@@ -1,0 +1,17 @@
+[
+  "tests/test_ai_only.py::TestAIOnlyAutomation::test_ai_baidu_search_workflow",
+  "tests/test_ai_only.py::TestAIOnlyAutomation::test_ai_data_extraction",
+  "tests/test_ai_only.py::TestAIOnlyAutomation::test_ai_multi_step_workflow",
+  "tests/test_ai_only.py::TestAIOnlyAutomation::test_ai_page_interaction",
+  "tests/test_ai_only.py::TestAIOnlyAutomation::test_ai_scroll_and_explore",
+  "tests/test_baidu_search.py::TestBaiduSearch::test_ai_assertion",
+  "tests/test_baidu_search.py::TestBaiduSearch::test_ai_query_results",
+  "tests/test_baidu_search.py::TestBaiduSearch::test_basic_search",
+  "tests/test_baidu_search.py::TestBaiduSearch::test_full_ai_workflow",
+  "tests/test_baidu_search.py::TestBaiduSearch::test_page_navigation",
+  "tests/test_improved_workflow.py::TestImprovedWorkflow::test_robust_multi_step_workflow",
+  "tests/test_improved_workflow.py::TestImprovedWorkflow::test_simple_robust_search",
+  "tests/test_pure_python.py::TestPurePythonAI::test_ai_basic_operations",
+  "tests/test_simple.py::test_page_elements",
+  "tests/test_simple.py::test_simple_baidu_without_ai"
+]

@@ -1,0 +1,5 @@
+{
+  "tests/test_baidu_search.py::TestBaiduSearch::test_full_ai_workflow": true,
+  "tests/test_ai_only.py::TestAIOnlyAutomation::test_ai_multi_step_workflow": true,
+  "tests/test_improved_workflow.py::TestImprovedWorkflow::test_robust_multi_step_workflow": true
+}
