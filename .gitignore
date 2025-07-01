@@ -141,3 +141,36 @@ cython_debug/
 # static files generated from Django application using `collectstatic`
 media
 static
+
+# Midscene.js dump files
+midscene_run/dump
+midscene_run/report/
+midscene_run/tmp
+midscene_run/log
+midscene_run/cache/
+
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Test results and screenshots
+test_results/
+screenshots/
