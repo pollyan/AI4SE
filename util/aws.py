@@ -132,29 +132,6 @@ class AwsRequest(object):
             traceback.print_exc()
         return rep, headers
 
-''' 
-if __name__ == "__main__":
-    service = 'iam'
-    host = 'iam.cn-shanghai-3.api.ksyun.com'
-    region = 'cn-shanghai-3'
-    endpoint = 'http://iam.cn-shanghai-3.api.ksyun.com'
-    
-    # Read AWS access key from env. variables or configuration file. Best practice is NOT
-    # to embed credentials in code.
-    access_key = "AKLTafg0-VY1SQ2HzX5Hiboa1w"
-    secret_key = "OB2ksCy39heVhs+p9tT2YZcRq4iuxCFqz8+JKh7+vXTmpro+cqpA3xl3uXCTf3y/kQ=="
-
-    request_parameters = {
-            "Action": "UpdateAccessKey",
-            "UserName": "test_user_LdCohvsCSD",
-            "AccessKeyId": "AKLTy6gBz46fQxGClXrKS_ASVQ",
-            "Status": "Inactive",
-            "Version": "2015-11-01"
-        }
-    
-    re = AwsRequest(service, host, region, endpoint, access_key, secret_key)
-    re.sendRequest(request_parameters)
-'''
 if __name__ == "__main__":
     service = 'iam'
     host = 'iam.cn-beijing-6.api.ksyun.com'
@@ -163,13 +140,13 @@ if __name__ == "__main__":
 
     # Read AWS access key from env. variables or configuration file. Best practice is NOT
     # to embed credentials in code.
-    access_key = "AKLTWtG-bTHOQvq5dtykmUA70g"
-    secret_key = "OBUTyr423yW0xW7BStRKWgTkgSKoB7AQ1ySk6XwUSRjzlQE8QoT/P2IHHtFNcCqAmQ=="
+    access_key = "your ak"
+    secret_key = "your sk"
 
     request_parameters = {
         "Action": "UpdateAccessKey",
         "UserName": "test_user_LdCohvsCSD",
-        "AccessKeyId": "AKLTWtG-bTHOQvq5dtykmUA70g",
+        "AccessKeyId": "id",
         "Status": "Inactive",
         "Version": "2016-03-04"
     }
