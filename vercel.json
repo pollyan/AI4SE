@@ -1,0 +1,52 @@
+{
+  "version": 2,
+  "name": "intent-test-framework",
+  "builds": [
+    {
+      "src": "web_gui/app_enhanced.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb"
+      }
+    },
+    {
+      "src": "midscene_server.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "web_gui/static/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/static/(.*)",
+      "dest": "/web_gui/static/$1"
+    },
+    {
+      "src": "/api/midscene/(.*)",
+      "dest": "/midscene_server.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/web_gui/app_enhanced.py"
+    }
+  ],
+  "env": {
+    "VERCEL": "1",
+    "PYTHON_VERSION": "3.11"
+  },
+  "functions": {
+    "web_gui/app_enhanced.py": {
+      "maxDuration": 30
+    },
+    "midscene_server.js": {
+      "maxDuration": 30
+    }
+  },
+  "regions": ["hkg1"],
+  "installCommand": "pip install -r requirements.txt && npm install",
+  "buildCommand": "echo 'Build completed'",
+  "outputDirectory": ".",
+  "framework": null
+}

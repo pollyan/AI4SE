@@ -2,4 +2,18 @@ playwright==1.45.0
 pytest>=7.0.0,<8.0.0
 pytest-playwright==0.4.3
 python-dotenv==1.0.0
-requests==2.31.0 
+requests==2.31.0
+# Web框架
+flask>=2.0.0
+flask-socketio>=5.0.0
+flask-cors>=4.0.0
+python-socketio>=5.0.0
+# 数据库支持
+flask-sqlalchemy>=3.0.0
+psycopg2-binary>=2.9.0
+# Supabase客户端
+supabase>=1.0.0
+# 开发工具
+black>=22.0.0
+flake8>=4.0.0
+pytest-cov>=3.0.0

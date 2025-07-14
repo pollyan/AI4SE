@@ -19,6 +19,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # 导入模块
 from models import db, TestCase, ExecutionHistory, StepExecution, Template
 from api_routes import api_bp
+from database_config import get_flask_config, print_database_info, validate_database_connection
 
 # 尝试导入MidSceneAI，如果失败则使用模拟版本
 try:
@@ -114,18 +115,16 @@ if not AI_AVAILABLE:
 def create_app():
     """应用工厂函数"""
     app = Flask(__name__)
-    
+
     # 配置
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-    # 确保instance目录存在
-    instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
-    os.makedirs(instance_path, exist_ok=True)
+    # 数据库配置 - 支持SQLite和PostgreSQL
+    db_config = get_flask_config()
+    app.config.update(db_config)
 
-    # 数据库配置
-    db_path = os.path.join(instance_path, 'gui_test_cases.db')
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    # 打印数据库信息
+    print_database_info()
     
     # 初始化扩展
     db.init_app(app)
@@ -640,14 +639,20 @@ def init_database():
     """初始化数据库"""
     with app.app_context():
         try:
+            # 验证数据库连接
+            if not validate_database_connection():
+                print("❌ 数据库连接失败")
+                return False
+
+            # 创建表
             db.create_all()
-            print("数据库表创建完成")
+            print("✅ 数据库表创建完成")
 
             # 创建默认模板
             create_default_templates()
             return True
         except Exception as e:
-            print(f"数据库初始化失败: {e}")
+            print(f"❌ 数据库初始化失败: {e}")
             return False
 
 def create_default_templates():
