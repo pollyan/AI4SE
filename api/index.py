@@ -198,6 +198,60 @@ try:
             'environment': 'Vercel Serverless'
         })
 
+    # 数据库初始化API
+    @app.route('/api/init-db', methods=['POST'])
+    def init_database():
+        try:
+            # 创建所有表
+            db.create_all()
+
+            # 检查是否有示例数据
+            from web_gui.models import TestCase, Template
+
+            test_count = TestCase.query.count()
+            template_count = Template.query.count()
+
+            # 如果没有数据，创建示例数据
+            if test_count == 0:
+                sample_testcase = TestCase(
+                    name='百度搜索测试',
+                    description='测试百度搜索功能',
+                    steps='[{"action":"navigate","params":{"url":"https://www.baidu.com"},"description":"访问百度首页"},{"action":"ai_input","params":{"text":"AI测试","locate":"搜索框"},"description":"输入搜索关键词"}]',
+                    category='搜索功能',
+                    priority=1,
+                    created_by='system'
+                )
+                db.session.add(sample_testcase)
+
+            if template_count == 0:
+                sample_template = Template(
+                    name='搜索功能模板',
+                    description='通用搜索功能测试模板',
+                    category='搜索',
+                    steps_template='[{"action":"navigate","params":{"url":"{{search_url}}"},"description":"访问搜索页面"}]',
+                    parameters='{"search_url":{"type":"string","description":"搜索页面URL"}}',
+                    created_by='system',
+                    is_public=True
+                )
+                db.session.add(sample_template)
+
+            db.session.commit()
+
+            return jsonify({
+                'status': 'success',
+                'message': '数据库初始化成功',
+                'data': {
+                    'test_cases': TestCase.query.count(),
+                    'templates': Template.query.count()
+                }
+            })
+
+        except Exception as e:
+            return jsonify({
+                'status': 'error',
+                'message': f'数据库初始化失败: {str(e)}'
+            }), 500
+
     # 数据库连接测试
     @app.route('/api/db-test')
     def db_test():
