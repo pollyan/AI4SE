@@ -62,6 +62,16 @@ def create_testcase():
     try:
         data = request.get_json()
         
+        # 记录请求数据进行调试
+        print(f"创建测试用例请求数据: {data}")
+        
+        # 验证请求数据
+        if not data:
+            return jsonify({
+                'code': 400,
+                'message': '请求数据不能为空'
+            }), 400
+        
         # 验证必填字段
         if not data.get('name'):
             return jsonify({
@@ -69,13 +79,35 @@ def create_testcase():
                 'message': '测试用例名称不能为空'
             }), 400
         
-        if not data.get('steps'):
+        # 验证步骤数据格式（允许为空，后续在步骤编辑器中完善）
+        steps = data.get('steps', [])
+        if not isinstance(steps, list):
             return jsonify({
                 'code': 400,
-                'message': '测试步骤不能为空'
+                'message': '测试步骤必须是数组格式'
             }), 400
         
+        # 如果有步骤，验证每个步骤的格式
+        if len(steps) > 0:
+            for i, step in enumerate(steps):
+                if not isinstance(step, dict):
+                    return jsonify({
+                        'code': 400,
+                        'message': f'步骤 {i+1} 格式不正确，必须是对象'
+                    }), 400
+                
+                if not step.get('action'):
+                    return jsonify({
+                        'code': 400,
+                        'message': f'步骤 {i+1} 缺少action字段'
+                    }), 400
+        
+        # 创建测试用例实例
+        print(f"准备创建测试用例，数据: {data}")
         testcase = TestCase.from_dict(data)
+        print(f"创建的测试用例对象: name={testcase.name}, steps={testcase.steps}")
+        
+        # 添加到数据库
         db.session.add(testcase)
         db.session.commit()
         
@@ -86,6 +118,8 @@ def create_testcase():
         })
     except Exception as e:
         db.session.rollback()
+        print(f"创建测试用例失败: {str(e)}")
+        print(f"错误详情: {e}")
         return jsonify({
             'code': 500,
             'message': f'创建失败: {str(e)}'
