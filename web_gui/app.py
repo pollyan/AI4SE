@@ -10,6 +10,9 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import json
 import uuid
+import zipfile
+import tempfile
+from pathlib import Path
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -197,7 +200,7 @@ ai_service = AITestService()
 @app.route('/')
 def index():
     """主页"""
-    return render_template('index.html')
+    return render_template('index_enhanced.html')
 
 @app.route('/local-proxy')
 def local_proxy():
@@ -207,10 +210,6 @@ def local_proxy():
 @app.route('/download/local-proxy')
 def download_local_proxy():
     """下载本地代理包"""
-    import zipfile
-    import tempfile
-    from pathlib import Path
-
     try:
         # 代理包路径
         proxy_dir = Path(__file__).parent.parent / 'dist' / 'intent-test-proxy'
