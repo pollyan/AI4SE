@@ -1,11 +1,11 @@
 """
 Vercel入口文件 - Intent Test Framework
-简化版本，专为Serverless环境优化
+专为Serverless环境优化，避免复杂的模块导入
 """
 
 import sys
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template_string
 
 # 添加项目根目录到Python路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -18,26 +18,95 @@ app = Flask(__name__)
 # 基本配置
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-# 简单的健康检查路由
+# 简单的HTML模板
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intent Test Framework</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; margin-bottom: 30px; }
+        .status { padding: 15px; border-radius: 5px; margin: 10px 0; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .api-list { margin: 20px 0; }
+        .api-item { margin: 10px 0; padding: 10px; background: #f8f9fa; border-left: 4px solid #007bff; }
+        .api-url { font-family: monospace; color: #007bff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Intent Test Framework</h1>
+            <p>AI驱动的Web自动化测试平台</p>
+        </div>
+
+        <div class="status success">
+            ✅ 应用运行正常 - Vercel Serverless环境
+        </div>
+
+        <div class="status info">
+            🗄️ 数据库: {{ database_status }}
+        </div>
+
+        <h3>📋 可用的API端点</h3>
+        <div class="api-list">
+            <div class="api-item">
+                <strong>健康检查:</strong><br>
+                <span class="api-url">GET /health</span>
+            </div>
+            <div class="api-item">
+                <strong>API状态:</strong><br>
+                <span class="api-url">GET /api/status</span>
+            </div>
+            <div class="api-item">
+                <strong>测试用例:</strong><br>
+                <span class="api-url">GET /api/testcases</span>
+            </div>
+            <div class="api-item">
+                <strong>执行历史:</strong><br>
+                <span class="api-url">GET /api/executions</span>
+            </div>
+            <div class="api-item">
+                <strong>模板管理:</strong><br>
+                <span class="api-url">GET /api/templates</span>
+            </div>
+            <div class="api-item">
+                <strong>统计数据:</strong><br>
+                <span class="api-url">GET /api/stats/dashboard</span>
+            </div>
+        </div>
+
+        <div style="margin-top: 30px; text-align: center; color: #666;">
+            <p>🌐 部署在 Vercel | 🗄️ 数据库 Supabase | 🤖 AI驱动测试</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+# 主页路由
 @app.route('/')
-def health_check():
-    return jsonify({
-        'status': 'ok',
-        'message': 'Intent Test Framework is running',
-        'environment': 'Vercel Serverless',
-        'database_url': os.getenv('DATABASE_URL', 'Not configured')[:50] + '...' if os.getenv('DATABASE_URL') else 'Not configured'
-    })
+def home():
+    database_url = os.getenv('DATABASE_URL', 'Not configured')
+    database_status = 'PostgreSQL (Supabase)' if database_url.startswith('postgresql://') else 'Not configured'
+
+    return render_template_string(HTML_TEMPLATE, database_status=database_status)
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'healthy'})
+    return jsonify({'status': 'healthy', 'timestamp': os.getenv('VERCEL_DEPLOYMENT_ID', 'local')})
 
-# 尝试导入完整应用
+# 设置环境变量
+os.environ['VERCEL'] = '1'
+
+# 尝试加载API功能
 try:
-    # 设置环境变量
-    os.environ['VERCEL'] = '1'
-
-    print("🔄 开始加载完整应用...")
+    print("🔄 开始加载API功能...")
 
     # 导入数据库配置
     from web_gui.database_config import get_flask_config
@@ -70,26 +139,29 @@ try:
     except ImportError:
         print("⚠️ CORS模块未找到，跳过")
 
+    # API状态检查
     @app.route('/api/status')
     def api_status():
         return jsonify({
             'status': 'ok',
             'message': 'API is working',
-            'database': 'connected'
+            'database': 'connected',
+            'environment': 'Vercel Serverless'
         })
 
-    print("✅ 完整应用加载成功")
+    print("✅ API功能加载成功")
 
 except Exception as e:
-    print(f"⚠️ 完整应用加载失败: {e}")
+    print(f"⚠️ API功能加载失败: {e}")
     import traceback
     traceback.print_exc()
 
-    @app.route('/error')
-    def show_error():
+    # 简单的错误API
+    @app.route('/api/status')
+    def api_status_error():
         return jsonify({
             'status': 'error',
-            'message': f'应用加载失败: {str(e)}',
+            'message': f'API加载失败: {str(e)}',
             'suggestion': '请检查环境变量和依赖配置'
         }), 500
 
