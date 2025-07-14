@@ -900,6 +900,59 @@ try:
                 )
                 db.session.add(sample_template)
 
+            # 创建示例执行记录
+            from web_gui.models import ExecutionHistory
+            execution_count = ExecutionHistory.query.count()
+            
+            if execution_count == 0:
+                from datetime import datetime, timedelta
+                import uuid
+                
+                # 获取刚创建的测试用例
+                testcase = TestCase.query.first()
+                
+                if testcase:
+                    base_time = datetime.utcnow() - timedelta(days=5)
+                    
+                    # 创建一些成功的执行记录
+                    for i in range(8):
+                        execution_id = str(uuid.uuid4())
+                        execution = ExecutionHistory(
+                            execution_id=execution_id,
+                            test_case_id=testcase.id,
+                            status='success',
+                            mode='headless',
+                            start_time=base_time + timedelta(hours=i*3),
+                            end_time=base_time + timedelta(hours=i*3, minutes=2),
+                            duration=120,
+                            steps_total=3,
+                            steps_passed=3,
+                            steps_failed=0,
+                            executed_by='system'
+                        )
+                        db.session.add(execution)
+                    
+                    # 创建一些失败的执行记录
+                    for i in range(3):
+                        execution_id = str(uuid.uuid4())
+                        execution = ExecutionHistory(
+                            execution_id=execution_id,
+                            test_case_id=testcase.id,
+                            status='failed',
+                            mode='headless',
+                            start_time=base_time + timedelta(hours=i*8),
+                            end_time=base_time + timedelta(hours=i*8, minutes=1),
+                            duration=60,
+                            steps_total=3,
+                            steps_passed=1,
+                            steps_failed=2,
+                            error_message='模拟执行失败',
+                            executed_by='system'
+                        )
+                        db.session.add(execution)
+                    
+                    print("✅ 创建示例执行记录")
+
             db.session.commit()
 
             return jsonify({
@@ -907,7 +960,8 @@ try:
                 'message': '数据库初始化成功',
                 'data': {
                     'test_cases': TestCase.query.count(),
-                    'templates': Template.query.count()
+                    'templates': Template.query.count(),
+                    'executions': ExecutionHistory.query.count()
                 }
             })
 
@@ -1118,6 +1172,28 @@ try:
             steps = json.loads(testcase.steps) if testcase.steps else []
             execution['total_steps'] = len(steps)
             execution['steps'] = [{'status': 'pending', 'description': step.get('description', '')} for step in steps]
+            
+            # 创建数据库执行记录
+            db_execution = None
+            try:
+                from web_gui.models import ExecutionHistory, db
+                with app.app_context():
+                    db_execution = ExecutionHistory(
+                        execution_id=execution_id,
+                        test_case_id=testcase.id,
+                        status='running',
+                        mode=mode,
+                        start_time=datetime.utcnow(),
+                        steps_total=len(steps),
+                        steps_passed=0,
+                        steps_failed=0,
+                        executed_by='system'
+                    )
+                    db.session.add(db_execution)
+                    db.session.commit()
+                    print(f"✅ 创建执行记录: {execution_id}")
+            except Exception as db_error:
+                print(f"⚠️ 创建执行记录失败: {db_error}")
 
             # 尝试导入AI执行引擎
             try:
@@ -1161,6 +1237,22 @@ try:
                 execution['status'] = 'completed'
                 execution['end_time'] = datetime.utcnow().isoformat()
                 execution['message'] = '测试执行完成'
+                
+                # 更新数据库记录
+                try:
+                    from web_gui.models import ExecutionHistory, db
+                    with app.app_context():
+                        db_execution = ExecutionHistory.query.filter_by(execution_id=execution_id).first()
+                        if db_execution:
+                            db_execution.status = 'success'
+                            db_execution.end_time = datetime.utcnow()
+                            db_execution.steps_passed = sum(1 for step in execution['steps'] if step.get('status') == 'success')
+                            db_execution.steps_failed = sum(1 for step in execution['steps'] if step.get('status') == 'failed')
+                            db_execution.duration = int((datetime.utcnow() - db_execution.start_time).total_seconds())
+                            db.session.commit()
+                            print(f"✅ 更新执行记录: {execution_id} -> success")
+                except Exception as db_error:
+                    print(f"⚠️ 更新执行记录失败: {db_error}")
 
             except ImportError as e:
                 # AI引擎不可用，使用模拟执行
@@ -1176,12 +1268,43 @@ try:
                 execution['status'] = 'completed'
                 execution['end_time'] = datetime.utcnow().isoformat()
                 execution['message'] = '模拟执行完成'
+                
+                # 更新数据库记录
+                try:
+                    from web_gui.models import ExecutionHistory, db
+                    with app.app_context():
+                        db_execution = ExecutionHistory.query.filter_by(execution_id=execution_id).first()
+                        if db_execution:
+                            db_execution.status = 'success'
+                            db_execution.end_time = datetime.utcnow()
+                            db_execution.steps_passed = sum(1 for step in execution['steps'] if step.get('status') == 'success')
+                            db_execution.steps_failed = sum(1 for step in execution['steps'] if step.get('status') == 'failed')
+                            db_execution.duration = int((datetime.utcnow() - db_execution.start_time).total_seconds())
+                            db.session.commit()
+                            print(f"✅ 更新执行记录: {execution_id} -> success (模拟)")
+                except Exception as db_error:
+                    print(f"⚠️ 更新执行记录失败: {db_error}")
 
         except Exception as e:
             execution['status'] = 'failed'
             execution['error'] = str(e)
             execution['end_time'] = datetime.utcnow().isoformat()
             print(f"执行失败: {e}")
+            
+            # 更新数据库记录为失败
+            try:
+                from web_gui.models import ExecutionHistory, db
+                with app.app_context():
+                    db_execution = ExecutionHistory.query.filter_by(execution_id=execution_id).first()
+                    if db_execution:
+                        db_execution.status = 'failed'
+                        db_execution.end_time = datetime.utcnow()
+                        db_execution.error_message = str(e)
+                        db_execution.duration = int((datetime.utcnow() - db_execution.start_time).total_seconds())
+                        db.session.commit()
+                        print(f"✅ 更新执行记录: {execution_id} -> failed")
+            except Exception as db_error:
+                print(f"⚠️ 更新执行记录失败: {db_error}")
 
     def execute_single_step(ai, step, step_index):
         """执行单个测试步骤"""
