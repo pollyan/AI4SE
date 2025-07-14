@@ -149,6 +149,50 @@ try:
             'environment': 'Vercel Serverless'
         })
 
+    # 数据库连接测试
+    @app.route('/api/db-test')
+    def db_test():
+        try:
+            database_url = os.getenv('DATABASE_URL')
+            if not database_url:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'DATABASE_URL环境变量未设置'
+                }), 500
+
+            # 显示连接信息（隐藏密码）
+            from urllib.parse import urlparse
+            parsed = urlparse(database_url)
+
+            connection_info = {
+                'scheme': parsed.scheme,
+                'hostname': parsed.hostname,
+                'port': parsed.port,
+                'database': parsed.path.lstrip('/') if parsed.path else None,
+                'username': parsed.username,
+                'password_set': bool(parsed.password)
+            }
+
+            # 尝试连接数据库
+            with db.engine.connect() as conn:
+                result = conn.execute(db.text("SELECT 1 as test"))
+                test_result = result.fetchone()
+
+            return jsonify({
+                'status': 'success',
+                'message': '数据库连接成功',
+                'connection_info': connection_info,
+                'test_query': 'SELECT 1 执行成功'
+            })
+
+        except Exception as e:
+            return jsonify({
+                'status': 'error',
+                'message': f'数据库连接失败: {str(e)}',
+                'connection_info': connection_info if 'connection_info' in locals() else None,
+                'suggestion': '请检查DATABASE_URL环境变量和Supabase项目状态'
+            }), 500
+
     print("✅ API功能加载成功")
 
 except Exception as e:
