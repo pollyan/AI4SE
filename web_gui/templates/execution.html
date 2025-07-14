@@ -1016,54 +1016,115 @@
 
         async function checkChromeExtension() {
             try {
+                addLog('🔍 开始检测Chrome扩展环境...', 'info');
+
                 // 检查是否在Chrome浏览器中
                 const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
                 if (!isChrome) {
-                    addLog('⚠️ 建议使用Chrome浏览器以获得最佳体验', 'warning');
+                    addLog('⚠️ 当前不是Chrome浏览器，桥接模式可能无法正常工作', 'warning');
+                    addLog('💡 建议使用Chrome浏览器以获得最佳体验', 'warning');
                 }
 
-                // 尝试检测MidSceneJS扩展
+                let extensionFound = false;
+                let detectionMethod = '';
+
                 // 方法1: 检查是否有扩展注入的全局对象
                 if (window.midsceneExtension) {
                     addLog('✅ 检测到MidSceneJS扩展（全局对象）', 'success');
-                    return true;
+                    extensionFound = true;
+                    detectionMethod = 'global_object';
                 }
 
-                // 方法2: 尝试发送消息到扩展
-                if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-                    return new Promise((resolve) => {
-                        chrome.runtime.sendMessage('midscene-extension-id', {action: 'ping'}, (response) => {
-                            if (chrome.runtime.lastError) {
-                                addLog('⚠️ 未检测到MidSceneJS扩展响应', 'warning');
-                                resolve(false);
-                            } else {
-                                addLog('✅ MidSceneJS扩展响应正常', 'success');
-                                resolve(true);
+                // 方法2: 检查Chrome扩展API可用性
+                if (typeof chrome !== 'undefined' && chrome.runtime) {
+                    addLog('✅ Chrome扩展API可用', 'success');
+
+                    // 尝试发送ping消息到已知的扩展ID
+                    const knownExtensionIds = [
+                        'midscene-extension-id',
+                        'midscenejs-extension',
+                        'web-automation-extension'
+                    ];
+
+                    for (const extensionId of knownExtensionIds) {
+                        try {
+                            const response = await new Promise((resolve) => {
+                                chrome.runtime.sendMessage(extensionId, {action: 'ping'}, (response) => {
+                                    if (chrome.runtime.lastError) {
+                                        resolve(null);
+                                    } else {
+                                        resolve(response);
+                                    }
+                                });
+                            });
+
+                            if (response) {
+                                addLog(`✅ 检测到扩展响应: ${extensionId}`, 'success');
+                                extensionFound = true;
+                                detectionMethod = 'message_api';
+                                break;
                             }
-                        });
-                    });
+                        } catch (e) {
+                            // 忽略单个扩展检测失败
+                        }
+                    }
+                } else {
+                    addLog('❌ Chrome扩展API不可用', 'error');
                 }
 
                 // 方法3: 检查DOM中是否有扩展标识
-                const extensionMarker = document.querySelector('[data-midscene-extension]');
-                if (extensionMarker) {
-                    addLog('✅ 检测到MidSceneJS扩展（DOM标识）', 'success');
-                    return true;
-                }
+                const extensionMarkers = [
+                    '[data-midscene-extension]',
+                    '[data-web-automation]',
+                    '.midscene-injected',
+                    '#midscene-bridge'
+                ];
 
-                // 如果都没有检测到，返回false但不阻止执行（用户可能手动确认过）
-                const manualStatus = localStorage.getItem('midscene_manual_status');
-                if (manualStatus) {
-                    const status = JSON.parse(manualStatus);
-                    if (status.bridge_available) {
-                        addLog('✅ 使用手动确认的扩展状态', 'info');
-                        return true;
+                for (const selector of extensionMarkers) {
+                    const marker = document.querySelector(selector);
+                    if (marker) {
+                        addLog(`✅ 检测到扩展DOM标识: ${selector}`, 'success');
+                        extensionFound = true;
+                        detectionMethod = 'dom_marker';
+                        break;
                     }
                 }
 
-                return false;
+                // 方法4: 检查是否有手动确认的状态
+                const manualStatus = localStorage.getItem('midscene_manual_status');
+                if (manualStatus) {
+                    try {
+                        const status = JSON.parse(manualStatus);
+                        if (status.bridge_available && status.timestamp > Date.now() - 24 * 60 * 60 * 1000) {
+                            addLog('✅ 使用手动确认的扩展状态（24小时内有效）', 'info');
+                            extensionFound = true;
+                            detectionMethod = 'manual_confirmation';
+                        } else if (status.bridge_available) {
+                            addLog('⚠️ 手动确认的扩展状态已过期，需要重新确认', 'warning');
+                            localStorage.removeItem('midscene_manual_status');
+                        }
+                    } catch (e) {
+                        addLog('⚠️ 手动状态数据格式错误，已清除', 'warning');
+                        localStorage.removeItem('midscene_manual_status');
+                    }
+                }
+
+                if (extensionFound) {
+                    addLog(`🎉 扩展检测成功！检测方式: ${detectionMethod}`, 'success');
+                    return true;
+                } else {
+                    addLog('❌ 未检测到MidSceneJS扩展', 'error');
+                    addLog('📋 扩展安装指南：', 'info');
+                    addLog('  1. 访问Chrome网上应用店', 'info');
+                    addLog('  2. 搜索"MidSceneJS"或"Web Automation"', 'info');
+                    addLog('  3. 安装扩展并启用', 'info');
+                    addLog('  4. 在扩展设置中配置AI API密钥', 'info');
+                    addLog('  5. 刷新此页面重新检测', 'info');
+                    return false;
+                }
+
             } catch (error) {
-                addLog(`扩展检测异常: ${error.message}`, 'warning');
+                addLog(`❌ 扩展检测异常: ${error.message}`, 'error');
                 return false;
             }
         }
@@ -1125,7 +1186,6 @@
         async function executeStepThroughExtension(step, stepIndex) {
             return new Promise((resolve) => {
                 try {
-                    // 模拟扩展执行（实际应该调用真实的扩展API）
                     const action = step.action;
                     const params = step.params || {};
 
@@ -1134,18 +1194,123 @@
                     if (params.text) addLog(`  📝 文本: ${params.text}`, 'info');
                     if (params.locate) addLog(`  🎯 定位: ${params.locate}`, 'info');
 
-                    // 这里应该调用真实的Chrome扩展API
-                    // 现在先模拟成功执行
-                    setTimeout(() => {
-                        resolve({
-                            success: true,
-                            action: action,
-                            stepIndex: stepIndex,
-                            screenshot: `screenshot_step_${stepIndex + 1}.png`
+                    // 尝试真实的Chrome扩展通信
+                    if (window.midsceneExtension && typeof window.midsceneExtension.executeStep === 'function') {
+                        // 方法1: 通过全局对象调用
+                        addLog(`  🔌 通过全局对象调用扩展`, 'info');
+                        window.midsceneExtension.executeStep(step)
+                            .then(result => {
+                                addLog(`  ✅ 扩展执行成功`, 'success');
+                                resolve({
+                                    success: true,
+                                    action: action,
+                                    stepIndex: stepIndex,
+                                    result: result
+                                });
+                            })
+                            .catch(error => {
+                                addLog(`  ❌ 扩展执行失败: ${error.message}`, 'error');
+                                resolve({
+                                    success: false,
+                                    error: error.message
+                                });
+                            });
+                    } else if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                        // 方法2: 通过Chrome消息API
+                        addLog(`  🔌 通过Chrome消息API调用扩展`, 'info');
+                        chrome.runtime.sendMessage('midscene-extension-id', {
+                            action: 'executeStep',
+                            step: step,
+                            stepIndex: stepIndex
+                        }, (response) => {
+                            if (chrome.runtime.lastError) {
+                                addLog(`  ❌ 扩展通信失败: ${chrome.runtime.lastError.message}`, 'error');
+                                resolve({
+                                    success: false,
+                                    error: chrome.runtime.lastError.message
+                                });
+                            } else if (response && response.success) {
+                                addLog(`  ✅ 扩展执行成功`, 'success');
+                                resolve({
+                                    success: true,
+                                    action: action,
+                                    stepIndex: stepIndex,
+                                    result: response.result
+                                });
+                            } else {
+                                addLog(`  ❌ 扩展执行失败: ${response ? response.error : '未知错误'}`, 'error');
+                                resolve({
+                                    success: false,
+                                    error: response ? response.error : '未知错误'
+                                });
+                            }
                         });
-                    }, 2000); // 模拟执行时间
+                    } else if (window.postMessage) {
+                        // 方法3: 通过postMessage通信
+                        addLog(`  🔌 通过postMessage调用扩展`, 'info');
+
+                        const messageId = `midscene_${Date.now()}_${stepIndex}`;
+
+                        // 监听响应
+                        const responseHandler = (event) => {
+                            if (event.data && event.data.type === 'midscene_response' && event.data.messageId === messageId) {
+                                window.removeEventListener('message', responseHandler);
+
+                                if (event.data.success) {
+                                    addLog(`  ✅ 扩展执行成功`, 'success');
+                                    resolve({
+                                        success: true,
+                                        action: action,
+                                        stepIndex: stepIndex,
+                                        result: event.data.result
+                                    });
+                                } else {
+                                    addLog(`  ❌ 扩展执行失败: ${event.data.error}`, 'error');
+                                    resolve({
+                                        success: false,
+                                        error: event.data.error
+                                    });
+                                }
+                            }
+                        };
+
+                        window.addEventListener('message', responseHandler);
+
+                        // 发送消息
+                        window.postMessage({
+                            type: 'midscene_execute',
+                            messageId: messageId,
+                            step: step,
+                            stepIndex: stepIndex
+                        }, '*');
+
+                        // 设置超时
+                        setTimeout(() => {
+                            window.removeEventListener('message', responseHandler);
+                            addLog(`  ⏰ 扩展响应超时`, 'warning');
+                            resolve({
+                                success: false,
+                                error: '扩展响应超时'
+                            });
+                        }, 30000); // 30秒超时
+
+                    } else {
+                        // 没有可用的通信方式，提供详细的错误信息
+                        addLog(`  ❌ 无法找到Chrome扩展通信接口`, 'error');
+                        addLog(`  💡 请确保：`, 'warning');
+                        addLog(`     1. 已安装MidSceneJS Chrome扩展`, 'warning');
+                        addLog(`     2. 扩展已启用并配置正确`, 'warning');
+                        addLog(`     3. 在Chrome浏览器中访问此页面`, 'warning');
+                        addLog(`     4. 扩展有足够的权限`, 'warning');
+
+                        resolve({
+                            success: false,
+                            error: '未检测到Chrome扩展，请安装并配置MidSceneJS扩展'
+                        });
+                    }
 
                 } catch (error) {
+                    addLog(`  ❌ 执行异常: ${error.message}`, 'error');
                     resolve({
                         success: false,
                         error: error.message
