@@ -974,20 +974,16 @@
 
                 addLog('✅ MidSceneJS扩展连接成功', 'success');
 
-                // 3. 提供两种执行方式
-                addLog('🚀 准备执行测试用例...', 'info');
+                // 3. 尝试直接执行，失败则生成脚本
+                addLog('🚀 尝试直接通过扩展执行...', 'info');
 
-                const executionChoice = confirm(
-                    '选择执行方式：\n\n' +
-                    '点击"确定"：尝试直接通过扩展执行（实验性功能）\n' +
-                    '点击"取消"：生成脚本供手动执行（推荐方式）'
-                );
-
-                if (executionChoice) {
-                    addLog('🔌 尝试直接通过扩展执行...', 'info');
+                try {
                     await executeThroughMidSceneExtension(testcase, mode);
-                } else {
-                    addLog('📝 生成MidSceneJS脚本...', 'info');
+                } catch (executionError) {
+                    addLog(`❌ 直接执行失败: ${executionError.message}`, 'error');
+                    addLog('🔄 切换到脚本生成模式...', 'warning');
+
+                    // 备用方案：生成脚本
                     const script = generateMidSceneScript(testcase, mode);
                     downloadScript(script, `${testcase.name}-bridge.mjs`);
                     showBridgeInstructions(testcase.name);
@@ -1271,16 +1267,29 @@
                 document.getElementById('startBtn').disabled = true;
                 document.getElementById('stopBtn').disabled = false;
 
-                // 动态导入并创建MidScene代理
+                // 创建MidScene代理
                 addLog('🔌 初始化MidScene代理...', 'info');
 
                 try {
-                    const { AgentOverChromeBridge } = await import('@midscene/web/bridge-mode');
-                    agent = new AgentOverChromeBridge();
-                    addLog('✅ MidScene代理创建成功', 'success');
-                } catch (importError) {
-                    addLog(`❌ 无法导入MidSceneJS: ${importError.message}`, 'error');
-                    addLog('💡 请确保页面支持ES6模块导入', 'warning');
+                    // 检查全局对象
+                    if (window.AgentOverChromeBridge) {
+                        agent = new window.AgentOverChromeBridge();
+                        addLog('✅ 使用全局AgentOverChromeBridge创建代理', 'success');
+                    } else {
+                        // 尝试从CDN加载
+                        addLog('🔄 尝试从CDN加载MidSceneJS...', 'info');
+                        await loadMidSceneFromCDN();
+
+                        if (window.AgentOverChromeBridge) {
+                            agent = new window.AgentOverChromeBridge();
+                            addLog('✅ 从CDN加载并创建代理成功', 'success');
+                        } else {
+                            throw new Error('无法获取AgentOverChromeBridge类');
+                        }
+                    }
+                } catch (createError) {
+                    addLog(`❌ 无法创建MidScene代理: ${createError.message}`, 'error');
+                    addLog('💡 请确保MidSceneJS扩展已正确安装和配置', 'warning');
                     return;
                 }
 
@@ -1768,25 +1777,37 @@
             try {
                 console.log('🔍 检测MidSceneJS扩展...');
 
-                // 检查是否可以导入AgentOverChromeBridge
-                try {
-                    // 尝试动态导入MidSceneJS桥接模块
-                    const { AgentOverChromeBridge } = await import('@midscene/web/bridge-mode');
-                    console.log('✅ 成功导入AgentOverChromeBridge');
-
-                    // 尝试创建代理实例
-                    const testAgent = new AgentOverChromeBridge();
-                    console.log('✅ 成功创建MidScene代理实例');
-
+                // 方法1: 检查扩展注入的全局对象
+                if (window.AgentOverChromeBridge) {
+                    console.log('✅ 检测到AgentOverChromeBridge全局对象');
                     return true;
-                } catch (importError) {
-                    console.log('❌ 无法导入MidSceneJS模块:', importError.message);
                 }
 
-                // 备用检测：检查全局对象
-                if (window.AgentOverChromeBridge || window.midscene || window.MidScene) {
-                    console.log('✅ 检测到MidSceneJS全局对象');
+                if (window.midscene || window.MidScene) {
+                    console.log('✅ 检测到MidScene全局对象');
                     return true;
+                }
+
+                // 方法2: 尝试加载MidSceneJS CDN
+                try {
+                    await loadMidSceneFromCDN();
+                    if (window.AgentOverChromeBridge) {
+                        console.log('✅ 从CDN成功加载MidSceneJS');
+                        return true;
+                    }
+                } catch (cdnError) {
+                    console.log('❌ CDN加载失败:', cdnError.message);
+                }
+
+                // 方法3: 检查Chrome扩展是否注入了脚本
+                const scripts = document.querySelectorAll('script[src*="midscene"], script[src*="chrome-extension"]');
+                if (scripts.length > 0) {
+                    console.log('✅ 检测到MidSceneJS扩展脚本');
+                    // 等待脚本加载
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    if (window.AgentOverChromeBridge) {
+                        return true;
+                    }
                 }
 
                 // 用户手动确认
@@ -1798,7 +1819,7 @@
                     '1. 安装官方MidSceneJS Chrome扩展\n' +
                     '2. 扩展已启用并配置AI API密钥\n' +
                     '3. 在扩展中点击"Allow connection"\n' +
-                    '4. 页面需要支持ES6模块导入\n\n' +
+                    '4. 扩展需要注入AgentOverChromeBridge到页面\n\n' +
                     '点击"确定"尝试继续执行，点击"取消"停止执行。'
                 );
 
@@ -1808,6 +1829,50 @@
                 console.error('扩展检测失败:', error);
                 return false;
             }
+        }
+
+        async function loadMidSceneFromCDN() {
+            return new Promise((resolve, reject) => {
+                // 尝试从CDN加载MidSceneJS
+                const script = document.createElement('script');
+                script.type = 'module';
+                script.innerHTML = `
+                    try {
+                        const { AgentOverChromeBridge } = await import('https://unpkg.com/@midscene/web@latest/bridge-mode');
+                        window.AgentOverChromeBridge = AgentOverChromeBridge;
+                        window.dispatchEvent(new CustomEvent('midscene-loaded'));
+                    } catch (error) {
+                        window.dispatchEvent(new CustomEvent('midscene-load-error', { detail: error }));
+                    }
+                `;
+
+                const onLoaded = () => {
+                    cleanup();
+                    resolve();
+                };
+
+                const onError = (event) => {
+                    cleanup();
+                    reject(new Error(event.detail?.message || 'CDN加载失败'));
+                };
+
+                const cleanup = () => {
+                    window.removeEventListener('midscene-loaded', onLoaded);
+                    window.removeEventListener('midscene-load-error', onError);
+                    document.head.removeChild(script);
+                };
+
+                window.addEventListener('midscene-loaded', onLoaded);
+                window.addEventListener('midscene-load-error', onError);
+
+                document.head.appendChild(script);
+
+                // 5秒超时
+                setTimeout(() => {
+                    cleanup();
+                    reject(new Error('CDN加载超时'));
+                }, 5000);
+            });
         }
 
         async function testExtensionMessage() {
