@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>调试截图历史功能</title>
+    <style>
+        .screenshot-history {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 10px;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            background: #fafafa;
+        }
+
+        .screenshot-item {
+            position: relative;
+            width: 120px;
+            height: 90px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        .screenshot-item:hover {
+            border-color: #1890ff;
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .screenshot-item.current {
+            border-color: #52c41a;
+            box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.2);
+        }
+
+        .screenshot-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .screenshot-item .step-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 2px 4px;
+            font-size: 10px;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .screenshot-item .step-index {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            background: #1890ff;
+            color: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>调试截图历史功能</h1>
+    
+    <button onclick="addTestScreenshot()">添加测试截图</button>
+    <button onclick="clearHistory()">清空历史</button>
+    
+    <div id="screenshotHistoryContainer">
+        <h4>步骤截图历史:</h4>
+        <div id="screenshotHistory" class="screenshot-history">
+            <!-- 截图缩略图将在这里动态添加 -->
+        </div>
+    </div>
+
+    <script>
+        let screenshotHistory = [];
+
+        function addTestScreenshot() {
+            const screenshot = {
+                path: "/static/screenshots/exec_d7da1ce8-a8ca-407b-80b4-12325eadc881_step_" + screenshotHistory.length + "_1752430129.png",
+                filename: "exec_d7da1ce8-a8ca-407b-80b4-12325eadc881_step_" + screenshotHistory.length + "_1752430129.png",
+                timestamp: Date.now(),
+                step_index: screenshotHistory.length,
+                step_name: "测试步骤 " + (screenshotHistory.length + 1)
+            };
+            
+            addScreenshotToHistory(screenshot);
+        }
+
+        function clearHistory() {
+            screenshotHistory = [];
+            const historyContainer = document.getElementById('screenshotHistory');
+            historyContainer.innerHTML = '';
+        }
+
+        function addScreenshotToHistory(screenshot) {
+            screenshotHistory.push(screenshot);
+            renderScreenshotHistory();
+        }
+
+        function renderScreenshotHistory() {
+            const historyContainer = document.getElementById('screenshotHistory');
+            historyContainer.innerHTML = '';
+
+            screenshotHistory.forEach((screenshot, index) => {
+                const item = document.createElement('div');
+                item.className = 'screenshot-item';
+                if (index === screenshotHistory.length - 1) {
+                    item.classList.add('current'); // 标记当前截图
+                }
+
+                item.innerHTML = `
+                    <div class="step-index">${screenshot.step_index + 1}</div>
+                    <img src="${screenshot.path}" alt="步骤 ${screenshot.step_index + 1} 截图" 
+                         onerror="this.style.display='none'; this.parentElement.style.background='#f0f0f0'; this.parentElement.innerHTML += '<div style=\\'text-align:center; padding:20px; color:#999;\\'>图片加载失败</div>'">
+                    <div class="step-label">${screenshot.step_name}</div>
+                `;
+
+                // 点击缩略图显示大图
+                item.addEventListener('click', function() {
+                    alert('点击了步骤 ' + (screenshot.step_index + 1) + ' 的截图');
+                    
+                    // 更新当前标记
+                    document.querySelectorAll('.screenshot-item').forEach(el => el.classList.remove('current'));
+                    item.classList.add('current');
+                });
+
+                historyContainer.appendChild(item);
+            });
+
+            // 自动滚动到最新截图
+            historyContainer.scrollTop = historyContainer.scrollHeight;
+        }
+
+        // 初始化一些测试数据
+        window.onload = function() {
+            // 添加一些真实的截图路径进行测试
+            const realScreenshots = [
+                {
+                    path: "/static/screenshots/exec_d7da1ce8-a8ca-407b-80b4-12325eadc881_step_0_1752430129.png",
+                    filename: "exec_d7da1ce8-a8ca-407b-80b4-12325eadc881_step_0_1752430129.png",
+                    timestamp: 1752430129,
+                    step_index: 0,
+                    step_name: "访问百度首页"
+                },
+                {
+                    path: "/static/screenshots/exec_d7da1ce8-a8ca-407b-80b4-12325eadc881_step_1_1752430139.png",
+                    filename: "exec_d7da1ce8-a8ca-407b-80b4-12325eadc881_step_1_1752430139.png",
+                    timestamp: 1752430139,
+                    step_index: 1,
+                    step_name: "输入搜索关键词"
+                },
+                {
+                    path: "/static/screenshots/exec_d7da1ce8-a8ca-407b-80b4-12325eadc881_step_2_1752430144.png",
+                    filename: "exec_d7da1ce8-a8ca-407b-80b4-12325eadc881_step_2_1752430144.png",
+                    timestamp: 1752430144,
+                    step_index: 2,
+                    step_name: "点击搜索"
+                }
+            ];
+
+            realScreenshots.forEach(screenshot => {
+                addScreenshotToHistory(screenshot);
+            });
+        };
+    </script>
+</body>
+</html>

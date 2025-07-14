@@ -13,7 +13,7 @@ load_dotenv()
 class MidSceneAI:
     """MidSceneJS Python封装类 - 纯AI驱动，无传统方法fallback"""
     
-    def __init__(self, server_url: str = "http://localhost:3001"):
+    def __init__(self, server_url: str = "http://127.0.0.1:3001"):
         """
         初始化MidSceneAI
         
@@ -22,6 +22,7 @@ class MidSceneAI:
         """
         self.server_url = server_url.rstrip('/')
         self.config = self._load_config()
+        self.current_mode = 'headless'  # 默认无头模式
         self._verify_server_connection()
     
     def _load_config(self) -> Dict[str, Any]:
@@ -99,11 +100,40 @@ class MidSceneAI:
                     raise Exception(f"AI操作失败: {str(e)}")
         
         raise Exception("重试次数已用完")
-    
-    def goto(self, url: str) -> Dict[str, Any]:
-        """导航到指定URL"""
+
+    def set_browser_mode(self, mode: str) -> Dict[str, Any]:
+        """
+        设置浏览器模式
+
+        Args:
+            mode: 'browser' (浏览器模式) 或 'headless' (无头模式)
+
+        Returns:
+            设置结果
+        """
+        if mode not in ['browser', 'headless']:
+            raise ValueError("模式必须是 'browser' 或 'headless'")
+
+        print(f"🔧 设置浏览器模式: {mode}")
+        result = self._make_request("/set-browser-mode", data={"mode": mode})
+        self.current_mode = mode
+        print(f"✅ {result.get('message', '模式设置成功')}")
+        return result
+
+    def goto(self, url: str, mode: str = None) -> Dict[str, Any]:
+        """
+        导航到指定URL
+
+        Args:
+            url: 目标URL
+            mode: 浏览器模式 ('browser' 或 'headless')，如果不指定则使用当前模式
+        """
+        # 如果指定了模式且与当前模式不同，先设置模式
+        if mode and mode != self.current_mode:
+            self.set_browser_mode(mode)
+
         print(f"🌐 正在访问: {url}")
-        result = self._make_request("/goto", data={"url": url})
+        result = self._make_request("/goto", data={"url": url, "mode": self.current_mode})
         print(f"✅ 页面加载成功: {result['url']}")
         return result
     
@@ -264,17 +294,21 @@ class MidSceneAI:
     def take_screenshot(self, title: str = "screenshot") -> str:
         """
         截取屏幕截图
-        
+
         Args:
             title: 截图标题
-            
+
         Returns:
             截图文件路径
         """
-        screenshot_path = f"screenshots/{title}.png"
-        os.makedirs("screenshots", exist_ok=True)
-        
-        print(f"📸 截图: {title}")
+        # 确保截图保存到正确的静态文件目录
+        screenshot_filename = f"{title}.png"
+        screenshot_path = f"web_gui/static/screenshots/{screenshot_filename}"
+
+        # 确保目录存在
+        os.makedirs("web_gui/static/screenshots", exist_ok=True)
+
+        print(f"📸 截图: {screenshot_path}")
         result = self._make_request("/screenshot", data={"path": screenshot_path})
         print(f"✅ 截图保存到: {screenshot_path}")
         return screenshot_path

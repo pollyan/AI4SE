@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>执行控制台 - AI测试系统</title>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0f2f5;
+        }
+
+        .header {
+            background: white;
+            padding: 16px 24px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .back-btn {
+            color: #1890ff;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 1px solid #1890ff;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+
+        .back-btn:hover {
+            background: #1890ff;
+            color: white;
+        }
+
+        .content {
+            padding: 24px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            height: calc(100vh - 120px);
+        }
+
+        .panel {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid #f0f0f0;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .panel-content {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .testcase-selector {
+            margin-bottom: 20px;
+        }
+
+        .testcase-selector label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .testcase-select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .execution-controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .mode-selector label {
+            font-weight: 500;
+        }
+
+        .mode-selector input[type="radio"] {
+            margin-right: 4px;
+        }
+
+        .mode-description {
+            margin-bottom: 20px;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 3px solid #007bff;
+        }
+
+        .mode-description small {
+            color: #666;
+            font-size: 13px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #52c41a;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #73d13d;
+        }
+
+        .btn-primary:disabled {
+            background: #d9d9d9;
+            cursor: not-allowed;
+        }
+
+        .btn-danger {
+            background: #ff4d4f;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #ff7875;
+        }
+
+        .execution-status {
+            padding: 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .status-idle {
+            background: #f6ffed;
+            border: 1px solid #b7eb8f;
+            color: #389e0d;
+        }
+
+        .status-running {
+            background: #e6f7ff;
+            border: 1px solid #91d5ff;
+            color: #1890ff;
+        }
+
+        .status-success {
+            background: #f6ffed;
+            border: 1px solid #b7eb8f;
+            color: #52c41a;
+        }
+
+        .status-failed {
+            background: #fff2f0;
+            border: 1px solid #ffccc7;
+            color: #ff4d4f;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 12px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #1890ff;
+            transition: width 0.3s ease;
+        }
+
+        .step-list {
+            margin-top: 20px;
+        }
+
+        .step-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .step-item:last-child {
+            border-bottom: none;
+        }
+
+        .step-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .step-icon.pending {
+            background: #f0f0f0;
+            color: #8c8c8c;
+        }
+
+        .step-icon.running {
+            background: #1890ff;
+            color: white;
+            animation: pulse 1.5s infinite;
+        }
+
+        .step-icon.success {
+            background: #52c41a;
+            color: white;
+        }
+
+        .step-icon.failed {
+            background: #ff4d4f;
+            color: white;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .step-description {
+            color: #666;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .step-time {
+            color: #8c8c8c;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .log-container {
+            background: #001529;
+            color: #fff;
+            padding: 16px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+        }
+
+        .log-timestamp {
+            color: #8c8c8c;
+            margin-right: 8px;
+        }
+
+        .log-level-info {
+            color: #1890ff;
+        }
+
+        .log-level-success {
+            color: #52c41a;
+        }
+
+        .log-level-error {
+            color: #ff4d4f;
+        }
+
+        .log-level-warning {
+            color: #fa8c16;
+        }
+
+        .screenshot-container {
+            margin-top: 16px;
+        }
+
+        .screenshot-container img {
+            max-width: 100%;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        /* 步骤截图缩略图样式 */
+        .step-screenshot {
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }
+
+        .step-screenshot-thumbnail {
+            width: 120px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 4px;
+            border: 2px solid #e8e8e8;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .step-screenshot-thumbnail:hover {
+            border-color: #1890ff;
+            transform: scale(1.05);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .step-screenshot-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+            text-align: center;
+        }
+
+        /* 截图历史样式 */
+        .screenshot-history-container {
+            margin-top: 20px;
+        }
+
+        .screenshot-history {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            background: #fafafa;
+        }
+
+        .screenshot-item {
+            position: relative;
+            width: 120px;
+            height: 90px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        .screenshot-item:hover {
+            border-color: #1890ff;
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .screenshot-item.current {
+            border-color: #52c41a;
+            box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.2);
+        }
+
+        .screenshot-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .screenshot-item .step-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 2px 4px;
+            font-size: 10px;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .screenshot-item .step-index {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            background: #1890ff;
+            color: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        /* 全屏截图查看器 */
+        .screenshot-viewer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            cursor: pointer;
+        }
+
+        .screenshot-viewer img {
+            max-width: 95%;
+            max-height: 95%;
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            cursor: default;
+        }
+
+        .screenshot-viewer-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 1001;
+        }
+
+        .screenshot-viewer-close:hover {
+            color: #ccc;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #8c8c8c;
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>执行控制台</h1>
+        <a href="/" class="back-btn">返回首页</a>
+    </div>
+
+    <div class="content">
+        <!-- 左侧控制面板 -->
+        <div class="panel">
+            <div class="panel-header">执行控制</div>
+            <div class="panel-content">
+                <!-- 测试用例选择 -->
+                <div class="testcase-selector">
+                    <label for="testcaseSelect">选择测试用例:</label>
+                    <select id="testcaseSelect" class="testcase-select">
+                        <option value="">请选择测试用例</option>
+                    </select>
+                </div>
+
+                <!-- 执行模式 -->
+                <div class="mode-selector">
+                    <label>执行模式:</label>
+                    <label><input type="radio" name="mode" value="headless" checked> 🚀 无头模式</label>
+                    <label><input type="radio" name="mode" value="browser"> 🖥️ 浏览器模式</label>
+                </div>
+
+                <!-- 模式说明 -->
+                <div class="mode-description">
+                    <small id="modeDescription">
+                        🚀 <strong>无头模式</strong>: 后台执行，速度快，失败时停止执行
+                    </small>
+                </div>
+
+                <!-- 执行控制按钮 -->
+                <div class="execution-controls">
+                    <button id="startBtn" class="btn btn-primary" onclick="startExecution()">▶️ 开始执行</button>
+                    <button id="stopBtn" class="btn btn-danger" onclick="stopExecution()" disabled>⏹️ 停止执行</button>
+                </div>
+
+                <!-- 执行状态 -->
+                <div id="executionStatus" class="execution-status status-idle">
+                    状态: 就绪
+                </div>
+
+                <!-- 进度条 -->
+                <div id="progressContainer" style="display: none;">
+                    <div>执行进度:</div>
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div id="progressText">0 / 0</div>
+                </div>
+
+                <!-- 步骤列表 -->
+                <div id="stepList" class="step-list">
+                    <div class="empty-state">
+                        <div class="icon">📝</div>
+                        <div>请选择测试用例查看执行步骤</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧监控面板 -->
+        <div class="panel">
+            <div class="panel-header">执行监控</div>
+            <div class="panel-content">
+                <!-- 实时日志 -->
+                <div>
+                    <h4>执行日志:</h4>
+                    <div id="logContainer" class="log-container">
+                        <div class="log-entry">
+                            <span class="log-timestamp">[等待中]</span>
+                            <span class="log-level-info">系统就绪，等待执行指令...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 截图展示 -->
+                <div id="screenshotContainer" class="screenshot-container" style="display: none;">
+                    <h4>当前截图:</h4>
+                    <img id="currentScreenshot" src="" alt="执行截图">
+                </div>
+
+                <!-- 步骤截图历史 -->
+                <div id="screenshotHistoryContainer" class="screenshot-history-container" style="display: none;">
+                    <h4>步骤截图历史:</h4>
+                    <div id="screenshotHistory" class="screenshot-history">
+                        <!-- 截图缩略图将在这里动态添加 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/axios@1.6.0/dist/axios.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        // 全局变量
+        const API_BASE = '/api/v1';
+        const socket = io();
+        let currentExecution = null;
+        let testcases = [];
+        let screenshotHistory = []; // 存储所有步骤的截图历史
+
+        // 页面初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTestcases();
+            setupWebSocket();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // 测试用例选择变化
+            document.getElementById('testcaseSelect').addEventListener('change', function() {
+                const testcaseId = this.value;
+                if (testcaseId) {
+                    loadTestcaseSteps(testcaseId);
+                } else {
+                    clearStepList();
+                }
+            });
+
+            // URL参数处理
+            const urlParams = new URLSearchParams(window.location.search);
+            const testcaseId = urlParams.get('testcase');
+            if (testcaseId) {
+                setTimeout(() => {
+                    document.getElementById('testcaseSelect').value = testcaseId;
+                    loadTestcaseSteps(testcaseId);
+                }, 1000);
+            }
+        }
+
+        function setupWebSocket() {
+            socket.on('connected', function(data) {
+                addLog('WebSocket连接成功', 'success');
+            });
+
+            socket.on('execution_started', function(data) {
+                currentExecution = data.execution_id;
+                updateExecutionStatus('running', `执行开始: ${data.testcase_name}`);
+                addLog(`开始执行测试用例: ${data.testcase_name}`, 'info');
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+
+                // 清空截图历史
+                clearScreenshotHistory();
+            });
+
+            socket.on('step_started', function(data) {
+                updateStepStatus(data.step_index, 'running');
+                addLog(`执行步骤 ${data.step_index + 1}: ${data.step_description}`, 'info');
+            });
+
+            socket.on('step_completed', function(data) {
+                const status = data.status === 'success' ? 'success' : 'failed';
+                updateStepStatus(data.step_index, status);
+
+                // 更新进度条 - 步骤完成时更新
+                updateProgress(data.step_index + 1, data.total_steps || getCurrentTotalSteps());
+
+                if (data.status === 'success') {
+                    addLog(`步骤 ${data.step_index + 1} 执行成功 (${data.duration}秒)`, 'success');
+                } else {
+                    addLog(`步骤 ${data.step_index + 1} 执行失败: ${data.error_message}`, 'error');
+                }
+
+                // 处理截图
+                if (data.screenshot) {
+                    // 新格式：完整的截图对象
+                    addScreenshotToHistory(data.screenshot);
+                    showScreenshot(data.screenshot.path);
+                } else if (data.screenshot_path) {
+                    // 兼容旧格式：只有路径
+                    const screenshot = {
+                        path: data.screenshot_path,
+                        step_index: data.step_index || screenshotHistory.length,
+                        step_name: `步骤 ${(data.step_index || screenshotHistory.length) + 1}`,
+                        timestamp: Date.now()
+                    };
+                    addScreenshotToHistory(screenshot);
+                    showScreenshot(data.screenshot_path);
+                }
+
+                // 调试输出
+                console.log('步骤完成事件:', data);
+                console.log('截图历史:', screenshotHistory);
+            });
+
+            socket.on('execution_completed', function(data) {
+                currentExecution = null;
+                const status = data.status === 'success' ? 'success' : 'failed';
+                updateExecutionStatus(status, `执行完成: ${data.status}`);
+                addLog(`测试执行完成: ${data.steps_passed}/${data.total_steps} 步骤成功`, 
+                       data.status === 'success' ? 'success' : 'error');
+                
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+            });
+
+            socket.on('execution_error', function(data) {
+                currentExecution = null;
+                updateExecutionStatus('failed', '执行错误');
+                addLog(`执行错误: ${data.message}`, 'error');
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+            });
+        }
+
+        async function loadTestcases() {
+            try {
+                const response = await axios.get(`${API_BASE}/testcases?size=100`);
+                if (response.data.code === 200) {
+                    testcases = response.data.data.items;
+                    renderTestcaseOptions();
+                }
+            } catch (error) {
+                addLog('加载测试用例失败', 'error');
+            }
+        }
+
+        function renderTestcaseOptions() {
+            const select = document.getElementById('testcaseSelect');
+            select.innerHTML = '<option value="">请选择测试用例</option>';
+            
+            testcases.forEach(testcase => {
+                const option = document.createElement('option');
+                option.value = testcase.id;
+                option.textContent = `${testcase.name} (${testcase.category || '未分类'})`;
+                select.appendChild(option);
+            });
+        }
+
+        async function loadTestcaseSteps(testcaseId) {
+            try {
+                const response = await axios.get(`${API_BASE}/testcases/${testcaseId}`);
+                if (response.data.code === 200) {
+                    const testcase = response.data.data;
+                    renderSteps(testcase.steps);
+                }
+            } catch (error) {
+                addLog('加载测试步骤失败', 'error');
+            }
+        }
+
+        function renderSteps(steps) {
+            const stepList = document.getElementById('stepList');
+            
+            if (!steps || steps.length === 0) {
+                stepList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">⚠️</div>
+                        <div>该测试用例暂无执行步骤</div>
+                    </div>
+                `;
+                return;
+            }
+
+            stepList.innerHTML = steps.map((step, index) => `
+                <div class="step-item" id="step-${index}">
+                    <div class="step-icon pending" id="step-icon-${index}">
+                        ${index + 1}
+                    </div>
+                    <div class="step-content">
+                        <div class="step-title">${step.description || step.action}</div>
+                        <div class="step-description">${JSON.stringify(step.params || {})}</div>
+                        <div class="step-time" id="step-time-${index}"></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function clearStepList() {
+            document.getElementById('stepList').innerHTML = `
+                <div class="empty-state">
+                    <div class="icon">📝</div>
+                    <div>请选择测试用例查看执行步骤</div>
+                </div>
+            `;
+        }
+
+        function startExecution() {
+            const testcaseId = document.getElementById('testcaseSelect').value;
+            if (!testcaseId) {
+                addLog('请先选择测试用例', 'warning');
+                return;
+            }
+
+            const mode = document.querySelector('input[name="mode"]:checked').value;
+            
+            // 重置步骤状态
+            const stepIcons = document.querySelectorAll('.step-icon');
+            stepIcons.forEach(icon => {
+                icon.className = 'step-icon pending';
+                icon.textContent = icon.id.split('-')[2] ? parseInt(icon.id.split('-')[2]) + 1 : '';
+            });
+
+            // 清空日志
+            document.getElementById('logContainer').innerHTML = '';
+            
+            // 显示进度条
+            document.getElementById('progressContainer').style.display = 'block';
+            updateProgress(0, stepIcons.length);
+
+            // 发送执行请求
+            socket.emit('start_execution', {
+                testcase_id: parseInt(testcaseId),
+                mode: mode
+            });
+
+            addLog(`开始执行测试用例 (模式: ${mode})`, 'info');
+        }
+
+        function stopExecution() {
+            if (currentExecution) {
+                // TODO: 实现停止执行功能
+                addLog('停止执行功能开发中...', 'warning');
+            }
+        }
+
+        function updateExecutionStatus(status, message) {
+            const statusEl = document.getElementById('executionStatus');
+            statusEl.className = `execution-status status-${status}`;
+            statusEl.textContent = `状态: ${message}`;
+        }
+
+        function updateStepStatus(stepIndex, status) {
+            const iconEl = document.getElementById(`step-icon-${stepIndex}`);
+            if (iconEl) {
+                iconEl.className = `step-icon ${status}`;
+                if (status === 'success') {
+                    iconEl.textContent = '✓';
+                } else if (status === 'failed') {
+                    iconEl.textContent = '✗';
+                } else if (status === 'running') {
+                    iconEl.textContent = '⏳';
+                }
+            }
+        }
+
+        function updateProgress(current, total) {
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+
+            const percentage = total > 0 ? (current / total) * 100 : 0;
+            progressFill.style.width = percentage + '%';
+            progressText.textContent = `${current} / ${total}`;
+        }
+
+        function getCurrentTotalSteps() {
+            const stepIcons = document.querySelectorAll('.step-icon');
+            return stepIcons.length;
+        }
+
+        function addLog(message, level = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.innerHTML = `
+                <span class="log-timestamp">[${timestamp}]</span>
+                <span class="log-level-${level}">${message}</span>
+            `;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function showScreenshot(path) {
+            const container = document.getElementById('screenshotContainer');
+            const img = document.getElementById('currentScreenshot');
+
+            img.src = path;
+            container.style.display = 'block';
+        }
+
+        // 截图历史处理函数
+        function clearScreenshotHistory() {
+            screenshotHistory = [];
+            const historyContainer = document.getElementById('screenshotHistory');
+            historyContainer.innerHTML = '';
+            document.getElementById('screenshotHistoryContainer').style.display = 'none';
+        }
+
+        function addScreenshotToHistory(screenshot) {
+            screenshotHistory.push(screenshot);
+            renderScreenshotHistory();
+
+            // 显示截图历史容器
+            document.getElementById('screenshotHistoryContainer').style.display = 'block';
+        }
+
+        function renderScreenshotHistory() {
+            const historyContainer = document.getElementById('screenshotHistory');
+            historyContainer.innerHTML = '';
+
+            screenshotHistory.forEach((screenshot, index) => {
+                const item = document.createElement('div');
+                item.className = 'screenshot-item';
+                if (index === screenshotHistory.length - 1) {
+                    item.classList.add('current'); // 标记当前截图
+                }
+
+                item.innerHTML = `
+                    <div class="step-index">${screenshot.step_index + 1}</div>
+                    <img src="${screenshot.path}" alt="步骤 ${screenshot.step_index + 1} 截图"
+                         onerror="this.style.display='none'">
+                    <div class="step-label">${screenshot.step_name}</div>
+                `;
+
+                // 点击缩略图显示大图
+                item.addEventListener('click', function() {
+                    showScreenshotFullscreen(screenshot.path, screenshot.step_name);
+
+                    // 更新当前截图
+                    showScreenshot(screenshot.path);
+
+                    // 更新当前标记
+                    document.querySelectorAll('.screenshot-item').forEach(el => el.classList.remove('current'));
+                    item.classList.add('current');
+                });
+
+                historyContainer.appendChild(item);
+            });
+
+            // 自动滚动到最新截图
+            historyContainer.scrollTop = historyContainer.scrollHeight;
+        }
+
+        function showScreenshotFullscreen(imagePath, stepName) {
+            // 创建全屏查看器
+            let viewer = document.getElementById('screenshotViewer');
+            if (!viewer) {
+                viewer = document.createElement('div');
+                viewer.id = 'screenshotViewer';
+                viewer.className = 'screenshot-viewer';
+                viewer.innerHTML = `
+                    <div style="position: relative;">
+                        <img id="fullscreenImage" src="" alt="截图">
+                        <div style="position: absolute; top: -40px; left: 0; color: white; font-size: 16px; font-weight: bold;">
+                            <span id="fullscreenTitle"></span>
+                        </div>
+                        <div style="position: absolute; top: -40px; right: 0; color: white; font-size: 24px; cursor: pointer;" onclick="closeScreenshotViewer()">
+                            ✕
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(viewer);
+
+                // 点击背景关闭
+                viewer.addEventListener('click', function(e) {
+                    if (e.target === viewer) {
+                        closeScreenshotViewer();
+                    }
+                });
+            }
+
+            document.getElementById('fullscreenImage').src = imagePath;
+            document.getElementById('fullscreenTitle').textContent = stepName;
+            viewer.style.display = 'flex';
+        }
+
+        function closeScreenshotViewer() {
+            const viewer = document.getElementById('screenshotViewer');
+            if (viewer) {
+                viewer.style.display = 'none';
+            }
+        }
+
+        // 模式切换处理
+        document.addEventListener('DOMContentLoaded', function() {
+            const modeRadios = document.querySelectorAll('input[name="mode"]');
+            const modeDescription = document.getElementById('modeDescription');
+
+            // 模式描述文本
+            const modeDescriptions = {
+                'headless': '🚀 <strong>无头模式</strong>: 后台执行，速度快，失败时停止执行',
+                'browser': '🖥️ <strong>浏览器模式</strong>: 可视化执行，便于调试，失败时继续执行'
+            };
+
+            // 监听模式切换
+            modeRadios.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    if (this.checked) {
+                        modeDescription.innerHTML = modeDescriptions[this.value];
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

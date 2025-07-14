@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试用例管理 - AI测试系统</title>
+    
+    <!-- Ant Design CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/antd@5.12.8/dist/antd.min.css" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0f2f5;
+        }
+
+        .header {
+            background: white;
+            padding: 16px 24px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .back-btn {
+            color: #1890ff;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 1px solid #1890ff;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+
+        .back-btn:hover {
+            background: #1890ff;
+            color: white;
+        }
+
+        .content {
+            padding: 24px;
+        }
+
+        .toolbar {
+            background: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .search-area {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .search-input, .category-select {
+            padding: 8px 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .search-input {
+            width: 300px;
+        }
+
+        .category-select {
+            width: 150px;
+        }
+
+        .create-btn {
+            background: #1890ff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .create-btn:hover {
+            background: #40a9ff;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th,
+        .table td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .table th {
+            background: #fafafa;
+            font-weight: 600;
+            color: #262626;
+        }
+
+        .table tr:hover {
+            background: #f5f5f5;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-right: 4px;
+            margin-bottom: 2px;
+        }
+
+        .priority-tag {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: white;
+        }
+
+        .priority-1 { background: #ff4d4f; }
+        .priority-2 { background: #fa8c16; }
+        .priority-3 { background: #52c41a; }
+        .priority-4 { background: #1890ff; }
+        .priority-5 { background: #8c8c8c; }
+
+        .action-btn {
+            color: #1890ff;
+            text-decoration: none;
+            margin-right: 12px;
+            cursor: pointer;
+        }
+
+        .action-btn:hover {
+            text-decoration: underline;
+        }
+
+        .action-btn.danger {
+            color: #ff4d4f;
+        }
+
+        .pagination {
+            padding: 16px 24px;
+            text-align: center;
+            background: white;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        .pagination button {
+            padding: 8px 12px;
+            margin: 0 4px;
+            border: 1px solid #d9d9d9;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .pagination button:hover {
+            border-color: #1890ff;
+            color: #1890ff;
+        }
+
+        .pagination button.active {
+            background: #1890ff;
+            color: white;
+            border-color: #1890ff;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 8px;
+            width: 600px;
+            max-width: 90vw;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #8c8c8c;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
+            color: #262626;
+        }
+
+        .form-input,
+        .form-textarea,
+        .form-select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #1890ff;
+            color: white;
+            border-color: #1890ff;
+        }
+
+        .btn-primary:hover {
+            background: #40a9ff;
+        }
+
+        .btn-default {
+            background: white;
+            color: #262626;
+        }
+
+        .btn-default:hover {
+            border-color: #1890ff;
+            color: #1890ff;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #8c8c8c;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: #8c8c8c;
+        }
+
+        .message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 4px;
+            color: white;
+            z-index: 1001;
+            animation: slideIn 0.3s ease;
+        }
+
+        .message.success {
+            background: #52c41a;
+        }
+
+        .message.error {
+            background: #ff4d4f;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>测试用例管理</h1>
+        <a href="/" class="back-btn">返回首页</a>
+    </div>
+
+    <div class="content">
+        <div class="toolbar">
+            <div class="search-area">
+                <input type="text" class="search-input" id="searchInput" placeholder="搜索测试用例名称...">
+                <select class="category-select" id="categorySelect">
+                    <option value="">所有分类</option>
+                    <option value="功能测试">功能测试</option>
+                    <option value="性能测试">性能测试</option>
+                    <option value="兼容性测试">兼容性测试</option>
+                    <option value="安全测试">安全测试</option>
+                </select>
+            </div>
+            <button class="create-btn" onclick="showCreateModal()">➕ 创建测试用例</button>
+        </div>
+
+        <div class="table-container">
+            <div id="loading" class="loading">正在加载测试用例...</div>
+            <div id="tableContent" style="display: none;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>名称</th>
+                            <th>描述</th>
+                            <th>分类</th>
+                            <th>优先级</th>
+                            <th>标签</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- 动态内容 -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="emptyState" class="empty" style="display: none;">
+                暂无测试用例，点击"创建测试用例"开始添加
+            </div>
+            <div class="pagination" id="pagination" style="display: none;">
+                <!-- 分页控件 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建/编辑模态框 -->
+    <div class="modal" id="createModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">创建测试用例</h3>
+                <button class="close-btn" onclick="hideCreateModal()">&times;</button>
+            </div>
+            <form id="testcaseForm">
+                <div class="form-group">
+                    <label class="form-label">测试用例名称 *</label>
+                    <input type="text" class="form-input" id="testcaseName" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">描述</label>
+                    <textarea class="form-textarea" id="testcaseDescription" placeholder="请输入测试用例描述"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">分类</label>
+                    <select class="form-select" id="testcaseCategory">
+                        <option value="">请选择分类</option>
+                        <option value="功能测试">功能测试</option>
+                        <option value="性能测试">性能测试</option>
+                        <option value="兼容性测试">兼容性测试</option>
+                        <option value="安全测试">安全测试</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">优先级</label>
+                    <select class="form-select" id="testcasePriority">
+                        <option value="1">高</option>
+                        <option value="2">中高</option>
+                        <option value="3" selected>中</option>
+                        <option value="4">中低</option>
+                        <option value="5">低</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">标签</label>
+                    <input type="text" class="form-input" id="testcaseTags" placeholder="请输入标签，用逗号分隔">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-default" onclick="hideCreateModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/axios@1.6.0/dist/axios.min.js"></script>
+    <script>
+        // 全局变量
+        const API_BASE = '/api/v1';
+        let currentPage = 1;
+        let pageSize = 20;
+        let totalPages = 0;
+        let editingTestcase = null;
+
+        // 页面初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTestcases();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // 搜索输入
+            document.getElementById('searchInput').addEventListener('input', debounce(function() {
+                currentPage = 1;
+                loadTestcases();
+            }, 500));
+
+            // 分类选择
+            document.getElementById('categorySelect').addEventListener('change', function() {
+                currentPage = 1;
+                loadTestcases();
+            });
+
+            // 表单提交
+            document.getElementById('testcaseForm').addEventListener('submit', handleFormSubmit);
+        }
+
+        async function loadTestcases() {
+            try {
+                showLoading(true);
+                
+                const searchText = document.getElementById('searchInput').value;
+                const category = document.getElementById('categorySelect').value;
+                
+                const params = {
+                    page: currentPage,
+                    size: pageSize,
+                    search: searchText,
+                    category: category
+                };
+                
+                const response = await axios.get(`${API_BASE}/testcases`, { params });
+                
+                if (response.data.code === 200) {
+                    const data = response.data.data;
+                    renderTestcases(data.items);
+                    renderPagination(data.page, data.pages, data.total);
+                } else {
+                    showMessage('加载失败: ' + response.data.message, 'error');
+                }
+            } catch (error) {
+                console.error('加载测试用例失败:', error);
+                showMessage('加载测试用例失败', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function renderTestcases(testcases) {
+            const tbody = document.getElementById('tableBody');
+            const tableContent = document.getElementById('tableContent');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (testcases.length === 0) {
+                tableContent.style.display = 'none';
+                emptyState.style.display = 'block';
+                return;
+            }
+            
+            tableContent.style.display = 'block';
+            emptyState.style.display = 'none';
+            
+            tbody.innerHTML = testcases.map(testcase => `
+                <tr>
+                    <td>${testcase.id}</td>
+                    <td><a href="#" onclick="editTestcase(${testcase.id})">${testcase.name}</a></td>
+                    <td>${testcase.description || '-'}</td>
+                    <td>${testcase.category ? `<span class="tag">${testcase.category}</span>` : '-'}</td>
+                    <td><span class="priority-tag priority-${testcase.priority}">${getPriorityText(testcase.priority)}</span></td>
+                    <td>${testcase.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}</td>
+                    <td>${new Date(testcase.created_at).toLocaleString()}</td>
+                    <td>
+                        <a href="#" class="action-btn" onclick="editTestcase(${testcase.id})">编辑</a>
+                        <a href="/step_editor?id=${testcase.id}" class="action-btn">步骤</a>
+                        <a href="/execution?testcase=${testcase.id}" class="action-btn">执行</a>
+                        <a href="#" class="action-btn danger" onclick="deleteTestcase(${testcase.id})">删除</a>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderPagination(page, pages, total) {
+            const pagination = document.getElementById('pagination');
+            
+            if (pages <= 1) {
+                pagination.style.display = 'none';
+                return;
+            }
+            
+            pagination.style.display = 'block';
+            
+            let html = `<span>共 ${total} 条记录，第 ${page}/${pages} 页</span> `;
+            
+            // 上一页
+            if (page > 1) {
+                html += `<button onclick="goToPage(${page - 1})">上一页</button>`;
+            }
+            
+            // 页码
+            for (let i = Math.max(1, page - 2); i <= Math.min(pages, page + 2); i++) {
+                html += `<button class="${i === page ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+            }
+            
+            // 下一页
+            if (page < pages) {
+                html += `<button onclick="goToPage(${page + 1})">下一页</button>`;
+            }
+            
+            pagination.innerHTML = html;
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            loadTestcases();
+        }
+
+        function getPriorityText(priority) {
+            const texts = { 1: '高', 2: '中高', 3: '中', 4: '中低', 5: '低' };
+            return texts[priority] || '中';
+        }
+
+        function showCreateModal() {
+            editingTestcase = null;
+            document.getElementById('modalTitle').textContent = '创建测试用例';
+            document.getElementById('testcaseForm').reset();
+            document.getElementById('createModal').classList.add('show');
+        }
+
+        function hideCreateModal() {
+            document.getElementById('createModal').classList.remove('show');
+        }
+
+        async function editTestcase(id) {
+            try {
+                const response = await axios.get(`${API_BASE}/testcases/${id}`);
+                if (response.data.code === 200) {
+                    const testcase = response.data.data;
+                    editingTestcase = testcase;
+                    
+                    document.getElementById('modalTitle').textContent = '编辑测试用例';
+                    document.getElementById('testcaseName').value = testcase.name;
+                    document.getElementById('testcaseDescription').value = testcase.description || '';
+                    document.getElementById('testcaseCategory').value = testcase.category || '';
+                    document.getElementById('testcasePriority').value = testcase.priority;
+                    document.getElementById('testcaseTags').value = testcase.tags.join(', ');
+                    
+                    document.getElementById('createModal').classList.add('show');
+                } else {
+                    showMessage('获取测试用例详情失败', 'error');
+                }
+            } catch (error) {
+                showMessage('获取测试用例详情失败', 'error');
+            }
+        }
+
+        async function deleteTestcase(id) {
+            if (!confirm('确定要删除这个测试用例吗？')) {
+                return;
+            }
+            
+            try {
+                const response = await axios.delete(`${API_BASE}/testcases/${id}`);
+                if (response.data.code === 200) {
+                    showMessage('删除成功', 'success');
+                    loadTestcases();
+                } else {
+                    showMessage('删除失败: ' + response.data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('删除失败', 'error');
+            }
+        }
+
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            
+            const formData = {
+                name: document.getElementById('testcaseName').value,
+                description: document.getElementById('testcaseDescription').value,
+                category: document.getElementById('testcaseCategory').value,
+                priority: parseInt(document.getElementById('testcasePriority').value),
+                tags: document.getElementById('testcaseTags').value.split(',').map(tag => tag.trim()).filter(tag => tag),
+                steps: [] // 暂时为空，后续在步骤编辑器中完善
+            };
+            
+            try {
+                let response;
+                if (editingTestcase) {
+                    response = await axios.put(`${API_BASE}/testcases/${editingTestcase.id}`, formData);
+                } else {
+                    response = await axios.post(`${API_BASE}/testcases`, formData);
+                }
+                
+                if (response.data.code === 200) {
+                    showMessage(editingTestcase ? '更新成功' : '创建成功', 'success');
+                    hideCreateModal();
+                    loadTestcases();
+                } else {
+                    showMessage((editingTestcase ? '更新' : '创建') + '失败: ' + response.data.message, 'error');
+                }
+            } catch (error) {
+                showMessage((editingTestcase ? '更新' : '创建') + '失败', 'error');
+            }
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+            document.getElementById('tableContent').style.display = show ? 'none' : 'block';
+        }
+
+        function showMessage(message, type) {
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${type}`;
+            messageEl.textContent = message;
+            document.body.appendChild(messageEl);
+            
+            setTimeout(() => {
+                document.body.removeChild(messageEl);
+            }, 3000);
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+    </script>
+</body>
+</html>

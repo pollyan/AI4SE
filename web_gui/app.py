@@ -197,7 +197,7 @@ ai_service = AITestService()
 @app.route('/')
 def index():
     """主页"""
-    return render_template('index.html')
+    return render_template('index_enhanced.html')
 
 @app.route('/api/test-cases', methods=['GET'])
 def get_test_cases():

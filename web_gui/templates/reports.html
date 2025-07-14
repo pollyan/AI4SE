@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试报告 - AI测试系统</title>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0f2f5;
+        }
+
+        .header {
+            background: white;
+            padding: 16px 24px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .back-btn {
+            color: #1890ff;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 1px solid #1890ff;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+
+        .back-btn:hover {
+            background: #1890ff;
+            color: white;
+        }
+
+        .content {
+            padding: 24px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 24px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .stat-number.success { color: #52c41a; }
+        .stat-number.failed { color: #ff4d4f; }
+        .stat-number.total { color: #1890ff; }
+        .stat-number.rate { color: #722ed1; }
+
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .reports-section {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .section-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .filter-select {
+            padding: 6px 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .section-content {
+            padding: 24px;
+        }
+
+        .execution-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .execution-item {
+            border: 1px solid #f0f0f0;
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+
+        .execution-item:hover {
+            border-color: #1890ff;
+            box-shadow: 0 4px 12px rgba(24, 144, 255, 0.15);
+        }
+
+        .execution-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .execution-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .execution-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .execution-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-success {
+            background: #f6ffed;
+            color: #52c41a;
+            border: 1px solid #b7eb8f;
+        }
+
+        .status-failed {
+            background: #fff2f0;
+            color: #ff4d4f;
+            border: 1px solid #ffccc7;
+        }
+
+        .status-running {
+            background: #e6f7ff;
+            color: #1890ff;
+            border: 1px solid #91d5ff;
+        }
+
+        .execution-stats {
+            display: flex;
+            gap: 24px;
+            margin-top: 12px;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 14px;
+        }
+
+        .stat-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: white;
+        }
+
+        .stat-icon.success { background: #52c41a; }
+        .stat-icon.failed { background: #ff4d4f; }
+        .stat-icon.total { background: #1890ff; }
+
+        .execution-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            padding: 6px 12px;
+            border: 1px solid #d9d9d9;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            text-decoration: none;
+            color: #666;
+            transition: all 0.3s;
+        }
+
+        .action-btn:hover {
+            border-color: #1890ff;
+            color: #1890ff;
+        }
+
+        .action-btn.primary {
+            background: #1890ff;
+            color: white;
+            border-color: #1890ff;
+        }
+
+        .action-btn.primary:hover {
+            background: #40a9ff;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #8c8c8c;
+        }
+
+        .empty-state .icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+
+        .empty-state .title {
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .empty-state .description {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #8c8c8c;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 24px;
+            padding: 16px;
+        }
+
+        .pagination button {
+            padding: 8px 12px;
+            border: 1px solid #d9d9d9;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .pagination button:hover {
+            border-color: #1890ff;
+            color: #1890ff;
+        }
+
+        .pagination button.active {
+            background: #1890ff;
+            color: white;
+            border-color: #1890ff;
+        }
+
+        .pagination button:disabled {
+            background: #f5f5f5;
+            color: #bfbfbf;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .execution-header {
+                flex-direction: column;
+                gap: 12px;
+            }
+            
+            .execution-meta {
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .execution-stats {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>测试报告</h1>
+        <a href="/" class="back-btn">返回首页</a>
+    </div>
+
+    <div class="content">
+        <!-- 统计概览 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number total" id="totalExecutions">0</div>
+                <div class="stat-label">总执行次数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number success" id="successExecutions">0</div>
+                <div class="stat-label">成功次数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number failed" id="failedExecutions">0</div>
+                <div class="stat-label">失败次数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number rate" id="successRate">0%</div>
+                <div class="stat-label">成功率</div>
+            </div>
+        </div>
+
+        <!-- 执行历史 -->
+        <div class="reports-section">
+            <div class="section-header">
+                <h3 class="section-title">执行历史</h3>
+                <div class="filter-controls">
+                    <select class="filter-select" id="statusFilter">
+                        <option value="">所有状态</option>
+                        <option value="success">成功</option>
+                        <option value="failed">失败</option>
+                        <option value="running">运行中</option>
+                    </select>
+                    <select class="filter-select" id="testcaseFilter">
+                        <option value="">所有用例</option>
+                    </select>
+                </div>
+            </div>
+            <div class="section-content">
+                <div id="loading" class="loading">正在加载执行历史...</div>
+                <div id="executionList" class="execution-list" style="display: none;">
+                    <!-- 动态内容 -->
+                </div>
+                <div id="emptyState" class="empty-state" style="display: none;">
+                    <div class="icon">📊</div>
+                    <div class="title">暂无执行记录</div>
+                    <div class="description">还没有执行过测试用例<br>前往执行控制台开始第一次测试</div>
+                </div>
+                <div class="pagination" id="pagination" style="display: none;">
+                    <!-- 分页控件 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/axios@1.6.0/dist/axios.min.js"></script>
+    <script>
+        // 全局变量
+        const API_BASE = '/api/v1';
+        let currentPage = 1;
+        let pageSize = 10;
+        let totalPages = 0;
+        let testcases = [];
+
+        // 页面初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStats();
+            loadTestcases();
+            loadExecutions();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // 筛选器变化
+            document.getElementById('statusFilter').addEventListener('change', function() {
+                currentPage = 1;
+                loadExecutions();
+            });
+
+            document.getElementById('testcaseFilter').addEventListener('change', function() {
+                currentPage = 1;
+                loadExecutions();
+            });
+        }
+
+        async function loadStats() {
+            try {
+                const response = await axios.get(`${API_BASE}/stats/dashboard`);
+                if (response.data.code === 200) {
+                    const stats = response.data.data;
+                    document.getElementById('totalExecutions').textContent = stats.total_executions || 0;
+                    document.getElementById('successExecutions').textContent = stats.success_executions || 0;
+                    document.getElementById('failedExecutions').textContent = stats.failed_executions || 0;
+                    document.getElementById('successRate').textContent = (stats.success_rate || 0) + '%';
+                }
+            } catch (error) {
+                console.error('加载统计数据失败:', error);
+            }
+        }
+
+        async function loadTestcases() {
+            try {
+                const response = await axios.get(`${API_BASE}/testcases?size=100`);
+                if (response.data.code === 200) {
+                    testcases = response.data.data.items;
+                    renderTestcaseFilter();
+                }
+            } catch (error) {
+                console.error('加载测试用例失败:', error);
+            }
+        }
+
+        function renderTestcaseFilter() {
+            const select = document.getElementById('testcaseFilter');
+            select.innerHTML = '<option value="">所有用例</option>';
+            
+            testcases.forEach(testcase => {
+                const option = document.createElement('option');
+                option.value = testcase.id;
+                option.textContent = testcase.name;
+                select.appendChild(option);
+            });
+        }
+
+        async function loadExecutions() {
+            try {
+                showLoading(true);
+                
+                const statusFilter = document.getElementById('statusFilter').value;
+                const testcaseFilter = document.getElementById('testcaseFilter').value;
+                
+                const params = {
+                    page: currentPage,
+                    size: pageSize
+                };
+                
+                if (testcaseFilter) {
+                    params.testcase_id = testcaseFilter;
+                }
+                
+                const response = await axios.get(`${API_BASE}/executions`, { params });
+                
+                if (response.data.code === 200) {
+                    const data = response.data.data;
+                    let executions = data.items;
+                    
+                    // 客户端状态筛选
+                    if (statusFilter) {
+                        executions = executions.filter(exec => exec.status === statusFilter);
+                    }
+                    
+                    renderExecutions(executions);
+                    renderPagination(data.page, data.pages, data.total);
+                } else {
+                    showError('加载执行历史失败');
+                }
+            } catch (error) {
+                console.error('加载执行历史失败:', error);
+                showError('加载执行历史失败');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function renderExecutions(executions) {
+            const listEl = document.getElementById('executionList');
+            const emptyEl = document.getElementById('emptyState');
+            
+            if (executions.length === 0) {
+                listEl.style.display = 'none';
+                emptyEl.style.display = 'block';
+                return;
+            }
+            
+            listEl.style.display = 'block';
+            emptyEl.style.display = 'none';
+            
+            listEl.innerHTML = executions.map(execution => `
+                <div class="execution-item">
+                    <div class="execution-header">
+                        <div>
+                            <div class="execution-title">${execution.test_case_name || '未知测试用例'}</div>
+                            <div class="execution-meta">
+                                <span>执行ID: ${execution.execution_id}</span>
+                                <span>开始时间: ${new Date(execution.start_time).toLocaleString()}</span>
+                                <span>执行时长: ${execution.duration ? execution.duration + '秒' : '未知'}</span>
+                            </div>
+                        </div>
+                        <div class="execution-actions">
+                            <button class="action-btn" onclick="viewDetails('${execution.execution_id}')">查看详情</button>
+                            <button class="action-btn primary" onclick="rerun(${execution.test_case_id})">重新执行</button>
+                        </div>
+                    </div>
+                    <div class="execution-status">
+                        <span class="status-badge status-${execution.status}">${getStatusText(execution.status)}</span>
+                        <span style="margin-left: 12px; color: #666;">模式: ${execution.mode === 'debug' ? '调试' : '正常'}</span>
+                    </div>
+                    <div class="execution-stats">
+                        <div class="stat-item">
+                            <div class="stat-icon total">T</div>
+                            <span>总步骤: ${execution.steps_total || 0}</span>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon success">✓</div>
+                            <span>成功: ${execution.steps_passed || 0}</span>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon failed">✗</div>
+                            <span>失败: ${execution.steps_failed || 0}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderPagination(page, pages, total) {
+            const pagination = document.getElementById('pagination');
+            
+            if (pages <= 1) {
+                pagination.style.display = 'none';
+                return;
+            }
+            
+            pagination.style.display = 'flex';
+            
+            let html = `<span style="margin-right: 16px;">共 ${total} 条记录，第 ${page}/${pages} 页</span>`;
+            
+            // 上一页
+            html += `<button ${page <= 1 ? 'disabled' : ''} onclick="goToPage(${page - 1})">上一页</button>`;
+            
+            // 页码
+            for (let i = Math.max(1, page - 2); i <= Math.min(pages, page + 2); i++) {
+                html += `<button class="${i === page ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+            }
+            
+            // 下一页
+            html += `<button ${page >= pages ? 'disabled' : ''} onclick="goToPage(${page + 1})">下一页</button>`;
+            
+            pagination.innerHTML = html;
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            loadExecutions();
+        }
+
+        function getStatusText(status) {
+            const statusMap = {
+                'success': '成功',
+                'failed': '失败',
+                'running': '运行中',
+                'pending': '等待中'
+            };
+            return statusMap[status] || status;
+        }
+
+        function viewDetails(executionId) {
+            // TODO: 实现查看详情功能
+            alert(`查看执行详情功能开发中...\n执行ID: ${executionId}`);
+        }
+
+        function rerun(testcaseId) {
+            if (testcaseId) {
+                window.location.href = `/execution?testcase=${testcaseId}`;
+            } else {
+                alert('无法重新执行：测试用例ID不存在');
+            }
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+            document.getElementById('executionList').style.display = show ? 'none' : 'block';
+        }
+
+        function showError(message) {
+            const emptyEl = document.getElementById('emptyState');
+            emptyEl.innerHTML = `
+                <div class="icon">⚠️</div>
+                <div class="title">加载失败</div>
+                <div class="description">${message}</div>
+            `;
+            emptyEl.style.display = 'block';
+            document.getElementById('executionList').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
