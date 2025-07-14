@@ -14,7 +14,7 @@ DEMO_CASES = [
 3. 等待搜索结果页面加载完成
 4. 验证页面显示了相关的搜索结果
 5. 提取前5个搜索结果的标题
-6. 验证搜索结果数量大于0"""
+6. 验证搜索结果数量大于0""",
     },
     {
         "name": "电商网站商品搜索",
@@ -27,7 +27,7 @@ DEMO_CASES = [
 5. 点击第一个商品
 6. 等待商品详情页加载
 7. 验证商品详情页显示了价格信息
-8. 提取商品名称和价格"""
+8. 提取商品名称和价格""",
     },
     {
         "name": "新闻网站内容浏览",
@@ -39,7 +39,7 @@ DEMO_CASES = [
 4. 点击第一条新闻
 5. 等待新闻详情页加载
 6. 验证新闻内容已显示
-7. 提取新闻发布时间和作者信息"""
+7. 提取新闻发布时间和作者信息""",
     },
     {
         "name": "社交媒体登录流程",
@@ -52,7 +52,7 @@ DEMO_CASES = [
 5. 等待页面响应
 6. 验证是否显示验证码
 7. 如果有验证码，提取验证码图片
-8. 验证登录状态或错误提示"""
+8. 验证登录状态或错误提示""",
     },
     {
         "name": "在线表单填写测试",
@@ -66,7 +66,7 @@ DEMO_CASES = [
 6. 填写联系方式
 7. 填写意见建议文本框
 8. 点击提交按钮
-9. 验证提交成功提示"""
+9. 验证提交成功提示""",
     },
     {
         "name": "视频网站搜索播放",
@@ -80,7 +80,7 @@ DEMO_CASES = [
 6. 点击第一个视频
 7. 等待视频页面加载
 8. 验证视频播放器已显示
-9. 提取视频时长和UP主信息"""
+9. 提取视频时长和UP主信息""",
     },
     {
         "name": "天气查询功能测试",
@@ -93,7 +93,7 @@ DEMO_CASES = [
 5. 提取当前温度和天气状况
 6. 提取未来7天天气预报
 7. 验证空气质量信息已显示
-8. 提取空气质量指数"""
+8. 提取空气质量指数""",
     },
     {
         "name": "在线翻译功能测试",
@@ -106,32 +106,33 @@ DEMO_CASES = [
 5. 验证翻译结果已显示
 6. 提取翻译结果文本
 7. 验证翻译结果包含"世界"
-8. 测试语音播放功能"""
-    }
+8. 测试语音播放功能""",
+    },
 ]
+
 
 def create_demo_cases():
     """创建演示测试用例的函数"""
     import sys
     import os
     from pathlib import Path
-    
+
     # 添加项目路径
     project_root = Path(__file__).parent.parent
     sys.path.insert(0, str(project_root))
-    
+
     try:
         from web_gui.app import app, db, TestCase
-        
+
         with app.app_context():
             # 检查是否已有演示用例
             existing_count = TestCase.query.count()
             if existing_count > 0:
                 print(f"数据库中已有 {existing_count} 个测试用例")
                 response = input("是否要添加演示用例? (y/N): ")
-                if response.lower() != 'y':
+                if response.lower() != "y":
                     return
-            
+
             # 创建演示用例
             created_count = 0
             for demo_case in DEMO_CASES:
@@ -140,14 +141,14 @@ def create_demo_cases():
                 if existing:
                     print(f"跳过已存在的用例: {demo_case['name']}")
                     continue
-                
+
                 # 使用AI解析器生成步骤
                 from web_gui.services.ai_enhanced_parser import parse_natural_language
+
                 steps = parse_natural_language(
-                    demo_case["natural_language_input"],
-                    demo_case["target_url"]
+                    demo_case["natural_language_input"], demo_case["target_url"]
                 )
-                
+
                 # 创建测试用例
                 test_case = TestCase(
                     name=demo_case["name"],
@@ -155,20 +156,22 @@ def create_demo_cases():
                     natural_language_input=demo_case["natural_language_input"],
                     generated_steps=json.dumps(steps, ensure_ascii=False, indent=2),
                     target_url=demo_case["target_url"],
-                    status='ready'
+                    status="ready",
                 )
-                
+
                 db.session.add(test_case)
                 created_count += 1
                 print(f"✅ 创建演示用例: {demo_case['name']}")
-            
+
             db.session.commit()
             print(f"\n🎉 成功创建 {created_count} 个演示测试用例!")
             print("现在可以启动Web GUI查看和执行这些用例")
-            
+
     except Exception as e:
         print(f"❌ 创建演示用例失败: {e}")
 
+
 if __name__ == "__main__":
     import json
+
     create_demo_cases()

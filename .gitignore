@@ -174,3 +174,7 @@ Thumbs.db
 # Test results and screenshots
 test_results/
 screenshots/
+
+# Auto-added by quality check
+*.pyc
+logs/

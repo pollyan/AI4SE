@@ -21,10 +21,11 @@ let page = null;
 let agent = null;
 
 // 启动浏览器和页面
-async function initBrowser() {
+async function initBrowser(headless = true) {
     if (!browser) {
+        console.log(`🚀 启动浏览器 - 模式: ${headless ? '无头模式' : '浏览器模式'}`);
         browser = await chromium.launch({
-            headless: process.env.HEADLESS === 'true',
+            headless: headless,
             args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
     }
@@ -59,11 +60,42 @@ async function initBrowser() {
 
 // API端点
 
+// 设置浏览器模式
+app.post('/set-browser-mode', async (req, res) => {
+    try {
+        const { mode } = req.body; // 'browser' 或 'headless'
+        const headless = mode === 'headless';
+
+        // 如果浏览器已经启动且模式不同，需要重启浏览器
+        if (browser) {
+            await browser.close();
+            browser = null;
+            page = null;
+            agent = null;
+        }
+
+        // 重新初始化浏览器
+        await initBrowser(headless);
+
+        res.json({
+            success: true,
+            mode: mode,
+            message: `浏览器已切换到${headless ? '无头模式' : '浏览器模式'}`
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // 导航到URL
 app.post('/goto', async (req, res) => {
     try {
-        const { url } = req.body;
-        const { page } = await initBrowser();
+        const { url, mode } = req.body;
+        const headless = mode === 'headless' || mode === undefined; // 默认无头模式
+        const { page } = await initBrowser(headless);
         
         await page.goto(url, { waitUntil: 'networkidle' });
         

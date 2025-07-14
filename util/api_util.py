@@ -59,20 +59,17 @@ def get_cookie_from_iam():
         verison = "2015-11-01"
         endpoint = "http://%s.inner.api.ksyun.com" % service
         host = endpoint.split("//")[1]
-        request_parameters = {
-            "Action": "GetUserSession",
-            "Version": verison
-        }
+        request_parameters = {"Action": "GetUserSession", "Version": verison}
         re = AwsRequest(service, host, region, endpoint, access_key, secret_key)
         resp, header = re.sendRequest(request_parameters)
         if resp and resp.status_code == 200:
-            session_url = resp.json()['GetUserSessionResult']['Url']
+            session_url = resp.json()["GetUserSessionResult"]["Url"]
             r = requests.get(session_url)
             cookies = requests.utils.dict_from_cookiejar(r.cookies)
 
             return cookies
         else:
-            logging.error('failed to get user session url')
+            logging.error("failed to get user session url")
 
     except Exception as e:
         logging.error(str(e))
