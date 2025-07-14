@@ -978,125 +978,117 @@
         }
 
         function generateMidSceneScript(testcase, mode) {
-            const steps = JSON.parse(testcase.steps || '[]');
+            try {
+                const steps = JSON.parse(testcase.steps || '[]');
 
-            let script = `// MidSceneJS桥接模式脚本
-// 测试用例: ${testcase.name}
-// 生成时间: ${new Date().toLocaleString()}
+                // 使用字符串拼接避免模板字符串嵌套问题
+                let script = '// MidSceneJS桥接模式脚本\n';
+                script += '// 测试用例: ' + testcase.name + '\n';
+                script += '// 生成时间: ' + new Date().toLocaleString() + '\n\n';
+                script += 'import { AgentOverChromeBridge } from \'@midscene/web/bridge-mode\';\n\n';
+                script += 'const sleep = (ms) => new Promise((r) => setTimeout(r, ms));\n\n';
+                script += 'Promise.resolve(\n';
+                script += '  (async () => {\n';
+                script += '    const agent = new AgentOverChromeBridge();\n';
+                script += '    \n';
+                script += '    try {\n';
+                script += '      console.log(\'🌉 开始桥接模式执行: ' + testcase.name + '\');\n';
+                script += '      \n';
 
-import { AgentOverChromeBridge } from '@midscene/web/bridge-mode';
+                // 确定连接方式
+                const firstStep = steps[0] || {};
+                const startUrl = firstStep.params?.url || 'https://www.baidu.com';
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-Promise.resolve(
-  (async () => {
-    const agent = new AgentOverChromeBridge();
-
-    try {
-      console.log('🌉 开始桥接模式执行: ${testcase.name}');
-
-`;
-
-            // 确定连接方式
-            const firstStep = steps[0] || {};
-            const startUrl = firstStep.params?.url || 'https://www.baidu.com';
-
-            if (firstStep.action === 'navigate' && startUrl) {
-                script += `      // 连接到新标签页并导航
-      await agent.connectNewTabWithUrl('${startUrl}');
-      console.log('✅ 已连接到新标签页: ${startUrl}');
-
-`;
-                // 跳过第一个导航步骤
-                steps.shift();
-            } else {
-                script += `      // 连接到当前标签页
-      await agent.connectCurrentTab();
-      console.log('✅ 已连接到当前标签页');
-
-`;
-            }
-
-            // 生成步骤执行代码
-            steps.forEach((step, index) => {
-                const { action, params = {}, description } = step;
-                const stepNum = index + 1;
-
-                script += `      // 步骤 ${stepNum}: ${description || action}
-`;
-
-                switch (action) {
-                    case 'navigate':
-                        if (params.url) {
-                            script += `      await agent.goto('${params.url}');
-      console.log('🔗 导航到: ${params.url}');
-`;
-                        }
-                        break;
-
-                    case 'click':
-                        if (params.locate) {
-                            script += `      await agent.ai('click "${params.locate}"');
-      console.log('👆 点击: ${params.locate}');
-`;
-                        }
-                        break;
-
-                    case 'type':
-                        if (params.locate && params.text) {
-                            script += `      await agent.ai('type "${params.text}" in "${params.locate}"');
-      console.log('⌨️ 输入文本: ${params.text} 到 ${params.locate}');
-`;
-                        }
-                        break;
-
-                    case 'wait':
-                        const waitTime = params.time || 1000;
-                        script += `      await sleep(${waitTime});
-      console.log('⏱️ 等待 ${waitTime}ms');
-`;
-                        break;
-
-                    case 'assert':
-                        if (params.condition) {
-                            script += `      await agent.aiAssert('${params.condition}');
-      console.log('✅ 断言: ${params.condition}');
-`;
-                        }
-                        break;
-
-                    default:
-                        // 通用AI操作
-                        let aiInstruction = description || action;
-                        if (params.locate) {
-                            aiInstruction = `${action} ${params.locate}`;
-                            if (params.text) {
-                                aiInstruction += ` with text "${params.text}"`;
-                            }
-                        }
-                        script += `      await agent.ai('${aiInstruction}');
-      console.log('🤖 AI操作: ${aiInstruction}');
-`;
-                        break;
+                if (firstStep.action === 'navigate' && startUrl) {
+                    script += '      // 连接到新标签页并导航\n';
+                    script += '      await agent.connectNewTabWithUrl(\'' + startUrl + '\');\n';
+                    script += '      console.log(\'✅ 已连接到新标签页: ' + startUrl + '\');\n';
+                    script += '      \n';
+                    // 跳过第一个导航步骤
+                    steps.shift();
+                } else {
+                    script += '      // 连接到当前标签页\n';
+                    script += '      await agent.connectCurrentTab();\n';
+                    script += '      console.log(\'✅ 已连接到当前标签页\');\n';
+                    script += '      \n';
                 }
 
-                script += `
-`;
-            });
+                // 生成步骤执行代码
+                steps.forEach((step, index) => {
+                    const { action, params = {}, description } = step;
+                    const stepNum = index + 1;
 
-            script += `      console.log('🎉 测试执行完成！');
-      await agent.destroy();
+                    script += '      // 步骤 ' + stepNum + ': ' + (description || action) + '\n';
 
-    } catch (error) {
-      console.error('❌ 测试执行失败:', error.message);
-      await agent.destroy();
-      process.exit(1);
-    }
-  })()
-);
-`;
+                    switch (action) {
+                        case 'navigate':
+                            if (params.url) {
+                                script += '      await agent.goto(\'' + params.url + '\');\n';
+                                script += '      console.log(\'🔗 导航到: ' + params.url + '\');\n';
+                            }
+                            break;
 
-            return script;
+                        case 'click':
+                            if (params.locate) {
+                                script += '      await agent.ai(\'click "' + params.locate + '"\');\n';
+                                script += '      console.log(\'👆 点击: ' + params.locate + '\');\n';
+                            }
+                            break;
+
+                        case 'type':
+                            if (params.locate && params.text) {
+                                script += '      await agent.ai(\'type "' + params.text + '" in "' + params.locate + '"\');\n';
+                                script += '      console.log(\'⌨️ 输入文本: ' + params.text + ' 到 ' + params.locate + '\');\n';
+                            }
+                            break;
+
+                        case 'wait':
+                            const waitTime = params.time || 1000;
+                            script += '      await sleep(' + waitTime + ');\n';
+                            script += '      console.log(\'⏱️ 等待 ' + waitTime + 'ms\');\n';
+                            break;
+
+                        case 'assert':
+                            if (params.condition) {
+                                script += '      await agent.aiAssert(\'' + params.condition + '\');\n';
+                                script += '      console.log(\'✅ 断言: ' + params.condition + '\');\n';
+                            }
+                            break;
+
+                        default:
+                            // 通用AI操作
+                            let aiInstruction = description || action;
+                            if (params.locate) {
+                                aiInstruction = action + ' ' + params.locate;
+                                if (params.text) {
+                                    aiInstruction += ' with text "' + params.text + '"';
+                                }
+                            }
+                            script += '      await agent.ai(\'' + aiInstruction + '\');\n';
+                            script += '      console.log(\'🤖 AI操作: ' + aiInstruction + '\');\n';
+                            break;
+                    }
+
+                    script += '\n';
+                });
+
+                script += '      console.log(\'🎉 测试执行完成！\');\n';
+                script += '      await agent.destroy();\n';
+                script += '      \n';
+                script += '    } catch (error) {\n';
+                script += '      console.error(\'❌ 测试执行失败:\', error.message);\n';
+                script += '      await agent.destroy();\n';
+                script += '      process.exit(1);\n';
+                script += '    }\n';
+                script += '  })()\n';
+                script += ');\n';
+
+                return script;
+
+            } catch (error) {
+                console.error('脚本生成错误:', error);
+                throw new Error('脚本生成失败: ' + error.message);
+            }
         }
 
         function downloadScript(content, filename) {
