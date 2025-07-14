@@ -947,7 +947,7 @@
         }
 
         async function startBridgeExecution(testcaseId, mode) {
-            addLog('🌉 启动Chrome桥接模式（客户端执行）', 'info');
+            addLog('🌉 启动Chrome桥接模式（直接执行）', 'info');
 
             try {
                 // 1. 获取测试用例数据
@@ -961,27 +961,26 @@
                 const testcase = testcaseResponse.data.data;
                 addLog(`✅ 获取测试用例: ${testcase.name}`, 'success');
 
-                // 调试信息
-                console.log('测试用例完整数据:', testcase);
-                addLog('📋 测试用例数据类型检查...', 'info');
-                addLog(`  - 名称: ${testcase.name}`, 'info');
-                addLog(`  - 步骤类型: ${typeof testcase.steps}`, 'info');
-                addLog(`  - 步骤内容: ${JSON.stringify(testcase.steps).substring(0, 100)}...`, 'info');
+                // 2. 检查MidSceneJS扩展
+                addLog('🔍 检查MidSceneJS扩展连接...', 'info');
+                if (!await checkMidSceneExtension()) {
+                    addLog('❌ 未检测到MidSceneJS扩展', 'error');
+                    addLog('📋 请确保：', 'warning');
+                    addLog('  1. 已安装官方MidSceneJS Chrome扩展', 'warning');
+                    addLog('  2. 扩展已启用并配置AI API密钥', 'warning');
+                    addLog('  3. 在扩展中点击"Allow connection"', 'warning');
+                    return;
+                }
 
-                // 2. 生成MidSceneJS桥接脚本
-                addLog('🔧 正在生成MidSceneJS桥接脚本...', 'info');
-                const script = generateMidSceneScript(testcase, mode);
+                addLog('✅ MidSceneJS扩展连接成功', 'success');
 
-                // 3. 提供脚本下载
-                addLog('📥 脚本生成完成，准备下载...', 'success');
-                downloadScript(script, `${testcase.name}-bridge.mjs`);
-
-                // 4. 显示执行指导
-                showBridgeInstructions(testcase.name);
+                // 3. 直接执行测试用例
+                addLog('🚀 开始执行测试用例...', 'info');
+                await executeThroughMidSceneExtension(testcase, mode);
 
             } catch (error) {
                 console.error('桥接模式执行错误:', error);
-                addLog(`❌ Chrome桥接脚本生成失败: ${error.message}`, 'error');
+                addLog(`❌ Chrome桥接执行失败: ${error.message}`, 'error');
                 addLog('💡 请检查浏览器控制台获取详细错误信息', 'warning');
             }
         }
@@ -1232,7 +1231,281 @@
 
         // 桥接模式不需要直接执行，只生成脚本
 
-        // 桥接模式不需要直接执行步骤，只生成脚本供用户下载
+        async function executeThroughMidSceneExtension(testcase, mode) {
+            try {
+                // 解析测试步骤
+                let steps;
+                if (typeof testcase.steps === 'string') {
+                    steps = JSON.parse(testcase.steps || '[]');
+                } else if (Array.isArray(testcase.steps)) {
+                    steps = testcase.steps;
+                } else {
+                    steps = [];
+                }
+
+                if (steps.length === 0) {
+                    addLog('⚠️ 测试用例没有步骤', 'warning');
+                    return;
+                }
+
+                addLog(`📋 开始执行 ${steps.length} 个测试步骤`, 'info');
+
+                // 更新按钮状态
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+
+                // 初始化MidScene代理（通过扩展）
+                addLog('🔌 初始化MidScene代理...', 'info');
+                const agentReady = await initializeMidSceneAgent();
+
+                if (!agentReady) {
+                    addLog('❌ MidScene代理初始化失败', 'error');
+                    return;
+                }
+
+                addLog('✅ MidScene代理初始化成功', 'success');
+
+                // 连接到新标签页（如果第一步是导航）
+                const firstStep = steps[0];
+                if (firstStep && firstStep.action === 'navigate' && firstStep.params?.url) {
+                    addLog(`🔗 连接到新标签页: ${firstStep.params.url}`, 'info');
+                    const connected = await connectToNewTab(firstStep.params.url);
+
+                    if (connected) {
+                        addLog('✅ 已连接到新标签页', 'success');
+                        steps.shift(); // 跳过第一个导航步骤
+                    } else {
+                        addLog('❌ 连接新标签页失败', 'error');
+                        return;
+                    }
+                } else {
+                    // 连接到当前标签页
+                    addLog('🔗 连接到当前标签页...', 'info');
+                    const connected = await connectToCurrentTab();
+
+                    if (connected) {
+                        addLog('✅ 已连接到当前标签页', 'success');
+                    } else {
+                        addLog('❌ 连接当前标签页失败', 'error');
+                        return;
+                    }
+                }
+
+                // 执行每个步骤
+                for (let i = 0; i < steps.length; i++) {
+                    const step = steps[i];
+                    const stepNum = i + 1;
+
+                    addLog(`🔄 执行步骤 ${stepNum}: ${step.description || step.action}`, 'info');
+
+                    try {
+                        const result = await executeStepThroughExtension(step, stepNum);
+
+                        if (result.success) {
+                            addLog(`✅ 步骤 ${stepNum} 执行成功`, 'success');
+                        } else {
+                            addLog(`❌ 步骤 ${stepNum} 执行失败: ${result.error}`, 'error');
+                            break;
+                        }
+
+                        // 短暂延迟，让用户看到执行过程
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+
+                    } catch (stepError) {
+                        addLog(`❌ 步骤 ${stepNum} 执行异常: ${stepError.message}`, 'error');
+                        break;
+                    }
+                }
+
+                addLog('🎉 测试执行完成！', 'success');
+
+                // 销毁代理
+                await destroyMidSceneAgent();
+
+            } catch (error) {
+                addLog(`❌ 执行过程异常: ${error.message}`, 'error');
+            } finally {
+                // 恢复按钮状态
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+            }
+        }
+
+        async function initializeMidSceneAgent() {
+            return new Promise((resolve) => {
+                const messageId = 'midscene_init_' + Date.now();
+
+                const responseHandler = (event) => {
+                    if (event.data &&
+                        event.data.type === 'midscene_init_response' &&
+                        event.data.messageId === messageId) {
+
+                        window.removeEventListener('message', responseHandler);
+                        resolve(event.data.success);
+                    }
+                };
+
+                window.addEventListener('message', responseHandler);
+
+                window.postMessage({
+                    type: 'midscene_init',
+                    messageId: messageId
+                }, '*');
+
+                setTimeout(() => {
+                    window.removeEventListener('message', responseHandler);
+                    resolve(false);
+                }, 5000);
+            });
+        }
+
+        async function connectToNewTab(url) {
+            return new Promise((resolve) => {
+                const messageId = 'midscene_connect_new_' + Date.now();
+
+                const responseHandler = (event) => {
+                    if (event.data &&
+                        event.data.type === 'midscene_connect_response' &&
+                        event.data.messageId === messageId) {
+
+                        window.removeEventListener('message', responseHandler);
+                        resolve(event.data.success);
+                    }
+                };
+
+                window.addEventListener('message', responseHandler);
+
+                window.postMessage({
+                    type: 'midscene_connect_new_tab',
+                    messageId: messageId,
+                    url: url
+                }, '*');
+
+                setTimeout(() => {
+                    window.removeEventListener('message', responseHandler);
+                    resolve(false);
+                }, 10000);
+            });
+        }
+
+        async function connectToCurrentTab() {
+            return new Promise((resolve) => {
+                const messageId = 'midscene_connect_current_' + Date.now();
+
+                const responseHandler = (event) => {
+                    if (event.data &&
+                        event.data.type === 'midscene_connect_response' &&
+                        event.data.messageId === messageId) {
+
+                        window.removeEventListener('message', responseHandler);
+                        resolve(event.data.success);
+                    }
+                };
+
+                window.addEventListener('message', responseHandler);
+
+                window.postMessage({
+                    type: 'midscene_connect_current_tab',
+                    messageId: messageId
+                }, '*');
+
+                setTimeout(() => {
+                    window.removeEventListener('message', responseHandler);
+                    resolve(false);
+                }, 5000);
+            });
+        }
+
+        async function executeStepThroughExtension(step, stepIndex) {
+            return new Promise((resolve) => {
+                const messageId = 'midscene_execute_' + Date.now();
+
+                const responseHandler = (event) => {
+                    if (event.data &&
+                        event.data.type === 'midscene_execute_response' &&
+                        event.data.messageId === messageId) {
+
+                        window.removeEventListener('message', responseHandler);
+                        resolve({
+                            success: event.data.success,
+                            error: event.data.error,
+                            result: event.data.result
+                        });
+                    }
+                };
+
+                window.addEventListener('message', responseHandler);
+
+                // 转换步骤为MidScene格式
+                let midsceneAction;
+                const { action, params = {}, description } = step;
+
+                switch (action) {
+                    case 'navigate':
+                        midsceneAction = {
+                            type: 'goto',
+                            url: params.url
+                        };
+                        break;
+
+                    case 'click':
+                        midsceneAction = {
+                            type: 'ai',
+                            instruction: `click "${params.locate}"`
+                        };
+                        break;
+
+                    case 'type':
+                        midsceneAction = {
+                            type: 'ai',
+                            instruction: `type "${params.text}" in "${params.locate}"`
+                        };
+                        break;
+
+                    case 'wait':
+                        midsceneAction = {
+                            type: 'sleep',
+                            duration: params.time || 1000
+                        };
+                        break;
+
+                    case 'assert':
+                        midsceneAction = {
+                            type: 'aiAssert',
+                            condition: params.condition
+                        };
+                        break;
+
+                    default:
+                        midsceneAction = {
+                            type: 'ai',
+                            instruction: description || action
+                        };
+                        break;
+                }
+
+                window.postMessage({
+                    type: 'midscene_execute_step',
+                    messageId: messageId,
+                    action: midsceneAction,
+                    stepIndex: stepIndex
+                }, '*');
+
+                setTimeout(() => {
+                    window.removeEventListener('message', responseHandler);
+                    resolve({
+                        success: false,
+                        error: '执行超时'
+                    });
+                }, 30000);
+            });
+        }
+
+        async function destroyMidSceneAgent() {
+            window.postMessage({
+                type: 'midscene_destroy'
+            }, '*');
+        }
 
         function updateStepStatus(stepIndex, status) {
             const stepIcon = document.getElementById(`step-icon-${stepIndex}`);
@@ -1575,11 +1848,55 @@
             return status;
         }
 
-        async function detectMidSceneExtension() {
-            // 桥接模式不需要复杂检测，直接返回true
-            // 用户会在本地环境中安装和使用扩展
-            console.log('💡 桥接模式：请确保已安装官方MidSceneJS Chrome扩展');
-            return true;
+        async function checkMidSceneExtension() {
+            try {
+                // 方法1: 检查是否有MidSceneJS扩展注入的全局对象
+                if (window.midscene || window.MidScene) {
+                    console.log('✅ 检测到MidSceneJS全局对象');
+                    return true;
+                }
+
+                // 方法2: 尝试通过postMessage与扩展通信
+                return new Promise((resolve) => {
+                    const messageId = 'midscene_ping_' + Date.now();
+                    let responded = false;
+
+                    // 监听扩展响应
+                    const responseHandler = (event) => {
+                        if (event.data &&
+                            event.data.type === 'midscene_pong' &&
+                            event.data.messageId === messageId) {
+
+                            window.removeEventListener('message', responseHandler);
+                            responded = true;
+                            console.log('✅ MidSceneJS扩展响应成功');
+                            resolve(true);
+                        }
+                    };
+
+                    window.addEventListener('message', responseHandler);
+
+                    // 发送ping消息
+                    window.postMessage({
+                        type: 'midscene_ping',
+                        messageId: messageId,
+                        source: 'intent-test-framework'
+                    }, '*');
+
+                    // 3秒超时
+                    setTimeout(() => {
+                        if (!responded) {
+                            window.removeEventListener('message', responseHandler);
+                            console.log('❌ MidSceneJS扩展未响应');
+                            resolve(false);
+                        }
+                    }, 3000);
+                });
+
+            } catch (error) {
+                console.error('扩展检测失败:', error);
+                return false;
+            }
         }
 
         async function testExtensionMessage() {
