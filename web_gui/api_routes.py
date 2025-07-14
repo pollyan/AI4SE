@@ -2,10 +2,15 @@
 API路由定义
 """
 from flask import Blueprint, request, jsonify
-from models import db, TestCase, ExecutionHistory, StepExecution, Template
 import json
 import uuid
 from datetime import datetime
+
+# 修复Serverless环境的导入路径
+try:
+    from models import db, TestCase, ExecutionHistory, StepExecution, Template
+except ImportError:
+    from web_gui.models import db, TestCase, ExecutionHistory, StepExecution, Template
 
 # 创建蓝图
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')

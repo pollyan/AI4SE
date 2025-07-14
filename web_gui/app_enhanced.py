@@ -16,10 +16,16 @@ import threading
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# 导入模块
-from models import db, TestCase, ExecutionHistory, StepExecution, Template
-from api_routes import api_bp
-from database_config import get_flask_config, print_database_info, validate_database_connection
+# 导入模块 - 修复Serverless环境的导入路径
+try:
+    from models import db, TestCase, ExecutionHistory, StepExecution, Template
+    from api_routes import api_bp
+    from database_config import get_flask_config, print_database_info, validate_database_connection
+except ImportError:
+    # Serverless环境中使用绝对导入
+    from web_gui.models import db, TestCase, ExecutionHistory, StepExecution, Template
+    from web_gui.api_routes import api_bp
+    from web_gui.database_config import get_flask_config, print_database_info, validate_database_connection
 
 # 尝试导入MidSceneAI，如果失败则使用模拟版本
 try:

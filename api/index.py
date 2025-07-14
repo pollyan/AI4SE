@@ -37,16 +37,22 @@ try:
     # 设置环境变量
     os.environ['VERCEL'] = '1'
 
+    print("🔄 开始加载完整应用...")
+
     # 导入数据库配置
-    from web_gui.database_config import get_flask_config, print_database_info
+    from web_gui.database_config import get_flask_config
 
     # 应用数据库配置
     db_config = get_flask_config()
     app.config.update(db_config)
 
+    print("✅ 数据库配置加载成功")
+
     # 导入模型和路由
     from web_gui.models import db
     from web_gui.api_routes import api_bp
+
+    print("✅ 模型和路由导入成功")
 
     # 初始化数据库
     db.init_app(app)
@@ -54,9 +60,15 @@ try:
     # 注册API路由
     app.register_blueprint(api_bp)
 
+    print("✅ API路由注册成功")
+
     # 添加CORS支持
-    from flask_cors import CORS
-    CORS(app, origins="*")
+    try:
+        from flask_cors import CORS
+        CORS(app, origins="*")
+        print("✅ CORS配置成功")
+    except ImportError:
+        print("⚠️ CORS模块未找到，跳过")
 
     @app.route('/api/status')
     def api_status():
@@ -70,6 +82,8 @@ try:
 
 except Exception as e:
     print(f"⚠️ 完整应用加载失败: {e}")
+    import traceback
+    traceback.print_exc()
 
     @app.route('/error')
     def show_error():
