@@ -350,6 +350,69 @@ try:
                 'connection_info': connection_info if 'connection_info' in locals() else None
             }), 500
 
+    # 简化的执行API（不依赖WebSocket）
+    @app.route('/api/executions/start', methods=['POST'])
+    def start_execution():
+        try:
+            from flask import request
+            data = request.get_json() or {}
+            testcase_id = data.get('testcase_id')
+            mode = data.get('mode', 'normal')
+
+            if not testcase_id:
+                return jsonify({
+                    'code': 400,
+                    'message': '缺少测试用例ID'
+                }), 400
+
+            # 模拟执行ID
+            import uuid
+            execution_id = str(uuid.uuid4())
+
+            return jsonify({
+                'code': 200,
+                'message': '执行已启动',
+                'data': {
+                    'execution_id': execution_id,
+                    'testcase_id': testcase_id,
+                    'mode': mode,
+                    'status': 'started',
+                    'message': '测试执行已启动，请注意这是演示版本'
+                }
+            })
+        except Exception as e:
+            return jsonify({
+                'code': 500,
+                'message': f'启动执行失败: {str(e)}'
+            }), 500
+
+    # 执行状态查询API
+    @app.route('/api/executions/<execution_id>/status')
+    def get_execution_status(execution_id):
+        try:
+            # 模拟执行状态
+            return jsonify({
+                'code': 200,
+                'data': {
+                    'execution_id': execution_id,
+                    'status': 'completed',
+                    'message': '演示执行已完成',
+                    'total_steps': 4,
+                    'completed_steps': 4,
+                    'steps': [
+                        {'status': 'success', 'description': '访问百度首页'},
+                        {'status': 'success', 'description': '输入搜索关键词'},
+                        {'status': 'success', 'description': '点击搜索按钮'},
+                        {'status': 'success', 'description': '验证搜索结果'}
+                    ]
+                }
+            })
+        except Exception as e:
+            return jsonify({
+                'code': 500,
+                'message': f'获取执行状态失败: {str(e)}'
+            }), 500
+
     print("✅ API功能加载成功")
 
 except Exception as e:

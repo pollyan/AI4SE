@@ -582,20 +582,19 @@
     </div>
 
     <script src="https://unpkg.com/axios@1.6.0/dist/axios.min.js"></script>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script>
         // 全局变量
         const API_BASE = '/api';
-        const socket = io();
         let currentExecution = null;
+        let pollingInterval = null;
         let testcases = [];
         let screenshotHistory = []; // 存储所有步骤的截图历史
 
         // 页面初始化
         document.addEventListener('DOMContentLoaded', function() {
             loadTestcases();
-            setupWebSocket();
             setupEventListeners();
+            addLog('执行控制台已就绪', 'success');
         });
 
         function setupEventListeners() {
@@ -620,35 +619,45 @@
             }
         }
 
-        function setupWebSocket() {
-            socket.on('connected', function(data) {
-                addLog('WebSocket连接成功', 'success');
-            });
+        // 轮询检查执行状态
+        function startPolling(executionId) {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+            }
 
-            socket.on('execution_started', function(data) {
-                currentExecution = data.execution_id;
-                updateExecutionStatus('running', `执行开始: ${data.testcase_name}`);
-                addLog(`开始执行测试用例: ${data.testcase_name}`, 'info');
-                document.getElementById('startBtn').disabled = true;
-                document.getElementById('stopBtn').disabled = false;
+            pollingInterval = setInterval(async () => {
+                try {
+                    const response = await axios.get(`${API_BASE}/executions/${executionId}/status`);
+                    if (response.data.code === 200) {
+                        const status = response.data.data;
+                        updateExecutionFromStatus(status);
 
-                // 清空截图历史
-                clearScreenshotHistory();
-            });
+                        // 如果执行完成，停止轮询
+                        if (status.status === 'completed' || status.status === 'failed') {
+                            clearInterval(pollingInterval);
+                            pollingInterval = null;
+                        }
+                    }
+                } catch (error) {
+                    console.error('轮询执行状态失败:', error);
+                }
+            }, 1000); // 每秒轮询一次
+        }
 
-            socket.on('step_started', function(data) {
-                updateStepStatus(data.step_index, 'running');
-                addLog(`执行步骤 ${data.step_index + 1}: ${data.step_description}`, 'info');
-            });
+        function updateExecutionFromStatus(status) {
+            // 更新执行状态
+            updateExecutionStatus(status.status, status.message || '');
 
-            socket.on('step_completed', function(data) {
-                const status = data.status === 'success' ? 'success' : 'failed';
-                updateStepStatus(data.step_index, status);
+            // 更新步骤状态
+            if (status.steps) {
+                status.steps.forEach((step, index) => {
+                    updateStepStatus(index, step.status);
+                });
+                updateProgress(status.completed_steps || 0, status.total_steps || 0);
+            }
 
-                // 更新进度条 - 步骤完成时更新
-                updateProgress(data.step_index + 1, data.total_steps || getCurrentTotalSteps());
-
-                if (data.status === 'success') {
+            // 添加日志
+            if (status.current_step) {
                     addLog(`步骤 ${data.step_index + 1} 执行成功 (${data.duration}秒)`, 'success');
                 } else {
                     addLog(`步骤 ${data.step_index + 1} 执行失败: ${data.error_message}`, 'error');
@@ -768,7 +777,7 @@
             `;
         }
 
-        function startExecution() {
+        async function startExecution() {
             const testcaseId = document.getElementById('testcaseSelect').value;
             if (!testcaseId) {
                 addLog('请先选择测试用例', 'warning');
@@ -776,7 +785,7 @@
             }
 
             const mode = document.querySelector('input[name="mode"]:checked').value;
-            
+
             // 重置步骤状态
             const stepIcons = document.querySelectorAll('.step-icon');
             stepIcons.forEach(icon => {
@@ -786,18 +795,35 @@
 
             // 清空日志
             document.getElementById('logContainer').innerHTML = '';
-            
+
             // 显示进度条
             document.getElementById('progressContainer').style.display = 'block';
             updateProgress(0, stepIcons.length);
 
-            // 发送执行请求
-            socket.emit('start_execution', {
-                testcase_id: parseInt(testcaseId),
-                mode: mode
-            });
+            try {
+                // 发送HTTP执行请求
+                const response = await axios.post(`${API_BASE}/executions/start`, {
+                    testcase_id: parseInt(testcaseId),
+                    mode: mode
+                });
 
-            addLog(`开始执行测试用例 (模式: ${mode})`, 'info');
+                if (response.data.code === 200) {
+                    currentExecution = response.data.data.execution_id;
+                    addLog(`开始执行测试用例 (模式: ${mode})`, 'info');
+                    addLog(response.data.data.message, 'info');
+
+                    // 开始轮询状态
+                    startPolling(currentExecution);
+
+                    // 更新按钮状态
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = false;
+                } else {
+                    addLog(`执行启动失败: ${response.data.message}`, 'error');
+                }
+            } catch (error) {
+                addLog(`执行启动失败: ${error.message}`, 'error');
+            }
         }
 
         function stopExecution() {
