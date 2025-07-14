@@ -179,8 +179,8 @@ python -m pytest tests/test_models.py
 ## 📞 支持
 
 如有问题或建议，请：
-1. 查看[开发指南](DEVELOPMENT_GUIDE.md)
-2. 查看[项目规则](PROJECT_RULES.md)
+1. 查看[开发指南](docs/DEVELOPMENT_GUIDE.md)
+2. 查看[项目规则](docs/PROJECT_RULES.md)
 3. 创建[Issue](https://github.com/pollyan/intent-test-framework/issues)
 4. 联系维护者
 

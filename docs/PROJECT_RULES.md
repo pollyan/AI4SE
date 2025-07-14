@@ -400,10 +400,12 @@ def execute_test_case(testcase_id: int):
 ```
 
 ### 4. 配置管理规范
+
 ```python
 # config.py - 配置管理
 import os
 from typing import Optional
+
 
 class Config:
     """应用配置类"""
@@ -421,8 +423,8 @@ class Config:
     SECRET_KEY: str = os.getenv('SECRET_KEY', 'dev-secret-key')
 
     # 文件路径配置
-    SCREENSHOT_DIR: str = os.getenv('SCREENSHOT_DIR', 'web_gui/static/screenshots')
-    LOG_DIR: str = os.getenv('LOG_DIR', 'logs')
+    SCREENSHOT_DIR: str = os.getenv('SCREENSHOT_DIR', '../web_gui/static/screenshots')
+    LOG_DIR: str = os.getenv('LOG_DIR', '../logs')
 
     @classmethod
     def validate(cls) -> None:
@@ -435,6 +437,7 @@ class Config:
 
         if missing_configs:
             raise ValueError(f"缺少必要配置: {', '.join(missing_configs)}")
+
 
 # 环境变量模板 (.env.example)
 """

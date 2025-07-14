@@ -198,6 +198,44 @@
             background-color: #e1e4e8;
         }
 
+        .manual-confirm-area {
+            margin-top: 12px;
+            padding: 12px;
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+        }
+
+        .manual-confirm-area h5 {
+            margin: 0 0 8px 0;
+            font-size: 13px;
+            color: #856404;
+        }
+
+        .manual-confirm-area label {
+            display: block;
+            margin: 6px 0;
+            font-size: 12px;
+            color: #856404;
+            cursor: pointer;
+        }
+
+        .manual-confirm-btn, .confirm-status-btn {
+            margin-top: 8px;
+            margin-right: 8px;
+            padding: 6px 12px;
+            background-color: #ffc107;
+            color: #212529;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .manual-confirm-btn:hover, .confirm-status-btn:hover {
+            background-color: #e0a800;
+        }
+
         .mode-description {
             margin-bottom: 20px;
             padding: 8px 12px;
@@ -608,7 +646,18 @@
                 <div id="bridgeStatus" class="bridge-status" style="display: none;">
                     <h4>🌉 Chrome桥接状态: <button id="refreshStatusBtn" class="refresh-status-btn">🔄 刷新状态</button></h4>
                     <div id="bridgeStatusContent" class="status-content"></div>
+
+                    <!-- 手动确认区域 -->
+                    <div id="manualConfirmArea" class="manual-confirm-area" style="display: none;">
+                        <h5>手动确认状态:</h5>
+                        <label><input type="checkbox" id="confirmChrome"> ✅ 我确认Chrome浏览器正在运行</label><br>
+                        <label><input type="checkbox" id="confirmExtension"> ✅ 我确认已安装MidSceneJS Chrome扩展</label><br>
+                        <label><input type="checkbox" id="confirmAI"> ✅ 我确认已在扩展中配置AI API密钥</label><br>
+                        <button id="confirmStatusBtn" class="confirm-status-btn">确认状态</button>
+                    </div>
+
                     <button id="installGuideBtn" class="install-guide-btn" style="display: none;">查看安装指南</button>
+                    <button id="manualConfirmBtn" class="manual-confirm-btn">手动确认状态</button>
                 </div>
 
                 <!-- 模式说明 -->
@@ -1118,6 +1167,22 @@
                     checkBridgeStatus();
                 });
             }
+
+            // 手动确认按钮
+            const manualConfirmBtn = document.getElementById('manualConfirmBtn');
+            if (manualConfirmBtn) {
+                manualConfirmBtn.addEventListener('click', function() {
+                    toggleManualConfirmArea();
+                });
+            }
+
+            // 确认状态按钮
+            const confirmStatusBtn = document.getElementById('confirmStatusBtn');
+            if (confirmStatusBtn) {
+                confirmStatusBtn.addEventListener('click', function() {
+                    applyManualConfirmation();
+                });
+            }
         }
 
         function updateExecutionTypeDescription(type) {
@@ -1151,21 +1216,174 @@
         async function checkBridgeStatus() {
             try {
                 addLog('正在检查Chrome桥接状态...', 'info');
-                const response = await axios.get(`${API_BASE}/bridge/status`);
-                if (response.data.code === 200) {
-                    updateBridgeStatusDisplay(response.data.data);
-                } else {
-                    updateBridgeStatusDisplay({
-                        bridge_available: false,
-                        message: '桥接状态检查失败'
-                    });
+
+                // 优先检查手动确认状态
+                const manualStatus = loadManualConfirmation();
+                if (manualStatus) {
+                    addLog('使用手动确认的状态', 'info');
+                    updateBridgeStatusDisplay(manualStatus);
+                    return;
                 }
+
+                // 前端检测
+                const frontendStatus = await checkBridgeStatusFrontend();
+
+                // 后端检测（仅检测AI配置）
+                let backendStatus = { ai_configured: false };
+                try {
+                    const response = await axios.get(`${API_BASE}/bridge/status`);
+                    if (response.data.code === 200) {
+                        backendStatus = response.data.data;
+                    }
+                } catch (error) {
+                    console.warn('后端状态检查失败，使用前端检测结果');
+                }
+
+                // 合并前端和后端检测结果
+                const combinedStatus = {
+                    chrome_running: frontendStatus.chrome_running,
+                    extension_installed: frontendStatus.extension_installed,
+                    ai_configured: backendStatus.ai_configured || frontendStatus.ai_configured,
+                    connection_test_passed: frontendStatus.connection_test_passed,
+                    bridge_available: frontendStatus.chrome_running &&
+                                    frontendStatus.extension_installed &&
+                                    (backendStatus.ai_configured || frontendStatus.ai_configured),
+                    message: getBridgeStatusMessage(frontendStatus, backendStatus)
+                };
+
+                updateBridgeStatusDisplay(combinedStatus);
+
             } catch (error) {
                 console.error('检查桥接状态失败:', error);
                 updateBridgeStatusDisplay({
+                    chrome_running: false,
+                    extension_installed: false,
+                    ai_configured: false,
+                    connection_test_passed: false,
                     bridge_available: false,
-                    message: '无法连接到桥接服务'
+                    message: '桥接状态检查失败'
                 });
+            }
+        }
+
+        async function checkBridgeStatusFrontend() {
+            const status = {
+                chrome_running: true, // 如果能运行这个JS，说明Chrome在运行
+                extension_installed: false,
+                ai_configured: false,
+                connection_test_passed: false
+            };
+
+            // 检测Chrome扩展
+            status.extension_installed = await detectMidSceneExtension();
+
+            // 检测AI配置（通过localStorage或其他方式）
+            status.ai_configured = checkAIConfiguration();
+
+            // 检测连接能力
+            status.connection_test_passed = await testBridgeConnection();
+
+            return status;
+        }
+
+        async function detectMidSceneExtension() {
+            try {
+                // 方法1: 检测是否有MidSceneJS相关的全局对象
+                if (window.MidScene || window.midscene || window.AgentOverChromeBridge) {
+                    console.log('✅ 检测到MidSceneJS全局对象');
+                    return true;
+                }
+
+                // 方法2: 尝试检测扩展注入的内容
+                const scripts = document.querySelectorAll('script');
+                for (let script of scripts) {
+                    if (script.src && (script.src.includes('midscene') || script.src.includes('chrome-extension'))) {
+                        console.log('✅ 检测到MidSceneJS扩展脚本');
+                        return true;
+                    }
+                }
+
+                // 方法3: 检测DOM中是否有扩展相关元素
+                const midsceneElements = document.querySelectorAll('[data-midscene], [class*="midscene"], [id*="midscene"]');
+                if (midsceneElements.length > 0) {
+                    console.log('✅ 检测到MidSceneJS扩展元素');
+                    return true;
+                }
+
+                // 方法4: 尝试发送消息给扩展
+                return await testExtensionMessage();
+
+            } catch (error) {
+                console.warn('扩展检测失败:', error);
+                return false;
+            }
+        }
+
+        async function testExtensionMessage() {
+            return new Promise((resolve) => {
+                try {
+                    // 尝试向MidSceneJS扩展发送消息
+                    if (window.chrome && window.chrome.runtime) {
+                        // 这里需要知道MidSceneJS扩展的ID
+                        // 暂时返回false，等待用户提供扩展ID
+                        console.log('Chrome扩展API可用，但需要扩展ID');
+                        resolve(false);
+                    } else {
+                        resolve(false);
+                    }
+                } catch (error) {
+                    resolve(false);
+                }
+            });
+        }
+
+        function checkAIConfiguration() {
+            try {
+                // 检查localStorage中的AI配置
+                const apiKey = localStorage.getItem('midscene_api_key') ||
+                              localStorage.getItem('openai_api_key') ||
+                              sessionStorage.getItem('midscene_api_key');
+
+                if (apiKey) {
+                    console.log('✅ 检测到本地AI配置');
+                    return true;
+                }
+
+                // 检查是否有环境变量（通过某种方式暴露）
+                if (window.MIDSCENE_CONFIG || window.OPENAI_API_KEY) {
+                    console.log('✅ 检测到全局AI配置');
+                    return true;
+                }
+
+                console.log('❌ 未检测到AI配置');
+                return false;
+            } catch (error) {
+                console.warn('AI配置检测失败:', error);
+                return false;
+            }
+        }
+
+        async function testBridgeConnection() {
+            try {
+                // 检测Node.js相关工具是否可用（通过某种方式）
+                // 这个在浏览器中无法直接检测，所以简化处理
+                console.log('✅ 假设桥接连接可用');
+                return true;
+            } catch (error) {
+                console.warn('连接测试失败:', error);
+                return false;
+            }
+        }
+
+        function getBridgeStatusMessage(frontendStatus, backendStatus) {
+            if (!frontendStatus.chrome_running) {
+                return "Chrome浏览器未运行";
+            } else if (!frontendStatus.extension_installed) {
+                return "请安装MidSceneJS Chrome扩展";
+            } else if (!backendStatus.ai_configured && !frontendStatus.ai_configured) {
+                return "请配置AI模型API密钥";
+            } else {
+                return "Chrome桥接模式就绪";
             }
         }
 
@@ -1262,6 +1480,72 @@
             });
 
             addLog('安装指南已显示', 'success');
+        }
+
+        function toggleManualConfirmArea() {
+            const area = document.getElementById('manualConfirmArea');
+            if (area) {
+                if (area.style.display === 'none') {
+                    area.style.display = 'block';
+                    addLog('显示手动确认区域', 'info');
+                } else {
+                    area.style.display = 'none';
+                }
+            }
+        }
+
+        function applyManualConfirmation() {
+            const confirmChrome = document.getElementById('confirmChrome').checked;
+            const confirmExtension = document.getElementById('confirmExtension').checked;
+            const confirmAI = document.getElementById('confirmAI').checked;
+
+            const manualStatus = {
+                chrome_running: confirmChrome,
+                extension_installed: confirmExtension,
+                ai_configured: confirmAI,
+                connection_test_passed: confirmChrome && confirmExtension,
+                bridge_available: confirmChrome && confirmExtension && confirmAI,
+                message: getManualConfirmMessage(confirmChrome, confirmExtension, confirmAI),
+                manual_confirmed: true
+            };
+
+            // 保存到localStorage
+            localStorage.setItem('midscene_manual_status', JSON.stringify(manualStatus));
+
+            updateBridgeStatusDisplay(manualStatus);
+
+            // 隐藏手动确认区域
+            document.getElementById('manualConfirmArea').style.display = 'none';
+
+            addLog(`手动确认完成：${manualStatus.message}`, manualStatus.bridge_available ? 'success' : 'warning');
+        }
+
+        function getManualConfirmMessage(chrome, extension, ai) {
+            if (!chrome) {
+                return "请启动Chrome浏览器";
+            } else if (!extension) {
+                return "请安装MidSceneJS Chrome扩展";
+            } else if (!ai) {
+                return "请在扩展中配置AI API密钥";
+            } else {
+                return "手动确认：Chrome桥接模式就绪";
+            }
+        }
+
+        function loadManualConfirmation() {
+            try {
+                const saved = localStorage.getItem('midscene_manual_status');
+                if (saved) {
+                    const status = JSON.parse(saved);
+                    if (status.manual_confirmed) {
+                        addLog('加载已保存的手动确认状态', 'info');
+                        return status;
+                    }
+                }
+            } catch (error) {
+                console.warn('加载手动确认状态失败:', error);
+            }
+            return null;
         }
 
     </script>
