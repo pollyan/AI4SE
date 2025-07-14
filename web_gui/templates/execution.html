@@ -183,6 +183,21 @@
             background-color: #0256cc;
         }
 
+        .refresh-status-btn {
+            margin-left: 8px;
+            padding: 2px 6px;
+            background-color: #f8f9fa;
+            color: #586069;
+            border: 1px solid #d1d5da;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        .refresh-status-btn:hover {
+            background-color: #e1e4e8;
+        }
+
         .mode-description {
             margin-bottom: 20px;
             padding: 8px 12px;
@@ -591,7 +606,7 @@
 
                 <!-- 桥接状态显示 -->
                 <div id="bridgeStatus" class="bridge-status" style="display: none;">
-                    <h4>🌉 Chrome桥接状态:</h4>
+                    <h4>🌉 Chrome桥接状态: <button id="refreshStatusBtn" class="refresh-status-btn">🔄 刷新状态</button></h4>
                     <div id="bridgeStatusContent" class="status-content"></div>
                     <button id="installGuideBtn" class="install-guide-btn" style="display: none;">查看安装指南</button>
                 </div>
@@ -1094,6 +1109,15 @@
                     showInstallationGuide();
                 });
             }
+
+            // 刷新状态按钮
+            const refreshBtn = document.getElementById('refreshStatusBtn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', function() {
+                    addLog('手动刷新桥接状态...', 'info');
+                    checkBridgeStatus();
+                });
+            }
         }
 
         function updateExecutionTypeDescription(type) {
@@ -1157,6 +1181,7 @@
                     <div>Chrome运行: ${status.chrome_running ? '✅' : '❌'}</div>
                     <div>扩展安装: ${status.extension_installed ? '✅' : '❌'}</div>
                     <div>AI配置: ${status.ai_configured ? '✅' : '❌'}</div>
+                    <div>连接测试: ${status.connection_test_passed ? '✅' : '❌'}</div>
                 `;
                 if (installBtn) installBtn.style.display = 'none';
                 addLog('Chrome桥接状态检查完成：已就绪', 'success');
@@ -1166,6 +1191,8 @@
                     <div>Chrome运行: ${status.chrome_running ? '✅' : '❌'}</div>
                     <div>扩展安装: ${status.extension_installed ? '✅' : '❌'}</div>
                     <div>AI配置: ${status.ai_configured ? '✅' : '❌'}</div>
+                    <div>连接测试: ${status.connection_test_passed ? '✅' : '❌'}</div>
+                    ${status.error ? `<div style="color: #d73a49; font-size: 12px; margin-top: 4px;">错误详情: ${status.error}</div>` : ''}
                 `;
                 if (installBtn) installBtn.style.display = 'inline-block';
                 addLog(`Chrome桥接状态检查完成：${status.message}`, 'warning');
