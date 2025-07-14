@@ -107,7 +107,7 @@ async function executeStep(step, page, agent, executionId, stepIndex) {
         switch (action) {
             case 'navigate':
                 if (params.url) {
-                    await page.goto(params.url, { waitUntil: 'networkidle' });
+                    await page.goto(params.url, { waitUntil: 'networkidle', timeout: 60000 });
                     io.emit('log-message', {
                         executionId,
                         level: 'info',
@@ -487,7 +487,7 @@ app.post('/goto', async (req, res) => {
         const headless = mode === 'headless' || mode === undefined; // 默认无头模式
         const { page } = await initBrowser(headless);
         
-        await page.goto(url, { waitUntil: 'networkidle' });
+        await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
         
         res.json({ 
             success: true, 
