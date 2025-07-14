@@ -23,7 +23,6 @@ app = Flask(__name__,
 
 # 基本配置
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
-app.config['JSON_AS_ASCII'] = False  # 支持中文JSON输出
 
 # 简单的HTML模板
 HTML_TEMPLATE = """
@@ -198,41 +197,6 @@ try:
             'database': 'connected',
             'environment': 'Vercel Serverless'
         })
-
-    # 中文编码测试API
-    @app.route('/api/test-chinese')
-    def test_chinese():
-        return jsonify({
-            'status': 'success',
-            'message': '中文编码测试',
-            'data': {
-                'chinese_text': '这是中文测试',
-                'test_case': '百度搜索测试',
-                'description': '测试百度搜索功能'
-            }
-        })
-
-    # 简单的测试用例创建API（用于测试）
-    @app.route('/api/test-create', methods=['POST'])
-    def test_create():
-        try:
-            from flask import request
-            data = request.get_json() or {}
-
-            return jsonify({
-                'status': 'success',
-                'message': '测试创建成功',
-                'data': {
-                    'received_data': data,
-                    'chinese_support': '支持中文',
-                    'timestamp': '2025-07-14'
-                }
-            })
-        except Exception as e:
-            return jsonify({
-                'status': 'error',
-                'message': f'测试创建失败: {str(e)}'
-            }), 500
 
     # 数据库初始化API
     @app.route('/api/init-db', methods=['POST'])

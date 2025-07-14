@@ -485,35 +485,30 @@
 
         async function loadTestcases() {
             try {
-                console.log('开始加载测试用例...');
                 showLoading(true);
-
+                
                 const searchText = document.getElementById('searchInput').value;
                 const category = document.getElementById('categorySelect').value;
-
+                
                 const params = {
                     page: currentPage,
                     size: pageSize,
                     search: searchText,
                     category: category
                 };
-
-                console.log('请求参数:', params);
+                
                 const response = await axios.get(`${API_BASE}/testcases`, { params });
-                console.log('API响应:', response.data);
-
+                
                 if (response.data.code === 200) {
                     const data = response.data.data;
-                    console.log('测试用例数据:', data.items);
                     renderTestcases(data.items);
                     renderPagination(data.page, data.pages, data.total);
                 } else {
-                    console.error('API返回错误:', response.data);
                     showMessage('加载失败: ' + response.data.message, 'error');
                 }
             } catch (error) {
                 console.error('加载测试用例失败:', error);
-                showMessage('加载测试用例失败: ' + error.message, 'error');
+                showMessage('加载测试用例失败', 'error');
             } finally {
                 showLoading(false);
             }
