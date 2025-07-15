@@ -11,7 +11,7 @@
     /* 执行控制台特定样式 */
     .execution-grid {
         display: grid;
-        grid-template-columns: 400px 1fr;
+        grid-template-columns: repeat(2, 1fr);
         gap: 24px;
         margin-bottom: 0;
     }
@@ -201,7 +201,7 @@
     }
     
     @media (max-width: 1200px) {
-        .execution-grid {
+        .grid-cols-2 {
             grid-template-columns: 1fr;
             gap: 16px;
         }
@@ -215,7 +215,7 @@
 
 {% block content %}
 <!-- 主要内容区域 -->
-<div class="execution-grid">
+<div class="grid grid-cols-2 gap-3">
     <!-- 左侧：执行控制 -->
     <div class="card">
         <h3 class="card-title">执行控制</h3>
@@ -289,12 +289,12 @@
     </div>
 
     <!-- 右侧：实时信息 -->
-    <div class="execution-right-panel">
+    <div class="flex flex-column gap-2">
         <!-- 执行日志 -->
         <div class="card" style="flex: 1;">
             <h3 class="card-title">执行日志</h3>
             <p class="card-subtitle">实时执行日志输出</p>
-            <div id="log-container" class="log-container">
+            <div id="log-container" class="log-container" style="height: 250px;">
                 <div class="log-entry">
                     <span class="log-entry-time">[14:32:15]</span>
                     本地代理执行控制台已就绪
@@ -306,6 +306,14 @@
                 <div class="log-entry">
                     <span class="log-entry-time">[14:32:15]</span>
                     请先在您的电脑上下载并启动本地代理服务器(端口3001)
+                </div>
+                <div class="log-entry">
+                    <span class="log-entry-time">[14:32:16]</span>
+                    跳过服务器WebSocket连接，仅使用本地代理连接
+                </div>
+                <div class="log-entry">
+                    <span class="log-entry-time">[14:32:16]</span>
+                    <span class="log-entry-success">本地代理连接成功</span>
                 </div>
             </div>
         </div>
