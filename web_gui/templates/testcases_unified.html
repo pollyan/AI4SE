@@ -431,11 +431,11 @@
         item.className = 'testcase-item';
         item.onclick = () => viewTestCase(testcase.id);
         
-        const tags = testcase.tags ? testcase.tags.split(',').map(tag => 
+        const tags = testcase.tags && testcase.tags.length > 0 ? testcase.tags.map(tag => 
             `<span class="tag">${tag.trim()}</span>`
         ).join('') : '';
         
-        const steps = JSON.parse(testcase.steps || '[]');
+        const steps = testcase.steps || [];
         const stepCount = steps.length;
         
         item.innerHTML = `
