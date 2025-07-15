@@ -125,9 +125,14 @@ def create_app():
     # 配置
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-    # 数据库配置 - 支持SQLite和PostgreSQL
-    db_config = get_flask_config()
-    app.config.update(db_config)
+    # 数据库配置 - 仅支持PostgreSQL
+    try:
+        db_config = get_flask_config()
+        app.config.update(db_config)
+    except (ValueError, ImportError) as e:
+        print(f"❌ 数据库配置失败: {e}")
+        print("请确保已正确配置PostgreSQL数据库连接。")
+        sys.exit(1)
 
     # 打印数据库信息
     print_database_info()
