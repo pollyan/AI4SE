@@ -196,6 +196,11 @@ def download_local_proxy():
             'error': f'下载失败: {str(e)}'
         }), 500
 
+@app.route('/api/download-proxy')
+def api_download_proxy():
+    """API端点：下载本地代理包 - 与/download/local-proxy功能相同"""
+    return download_local_proxy()
+
 def generate_proxy_package_files():
     """动态生成代理包文件内容"""
     import os
