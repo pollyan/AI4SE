@@ -9,11 +9,12 @@
 {% block extra_css %}
 <style>
     /* 执行控制台特定样式 */
-    .execution-grid {
-        display: grid;
-        grid-template-columns: 1fr 2fr;
-        gap: 24px;
-        margin-bottom: 0;
+    .execution-console-layout {
+        display: grid !important;
+        grid-template-columns: 1fr 2fr !important;
+        gap: 24px !important;
+        margin-bottom: 0 !important;
+        width: 100% !important;
     }
     
     .execution-right-panel {
@@ -201,9 +202,9 @@
     }
     
     @media (max-width: 1200px) {
-        .execution-grid {
-            grid-template-columns: 1fr;
-            gap: 16px;
+        .execution-console-layout {
+            grid-template-columns: 1fr !important;
+            gap: 16px !important;
         }
         
         .log-container {
@@ -215,7 +216,7 @@
 
 {% block content %}
 <!-- 主要内容区域 -->
-<div class="execution-grid">
+<div class="execution-console-layout">
     <!-- 左侧：执行控制 -->
     <div class="card">
         <h3 class="card-title">执行控制</h3>
