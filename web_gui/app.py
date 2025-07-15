@@ -215,10 +215,29 @@ def download_local_proxy():
         proxy_dir = Path(__file__).parent.parent / 'dist' / 'intent-test-proxy'
 
         if not proxy_dir.exists():
-            return jsonify({
-                'success': False,
-                'error': '代理包不存在，请先构建代理包'
-            }), 404
+            # 自动构建代理包
+            import subprocess
+            build_script = Path(__file__).parent.parent / 'scripts' / 'build-proxy-package.js'
+            try:
+                result = subprocess.run(['node', str(build_script)], 
+                                      capture_output=True, text=True, cwd=Path(__file__).parent.parent)
+                if result.returncode != 0:
+                    return jsonify({
+                        'success': False,
+                        'error': f'构建代理包失败: {result.stderr}'
+                    }), 500
+            except Exception as build_error:
+                return jsonify({
+                    'success': False,
+                    'error': f'构建代理包失败: {str(build_error)}'
+                }), 500
+            
+            # 再次检查是否存在
+            if not proxy_dir.exists():
+                return jsonify({
+                    'success': False,
+                    'error': '代理包构建失败，请检查Node.js环境'
+                }), 500
 
         # 创建临时ZIP文件
         with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
