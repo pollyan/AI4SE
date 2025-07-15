@@ -294,7 +294,7 @@
                     <div class="text-sm text-gray-600" id="execution-progress">0/0</div>
                 </div>
                 <div class="progress" style="height: 6px;">
-                    <div class="progress-bar" id="execution-progress-bar" style="width: 0%;"></div>
+                    <div class="progress-bar" id="execution-progress-bar" style="width: 0%; background: #333333;"></div>
                 </div>
                 <div class="text-sm text-gray-500 mt-1" id="current-step-info">等待执行开始...</div>
             </div>
@@ -476,17 +476,23 @@
             
             localProxySocket.on('step-start', function(data) {
                 addLog(`步骤 ${data.stepIndex + 1} 开始: ${data.description}`, 'info');
-                updateExecutionProgress(data.stepIndex, data.totalSteps, `正在执行: ${data.description}`);
+                // 使用实际的步骤数或者从testcase获取
+                const totalSteps = data.totalSteps || currentExecution?.totalSteps || 0;
+                updateExecutionProgress(data.stepIndex, totalSteps, `正在执行: ${data.description}`);
             });
             
             localProxySocket.on('step-completed', function(data) {
                 addLog(`步骤 ${data.stepIndex + 1} 完成`, 'success');
-                updateExecutionProgress(data.stepIndex + 1, data.totalSteps, `步骤 ${data.stepIndex + 1} 已完成`);
+                // 使用实际的步骤数或者从testcase获取
+                const totalSteps = data.totalSteps || currentExecution?.totalSteps || 0;
+                updateExecutionProgress(data.stepIndex + 1, totalSteps, `步骤 ${data.stepIndex + 1} 已完成`);
             });
             
             localProxySocket.on('step-failed', function(data) {
                 addLog(`步骤 ${data.stepIndex + 1} 失败: ${data.error}`, 'error');
-                updateExecutionProgress(data.stepIndex + 1, data.totalSteps, `步骤 ${data.stepIndex + 1} 执行失败`);
+                // 使用实际的步骤数或者从testcase获取
+                const totalSteps = data.totalSteps || currentExecution?.totalSteps || 0;
+                updateExecutionProgress(data.stepIndex + 1, totalSteps, `步骤 ${data.stepIndex + 1} 执行失败`);
             });
             
             localProxySocket.on('screenshot-taken', function(data) {
@@ -612,6 +618,13 @@
                     addLog(`测试用例数据获取成功: ${testcase.name}`, 'success');
                     addLog(`正在发送执行请求到本地代理服务器...`, 'info');
                     
+                    // 保存总步骤数到currentExecution
+                    const totalSteps = testcase.steps ? testcase.steps.length : 0;
+                    currentExecution.totalSteps = totalSteps;
+                    
+                    // 更新进度条显示总步骤数
+                    updateExecutionProgress(0, totalSteps, '准备开始执行...');
+                    
                     // 检查WebSocket连接状态
                     if (!localProxySocket || !localProxySocket.connected) {
                         addLog('错误：本地代理连接已断开', 'error');
@@ -683,13 +696,20 @@
 
     // 更新执行进度
     function updateExecutionProgress(current, total, stepInfo) {
-        document.getElementById('execution-progress').textContent = `${current}/${total}`;
+        // 确保数值有效
+        const currentStep = Math.max(0, current || 0);
+        const totalSteps = Math.max(0, total || 0);
+        
+        document.getElementById('execution-progress').textContent = `${currentStep}/${totalSteps}`;
         
         // 更新进度条
         const progressBar = document.getElementById('execution-progress-bar');
-        if (progressBar && total > 0) {
-            const percentage = (current / total) * 100;
+        if (progressBar && totalSteps > 0) {
+            const percentage = (currentStep / totalSteps) * 100;
             progressBar.style.width = `${percentage}%`;
+            progressBar.style.background = '#333333';
+        } else if (progressBar) {
+            progressBar.style.width = '0%';
         }
         
         // 更新当前步骤信息
@@ -697,12 +717,12 @@
         if (stepInfoElement) {
             if (stepInfo) {
                 stepInfoElement.textContent = stepInfo;
-            } else if (current === 0) {
+            } else if (currentStep === 0) {
                 stepInfoElement.textContent = '等待执行开始...';
-            } else if (current === total) {
+            } else if (currentStep === totalSteps && totalSteps > 0) {
                 stepInfoElement.textContent = '执行完成';
             } else {
-                stepInfoElement.textContent = `正在执行第 ${current + 1} 步...`;
+                stepInfoElement.textContent = `正在执行第 ${currentStep + 1} 步...`;
             }
         }
     }
@@ -719,9 +739,15 @@
         const progressBar = document.getElementById('execution-progress-bar');
         const stepInfoElement = document.getElementById('current-step-info');
         if (data.status === 'success') {
-            if (progressBar) progressBar.style.width = '100%';
+            if (progressBar) {
+                progressBar.style.width = '100%';
+                progressBar.style.background = '#28a745'; // 成功时显示绿色
+            }
             if (stepInfoElement) stepInfoElement.textContent = '执行完成';
         } else {
+            if (progressBar) {
+                progressBar.style.background = '#dc3545'; // 失败时显示红色
+            }
             if (stepInfoElement) stepInfoElement.textContent = '执行失败';
         }
         
