@@ -348,6 +348,15 @@ class TestCaseEditor {
             }
         });
         
+        // 预览执行
+        document.getElementById('preview-execution').addEventListener('click', () => {
+            if (this.isCreateMode) {
+                this.showMessage('请先保存测试用例后再预览执行', 'warning');
+                return;
+            }
+            window.location.href = `/execution?testcase_id=${this.testcaseId}`;
+        });
+        
         // 添加步骤
         document.getElementById('add-step').addEventListener('click', () => {
             this.addNewStep();

@@ -410,6 +410,18 @@
                     option.textContent = testcase.name;
                     select.appendChild(option);
                 });
+                
+                // 检查URL参数中是否有testcase_id，如果有则自动选择
+                const urlParams = new URLSearchParams(window.location.search);
+                const testcaseId = urlParams.get('testcase_id');
+                if (testcaseId) {
+                    select.value = testcaseId;
+                    // 如果找到了匹配的测试用例，显示一个提示
+                    const selectedOption = select.querySelector(`option[value="${testcaseId}"]`);
+                    if (selectedOption) {
+                        addLog(`已自动选择测试用例: ${selectedOption.textContent}`, 'info');
+                    }
+                }
             }
         } catch (error) {
             console.error('加载测试用例失败:', error);
