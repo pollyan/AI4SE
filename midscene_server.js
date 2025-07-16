@@ -428,8 +428,9 @@ async function executeTestCaseAsync(testcase, mode, executionId) {
             await executeStep(step, page, agent, executionId, i, steps.length);
 
             // 截图
+            let screenshot = null;
             try {
-                const screenshot = await page.screenshot({
+                screenshot = await page.screenshot({
                     fullPage: false,
                     type: 'png'
                 });
