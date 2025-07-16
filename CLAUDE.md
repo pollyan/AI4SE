@@ -258,11 +258,96 @@ All templates should follow the minimal design pattern:
 - **Cards**: Use `card`, `card-title`, `card-subtitle` hierarchy
 - **Status**: Use `status` with color variants (`status-success`, `status-warning`, `status-error`)
 
+### List Item Design Standards
+Based on the testcases management page implementation, all list items should follow these design patterns:
+
+#### HTML Structure
+```html
+<div class="list-item" title="点击进入编辑模式" onclick="editItem(id)">
+    <div class="list-item-content">
+        <div class="list-item-title">主标题</div>
+        <div class="list-item-subtitle">副标题或描述</div>
+        <div class="list-item-meta">
+            <span class="text-gray-600">元数据1</span>
+            <span class="text-gray-400">•</span>
+            <span class="text-gray-600">元数据2</span>
+            <!-- 更多元数据... -->
+        </div>
+    </div>
+    <div class="flex items-center gap-1">
+        <button class="btn btn-small btn-ghost" onclick="event.stopPropagation(); action1()">操作1</button>
+        <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); action2()">操作2</button>
+        <button class="btn btn-small btn-ghost" onclick="event.stopPropagation(); action3()">操作3</button>
+        <div class="status status-success" title="状态描述"></div>
+    </div>
+</div>
+```
+
+#### CSS Styling
+```css
+/* 列表项目点击效果样式 */
+.list-item {
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.list-item:hover {
+    background-color: #f8f9fa;
+    transform: translateY(-1px);
+}
+
+.list-item:active {
+    transform: translateY(0);
+}
+
+/* 状态指示器增强效果 */
+.status {
+    cursor: help;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.status:hover {
+    transform: scale(1.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+```
+
+#### JavaScript Interaction
+```javascript
+// 创建列表项目
+function createListItem(item) {
+    const listItem = document.createElement('div');
+    listItem.className = 'list-item';
+    listItem.title = '点击进入编辑模式';  // 适当的提示文本
+    listItem.onclick = () => editItem(item.id);
+    
+    // 设置HTML内容...
+    
+    return listItem;
+}
+
+// 按钮事件处理必须包含 event.stopPropagation()
+function handleButtonClick(event, action) {
+    event.stopPropagation();
+    action();
+}
+```
+
+#### Design Principles
+1. **可点击性**: 整个列表项目都应该可以点击进入主要操作（通常是编辑）
+2. **视觉反馈**: 悬停时有背景色变化和轻微上移效果
+3. **事件隔离**: 按钮区域使用 `event.stopPropagation()` 防止冒泡
+4. **一致的布局**: 左侧内容区域 + 右侧操作区域
+5. **状态指示**: 使用彩色圆点表示状态，支持悬停放大效果
+6. **元数据展示**: 使用灰色文本和分隔符展示次要信息
+
 ### Interactive Features
 - Implement real-time filtering and search
 - Use debouncing for search inputs (500ms)
 - Provide immediate feedback for user actions
 - Maintain consistent pagination patterns
+- All list items should be clickable with hover effects
+- Use consistent button layouts and event handling
 
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.
