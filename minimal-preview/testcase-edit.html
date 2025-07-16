@@ -124,10 +124,11 @@
                             </div>
                         </div>
                         <div class="flex items-center gap-1">
-                            <button class="btn btn-small btn-ghost">↑</button>
-                            <button class="btn btn-small btn-ghost">↓</button>
-                            <button class="btn btn-small btn-ghost">复制</button>
-                            <button class="btn btn-small btn-ghost">删除</button>
+                            <button class="btn btn-small btn-ghost edit-step">编辑</button>
+                            <button class="btn btn-small btn-ghost move-up">↑</button>
+                            <button class="btn btn-small btn-ghost move-down">↓</button>
+                            <button class="btn btn-small btn-ghost duplicate-step">复制</button>
+                            <button class="btn btn-small btn-ghost delete-step">删除</button>
                         </div>
                     </div>
 
@@ -142,10 +143,11 @@
                             </div>
                         </div>
                         <div class="flex items-center gap-1">
-                            <button class="btn btn-small btn-ghost">↑</button>
-                            <button class="btn btn-small btn-ghost">↓</button>
-                            <button class="btn btn-small btn-ghost">复制</button>
-                            <button class="btn btn-small btn-ghost">删除</button>
+                            <button class="btn btn-small btn-ghost edit-step">编辑</button>
+                            <button class="btn btn-small btn-ghost move-up">↑</button>
+                            <button class="btn btn-small btn-ghost move-down">↓</button>
+                            <button class="btn btn-small btn-ghost duplicate-step">复制</button>
+                            <button class="btn btn-small btn-ghost delete-step">删除</button>
                         </div>
                     </div>
 
@@ -160,10 +162,11 @@
                             </div>
                         </div>
                         <div class="flex items-center gap-1">
-                            <button class="btn btn-small btn-ghost">↑</button>
-                            <button class="btn btn-small btn-ghost">↓</button>
-                            <button class="btn btn-small btn-ghost">复制</button>
-                            <button class="btn btn-small btn-ghost">删除</button>
+                            <button class="btn btn-small btn-ghost edit-step">编辑</button>
+                            <button class="btn btn-small btn-ghost move-up">↑</button>
+                            <button class="btn btn-small btn-ghost move-down">↓</button>
+                            <button class="btn btn-small btn-ghost duplicate-step">复制</button>
+                            <button class="btn btn-small btn-ghost delete-step">删除</button>
                         </div>
                     </div>
 
@@ -178,10 +181,11 @@
                             </div>
                         </div>
                         <div class="flex items-center gap-1">
-                            <button class="btn btn-small btn-ghost">↑</button>
-                            <button class="btn btn-small btn-ghost">↓</button>
-                            <button class="btn btn-small btn-ghost">复制</button>
-                            <button class="btn btn-small btn-ghost">删除</button>
+                            <button class="btn btn-small btn-ghost edit-step">编辑</button>
+                            <button class="btn btn-small btn-ghost move-up">↑</button>
+                            <button class="btn btn-small btn-ghost move-down">↓</button>
+                            <button class="btn btn-small btn-ghost duplicate-step">复制</button>
+                            <button class="btn btn-small btn-ghost delete-step">删除</button>
                         </div>
                     </div>
 
@@ -196,10 +200,11 @@
                             </div>
                         </div>
                         <div class="flex items-center gap-1">
-                            <button class="btn btn-small btn-ghost">↑</button>
-                            <button class="btn btn-small btn-ghost">↓</button>
-                            <button class="btn btn-small btn-ghost">复制</button>
-                            <button class="btn btn-small btn-ghost">删除</button>
+                            <button class="btn btn-small btn-ghost edit-step">编辑</button>
+                            <button class="btn btn-small btn-ghost move-up">↑</button>
+                            <button class="btn btn-small btn-ghost move-down">↓</button>
+                            <button class="btn btn-small btn-ghost duplicate-step">复制</button>
+                            <button class="btn btn-small btn-ghost delete-step">删除</button>
                         </div>
                     </div>
                 </div>
@@ -324,52 +329,6 @@
             </div>
         </div>
 
-        <!-- 步骤编辑弹窗/面板 -->
-        <div class="card mt-3" id="step-editor" style="display: none;">
-            <div class="card-title">步骤编辑</div>
-            <div class="card-subtitle">编辑选中步骤的详细参数</div>
-            
-            <div class="grid grid-cols-3 gap-2">
-                <div class="form-group">
-                    <label class="form-label">步骤名称</label>
-                    <input type="text" class="form-input" value="导航到登录页面" placeholder="请输入步骤名称">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">动作类型</label>
-                    <select class="form-select">
-                        <option>navigate</option>
-                        <option>ai_input</option>
-                        <option>ai_tap</option>
-                        <option>ai_assert</option>
-                        <option>ai_wait</option>
-                        <option>ai_scroll</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">必需步骤</label>
-                    <select class="form-select">
-                        <option>是</option>
-                        <option>否</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">步骤描述</label>
-                <textarea class="form-textarea" style="min-height: 60px;" placeholder="请输入步骤的详细描述">访问 https://example.com/login 页面</textarea>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">动作参数 (JSON)</label>
-                <textarea class="form-textarea" style="font-family: 'SF Mono', Monaco, monospace; font-size: 13px; min-height: 100px;" placeholder="请输入动作参数的JSON格式">{"url": "https://example.com/login"}</textarea>
-            </div>
-
-            <div class="flex gap-2">
-                <button class="btn btn-primary">保存步骤</button>
-                <button class="btn btn-ghost">取消编辑</button>
-                <button class="btn btn-ghost">删除步骤</button>
-            </div>
-        </div>
 
         <!-- 调试信息 -->
         <div class="card mt-4">
@@ -400,131 +359,409 @@
     <script>
         // 交互逻辑
         document.addEventListener('DOMContentLoaded', function() {
-            const listItems = document.querySelectorAll('.list-item');
-            const stepEditor = document.getElementById('step-editor');
+            const stepsList = document.querySelector('.list');
             const stepTypes = document.querySelectorAll('#step-types .btn-small');
-            let selectedStep = null;
+            let editingStep = null;
             
-            // 步骤选择和编辑
-            listItems.forEach((item, index) => {
-                item.addEventListener('click', function(e) {
-                    // 阻止事件冒泡到按钮
-                    if (e.target.classList.contains('btn')) return;
-                    
-                    // 清除之前的选择
-                    listItems.forEach(i => i.style.background = '');
-                    
-                    // 高亮当前选择
-                    this.style.background = '#f8f8f8';
-                    selectedStep = index;
-                    
-                    // 显示编辑面板
-                    stepEditor.style.display = 'block';
-                    stepEditor.scrollIntoView({ behavior: 'smooth' });
-                });
-            });
+            // 步骤数据（模拟数据）
+            const stepsData = [
+                {
+                    id: 1,
+                    title: '导航到登录页面',
+                    action: 'navigate',
+                    description: '访问 https://example.com/login 页面',
+                    params: { url: 'https://example.com/login' },
+                    required: true
+                },
+                {
+                    id: 2,
+                    title: '输入用户名',
+                    action: 'ai_input',
+                    description: '在用户名输入框中输入 "testuser"',
+                    params: { text: 'testuser', locate: '用户名输入框' },
+                    required: true
+                },
+                {
+                    id: 3,
+                    title: '输入密码',
+                    action: 'ai_input',
+                    description: '在密码输入框中输入密码',
+                    params: { text: 'password123', locate: '密码输入框' },
+                    required: true
+                },
+                {
+                    id: 4,
+                    title: '点击登录按钮',
+                    action: 'ai_tap',
+                    description: '点击登录按钮',
+                    params: { locate: '登录按钮' },
+                    required: true
+                },
+                {
+                    id: 5,
+                    title: '验证登录成功',
+                    action: 'ai_assert',
+                    description: '验证页面显示欢迎信息',
+                    params: { condition: '登录成功' },
+                    required: true
+                }
+            ];
 
-            // 步骤操作按钮
-            document.querySelectorAll('.list-item .btn-small').forEach(btn => {
-                btn.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    const action = this.textContent.trim();
+            // 渲染步骤列表
+            function renderSteps() {
+                stepsList.innerHTML = '';
+                stepsData.forEach((step, index) => {
+                    const stepElement = createStepElement(step, index);
+                    stepsList.appendChild(stepElement);
+                });
+            }
+
+            // 创建步骤元素
+            function createStepElement(step, index) {
+                const div = document.createElement('div');
+                div.className = 'step-container';
+                div.innerHTML = `
+                    <div class="list-item" data-step-id="${step.id}">
+                        <div class="list-item-content">
+                            <div class="list-item-title">步骤 ${index + 1}: ${step.title}</div>
+                            <div class="list-item-subtitle">${step.action} • ${getActionDescription(step.action, step.params)}</div>
+                            <div class="list-item-meta">
+                                <span class="text-gray-600">动作类型: ${step.action}</span>
+                                <span class="text-gray-400">•</span>
+                                <span class="text-gray-600">${getMainParam(step.action, step.params)}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button class="btn btn-small btn-ghost edit-step">编辑</button>
+                            <button class="btn btn-small btn-ghost move-up">↑</button>
+                            <button class="btn btn-small btn-ghost move-down">↓</button>
+                            <button class="btn btn-small btn-ghost duplicate-step">复制</button>
+                            <button class="btn btn-small btn-ghost delete-step">删除</button>
+                        </div>
+                    </div>
+                `;
+                return div;
+            }
+
+            // 创建行内编辑表单
+            function createInlineEditForm(step, index) {
+                const editForm = document.createElement('div');
+                editForm.className = 'inline-edit-form';
+                editForm.style.cssText = `
+                    background: #f8f8f8;
+                    border: 1px solid #e8e8e8;
+                    border-radius: 4px;
+                    padding: 16px;
+                    margin-top: 8px;
+                    animation: slideDown 0.2s ease;
+                `;
+                
+                editForm.innerHTML = `
+                    <div class="form-edit-header" style="margin-bottom: 12px;">
+                        <div style="font-weight: 500; color: #333;">编辑步骤 ${index + 1}</div>
+                        <div style="font-size: 12px; color: #666;">修改步骤的详细参数</div>
+                    </div>
                     
-                    switch(action) {
-                        case '↑':
-                            console.log('上移步骤');
-                            break;
-                        case '↓':
-                            console.log('下移步骤');
-                            break;
-                        case '复制':
-                            console.log('复制步骤');
-                            break;
-                        case '删除':
-                            if (confirm('确定要删除这个步骤吗？')) {
-                                console.log('删除步骤');
-                            }
-                            break;
+                    <div class="grid grid-cols-3 gap-2" style="margin-bottom: 12px;">
+                        <div>
+                            <label class="form-label" style="margin-bottom: 4px;">步骤名称</label>
+                            <input type="text" class="form-input" id="edit-title" value="${step.title}" placeholder="请输入步骤名称">
+                        </div>
+                        <div>
+                            <label class="form-label" style="margin-bottom: 4px;">动作类型</label>
+                            <select class="form-select" id="edit-action">
+                                <option value="navigate" ${step.action === 'navigate' ? 'selected' : ''}>navigate</option>
+                                <option value="ai_input" ${step.action === 'ai_input' ? 'selected' : ''}>ai_input</option>
+                                <option value="ai_tap" ${step.action === 'ai_tap' ? 'selected' : ''}>ai_tap</option>
+                                <option value="ai_assert" ${step.action === 'ai_assert' ? 'selected' : ''}>ai_assert</option>
+                                <option value="ai_wait" ${step.action === 'ai_wait' ? 'selected' : ''}>ai_wait</option>
+                                <option value="ai_scroll" ${step.action === 'ai_scroll' ? 'selected' : ''}>ai_scroll</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label" style="margin-bottom: 4px;">必需步骤</label>
+                            <select class="form-select" id="edit-required">
+                                <option value="true" ${step.required ? 'selected' : ''}>是</option>
+                                <option value="false" ${!step.required ? 'selected' : ''}>否</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 12px;">
+                        <label class="form-label" style="margin-bottom: 4px;">步骤描述</label>
+                        <textarea class="form-textarea" id="edit-description" style="min-height: 60px;" placeholder="请输入步骤的详细描述">${step.description}</textarea>
+                    </div>
+
+                    <div style="margin-bottom: 16px;">
+                        <label class="form-label" style="margin-bottom: 4px;">动作参数 (JSON)</label>
+                        <textarea class="form-textarea" id="edit-params" style="font-family: 'SF Mono', Monaco, monospace; font-size: 13px; min-height: 80px;" placeholder="请输入动作参数的JSON格式">${JSON.stringify(step.params, null, 2)}</textarea>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button class="btn btn-primary save-step">保存步骤</button>
+                        <button class="btn btn-ghost cancel-edit">取消编辑</button>
+                        <button class="btn btn-ghost delete-step-inline">删除步骤</button>
+                    </div>
+                `;
+                
+                return editForm;
+            }
+
+            // 获取动作描述
+            function getActionDescription(action, params) {
+                switch(action) {
+                    case 'navigate':
+                        return `访问 ${params.url || '未指定URL'}`;
+                    case 'ai_input':
+                        return `在 "${params.locate || '未指定位置'}" 输入 "${params.text || '未指定文本'}"`;
+                    case 'ai_tap':
+                        return `点击 "${params.locate || '未指定元素'}"`;
+                    case 'ai_assert':
+                        return `验证 "${params.condition || '未指定条件'}"`;
+                    case 'ai_wait':
+                        return `等待 "${params.locate || '未指定元素'}" 出现`;
+                    default:
+                        return JSON.stringify(params);
+                }
+            }
+
+            // 获取主要参数
+            function getMainParam(action, params) {
+                switch(action) {
+                    case 'navigate':
+                        return `目标URL: ${params.url || '未指定'}`;
+                    case 'ai_input':
+                        return `定位描述: ${params.locate || '未指定'}`;
+                    case 'ai_tap':
+                    case 'ai_assert':
+                    case 'ai_wait':
+                        return `定位描述: ${params.locate || params.condition || '未指定'}`;
+                    default:
+                        return Object.keys(params).length > 0 ? Object.keys(params)[0] + ': ' + params[Object.keys(params)[0]] : '无参数';
+                }
+            }
+
+            // 显示行内编辑表单
+            function showInlineEdit(stepContainer, stepIndex) {
+                // 关闭其他编辑表单
+                document.querySelectorAll('.inline-edit-form').forEach(form => {
+                    form.remove();
+                });
+                
+                const step = stepsData[stepIndex];
+                const editForm = createInlineEditForm(step, stepIndex);
+                stepContainer.appendChild(editForm);
+                
+                // 绑定编辑表单事件
+                bindEditFormEvents(editForm, stepIndex);
+                
+                editingStep = stepIndex;
+            }
+
+            // 绑定编辑表单事件
+            function bindEditFormEvents(editForm, stepIndex) {
+                const saveBtn = editForm.querySelector('.save-step');
+                const cancelBtn = editForm.querySelector('.cancel-edit');
+                const deleteBtn = editForm.querySelector('.delete-step-inline');
+                
+                saveBtn.addEventListener('click', function() {
+                    const title = editForm.querySelector('#edit-title').value;
+                    const action = editForm.querySelector('#edit-action').value;
+                    const description = editForm.querySelector('#edit-description').value;
+                    const required = editForm.querySelector('#edit-required').value === 'true';
+                    
+                    try {
+                        const params = JSON.parse(editForm.querySelector('#edit-params').value);
+                        
+                        // 更新步骤数据
+                        stepsData[stepIndex] = {
+                            ...stepsData[stepIndex],
+                            title,
+                            action,
+                            description,
+                            params,
+                            required
+                        };
+                        
+                        // 重新渲染步骤列表
+                        renderSteps();
+                        editingStep = null;
+                        
+                        console.log('步骤保存成功:', stepsData[stepIndex]);
+                    } catch (e) {
+                        alert('参数格式错误，请输入有效的JSON');
                     }
                 });
-            });
+                
+                cancelBtn.addEventListener('click', function() {
+                    editForm.remove();
+                    editingStep = null;
+                });
+                
+                deleteBtn.addEventListener('click', function() {
+                    if (confirm('确定要删除这个步骤吗？')) {
+                        stepsData.splice(stepIndex, 1);
+                        renderSteps();
+                        editingStep = null;
+                    }
+                });
+            }
 
-            // 步骤类型拖拽（模拟点击添加）
+            // 绑定步骤操作事件
+            function bindStepEvents() {
+                document.querySelectorAll('.step-container').forEach((container, index) => {
+                    const listItem = container.querySelector('.list-item');
+                    const editBtn = container.querySelector('.edit-step');
+                    const moveUpBtn = container.querySelector('.move-up');
+                    const moveDownBtn = container.querySelector('.move-down');
+                    const duplicateBtn = container.querySelector('.duplicate-step');
+                    const deleteBtn = container.querySelector('.delete-step');
+                    
+                    // 编辑按钮
+                    editBtn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        showInlineEdit(container, index);
+                    });
+                    
+                    // 上移按钮
+                    moveUpBtn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        if (index > 0) {
+                            [stepsData[index], stepsData[index - 1]] = [stepsData[index - 1], stepsData[index]];
+                            renderSteps();
+                        }
+                    });
+                    
+                    // 下移按钮
+                    moveDownBtn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        if (index < stepsData.length - 1) {
+                            [stepsData[index], stepsData[index + 1]] = [stepsData[index + 1], stepsData[index]];
+                            renderSteps();
+                        }
+                    });
+                    
+                    // 复制按钮
+                    duplicateBtn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const stepCopy = JSON.parse(JSON.stringify(stepsData[index]));
+                        stepCopy.id = Date.now();
+                        stepCopy.title = stepCopy.title + ' (复制)';
+                        stepsData.splice(index + 1, 0, stepCopy);
+                        renderSteps();
+                    });
+                    
+                    // 删除按钮
+                    deleteBtn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        if (confirm('确定要删除这个步骤吗？')) {
+                            stepsData.splice(index, 1);
+                            renderSteps();
+                        }
+                    });
+                });
+            }
+
+            // 步骤类型点击添加
             stepTypes.forEach(type => {
                 type.addEventListener('click', function() {
                     const stepType = this.querySelector('div div').textContent;
-                    console.log('添加步骤类型:', stepType);
+                    const newStep = {
+                        id: Date.now(),
+                        title: getDefaultTitle(stepType),
+                        action: stepType,
+                        description: getDefaultDescription(stepType),
+                        params: getDefaultParams(stepType),
+                        required: true
+                    };
                     
-                    // 这里可以添加实际的步骤添加逻辑
-                    // 比如在步骤列表最后添加一个新步骤
+                    stepsData.push(newStep);
+                    renderSteps();
                 });
             });
 
-            // 编辑面板操作
-            document.querySelectorAll('#step-editor .btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const action = this.textContent.trim();
-                    
-                    switch(action) {
-                        case '保存步骤':
-                            console.log('保存步骤修改');
-                            stepEditor.style.display = 'none';
-                            break;
-                        case '取消编辑':
-                            stepEditor.style.display = 'none';
-                            break;
-                        case '删除步骤':
-                            if (confirm('确定要删除这个步骤吗？')) {
-                                console.log('删除当前步骤');
-                                stepEditor.style.display = 'none';
-                            }
-                            break;
-                    }
-                });
+            // 获取默认标题
+            function getDefaultTitle(action) {
+                const titles = {
+                    'navigate': '导航到页面',
+                    'ai_input': 'AI输入文本',
+                    'ai_tap': 'AI点击元素',
+                    'ai_assert': 'AI断言验证',
+                    'ai_wait': '等待元素出现',
+                    'ai_scroll': 'AI滚动页面'
+                };
+                return titles[action] || action;
+            }
+
+            // 获取默认描述
+            function getDefaultDescription(action) {
+                const descriptions = {
+                    'navigate': '访问指定URL',
+                    'ai_input': '在指定位置输入文本',
+                    'ai_tap': '点击指定元素',
+                    'ai_assert': '验证指定条件',
+                    'ai_wait': '等待指定元素出现',
+                    'ai_scroll': '滚动页面'
+                };
+                return descriptions[action] || '执行' + action + '操作';
+            }
+
+            // 获取默认参数
+            function getDefaultParams(action) {
+                const defaults = {
+                    'navigate': { url: 'https://example.com' },
+                    'ai_input': { text: '', locate: '输入框' },
+                    'ai_tap': { locate: '按钮' },
+                    'ai_assert': { condition: '页面内容' },
+                    'ai_wait': { locate: '元素', timeout: 10000 },
+                    'ai_scroll': { direction: 'down' }
+                };
+                return defaults[action] || {};
+            }
+
+            // 初始化
+            renderSteps();
+            
+            // 渲染后绑定事件
+            const observer = new MutationObserver(function(mutations) {
+                bindStepEvents();
             });
+            observer.observe(stepsList, { childList: true });
+            
+            // 初始绑定
+            bindStepEvents();
 
             // 主要操作按钮
             document.querySelector('.btn-primary').addEventListener('click', function() {
-                console.log('保存测试用例');
-            });
-            
-            document.querySelectorAll('.main-container > .card:nth-child(3) .btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const action = this.textContent.trim();
-                    
-                    switch(action) {
-                        case '取消编辑':
-                            if (confirm('确定要取消编辑吗？未保存的更改将丢失。')) {
-                                window.history.back();
-                            }
-                            break;
-                        case '预览执行':
-                            console.log('预览执行');
-                            break;
-                        case '清空所有':
-                            if (confirm('确定要清空所有步骤吗？此操作不可恢复。')) {
-                                console.log('清空所有步骤');
-                            }
-                            break;
-                    }
-                });
+                console.log('保存测试用例', stepsData);
             });
 
             // 键盘快捷键
             document.addEventListener('keydown', function(e) {
-                if (e.ctrlKey || e.metaKey) {
-                    switch(e.key) {
-                        case 's':
-                            e.preventDefault();
-                            console.log('快捷键保存');
-                            break;
-                        case 'Escape':
-                            stepEditor.style.display = 'none';
-                            break;
-                    }
+                if (e.key === 'Escape') {
+                    document.querySelectorAll('.inline-edit-form').forEach(form => {
+                        form.remove();
+                    });
+                    editingStep = null;
                 }
             });
         });
+        
+        // 添加动画样式
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideDown {
+                from {
+                    opacity: 0;
+                    transform: translateY(-10px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>
