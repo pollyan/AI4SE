@@ -161,6 +161,38 @@ def local_proxy_page():
     except Exception as e:
         return jsonify({'error': f'无法加载本地代理页面: {str(e)}'}), 500
 
+@app.route('/testcases/create')
+def testcase_create_page():
+    """测试用例创建页面"""
+    try:
+        from flask import render_template
+        import json
+        
+        # 创建一个空的测试用例对象用于创建模式
+        class EmptyTestCase:
+            def __init__(self):
+                self.id = None
+                self.name = ''
+                self.description = ''
+                self.category = ''
+                self.priority = 2
+                self.tags = ''
+                self.is_active = True
+                self.created_by = 'admin'
+                self.created_at = None
+                self.updated_at = None
+        
+        empty_testcase = EmptyTestCase()
+        
+        return render_template('testcase_edit.html', 
+                             testcase=empty_testcase,
+                             steps_data='[]',
+                             total_executions=0,
+                             success_rate=0,
+                             is_create_mode=True)
+    except Exception as e:
+        return jsonify({'error': f'无法加载测试用例创建页面: {str(e)}'}), 500
+
 @app.route('/testcases/<int:testcase_id>/edit')
 def testcase_edit_page(testcase_id):
     """测试用例编辑页面"""
@@ -188,7 +220,8 @@ def testcase_edit_page(testcase_id):
                              testcase=testcase,
                              steps_data=json.dumps(steps_data),
                              total_executions=total_executions,
-                             success_rate=success_rate)
+                             success_rate=success_rate,
+                             is_create_mode=False)
     except Exception as e:
         return jsonify({'error': f'无法加载测试用例编辑页面: {str(e)}'}), 500
 

@@ -1,10 +1,10 @@
 {% extends "base_layout.html" %}
 
-{% block title %}编辑测试用例 - Intent Test Framework{% endblock %}
+{% block title %}{{ '创建测试用例' if is_create_mode else '编辑测试用例' }} - Intent Test Framework{% endblock %}
 
-{% block page_title %}编辑测试用例{% endblock %}
+{% block page_title %}{{ '创建测试用例' if is_create_mode else '编辑测试用例' }}{% endblock %}
 
-{% block page_subtitle %}修改测试用例的基本信息和执行步骤{% endblock %}
+{% block page_subtitle %}{{ '创建新的测试用例并设置基本信息和执行步骤' if is_create_mode else '修改测试用例的基本信息和执行步骤' }}{% endblock %}
 
 {% block content %}
 
@@ -65,15 +65,20 @@
 <div class="card mb-3">
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
-            <button class="btn btn-primary" id="save-testcase">保存用例</button>
+            <button class="btn btn-primary" id="save-testcase">{{ '创建用例' if is_create_mode else '保存用例' }}</button>
             <button class="btn btn-ghost" id="cancel-edit">取消编辑</button>
             <button class="btn btn-ghost" id="preview-execution">预览执行</button>
         </div>
         <div class="text-sm text-gray-600">
-            最后修改: {{ testcase.updated_at.strftime('%Y-%m-%d %H:%M') if testcase.updated_at else testcase.created_at.strftime('%Y-%m-%d %H:%M') }} • 
-            <span id="step-count">0</span>个步骤 • 
-            执行{{ total_executions }}次 • 
-            成功率{{ "%.1f"|format(success_rate) }}%
+            {% if is_create_mode %}
+                <span id="step-count">0</span>个步骤 • 
+                新建用例
+            {% else %}
+                最后修改: {{ testcase.updated_at.strftime('%Y-%m-%d %H:%M') if testcase.updated_at else testcase.created_at.strftime('%Y-%m-%d %H:%M') }} • 
+                <span id="step-count">0</span>个步骤 • 
+                执行{{ total_executions }}次 • 
+                成功率{{ "%.1f"|format(success_rate) }}%
+            {% endif %}
         </div>
     </div>
 </div>
@@ -302,8 +307,9 @@
 // 测试用例编辑器JavaScript
 class TestCaseEditor {
     constructor() {
-        this.testcaseId = {{ testcase.id }};
+        this.testcaseId = {{ testcase.id if testcase.id else 'null' }};
         this.steps = {{ steps_data|safe }};
+        this.isCreateMode = {{ 'true' if is_create_mode else 'false' }};
         this.selectedStepIndex = -1;
         this.isDirty = false;
         this.autoSaveTimer = null;
@@ -311,7 +317,11 @@ class TestCaseEditor {
         this.initializeEditor();
         this.bindEvents();
         this.renderSteps();
-        this.startAutoSave();
+        
+        // 启动自动保存（创建模式下不启动）
+        if (!this.isCreateMode) {
+            this.startAutoSave();
+        }
     }
     
     initializeEditor() {
@@ -924,8 +934,17 @@ class TestCaseEditor {
                 return;
             }
             
-            const response = await fetch(`/api/testcases/${this.testcaseId}`, {
-                method: 'PUT',
+            let url, method;
+            if (this.isCreateMode) {
+                url = '/api/testcases';
+                method = 'POST';
+            } else {
+                url = `/api/testcases/${this.testcaseId}`;
+                method = 'PUT';
+            }
+            
+            const response = await fetch(url, {
+                method: method,
                 headers: {
                     'Content-Type': 'application/json',
                 },
@@ -936,13 +955,23 @@ class TestCaseEditor {
             
             if (response.ok) {
                 this.isDirty = false;
-                if (!silent) {
-                    this.showMessage('测试用例保存成功', 'success');
-                    
-                    // 更新页面显示的信息
-                    setTimeout(() => {
-                        location.reload();
-                    }, 1000);
+                if (this.isCreateMode) {
+                    // 创建成功后跳转到编辑页面
+                    if (!silent) {
+                        this.showMessage('测试用例创建成功', 'success');
+                        setTimeout(() => {
+                            window.location.href = `/testcases/${result.data.id}/edit`;
+                        }, 1000);
+                    }
+                } else {
+                    if (!silent) {
+                        this.showMessage('测试用例保存成功', 'success');
+                        
+                        // 更新页面显示的信息
+                        setTimeout(() => {
+                            location.reload();
+                        }, 1000);
+                    }
                 }
             } else {
                 if (!silent) this.showMessage(result.message || '保存失败', 'error');
@@ -960,7 +989,7 @@ class TestCaseEditor {
     }
     
     async autoSave() {
-        if (!this.isDirty) return;
+        if (!this.isDirty || this.isCreateMode) return; // 创建模式下不自动保存
         
         try {
             await this.saveTestCase(true); // 静默保存
