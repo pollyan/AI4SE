@@ -221,9 +221,14 @@
             <!-- 测试用例选择 -->
             <div class="form-group">
                 <label class="form-label">选择测试用例</label>
-                <select id="testcase-select" class="form-select">
-                    <option value="">请选择测试用例</option>
-                </select>
+                <div class="flex items-center gap-2">
+                    <select id="testcase-select" class="form-select" style="flex: 1;">
+                        <option value="">请选择测试用例</option>
+                    </select>
+                    <button id="back-to-edit" class="btn btn-ghost btn-small" style="display: none;" onclick="backToEdit()">
+                        编辑
+                    </button>
+                </div>
             </div>
 
             <!-- 执行配置 -->
@@ -445,6 +450,8 @@
                     const selectedOption = select.querySelector(`option[value="${testcaseId}"]`);
                     if (selectedOption) {
                         addLog(`已自动选择测试用例: ${selectedOption.textContent}`, 'info');
+                        // 显示返回编辑按钮
+                        showBackToEditButton(testcaseId);
                     }
                 }
             }
@@ -1086,6 +1093,24 @@
                 
                 addExecutionReport(reportPath.trim(), testcaseName, executionId);
             }
+        }
+    }
+
+    // 显示返回编辑按钮
+    function showBackToEditButton(testcaseId) {
+        const backButton = document.getElementById('back-to-edit');
+        if (backButton) {
+            backButton.style.display = 'inline-block';
+            backButton.setAttribute('data-testcase-id', testcaseId);
+        }
+    }
+
+    // 返回编辑测试用例
+    function backToEdit() {
+        const backButton = document.getElementById('back-to-edit');
+        const testcaseId = backButton.getAttribute('data-testcase-id');
+        if (testcaseId) {
+            window.location.href = `/testcases/edit/${testcaseId}`;
         }
     }
 
