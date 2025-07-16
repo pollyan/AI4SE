@@ -49,6 +49,22 @@
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
     }
+    
+    /* 状态指示器样式增强 */
+    .status {
+        cursor: help;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .status:hover {
+        transform: scale(1.3);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* 状态指示器tooltip样式 */
+    .status[title] {
+        position: relative;
+    }
 </style>
 {% endblock %}
 
@@ -240,8 +256,9 @@
         const executionCount = testcase.execution_count || Math.floor(Math.random() * 300) + 50;
         const successRate = testcase.success_rate || (90 + Math.random() * 10).toFixed(1);
         
-        // 获取状态样式
-        const statusClass = getStatusClass(testcase.status || '活跃');
+        // 获取状态样式和文本
+        const statusText = testcase.status || '活跃';
+        const statusClass = getStatusClass(statusText);
         
         item.innerHTML = `
             <div class="list-item-content">
@@ -265,7 +282,7 @@
                 <button class="btn btn-small btn-ghost" onclick="event.stopPropagation(); editTestCase(${testcase.id})">编辑</button>
                 <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); executeTestCase(${testcase.id})">执行</button>
                 <button class="btn btn-small btn-ghost" onclick="event.stopPropagation(); deleteTestCase(${testcase.id})">删除</button>
-                <div class="status ${statusClass}"></div>
+                <div class="status ${statusClass}" title="${getStatusDescription(statusText)}"></div>
             </div>
         `;
         
@@ -289,6 +306,16 @@
             case '暂停': return 'status-warning';
             case '草稿': return 'status-error';
             default: return 'status-success';
+        }
+    }
+    
+    // 获取状态详细描述
+    function getStatusDescription(status) {
+        switch(status) {
+            case '活跃': return '状态: 活跃 - 测试用例正常运行，可以执行测试';
+            case '暂停': return '状态: 暂停 - 测试用例已暂停，暂时不可执行';
+            case '草稿': return '状态: 草稿 - 测试用例尚未完成，处于编辑状态';
+            default: return '状态: 活跃 - 测试用例正常运行，可以执行测试';
         }
     }
     
