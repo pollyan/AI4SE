@@ -6,6 +6,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is the Intent Test Framework - an AI-driven web automation testing platform that provides complete WebUI interface for test case management, execution monitoring, and result analysis. The system uses MidSceneJS for AI-powered visual testing and supports natural language test descriptions.
 
+## Design System
+
+### Minimal Design Reference
+The target design system is stored in `/Users/huian@thoughtworks.com/intent-test-framework/minimal-preview` directory. When implementing new features or modifying existing ones, **ALWAYS** reference these design files:
+
+- `minimal-preview/assets/css/minimal-style.css` - Core CSS framework
+- `minimal-preview/dashboard.html` - Dashboard page design
+- `minimal-preview/testcases.html` - Test cases management page design
+- `minimal-preview/execution.html` - Execution console design
+- `minimal-preview/reports.html` - Reports page design
+- `minimal-preview/index.html` - Main entry page design
+
+### Design Principles
+1. **Extreme Minimalism**: Clean, focused interfaces without unnecessary elements
+2. **No Icons**: Text-only buttons and interfaces, no emoji or symbol icons
+3. **Consistent Typography**: System fonts with specific weight and spacing
+4. **Neutral Colors**: Primary palette uses grays and whites
+5. **Grid Layouts**: Consistent grid systems for content organization
+6. **Status Indicators**: Simple colored dots for status representation
+7. **Unified Components**: Consistent button styles, form elements, and list items
+
 ## Development Commands
 
 ### Setup and Installation
@@ -220,3 +241,34 @@ The system generates downloadable local proxy packages containing:
 - Enhanced error handling and auto-repair functionality
 
 Users download from https://intent-test-framework.vercel.app/local-proxy for the latest version.
+
+## UI/UX Implementation Guidelines
+
+### Template Structure
+All templates should follow the minimal design pattern:
+1. Use `base_layout.html` as parent template
+2. Reference `minimal-preview/` designs for layout structure
+3. Apply consistent spacing and typography
+4. Use grid layouts for content organization
+
+### Component Standards
+- **Buttons**: Use `btn`, `btn-primary`, `btn-ghost`, `btn-small` classes
+- **Forms**: Use `form-group`, `form-label`, `form-input`, `form-select` classes
+- **Lists**: Use `list`, `list-item`, `list-item-content` structure
+- **Cards**: Use `card`, `card-title`, `card-subtitle` hierarchy
+- **Status**: Use `status` with color variants (`status-success`, `status-warning`, `status-error`)
+
+### Interactive Features
+- Implement real-time filtering and search
+- Use debouncing for search inputs (500ms)
+- Provide immediate feedback for user actions
+- Maintain consistent pagination patterns
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+ALWAYS reference the minimal-preview directory designs when implementing or modifying UI components.
+NEVER add icons or emoji symbols to interfaces - use text-only approach.
+ALWAYS maintain the extreme minimalist design philosophy.
