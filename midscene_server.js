@@ -538,6 +538,9 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
         });
 
         logMessage(executionId, 'success', `测试执行完成！耗时: ${Math.round(executionState.duration / 1000)}秒`);
+        
+        // 检查并通知MidScene生成的报告
+        await checkAndNotifyMidsceneReport(executionId);
 
         // 通知Web系统执行完成
         await notifyExecutionResult(executionId, testcase, mode, 'success', executionState.steps);
@@ -1064,6 +1067,62 @@ app.use((error, req, res, next) => {
         error: '内部服务器错误' 
     });
 });
+
+// 检查并通知MidScene生成的报告
+async function checkAndNotifyMidsceneReport(executionId) {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        
+        // 检查midscene_run目录是否存在
+        const midsceneRunDir = path.join(process.cwd(), 'midscene_run');
+        if (!fs.existsSync(midsceneRunDir)) {
+            console.log('📋 midscene_run目录不存在，跳过报告检查');
+            return;
+        }
+        
+        // 检查报告目录
+        const reportDir = path.join(midsceneRunDir, 'report');
+        if (!fs.existsSync(reportDir)) {
+            console.log('📋 报告目录不存在，跳过报告检查');
+            return;
+        }
+        
+        // 获取报告目录中的所有HTML文件
+        const files = fs.readdirSync(reportDir);
+        const htmlFiles = files.filter(file => file.endsWith('.html') && file.includes('playwright-'));
+        
+        if (htmlFiles.length === 0) {
+            console.log('📋 未找到MidScene报告文件');
+            return;
+        }
+        
+        // 按文件修改时间排序，获取最新的报告文件
+        const fileStats = htmlFiles.map(file => {
+            const filePath = path.join(reportDir, file);
+            const stats = fs.statSync(filePath);
+            return {
+                name: file,
+                path: filePath,
+                mtime: stats.mtime
+            };
+        });
+        
+        // 获取最新的报告文件
+        const latestReport = fileStats.sort((a, b) => b.mtime - a.mtime)[0];
+        
+        if (latestReport) {
+            const reportPath = latestReport.path;
+            console.log(`📊 找到MidScene报告文件: ${reportPath}`);
+            
+            // 通过日志消息通知前端
+            logMessage(executionId, 'info', `Midscene - report file updated: ${reportPath}`);
+        }
+        
+    } catch (error) {
+        console.error('检查MidScene报告失败:', error);
+    }
+}
 
 // 启动服务器
 server.listen(port, () => {
