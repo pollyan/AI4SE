@@ -21,6 +21,7 @@
         display: flex;
         flex-direction: column;
         gap: 16px;
+        align-items: flex-start;
     }
     
     .log-container {
@@ -35,6 +36,11 @@
         max-height: 400px;
         overflow-y: auto;
         color: #333333;
+    }
+    
+    /* 确保右侧面板不会因为内容少而产生空白 */
+    .execution-console-layout > div:last-child {
+        align-self: flex-start;
     }
     
     .log-entry {
@@ -310,9 +316,9 @@
     </div>
 
     <!-- 右侧：实时信息 -->
-    <div class="flex flex-column gap-2">
+    <div class="flex flex-column gap-2" style="width: 100%;">
         <!-- 执行日志 -->
-        <div class="card" style="flex: 1;">
+        <div class="card">
             <h3 class="card-title">执行日志</h3>
             <p class="card-subtitle">实时执行日志输出</p>
             
