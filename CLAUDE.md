@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Communication Guidelines
+
+**Language**: Always respond in Chinese (中文) when working with this project. All communication, explanations, and documentation should be in Chinese unless specifically requested otherwise.
+
 ## Overview
 
 This is the Intent Test Framework - an AI-driven web automation testing platform that provides complete WebUI interface for test case management, execution monitoring, and result analysis. The system uses MidSceneJS for AI-powered visual testing and supports natural language test descriptions.

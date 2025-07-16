@@ -163,24 +163,23 @@ async function initBrowser(headless = true, timeoutConfig = {}) {
     page.setDefaultNavigationTimeout(navigationTimeout);
     
     console.log(`⏱️ 超时设置: 页面加载=${pageTimeout}ms, 操作=${actionTimeout}ms, 导航=${navigationTimeout}ms`);
-        
-        // 配置MidSceneJS AI
-        const config = {
-            modelName: process.env.MIDSCENE_MODEL_NAME || 'qwen-vl-max-latest',
-            apiKey: process.env.OPENAI_API_KEY,
-            baseUrl: process.env.OPENAI_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1'
-        };
-        
-        console.log('🤖 初始化MidSceneJS AI配置:', {
-            modelName: config.modelName,
-            baseUrl: config.baseUrl,
-            hasApiKey: !!config.apiKey
-        });
-        
-        agent = new PlaywrightAgent(page, { 
-            aiModel: config 
-        });
-    }
+    
+    // 配置MidSceneJS AI
+    const config = {
+        modelName: process.env.MIDSCENE_MODEL_NAME || 'qwen-vl-max-latest',
+        apiKey: process.env.OPENAI_API_KEY,
+        baseUrl: process.env.OPENAI_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    };
+    
+    console.log('🤖 初始化MidSceneJS AI配置:', {
+        modelName: config.modelName,
+        baseUrl: config.baseUrl,
+        hasApiKey: !!config.apiKey
+    });
+    
+    agent = new PlaywrightAgent(page, { 
+        aiModel: config 
+    });
     
     return { page, agent };
 }
