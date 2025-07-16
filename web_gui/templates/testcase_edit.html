@@ -217,55 +217,6 @@
     </div>
 </div>
 
-<!-- 步骤编辑弹窗/面板 -->
-<div class="card mt-3" id="step-editor" style="display: none;">
-    <div class="card-title">步骤编辑</div>
-    <div class="card-subtitle">编辑选中步骤的详细参数</div>
-    
-    <div class="grid grid-cols-3 gap-2">
-        <div class="form-group">
-            <label class="form-label">步骤名称</label>
-            <input type="text" class="form-input" id="step-name" placeholder="请输入步骤名称">
-        </div>
-        <div class="form-group">
-            <label class="form-label">动作类型</label>
-            <select class="form-select" id="step-action">
-                <option value="goto">goto</option>
-                <option value="ai_input">ai_input</option>
-                <option value="ai_tap">ai_tap</option>
-                <option value="ai_assert">ai_assert</option>
-                <option value="ai_wait_for">ai_wait_for</option>
-                <option value="ai_scroll">ai_scroll</option>
-                <option value="ai_drag">ai_drag</option>
-                <option value="sleep">sleep</option>
-                <option value="screenshot">screenshot</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label class="form-label">必需步骤</label>
-            <select class="form-select" id="step-required">
-                <option value="true">是</option>
-                <option value="false">否</option>
-            </select>
-        </div>
-    </div>
-
-    <div class="form-group">
-        <label class="form-label">步骤描述</label>
-        <textarea class="form-textarea" id="step-description" style="min-height: 60px;" placeholder="请输入步骤的详细描述"></textarea>
-    </div>
-
-    <div class="form-group">
-        <label class="form-label">动作参数 (JSON)</label>
-        <textarea class="form-textarea" id="step-params" style="font-family: 'SF Mono', Monaco, monospace; font-size: 13px; min-height: 100px;" placeholder="请输入动作参数的JSON格式"></textarea>
-    </div>
-
-    <div class="flex gap-2">
-        <button class="btn btn-primary" id="save-step">保存步骤</button>
-        <button class="btn btn-ghost" id="cancel-step-edit">取消编辑</button>
-        <button class="btn btn-ghost" id="delete-step">删除步骤</button>
-    </div>
-</div>
 
 <!-- 调试信息 -->
 <div class="card mt-4">
@@ -310,9 +261,9 @@ class TestCaseEditor {
     
     initializeEditor() {
         this.stepsList = document.getElementById('steps-list');
-        this.stepEditor = document.getElementById('step-editor');
         this.totalStepsSpan = document.getElementById('total-steps');
         this.stepCountSpan = document.getElementById('step-count');
+        this.editingStep = null;
     }
     
     bindEvents() {
@@ -334,7 +285,7 @@ class TestCaseEditor {
         
         // 添加步骤
         document.getElementById('add-step').addEventListener('click', () => {
-            this.showStepEditor();
+            this.addNewStep();
         });
         
         // 步骤类型按钮
@@ -343,19 +294,6 @@ class TestCaseEditor {
                 const action = e.currentTarget.dataset.action;
                 this.addStepFromType(action);
             });
-        });
-        
-        // 步骤编辑器按钮
-        document.getElementById('save-step').addEventListener('click', () => {
-            this.saveStep();
-        });
-        
-        document.getElementById('cancel-step-edit').addEventListener('click', () => {
-            this.hideStepEditor();
-        });
-        
-        document.getElementById('delete-step').addEventListener('click', () => {
-            this.deleteCurrentStep();
         });
         
         // 表单变化检测
@@ -369,10 +307,10 @@ class TestCaseEditor {
                         e.preventDefault();
                         this.saveTestCase();
                         break;
-                    case 'Escape':
-                        this.hideStepEditor();
-                        break;
                 }
+            }
+            if (e.key === 'Escape') {
+                this.hideAllInlineEditors();
             }
         });
     }
@@ -407,61 +345,68 @@ class TestCaseEditor {
     }
     
     createStepElement(step, index) {
-        const div = document.createElement('div');
-        div.className = 'list-item';
-        div.style.cursor = 'pointer';
-        div.dataset.index = index;
+        const container = document.createElement('div');
+        container.className = 'step-container';
+        container.dataset.index = index;
         
         const actionDesc = this.getActionDescription(step.action);
         const paramsDesc = this.getParamsDescription(step.action, step.params);
         
-        div.innerHTML = `
-            <div class="list-item-content">
-                <div class="list-item-title">步骤 ${index + 1}: ${step.description || actionDesc}</div>
-                <div class="list-item-subtitle">${step.action} • ${paramsDesc}</div>
-                <div class="list-item-meta">
-                    <span class="text-gray-600">动作类型: ${step.action}</span>
-                    <span class="text-gray-400">•</span>
-                    <span class="text-gray-600">${this.getMainParam(step.action, step.params)}</span>
+        container.innerHTML = `
+            <div class="list-item" style="cursor: pointer;">
+                <div class="list-item-content">
+                    <div class="list-item-title">步骤 ${index + 1}: ${step.description || actionDesc}</div>
+                    <div class="list-item-subtitle">${step.action} • ${paramsDesc}</div>
+                    <div class="list-item-meta">
+                        <span class="text-gray-600">动作类型: ${step.action}</span>
+                        <span class="text-gray-400">•</span>
+                        <span class="text-gray-600">${this.getMainParam(step.action, step.params)}</span>
+                    </div>
                 </div>
-            </div>
-            <div class="flex items-center gap-1">
-                <button class="btn btn-small btn-ghost step-up" ${index === 0 ? 'disabled' : ''}>↑</button>
-                <button class="btn btn-small btn-ghost step-down" ${index === this.steps.length - 1 ? 'disabled' : ''}>↓</button>
-                <button class="btn btn-small btn-ghost step-duplicate">复制</button>
-                <button class="btn btn-small btn-ghost step-delete">删除</button>
+                <div class="flex items-center gap-1">
+                    <button class="btn btn-small btn-ghost step-up" ${index === 0 ? 'disabled' : ''}>↑</button>
+                    <button class="btn btn-small btn-ghost step-down" ${index === this.steps.length - 1 ? 'disabled' : ''}>↓</button>
+                    <button class="btn btn-small btn-ghost step-edit">编辑</button>
+                    <button class="btn btn-small btn-ghost step-duplicate">复制</button>
+                    <button class="btn btn-small btn-ghost step-delete">删除</button>
+                </div>
             </div>
         `;
         
-        // 绑定点击事件
-        div.addEventListener('click', (e) => {
-            if (!e.target.classList.contains('btn')) {
-                this.selectStep(index);
-            }
-        });
-        
         // 绑定按钮事件
-        div.querySelector('.step-up').addEventListener('click', (e) => {
+        const listItem = container.querySelector('.list-item');
+        const stepUpBtn = container.querySelector('.step-up');
+        const stepDownBtn = container.querySelector('.step-down');
+        const stepEditBtn = container.querySelector('.step-edit');
+        const stepDuplicateBtn = container.querySelector('.step-duplicate');
+        const stepDeleteBtn = container.querySelector('.step-delete');
+        
+        stepUpBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this.moveStepUp(index);
         });
         
-        div.querySelector('.step-down').addEventListener('click', (e) => {
+        stepDownBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this.moveStepDown(index);
         });
         
-        div.querySelector('.step-duplicate').addEventListener('click', (e) => {
+        stepEditBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showInlineEdit(container, index);
+        });
+        
+        stepDuplicateBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this.duplicateStep(index);
         });
         
-        div.querySelector('.step-delete').addEventListener('click', (e) => {
+        stepDeleteBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this.deleteStep(index);
         });
         
-        return div;
+        return container;
     }
     
     getActionDescription(action) {
@@ -519,113 +464,172 @@ class TestCaseEditor {
         }
     }
     
-    selectStep(index) {
-        // 清除之前的选择
-        document.querySelectorAll('.list-item').forEach(item => {
-            item.style.background = '';
-        });
+    // 显示行内编辑表单
+    showInlineEdit(stepContainer, stepIndex) {
+        // 关闭其他编辑表单
+        this.hideAllInlineEditors();
         
-        // 高亮当前选择
-        const selectedElement = document.querySelector(`[data-index="${index}"]`);
-        if (selectedElement) {
-            selectedElement.style.background = '#f8f8f8';
-        }
+        const step = this.steps[stepIndex];
+        const editForm = this.createInlineEditForm(step, stepIndex);
+        stepContainer.appendChild(editForm);
         
-        this.selectedStepIndex = index;
-        this.showStepEditor(this.steps[index]);
+        // 绑定编辑表单事件
+        this.bindEditFormEvents(editForm, stepIndex);
+        
+        this.editingStep = stepIndex;
     }
     
-    showStepEditor(step = null) {
-        if (step) {
-            // 编辑现有步骤
-            document.getElementById('step-name').value = step.description || '';
-            document.getElementById('step-action').value = step.action || 'goto';
-            document.getElementById('step-required').value = step.required !== false ? 'true' : 'false';
-            document.getElementById('step-description').value = step.description || '';
-            document.getElementById('step-params').value = JSON.stringify(step.params || {}, null, 2);
-            document.getElementById('delete-step').style.display = 'inline-flex';
-        } else {
-            // 添加新步骤
-            document.getElementById('step-name').value = '';
-            document.getElementById('step-action').value = 'goto';
-            document.getElementById('step-required').value = 'true';
-            document.getElementById('step-description').value = '';
-            document.getElementById('step-params').value = '{}';
-            document.getElementById('delete-step').style.display = 'none';
-            this.selectedStepIndex = -1;
-        }
+    // 创建行内编辑表单
+    createInlineEditForm(step, index) {
+        const editForm = document.createElement('div');
+        editForm.className = 'inline-edit-form';
+        editForm.style.cssText = `
+            background: #f8f8f8;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            padding: 16px;
+            margin-top: 8px;
+            animation: slideDown 0.2s ease;
+        `;
         
-        this.stepEditor.style.display = 'block';
-        this.stepEditor.scrollIntoView({ behavior: 'smooth' });
-    }
-    
-    hideStepEditor() {
-        this.stepEditor.style.display = 'none';
-        this.selectedStepIndex = -1;
-        
-        // 清除高亮
-        document.querySelectorAll('.list-item').forEach(item => {
-            item.style.background = '';
-        });
-    }
-    
-    saveStep() {
-        try {
-            const action = document.getElementById('step-action').value;
-            const description = document.getElementById('step-description').value;
-            const paramsText = document.getElementById('step-params').value;
+        editForm.innerHTML = `
+            <div class="form-edit-header" style="margin-bottom: 12px;">
+                <div style="font-weight: 500; color: #333;">编辑步骤 ${index + 1}</div>
+                <div style="font-size: 12px; color: #666;">修改步骤的详细参数</div>
+            </div>
             
-            // 验证必填字段
-            if (!action) {
-                this.showMessage('请选择动作类型', 'error');
-                return;
-            }
+            <div class="grid grid-cols-3 gap-2" style="margin-bottom: 12px;">
+                <div>
+                    <label class="form-label" style="margin-bottom: 4px;">步骤名称</label>
+                    <input type="text" class="form-input" id="edit-title-${index}" value="${step.description || ''}" placeholder="请输入步骤名称">
+                </div>
+                <div>
+                    <label class="form-label" style="margin-bottom: 4px;">动作类型</label>
+                    <select class="form-select" id="edit-action-${index}">
+                        <option value="goto" ${step.action === 'goto' ? 'selected' : ''}>goto</option>
+                        <option value="ai_input" ${step.action === 'ai_input' ? 'selected' : ''}>ai_input</option>
+                        <option value="ai_tap" ${step.action === 'ai_tap' ? 'selected' : ''}>ai_tap</option>
+                        <option value="ai_assert" ${step.action === 'ai_assert' ? 'selected' : ''}>ai_assert</option>
+                        <option value="ai_wait_for" ${step.action === 'ai_wait_for' ? 'selected' : ''}>ai_wait_for</option>
+                        <option value="ai_scroll" ${step.action === 'ai_scroll' ? 'selected' : ''}>ai_scroll</option>
+                        <option value="ai_drag" ${step.action === 'ai_drag' ? 'selected' : ''}>ai_drag</option>
+                        <option value="sleep" ${step.action === 'sleep' ? 'selected' : ''}>sleep</option>
+                        <option value="screenshot" ${step.action === 'screenshot' ? 'selected' : ''}>screenshot</option>
+                        <option value="refresh" ${step.action === 'refresh' ? 'selected' : ''}>refresh</option>
+                        <option value="back" ${step.action === 'back' ? 'selected' : ''}>back</option>
+                        <option value="ai_select" ${step.action === 'ai_select' ? 'selected' : ''}>ai_select</option>
+                        <option value="ai_upload" ${step.action === 'ai_upload' ? 'selected' : ''}>ai_upload</option>
+                        <option value="ai_check" ${step.action === 'ai_check' ? 'selected' : ''}>ai_check</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" style="margin-bottom: 4px;">必需步骤</label>
+                    <select class="form-select" id="edit-required-${index}">
+                        <option value="true" ${step.required !== false ? 'selected' : ''}>是</option>
+                        <option value="false" ${step.required === false ? 'selected' : ''}>否</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+                <label class="form-label" style="margin-bottom: 4px;">步骤描述</label>
+                <textarea class="form-textarea" id="edit-description-${index}" style="min-height: 60px;" placeholder="请输入步骤的详细描述">${step.description || ''}</textarea>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label class="form-label" style="margin-bottom: 4px;">动作参数 (JSON)</label>
+                <textarea class="form-textarea" id="edit-params-${index}" style="font-family: 'SF Mono', Monaco, monospace; font-size: 13px; min-height: 80px;" placeholder="请输入动作参数的JSON格式">${JSON.stringify(step.params || {}, null, 2)}</textarea>
+            </div>
+
+            <div class="flex gap-2">
+                <button class="btn btn-primary save-step-inline">保存步骤</button>
+                <button class="btn btn-ghost cancel-edit-inline">取消编辑</button>
+                <button class="btn btn-ghost delete-step-inline">删除步骤</button>
+            </div>
+        `;
+        
+        return editForm;
+    }
+    
+    // 绑定编辑表单事件
+    bindEditFormEvents(editForm, stepIndex) {
+        const saveBtn = editForm.querySelector('.save-step-inline');
+        const cancelBtn = editForm.querySelector('.cancel-edit-inline');
+        const deleteBtn = editForm.querySelector('.delete-step-inline');
+        
+        saveBtn.addEventListener('click', () => {
+            const title = editForm.querySelector(`#edit-title-${stepIndex}`).value;
+            const action = editForm.querySelector(`#edit-action-${stepIndex}`).value;
+            const description = editForm.querySelector(`#edit-description-${stepIndex}`).value;
+            const required = editForm.querySelector(`#edit-required-${stepIndex}`).value === 'true';
             
-            // 验证JSON格式
-            let params;
             try {
-                params = JSON.parse(paramsText);
+                const params = JSON.parse(editForm.querySelector(`#edit-params-${stepIndex}`).value);
+                
+                // 更新步骤数据
+                this.steps[stepIndex] = {
+                    ...this.steps[stepIndex],
+                    action,
+                    description: description || title,
+                    params,
+                    required
+                };
+                
+                this.isDirty = true;
+                this.renderSteps();
+                this.editingStep = null;
+                
+                this.showMessage('步骤保存成功', 'success');
+                this.autoSave();
             } catch (e) {
                 this.showMessage('参数格式错误，请输入有效的JSON', 'error');
-                return;
             }
-            
-            // 验证特定动作的必需参数
-            if (action === 'goto' && !params.url) {
-                this.showMessage('goto动作需要url参数', 'error');
-                return;
-            } else if (['ai_input', 'ai_tap', 'ai_assert', 'ai_wait_for'].includes(action) && !params.prompt && !params.locate) {
-                this.showMessage(`${action}动作需要prompt或locate参数`, 'error');
-                return;
+        });
+        
+        cancelBtn.addEventListener('click', () => {
+            editForm.remove();
+            this.editingStep = null;
+        });
+        
+        deleteBtn.addEventListener('click', () => {
+            if (confirm('确定要删除这个步骤吗？')) {
+                this.steps.splice(stepIndex, 1);
+                this.isDirty = true;
+                this.renderSteps();
+                this.editingStep = null;
             }
-            
-            const stepData = {
-                action: action,
-                description: description || this.getActionDescription(action),
-                params: params,
-                required: document.getElementById('step-required').value === 'true'
-            };
-            
-            if (this.selectedStepIndex >= 0) {
-                // 更新现有步骤
-                this.steps[this.selectedStepIndex] = stepData;
-            } else {
-                // 添加新步骤
-                this.steps.push(stepData);
+        });
+    }
+    
+    // 隐藏所有行内编辑器
+    hideAllInlineEditors() {
+        document.querySelectorAll('.inline-edit-form').forEach(form => {
+            form.remove();
+        });
+        this.editingStep = null;
+    }
+    
+    // 添加新步骤
+    addNewStep() {
+        const newStep = {
+            action: 'goto',
+            description: '新步骤',
+            params: { url: 'https://example.com' },
+            required: true
+        };
+        
+        this.steps.push(newStep);
+        this.isDirty = true;
+        this.renderSteps();
+        
+        // 自动进入编辑模式
+        setTimeout(() => {
+            const newStepIndex = this.steps.length - 1;
+            const stepContainers = document.querySelectorAll('.step-container');
+            if (stepContainers[newStepIndex]) {
+                this.showInlineEdit(stepContainers[newStepIndex], newStepIndex);
             }
-            
-            this.isDirty = true;
-            this.renderSteps();
-            this.hideStepEditor();
-            
-            // 显示成功提示
-            this.showMessage('步骤保存成功', 'success');
-            
-            // 自动保存
-            this.autoSave();
-        } catch (error) {
-            this.showMessage('步骤保存失败: ' + error.message, 'error');
-        }
+        }, 100);
     }
     
     addStepFromType(action) {
@@ -641,8 +645,14 @@ class TestCaseEditor {
         this.isDirty = true;
         this.renderSteps();
         
-        // 自动选择新添加的步骤
-        this.selectStep(this.steps.length - 1);
+        // 自动进入编辑模式
+        setTimeout(() => {
+            const newStepIndex = this.steps.length - 1;
+            const stepContainers = document.querySelectorAll('.step-container');
+            if (stepContainers[newStepIndex]) {
+                this.showInlineEdit(stepContainers[newStepIndex], newStepIndex);
+            }
+        }, 100);
     }
     
     getDefaultParams(action) {
@@ -691,15 +701,10 @@ class TestCaseEditor {
             this.steps.splice(index, 1);
             this.isDirty = true;
             this.renderSteps();
-            this.hideStepEditor();
+            this.hideAllInlineEditors();
         }
     }
     
-    deleteCurrentStep() {
-        if (this.selectedStepIndex >= 0) {
-            this.deleteStep(this.selectedStepIndex);
-        }
-    }
     
     updateStepCount() {
         const count = this.steps.length;
@@ -822,6 +827,17 @@ document.addEventListener('DOMContentLoaded', function() {
     to {
         transform: translateX(0);
         opacity: 1;
+    }
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
 </style>
