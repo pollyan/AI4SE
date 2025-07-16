@@ -143,24 +143,26 @@ async function initBrowser(headless = true, timeoutConfig = {}) {
         });
     }
     
+    // 解析超时配置
+    const pageTimeout = timeoutConfig.page_timeout || 30000;
+    const actionTimeout = timeoutConfig.action_timeout || 30000;
+    const navigationTimeout = timeoutConfig.navigation_timeout || 30000;
+    
     if (!page) {
         const context = await browser.newContext({
             viewport: { width: 1280, height: 720 },
             deviceScaleFactor: 1,
-            // 增加超时设置
-            timeout: 30000
+            // 使用动态超时设置
+            timeout: actionTimeout
         });
         page = await context.newPage();
-        
-        // 设置页面超时
-        const pageTimeout = timeoutConfig.page_timeout || 30000;
-        const actionTimeout = timeoutConfig.action_timeout || 30000;
-        const navigationTimeout = timeoutConfig.navigation_timeout || 30000;
-        
-        page.setDefaultTimeout(actionTimeout);
-        page.setDefaultNavigationTimeout(navigationTimeout);
-        
-        console.log(`⏱️ 超时设置: 页面加载=${pageTimeout}ms, 操作=${actionTimeout}ms, 导航=${navigationTimeout}ms`);
+    }
+    
+    // 每次都重新设置页面超时（因为浏览器可能被重用）
+    page.setDefaultTimeout(actionTimeout);
+    page.setDefaultNavigationTimeout(navigationTimeout);
+    
+    console.log(`⏱️ 超时设置: 页面加载=${pageTimeout}ms, 操作=${actionTimeout}ms, 导航=${navigationTimeout}ms`);
         
         // 配置MidSceneJS AI
         const config = {
@@ -316,13 +318,15 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
                 break;
 
             case 'refresh':
-                await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
-                logMessage(executionId, 'info', '刷新页面');
+                const refreshTimeout = timeoutConfig.navigation_timeout || 30000;
+                await page.reload({ waitUntil: 'domcontentloaded', timeout: refreshTimeout });
+                logMessage(executionId, 'info', `刷新页面 (超时=${refreshTimeout}ms)`);
                 break;
 
             case 'back':
-                await page.goBack({ waitUntil: 'networkidle', timeout: 30000 });
-                logMessage(executionId, 'info', '返回上一页');
+                const backTimeout = timeoutConfig.navigation_timeout || 30000;
+                await page.goBack({ waitUntil: 'domcontentloaded', timeout: backTimeout });
+                logMessage(executionId, 'info', `返回上一页 (超时=${backTimeout}ms)`);
                 break;
 
             case 'screenshot':
@@ -601,6 +605,8 @@ app.post('/api/execute-testcase', async (req, res) => {
             action_timeout: timeout_settings.action_timeout || 30000,
             navigation_timeout: timeout_settings.navigation_timeout || 30000
         };
+        
+        console.log('📋 接收到的超时设置:', JSON.stringify(timeoutConfig, null, 2));
 
         // 异步执行，立即返回执行ID
         executeTestCaseAsync(testcase, mode, executionId, timeoutConfig).catch(error => {
@@ -798,11 +804,23 @@ app.post('/set-browser-mode', async (req, res) => {
 // 导航到URL
 app.post('/goto', async (req, res) => {
     try {
-        const { url, mode } = req.body;
+        const { url, mode, timeout_settings = {} } = req.body;
         const headless = mode === 'headless' || mode === undefined; // 默认无头模式
-        const { page } = await initBrowser(headless);
+        const timeoutConfig = {
+            page_timeout: timeout_settings.page_timeout || 30000,
+            action_timeout: timeout_settings.action_timeout || 30000,
+            navigation_timeout: timeout_settings.navigation_timeout || 30000
+        };
+        const { page } = await initBrowser(headless, timeoutConfig);
         
-        await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+        const navigationTimeout = timeoutConfig.navigation_timeout;
+        try {
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: navigationTimeout });
+        } catch (error) {
+            // 如果超时，尝试使用更宽松的策略
+            const fallbackTimeout = Math.min(navigationTimeout / 2, 15000);
+            await page.goto(url, { waitUntil: 'commit', timeout: fallbackTimeout });
+        }
         
         res.json({ 
             success: true, 
