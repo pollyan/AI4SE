@@ -98,7 +98,7 @@
             </div>
         </div>
 
-        <div class="list" id="steps-list" style="min-height: 400px;">
+        <div class="list" id="steps-list" style="min-height: 400px; background: #f8f9fa; border-radius: 6px; padding: 16px; border: 1px solid #e2e8f0;">
             <!-- 步骤列表将通过JavaScript动态生成 -->
         </div>
     </div>
@@ -405,7 +405,14 @@ class TestCaseEditor {
         this.stepsList.innerHTML = '';
         
         if (this.steps.length === 0) {
-            this.stepsList.innerHTML = '<div class="text-center text-gray-500 py-8">暂无步骤，点击右侧步骤类型或"添加步骤"按钮开始创建</div>';
+            this.stepsList.innerHTML = `
+                <div class="empty-state" style="text-align: center; padding: 60px 20px; color: #a0aec0;">
+                    <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;">⚙️</div>
+                    <div style="font-size: 16px; font-weight: 500; color: #4a5568; margin-bottom: 8px;">暂无步骤</div>
+                    <div style="font-size: 14px; color: #a0aec0; margin-bottom: 24px;">点击右侧步骤类型或"添加步骤"按钮开始创建</div>
+                    <button class="btn btn-primary btn-small" onclick="document.getElementById('add-step').click()" style="background: #4299e1; border-color: #4299e1;">添加第一个步骤</button>
+                </div>
+            `;
             this.updateStepCount();
             return;
         }
@@ -427,24 +434,24 @@ class TestCaseEditor {
         const paramsDesc = this.getParamsDescription(step.action, step.params);
         
         container.innerHTML = `
-            <div class="list-item" title="点击编辑此步骤">
+            <div class="list-item" title="点击编辑此步骤" style="padding: 20px; border-radius: 6px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <div class="list-item-content">
-                    <div class="list-item-title">步骤 ${index + 1}: ${step.description || actionDesc}</div>
-                    <div class="list-item-subtitle">${step.action} • ${paramsDesc}</div>
-                    <div class="list-item-meta">
-                        <span class="text-gray-600">动作类型: ${step.action}</span>
-                        <span class="text-gray-400">•</span>
-                        <span class="text-gray-600">${this.getMainParam(step.action, step.params)}</span>
-                        <span class="text-gray-400">•</span>
-                        <span class="text-gray-600">${step.required !== false ? '必需' : '可选'}</span>
+                    <div class="list-item-title" style="font-size: 15px; font-weight: 600; color: #2d3748; margin-bottom: 6px;">
+                        <span style="display: inline-block; background: #e2e8f0; color: #4a5568; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 500; margin-right: 8px;">${index + 1}</span>
+                        ${step.description || actionDesc}
+                    </div>
+                    <div class="list-item-subtitle" style="color: #4a5568; font-size: 14px; margin-bottom: 8px;">${paramsDesc}</div>
+                    <div class="list-item-meta" style="display: flex; align-items: center; gap: 12px;">
+                        <span style="background: #f7fafc; color: #2d3748; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">${step.action}</span>
+                        <span style="color: #a0aec0; font-size: 12px;">${this.getMainParam(step.action, step.params)}</span>
                     </div>
                 </div>
                 <div class="flex items-center gap-1">
-                    <button class="btn btn-small btn-ghost step-up" ${index === 0 ? 'disabled' : ''}>↑</button>
-                    <button class="btn btn-small btn-ghost step-down" ${index === this.steps.length - 1 ? 'disabled' : ''}>↓</button>
-                    <button class="btn btn-small btn-ghost step-edit">编辑</button>
-                    <button class="btn btn-small btn-ghost step-duplicate">复制</button>
-                    <button class="btn btn-small btn-ghost step-delete">删除</button>
+                    <button class="btn btn-small btn-ghost step-up" ${index === 0 ? 'disabled' : ''} style="padding: 6px 10px;">↑</button>
+                    <button class="btn btn-small btn-ghost step-down" ${index === this.steps.length - 1 ? 'disabled' : ''} style="padding: 6px 10px;">↓</button>
+                    <button class="btn btn-small btn-ghost step-edit" style="padding: 6px 12px;">编辑</button>
+                    <button class="btn btn-small btn-ghost step-duplicate" style="padding: 6px 12px;">复制</button>
+                    <button class="btn btn-small btn-ghost step-delete" style="padding: 6px 12px; color: #e53e3e;">删除</button>
                 </div>
             </div>
         `;
@@ -679,7 +686,7 @@ class TestCaseEditor {
                 <div style="font-size: 12px; color: #666;">修改步骤的详细参数</div>
             </div>
             
-            <div class="grid grid-cols-3 gap-2" style="margin-bottom: 12px;">
+            <div class="grid grid-cols-2 gap-2" style="margin-bottom: 12px;">
                 <div>
                     <label class="form-label" style="margin-bottom: 4px;">步骤名称</label>
                     <input type="text" class="form-input" id="edit-title-${index}" value="${step.description || ''}" placeholder="请输入步骤名称">
@@ -721,18 +728,6 @@ class TestCaseEditor {
                         </optgroup>
                     </select>
                 </div>
-                <div>
-                    <label class="form-label" style="margin-bottom: 4px;">必需步骤</label>
-                    <select class="form-select" id="edit-required-${index}">
-                        <option value="true" ${step.required !== false ? 'selected' : ''}>是</option>
-                        <option value="false" ${step.required === false ? 'selected' : ''}>否</option>
-                    </select>
-                </div>
-            </div>
-
-            <div style="margin-bottom: 12px;">
-                <label class="form-label" style="margin-bottom: 4px;">步骤描述</label>
-                <textarea class="form-textarea" id="edit-description-${index}" style="min-height: 60px;" placeholder="请输入步骤的详细描述">${step.description || ''}</textarea>
             </div>
 
             <div style="margin-bottom: 16px;">
@@ -759,8 +754,6 @@ class TestCaseEditor {
         saveBtn.addEventListener('click', () => {
             const title = editForm.querySelector(`#edit-title-${stepIndex}`).value;
             const action = editForm.querySelector(`#edit-action-${stepIndex}`).value;
-            const description = editForm.querySelector(`#edit-description-${stepIndex}`).value;
-            const required = editForm.querySelector(`#edit-required-${stepIndex}`).value === 'true';
             
             try {
                 const params = JSON.parse(editForm.querySelector(`#edit-params-${stepIndex}`).value);
@@ -769,9 +762,8 @@ class TestCaseEditor {
                 this.steps[stepIndex] = {
                     ...this.steps[stepIndex],
                     action,
-                    description: description || title,
-                    params,
-                    required
+                    description: title,
+                    params
                 };
                 
                 this.isDirty = true;
@@ -813,8 +805,7 @@ class TestCaseEditor {
         const newStep = {
             action: 'goto',
             description: '新步骤',
-            params: { url: 'https://example.com' },
-            required: true
+            params: { url: 'https://example.com' }
         };
         
         this.steps.push(newStep);
@@ -836,8 +827,7 @@ class TestCaseEditor {
         const newStep = {
             action: action,
             description: this.getActionDescription(action),
-            params: defaultParams,
-            required: true
+            params: defaultParams
         };
         
         this.steps.push(newStep);
