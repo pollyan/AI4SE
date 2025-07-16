@@ -154,6 +154,18 @@
                 applyFilters();
             }
         });
+        
+        // 筛选器变化时立即触发筛选
+        document.getElementById('category').addEventListener('change', applyFilters);
+        document.getElementById('priority').addEventListener('change', applyFilters);
+        document.getElementById('status').addEventListener('change', applyFilters);
+        
+        // 搜索框输入时实时筛选（可选，防抖处理）
+        let searchTimeout;
+        document.getElementById('search').addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(applyFilters, 500); // 500ms防抖
+        });
     });
     
     // 加载测试用例列表
