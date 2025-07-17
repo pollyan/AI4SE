@@ -352,7 +352,16 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
             case 'ai_tap':
                 const clickTarget = params.locate || params.selector || params.element;
                 if (clickTarget) {
+                    console.log(`\n[${new Date().toISOString()}] MidScene Step Execution - aiTap`);
+                    console.log(`Target: ${clickTarget}`);
+                    console.log(`Execution ID: ${executionId}`);
+                    console.log(`Step ${stepIndex + 1}/${totalSteps}`);
+                    
+                    const tapStartTime = Date.now();
                     await agent.aiTap(clickTarget);
+                    const tapEndTime = Date.now();
+                    
+                    console.log(`MidScene aiTap completed in ${tapEndTime - tapStartTime}ms\n`);
                     logMessage(executionId, 'info', `点击: ${clickTarget}`);
                 }
                 break;
@@ -362,7 +371,17 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
                 const inputTarget = params.locate || params.selector || params.element;
                 const inputText = params.text || params.value;
                 if (inputTarget && inputText) {
+                    console.log(`\n[${new Date().toISOString()}] MidScene Step Execution - aiInput`);
+                    console.log(`Text: ${inputText}`);
+                    console.log(`Target: ${inputTarget}`);
+                    console.log(`Execution ID: ${executionId}`);
+                    console.log(`Step ${stepIndex + 1}/${totalSteps}`);
+                    
+                    const inputStartTime = Date.now();
                     await agent.aiInput(inputText, inputTarget);
+                    const inputEndTime = Date.now();
+                    
+                    console.log(`MidScene aiInput completed in ${inputEndTime - inputStartTime}ms\n`);
                     logMessage(executionId, 'info', `输入: "${inputText}" 到 ${inputTarget}`);
                 }
                 break;
@@ -378,7 +397,16 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
             case 'ai_assert':
                 const assertCondition = params.condition || params.assertion || params.expected;
                 if (assertCondition) {
+                    console.log(`\n[${new Date().toISOString()}] MidScene Step Execution - aiAssert`);
+                    console.log(`Condition: ${assertCondition}`);
+                    console.log(`Execution ID: ${executionId}`);
+                    console.log(`Step ${stepIndex + 1}/${totalSteps}`);
+                    
+                    const assertStartTime = Date.now();
                     await agent.aiAssert(assertCondition);
+                    const assertEndTime = Date.now();
+                    
+                    console.log(`MidScene aiAssert completed in ${assertEndTime - assertStartTime}ms\n`);
                     logMessage(executionId, 'info', `断言: ${assertCondition}`);
                 }
                 break;
@@ -432,15 +460,50 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
                 const waitTarget = params.locate || params.selector || params.element;
                 const waitTimeout = params.timeout || 10000;
                 if (waitTarget) {
+                    console.log(`\n[${new Date().toISOString()}] MidScene Step Execution - aiWaitFor`);
+                    console.log(`Target: ${waitTarget}`);
+                    console.log(`Timeout: ${waitTimeout}ms`);
+                    console.log(`Execution ID: ${executionId}`);
+                    console.log(`Step ${stepIndex + 1}/${totalSteps}`);
+                    
+                    const waitStartTime = Date.now();
                     await agent.aiWaitFor(waitTarget, { timeout: waitTimeout });
+                    const waitEndTime = Date.now();
+                    
+                    console.log(`MidScene aiWaitFor completed in ${waitEndTime - waitStartTime}ms\n`);
                     logMessage(executionId, 'info', `等待元素出现: ${waitTarget}`);
                 }
+                break;
+
+            case 'ai_action':
+                const aiActionPrompt = params.prompt || params.instruction || description || stepType;
+                console.log(`\n[${new Date().toISOString()}] MidScene Step Execution - ai_action`);
+                console.log(`Prompt: ${aiActionPrompt}`);
+                console.log(`Execution ID: ${executionId}`);
+                console.log(`Step ${stepIndex + 1}/${totalSteps}`);
+                
+                const aiActionStartTime = Date.now();
+                await agent.aiAction(aiActionPrompt);
+                const aiActionEndTime = Date.now();
+                
+                console.log(`MidScene aiAction completed in ${aiActionEndTime - aiActionStartTime}ms\n`);
+                logMessage(executionId, 'info', `AI操作规划: ${aiActionPrompt}`);
                 break;
 
             default:
                 // 通用AI操作
                 const instruction = description || stepType;
+                console.log(`\n[${new Date().toISOString()}] MidScene Step Execution - Default Action`);
+                console.log(`Action Type: ${normalizedAction}`);
+                console.log(`Instruction: ${instruction}`);
+                console.log(`Execution ID: ${executionId}`);
+                console.log(`Step ${stepIndex + 1}/${totalSteps}`);
+                
+                const defaultStartTime = Date.now();
                 await agent.ai(instruction);
+                const defaultEndTime = Date.now();
+                
+                console.log(`MidScene default action completed in ${defaultEndTime - defaultStartTime}ms\n`);
                 logMessage(executionId, 'info', `AI操作: ${instruction}`);
                 break;
         }
@@ -527,6 +590,19 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
         if (steps.length === 0) {
             throw new Error('测试用例没有步骤');
         }
+
+        console.log(`\n[${new Date().toISOString()}] Test Case Execution Details`);
+        console.log(`Test Case: ${testcase.name}`);
+        console.log(`Execution ID: ${executionId}`);
+        console.log(`Mode: ${mode}`);
+        console.log(`Total Steps: ${steps.length}`);
+        console.log('\nSteps Overview:');
+        steps.forEach((step, index) => {
+            const stepType = step.type || step.action;
+            const description = step.description || stepType;
+            console.log(`  ${index + 1}. [${stepType}] ${description}`);
+        });
+        console.log('');
 
         logMessage(executionId, 'info', `共 ${steps.length} 个步骤`);
 
@@ -717,7 +793,21 @@ app.post('/api/execute-testcase', async (req, res) => {
     try {
         const { testcase, mode = 'headless', timeout_settings = {} } = req.body;
 
+        // 详细记录请求信息
+        console.log(`\n[${new Date().toISOString()}] MidScene API Request - /api/execute-testcase`);
+        console.log('Request Body:', JSON.stringify({
+            testcase: {
+                id: testcase?.id,
+                name: testcase?.name,
+                stepsCount: Array.isArray(testcase?.steps) ? testcase.steps.length : 
+                            (typeof testcase?.steps === 'string' ? JSON.parse(testcase.steps).length : 0)
+            },
+            mode,
+            timeout_settings
+        }, null, 2));
+
         if (!testcase) {
+            console.error('Error: Missing test case data');
             return res.status(400).json({
                 success: false,
                 error: '缺少测试用例数据'
@@ -725,6 +815,7 @@ app.post('/api/execute-testcase', async (req, res) => {
         }
 
         const executionId = generateExecutionId();
+        console.log(`Generated Execution ID: ${executionId}`);
 
         // 解析超时设置
         const timeoutConfig = {
@@ -740,6 +831,8 @@ app.post('/api/execute-testcase', async (req, res) => {
             console.error('异步执行错误:', error);
         });
 
+        console.log(`Test case execution started successfully\n`);
+
         res.json({
             success: true,
             executionId,
@@ -748,6 +841,10 @@ app.post('/api/execute-testcase', async (req, res) => {
         });
 
     } catch (error) {
+        console.error(`[${new Date().toISOString()}] MidScene API Error - /api/execute-testcase`);
+        console.error('Error:', error.message);
+        console.error('Stack:', error.stack);
+        
         res.status(500).json({
             success: false,
             error: error.message
@@ -966,15 +1063,34 @@ app.post('/goto', async (req, res) => {
 app.post('/ai-input', async (req, res) => {
     try {
         const { text, locate } = req.body;
+        
+        // 详细记录请求信息
+        console.log(`\n[${new Date().toISOString()}] MidScene API Request - /ai-input`);
+        console.log('Request Body:', JSON.stringify(req.body, null, 2));
+        console.log('Text:', text);
+        console.log('Locate:', locate);
+        
         const { agent } = await initBrowser();
         
+        console.log(`Sending to MidScene: agent.aiInput("${text}", "${locate}")`);
+        
+        const startTime = Date.now();
         const result = await agent.aiInput(text, locate);
+        const endTime = Date.now();
+        
+        console.log(`MidScene Response Time: ${endTime - startTime}ms`);
+        console.log('MidScene Response:', JSON.stringify(result, null, 2));
+        console.log('Request completed successfully\n');
         
         res.json({ 
             success: true, 
             result 
         });
     } catch (error) {
+        console.error(`[${new Date().toISOString()}] MidScene API Error - /ai-input`);
+        console.error('Error:', error.message);
+        console.error('Stack:', error.stack);
+        
         res.status(500).json({ 
             success: false, 
             error: error.message 
@@ -986,15 +1102,33 @@ app.post('/ai-input', async (req, res) => {
 app.post('/ai-tap', async (req, res) => {
     try {
         const { prompt } = req.body;
+        
+        // 详细记录请求信息
+        console.log(`\n[${new Date().toISOString()}] MidScene API Request - /ai-tap`);
+        console.log('Request Body:', JSON.stringify(req.body, null, 2));
+        console.log('Prompt:', prompt);
+        
         const { agent } = await initBrowser();
         
+        console.log(`Sending to MidScene: agent.aiTap("${prompt}")`);
+        
+        const startTime = Date.now();
         const result = await agent.aiTap(prompt);
+        const endTime = Date.now();
+        
+        console.log(`MidScene Response Time: ${endTime - startTime}ms`);
+        console.log('MidScene Response:', JSON.stringify(result, null, 2));
+        console.log('Request completed successfully\n');
         
         res.json({ 
             success: true, 
             result 
         });
     } catch (error) {
+        console.error(`[${new Date().toISOString()}] MidScene API Error - /ai-tap`);
+        console.error('Error:', error.message);
+        console.error('Stack:', error.stack);
+        
         res.status(500).json({ 
             success: false, 
             error: error.message 
@@ -1026,15 +1160,33 @@ app.post('/ai-query', async (req, res) => {
 app.post('/ai-assert', async (req, res) => {
     try {
         const { prompt } = req.body;
+        
+        // 详细记录请求信息
+        console.log(`\n[${new Date().toISOString()}] MidScene API Request - /ai-assert`);
+        console.log('Request Body:', JSON.stringify(req.body, null, 2));
+        console.log('Prompt:', prompt);
+        
         const { agent } = await initBrowser();
         
+        console.log(`Sending to MidScene: agent.aiAssert("${prompt}")`);
+        
+        const startTime = Date.now();
         await agent.aiAssert(prompt);
+        const endTime = Date.now();
+        
+        console.log(`MidScene Response Time: ${endTime - startTime}ms`);
+        console.log('Assertion passed successfully');
+        console.log('Request completed successfully\n');
         
         res.json({ 
             success: true, 
             result: true 
         });
     } catch (error) {
+        console.error(`[${new Date().toISOString()}] MidScene API Error - /ai-assert`);
+        console.error('Error:', error.message);
+        console.error('Stack:', error.stack);
+        
         res.status(500).json({ 
             success: false, 
             error: error.message 
@@ -1046,15 +1198,33 @@ app.post('/ai-assert', async (req, res) => {
 app.post('/ai-action', async (req, res) => {
     try {
         const { prompt } = req.body;
+        
+        // 详细记录请求信息
+        console.log(`\n[${new Date().toISOString()}] MidScene API Request - /ai-action`);
+        console.log('Request Body:', JSON.stringify(req.body, null, 2));
+        console.log('Prompt:', prompt);
+        
         const { agent } = await initBrowser();
         
+        console.log(`Sending to MidScene: agent.aiAction("${prompt}")`);
+        
+        const startTime = Date.now();
         const result = await agent.aiAction(prompt);
+        const endTime = Date.now();
+        
+        console.log(`MidScene Response Time: ${endTime - startTime}ms`);
+        console.log('MidScene Response:', JSON.stringify(result, null, 2));
+        console.log('Request completed successfully\n');
         
         res.json({ 
             success: true, 
             result 
         });
     } catch (error) {
+        console.error(`[${new Date().toISOString()}] MidScene API Error - /ai-action`);
+        console.error('Error:', error.message);
+        console.error('Stack:', error.stack);
+        
         res.status(500).json({ 
             success: false, 
             error: error.message 
@@ -1066,15 +1236,34 @@ app.post('/ai-action', async (req, res) => {
 app.post('/ai-wait-for', async (req, res) => {
     try {
         const { prompt, timeout = 30000 } = req.body;
+        
+        // 详细记录请求信息
+        console.log(`\n[${new Date().toISOString()}] MidScene API Request - /ai-wait-for`);
+        console.log('Request Body:', JSON.stringify(req.body, null, 2));
+        console.log('Prompt:', prompt);
+        console.log('Timeout:', timeout);
+        
         const { agent } = await initBrowser();
         
+        console.log(`Sending to MidScene: agent.aiWaitFor("${prompt}", { timeout: ${timeout} })`);
+        
+        const startTime = Date.now();
         const result = await agent.aiWaitFor(prompt, { timeout });
+        const endTime = Date.now();
+        
+        console.log(`MidScene Response Time: ${endTime - startTime}ms`);
+        console.log('MidScene Response:', JSON.stringify(result, null, 2));
+        console.log('Request completed successfully\n');
         
         res.json({ 
             success: true, 
             result 
         });
     } catch (error) {
+        console.error(`[${new Date().toISOString()}] MidScene API Error - /ai-wait-for`);
+        console.error('Error:', error.message);
+        console.error('Stack:', error.stack);
+        
         res.status(500).json({ 
             success: false, 
             error: error.message 
