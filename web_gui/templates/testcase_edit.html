@@ -655,7 +655,7 @@ class TestCaseEditor {
                 
             // 智能交互操作
             case 'ai':
-                return `智能操作: ${params.instruction || '未指定操作'}`;
+                return `智能操作: ${params.prompt || '未指定提示词'}`;
             case 'aiTap':
                 return `点击 "${params.locate || '未指定元素'}"`;
             case 'aiInput':
@@ -717,7 +717,7 @@ class TestCaseEditor {
                 
             // 智能交互操作
             case 'ai':
-                return `操作指令: ${params.instruction || '未指定'}`;
+                return `提示词: ${params.prompt || '未指定'}`;
             case 'aiTap':
             case 'aiHover':
             case 'aiScroll':
@@ -958,7 +958,7 @@ class TestCaseEditor {
             'evaluateJavaScript': { code: 'console.log("Hello World");' },
             
             // 智能交互操作
-            'ai': { instruction: '描述您要执行的操作' },
+            'ai': { prompt: '' },
             'aiTap': { locate: '按钮描述', options: { deepThink: false, cacheable: true } },
             'aiInput': { text: '输入内容', locate: '输入框描述', options: { deepThink: false, cacheable: true } },
             'aiHover': { locate: '元素描述', options: { deepThink: false, cacheable: true } },
