@@ -80,14 +80,46 @@ function generateExecutionId() {
 // Web系统API集成函数
 async function notifyExecutionStart(executionId, testcase, mode) {
     try {
+        const totalSteps = Array.isArray(testcase.steps) ? testcase.steps.length : 
+                          (typeof testcase.steps === 'string' ? JSON.parse(testcase.steps).length : 0);
+
         // 通过WebSocket通知前端执行开始
         io.emit('execution-start', {
             executionId: executionId,
             testcase: testcase.name,
             mode: mode,
-            totalSteps: Array.isArray(testcase.steps) ? testcase.steps.length : 
-                       (typeof testcase.steps === 'string' ? JSON.parse(testcase.steps).length : 0)
+            totalSteps: totalSteps
         });
+
+        // 发送执行开始通知到Web系统API
+        try {
+            const startData = {
+                execution_id: executionId,
+                testcase_id: testcase.id,
+                mode: mode,
+                browser: 'chrome',
+                steps_total: totalSteps,
+                executed_by: 'midscene-server'
+            };
+
+            console.log(`📡 发送执行开始通知到Web系统 API: ${executionId}`);
+            
+            const response = await axios.post(`${API_BASE_URL}/midscene/execution-start`, startData, {
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                timeout: 10000
+            });
+
+            if (response.status === 200) {
+                console.log(`✅ 执行开始通知已同步到Web系统: ${executionId}`);
+            } else {
+                console.warn(`⚠️ Web系统API响应异常: ${response.status} - ${response.statusText}`);
+            }
+        } catch (apiError) {
+            console.error(`❌ 发送执行开始通知到Web系统失败: ${apiError.message}`);
+            // 不中断流程，继续执行
+        }
         
         console.log(`通知执行开始: ${executionId}`);
         return { success: true };
@@ -105,17 +137,52 @@ async function notifyExecutionResult(executionId, testcase, mode, status, steps,
             return;
         }
 
+        const endTime = new Date().toISOString();
+        const startTime = executionState.startTime.toISOString();
+
         // 通过WebSocket通知前端执行结果
         io.emit('execution-completed', {
             executionId: executionId,
             testcase: testcase.name,
             status: status,
             mode: mode,
-            startTime: executionState.startTime.toISOString(),
-            endTime: new Date().toISOString(),
+            startTime: startTime,
+            endTime: endTime,
             steps: steps,
             errorMessage: errorMessage
         });
+
+        // 发送执行结果到Web系统API
+        try {
+            const resultData = {
+                execution_id: executionId,
+                testcase_id: testcase.id,
+                status: status,
+                mode: mode,
+                start_time: startTime,
+                end_time: endTime,
+                steps: steps || [],
+                error_message: errorMessage
+            };
+
+            console.log(`📡 发送执行结果到Web系统 API: ${executionId}`);
+            
+            const response = await axios.post(`${API_BASE_URL}/midscene/execution-result`, resultData, {
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                timeout: 10000
+            });
+
+            if (response.status === 200) {
+                console.log(`✅ 执行结果已同步到Web系统: ${executionId}`);
+            } else {
+                console.warn(`⚠️ Web系统API响应异常: ${response.status} - ${response.statusText}`);
+            }
+        } catch (apiError) {
+            console.error(`❌ 发送执行结果到Web系统失败: ${apiError.message}`);
+            // 不中断流程，继续WebSocket通知
+        }
 
         console.log(`通知执行结果: ${executionId} -> ${status}`);
         return { success: true };
@@ -378,9 +445,20 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
                 break;
         }
 
-        return { success: true };
+        const stepEndTime = Date.now();
+        const duration = stepEndTime - stepStartTime;
+        
+        return {
+            status: 'success',
+            start_time: new Date(stepStartTime).toISOString(),
+            end_time: new Date(stepEndTime).toISOString(),
+            duration: duration
+        };
 
     } catch (error) {
+        const stepEndTime = Date.now();
+        const duration = stepEndTime - stepStartTime;
+        
         // 发送步骤失败事件
         io.emit('step-failed', {
             executionId,
@@ -390,7 +468,15 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
         });
         
         logMessage(executionId, 'error', `步骤执行失败: ${error.message}`);
-        throw error;
+        
+        // 返回失败结果而不是抛出异常，让上层处理
+        return {
+            status: 'failed',
+            start_time: new Date(stepStartTime).toISOString(),
+            end_time: new Date(stepEndTime).toISOString(),
+            duration: duration,
+            error_message: error.message
+        };
     }
 }
 
@@ -463,8 +549,38 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
                 progress: Math.round((i / steps.length) * 100)
             });
 
-            // 执行步骤
-            await executeStep(step, page, agent, executionId, i, steps.length, timeoutConfig);
+            // 执行步骤并获取详细结果
+            const stepStartTime = new Date();
+            let stepResult = null;
+            
+            // executeStep现在返回结果而不是抛出异常
+            stepResult = await executeStep(step, page, agent, executionId, i, steps.length, timeoutConfig);
+            
+            // 根据步骤结果发送相应事件
+            if (stepResult.status === 'success') {
+                // 发送步骤完成事件
+                io.emit('step-completed', {
+                    executionId,
+                    stepIndex: i,
+                    totalSteps: steps.length,
+                    success: true,
+                    result: stepResult
+                });
+            } else {
+                // 步骤执行失败
+                logMessage(executionId, 'error', `步骤 ${i + 1} 执行失败: ${stepResult.error_message}`);
+                
+                // 发送步骤失败事件
+                io.emit('step-completed', {
+                    executionId,
+                    stepIndex: i,
+                    totalSteps: steps.length,
+                    success: false,
+                    error: stepResult.error_message
+                });
+                
+                // 继续执行后续步骤（可以根据配置决定是否在首次失败时停止）
+            }
 
             // 截图
             let screenshot = null;
@@ -484,26 +600,20 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
                 console.warn('截图失败:', screenshotError.message);
             }
 
-            // 发送步骤完成事件
-            io.emit('step-completed', {
-                executionId,
-                stepIndex: i,
-                totalSteps: steps.length,
-                success: true
-            });
-
             // 记录步骤执行数据到当前执行记录
             const executionState = executionStates.get(executionId);
             if (executionState) {
+                const stepEndTime = new Date();
                 const stepData = {
                     index: i,
-                    description: step.description || step.action,
-                    status: 'success',
-                    start_time: new Date(Date.now() - 500).toISOString(), // 估算开始时间
-                    end_time: new Date().toISOString(),
-                    duration: 500, // 估算持续时间
+                    description: step.description || step.action || 'Unknown Step',
+                    status: stepResult?.status || 'success',
+                    start_time: stepResult?.start_time || stepStartTime.toISOString(),
+                    end_time: stepResult?.end_time || stepEndTime.toISOString(),
+                    duration: stepResult?.duration || (stepEndTime - stepStartTime),
                     stepType: step.type || step.action,
-                    params: step.params || {}
+                    params: step.params || {},
+                    error_message: stepResult?.error_message || null
                 };
                 
                 executionState.steps.push(stepData);
@@ -522,28 +632,43 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
             await page.waitForTimeout(500);
         }
 
-        // 更新执行状态
+        // 更新执行状态并计算统计信息
         const executionState = executionStates.get(executionId);
-        executionState.status = 'completed';
         executionState.endTime = new Date();
         executionState.duration = executionState.endTime - executionState.startTime;
+        
+        // 计算步骤统计
+        const totalSteps = executionState.steps.length;
+        const successSteps = executionState.steps.filter(step => step.status === 'success').length;
+        const failedSteps = executionState.steps.filter(step => step.status === 'failed').length;
+        
+        // 根据步骤结果确定整体状态
+        const overallStatus = failedSteps > 0 ? 'failed' : 'success';
+        executionState.status = overallStatus;
 
         // 发送执行完成事件
         io.emit('execution-completed', {
             executionId,
-            status: 'success',
-            message: '测试执行完成！',
+            status: overallStatus,
+            message: overallStatus === 'success' ? '测试执行完成！' : `测试执行完成，但有 ${failedSteps} 个步骤失败`,
             duration: executionState.duration,
+            totalSteps: totalSteps,
+            successSteps: successSteps,
+            failedSteps: failedSteps,
             timestamp: new Date().toISOString()
         });
 
-        logMessage(executionId, 'success', `测试执行完成！耗时: ${Math.round(executionState.duration / 1000)}秒`);
+        const statusMessage = overallStatus === 'success' 
+            ? `测试执行完成！耗时: ${Math.round(executionState.duration / 1000)}秒，成功步骤: ${successSteps}/${totalSteps}`
+            : `测试执行完成，但有失败！耗时: ${Math.round(executionState.duration / 1000)}秒，成功步骤: ${successSteps}/${totalSteps}，失败步骤: ${failedSteps}`;
+        
+        logMessage(executionId, overallStatus === 'success' ? 'success' : 'warning', statusMessage);
         
         // 检查并通知MidScene生成的报告
         await checkAndNotifyMidsceneReport(executionId, testcase, executionState);
 
         // 通知Web系统执行完成
-        await notifyExecutionResult(executionId, testcase, mode, 'success', executionState.steps);
+        await notifyExecutionResult(executionId, testcase, mode, overallStatus, executionState.steps);
 
     } catch (error) {
         console.error('测试执行失败:', error);

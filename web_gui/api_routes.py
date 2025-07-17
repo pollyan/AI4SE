@@ -898,6 +898,109 @@ def create_test_data():
             'message': f'创建测试数据失败: {str(e)}'
         }), 500
 
+# ==================== 报告导出API ====================
+
+@api_bp.route('/executions/<execution_id>/export', methods=['GET'])
+def export_execution_report(execution_id):
+    """导出单个执行报告"""
+    try:
+        execution = ExecutionHistory.query.filter_by(execution_id=execution_id).first()
+        if not execution:
+            return jsonify({
+                'code': 404,
+                'message': '执行记录不存在'
+            }), 404
+
+        # 获取步骤执行详情
+        step_executions = StepExecution.query.filter_by(execution_id=execution_id).order_by(StepExecution.step_index).all()
+
+        # 构建报告数据
+        report_data = execution.to_dict()
+        report_data['step_executions'] = [step.to_dict() for step in step_executions]
+        
+        # 添加导出时间戳
+        report_data['exported_at'] = datetime.utcnow().isoformat()
+
+        response = jsonify(report_data)
+        response.headers['Content-Disposition'] = f'attachment; filename=execution_report_{execution_id}.json'
+        
+        return response
+    except Exception as e:
+        return jsonify({
+            'code': 500,
+            'message': f'导出报告失败: {str(e)}'
+        }), 500
+
+@api_bp.route('/executions/export-all', methods=['GET'])
+def export_all_execution_reports():
+    """导出所有执行报告"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        size = request.args.get('size', 100, type=int)  # 限制导出数量避免过大
+        
+        # 获取执行记录
+        query = ExecutionHistory.query.order_by(ExecutionHistory.created_at.desc())
+        pagination = query.paginate(page=page, per_page=size, error_out=False)
+        
+        # 构建所有报告数据
+        all_reports = []
+        for execution in pagination.items:
+            # 获取步骤执行详情
+            step_executions = StepExecution.query.filter_by(execution_id=execution.execution_id).order_by(StepExecution.step_index).all()
+            
+            report_data = execution.to_dict()
+            report_data['step_executions'] = [step.to_dict() for step in step_executions]
+            all_reports.append(report_data)
+        
+        # 构建导出数据
+        export_data = {
+            'exported_at': datetime.utcnow().isoformat(),
+            'total_reports': len(all_reports),
+            'page': page,
+            'size': size,
+            'reports': all_reports
+        }
+
+        response = jsonify(export_data)
+        filename = f'all_execution_reports_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.json'
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        
+        return response
+    except Exception as e:
+        return jsonify({
+            'code': 500,
+            'message': f'导出所有报告失败: {str(e)}'
+        }), 500
+
+@api_bp.route('/executions/<execution_id>', methods=['DELETE'])
+def delete_execution_report(execution_id):
+    """删除执行报告"""
+    try:
+        execution = ExecutionHistory.query.filter_by(execution_id=execution_id).first()
+        if not execution:
+            return jsonify({
+                'code': 404,
+                'message': '执行记录不存在'
+            }), 404
+
+        # 删除相关的步骤执行记录
+        StepExecution.query.filter_by(execution_id=execution_id).delete()
+        
+        # 删除执行记录
+        db.session.delete(execution)
+        db.session.commit()
+        
+        return jsonify({
+            'code': 200,
+            'message': '执行报告删除成功'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'code': 500,
+            'message': f'删除执行报告失败: {str(e)}'
+        }), 500
+
 # ==================== MidScene执行结果接收API ====================
 
 @api_bp.route('/midscene/execution-result', methods=['POST'])
