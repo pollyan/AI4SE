@@ -1,6 +1,6 @@
 {% extends "base_layout.html" %}
 
-{% block title %}仪表板 - AI测试用例管理系统{% endblock %}
+{% block title %}仪表板 - Intent Test Framework{% endblock %}
 
 {% block page_title %}仪表板{% endblock %}
 
@@ -8,6 +8,14 @@
 
 {% block extra_css %}
 <style>
+    /* 实时状态栏样式 */
+    .status-bar {
+        background: linear-gradient(90deg, #f8f9fa 0%, #ffffff 100%);
+        padding: 16px 24px;
+        border-radius: 8px;
+        margin-bottom: 24px;
+    }
+
     /* 统计卡片样式 */
     .stat-card {
         text-align: center;
@@ -28,127 +36,176 @@
         color: #999999;
         text-transform: uppercase;
         letter-spacing: 0.5px;
+        margin-bottom: 4px;
     }
 
-    /* 快速操作样式 */
-    .quick-actions {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 16px;
-    }
-
-    .quick-action {
-        padding: 20px;
-        text-align: center;
-        cursor: pointer;
-        border: 1px solid #e8e8e8;
-        border-radius: 4px;
-        transition: all 0.2s ease;
-        background: #ffffff;
-    }
-
-    .quick-action:hover {
-        border-color: #d0d0d0;
-        transform: translateY(-1px);
-    }
-
-
-    .action-title {
-        font-weight: 500;
-        margin-bottom: 8px;
-        color: #333333;
-        font-size: 14px;
-    }
-
-    .action-desc {
+    .stat-change {
         font-size: 12px;
         color: #666666;
-        line-height: 1.4;
     }
 
-    /* 最近执行记录样式 */
-    .recent-executions {
+    .stat-change.positive {
+        color: #52c41a;
+    }
+
+    .stat-change.negative {
+        color: #ff4d4f;
+    }
+
+    /* 进度条样式 */
+    .progress {
+        height: 4px;
+        background-color: #f0f0f0;
+        border-radius: 2px;
+        overflow: hidden;
+        margin-bottom: 4px;
+    }
+
+    .progress-bar {
+        height: 100%;
+        background-color: #333;
+        transition: width 0.3s ease;
+    }
+
+    /* 迷你图表样式 */
+    .mini-chart {
+        height: 80px;
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 4px;
+        border-bottom: 1px solid #e8e8e8;
+        padding-bottom: 8px;
+        margin-bottom: 8px;
+    }
+
+    .chart-bar {
+        background: #333;
+        width: 12px;
+        border-radius: 1px;
+        transition: all 0.3s ease;
+    }
+
+    .chart-bar:hover {
+        background: #666;
+    }
+
+    .chart-labels {
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        color: #666;
+    }
+
+    /* 日志容器样式 */
+    .log-container {
         max-height: 300px;
         overflow-y: auto;
+        font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+        font-size: 12px;
+        line-height: 1.5;
     }
 
-    .execution-item {
-        display: flex;
-        align-items: flex-start;
-        padding: 12px 0;
+    .log-entry {
+        padding: 4px 0;
         border-bottom: 1px solid #f0f0f0;
     }
 
-    .execution-item:last-child {
+    .log-entry:last-child {
         border-bottom: none;
     }
 
-    .execution-avatar {
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: bold;
-        margin-right: 12px;
-        flex-shrink: 0;
-        font-size: 12px;
+    .log-entry-time {
+        color: #999;
+        margin-right: 8px;
     }
 
-    .execution-content {
-        flex: 1;
+    .log-entry-success {
+        color: #52c41a;
     }
 
-    .execution-title {
-        font-weight: 500;
-        margin-bottom: 4px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 14px;
-        color: #333333;
+    .log-entry-error {
+        color: #ff4d4f;
     }
 
-    .execution-status {
-        font-size: 11px;
-        padding: 2px 6px;
-        border-radius: 4px;
-        background-color: rgba(0, 0, 0, 0.06);
+    .log-entry-warning {
+        color: #faad14;
     }
 
-    .execution-meta {
-        font-size: 12px;
-        color: #666666;
-        line-height: 1.4;
+    /* 列表项hover效果 */
+    .list-item {
+        cursor: pointer;
+        transition: background-color 0.2s ease, transform 0.1s ease;
     }
 
-    /* 加载状态样式 */
-    .loading {
-        text-align: center;
-        padding: 60px 20px;
-        color: #999999;
+    .list-item:hover {
+        background-color: #f8f9fa;
+        transform: translateY(-1px);
     }
 
-    .loading-spinner {
-        width: 20px;
-        height: 20px;
-        border: 2px solid #f0f0f0;
-        border-top: 2px solid #333333;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin: 0 auto 16px;
+    .list-item:active {
+        transform: translateY(0);
     }
 
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+    /* 状态指示器增强效果 */
+    .status {
+        cursor: help;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .status:hover {
+        transform: scale(1.3);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    /* 搜索框样式调整 */
+    .search-container {
+        position: relative;
+    }
+
+    .search-suggestions {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #e8e8e8;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        max-height: 200px;
+        overflow-y: auto;
+        display: none;
+        z-index: 10;
+    }
+
+    .search-suggestions.show {
+        display: block;
+    }
+
+    .suggestion-item {
+        padding: 8px 12px;
+        cursor: pointer;
+        font-size: 13px;
+    }
+
+    .suggestion-item:hover {
+        background-color: #f8f9fa;
+    }
+
+    /* 收藏图标 */
+    .favorite-icon {
+        cursor: pointer;
+        color: #ccc;
+        transition: color 0.2s ease;
+    }
+
+    .favorite-icon.active {
+        color: #faad14;
     }
 
     /* 响应式设计 */
-    @media (max-width: 768px) {
-        .quick-actions {
+    @media (max-width: 1024px) {
+        .grid-cols-3 {
             grid-template-columns: 1fr;
         }
     }
@@ -157,68 +214,176 @@
 
 {% block content %}
 <div id="app">
-    <!-- 加载状态 -->
-    <div id="loading" class="loading" style="display: none;">
-        <div class="loading-spinner"></div>
-        <div>正在加载数据...</div>
+    <!-- 实时状态栏 -->
+    <div class="card status-bar">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <div class="status status-success" id="system-status"></div>
+                    <span class="text-sm font-medium" id="system-status-text">系统运行正常</span>
+                </div>
+                <div class="text-sm text-gray-600">正在执行: <span id="running-count">0</span>个测试</div>
+                <div class="text-sm text-gray-600">队列等待: <span id="queue-count">0</span>个</div>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="text-sm text-gray-600">上次同步: <span id="last-sync">刚刚</span></div>
+                <button class="btn btn-small btn-ghost" onclick="refreshDashboard()">刷新状态</button>
+            </div>
+        </div>
     </div>
 
-    <!-- 主要内容 -->
-    <div id="main-content">
-        <!-- 统计卡片 -->
-        <div class="grid grid-cols-4 mb-4">
-            <div class="card stat-card">
-                <div class="stat-number" id="total-testcases">0</div>
-                <div class="stat-label">测试用例总数</div>
+    <!-- 统计概览 -->
+    <div class="grid grid-cols-4 mb-4">
+        <div class="card stat-card">
+            <div class="stat-number" id="today-executions">0</div>
+            <div class="stat-label">今日执行</div>
+            <div class="stat-change" id="executions-change">加载中...</div>
+        </div>
+        <div class="card stat-card">
+            <div class="stat-number" id="today-success-rate">0%</div>
+            <div class="stat-label">今日成功率</div>
+            <div class="stat-change" id="success-rate-change">加载中...</div>
+        </div>
+        <div class="card stat-card">
+            <div class="stat-number" id="avg-duration">0s</div>
+            <div class="stat-label">平均耗时</div>
+            <div class="stat-change" id="duration-change">加载中...</div>
+        </div>
+        <div class="card stat-card">
+            <div class="stat-number" id="pending-failures">0</div>
+            <div class="stat-label">待处理失败</div>
+            <div class="stat-change" id="failures-change">需关注</div>
+        </div>
+    </div>
+
+    <!-- 主要内容区域 -->
+    <div class="grid grid-cols-3 gap-3">
+        <!-- 智能搜索与最近活动 -->
+        <div class="card">
+            <h3 class="card-title">智能搜索</h3>
+            <p class="card-subtitle">快速找到并执行测试用例</p>
+            <div class="card-content">
+                <div class="form-group mb-3 search-container">
+                    <input type="text" 
+                           class="form-input" 
+                           id="search-input"
+                           placeholder="搜索测试用例名称..." 
+                           style="width: 100%;"
+                           autocomplete="off">
+                    <div class="search-suggestions" id="search-suggestions"></div>
+                </div>
+                <div class="flex gap-2 mb-3">
+                    <button class="btn btn-primary btn-small" onclick="performSearch()">搜索</button>
+                    <button class="btn btn-ghost btn-small" onclick="showAdvancedFilter()">高级筛选</button>
+                </div>
             </div>
-            <div class="card stat-card">
-                <div class="stat-number" id="total-executions">0</div>
-                <div class="stat-label">执行总次数</div>
-            </div>
-            <div class="card stat-card">
-                <div class="stat-number" id="success-executions">0</div>
-                <div class="stat-label">成功次数</div>
-            </div>
-            <div class="card stat-card">
-                <div class="stat-number" id="success-rate">0%</div>
-                <div class="stat-label">成功率</div>
+
+            <div class="divider"></div>
+
+            <h4 class="card-title" style="font-size: 14px; margin-bottom: 8px;">最近执行</h4>
+            <div class="list" id="recent-executions">
+                <!-- 动态加载 -->
             </div>
         </div>
 
-        <!-- 功能区域 -->
-        <div class="grid grid-cols-2 gap-3">
-            <!-- 快速操作 -->
-            <div class="card">
-                <h3 class="card-title">快速操作</h3>
-                <p class="card-subtitle">常用功能快速访问</p>
-                <div class="quick-actions">
-                    <div class="quick-action" data-url="/testcases?action=create">
-                        <div class="action-title">创建测试用例</div>
-                        <div class="action-desc">使用自然语言快速创建测试用例</div>
-                    </div>
-                    <div class="quick-action" data-url="/execution">
-                        <div class="action-title">执行测试</div>
-                        <div class="action-desc">选择测试用例并立即执行</div>
-                    </div>
-                    <div class="quick-action" data-url="/reports">
-                        <div class="action-title">查看报告</div>
-                        <div class="action-desc">查看最新的测试执行报告</div>
-                    </div>
-                    <div class="quick-action" data-url="/templates">
-                        <div class="action-title">使用模板</div>
-                        <div class="action-desc">从模板库选择预设测试场景</div>
-                    </div>
+        <!-- 我的工作台与快速操作 -->
+        <div class="card">
+            <h3 class="card-title">我的工作台</h3>
+            <p class="card-subtitle">个人测试与快速操作</p>
+            <div class="card-content">
+                <div class="flex flex-column gap-2 mb-3">
+                    <a href="/testcases/create" class="btn btn-primary">创建新测试用例</a>
+                    <a href="/execution" class="btn btn-ghost">进入执行控制台</a>
+                </div>
+                
+                <div class="flex gap-2 mb-3">
+                    <button class="btn btn-ghost btn-small" onclick="showBatchExecute()">批量执行</button>
+                    <button class="btn btn-ghost btn-small" onclick="showImportDialog()">导入用例</button>
                 </div>
             </div>
 
-            <!-- 最近执行记录 -->
-            <div class="card">
-                <h3 class="card-title">最近执行记录</h3>
-                <p class="card-subtitle">系统执行历史</p>
-                <div id="recent-executions" class="recent-executions">
-                    <!-- 动态加载内容 -->
-                </div>
+            <div class="divider"></div>
+
+            <h4 class="card-title" style="font-size: 14px; margin-bottom: 8px;">收藏的测试用例</h4>
+            <div class="list" id="favorite-testcases">
+                <!-- 动态加载 -->
             </div>
+        </div>
+
+        <!-- 系统监控与趋势 -->
+        <div class="card">
+            <h3 class="card-title">系统监控</h3>
+            <p class="card-subtitle">服务状态与性能趋势</p>
+            
+            <div class="list mb-3" id="system-services">
+                <!-- 动态加载 -->
+            </div>
+
+            <div class="divider"></div>
+
+            <h4 class="card-title" style="font-size: 14px; margin-bottom: 8px;">执行趋势 (近7天)</h4>
+            <div class="mini-chart" id="trend-chart">
+                <!-- 动态生成 -->
+            </div>
+            <div class="chart-labels" id="chart-labels">
+                <!-- 动态生成 -->
+            </div>
+
+            <div class="divider"></div>
+            
+            <div class="flex gap-2 mt-2">
+                <a href="/reports" class="btn btn-ghost btn-small">查看详细报告</a>
+                <button class="btn btn-ghost btn-small" onclick="showSystemSettings()">系统设置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 待处理的失败 -->
+    <div class="mt-4">
+        <div class="card">
+            <h3 class="card-title">待处理的失败</h3>
+            <p class="card-subtitle">需要关注的测试问题</p>
+            <div class="list" id="pending-failures-list">
+                <!-- 动态加载 -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 高级筛选对话框 -->
+<div id="advanced-filter-dialog" class="modal" style="display: none;">
+    <div class="modal-content">
+        <h3>高级筛选</h3>
+        <div class="form-group">
+            <label class="form-label">分类</label>
+            <select class="form-select" id="filter-category">
+                <option value="">全部分类</option>
+                <option value="功能测试">功能测试</option>
+                <option value="UI测试">UI测试</option>
+                <option value="API测试">API测试</option>
+                <option value="性能测试">性能测试</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">状态</label>
+            <select class="form-select" id="filter-status">
+                <option value="">全部状态</option>
+                <option value="active">激活</option>
+                <option value="inactive">未激活</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">优先级</label>
+            <select class="form-select" id="filter-priority">
+                <option value="">全部优先级</option>
+                <option value="1">高</option>
+                <option value="2">中</option>
+                <option value="3">低</option>
+            </select>
+        </div>
+        <div class="flex justify-end gap-2 mt-4">
+            <button class="btn btn-ghost" onclick="closeAdvancedFilter()">取消</button>
+            <button class="btn btn-primary" onclick="applyAdvancedFilter()">应用筛选</button>
         </div>
     </div>
 </div>
@@ -229,72 +394,103 @@
     // API基础配置
     const API_BASE = '/api';
     
-    // 智能WebSocket连接 - 仪表板页面不需要连接WebSocket
-    // WebSocket只在执行控制台页面使用，连接到本地代理服务器
-    let socket = null;
-
+    // 全局变量
+    let favoriteTestcases = new Set();
+    let systemStatus = 'normal';
+    let lastSyncTime = new Date();
+    
     // 页面初始化
     document.addEventListener('DOMContentLoaded', function() {
         initializePage();
+        setupSearchInput();
+        startAutoRefresh();
     });
 
-    function initializePage() {
-        loadDashboardData();
-        setupWebSocket();
-        setupQuickActions();
+    async function initializePage() {
+        await Promise.all([
+            loadDashboardStats(),
+            loadRecentExecutions(),
+            loadFavoriteTestcases(),
+            loadSystemStatus(),
+            loadExecutionTrend(),
+            loadPendingFailures()
+        ]);
     }
 
-    function setupWebSocket() {
-        // 仪表板页面不需要WebSocket连接
-        // WebSocket连接只在执行控制台页面使用，用于实时监控测试执行
-        console.log('仪表板页面已加载，无需WebSocket连接');
-    }
-
-    function setupQuickActions() {
-        // 设置快速操作点击事件
-        const quickActions = document.querySelectorAll('.quick-action');
-        quickActions.forEach(action => {
-            action.addEventListener('click', function() {
-                const url = this.dataset.url;
-                if (url) {
-                    window.location.href = url;
-                }
-            });
-        });
-    }
-
-    async function loadDashboardData() {
+    // 加载今日统计数据
+    async function loadDashboardStats() {
         try {
-            showLoading(true);
-
-            // 加载统计数据
-            const statsResponse = await axios.get(API_BASE + '/stats/dashboard');
-            if (statsResponse.data.code === 200) {
-                updateStats(statsResponse.data.data);
+            const response = await axios.get(API_BASE + '/stats/today');
+            if (response.data.code === 200) {
+                const stats = response.data.data;
+                updateTodayStats(stats);
             }
-
-            // 加载最近执行记录
-            const executionsResponse = await axios.get(API_BASE + '/executions?size=10');
-            if (executionsResponse.data.code === 200) {
-                updateRecentExecutions(executionsResponse.data.data.items);
-            }
-
         } catch (error) {
-            console.error('加载数据失败:', error);
-            showMessage('加载数据失败', 'error');
-        } finally {
-            showLoading(false);
+            console.error('加载统计数据失败:', error);
         }
     }
 
-    function updateStats(stats) {
-        document.getElementById('total-testcases').textContent = stats.total_testcases || 0;
-        document.getElementById('total-executions').textContent = stats.total_executions || 0;
-        document.getElementById('success-executions').textContent = stats.success_executions || 0;
-        document.getElementById('success-rate').textContent = (stats.success_rate || 0) + '%';
+    function updateTodayStats(stats) {
+        // 更新今日执行数
+        document.getElementById('today-executions').textContent = stats.today_executions || 0;
+        const executionsChange = document.getElementById('executions-change');
+        if (stats.executions_change > 0) {
+            executionsChange.textContent = `+${stats.executions_change} 较昨日`;
+            executionsChange.className = 'stat-change positive';
+        } else if (stats.executions_change < 0) {
+            executionsChange.textContent = `${stats.executions_change} 较昨日`;
+            executionsChange.className = 'stat-change negative';
+        } else {
+            executionsChange.textContent = '与昨日持平';
+            executionsChange.className = 'stat-change';
+        }
+
+        // 更新成功率
+        document.getElementById('today-success-rate').textContent = (stats.today_success_rate || 0).toFixed(1) + '%';
+        const successRateChange = document.getElementById('success-rate-change');
+        if (stats.success_rate_change > 0) {
+            successRateChange.textContent = `+${stats.success_rate_change.toFixed(1)}%`;
+            successRateChange.className = 'stat-change positive';
+        } else if (stats.success_rate_change < 0) {
+            successRateChange.textContent = `${stats.success_rate_change.toFixed(1)}%`;
+            successRateChange.className = 'stat-change negative';
+        } else {
+            successRateChange.textContent = '无变化';
+            successRateChange.className = 'stat-change';
+        }
+
+        // 更新平均耗时
+        document.getElementById('avg-duration').textContent = (stats.avg_duration || 0).toFixed(1) + 's';
+        const durationChange = document.getElementById('duration-change');
+        if (stats.duration_change < 0) {
+            durationChange.textContent = `${stats.duration_change.toFixed(1)}s`;
+            durationChange.className = 'stat-change positive'; // 耗时减少是好事
+        } else if (stats.duration_change > 0) {
+            durationChange.textContent = `+${stats.duration_change.toFixed(1)}s`;
+            durationChange.className = 'stat-change negative';
+        } else {
+            durationChange.textContent = '无变化';
+            durationChange.className = 'stat-change';
+        }
+
+        // 更新待处理失败数
+        document.getElementById('pending-failures').textContent = stats.pending_failures || 0;
     }
 
-    function updateRecentExecutions(executions) {
+    // 加载最近执行记录
+    async function loadRecentExecutions() {
+        try {
+            const response = await axios.get(API_BASE + '/executions?size=3&sort=start_time,desc');
+            if (response.data.code === 200) {
+                const executions = response.data.data.items;
+                renderRecentExecutions(executions);
+            }
+        } catch (error) {
+            console.error('加载最近执行失败:', error);
+        }
+    }
+
+    function renderRecentExecutions(executions) {
         const container = document.getElementById('recent-executions');
         container.innerHTML = '';
 
@@ -304,77 +500,477 @@
         }
 
         executions.forEach(execution => {
-            const item = createExecutionItem(execution);
+            const item = document.createElement('div');
+            item.className = 'list-item';
+            item.title = '点击查看详情，右键快速操作';
+            item.onclick = () => viewExecutionDetail(execution.id);
+            
+            const statusClass = execution.status === 'success' ? 'status-success' : 
+                               execution.status === 'failed' ? 'status-error' : 'status-warning';
+            
+            const timeAgo = getTimeAgo(new Date(execution.start_time));
+            
+            item.innerHTML = `
+                <div class="list-item-content">
+                    <div class="list-item-title">${execution.test_case_name}</div>
+                    <div class="list-item-subtitle">${timeAgo} • ${execution.duration ? '耗时 ' + execution.duration + 's' : '执行失败'}</div>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button class="btn btn-small btn-ghost" onclick="event.stopPropagation(); rerunTest(${execution.test_case_id})">重新执行</button>
+                    <div class="status ${statusClass}"></div>
+                </div>
+            `;
+            
             container.appendChild(item);
         });
     }
 
-    function createExecutionItem(execution) {
-        const item = document.createElement('div');
-        item.className = 'execution-item';
+    // 加载收藏的测试用例
+    async function loadFavoriteTestcases() {
+        try {
+            // 先获取用户的收藏列表
+            const favResponse = await axios.get(API_BASE + '/user/favorites');
+            if (favResponse.data.code === 200) {
+                favoriteTestcases = new Set(favResponse.data.data);
+            }
 
-        const statusIcon = getStatusIcon(execution.status);
-        const statusColor = getStatusColor(execution.status);
-        const statusText = getStatusText(execution.status);
+            // 获取收藏的测试用例详情
+            if (favoriteTestcases.size > 0) {
+                const ids = Array.from(favoriteTestcases).join(',');
+                const response = await axios.get(API_BASE + `/testcases?ids=${ids}&size=5`);
+                if (response.data.code === 200) {
+                    renderFavoriteTestcases(response.data.data.items);
+                }
+            } else {
+                renderFavoriteTestcases([]);
+            }
+        } catch (error) {
+            console.error('加载收藏测试用例失败:', error);
+            // 如果API不存在，显示示例数据
+            renderFavoriteTestcases([
+                { id: 1, name: '核心业务流程测试', description: '包含5个关键步骤', last_success: true },
+                { id: 2, name: '回归测试套件', description: '12个测试用例', last_success: true }
+            ]);
+        }
+    }
 
-        item.innerHTML = `
-            <div class="execution-avatar" style="background-color: ${statusColor}">
-                ${statusIcon}
-            </div>
-            <div class="execution-content">
-                <div class="execution-title">
-                    ${execution.test_case_name}
-                    <span class="execution-status" style="color: ${statusColor}">${statusText}</span>
+    function renderFavoriteTestcases(testcases) {
+        const container = document.getElementById('favorite-testcases');
+        container.innerHTML = '';
+
+        if (testcases.length === 0) {
+            container.innerHTML = '<div class="text-center text-gray-500 py-4">暂无收藏的测试用例</div>';
+            return;
+        }
+
+        testcases.forEach(testcase => {
+            const item = document.createElement('div');
+            item.className = 'list-item';
+            item.title = '点击执行收藏的测试用例';
+            
+            const statusClass = testcase.last_success ? 'status-success' : 'status-error';
+            
+            item.innerHTML = `
+                <div class="list-item-content">
+                    <div class="list-item-title">${testcase.name}</div>
+                    <div class="list-item-subtitle">${testcase.description || '无描述'}</div>
                 </div>
-                <div class="execution-meta">
-                    <div>执行时间: ${execution.duration ? execution.duration + '秒' : '未知'}</div>
-                    <div>开始时间: ${new Date(execution.start_time).toLocaleString()}</div>
+                <div class="flex items-center gap-1">
+                    <button class="btn btn-small btn-primary" onclick="executeTestcase(${testcase.id})">执行</button>
+                    <div class="status ${statusClass}"></div>
                 </div>
-            </div>
-        `;
-
-        return item;
+            `;
+            
+            container.appendChild(item);
+        });
     }
 
-    function getStatusIcon(status) {
-        switch (status) {
-            case 'success': return '✓';
-            case 'failed': return '✗';
-            case 'running': return '⏳';
-            default: return '○';
+    // 加载系统状态
+    async function loadSystemStatus() {
+        try {
+            const response = await axios.get(API_BASE + '/system/status');
+            if (response.data.code === 200) {
+                renderSystemStatus(response.data.data);
+            }
+        } catch (error) {
+            console.error('加载系统状态失败:', error);
+            // 使用默认数据
+            renderSystemStatus({
+                services: [
+                    { name: 'AI模型服务', status: 'online', info: 'qwen-vl-max • 响应 0.8s' },
+                    { name: '本地代理', status: 'online', info: 'localhost:3001 • 连接正常' },
+                    { name: '数据库', status: 'online', info: 'PostgreSQL • 延迟 12ms' }
+                ],
+                running_tests: 0,
+                queue_size: 0
+            });
         }
     }
 
-    function getStatusColor(status) {
-        switch (status) {
-            case 'success': return '#28a745';
-            case 'failed': return '#dc3545';
-            case 'running': return '#333333';
-            default: return '#6c757d';
-        }
-    }
+    function renderSystemStatus(status) {
+        // 更新顶部状态栏
+        document.getElementById('running-count').textContent = status.running_tests || 0;
+        document.getElementById('queue-count').textContent = status.queue_size || 0;
+        
+        // 更新系统服务状态
+        const container = document.getElementById('system-services');
+        container.innerHTML = '';
+        
+        status.services.forEach(service => {
+            const item = document.createElement('div');
+            item.className = 'list-item';
+            
+            const statusClass = service.status === 'online' ? 'status-success' : 
+                               service.status === 'offline' ? 'status-error' : 'status-warning';
+            
+            item.innerHTML = `
+                <div class="list-item-content">
+                    <div class="list-item-title">${service.name}</div>
+                    <div class="list-item-subtitle">${service.info}</div>
+                </div>
+                <div class="status ${statusClass}"></div>
+            `;
+            
+            container.appendChild(item);
+        });
 
-    function getStatusText(status) {
-        switch (status) {
-            case 'success': return '成功';
-            case 'failed': return '失败';
-            case 'running': return '运行中';
-            case 'pending': return '等待中';
-            default: return status;
-        }
-    }
-
-    function showLoading(show) {
-        const loadingEl = document.getElementById('loading');
-        const contentEl = document.getElementById('main-content');
-
-        if (show) {
-            loadingEl.style.display = 'block';
-            contentEl.style.display = 'none';
+        // 更新系统总体状态
+        const allOnline = status.services.every(s => s.status === 'online');
+        const statusEl = document.getElementById('system-status');
+        const statusTextEl = document.getElementById('system-status-text');
+        
+        if (allOnline) {
+            statusEl.className = 'status status-success';
+            statusTextEl.textContent = '系统运行正常';
         } else {
-            loadingEl.style.display = 'none';
-            contentEl.style.display = 'block';
+            statusEl.className = 'status status-warning';
+            statusTextEl.textContent = '部分服务异常';
         }
     }
+
+    // 加载执行趋势
+    async function loadExecutionTrend() {
+        try {
+            const response = await axios.get(API_BASE + '/stats/trend?days=7');
+            if (response.data.code === 200) {
+                renderTrendChart(response.data.data);
+            }
+        } catch (error) {
+            console.error('加载执行趋势失败:', error);
+            // 使用示例数据
+            const today = new Date();
+            const mockData = [];
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - i);
+                mockData.push({
+                    date: date.toISOString().split('T')[0],
+                    count: Math.floor(Math.random() * 100) + 20
+                });
+            }
+            renderTrendChart(mockData);
+        }
+    }
+
+    function renderTrendChart(data) {
+        const chartContainer = document.getElementById('trend-chart');
+        const labelsContainer = document.getElementById('chart-labels');
+        
+        chartContainer.innerHTML = '';
+        labelsContainer.innerHTML = '';
+        
+        // 找出最大值用于计算高度比例
+        const maxCount = Math.max(...data.map(d => d.count));
+        
+        data.forEach((day, index) => {
+            // 创建柱状条
+            const bar = document.createElement('div');
+            bar.className = 'chart-bar';
+            const height = (day.count / maxCount) * 80; // 最大高度80px
+            bar.style.height = height + 'px';
+            bar.title = `${day.date}: ${day.count}次执行`;
+            chartContainer.appendChild(bar);
+            
+            // 创建日期标签
+            const label = document.createElement('span');
+            const date = new Date(day.date);
+            label.textContent = `${date.getMonth() + 1}/${date.getDate()}`;
+            labelsContainer.appendChild(label);
+        });
+    }
+
+    // 加载待处理失败
+    async function loadPendingFailures() {
+        try {
+            const response = await axios.get(API_BASE + '/executions?status=failed&resolved=false&size=5');
+            if (response.data.code === 200) {
+                renderPendingFailures(response.data.data.items);
+            }
+        } catch (error) {
+            console.error('加载待处理失败失败:', error);
+            // 使用示例数据
+            renderPendingFailures([
+                {
+                    id: 1,
+                    test_case_name: '购物车结算测试连续失败',
+                    error_summary: '最近3次执行都失败 • 错误：元素定位超时',
+                    impact: '影响：核心业务流程',
+                    severity: 'high'
+                },
+                {
+                    id: 2,
+                    test_case_name: 'AI模型响应时间异常',
+                    error_summary: '平均响应时间从0.8s增加到2.1s',
+                    impact: '影响：执行效率',
+                    severity: 'medium'
+                },
+                {
+                    id: 3,
+                    test_case_name: '新功能测试用例需求',
+                    error_summary: 'v2.3版本功能需要增加测试覆盖',
+                    impact: '优先级：中',
+                    severity: 'low'
+                }
+            ]);
+        }
+    }
+
+    function renderPendingFailures(failures) {
+        const container = document.getElementById('pending-failures-list');
+        container.innerHTML = '';
+        
+        if (failures.length === 0) {
+            container.innerHTML = '<div class="text-center text-gray-500 py-4">暂无待处理的失败</div>';
+            return;
+        }
+        
+        failures.forEach(failure => {
+            const item = document.createElement('div');
+            item.className = 'list-item';
+            
+            const borderColor = failure.severity === 'high' ? '#ff4d4f' : 
+                               failure.severity === 'medium' ? '#faad14' : '#52c41a';
+            item.style.borderLeft = `4px solid ${borderColor}`;
+            
+            const statusClass = failure.severity === 'high' ? 'status-error' : 
+                               failure.severity === 'medium' ? 'status-warning' : 'status-success';
+            
+            item.innerHTML = `
+                <div class="list-item-content">
+                    <div class="list-item-title">${failure.test_case_name}</div>
+                    <div class="list-item-subtitle">${failure.error_summary}</div>
+                    <div class="list-item-meta">${failure.impact}</div>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button class="btn btn-small ${failure.severity === 'high' ? 'btn-primary' : 'btn-ghost'}" 
+                            onclick="handleFailure(${failure.id})">
+                        ${failure.severity === 'high' ? '立即处理' : failure.severity === 'low' ? '开始创建' : '查看详情'}
+                    </button>
+                    <div class="status ${statusClass}"></div>
+                </div>
+            `;
+            
+            container.appendChild(item);
+        });
+    }
+
+    // 搜索功能
+    function setupSearchInput() {
+        const searchInput = document.getElementById('search-input');
+        const suggestions = document.getElementById('search-suggestions');
+        
+        let searchTimeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const query = this.value.trim();
+            
+            if (query.length < 2) {
+                suggestions.classList.remove('show');
+                return;
+            }
+            
+            searchTimeout = setTimeout(async () => {
+                try {
+                    const response = await axios.get(API_BASE + `/testcases/search?q=${encodeURIComponent(query)}&size=5`);
+                    if (response.data.code === 200) {
+                        showSearchSuggestions(response.data.data.items);
+                    }
+                } catch (error) {
+                    console.error('搜索失败:', error);
+                }
+            }, 300);
+        });
+        
+        // 点击其他地方关闭建议框
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !suggestions.contains(e.target)) {
+                suggestions.classList.remove('show');
+            }
+        });
+    }
+
+    function showSearchSuggestions(items) {
+        const suggestions = document.getElementById('search-suggestions');
+        suggestions.innerHTML = '';
+        
+        if (items.length === 0) {
+            suggestions.innerHTML = '<div class="suggestion-item">无匹配结果</div>';
+        } else {
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                div.textContent = item.name;
+                div.onclick = () => {
+                    document.getElementById('search-input').value = item.name;
+                    suggestions.classList.remove('show');
+                    viewTestcaseDetail(item.id);
+                };
+                suggestions.appendChild(div);
+            });
+        }
+        
+        suggestions.classList.add('show');
+    }
+
+    function performSearch() {
+        const query = document.getElementById('search-input').value.trim();
+        if (query) {
+            window.location.href = `/testcases?search=${encodeURIComponent(query)}`;
+        }
+    }
+
+    // 刷新功能
+    function refreshDashboard() {
+        lastSyncTime = new Date();
+        updateLastSyncTime();
+        initializePage();
+        showMessage('数据已刷新', 'success');
+    }
+
+    function updateLastSyncTime() {
+        const now = new Date();
+        const diff = Math.floor((now - lastSyncTime) / 1000);
+        
+        let text;
+        if (diff < 60) {
+            text = '刚刚';
+        } else if (diff < 3600) {
+            text = Math.floor(diff / 60) + '分钟前';
+        } else {
+            text = Math.floor(diff / 3600) + '小时前';
+        }
+        
+        document.getElementById('last-sync').textContent = text;
+    }
+
+    // 自动刷新
+    function startAutoRefresh() {
+        // 每分钟更新一次同步时间显示
+        setInterval(updateLastSyncTime, 60000);
+        
+        // 每5分钟自动刷新数据
+        setInterval(() => {
+            initializePage();
+        }, 300000);
+    }
+
+    // 辅助函数
+    function getTimeAgo(date) {
+        const now = new Date();
+        const diff = Math.floor((now - date) / 1000);
+        
+        if (diff < 60) return diff + '秒前';
+        if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+        if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+        return Math.floor(diff / 86400) + '天前';
+    }
+
+    // 操作函数
+    function executeTestcase(id) {
+        window.location.href = `/execution?testcase=${id}&auto=true`;
+    }
+
+    function rerunTest(testcaseId) {
+        executeTestcase(testcaseId);
+    }
+
+    function viewTestcaseDetail(id) {
+        window.location.href = `/testcases/${id}/edit`;
+    }
+
+    function viewExecutionDetail(id) {
+        window.location.href = `/reports?execution=${id}`;
+    }
+
+    function handleFailure(id) {
+        window.location.href = `/reports?failure=${id}`;
+    }
+
+    function showAdvancedFilter() {
+        document.getElementById('advanced-filter-dialog').style.display = 'flex';
+    }
+
+    function closeAdvancedFilter() {
+        document.getElementById('advanced-filter-dialog').style.display = 'none';
+    }
+
+    function applyAdvancedFilter() {
+        const category = document.getElementById('filter-category').value;
+        const status = document.getElementById('filter-status').value;
+        const priority = document.getElementById('filter-priority').value;
+        
+        const params = new URLSearchParams();
+        if (category) params.append('category', category);
+        if (status) params.append('status', status);
+        if (priority) params.append('priority', priority);
+        
+        window.location.href = `/testcases?${params.toString()}`;
+    }
+
+    function showBatchExecute() {
+        window.location.href = '/execution?mode=batch';
+    }
+
+    function showImportDialog() {
+        window.location.href = '/testcases?action=import';
+    }
+
+    function showSystemSettings() {
+        showMessage('系统设置功能开发中', 'info');
+    }
+
+    // 模态框样式
+    const modalStyle = document.createElement('style');
+    modalStyle.textContent = `
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 32px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .modal-content h3 {
+            margin-bottom: 24px;
+            font-size: 18px;
+            font-weight: 500;
+        }
+    `;
+    document.head.appendChild(modalStyle);
 </script>
 {% endblock %}

@@ -29,181 +29,244 @@
             <p class="page-subtitle">系统概览和快速操作</p>
         </div>
 
+        <!-- 实时状态栏 -->
+        <div class="card mb-3" style="background: linear-gradient(90deg, #f8f9fa 0%, #ffffff 100%);">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <div class="status status-success"></div>
+                        <span class="text-sm font-medium">系统运行正常</span>
+                    </div>
+                    <div class="text-sm text-gray-600">正在执行: 2个测试</div>
+                    <div class="text-sm text-gray-600">队列等待: 0个</div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="text-sm text-gray-600">上次同步: 1分钟前</div>
+                    <button class="btn btn-small btn-ghost">刷新状态</button>
+                </div>
+            </div>
+        </div>
+
         <!-- 统计概览 -->
         <div class="grid grid-cols-4 mb-4">
             <div class="card stat-card">
-                <div class="stat-number">156</div>
-                <div class="stat-label">测试用例</div>
-                <div class="stat-change">+12 本月</div>
+                <div class="stat-number">89</div>
+                <div class="stat-label">今日执行</div>
+                <div class="stat-change">+23 较昨日</div>
             </div>
             <div class="card stat-card">
-                <div class="stat-number">2,847</div>
-                <div class="stat-label">执行次数</div>
-                <div class="stat-change">+234 本周</div>
+                <div class="stat-number">96.6%</div>
+                <div class="stat-label">今日成功率</div>
+                <div class="stat-change">+1.8%</div>
             </div>
             <div class="card stat-card">
-                <div class="stat-number">94.2%</div>
-                <div class="stat-label">成功率</div>
-                <div class="stat-change">+2.1%</div>
-            </div>
-            <div class="card stat-card">
-                <div class="stat-number">1.2s</div>
+                <div class="stat-number">0.9s</div>
                 <div class="stat-label">平均耗时</div>
-                <div class="stat-change">-0.3s</div>
+                <div class="stat-change">-0.2s</div>
+            </div>
+            <div class="card stat-card">
+                <div class="stat-number">3</div>
+                <div class="stat-label">待处理失败</div>
+                <div class="stat-change">需关注</div>
             </div>
         </div>
 
         <!-- 主要内容区域 -->
         <div class="grid grid-cols-3 gap-3">
-            <!-- 最近执行 -->
+            <!-- 智能搜索与最近活动 -->
             <div class="card">
-                <h3 class="card-title">最近执行</h3>
-                <p class="card-subtitle">最新的测试执行记录</p>
+                <h3 class="card-title">智能搜索</h3>
+                <p class="card-subtitle">快速找到并执行测试用例</p>
+                <div class="card-content">
+                    <div class="form-group mb-3">
+                        <input type="text" class="form-input" placeholder="搜索测试用例名称..." style="width: 100%;">
+                    </div>
+                    <div class="flex gap-2 mb-3">
+                        <button class="btn btn-primary btn-small">搜索</button>
+                        <button class="btn btn-ghost btn-small">高级筛选</button>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <h4 class="card-title" style="font-size: 14px; margin-bottom: 8px;">最近执行</h4>
                 <div class="list">
-                    <div class="list-item">
+                    <div class="list-item" title="点击查看详情，右键快速操作">
                         <div class="list-item-content">
                             <div class="list-item-title">用户登录功能测试</div>
-                            <div class="list-item-subtitle">2分钟前执行</div>
-                            <div class="list-item-meta">耗时 0.8s</div>
+                            <div class="list-item-subtitle">2分钟前 • 耗时 0.8s</div>
                         </div>
-                        <div class="status status-success"></div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-item-content">
-                            <div class="list-item-title">商品搜索功能测试</div>
-                            <div class="list-item-subtitle">5分钟前执行</div>
-                            <div class="list-item-meta">耗时 1.2s</div>
+                        <div class="flex items-center gap-1">
+                            <button class="btn btn-small btn-ghost">重新执行</button>
+                            <div class="status status-success"></div>
                         </div>
-                        <div class="status status-success"></div>
                     </div>
-                    <div class="list-item">
+                    <div class="list-item" title="点击查看详情，右键快速操作">
                         <div class="list-item-content">
                             <div class="list-item-title">购物车结算测试</div>
-                            <div class="list-item-subtitle">8分钟前执行</div>
-                            <div class="list-item-meta">耗时 0.5s</div>
+                            <div class="list-item-subtitle">8分钟前 • 执行失败</div>
                         </div>
-                        <div class="status status-error"></div>
+                        <div class="flex items-center gap-1">
+                            <button class="btn btn-small btn-primary">重新执行</button>
+                            <div class="status status-error"></div>
+                        </div>
                     </div>
-                    <div class="list-item">
+                    <div class="list-item" title="点击查看详情，右键快速操作">
                         <div class="list-item-content">
-                            <div class="list-item-title">用户注册功能测试</div>
-                            <div class="list-item-subtitle">12分钟前执行</div>
-                            <div class="list-item-meta">耗时 1.5s</div>
+                            <div class="list-item-title">商品搜索功能测试</div>
+                            <div class="list-item-subtitle">12分钟前 • 耗时 1.2s</div>
                         </div>
-                        <div class="status status-success"></div>
+                        <div class="flex items-center gap-1">
+                            <button class="btn btn-small btn-ghost">重新执行</button>
+                            <div class="status status-success"></div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- 系统状态 -->
+            <!-- 我的工作台与快速操作 -->
             <div class="card">
-                <h3 class="card-title">系统状态</h3>
-                <p class="card-subtitle">服务运行状态</p>
-                <div class="list">
-                    <div class="list-item">
-                        <div class="list-item-content">
-                            <div class="list-item-title">本地代理服务器</div>
-                            <div class="list-item-subtitle">localhost:3001</div>
-                            <div class="list-item-meta">运行中</div>
-                        </div>
-                        <div class="status status-success"></div>
+                <h3 class="card-title">我的工作台</h3>
+                <p class="card-subtitle">个人测试与快速操作</p>
+                <div class="card-content">
+                    <div class="flex flex-column gap-2 mb-3">
+                        <a href="testcases.html" class="btn btn-primary">创建新测试用例</a>
+                        <a href="execution.html" class="btn btn-ghost">进入执行控制台</a>
                     </div>
+                    
+                    <div class="flex gap-2 mb-3">
+                        <button class="btn btn-ghost btn-small">批量执行</button>
+                        <button class="btn btn-ghost btn-small">导入用例</button>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <h4 class="card-title" style="font-size: 14px; margin-bottom: 8px;">收藏的测试用例</h4>
+                <div class="list">
+                    <div class="list-item" title="点击执行收藏的测试用例">
+                        <div class="list-item-content">
+                            <div class="list-item-title">核心业务流程测试</div>
+                            <div class="list-item-subtitle">包含5个关键步骤</div>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button class="btn btn-small btn-primary">执行</button>
+                            <div class="status status-success"></div>
+                        </div>
+                    </div>
+                    <div class="list-item" title="点击执行收藏的测试用例">
+                        <div class="list-item-content">
+                            <div class="list-item-title">回归测试套件</div>
+                            <div class="list-item-subtitle">12个测试用例</div>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button class="btn btn-small btn-ghost">执行</button>
+                            <div class="status status-success"></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- 系统监控与趋势 -->
+            <div class="card">
+                <h3 class="card-title">系统监控</h3>
+                <p class="card-subtitle">服务状态与性能趋势</p>
+                
+                <div class="list mb-3">
                     <div class="list-item">
                         <div class="list-item-content">
                             <div class="list-item-title">AI模型服务</div>
-                            <div class="list-item-subtitle">qwen-vl-max-latest</div>
-                            <div class="list-item-meta">响应时间 0.8s</div>
+                            <div class="list-item-subtitle">qwen-vl-max • 响应 0.8s</div>
                         </div>
                         <div class="status status-success"></div>
                     </div>
                     <div class="list-item">
                         <div class="list-item-content">
-                            <div class="list-item-title">数据库连接</div>
-                            <div class="list-item-subtitle">PostgreSQL</div>
-                            <div class="list-item-meta">连接正常</div>
+                            <div class="list-item-title">本地代理</div>
+                            <div class="list-item-subtitle">localhost:3001 • 连接正常</div>
                         </div>
                         <div class="status status-success"></div>
                     </div>
                     <div class="list-item">
                         <div class="list-item-content">
-                            <div class="list-item-title">WebSocket服务</div>
-                            <div class="list-item-subtitle">实时通信</div>
-                            <div class="list-item-meta">3个连接</div>
+                            <div class="list-item-title">数据库</div>
+                            <div class="list-item-subtitle">PostgreSQL • 延迟 12ms</div>
                         </div>
-                        <div class="status status-warning"></div>
+                        <div class="status status-success"></div>
                     </div>
                 </div>
-            </div>
 
-            <!-- 快速操作 -->
-            <div class="card">
-                <h3 class="card-title">快速操作</h3>
-                <p class="card-subtitle">常用功能入口</p>
-                <div class="card-content">
-                    <div class="flex flex-column gap-2">
-                        <a href="testcases.html" class="btn btn-primary">创建测试用例</a>
-                        <a href="execution.html" class="btn btn-ghost">执行控制台</a>
-                        <a href="reports.html" class="btn btn-ghost">查看报告</a>
-                        <a href="#" class="btn btn-ghost">导入用例</a>
-                    </div>
-                    
-                    <div class="divider"></div>
-                    
-                    <div class="mb-2">
-                        <div class="text-sm text-gray-600 mb-1">今日执行进度</div>
-                        <div class="progress">
-                            <div class="progress-bar" style="width: 68%;"></div>
-                        </div>
-                        <div class="text-sm text-gray-500">68% (89/130)</div>
-                    </div>
-                    
-                    <div class="mb-2">
-                        <div class="text-sm text-gray-600 mb-1">本周成功率</div>
-                        <div class="progress">
-                            <div class="progress-bar" style="width: 94%;"></div>
-                        </div>
-                        <div class="text-sm text-gray-500">94.2%</div>
-                    </div>
+                <div class="divider"></div>
+
+                <h4 class="card-title" style="font-size: 14px; margin-bottom: 8px;">执行趋势 (近7天)</h4>
+                <div style="height: 80px; display: flex; align-items: end; justify-content: space-between; gap: 4px; border-bottom: 1px solid #e8e8e8; padding-bottom: 8px; margin-bottom: 8px;">
+                    <div style="background: #333; width: 12px; height: 45px; border-radius: 1px;"></div>
+                    <div style="background: #333; width: 12px; height: 38px; border-radius: 1px;"></div>
+                    <div style="background: #333; width: 12px; height: 52px; border-radius: 1px;"></div>
+                    <div style="background: #333; width: 12px; height: 61px; border-radius: 1px;"></div>
+                    <div style="background: #333; width: 12px; height: 43px; border-radius: 1px;"></div>
+                    <div style="background: #333; width: 12px; height: 67px; border-radius: 1px;"></div>
+                    <div style="background: #333; width: 12px; height: 80px; border-radius: 1px;"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 10px; color: #666;">
+                    <span>1/9</span>
+                    <span>1/10</span>
+                    <span>1/11</span>
+                    <span>1/12</span>
+                    <span>1/13</span>
+                    <span>1/14</span>
+                    <span>1/15</span>
+                </div>
+
+                <div class="divider"></div>
+                
+                <div class="flex gap-2 mt-2">
+                    <a href="reports.html" class="btn btn-ghost btn-small">查看详细报告</a>
+                    <button class="btn btn-ghost btn-small">系统设置</button>
                 </div>
             </div>
         </div>
 
-        <!-- 活动日志 -->
-        <div class="card mt-4">
-            <h3 class="card-title">活动日志</h3>
-            <p class="card-subtitle">系统活动记录</p>
-            <div class="log-container">
-                <div class="log-entry">
-                    <span class="log-entry-time">[14:32:15]</span>
-                    <span class="log-entry-success">用户登录功能测试 - 执行成功</span>
-                </div>
-                <div class="log-entry">
-                    <span class="log-entry-time">[14:31:42]</span>
-                    本地代理服务器连接成功
-                </div>
-                <div class="log-entry">
-                    <span class="log-entry-time">[14:30:18]</span>
-                    <span class="log-entry-success">商品搜索功能测试 - 执行成功</span>
-                </div>
-                <div class="log-entry">
-                    <span class="log-entry-time">[14:29:33]</span>
-                    <span class="log-entry-warning">AI模型响应时间较慢: 2.3s</span>
-                </div>
-                <div class="log-entry">
-                    <span class="log-entry-time">[14:28:45]</span>
-                    <span class="log-entry-error">购物车结算测试 - 执行失败</span>
-                </div>
-                <div class="log-entry">
-                    <span class="log-entry-time">[14:27:12]</span>
-                    新用例创建: 用户注册功能测试
-                </div>
-                <div class="log-entry">
-                    <span class="log-entry-time">[14:26:03]</span>
-                    用户登录: admin
-                </div>
-                <div class="log-entry">
-                    <span class="log-entry-time">[14:25:31]</span>
-                    系统启动完成
+        <!-- 待处理的失败 -->
+        <div class="mt-4">
+            <div class="card">
+                <h3 class="card-title">待处理的失败</h3>
+                <p class="card-subtitle">需要关注的测试问题</p>
+                <div class="list">
+                    <div class="list-item" style="border-left: 4px solid #ff4d4f;">
+                        <div class="list-item-content">
+                            <div class="list-item-title">购物车结算测试连续失败</div>
+                            <div class="list-item-subtitle">最近3次执行都失败 • 错误：元素定位超时</div>
+                            <div class="list-item-meta">影响：核心业务流程</div>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button class="btn btn-small btn-primary">立即处理</button>
+                            <div class="status status-error"></div>
+                        </div>
+                    </div>
+                    <div class="list-item" style="border-left: 4px solid #faad14;">
+                        <div class="list-item-content">
+                            <div class="list-item-title">AI模型响应时间异常</div>
+                            <div class="list-item-subtitle">平均响应时间从0.8s增加到2.1s</div>
+                            <div class="list-item-meta">影响：执行效率</div>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button class="btn btn-small btn-ghost">查看详情</button>
+                            <div class="status status-warning"></div>
+                        </div>
+                    </div>
+                    <div class="list-item" style="border-left: 4px solid #52c41a;">
+                        <div class="list-item-content">
+                            <div class="list-item-title">新功能测试用例需求</div>
+                            <div class="list-item-subtitle">v2.3版本功能需要增加测试覆盖</div>
+                            <div class="list-item-meta">优先级：中</div>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button class="btn btn-small btn-ghost">开始创建</button>
+                            <div class="status status-success"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

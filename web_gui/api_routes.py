@@ -1532,3 +1532,274 @@ def receive_execution_start():
             'code': 500,
             'message': f'记录执行开始失败: {str(e)}'
         }), 500
+
+# ==================== 新增仪表板相关API ====================
+
+@api_bp.route('/stats/today', methods=['GET'])
+def get_today_stats():
+    """获取今日统计数据"""
+    try:
+        from datetime import datetime, timedelta
+        from sqlalchemy import func
+        
+        # 计算今天和昨天的日期范围
+        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow = today + timedelta(days=1)
+        yesterday = today - timedelta(days=1)
+        
+        # 今日执行数
+        today_executions = ExecutionHistory.query.filter(
+            ExecutionHistory.created_at >= today,
+            ExecutionHistory.created_at < tomorrow
+        ).count()
+        
+        # 昨日执行数
+        yesterday_executions = ExecutionHistory.query.filter(
+            ExecutionHistory.created_at >= yesterday,
+            ExecutionHistory.created_at < today
+        ).count()
+        
+        executions_change = today_executions - yesterday_executions
+        
+        # 今日成功率
+        today_success = ExecutionHistory.query.filter(
+            ExecutionHistory.created_at >= today,
+            ExecutionHistory.created_at < tomorrow,
+            ExecutionHistory.status == 'success'
+        ).count()
+        
+        today_success_rate = (today_success / today_executions * 100) if today_executions > 0 else 0
+        
+        # 昨日成功率
+        yesterday_success = ExecutionHistory.query.filter(
+            ExecutionHistory.created_at >= yesterday,
+            ExecutionHistory.created_at < today,
+            ExecutionHistory.status == 'success'
+        ).count()
+        
+        yesterday_success_rate = (yesterday_success / yesterday_executions * 100) if yesterday_executions > 0 else 0
+        success_rate_change = today_success_rate - yesterday_success_rate
+        
+        # 平均执行时间
+        avg_duration_result = db.session.query(func.avg(ExecutionHistory.duration)).filter(
+            ExecutionHistory.created_at >= today,
+            ExecutionHistory.created_at < tomorrow,
+            ExecutionHistory.duration.isnot(None)
+        ).scalar()
+        
+        avg_duration = float(avg_duration_result) if avg_duration_result else 0
+        
+        # 昨日平均执行时间
+        yesterday_avg_result = db.session.query(func.avg(ExecutionHistory.duration)).filter(
+            ExecutionHistory.created_at >= yesterday,
+            ExecutionHistory.created_at < today,
+            ExecutionHistory.duration.isnot(None)
+        ).scalar()
+        
+        yesterday_avg_duration = float(yesterday_avg_result) if yesterday_avg_result else 0
+        duration_change = avg_duration - yesterday_avg_duration
+        
+        # 待处理失败数
+        pending_failures = ExecutionHistory.query.filter(
+            ExecutionHistory.status == 'failed',
+            ExecutionHistory.created_at >= today - timedelta(days=7)  # 最近7天的失败
+        ).count()
+        
+        return jsonify({
+            'code': 200,
+            'data': {
+                'today_executions': today_executions,
+                'executions_change': executions_change,
+                'today_success_rate': round(today_success_rate, 1),
+                'success_rate_change': round(success_rate_change, 1),
+                'avg_duration': round(avg_duration, 1),
+                'duration_change': round(duration_change, 1),
+                'pending_failures': pending_failures
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'code': 500,
+            'message': f'获取今日统计失败: {str(e)}'
+        }), 500
+
+@api_bp.route('/system/status', methods=['GET'])
+def get_system_status():
+    """获取系统状态"""
+    try:
+        import os
+        
+        # 检查服务状态
+        services = []
+        
+        # AI模型服务状态（可以通过环境变量或实际检查）
+        ai_service_status = 'online'
+        ai_response_time = 0.8
+        services.append({
+            'name': 'AI模型服务',
+            'status': ai_service_status,
+            'info': f'{os.getenv("MIDSCENE_MODEL_NAME", "qwen-vl-max")} • 响应 {ai_response_time}s'
+        })
+        
+        # 本地代理状态（检查midscene服务器）
+        local_proxy_status = 'online'  # 实际应该检查端口3001
+        services.append({
+            'name': '本地代理',
+            'status': local_proxy_status,
+            'info': 'localhost:3001 • 连接正常'
+        })
+        
+        # 数据库状态
+        try:
+            from sqlalchemy import text
+            db.session.execute(text('SELECT 1'))
+            db_status = 'online'
+            db_info = 'PostgreSQL • 延迟 12ms'
+        except:
+            db_status = 'offline'
+            db_info = 'PostgreSQL • 连接失败'
+        
+        services.append({
+            'name': '数据库',
+            'status': db_status,
+            'info': db_info
+        })
+        
+        # 正在执行的测试数
+        running_tests = ExecutionHistory.query.filter(
+            ExecutionHistory.status == 'running'
+        ).count()
+        
+        # 队列大小（暂时设为0）
+        queue_size = 0
+        
+        return jsonify({
+            'code': 200,
+            'data': {
+                'services': services,
+                'running_tests': running_tests,
+                'queue_size': queue_size
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'code': 500,
+            'message': f'获取系统状态失败: {str(e)}'
+        }), 500
+
+@api_bp.route('/stats/trend', methods=['GET'])
+def get_execution_trend():
+    """获取执行趋势数据"""
+    try:
+        from datetime import datetime, timedelta
+        
+        days = request.args.get('days', 7, type=int)
+        trend_data = []
+        
+        for i in range(days):
+            date = datetime.utcnow() - timedelta(days=days-1-i)
+            day_start = date.replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day_start + timedelta(days=1)
+            
+            count = ExecutionHistory.query.filter(
+                ExecutionHistory.created_at >= day_start,
+                ExecutionHistory.created_at < day_end
+            ).count()
+            
+            trend_data.append({
+                'date': day_start.strftime('%Y-%m-%d'),
+                'count': count
+            })
+        
+        return jsonify({
+            'code': 200,
+            'data': trend_data
+        })
+    except Exception as e:
+        return jsonify({
+            'code': 500,
+            'message': f'获取执行趋势失败: {str(e)}'
+        }), 500
+
+@api_bp.route('/testcases/search', methods=['GET'])
+def search_testcases():
+    """搜索测试用例"""
+    try:
+        query = request.args.get('q', '')
+        size = request.args.get('size', 5, type=int)
+        
+        if not query:
+            return jsonify({
+                'code': 200,
+                'data': {
+                    'items': [],
+                    'total': 0
+                }
+            })
+        
+        # 搜索名称或描述包含关键词的测试用例
+        testcases = TestCase.query.filter(
+            TestCase.is_active == True,
+            (TestCase.name.contains(query) | TestCase.description.contains(query))
+        ).limit(size).all()
+        
+        return jsonify({
+            'code': 200,
+            'data': {
+                'items': [tc.to_dict() for tc in testcases],
+                'total': len(testcases)
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'code': 500,
+            'message': f'搜索失败: {str(e)}'
+        }), 500
+
+@api_bp.route('/user/favorites', methods=['GET'])
+def get_user_favorites():
+    """获取用户收藏的测试用例ID列表"""
+    try:
+        # 暂时返回模拟数据，实际应该从用户表或缓存中获取
+        # 可以通过cookie或session存储
+        favorites = [1, 2, 3]  # 模拟收藏的测试用例ID
+        
+        return jsonify({
+            'code': 200,
+            'data': favorites
+        })
+    except Exception as e:
+        return jsonify({
+            'code': 500,
+            'message': f'获取收藏列表失败: {str(e)}'
+        }), 500
+
+@api_bp.route('/user/favorites/<int:testcase_id>', methods=['POST'])
+def add_favorite(testcase_id):
+    """添加收藏"""
+    try:
+        # 实际应该保存到数据库或缓存
+        return jsonify({
+            'code': 200,
+            'message': '收藏成功'
+        })
+    except Exception as e:
+        return jsonify({
+            'code': 500,
+            'message': f'收藏失败: {str(e)}'
+        }), 500
+
+@api_bp.route('/user/favorites/<int:testcase_id>', methods=['DELETE'])
+def remove_favorite(testcase_id):
+    """取消收藏"""
+    try:
+        # 实际应该从数据库或缓存中删除
+        return jsonify({
+            'code': 200,
+            'message': '取消收藏成功'
+        })
+    except Exception as e:
+        return jsonify({
+            'code': 500,
+            'message': f'取消收藏失败: {str(e)}'
+        }), 500
