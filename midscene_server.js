@@ -196,7 +196,7 @@ async function notifyExecutionResult(executionId, testcase, mode, status, steps,
 }
 
 // 启动浏览器和页面
-async function initBrowser(headless = true, timeoutConfig = {}) {
+async function initBrowser(headless = true, timeoutConfig = {}, enableCache = true) {
     if (!browser) {
         console.log(`启动浏览器 - 模式: ${headless ? '无头模式' : '浏览器模式'}`);
         browser = await chromium.launch({
@@ -244,12 +244,25 @@ async function initBrowser(headless = true, timeoutConfig = {}) {
     console.log('🤖 初始化MidSceneJS AI配置:', {
         modelName: config.modelName,
         baseUrl: config.baseUrl,
-        hasApiKey: !!config.apiKey
+        hasApiKey: !!config.apiKey,
+        enableCache: enableCache
     });
     
-    agent = new PlaywrightAgent(page, { 
-        aiModel: config 
-    });
+    // 根据 MidScene 文档配置缓存
+    const agentConfig = { 
+        aiModel: config
+    };
+    
+    // 设置缓存相关的环境变量
+    if (enableCache) {
+        process.env.MIDSCENE_CACHE = 'true';
+        console.log('📦 AI缓存已启用');
+    } else {
+        process.env.MIDSCENE_CACHE = 'false';
+        console.log('📦 AI缓存已禁用');
+    }
+    
+    agent = new PlaywrightAgent(page, agentConfig);
     
     return { page, agent };
 }
@@ -579,7 +592,7 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
 }
 
 // 异步执行完整测试用例
-async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig = {}) {
+async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig = {}, enableCache = true) {
     try {
         // 清理旧的执行状态，确保不会累积太多数据
         cleanupOldExecutions();
@@ -633,6 +646,7 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
         console.log(`Test Case: ${testcase.name}`);
         console.log(`Execution ID: ${executionId}`);
         console.log(`Mode: ${mode}`);
+        console.log(`Cache Enabled: ${enableCache}`);
         console.log(`Total Steps: ${steps.length}`);
         console.log('\nSteps Overview:');
         steps.forEach((step, index) => {
@@ -653,7 +667,7 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
         
         logMessage(executionId, 'info', `初始化浏览器 (${headless ? '无头模式' : '可视模式'})`);
 
-        const { page, agent } = await initBrowser(headless, timeoutConfig);
+        const { page, agent } = await initBrowser(headless, timeoutConfig, enableCache);
 
         // 执行每个步骤
         for (let i = 0; i < steps.length; i++) {
@@ -861,7 +875,7 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
 // 执行完整测试用例
 app.post('/api/execute-testcase', async (req, res) => {
     try {
-        const { testcase, mode = 'headless', timeout_settings = {} } = req.body;
+        const { testcase, mode = 'headless', timeout_settings = {}, enable_cache = true } = req.body;
 
         // 详细记录请求信息
         console.log(`\n[${new Date().toISOString()}] MidScene API Request - /api/execute-testcase`);
@@ -899,7 +913,7 @@ app.post('/api/execute-testcase', async (req, res) => {
         console.log('📋 接收到的超时设置:', JSON.stringify(timeoutConfig, null, 2));
 
         // 异步执行，立即返回执行ID
-        executeTestCaseAsync(testcase, mode, executionId, timeoutConfig).catch(error => {
+        executeTestCaseAsync(testcase, mode, executionId, timeoutConfig, enable_cache).catch(error => {
             console.error('异步执行错误:', error);
         });
 

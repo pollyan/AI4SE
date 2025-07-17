@@ -254,6 +254,17 @@
                 </div>
             </div>
 
+            <!-- 缓存设置 -->
+            <div class="card" style="background: #f8f8f8; border: 1px solid #e8e8e8; margin-bottom: 16px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label class="flex items-center gap-2" style="cursor: pointer;">
+                        <input type="checkbox" id="enable-cache" checked>
+                        <span>启用AI缓存</span>
+                    </label>
+                    <div class="text-sm text-gray-500 mt-1">使用缓存可以加速重复测试的执行速度</div>
+                </div>
+            </div>
+
             <!-- 执行按钮 -->
             <div class="flex gap-2 mb-3">
                 <button id="start-execution" class="btn btn-primary w-full">开始执行</button>
@@ -792,9 +803,12 @@
                         return;
                     }
                     
+                    const enableCache = document.getElementById('enable-cache').checked;
+                    
                     const executeData = {
                         testcase: testcase,
                         mode: executionMode,
+                        enable_cache: enableCache,
                         timeout_settings: {
                             page_timeout: pageTimeout * 1000, // 转换为毫秒
                             action_timeout: actionTimeout * 1000, // 转换为毫秒
