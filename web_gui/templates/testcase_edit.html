@@ -6,6 +6,57 @@
 
 {% block page_subtitle %}{{ '创建新的测试用例并设置基本信息和执行步骤' if is_create_mode else '修改测试用例的基本信息和执行步骤' }}{% endblock %}
 
+{% block extra_css %}
+<style>
+/* 拖拽相关样式 */
+.step-container {
+    transition: all 0.3s ease;
+}
+
+.step-container.dragging {
+    opacity: 0.5;
+}
+
+.draggable-item {
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.draggable-item:hover .drag-handle {
+    opacity: 1;
+}
+
+.drag-handle {
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+}
+
+.drag-handle:hover {
+    cursor: grab;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+/* 拖拽时的占位符效果 */
+.step-container.drag-over {
+    border-top: 3px solid #4299e1;
+}
+
+/* 拖拽时的悬浮效果 */
+.step-container.dragging .list-item {
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    transform: rotate(2deg);
+}
+
+/* 禁用拖拽时的文本选择 */
+.steps-list {
+    user-select: none;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 
 <!-- 基本信息 -->
@@ -429,13 +480,24 @@ class TestCaseEditor {
         const container = document.createElement('div');
         container.className = 'step-container';
         container.dataset.index = index;
+        container.draggable = true; // 使元素可拖拽
         
         const actionDesc = this.getActionDescription(step.action);
         const paramsDesc = this.getParamsDescription(step.action, step.params);
         
         container.innerHTML = `
-            <div class="list-item" title="点击编辑此步骤" style="padding: 20px; border-radius: 6px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div class="list-item-content">
+            <div class="list-item draggable-item" title="拖拽排序或点击编辑" style="padding: 20px; border-radius: 6px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: move;">
+                <div class="drag-handle" style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); cursor: grab; padding: 4px;">
+                    <svg width="12" height="20" viewBox="0 0 12 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="3" cy="3" r="1.5" fill="#CBD5E0"/>
+                        <circle cx="9" cy="3" r="1.5" fill="#CBD5E0"/>
+                        <circle cx="3" cy="10" r="1.5" fill="#CBD5E0"/>
+                        <circle cx="9" cy="10" r="1.5" fill="#CBD5E0"/>
+                        <circle cx="3" cy="17" r="1.5" fill="#CBD5E0"/>
+                        <circle cx="9" cy="17" r="1.5" fill="#CBD5E0"/>
+                    </svg>
+                </div>
+                <div class="list-item-content" style="padding-left: 24px;">
                     <div class="list-item-title" style="font-size: 15px; font-weight: 600; color: #2d3748; margin-bottom: 6px;">
                         <span style="display: inline-block; background: #e2e8f0; color: #4a5568; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 500; margin-right: 8px;">${index + 1}</span>
                         ${step.description || actionDesc}
@@ -492,6 +554,49 @@ class TestCaseEditor {
         stepDeleteBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this.deleteStep(index);
+        });
+        
+        // 添加拖拽事件
+        container.addEventListener('dragstart', (e) => {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', index);
+            container.classList.add('dragging');
+            // 设置拖拽时的视觉效果
+            setTimeout(() => {
+                container.style.opacity = '0.5';
+            }, 0);
+        });
+        
+        container.addEventListener('dragend', (e) => {
+            container.classList.remove('dragging');
+            container.style.opacity = '';
+            // 清理所有拖拽提示样式
+            document.querySelectorAll('.drag-over').forEach(el => {
+                el.classList.remove('drag-over');
+            });
+        });
+        
+        container.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            const draggingElement = document.querySelector('.dragging');
+            if (draggingElement && draggingElement !== container) {
+                const afterElement = this.getDragAfterElement(this.stepsList, e.clientY);
+                if (afterElement == null) {
+                    this.stepsList.appendChild(draggingElement);
+                } else {
+                    this.stepsList.insertBefore(draggingElement, afterElement);
+                }
+            }
+        });
+        
+        container.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+            const toIndex = [...this.stepsList.children].indexOf(container);
+            
+            if (fromIndex !== toIndex) {
+                this.reorderSteps(fromIndex, toIndex);
+            }
         });
         
         return container;
@@ -897,6 +1002,32 @@ class TestCaseEditor {
             this.renderSteps();
             await this.autoSave();
         }
+    }
+    
+    getDragAfterElement(container, y) {
+        const draggableElements = [...container.querySelectorAll('.step-container:not(.dragging)')];
+        
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            } else {
+                return closest;
+            }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+    
+    async reorderSteps(fromIndex, toIndex) {
+        if (fromIndex === toIndex) return;
+        
+        const movedStep = this.steps.splice(fromIndex, 1)[0];
+        this.steps.splice(toIndex, 0, movedStep);
+        
+        this.isDirty = true;
+        this.renderSteps();
+        await this.autoSave();
     }
     
     duplicateStep(index) {
