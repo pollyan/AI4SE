@@ -257,9 +257,16 @@ async function initBrowser(headless = true, timeoutConfig = {}, enableCache = tr
     if (enableCache) {
         process.env.MIDSCENE_CACHE = '1';
         // 为每个测试用例生成唯一的 cacheId
-        const cacheId = testcaseName ? 
-            `playwright-${testcaseName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}` : 
-            `playwright-test-${Date.now()}`;
+        // 支持中文字符，并合并连续的连字符
+        const normalizedName = testcaseName ? 
+            testcaseName
+                .replace(/[\s\-_]+/g, '-')  // 空格、连字符、下划线统一替换为单个连字符
+                .replace(/[^\u4e00-\u9fa5a-zA-Z0-9\-]/g, '')  // 保留中文、字母、数字和连字符
+                .replace(/\-+/g, '-')  // 合并多个连续的连字符
+                .replace(/^\-|\-$/g, '')  // 去除首尾的连字符
+                .toLowerCase() : 
+            `test-${Date.now()}`;
+        const cacheId = `playwright-${normalizedName || Date.now()}`;
         agentConfig.cacheId = cacheId;
         console.log('📦 AI缓存已启用');
         console.log(`📦 Cache ID: ${cacheId}`);
