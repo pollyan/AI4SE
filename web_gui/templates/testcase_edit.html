@@ -480,14 +480,13 @@ class TestCaseEditor {
         const container = document.createElement('div');
         container.className = 'step-container';
         container.dataset.index = index;
-        container.draggable = true; // 使元素可拖拽
         
         const actionDesc = this.getActionDescription(step.action);
         const paramsDesc = this.getParamsDescription(step.action, step.params);
         
         container.innerHTML = `
             <div class="list-item draggable-item ${step.skip ? 'step-skipped' : ''}" title="拖拽排序或点击编辑" style="padding: 20px; border-radius: 6px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: move; ${step.skip ? 'opacity: 0.6; background-color: #f7fafc;' : ''}">
-                <div class="drag-handle" style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); cursor: grab; padding: 4px;">
+                <div class="drag-handle" draggable="true" style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); cursor: grab; padding: 4px;">
                     <svg width="12" height="20" viewBox="0 0 12 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <circle cx="3" cy="3" r="1.5" fill="#CBD5E0"/>
                         <circle cx="9" cy="3" r="1.5" fill="#CBD5E0"/>
@@ -564,34 +563,11 @@ class TestCaseEditor {
             this.deleteStep(index);
         });
         
-        // 添加拖拽事件
-        container.addEventListener('dragstart', (e) => {
-            // 检查是否点击在可拖拽区域
-            // 只允许从拖拽手柄或非交互区域开始拖拽
-            const target = e.target;
-            const dragHandle = target.closest('.drag-handle');
-            const listItemContent = target.closest('.list-item-content');
-            const buttonArea = target.closest('.flex.items-center.gap-1');
-            const editForm = target.closest('.inline-edit-form');
-            
-            // 如果在编辑表单内，阻止拖拽
-            if (editForm) {
-                e.preventDefault();
-                return;
-            }
-            
-            // 只允许从拖拽手柄或列表项内容区域（非按钮区）开始拖拽
-            if (!dragHandle && !listItemContent) {
-                e.preventDefault();
-                return;
-            }
-            
-            // 如果在按钮区域，阻止拖拽
-            if (buttonArea) {
-                e.preventDefault();
-                return;
-            }
-            
+        // 获取拖拽手柄元素
+        const dragHandle = container.querySelector('.drag-handle');
+        
+        // 添加拖拽事件到拖拽手柄
+        dragHandle.addEventListener('dragstart', (e) => {
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', index);
             container.classList.add('dragging');
@@ -601,7 +577,7 @@ class TestCaseEditor {
             }, 0);
         });
         
-        container.addEventListener('dragend', (e) => {
+        dragHandle.addEventListener('dragend', (e) => {
             container.classList.remove('dragging');
             container.style.opacity = '';
             // 清理所有拖拽提示样式
