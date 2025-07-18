@@ -644,6 +644,13 @@
                 updateExecutionProgress(data.stepIndex + 1, totalSteps, `步骤 ${data.stepIndex + 1} 执行失败`);
             });
             
+            localProxySocket.on('step-skipped', function(data) {
+                addLog(`步骤 ${data.stepIndex + 1} 跳过: ${data.message || '此步骤已被标记为跳过'}`, 'warning');
+                // 使用实际的步骤数或者从testcase获取
+                const totalSteps = data.totalSteps || currentExecution?.totalSteps || 0;
+                updateExecutionProgress(data.stepIndex + 1, totalSteps, `步骤 ${data.stepIndex + 1} 已跳过`);
+            });
+            
             localProxySocket.on('screenshot-taken', function(data) {
                 const screenshot = {
                     step_index: data.stepIndex,

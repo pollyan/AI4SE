@@ -1,0 +1,4649 @@
+---
+url: /API.md
+---
+
+# API Reference
+
+> In the documentation below, you might see function calls prefixed with `agent.`. If you utilize destructuring in Playwright (e.g., `async ({ ai, aiQuery }) => { /* ... */ }`), you can call these functions without the `agent.` prefix. This is merely a syntactical difference.
+
+## Constructors
+
+Each Agent in Midscene has its own constructor.
+
+* In Puppeteer, use [PuppeteerAgent](/en/integrate-with-puppeteer.md)
+* In Bridge Mode, use [AgentOverChromeBridge](/en/bridge-mode-by-chrome-extension.md#constructor)
+* In Android, use [AndroidAgent](/en/integrate-with-android.md)
+
+These Agents share some common constructor parameters:
+
+* `generateReport: boolean`: If true, a report file will be generated. (Default: true)
+* `autoPrintReportMsg: boolean`: If true, report messages will be printed. (Default: true)
+* `cacheId: string | undefined`: If provided, this cacheId will be used to save or match the cache. (Default: undefined, means cache feature is disabled)
+* `actionContext: string`: Some background knowledge that should be sent to the AI model when calling `agent.aiAction()`, like 'close the cookie consent dialog first if it exists' (Default: undefined)
+
+In Playwright and Puppeteer, there are some common parameters:
+
+* `forceSameTabNavigation: boolean`: If true, page navigation is restricted to the current tab. (Default: true)
+* `waitForNetworkIdleTimeout: number`: The timeout for waiting for network idle between each action. (Default: 2000ms, set to 0 means not waiting for network idle)
+* `waitForNavigationTimeout: number`: The timeout for waiting for navigation finished. (Default: 5000ms, set to 0 means not waiting for navigation finished)
+
+## Interaction Methods
+
+Below are the main APIs available for the various Agents in Midscene.
+
+:::info Auto Planning v.s. Instant Action
+
+In Midscene, you can choose to use either auto planning or instant action.
+
+* `agent.ai()` is for Auto Planning: Midscene will automatically plan the steps and execute them. It's more smart and looks like more fashionable style for AI agents. But it may be slower and heavily rely on the quality of the AI model.
+* `agent.aiTap()`, `agent.aiHover()`, `agent.aiInput()`, `agent.aiKeyboardPress()`, `agent.aiScroll()`, `agent.aiRightClick()` are for Instant Action: Midscene will directly perform the specified action, while the AI model is responsible for basic tasks such as locating elements. It's faster and more reliable if you are certain about the action you want to perform.
+
+:::
+
+### `agent.aiAction()` or `.ai()`
+
+This method allows you to perform a series of UI actions described in natural language. Midscene automatically plans the steps and executes them.
+
+* Type
+
+```typescript
+function aiAction(
+  prompt: string,
+  options?: {
+    cacheable?: boolean;
+  },
+): Promise<void>;
+function ai(prompt: string): Promise<void>; // shorthand form
+```
+
+* Parameters:
+
+  * `prompt: string` - A natural language description of the UI steps.
+  * `options?: Object` - Optional, a configuration object containing:
+    * `cacheable?: boolean` - Whether cacheable when enabling [caching feature](/en/caching.md). True by default.
+
+* Return Value:
+
+  * Returns a Promise that resolves to void when all steps are completed; if execution fails, an error is thrown.
+
+* Examples:
+
+```typescript
+// Basic usage
+await agent.aiAction(
+  'Type "JavaScript" into the search box, then click the search button',
+);
+
+// Using the shorthand .ai form
+await agent.ai(
+  'Click the login button at the top of the page, then enter "test@example.com" in the username field',
+);
+
+// When using UI Agent models like ui-tars, you can try a more goal-driven prompt
+await agent.aiAction('Post a Tweet "Hello World"');
+```
+
+:::tip
+
+Under the hood, Midscene uses AI model to split the instruction into a series of steps (a.k.a. "Planning"). It then executes these steps sequentially. If Midscene determines that the actions cannot be performed, an error will be thrown.
+
+For optimal results, please provide clear and detailed instructions for `agent.aiAction()`. For guides about writing prompts, you may read this doc: [Tips for Writing Prompts](/en/prompting-tips.md).
+
+Related Documentation:
+
+* [Choose a model](/en/choose-a-model.md)
+
+:::
+
+### `agent.aiTap()`
+
+Tap something.
+
+* Type
+
+```typescript
+function aiTap(locate: string, options?: Object): Promise<void>;
+```
+
+* Parameters:
+
+  * `locate: string` - A natural language description of the element to tap.
+  * `options?: Object` - Optional, a configuration object containing:
+    * `deepThink?: boolean` - If true, Midscene will call AI model twice to precisely locate the element. False by default.
+    * `xpath?: string` - The xpath of the element to operate. If provided, Midscene will first use this xpath to locate the element before using the cache and the AI model. Empty by default.
+    * `cacheable?: boolean` - Whether cacheable when enabling [caching feature](/en/caching.md). True by default.
+
+* Return Value:
+
+  * Returns a `Promise<void>`
+
+* Examples:
+
+```typescript
+await agent.aiTap('The login button at the top of the page');
+
+// Use deepThink feature to precisely locate the element
+await agent.aiTap('The login button at the top of the page', {
+  deepThink: true,
+});
+```
+
+### `agent.aiHover()`
+
+> Only available in web pages, not available in Android.
+
+Move mouse over something.
+
+* Type
+
+```typescript
+function aiHover(locate: string, options?: Object): Promise<void>;
+```
+
+* Parameters:
+
+  * `locate: string` - A natural language description of the element to hover over.
+  * `options?: Object` - Optional, a configuration object containing:
+    * `deepThink?: boolean` - If true, Midscene will call AI model twice to precisely locate the element. False by default.
+    * `xpath?: string` - The xpath of the element to operate. If provided, Midscene will first use this xpath to locate the element before using the cache and the AI model. Empty by default.
+    * `cacheable?: boolean` - Whether cacheable when enabling [caching feature](/en/caching.md). True by default.
+
+* Return Value:
+
+  * Returns a `Promise<void>`
+
+* Examples:
+
+```typescript
+await agent.aiHover('The version number of the current page');
+```
+
+### `agent.aiInput()`
+
+Input text into something.
+
+* Type
+
+```typescript
+function aiInput(text: string, locate: string, options?: Object): Promise<void>;
+```
+
+* Parameters:
+
+  * `text: string` - The final text content that should be placed in the input element. Use blank string to clear the input.
+  * `locate: string` - A natural language description of the element to input text into.
+  * `options?: Object` - Optional, a configuration object containing:
+    * `deepThink?: boolean` - If true, Midscene will call AI model twice to precisely locate the element. False by default.
+    * `xpath?: string` - The xpath of the element to operate. If provided, Midscene will first use this xpath to locate the element before using the cache and the AI model. Empty by default.
+    * `cacheable?: boolean` - Whether cacheable when enabling [caching feature](/en/caching.md). True by default.
+    * `autoDismissKeyboard?: boolean` - If true, the keyboard will be dismissed after input text, only available in Android. (Default: true)
+
+* Return Value:
+
+  * Returns a `Promise<void>`
+
+* Examples:
+
+```typescript
+await agent.aiInput('Hello World', 'The search input box');
+```
+
+### `agent.aiKeyboardPress()`
+
+Press a keyboard key.
+
+* Type
+
+```typescript
+function aiKeyboardPress(
+  key: string,
+  locate?: string,
+  options?: Object,
+): Promise<void>;
+```
+
+* Parameters:
+
+  * `key: string` - The web key to press, e.g. 'Enter', 'Tab', 'Escape', etc. Key Combination is not supported.
+  * `locate?: string` - Optional, a natural language description of the element to press the key on.
+  * `options?: Object` - Optional, a configuration object containing:
+    * `deepThink?: boolean` - If true, Midscene will call AI model twice to precisely locate the element. False by default.
+    * `xpath?: string` - The xpath of the element to operate. If provided, Midscene will first use this xpath to locate the element before using the cache and the AI model. Empty by default.
+    * `cacheable?: boolean` - Whether cacheable when enabling [caching feature](/en/caching.md). True by default.
+
+* Return Value:
+
+  * Returns a `Promise<void>`
+
+* Examples:
+
+```typescript
+await agent.aiKeyboardPress('Enter', 'The search input box');
+```
+
+### `agent.aiScroll()`
+
+Scroll a page or an element.
+
+* Type
+
+```typescript
+function aiScroll(
+  scrollParam: PlanningActionParamScroll,
+  locate?: string,
+  options?: Object,
+): Promise<void>;
+```
+
+* Parameters:
+
+  * `scrollParam: PlanningActionParamScroll` - The scroll parameter
+    * `direction: 'up' | 'down' | 'left' | 'right'` - The direction to scroll.
+    * `scrollType: 'once' | 'untilBottom' | 'untilTop' | 'untilRight' | 'untilLeft'` - Optional, the type of scroll to perform.
+    * `distance: number` - Optional, the distance to scroll in px.
+  * `locate?: string` - Optional, a natural language description of the element to scroll on. If not provided, Midscene will perform scroll on the current mouse position.
+  * `options?: Object` - Optional, a configuration object containing:
+    * `deepThink?: boolean` - If true, Midscene will call AI model twice to precisely locate the element. False by default.
+    * `xpath?: string` - The xpath of the element to operate. If provided, Midscene will first use this xpath to locate the element before using the cache and the AI model. Empty by default.
+    * `cacheable?: boolean` - Whether cacheable when enabling [caching feature](/en/caching.md). True by default.
+
+* Return Value:
+
+  * Returns a `Promise<void>`
+
+* Examples:
+
+```typescript
+await agent.aiScroll(
+  { direction: 'up', distance: 100, scrollType: 'once' },
+  'The form panel',
+);
+```
+
+### `agent.aiRightClick()`
+
+> Only available in web pages, not available in Android.
+
+Right-click on an element. Please note that Midscene cannot interact with the native context menu in browser after right-clicking. This interface is usually used for the element that listens to the right-click event by itself.
+
+* Type
+
+```typescript
+function aiRightClick(locate: string, options?: Object): Promise<void>;
+```
+
+* Parameters:
+
+  * `locate: string` - A natural language description of the element to right-click on.
+  * `options?: Object` - Optional, a configuration object containing:
+    * `deepThink?: boolean` - If true, Midscene will call AI model twice to precisely locate the element. False by default.
+    * `xpath?: string` - The xpath of the element to operate. If provided, Midscene will first use this xpath to locate the element before using the cache and the AI model. Empty by default.
+    * `cacheable?: boolean` - Whether cacheable when enabling [caching feature](/en/caching.md). True by default.
+
+* Return Value:
+
+  * Returns a `Promise<void>`
+
+* Examples:
+
+```typescript
+await agent.aiRightClick('The file name at the top of the page');
+
+// Use deepThink feature to precisely locate the element
+await agent.aiRightClick('The file name at the top of the page', {
+  deepThink: true,
+});
+```
+
+:::tip About the `deepThink` feature
+
+The `deepThink` feature is a powerful feature that allows Midscene to call AI model twice to precisely locate the element. False by default. It is useful when the AI model find it hard to distinguish the element from its surroundings.
+
+:::
+
+## Data Extraction
+
+### `agent.aiAsk()`
+
+Ask the AI model any question about the current page. It returns the answer in string from the AI model.
+
+* Type
+
+```typescript
+function aiAsk(prompt: string, options?: Object): Promise<string>;
+```
+
+* Parameters:
+
+  * `prompt: string` - A natural language description of the question.
+  * `options?: Object` - Optional, a configuration object containing:
+    * `domIncluded?: boolean | 'visible-only'` - Whether to send simplified DOM information to the model, usually used for extracting invisible attributes like image links. If set to `'visible-only'`, only the visible elements will be sent. Default: False.
+    * `screenshotIncluded?: boolean` - Whether to send screenshot to the model. Default: True.
+
+* Return Value:
+
+  * Return a Promise. Return the answer from the AI model.
+
+* Examples:
+
+```typescript
+const result = await agent.aiAsk('What should I do to test this page?');
+console.log(result); // Output the answer from the AI model
+```
+
+Besides `aiAsk`, you can also use `aiQuery` to extract structured data from the UI.
+
+### `agent.aiQuery()`
+
+This method allows you to extract structured data from current page. Simply define the expected format (e.g., string, number, JSON, or an array) in the `dataDemand`, and Midscene will return a result that matches the format.
+
+* Type
+
+```typescript
+function aiQuery<T>(dataDemand: string | Object, options?: Object): Promise<T>;
+```
+
+* Parameters:
+
+  * `dataDemand: T`: A description of the expected data and its return format.
+  * `options?: Object` - Optional, a configuration object containing:
+    * `domIncluded?: boolean | 'visible-only'` - Whether to send simplified DOM information to the model, usually used for extracting invisible attributes like image links. If set to `'visible-only'`, only the visible elements will be sent. Default: False.
+    * `screenshotIncluded?: boolean` - Whether to send screenshot to the model. Default: True.
+
+* Return Value:
+
+  * Returns any valid basic type, such as string, number, JSON, array, etc.
+  * Just describe the format in `dataDemand`, and Midscene will return a matching result.
+
+* Examples:
+
+```typescript
+const dataA = await agent.aiQuery({
+  time: 'The date and time displayed in the top-left corner as a string',
+  userInfo: 'User information in the format {name: string}',
+  tableFields: 'An array of table field names, string[]',
+  tableDataRecord:
+    'Table records in the format {id: string, [fieldName]: string}[]',
+});
+
+// You can also describe the expected return format using a string:
+
+// dataB will be an array of strings
+const dataB = await agent.aiQuery('string[], list of task names');
+
+// dataC will be an array of objects
+const dataC = await agent.aiQuery(
+  '{name: string, age: string}[], table data records',
+);
+
+// Use domIncluded feature to extract invisible attributes
+const dataD = await agent.aiQuery(
+  '{name: string, age: string, avatarUrl: string}[], table data records',
+  { domIncluded: true },
+);
+```
+
+### `agent.aiBoolean()`
+
+Extract a boolean value from the UI.
+
+* Type
+
+```typescript
+function aiBoolean(prompt: string, options?: Object): Promise<boolean>;
+```
+
+* Parameters:
+  * `prompt: string` - A natural language description of the expected value.
+  * `options?: Object` - Optional, a configuration object containing:
+    * `domIncluded?: boolean | 'visible-only'` - Whether to send simplified DOM information to the model, usually used for extracting invisible attributes like image links. If set to `'visible-only'`, only the visible elements will be sent. Default: False.
+    * `screenshotIncluded?: boolean` - Whether to send screenshot to the model. Default: True.
+
+* Return Value:
+
+  * Returns a `Promise<boolean>` when AI returns a boolean value.
+
+* Examples:
+
+```typescript
+const boolA = await agent.aiBoolean('Whether there is a login dialog');
+
+// Use domIncluded feature to extract invisible attributes
+const boolB = await agent.aiBoolean('Whether the login button has a link', {
+  domIncluded: true,
+});
+```
+
+### `agent.aiNumber()`
+
+Extract a number value from the UI.
+
+* Type
+
+```typescript
+function aiNumber(prompt: string, options?: Object): Promise<number>;
+```
+
+* Parameters:
+  * `prompt: string` - A natural language description of the expected value.
+  * `options?: Object` - Optional, a configuration object containing:
+    * `domIncluded?: boolean | 'visible-only'` - Whether to send simplified DOM information to the model, usually used for extracting invisible attributes like image links. If set to `'visible-only'`, only the visible elements will be sent. Default: False.
+    * `screenshotIncluded?: boolean` - Whether to send screenshot to the model. Default: True.
+
+* Return Value:
+
+  * Returns a `Promise<number>` when AI returns a number value.
+
+* Examples:
+
+```typescript
+const numberA = await agent.aiNumber('The remaining points of the account');
+
+// Use domIncluded feature to extract invisible attributes
+const numberB = await agent.aiNumber(
+  'The value of the remaining points element',
+  { domIncluded: true },
+);
+```
+
+### `agent.aiString()`
+
+Extract a string value from the UI.
+
+* Type
+
+```typescript
+function aiString(prompt: string, options?: Object): Promise<string>;
+```
+
+* Parameters:
+  * `prompt: string` - A natural language description of the expected value.
+  * `options?: Object` - Optional, a configuration object containing:
+    * `domIncluded?: boolean | 'visible-only'` - Whether to send simplified DOM information to the model, usually used for extracting invisible attributes like image links. If set to `'visible-only'`, only the visible elements will be sent. Default: False.
+    * `screenshotIncluded?: boolean` - Whether to send screenshot to the model. Default: True.
+
+* Return Value:
+
+  * Returns a `Promise<string>` when AI returns a string value.
+
+* Examples:
+
+```typescript
+const stringA = await agent.aiString('The first item in the list');
+
+// Use domIncluded feature to extract invisible attributes
+const stringB = await agent.aiString('The link of the first item in the list', {
+  domIncluded: true,
+});
+```
+
+## More APIs
+
+### `agent.aiAssert()`
+
+Specify an assertion in natural language, and the AI determines whether the condition is true. If the assertion fails, the SDK throws an error that includes both the optional `errorMsg` and a detailed reason generated by the AI.
+
+* Type
+
+```typescript
+function aiAssert(assertion: string, errorMsg?: string): Promise<void>;
+```
+
+* Parameters:
+
+  * `assertion: string` - The assertion described in natural language.
+  * `errorMsg?: string` - An optional error message to append if the assertion fails.
+
+* Return Value:
+
+  * Returns a Promise that resolves to void if the assertion passes; if it fails, an error is thrown with `errorMsg` and additional AI-provided information.
+
+* Example:
+
+```typescript
+await agent.aiAssert('The price of "Sauce Labs Onesie" is 7.99');
+```
+
+:::tip
+Assertions are critical in test scripts. To reduce the risk of errors due to AI hallucination (e.g., missing an error), you can also combine `.aiQuery` with standard JavaScript assertions instead of using `.aiAssert`.
+
+For example, you might replace the above code with:
+
+```typescript
+const items = await agent.aiQuery(
+  '"{name: string, price: number}[], return product names and prices',
+);
+const onesieItem = items.find((item) => item.name === 'Sauce Labs Onesie');
+expect(onesieItem).toBeTruthy();
+expect(onesieItem.price).toBe(7.99);
+```
+
+:::
+
+### `agent.aiLocate()`
+
+Locate an element using natural language.
+
+* Type
+
+```typescript
+function aiLocate(
+  locate: string,
+  options?: Object,
+): Promise<{
+  rect: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
+  center: [number, number];
+  scale: number; // device pixel ratio
+}>;
+```
+
+* Parameters:
+
+  * `locate: string` - A natural language description of the element to locate.
+  * `options?: Object` - Optional, a configuration object containing:
+    * `deepThink?: boolean` - If true, Midscene will call AI model twice to precisely locate the element. False by default.
+    * `xpath?: string` - The xpath of the element to operate. If provided, Midscene will first use this xpath to locate the element before using the cache and the AI model. Empty by default.
+    * `cacheable?: boolean` - Whether cacheable when enabling [caching feature](/en/caching.md). True by default.
+
+* Return Value:
+
+  * Returns a `Promise` when the element is located parsed as an locate info object.
+
+* Examples:
+
+```typescript
+const locateInfo = await agent.aiLocate(
+  'The login button at the top of the page',
+);
+console.log(locateInfo);
+```
+
+### `agent.aiWaitFor()`
+
+Wait until a specified condition, described in natural language, becomes true. Considering the cost of AI calls, the check interval will not exceed the specified `checkIntervalMs`.
+
+* Type
+
+```typescript
+function aiWaitFor(
+  assertion: string,
+  options?: {
+    timeoutMs?: number;
+    checkIntervalMs?: number;
+  },
+): Promise<void>;
+```
+
+* Parameters:
+
+  * `assertion: string` - The condition described in natural language.
+  * `options?: object` - An optional configuration object containing:
+    * `timeoutMs?: number` - Timeout in milliseconds (default: 15000).
+    * `checkIntervalMs?: number` - Interval for checking in milliseconds (default: 3000).
+
+* Return Value:
+
+  * Returns a Promise that resolves to void if the condition is met; if not, an error is thrown when the timeout is reached.
+
+* Examples:
+
+```typescript
+// Basic usage
+await agent.aiWaitFor(
+  'There is at least one headphone information displayed on the interface',
+);
+
+// Using custom options
+await agent.aiWaitFor('The shopping cart icon shows a quantity of 2', {
+  timeoutMs: 30000, // Wait for 30 seconds
+  checkIntervalMs: 5000, // Check every 5 seconds
+});
+```
+
+:::tip
+Given the time consumption of AI services, `.aiWaitFor` might not be the most efficient method. Sometimes, using a simple sleep function may be a better alternative.
+:::
+
+### `agent.runYaml()`
+
+Execute an automation script written in YAML. Only the `tasks` part of the script is executed, and it returns the results of all `.aiQuery` calls within the script.
+
+* Type
+
+```typescript
+function runYaml(yamlScriptContent: string): Promise<{ result: any }>;
+```
+
+* Parameters:
+
+  * `yamlScriptContent: string` - The YAML-formatted script content.
+
+* Return Value:
+
+  * Returns an object with a `result` property that includes the results of all `.aiQuery` calls.
+
+* Example:
+
+```typescript
+const { result } = await agent.runYaml(`
+tasks:
+  - name: search weather
+    flow:
+      - ai: input 'weather today' in input box, click search button
+      - sleep: 3000
+
+  - name: query weather
+    flow:
+      - aiQuery: "the result shows the weather info, {description: string}"
+`);
+console.log(result);
+```
+
+:::tip
+For more information about YAML scripts, please refer to [Automate with Scripts in YAML](/en/automate-with-scripts-in-yaml.md).
+:::
+
+### `agent.setAIActionContext()`
+
+Set the background knowledge that should be sent to the AI model when calling `agent.aiAction()`.
+
+* Type
+
+```typescript
+function setAIActionContext(actionContext: string): void;
+```
+
+* Parameters:
+
+  * `actionContext: string` - The background knowledge that should be sent to the AI model.
+
+* Example:
+
+```typescript
+await agent.setAIActionContext(
+  'Close the cookie consent dialog first if it exists',
+);
+```
+
+### `agent.evaluateJavaScript()`
+
+> Only available in web pages, not available in Android.
+
+Evaluate a JavaScript expression in the web page context.
+
+* Type
+
+```typescript
+function evaluateJavaScript(script: string): Promise<any>;
+```
+
+* Parameters:
+
+  * `script: string` - The JavaScript expression to evaluate.
+
+* Return Value:
+
+  * Returns the result of the JavaScript expression.
+
+* Example:
+
+```typescript
+const result = await agent.evaluateJavaScript('document.title');
+console.log(result);
+```
+
+### `agent.logScreenshot()`
+
+Log the current screenshot with a description in the report file.
+
+* Type
+
+```typescript
+function logScreenshot(title?: string, options?: Object): Promise<void>;
+```
+
+* Parameters:
+
+  * `title?: string` - Optional, the title of the screenshot, if not provided, the title will be 'untitled'.
+  * `options?: Object` - Optional, a configuration object containing:
+    * `content?: string` - The description of the screenshot.
+
+* Return Value:
+
+  * Returns a `Promise<void>`
+
+* Examples:
+
+```typescript
+await agent.logScreenshot('Login page', {
+  content: 'User A',
+});
+```
+
+### `agent._unstableLogContent()`
+
+Retrieve the log content in JSON format from the report file. The structure of the log content may change in the future.
+
+* Type
+
+```typescript
+function _unstableLogContent(): Object;
+```
+
+* Return Value:
+
+  * Returns an object containing the log content.
+
+* Examples:
+
+```typescript
+const logContent = agent._unstableLogContent();
+console.log(logContent);
+```
+
+## Properties
+
+### `.reportFile`
+
+The path to the report file.
+
+## Additional Configurations
+
+### Setting Environment Variables at Runtime
+
+You can override environment variables at runtime by calling the `overrideAIConfig` method.
+
+```typescript
+import { overrideAIConfig } from '@midscene/web/puppeteer'; // or another Agent
+
+overrideAIConfig({
+  OPENAI_BASE_URL: '...',
+  OPENAI_API_KEY: '...',
+  MIDSCENE_MODEL_NAME: '...',
+});
+```
+
+### Print usage information for each AI call
+
+Set the `DEBUG=midscene:ai:profile:stats` to view the execution time and usage for each AI call.
+
+```bash
+export DEBUG=midscene:ai:profile:stats
+```
+
+### Customize the run artifact directory
+
+Set the `MIDSCENE_RUN_DIR` variable to customize the run artifact directory.
+
+```bash
+export MIDSCENE_RUN_DIR=midscene_run # The default value is the midscene_run in the current working directory, you can set it to an absolute path or a relative path
+```
+
+### Customize the replanning cycle limit
+
+Set the `MIDSCENE_REPLANNING_CYCLE_LIMIT` variable to customize the maximum number of replanning cycles allowed during action execution (`aiAction`).
+
+```bash
+export MIDSCENE_REPLANNING_CYCLE_LIMIT=10 # The default value is 10. When the AI needs to replan more than this limit, an error will be thrown suggesting to split the task into multiple steps
+```
+
+### Using LangSmith
+
+LangSmith is a platform for debugging large language models. To integrate LangSmith, follow these steps:
+
+```bash
+# Set environment variables
+
+# Enable debug mode
+export MIDSCENE_LANGSMITH_DEBUG=1
+
+# LangSmith configuration
+export LANGSMITH_TRACING_V2=true
+export LANGSMITH_ENDPOINT="https://api.smith.langchain.com"
+export LANGSMITH_API_KEY="your_key_here"
+export LANGSMITH_PROJECT="your_project_name_here"
+```
+
+After starting Midscene, you should see logs similar to:
+
+```log
+DEBUGGING MODE: langsmith wrapper enabled
+```
+
+
+
+---
+url: /automate-with-scripts-in-yaml.md
+---
+
+# Automate with Scripts in YAML
+
+In most cases, developers write automation just to perform some smoke tests, like checking the appearance of some content, or verifying that the key user path is accessible. Maintaining a large test project is unnecessary in this situation.
+
+⁠Midscene offers a way to do this kind of automation with `.yaml` files, which helps you to focus on the script itself instead of the test infrastructure. Any team member can write an automation script without learning any API.
+
+Here is an example of `.yaml` script, you may have already understood how it works by reading its content.
+
+```yaml
+web:
+  url: https://www.bing.com
+
+tasks:
+  - name: search weather
+    flow:
+      - ai: search for 'weather today'
+      - sleep: 3000
+
+  - name: check result
+    flow:
+      - aiAssert: the result shows the weather info
+```
+
+:::info Demo Project
+
+You can find the demo project with YAML scripts
+[https://github.com/web-infra-dev/midscene-example/tree/main/yaml-scripts-demo](https://github.com/web-infra-dev/midscene-example/tree/main/yaml-scripts-demo)
+
+* [Web](https://github.com/web-infra-dev/midscene-example/tree/main/yaml-scripts-demo)
+* [Android](https://github.com/web-infra-dev/midscene-example/tree/main/android/yaml-scripts-demo)
+
+:::
+
+## Setup AI model service
+
+Set your model configs into the environment variables. You may refer to [choose a model](/choose-a-model.md) for more details.
+
+```bash
+# replace with your own
+export OPENAI_API_KEY="sk-abcdefghijklmnopqrstuvwxyz"
+```
+
+or you can use a `.env` file locate at the same directory as you run the command to store the configuration, Midscene command line tool will automatically load it.
+
+```env filename=.env
+OPENAI_API_KEY="sk-abcdefghijklmnopqrstuvwxyz"
+```
+
+## Install Command Line Tool
+
+Install `@midscene/cli` globally
+
+```bash
+npm i -g @midscene/cli
+# or if you prefer a project-wide installation
+npm i @midscene/cli --save-dev
+```
+
+Write a yaml file to `bing-search.yaml` to automate in web browser :
+
+```yaml
+web:
+  url: https://www.bing.com
+
+tasks:
+  - name: search weather
+    flow:
+      - ai: search for 'weather today'
+      - sleep: 3000
+      - aiAssert: the result shows the weather info
+```
+
+or to automate in Android device connected by adb :
+
+```yaml
+android:
+  # launch: https://www.bing.com
+  deviceId: s4ey59
+
+tasks:
+  - name: search weather
+    flow:
+      - ai: open browser and navigate to bing.com
+      - ai: search for 'weather today'
+      - sleep: 3000
+      - aiAssert: the result shows the weather info
+```
+
+Run this script
+
+```bash
+midscene ./bing-search.yaml
+# or if you installed midscene inside the project
+npx midscene ./bing-search.yaml
+```
+
+You should see that the output shows the progress of the running process and the report file.
+
+## Command line usage
+
+### Run single `.yaml` file
+
+```bash
+midscene /path/to/yaml
+```
+
+### Run all `.yaml` files under a folder
+
+```bash
+midscene /dir/of/yaml/
+
+# glob is also supported
+midscene /dir/**/yaml/
+```
+
+## YAML file schema
+
+There are two parts in a `.yaml` file, the `web/android` and the `tasks`.
+
+The `web/android` part defines the basic of a task. Use `web` parameter (also previously named as `target`) for web browser automation, and use `android` parameter for Android device automation. They are mutually exclusive.
+
+### The `web` part
+
+```yaml
+web:
+  # The URL to visit, required. If `serve` is provided, provide the path to the file to visit
+  url: <url>
+
+  # Serve the local path as a static server, optional
+  serve: <root-directory>
+
+  # The user agent to use, optional
+  userAgent: <ua>
+
+  # number, the viewport width, default is 1280, optional
+  viewportWidth: <width>
+
+  # number, the viewport height, default is 960, optional
+  viewportHeight: <height>
+
+  # number, the device scale factor (dpr), default is 1, optional
+  deviceScaleFactor: <scale>
+
+  # string, the path to the json format cookie file, optional
+  cookie: <path-to-cookie-file>
+
+  # object, the strategy to wait for network idle, optional
+  waitForNetworkIdle:
+    # number, the timeout in milliseconds, 2000ms for default, optional
+    timeout: <ms>
+    # boolean, continue on network idle error, true for default
+    continueOnNetworkIdleError: <boolean>
+
+  # string, the path to save the aiQuery/aiAssert result, optional
+  output: <path-to-output-file>
+
+  # string, the path to save the log content in JSON format, optional. If true, save to `unstableLogContent.json` file. If a string, save to the specified path. The structure of the log content may change in the future.
+  unstableLogContent: <boolean | path-to-unstable-log-file>
+
+  # boolean, if limit the popup to the current page, true for default in yaml script
+  forceSameTabNavigation: <boolean>
+
+  # string, the bridge mode to use, optional, default is false, can be 'newTabWithUrl' or 'currentTab'. More details see the following section
+  bridgeMode: false | 'newTabWithUrl' | 'currentTab'
+
+  # boolean, if close the new tabs after the bridge is disconnected, optional, default is false
+  closeNewTabsAfterDisconnect: <boolean>
+
+  # boolean, if allow insecure https certs, optional, default is false
+  acceptInsecureCerts: <boolean>
+
+  # string, the background knowledge to send to the AI model when calling aiAction, optional
+  aiActionContext: <string>
+```
+
+### The `android` part
+
+```yaml
+android:
+  # The device id to use, optional, default is the first connected device
+  deviceId: <device-id>
+
+  # The url to launch, optional, default is the current page
+  launch: <url>
+```
+
+### The `tasks` part
+
+The `tasks` part is an array indicates the tasks to do. Remember to write a `-` before each item which means an array item.
+
+The interfaces of the `flow` part are almost the same as the [API](/en/API.md), except for some parameter levels.
+
+```yaml
+tasks:
+  - name: <name>
+    continueOnError: <boolean> # optional, default is false
+    flow:
+      # Auto Planning (.ai)
+      # ----------------
+
+      # perform an action, this is the shortcut for aiAction
+      - ai: <prompt>
+        cacheable: <boolean> # optional, whether cacheable when enabling [caching feature](./caching.mdx). True by default.
+
+      # this is the same as ai
+      - aiAction: <prompt>
+        cacheable: <boolean> # optional, whether cacheable when enabling [caching feature](./caching.mdx). True by default.
+
+      # Instant Action(.aiTap, .aiHover, .aiInput, .aiKeyboardPress, .aiScroll)
+      # ----------------
+
+      # tap an element located by prompt
+      - aiTap: <prompt>
+        deepThink: <boolean> # optional, whether to use deepThink to precisely locate the element. False by default.
+        xpath: <xpath> # optional, the xpath of the element to operate. If provided, Midscene will first use this xpath to locate the element before using the cache and the AI model. Empty by default.
+    - `cacheable?: boolean` - Whether cacheable when enabling [caching feature](./caching.mdx). True by default.
+        cacheable: <boolean> # optional, whether cacheable when enabling [caching feature](./caching.mdx). True by default.
+
+      # hover an element located by prompt
+      - aiHover: <prompt>
+        deepThink: <boolean> # optional, whether to use deepThink to precisely locate the element. False by default.
+        xpath: <xpath> # optional, the xpath of the element to operate. If provided, Midscene will first use this xpath to locate the element before using the cache and the AI model. Empty by default.
+    - `cacheable?: boolean` - Whether cacheable when enabling [caching feature](./caching.mdx). True by default.
+        cacheable: <boolean> # optional, whether cacheable when enabling [caching feature](./caching.mdx). True by default.
+
+      # input text into an element located by prompt
+      - aiInput: <final text content of the input>
+        locate: <prompt>
+        deepThink: <boolean> # optional, whether to use deepThink to precisely locate the element. False by default.
+        xpath: <xpath> # optional, the xpath of the element to operate. If provided, Midscene will first use this xpath to locate the element before using the cache and the AI model. Empty by default.
+    - `cacheable?: boolean` - Whether cacheable when enabling [caching feature](./caching.mdx). True by default.
+        cacheable: <boolean> # optional, whether cacheable when enabling [caching feature](./caching.mdx). True by default.
+
+      # press a key (like Enter, Tab, Escape, etc.) on an element located by prompt
+      - aiKeyboardPress: <key>
+        locate: <prompt>
+        deepThink: <boolean> # optional, whether to use deepThink to precisely locate the element. False by default.
+        xpath: <xpath> # optional, the xpath of the element to operate. If provided, Midscene will first use this xpath to locate the element before using the cache and the AI model. Empty by default.
+    - `cacheable?: boolean` - Whether cacheable when enabling [caching feature](./caching.mdx). True by default.
+        cacheable: <boolean> # optional, whether cacheable when enabling [caching feature](./caching.mdx). True by default.
+
+      # scroll globally or on an element located by prompt
+      - aiScroll:
+        direction: 'up' # or 'down' | 'left' | 'right'
+        scrollType: 'once' # or 'untilTop' | 'untilBottom' | 'untilLeft' | 'untilRight'
+        distance: <number> # optional, distance to scroll in px
+        locate: <prompt> # optional, the element to scroll on
+        deepThink: <boolean> # optional, whether to use deepThink to precisely locate the element. False by default.
+        xpath: <xpath> # optional, the xpath of the element to operate. If provided, Midscene will first use this xpath to locate the element before using the cache and the AI model. Empty by default.
+    - `cacheable?: boolean` - Whether cacheable when enabling [caching feature](./caching.mdx). True by default.
+        cacheable: <boolean> # optional, whether cacheable when enabling [caching feature](./caching.mdx). True by default.
+
+      # log the current screenshot with a description in the report file
+      - logScreenshot: <title> # optional, the title of the screenshot, if not provided, the title will be 'untitled'
+        content: <content> # optional, the screenshot description
+
+      # Data Extraction
+      # ----------------
+
+      # perform a query, return a json object
+      - aiQuery: <prompt> # remember to describe the format of the result in the prompt
+        name: <name> # the name of the result, will be used as the key in the output json
+
+      # More APIs
+      # ----------------
+
+      # wait for a condition to be met with a timeout (ms, optional, default 30000)
+      - aiWaitFor: <prompt>
+        timeout: <ms>
+
+      # perform an assertion
+      - aiAssert: <prompt>
+        errorMessage: <error-message> # optional, the error message to print when the assertion fails
+
+      # sleep for a number of milliseconds
+      - sleep: <ms>
+
+      # evaluate a javascript expression in web page context
+      - javascript: <javascript>
+        name: <name> # assign a name to the return value, will be used as the key in the output json, optional
+
+  - name: <name>
+    flow:
+      # ...
+```
+
+## More features
+
+### Use environment variables in `.yaml` file
+
+You can use environment variables in `.yaml` file by `${variable-name}`.
+
+For example, if you have a `.env` file with the following content:
+
+```env filename=.env
+topic=weather today
+```
+
+You can use the environment variable in the `.yaml` file like this:
+
+```yaml
+#...
+- ai: type ${topic} in input box
+#...
+```
+
+### Debug in headed mode
+
+> `web` scenario only
+
+'headed mode' means the browser will be visible. The default behavior is to run in headless mode.
+
+To turn on headed mode, you can use `--headed` option. Besides, if you want to keep the browser window open after the script finishes, you can use `--keep-window` option. `--keep-window` implies `--headed`.
+
+When running in headed mode, it will consume more resources, so we recommend you to use it locally only when needed.
+
+```bash
+# run in headed mode
+midscene /path/to/yaml --headed
+
+# run in headed mode and keep the browser window open after the script finishes
+midscene /path/to/yaml --keep-window
+```
+
+### Use bridge mode
+
+> `web` scenario only
+> By using bridge mode, you can utilize YAML scripts to automate the web browser on your desktop. This is particularly useful if you want to reuse cookies, plugins, and page states, or if you want to manually interact with automation scripts.
+
+To use bridge mode, you should install the Chrome extension first, and use this configuration in the `target` section:
+
+```diff
+web:
+  url: https://www.bing.com
++ bridgeMode: newTabWithUrl
+```
+
+See [Bridge Mode by Chrome Extension](/en/bridge-mode-by-chrome-extension.md) for more details.
+
+### Run yaml script with javascript
+
+You can also run a yaml script with javascript by using the [`runYaml`](/en/api.md#runyaml) method of the Midscene agent. Only the `tasks` part of the yaml script will be executed.
+
+## Config default behavior of dotenv
+
+Midscene uses [`dotenv`](https://github.com/motdotla/dotenv) to load environment variables from `.env` file to set the environment variables.
+
+### Debug log
+
+The debug log of `dotenv` will be printed by default. If you don't want to see these information, you can use `--dotenv-debug` option.
+
+```bash
+midscene /path/to/yaml --dotenv-debug=false
+```
+
+### Use .env file to override global environment variables
+
+By default, `dotenv` will NOT override the same name environment variable in the `.env` file if the global environment variable is already set.
+
+If you want to do this, you can use `--dotenv-override` option.
+
+```bash
+midscene /path/to/yaml --dotenv-override=true
+```
+
+## FAQ
+
+**How to get cookies in JSON format from Chrome?**
+
+You can use this [chrome extension](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc) to export cookies in JSON format.
+
+## More
+
+You may also be interested in [Prompting Tips](/en/prompting-tips.md)
+
+
+
+---
+url: /blog-introducing-instant-actions-and-deep-think.md
+---
+
+# Introducing Instant Actions and Deep Think
+
+From Midscene v0.14.0, we have introduced two new features: Instant Actions and Deep Think.
+
+## Instant Actions - A More Predictable Way to Perform Actions
+
+You may have already been familiar with our `.ai` interface. It's an auto-planning interface to interact with web pages. For example, when performing a search, you can do this:
+
+```typescript
+await agent.ai('type "Headphones" in search box, hit Enter');
+```
+
+Behind the scene, Midscene will call the LLM to plan the steps and execute them. You can see the report file to see the process. It's a very common way for AI agents to these kinds of tasks.
+
+![](/blog/report-planning.png)
+
+In the meantime, there are many testing engineers who want a faster way to perform actions. When using AI models with complex prompts, some of the LLM models may find it hard to plan the proper steps, or the coordinates of the elements may not be accurate. It could be frustrating for debugging the unpredictable process.
+
+To solve this problem, we have introduced the `aiTap()`, `aiHover()`, `aiInput()`, `aiKeyboardPress()`, `aiScroll()` interfaces. They are call the **"instant actions"**. These interfaces will directly perform the specified action as the interface name suggests, while the AI model is responsible for the easier tasks such as locating elements. The whole process can be obviously faster and more reliable after using them.
+
+For example, the search action above can be rewritten as:
+
+```typescript
+await agent.aiInput('Headphones', 'search-box');
+await agent.aiKeyboardPress('Enter');
+```
+
+The typical workflow in the report file is like this, as you can see there is no planning process in the report file:
+
+![](/blog/report-instant-action.png)
+
+The scripts with instant actions seems a little bit redundant (or not 'ai-style'), but we believe these structured interfaces are a good way to save time debugging when the action is already clear.
+
+## Deep Think - A More Accurate Way to Locate Elements
+
+When using Midscene with some complex widgets, the LLM may find it hard to locate the target element. We have introduced a new option named `deepThink` to the instant actions.
+
+The signature of the instant actions with `deepThink` is like this:
+
+```typescript
+await agent.aiTap('target', { deepThink: true });
+```
+
+`deepThink` is a strategy of locating elements. It will first find an area that contains the target element, then "focus" on this area to search the element again. By this way, the coordinates of the target element will be more accurate. 
+
+Let's take the workflow editor page of Coze.com as an example. There are many customized icons on the sidebar. This is usually hard for LLMs to distinguish the target element from its surroundings.
+
+![](/blog/coze-sidebar.png)
+
+After using `deepThink` in instant actions, the yaml scripts will be like this (of course, you can also use the javascript interface):
+
+```yaml
+tasks:
+  - name: edit input panel
+    flow:
+      - aiTap: the triangle icon on the left side of the text "Input"
+        deepThink: true
+      - aiTap: the first checkbox in the Input form
+        deepThink: true
+      - aiTap: the expand button on the second row of the Input form (on the right of the checkbox)
+        deepThink: true
+      - aiTap: the delete button on the second last row of the Input form
+        deepThink: true
+      - aiTap: the add button on the last row of the Input form （second button from the right）
+        deepThink: true
+```
+
+By viewing the report file, you can see Midscene has found every target element in the area.
+
+![](/blog/report-coze-deep-think.png)
+
+Just like the example above, the highly-detailed prompt for `deepThink` adheres to [the prompting tips](./prompting-tips). This is always the key to make result stable.
+
+`deepThink` is only available with the models that support visual grounding like qwen2.5-vl. If you are using LLM models like gpt-4o, it won't work.
+
+
+
+---
+url: /blog-programming-practice-using-structured-api.md
+---
+
+# Use JavaScript to Optimize the AI Automation Code
+
+Many developers love using `ai` or `aiAction` to accomplish complex tasks, and even describe all logic in a single natural language instruction. Although it may seem 'intelligent', in practice, this approach may not provide a reliable and efficient experience, and results in an endless loop of Prompt tuning.
+
+Here is a typical example, developers may write a large logic storm with long descriptions, such as:
+
+```javascript
+// complex tasks
+aiAction(`
+1. click the first user
+2. click the chat bubble on the right side of the user page
+3. if I have already sent a message to him/her, go back to the previous page
+4. if I have not sent a message to him/her, input a greeting text and click send
+`)
+```
+
+Another common misconception is that the complex workflow can be effectively controlled using `aiAction` methods. These prompts are far from reliable when compared to traditional JavaScript. For example:
+
+```javascript
+// not stable !
+aiAction('click all the records one by one. If one record contains the text "completed", skip it')
+```
+
+## One Path to Optimize the Automation Code: Use JavaScript and Structured API
+
+From v0.16.10, Midscene provides data extraction methods like `aiBoolean` `aiString` `aiNumber`, which can be used to control the workflow. 
+
+Combining them with the instant action methods, like `aiTap`, `aiInput`, `aiScroll`, `aiHover`, etc., you can split complex logic into multiple steps to improve the stability of the automation code.
+
+Let's take the first bad case above, you can convert the `.aiAction` method into a structured API call:
+
+Original prompt:
+
+```
+click all the records one by one. If one record contains the text "completed", skip it
+```
+
+Converted code:
+```javascript
+const recordList = await agent.aiQuery('string[], the record list')
+for (const record of recordList) {
+  const hasCompleted = await agent.aiBoolean(`check if the record contains the text "completed"`)
+  if (!hasCompleted) {
+    await agent.aiTap(record)
+  }
+}
+```
+
+After modifying the coding style, the whole process can be much more reliable and easier to maintain.
+
+## A More Complex Example
+
+Here is another example, this is what it looks like before rewriting: 
+
+```javascript
+aiAction(`
+1. click the first unfollowed user, enter the user's homepage
+2. click the follow button
+3. go back to the previous page
+4. if all users are followed, scroll down one screen
+5. repeat the above steps until all users are followed
+`)
+```
+
+After using the structured APIs, developers can easily inspect the code step by step.
+
+```javascript
+let user = await agent.aiQuery('string[], the unfollowed user names in the list')
+let currentUserIndex = 0
+
+while (user.length > 0) {
+  console.log('current user is', user[currentUserIndex])
+  await agent.aiTap(user[currentUserIndex])
+  try {
+    await agent.aiTap('follow button')
+  } catch (e) {
+    // ignore if error
+  }
+  // Go back to the previous page
+  await agent.aiTap('back button')
+  
+  currentUserIndex++
+  
+  // Check if we've gone through all users in the current list
+  if (currentUserIndex >= user.length) {
+    // Scroll down to load more users
+    await agent.aiScroll({
+      direction: 'down',
+      scrollType: 'once',
+    })
+    
+    // Get the updated user list
+    user = await agent.aiQuery('string[], the unfollowed user names in the list')
+    currentUserIndex = 0
+  }
+}
+```
+
+## Commonly-used Structured API Methods
+
+Here are some commonly-used structured API methods:
+
+### `aiBoolean` - Conditional Decision
+
+* Use Case: Condition Judgment, State Detection
+* Advantage: Convert fuzzy descriptions into clear boolean values
+
+Example:
+```javascript
+const hasAlreadyChat = await agent.aiBoolean('check if I have already sent a message to him/her')
+if (hasAlreadyChat) {
+  // ...
+}
+```
+
+### `aiString` - Text Extraction
+
+* Use Case: Text Content Retrieval
+* Advantage: Avoid Ambiguity in Natural Language Descriptions
+
+Example:
+```javascript
+const username = await agent.aiString('the nickname of the first user in the list')
+console.log('username is', username)
+```
+
+### `aiNumber` - Numerical Extraction
+
+* Use Case: Counting, Numerical Comparison, Loop Control
+* Advantage: Ensure Return Standard Numeric Types
+
+Example:
+```javascript
+const unreadCount = await agent.aiNumber('the number of unread messages on the message icon')
+for (let i = 0; i < unreadCount; i++) {
+  // ...
+}
+```
+
+### `aiQuery` - General Data Extraction
+
+* Use Case: Extract any data type
+* Advantage: Flexible Data Type Handling
+
+Example:
+```javascript
+const userList = await agent.aiQuery('string[], the user list')
+```
+
+### Instant Action Methods
+
+Midscene provides some instant action methods, like `aiTap`, `aiInput`, `aiScroll`, `aiHover`, etc., They are also commonly used in the automation code. You can check them in the [API](./API) page.
+
+## Want to Write Structured Code Easily ?
+
+If you think the javascript code is hard to write, then this is the right time to use the AI IDE.
+
+Use your AI IDE to index the following documents:
+
+- https://midscenejs.com/blog-programming-practice-using-structured-api.md
+- https://midscenejs.com/API.md
+
+:::tip
+How to add the Midscene documents to the AI IDE?
+
+Refer to [this article](./llm-txt.mdx#usage).
+
+:::
+
+And use this prompt with the mention of the Midscene documents:
+
+```
+According to the tips and APIs mentioned in @Use JavaScript to Optimize the Midscene Al Automation Code and @@Midscene API docs,
+
+please help me convert the following instructions into structured javascript code:
+
+<your prompt>
+```
+
+![](/blog/ai-ide-convert-prompt.png)
+
+After you input the prompt, the AI IDE will convert the prompt into structured javascript code: 
+
+![](/blog/ai-ide-convert-prompt-result.png)
+
+Enjoy it!
+
+## `aiAction` vs Structured Code: Which is the Best Solution ?
+
+There is no standard answer. It depends on the model's ability, the complexity of the actual business.
+
+Generally, if you encounter the following situations, you should consider abandoning the `aiAction` method:
+
+- The success rate of `aiAction` does not meet the requirements after multiple retries
+- You have already felt tired and spent too much time repeatedly tuning the `aiAction` prompt
+- You need to debug the script step by step
+
+## What's Next ?
+
+To achieve better performance, you can check the [Midscene caching feature](./caching) to cache the planning and xpath results.
+
+To learn more about the structured API, you can check the [API reference](./API).
+
+
+
+
+
+---
+url: /blog-support-android-automation.md
+---
+
+# Support Android Automation
+
+From Midscene v0.15, we are happy to announce the support for Android automation. The era for AI-driven Android automation is here!
+
+## Showcases
+
+### Navigation to attraction
+
+Open Maps, search for a destination, and navigate to it.
+
+### Auto-like tweets
+
+Open Twitter, auto-like the first tweet by [@midscene\_ai](https://x.com/midscene_ai).
+
+## Suitable for ALL apps
+
+For our developers, all you need is the adb connection and a visual-language model (vl-model) service. Everything is ready!
+
+Behind the scenes, we utilize the visual grounding capabilities of vl-model to locate target elements on the screen. So, regardless of whether it's a native app, a [Lynx](https://github.com/lynx-family/lynx) page, or a hybrid app with a webview, it makes no difference. Developers can write automation scripts without the burden of worrying about the technology stack of the app.
+
+## With ALL the power of Midscene
+
+When using Midscene to do web automation, our users loves the tools like playgrounds and reports. Now, we bring the same power to Android automation!
+
+### Use the playground to run automation without any code
+
+### Use the report to replay the whole process
+
+### Write the automation scripts by yaml file
+
+Connect to the device, open ebay.com, and get some items info.
+
+```yaml
+# search headphone on ebay, extract the items info into a json file, and assert the shopping cart icon
+
+android:
+  deviceId: s4ey59
+
+tasks:
+  - name: search headphones
+    flow:
+      - aiAction: open browser and navigate to ebay.com
+      - aiAction: type 'Headphones' in ebay search box, hit Enter
+      - sleep: 5000
+      - aiAction: scroll down the page for 800px
+
+  - name: extract headphones info
+    flow:
+      - aiQuery: >
+          {name: string, price: number, subTitle: string}[], return item name, price and the subTitle on the lower right corner of each item
+        name: headphones
+
+  - name: assert Filter button
+    flow:
+      - aiAssert: There is a Filter button on the page
+```
+
+### Use the javascript SDK
+
+Use the javascript SDK to do the automation by code.
+
+```ts
+import { AndroidAgent, AndroidDevice, getConnectedDevices } from '@midscene/android';
+import "dotenv/config"; // read environment variables from .env file
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+Promise.resolve(
+  (async () => {
+    const devices = await getConnectedDevices();
+    const page = new AndroidDevice(devices[0].udid);
+
+    // 👀 init Midscene agent
+    const agent = new AndroidAgent(page,{
+      aiActionContext:
+        'If any location, permission, user agreement, etc. popup, click agree. If login page pops up, close it.',
+    });
+    await page.connect();
+    await page.launch('https://www.ebay.com');
+
+    await sleep(5000);
+
+    // 👀 type keywords, perform a search
+    await agent.aiAction('type "Headphones" in search box, hit Enter');
+
+    // 👀 wait for the loading
+    await agent.aiWaitFor("there is at least one headphone item on page");
+    // or you may use a plain sleep:
+    // await sleep(5000);
+
+    // 👀 understand the page content, find the items
+    const items = await agent.aiQuery(
+      "{itemTitle: string, price: Number}[], find item in list and corresponding price"
+    );
+    console.log("headphones in stock", items);
+
+    // 👀 assert by AI
+    await agent.aiAssert("There is a category filter on the left");
+  })()
+);
+
+```
+
+### Two style APIs to do interaction
+
+The auto-planning style:
+
+```javascript
+await agent.ai('input "Headphones" in search box, hit Enter');
+```
+
+The instant action style:
+
+```javascript
+await agent.aiInput('Headphones', 'search box');
+await agent.aiKeyboardPress('Enter');
+```
+
+## Quick start
+
+You can use the playground to experience the Android automation without any code. Please refer to [Quick experience with Android](/en/quick-experience-with-android.md) for more details.
+
+After the experience, you can integrate with the Android device by javascript code. Please refer to [Integrate with Android(adb)](/en/integrate-with-android.md) for more details.
+
+If you prefer the yaml file for automation scripts, please refer to [Automate with scripts in yaml](/en/automate-with-scripts-in-yaml.md).
+
+### Demo projects
+
+We have prepared a demo project for javascript SDK:
+
+[JavaScript demo project](https://github.com/web-infra-dev/midscene-example/blob/main/android/javascript-sdk-demo)
+
+If you want to use the automation for testing purpose, you can use the javascript with vitest. We have setup a demo project for you to see how it works:
+
+[Vitest demo project](https://github.com/web-infra-dev/midscene-example/blob/main/android/vitest-demo)
+
+You can also write the automation scripts by yaml file:
+
+[YAML demo project](https://github.com/web-infra-dev/midscene-example/blob/main/android/yaml-scripts-demo)
+
+## Limitations
+
+1. Caching feature for element locator is not supported. Since no view-hierarchy is collected, we cannot cache the element identifier and reuse it.
+2. LLMs like gpt-4o or deepseek are not supported. Only some known vl models with visual grounding ability are supported for now. If you want to introduce other vl models, please let us know.
+3. The performance is not good enough for now. We are still working on it.
+4. The vl model may not perform well on `.aiQuery` and `.aiAssert`. We will give a way to switch model for different kinds of tasks.
+5. Due to some security restrictions, you may got a blank screenshot for the password input and Midscene will not be able to work for that.
+
+## Credits
+
+We would like to thank the following projects:
+
+* [scrcpy](https://github.com/Genymobile/scrcpy) and [yume-chan](https://github.com/yume-chan) allow us to control Android devices with browser.
+* [appium-adb](https://github.com/appium/appium-adb) for the javascript bridge of adb.
+* [YADB](https://github.com/ysbing/YADB) for the yadb tool which improves the performance of text input.
+
+
+
+---
+url: /bridge-mode-by-chrome-extension.md
+---
+
+# Bridge Mode by Chrome Extension
+
+
+
+The bridge mode in the Midscene Chrome extension is a tool that allows you to use local scripts to control the desktop version of Chrome. Your scripts can connect to either a new tab or the currently active tab.
+
+Using the desktop version of Chrome allows you to reuse all cookies, plugins, page status, and everything else you want. You can work with automation scripts to complete your tasks. This mode is commonly referred to as 'man-in-the-loop' in the context of automation.
+
+![bridge mode](/midscene-bridge-mode.jpg)
+
+:::info Demo Project
+check the demo project of bridge mode: [https://github.com/web-infra-dev/midscene-example/blob/main/bridge-mode-demo](https://github.com/web-infra-dev/midscene-example/blob/main/bridge-mode-demo)
+:::
+
+## Setup AI model service
+
+Set your model configs into the environment variables. You may refer to [choose a model](/choose-a-model.md) for more details.
+
+```bash
+# replace with your own
+export OPENAI_API_KEY="sk-abcdefghijklmnopqrstuvwxyz"
+```
+
+> In bridge mode, the AI models configs should be set in the Node.js side instead of the browser side.
+
+## Step 1. Install Midscene extension from Chrome web store
+
+Install [Midscene extension from Chrome web store](https://chromewebstore.google.com/detail/midscene/gbldofcpkknbggpkmbdaefngejllnief)
+
+## Step 2. install dependencies
+
+## Step 3. write scripts
+
+Write and save the following code as `./demo-new-tab.ts`.
+
+```typescript
+import { AgentOverChromeBridge } from "@midscene/web/bridge-mode";
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+Promise.resolve(
+  (async () => {
+    const agent = new AgentOverChromeBridge();
+
+    // This will connect to a new tab on your desktop Chrome
+    // remember to start your chrome extension, click 'allow connection' button. Otherwise you will get an timeout error
+    await agent.connectNewTabWithUrl("https://www.bing.com");
+
+    // these are the same as normal Midscene agent
+    await agent.ai('type "AI 101" and hit Enter');
+    await sleep(3000);
+
+    await agent.aiAssert("there are some search results");
+    await agent.destroy();
+  })()
+);
+```
+
+## Step 4. start the chrome extension
+
+Start the chrome extension and switch to 'Bridge Mode' tab. Click "Allow connection".
+
+## Step 5. run the script
+
+Run your scripts
+
+```bash
+tsx demo-new-tab.ts
+```
+
+After executing the script, you should see the status of the Chrome extension switched to 'connected', and a new tab has been opened. Now this tab is controlled by your scripts.
+
+:::tip
+⁠Whether the scripts are run before or after clicking 'Allow connection' in the browser is not significant.
+:::
+
+## Constructor
+
+```typescript
+import { AgentOverChromeBridge } from "@midscene/web/bridge-mode";
+
+const agent = new AgentOverChromeBridge();
+```
+
+Except [the normal parameters in the agent constructor](/en/api.md), `AgentOverChromeBridge` accepts one more parameter:
+
+* `closeNewTabsAfterDisconnect?: boolean`: If true, the newly created tab will be closed when the bridge is destroyed. Default is false.
+
+## Methods
+
+Except [the normal agent interface](/en/api.md), `AgentOverChromeBridge` provides some other interfaces to control the desktop Chrome.
+
+:::info
+You should always call `connectCurrentTab` or `connectNewTabWithUrl` before doing further actions.
+
+Each of the agent instance can only connect to one tab instance, and it cannot be reconnected after destroy.
+:::
+
+### `connectCurrentTab()`
+
+Connect to the currently active tab.
+
+* Type
+
+```typescript
+function connectCurrentTab(options?: { 
+  forceSameTabNavigation?: boolean 
+}): Promise<void>;
+```
+
+* Parameters:
+  * `options?: object` - Optional configuration object
+    * `forceSameTabNavigation?: boolean` - If true (default), restricts pages from opening new tabs, forcing new pages to open in the current tab to prevent AI operation failures due to manual tab switching. This configuration usually doesn't need to be changed
+
+* Returns:
+  * Returns a Promise that resolves to void when connected successfully; throws an error if connection fails
+
+* Example:
+
+```typescript
+try {
+  await agent.connectCurrentTab();
+  console.log('Successfully connected to current tab');
+} catch (err) {
+  console.error('Connection failed:', err.message);
+}
+```
+
+### `connectNewTabWithUrl()`
+
+Create a new tab and connect to it immediately.
+
+* Type
+
+```typescript
+function connectNewTabWithUrl(
+  url: string,
+  options?: { 
+    forceSameTabNavigation?: boolean 
+  }
+): Promise<void>;
+```
+
+* Parameters:
+  * `url: string` - URL to open in the new tab
+  * `options?: object` - Optional configuration object (same parameters as connectCurrentTab)
+
+* Returns:
+  * Returns a Promise that resolves to void when connected successfully; throws an error if connection fails
+
+* Example:
+
+```typescript
+// Open Bing and wait for connection
+await agent.connectNewTabWithUrl(
+  "https://www.bing.com",
+  { forceSameTabNavigation: false }
+);
+```
+
+### `destroy()`
+
+Destroy the connection and release resources.
+
+* Type
+
+```typescript
+function destroy(closeNewTabsAfterDisconnect?: boolean): Promise<void>;
+```
+
+* Parameters:
+  * `closeNewTabsAfterDisconnect?: boolean` - If true, the newly created tab will be closed when the bridge is destroyed. Default is false. The will override the `closeNewTabsAfterDisconnect` parameter in the constructor.
+
+* Returns:
+  * Returns a Promise that resolves to void when destruction completes
+
+* Example:
+
+```typescript
+// Destroy connection after completing operations
+await agent.ai('Perform final operation...');
+await agent.destroy();
+```
+
+## Use bridge mode in yaml-script
+
+[Yaml scripts](/en/automate-with-scripts-in-yaml.md) is a way for developers to write automation scripts in yaml format, which is easy to read and write comparing to javascript.
+
+To use bridge mode in yaml script, set the `bridgeMode` property in the `target` section. If you want to use the current tab, set it to `currentTab`, otherwise set it to `newTabWithUrl`.
+
+Set `closeNewTabsAfterDisconnect` to true if you want to close the newly created tabs when the bridge is destroyed. This is optional and the default value is false.
+
+For example, the following script will open a new tab by Chrome extension bridge:
+
+```diff
+target:
+  url: https://www.bing.com
++ bridgeMode: newTabWithUrl
++ closeNewTabsAfterDisconnect: true
+tasks:
+```
+
+Run the script:
+
+```bash
+midscene ./bing.yaml
+```
+
+Remember to start the chrome extension and click 'Allow connection' button after the script is running.
+
+### Unsupported options
+
+In bridge mode, these options will be ignored (they will follow your desktop browser's settings):
+
+* userAgent
+* viewportWidth
+* viewportHeight
+* viewportScale
+* waitForNetworkIdle
+* cookie
+
+## FAQ
+
+* Where should I config the `OPENAI_API_KEY`, in the browser or in the terminal?
+
+When using bridge mode, you should config the `OPENAI_API_KEY` in the terminal.
+
+
+
+---
+url: /caching.md
+---
+
+# Caching
+
+Midscene supports caching the planning steps and DOM XPaths to reduce calls to AI models and greatly improve execution efficiency.
+
+Caching is not supported in Android automation.
+
+**Effect**
+
+After enabling the cache, the execution time of AI service related steps can be significantly reduced.
+
+* **before using cache, 39s**
+
+![](/cache/no-cache-time.png)
+
+* **after using cache, 13s**
+
+![](/cache/use-cache-time.png)
+
+## Instructions
+
+There are two key points to use caching:
+
+1. Set `MIDSCENE_CACHE=1` in the environment variable to enable matching cache.
+2. Set `cacheId` to specify the cache file name. It's automatically set in Playwright and Yaml mode. If you are using javascript SDK, you should set it manually.
+
+### Playwright
+
+In playwright mode, you can use the `MIDSCENE_CACHE=1` environment variable to enable caching.
+
+The `cacheId` will be automatically set to the test file name.
+
+```diff
+- playwright test --config=playwright.config.ts
++ MIDSCENE_CACHE=1 playwright test --config=playwright.config.ts
+```
+
+### Javascript agent, like PuppeteerAgent, AgentOverChromeBridge
+
+Enable caching by setting the `MIDSCENE_CACHE=1` environment variable.
+And also, you should set the `cacheId` to specify the cache identifier.
+
+```diff
+- tsx demo.ts 
++ MIDSCENE_CACHE=1 tsx demo.ts
+```
+
+```javascript
+const mid = new PuppeteerAgent(originPage, {
+  cacheId: 'puppeteer-swag-sab', // specify cache id
+});
+```
+
+### Yaml
+
+Enable caching by setting the `MIDSCENE_CACHE=1` environment variable.
+The `cacheId` will be automatically set to the yaml filename.
+
+```diff
+- npx midscene ./bing-search.yaml
++ # Add cache identifier, cacheId is the yaml filename
++ MIDSCENE_CACHE=1 npx midscene ./bing-search.yaml
+```
+
+## Cache strategy
+
+Cache contents will be saved in the `./midscene_run/cache` directory with the `.cache.yaml` as the extension name.
+
+These two types of content will be cached:
+
+1. the result of planning, like calls to `.ai` `.aiAction`
+2. The XPaths for elements located by AI, such as `.aiLocate`, `.aiTap`, etc.
+
+The query results like `aiBoolean`, `aiQuery`, `aiAssert` will never be cached.
+
+If the cache is not hit, Midscene will call AI model again and the result in cache file will be updated.
+
+## Common issues
+
+### How to check if the cache is hit?
+
+You can view the report file. If the cache is hit, you will see the `cache` tip and the time cost is obviously reduced.
+
+### Why the cache is missed on CI?
+
+You should commit the cache file to the repository (which is in the `./midscene_run/cache` directory). And also, check whether the prompt is the same as the one in the cache file.
+
+### Does it mean that AI services are no longer needed after using cache?
+
+No. Caching is the way to accelerate the execution, but it's not a tool for ensuring long-term script stability. We have noticed many scenarios where the cache may miss when the DOM structure changes. AI services are still needed to reevaluate the task when the cache miss occurs.
+
+### How to manually remove the cache?
+
+You can remove the cache file in the `cache` directory, or edit the contents in the cache file.
+
+### How to disable the cache for a single API?
+
+You can use the `cacheable` option to disable the cache for a single API.
+
+Please refer to the documentation of the corresponding [API](/en/API.md) for details.
+
+### Limitations of XPath in caching element location
+
+Midscene uses [XPath](https://developer.mozilla.org/en-US/docs/Web/XML/XPath) to cache the element location. ⁠We are using a relatively strict strategy to prevent false matches. In these situations, the cache will not be accessed.
+
+1. The text content of the new element at the same XPath is different from the cached element.
+2. The DOM structure of the page is changed from the cached one.
+
+When the cache is not hit, the process will fall back to continue using AI services to find the element.
+
+
+
+---
+url: /changelog.md
+---
+
+# Changelog
+
+> For the complete changelog, please refer to: [Midscene Releases](https://github.com/web-infra-dev/midscene/releases)
+
+## v0.21 - 🎨 Chrome Extension UI Upgrade
+
+### 🌐 Web Integration Enhancement
+
+#### 1️⃣ New Chat-Style User Interface
+
+* New chat-style user interface design for better user experience
+
+#### 2️⃣ Flexible Timeout Configuration
+
+* Supports overriding timeout settings from test fixture, providing more flexible timeout control
+* Applicable scenarios: Different test cases require different timeout settings
+
+#### 3️⃣ Unified Puppeteer and Playwright Configuration
+
+* New `waitForNavigationTimeout` and `waitForNetworkIdleTimeout` parameters for Playwright
+* Unified timeout options configuration for Puppeteer and Playwright, providing consistent API experience, reducing learning costs
+
+#### 4️⃣ New Data Export Callback Mechanism
+
+* New `agent.onDumpUpdate` callback function, can get real-time notification when data is exported
+* Refactored the post-task processing flow to ensure the correct execution of asynchronous operations
+* Applicable scenarios: Monitoring or processing exported data
+
+### 📱 Android Interaction Optimization
+
+#### 1️⃣ Input Experience Improvement
+
+* Changed click input to slide operation, improving interaction response and stability
+* Reduced operation failures caused by inaccurate clicks
+
+## v0.20 - Support for assigning XPath to locate elements
+
+### 🌐 Web Integration Enhancement
+
+#### 1️⃣ New `aiAsk` Method
+
+* Allows direct questioning of the AI model to obtain string-formatted answers for the current page.
+* Applicable scenarios: Tasks requiring AI reasoning such as Q\&A on page content and information extraction.
+* Example:
+
+```typescript
+await agent.aiAsk('any question')
+```
+
+#### 2️⃣ Support for Passing XPath to Locate Elements
+
+* Location priority: Specified XPath > Cache > AI model location.
+* Applicable scenarios: When the XPath of an element is known and the AI model location needs to be skipped.
+* Example:
+
+```typescript
+await agent.aiTap('submit button', { xpath: '//button[@id="submit"]' })
+```
+
+### 📱 Android Improvement
+
+#### 1️⃣ Playground Tasks Can Be Cancelled
+
+* Supports interrupting ongoing automation tasks to improve debugging efficiency.
+
+#### 2️⃣ Enhanced `aiLocate` API
+
+* Returns the Device Pixel Ratio, which is commonly used to calculate the real coordinates of elements.
+
+### 📈 Report Generation Optimization
+
+Improve report generation mechanism, from batch storage to single append, effectively reducing memory usage and avoiding memory overflow when the number of test cases is large.
+
+## v0.19 - Support for Getting Complete Execution Process Data
+
+### New API for Getting Midscene Execution Process Data
+
+Add the `_unstableLogContent` API to the agent. Get the execution process data of Midscene, including the time of each step, the AI tokens consumed, and the screenshot.
+
+The report is generated based on this data, which means you can customize your own report using this data.
+
+Read more: [API documentation](/en/API.md#agent_unstablelogcontent)
+
+### CLI Support for Adjusting Midscene Env Variable Priority
+
+By default, `dotenv` does not override the global environment variables in the `.env` file. If you want to override, you can use the `--dotenv-override` option.
+
+Read more: [Use YAML-based Automation Scripts](/en/automate-with-scripts-in-yaml.md#use-env-file-to-override-global-environment-variables)
+
+### Reduce Report File Size
+
+Reduce the size of the generated report by trimming redundant data, significantly reducing the report file size for complex pages. The typical report file size for complex pages has been reduced from 47.6M to 15.6M!
+
+## v0.18 - enhanced reporting features
+
+🚀 Midscene has another update! It makes your testing and automation processes even more powerful:
+
+### Custom Node in Report
+
+* Add the `logScreenshot` API to the agent. Take a screenshot of the current page as a report node, and support setting the node title and description to make the automated testing process more intuitive. Applicable for capturing screenshots of key steps, error status capture, UI validation, etc.
+
+![](/blog/logScreenshot-api.png)
+
+* Example:
+
+```javascript
+test('login github', async ({ ai, aiAssert, aiInput, logScreenshot }) => {
+  if (CACHE_TIME_OUT) {
+    test.setTimeout(200 * 1000);
+  }
+  await ai('Click the "Sign in" button');
+  await aiInput('quanru', 'username');
+  await aiInput('123456', 'password');
+
+  // log by your own
+  await logScreenshot('Login page', {
+    content: 'Username is quanru, password is 123456',
+  });
+
+  await ai('Click the "Sign in" button');
+  await aiAssert('Login success');
+});
+```
+
+### Support for Downloading Reports as Videos
+
+* Support direct video download from the report player, just by clicking the download button on the player interface.
+
+![](/blog/export-video.png)
+
+* Applicable scenarios: Share test results, archive reproduction steps, and demonstrate problem reproduction.
+
+### More Android Configurations Exposed
+
+* Optimize input interactions in Android apps and allow connecting to remote Android devices
+
+  * `autoDismissKeyboard?: boolean` - Optional parameter. Whether to automatically dismiss the keyboard after entering text. The default value is true.
+
+  * `androidAdbPath?: string` - Optional parameter. Used to specify the path of the adb executable file.
+
+  * `remoteAdbHost?: string` - Optional parameter. Used to specify the remote adb host.
+
+  * `remoteAdbPort?: number` - Optional parameter. Used to specify the remote adb port.
+
+* Examples:
+
+```typescript
+await agent.aiInput('Search Box', 'Test Content', { autoDismissKeyboard: true })
+```
+
+```typescript
+const agent = await agentFromAdbDevice('s4ey59', {
+    autoDismissKeyboard: false, // Optional parameter. Whether to automatically dismiss the keyboard after entering text. The default value is true.
+    androidAdbPath: '/usr/bin/adb', // Optional parameter. Used to specify the path of the adb executable file.
+    remoteAdbHost: '192.168.10.1', // Optional parameter. Used to specify the remote adb host.
+    remoteAdbPort: '5037' // Optional parameter. Used to specify the remote adb port.
+})
+```
+
+Upgrade now to experience these powerful new features!
+
+* [Custom Report Node API documentation](/API.md#log-screenshot)
+
+* [API documentation for more Android configuration items](/integrate-with-android.md#androiddevice-constructor)
+
+## v0.17 - Let AI See the DOM of the Page
+
+### Data Query API Enhanced
+
+To meet more automation and data extraction scenarios, the following APIs have been enhanced with the `options` parameter, supporting more flexible DOM information and screenshots:
+
+* `agent.aiQuery(dataDemand, options)`
+* `agent.aiBoolean(prompt, options)`
+* `agent.aiNumber(prompt, options)`
+* `agent.aiString(prompt, options)`
+
+#### New `options` parameter
+
+* `domIncluded`: Whether to pass the simplified DOM information to AI model, default is off. This is useful for extracting attributes that are not visible on the page, like image links.
+* `screenshotIncluded`: Whether to pass the screenshot to AI model, default is on.
+
+#### Code Example
+
+```typescript
+// Extract all contact information (including hidden avatarUrl attributes)
+const contactsData = await agent.aiQuery(
+  "{name: string, id: number, company: string, department: string, avatarUrl: string}[], extract all contact information including hidden avatarUrl attributes",
+  { domIncluded: true }
+);
+
+// Check if the id attribute of the first contact is 1
+const isId1 = await agent.aiBoolean(
+  "Is the first contact's id is 1?",
+  { domIncluded: true }
+);
+
+// Get the ID of the first contact (hidden attribute)
+const firstContactId = await agent.aiNumber("First contact's id?", { domIncluded: true });
+
+// Get the avatar URL of the first contact (invisible attribute on the page)
+const avatarUrl = await agent.aiString(
+  "What is the Avatar URL of the first contact?",
+  { domIncluded: true }
+);
+```
+
+### New Right-Click Ability
+
+Have you ever encountered a scenario where you need to automate a right-click operation? Now, Midscene supports a new `agent.aiRightClick()` method!
+
+#### Function
+
+Perform a right-click operation on the specified element, suitable for scenarios where right-click events are customized on web pages. Please note that Midscene cannot interact with the browser's native context menu after right-click.
+
+#### Parameter Description
+
+* `locate`: Describe the element you want to operate in natural language
+* `options`: Optional, supports `deepThink` (AI fine-grained positioning) and `cacheable` (result caching)
+
+#### Example
+
+```typescript
+// Right-click on a contact in the contacts application, triggering a custom context menu
+await agent.aiRightClick("Alice Johnson");
+
+// Then you can click on the options in the menu
+await agent.aiTap("Copy Info"); // Copy contact information to the clipboard
+```
+
+### A Complete Example
+
+In this report file, we show a complete example of using the new `aiRightClick` API and new query parameters to extract contact data including hidden attributes.
+
+Report file: [puppeteer-2025-06-04\_20-34-48-zyh4ry4e.html](https://lf3-static.bytednsdoc.com/obj/eden-cn/nupipfups/Midscene/puppeteer-2025-06-04_20-34-48-zyh4ry4e.html)
+
+The corresponding code can be found in our example repository: [puppeteer-demo/extract-data.ts](https://github.com/web-infra-dev/midscene-example/blob/main/puppeteer-demo/extract-data.ts)
+
+### Refactor Cache
+
+Use xpath cache instead of coordinates, improve cache hit rate.
+
+Refactor cache file format from json to yaml, improve readability.
+
+## v0.16 - Support MCP
+
+### Midscene MCP
+
+🤖 Use Cursor / Trae to help write test cases.
+🕹️ Quickly implement browser operations akin to the Manus platform.
+🔧 Integrate Midscene capabilities swiftly into your platforms and tools.
+
+Read more: [MCP](/en/mcp.md)
+
+### Support structured API for agent
+
+APIs: `aiBoolean`, `aiNumber`, `aiString`, `aiLocate`
+
+Read more: [Use JavaScript to Optimize the AI Automation Code](/en/blog-programming-practice-using-structured-api.md)
+
+## v0.15 - Android automation unlocked!
+
+### Android automation unlocked!
+
+🤖 AI Playground: natural‑language debugging
+📱 Supports native, Lynx & WebView apps
+🔁 Replayable runs
+🛠️ YAML or JS SDK
+⚡ Auto‑planning & Instant Actions APIs
+
+Read more: [Android automation](/en/blog-support-android-automation.md)
+
+### More features
+
+* Allow custom midscene\_run dir
+* Enhance report filename generation with unique identifiers and support split mode
+* Enhance timeout configurations and logging for network idle and navigation
+* Adapt for gemini-2.5-pro
+
+## v0.14 - Instant Actions
+
+"Instant Actions" introduces new atomic APIs, enhancing the accuracy of AI operations.
+
+Read more: [Instant Actions](/en/blog-introducing-instant-actions-and-deep-think.md)
+
+## v0.13 - DeepThink Mode
+
+### Atomic AI Interaction Methods
+
+* Supports aiTap, aiInput, aiHover, aiScroll, and aiKeyboardPress for precise AI actions.
+
+### DeepThink Mode
+
+* Enhances click accuracy with deeper contextual understanding.
+
+![](/blog/0.13.jpeg)
+
+## v0.12 - Integrate Qwen 2.5 VL
+
+### Integrate Qwen 2.5 VL's native capabilities
+
+* Keeps output accuracy.
+* Supports more element interactions.
+* Cuts operating cost by over 80%.
+
+## v0.11.0 - UI-TARS Model Caching
+
+### **✨ UI-TARS Model Support Caching**
+
+* Enable caching by document 👉 ： [Enable Caching](/en/caching.md)
+
+* Enable effect
+
+![](/blog/0.11.0.png)
+
+### **✨ Optimize DOM Tree Extraction Strategy**
+
+* Optimize the information ability of the dom tree, accelerate the inference process of models like GPT 4o
+
+![](/blog/0.11.0-2.png)
+
+## v0.10.0 - UI-TARS Model Released
+
+UI-TARS is a Native GUI agent model released by the **Seed** team. It is named after the [TARS robot](https://interstellarfilm.fandom.com/wiki/TARS) in the movie [Star Trek](https://en.wikipedia.org/wiki/Star_Trek), which has high intelligence and autonomous thinking capabilities. UI-TARS **takes images and human instructions as input information**, can correctly perceive the next action, and gradually approach the goal of human instructions, leading to the best performance in various benchmark tests of GUI automation tasks compared to open-source and closed-source commercial models.
+
+![](/blog/0.10.0.png)
+
+UI-TARS: Pioneering Automated GUI Interaction with Native Agents - Figure 1
+
+![](/blog/0.10.0-2.png)
+
+UI-TARS: Pioneering Automated GUI Interaction with Native - Figure 4
+
+### **✨** Model Advantage
+
+UI-TARS has the following advantages in GUI tasks:
+
+* **Target-driven**
+
+* **Fast inference speed**
+
+* **Native GUI agent model**
+
+* **Private deployment without data security issues**
+
+## v0.9.0 - Bridge Mode Released
+
+With the Midscene browser extension, you can now use scripts to link with the desktop browser for automated operations!
+
+We call it "Bridge Mode".
+
+Compared to previous CI environment debugging, the advantages are:
+
+1. You can reuse the desktop browser, especially Cookie, login state, and front-end interface state, and start automation without worrying about environment setup.
+
+2. Support manual and script cooperation to improve the flexibility of automation tools.
+
+3. Simple business regression, just run it locally with Bridge Mode.
+
+![](/blog/0.9.0.png)
+
+Documentation: [Use Chrome Extension to Experience Midscene](/en/bridge-mode-by-chrome-extension.md)
+
+## v0.8.0 - Chrome Extension
+
+### **✨ New Chrome Extension, Run Midscene Anywhere**
+
+Through the Midscene browser extension, you can run Midscene on any page, without writing any code.
+
+Experience it now 👉：[Use Chrome Extension to Experience Midscene](/en/quick-experience.md)
+
+## v0.7.0 - Playground Ability
+
+### **✨ Playground Ability, Debug Anytime**
+
+Now you don't have to keep re-running scripts to debug prompts!
+
+On the new test report page, you can debug the AI execution results at any time, including page operations, page information extraction, and page assertions.
+
+## v0.6.0 - Doubao Model Support
+
+### **✨ Doubao Model Support**
+
+* Support for calling Doubao models, reference the environment variables below to experience.
+
+```bash
+MIDSCENE_OPENAI_INIT_CONFIG_JSON='{"baseURL":"https://xxx.net/api/v3","apiKey":"xxx"}'
+MIDSCENE_MODEL_NAME='ep-20240925111815-mpfz8'
+MIDSCENE_MODEL_TEXT_ONLY='true'
+```
+
+Summarize the availability of Doubao models:
+
+* Currently, Doubao only has pure text models, which means "seeing" is not available. In scenarios where pure text is used for reasoning, it performs well.
+
+* If the use case requires combining UI analysis, it is completely unusable
+
+Example:
+
+✅ The price of a multi-meat grape (can be guessed from the order of the text on the interface)
+
+✅ The language switch text button (can be guessed from the text content on the interface: Chinese, English text)
+
+❌ The left-bottom play button (requires image understanding, failed)
+
+### **✨ Support for GPT-4o Structured Output, Cost Reduction**
+
+By using the gpt-4o-2024-08-06 model, Midscene now supports structured output (structured-output) features, ensuring enhanced stability and reduced costs by 40%+.
+
+Midscene now supports hitting GPT-4o prompt caching features, and the cost of AI calls will continue to decrease as the company's GPT platform is deployed.
+
+### **✨ Test Report: Support Animation Playback**
+
+Now you can view the animation playback of each step in the test report, quickly debug your running script
+
+### **✨ Speed Up: Merge Plan and Locate Operations, Response Speed Increased by 30%**
+
+In the new version, we have merged the Plan and Locate operations in the prompt execution to a certain extent, which increases the response speed of AI by 30%.
+
+> Before
+
+![](/blog/0.6.0.png)
+
+> after
+
+![](/blog/0.6.0-2.png)
+
+### **✨ Test Report: The Accuracy of Different Models**
+
+* GPT 4o series models, 100% correct rate
+
+* doubao-pro-4k pure text model, approaching usable state
+
+![](/blog/0.6.0-3.png)
+
+![](/blog/0.6.0-4.png)
+
+### **🐞** Problem Fix
+
+* Optimize the page information extraction to avoid collecting obscured elements, improving success rate, speed, and AI call cost 🚀
+
+> before
+
+![](/blog/0.6.0-5.png)
+
+> after
+
+![](/blog/0.6.0-6.png)
+
+## v0.5.0 - Support GPT-4o Structured Output
+
+### **✨ New Features**
+
+* Support for gpt-4o-2024-08-06 model to provide 100% JSON format limit, reducing Midscene task planning hallucination behavior
+
+![](/blog/0.5.0.png)
+
+* Support for Playwright AI behavior real-time visualization, improve the efficiency of troubleshooting
+
+![](/blog/0.5.0-2.png)
+
+* Cache generalization, cache capabilities are no longer limited to playwright, pagepass, puppeteer can also use cache
+
+```diff
+- playwright test --config=playwright.config.ts
+# Enable cache
++ MIDSCENE_CACHE=true playwright test --config=playwright.config.ts
+```
+
+* Support for azure openAI
+
+* Support for AI to add, delete, and modify the existing input
+
+### **🐞** Problem Fix
+
+* Optimize the page information extraction to avoid collecting obscured elements, improving success rate, speed, and AI call cost 🚀
+
+* During the AI interaction process, unnecessary attribute fields were trimmed, reducing token consumption.
+
+* Optimize the AI interaction process to reduce the likelihood of hallucination in KeyboardPress and Input events
+
+* For pagepass, provide an optimization solution for the flickering behavior that occurs during the execution of Midscene
+
+```javascript
+// Currently, pagepass relies on a too low version of puppeteer, which may cause the interface to flicker and the cursor to be lost. The following solution can be used to solve this problem
+const originScreenshot = puppeteerPage.screenshot;
+puppeteerPage.screenshot = async (options) => {
+  return await originScreenshot.call(puppeteerPage, {
+    ...options,
+    captureBeyondViewport: false
+  });
+};
+```
+
+## v0.4.0 - Support Cli Usage
+
+### **✨ New Features**
+
+* Support for Cli usage, reducing the usage threshold of Midscene
+
+```bash
+# headed mode (visible browser) access baidu.com and search "weather"
+npx @midscene/cli --headed --url https://www.baidu.com --action "input 'weather', press enter" --sleep 3000
+
+# visit github status page and save the status to ./status.json
+npx @midscene/cli --url https://www.githubstatus.com/ \
+  --query-output status.json \
+  --query '{serviceName: string, status: string}[], github page status, return service name'
+```
+
+* Support for AI to wait for a certain time to continue the subsequent task execution
+
+* Playwright AI task report shows the overall time and aggregates AI tasks by test group
+
+### **🐞** Problem Fix
+
+* Optimize the AI interaction process to reduce the likelihood of hallucination in KeyboardPress and Input events
+
+## v0.3.0 - Support AI Report HTML
+
+### **✨ New Features**
+
+* Generate html format AI report, aggregate AI tasks by test group, facilitate test report distribution
+
+### **🐞** Problem Fix
+
+* Fix the problem of AI report scrolling preview
+
+## v0.2.0 - Control puppeteer by natural language
+
+### **✨ New Features**
+
+* Support for using natural language to control puppeteer to implement page automation 🗣️💻
+
+* Provide AI cache capabilities for playwright framework, improve stability and execution efficiency
+
+* AI report visualization, aggregate AI tasks by test group, facilitate test report distribution
+
+* Support for AI to assert the page, let AI judge whether the page meets certain conditions
+
+## v0.1.0 - Control playwright by natural language
+
+### **✨ New Features**
+
+* Support for using natural language to control puppeteer to implement page automation 🗣️💻
+
+* Support for using natural language to extract page information 🔍🗂️
+
+* AI report visualization, AI behavior, AI thinking visualization 🛠️👀
+
+* Direct use of GPT-4o model, no training required 🤖🔧
+
+
+
+---
+url: /choose-a-model.md
+---
+
+# Choose a Model
+
+In this article, we will talk about what kind of models are supported by Midscene.js and the features of each model.
+
+## Quick Config for using Midscene.js
+
+Choose one of the following models, obtain the API key, complete the configuration, and you are ready to go. Choose the model that is easiest to obtain if you are a beginner.
+
+If you want to see the detailed configuration of model services, see [Config Model and Provider](/en/model-provider.md).
+
+### GPT-4o (can't be used in Android automation)
+
+```bash
+OPENAI_API_KEY="......"
+OPENAI_BASE_URL="https://custom-endpoint.com/compatible-mode/v1" # optional, if you want an endpoint other than the default one from OpenAI.
+MIDSCENE_MODEL_NAME="gpt-4o-2024-11-20" # optional. The default is "gpt-4o".
+```
+
+### Qwen-2.5-VL on Openrouter or Aliyun
+
+After applying for the API key on [Openrouter](https://openrouter.ai) or [Aliyun](https://aliyun.com), you can use the following config:
+
+```bash
+# openrouter.ai
+export OPENAI_BASE_URL="https://openrouter.ai/api/v1"
+export OPENAI_API_KEY="......"
+export MIDSCENE_MODEL_NAME="qwen/qwen2.5-vl-72b-instruct"
+export MIDSCENE_USE_QWEN_VL=1
+
+# or from Aliyun.com
+OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+export OPENAI_API_KEY="......"
+MIDSCENE_MODEL_NAME="qwen-vl-max-latest"
+MIDSCENE_USE_QWEN_VL=1
+```
+
+### Gemini-2.5-Pro on Google Gemini
+
+After applying for the API key on [Google Gemini](https://gemini.google.com/), you can use the following config:
+
+```bash
+OPENAI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai/"
+OPENAI_API_KEY="......"
+MIDSCENE_MODEL_NAME="gemini-2.5-pro-preview-05-06"
+MIDSCENE_USE_GEMINI=1
+```
+
+### Doubao-1.5-thinking-vision-pro on Volcano Engine
+
+You can use the `Doubao-1.5-thinking-vision-pro` model on [Volcano Engine](https://volcengine.com). After obtaining an API key from Volcano Engine, you can use the following configuration:
+
+```bash
+OPENAI_BASE_URL="https://ark.cn-beijing.volces.com/api/v3" 
+OPENAI_API_KEY="...."
+MIDSCENE_MODEL_NAME="ep-..." # Inference endpoint ID from Volcano Engine
+MIDSCENE_USE_DOUBAO_VISION=1
+```
+
+### UI-TARS on volcengine.com
+
+You can use `doubao-1.5-ui-tars` on [Volcengine](https://www.volcengine.com):
+
+```bash
+OPENAI_BASE_URL="https://ark.cn-beijing.volces.com/api/v3" 
+OPENAI_API_KEY="...."
+MIDSCENE_MODEL_NAME="ep-2025..."
+MIDSCENE_USE_VLM_UI_TARS=DOUBAO
+```
+
+## Models in Depth
+
+Midscene supports two types of models, which are:
+
+1. **general-purpose multimodal LLMs**: Models that can understand text and image input. *GPT-4o* is this kind of model.
+2. **models with visual grounding capabilities (VL models)**: Besides the ability to understand text and image input, these models can also return the coordinates of target elements on the page. We have adapted *Qwen-2.5-VL-72B*, *Gemini-2.5-Pro* and *UI-TARS* as VL models.
+
+And we are primarily concerned with two features of the model:
+
+1. The ability to understand the screenshot and *plan* the steps to achieve the goal.
+2. The ability to *locate* the target elements on the page.
+
+The main difference between different models is the way they handle the *locating* capability.
+
+When using LLMs like GPT-4o, locating is accomplished through the model's understanding of the UI hierarchy tree and the markup on the screenshot, which consumes more tokens and does not always yield accurate results. In contrast, when using VL models, locating relies on the model's visual grounding capabilities, providing a more native and reliable solution in complex situations.
+
+In the Android automation scenario, we decided to use the VL models since the infrastructure of the App in the real world is so complex that we don't want to do any adaptive work on the App UI stack any more. The VL models can provide us with more reliable results, and it should be a better approach to this type of work.
+
+## The Recommended Models
+
+### GPT-4o
+
+GPT-4o is a multimodal LLM by OpenAI, which supports image input. This is the default model for Midscene.js. When using GPT-4o, a step-by-step prompting is preferred.
+
+**Features**
+
+* **Easy to achieve**: you can get the stable API service from many providers and just pay for the token.
+* **Performing steadily**: it performs well on interaction, assertion, and query.
+
+**Limitations when used in Midscene.js**
+
+* **High token cost**: dom tree and screenshot will be sent together to the model. For example, it will use 6k input tokens for ebay homepage under 1280x800 resolution, and 9k for search result page. As a result, the cost will be higher than other models. And it will also take longer time to generate the response.
+* **Content limitation**: it will not work if the target element is inside a cross-origin `<iframe />` or `<canvas />`.
+* **Low resolution support**: the upper limit of the resolution is 2000 x 768. For images larger than this, the output quality will be lower.
+* **Not good at small icon recognition**: it may not work well if the target element is a small icon.
+* **Not supported for Android automation**: it does not support Android automation.
+
+**Config**
+
+```bash
+OPENAI_API_KEY="......"
+OPENAI_BASE_URL="https://custom-endpoint.com/compatible-mode/v1" # optional, if you want an endpoint other than the default one from OpenAI.
+MIDSCENE_MODEL_NAME="gpt-4o-2024-11-20" # optional. The default is "gpt-4o".
+```
+
+### Qwen-2.5-VL 72B Instruct
+
+From 0.12.0 version, Midscene.js supports Qwen-2.5-VL-72B-Instruct model.
+
+Qwen-2.5-VL is an open-source model published by Alibaba. It provides Visual Grounding ability, which can accurately return the coordinates of target elements on the page. When using it for interaction, assertion and query, it performs quite well. We recommend using the largest version (72B) for reliable output.
+
+Qwen-2.5-VL indeed has an action planning feature to control the application, but we still recommend using detailed prompts to provide a more stable and reliable result.
+
+**Features**
+
+* **Low cost**: the model can accurately tell the exact coordinates of target elements on the page(Visual Grounding), so we don't have to send the DOM tree to the model. You will achieve a token saving of 30% to 50% compared to GPT-4o.
+* **Higher resolution support**: Qwen-2.5-VL supports higher resolution input than GPT-4o. It's enough for most of the cases.
+* **Open-source**: this is an open-source model, so you can both use the API already deployed by cloud providers or deploy it on your own server.
+
+**Limitations when used in Midscene.js**
+
+* **Not good at small icon recognition**: to recognize small icons, you may need to [enable the `deepThink` parameter](/en/blog-introducing-instant-actions-and-deep-think.md) and optimize the description, otherwise the recognition result may not be accurate.
+* **Perform not that good on assertion**: it may not work as well as GPT-4o on assertion.
+
+**Config**
+
+Except for the regular config, you need to include the `MIDSCENE_USE_QWEN_VL=1` config to turn on Qwen-2.5-VL mode. Otherwise, it will be the default GPT-4o mode (much more tokens used).
+
+```bash
+OPENAI_BASE_URL="https://openrouter.ai/api/v1"
+OPENAI_API_KEY="......"
+MIDSCENE_MODEL_NAME="qwen/qwen2.5-vl-72b-instruct"
+MIDSCENE_USE_QWEN_VL=1
+```
+
+**Note about the model name on Aliyun.com**
+
+⁠While the open-source version of Qwen-2.5-VL (72B) is named `qwen2.5-vl-72b-instruct`, there is also an enhanced and more stable version named `qwen-vl-max-latest` officially hosted on Aliyun.com. When using the `qwen-vl-max-latest` model on Aliyun, you will get larger context support and a much lower price (likely only 19% of the open-source version).
+
+In short, if you want to use the Aliyun service, use `qwen-vl-max-latest`.
+
+**Links**
+
+* [Qwen 2.5 on 🤗 HuggingFace](https://huggingface.co/Qwen/Qwen2.5-VL-72B-Instruct)
+* [Qwen 2.5 on Github](https://github.com/QwenLM/Qwen2.5-VL)
+* [Qwen 2.5 on Aliyun](https://bailian.console.aliyun.com/#/model-market/detail/qwen-vl-max-latest)
+* [Qwen 2.5 on openrouter.ai](https://openrouter.ai/qwen/qwen2.5-vl-72b-instruct)
+
+### Gemini-2.5-Pro
+
+Gemini-2.5-Pro is a model provided by Google Cloud. It works somehow similar to Qwen-2.5-VL, but it's not open-source.
+
+From 0.15.1 version, Midscene.js supports Gemini-2.5-Pro model.
+
+When using Gemini-2.5-Pro, you should use the `MIDSCENE_USE_GEMINI=1` config to turn on the Gemini-2.5-Pro mode.
+
+```bash
+OPENAI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai/"
+OPENAI_API_KEY="...."
+MIDSCENE_MODEL_NAME="gemini-2.5-pro-preview-05-06"
+MIDSCENE_USE_GEMINI=1
+```
+
+**Links**
+
+* [Gemini 2.5 on Google Cloud](https://cloud.google.com/gemini-api/docs/gemini-25-overview)
+
+### Doubao-1.5-thinking-vision-pro
+
+Doubao-1.5-thinking-vision-pro is a model provided by Volcano Engine. It works better on visual grounding and assertion.
+
+**Links**
+
+* [Doubao-1.5-thinking-vision-pro on Volcano Engine](https://www.volcengine.com/docs/82379/1536428)
+
+### UI-TARS
+
+UI-TARS is an end-to-end GUI agent model based on VLM architecture. It solely perceives screenshots as input and performs human-like interactions (e.g., keyboard and mouse operations), achieving state-of-the-art performance on 10+ GUI benchmarks. UI-TARS is an open-source model, and provides different versions of size.
+
+When using UI-TARS, you can use target-driven style prompts, like "Login with user name foo and password bar", and it will plan the steps to achieve the goal.
+
+**Features**
+
+* **Exploratory**: it performs well on exploratory tasks, like "Help me send a tweet". It can try different paths to achieve the goal.
+* **Speed**: Take the `doubao-1.5-ui-tars` deployed on volcengine as an example, its response time is obviously faster than other models.
+* **Native image recognition**: Like Qwen-2.5-VL, UI-TARS can recognize the image directly from the screenshot, so Midscene.js does not need to extract the dom tree.
+* **Open-source**: you can deploy it on your own server and your data will no longer be sent to the cloud.
+
+**Limitations when used in Midscene.js**
+
+* **Perform not good on assertion**: it may not work as well as GPT-4o and Qwen 2.5 on assertion and query.
+* **Not stable on action path**: It may try different paths to achieve the goal, so the action path is not stable each time you call it.
+
+**Config**
+
+Except for the regular config, you need to include the `MIDSCENE_USE_VLM_UI_TARS` parameter to specify the UI-TARS version, supported values are `1.0` `1.5` `DOUBAO` (volcengine version). Otherwise, you will get some JSON parsing error.
+
+```bash
+OPENAI_BASE_URL="....."
+OPENAI_API_KEY="......" 
+MIDSCENE_MODEL_NAME="ui-tars-72b-sft"
+MIDSCENE_USE_VLM_UI_TARS=1 # remember to include this for UI-TARS mode !
+```
+
+**Use the version provided by Volcengine**
+
+On the Volcengine, there is a `doubao-1.5-ui-tars` model that has been deployed. Developers can access the model directly via API calls and pay based on usage. Docs link: https://www.volcengine.com/docs/82379/1536429
+
+When using the Volcengine version of the model, you need to create an inference access point(like `ep-2025...`). After collecting the API Key and inference access point ID, configure should look like this:
+
+```bash
+OPENAI_BASE_URL="https://ark.cn-beijing.volces.com/api/v3" 
+OPENAI_API_KEY="...."
+MIDSCENE_MODEL_NAME="ep-2025..."
+MIDSCENE_USE_VLM_UI_TARS=DOUBAO
+```
+
+Links:
+
+* [UI-TARS on 🤗 HuggingFace](https://huggingface.co/bytedance-research/UI-TARS-72B-SFT)
+* [UI-TARS on Github](https://github.com/bytedance/ui-tars)
+* [UI-TARS - Model Deployment Guide](https://juniper-switch-f10.notion.site/UI-TARS-Model-Deployment-Guide-17b5350241e280058e98cea60317de71)
+
+## Choose other multimodal LLMs
+
+Other models are also supported by Midscene.js. Midscene will use the same prompt and strategy as GPT-4o for these models. If you want to use other models, please follow these steps:
+
+1. A multimodal model is required, which means it must support image input.
+2. The larger the model, the better it works. However, it needs more GPU or money.
+3. Find out how to to call it with an OpenAI SDK compatible endpoint. Usually you should set the `OPENAI_BASE_URL`, `OPENAI_API_KEY` and `MIDSCENE_MODEL_NAME`. Config are described in [Config Model and Provider](/en/model-provider.md).
+4. If you find it not working well after changing the model, you can try using some short and clear prompt, or roll back to the previous model. See more details in [Prompting Tips](/en/prompting-tips.md).
+5. Remember to follow the terms of use of each model and provider.
+6. Don't include the `MIDSCENE_USE_VLM_UI_TARS` and `MIDSCENE_USE_QWEN_VL` config unless you know what you are doing.
+
+### Config
+
+```bash
+MIDSCENE_MODEL_NAME="....."
+OPENAI_BASE_URL="......"
+OPENAI_API_KEY="......"
+```
+
+For more details and sample config, see [Config Model and Provider](/en/model-provider.md).
+
+## FAQ
+
+### How can i check the model's token usage?
+
+By setting `DEBUG=midscene:ai:profile:stats` in the environment variables, you can print the model's usage info and response time.
+
+## More
+
+* [Config Model and Provider](/en/model-provider.md)
+* [Prompting Tips](/en/prompting-tips.md)
+
+
+
+---
+url: /common/prepare-android.md
+---
+
+## Preparation
+
+### Install Node.js
+
+Install [Node.js 18 or above](https://nodejs.org/en/download/) globally.
+
+### Prepare an API Key
+
+Prepare an API key from a visual-language (VL) model. You will use it later.
+
+You can check the supported models in [Choose a model](/en/choose-a-model.md)
+
+### Install adb
+
+`adb` is a command-line tool that allows you to communicate with an Android device. There are two ways to install `adb`:
+
+* way 1: use [Android Studio](https://developer.android.com/studio) to install
+* way 2: use [Android command-line tools](https://developer.android.com/studio#command-line-tools-only) to install
+
+Verify adb is installed successfully:
+
+```bash
+adb --version
+```
+
+When you see the following output, adb is installed successfully:
+
+```log
+Android Debug Bridge version 1.0.41
+Version 34.0.4-10411341
+Installed as /usr/local/bin//adb
+Running on Darwin 24.3.0 (arm64)
+```
+
+### Set environment variable ANDROID\_HOME
+
+Reference [Android environment variables](https://developer.android.com/tools/variables), set the environment variable `ANDROID_HOME`.
+
+Verify the `ANDROID_HOME` variable is set successfully:
+
+```bash
+echo $ANDROID_HOME
+```
+
+When the command has any output, the `ANDROID_HOME` variable is set successfully:
+
+```log
+/Users/your_username/Library/Android/sdk
+```
+
+### Connect Android device with adb
+
+In the developer options of the system settings, enable the 'USB debugging' of the Android device, if the 'USB debugging (secure settings)' exists, also enable it, then connect the Android device with a USB cable
+
+Verify the connection:
+
+```bash
+adb devices -l
+```
+
+When you see the following output, the connection is successful:
+
+```log
+List of devices attached
+s4ey59	device usb:34603008X product:cezanne model:M2006J device:cezan transport_id:3
+```
+
+
+
+---
+url: /common/prepare-key-for-further-use.md
+---
+
+Prepare the config for the AI model you want to use. You can check the supported models in [Choose a model](/en/choose-a-model.md)
+
+
+
+---
+url: /common/setup-env.md
+---
+
+## Setup AI model service
+
+Set your model configs into the environment variables. You may refer to [choose a model](/en/choose-a-model.md) for more details.
+
+```bash
+# replace with your own
+export OPENAI_API_KEY="sk-abcdefghijklmnopqrstuvwxyz"
+```
+
+
+
+---
+url: /common/start-experience.md
+---
+
+## Start experiencing
+
+After the configuration, you can immediately experience Midscene. There are three main tabs in the extension:
+
+* **Action**: interact with the web page. This is also known as "Auto Planning". For example:
+
+```
+type Midscene in the search box
+click the login button
+```
+
+* **Query**: extract JSON data from the web page
+
+```
+extract the user id from the page, return in \{ id: string \}
+```
+
+* **Assert**: validate the page
+
+```
+the page title is "Midscene"
+```
+
+* **Tap**: perform a single tap on the element where you want to click. This is also known as "Instant Action".
+
+```
+the login button
+```
+
+Enjoy !
+
+> For the different between "Auto Planning" and "Instant Action", please refer to the [API](/en/API.md) document.
+
+## Want to write some code ?
+
+After experiencing, you may want to write some code to integrate Midscene. There are multiple ways to do that. Please refer to the documents below:
+
+* [Automate with Scripts in YAML](/en/automate-with-scripts-in-yaml.md)
+
+
+
+---
+url: /data-privacy.md
+---
+
+# Data Privacy
+
+⁠Midscene.js is an open-source project (GitHub: [Midscene](https://github.com/web-infra-dev/midscene/)) under the MIT license. You can see all the codes in the public repository.
+
+When using Midscene.js, your page data (including the screenshot) is sent directly to the AI model provider you choose. No third-party platform will have access to this data. All you need to be concerned about is the data privacy policy of the model provider.
+
+If you prefer building Midscene.js and its Chrome Extension in your own environment instead of using the published versions, you can refer to the [Contributing Guide](https://github.com/web-infra-dev/midscene/blob/main/CONTRIBUTING.md) to find building instructions.
+
+
+
+
+---
+url: /faq.md
+---
+
+# FAQ
+
+## Can Midscene smartly plan the actions according to my one-line goal? Like executing "Tweet 'hello world'"
+
+It's only recommended to use this kind of goal-oriented prompt when you are using GUI agent models like *UI-TARS*.
+
+## Why does Midscene require developers to provide detailed steps while other AI agents are demonstrating "autonomous planning"? Is this an outdated approach?
+
+Midscene has a lot of tool developers, who are more concerned with the stability and performance of UI automation tools. To ensure that the Agent can run accurately in complex systems, clear prompts are still the optimal solution.
+
+To further improve stability, we also provide features like Instant Action interface, Playback Report, and Playground. They may seem traditional and not AI-like, but after extensive practice, we believe these features are the real key to improving efficiency.
+
+If you are interested in "smart GUI Agent", you can check out [UI-TARS](https://github.com/bytedance/ui-tars), which Midscene also supports.
+
+Related Docs: 
+* [Choose a model](./choose-a-model)
+* [Prompting Tips](./prompting-tips)
+
+## Limitations
+
+There are some limitations with Midscene. We are still working on them.
+
+1. The interaction types are limited to only tap, hover, drag (in UI-TARS model only), type, keyboard press, and scroll.
+2. AI model is not 100% stable. Following the [Prompting Tips](./prompting-tips) will help improve stability.
+3. You cannot interact with the elements inside the cross-origin iframe and canvas when using GPT-4o. This is not a problem when using Qwen and UI-TARS model.
+4. We cannot access the native elements of Chrome, like the right-click context menu or file upload dialog.
+5. Do not use Midscene to bypass CAPTCHA. Some LLM services are set to decline requests that involve CAPTCHA-solving (e.g., OpenAI), while the DOM of some CAPTCHA pages is not accessible by regular web scraping methods. Therefore, using Midscene to bypass CAPTCHA is not a reliable method.
+
+## Which models are supported?
+
+Please refer to [Choose a model](./choose-a-model).
+
+## What data is sent to AI model?
+
+The screenshot will be sent to the AI model. If you are using GPT-4o, some key information extracted from the DOM will also be sent.
+
+⁠If you are worried about data privacy issues, please refer to [Data Privacy](./data-privacy)
+
+## The automation process is running more slowly than the traditional one
+
+When using multimodal LLM in Midscene.js, the running time may increase by a factor of 3 to 10 compared to traditional Playwright scripts, for instance from 5 seconds to 20 seconds. To make the result more stable, the token and time cost is inevitable.
+
+There are several ways to improve the running time:
+1. Use instant action interface like `agent.aiTap('Login Button')` instead of `agent.ai('Click Login Button')`. Read more about it in [API](./API).
+2. Use a dedicated model and deploy it yourself, like UI-TARS. This is the recommended way. Read more about it in [Choose a model](./choose-a-model).
+3. Use a lower resolution if possible.
+4. Use caching to accelerate the debug process. Read more about it in [Caching](./caching).
+
+## The webpage continues to flash when running in headed mode
+
+It's common when the viewport `deviceScaleFactor` does not match your system settings. Setting it to 2 in OSX will solve the issue.
+
+```typescript
+await page.setViewport({
+  deviceScaleFactor: 2,
+});
+```
+
+## Where are the report files saved?
+
+The report files are saved in `./midscene-run/report/` by default.
+
+## How can I learn about Midscene's working process?
+
+⁠By reviewing the report file after running the script, you can gain an overview of how Midscene works. 
+
+## Customize the network timeout
+
+When doing interaction or navigation on web page, Midscene automatically waits for the network to be idle. It's a strategy to ensure the stability of the automation. Nothing would happen if the waiting process is timeout. 
+
+The default timeout is configured as follows:
+
+1. If it's a page navigation, the default wait timeout is 5000ms (the `waitForNavigationTimeout`)
+2. If it's a click, input, etc., the default wait timeout is 2000ms (the `waitForNetworkIdleTimeout`)
+
+You can also customize or disable the timeout by options:
+
+- Use `waitForNetworkIdleTimeout` and `waitForNavigationTimeout` parameters in [Agent](/api.html#constructors).
+- Use `waitForNetworkIdle` parameter in [Yaml](/automate-with-scripts-in-yaml.html#the-web-part) or [PlaywrightAiFixture](/integrate-with-playwright.html#step-2-extend-the-test-instance).
+
+
+---
+url: /index.md
+---
+
+# Midscene.js - Joyful Automation by AI
+
+Open-source AI Operator for Web, Mobile App, Automation & Testing
+
+## Features
+
+### Write Automation with Natural Language
+
+* Describe your goals and steps, and Midscene will plan and operate the user interface for you.
+* Use Javascript SDK or YAML to write your automation script.
+
+### Web or Mobile App
+
+* **Web Automation**: Either [integrate with Puppeteer](https://midscenejs.com/integrate-with-puppeteer.html), [with Playwright](https://midscenejs.com/integrate-with-playwright.html) or use [Bridge Mode](https://midscenejs.com/bridge-mode-by-chrome-extension.html) to control your desktop browser.
+* **Android Automation**: Use [Javascript SDK](https://midscenejs.com/integrate-with-android.html) with adb to control your local Android device.
+
+### Tools
+
+* **Visual Reports for Debugging**: Through our test reports and Playground, you can easily understand, replay and debug the entire process.
+* [**Caching for Efficiency**](https://midscenejs.com/caching.html): Replay your script with cache and get the result faster.
+* [**MCP**](https://midscenejs.com/mcp.html): Allows other MCP Clients to directly use Midscene's capabilities.
+
+### Three kinds of APIs
+
+* [Interaction API](https://midscenejs.com/api.html#interaction-methods): interact with the user interface.
+* [Data Extraction API](https://midscenejs.com/api.html#data-extraction): extract data from the user interface and dom.
+* [Utility API](https://midscenejs.com/api.html#more-apis): utility functions like `aiAssert()`, `aiLocate()`, `aiWaitFor()`.
+
+## Showcases
+
+We've prepared some showcases for you to learn the use of Midscene.js.
+
+1. Use JS code to drive task orchestration, collect information about Jay Chou's concert, and write it into Google Docs (By UI-TARS model)
+
+2) Control Maps App on Android (By Qwen-2.5-VL model)
+
+3. Using midscene mcp to browse the page (https://www.saucedemo.com/), perform login, add products, place orders, and finally generate test cases based on mcp execution steps and playwright example
+
+## Zero-code Quick Experience
+
+* **[Chrome Extension](https://midscenejs.com/quick-experience.html)**: Start in-browser experience immediately through [the Chrome Extension](https://midscenejs.com/quick-experience.html), without writing any code.
+* **[Android Playground](https://midscenejs.com/quick-experience-with-android.html)**: There is also a built-in Android playground to control your local Android device.
+
+## Model Choices
+
+Midscene.js supports both multimodal LLMs like `gpt-4o`, and visual-language models like `Qwen2.5-VL`, `Doubao-1.5-thinking-vision-pro`, `gemini-2.5-pro` and `UI-TARS`.
+
+Visual-language models are recommended for UI automation.
+
+Read more about [Choose a model](https://midscenejs.com/choose-a-model)
+
+## Two Styles of Automation
+
+### Auto Planning
+
+Midscene will automatically plan the steps and execute them. It may be slower and heavily rely on the quality of the AI model.
+
+```javascript
+await aiAction('click all the records one by one. If one record contains the text "completed", skip it');
+```
+
+### Workflow Style
+
+Split complex logic into multiple steps to improve the stability of the automation code.
+
+```javascript
+const recordList = await agent.aiQuery('string[], the record list')
+for (const record of recordList) {
+  const hasCompleted = await agent.aiBoolean(`check if the record contains the text "completed"`)
+  if (!hasCompleted) {
+    await agent.aiTap(record)
+  }
+}
+```
+
+> For more details about the workflow style, please refer to [Blog - Use JavaScript to Optimize the AI Automation Code](https://midscenejs.com/blog-programming-practice-using-structured-api.html)
+
+## Comparing to other projects
+
+There are so many UI automation tools out there, and each one seems to be all-powerful. What's special about Midscene.js?
+
+* **Debugging Experience**: You will soon realize that debugging and maintaining automation scripts is the real challenge. No matter how magical the demo looks, ensuring stability over time requires careful debugging. Midscene.js offers a visualized report file, a built-in playground, and a Chrome Extension to simplify the debugging process. These are the tools most developers truly need, and we're continually working to improve the debugging experience.
+
+* **Open Source, Free, Deploy as you want**: Midscene.js is an open-source project. It's decoupled from any cloud service and model provider, you can choose either public or private deployment. There is always a suitable plan for your business.
+
+* **Integrate with Javascript**: You can always bet on Javascript 😎
+
+## Resources
+
+* Home Page and Documentation: [https://midscenejs.com](https://midscenejs.com/)
+* Sample Projects: [https://github.com/web-infra-dev/midscene-example](https://github.com/web-infra-dev/midscene-example)
+* API Reference: [https://midscenejs.com/api.html](https://midscenejs.com/api.html)
+* GitHub: [https://github.com/web-infra-dev/midscene](https://github.com/web-infra-dev/midscene)
+
+## Community
+
+* [Discord](https://discord.gg/2JyBHxszE4)
+* [Follow us on X](https://x.com/midscene_ai)
+* [Lark Group(飞书交流群)](https://applink.larkoffice.com/client/chat/chatter/add_by_link?link_token=291q2b25-e913-411a-8c51-191e59aab14d)
+
+## Credits
+
+We would like to thank the following projects:
+
+* [Rsbuild](https://github.com/web-infra-dev/rsbuild) for the build tool.
+* [UI-TARS](https://github.com/bytedance/ui-tars) for the open-source agent model UI-TARS.
+* [Qwen2.5-VL](https://github.com/QwenLM/Qwen2.5-VL) for the open-source VL model Qwen2.5-VL.
+* [scrcpy](https://github.com/Genymobile/scrcpy) and [yume-chan](https://github.com/yume-chan) allow us to control Android devices with browser.
+* [appium-adb](https://github.com/appium/appium-adb) for the javascript bridge of adb.
+* [YADB](https://github.com/ysbing/YADB) for the yadb tool which improves the performance of text input.
+* [Puppeteer](https://github.com/puppeteer/puppeteer) for browser automation and control.
+* [Playwright](https://github.com/microsoft/playwright) for browser automation and control and testing.
+
+## License
+
+Midscene.js is [MIT licensed](https://github.com/web-infra-dev/midscene/blob/main/LICENSE).
+
+
+
+---
+url: /integrate-with-android.md
+---
+
+# Integrate with Android (adb)
+
+After connecting the Android device with adb, you can use Midscene javascript SDK to control Android devices.
+
+
+
+:::info Demo Project
+Control Android devices with javascript: [https://github.com/web-infra-dev/midscene-example/blob/main/android/javascript-sdk-demo](https://github.com/web-infra-dev/midscene-example/blob/main/android/javascript-sdk-demo)
+
+Integrate Vitest for testing: [https://github.com/web-infra-dev/midscene-example/tree/main/android/vitest-demo](https://github.com/web-infra-dev/midscene-example/tree/main/android/vitest-demo)
+:::
+
+## Preparation
+
+### Install Node.js
+
+Install [Node.js 18 or above](https://nodejs.org/en/download/) globally.
+
+### Prepare an API Key
+
+Prepare an API key from a visual-language (VL) model. You will use it later.
+
+You can check the supported models in [Choose a model](/choose-a-model.md)
+
+### Install adb
+
+`adb` is a command-line tool that allows you to communicate with an Android device. There are two ways to install `adb`:
+
+* way 1: use [Android Studio](https://developer.android.com/studio) to install
+* way 2: use [Android command-line tools](https://developer.android.com/studio#command-line-tools-only) to install
+
+Verify adb is installed successfully:
+
+```bash
+adb --version
+```
+
+When you see the following output, adb is installed successfully:
+
+```log
+Android Debug Bridge version 1.0.41
+Version 34.0.4-10411341
+Installed as /usr/local/bin//adb
+Running on Darwin 24.3.0 (arm64)
+```
+
+### Set environment variable ANDROID\_HOME
+
+Reference [Android environment variables](https://developer.android.com/tools/variables), set the environment variable `ANDROID_HOME`.
+
+Verify the `ANDROID_HOME` variable is set successfully:
+
+```bash
+echo $ANDROID_HOME
+```
+
+When the command has any output, the `ANDROID_HOME` variable is set successfully:
+
+```log
+/Users/your_username/Library/Android/sdk
+```
+
+### Connect Android device with adb
+
+In the developer options of the system settings, enable the 'USB debugging' of the Android device, if the 'USB debugging (secure settings)' exists, also enable it, then connect the Android device with a USB cable
+
+Verify the connection:
+
+```bash
+adb devices -l
+```
+
+When you see the following output, the connection is successful:
+
+```log
+List of devices attached
+s4ey59	device usb:34603008X product:cezanne model:M2006J device:cezan transport_id:3
+```
+
+## Setup AI model service
+
+Set your model configs into the environment variables. You may refer to [choose a model](/choose-a-model.md) for more details.
+
+```bash
+# replace with your own
+export OPENAI_API_KEY="sk-abcdefghijklmnopqrstuvwxyz"
+```
+
+## Step 1. install dependencies
+
+## Step 2. write scripts
+
+Let's take a simple example: search for headphones on eBay using the browser in the Android device. （Of course, you can also use any other apps on the Android device.）
+
+Write the following code, and save it as `./demo.ts`
+
+```typescript title="./demo.ts"
+import {
+  AndroidAgent,
+  AndroidDevice,
+  getConnectedDevices,
+} from '@midscene/android';
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+Promise.resolve(
+  (async () => {
+    const devices = await getConnectedDevices();
+    const page = new AndroidDevice(devices[0].udid);
+
+    // 👀 init Midscene agent
+    const agent = new AndroidAgent(page, {
+      aiActionContext:
+        'If any location, permission, user agreement, etc. popup, click agree. If login page pops up, close it.',
+    });
+    await page.connect();
+
+    // 👀 open browser and navigate to ebay.com (Please ensure that the current page has a browser app)
+    await agent.aiAction('open browser and navigate to ebay.com');
+
+    await sleep(5000);
+
+    // 👀 type keywords, perform a search
+    await agent.aiAction('type "Headphones" in search box, hit Enter');
+
+    // 👀 wait for loading completed
+    await agent.aiWaitFor('There is at least one headphone product');
+    // or you can use a normal sleep:
+    // await sleep(5000);
+
+    // 👀 understand the page content, extract data
+    const items = await agent.aiQuery(
+      '{itemTitle: string, price: Number}[], find item in list and corresponding price',
+    );
+    console.log('headphones in stock', items);
+
+    // 👀 assert by AI
+    await agent.aiAssert('There is a category filter on the left');
+  })(),
+);
+```
+
+## Step 3. run
+
+Using `tsx` to run
+
+```bash
+# run
+npx tsx demo.ts
+```
+
+After a while, you will see the following output:
+
+```log
+[
+{
+  itemTitle: 'Beats by Dr. Dre Studio Buds Totally Wireless Noise Cancelling In Ear + OPEN BOX',
+  price: 505.15
+},
+{
+  itemTitle: 'Skullcandy Indy Truly Wireless Earbuds-Headphones Green Mint',
+  price: 186.69
+}
+]
+```
+
+## Step 4: view the report
+
+After the above command executes successfully, the console will output: `Midscene - report file updated: /path/to/report/some_id.html`. You can open this file in a browser to view the report.
+
+## `AndroidDevice` constructor
+
+The AndroidDevice constructor supports the following parameters:
+
+* `deviceId: string` - The device id
+* `opts?: AndroidDeviceOpt` - Optional, the options for the AndroidDevice
+  * `autoDismissKeyboard?: boolean` - Optional, whether to dismiss the keyboard after inputting. (Default: true)
+  * `androidAdbPath?: string` - Optional, the path to the adb executable.
+  * `remoteAdbHost?: string` - Optional, the remote adb host.
+  * `remoteAdbPort?: number` - Optional, the remote adb port.
+  * `imeStrategy?: 'always-yadb' | 'yadb-for-non-ascii'` - Optional, when should Midscene invoke [yadb](https://github.com/ysbing/YADB) to input texts. (Default: 'always-yadb')
+
+## More interfaces in AndroidAgent
+
+Except the common agent interfaces in [API Reference](/en/API.md), AndroidAgent also provides some other interfaces:
+
+### `agent.launch()`
+
+Launch a webpage or native page.
+
+* Type
+
+```typescript
+function launch(uri: string): Promise<void>;
+```
+
+* Parameters:
+
+  * `uri: string` - The uri to open, can be a webpage url or a native app's package name or activity name, if the activity name exists, it should be separated by / (e.g. com.android.settings/.Settings).
+
+* Return Value:
+
+  * Returns a Promise that resolves to void when the page is opened.
+
+* Examples:
+
+```typescript
+import { AndroidAgent, AndroidDevice } from '@midscene/android';
+
+const page = new AndroidDevice('s4ey59');
+const agent = new AndroidAgent(page);
+
+await agent.launch('https://www.ebay.com'); // open a webpage
+await agent.launch('com.android.settings'); // open a native page
+await agent.launch('com.android.settings/.Settings'); // open a native page
+```
+
+### `agentFromAdbDevice()`
+
+Create a AndroidAgent from a connected adb device.
+
+* Type
+
+```typescript
+function agentFromAdbDevice(
+  deviceId?: string,
+  opts?: PageAgentOpt,
+): Promise<AndroidAgent>;
+```
+
+* Parameters:
+
+  * `deviceId?: string` - Optional, the adb device id to connect. If not provided, the first connected device will be used.
+  * `opts?: PageAgentOpt & AndroidDeviceOpt` - Optional, the options for the AndroidAgent, PageAgentOpt refer to [constructor](/en/API.md), AndroidDeviceOpt refer to [AndroidDevice constructor](/en/integrate-with-android.md#androiddevice-constructor).
+
+* Return Value:
+
+  * `Promise<AndroidAgent>` Returns a Promise that resolves to an AndroidAgent.
+
+* Examples:
+
+```typescript
+import { agentFromAdbDevice } from '@midscene/android';
+
+const agent = await agentFromAdbDevice('s4ey59'); // create a AndroidAgent from a specific adb device
+const agent = await agentFromAdbDevice(); // no deviceId, use the first connected device
+```
+
+### `getConnectedDevices()`
+
+Get all connected Android devices.
+
+* Type
+
+```typescript
+function getConnectedDevices(): Promise<Device[]>;
+interface Device {
+  /**
+   * The device udid.
+   */
+  udid: string;
+  /**
+   * Current device state, as it is visible in
+   * _adb devices -l_ output.
+   */
+  state: string;
+  port?: number;
+}
+```
+
+* Return Value:
+
+  * `Promise<Device[]>` Returns a Promise that resolves to an array of Device.
+
+* Examples:
+
+```typescript
+import { agentFromAdbDevice, getConnectedDevices } from '@midscene/android';
+
+const devices = await getConnectedDevices();
+console.log(devices);
+const agent = await agentFromAdbDevice(devices[0].udid);
+```
+
+## More
+
+* For all the APIs on the Agent, please refer to [API Reference](/en/API.md).
+* For more details about prompting, please refer to [Prompting Tips](/en/prompting-tips.md)
+
+## FAQ
+
+### Why can't I control the device even though I've connected it?
+
+Please check if the device is unlocked in the developer options of the system settings.
+
+### How to use a custom adb path, remote adb host and port?
+
+You can use the `MIDSCENE_ADB_PATH` environment variable to specify the path to the adb executable, `MIDSCENE_ADB_REMOTE_HOST` environment variable to specify the remote adb host, `MIDSCENE_ADB_REMOTE_PORT` environment variable to specify the remote adb port.
+
+```bash
+export MIDSCENE_ADB_PATH=/path/to/adb
+export MIDSCENE_ADB_REMOTE_HOST=192.168.1.100
+export MIDSCENE_ADB_REMOTE_PORT=5037
+```
+
+Additionally, you can also specify the adb path, remote adb host and port through the AndroidDevice constructor.
+
+```typescript
+const device = new AndroidDevice('s4ey59', {
+  androidAdbPath: '/path/to/adb',
+  remoteAdbHost: '192.168.1.100',
+  remoteAdbPort: 5037,
+});
+```
+
+
+
+---
+url: /integrate-with-playwright.md
+---
+
+# Integrate with Playwright
+
+
+
+[Playwright.js](https://playwright.com/) is an open-source automation library developed by Microsoft, primarily used for end-to-end testing and web scraping of web applications.
+
+Here we assume you already have a repository with Playwright integration.
+
+:::info Example Project
+You can find an example project of Playwright integration here: [https://github.com/web-infra-dev/midscene-example/blob/main/playwright-demo](https://github.com/web-infra-dev/midscene-example/blob/main/playwright-demo)
+:::
+
+## Setup AI model service
+
+Set your model configs into the environment variables. You may refer to [choose a model](/choose-a-model.md) for more details.
+
+```bash
+# replace with your own
+export OPENAI_API_KEY="sk-abcdefghijklmnopqrstuvwxyz"
+```
+
+## Step 1: add dependencies and update configuration
+
+Add dependencies
+
+Update playwright.config.ts
+
+```diff
+export default defineConfig({
+  testDir: './e2e',
++ timeout: 90 * 1000,
++ reporter: [["list"], ["@midscene/web/playwright-reporter", { type: "merged" }]], // type optional, default is "merged", means multiple test cases generate one report, optional value is "separate", means one report for each test case
+});
+```
+
+The `type` option of the `reporter` configuration can be `merged` or `separate`. The default value is `merged`, which indicates that one merged report for all test cases; the optional value is `separate`, indicating that the report is separated for each test case.
+
+## Step 2: extend the `test` instance
+
+Save the following code as `./e2e/fixture.ts`:
+
+```typescript
+import { test as base } from '@playwright/test';
+import type { PlayWrightAiFixtureType } from '@midscene/web/playwright';
+import { PlaywrightAiFixture } from '@midscene/web/playwright';
+
+export const test = base.extend<PlayWrightAiFixtureType>(
+  PlaywrightAiFixture({
+    waitForNetworkIdleTimeout: 2000, // optional, the timeout for waiting for network idle between each action, default is 2000ms
+  }),
+);
+```
+
+## Step 3: write test cases
+
+### Basic AI Operation APIs
+
+* `ai` or `aiAction` - General AI interaction
+* `aiTap` - Click operation
+* `aiHover` - Hover operation
+* `aiInput` - Input operation
+* `aiKeyboardPress` - Keyboard operation
+* `aiScroll` - Scroll operation
+
+### Query
+
+* `aiAsk` - Ask AI Model anything about the current page
+* `aiQuery` - Extract structured data from current page
+* `aiNumber` - Extract number from current page
+* `aiString` - Extract string from current page
+* `aiBoolean` - Extract boolean from current page
+
+### More APIs
+
+* `aiAssert` - AI Assertion
+* `aiWaitFor` - AI Wait
+* `aiLocate` - Locate Element
+
+Besides the exposed shortcut methods, if you need to call other [API](/en/API.md) provided by the agent, you can use `agentForPage` to get the `PageAgent` instance, and use `PageAgent` to call the API for interaction:
+
+```typescript
+test('case demo', async ({ agentForPage, page }) => {
+  const agent = await agentForPage(page);
+
+  await agent.logScreenshot();
+  const logContent = agent._unstableLogContent();
+  console.log(logContent);
+});
+```
+
+### Example Code
+
+```typescript title="./e2e/ebay-search.spec.ts"
+import { expect } from '@playwright/test';
+import { test } from './fixture';
+
+test.beforeEach(async ({ page }) => {
+  page.setViewportSize({ width: 400, height: 905 });
+  await page.goto('https://www.ebay.com');
+  await page.waitForLoadState('networkidle');
+});
+
+test('search headphone on ebay', async ({
+  ai,
+  aiQuery,
+  aiAssert,
+  aiInput,
+  aiTap,
+  aiScroll,
+  aiWaitFor,
+}) => {
+  // Use aiInput to enter search keyword
+  await aiInput('Headphones', 'search box');
+
+  // Use aiTap to click search button
+  await aiTap('search button');
+
+  // Wait for search results to load
+  await aiWaitFor('search results list loaded', { timeoutMs: 5000 });
+
+  // Use aiScroll to scroll to bottom
+  await aiScroll(
+    {
+      direction: 'down',
+      scrollType: 'untilBottom',
+    },
+    'search results list',
+  );
+
+  // Use aiQuery to get product information
+  const items = await aiQuery<Array<{ title: string; price: number }>>(
+    'get product titles and prices from search results',
+  );
+
+  console.log('headphones in stock', items);
+  expect(items?.length).toBeGreaterThan(0);
+
+  // Use aiAssert to verify filter functionality
+  await aiAssert('category filter exists on the left side');
+});
+```
+
+For more Agent API details, please refer to [API Reference](/en/API.md).
+
+## Step 4. run test cases
+
+```bash
+npx playwright test ./e2e/ebay-search.spec.ts
+```
+
+## Step 5. view test report
+
+After the command executes successfully, it will output: `Midscene - report file updated: ./current_cwd/midscene_run/report/some_id.html`. Open this file in your browser to view the report.
+
+## More
+
+* For all the methods on the Agent, please refer to [API Reference](/en/API.md).
+* For more details about prompting, please refer to [Prompting Tips](/en/prompting-tips.md)
+
+
+
+---
+url: /integrate-with-puppeteer.md
+---
+
+# Integrate with Puppeteer
+
+
+
+[Puppeteer](https://pptr.dev/) is a Node.js library which provides a high-level API to control Chrome or Firefox over the DevTools Protocol or WebDriver BiDi. Puppeteer runs in the headless (no visible UI) by default but can be configured to run in a visible ("headful") browser.
+
+:::info Demo Project
+you can check the demo project of Puppeteer here: [https://github.com/web-infra-dev/midscene-example/blob/main/puppeteer-demo](https://github.com/web-infra-dev/midscene-example/blob/main/puppeteer-demo)
+
+There is also a demo of Puppeteer with Vitest: [https://github.com/web-infra-dev/midscene-example/tree/main/puppeteer-with-vitest-demo](https://github.com/web-infra-dev/midscene-example/tree/main/puppeteer-with-vitest-demo)
+:::
+
+## Setup AI model service
+
+Set your model configs into the environment variables. You may refer to [choose a model](/choose-a-model.md) for more details.
+
+```bash
+# replace with your own
+export OPENAI_API_KEY="sk-abcdefghijklmnopqrstuvwxyz"
+```
+
+## Step 1. install dependencies
+
+## Step 2. write scripts
+
+Write and save the following code as `./demo.ts`.
+
+```typescript title="./demo.ts"
+import puppeteer from "puppeteer";
+import { PuppeteerAgent } from "@midscene/web/puppeteer";
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+Promise.resolve(
+  (async () => {
+    const browser = await puppeteer.launch({
+      headless: false, // here we use headed mode to help debug
+    });
+
+    const page = await browser.newPage();
+    await page.setViewport({
+      width: 1280,
+      height: 800,
+      deviceScaleFactor: 1,
+    });
+
+    await page.goto("https://www.ebay.com");
+    await sleep(5000);
+
+    // 👀 init Midscene agent
+    const agent = new PuppeteerAgent(page);
+
+    // 👀 type keywords, perform a search
+    await agent.aiAction('type "Headphones" in search box, hit Enter');
+    await sleep(5000);
+
+    // 👀 understand the page content, find the items
+    const items = await agent.aiQuery(
+      "{itemTitle: string, price: Number}[], find item in list and corresponding price"
+    );
+    console.log("headphones in stock", items);
+
+    // 👀 assert by AI
+    await agent.aiAssert("There is a category filter on the left");
+
+    await browser.close();
+  })()
+);
+```
+
+## Step 3. run
+
+Using `tsx` to run, you will get the data of Headphones on eBay:
+
+```bash
+# run
+npx tsx demo.ts
+
+# it should print 
+#  [
+#   {
+#     itemTitle: 'Beats by Dr. Dre Studio Buds Totally Wireless Noise Cancelling In Ear + OPEN BOX',
+#     price: 505.15
+#   },
+#   {
+#     itemTitle: 'Skullcandy Indy Truly Wireless Earbuds-Headphones Green Mint',
+#     price: 186.69
+#   }
+# ]
+```
+
+For the agent's more APIs, please refer to [API](/en/API.md).
+
+## Step 4: view the report
+
+After the above command executes successfully, the console will output: `Midscene - report file updated: /path/to/report/some_id.html`. You can open this file in a browser to view the report.
+
+## More options in PuppeteerAgent constructor
+
+### To limit the popup to the current page
+
+If you want to limit the popup to the current page (like clicking a link with `target="_blank"`), you can set the `forceSameTabNavigation` option to `true`:
+
+```typescript
+const mid = new PuppeteerAgent(page, {
+  forceSameTabNavigation: true,
+});
+```
+
+## More
+
+* For all the APIs on the Agent, please refer to [API Reference](/en/API.md).
+* For more details about prompting, please refer to [Prompting Tips](/en/prompting-tips.md)
+
+
+
+---
+url: /llm-txt.md
+---
+
+# LLMs.txt Documentation
+
+How to get tools like Cursor, Windstatic, GitHub Copilot, ChatGPT, and Claude to understand Midscene.js.
+
+We support LLMs.txt files for making the Midscene.js documentation available to large language models.
+
+## Directory Overview
+
+The following files are available.
+
+* [llms.txt](https://midscenejs.com/llms.txt): The main LLMs.txt file
+* [llms-full.txt](https://midscenejs.com/llms-full.txt): The complete documentation for Midscene.js
+
+## Usage
+
+### Cursor
+
+Use `@Docs` feature in Cursor to include the LLMs.txt files in your project.
+
+[Read more](https://docs.cursor.com/context/@-symbols/@-docs)
+
+### Windstatic
+
+Reference the LLMs.txt files using `@` or in your `.windsurfrules` files.
+
+[Read more](https://docs.windsurf.com/windsurf/getting-started#memories-and-rules)
+
+
+
+---
+url: /mcp.md
+---
+
+# MCP Server
+
+Midscene provides a MCP server that allows AI assistants to control browsers, automate web tasks and write automation scripts for Midscene.
+
+:::info MCP Introduction
+MCP ([Model Context Protocol](https://modelcontextprotocol.io/introduction)) is a standardized way for AI models to interact with external tools and capabilities. MCP servers expose a set of tools that AI models can invoke to perform various tasks. In Midscene's case, these tools allow AI models to control browsers, navigate web pages, interact with UI elements, and more.
+:::
+
+## Use Cases
+
+* Control browsers to execute automation tasks
+* Automatically generate Midscene automation scripts
+
+### Examples
+
+> Generate Midscene test cases for the Sauce Demo site
+
+## Setting Up Midscene MCP
+
+### Prerequisites
+
+1. An OpenAI API key or another supported AI model provider. For more information, see [Choosing an AI Model](/en/choose-a-model.md).
+2. For Chrome browser integration (Bridge Mode):
+   * Install the Midscene Chrome extension (download from [Chrome Web Extension](https://chromewebstore.google.com/detail/midscenejs/gbldofcpkknbggpkmbdaefngejllnief?hl=en\&utm_source=ext_sidebar))
+   * Switch to "Bridge Mode" in the extension and click "Allow Connection"
+
+### Configuration
+
+Add the Midscene MCP server to your MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "mcp-midscene": {
+      "command": "npx",
+      "args": ["-y", "@midscene/mcp"],
+      "env": {
+        "MIDSCENE_MODEL_NAME": "REPLACE_WITH_YOUR_MODEL_NAME",
+        "OPENAI_API_KEY": "REPLACE_WITH_YOUR_OPENAI_API_KEY",
+        "MCP_SERVER_REQUEST_TIMEOUT": "800000"
+      }
+    }
+  }
+}
+```
+
+For more information about configuring AI models, see [Choosing an AI Model](/en/choose-a-model.md).
+
+## Available Tools
+
+Midscene MCP provides the following browser automation tools:
+
+| Category | Tool Name | Description |
+|---------|---------|---------|
+| **Navigation** | midscene\_navigate | Navigate to a specified URL in the current tab |
+| **Tab Management** | midscene\_get\_tabs | Get a list of all open browser tabs |
+| | midscene\_set\_active\_tab | Switch to a specific tab by ID |
+| **Page Interaction** | midscene\_aiTap | Click on an element described in natural language |
+| | midscene\_aiInput | Input text into a form field or element |
+| | midscene\_aiHover | Hover over an element |
+| | midscene\_aiKeyboardPress | Press a specific keyboard key |
+| | midscene\_aiScroll | Scroll the page or a specific element |
+| **Verification and Observation** | midscene\_aiWaitFor | Wait for a condition to be true on the page |
+| | midscene\_aiAssert | Assert that a condition is true on the page |
+| | midscene\_screenshot | Take a screenshot of the current page |
+| **Playwright Code Example** | midscene\_playwright\_example | Provides Playwright code examples for Midscene |
+
+### Navigation
+
+* **midscene\_navigate**: Navigate to a specified URL in the current tab
+  ```
+  Parameters:
+  - url: The URL to navigate to
+  ```
+
+### Tab Management
+
+* **midscene\_get\_tabs**: Get a list of all open browser tabs, including their IDs, titles, and URLs
+  ```
+  Parameters: None
+  ```
+
+* **midscene\_set\_active\_tab**: Switch to a specific tab by ID
+  ```
+  Parameters:
+  - tabId: The ID of the tab to activate
+  ```
+
+### Page Interaction
+
+* **midscene\_aiTap**: Click on an element described in natural language
+  ```
+  Parameters:
+  - locate: Natural language description of the element to click
+  ```
+
+* **midscene\_aiInput**: Input text into a form field or element
+  ```
+  Parameters:
+  - value: The text to input
+  - locate: Natural language description of the element to input text into
+  ```
+
+* **midscene\_aiHover**: Hover over an element
+  ```
+  Parameters:
+  - locate: Natural language description of the element to hover over
+  ```
+
+* **midscene\_aiKeyboardPress**: Press a specific keyboard key
+  ```
+  Parameters:
+  - key: The key to press (e.g., 'Enter', 'Tab', 'Escape')
+  - locate: (Optional) Description of element to focus before pressing the key
+  - deepThink: (Optional) If true, uses more precise element location
+  ```
+
+* **midscene\_aiScroll**: Scroll the page or a specific element
+  ```
+  Parameters:
+  - direction: 'up', 'down', 'left', or 'right'
+  - scrollType: 'once', 'untilBottom', 'untilTop', 'untilLeft', or 'untilRight'
+  - distance: (Optional) Distance to scroll in pixels
+  - locate: (Optional) Description of the element to scroll
+  - deepThink: (Optional) If true, uses more precise element location
+  ```
+
+### Verification and Observation
+
+* **midscene\_aiWaitFor**: Wait for a condition to be true on the page
+  ```
+  Parameters:
+  - assertion: Natural language description of the condition to wait for
+  - timeoutMs: (Optional) Maximum time to wait in milliseconds
+  - checkIntervalMs: (Optional) How often to check the condition
+  ```
+
+* **midscene\_aiAssert**: Assert that a condition is true on the page
+  ```
+  Parameters:
+  - assertion: Natural language description of the condition to check
+  ```
+
+* **midscene\_screenshot**: Take a screenshot of the current page
+  ```
+  Parameters:
+  - name: Name for the screenshot
+  ```
+
+## Common Issues
+
+### What advantages does Midscene MCP have over other browser MCPs?
+
+* Midscene MCP supports Bridge mode by default, allowing you to **directly control your current browser** without needing to **log in again or download a browser**
+* Midscene MCP includes built-in optimal prompt templates and operation execution practices for browser page control, providing **more stable and reliable browser automation experiences** compared to other MCP implementations
+* Midscene MCP automatically generates execution case reports after completing tasks, allowing you to **view the execution process at any time**
+
+### Local port conflicts when multiple Clients are used
+
+> Problem description
+
+When users simultaneously use Midscene MCP in multiple local clients (Claude Desktop, Cursor MCP, etc.), port conflicts may occur causing server errors
+
+> Solution
+
+* Temporarily close the MCP server in the extra clients
+* Execute the command:
+
+```bash
+# For macOS/Linux:
+lsof -i:3766 | awk 'NR>1 {print $2}' | xargs -r kill -9
+
+# For Windows:
+FOR /F "tokens=5" %i IN ('netstat -ano ^| findstr :3766') DO taskkill /F /PID %i
+```
+
+### How to Access Midscene Execution Reports
+
+After each task execution, a Midscene task report is generated. You can open this HTML report directly from the command line:
+
+```bash
+# Replace the opened address with your report filename
+open report_file_name.html
+```
+
+![image](https://lf3-static.bytednsdoc.com/obj/eden-cn/ozpmyhn_lm_hymuPild/ljhwZthlaukjlkulzlp/midscene/image.png)
+
+
+
+---
+url: /model-provider.md
+---
+
+# Config Model and Provider
+
+Midscene uses the OpenAI SDK to call AI services. Using this SDK limits the input and output schema of AI services, but it doesn't mean you can only use OpenAI's services. You can use any model service that supports the same interface (most platforms or tools support this).
+
+In this article, we will show you how to config AI service provider and how to choose a different model. You may read [Choose a model](/en/choose-a-model.md) first to learn more about how to choose a model.
+
+## Configs
+
+### Common configs
+
+These are the most common configs, in which `OPENAI_API_KEY` is required.
+
+| Name | Description |
+|------|-------------|
+| `OPENAI_API_KEY` | Required. Your OpenAI API key (e.g. "sk-abcdefghijklmnopqrstuvwxyz") |
+| `OPENAI_BASE_URL` | Optional. Custom endpoint URL for API endpoint. Use it to switch to a provider other than OpenAI (e.g. "https://some\_service\_name.com/v1") |
+| `MIDSCENE_MODEL_NAME` | Optional. Specify a different model name other than `gpt-4o` |
+
+Extra configs to use `Qwen 2.5 VL` model:
+
+| Name | Description |
+|------|-------------|
+| `MIDSCENE_USE_QWEN_VL` | Set to "1" to use the adapter of Qwen 2.5 VL model |
+
+Extra configs to use `UI-TARS` model:
+
+| Name | Description |
+|------|-------------|
+| `MIDSCENE_USE_VLM_UI_TARS` | Version of UI-TARS model, supported values are `1.0` `1.5` `DOUBAO` (volcengine version) |
+
+Extra configs to use `Gemini 2.5 Pro` model:
+
+| Name | Description |
+|------|-------------|
+| `MIDSCENE_USE_GEMINI` | Set to "1" to use the adapter of Gemini 2.5 Pro model |
+
+For more information about the models, see [Choose a model](/en/choose-a-model.md).
+
+### Advanced configs
+
+Some advanced configs are also supported. Usually you don't need to use them.
+
+| Name | Description |
+|------|-------------|
+| `OPENAI_USE_AZURE` | Optional. Set to "true" to use Azure OpenAI Service. See more details in the following section. |
+| `MIDSCENE_OPENAI_INIT_CONFIG_JSON` | Optional. Custom JSON config for OpenAI SDK initialization |
+| `MIDSCENE_OPENAI_HTTP_PROXY` | Optional. HTTP/HTTPS proxy configuration (e.g. "http://127.0.0.1:8080" or "https://proxy.example.com:8080"). This option has higher priority than `MIDSCENE_OPENAI_SOCKS_PROXY` |
+| `MIDSCENE_OPENAI_SOCKS_PROXY` | Optional. SOCKS proxy configuration (e.g. "socks5://127.0.0.1:1080") |
+| `MIDSCENE_PREFERRED_LANGUAGE` | Optional. The preferred language for the model response. The default is `Chinese` if the current timezone is GMT+8 and `English` otherwise. |
+| `OPENAI_MAX_TOKENS` | Optional. Maximum tokens for model response |
+
+### Debug configs
+
+By setting the following configs, you can see more logs for debugging. And also, they will be printed into the `./midscene_run/log` folder.
+
+| Name | Description |
+|------|-------------|
+| `DEBUG=midscene:ai:profile:stats` | Optional. Set this to print the AI service cost time, token usage, etc. in comma separated format, useful for analysis |
+| `DEBUG=midscene:ai:profile:detail` | Optional. Set this to print the AI token usage details |
+| `DEBUG=midscene:ai:call` | Optional. Set this to print the AI response details |
+| `DEBUG=midscene:android:adb` | Optional. Set this to print the adb command calling details |
+
+## Two ways to config environment variables
+
+Pick one of the following ways to config environment variables.
+
+### 1. Set environment variables in your system
+
+```bash
+# replace by your own
+export OPENAI_API_KEY="sk-abcdefghijklmnopqrstuvwxyz"
+
+# if you are not using the default OpenAI model, you need to config more params
+# export MIDSCENE_MODEL_NAME="..."
+```
+
+### 2. Set environment variables using dotenv
+
+This is what we used in our [demo project](https://github.com/web-infra-dev/midscene-example).
+
+[Dotenv](https://www.npmjs.com/package/dotenv) is a zero-dependency module that loads environment variables from a `.env` file into `process.env`.
+
+```bash
+# install dotenv
+npm install dotenv --save
+```
+
+Create a `.env` file in your project root directory, and add the following content. There is no need to add `export` before each line.
+
+```
+OPENAI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz
+```
+
+Import the dotenv module in your script. It will automatically read the environment variables from the `.env` file.
+
+```typescript
+import 'dotenv/config';
+```
+
+## Using Azure OpenAI Service
+
+There are some extra configs when using Azure OpenAI Service.
+
+### Use ADT token provider
+
+This mode cannot be used in Chrome extension.
+
+```bash
+# this is always true when using Azure OpenAI Service
+export MIDSCENE_USE_AZURE_OPENAI=1
+
+export MIDSCENE_AZURE_OPENAI_SCOPE="https://cognitiveservices.azure.com/.default"
+export AZURE_OPENAI_ENDPOINT="..."
+export AZURE_OPENAI_API_VERSION="2024-05-01-preview"
+export AZURE_OPENAI_DEPLOYMENT="gpt-4o"
+```
+
+### Use keyless authentication
+
+```bash
+export MIDSCENE_USE_AZURE_OPENAI=1
+export AZURE_OPENAI_ENDPOINT="..."
+export AZURE_OPENAI_KEY="..."
+export AZURE_OPENAI_API_VERSION="2024-05-01-preview"
+export AZURE_OPENAI_DEPLOYMENT="gpt-4o"
+```
+
+## Set Config by Javascript
+
+You can also override the config by javascript. Remember to call this before running Midscene codes.
+
+```typescript
+import { overrideAIConfig } from "@midscene/web/puppeteer";
+// or import { overrideAIConfig } from "@midscene/web/playwright";
+// or import { overrideAIConfig } from "@midscene/android";
+
+
+overrideAIConfig({
+  MIDSCENE_MODEL_NAME: "...",
+  // ...
+});
+```
+
+## Example: Using `gpt-4o` from OpenAI
+
+Configure the environment variables:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+export OPENAI_BASE_URL="https://endpoint.some_other_provider.com/v1" # config this if you want to use a different endpoint
+export MIDSCENE_MODEL_NAME="gpt-4o-2024-11-20" # optional, the default is "gpt-4o"
+```
+
+## Example: Using `qwen-vl-max-latest` from Aliyun
+
+Configure the environment variables:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+export OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+export MIDSCENE_MODEL_NAME="qwen-vl-max-latest"
+export MIDSCENE_USE_QWEN_VL=1
+```
+
+## Example: Using `Doubao-1.5-thinking-vision-pro` from Volcano Engine
+
+Configure the environment variables:
+
+```bash
+export OPENAI_BASE_URL="https://ark-cn-beijing.bytedance.net/api/v3"
+export OPENAI_API_KEY="..."
+export MIDSCENE_MODEL_NAME='ep-...'
+export MIDSCENE_USE_DOUBAO_VISION=1
+```
+
+## Example: Using `ui-tars-72b-sft` hosted by yourself
+
+Configure the environment variables:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+export OPENAI_BASE_URL="http://localhost:1234/v1"
+export MIDSCENE_MODEL_NAME="ui-tars-72b-sft"
+export MIDSCENE_USE_VLM_UI_TARS=1
+```
+
+## Example: Config `claude-3-opus-20240229` from Anthropic
+
+When configuring `MIDSCENE_USE_ANTHROPIC_SDK=1`, Midscene will use Anthropic SDK (`@anthropic-ai/sdk`) to call the model.
+
+Configure the environment variables:
+
+```bash
+export MIDSCENE_USE_ANTHROPIC_SDK=1
+export ANTHROPIC_API_KEY="....."
+export MIDSCENE_MODEL_NAME="claude-3-opus-20240229"
+```
+
+## Example: config request headers (like for openrouter)
+
+```bash
+export OPENAI_BASE_URL="https://openrouter.ai/api/v1"
+export OPENAI_API_KEY="..."
+export MIDSCENE_MODEL_NAME="..."
+export MIDSCENE_OPENAI_INIT_CONFIG_JSON='{"defaultHeaders":{"HTTP-Referer":"...","X-Title":"..."}}'
+```
+
+## Troubleshooting LLM Service Connectivity Issues
+
+If you want to troubleshoot connectivity issues, you can use the 'connectivity-test' folder in our example project: [https://github.com/web-infra-dev/midscene-example/tree/main/connectivity-test](https://github.com/web-infra-dev/midscene-example/tree/main/connectivity-test)
+
+Put your `.env` file in the `connectivity-test` folder, and run the test with `npm i && npm run test`.
+
+
+
+---
+url: /prompting-tips.md
+---
+
+# Prompting Tips
+
+The natural language parameter passed to Midscene will be part of the prompt sent to the AI model. There are certain techniques in prompt engineering that can help improve the understanding of user interfaces.
+
+## The goal is to get a stable response from AI
+
+Since AI has the nature of heuristic, the purpose of prompt tuning should be to obtain stable responses from the AI model across runs. In most cases, to expect a consistent response from AI model by using a good prompt is entirely feasible.
+
+## Use detailed descriptions and samples
+
+Detailed descriptions and examples are always welcome.
+
+For example: 
+
+❌ Don't
+```log
+Search 'headphone'
+```
+
+✅ Do
+```log
+Click the search box (it should be along with a region switch, such as 'domestic' or 'international'), type 'headphone', and hit Enter.
+```
+
+❌ Don't
+```log
+Assert: food delivery service is in normal state
+```
+
+✅ Do
+```log
+Assert: There is a 'food delivery service' on page, and is in normal state
+```
+
+### Use instant action interface if you are sure about what you want to do
+
+For example:
+
+`agent.ai('Click Login Button')` is the auto planning mode, Midscene will plan the steps and then execute them. It will cost more time and tokens.
+
+By using `agent.aiTap('Login Button')`, you can directly using the locating result from the AI model and perform the click action. It's faster and more accurate compared to the auto planning mode.
+
+For more details, please refer to [API](./API).
+
+### Understand the reason why `.ai` is wrong
+
+**Understanding the report**
+
+By reviewing the report, you can see there are two main steps of each `.ai` call:
+
+1. Planning
+2. Locating
+
+First, you should find out whether the AI is wrong in the planning step or the locating step.
+
+When you see the steps are not as expected (more steps or less steps), it means the AI is wrong in the planning step. So you can try to give more details in the task flow.
+
+For example:
+
+❌ Don't
+```log
+Select "include" in the "range" dropdown menu
+```
+
+You can try:
+
+✅ Do
+```log
+Click the "range" dropdown menu, and select "include"
+```
+
+When you see the locating result is not as expected (wrong element or biased coordinates), try to give more details in the locate parameter.
+
+For example:
+
+❌ Don't
+```log
+Click the "Add" button
+```
+
+You can try:
+
+✅ Do
+```log
+Click the "Add" button on the top-right corner, it's on the right side of the "range" dropdown menu
+```
+
+**Other ways to improve**
+
+* Use a larger and stronger AI model
+* Use instant action interface like `agent.aiTap()` instead of `.ai` if you are sure about what you want to do
+
+## One prompt should only do one thing
+
+Use `.ai` each time to do one task. Although Midscene has an auto-replanning strategy, it's still preferable to keep the prompt concise. Otherwise the LLM output will likely be messy. The token cost between a long prompt and a short prompt is almost the same.
+
+❌ Don't
+```log
+Click Login button, then click Sign up button, fill the form with 'test@test.com' in the email field, 'test' in the password field, and click Sign up button
+```
+
+✅ Split the task into the following steps into multiple `.ai` calls
+```log
+Click Login Button
+Click Sign up button
+Fill the form with 'test@test.com' in the email field
+Fill the form with 'test' in the password field
+Click Sign up button
+```
+
+### LLMs can NOT tell the exact number like coords or hex-style color, give it some choices
+
+For example:
+
+❌ Don't
+```log
+string, hex value of text color
+```
+
+❌ Don't
+```log
+[number, number], the [x, y] coords of the main button
+```
+
+✅ Do
+```log
+string, color of text, one of blue / red / yellow / green / white / black / others
+```
+
+## Use report file and playground tool to debug
+
+Open the report file, you will see the detailed information about the steps. If you want to rerun a prompt together with UI context from the report file, just launch a Playground server and click "Send to Playground".
+
+To launch the local Playground server:
+```
+npx --yes @midscene/web
+```
+
+![Playground](/midescene-playground-entry.jpg)
+
+## Infer or assert from the interface, not the DOM properties or browser status
+
+All the data sent to the LLM is in the form of screenshots and element coordinates. The DOM and the browser instance are almost invisible to the LLM. Therefore, ensure everything you expect is visible on the screen.
+
+❌ Don't
+```log
+The title has a `test-id-size` property
+```
+
+❌ Don't
+```log
+The browser has two active tabs
+```
+
+❌ Don't
+```log
+The request has finished.
+```
+
+✅ Do
+```log
+The title is blue
+```
+
+## Cross-check the result using assertion
+
+LLM could behave incorrectly. A better practice is to check its result after running.
+
+For example, you can check the list content of the to-do app after inserting a record.
+
+```typescript
+await ai('Enter "Learning AI the day after tomorrow" in the task box, then press Enter to create');
+
+// check the result
+const taskList = await aiQuery<string[]>('string[], tasks in the list');
+expect(taskList.length).toBe(1);
+expect(taskList[0]).toBe('Learning AI the day after tomorrow');
+```
+
+## Non-English prompting is acceptable
+
+Since most AI models can understand many languages, feel free to write the prompt in any language you prefer. It usually works even if the prompt is in a language different from the page's language.
+
+✅ Good
+```log
+点击顶部左侧导航栏中的“首页”链接
+```
+
+
+
+---
+url: /quick-experience-with-android.md
+---
+
+# Quick Experience with Android
+
+By using Midscene.js playground, you can quickly experience the main features of Midscene on Android devices, without needing to write any code.
+
+![](/android-playground.png)
+
+## Preparation
+
+### Install Node.js
+
+Install [Node.js 18 or above](https://nodejs.org/en/download/) globally.
+
+### Prepare an API Key
+
+Prepare an API key from a visual-language (VL) model. You will use it later.
+
+You can check the supported models in [Choose a model](/choose-a-model.md)
+
+### Install adb
+
+`adb` is a command-line tool that allows you to communicate with an Android device. There are two ways to install `adb`:
+
+* way 1: use [Android Studio](https://developer.android.com/studio) to install
+* way 2: use [Android command-line tools](https://developer.android.com/studio#command-line-tools-only) to install
+
+Verify adb is installed successfully:
+
+```bash
+adb --version
+```
+
+When you see the following output, adb is installed successfully:
+
+```log
+Android Debug Bridge version 1.0.41
+Version 34.0.4-10411341
+Installed as /usr/local/bin//adb
+Running on Darwin 24.3.0 (arm64)
+```
+
+### Set environment variable ANDROID\_HOME
+
+Reference [Android environment variables](https://developer.android.com/tools/variables), set the environment variable `ANDROID_HOME`.
+
+Verify the `ANDROID_HOME` variable is set successfully:
+
+```bash
+echo $ANDROID_HOME
+```
+
+When the command has any output, the `ANDROID_HOME` variable is set successfully:
+
+```log
+/Users/your_username/Library/Android/sdk
+```
+
+### Connect Android device with adb
+
+In the developer options of the system settings, enable the 'USB debugging' of the Android device, if the 'USB debugging (secure settings)' exists, also enable it, then connect the Android device with a USB cable
+
+Verify the connection:
+
+```bash
+adb devices -l
+```
+
+When you see the following output, the connection is successful:
+
+```log
+List of devices attached
+s4ey59	device usb:34603008X product:cezanne model:M2006J device:cezan transport_id:3
+```
+
+## Run Playground
+
+```bash
+npx --yes @midscene/android-playground
+```
+
+## Config API Key
+
+Click the gear button to enter the configuration page and paste your API key config.
+
+![](/android-set-env.png)
+
+Refer to [Config Model and Provider](/en/model-provider.md) document, config the API Key.
+
+## Start experiencing
+
+After the configuration, you can immediately experience Midscene. There are three main tabs in the extension:
+
+* **Action**: interact with the web page. This is also known as "Auto Planning". For example:
+
+```
+type Midscene in the search box
+click the login button
+```
+
+* **Query**: extract JSON data from the web page
+
+```
+extract the user id from the page, return in \{ id: string \}
+```
+
+* **Assert**: validate the page
+
+```
+the page title is "Midscene"
+```
+
+* **Tap**: perform a single tap on the element where you want to click. This is also known as "Instant Action".
+
+```
+the login button
+```
+
+Enjoy !
+
+> For the different between "Auto Planning" and "Instant Action", please refer to the [API](/API.md) document.
+
+## Want to write some code ?
+
+After experiencing, you may want to write some code to integrate Midscene. There are multiple ways to do that. Please refer to the documents below:
+
+* [Automate with Scripts in YAML](/automate-with-scripts-in-yaml.md)
+
+* [Integrate javascript SDK with Android](/en/integrate-with-android.md)
+
+
+
+---
+url: /quick-experience.md
+---
+
+# Quick Experience by Chrome Extension
+
+Midscene.js provides a Chrome extension. By using it, you can quickly experience the main features of Midscene on any webpage, without needing to set up a code project.
+
+⁠The extension shares the same code as the npm `@midscene/web` packages, so you can think of it as a playground or a way to debug with Midscene.
+
+## Preparation
+
+Prepare the config for the AI model you want to use. You can check the supported models in [Choose a model](/choose-a-model.md)
+
+## Install and config
+
+Install Midscene extension from chrome web store: [Midscene](https://chromewebstore.google.com/detail/midscene/gbldofcpkknbggpkmbdaefngejllnief)
+
+Start the extension (may be folded by Chrome extension icon), setup the config by pasting the config in the K=V format:
+
+```bash
+OPENAI_API_KEY="sk-replace-by-your-own"
+# ...all other configs here (if any)
+```
+
+## Start experiencing
+
+After the configuration, you can immediately experience Midscene. There are three main tabs in the extension:
+
+* **Action**: interact with the web page. This is also known as "Auto Planning". For example:
+
+```
+type Midscene in the search box
+click the login button
+```
+
+* **Query**: extract JSON data from the web page
+
+```
+extract the user id from the page, return in \{ id: string \}
+```
+
+* **Assert**: validate the page
+
+```
+the page title is "Midscene"
+```
+
+* **Tap**: perform a single tap on the element where you want to click. This is also known as "Instant Action".
+
+```
+the login button
+```
+
+Enjoy !
+
+> For the different between "Auto Planning" and "Instant Action", please refer to the [API](/API.md) document.
+
+## Want to write some code ?
+
+After experiencing, you may want to write some code to integrate Midscene. There are multiple ways to do that. Please refer to the documents below:
+
+* [Automate with Scripts in YAML](/automate-with-scripts-in-yaml.md)
+
+- [Bridge Mode by Chrome Extension](/en/bridge-mode-by-chrome-extension.md)
+- [Integrate with Puppeteer](/en/integrate-with-puppeteer.md)
+- [Integrate with Playwright](/en/integrate-with-playwright.md)
+
+## FAQ
+
+### Extension fails to run and shows 'Cannot access a chrome-extension:// URL of different extension'
+
+It's mainly due to conflicts with other extensions injecting `<iframe />` or `<script />` into the page. Try disabling the suspicious plugins and refresh.
+
+To find the suspicious plugins:
+
+1. Open the Devtools of the page, find the `<script>` or `<iframe>` with a url like `chrome-extension://{ID-of-the-suspicious-plugin}/...`.
+2. Copy the ID from the url, open `chrome://extensions/` , use cmd+f to find the plugin with the same ID, disable it.
+3. Refresh the page, try again.
+
+

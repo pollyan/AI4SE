@@ -453,6 +453,34 @@ def execute_testcase_async(execution_id, testcase, mode, client_sid):
             for i, step in enumerate(steps):
                 step_start_time = datetime.utcnow()
 
+                # 检查步骤是否被跳过
+                if step.get('skip', False):
+                    # 发送步骤跳过事件
+                    socketio.emit('step_skipped', {
+                        'execution_id': execution_id,
+                        'step_index': i,
+                        'step_description': step.get('description', step.get('action', f'步骤 {i+1}')),
+                        'total_steps': len(steps),
+                        'message': '此步骤已被标记为跳过'
+                    }, room=client_sid)
+                    
+                    # 记录跳过的步骤
+                    step_execution = StepExecution(
+                        execution_id=execution_id,
+                        step_index=i,
+                        step_description=step.get('description', step.get('action', f'步骤 {i+1}')),
+                        status='skipped',
+                        start_time=step_start_time,
+                        end_time=step_start_time,
+                        duration=0,
+                        error_message='步骤被跳过'
+                    )
+                    db.session.add(step_execution)
+                    db.session.commit()
+                    
+                    # 继续下一个步骤
+                    continue
+
                 try:
                     # 发送步骤开始事件
                     socketio.emit('step_started', {

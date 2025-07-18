@@ -486,7 +486,7 @@ class TestCaseEditor {
         const paramsDesc = this.getParamsDescription(step.action, step.params);
         
         container.innerHTML = `
-            <div class="list-item draggable-item" title="拖拽排序或点击编辑" style="padding: 20px; border-radius: 6px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: move;">
+            <div class="list-item draggable-item ${step.skip ? 'step-skipped' : ''}" title="拖拽排序或点击编辑" style="padding: 20px; border-radius: 6px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: move; ${step.skip ? 'opacity: 0.6; background-color: #f7fafc;' : ''}">
                 <div class="drag-handle" style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); cursor: grab; padding: 4px;">
                     <svg width="12" height="20" viewBox="0 0 12 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <circle cx="3" cy="3" r="1.5" fill="#CBD5E0"/>
@@ -501,6 +501,7 @@ class TestCaseEditor {
                     <div class="list-item-title" style="font-size: 15px; font-weight: 600; color: #2d3748; margin-bottom: 6px;">
                         <span style="display: inline-block; background: #e2e8f0; color: #4a5568; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 500; margin-right: 8px;">${index + 1}</span>
                         ${step.description || actionDesc}
+                        ${step.skip ? '<span style="margin-left: 8px; background: #fed7d7; color: #c53030; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;">跳过</span>' : ''}
                     </div>
                     <div class="list-item-subtitle" style="color: #4a5568; font-size: 14px; margin-bottom: 8px;">${paramsDesc}</div>
                     <div class="list-item-meta" style="display: flex; align-items: center; gap: 12px;">
@@ -509,6 +510,7 @@ class TestCaseEditor {
                     </div>
                 </div>
                 <div class="flex items-center gap-1">
+                    <button class="btn btn-small ${step.skip ? 'btn-ghost' : 'btn-primary'} step-skip" style="padding: 6px 12px;" title="${step.skip ? '点击取消跳过' : '点击跳过此步骤'}">${step.skip ? '取消跳过' : '跳过'}</button>
                     <button class="btn btn-small btn-ghost step-up" ${index === 0 ? 'disabled' : ''} style="padding: 6px 10px;">↑</button>
                     <button class="btn btn-small btn-ghost step-down" ${index === this.steps.length - 1 ? 'disabled' : ''} style="padding: 6px 10px;">↓</button>
                     <button class="btn btn-small btn-ghost step-edit" style="padding: 6px 12px;">编辑</button>
@@ -520,6 +522,7 @@ class TestCaseEditor {
         
         // 绑定事件
         const listItem = container.querySelector('.list-item');
+        const stepSkipBtn = container.querySelector('.step-skip');
         const stepUpBtn = container.querySelector('.step-up');
         const stepDownBtn = container.querySelector('.step-down');
         const stepEditBtn = container.querySelector('.step-edit');
@@ -529,6 +532,11 @@ class TestCaseEditor {
         // 点击步骤项目进入编辑模式（与点击编辑按钮效果相同）
         listItem.addEventListener('click', () => {
             this.showInlineEdit(container, index);
+        });
+        
+        stepSkipBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleStepSkip(index);
         });
         
         stepUpBtn.addEventListener('click', (e) => {
@@ -984,6 +992,16 @@ class TestCaseEditor {
             'runYaml': { yaml: 'steps:\n  - action: aiTap\n    locate: 按钮' }
         };
         return defaults[action] || {};
+    }
+    
+    toggleStepSkip(index) {
+        this.steps[index].skip = !this.steps[index].skip;
+        this.isDirty = true;
+        this.renderSteps();
+        this.autoSave();
+        
+        const message = this.steps[index].skip ? '步骤已设置为跳过' : '步骤已取消跳过';
+        this.showMessage(message, 'success');
     }
     
     async moveStepUp(index) {
