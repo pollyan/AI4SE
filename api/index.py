@@ -658,7 +658,7 @@ echo [2/4] Checking dependencies...
 if not exist node_modules (
     echo Installing dependencies for first run...
     echo This may take a few minutes, please wait...
-    npm install
+    call npm install
     if %errorlevel% neq 0 (
         echo ERROR: Failed to install dependencies
         pause
@@ -671,9 +671,9 @@ if not exist node_modules (
 
 REM Check Playwright browsers
 echo.
-echo [3/4] Checking Playwright browsers...
+echo [3/5] Checking Playwright browsers...
 echo This ensures browser drivers are installed...
-npx playwright install chromium --with-deps
+call npx playwright install chromium --with-deps
 if %errorlevel% neq 0 (
     echo WARNING: Could not install Playwright browsers
     echo You may need to run: npx playwright install chromium
@@ -696,7 +696,7 @@ if not exist .env (
     echo.
     echo After configuration, please run this script again
     echo.
-    notepad .env
+    start notepad .env
     pause
     exit /b 0
 )
@@ -713,7 +713,7 @@ echo After successful startup, please return to the Web interface and select "Lo
 echo Press Ctrl+C to stop the server
 echo.
 
-node midscene_server.js
+call node midscene_server.js
 
 echo.
 echo Server stopped
