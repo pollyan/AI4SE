@@ -566,6 +566,21 @@ class TestCaseEditor {
         
         // 添加拖拽事件
         container.addEventListener('dragstart', (e) => {
+            // 检查事件源，如果是输入元素，则阻止拖拽
+            const target = e.target;
+            const isInputElement = target.tagName === 'INPUT' || 
+                                 target.tagName === 'TEXTAREA' || 
+                                 target.tagName === 'SELECT' ||
+                                 target.contentEditable === 'true';
+            
+            // 检查是否在编辑表单内
+            const isInEditForm = target.closest('.inline-edit-form') !== null;
+            
+            if (isInputElement || isInEditForm) {
+                e.preventDefault();
+                return;
+            }
+            
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', index);
             container.classList.add('dragging');
