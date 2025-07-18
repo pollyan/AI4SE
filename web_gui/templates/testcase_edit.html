@@ -566,17 +566,28 @@ class TestCaseEditor {
         
         // 添加拖拽事件
         container.addEventListener('dragstart', (e) => {
-            // 检查事件源，如果是输入元素，则阻止拖拽
+            // 检查是否点击在可拖拽区域
+            // 只允许从拖拽手柄或非交互区域开始拖拽
             const target = e.target;
-            const isInputElement = target.tagName === 'INPUT' || 
-                                 target.tagName === 'TEXTAREA' || 
-                                 target.tagName === 'SELECT' ||
-                                 target.contentEditable === 'true';
+            const dragHandle = target.closest('.drag-handle');
+            const listItemContent = target.closest('.list-item-content');
+            const buttonArea = target.closest('.flex.items-center.gap-1');
+            const editForm = target.closest('.inline-edit-form');
             
-            // 检查是否在编辑表单内
-            const isInEditForm = target.closest('.inline-edit-form') !== null;
+            // 如果在编辑表单内，阻止拖拽
+            if (editForm) {
+                e.preventDefault();
+                return;
+            }
             
-            if (isInputElement || isInEditForm) {
+            // 只允许从拖拽手柄或列表项内容区域（非按钮区）开始拖拽
+            if (!dragHandle && !listItemContent) {
+                e.preventDefault();
+                return;
+            }
+            
+            // 如果在按钮区域，阻止拖拽
+            if (buttonArea) {
                 e.preventDefault();
                 return;
             }
