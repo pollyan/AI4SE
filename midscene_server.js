@@ -3,6 +3,9 @@
  * 提供AI功能的HTTP接口供Python调用
  */
 
+// 加载环境变量
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const { PlaywrightAgent } = require('@midscene/web');
@@ -1655,11 +1658,14 @@ function createSimplifiedReportContent(originalContent, testcase, executionState
 
 // 启动服务器
 server.listen(port, () => {
-    console.log(`MidSceneJS本地代理服务器启动成功`);
+    console.log(`\n🚀 MidSceneJS本地代理服务器启动成功`);
     console.log(`HTTP服务器: http://localhost:${port}`);
     console.log(`WebSocket服务器: ws://localhost:${port}`);
     console.log(`AI模型: ${process.env.MIDSCENE_MODEL_NAME || 'qwen-vl-max-latest'}`);
     console.log(`API地址: ${process.env.OPENAI_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1'}`);
+    if (process.env.MIDSCENE_USE_GEMINI === '1') {
+        console.log(`Gemini模式: 已启用`);
+    }
     console.log(`服务器就绪，等待测试执行请求...`);
     console.log(`支持的API端点:`);
     console.log(`   POST /api/execute-testcase - 执行测试用例`);
