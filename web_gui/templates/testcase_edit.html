@@ -54,6 +54,28 @@
 .steps-list {
     user-select: none;
 }
+
+/* 步骤类型库网格布局 */
+.grid {
+    display: grid;
+}
+
+.grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.gap-1 {
+    gap: 4px;
+}
+
+/* 步骤类型按钮紧凑样式 */
+.step-type-btn {
+    width: 100%;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 </style>
 {% endblock %}
 
@@ -155,172 +177,172 @@
     </div>
 
     <!-- 右侧：步骤类型库 -->
-    <div class="card" id="step-types">
-        <div class="card-title">步骤类型库</div>
-        <div class="card-subtitle">拖拽到左侧添加步骤</div>
+    <div class="card" id="step-types" style="font-size: 13px;">
+        <div class="card-title" style="margin-bottom: 8px;">步骤类型库</div>
+        <div class="card-subtitle" style="margin-bottom: 12px;">拖拽到左侧添加步骤</div>
         
         <!-- 页面导航操作 -->
-        <div class="mb-3">
-            <div class="text-sm font-medium text-gray-700 mb-2">页面导航</div>
-            <div class="flex flex-column gap-1">
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="goto">
+        <div style="margin-bottom: 12px;">
+            <div class="text-xs font-medium text-gray-700" style="margin-bottom: 6px;">页面导航</div>
+            <div class="grid grid-cols-2 gap-1">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="goto">
                     <div>
-                        <div class="text-sm font-medium">goto</div>
-                        <div class="text-xs text-gray-500">导航到页面</div>
+                        <div class="text-xs font-medium">goto</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">导航到页面</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="refresh">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="refresh">
                     <div>
-                        <div class="text-sm font-medium">refresh</div>
-                        <div class="text-xs text-gray-500">刷新页面</div>
+                        <div class="text-xs font-medium">refresh</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">刷新页面</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="back">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="back">
                     <div>
-                        <div class="text-sm font-medium">back</div>
-                        <div class="text-xs text-gray-500">返回上一页</div>
+                        <div class="text-xs font-medium">back</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">返回上一页</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="evaluateJavaScript">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="evaluateJavaScript">
                     <div>
-                        <div class="text-sm font-medium">evaluateJavaScript</div>
-                        <div class="text-xs text-gray-500">执行JS代码</div>
+                        <div class="text-xs font-medium">evaluateJS</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">执行JS</div>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- 智能交互操作 -->
-        <div class="mb-3">
-            <div class="text-sm font-medium text-gray-700 mb-2">智能交互</div>
-            <div class="flex flex-column gap-1">
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="ai">
+        <div style="margin-bottom: 12px;">
+            <div class="text-xs font-medium text-gray-700" style="margin-bottom: 6px;">智能交互</div>
+            <div class="grid grid-cols-2 gap-1">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="ai">
                     <div>
-                        <div class="text-sm font-medium">ai</div>
-                        <div class="text-xs text-gray-500">智能操作规划</div>
+                        <div class="text-xs font-medium">ai</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">智能操作</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="aiTap">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="aiTap">
                     <div>
-                        <div class="text-sm font-medium">aiTap</div>
-                        <div class="text-xs text-gray-500">AI点击元素</div>
+                        <div class="text-xs font-medium">aiTap</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">点击元素</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="aiInput">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="aiInput">
                     <div>
-                        <div class="text-sm font-medium">aiInput</div>
-                        <div class="text-xs text-gray-500">AI输入文本</div>
+                        <div class="text-xs font-medium">aiInput</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">输入文本</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="aiHover">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="aiHover">
                     <div>
-                        <div class="text-sm font-medium">aiHover</div>
-                        <div class="text-xs text-gray-500">AI悬停元素</div>
+                        <div class="text-xs font-medium">aiHover</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">悬停元素</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="aiScroll">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="aiScroll">
                     <div>
-                        <div class="text-sm font-medium">aiScroll</div>
-                        <div class="text-xs text-gray-500">AI滚动页面</div>
+                        <div class="text-xs font-medium">aiScroll</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">滚动页面</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="aiKeyboardPress">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="aiKeyboardPress">
                     <div>
-                        <div class="text-sm font-medium">aiKeyboardPress</div>
-                        <div class="text-xs text-gray-500">AI键盘按键</div>
+                        <div class="text-xs font-medium">aiKeyPress</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">键盘按键</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="aiRightClick">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="aiRightClick">
                     <div>
-                        <div class="text-sm font-medium">aiRightClick</div>
-                        <div class="text-xs text-gray-500">AI右键点击</div>
+                        <div class="text-xs font-medium">aiRightClick</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">右键点击</div>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- 数据提取操作 -->
-        <div class="mb-3">
-            <div class="text-sm font-medium text-gray-700 mb-2">数据提取</div>
-            <div class="flex flex-column gap-1">
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="aiQuery">
+        <div style="margin-bottom: 12px;">
+            <div class="text-xs font-medium text-gray-700" style="margin-bottom: 6px;">数据提取</div>
+            <div class="grid grid-cols-2 gap-1">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="aiQuery">
                     <div>
-                        <div class="text-sm font-medium">aiQuery</div>
-                        <div class="text-xs text-gray-500">提取结构化数据</div>
+                        <div class="text-xs font-medium">aiQuery</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">结构化数据</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="aiAsk">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="aiAsk">
                     <div>
-                        <div class="text-sm font-medium">aiAsk</div>
-                        <div class="text-xs text-gray-500">询问页面信息</div>
+                        <div class="text-xs font-medium">aiAsk</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">询问信息</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="aiBoolean">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="aiBoolean">
                     <div>
-                        <div class="text-sm font-medium">aiBoolean</div>
-                        <div class="text-xs text-gray-500">提取布尔值</div>
+                        <div class="text-xs font-medium">aiBoolean</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">布尔值</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="aiNumber">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="aiNumber">
                     <div>
-                        <div class="text-sm font-medium">aiNumber</div>
-                        <div class="text-xs text-gray-500">提取数值</div>
+                        <div class="text-xs font-medium">aiNumber</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">提取数值</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="aiString">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="aiString">
                     <div>
-                        <div class="text-sm font-medium">aiString</div>
-                        <div class="text-xs text-gray-500">提取字符串</div>
+                        <div class="text-xs font-medium">aiString</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">提取文本</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="aiLocate">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="aiLocate">
                     <div>
-                        <div class="text-sm font-medium">aiLocate</div>
-                        <div class="text-xs text-gray-500">定位元素坐标</div>
+                        <div class="text-xs font-medium">aiLocate</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">元素坐标</div>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- 验证等待操作 -->
-        <div class="mb-3">
-            <div class="text-sm font-medium text-gray-700 mb-2">验证等待</div>
-            <div class="flex flex-column gap-1">
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="aiAssert">
+        <div style="margin-bottom: 12px;">
+            <div class="text-xs font-medium text-gray-700" style="margin-bottom: 6px;">验证等待</div>
+            <div class="grid grid-cols-2 gap-1">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="aiAssert">
                     <div>
-                        <div class="text-sm font-medium">aiAssert</div>
-                        <div class="text-xs text-gray-500">AI断言验证</div>
+                        <div class="text-xs font-medium">aiAssert</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">断言验证</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="aiWaitFor">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="aiWaitFor">
                     <div>
-                        <div class="text-sm font-medium">aiWaitFor</div>
-                        <div class="text-xs text-gray-500">等待条件满足</div>
+                        <div class="text-xs font-medium">aiWaitFor</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">等待条件</div>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- 工具操作 -->
-        <div class="mb-3">
-            <div class="text-sm font-medium text-gray-700 mb-2">工具操作</div>
-            <div class="flex flex-column gap-1">
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="logScreenshot">
+        <div style="margin-bottom: 8px;">
+            <div class="text-xs font-medium text-gray-700" style="margin-bottom: 6px;">工具操作</div>
+            <div class="grid grid-cols-2 gap-1">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="logScreenshot">
                     <div>
-                        <div class="text-sm font-medium">logScreenshot</div>
-                        <div class="text-xs text-gray-500">截图并记录</div>
+                        <div class="text-xs font-medium">screenshot</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">截图记录</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="sleep">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="sleep">
                     <div>
-                        <div class="text-sm font-medium">sleep</div>
-                        <div class="text-xs text-gray-500">延时等待</div>
+                        <div class="text-xs font-medium">sleep</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">延时等待</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="justify-content: flex-start; cursor: grab;" data-action="runYaml">
+                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;" data-action="runYaml">
                     <div>
-                        <div class="text-sm font-medium">runYaml</div>
-                        <div class="text-xs text-gray-500">执行YAML脚本</div>
+                        <div class="text-xs font-medium">runYaml</div>
+                        <div class="text-xs text-gray-500" style="font-size: 11px;">YAML脚本</div>
                     </div>
                 </div>
             </div>
