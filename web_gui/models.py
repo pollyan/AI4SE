@@ -25,6 +25,14 @@ class TestCase(db.Model):
     
     def to_dict(self):
         """转换为字典"""
+        # 计算执行次数和成功率
+        execution_count = ExecutionHistory.query.filter_by(test_case_id=self.id).count()
+        success_count = ExecutionHistory.query.filter_by(
+            test_case_id=self.id, 
+            status='success'
+        ).count()
+        success_rate = (success_count / execution_count * 100) if execution_count > 0 else 0
+        
         return {
             'id': self.id,
             'name': self.name,
@@ -36,7 +44,9 @@ class TestCase(db.Model):
             'created_by': self.created_by,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-            'is_active': self.is_active
+            'is_active': self.is_active,
+            'execution_count': execution_count,
+            'success_rate': round(success_rate, 1)
         }
     
     @classmethod

@@ -268,9 +268,9 @@
         const steps = testcase.steps || [];
         const stepCount = steps.length;
         
-        // 获取或模拟执行统计数据
-        const executionCount = testcase.execution_count || Math.floor(Math.random() * 300) + 50;
-        const successRate = testcase.success_rate || (90 + Math.random() * 10).toFixed(1);
+        // 获取执行统计数据
+        const executionCount = testcase.execution_count || 0;
+        const successRate = testcase.success_rate || 0;
         
         // 获取状态样式和文本
         const statusText = testcase.status || '活跃';
