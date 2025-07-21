@@ -300,8 +300,8 @@
 
             <div class="divider"></div>
 
-            <h4 class="card-title" style="font-size: 14px; margin-bottom: 8px;">收藏的测试用例</h4>
-            <div class="list" id="favorite-testcases">
+            <h4 class="card-title" style="font-size: 14px; margin-bottom: 8px;">最新修改的测试用例</h4>
+            <div class="list" id="recent-modified-testcases">
                 <!-- 动态加载 -->
             </div>
         </div>
@@ -533,53 +533,45 @@
         });
     }
 
-    // 加载收藏的测试用例
+    // 加载最新修改的测试用例
     async function loadFavoriteTestcases() {
         try {
-            // 先获取用户的收藏列表
-            const favResponse = await axios.get(API_BASE + '/user/favorites');
-            if (favResponse.data.code === 200) {
-                favoriteTestcases = new Set(favResponse.data.data);
-            }
-
-            // 获取收藏的测试用例详情
-            if (favoriteTestcases.size > 0) {
-                const ids = Array.from(favoriteTestcases).join(',');
-                const response = await axios.get(API_BASE + `/testcases?ids=${ids}&size=5`);
-                if (response.data.code === 200) {
-                    renderFavoriteTestcases(response.data.data.items);
-                }
+            // 获取最新修改的5条测试用例
+            const response = await axios.get(API_BASE + '/testcases?sort=updated_at,desc&size=5');
+            if (response.data.code === 200) {
+                renderFavoriteTestcases(response.data.data.items);
             } else {
                 renderFavoriteTestcases([]);
             }
         } catch (error) {
-            console.error('加载收藏测试用例失败:', error);
+            console.error('加载最新修改的测试用例失败:', error);
             // 如果API不存在，显示示例数据
             renderFavoriteTestcases([
-                { id: 1, name: '核心业务流程测试', description: '包含5个关键步骤', last_success: true },
-                { id: 2, name: '回归测试套件', description: '12个测试用例', last_success: true }
+                { id: 1, name: '核心业务流程测试', description: '包含5个关键步骤', updated_at: new Date().toISOString() },
+                { id: 2, name: '回归测试套件', description: '12个测试用例', updated_at: new Date(Date.now() - 3600000).toISOString() }
             ]);
         }
     }
 
     function renderFavoriteTestcases(testcases) {
-        const container = document.getElementById('favorite-testcases');
+        const container = document.getElementById('recent-modified-testcases');
         container.innerHTML = '';
 
         if (testcases.length === 0) {
-            container.innerHTML = '<div class="text-center text-gray-500 py-4">暂无收藏的测试用例</div>';
+            container.innerHTML = '<div class="text-center text-gray-500 py-4">暂无最新修改的测试用例</div>';
             return;
         }
 
         testcases.forEach(testcase => {
             const item = document.createElement('div');
             item.className = 'list-item';
-            item.title = '点击执行收藏的测试用例';
+            item.title = '点击执行最新修改的测试用例';
             
             item.innerHTML = `
                 <div class="list-item-content">
                     <div class="list-item-title">${testcase.name}</div>
                     <div class="list-item-subtitle">${testcase.description || '无描述'}</div>
+                    <div class="list-item-meta">${testcase.updated_at ? formatTimeAgo(testcase.updated_at) : '未知时间'}</div>
                 </div>
                 <div class="flex items-center gap-1">
                     <button class="btn btn-small btn-primary" onclick="executeTestcase(${testcase.id})">执行</button>
@@ -897,6 +889,23 @@
     }
 
     // 辅助函数
+    function formatTimeAgo(timestamp) {
+        const now = new Date();
+        const date = new Date(timestamp);
+        const seconds = Math.floor((now - date) / 1000);
+        
+        if (seconds < 60) {
+            return '刚刚';
+        } else if (seconds < 3600) {
+            return Math.floor(seconds / 60) + '分钟前';
+        } else if (seconds < 86400) {
+            return Math.floor(seconds / 3600) + '小时前';
+        } else if (seconds < 2592000) {
+            return Math.floor(seconds / 86400) + '天前';
+        } else {
+            return date.toLocaleDateString();
+        }
+    }
     function getTimeAgo(date) {
         const now = new Date();
         const diff = Math.floor((now - date) / 1000);
