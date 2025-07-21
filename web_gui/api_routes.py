@@ -4,6 +4,7 @@ API路由定义
 from flask import Blueprint, request, jsonify
 import json
 import uuid
+import requests
 from datetime import datetime
 
 # 修复Serverless环境的导入路径
@@ -1652,7 +1653,7 @@ def get_system_status():
         ai_model_info = '监测中'
         try:
             # 尝试从本地代理服务器获取模型信息
-            proxy_response = requests.get('http://localhost:3001/health', timeout=2)
+            proxy_response = requests.get('http://localhost:3001/health', timeout=5)
             if proxy_response.status_code == 200:
                 health_data = proxy_response.json()
                 if health_data.get('success') and health_data.get('model'):
@@ -1668,7 +1669,6 @@ def get_system_status():
         })
         
         # 本地代理状态（检查midscene服务器）
-        import requests
         local_proxy_status = 'offline'
         local_proxy_info = 'localhost:3001 • 未检测到'
         
