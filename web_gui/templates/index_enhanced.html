@@ -11,9 +11,9 @@
     /* 实时状态栏样式 */
     .status-bar {
         background: linear-gradient(90deg, #f8f9fa 0%, #ffffff 100%);
-        padding: 16px 24px;
-        border-radius: 8px;
-        margin-bottom: 24px;
+        padding: 10px 20px;
+        border-radius: 6px;
+        margin-bottom: 16px;
     }
 
     /* 统计卡片样式 */
@@ -203,6 +203,19 @@
         color: #faad14;
     }
 
+    /* 仪表板紧凑布局优化 */
+    .dashboard-compact .list-item {
+        padding: 12px 16px;
+    }
+    
+    .dashboard-compact .card {
+        padding: 20px;
+    }
+    
+    .dashboard-compact .divider {
+        margin: 16px 0;
+    }
+
     /* 响应式设计 */
     @media (max-width: 1024px) {
         .grid-cols-3 {
@@ -253,7 +266,7 @@
     </div>
 
     <!-- 主要内容区域 -->
-    <div class="grid grid-cols-3 gap-3">
+    <div class="grid grid-cols-3 gap-3 dashboard-compact">
         <!-- 智能搜索与最近活动 -->
         <div class="card">
             <h3 class="card-title">智能搜索</h3>
@@ -335,7 +348,7 @@
     </div>
 
     <!-- 待处理的失败 -->
-    <div class="mt-4">
+    <div class="mt-4 dashboard-compact">
         <div class="card">
             <h3 class="card-title">待处理的失败</h3>
             <p class="card-subtitle">需要关注的测试问题</p>
