@@ -596,20 +596,83 @@
         try {
             const response = await axios.get(API_BASE + '/system/status');
             if (response.data.code === 200) {
-                renderSystemStatus(response.data.data);
+                // 获取后端返回的服务状态
+                const systemData = response.data.data;
+                
+                // 在前端检测本地代理状态
+                checkLocalProxy().then(localProxyService => {
+                    // 更新本地代理的状态
+                    const services = systemData.services.map(service => {
+                        if (service.name === '本地代理') {
+                            return localProxyService;
+                        }
+                        return service;
+                    });
+                    
+                    renderSystemStatus({
+                        ...systemData,
+                        services: services
+                    });
+                });
             }
         } catch (error) {
             console.error('加载系统状态失败:', error);
-            // 使用默认数据
-            renderSystemStatus({
-                services: [
-                    { name: 'AI模型服务', status: 'online', info: 'qwen-vl-max • 响应 0.8s' },
-                    { name: '本地代理', status: 'online', info: 'localhost:3001 • 连接正常' },
-                    { name: '数据库', status: 'online', info: 'PostgreSQL • 延迟 12ms' }
-                ],
-                running_tests: 0,
-                queue_size: 0
+            // 使用默认数据，同时检测本地代理
+            checkLocalProxy().then(localProxyService => {
+                renderSystemStatus({
+                    services: [
+                        { name: 'AI模型服务', status: 'online', info: 'qwen-vl-max • 响应 0.8s' },
+                        localProxyService,
+                        { name: '数据库', status: 'online', info: 'PostgreSQL • 延迟 12ms' }
+                    ],
+                    running_tests: 0,
+                    queue_size: 0
+                });
             });
+        }
+    }
+    
+    // 在前端检测本地代理
+    async function checkLocalProxy() {
+        try {
+            // 尝试连接本地代理
+            const startTime = Date.now();
+            const response = await axios.get('http://localhost:3001/health', { 
+                timeout: 2000,
+                // 避免CORS问题
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+            const responseTime = Date.now() - startTime;
+            
+            if (response.data && response.data.success) {
+                return {
+                    name: '本地代理',
+                    status: 'online',
+                    info: `localhost:3001 • 响应 ${responseTime}ms`
+                };
+            } else {
+                return {
+                    name: '本地代理',
+                    status: 'warning',
+                    info: 'localhost:3001 • 状态异常'
+                };
+            }
+        } catch (error) {
+            console.error('本地代理检测失败:', error);
+            let info = 'localhost:3001 • 连接失败';
+            if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
+                info = 'localhost:3001 • 未启动';
+            } else if (error.code === 'ETIMEDOUT') {
+                info = 'localhost:3001 • 响应超时';
+            }
+            
+            return {
+                name: '本地代理',
+                status: 'offline',
+                info: info
+            };
         }
     }
 
