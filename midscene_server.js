@@ -782,6 +782,9 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
 
         logMessage(executionId, 'info', `共 ${steps.length} 个步骤`);
 
+        // 初始化步骤结果数组
+        const stepsResult = [];
+        
         // 初始化浏览器
         const headless = mode === 'headless';
         console.log(`\n[${new Date().toISOString()}] Browser Mode Configuration`);
@@ -820,16 +823,34 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
                     message: '此步骤已被标记为跳过'
                 });
                 
-                // 记录跳过的步骤结果
+                // 记录跳过的步骤结果到stepsResult
+                const skipTime = new Date().toISOString();
                 stepsResult.push({
                     step_index: i,
                     description: step.description || step.action,
                     status: 'skipped',
-                    start_time: new Date().toISOString(),
-                    end_time: new Date().toISOString(),
+                    start_time: skipTime,
+                    end_time: skipTime,
                     duration: 0,
                     error_message: '步骤被跳过'
                 });
+                
+                // 同样需要记录到executionState.steps中以便统计
+                const executionState = executionStates.get(executionId);
+                if (executionState) {
+                    const stepData = {
+                        index: i,
+                        description: step.description || step.action || 'Unknown Step',
+                        status: 'skipped',
+                        start_time: skipTime,
+                        end_time: skipTime,
+                        duration: 0,
+                        stepType: step.type || step.action,
+                        params: step.params || {},
+                        error_message: '步骤被跳过'
+                    };
+                    executionState.steps.push(stepData);
+                }
                 
                 continue; // 跳过此步骤，继续下一个
             }
@@ -950,26 +971,41 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
         const totalSteps = executionState.steps.length;
         const successSteps = executionState.steps.filter(step => step.status === 'success').length;
         const failedSteps = executionState.steps.filter(step => step.status === 'failed').length;
+        const skippedSteps = executionState.steps.filter(step => step.status === 'skipped').length;
+        const executedSteps = totalSteps - skippedSteps; // 实际执行的步骤数
         
-        // 根据步骤结果确定整体状态
-        const overallStatus = failedSteps > 0 ? 'failed' : 'success';
+        // 优化成功判断逻辑：如果实际执行的步骤都成功，则判断为成功（跳过的步骤不影响结果）
+        const overallStatus = (failedSteps === 0 && executedSteps > 0) ? 'success' : 
+                             (executedSteps === 0) ? 'skipped' : 'failed';
         executionState.status = overallStatus;
+
+        // 生成更详细的消息
+        let message = '';
+        if (overallStatus === 'success') {
+            message = skippedSteps > 0 
+                ? `测试执行完成！执行步骤 ${successSteps}/${executedSteps} 全部成功，跳过 ${skippedSteps} 个步骤`
+                : `测试执行完成！所有 ${successSteps} 个步骤全部成功`;
+        } else if (overallStatus === 'skipped') {
+            message = `测试执行完成，但所有步骤都被跳过`;
+        } else {
+            message = `测试执行完成，但有 ${failedSteps} 个步骤失败`;
+        }
 
         // 发送执行完成事件
         io.emit('execution-completed', {
             executionId,
             status: overallStatus,
-            message: overallStatus === 'success' ? '测试执行完成！' : `测试执行完成，但有 ${failedSteps} 个步骤失败`,
+            message: message,
             duration: executionState.duration,
             totalSteps: totalSteps,
             successSteps: successSteps,
             failedSteps: failedSteps,
+            skippedSteps: skippedSteps,
+            executedSteps: executedSteps,
             timestamp: new Date().toISOString()
         });
 
-        const statusMessage = overallStatus === 'success' 
-            ? `测试执行完成！耗时: ${Math.round(executionState.duration / 1000)}秒，成功步骤: ${successSteps}/${totalSteps}`
-            : `测试执行完成，但有失败！耗时: ${Math.round(executionState.duration / 1000)}秒，成功步骤: ${successSteps}/${totalSteps}，失败步骤: ${failedSteps}`;
+        const statusMessage = `${message}，耗时: ${Math.round(executionState.duration / 1000)}秒`;
         
         logMessage(executionId, overallStatus === 'success' ? 'success' : 'warning', statusMessage);
         
