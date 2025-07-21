@@ -1511,6 +1511,56 @@ app.get('/health', (req, res) => {
     });
 });
 
+// AI模型响应时间测试
+app.get('/ai-test', async (req, res) => {
+    try {
+        console.log('🤖 开始测试AI模型响应时间...');
+        
+        // 获取当前配置的模型信息
+        const modelName = process.env.MIDSCENE_MODEL_NAME || 'qwen-vl-max-latest';
+        const baseUrl = process.env.OPENAI_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+        
+        // 使用一个简单的测试图片进行AI识别测试
+        const { agent, page } = await initBrowser(true); // 使用无头模式
+        
+        try {
+            // 导航到一个简单的测试页面
+            await page.goto('data:text/html,<html><body><h1>AI Test</h1><button>Test Button</button></body></html>');
+            
+            // 测试AI识别响应时间
+            const startTime = Date.now();
+            
+            // 使用aiLocate进行简单的元素定位测试
+            const result = await agent.aiLocate('Test Button');
+            
+            const responseTime = Date.now() - startTime;
+            
+            console.log(`✅ AI模型响应时间: ${responseTime}ms`);
+            
+            res.json({
+                success: true,
+                model: modelName,
+                baseUrl: baseUrl,
+                responseTime: responseTime,
+                timestamp: new Date().toISOString()
+            });
+            
+        } finally {
+            // 清理资源
+            if (page) await page.close();
+        }
+        
+    } catch (error) {
+        console.error('❌ AI模型测试失败:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            model: process.env.MIDSCENE_MODEL_NAME || 'qwen-vl-max-latest',
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 // 清理资源
 app.post('/cleanup', async (req, res) => {
     try {
