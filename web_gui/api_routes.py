@@ -1648,13 +1648,13 @@ def get_system_status():
         # 检查服务状态
         services = []
         
-        # AI模型服务状态（可以通过环境变量或实际检查）
+        # AI模型服务状态（仅显示模型名称，不进行连接测试）
         ai_service_status = 'online'
-        ai_response_time = 0.8
+        model_name = os.getenv("MIDSCENE_MODEL_NAME", "qwen-vl-max-latest")
         services.append({
             'name': 'AI模型服务',
             'status': ai_service_status,
-            'info': f'{os.getenv("MIDSCENE_MODEL_NAME", "qwen-vl-max")} • 响应 {ai_response_time}s'
+            'info': model_name
         })
         
         # 本地代理状态（检查midscene服务器）
