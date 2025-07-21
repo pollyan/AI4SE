@@ -513,8 +513,10 @@
             item.title = '点击查看详情，右键快速操作';
             item.onclick = () => viewExecutionDetail(execution.id);
             
-            const statusClass = execution.status === 'success' ? 'status-success' : 
-                               execution.status === 'failed' ? 'status-error' : 'status-warning';
+            // 兼容不同的状态值格式
+            const status = execution.status ? execution.status.toLowerCase() : '';
+            const statusClass = status === 'success' || status === 'passed' ? 'status-success' : 
+                               status === 'failed' || status === 'error' || !execution.duration ? 'status-error' : 'status-warning';
             
             const timeAgo = getTimeAgo(new Date(execution.start_time));
             
@@ -528,7 +530,7 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-1">
-                    <button class="btn btn-small btn-ghost" onclick="event.stopPropagation(); rerunTest(${execution.test_case_id})">重新执行</button>
+                    <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); rerunTest(${execution.test_case_id})">重新执行</button>
                     <div class="status ${statusClass}"></div>
                 </div>
             `;
