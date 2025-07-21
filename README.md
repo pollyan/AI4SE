@@ -1,4 +1,4 @@
-# Intent Test Framework
+# 意图测试平台
 
 一个基于AI的意图驱动Web自动化测试框架，提供完整的WebUI界面用于测试用例管理、执行监控和结果分析。
 
@@ -186,4 +186,4 @@ python -m pytest tests/test_models.py
 
 ---
 
-**Intent Test Framework** - 让AI驱动的Web测试变得简单而强大！
+**意图测试平台** - 让AI驱动的Web测试变得简单而强大！

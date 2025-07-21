@@ -1,5 +1,5 @@
 """
-Vercel入口文件 - Intent Test Framework
+Vercel入口文件 - 意图测试平台
 专为Serverless环境优化，避免复杂的模块导入
 """
 
@@ -31,7 +31,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Intent Test Framework</title>
+    <title>意图测试平台</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
         .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -47,7 +47,7 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚀 Intent Test Framework</h1>
+            <h1>🚀 意图测试平台</h1>
             <p>AI驱动的Web自动化测试平台</p>
         </div>
 
@@ -568,7 +568,7 @@ def get_package_json_content():
     return '''{
   "name": "intent-test-proxy",
   "version": "1.0.0",
-  "description": "Intent Test Framework 本地代理服务器",
+  "description": "意图测试平台 本地代理服务器",
   "main": "midscene_server.js",
   "scripts": {
     "start": "node midscene_server.js",
@@ -588,13 +588,13 @@ def get_package_json_content():
     "@types/node": "^20.0.0"
   },
   "keywords": ["midscene", "automation", "testing", "ai"],
-  "author": "Intent Test Framework",
+  "author": "意图测试平台",
   "license": "MIT"
 }'''
 
 def get_env_template():
     """获取环境变量模板"""
-    return '''# Intent Test Framework 本地代理服务器配置
+    return '''# 意图测试平台 本地代理服务器配置
 
 # AI API配置 (必填)
 # 选择以下其中一种配置方式：
@@ -627,11 +627,11 @@ def get_windows_start_script():
     """获取Windows启动脚本"""
     return '''@echo off
 chcp 65001 >nul
-title Intent Test Framework - Local Proxy Server
+title 意图测试平台 - Local Proxy Server
 
 echo.
 echo ========================================
-echo   Intent Test Framework Local Proxy Server
+echo   意图测试平台 Local Proxy Server
 echo ========================================
 echo.
 
@@ -707,7 +707,7 @@ REM Start server
 echo.
 echo [5/5] Starting server...
 echo.
-echo Starting Intent Test Framework Local Proxy Server...
+echo Starting 意图测试平台 Local Proxy Server...
 echo.
 echo After successful startup, please return to the Web interface and select "Local Proxy Mode"
 echo Press Ctrl+C to stop the server
@@ -724,7 +724,7 @@ def get_unix_start_script():
     """获取Unix启动脚本"""
     return '''#!/bin/bash
 
-# Intent Test Framework 本地代理服务器启动脚本
+# 意图测试平台 本地代理服务器启动脚本
 
 # 设置颜色输出
 RED='\\033[0;31m'
@@ -735,7 +735,7 @@ NC='\\033[0m' # No Color
 
 echo ""
 echo "========================================"
-echo "  Intent Test Framework 本地代理服务器"
+echo "  意图测试平台 本地代理服务器"
 echo "========================================"
 echo ""
 
@@ -852,7 +852,7 @@ echo -e "${GREEN}✅ 配置文件存在${NC}"
 echo ""
 echo -e "${BLUE}[5/5]${NC} 启动服务器..."
 echo ""
-echo -e "${GREEN}🚀 正在启动Intent Test Framework本地代理服务器...${NC}"
+echo -e "${GREEN}🚀 正在启动意图测试平台本地代理服务器...${NC}"
 echo ""
 echo "启动成功后，请返回Web界面选择"本地代理模式""
 echo "按 Ctrl+C 可停止服务器"
@@ -866,7 +866,7 @@ echo "服务器已停止"
 
 def get_readme_content():
     """获取README内容"""
-    return '''# Intent Test Framework - 本地代理服务器
+    return '''# 意图测试平台 - 本地代理服务器
 
 ## 快速开始
 
@@ -955,7 +955,7 @@ npm install
 
 ---
 
-Intent Test Framework - AI驱动的Web自动化测试平台
+意图测试平台 - AI驱动的Web自动化测试平台
 '''
 
 # 设置环境变量
