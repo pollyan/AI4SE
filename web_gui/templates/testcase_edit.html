@@ -363,11 +363,11 @@
         </div>
         <div>
             <div class="text-sm text-gray-600 mb-1">创建时间</div>
-            <div class="text-sm font-medium">{{ testcase.created_at.strftime('%Y-%m-%d %H:%M:%S') if testcase.created_at else '未知' }}</div>
+            <div class="text-sm font-medium" data-time="{{ testcase.created_at.isoformat() if testcase.created_at else '' }}">{{ '未知' if not testcase.created_at else '' }}</div>
         </div>
         <div>
             <div class="text-sm text-gray-600 mb-1">最后修改</div>
-            <div class="text-sm font-medium">{{ testcase.updated_at.strftime('%Y-%m-%d %H:%M:%S') if testcase.updated_at else (testcase.created_at.strftime('%Y-%m-%d %H:%M:%S') if testcase.created_at else '未知') }}</div>
+            <div class="text-sm font-medium" data-time="{{ (testcase.updated_at or testcase.created_at).isoformat() if (testcase.updated_at or testcase.created_at) else '' }}">{{ '未知' if not (testcase.updated_at or testcase.created_at) else '' }}</div>
         </div>
         <div>
             <div class="text-sm text-gray-600 mb-1">创建者</div>
@@ -1279,8 +1279,33 @@ class TestCaseEditor {
     }
 }
 
+// 通用时间格式化函数
+function formatLocalTime(isoString) {
+    if (!isoString) return '未知';
+    try {
+        return new Date(isoString).toLocaleString('zh-CN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    } catch (e) {
+        return '时间格式错误';
+    }
+}
+
 // 页面加载完成后初始化编辑器
 document.addEventListener('DOMContentLoaded', function() {
+    // 格式化所有时间显示
+    document.querySelectorAll('[data-time]').forEach(element => {
+        const isoTime = element.getAttribute('data-time');
+        if (isoTime) {
+            element.textContent = formatLocalTime(isoTime);
+        }
+    });
+    
     new TestCaseEditor();
 });
 </script>
