@@ -921,8 +921,8 @@ def get_execution_trends():
             day_end = day_start + timedelta(days=1)
             
             count = ExecutionHistory.query.filter(
-                ExecutionHistory.created_at >= day_start,
-                ExecutionHistory.created_at < day_end
+                ExecutionHistory.start_time >= day_start,
+                ExecutionHistory.start_time < day_end
             ).count()
             
             trends.append({
@@ -1730,8 +1730,8 @@ def get_execution_trend():
             day_end = day_start + timedelta(days=1)
             
             count = ExecutionHistory.query.filter(
-                ExecutionHistory.created_at >= day_start,
-                ExecutionHistory.created_at < day_end
+                ExecutionHistory.start_time >= day_start,
+                ExecutionHistory.start_time < day_end
             ).count()
             
             trend_data.append({

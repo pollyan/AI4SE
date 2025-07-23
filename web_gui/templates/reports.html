@@ -291,6 +291,9 @@
         }, 3000);
     }
     
+    // API基础路径
+    const API_BASE = '/api';
+    
     // 页面初始化
     document.addEventListener('DOMContentLoaded', function() {
         // 设置默认日期
@@ -338,23 +341,36 @@
     // 加载趋势图表
     async function loadTrendChart() {
         try {
-            const response = await axios.get('/api/reports/trends');
+            // 使用与首页相同的API端点和参数
+            const response = await axios.get(API_BASE + '/stats/trend?days=7');
             if (response.data.code === 200) {
                 const trends = response.data.data;
-                renderTrendChart(trends);
+                // 转换日期格式以匹配报告页面的显示需求
+                const formattedTrends = trends.map(item => ({
+                    date: new Date(item.date).toLocaleDateString('zh-CN', {
+                        month: '2-digit',
+                        day: '2-digit'
+                    }),
+                    count: item.count
+                }));
+                renderTrendChart(formattedTrends);
             }
         } catch (error) {
             console.error('加载趋势数据失败:', error);
-            // 使用设计图中的数据
-            const mockTrends = [
-                {date: '01/09', count: 120},
-                {date: '01/10', count: 95},
-                {date: '01/11', count: 140},
-                {date: '01/12', count: 165},
-                {date: '01/13', count: 110},
-                {date: '01/14', count: 180},
-                {date: '01/15', count: 200}
-            ];
+            // 使用动态生成的模拟数据，与首页保持一致
+            const today = new Date();
+            const mockTrends = [];
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - i);
+                mockTrends.push({
+                    date: date.toLocaleDateString('zh-CN', {
+                        month: '2-digit',
+                        day: '2-digit'
+                    }),
+                    count: Math.floor(Math.random() * 100) + 20
+                });
+            }
             renderTrendChart(mockTrends);
         }
     }
