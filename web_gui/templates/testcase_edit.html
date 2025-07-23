@@ -147,7 +147,7 @@
                 <span id="step-count">0</span>个步骤 • 
                 新建用例
             {% else %}
-                最后修改: {{ testcase.updated_at.strftime('%Y-%m-%d %H:%M') if testcase.updated_at else (testcase.created_at.strftime('%Y-%m-%d %H:%M') if testcase.created_at else '未知') }} • 
+                最后修改: <span data-time="{{ (testcase.updated_at or testcase.created_at).isoformat() if (testcase.updated_at or testcase.created_at) else '' }}">{{ '未知' if not (testcase.updated_at or testcase.created_at) else '' }}</span> • 
                 <span id="step-count">0</span>个步骤 • 
                 执行{{ total_executions }}次 • 
                 成功率{{ "%.1f"|format(success_rate) }}%
