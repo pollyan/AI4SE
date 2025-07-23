@@ -370,76 +370,7 @@ def execute_testcase_async(execution_id, testcase, mode, client_sid):
             except Exception as e:
                 print(f"AI引擎初始化失败，使用模拟模式: {e}")
                 # 如果真实AI引擎失败，回退到模拟模式
-                # 重新创建模拟AI类
-                class FallbackMockAI:
-                    def __init__(self):
-                        self.current_url = None
-
-                    def goto(self, url):
-                        self.current_url = url
-                        print(f"[模拟] 访问页面: {url}")
-                        time.sleep(1)
-
-                    def ai_input(self, text, locate):
-                        print(f"[模拟] 在 '{locate}' 中输入: {text}")
-                        time.sleep(0.5)
-
-                    def ai_tap(self, prompt):
-                        print(f"[模拟] 点击: {prompt}")
-                        time.sleep(0.5)
-
-                    def ai_assert(self, prompt):
-                        print(f"[模拟] 验证: {prompt}")
-                        time.sleep(0.5)
-
-                    def ai_wait_for(self, prompt, timeout=10000):
-                        print(f"[模拟] 等待: {prompt} (超时: {timeout}ms)")
-                        time.sleep(1)
-
-                    def ai_scroll(self, direction='down', scroll_type='once', locate_prompt=None):
-                        print(f"[模拟] 滚动: {direction} ({scroll_type})")
-                        time.sleep(0.5)
-
-                    def take_screenshot(self, title):
-                        """模拟截图功能"""
-                        # 确保截图保存到正确的静态文件目录
-                        screenshot_filename = f"{title}.png"
-                        screenshot_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'screenshots')
-                        screenshot_path = os.path.join(screenshot_dir, screenshot_filename)
-
-                        print(f"[模拟] 截图保存到: {screenshot_path}")
-
-                        try:
-                            from PIL import Image, ImageDraw
-                            os.makedirs(screenshot_dir, exist_ok=True)
-
-                            # 创建一个简单的模拟截图
-                            img = Image.new('RGB', (800, 600), color='lightblue')
-                            draw = ImageDraw.Draw(img)
-                            draw.rectangle([50, 50, 750, 550], outline='darkblue', width=3)
-                            draw.text((100, 100), "Fallback Mock Screenshot", fill='darkblue')
-                            draw.text((100, 150), f"URL: {getattr(self, 'current_url', 'Unknown')}", fill='blue')
-                            draw.text((100, 200), f"Time: {time.strftime('%Y-%m-%d %H:%M:%S')}", fill='gray')
-
-                            img.save(screenshot_path, 'PNG')
-                            print(f"[模拟] 截图已保存: {screenshot_path}")
-                        except ImportError:
-                            # 如果没有PIL库，创建一个简单的文本文件
-                            os.makedirs(screenshot_dir, exist_ok=True)
-                            with open(screenshot_path.replace('.png', '.txt'), 'w') as f:
-                                f.write(f"Fallback Mock Screenshot - {time.strftime('%Y-%m-%d %H:%M:%S')}")
-                        except Exception as e:
-                            print(f"[模拟] 截图保存失败: {e}")
-                            os.makedirs(screenshot_dir, exist_ok=True)
-                            with open(screenshot_path, 'w') as f:
-                                f.write("")
-
-                        return f"web_gui/static/screenshots/{screenshot_filename}"
-
-                    def cleanup(self):
-                        print("[模拟] 清理AI资源")
-
-                ai = FallbackMockAI()
+                ai = MockMidSceneAI()
                 socketio.emit('execution_log', {
                     'execution_id': execution_id,
                     'message': f'AI引擎初始化失败，使用模拟模式: {str(e)}',
@@ -743,6 +674,19 @@ def init_database():
             # 创建表
             db.create_all()
             print("✅ 数据库表创建完成")
+            
+            # 应用数据库优化
+            try:
+                from utils.db_optimization import create_database_indexes
+                create_database_indexes(db)
+                print("✅ 数据库索引优化完成")
+            except ImportError:
+                try:
+                    from web_gui.utils.db_optimization import create_database_indexes
+                    create_database_indexes(db)
+                    print("✅ 数据库索引优化完成")
+                except Exception as opt_e:
+                    print(f"⚠️ 数据库优化失败: {opt_e}")
 
             # 创建默认模板
             create_default_templates()

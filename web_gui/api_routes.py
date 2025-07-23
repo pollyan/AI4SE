@@ -7,6 +7,18 @@ import uuid
 import requests
 from datetime import datetime
 
+# 导入统一错误处理工具
+try:
+    from utils.error_handler import (
+        api_error_handler, db_transaction_handler, validate_json_data,
+        format_success_response, ValidationError, NotFoundError, DatabaseError
+    )
+except ImportError:
+    from web_gui.utils.error_handler import (
+        api_error_handler, db_transaction_handler, validate_json_data,
+        format_success_response, ValidationError, NotFoundError, DatabaseError
+    )
+
 # 修复Serverless环境的导入路径
 try:
     from models import db, TestCase, ExecutionHistory, StepExecution, Template
@@ -61,73 +73,42 @@ def get_testcases():
         }), 500
 
 @api_bp.route('/testcases', methods=['POST'])
+@api_error_handler
+@validate_json_data(required_fields=['name'])
+@db_transaction_handler(db)
 def create_testcase():
     """创建测试用例"""
-    try:
-        data = request.get_json()
-        
-        # 记录请求数据进行调试
-        print(f"创建测试用例请求数据: {data}")
-        
-        # 验证请求数据
-        if not data:
-            return jsonify({
-                'code': 400,
-                'message': '请求数据不能为空'
-            }), 400
-        
-        # 验证必填字段
-        if not data.get('name'):
-            return jsonify({
-                'code': 400,
-                'message': '测试用例名称不能为空'
-            }), 400
-        
-        # 验证步骤数据格式（允许为空，后续在步骤编辑器中完善）
-        steps = data.get('steps', [])
-        if not isinstance(steps, list):
-            return jsonify({
-                'code': 400,
-                'message': '测试步骤必须是数组格式'
-            }), 400
-        
-        # 如果有步骤，验证每个步骤的格式
-        if len(steps) > 0:
-            for i, step in enumerate(steps):
-                if not isinstance(step, dict):
-                    return jsonify({
-                        'code': 400,
-                        'message': f'步骤 {i+1} 格式不正确，必须是对象'
-                    }), 400
-                
-                if not step.get('action'):
-                    return jsonify({
-                        'code': 400,
-                        'message': f'步骤 {i+1} 缺少action字段'
-                    }), 400
-        
-        # 创建测试用例实例
-        print(f"准备创建测试用例，数据: {data}")
-        testcase = TestCase.from_dict(data)
-        print(f"创建的测试用例对象: name={testcase.name}, steps={testcase.steps}")
-        
-        # 添加到数据库
-        db.session.add(testcase)
-        db.session.commit()
-        
-        return jsonify({
-            'code': 200,
-            'data': testcase.to_dict(),
-            'message': '测试用例创建成功'
-        })
-    except Exception as e:
-        db.session.rollback()
-        print(f"创建测试用例失败: {str(e)}")
-        print(f"错误详情: {e}")
-        return jsonify({
-            'code': 500,
-            'message': f'创建失败: {str(e)}'
-        }), 500
+    data = request.get_json()
+    
+    # 记录请求数据进行调试
+    print(f"创建测试用例请求数据: {data}")
+    
+    # 验证步骤数据格式（允许为空，后续在步骤编辑器中完善）
+    steps = data.get('steps', [])
+    if not isinstance(steps, list):
+        raise ValidationError('测试步骤必须是数组格式', 'steps')
+    
+    # 如果有步骤，验证每个步骤的格式
+    if len(steps) > 0:
+        for i, step in enumerate(steps):
+            if not isinstance(step, dict):
+                raise ValidationError(f'步骤 {i+1} 格式不正确，必须是对象')
+            
+            if not step.get('action'):
+                raise ValidationError(f'步骤 {i+1} 缺少action字段')
+    
+    # 创建测试用例实例
+    print(f"准备创建测试用例，数据: {data}")
+    testcase = TestCase.from_dict(data)
+    print(f"创建的测试用例对象: name={testcase.name}, steps={testcase.steps}")
+    
+    # 添加到数据库
+    db.session.add(testcase)
+    
+    return jsonify(format_success_response(
+        data=testcase.to_dict(),
+        message='测试用例创建成功'
+    ))
 
 @api_bp.route('/testcases/<int:testcase_id>', methods=['GET'])
 def get_testcase(testcase_id):
@@ -193,46 +174,32 @@ def update_testcase(testcase_id):
         }), 500
 
 @api_bp.route('/testcases/<int:testcase_id>', methods=['DELETE'])
+@api_error_handler
+@db_transaction_handler(db)
 def delete_testcase(testcase_id):
     """删除测试用例（软删除）"""
-    try:
-        print(f"🗑️ 开始删除测试用例: ID={testcase_id}")
-        
-        testcase = TestCase.query.get(testcase_id)
-        if not testcase:
-            print(f"❌ 测试用例不存在: ID={testcase_id}")
-            return jsonify({
-                'code': 404,
-                'message': '测试用例不存在'
-            }), 404
-        
-        print(f"📋 找到测试用例: {testcase.name}, is_active={testcase.is_active}")
-        
-        # 检查是否已经被删除
-        if not testcase.is_active:
-            print(f"⚠️ 测试用例已经被删除: ID={testcase_id}")
-            return jsonify({
-                'code': 400,
-                'message': '测试用例已经被删除'
-            }), 400
-        
-        testcase.is_active = False
-        testcase.updated_at = datetime.utcnow()
-        db.session.commit()
-        
-        print(f"✅ 测试用例删除成功: ID={testcase_id}, name={testcase.name}")
-        
-        return jsonify({
-            'code': 200,
-            'message': '测试用例删除成功'
-        })
-    except Exception as e:
-        db.session.rollback()
-        print(f"❌ 删除测试用例失败: ID={testcase_id}, 错误: {str(e)}")
-        return jsonify({
-            'code': 500,
-            'message': f'删除失败: {str(e)}'
-        }), 500
+    print(f"🗑️ 开始删除测试用例: ID={testcase_id}")
+    
+    testcase = TestCase.query.get(testcase_id)
+    if not testcase:
+        print(f"❌ 测试用例不存在: ID={testcase_id}")
+        raise NotFoundError('测试用例', testcase_id)
+    
+    print(f"📋 找到测试用例: {testcase.name}, is_active={testcase.is_active}")
+    
+    # 检查是否已经被删除
+    if not testcase.is_active:
+        print(f"⚠️ 测试用例已经被删除: ID={testcase_id}")
+        raise ValidationError('测试用例已经被删除')
+    
+    testcase.is_active = False
+    testcase.updated_at = datetime.utcnow()
+    
+    print(f"✅ 测试用例删除成功: ID={testcase_id}, name={testcase.name}")
+    
+    return jsonify(format_success_response(
+        message='测试用例删除成功'
+    ))
 
 # ==================== 步骤管理相关API ====================
 
