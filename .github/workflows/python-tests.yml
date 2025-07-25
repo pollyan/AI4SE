@@ -35,6 +35,20 @@ jobs:
         pip install -r requirements.txt
         pip install -r web_gui/requirements.txt
         pip install pytest pytest-cov pytest-html
+        pip install factory-boy faker
+    
+    - name: Debug - Check environment
+      run: |
+        echo "Current directory: $(pwd)"
+        echo "Python version: $(python --version)"
+        echo "Installed packages:"
+        pip list
+        echo "Directory structure:"
+        ls -la
+        echo "Test directory:"
+        ls -la tests/
+        echo "Unit test directory:"
+        ls -la tests/unit/
     
     - name: Run unit tests with coverage
       run: |
@@ -42,6 +56,7 @@ jobs:
       env:
         TESTING: "true"
         DATABASE_URL: "sqlite:///:memory:"
+        PYTHONPATH: ${{ github.workspace }}
     
     - name: Upload test results
       uses: actions/upload-artifact@v4
