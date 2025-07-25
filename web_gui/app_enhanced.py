@@ -118,24 +118,28 @@ except ImportError as e:
 if not AI_AVAILABLE:
     MockMidSceneAI = MidSceneAI
 
-def create_app():
+def create_app(test_config=None):
     """应用工厂函数"""
     app = Flask(__name__)
 
     # 配置
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-    # 数据库配置 - 仅支持PostgreSQL
-    try:
-        db_config = get_flask_config()
-        app.config.update(db_config)
-    except (ValueError, ImportError) as e:
-        print(f"❌ 数据库配置失败: {e}")
-        print("请确保已正确配置PostgreSQL数据库连接。")
-        sys.exit(1)
+    if test_config:
+        # 如果传入测试配置，使用测试配置（用于单元测试）
+        app.config.update(test_config)
+    else:
+        # 数据库配置 - 仅支持PostgreSQL
+        try:
+            db_config = get_flask_config()
+            app.config.update(db_config)
+        except (ValueError, ImportError) as e:
+            print(f"❌ 数据库配置失败: {e}")
+            print("请确保已正确配置PostgreSQL数据库连接。")
+            sys.exit(1)
 
-    # 打印数据库信息
-    print_database_info()
+        # 打印数据库信息
+        print_database_info()
     
     # 初始化扩展
     db.init_app(app)

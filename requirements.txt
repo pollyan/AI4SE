@@ -17,3 +17,7 @@ supabase>=1.0.0
 black>=22.0.0
 flake8>=4.0.0
 pytest-cov>=3.0.0
+# 测试工具
+factory-boy>=3.2.0
+faker>=18.0.0
+pytest-mock>=3.10.0

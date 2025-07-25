@@ -1,5 +1,10 @@
 # 意图测试平台
 
+![Python Tests](https://github.com/pollyan/intent-test-framework/actions/workflows/python-tests.yml/badge.svg)
+[![codecov](https://codecov.io/gh/pollyan/intent-test-framework/branch/master/graph/badge.svg)](https://codecov.io/gh/pollyan/intent-test-framework)
+![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 一个基于AI的意图驱动Web自动化测试框架，提供完整的WebUI界面用于测试用例管理、执行监控和结果分析。
 
 ## 项目特色
