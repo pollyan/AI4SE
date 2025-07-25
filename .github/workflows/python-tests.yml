@@ -1,4 +1,4 @@
-name: Python Tests
+name: Python Tests (Unit + API)
 
 on:
   push:
@@ -58,7 +58,25 @@ jobs:
     
     - name: Run unit tests with coverage
       run: |
-        python -m pytest tests/unit/ -v -s --tb=short --cov=web_gui --cov-report=xml --cov-report=html --html=report.html --self-contained-html || (echo "Tests failed. Running single test for debugging:" && python -m pytest tests/unit/test_models.py::TestTestCaseModel::test_should_create_testcase_with_valid_data -vvs)
+        python -m pytest tests/unit/ -v -s --tb=short --cov=web_gui --cov-report=xml --cov-report=html --html=unit-report.html --self-contained-html || (echo "Unit tests failed. Running single test for debugging:" && python -m pytest tests/unit/test_models.py::TestTestCaseModel::test_should_create_testcase_with_valid_data -vvs)
+      env:
+        TESTING: "true"
+        DATABASE_URL: "sqlite:///:memory:"
+        PYTHONPATH: ${{ github.workspace }}
+        SQLALCHEMY_SILENCE_UBER_WARNING: "1"
+    
+    - name: Run API tests
+      run: |
+        python -m pytest tests/api/ -v -s --tb=short --html=api-report.html --self-contained-html || (echo "API tests failed. Running single test for debugging:" && python -m pytest tests/api/test_testcase_api.py::TestTestCaseListAPI::test_should_get_empty_testcase_list -vvs)
+      env:
+        TESTING: "true"
+        DATABASE_URL: "sqlite:///:memory:"
+        PYTHONPATH: ${{ github.workspace }}
+        SQLALCHEMY_SILENCE_UBER_WARNING: "1"
+    
+    - name: Run all tests with combined coverage
+      run: |
+        python -m pytest tests/unit/ tests/api/ -v --tb=short --cov=web_gui --cov-report=xml --cov-report=html --html=combined-report.html --self-contained-html
       env:
         TESTING: "true"
         DATABASE_URL: "sqlite:///:memory:"
@@ -71,7 +89,9 @@ jobs:
       with:
         name: test-results-${{ matrix.python-version }}
         path: |
-          report.html
+          unit-report.html
+          api-report.html
+          combined-report.html
           htmlcov/
           coverage.xml
     
@@ -101,8 +121,8 @@ jobs:
         echo "| Test Time | $(date '+%Y-%m-%d %H:%M:%S') UTC |" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         
-        # 运行测试并生成JSON报告
-        python -m pytest tests/unit/ --tb=short --json-report --json-report-file=test-report.json || true
+        # 运行所有测试并生成JSON报告
+        python -m pytest tests/unit/ tests/api/ --tb=short --json-report --json-report-file=test-report.json || true
         
         # 解析测试结果
         if [ -f test-report.json ]; then
@@ -139,7 +159,7 @@ jobs:
             echo "### ❌ Failed Tests" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "```" >> $GITHUB_STEP_SUMMARY
-            python -m pytest tests/unit/ --tb=short -v | grep -E "(FAILED|ERROR)" | head -20 >> $GITHUB_STEP_SUMMARY || true
+            python -m pytest tests/unit/ tests/api/ --tb=short -v | grep -E "(FAILED|ERROR)" | head -20 >> $GITHUB_STEP_SUMMARY || true
             echo "```" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
@@ -157,7 +177,7 @@ jobs:
           # 如果没有JSON报告，使用基本输出
           echo "### 📋 Test Output" >> $GITHUB_STEP_SUMMARY
           echo "```" >> $GITHUB_STEP_SUMMARY
-          python -m pytest tests/unit/ --tb=short -v | tail -30 >> $GITHUB_STEP_SUMMARY || true
+          python -m pytest tests/unit/ tests/api/ --tb=short -v | tail -30 >> $GITHUB_STEP_SUMMARY || true
           echo "```" >> $GITHUB_STEP_SUMMARY
         fi
         
@@ -166,7 +186,13 @@ jobs:
         echo "<details>" >> $GITHUB_STEP_SUMMARY
         echo "<summary>Click to expand</summary>" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
+        echo "#### Unit Tests" >> $GITHUB_STEP_SUMMARY
         echo "```" >> $GITHUB_STEP_SUMMARY
         find tests/unit/ -name "test_*.py" -type f | sort >> $GITHUB_STEP_SUMMARY
+        echo "```" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "#### API Tests" >> $GITHUB_STEP_SUMMARY
+        echo "```" >> $GITHUB_STEP_SUMMARY
+        find tests/api/ -name "test_*.py" -type f | sort >> $GITHUB_STEP_SUMMARY
         echo "```" >> $GITHUB_STEP_SUMMARY
         echo "</details>" >> $GITHUB_STEP_SUMMARY
