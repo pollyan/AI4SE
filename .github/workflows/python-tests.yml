@@ -56,27 +56,9 @@ jobs:
         python -c "from web_gui import models; print('Import models OK')" || echo "Failed to import models"
         python -c "from tests.unit import factories; print('Import factories OK')" || echo "Failed to import factories"
     
-    - name: Run unit tests with coverage
+    - name: Run all tests with coverage
       run: |
-        python -m pytest tests/unit/ -v -s --tb=short --cov=web_gui --cov-report=xml --cov-report=html --html=unit-report.html --self-contained-html || (echo "Unit tests failed. Running single test for debugging:" && python -m pytest tests/unit/test_models.py::TestTestCaseModel::test_should_create_testcase_with_valid_data -vvs)
-      env:
-        TESTING: "true"
-        DATABASE_URL: "sqlite:///:memory:"
-        PYTHONPATH: ${{ github.workspace }}
-        SQLALCHEMY_SILENCE_UBER_WARNING: "1"
-    
-    - name: Run API tests
-      run: |
-        python -m pytest tests/api/ -v -s --tb=short --html=api-report.html --self-contained-html || (echo "API tests failed. Running single test for debugging:" && python -m pytest tests/api/test_testcase_api.py::TestTestCaseListAPI::test_should_get_empty_testcase_list -vvs)
-      env:
-        TESTING: "true"
-        DATABASE_URL: "sqlite:///:memory:"
-        PYTHONPATH: ${{ github.workspace }}
-        SQLALCHEMY_SILENCE_UBER_WARNING: "1"
-    
-    - name: Run all tests with combined coverage
-      run: |
-        python -m pytest tests/unit/ tests/api/ -v --tb=short --cov=web_gui --cov-report=xml --cov-report=html --html=combined-report.html --self-contained-html
+        python -m pytest tests/unit/ tests/api/ -v --tb=short --cov=web_gui --cov-report=xml --cov-report=html --html=test-report.html --self-contained-html || (echo "Tests failed. Running single test for debugging:" && python -m pytest tests/unit/test_models.py::TestTestCaseModel::test_should_create_testcase_with_valid_data -vvs)
       env:
         TESTING: "true"
         DATABASE_URL: "sqlite:///:memory:"
@@ -89,9 +71,7 @@ jobs:
       with:
         name: test-results-${{ matrix.python-version }}
         path: |
-          unit-report.html
-          api-report.html
-          combined-report.html
+          test-report.html
           htmlcov/
           coverage.xml
     
