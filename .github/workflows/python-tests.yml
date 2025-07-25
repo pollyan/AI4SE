@@ -40,8 +40,8 @@ jobs:
       run: |
         python -m pytest tests/unit/ -v --cov=web_gui --cov-report=xml --cov-report=html --html=report.html --self-contained-html
       env:
-        TESTING: true
-        DATABASE_URL: sqlite:///:memory:
+        TESTING: "true"
+        DATABASE_URL: "sqlite:///:memory:"
     
     - name: Upload test results
       uses: actions/upload-artifact@v3
