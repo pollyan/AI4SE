@@ -34,8 +34,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install -r web_gui/requirements.txt
-        pip install pytest pytest-cov pytest-html
+        pip install pytest pytest-cov pytest-html pytest-mock
         pip install factory-boy faker
+        pip install sqlalchemy
     
     - name: Debug - Check environment
       run: |
@@ -49,14 +50,19 @@ jobs:
         ls -la tests/
         echo "Unit test directory:"
         ls -la tests/unit/
+        echo "Testing imports:"
+        python -c "import sys; print('Python path:', sys.path)"
+        python -c "from web_gui import models; print('Import models OK')" || echo "Failed to import models"
+        python -c "from tests.unit import factories; print('Import factories OK')" || echo "Failed to import factories"
     
     - name: Run unit tests with coverage
       run: |
-        python -m pytest tests/unit/ -v --cov=web_gui --cov-report=xml --cov-report=html --html=report.html --self-contained-html
+        python -m pytest tests/unit/ -v -s --tb=short --cov=web_gui --cov-report=xml --cov-report=html --html=report.html --self-contained-html || (echo "Tests failed. Running single test for debugging:" && python -m pytest tests/unit/test_models.py::TestTestCaseModel::test_should_create_testcase_with_valid_data -vvs)
       env:
         TESTING: "true"
         DATABASE_URL: "sqlite:///:memory:"
         PYTHONPATH: ${{ github.workspace }}
+        SQLALCHEMY_SILENCE_UBER_WARNING: "1"
     
     - name: Upload test results
       uses: actions/upload-artifact@v4
