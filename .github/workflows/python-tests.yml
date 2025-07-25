@@ -34,7 +34,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install -r web_gui/requirements.txt
-        pip install pytest pytest-cov pytest-html pytest-mock
+        pip install pytest pytest-cov pytest-html pytest-mock pytest-json-report
         pip install factory-boy faker
         pip install sqlalchemy
     
@@ -84,10 +84,88 @@ jobs:
         fail_ci_if_error: false
         token: ${{ secrets.CODECOV_TOKEN }}
     
-    - name: Test Report Summary
+    - name: Generate Test Summary
       if: always()
       run: |
-        echo "### Test Results :test_tube:" >> $GITHUB_STEP_SUMMARY
+        # 生成详细的测试摘要
+        echo "## 📊 Test Results for Python ${{ matrix.python-version }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "Python ${{ matrix.python-version }} test results:" >> $GITHUB_STEP_SUMMARY
-        python -m pytest tests/unit/ --tb=no -q | tail -n 5 >> $GITHUB_STEP_SUMMARY || true
+        
+        # 添加环境信息
+        echo "### 🔧 Environment" >> $GITHUB_STEP_SUMMARY
+        echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Python Version | ${{ matrix.python-version }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Runner OS | ${{ runner.os }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Test Time | $(date '+%Y-%m-%d %H:%M:%S') UTC |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # 运行测试并生成JSON报告
+        python -m pytest tests/unit/ --tb=short --json-report --json-report-file=test-report.json || true
+        
+        # 解析测试结果
+        if [ -f test-report.json ]; then
+          # 提取测试统计信息
+          TOTAL=$(python -c "import json; data=json.load(open('test-report.json')); print(data['summary']['total'])")
+          PASSED=$(python -c "import json; data=json.load(open('test-report.json')); print(data['summary'].get('passed', 0))")
+          FAILED=$(python -c "import json; data=json.load(open('test-report.json')); print(data['summary'].get('failed', 0))")
+          SKIPPED=$(python -c "import json; data=json.load(open('test-report.json')); print(data['summary'].get('skipped', 0))")
+          ERRORS=$(python -c "import json; data=json.load(open('test-report.json')); print(data['summary'].get('error', 0))")
+          DURATION=$(python -c "import json; data=json.load(open('test-report.json')); print(f\"{data['duration']:.2f}\")")
+          
+          # 计算通过率
+          if [ "$TOTAL" -gt 0 ]; then
+            PASS_RATE=$(python -c "print(f'{($PASSED/$TOTAL)*100:.1f}')")
+          else
+            PASS_RATE="0.0"
+          fi
+          
+          # 添加测试摘要
+          echo "### 📈 Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Total Tests | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+          echo "| ✅ Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
+          echo "| ❌ Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⏭️ Skipped | $SKIPPED |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔥 Errors | $ERRORS |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⏱️ Duration | ${DURATION}s |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📊 Pass Rate | ${PASS_RATE}% |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # 如果有失败的测试，列出失败详情
+          if [ "$FAILED" -gt 0 ] || [ "$ERRORS" -gt 0 ]; then
+            echo "### ❌ Failed Tests" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "```" >> $GITHUB_STEP_SUMMARY
+            python -m pytest tests/unit/ --tb=short -v | grep -E "(FAILED|ERROR)" | head -20 >> $GITHUB_STEP_SUMMARY || true
+            echo "```" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # 添加覆盖率信息（如果存在）
+          if [ -f coverage.xml ]; then
+            COVERAGE=$(python -c "import xml.etree.ElementTree as ET; tree=ET.parse('coverage.xml'); root=tree.getroot(); print(f\"{float(root.attrib['line-rate'])*100:.1f}\")" 2>/dev/null || echo "N/A")
+            echo "### 📊 Code Coverage" >> $GITHUB_STEP_SUMMARY
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Line Coverage | ${COVERAGE}% |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          # 如果没有JSON报告，使用基本输出
+          echo "### 📋 Test Output" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          python -m pytest tests/unit/ --tb=short -v | tail -30 >> $GITHUB_STEP_SUMMARY || true
+          echo "```" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # 添加测试文件列表
+        echo "### 📁 Test Files" >> $GITHUB_STEP_SUMMARY
+        echo "<details>" >> $GITHUB_STEP_SUMMARY
+        echo "<summary>Click to expand</summary>" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "```" >> $GITHUB_STEP_SUMMARY
+        find tests/unit/ -name "test_*.py" -type f | sort >> $GITHUB_STEP_SUMMARY
+        echo "```" >> $GITHUB_STEP_SUMMARY
+        echo "</details>" >> $GITHUB_STEP_SUMMARY
