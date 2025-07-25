@@ -164,199 +164,210 @@ def create_app(test_config=None):
     
     return app
 
-# 创建应用实例
-# 注意：如果在测试环境中，应该使用 create_app(test_config) 而不是直接导入这个模块
-if os.getenv('TESTING') != 'true':
-    app = create_app()
-    socketio = SocketIO(app, cors_allowed_origins="*")
-else:
-    # 测试环境下创建空的占位符，避免导入错误
-    app = None
-    socketio = None
+# 全局变量
+app = None
+socketio = None
+
+def init_app():
+    """初始化应用实例"""
+    global app, socketio
+    if app is None:
+        app = create_app()
+        socketio = SocketIO(app, cors_allowed_origins="*")
+        setup_routes(app, socketio)
+    return app, socketio
 
 # 全局变量存储执行状态
 execution_manager = {}
 
-# ==================== 主页路由 ====================
-
-@app.route('/')
-@app.route('/dashboard')
-def index():
-    """主页"""
-    return render_template('index.html')
-
-@app.route('/testcases')
-def testcases_page():
-    """测试用例管理页面"""
-    return render_template('testcases.html')
-
-@app.route('/testcases/create')
-def testcase_create_page():
-    """测试用例创建页面"""
-    # 创建一个空的测试用例对象用于创建模式
-    class EmptyTestCase:
-        def __init__(self):
-            self.id = None
-            self.name = ''
-            self.description = ''
-            self.category = '功能测试'  # 默认分类
-            self.priority = 2
-            self.tags = ''
-            self.is_active = True
-            self.created_by = 'admin'
-            self.created_at = None
-            self.updated_at = None
+def setup_routes(app, socketio):
+    """设置所有路由和WebSocket事件处理器"""
     
-    empty_testcase = EmptyTestCase()
+    # ==================== 主页路由 ====================
     
-    return render_template('testcase_edit.html', 
-                         testcase=empty_testcase,
-                         steps_data='[]',
-                         total_executions=0,
-                         success_rate=0,
-                         is_create_mode=True)
+    @app.route('/')
+    @app.route('/dashboard')
+    def index():
+        """主页"""
+        return render_template('index.html')
 
-@app.route('/testcases/<int:testcase_id>/edit')
-def testcase_edit_page(testcase_id):
-    """测试用例编辑页面"""
-    # 获取测试用例详情
-    testcase = TestCase.query.get_or_404(testcase_id)
-    
-    # 获取执行统计信息
-    execution_stats = db.session.query(ExecutionHistory).filter_by(test_case_id=testcase_id).all()
-    total_executions = len(execution_stats)
-    successful_executions = len([e for e in execution_stats if e.status == 'success'])
-    success_rate = (successful_executions / total_executions * 100) if total_executions > 0 else 0
-    
-    # 确保步骤数据是正确的JSON格式
-    try:
-        steps_data = json.loads(testcase.steps) if testcase.steps else []
-    except (json.JSONDecodeError, TypeError):
-        steps_data = []
-    
-    return render_template('testcase_edit.html', 
-                         testcase=testcase,
-                         steps_data=json.dumps(steps_data),
-                         total_executions=total_executions,
-                         success_rate=success_rate,
-                         is_create_mode=False)
+    @app.route('/testcases')
+    def testcases_page():
+        """测试用例管理页面"""
+        return render_template('testcases.html')
 
-@app.route('/execution')
-def execution_page():
-    """执行控制台页面"""
-    return render_template('execution.html')
+    @app.route('/testcases/create')
+    def testcase_create_page():
+        """测试用例创建页面"""
+        # 创建一个空的测试用例对象用于创建模式
+        class EmptyTestCase:
+            def __init__(self):
+                self.id = None
+                self.name = ''
+                self.description = ''
+                self.category = '功能测试'  # 默认分类
+                self.priority = 2
+                self.tags = ''
+                self.is_active = True
+                self.created_by = 'admin'
+                self.created_at = None
+                self.updated_at = None
+        
+        empty_testcase = EmptyTestCase()
+        
+        return render_template('testcase_edit.html', 
+                             testcase=empty_testcase,
+                             steps_data='[]',
+                             total_executions=0,
+                             success_rate=0,
+                             is_create_mode=True)
 
-@app.route('/reports')
-def reports_page():
-    """测试报告页面"""
-    return render_template('reports.html')
+    @app.route('/testcases/<int:testcase_id>/edit')
+    def testcase_edit_page(testcase_id):
+        """测试用例编辑页面"""
+        # 获取测试用例详情
+        testcase = TestCase.query.get_or_404(testcase_id)
+        
+        # 获取执行统计信息
+        execution_stats = db.session.query(ExecutionHistory).filter_by(test_case_id=testcase_id).all()
+        total_executions = len(execution_stats)
+        successful_executions = len([e for e in execution_stats if e.status == 'success'])
+        success_rate = (successful_executions / total_executions * 100) if total_executions > 0 else 0
+        
+        # 确保步骤数据是正确的JSON格式
+        try:
+            steps_data = json.loads(testcase.steps) if testcase.steps else []
+        except (json.JSONDecodeError, TypeError):
+            steps_data = []
+        
+        return render_template('testcase_edit.html', 
+                             testcase=testcase,
+                             steps_data=json.dumps(steps_data),
+                             total_executions=total_executions,
+                             success_rate=success_rate,
+                             is_create_mode=False)
 
-@app.route('/local-proxy')
-def local_proxy_page():
-    """本地代理下载页面"""
-    return render_template('local_proxy.html', current_date=datetime.utcnow().strftime('%Y-%m-%d'))
+    @app.route('/execution')
+    def execution_page():
+        """执行控制台页面"""
+        return render_template('execution.html')
 
-@app.route('/debug_screenshot_history.html')
-def debug_screenshot_history():
-    """调试截图历史功能"""
-    import os
-    file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'debug_screenshot_history.html')
-    with open(file_path, 'r', encoding='utf-8') as f:
-        return f.read()
+    @app.route('/reports')
+    def reports_page():
+        """测试报告页面"""
+        return render_template('reports.html')
 
-@app.route('/step_editor')
-def step_editor_page():
-    """步骤编辑器页面"""
-    return render_template('step_editor.html')
+    @app.route('/local-proxy')
+    def local_proxy_page():
+        """本地代理下载页面"""
+        return render_template('local_proxy.html', current_date=datetime.utcnow().strftime('%Y-%m-%d'))
 
-@app.route('/static/screenshots/<filename>')
-def screenshot_file(filename):
-    """提供截图文件访问"""
-    screenshot_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'screenshots')
-    return send_from_directory(screenshot_dir, filename)
+    @app.route('/debug_screenshot_history.html')
+    def debug_screenshot_history():
+        """调试截图历史功能"""
+        import os
+        file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'debug_screenshot_history.html')
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
 
-# ==================== WebSocket事件处理 ====================
+    @app.route('/step_editor')
+    def step_editor_page():
+        """步骤编辑器页面"""
+        return render_template('step_editor.html')
 
-@socketio.on('connect')
-def handle_connect():
-    """客户端连接"""
-    print(f'客户端已连接: {request.sid}')
-    emit('connected', {
-        'message': '连接成功',
-        'ai_available': AI_AVAILABLE,
-        'server_time': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-    })
+    @app.route('/static/screenshots/<filename>')
+    def screenshot_file(filename):
+        """提供截图文件访问"""
+        screenshot_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'screenshots')
+        return send_from_directory(screenshot_dir, filename)
 
-@socketio.on('disconnect')
-def handle_disconnect():
-    """客户端断开连接"""
-    print(f'客户端已断开: {request.sid}')
+    # ==================== WebSocket事件处理 ====================
 
-@socketio.on('ping')
-def handle_ping():
-    """心跳检测"""
-    emit('pong', {'timestamp': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')})
-
-@socketio.on('stop_execution')
-def handle_stop_execution(data):
-    """停止执行测试用例"""
-    execution_id = data.get('execution_id')
-    if execution_id:
-        # TODO: 实现停止执行逻辑
-        emit('execution_stopped', {
-            'execution_id': execution_id,
-            'message': '执行已停止'
+    @socketio.on('connect')
+    def handle_connect():
+        """客户端连接"""
+        print(f'客户端已连接: {request.sid}')
+        emit('connected', {
+            'message': '连接成功',
+            'ai_available': AI_AVAILABLE,
+            'server_time': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
         })
-    else:
-        emit('error', {'message': '缺少execution_id参数'})
 
-@socketio.on('start_execution')
-def handle_start_execution(data):
-    """开始执行测试用例"""
-    try:
-        testcase_id = data.get('testcase_id')
-        mode = data.get('mode', 'headless')
-        
-        # 获取测试用例
-        testcase = TestCase.query.get(testcase_id)
-        if not testcase:
-            emit('execution_error', {'message': '测试用例不存在'})
-            return
-        
-        # 创建执行记录
-        execution_id = str(uuid.uuid4())
-        execution = ExecutionHistory(
-            execution_id=execution_id,
-            test_case_id=testcase_id,
-            status='running',
-            mode=mode,
-            start_time=datetime.utcnow(),
-            executed_by='web_user'
-        )
-        
-        db.session.add(execution)
-        db.session.commit()
-        
-        # 启动异步执行
-        thread = threading.Thread(
-            target=execute_testcase_async,
-            args=(execution_id, testcase, mode, request.sid)
-        )
-        thread.daemon = True
-        thread.start()
-        
-        emit('execution_started', {
-            'execution_id': execution_id,
-            'testcase_name': testcase.name
-        })
-        
-    except Exception as e:
-        emit('execution_error', {'message': f'启动执行失败: {str(e)}'})
+    @socketio.on('disconnect')
+    def handle_disconnect():
+        """客户端断开连接"""
+        print(f'客户端已断开: {request.sid}')
+
+    @socketio.on('ping')
+    def handle_ping():
+        """心跳检测"""
+        emit('pong', {'timestamp': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')})
+
+    @socketio.on('stop_execution')
+    def handle_stop_execution(data):
+        """停止执行测试用例"""
+        execution_id = data.get('execution_id')
+        if execution_id:
+            # TODO: 实现停止执行逻辑
+            emit('execution_stopped', {
+                'execution_id': execution_id,
+                'message': '执行已停止'
+            })
+        else:
+            emit('error', {'message': '缺少execution_id参数'})
+
+    @socketio.on('start_execution')
+    def handle_start_execution(data):
+        """开始执行测试用例"""
+        try:
+            testcase_id = data.get('testcase_id')
+            mode = data.get('mode', 'headless')
+            
+            # 获取测试用例
+            testcase = TestCase.query.get(testcase_id)
+            if not testcase:
+                emit('execution_error', {'message': '测试用例不存在'})
+                return
+            
+            # 创建执行记录
+            execution_id = str(uuid.uuid4())
+            execution = ExecutionHistory(
+                execution_id=execution_id,
+                test_case_id=testcase_id,
+                status='running',
+                mode=mode,
+                start_time=datetime.utcnow(),
+                executed_by='web_user'
+            )
+            
+            db.session.add(execution)
+            db.session.commit()
+            
+            # 启动异步执行
+            thread = threading.Thread(
+                target=execute_testcase_async,
+                args=(execution_id, testcase, mode, request.sid)
+            )
+            thread.daemon = True
+            thread.start()
+            
+            emit('execution_started', {
+                'execution_id': execution_id,
+                'testcase_name': testcase.name
+            })
+            
+        except Exception as e:
+            emit('execution_error', {'message': f'启动执行失败: {str(e)}'})
 
 def execute_testcase_async(execution_id, testcase, mode, client_sid):
     """异步执行测试用例"""
     ai = None
     try:
+        # 确保app实例已创建
+        global app
+        if app is None:
+            app, _ = init_app()
+            
         # 获取执行记录
         with app.app_context():
             execution = ExecutionHistory.query.filter_by(execution_id=execution_id).first()
@@ -555,6 +566,10 @@ def execute_testcase_async(execution_id, testcase, mode, client_sid):
             
     except Exception as e:
         # 更新执行状态为失败
+        # 确保app实例已创建
+        if app is None:
+            app, _ = init_app()
+        
         with app.app_context():
             execution = ExecutionHistory.query.filter_by(execution_id=execution_id).first()
             if execution:
@@ -688,6 +703,11 @@ def execute_single_step(ai, step, mode, execution_id, step_index=0):
 
 def init_database():
     """初始化数据库"""
+    # 确保app实例已创建
+    global app
+    if app is None:
+        app, _ = init_app()
+    
     with app.app_context():
         try:
             # 验证数据库连接
@@ -779,10 +799,8 @@ if __name__ == '__main__':
     print("📍 后端地址: http://localhost:5001")
     print("📍 API文档: http://localhost:5001/api/v1/")
 
-    # 确保应用实例已创建
-    if app is None:
-        app = create_app()
-        socketio = SocketIO(app, cors_allowed_origins="*")
+    # 初始化应用实例
+    app, socketio = init_app()
     
     # 初始化数据库
     if init_database():

@@ -37,6 +37,7 @@ jobs:
         pip install pytest pytest-cov pytest-html pytest-mock pytest-json-report
         pip install factory-boy faker
         pip install sqlalchemy
+        pip install flask-socketio python-socketio
     
     - name: Debug - Check environment
       run: |
