@@ -1,6 +1,6 @@
 # 意图测试平台
 
-![Python Tests](https://github.com/pollyan/intent-test-framework/actions/workflows/python-tests.yml/badge.svg)
+![Python Tests (Unit + API)](https://github.com/pollyan/intent-test-framework/actions/workflows/python-tests.yml/badge.svg)
 [![codecov](https://codecov.io/gh/pollyan/intent-test-framework/branch/master/graph/badge.svg)](https://codecov.io/gh/pollyan/intent-test-framework)
 ![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
