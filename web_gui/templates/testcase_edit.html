@@ -1283,7 +1283,7 @@ class TestCaseEditor {
         }
         
         // 标记为已修改
-        this.markAsDirty();
+        this.isDirty = true;
         
         // 显示参数更新提示
         this.showMessage(`动作类型已从 "${oldActionType}" 切换为 "${newActionType}"，参数已自动更新`, 'success');
@@ -1310,14 +1310,27 @@ class TestCaseEditor {
         // 默认参数设置
         const defaultParams = {
             'goto': { url: 'https://example.com' },
-            'aiInput': { text: '', locate: '' },
+            'refresh': {},
+            'back': {},
+            'evaluateJavaScript': { code: '' },
+            'ai': { prompt: '' },
             'aiTap': { locate: '' },
-            'aiAssert': { prompt: '' },
-            'aiWaitFor': { prompt: '', timeout: 10000 },
+            'aiInput': { text: '', locate: '' },  
+            'aiHover': { locate: '' },
             'aiScroll': { direction: 'down' },
+            'aiKeyboardPress': { key: '' },
+            'aiRightClick': { locate: '' },
             'aiQuery': { query: '' },
+            'aiAsk': { question: '' },
+            'aiBoolean': { question: '' },
+            'aiNumber': { question: '' },
+            'aiString': { question: '' },
+            'aiLocate': { description: '' },
+            'aiAssert': { condition: '' },
+            'aiWaitFor': { condition: '', timeout: 10000 },
             'sleep': { duration: 3000 },
-            'logScreenshot': { name: '' }
+            'logScreenshot': { name: '' },
+            'runYaml': { yaml: '' }
         };
         
         // 设置新动作类型的默认参数
