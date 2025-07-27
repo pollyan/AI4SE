@@ -832,7 +832,7 @@ class TestCaseEditor {
                 </div>
                 <div>
                     <label class="form-label" style="margin-bottom: 4px;">动作类型</label>
-                    <select class="form-select" id="edit-action-${index}">
+                    <select class="form-select" id="edit-action-${index}" onchange="handleActionTypeChange(${index}, this.value)">
                         <optgroup label="页面导航">
                             <option value="goto" ${step.action === 'goto' ? 'selected' : ''}>goto - 导航到页面</option>
                             <option value="refresh" ${step.action === 'refresh' ? 'selected' : ''}>refresh - 刷新页面</option>
@@ -1241,6 +1241,110 @@ class TestCaseEditor {
         }
     }
     
+    // 处理动作类型切换
+    handleActionTypeChange(index, newActionType) {
+        console.log('handleActionTypeChange called:', index, newActionType);
+        
+        if (!newActionType || index < 0 || index >= this.steps.length) {
+            console.log('Invalid parameters:', index, newActionType);
+            return;
+        }
+
+        const currentStep = this.steps[index];
+        const oldActionType = currentStep.action;
+        
+        console.log('Action type change:', oldActionType, '->', newActionType);
+        
+        // 如果动作类型没有改变，直接返回
+        if (oldActionType === newActionType) {
+            console.log('No action type change needed');
+            return;
+        }
+
+        // 保存当前参数用于智能保留
+        const oldParams = currentStep.params || {};
+        console.log('Old params:', oldParams);
+        
+        // 更新步骤的动作类型
+        currentStep.action = newActionType;
+        
+        // 智能合并参数
+        const newParams = this.mergeParamsOnActionChange(oldActionType, newActionType, oldParams);
+        console.log('New params after merge:', newParams);
+        currentStep.params = newParams;
+        
+        // 重新渲染参数文本区域
+        const paramsTextarea = document.getElementById(`edit-params-${index}`);
+        if (paramsTextarea) {
+            paramsTextarea.value = JSON.stringify(newParams, null, 2);
+            console.log('Updated params textarea');
+        } else {
+            console.log('Params textarea not found:', `edit-params-${index}`);
+        }
+        
+        // 标记为已修改
+        this.markAsDirty();
+        
+        // 显示参数更新提示
+        this.showMessage(`动作类型已从 "${oldActionType}" 切换为 "${newActionType}"，参数已自动更新`, 'success');
+        
+        console.log('Final step params:', currentStep.params);
+    }
+    
+    // 智能参数合并算法
+    mergeParamsOnActionChange(oldAction, newAction, oldParams) {
+        const newParams = {};
+        
+        // 基础参数映射表
+        const paramMappings = {
+            'locate': ['locate', 'prompt'],
+            'prompt': ['prompt', 'locate'], 
+            'text': ['text'],
+            'url': ['url'],
+            'timeout': ['timeout', 'duration'],
+            'duration': ['duration', 'timeout'],
+            'query': ['query'],
+            'name': ['name']
+        };
+        
+        // 默认参数设置
+        const defaultParams = {
+            'goto': { url: 'https://example.com' },
+            'aiInput': { text: '', locate: '' },
+            'aiTap': { locate: '' },
+            'aiAssert': { prompt: '' },
+            'aiWaitFor': { prompt: '', timeout: 10000 },
+            'aiScroll': { direction: 'down' },
+            'aiQuery': { query: '' },
+            'sleep': { duration: 3000 },
+            'logScreenshot': { name: '' }
+        };
+        
+        // 设置新动作类型的默认参数
+        Object.assign(newParams, defaultParams[newAction] || {});
+        
+        // 尝试保留兼容的参数
+        for (const [newParamName, possibleOldNames] of Object.entries(paramMappings)) {
+            if (newParams.hasOwnProperty(newParamName)) {
+                for (const oldParamName of possibleOldNames) {
+                    if (oldParams[oldParamName] !== undefined && oldParams[oldParamName] !== '') {
+                        newParams[newParamName] = oldParams[oldParamName];
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // 保留同名参数
+        for (const paramName in oldParams) {
+            if (newParams.hasOwnProperty(paramName) && oldParams[paramName] !== undefined) {
+                newParams[paramName] = oldParams[paramName];
+            }
+        }
+        
+        return newParams;
+    }
+    
     showMessage(message, type = 'info') {
         // 创建消息提示
         const messageDiv = document.createElement('div');
@@ -1306,7 +1410,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    new TestCaseEditor();
+    const editor = new TestCaseEditor();
+    
+    // 将动作类型切换函数设置为全局可访问
+    window.handleActionTypeChange = function(index, newActionType) {
+        editor.handleActionTypeChange(index, newActionType);
+    };
 });
 </script>
 
