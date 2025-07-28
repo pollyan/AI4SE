@@ -532,13 +532,15 @@ class TestCaseEditor {
                         <span style="color: #a0aec0; font-size: 12px;">${this.getMainParam(step.action, step.params)}</span>
                     </div>
                 </div>
-                <div class="flex items-center gap-1">
-                    <button class="btn btn-small ${step.skip ? 'btn-ghost' : 'btn-primary'} step-skip" style="padding: 6px 12px;" title="${step.skip ? '点击取消跳过' : '点击跳过此步骤'}">${step.skip ? '取消跳过' : '跳过'}</button>
-                    <button class="btn btn-small btn-ghost step-up" ${index === 0 ? 'disabled' : ''} style="padding: 6px 10px;">↑</button>
-                    <button class="btn btn-small btn-ghost step-down" ${index === this.steps.length - 1 ? 'disabled' : ''} style="padding: 6px 10px;">↓</button>
-                    <button class="btn btn-small btn-ghost step-edit" style="padding: 6px 12px;">编辑</button>
-                    <button class="btn btn-small btn-ghost step-duplicate" style="padding: 6px 12px;">复制</button>
-                    <button class="btn btn-small btn-ghost step-delete" style="padding: 6px 12px; color: #e53e3e;">删除</button>
+                <div class="flex items-center gap-2">
+                    <button class="btn btn-small btn-ghost step-skip" style="padding: 4px 10px;" title="${step.skip ? '点击取消跳过' : '点击跳过此步骤'}">${step.skip ? '取消跳过' : '跳过'}</button>
+                    <div class="btn-group">
+                        <button class="btn btn-small btn-ghost step-up" ${index === 0 ? 'disabled' : ''} style="padding: 4px 8px;">↑</button>
+                        <button class="btn btn-small btn-ghost step-down" ${index === this.steps.length - 1 ? 'disabled' : ''} style="padding: 4px 8px;">↓</button>
+                    </div>
+                    <button class="btn btn-small btn-ghost step-edit" style="padding: 4px 10px;">编辑</button>
+                    <button class="btn btn-small btn-ghost step-duplicate" style="padding: 4px 10px;">复制</button>
+                    <button class="btn btn-small btn-ghost step-delete" style="padding: 4px 10px;">删除</button>
                 </div>
             </div>
         `;
