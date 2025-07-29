@@ -526,7 +526,6 @@ class TestCaseEditor {
                         ${step.description || actionDesc}
                         ${step.skip ? '<span style="margin-left: 8px; background: #fed7d7; color: #c53030; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;">跳过</span>' : ''}
                     </div>
-                    <div class="list-item-subtitle" style="color: #4a5568; font-size: 14px; margin-bottom: 8px;">${paramsDesc}</div>
                     <div class="list-item-meta" style="display: flex; align-items: center; gap: 12px;">
                         <span style="background: #f7fafc; color: #2d3748; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">${step.action}</span>
                         <span style="color: #a0aec0; font-size: 12px;">${this.getMainParam(step.action, step.params)}</span>
