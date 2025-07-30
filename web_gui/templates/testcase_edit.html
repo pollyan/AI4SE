@@ -423,6 +423,32 @@ class TestCaseEditor {
             }
         });
         
+        // 点击其他位置自动收起编辑面板
+        document.addEventListener('click', (event) => {
+            // 如果当前有编辑面板打开
+            if (this.editingStep !== null) {
+                const inlineEditForm = document.querySelector('.inline-edit-form');
+                if (inlineEditForm) {
+                    // 检查点击的元素是否在编辑面板内
+                    const isInsideEditForm = inlineEditForm.contains(event.target);
+                    
+                    // 检查是否点击了编辑按钮
+                    const isEditButton = event.target.classList.contains('step-edit') || 
+                                       event.target.closest('.step-edit');
+                    
+                    // 检查是否点击了步骤区域(但不是操作按钮)
+                    const stepContainer = event.target.closest('.step-container');
+                    const isStepContent = stepContainer && !event.target.closest('button') && 
+                                        !event.target.classList.contains('btn');
+                    
+                    // 如果点击的不是编辑面板内部、编辑按钮或步骤内容区域，则收起面板
+                    if (!isInsideEditForm && !isEditButton && !isStepContent) {
+                        this.hideAllInlineEditors();
+                    }
+                }
+            }
+        });
+        
         // 预览执行
         document.getElementById('preview-execution').addEventListener('click', () => {
             if (this.isCreateMode) {
@@ -531,19 +557,21 @@ class TestCaseEditor {
                         <span style="color: #a0aec0; font-size: 12px;">${this.getMainParam(step.action, step.params)}</span>
                     </div>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
-                    <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-                        <button class="btn btn-small btn-ghost step-up" ${index === 0 ? 'disabled' : ''} style="padding: 4px 8px;">↑</button>
-                        <div style="display: flex; gap: 4px;">
-                            <button class="btn btn-small btn-ghost step-skip" style="padding: 4px 10px;" title="${step.skip ? '点击取消跳过' : '点击跳过此步骤'}">${step.skip ? '取消跳过' : '跳过'}</button>
-                            <button class="btn btn-small btn-ghost step-edit" style="padding: 4px 10px;">编辑</button>
+                <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end; padding: 8px 0;">
+                    <div style="display: flex; width: 100%; align-items: center;">
+                        <button class="btn btn-small btn-ghost step-up" ${index === 0 ? 'disabled' : ''} style="padding: 6px 10px; margin-left: 8px;">↑</button>
+                        <div style="flex: 1;"></div>
+                        <div style="display: flex; gap: 8px; margin-right: 8px;">
+                            <button class="btn btn-small btn-ghost step-skip" style="padding: 6px 12px;" title="${step.skip ? '点击取消跳过' : '点击跳过此步骤'}">${step.skip ? '取消' : '跳过'}</button>
+                            <button class="btn btn-small btn-ghost step-edit" style="padding: 6px 12px;">编辑</button>
                         </div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-                        <button class="btn btn-small btn-ghost step-down" ${index === this.steps.length - 1 ? 'disabled' : ''} style="padding: 4px 8px;">↓</button>
-                        <div style="display: flex; gap: 4px;">
-                            <button class="btn btn-small btn-ghost step-duplicate" style="padding: 4px 10px;">复制</button>
-                            <button class="btn btn-small btn-ghost step-delete" style="padding: 4px 10px;">删除</button>
+                    <div style="display: flex; width: 100%; align-items: center;">
+                        <button class="btn btn-small btn-ghost step-down" ${index === this.steps.length - 1 ? 'disabled' : ''} style="padding: 6px 10px; margin-left: 8px;">↓</button>
+                        <div style="flex: 1;"></div>
+                        <div style="display: flex; gap: 8px; margin-right: 8px;">
+                            <button class="btn btn-small btn-ghost step-duplicate" style="padding: 6px 12px;">复制</button>
+                            <button class="btn btn-small btn-ghost step-delete" style="padding: 6px 12px;">删除</button>
                         </div>
                     </div>
                 </div>
