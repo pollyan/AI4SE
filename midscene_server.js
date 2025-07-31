@@ -92,10 +92,20 @@ function resolveVariableReferences(text, variableContext) {
         return text;
     }
     
-    // 匹配形如 step_X_result.property 或 step_X_result 的模式
-    const variablePattern = /step_(\d+)_result(?:\.([a-zA-Z_][a-zA-Z0-9_]*))?/g;
+    // 匹配两种模式：
+    // 1. step_X_result.property 或 step_X_result （兼容模式）
+    // 2. 自定义变量名.property 或 自定义变量名
+    const patterns = [
+        // 匹配step_X_result格式（兼容模式）
+        /step_(\d+)_result(?:\.([a-zA-Z_][a-zA-Z0-9_]*))?/g,
+        // 匹配自定义变量名格式（支持下划线开头的变量名）
+        /([a-zA-Z_][a-zA-Z0-9_]*)(?:\.([a-zA-Z_][a-zA-Z0-9_]*))?/g
+    ];
     
-    return text.replace(variablePattern, (match, stepNum, property) => {
+    let result = text;
+    
+    // 先处理step_X_result格式
+    result = result.replace(patterns[0], (match, stepNum, property) => {
         const variableName = `step_${stepNum}_result`;
         const variableValue = variableContext[variableName];
         
@@ -123,6 +133,42 @@ function resolveVariableReferences(text, variableContext) {
             return typeof variableValue === 'object' ? JSON.stringify(variableValue) : String(variableValue);
         }
     });
+    
+    // 再处理自定义变量名格式
+    result = result.replace(patterns[1], (match, variableName, property) => {
+        // 跳过已经处理过的step_X_result格式
+        if (variableName.startsWith('step_') && variableName.endsWith('_result')) {
+            return match;
+        }
+        
+        const variableValue = variableContext[variableName];
+        
+        if (variableValue === undefined) {
+            // 如果不是变量引用，保持原文本
+            return match;
+        }
+        
+        if (property) {
+            // 访问对象属性
+            if (typeof variableValue === 'object' && variableValue !== null) {
+                const propertyValue = variableValue[property];
+                if (propertyValue !== undefined) {
+                    return String(propertyValue);
+                } else {
+                    console.warn(`属性未找到: ${variableName}.${property}`);
+                    return match;
+                }
+            } else {
+                console.warn(`${variableName} 不是对象，无法访问属性 ${property}`);
+                return match;
+            }
+        } else {
+            // 返回整个变量值
+            return typeof variableValue === 'object' ? JSON.stringify(variableValue) : String(variableValue);
+        }
+    });
+    
+    return result;
 }
 
 // Web系统API集成函数
@@ -591,10 +637,19 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
                 break;
 
             case 'ai_query':
-                const querySchema = params.schema || params.dataDemand;
-                if (querySchema) {
+                const queryText = params.query;
+                const dataDemand = params.dataDemand;
+                const outputVariable = step.output_variable;
+                
+                if (queryText && dataDemand) {
+                    // 将dataDemand结构描述拼接到query字符串末尾
+                    const combinedQuery = `${queryText}${dataDemand}`;
+                    
                     console.log(`\n[${new Date().toISOString()}] MidScene Step Execution - aiQuery`);
-                    console.log(`Schema: ${JSON.stringify(querySchema)}`);
+                    console.log(`Original Query: ${queryText}`);
+                    console.log(`DataDemand: ${dataDemand}`);
+                    console.log(`Combined Query: ${combinedQuery}`);
+                    console.log(`Output Variable: ${outputVariable || 'None'}`);
                     console.log(`Execution ID: ${executionId}`);
                     console.log(`Step ${stepIndex + 1}/${totalSteps}`);
                     
@@ -608,7 +663,8 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
                     
                     while (retryCount < maxRetries) {
                         try {
-                            queryResult = await agent.aiQuery(querySchema);
+                            // 使用MidSceneJS的aiQuery方法，传入拼接后的查询字符串
+                            queryResult = await agent.aiQuery(combinedQuery);
                             break; // 成功则退出循环
                         } catch (error) {
                             lastError = error;
@@ -640,18 +696,29 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
                     const resultStr = typeof queryResult === 'object' ? JSON.stringify(queryResult, null, 2) : String(queryResult);
                     logMessage(executionId, 'info', `AI数据提取完成，提取结果: ${resultStr}`);
                     
-                    // 将结果存储到变量上下文中
-                    let context = variableContexts.get(executionId);
-                    if (!context) {
-                        context = {};
-                        variableContexts.set(executionId, context);
+                    // 存储变量（如果指定了output_variable）
+                    if (outputVariable) {
+                        let context = variableContexts.get(executionId);
+                        if (!context) {
+                            context = {};
+                            variableContexts.set(executionId, context);
+                        }
+                        
+                        // 使用用户指定的变量名存储结果
+                        context[outputVariable] = queryResult;
+                        logMessage(executionId, 'info', `变量已存储: ${outputVariable} = ${resultStr}`);
+                    } else {
+                        // 兼容性：如果没有指定output_variable，使用step_X_result格式
+                        let context = variableContexts.get(executionId);
+                        if (!context) {
+                            context = {};
+                            variableContexts.set(executionId, context);
+                        }
+                        
+                        const stepVariableName = `step_${stepIndex + 1}_result`;
+                        context[stepVariableName] = queryResult;
+                        logMessage(executionId, 'info', `变量已存储（兼容模式）: ${stepVariableName} = ${resultStr}`);
                     }
-                    
-                    // 存储结果，使用步骤索引作为变量名
-                    const stepVariableName = `step_${stepIndex + 1}_result`;
-                    context[stepVariableName] = queryResult;
-                    
-                    logMessage(executionId, 'info', `变量已存储: ${stepVariableName} = ${resultStr}`);
                 }
                 break;
 
