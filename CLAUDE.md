@@ -361,3 +361,4 @@ NEVER proactively create documentation files (*.md) or README files. Only create
 ALWAYS reference the minimal-preview directory designs when implementing or modifying UI components.
 NEVER add icons or emoji symbols to interfaces - use text-only approach.
 ALWAYS maintain the extreme minimalist design philosophy.
+永远不要做假功能，真实实现所有功能，如果有问题及时反馈，不能骗人。

@@ -43,6 +43,9 @@ const executionStates = new Map();
 // 执行控制标志 - 用于中断执行
 const executionControls = new Map();
 
+// 变量上下文管理 - 存储每个执行的变量
+const variableContexts = new Map();
+
 // 清理旧的执行状态 - 保留最近的50个执行记录
 function cleanupOldExecutions() {
     const executions = Array.from(executionStates.entries());
@@ -81,6 +84,45 @@ function logMessage(executionId, level, message) {
 // 生成执行ID
 function generateExecutionId() {
     return 'exec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+// 解析变量引用
+function resolveVariableReferences(text, variableContext) {
+    if (!text || typeof text !== 'string' || !variableContext) {
+        return text;
+    }
+    
+    // 匹配形如 step_X_result.property 或 step_X_result 的模式
+    const variablePattern = /step_(\d+)_result(?:\.([a-zA-Z_][a-zA-Z0-9_]*))?/g;
+    
+    return text.replace(variablePattern, (match, stepNum, property) => {
+        const variableName = `step_${stepNum}_result`;
+        const variableValue = variableContext[variableName];
+        
+        if (variableValue === undefined) {
+            console.warn(`变量未找到: ${variableName}`);
+            return match; // 保持原始文本
+        }
+        
+        if (property) {
+            // 访问对象属性
+            if (typeof variableValue === 'object' && variableValue !== null) {
+                const propertyValue = variableValue[property];
+                if (propertyValue !== undefined) {
+                    return String(propertyValue);
+                } else {
+                    console.warn(`属性未找到: ${variableName}.${property}`);
+                    return match;
+                }
+            } else {
+                console.warn(`${variableName} 不是对象，无法访问属性 ${property}`);
+                return match;
+            }
+        } else {
+            // 返回整个变量值
+            return typeof variableValue === 'object' ? JSON.stringify(variableValue) : String(variableValue);
+        }
+    });
 }
 
 // Web系统API集成函数
@@ -311,6 +353,7 @@ function normalizeStepType(stepType) {
         'aiTap': 'ai_tap',
         'aiInput': 'ai_input',
         'aiAssert': 'ai_assert',
+        'aiQuery': 'ai_query',
         'aiHover': 'ai_hover',
         'aiScroll': 'ai_scroll',
         'aiWaitFor': 'ai_wait_for',
@@ -460,7 +503,18 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
             case 'type':
             case 'ai_input':
                 const inputTarget = params.locate || params.selector || params.element;
-                const inputText = params.text || params.value;
+                let inputText = params.text || params.value;
+                
+                // 解析变量引用
+                const context = variableContexts.get(executionId);
+                if (context && inputText) {
+                    const originalText = inputText;
+                    inputText = resolveVariableReferences(inputText, context);
+                    if (originalText !== inputText) {
+                        logMessage(executionId, 'info', `变量解析: "${originalText}" → "${inputText}"`);
+                    }
+                }
+                
                 if (inputTarget && inputText) {
                     console.log(`\n[${new Date().toISOString()}] MidScene Step Execution - aiInput`);
                     console.log(`Text: ${inputText}`);
@@ -533,6 +587,71 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
                     
                     console.log(`MidScene aiAssert completed in ${assertEndTime - assertStartTime}ms\n`);
                     logMessage(executionId, 'info', `断言: ${assertCondition}`);
+                }
+                break;
+
+            case 'ai_query':
+                const querySchema = params.schema || params.dataDemand;
+                if (querySchema) {
+                    console.log(`\n[${new Date().toISOString()}] MidScene Step Execution - aiQuery`);
+                    console.log(`Schema: ${JSON.stringify(querySchema)}`);
+                    console.log(`Execution ID: ${executionId}`);
+                    console.log(`Step ${stepIndex + 1}/${totalSteps}`);
+                    
+                    const queryStartTime = Date.now();
+                    
+                    // 添加重试机制
+                    let retryCount = 0;
+                    const maxRetries = 3;
+                    let lastError = null;
+                    let queryResult = null;
+                    
+                    while (retryCount < maxRetries) {
+                        try {
+                            queryResult = await agent.aiQuery(querySchema);
+                            break; // 成功则退出循环
+                        } catch (error) {
+                            lastError = error;
+                            retryCount++;
+                            
+                            console.error(`aiQuery尝试 ${retryCount}/${maxRetries} 失败:`, error.message);
+                            
+                            // 检查是否是AI模型连接错误
+                            if (error.message.includes('Connection error') || error.message.includes('AI model service')) {
+                                logMessage(executionId, 'warning', `AI模型连接失败，正在重试... (${retryCount}/${maxRetries})`);
+                                await page.waitForTimeout(2000 * retryCount); // 递增等待时间
+                            } else {
+                                // 其他错误直接抛出
+                                throw error;
+                            }
+                        }
+                    }
+                    
+                    if (retryCount >= maxRetries) {
+                        throw lastError || new Error(`aiQuery操作失败，已重试${maxRetries}次`);
+                    }
+                    
+                    const queryEndTime = Date.now();
+                    
+                    console.log(`MidScene aiQuery completed in ${queryEndTime - queryStartTime}ms`);
+                    console.log(`Query Result:`, JSON.stringify(queryResult, null, 2));
+                    
+                    // 在日志中显示提取到的变量值
+                    const resultStr = typeof queryResult === 'object' ? JSON.stringify(queryResult, null, 2) : String(queryResult);
+                    logMessage(executionId, 'info', `AI数据提取完成，提取结果: ${resultStr}`);
+                    
+                    // 将结果存储到变量上下文中
+                    let context = variableContexts.get(executionId);
+                    if (!context) {
+                        context = {};
+                        variableContexts.set(executionId, context);
+                    }
+                    
+                    // 存储结果，使用步骤索引作为变量名
+                    const stepVariableName = `step_${stepIndex + 1}_result`;
+                    context[stepVariableName] = queryResult;
+                    
+                    logMessage(executionId, 'info', `变量已存储: ${stepVariableName} = ${resultStr}`);
                 }
                 break;
 

@@ -7,6 +7,8 @@
 {% block page_subtitle %}{{ '创建新的测试用例并设置基本信息和执行步骤' if is_create_mode else '修改测试用例的基本信息和执行步骤' }}{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/smart-variable-input.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/enhanced-step-editor.css') }}">
 <style>
 /* 拖拽相关样式 */
 .step-container {
@@ -389,6 +391,11 @@ class TestCaseEditor {
         this.isSaving = false; // 防止重复提交
         this.isAddingStep = false; // 防止重复添加步骤
         
+        // 增强功能初始化
+        this.executionId = this.getExecutionIdFromUrl() || 'temp-execution-id';
+        this.contextService = new VariableContextService(this.testcaseId, this.executionId);
+        this.enhancedEditors = new Map(); // 存储增强编辑器实例
+        
         this.initializeEditor();
         this.bindEvents();
         this.renderSteps();
@@ -397,6 +404,12 @@ class TestCaseEditor {
         if (!this.isCreateMode) {
             this.startAutoSave();
         }
+    }
+    
+    // 从URL获取执行ID
+    getExecutionIdFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('execution_id');
     }
     
     initializeEditor() {
@@ -905,8 +918,17 @@ class TestCaseEditor {
             </div>
 
             <div style="margin-bottom: 16px;">
-                <label class="form-label" style="margin-bottom: 4px;">动作参数 (JSON)</label>
-                <textarea class="form-textarea" id="edit-params-${index}" style="font-family: 'SF Mono', Monaco, monospace; font-size: 13px; min-height: 80px;" placeholder="请输入动作参数的JSON格式">${JSON.stringify(step.params || {}, null, 2)}</textarea>
+                <div class="enhanced-parameter-container" id="enhanced-params-${index}" style="display: none;">
+                    <!-- 增强参数编辑器将在这里生成 -->
+                </div>
+                
+                <!-- 参数编辑 -->
+                <div class="params-mode" style="margin-top: 12px;">
+                    <div class="mb-2">
+                        <label class="form-label">参数：</label>
+                    </div>
+                    <textarea class="form-textarea advanced-params" id="edit-params-${index}" style="font-family: 'SF Mono', Monaco, monospace; font-size: 13px; min-height: 80px;" placeholder="请输入动作参数的JSON格式">${JSON.stringify(step.params || {}, null, 2)}</textarea>
+                </div>
             </div>
 
             <div class="flex gap-2">
@@ -924,6 +946,9 @@ class TestCaseEditor {
         const saveBtn = editForm.querySelector('.save-step-inline');
         const cancelBtn = editForm.querySelector('.cancel-edit-inline');
         const deleteBtn = editForm.querySelector('.delete-step-inline');
+        
+        // 初始化增强参数编辑器
+        this.initializeEnhancedParameterEditor(editForm, stepIndex);
         
         saveBtn.addEventListener('click', () => {
             const title = editForm.querySelector(`#edit-title-${stepIndex}`).value;
@@ -1052,28 +1077,43 @@ class TestCaseEditor {
             'goto': { url: 'https://example.com' },
             'refresh': {},
             'back': {},
-            'evaluateJavaScript': { code: 'console.log("Hello World");' },
+            'evaluateJavaScript': { 
+                script: 'return {url: window.location.href, title: document.title, timestamp: Date.now()};' 
+            },
             
             // 智能交互操作
             'ai': { prompt: '' },
-            'aiTap': { locate: '按钮描述', options: { deepThink: false, cacheable: true } },
-            'aiInput': { text: '输入内容', locate: '输入框描述', options: { deepThink: false, cacheable: true } },
+            'aiTap': { locate: '登录按钮', options: { deepThink: false, cacheable: true } },
+            'aiInput': { text: 'admin@example.com', locate: '用户名输入框', options: { deepThink: false, cacheable: true } },
             'aiHover': { locate: '元素描述', options: { deepThink: false, cacheable: true } },
             'aiScroll': { locate: '滚动区域', options: { deepThink: false, cacheable: true } },
             'aiKeyboardPress': { keys: 'Enter', options: { deepThink: false } },
             'aiRightClick': { locate: '右键目标', options: { deepThink: false, cacheable: true } },
             
             // 数据提取操作
-            'aiQuery': { schema: { '字段名': '字段描述, 数据类型' } },
-            'aiAsk': { question: '询问关于页面的问题' },
-            'aiBoolean': { question: '返回布尔值的问题' },
-            'aiNumber': { question: '返回数值的问题' },
-            'aiString': { question: '返回字符串的问题' },
-            'aiLocate': { locate: '元素描述' },
+            'aiQuery': { 
+                schema: { 
+                    '商品名称': '商品的名称, string',
+                    '价格': '商品价格, number', 
+                    '库存': '库存数量, number',
+                    '是否促销': '是否在促销, boolean',
+                    '标签': '商品标签列表, array'
+                } 
+            },
+            'aiAsk': { query: '这个商品适合什么用户群体？请分析其特点和适用场景' },
+            'aiBoolean': { query: '当前页面是否显示了商品详情信息？' },
+            'aiNumber': { query: '页面上显示的商品价格是多少？' },
+            'aiString': { query: '获取页面标题或主要文本内容' },
+            'aiLocate': { locate: '登录按钮' },
             
             // 验证等待操作
-            'aiAssert': { assertion: '断言条件描述', errorMsg: '断言失败时的错误信息' },
-            'aiWaitFor': { assertion: '等待条件描述', options: { timeoutMs: 15000, checkIntervalMs: 3000 } },
+            'aiAssert': { 
+                condition: '页面显示了用户登录成功的提示信息' 
+            },
+            'aiWaitFor': { 
+                prompt: '页面加载完成，显示欢迎信息', 
+                options: { timeoutMs: 15000, checkIntervalMs: 3000 } 
+            },
             
             // 工具操作
             'logScreenshot': { description: '截图描述' },
@@ -1359,28 +1399,43 @@ class TestCaseEditor {
             'goto': { url: 'https://example.com' },
             'refresh': {},
             'back': {},
-            'evaluateJavaScript': { code: 'console.log("Hello World");' },
+            'evaluateJavaScript': { 
+                script: 'return {url: window.location.href, title: document.title, timestamp: Date.now()};' 
+            },
             
             // 智能交互操作
             'ai': { prompt: '' },
-            'aiTap': { locate: '按钮描述', options: { deepThink: false, cacheable: true } },
-            'aiInput': { text: '输入内容', locate: '输入框描述', options: { deepThink: false, cacheable: true } },
+            'aiTap': { locate: '登录按钮', options: { deepThink: false, cacheable: true } },
+            'aiInput': { text: 'admin@example.com', locate: '用户名输入框', options: { deepThink: false, cacheable: true } },
             'aiHover': { locate: '元素描述', options: { deepThink: false, cacheable: true } },
             'aiScroll': { locate: '滚动区域', options: { deepThink: false, cacheable: true } },
             'aiKeyboardPress': { keys: 'Enter', options: { deepThink: false } },
             'aiRightClick': { locate: '右键目标', options: { deepThink: false, cacheable: true } },
             
             // 数据提取操作
-            'aiQuery': { schema: { '字段名': '字段描述, 数据类型' } },
-            'aiAsk': { question: '询问关于页面的问题' },
-            'aiBoolean': { question: '返回布尔值的问题' },
-            'aiNumber': { question: '返回数值的问题' },
-            'aiString': { question: '返回字符串的问题' },
-            'aiLocate': { locate: '元素描述' },
+            'aiQuery': { 
+                schema: { 
+                    '商品名称': '商品的名称, string',
+                    '价格': '商品价格, number', 
+                    '库存': '库存数量, number',
+                    '是否促销': '是否在促销, boolean',
+                    '标签': '商品标签列表, array'
+                } 
+            },
+            'aiAsk': { query: '这个商品适合什么用户群体？请分析其特点和适用场景' },
+            'aiBoolean': { query: '当前页面是否显示了商品详情信息？' },
+            'aiNumber': { query: '页面上显示的商品价格是多少？' },
+            'aiString': { query: '获取页面标题或主要文本内容' },
+            'aiLocate': { locate: '登录按钮' },
             
             // 验证等待操作
-            'aiAssert': { assertion: '断言条件描述', errorMsg: '断言失败时的错误信息' },
-            'aiWaitFor': { assertion: '等待条件描述', options: { timeoutMs: 15000, checkIntervalMs: 3000 } },
+            'aiAssert': { 
+                condition: '页面显示了用户登录成功的提示信息' 
+            },
+            'aiWaitFor': { 
+                prompt: '页面加载完成，显示欢迎信息', 
+                options: { timeoutMs: 15000, checkIntervalMs: 3000 } 
+            },
             
             // 工具操作
             'logScreenshot': { description: '截图描述' },
@@ -1416,6 +1471,159 @@ class TestCaseEditor {
         }
         
         return newParams;
+    }
+
+    // 初始化增强参数编辑器
+    initializeEnhancedParameterEditor(editForm, stepIndex) {
+        try {
+            const enhancedContainer = editForm.querySelector(`#enhanced-params-${stepIndex}`);
+            if (!enhancedContainer) {
+                console.warn('增强参数容器未找到:', stepIndex);
+                return;
+            }
+
+            // 获取当前步骤数据
+            const stepRow = editForm.closest('tr');
+            const stepData = this.getStepDataFromRow(stepRow);
+            
+            if (!stepData) {
+                console.warn('无法获取步骤数据:', stepIndex);
+                return;
+            }
+
+            // 创建并初始化增强编辑器
+            const enhancedEditor = new EnhancedStepEditor(
+                editForm,
+                stepIndex,
+                this.testCaseId,
+                this.executionId
+            );
+
+            // 生成增强参数表单
+            const parameterForm = enhancedEditor.createEnhancedParameterForm(stepData);
+            enhancedContainer.innerHTML = '';
+            enhancedContainer.appendChild(parameterForm);
+
+            // 设置参数变更回调
+            enhancedEditor.onParameterChange = (fieldName, value) => {
+                this.updateParameterInTextarea(editForm, stepIndex, fieldName, value);
+            };
+
+            // 缓存编辑器实例
+            this.enhancedEditors.set(stepIndex, enhancedEditor);
+
+            console.log('增强参数编辑器初始化成功:', stepIndex);
+            
+        } catch (error) {
+            console.error('增强参数编辑器初始化失败:', stepIndex, error);
+            // 失败时隐藏增强容器
+            const enhancedContainer = editForm.querySelector(`#enhanced-params-${stepIndex}`);
+            if (enhancedContainer) {
+                enhancedContainer.style.display = 'none';
+            }
+        }
+    }
+
+
+    // 从步骤行获取步骤数据
+    getStepDataFromRow(stepRow) {
+        try {
+            const titleElement = stepRow.querySelector('[id^="step-title-"]');
+            const actionElement = stepRow.querySelector('[id^="step-action-"]');
+            const paramsElement = stepRow.querySelector('[id^="step-params-"]');
+            
+            if (!titleElement || !actionElement || !paramsElement) {
+                return null;
+            }
+
+            let params = {};
+            const paramsText = paramsElement.textContent.trim();
+            if (paramsText && paramsText !== '{}') {
+                try {
+                    params = JSON.parse(paramsText);
+                } catch (e) {
+                    console.warn('解析参数JSON失败:', paramsText, e);
+                }
+            }
+
+            return {
+                title: titleElement.textContent.trim(),
+                action: actionElement.textContent.trim(),
+                params: params
+            };
+        } catch (error) {
+            console.error('获取步骤数据失败:', error);
+            return null;
+        }
+    }
+
+    // 更新textarea中的参数
+    updateParameterInTextarea(editForm, stepIndex, fieldName, value) {
+        try {
+            const textarea = editForm.querySelector(`#edit-params-${stepIndex}`);
+            if (!textarea) return;
+
+            let params = {};
+            try {
+                const currentValue = textarea.value.trim();
+                if (currentValue && currentValue !== '{}') {
+                    params = JSON.parse(currentValue);
+                }
+            } catch (e) {
+                console.warn('解析当前参数失败:', e);
+            }
+
+            // 更新参数值
+            if (value === '' || value === null || value === undefined) {
+                delete params[fieldName];
+            } else {
+                params[fieldName] = value;
+            }
+
+            // 更新textarea
+            textarea.value = JSON.stringify(params, null, 2);
+        } catch (error) {
+            console.error('更新参数失败:', error);
+        }
+    }
+
+    // 从JSON同步数据到增强编辑器
+    syncJsonToEnhancedEditor(stepIndex, jsonValue) {
+        try {
+            const enhancedEditor = this.enhancedEditors.get(stepIndex);
+            if (!enhancedEditor) return;
+
+            let params = {};
+            if (jsonValue && jsonValue.trim() !== '') {
+                params = JSON.parse(jsonValue);
+            }
+
+            // 更新增强编辑器的字段值
+            Object.entries(params).forEach(([fieldName, value]) => {
+                const input = enhancedEditor.stepContainer.querySelector(`#field-${stepIndex}-${fieldName}`);
+                if (input) {
+                    input.value = value;
+                    enhancedEditor.handleFieldInput(fieldName, value, VariableFieldConfig.getFieldConfig(fieldName));
+                }
+            });
+
+        } catch (error) {
+            console.error('从JSON同步到增强编辑器失败:', error);
+        }
+    }
+
+    // 从增强编辑器同步数据到JSON
+    syncEnhancedEditorToJson(stepIndex, textarea) {
+        try {
+            const enhancedEditor = this.enhancedEditors.get(stepIndex);
+            if (!enhancedEditor) return;
+
+            const parameterValues = enhancedEditor.getParameterValues();
+            textarea.value = JSON.stringify(parameterValues, null, 2);
+
+        } catch (error) {
+            console.error('从增强编辑器同步到JSON失败:', error);
+        }
     }
     
     showMessage(message, type = 'info') {
@@ -1489,6 +1697,285 @@ document.addEventListener('DOMContentLoaded', function() {
     window.handleActionTypeChange = function(index, newActionType) {
         editor.handleActionTypeChange(index, newActionType);
     };
+});
+</script>
+
+<!-- 加载SmartVariableInput组件 -->
+<script src="{{ url_for('static', filename='js/smart-variable-input.js') }}"></script>
+
+<!-- 加载增强步骤编辑器相关组件 -->
+<script src="{{ url_for('static', filename='js/services/VariableContextService.js') }}"></script>
+<script src="{{ url_for('static', filename='js/utils/variableValidation.js') }}"></script>
+<script src="{{ url_for('static', filename='js/config/variableFieldConfig.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components/EnhancedStepEditor.js') }}"></script>
+
+<script>
+// SmartVariableInput组件集成
+const SmartVariableInputManager = {
+    instances: new Map(),
+    
+    // 初始化指定输入框的智能提示功能
+    initializeForInput(inputElement, executionId = null) {
+        if (!inputElement) return null;
+        
+        const inputId = inputElement.id || `input-${Date.now()}`;
+        
+        // 销毁已存在的实例
+        if (this.instances.has(inputId)) {
+            this.instances.get(inputId).destroy();
+        }
+        
+        try {
+            const instance = new SmartVariableInput(inputElement, {
+                executionId: executionId || this.getExecutionId(),
+                onChange: (value) => {
+                    // 触发原有的change事件以便其他逻辑响应
+                    inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+                },
+                placeholder: inputElement.placeholder || '输入参数值，使用${变量名}引用变量',
+                debounceMs: 200,
+                maxSuggestions: 8
+            });
+            
+            this.instances.set(inputId, instance);
+            return instance;
+        } catch (error) {
+            console.error('初始化SmartVariableInput失败:', error);
+            return null;
+        }
+    },
+    
+    // 获取当前的执行ID（从URL或其他地方）
+    getExecutionId() {
+        // 尝试从URL参数获取
+        const urlParams = new URLSearchParams(window.location.search);
+        const executionId = urlParams.get('execution_id');
+        
+        if (executionId) {
+            return executionId;
+        }
+        
+        // 如果没有执行ID，创建一个临时的用于演示
+        // 在实际使用中，这应该是一个有效的执行ID
+        return 'temp-execution-id';
+    },
+    
+    // 为所有参数输入框启用智能提示
+    enableForParameterInputs() {
+        // 查找所有参数编辑textarea
+        const paramTextareas = document.querySelectorAll('textarea[id^="edit-params-"]');
+        
+        paramTextareas.forEach(textarea => {
+            // 为textarea创建一个包装器来支持智能变量输入
+            this.wrapTextareaWithSmartInput(textarea);
+        });
+    },
+    
+    // 包装textarea以支持智能变量输入
+    wrapTextareaWithSmartInput(textarea) {
+        // 检查是否已经包装过
+        if (textarea.parentNode.querySelector('.smart-variable-helper')) {
+            return;
+        }
+        
+        // 添加一个按钮来触发智能提示
+        const smartButton = document.createElement('button');
+        smartButton.type = 'button';
+        smartButton.className = 'btn btn-small btn-ghost smart-variable-helper';
+        smartButton.style.cssText = 'margin-top: 4px; font-size: 12px;';
+        smartButton.textContent = '智能变量提示 (Ctrl+Space)';
+        smartButton.title = '点击或按Ctrl+Space使用智能变量输入助手';
+        
+        smartButton.onclick = () => {
+            this.showSmartInputModal(textarea);
+        };
+        
+        // 插入按钮
+        textarea.parentNode.insertBefore(smartButton, textarea.nextSibling);
+        
+        // 绑定键盘快捷键
+        textarea.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.code === 'Space') {
+                e.preventDefault();
+                this.showSmartInputModal(textarea);
+            }
+        });
+    },
+    
+    // 显示智能输入模态框
+    showSmartInputModal(textarea) {
+        // 创建模态框
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        `;
+        
+        const modalContent = document.createElement('div');
+        modalContent.style.cssText = `
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 400px;
+            overflow-y: auto;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        `;
+        
+        modalContent.innerHTML = `
+            <h3 style="margin-top: 0; margin-bottom: 16px; color: #1f2937;">智能变量输入助手</h3>
+            <p style="margin-bottom: 16px; color: #6b7280; font-size: 14px;">
+                输入 <code style="background: #f3f4f6; padding: 2px 4px; border-radius: 3px;">\${</code> 触发智能提示，支持变量引用和嵌套属性访问。
+            </p>
+            <div style="margin-bottom: 16px;">
+                <input type="text" id="smart-modal-input" 
+                       placeholder="输入内容，使用\${变量名}引用变量"
+                       style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-family: monospace;">
+            </div>
+            <div style="margin-bottom: 16px;">
+                <div style="font-size: 12px; color: #6b7280; margin-bottom: 8px;">键盘快捷键：</div>
+                <div style="font-size: 11px; color: #9ca3af;">
+                    <span style="background: #f3f4f6; padding: 1px 4px; border-radius: 2px; margin-right: 8px;">↑↓</span>选择变量
+                    <span style="background: #f3f4f6; padding: 1px 4px; border-radius: 2px; margin: 0 8px;">Enter</span>确认
+                    <span style="background: #f3f4f6; padding: 1px 4px; border-radius: 2px; margin: 0 8px;">ESC</span>关闭
+                    <span style="background: #f3f4f6; padding: 1px 4px; border-radius: 2px; margin-left: 8px;">Ctrl+Space</span>强制提示
+                </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                <button type="button" id="smart-cancel-btn" class="btn btn-ghost">取消</button>
+                <button type="button" id="smart-insert-btn" class="btn btn-primary">插入到原位置</button>
+            </div>
+        `;
+        
+        modal.appendChild(modalContent);
+        document.body.appendChild(modal);
+        
+        // 获取模态框中的输入框
+        const modalInput = modal.querySelector('#smart-modal-input');
+        
+        // 为模态框输入框初始化智能提示
+        const modalInstance = this.initializeForInput(modalInput);
+        
+        // 设置当前光标位置的文本
+        const cursorPos = textarea.selectionStart;
+        const textBefore = textarea.value.substring(0, cursorPos);
+        const textAfter = textarea.value.substring(textarea.selectionEnd);
+        
+        // 查找光标附近的变量引用
+        const match = textBefore.match(/\$\{[^}]*$/);
+        if (match) {
+            modalInput.value = match[0];
+            modalInput.setSelectionRange(modalInput.value.length, modalInput.value.length);
+        }
+        
+        // 聚焦输入框并稍微延迟以便组件初始化完成
+        setTimeout(() => {
+            modalInput.focus();
+        }, 100);
+        
+        // 绑定事件
+        const closeModal = () => {
+            if (modalInstance) modalInstance.destroy();
+            modal.remove();
+        };
+        
+        modal.querySelector('#smart-cancel-btn').onclick = closeModal;
+        
+        modal.querySelector('#smart-insert-btn').onclick = () => {
+            const value = modalInput.value;
+            if (value) {
+                // 如果找到了匹配的变量引用开始，替换它
+                let newValue;
+                let newCursorPos;
+                
+                if (match) {
+                    // 替换已有的变量引用
+                    const replaceStart = cursorPos - match[0].length;
+                    newValue = textarea.value.substring(0, replaceStart) + value + textAfter;
+                    newCursorPos = replaceStart + value.length;
+                } else {
+                    // 在光标位置插入新内容
+                    newValue = textBefore + value + textAfter;
+                    newCursorPos = cursorPos + value.length;
+                }
+                
+                textarea.value = newValue;
+                textarea.setSelectionRange(newCursorPos, newCursorPos);
+                textarea.focus();
+                
+                // 触发change事件
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            
+            closeModal();
+        };
+        
+        // 点击外部关闭
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        };
+        
+        // ESC键关闭
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', handleEsc);
+            }
+        };
+        document.addEventListener('keydown', handleEsc);
+    },
+    
+    // 销毁所有实例
+    destroyAll() {
+        this.instances.forEach(instance => instance.destroy());
+        this.instances.clear();
+    }
+};
+
+// 页面加载完成后执行
+document.addEventListener('DOMContentLoaded', function() {
+    // 延迟一段时间等待页面完全渲染
+    setTimeout(() => {
+        // 为参数输入框启用智能提示功能
+        SmartVariableInputManager.enableForParameterInputs();
+        console.log('SmartVariableInput组件已集成到测试用例编辑器');
+        
+        // 监听新步骤的添加，为新的参数输入框启用智能提示
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === 1) { // Element node
+                        const newTextareas = node.querySelectorAll('textarea[id^="edit-params-"]');
+                        newTextareas.forEach(textarea => {
+                            SmartVariableInputManager.wrapTextareaWithSmartInput(textarea);
+                        });
+                    }
+                });
+            });
+        });
+        
+        // 监听步骤列表的变化
+        const stepsList = document.querySelector('.steps-list');
+        if (stepsList) {
+            observer.observe(stepsList, { childList: true, subtree: true });
+        }
+    }, 800);
+});
+
+// 页面卸载时清理
+window.addEventListener('beforeunload', () => {
+    SmartVariableInputManager.destroyAll();
 });
 </script>
 
