@@ -86,89 +86,49 @@ function generateExecutionId() {
     return 'exec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
-// 解析变量引用
+// 解析变量引用 - 使用 ${variable} 语法
 function resolveVariableReferences(text, variableContext) {
     if (!text || typeof text !== 'string' || !variableContext) {
         return text;
     }
     
-    // 匹配两种模式：
-    // 1. step_X_result.property 或 step_X_result （兼容模式）
-    // 2. 自定义变量名.property 或 自定义变量名
-    const patterns = [
-        // 匹配step_X_result格式（兼容模式）
-        /step_(\d+)_result(?:\.([a-zA-Z_][a-zA-Z0-9_]*))?/g,
-        // 匹配自定义变量名格式（支持下划线开头的变量名）
-        /([a-zA-Z_][a-zA-Z0-9_]*)(?:\.([a-zA-Z_][a-zA-Z0-9_]*))?/g
-    ];
+    // 只匹配 ${variable} 或 ${variable.property} 格式
+    const variablePattern = /\$\{([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\}/g;
     
-    let result = text;
-    
-    // 先处理step_X_result格式
-    result = result.replace(patterns[0], (match, stepNum, property) => {
-        const variableName = `step_${stepNum}_result`;
-        const variableValue = variableContext[variableName];
+    return text.replace(variablePattern, (match, variablePath) => {
+        // 解析变量路径，支持多级属性访问
+        const pathParts = variablePath.split('.');
+        const variableName = pathParts[0];
+        const properties = pathParts.slice(1);
+        
+        // 获取基础变量值
+        let variableValue = variableContext[variableName];
         
         if (variableValue === undefined) {
             console.warn(`变量未找到: ${variableName}`);
             return match; // 保持原始文本
         }
         
-        if (property) {
-            // 访问对象属性
-            if (typeof variableValue === 'object' && variableValue !== null) {
-                const propertyValue = variableValue[property];
-                if (propertyValue !== undefined) {
-                    return String(propertyValue);
-                } else {
-                    console.warn(`属性未找到: ${variableName}.${property}`);
-                    return match;
-                }
-            } else {
-                console.warn(`${variableName} 不是对象，无法访问属性 ${property}`);
+        // 如果有属性路径，逐级访问
+        for (let i = 0; i < properties.length; i++) {
+            const property = properties[i];
+            
+            if (typeof variableValue !== 'object' || variableValue === null) {
+                console.warn(`${variableName}${properties.slice(0, i).map(p => '.' + p).join('')} 不是对象，无法访问属性 ${property}`);
                 return match;
             }
-        } else {
-            // 返回整个变量值
-            return typeof variableValue === 'object' ? JSON.stringify(variableValue) : String(variableValue);
-        }
-    });
-    
-    // 再处理自定义变量名格式
-    result = result.replace(patterns[1], (match, variableName, property) => {
-        // 跳过已经处理过的step_X_result格式
-        if (variableName.startsWith('step_') && variableName.endsWith('_result')) {
-            return match;
-        }
-        
-        const variableValue = variableContext[variableName];
-        
-        if (variableValue === undefined) {
-            // 如果不是变量引用，保持原文本
-            return match;
-        }
-        
-        if (property) {
-            // 访问对象属性
-            if (typeof variableValue === 'object' && variableValue !== null) {
-                const propertyValue = variableValue[property];
-                if (propertyValue !== undefined) {
-                    return String(propertyValue);
-                } else {
-                    console.warn(`属性未找到: ${variableName}.${property}`);
-                    return match;
-                }
-            } else {
-                console.warn(`${variableName} 不是对象，无法访问属性 ${property}`);
+            
+            if (variableValue[property] === undefined) {
+                console.warn(`属性未找到: ${variableName}.${properties.slice(0, i + 1).join('.')}`);
                 return match;
             }
-        } else {
-            // 返回整个变量值
-            return typeof variableValue === 'object' ? JSON.stringify(variableValue) : String(variableValue);
+            
+            variableValue = variableValue[property];
         }
+        
+        // 返回最终值
+        return typeof variableValue === 'object' ? JSON.stringify(variableValue) : String(variableValue);
     });
-    
-    return result;
 }
 
 // Web系统API集成函数

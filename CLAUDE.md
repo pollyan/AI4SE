@@ -131,10 +131,21 @@ Test cases are structured as JSON with steps containing:
 - `params`: Action-specific parameters
 - `description`: Human-readable step description
 
-Example test case:
+### Variable References
+
+The framework supports dynamic variable references using `${variable}` syntax:
+
+- **Basic variable**: `${product_name}`
+- **Object property**: `${product_info.name}`
+- **Multi-level property**: `${step_1_result.data.items.price}`
+- **Mixed text**: `"商品名称：${product_info.name}，价格：${product_info.price}元"`
+
+Variables are automatically resolved during test execution. If a variable is not found, the original text is preserved and a warning is logged.
+
+Example test case with variables:
 ```json
 {
-  "name": "Search Test",
+  "name": "Product Search Test",
   "steps": [
     {
       "action": "navigate",
@@ -142,19 +153,28 @@ Example test case:
       "description": "Navigate to example.com"
     },
     {
-      "action": "ai_input", 
-      "params": {"text": "search query", "locate": "search box"},
-      "description": "Enter search query"
+      "action": "aiQuery",
+      "params": {
+        "query": "提取商品信息",
+        "dataDemand": "{name: string, price: number, stock: number}"
+      },
+      "output_variable": "product_info",
+      "description": "Extract product information"
     },
     {
-      "action": "ai_tap",
-      "params": {"locate": "search button"},
-      "description": "Click search button"
+      "action": "ai_input", 
+      "params": {
+        "text": "${product_info.name}",
+        "locate": "search box"
+      },
+      "description": "Enter product name from extracted data"
     },
     {
       "action": "ai_assert",
-      "params": {"condition": "search results are displayed"},
-      "description": "Verify search results appear"
+      "params": {
+        "condition": "商品价格显示为${product_info.price}元"
+      },
+      "description": "Verify product price matches extracted data"
     }
   ]
 }
