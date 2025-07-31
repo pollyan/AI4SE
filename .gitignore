@@ -140,7 +140,7 @@ cython_debug/
 
 # static files generated from Django application using `collectstatic`
 media
-static
+# Note: Keep Flask static files (web_gui/static/) in git for deployment
 
 # Midscene.js dump files
 midscene_run/dump
