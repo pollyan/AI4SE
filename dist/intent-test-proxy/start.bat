@@ -29,44 +29,32 @@ echo + Node.js version: !NODE_VERSION!
 REM Check npm
 echo.
 echo [2/5] Checking npm...
-echo ^ Testing npm availability...
 
-REM First try to find npm
-where npm >nul 2>&1
+REM Try npm directly - simpler approach
+npm --version >nul 2>&1
 if !errorlevel! neq 0 (
-    echo X Error: npm command not found in PATH
-    echo   Please ensure npm is installed and in PATH
-    echo   Usually npm comes with Node.js installation
-    pause
-    exit /b 1
-)
-
-REM Try to get npm version
-npm --version >npm_temp.txt 2>&1
-set NPM_CHECK_CODE=!errorlevel!
-
-if !NPM_CHECK_CODE! neq 0 (
-    echo X Error: npm command failed with exit code !NPM_CHECK_CODE!
-    echo   npm error output:
-    type npm_temp.txt 2>nul
-    del npm_temp.txt 2>nul
+    echo X Error: npm not available
     echo.
-    echo   Possible solutions:
-    echo   1. Reinstall Node.js from https://nodejs.org/
-    echo   2. Run this script as administrator
-    echo   3. Clear npm cache: npm cache clean --force
+    echo npm is required but not found or not working properly.
+    echo This usually means:
+    echo   1. Node.js was installed without npm
+    echo   2. npm was corrupted during installation
+    echo   3. PATH environment variable needs refresh
+    echo.
+    echo Solutions:
+    echo   1. Download and reinstall Node.js from https://nodejs.org/
+    echo   2. Restart your command prompt after Node.js installation
+    echo   3. If problem persists, try running as administrator
+    echo.
     pause
     exit /b 1
 )
 
-REM Get and display npm version
+REM Get npm version if available
 for /f "tokens=*" %%i in ('npm --version 2^>nul') do set NPM_VERSION=%%i
-del npm_temp.txt 2>nul
-
 if "!NPM_VERSION!"=="" (
-    echo X Error: Could not determine npm version
-    pause
-    exit /b 1
+    echo ^ npm is available but version detection failed
+    echo + npm: OK (version unknown)
 ) else (
     echo + npm version: !NPM_VERSION!
 )
