@@ -715,26 +715,62 @@ if exist "package-lock.json" (
     del "package-lock.json" 2>nul
 )
 
-REM Install dependencies with output capture to avoid script termination
-echo ^ Running: npm install
-npm install >npm_install.log 2>&1
+REM Install dependencies with progress monitoring
+echo ^ Starting npm install...
+echo   This may take 5-15 minutes on first run...
+echo   Progress: npm install is running in background
+echo.
 
-REM Check if installation completed
-if !errorlevel! neq 0 (
-    echo X npm install failed
+REM Create monitoring script for long-running npm install
+echo @echo off > install_monitor.bat
+echo setlocal enabledelayedexpansion >> install_monitor.bat
+echo set counter=0 >> install_monitor.bat
+echo :monitor_loop >> install_monitor.bat
+echo timeout /t 30 /nobreak ^>nul >> install_monitor.bat
+echo set /a counter+=30 >> install_monitor.bat
+echo echo [!counter!s] npm install is still running... >> install_monitor.bat
+echo if !counter! geq 900 ( >> install_monitor.bat
+echo   echo [15min] This is taking longer than usual >> install_monitor.bat
+echo   echo [15min] Check network connection or consider Ctrl+C and retry >> install_monitor.bat
+echo ^) >> install_monitor.bat
+echo tasklist /fi "imagename eq npm.exe" ^>nul 2^>^&1 >> install_monitor.bat
+echo if !errorlevel! equ 0 goto monitor_loop >> install_monitor.bat
+echo echo + npm install process completed >> install_monitor.bat
+echo del install_monitor.bat >> install_monitor.bat
+
+REM Run npm install with monitoring
+start /b install_monitor.bat
+
+REM Try the actual npm install
+npm install --no-audit --no-fund
+
+set INSTALL_RESULT=!errorlevel!
+
+REM Stop monitoring
+taskkill /f /im timeout.exe >nul 2>&1
+
+if !INSTALL_RESULT! neq 0 (
     echo.
-    echo Error details:
-    if exist npm_install.log (
-        type npm_install.log
-        del npm_install.log
-    )
+    echo X npm install failed ^(exit code: !INSTALL_RESULT!^)
     echo.
-    echo Possible solutions:
-    echo 1. Check network connection
-    echo 2. Clear npm cache: npm cache clean --force
-    echo 3. Use China mirror: npm config set registry https://registry.npmmirror.com
-    echo 4. Try running as administrator
-    echo 5. Restart command prompt and try again
+    echo Most common solutions:
+    echo.
+    echo 1. Network/Registry Issues:
+    echo    npm config set registry https://registry.npmmirror.com
+    echo    npm cache clean --force
+    echo.
+    echo 2. Permission Issues:
+    echo    Close this window and "Run as administrator"
+    echo.
+    echo 3. Proxy/Firewall:
+    echo    Check your corporate proxy settings
+    echo    Temporarily disable antivirus/firewall
+    echo.
+    echo 4. Manual Installation:
+    echo    Run these commands manually:
+    echo    npm install --verbose
+    echo    npm install @playwright/test axios
+    echo.
     pause
     exit /b 1
 )
