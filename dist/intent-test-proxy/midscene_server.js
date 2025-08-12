@@ -6,6 +6,61 @@
 // 加载环境变量
 require('dotenv').config();
 
+// 环境变量完整性检查
+function validateEnvironmentVariables() {
+    const requiredVars = ['OPENAI_API_KEY'];
+    const optionalVars = {
+        'OPENAI_BASE_URL': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        'MIDSCENE_MODEL_NAME': 'qwen-vl-max-latest',
+        'PORT': '3001',
+        'MAIN_APP_URL': 'http://localhost:5001/api'
+    };
+    
+    const issues = [];
+    const warnings = [];
+    
+    // 检查必需变量
+    for (const varName of requiredVars) {
+        if (!process.env[varName]) {
+            issues.push(`❌ Required environment variable missing: ${varName}`);
+        } else {
+            console.log(`✅ ${varName}: configured`);
+        }
+    }
+    
+    // 检查可选变量并设置默认值
+    for (const [varName, defaultValue] of Object.entries(optionalVars)) {
+        if (!process.env[varName]) {
+            process.env[varName] = defaultValue;
+            warnings.push(`⚠️  ${varName} not set, using default: ${defaultValue}`);
+        } else {
+            console.log(`✅ ${varName}: ${process.env[varName]}`);
+        }
+    }
+    
+    // 显示警告
+    if (warnings.length > 0) {
+        console.log('\n📋 Environment Configuration Warnings:');
+        warnings.forEach(warning => console.log(warning));
+    }
+    
+    // 如果有严重问题，停止启动
+    if (issues.length > 0) {
+        console.log('\n🚨 Environment Configuration Issues:');
+        issues.forEach(issue => console.log(issue));
+        console.log('\n💡 Please create a .env file with required variables:');
+        console.log('   OPENAI_API_KEY=your_api_key_here');
+        console.log('   OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1');
+        console.log('   MIDSCENE_MODEL_NAME=qwen-vl-max-latest');
+        process.exit(1);
+    }
+    
+    console.log('\n✨ Environment validation completed successfully!\n');
+}
+
+// 执行环境变量检查
+validateEnvironmentVariables();
+
 const express = require('express');
 const cors = require('cors');
 const { PlaywrightAgent } = require('@midscene/web');

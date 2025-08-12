@@ -310,7 +310,70 @@ def generate_proxy_package_files():
 
 def get_basic_server_template():
     """获取基础服务器模板"""
-    return '''const express = require('express');
+    return '''/**
+ * MidSceneJS HTTP API Server
+ * Provides AI functionality HTTP interface for Python calls
+ */
+
+// Load environment variables
+require('dotenv').config();
+
+// Environment variables validation
+function validateEnvironmentVariables() {
+    const requiredVars = ['OPENAI_API_KEY'];
+    const optionalVars = {
+        'OPENAI_BASE_URL': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        'MIDSCENE_MODEL_NAME': 'qwen-vl-max-latest',
+        'PORT': '3001',
+        'MAIN_APP_URL': 'http://localhost:5001/api'
+    };
+    
+    const issues = [];
+    const warnings = [];
+    
+    // Check required variables
+    for (const varName of requiredVars) {
+        if (!process.env[varName]) {
+            issues.push(`❌ Required environment variable missing: ${varName}`);
+        } else {
+            console.log(`✅ ${varName}: configured`);
+        }
+    }
+    
+    // Check optional variables and set defaults
+    for (const [varName, defaultValue] of Object.entries(optionalVars)) {
+        if (!process.env[varName]) {
+            process.env[varName] = defaultValue;
+            warnings.push(`⚠️  ${varName} not set, using default: ${defaultValue}`);
+        } else {
+            console.log(`✅ ${varName}: ${process.env[varName]}`);
+        }
+    }
+    
+    // Display warnings
+    if (warnings.length > 0) {
+        console.log('\\n📋 Environment Configuration Warnings:');
+        warnings.forEach(warning => console.log(warning));
+    }
+    
+    // If there are serious issues, stop startup
+    if (issues.length > 0) {
+        console.log('\\n🚨 Environment Configuration Issues:');
+        issues.forEach(issue => console.log(issue));
+        console.log('\\n💡 Please create a .env file with required variables:');
+        console.log('   OPENAI_API_KEY=your_api_key_here');
+        console.log('   OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1');
+        console.log('   MIDSCENE_MODEL_NAME=qwen-vl-max-latest');
+        process.exit(1);
+    }
+    
+    console.log('\\n✨ Environment validation completed successfully!\\n');
+}
+
+// Execute environment validation
+validateEnvironmentVariables();
+
+const express = require('express');
 const cors = require('cors');
 const { PlaywrightAgent } = require('@midscene/web');
 const { chromium } = require('playwright');
@@ -327,6 +390,9 @@ const io = new Server(server, {
 });
 
 const port = process.env.PORT || 3001;
+
+// Database configuration - Note: If you need to connect to the main Web app, ensure the port is correct
+const API_BASE_URL = process.env.MAIN_APP_URL || 'http://localhost:5001/api';
 
 // 中间件
 app.use(cors());
@@ -569,7 +635,7 @@ async function executeStep(step, page, agent, executionId, stepIndex) {
 
 // 启动服务器
 server.listen(port, () => {
-    console.log(`🚀 MidSceneJS本地代理服务器启动成功`);
+    console.log(`🚀 MidSceneJS Local Proxy Server Started Successfully`);
     console.log(`🌐 HTTP服务器: http://localhost:${port}`);
     console.log(`🔌 WebSocket服务器: ws://localhost:${port}`);
     console.log(`💡 AI模型: ${process.env.MIDSCENE_MODEL_NAME || 'qwen-vl-max-latest'}`);
@@ -583,7 +649,7 @@ def get_package_json_content():
     return '''{
   "name": "intent-test-proxy",
   "version": "1.0.0",
-  "description": "意图测试平台 本地代理服务器",
+  "description": "Intent Test Framework Local Proxy Server",
   "main": "midscene_server.js",
   "scripts": {
     "start": "node midscene_server.js",
@@ -609,7 +675,7 @@ def get_package_json_content():
 
 def get_env_template():
     """获取环境变量模板"""
-    return '''# 意图测试平台 本地代理服务器配置
+    return '''# Intent Test Framework Local Proxy Server Configuration
 
 # AI API配置 (必填)
 # 选择以下其中一种配置方式：
@@ -874,7 +940,7 @@ def get_unix_start_script():
     """获取Unix启动脚本"""
     return '''#!/bin/bash
 
-# 意图测试平台 本地代理服务器启动脚本
+# Intent Test Framework Local Proxy Server Startup Script
 
 # 设置颜色输出
 RED='\\033[0;31m'
@@ -885,7 +951,7 @@ NC='\\033[0m' # No Color
 
 echo ""
 echo "========================================"
-echo "  意图测试平台 本地代理服务器"
+echo "  Intent Test Framework Local Proxy Server"
 echo "========================================"
 echo ""
 
@@ -1002,7 +1068,7 @@ echo -e "${GREEN}✅ 配置文件存在${NC}"
 echo ""
 echo -e "${BLUE}[5/5]${NC} 启动服务器..."
 echo ""
-echo -e "${GREEN}🚀 正在启动意图测试平台本地代理服务器...${NC}"
+echo -e "${GREEN}🚀 Starting Intent Test Framework Local Proxy Server...${NC}"
 echo ""
 echo "启动成功后，请返回Web界面选择"本地代理模式""
 echo "按 Ctrl+C 可停止服务器"
@@ -1016,7 +1082,7 @@ echo "服务器已停止"
 
 def get_readme_content():
     """获取README内容"""
-    return '''# 意图测试平台 - 本地代理服务器
+    return '''# Intent Test Framework - Local Proxy Server
 
 ## 快速开始
 
@@ -1056,7 +1122,7 @@ MIDSCENE_MODEL_NAME=qwen-vl-max-latest
 配置完成后重新运行启动脚本，看到以下信息表示启动成功：
 
 ```
-🚀 MidSceneJS本地代理服务器启动成功
+🚀 MidSceneJS Local Proxy Server Started Successfully
 🌐 HTTP服务器: http://localhost:3001
 🔌 WebSocket服务器: ws://localhost:3001
 ✨ 服务器就绪，等待测试执行请求...

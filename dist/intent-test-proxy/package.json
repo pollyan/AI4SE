@@ -1,7 +1,7 @@
 {
   "name": "intent-test-proxy",
   "version": "1.0.0",
-  "description": "Intent Test Framework 本地代理服务器",
+  "description": "Intent Test Framework Local Proxy Server",
   "main": "midscene_server.js",
   "scripts": {
     "start": "node midscene_server.js",
