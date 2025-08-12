@@ -283,11 +283,8 @@ def generate_proxy_package_files():
 
     # 获取当前项目的midscene_server.js内容
     current_dir = Path(__file__).parent.parent
-    # 优先使用dist目录中的完整版本
-    server_file = current_dir / 'dist' / 'intent-test-proxy' / 'midscene_server.js'
-    if not server_file.exists():
-        # 备用路径
-        server_file = current_dir / 'midscene_server.js'
+    # 统一使用根目录版本
+    server_file = current_dir / 'midscene_server.js'
 
     # 读取服务器文件内容
     if server_file.exists():
