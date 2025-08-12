@@ -40,7 +40,7 @@ const packageJson = {
         "install-deps": "npm install"
     },
     "dependencies": {
-        "@midscene/web": "^0.20.1",
+        "@midscene/web": "^0.22.1",
         "@playwright/test": "^1.45.0",
         "axios": "^1.10.0",
         "cors": "^2.8.5",
@@ -132,14 +132,29 @@ if exist "node_modules\\@playwright\\test" (
 echo ^ node_modules missing or incomplete
 echo ^ Running npm install...
 echo   Please wait, this may take several minutes...
+echo   Note: npm warnings are normal and will not interrupt installation
 echo.
 
-npm install --no-audit --no-fund
+REM Redirect stderr to capture warnings but continue on success
+npm install --no-audit --no-fund 2>npm_install.log
+set NPM_EXIT_CODE=!errorlevel!
 
-if !errorlevel! neq 0 (
+REM Show any warnings/errors from log, but only fail on actual errors
+if exist npm_install.log (
+    findstr /i "warn" npm_install.log >nul && (
+        echo ^ npm warnings detected ^(normal, continuing...^)
+    )
+    findstr /i "error" npm_install.log >nul && (
+        echo ^ npm errors detected:
+        type npm_install.log
+    )
+    del npm_install.log
+)
+
+if !NPM_EXIT_CODE! neq 0 (
     echo.
-    echo X npm install failed
-    echo Try: 1^) Run as administrator 2^) npm cache clean --force
+    echo X npm install failed ^(exit code: !NPM_EXIT_CODE!^)
+    echo Try: 1^) Run as administrator 2^) npm cache clean --force 3^) npm config set registry https://registry.npmmirror.com
     pause
     exit /b 1
 )
@@ -151,15 +166,31 @@ REM Step 4: Playwright browsers
 echo.
 echo [4/5] Installing Playwright browsers...
 echo ^ Installing Chromium browser...
+echo   This may take 2-5 minutes and show download progress...
+echo.
 
-npx playwright install chromium
+REM Redirect stderr to handle warnings gracefully  
+npx playwright install chromium 2>playwright_install.log
+set PLAYWRIGHT_EXIT_CODE=!errorlevel!
 
-if !errorlevel! neq 0 (
-    echo ^ Warning: Playwright browser installation failed
-    echo   You can install manually: npx playwright install chromium
-    echo   Continuing anyway...
+REM Show log content but don't fail on warnings
+if exist playwright_install.log (
+    findstr /i "warn" playwright_install.log >nul && (
+        echo ^ Playwright installation warnings ^(normal^)
+    )
+    findstr /i "error" playwright_install.log >nul && (
+        echo ^ Playwright installation errors:
+        type playwright_install.log
+    )
+    del playwright_install.log
+)
+
+if !PLAYWRIGHT_EXIT_CODE! neq 0 (
+    echo ^ Warning: Playwright browser installation had issues ^(exit code: !PLAYWRIGHT_EXIT_CODE!^)
+    echo   You can install manually later: npx playwright install chromium
+    echo   Continuing with server startup...
 ) else (
-    echo + Playwright browsers ready
+    echo + Playwright browsers installed successfully
 )
 
 REM Step 5: Configuration and startup

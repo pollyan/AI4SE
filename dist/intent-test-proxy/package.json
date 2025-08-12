@@ -8,7 +8,7 @@
     "install-deps": "npm install"
   },
   "dependencies": {
-    "@midscene/web": "^0.20.1",
+    "@midscene/web": "^0.22.1",
     "@playwright/test": "^1.45.0",
     "axios": "^1.10.0",
     "cors": "^2.8.5",
