@@ -344,14 +344,16 @@
             // 使用与首页相同的API端点和参数
             const response = await axios.get(API_BASE + '/stats/trend?days=7');
             if (response.data.code === 200) {
-                const trends = response.data.data;
+                const trendData = response.data.data;
+                // 从API返回的数据结构中提取daily_stats
+                const trends = trendData.daily_stats || [];
                 // 转换日期格式以匹配报告页面的显示需求
                 const formattedTrends = trends.map(item => ({
                     date: new Date(item.date).toLocaleDateString('zh-CN', {
                         month: '2-digit',
                         day: '2-digit'
                     }),
-                    count: item.count
+                    count: item.total_executions || 0
                 }));
                 renderTrendChart(formattedTrends);
             }
@@ -415,7 +417,12 @@
         try {
             const response = await axios.get('/api/reports/success-rate');
             if (response.data.code === 200) {
-                const rates = response.data.data;
+                const rateData = response.data.data;
+                // 从API返回的数据结构中提取testcase_success_rates并转换为前端期望的格式
+                const rates = (rateData.testcase_success_rates || []).map(item => ({
+                    category: item.testcase_name,
+                    rate: item.success_rate
+                }));
                 renderSuccessRateChart(rates);
             }
         } catch (error) {
@@ -457,7 +464,13 @@
         try {
             const response = await axios.get('/api/reports/failure-analysis');
             if (response.data.code === 200) {
-                const failures = response.data.data;
+                const analysisData = response.data.data;
+                // 转换API返回的数据结构为前端期望的格式
+                const failures = analysisData.failure_patterns?.map(pattern => ({
+                    reason: pattern.category,
+                    count: pattern.count,
+                    percentage: pattern.percentage
+                })) || [];
                 renderFailureAnalysis(failures);
             }
         } catch (error) {

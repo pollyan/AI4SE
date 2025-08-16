@@ -1,23 +1,39 @@
 """
 统一错误处理工具
+增强版本，提供更完整的错误处理和日志记录功能
 """
-from flask import jsonify
+from flask import jsonify, request
 from functools import wraps
 import logging
 import traceback
-from typing import Dict, Any, Tuple, Optional
+import time
+import uuid
+from typing import Dict, Any, Tuple, Optional, Union
+from datetime import datetime
 
-# 配置日志
-logging.basicConfig(level=logging.INFO)
+# 获取增强的日志器
 logger = logging.getLogger(__name__)
 
 class APIError(Exception):
     """自定义API异常类"""
-    def __init__(self, message: str, code: int = 500, details: Optional[Dict] = None):
+    def __init__(self, message: str, code: int = 500, details: Optional[Dict] = None, 
+                 error_id: Optional[str] = None):
         self.message = message
         self.code = code
         self.details = details or {}
+        self.error_id = error_id or str(uuid.uuid4())[:8]
+        self.timestamp = datetime.utcnow().isoformat()
         super().__init__(self.message)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典格式"""
+        return {
+            'error_id': self.error_id,
+            'message': self.message,
+            'code': self.code,
+            'details': self.details,
+            'timestamp': self.timestamp
+        }
 
 class ValidationError(APIError):
     """数据验证错误"""
@@ -40,33 +56,94 @@ class NotFoundError(APIError):
         super().__init__(message, 404, {'resource': resource, 'resource_id': resource_id})
 
 def api_error_handler(f):
-    """API错误处理装饰器"""
+    """增强的API错误处理装饰器"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        error_logger = logging.getLogger('web_gui.api.error')
+        start_time = time.time()
+        
+        # 生成请求ID用于追踪
+        request_id = str(uuid.uuid4())[:8]
+        if hasattr(request, 'request_id'):
+            request.request_id = request_id
+        
         try:
-            return f(*args, **kwargs)
+            result = f(*args, **kwargs)
+            duration = time.time() - start_time
+            
+            # 记录成功的API调用
+            logger.info(f"[{request_id}] API成功: {request.method} {request.path} ({duration:.3f}s)")
+            return result
+            
         except APIError as e:
-            logger.warning(f"API错误: {e.message} (代码: {e.code})")
-            return jsonify({
-                'code': e.code,
-                'message': e.message,
-                'details': e.details
-            }), e.code
+            duration = time.time() - start_time
+            
+            # 记录API错误
+            error_logger.warning(f"[{request_id}] API业务错误: {e.message} "
+                               f"(代码: {e.code}, 耗时: {duration:.3f}s)")
+            
+            response_data = e.to_dict()
+            response_data['request_id'] = request_id
+            
+            return jsonify(response_data), e.code
+            
         except Exception as e:
-            # 记录完整的错误信息
+            duration = time.time() - start_time
+            error_id = str(uuid.uuid4())[:8]
+            
+            # 记录未预期的错误
             error_details = {
+                'error_id': error_id,
                 'error_type': type(e).__name__,
-                'traceback': traceback.format_exc()
+                'traceback': traceback.format_exc(),
+                'request_method': request.method if hasattr(request, 'method') else 'unknown',
+                'request_path': request.path if hasattr(request, 'path') else 'unknown',
+                'request_data': _safe_get_request_data(),
+                'duration': duration
             }
-            logger.error(f"未预期的错误: {str(e)}")
-            logger.error(f"错误详情: {error_details}")
+            
+            error_logger.error(f"[{request_id}] 系统错误 [{error_id}]: {str(e)} ({duration:.3f}s)")
+            error_logger.error(f"[{request_id}] 错误详情: {error_details}")
+            
+            # 生产环境下不暴露内部错误详情
+            is_debug = logger.level <= logging.DEBUG
             
             return jsonify({
                 'code': 500,
-                'message': f'服务器内部错误: {str(e)}',
-                'details': error_details if logger.level <= logging.DEBUG else {}
+                'message': '服务器内部错误，请联系系统管理员',
+                'error_id': error_id,
+                'request_id': request_id,
+                'details': error_details if is_debug else {'error_id': error_id}
             }), 500
+    
     return decorated_function
+
+def _safe_get_request_data() -> Dict[str, Any]:
+    """安全地获取请求数据，避免敏感信息泄露"""
+    try:
+        if not hasattr(request, 'is_json') or not request.is_json:
+            return {}
+        
+        data = request.get_json()
+        if not data:
+            return {}
+        
+        # 过滤敏感字段
+        sensitive_fields = ['password', 'token', 'secret', 'key', 'auth', 'credential']
+        safe_data = {}
+        
+        for key, value in data.items():
+            if any(sensitive in key.lower() for sensitive in sensitive_fields):
+                safe_data[key] = '***'
+            elif isinstance(value, (str, int, float, bool)):
+                safe_data[key] = value
+            else:
+                safe_data[key] = str(type(value).__name__)
+        
+        return safe_data
+        
+    except Exception:
+        return {'error': 'failed to parse request data'}
 
 def db_transaction_handler(db):
     """数据库事务处理装饰器"""

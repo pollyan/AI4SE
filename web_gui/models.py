@@ -23,17 +23,17 @@ class TestCase(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)
     
-    def to_dict(self):
+    # 索引优化
+    __table_args__ = (
+        db.Index('idx_testcase_active', 'is_active'),
+        db.Index('idx_testcase_category', 'category', 'is_active'),
+        db.Index('idx_testcase_created', 'created_at'),
+        db.Index('idx_testcase_priority', 'priority', 'is_active'),
+    )
+    
+    def to_dict(self, include_stats=True):
         """转换为字典"""
-        # 计算执行次数和成功率
-        execution_count = ExecutionHistory.query.filter_by(test_case_id=self.id).count()
-        success_count = ExecutionHistory.query.filter_by(
-            test_case_id=self.id, 
-            status='success'
-        ).count()
-        success_rate = (success_count / execution_count * 100) if execution_count > 0 else 0
-        
-        return {
+        data = {
             'id': self.id,
             'name': self.name,
             'description': self.description,
@@ -44,10 +44,57 @@ class TestCase(db.Model):
             'created_by': self.created_by,
             'created_at': self.created_at.strftime('%Y-%m-%dT%H:%M:%S.%fZ') if self.created_at else None,
             'updated_at': self.updated_at.strftime('%Y-%m-%dT%H:%M:%S.%fZ') if self.updated_at else None,
-            'is_active': self.is_active,
-            'execution_count': execution_count,
-            'success_rate': round(success_rate, 1)
+            'is_active': self.is_active
         }
+        
+        # 可选的统计信息计算，避免N+1查询问题
+        if include_stats:
+            # 计算执行次数和成功率
+            execution_count = ExecutionHistory.query.filter_by(test_case_id=self.id).count()
+            success_count = ExecutionHistory.query.filter_by(
+                test_case_id=self.id, 
+                status='success'
+            ).count()
+            success_rate = (success_count / execution_count * 100) if execution_count > 0 else 0
+            
+            data.update({
+                'execution_count': execution_count,
+                'success_rate': round(success_rate, 1)
+            })
+        else:
+            data.update({
+                'execution_count': 0,
+                'success_rate': 0
+            })
+        
+        return data
+    
+    @classmethod
+    def get_with_stats(cls, limit=None, offset=None):
+        """批量获取测试用例及其统计信息，优化查询性能"""
+        from sqlalchemy import func
+        
+        # 使用子查询优化执行统计计算
+        execution_stats = db.session.query(
+            ExecutionHistory.test_case_id,
+            func.count(ExecutionHistory.id).label('total_executions'),
+            func.count(db.case([(ExecutionHistory.status == 'success', 1)])).label('successful_executions')
+        ).group_by(ExecutionHistory.test_case_id).subquery()
+        
+        query = db.session.query(
+            cls,
+            execution_stats.c.total_executions.label('execution_count'),
+            execution_stats.c.successful_executions.label('success_count')
+        ).outerjoin(
+            execution_stats, cls.id == execution_stats.c.test_case_id
+        ).filter(cls.is_active == True)
+        
+        if limit:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
+            
+        return query.all()
     
     @classmethod
     def from_dict(cls, data):
@@ -85,6 +132,15 @@ class ExecutionHistory(db.Model):
     error_stack = db.Column(db.Text)
     executed_by = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # 索引优化
+    __table_args__ = (
+        db.Index('idx_execution_testcase_status', 'test_case_id', 'status'),
+        db.Index('idx_execution_start_time', 'start_time'),
+        db.Index('idx_execution_status', 'status'),
+        db.Index('idx_execution_executed_by', 'executed_by'),
+        db.Index('idx_execution_created_at', 'created_at'),
+    )
     
     # 关系
     test_case = db.relationship('TestCase', backref=db.backref('executions', lazy=True))
@@ -129,6 +185,13 @@ class StepExecution(db.Model):
     ai_confidence = db.Column(db.Float)
     ai_decision = db.Column(db.Text)  # JSON string
     error_message = db.Column(db.Text)
+    
+    # 索引优化
+    __table_args__ = (
+        db.Index('idx_step_execution_id_index', 'execution_id', 'step_index'),
+        db.Index('idx_step_status', 'execution_id', 'status'),
+        db.Index('idx_step_start_time', 'start_time'),
+    )
     
     # 关系
     execution = db.relationship('ExecutionHistory', backref=db.backref('step_executions', lazy=True))

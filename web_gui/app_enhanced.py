@@ -5,6 +5,7 @@
 import os
 import sys
 import time
+import logging
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
@@ -13,19 +14,33 @@ import json
 import uuid
 import threading
 
+# 导入日志配置
+try:
+    from utils.logging_config import setup_logging
+    LOGGING_AVAILABLE = True
+except ImportError:
+    try:
+        from web_gui.utils.logging_config import setup_logging
+        LOGGING_AVAILABLE = True
+    except ImportError:
+        LOGGING_AVAILABLE = False
+        logging.basicConfig(level=logging.INFO)
+
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 导入模块 - 修复Serverless环境的导入路径
 try:
     from models import db, TestCase, ExecutionHistory, StepExecution, Template
-    from api_routes import api_bp
+    from api import register_api_routes
     from database_config import get_flask_config, print_database_info, validate_database_connection
+    print("✅ 模块化API路由导入成功 (本地模式)")
 except ImportError:
     # Serverless环境中使用绝对导入
     from web_gui.models import db, TestCase, ExecutionHistory, StepExecution, Template
-    from web_gui.api_routes import api_bp
+    from web_gui.api import register_api_routes
     from web_gui.database_config import get_flask_config, print_database_info, validate_database_connection
+    print("✅ 模块化API路由导入成功 (Serverless模式)")
 
 # 尝试导入MidSceneAI，如果失败则使用模拟版本
 try:
@@ -122,6 +137,15 @@ def create_app(test_config=None):
     """应用工厂函数"""
     app = Flask(__name__)
 
+    # 配置日志系统
+    if LOGGING_AVAILABLE:
+        setup_logging()
+        logger = logging.getLogger(__name__)
+        logger.info("Intent Test Framework 启动中...")
+    else:
+        logger = logging.getLogger(__name__)
+        logger.warning("高级日志配置不可用，使用基础日志配置")
+
     # 配置
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
@@ -149,7 +173,8 @@ def create_app(test_config=None):
     CORS(app, origins="*")
     
     # 注册API蓝图
-    app.register_blueprint(api_bp)
+    # 注册模块化API路由
+    register_api_routes(app)
     
     # 添加时区格式化过滤器
     @app.template_filter('utc_to_local')
