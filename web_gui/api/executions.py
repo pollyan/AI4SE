@@ -309,6 +309,9 @@ def export_all_executions():
             'reports': [execution.to_dict() for execution in executions],
             'exported_at': datetime.now().isoformat(),
             'report_type': 'batch_executions',
+            'total_reports': len(executions),  # 当前页的报告数量
+            'page': page,
+            'size': size,
             'pagination': {
                 'page': page,
                 'size': size,
@@ -389,6 +392,9 @@ def midscene_execution_result():
         # 验证必需字段
         if not data or not data.get('execution_id'):
             return standard_error_response('缺少必需字段: execution_id', 400)
+        
+        if 'status' not in data:
+            return standard_error_response('缺少必需字段: status', 400)
         
         execution_id = data['execution_id']
         

@@ -46,10 +46,12 @@ def validate_step_data(data, is_update=False):
     from ..utils.error_handler import ValidationError
     
     action = data.get('action')
-    if not action:
+    
+    # 在更新模式下，action字段是可选的
+    if not is_update and not action:
         raise ValidationError('action字段是必需的')
     
-    if action not in VALID_ACTIONS:
+    if action and action not in VALID_ACTIONS:
         raise ValidationError(f'无效的动作类型: {action}，支持的动作: {", ".join(sorted(VALID_ACTIONS))}')
     
     params = data.get('params', {})
@@ -144,6 +146,20 @@ def create_testcase():
         # 基本验证
         if not data or not data.get('name'):
             return standard_error_response('测试用例名称不能为空', 400)
+        
+        # 验证步骤数据格式
+        steps = data.get('steps', [])
+        if not isinstance(steps, list):
+            return standard_error_response('测试步骤必须是数组格式', 500)
+        
+        # 如果有步骤，验证每个步骤的格式
+        if len(steps) > 0:
+            for i, step in enumerate(steps):
+                if not isinstance(step, dict):
+                    return standard_error_response(f'步骤 {i+1} 格式不正确，必须是对象', 500)
+                
+                if not step.get('action'):
+                    return standard_error_response(f'步骤 {i+1} 缺少action字段', 500)
         
         # 处理tags - 转换数组为逗号分隔字符串存储
         tags = data.get('tags', '')
@@ -331,7 +347,7 @@ def add_testcase_step(testcase_id, testcase, data):
 @log_api_call
 @safe_api_operation("更新测试用例步骤")
 @validate_resource_exists(TestCase, 'testcase_id', '测试用例不存在')
-@require_json_data(required_fields=['action'])
+@require_json_data(required_fields=[])
 @database_transaction()
 def update_testcase_step(testcase_id, step_index, testcase, data):
     """更新测试用例步骤"""
@@ -344,15 +360,22 @@ def update_testcase_step(testcase_id, step_index, testcase, data):
         from ..utils.error_handler import ValidationError
         raise ValidationError('步骤索引超出范围')
     
-    # 更新步骤
-    steps[step_index].update({
-        'action': data['action'],
-        'params': data.get('params', {}),
-        'description': data.get('description', ''),
-        'wait_time': data.get('wait_time', 0),
-        'retry_count': data.get('retry_count', 0),
-        'output_variable': data.get('output_variable', '')
-    })
+    # 部分更新步骤 - 只更新提供的字段
+    current_step = steps[step_index]
+    if 'action' in data:
+        current_step['action'] = data['action']
+    if 'params' in data:
+        current_step['params'] = data['params']
+    if 'description' in data:
+        current_step['description'] = data['description']
+    if 'wait_time' in data:
+        current_step['wait_time'] = data['wait_time']
+    if 'retry_count' in data:
+        current_step['retry_count'] = data['retry_count']
+    if 'output_variable' in data:
+        current_step['output_variable'] = data['output_variable']
+    if 'required' in data:
+        current_step['required'] = data['required']
     
     testcase.steps = json.dumps(steps)
     testcase.updated_at = datetime.utcnow()

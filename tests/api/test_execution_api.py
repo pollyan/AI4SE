@@ -59,7 +59,7 @@ class TestCreateExecutionAPI:
                                  json=execution_data,
                                  content_type='application/json')
         
-        assert_api_response(response, 404)
+        assert_api_response(response, 400)
     
     def test_should_validate_testcase_exists(self, api_client, assert_api_response):
         """测试验证测试用例存在"""

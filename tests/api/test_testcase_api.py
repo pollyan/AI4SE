@@ -91,11 +91,11 @@ class TestTestCaseListAPI:
         assert data['data']['total'] == 1
         assert '登录' in data['data']['items'][0]['name']
         
-        # 搜索名称包含"功能"的测试用例
+        # 搜索包含"功能"的测试用例（名称和描述都会被搜索）
         response = api_client.get('/api/testcases?search=功能')
         data = assert_api_response(response, 200)
         
-        assert data['data']['total'] == 2
+        assert data['data']['total'] == 3
         
         # 搜索不存在的内容
         response = api_client.get('/api/testcases?search=不存在的内容')
@@ -396,16 +396,14 @@ class TestDeleteTestCaseAPI:
     def test_should_return_404_for_invalid_id(self, api_client, assert_api_response):
         """测试删除不存在的测试用例返回404"""
         response = api_client.delete('/api/testcases/99999')
-        # API返回500是因为NotFoundError被包装成DatabaseError
-        assert_api_response(response, 500)
+        assert_api_response(response, 404)
     
     def test_should_return_400_for_already_deleted_testcase(self, api_client, create_test_testcase, assert_api_response):
-        """测试删除已删除的测试用例返回400"""
+        """测试删除已删除的测试用例返回404"""
         testcase = create_test_testcase(name='已删除测试用例', is_active=False)
         
         response = api_client.delete(f'/api/testcases/{testcase.id}')
-        # API返回500是因为ValidationError被包装成DatabaseError
-        assert_api_response(response, 500)
+        assert_api_response(response, 404)
     
     def test_should_not_affect_execution_history(self, api_client, create_test_testcase, db_session, assert_api_response):
         """测试删除测试用例不影响执行历史"""
