@@ -1331,7 +1331,16 @@ class TestCaseEditor {
                     if (!silent) {
                         this.showMessage('测试用例创建成功', 'success');
                         setTimeout(() => {
-                            window.location.href = `/testcases/${result.data.id}/edit`;
+                            // 确保获得有效的ID后再跳转
+                            const testcaseId = result.data && result.data.id;
+                            if (testcaseId) {
+                                window.location.href = `/testcases/${testcaseId}/edit`;
+                            } else {
+                                console.error('创建测试用例成功，但未获得有效ID:', result);
+                                this.showMessage('测试用例创建成功，但跳转失败，请刷新页面', 'warning');
+                                // 跳转到测试用例列表页面
+                                window.location.href = '/testcases';
+                            }
                         }, 1000);
                     }
                 } else {

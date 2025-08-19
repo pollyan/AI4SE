@@ -107,6 +107,10 @@ def create_testcase():
     
     # 添加到数据库
     db.session.add(testcase)
+    # 刷新会话以获取生成的ID
+    db.session.flush()
+    
+    print(f"测试用例创建成功，ID: {testcase.id}")
     
     return jsonify(format_success_response(
         data=testcase.to_dict(),
