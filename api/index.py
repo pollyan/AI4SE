@@ -1165,17 +1165,17 @@ try:
 
     print("✅ 数据库配置加载成功")
 
-    # 导入模型和路由
+    # 导入模型和新的模块化API路由
     from web_gui.models import db
-    from web_gui.api_routes import api_bp
+    from web_gui.api import register_api_routes
 
     print("✅ 模型和路由导入成功")
 
     # 初始化数据库
     db.init_app(app)
 
-    # 注册API路由
-    app.register_blueprint(api_bp)
+    # 注册模块化API路由
+    register_api_routes(app)
 
     print("✅ API路由注册成功")
 
