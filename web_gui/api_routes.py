@@ -1024,16 +1024,47 @@ def get_executions():
         page = request.args.get('page', 1, type=int)
         size = request.args.get('size', 20, type=int)
         testcase_id = request.args.get('testcase_id', type=int)
+        status = request.args.get('status')
+        sort_param = request.args.get('sort', 'created_at,desc')
         
-        print(f"🔍 获取执行历史 - page: {page}, size: {size}, testcase_id: {testcase_id}")
+        print(f"🔍 获取执行历史 - page: {page}, size: {size}, testcase_id: {testcase_id}, status: {status}, sort: {sort_param}")
         
         query = ExecutionHistory.query
         
+        # 按测试用例ID过滤
         if testcase_id:
             query = query.filter(ExecutionHistory.test_case_id == testcase_id)
         
-        # 按创建时间倒序
-        query = query.order_by(ExecutionHistory.created_at.desc())
+        # 按状态过滤
+        if status:
+            query = query.filter(ExecutionHistory.status == status)
+        
+        # 解析排序参数
+        try:
+            sort_field, sort_direction = sort_param.split(',')
+            sort_direction = sort_direction.strip().lower()
+            
+            # 映射字段名
+            field_mapping = {
+                'start_time': ExecutionHistory.start_time,
+                'created_at': ExecutionHistory.created_at,
+                'end_time': ExecutionHistory.end_time,
+                'duration': ExecutionHistory.duration,
+                'status': ExecutionHistory.status
+            }
+            
+            if sort_field in field_mapping:
+                sort_column = field_mapping[sort_field]
+                if sort_direction == 'asc':
+                    query = query.order_by(sort_column.asc())
+                else:
+                    query = query.order_by(sort_column.desc())
+            else:
+                # 默认按创建时间倒序
+                query = query.order_by(ExecutionHistory.created_at.desc())
+        except ValueError:
+            # 排序参数格式错误，使用默认排序
+            query = query.order_by(ExecutionHistory.created_at.desc())
         
         pagination = query.paginate(
             page=page, per_page=size, error_out=False

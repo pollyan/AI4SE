@@ -570,7 +570,7 @@
             // 兼容不同的状态值格式
             const status = execution.status ? execution.status.toLowerCase() : '';
             const statusClass = status === 'success' || status === 'passed' ? 'status-success' : 
-                               status === 'failed' || status === 'error' || !execution.duration ? 'status-error' : 'status-warning';
+                               status === 'failed' || status === 'error' ? 'status-error' : 'status-warning';
             
             const timeAgo = getTimeAgo(new Date(execution.start_time));
             
