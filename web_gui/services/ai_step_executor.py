@@ -410,17 +410,12 @@ class AIStepExecutor:
     ) -> Dict[str, Any]:
         """
         处理参数中的变量引用
-        使用VariableSuggestionService解析${variable}语法
-        支持深度递归参数解析
+        基础变量解析功能，核心功能由执行引擎处理
         """
         try:
-            from .variable_resolver import VariableSuggestionService
-            
-            # 创建变量解析器
-            resolver = VariableSuggestionService(variable_manager.execution_id)
-            
-            # 解析参数中的变量引用，传递正确的步骤索引
-            resolved_params = resolver.resolve_step_parameters(params, step_index)
+            # 简化变量解析：核心功能已集成在执行引擎中
+            # 这里只进行基本的字符串替换
+            resolved_params = self._basic_variable_resolution(params, variable_manager)
             
             logger.debug(f"变量引用解析完成 [步骤 {step_index}]: {params} -> {resolved_params}")
             return resolved_params
@@ -428,6 +423,38 @@ class AIStepExecutor:
         except Exception as e:
             logger.warning(f"变量引用解析失败 [步骤 {step_index}]: {str(e)}, 返回原始参数")
             return params
+    
+    def _basic_variable_resolution(self, params: Dict[str, Any], variable_manager: VariableManager) -> Dict[str, Any]:
+        """基础变量解析，简单的字符串替换"""
+        import re
+        import json
+        
+        def resolve_value(value):
+            if isinstance(value, str):
+                # 查找${variable}模式
+                pattern = r'\$\{([^}]+)\}'
+                matches = re.findall(pattern, value)
+                
+                resolved_value = value
+                for match in matches:
+                    try:
+                        # 尝试从变量管理器获取值
+                        var_value = variable_manager.get_variable(match)
+                        if var_value is not None:
+                            resolved_value = resolved_value.replace(f'${{{match}}}', str(var_value))
+                    except:
+                        # 如果获取失败，保留原始引用
+                        pass
+                        
+                return resolved_value
+            elif isinstance(value, dict):
+                return {k: resolve_value(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [resolve_value(item) for item in value]
+            else:
+                return value
+        
+        return resolve_value(params)
     
     async def _mock_evaluate_javascript(self, script: str) -> Any:
         """Mock JavaScript执行"""

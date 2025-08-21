@@ -7,7 +7,7 @@ import logging
 
 # 导入数据库模型
 try:
-    from models import db, ExecutionHistory, StepExecution
+    from ..models import db, ExecutionHistory, StepExecution
 except ImportError:
     from web_gui.models import db, ExecutionHistory, StepExecution
 
@@ -15,8 +15,10 @@ logger = logging.getLogger(__name__)
 
 # 从主蓝图导入
 from . import api_bp
+from .base import log_api_call
 
 @api_bp.route('/midscene/execution-result', methods=['POST'])
+@log_api_call
 def midscene_execution_result():
     """接收MidScene服务器的执行结果并更新数据库记录"""
     try:
@@ -106,6 +108,7 @@ def midscene_execution_result():
         }), 500
 
 @api_bp.route('/midscene/execution-start', methods=['POST'])
+@log_api_call
 def midscene_execution_start():
     """接收MidScene服务器的执行开始通知并创建初始记录"""
     try:

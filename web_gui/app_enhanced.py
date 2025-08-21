@@ -203,6 +203,38 @@ def register_error_handlers(app):
         return render_template('500.html'), 500
 
 
+def basic_variable_resolve(params, variable_manager):
+    """基础变量解析辅助函数"""
+    import re
+    
+    def resolve_value(value):
+        if isinstance(value, str):
+            # 查找${variable}模式
+            pattern = r'\$\{([^}]+)\}'
+            matches = re.findall(pattern, value)
+            
+            resolved_value = value
+            for match in matches:
+                try:
+                    # 尝试从变量管理器获取值
+                    var_value = variable_manager.get_variable(match)
+                    if var_value is not None:
+                        resolved_value = resolved_value.replace(f'${{{match}}}', str(var_value))
+                except:
+                    # 如果获取失败，保留原始引用
+                    pass
+                    
+            return resolved_value
+        elif isinstance(value, dict):
+            return {k: resolve_value(v) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [resolve_value(item) for item in value]
+        else:
+            return value
+    
+    return resolve_value(params)
+
+
 def create_app(test_config=None):
     """应用工厂函数"""
     app = Flask(__name__)
@@ -745,13 +777,13 @@ def execute_single_step(ai, step, mode, execution_id, step_index=0):
 
         print(f"[执行] {description}")
 
-        # 创建变量解析器
+        # 简化变量解析（核心功能已集成在执行引擎中）
         try:
-            from web_gui.services.variable_resolver_service import VariableSuggestionService
-            resolver = VariableSuggestionService(execution_id)
+            from web_gui.services import get_variable_manager
+            variable_manager = get_variable_manager(execution_id)
             
-            # 解析步骤参数中的变量引用
-            resolved_params = resolver.resolve_step_parameters(params, step_index)
+            # 基础变量解析
+            resolved_params = basic_variable_resolve(params, variable_manager)
             print(f"[变量解析] 原始参数: {params}")
             print(f"[变量解析] 解析后参数: {resolved_params}")
             

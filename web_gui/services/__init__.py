@@ -6,7 +6,7 @@ from .variable_resolver_service import VariableManager, VariableManagerFactory, 
 
 __all__ = [
     'VariableManager',
-    'VariableManagerFactory', 
+    'VariableManagerFactory',
     'get_variable_manager',
     'cleanup_execution_variables'
 ]

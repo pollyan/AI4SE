@@ -17,7 +17,6 @@ from . import statistics
 from . import dashboard
 from . import user
 from . import midscene
-from . import variables
 from . import database
 
 # 注册子模块的路由到主蓝图

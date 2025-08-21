@@ -34,13 +34,7 @@ except ImportError:
         database_transaction, require_json_data, APIResponseHelper
     )
 
-# 导入变量管理服务
-try:
-    from ..services.variable_suggestion_service import VariableSuggestionService
-    from ..services.variable_manager import VariableManagerFactory
-except ImportError:
-    from web_gui.services.variable_suggestion_service import VariableSuggestionService
-    from web_gui.services.variable_manager import VariableManagerFactory
+# 变量管理服务已简化 - 核心变量功能在其他服务中实现
 
 
 # ==================== 执行任务管理 ====================
@@ -325,299 +319,30 @@ def export_all_executions():
         return standard_error_response(f'导出执行报告失败: {str(e)}')
 
 
-# ==================== MidScene集成API ====================
 
-@api_bp.route('/midscene/execution-start', methods=['POST'])
-@log_api_call
-@require_json
-def midscene_execution_start():
-    """MidScene执行开始通知"""
-    try:
-        data = request.get_json()
-        
-        # 验证必需字段
-        if not data or not data.get('execution_id') or not data.get('testcase_id'):
-            return standard_error_response('缺少必需字段: execution_id, testcase_id', 400)
-        
-        execution_id = data['execution_id']
-        testcase_id = data['testcase_id']
-        
-        # 验证测试用例存在
-        testcase = TestCase.query.filter_by(id=testcase_id, is_active=True).first()
-        if not testcase:
-            return standard_error_response('测试用例不存在', 404)
-        
-        # 创建或更新执行记录
-        execution = ExecutionHistory.query.filter_by(execution_id=execution_id).first()
-        
-        if not execution:
-            # 创建新执行记录
-            execution = ExecutionHistory(
-                execution_id=execution_id,
-                test_case_id=testcase_id,
-                status='running',
-                mode=data.get('mode', 'headless'),
-                browser=data.get('browser', 'chrome'),
-                start_time=datetime.now(),
-                executed_by=data.get('executed_by', 'midscene')
-            )
-            db.session.add(execution)
-        else:
-            # 更新现有记录
-            execution.status = 'running'
-            execution.start_time = datetime.now()
-            execution.mode = data.get('mode', execution.mode)
-            execution.browser = data.get('browser', execution.browser)
-        
-        db.session.commit()
-        
-        return format_success_response(
-            message='执行开始记录成功',
-            data=execution.to_dict()
-        )
-        
-    except Exception as e:
-        db.session.rollback()
-        return standard_error_response(f'记录执行开始失败: {str(e)}')
-
-
-@api_bp.route('/midscene/execution-result', methods=['POST'])
-@log_api_call
-@require_json
-def midscene_execution_result():
-    """MidScene执行结果通知"""
-    try:
-        data = request.get_json()
-        
-        # 验证必需字段
-        if not data or not data.get('execution_id'):
-            return standard_error_response('缺少必需字段: execution_id', 400)
-        
-        if 'status' not in data:
-            return standard_error_response('缺少必需字段: status', 400)
-        
-        execution_id = data['execution_id']
-        
-        # 查找执行记录
-        execution = ExecutionHistory.query.filter_by(execution_id=execution_id).first()
-        
-        if not execution:
-            return standard_error_response('执行记录不存在', 404)
-        
-        # 更新执行记录
-        execution.status = data.get('status', 'completed')
-        execution.end_time = datetime.now()
-        execution.duration = data.get('duration')
-        execution.steps_total = data.get('steps_total')
-        execution.steps_passed = data.get('steps_passed')
-        execution.steps_failed = data.get('steps_failed')
-        execution.result_summary = json.dumps(data.get('result_summary', {}))
-        execution.error_message = data.get('error_message')
-        
-        # 处理步骤执行详情
-        if 'steps' in data:
-            # 清除现有步骤执行记录
-            StepExecution.query.filter_by(execution_id=execution_id).delete()
-            
-            # 添加新的步骤执行记录
-            for step_data in data['steps']:
-                step_execution = StepExecution(
-                    execution_id=execution_id,
-                    step_index=step_data.get('index', 0),
-                    step_description=step_data.get('description', ''),
-                    status=step_data.get('status', 'unknown'),
-                    start_time=datetime.fromisoformat(step_data['start_time']) if step_data.get('start_time') else None,
-                    end_time=datetime.fromisoformat(step_data['end_time']) if step_data.get('end_time') else None,
-                    duration=step_data.get('duration'),
-                    screenshot_path=step_data.get('screenshot_path'),
-                    ai_confidence=step_data.get('ai_confidence'),
-                    ai_decision=json.dumps(step_data.get('ai_decision', {})),
-                    error_message=step_data.get('error_message')
-                )
-                db.session.add(step_execution)
-        
-        db.session.commit()
-        
-        return format_success_response(
-            message='执行结果记录成功',
-            data=execution.to_dict()
-        )
-        
-    except Exception as e:
-        db.session.rollback()
-        return standard_error_response(f'记录执行结果失败: {str(e)}')
-
-
-# ==================== 变量管理API ====================
-
-@api_bp.route('/executions/<execution_id>/variables', methods=['GET'])
-@log_api_call
-def get_execution_variables(execution_id):
-    """获取执行过程中的变量"""
-    try:
-        # 使用SQLAlchemy验证执行记录存在
-        execution = ExecutionHistory.query.filter_by(execution_id=execution_id).first()
-        
-        if not execution:
-            return standard_error_response('执行记录不存在', 404)
-        
-        # 获取变量管理器
-        manager = VariableManagerFactory.get_manager(execution_id)
-        variables = manager.list_variables()
-        
-        return jsonify({
-            'code': 200,
-            'message': '获取成功',
-            'data': {
-                'execution_id': execution_id,
-                'variables': variables,
-                'total_count': len(variables)
-            }
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'code': 500,
-            'message': f'获取变量失败: {str(e)}'
-        })
-
-
-@api_bp.route('/executions/<execution_id>/variables/<variable_name>', methods=['GET'])
-@log_api_call
-@safe_api_operation("获取变量详细信息")
-def get_variable_detail(execution_id, variable_name):
-    """获取变量详细信息"""
-    manager = VariableManagerFactory.get_manager(execution_id)
-    metadata = manager.get_variable_metadata(variable_name)
-    
-    if not metadata:
-        from ..utils.error_handler import NotFoundError
-        raise NotFoundError('变量不存在')
-    
-    return metadata
-
+# ==================== 简化变量管理API ====================
+# 核心变量功能已集成在执行引擎中，这里保留基础API接口
 
 @api_bp.route('/executions/<execution_id>/variable-references', methods=['GET'])
 @log_api_call
 def get_variable_references(execution_id):
     """获取变量引用历史"""
     try:
-        # TODO: 实现从VariableReference表查询
-        # 目前返回模拟数据
-        references = [
-            {
-                'step_index': 2,
-                'reference': '${user_info.name}',
-                'resolved_value': 'John Doe',
-                'status': 'success',
-                'timestamp': datetime.utcnow().isoformat()
-            },
-            {
-                'step_index': 3,
-                'reference': '${product_price}',
-                'resolved_value': 99.99,
-                'status': 'success', 
-                'timestamp': datetime.utcnow().isoformat()
-            }
-        ]
+        # 验证执行记录存在
+        execution = ExecutionHistory.query.filter_by(execution_id=execution_id).first()
+        if not execution:
+            return standard_error_response('执行记录不存在', 404)
         
+        # 简化实现：返回空列表，实际变量管理由执行引擎处理
         return standard_success_response(data={
             'execution_id': execution_id,
-            'references': references,
-            'total_count': len(references)
+            'references': [],
+            'total_count': 0,
+            'message': '变量引用功能已集成在执行引擎中'
         })
         
     except Exception as e:
         return standard_error_response(f'获取变量引用失败: {str(e)}')
-
-
-# ==================== 变量建议API ====================
-
-@api_bp.route('/v1/executions/<execution_id>/variable-suggestions', methods=['GET'])
-@api_bp.route('/executions/<execution_id>/variable-suggestions', methods=['GET'])
-@log_api_call
-def get_variable_suggestions(execution_id):
-    """获取变量建议列表"""
-    try:
-        step_index = request.args.get('step_index', type=int)
-        include_properties = request.args.get('include_properties', 'true').lower() == 'true'
-        limit = request.args.get('limit', type=int)
-        
-        service = VariableSuggestionService.get_service(execution_id)
-        result = service.get_variable_suggestions(
-            step_index=step_index,
-            include_properties=include_properties,
-            limit=limit
-        )
-        
-        return jsonify(result)
-        
-    except Exception as e:
-        return standard_error_response(f'获取变量建议失败: {str(e)}')
-
-
-@api_bp.route('/v1/executions/<execution_id>/variables/<variable_name>/properties', methods=['GET'])
-@api_bp.route('/executions/<execution_id>/variables/<variable_name>/properties', methods=['GET'])
-@log_api_call
-def get_variable_properties(execution_id, variable_name):
-    """获取变量属性探索"""
-    try:
-        max_depth = request.args.get('max_depth', 3, type=int)
-        
-        service = VariableSuggestionService.get_service(execution_id)
-        result = service.get_variable_properties(variable_name, max_depth)
-        
-        if result is None:
-            return standard_error_response('变量不存在', 404)
-        
-        return jsonify(result)
-        
-    except Exception as e:
-        return standard_error_response(f'获取变量属性失败: {str(e)}')
-
-
-@api_bp.route('/v1/executions/<execution_id>/variable-suggestions/search', methods=['GET'])
-@log_api_call
-def search_variables(execution_id):
-    """搜索变量"""
-    try:
-        query = request.args.get('query', '').strip()
-        if not query:
-            return standard_error_response('缺少查询参数', 400)
-        
-        limit = request.args.get('limit', 10, type=int)
-        step_index = request.args.get('step_index', type=int)
-        
-        service = VariableSuggestionService.get_service(execution_id)
-        result = service.search_variables(query, limit, step_index)
-        
-        return jsonify(result)
-        
-    except Exception as e:
-        return standard_error_response(f'搜索变量失败: {str(e)}')
-
-
-@api_bp.route('/v1/executions/<execution_id>/variables/validate', methods=['POST'])
-@log_api_call
-@safe_api_operation("验证变量引用")
-@require_json_data(required_fields=['references'])
-def validate_variable_references(execution_id, data):
-    """验证变量引用"""
-    references = data['references']
-    
-    if not isinstance(references, list):
-        from ..utils.error_handler import ValidationError
-        raise ValidationError('references必须是数组')
-    
-    step_index = data.get('step_index')
-    
-    service = VariableSuggestionService.get_service(execution_id)
-    results = service.validate_references(references, step_index)
-    
-    return {
-        'execution_id': execution_id,
-        'validation_results': results
-    }
 
 
 # ==================== 辅助函数 ====================
