@@ -152,12 +152,12 @@ def get_top_testcases():
     start_date = end_date - timedelta(days=days)
     
     # 按执行次数排序的测试用例
-    top_testcases = db.session.query(
+    # 使用子查询来避免SQLite的func.case问题
+    subquery = db.session.query(
         TestCase.id,
         TestCase.name,
         TestCase.category,
-        func.count(ExecutionHistory.id).label('execution_count'),
-        func.sum(func.case([(ExecutionHistory.status == 'success', 1)], else_=0)).label('success_count')
+        func.count(ExecutionHistory.id).label('execution_count')
     ).join(ExecutionHistory).filter(
         TestCase.is_active == True,
         ExecutionHistory.start_time >= start_date
@@ -165,10 +165,25 @@ def get_top_testcases():
         TestCase.id, TestCase.name, TestCase.category
     ).order_by(
         desc('execution_count')
-    ).limit(limit).all()
+    ).limit(limit).subquery()
+    
+    # 然后计算成功率
+    top_testcases = db.session.query(
+        subquery.c.id,
+        subquery.c.name, 
+        subquery.c.category,
+        subquery.c.execution_count
+    ).all()
     
     testcase_stats = []
-    for tc_id, name, category, exec_count, success_count in top_testcases:
+    for tc_id, name, category, exec_count in top_testcases:
+        # 单独查询成功次数来避免SQLite问题
+        success_count = db.session.query(func.count(ExecutionHistory.id)).filter(
+            ExecutionHistory.test_case_id == tc_id,
+            ExecutionHistory.status == 'success',
+            ExecutionHistory.start_time >= start_date
+        ).scalar() or 0
+        
         success_rate = (success_count / exec_count * 100) if exec_count > 0 else 0
         testcase_stats.append({
             'id': tc_id,
@@ -227,9 +242,9 @@ def get_failure_analysis():
     
     # 失败率最高的测试用例
     failure_prone_testcases = db.session.query(
+        TestCase.id,
         TestCase.name,
-        func.count(ExecutionHistory.id).label('total_count'),
-        func.count(func.case([(ExecutionHistory.status == 'failed', 1)])).label('failure_count')
+        func.count(ExecutionHistory.id).label('total_count')
     ).join(ExecutionHistory).filter(
         and_(
             TestCase.is_active == True,
@@ -241,7 +256,14 @@ def get_failure_analysis():
     
     # 计算失败率
     failure_rates = []
-    for name, total_count, failure_count in failure_prone_testcases:
+    for tc_id, name, total_count in failure_prone_testcases:
+        # 单独查询失败次数
+        failure_count = db.session.query(func.count(ExecutionHistory.id)).filter(
+            ExecutionHistory.test_case_id == tc_id,
+            ExecutionHistory.status == 'failed',
+            ExecutionHistory.start_time >= start_date
+        ).scalar() or 0
+        
         failure_rate = (failure_count / total_count * 100) if total_count > 0 else 0
         if failure_rate > 0:  # 只显示有失败的测试用例
             failure_rates.append({
