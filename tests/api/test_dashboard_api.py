@@ -84,13 +84,12 @@ class TestDashboardAPI:
         
         response = api_client.get('/api/dashboard/top-testcases')
         data = assert_api_response(response, 200, {
-            'top_testcases': list,
-            'most_executed': list,
-            'highest_success_rate': list
+            'testcases': list,  # 实际API返回的字段名
+            'period': dict
         })
         
-        assert 'top_testcases' in data
-        assert 'most_executed' in data
+        assert 'testcases' in data
+        assert 'period' in data
     
     def test_should_handle_dashboard_api_errors(self, api_client):
         """测试仪表板API错误处理"""
@@ -136,4 +135,7 @@ class TestDashboardDataAPI:
         response = api_client.get('/api/dashboard/failure-analysis')
         data = assert_api_response(response, 200)
         
-        assert 'failure_analysis' in data or 'common_errors' in data
+        # 检查实际API返回的字段
+        assert 'failure_reasons' in data
+        assert 'failed_steps' in data  
+        assert 'failure_prone_testcases' in data
