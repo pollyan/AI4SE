@@ -59,14 +59,13 @@ class TestDashboardAPI:
         
         response = api_client.get('/api/dashboard/execution-chart')
         data = assert_api_response(response, 200, {
-            'chart_data': dict,
-            'time_labels': list,
-            'success_data': list,
-            'failure_data': list
+            'chart_data': list,
+            'period': dict
         })
         
         assert 'chart_data' in data
-        assert 'time_labels' in data
+        assert 'period' in data
+        assert isinstance(data['chart_data'], list)
     
     def test_should_get_testcase_categories(self, api_client, create_test_testcase, assert_api_response):
         """测试获取测试用例分类统计"""

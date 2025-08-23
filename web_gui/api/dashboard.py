@@ -114,13 +114,22 @@ def get_execution_chart():
             func.date(ExecutionHistory.start_time)
         ).order_by('date').all()
         
-        chart_data = [
-            {
-                'time': date.strftime('%m-%d'),
+        chart_data = []
+        for date, count in daily_stats:
+            # SQLite返回字符串，需要解析为日期对象
+            if isinstance(date, str):
+                try:
+                    date_obj = datetime.strptime(date, '%Y-%m-%d')
+                    time_str = date_obj.strftime('%m-%d')
+                except ValueError:
+                    time_str = date  # 如果解析失败，使用原字符串
+            else:
+                time_str = date.strftime('%m-%d')
+            
+            chart_data.append({
+                'time': time_str,
                 'count': count
-            }
-            for date, count in daily_stats
-        ]
+            })
     
     return {
         'chart_data': chart_data,
@@ -148,7 +157,7 @@ def get_top_testcases():
         TestCase.name,
         TestCase.category,
         func.count(ExecutionHistory.id).label('execution_count'),
-        func.count(func.case([(ExecutionHistory.status == 'success', 1)])).label('success_count')
+        func.sum(func.case([(ExecutionHistory.status == 'success', 1)], else_=0)).label('success_count')
     ).join(ExecutionHistory).filter(
         TestCase.is_active == True,
         ExecutionHistory.start_time >= start_date
@@ -203,16 +212,16 @@ def get_failure_analysis():
         desc('count')
     ).limit(10).all()
     
-    # 失败步骤分析
+    # 失败步骤分析 - 使用step_description而不是action
     failed_steps = db.session.query(
-        StepExecution.action,
+        StepExecution.step_description,
         func.count(StepExecution.id).label('count')
     ).join(ExecutionHistory).filter(
         and_(
             ExecutionHistory.start_time >= start_date,
             StepExecution.status == 'failed'
         )
-    ).group_by(StepExecution.action).order_by(
+    ).group_by(StepExecution.step_description).order_by(
         desc('count')
     ).limit(10).all()
     
@@ -255,8 +264,8 @@ def get_failure_analysis():
             for reason, count in failure_reasons
         ],
         'failed_steps': [
-            {'action': action, 'count': count}
-            for action, count in failed_steps
+            {'description': description, 'count': count}
+            for description, count in failed_steps
         ],
         'failure_prone_testcases': failure_rates[:10]  # 只取前10个
     }
