@@ -154,7 +154,7 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-package-lock.json
+# package-lock.json - 保留用于CI/CD一致性
 
 # IDE files
 .idea/
