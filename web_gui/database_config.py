@@ -32,13 +32,18 @@ class DatabaseConfig:
                     "请安装PostgreSQL驱动：pip install psycopg2-binary\n"
                     "或者：pip install psycopg2"
                 )
+        # SQLite是Python标准库，无需额外检查
     
     def _get_database_url(self) -> str:
-        """获取PostgreSQL数据库URL"""
+        """获取数据库URL (支持PostgreSQL和SQLite)"""
         # 优先使用环境变量
         database_url = os.getenv('DATABASE_URL')
 
         if database_url:
+            # 如果是SQLite (测试环境)，直接返回
+            if database_url.startswith('sqlite://'):
+                return database_url
+                
             # 处理Heroku/Railway等平台的postgres://前缀
             if database_url.startswith('postgres://'):
                 database_url = database_url.replace('postgres://', 'postgresql://', 1)
@@ -86,7 +91,17 @@ class DatabaseConfig:
             'SQLALCHEMY_TRACK_MODIFICATIONS': False,
         }
         
-        if self.database_url.startswith(('postgresql://', 'postgres://')):
+        if self.database_url.startswith('sqlite://'):
+            # SQLite特定配置 (主要用于测试环境)
+            engine_options = {
+                'pool_pre_ping': True,
+                'pool_timeout': 20,
+                'pool_recycle': -1,
+            }
+            # SQLite不需要连接池，但保留基本设置
+            config['SQLALCHEMY_ENGINE_OPTIONS'] = engine_options
+            
+        elif self.database_url.startswith(('postgresql://', 'postgres://')):
             # PostgreSQL特定配置
             engine_options = {
                 'pool_pre_ping': True,
@@ -157,12 +172,16 @@ class DatabaseConfig:
         """获取连接信息用于调试"""
         parsed = urlparse(self.database_url)
         
+        is_sqlite = self.database_url.startswith('sqlite://')
+        is_postgres = self.database_url.startswith(('postgresql://', 'postgres://'))
+        
         return {
             'scheme': parsed.scheme,
-            'host': parsed.hostname or 'unknown',
+            'host': parsed.hostname or ('内存数据库' if ':memory:' in self.database_url else '本地文件'),
             'port': parsed.port,
             'database': parsed.path.lstrip('/') if parsed.path else 'unknown',
-            'is_postgres': self.database_url.startswith(('postgresql://', 'postgres://')),
+            'is_postgres': is_postgres,
+            'is_sqlite': is_sqlite,
             'is_production': self.is_production,
         }
 
@@ -176,7 +195,13 @@ def print_database_info():
     info = db_config.get_connection_info()
     
     print("🗄️  数据库配置信息:")
-    print(f"   类型: {'PostgreSQL' if info['is_postgres'] else 'SQLite'}")
+    if info['is_postgres']:
+        print(f"   类型: PostgreSQL")
+    elif info['is_sqlite']:
+        print(f"   类型: SQLite")
+    else:
+        print(f"   类型: 未知")
+        
     print(f"   环境: {'生产环境' if info['is_production'] else '开发环境'}")
     print(f"   主机: {info['host']}")
     if info['port']:
@@ -190,7 +215,7 @@ def get_flask_config() -> dict:
 
 
 def validate_database_connection() -> bool:
-    """验证PostgreSQL数据库连接"""
+    """验证数据库连接 (支持PostgreSQL和SQLite)"""
     try:
         engine = db_config.create_engine_with_config()
         with engine.connect() as conn:
@@ -198,7 +223,8 @@ def validate_database_connection() -> bool:
             result.fetchone()
         return True
     except Exception as e:
-        print(f"❌ PostgreSQL数据库连接失败: {e}")
+        db_type = "SQLite" if db_config.database_url.startswith('sqlite://') else "PostgreSQL"
+        print(f"❌ {db_type}数据库连接失败: {e}")
         return False
 
 

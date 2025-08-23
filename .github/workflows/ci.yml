@@ -14,21 +14,6 @@ jobs:
   api-tests:
     name: API Integration Tests
     runs-on: ubuntu-latest
-    
-    services:
-      postgres:
-        image: postgres:14
-        env:
-          POSTGRES_PASSWORD: test_password
-          POSTGRES_USER: test_user
-          POSTGRES_DB: intent_test_framework_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
 
     steps:
     - name: Checkout code
@@ -49,7 +34,6 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y postgresql-client
 
     - name: Install Python dependencies
       run: |
@@ -70,8 +54,8 @@ jobs:
     - name: Setup test environment variables
       run: |
         cat << EOF > .env.test
-        # Test Database Configuration
-        DATABASE_URL=postgresql://test_user:test_password@localhost:5432/intent_test_framework_test
+        # Test Database Configuration (SQLite in memory for CI tests)
+        DATABASE_URL=sqlite:///:memory:
         
         # Flask Configuration
         FLASK_ENV=testing
