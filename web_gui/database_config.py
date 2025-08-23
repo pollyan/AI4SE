@@ -93,12 +93,12 @@ class DatabaseConfig:
         
         if self.database_url.startswith('sqlite://'):
             # SQLite特定配置 (主要用于测试环境)
+            # SQLite使用单线程模式，不支持连接池参数
             engine_options = {
                 'pool_pre_ping': True,
-                'pool_timeout': 20,
                 'pool_recycle': -1,
+                'connect_args': {'check_same_thread': False},  # 允许多线程访问
             }
-            # SQLite不需要连接池，但保留基本设置
             config['SQLALCHEMY_ENGINE_OPTIONS'] = engine_options
             
         elif self.database_url.startswith(('postgresql://', 'postgres://')):
