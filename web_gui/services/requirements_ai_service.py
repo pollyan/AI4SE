@@ -232,7 +232,29 @@ class RequirementsAIService:
                 raise Exception(f"AI API调用失败，状态码: {response.status_code}, 响应: {response.text}")
             
             result = response.json()
-            ai_message = result['choices'][0]['message']['content'].strip()
+            logger.info(f"AI API响应结构: {json.dumps(result, ensure_ascii=False, indent=2)}")
+            
+            # 尝试提取AI响应内容，支持不同API格式
+            try:
+                # OpenAI格式
+                if 'choices' in result and result['choices'] and 'message' in result['choices'][0]:
+                    message = result['choices'][0]['message']
+                    if 'content' in message and message['content']:
+                        ai_message = message['content'].strip()
+                    else:
+                        # Gemini API可能返回空content或缺少content字段
+                        logger.warning(f"AI响应message缺少content或content为空: {message}")
+                        ai_message = "AI响应内容为空，请重新尝试。"
+                elif 'candidates' in result:
+                    # Google AI格式
+                    ai_message = result['candidates'][0]['content']['parts'][0]['text'].strip()
+                else:
+                    # 未识别的格式
+                    logger.error(f"未知的API响应格式: {result}")
+                    raise Exception(f"无法解析AI响应格式，未找到choices或candidates字段")
+            except (KeyError, IndexError, TypeError) as e:
+                logger.error(f"AI响应解析异常: {str(e)}, 响应结构: {result}")
+                raise Exception(f"AI响应解析失败: {str(e)}")
             
             logger.info(f"AI模型调用成功，返回内容长度: {len(ai_message)}")
             return ai_message
