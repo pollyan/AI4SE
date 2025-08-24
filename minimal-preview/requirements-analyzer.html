@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能需求分析 - Intent Test Framework</title>
+    <link rel="stylesheet" href="assets/css/minimal-style.css">
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <nav class="top-nav">
+        <div class="nav-container">
+            <div class="nav-brand">Intent Test Framework</div>
+            <div class="nav-links">
+                <a href="dashboard.html" class="nav-link">仪表板</a>
+                <a href="testcases.html" class="nav-link">测试用例</a>
+                <a href="requirements-analyzer.html" class="nav-link active">智能需求分析</a>
+                <a href="execution.html" class="nav-link">执行控制台</a>
+                <a href="reports.html" class="nav-link">报告</a>
+            </div>
+            <div class="nav-user">用户</div>
+        </div>
+    </nav>
+
+    <!-- 主内容 -->
+    <main class="main-container">
+        <!-- 页面标题 -->
+        <div class="page-header">
+            <h1 class="page-title">智能需求分析</h1>
+            <p class="page-subtitle">通过AI对话分析和澄清需求，自动生成结构化文档和测试用例</p>
+        </div>
+
+        <!-- 会话管理栏 -->
+        <div class="card mb-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <button class="btn btn-primary" onclick="createNewSession()">新建分析会话</button>
+                    <button class="btn btn-ghost" onclick="loadSession()">加载会话</button>
+                    <button class="btn btn-ghost" onclick="exportSession()">导出会话</button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="text-sm text-gray-600" id="sessionInfo">
+                        当前会话：<span id="currentSession">新建会话</span>
+                    </div>
+                    <div class="divider" style="width: 1px; height: 20px; margin: 0 8px;"></div>
+                    <select id="aiConfigSelect" class="form-select" style="width: 180px;" onchange="switchAIConfig()">
+                        <option value="config-2">DashScope Qwen</option>
+                        <option value="config-1">OpenAI GPT-4</option>
+                        <option value="config-3">Claude 3.5</option>
+                    </select>
+                    <button class="btn btn-ghost btn-small" onclick="manageAIConfigs()">配置</button>
+                    <div class="status status-success" id="aiStatus" title="AI配置正常"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="requirements-layout">
+            <!-- 左侧：对话区域 -->
+            <div class="card">
+                <div class="flex items-center justify-between mb-2">
+                    <div>
+                        <div class="card-title">AI需求分析对话</div>
+                        <div class="card-subtitle">与AI助手对话，澄清和完善您的需求</div>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <div class="text-xs text-gray-500">当前阶段：</div>
+                        <div class="status status-success" id="currentStageIndicator"></div>
+                        <div class="text-xs text-gray-600" id="currentStageText">需求澄清</div>
+                    </div>
+                </div>
+                
+                <!-- 对话历史 -->
+                <div id="chatHistory" class="log-container" style="height: 450px; font-family: inherit; background: #fafafa;">
+                    <div class="chat-message assistant">
+                        <div class="chat-avatar">AI</div>
+                        <div class="chat-content">
+                            <div class="chat-text">您好！我是AI需求分析助手。请描述您想要开发的功能或需求，我将通过对话帮您澄清细节，并生成结构化的需求文档。</div>
+                            <div class="chat-time">刚刚</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 输入区域 -->
+                <div class="divider"></div>
+                <div class="flex items-center gap-2">
+                    <textarea id="userInput" class="form-textarea" placeholder="描述您的需求或回答AI的问题..." 
+                              style="flex: 1; min-height: 60px; resize: none;" 
+                              onkeypress="handleInputKeyPress(event)"></textarea>
+                    <div class="flex flex-column gap-1">
+                        <button class="btn btn-primary" onclick="sendMessage()" id="sendButton">发送</button>
+                        <button class="btn btn-ghost btn-small" onclick="clearChat()">清空</button>
+                    </div>
+                </div>
+
+                <!-- AI处理状态 -->
+                <div id="aiProcessing" class="mt-2" style="display: none;">
+                    <div class="flex items-center gap-2 text-sm text-gray-600">
+                        <div class="loading-spinner" style="width: 16px; height: 16px;"></div>
+                        <span id="processingText">AI正在分析您的需求...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：共识与成果 -->
+            <div>
+                <!-- 已达成共识 -->
+                <div class="card mb-3">
+                    <div class="card-title">已达成共识</div>
+                    <div class="card-subtitle">AI已理解和确认的需求信息</div>
+                    
+                    <div id="consensusContent" class="consensus-list">
+                        <div class="empty-state" style="padding: 40px 20px;">
+                            <div class="empty-state-text">暂无共识内容</div>
+                            <div class="empty-state-subtext">开始与AI对话后，共识内容将在此显示</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 快速操作 -->
+                <div class="card mb-3">
+                    <div class="card-title">快速提问</div>
+                    <div class="card-subtitle">帮助澄清需求的常用问题</div>
+                    
+                    <div class="flex flex-column gap-1">
+                        <button class="btn btn-ghost btn-small" onclick="askQuickQuestion('用户角色')">用户角色是什么？</button>
+                        <button class="btn btn-ghost btn-small" onclick="askQuickQuestion('核心功能')">核心功能有哪些？</button>
+                        <button class="btn btn-ghost btn-small" onclick="askQuickQuestion('技术约束')">技术约束和限制？</button>
+                        <button class="btn btn-ghost btn-small" onclick="askQuickQuestion('优先级')">功能优先级排序？</button>
+                        <button class="btn btn-ghost btn-small" onclick="askQuickQuestion('边界条件')">边界条件处理？</button>
+                    </div>
+                </div>
+
+                <!-- 分析成果 -->
+                <div class="card">
+                    <div class="card-title">分析成果</div>
+                    <div class="card-subtitle">基于共识生成的文档和用例</div>
+                    
+                    <div class="document-list" id="documentList">
+                        <div class="document-item disabled">
+                            <div class="document-icon status status-inactive"></div>
+                            <div class="document-content">
+                                <div class="document-name">产品需求文档</div>
+                                <div class="document-type">PRD</div>
+                            </div>
+                        </div>
+                        
+                        <div class="document-item disabled">
+                            <div class="document-icon status status-inactive"></div>
+                            <div class="document-content">
+                                <div class="document-name">用户故事</div>
+                                <div class="document-type">Epic & Stories</div>
+                            </div>
+                        </div>
+                        
+                        <div class="document-item disabled">
+                            <div class="document-icon status status-inactive"></div>
+                            <div class="document-content">
+                                <div class="document-name">测试用例</div>
+                                <div class="document-type">Test Cases</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let currentSessionId = null;
+        let currentAIConfig = 'config-2';
+        let currentStep = 'clarification';
+        let isAIProcessing = false;
+
+        // WebSocket连接
+        let socket = null;
+        
+        function initWebSocket() {
+            // WebSocket连接逻辑
+            console.log('Initializing WebSocket connection...');
+        }
+
+        function createNewSession() {
+            currentSessionId = 'session_' + Date.now();
+            document.getElementById('currentSession').textContent = currentSessionId;
+            clearChat();
+            resetProgress();
+            
+            // 发送欢迎消息
+            addMessage('assistant', '您好！我是AI需求分析助手。请描述您想要开发的功能或需求，我将通过对话帮您澄清细节，并生成结构化的需求文档。');
+        }
+
+        function loadSession() {
+            // 加载已有会话逻辑
+            console.log('Loading existing session...');
+        }
+
+        function switchAIConfig() {
+            const select = document.getElementById('aiConfigSelect');
+            currentAIConfig = select.value;
+            
+            // 更新AI状态指示器
+            const statusEl = document.getElementById('aiStatus');
+            statusEl.className = 'status status-warning';
+            statusEl.title = '切换AI配置中...';
+            
+            // 模拟配置切换
+            setTimeout(() => {
+                statusEl.className = 'status status-success';
+                statusEl.title = 'AI配置正常';
+                addMessage('system', `已切换到 ${select.options[select.selectedIndex].text}`);
+            }, 1000);
+        }
+
+        function sendMessage() {
+            if (isAIProcessing) return;
+            
+            const input = document.getElementById('userInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // 添加用户消息
+            addMessage('user', message);
+            input.value = '';
+            
+            // 显示AI处理状态
+            showAIProcessing('AI正在分析您的需求...');
+            
+            // 模拟AI响应
+            setTimeout(() => {
+                simulateAIResponse(message);
+            }, 2000 + Math.random() * 2000);
+        }
+
+        function addMessage(type, content, time) {
+            const chatHistory = document.getElementById('chatHistory');
+            const messageEl = document.createElement('div');
+            messageEl.className = `chat-message ${type}`;
+            
+            const avatar = type === 'user' ? '我' : (type === 'system' ? '系统' : 'AI');
+            const timestamp = time || new Date().toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'});
+            
+            messageEl.innerHTML = `
+                <div class="chat-avatar">${avatar}</div>
+                <div class="chat-content">
+                    <div class="chat-text">${content}</div>
+                    <div class="chat-time">${timestamp}</div>
+                </div>
+            `;
+            
+            chatHistory.appendChild(messageEl);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        function showAIProcessing(text) {
+            isAIProcessing = true;
+            document.getElementById('processingText').textContent = text;
+            document.getElementById('aiProcessing').style.display = 'block';
+            document.getElementById('sendButton').disabled = true;
+        }
+
+        function hideAIProcessing() {
+            isAIProcessing = false;
+            document.getElementById('aiProcessing').style.display = 'none';
+            document.getElementById('sendButton').disabled = false;
+        }
+
+        function simulateAIResponse(userMessage) {
+            // 根据用户输入模拟不同的AI响应
+            let response = '';
+            let consensus = null;
+            let nextStep = currentStep;
+            
+            if (userMessage.includes('登录') || userMessage.includes('用户系统')) {
+                response = '我理解您想开发一个用户登录系统。让我进一步了解：\n\n1. 这个登录系统主要服务哪些用户群体？\n2. 需要支持哪些登录方式（邮箱、手机号、第三方登录等）？\n3. 对安全性有什么特殊要求？\n4. 是否需要用户注册功能？';
+                consensus = {
+                    category: '功能类型',
+                    content: '用户登录系统',
+                    details: '需要开发用户身份验证和会话管理功能'
+                };
+            } else if (userMessage.includes('电商') || userMessage.includes('购物')) {
+                response = '您提到的电商功能很有意思。为了更好地理解需求，请告诉我：\n\n1. 这是B2C还是B2B的电商平台？\n2. 主要销售什么类型的商品？\n3. 预期的用户规模大概是多少？\n4. 需要支持哪些支付方式？';
+                consensus = {
+                    category: '业务领域',
+                    content: '电商平台',
+                    details: '涉及商品展示、购物车、订单处理等核心电商功能'
+                };
+                updateStage('analysis', '需求分析');
+                nextStep = 'analysis';
+            } else if (userMessage.includes('B2C') || userMessage.includes('C端')) {
+                response = '明白了，B2C电商平台。基于这个信息，我还想了解：\n\n1. 平台的差异化特色是什么？\n2. 商品类目主要集中在哪些领域？\n3. 是否需要移动端支持？\n4. 对用户体验有什么特殊要求？';
+                consensus = {
+                    category: '平台类型',
+                    content: 'B2C电商平台',
+                    details: '面向消费者的直营或平台型电商系统'
+                };
+            } else {
+                response = '感谢您的描述。基于您提供的信息，我需要进一步澄清以下几点：\n\n1. 这个功能的核心目标是什么？\n2. 主要用户是谁？\n3. 有什么技术或业务约束？\n\n请详细描述一下，这样我能更准确地分析您的需求。';
+            }
+            
+            hideAIProcessing();
+            addMessage('assistant', response);
+            
+            // 更新共识内容
+            if (consensus) {
+                addConsensusItem(consensus);
+            }
+            
+            currentStep = nextStep;
+        }
+
+        function addConsensusItem(consensus) {
+            const consensusContent = document.getElementById('consensusContent');
+            
+            // 首次添加时清除空状态
+            if (consensusContent.querySelector('.empty-state')) {
+                consensusContent.innerHTML = '';
+            }
+            
+            const consensusItem = document.createElement('div');
+            consensusItem.className = 'consensus-item';
+            consensusItem.innerHTML = `
+                <div class="consensus-category">${consensus.category}</div>
+                <div class="consensus-content">${consensus.content}</div>
+                <div class="consensus-details">${consensus.details}</div>
+            `;
+            
+            consensusContent.appendChild(consensusItem);
+        }
+
+        function updateStage(stage, stageText) {
+            document.getElementById('currentStageIndicator').className = 'status status-success';
+            document.getElementById('currentStageText').textContent = stageText;
+        }
+
+        function manageAIConfigs() {
+            // 打开AI配置管理模态框
+            showAIConfigModal();
+        }
+
+        function showAIConfigModal() {
+            // 简化版AI配置界面（作为模态框）
+            const modal = document.createElement('div');
+            modal.id = 'aiConfigModal';
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content card" style="max-width: 700px; margin: 5% auto;">
+                    <div class="card-title">
+                        AI配置管理
+                        <button class="btn btn-ghost btn-small" style="float: right;" onclick="closeAIConfigModal()">&times;</button>
+                    </div>
+                    <div class="card-subtitle mb-3">管理用于需求分析的AI配置</div>
+                    
+                    <div class="mb-3">
+                        <button class="btn btn-primary btn-small" onclick="addAIConfig()">新建配置</button>
+                        <button class="btn btn-ghost btn-small" onclick="testAllAIConfigs()">测试全部</button>
+                    </div>
+                    
+                    <div class="list">
+                        <div class="list-item">
+                            <div class="list-item-content">
+                                <div class="list-item-title">DashScope Qwen配置</div>
+                                <div class="list-item-subtitle">阿里云DashScope，中文需求分析效果优秀</div>
+                                <div class="list-item-meta">
+                                    <span class="text-gray-600">DashScope</span>
+                                    <span class="text-gray-400">•</span>
+                                    <span class="text-gray-600">qwen-max</span>
+                                    <span class="text-gray-400">•</span>
+                                    <span class="text-gray-600">成功率 98.1%</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <button class="btn btn-small btn-ghost">编辑</button>
+                                <button class="btn btn-small btn-ghost">测试</button>
+                                <div class="status status-success"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="list-item">
+                            <div class="list-item-content">
+                                <div class="list-item-title">OpenAI GPT-4配置</div>
+                                <div class="list-item-subtitle">OpenAI GPT-4，逻辑推理能力强</div>
+                                <div class="list-item-meta">
+                                    <span class="text-gray-600">OpenAI</span>
+                                    <span class="text-gray-400">•</span>
+                                    <span class="text-gray-600">gpt-4</span>
+                                    <span class="text-gray-400">•</span>
+                                    <span class="text-gray-600">成功率 96.2%</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <button class="btn btn-small btn-ghost">编辑</button>
+                                <button class="btn btn-small btn-ghost">测试</button>
+                                <div class="status status-success"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // 模态框点击外部关闭
+            modal.onclick = function(event) {
+                if (event.target == modal) {
+                    closeAIConfigModal();
+                }
+            };
+        }
+
+        function closeAIConfigModal() {
+            const modal = document.getElementById('aiConfigModal');
+            if (modal) {
+                document.body.removeChild(modal);
+            }
+        }
+
+        function addAIConfig() {
+            console.log('Adding new AI config');
+            // 这里可以展开详细的配置表单
+        }
+
+        function testAllAIConfigs() {
+            console.log('Testing all AI configs');
+        }
+
+        function exportSession() {
+            console.log('Exporting current session');
+        }
+
+        function askQuickQuestion(topic) {
+            document.getElementById('userInput').value = `请详细说明${topic}相关的需求`;
+            sendMessage();
+        }
+
+        function updateProgress(step) {
+            // 重置所有步骤
+            const steps = ['clarification', 'analysis', 'documentation', 'testcases'];
+            steps.forEach(s => {
+                const stepEl = document.getElementById(`step-${s}`);
+                const statusEl = stepEl.querySelector('.status');
+                
+                if (s === step) {
+                    stepEl.classList.add('active');
+                    statusEl.className = 'status status-success';
+                } else if (steps.indexOf(s) < steps.indexOf(step)) {
+                    stepEl.classList.remove('active');
+                    statusEl.className = 'status status-success';
+                } else {
+                    stepEl.classList.remove('active');
+                    statusEl.className = 'status status-inactive';
+                }
+            });
+            
+            // 根据步骤更新文档状态
+            updateDocumentStatus(step);
+        }
+
+        function updateDocumentStatus(step) {
+            const documents = document.querySelectorAll('.document-item');
+            
+            if (step === 'documentation' || step === 'testcases') {
+                documents.forEach((doc, index) => {
+                    if (index < 2) { // PRD和用户故事
+                        doc.classList.remove('disabled');
+                        doc.querySelector('.status').className = 'status status-success';
+                        doc.onclick = () => viewDocument(index);
+                    }
+                });
+            }
+            
+            if (step === 'testcases') {
+                // 启用测试用例
+                documents[2].classList.remove('disabled');
+                documents[2].querySelector('.status').className = 'status status-success';
+                documents[2].onclick = () => viewDocument(2);
+            }
+        }
+
+        function viewDocument(index) {
+            const docTypes = ['PRD', 'Epic & Stories', 'Test Cases'];
+            console.log(`Viewing document: ${docTypes[index]}`);
+        }
+
+        function clearChat() {
+            const chatHistory = document.getElementById('chatHistory');
+            chatHistory.innerHTML = '';
+        }
+
+        function resetProgress() {
+            currentStep = 'clarification';
+            updateProgress('clarification');
+        }
+
+        function handleInputKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            createNewSession();
+            initWebSocket();
+        });
+    </script>
+
+    <style>
+        /* 对话样式 */
+        .chat-message {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            align-items: flex-start;
+        }
+
+        .chat-avatar {
+            width: 32px;
+            height: 32px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 500;
+            flex-shrink: 0;
+        }
+
+        .chat-message.user .chat-avatar {
+            background: #333;
+            color: white;
+        }
+
+        .chat-message.assistant .chat-avatar {
+            background: #e8f5e8;
+            color: #2d5a2d;
+        }
+
+        .chat-message.system .chat-avatar {
+            background: #e8f1ff;
+            color: #1a5490;
+        }
+
+        .chat-content {
+            flex: 1;
+        }
+
+        .chat-text {
+            color: #333;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .chat-time {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        /* 进度步骤样式 */
+        .progress-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .progress-step {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 8px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .progress-step.active {
+            background: #f8f9fa;
+        }
+
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 2px;
+        }
+
+        .step-subtitle {
+            font-size: 11px;
+            color: #666;
+        }
+
+        /* 文档列表样式 */
+        .document-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .document-item {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding: 8px;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .document-item:hover:not(.disabled) {
+            background: #f8f8f8;
+            border-color: #d0d0d0;
+        }
+
+        .document-item.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .document-content {
+            flex: 1;
+        }
+
+        .document-name {
+            font-size: 12px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .document-type {
+            font-size: 11px;
+            color: #666;
+        }
+
+        /* 共识内容样式 */
+        .consensus-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .consensus-item {
+            padding: 12px;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            background: #fafafa;
+        }
+
+        .consensus-category {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .consensus-content {
+            font-size: 13px;
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .consensus-details {
+            font-size: 12px;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        /* 确保桌面端保持5列布局 */
+        @media (min-width: 1024px) {
+            .requirements-layout {
+                grid-template-columns: 3fr 2fr !important;
+            }
+        }
+
+        .requirements-layout {
+            display: grid;
+            gap: 24px;
+        }
+    </style>
+</body>
+</html>

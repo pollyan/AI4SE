@@ -1,0 +1,268 @@
+# <!-- Powered by BMAD™ Core -->
+template:
+  id: epic-template-v1
+  name: Epic规格文档
+  version: 1.0
+  output:
+    format: markdown
+    filename: docs/epics/epic-{{epic_number}}-{{epic_slug}}.md
+    title: "Epic {{epic_number}}: {{epic_name}}"
+
+workflow:
+  mode: interactive
+  elicitation: intelligent-clarification
+
+sections:
+  - id: epic-overview
+    title: Epic概览
+    elicit: true
+    instruction: |
+      基于PRD中的功能需求和用户价值分析，定义此Epic的核心信息：
+      
+      **Epic标识**
+      - 唯一编号和简短名称
+      - 在产品路线图中的位置
+      - 与其他Epic的关系
+      
+      **用户价值主张**
+      - 此Epic为用户解决的核心问题
+      - 用户能获得的具体价值和体验改善
+      - 为什么这个Epic对用户重要
+      
+      **业务目标对齐**  
+      - Epic如何支撑整体业务目标
+      - 预期的业务价值和影响
+      - 成功的量化指标
+    template: |
+      ## Epic {{epic_number}}: {{epic_name}}
+      
+      ### 基本信息
+      - **Epic ID**: {{epic_id}}
+      - **优先级**: {{epic_priority}}
+      - **预估规模**: {{epic_size}} 故事点
+      - **目标迭代**: {{target_iteration}}
+      
+      ### 用户价值主张
+      {{user_value_proposition}}
+      
+      ### 业务目标对齐
+      {{business_alignment}}
+      
+      ### 成功指标
+      {{success_metrics}}
+
+  - id: user-stories-scope
+    title: 用户故事范围
+    elicit: true
+    instruction: |
+      定义此Epic包含的用户故事范围，确保：
+      - 所有故事都支撑Epic的用户价值主张
+      - 故事之间逻辑连贯，形成完整的用户体验
+      - 范围边界清晰，避免功能蔓延
+      - 考虑不同用户角色的需求
+    sections:
+      - id: included-stories
+        title: 包含的用户故事（概要）
+        type: story-list
+        instruction: 列出此Epic预期包含的主要用户故事
+        template: |
+          **{{story_title}}**
+          - **用户角色**: {{user_role}}
+          - **核心功能**: {{core_function}}
+          - **价值**: {{story_value}}
+          - **预估**: {{story_points}} 点
+      - id: excluded-scope
+        title: 明确排除的范围
+        type: bullet-list
+        instruction: 明确说明此Epic不包含什么，避免范围蔓延
+        template: "- {{excluded_item}} - **原因**: {{exclusion_reason}}"
+
+  - id: user-journey
+    title: 用户旅程
+    elicit: true
+    instruction: |
+      描述用户完整的使用旅程，展示Epic中各个功能如何协同工作：
+      
+      **旅程阶段**
+      - 用户进入Epic功能的触发条件
+      - 主要使用流程和关键决策点
+      - 用户完成目标的成功路径
+      - 可能的分支路径和异常处理
+      
+      **体验设计**
+      - 每个阶段的用户感受和期望
+      - 关键的用户界面和交互点
+      - 信息反馈和状态提示
+    template: |
+      ### 典型用户旅程
+      
+      #### 阶段1: {{journey_stage_1}}
+      **触发条件**: {{trigger_condition}}
+      **用户操作**: {{user_actions}}
+      **系统响应**: {{system_response}}
+      **用户期望**: {{user_expectation}}
+      
+      #### 阶段2: {{journey_stage_2}}
+      **用户操作**: {{user_actions}}
+      **关键决策**: {{key_decisions}}
+      **系统支持**: {{system_support}}
+      
+      #### 阶段3: {{journey_stage_3}}
+      **完成条件**: {{completion_criteria}}
+      **成功状态**: {{success_state}}
+      **后续行动**: {{follow_up_actions}}
+      
+      ### 替代路径
+      {{alternative_paths}}
+      
+      ### 异常处理
+      {{exception_handling}}
+
+  - id: acceptance-criteria
+    title: Epic验收标准
+    elicit: true
+    instruction: |
+      定义Epic整体的验收标准，确保交付的功能集合满足用户价值预期：
+      
+      **功能完整性** - 所有核心功能都按预期工作
+      **用户体验** - 整体体验流畅、直观、高效
+      **质量标准** - 性能、稳定性、安全性达标
+      **业务价值** - 实现预期的业务目标
+    sections:
+      - id: functional-acceptance
+        title: 功能验收标准
+        type: criteria-list
+        template: |
+          **标准**: {{acceptance_criterion}}
+          **验证方法**: {{verification_method}}
+          **测试场景**: {{test_scenarios}}
+      - id: experience-acceptance
+        title: 用户体验标准
+        type: criteria-list
+        template: |
+          **标准**: {{experience_criterion}}
+          **测量方式**: {{measurement_method}}
+          **目标值**: {{target_value}}
+      - id: quality-acceptance
+        title: 质量验收标准
+        type: criteria-list
+        template: |
+          **质量属性**: {{quality_attribute}}
+          **标准**: {{quality_standard}}
+          **测试方法**: {{testing_approach}}
+
+  - id: dependencies
+    title: 依赖关系和约束
+    elicit: true
+    instruction: |
+      识别和管理此Epic的依赖关系和约束条件：
+      
+      **Epic依赖** - 对其他Epic的依赖关系
+      **技术依赖** - 技术组件、API、数据的依赖
+      **业务依赖** - 业务流程、决策、资源的依赖
+      **外部依赖** - 第三方服务、合作伙伴的依赖
+    sections:
+      - id: epic-dependencies
+        title: Epic间依赖
+        type: dependency-list
+        template: |
+          **依赖Epic**: {{dependent_epic}}
+          **依赖类型**: {{dependency_type}}
+          **依赖说明**: {{dependency_description}}
+          **风险评估**: {{risk_assessment}}
+      - id: technical-dependencies
+        title: 技术依赖
+        type: dependency-list
+        template: |
+          **技术组件**: {{technical_component}}
+          **依赖内容**: {{dependency_content}}
+          **可用状态**: {{availability_status}}
+          **风险缓解**: {{risk_mitigation}}
+      - id: constraints
+        title: 约束条件
+        type: bullet-list
+        template: "- **{{constraint_type}}**: {{constraint_description}}"
+
+  - id: implementation-notes
+    title: 实施注意事项
+    elicit: true
+    instruction: |
+      为开发团队提供实施指导和关键考虑：
+      
+      **技术考虑** - 架构决策、技术选择、实施难点
+      **设计考虑** - UI/UX设计要求、设计原则
+      **数据考虑** - 数据模型、数据流、数据质量
+      **集成考虑** - 系统集成点、API设计、兼容性
+    template: |
+      ### 技术实施要点
+      {{technical_implementation_notes}}
+      
+      ### 设计实施要点
+      {{design_implementation_notes}}
+      
+      ### 数据实施要点
+      {{data_implementation_notes}}
+      
+      ### 集成实施要点
+      {{integration_implementation_notes}}
+      
+      ### 风险提醒
+      {{implementation_risks}}
+
+  - id: testing-strategy
+    title: 测试策略
+    elicit: true
+    instruction: |
+      为此Epic定义测试策略，确保质量保证：
+      
+      **测试类型** - 单元测试、集成测试、端到端测试
+      **测试重点** - 关键功能、用户路径、边界条件
+      **测试数据** - 测试数据准备、数据隐私考虑
+      **测试环境** - 测试环境要求、部署策略
+    template: |
+      ### 测试范围
+      {{testing_scope}}
+      
+      ### 关键测试场景
+      {{key_test_scenarios}}
+      
+      ### 测试数据要求
+      {{test_data_requirements}}
+      
+      ### 性能测试要求
+      {{performance_testing_requirements}}
+      
+      ### 安全测试要求
+      {{security_testing_requirements}}
+
+  - id: definition-of-done
+    title: 完成定义
+    instruction: |
+      明确此Epic完成的标准，确保交付质量
+    template: |
+      ### Epic完成标准
+      
+      #### 功能完成
+      - [ ] 所有用户故事开发完成并通过验收
+      - [ ] 所有验收标准得到满足
+      - [ ] 核心用户旅程测试通过
+      
+      #### 质量完成
+      - [ ] 代码审查完成，符合编码标准
+      - [ ] 单元测试覆盖率达到要求
+      - [ ] 集成测试通过
+      - [ ] 性能测试达标
+      - [ ] 安全测试通过
+      
+      #### 文档完成
+      - [ ] 用户文档更新
+      - [ ] API文档更新（如适用）
+      - [ ] 运维文档更新
+      
+      #### 部署完成
+      - [ ] 功能成功部署到生产环境
+      - [ ] 监控和告警配置完成
+      - [ ] 回滚计划准备就绪
+      
+      ### 发布决策标准
+      {{release_criteria}}

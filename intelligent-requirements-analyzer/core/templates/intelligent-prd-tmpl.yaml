@@ -1,0 +1,337 @@
+# <!-- Powered by BMAD™ Core -->
+template:
+  id: intelligent-prd-v1
+  name: 智能产品需求文档
+  version: 1.0
+  output:
+    format: markdown
+    filename: docs/requirements-prd.md
+    title: "{{project_name}} 智能产品需求文档"
+
+workflow:
+  mode: interactive
+  elicitation: intelligent-clarification
+  custom_elicitation:
+    title: "智能PRD澄清选项"
+    options:
+      - "扩展章节细节和具体实例"
+      - "从业务角度验证需求合理性"
+      - "从用户角度测试需求可用性"
+      - "探索替代解决方案和实现方式"
+      - "分析资源约束和实施风险"
+      - "生成风险缓解策略"
+      - "从MVP角度挑战范围定义"
+      - "头脑风暴创新功能可能性"
+      - "如果有[更多资源/能力/时间]会怎样"
+      - "继续下一章节"
+
+sections:
+  - id: introduction
+    instruction: |
+      此模板指导创建基于智能需求澄清结果的综合性产品需求文档。
+      
+      开始前询问用户偏好的模式：
+      
+      1. **交互模式** - 逐章节协作完成，充分澄清每个部分
+      2. **YOLO模式** - 快速生成完整草稿供审阅和完善
+      
+      了解可用的输入（澄清结果、用户研究、竞品分析、初始想法）并收集项目上下文。
+
+  - id: clarification-summary
+    title: 需求澄清摘要
+    elicit: true
+    instruction: |
+      基于前期智能澄清过程的结果，综合分析并生成以下内容：
+      
+      **核心问题陈述**
+      - 从澄清对话中提炼的本质问题（1-2句话）
+      - 问题产生的根本原因分析
+      - 问题的影响范围和紧急程度
+      - 不解决此问题的业务风险
+      
+      **目标用户画像** 
+      - 基于澄清结果的具体用户描述
+      - 主要用户群体的详细特征（角色、技能、环境、目标）
+      - 次要用户群体（如果存在）
+      - 用户当前的工作流程和痛点
+      - 用户成功的定义和期望
+      
+      **价值主张**
+      - 明确的用户价值实现方式
+      - 可量化的业务价值预期
+      - 与现有解决方案的差异化优势
+      - 预期的改进效果和成功指标
+      
+      **关键假设**
+      - 需要在开发过程中验证的核心假设
+      - 用户行为和偏好的假设
+      - 市场和竞争环境的假设
+      - 技术可行性的假设
+    template: |
+      ### 核心问题陈述
+      {{core_problem_statement}}
+      
+      ### 目标用户画像
+      
+      #### 主要用户群体：{{primary_user_segment}}
+      {{primary_user_description}}
+      
+      #### 次要用户群体：{{secondary_user_segment}}
+      {{secondary_user_description}}
+      
+      ### 价值主张
+      {{value_proposition}}
+      
+      #### 预期改进效果
+      {{expected_improvements}}
+      
+      ### 关键假设
+      {{key_assumptions}}
+
+  - id: functional-requirements
+    title: 功能需求
+    elicit: true
+    instruction: |
+      基于澄清结果智能生成功能需求，确保每个需求都：
+      
+      **生成逻辑**：
+      1. 从用户场景和痛点中提取核心功能点
+      2. 按照用户价值和业务价值进行优先级排序
+      3. 确保每个功能都对应明确的用户需求和价值实现
+      4. 标注功能间的依赖关系和实现顺序
+      
+      **需求质量标准**：
+      - 每个功能需求必须回答"为什么需要"和"如何验证成功"
+      - 功能描述要具体可测试，避免模糊表述
+      - 包含正常流程、边界条件和异常处理
+      - 考虑不同用户角色的权限和访问控制
+      
+      **分类组织**：
+      - 核心功能：解决主要痛点，支撑核心价值主张
+      - 支撑功能：支持核心功能运行的必要功能
+      - 增值功能：提升用户体验的额外功能
+    sections:
+      - id: core-functions
+        title: 核心功能需求
+        type: numbered-list
+        prefix: FR-CORE
+        instruction: 解决核心痛点，支撑主要价值主张的功能
+        template: "FR-CORE-{{n}}: {{function_description}} - **价值**: {{user_value}} - **验证**: {{verification_criteria}}"
+      - id: supporting-functions  
+        title: 支撑功能需求
+        type: numbered-list
+        prefix: FR-SUP
+        instruction: 支持核心功能运行的必要功能
+        template: "FR-SUP-{{n}}: {{function_description}} - **支撑**: {{supported_core_function}} - **验证**: {{verification_criteria}}"
+      - id: enhancement-functions
+        title: 增值功能需求  
+        type: numbered-list
+        prefix: FR-ENH
+        instruction: 提升用户体验的额外功能
+        template: "FR-ENH-{{n}}: {{function_description}} - **价值**: {{enhancement_value}} - **优先级**: {{priority_level}}"
+
+  - id: non-functional-requirements
+    title: 非功能性需求
+    elicit: true
+    instruction: |
+      基于澄清过程中收集的质量属性要求，定义系统的非功能性需求：
+      
+      **性能需求** - 基于用户期望和使用场景
+      **可靠性需求** - 基于业务关键性和风险承受度
+      **安全性需求** - 基于数据敏感性和合规要求
+      **可用性需求** - 基于用户技能水平和使用环境
+      **可扩展性需求** - 基于预期增长和业务发展
+    sections:
+      - id: performance
+        title: 性能需求
+        type: numbered-list
+        prefix: NFR-PERF
+        template: "NFR-PERF-{{n}}: {{performance_requirement}} - **指标**: {{measurement_criteria}}"
+      - id: reliability
+        title: 可靠性需求
+        type: numbered-list  
+        prefix: NFR-REL
+        template: "NFR-REL-{{n}}: {{reliability_requirement}} - **标准**: {{reliability_standard}}"
+      - id: security
+        title: 安全性需求
+        type: numbered-list
+        prefix: NFR-SEC
+        template: "NFR-SEC-{{n}}: {{security_requirement}} - **措施**: {{security_measures}}"
+      - id: usability
+        title: 可用性需求
+        type: numbered-list
+        prefix: NFR-USE
+        template: "NFR-USE-{{n}}: {{usability_requirement}} - **标准**: {{usability_standard}}"
+
+  - id: epic-roadmap
+    title: Epic路线图建议
+    elicit: true
+    instruction: |
+      基于功能需求和澄清的业务优先级，建议Epic分解和交付路线图：
+      
+      **分解原则**：
+      - 按用户价值流分组相关功能
+      - 考虑技术实现的自然边界和依赖关系
+      - 平衡Epic规模，确保可在合理周期内完成
+      - 优先安排能快速验证核心假设的Epic
+      
+      **路线图考虑**：
+      - MVP功能识别和优先级
+      - 技术依赖和实施顺序
+      - 风险管理和缓解策略
+      - 里程碑和成功检查点
+    template: |
+      ### 建议Epic分解
+      
+      #### Epic 1: {{epic_1_name}}
+      **用户价值**: {{epic_1_value}}
+      **包含功能**: {{epic_1_functions}}
+      **优先级理由**: {{epic_1_priority_reason}}
+      
+      #### Epic 2: {{epic_2_name}}  
+      **用户价值**: {{epic_2_value}}
+      **包含功能**: {{epic_2_functions}}
+      **依赖关系**: {{epic_2_dependencies}}
+      
+      #### Epic 3: {{epic_3_name}}
+      **用户价值**: {{epic_3_value}}  
+      **包含功能**: {{epic_3_functions}}
+      **实施时机**: {{epic_3_timing}}
+      
+      ### 交付路线图
+      
+      **第一阶段（MVP）**: {{phase_1_epics}}
+      **第二阶段（增强）**: {{phase_2_epics}}  
+      **第三阶段（优化）**: {{phase_3_epics}}
+      
+      ### 关键里程碑
+      {{key_milestones}}
+
+  - id: acceptance-criteria
+    title: 高层验收标准
+    elicit: true
+    instruction: |
+      定义产品整体的验收标准，确保最终交付物满足用户期望：
+      
+      **用户验收标准** - 从用户角度的成功定义
+      **业务验收标准** - 从业务目标角度的成功定义  
+      **技术验收标准** - 从技术质量角度的成功定义
+      **体验验收标准** - 从用户体验角度的成功定义
+    template: |
+      ### 用户验收标准
+      {{user_acceptance_criteria}}
+      
+      ### 业务验收标准
+      {{business_acceptance_criteria}}
+      
+      ### 技术验收标准
+      {{technical_acceptance_criteria}}
+      
+      ### 用户体验标准
+      {{experience_acceptance_criteria}}
+
+  - id: constraints-assumptions
+    title: 约束条件和假设
+    elicit: true
+    instruction: |
+      明确项目的约束条件和关键假设，为项目规划和风险管理提供基础：
+      
+      **技术约束** - 技术栈、集成要求、性能限制等
+      **业务约束** - 预算、时间、资源、合规要求等  
+      **市场假设** - 用户需求、竞争环境、市场趋势等
+      **组织假设** - 团队能力、流程、工具等
+    sections:
+      - id: technical-constraints
+        title: 技术约束
+        template: |
+          **技术栈约束**: {{tech_stack_constraints}}
+          **集成约束**: {{integration_constraints}}  
+          **性能约束**: {{performance_constraints}}
+          **安全约束**: {{security_constraints}}
+      - id: business-constraints
+        title: 业务约束
+        template: |
+          **预算约束**: {{budget_constraints}}
+          **时间约束**: {{timeline_constraints}}
+          **资源约束**: {{resource_constraints}}
+          **合规约束**: {{compliance_constraints}}
+      - id: key-assumptions
+        title: 关键假设
+        type: bullet-list
+        template: "- {{assumption}} - **验证方式**: {{validation_method}}"
+
+  - id: risks-mitigation
+    title: 风险识别和缓解策略
+    elicit: true  
+    instruction: |
+      基于澄清过程中识别的风险和不确定性，制定全面的风险管理策略：
+      
+      **技术风险** - 实现难度、技术依赖、性能风险等
+      **业务风险** - 市场变化、用户接受度、竞争风险等
+      **项目风险** - 时间延期、资源不足、团队风险等
+      **运营风险** - 部署、维护、扩展风险等
+    sections:
+      - id: technical-risks
+        title: 技术风险
+        type: risk-list
+        template: |
+          **风险**: {{risk_description}}
+          **影响**: {{risk_impact}}
+          **概率**: {{risk_probability}}  
+          **缓解策略**: {{mitigation_strategy}}
+      - id: business-risks
+        title: 业务风险
+        type: risk-list
+        template: |
+          **风险**: {{risk_description}}
+          **影响**: {{business_impact}}
+          **概率**: {{risk_probability}}
+          **缓解策略**: {{mitigation_strategy}}
+
+  - id: success-metrics
+    title: 成功指标和监控
+    elicit: true
+    instruction: |
+      定义产品成功的量化指标和监控机制：
+      
+      **用户成功指标** - 用户满意度、使用频率、任务完成率等
+      **业务成功指标** - 收入影响、成本节约、市场份额等
+      **产品成功指标** - 功能采用率、性能指标、质量指标等
+      **监控和评估** - 数据收集、分析方法、改进机制等
+    template: |
+      ### 用户成功指标
+      {{user_success_metrics}}
+      
+      ### 业务成功指标  
+      {{business_success_metrics}}
+      
+      ### 产品成功指标
+      {{product_success_metrics}}
+      
+      ### 监控和评估机制
+      {{monitoring_evaluation_mechanism}}
+
+  - id: next-steps
+    title: 下一步行动
+    instruction: |
+      为后续的Epic分解和开发准备提供明确指导
+    template: |
+      ### 立即行动项
+      1. 将此PRD分解为详细的Epic（使用 `*create-epics` 命令）
+      2. 为高优先级Epic创建用户故事（使用 `*create-stories` 命令）
+      3. 与技术团队审查技术约束和架构需求
+      4. 与业务团队确认优先级和时间规划
+      
+      ### Epic分解准备
+      本PRD为Epic分解任务提供了：
+      - 明确的功能需求和优先级
+      - 详细的用户画像和使用场景  
+      - 清晰的验收标准框架
+      - 全面的约束条件和假设
+      
+      ### 开发团队移交
+      请将此PRD与开发团队分享，确保：
+      - 技术架构与需求匹配
+      - 开发计划与业务优先级一致
+      - 质量标准和验收标准明确
+      - 风险缓解措施得到理解和支持

@@ -15,6 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 在实际的业务功能中不要有任何的模拟数据，模拟功能
 - 完成任务之后，要详细验证结果，之后再给出确定的反馈，不能猜测，要有确实的根据
 - 修改完业务功能后，本地运行API测试来保证功能正确
+- 每当开始一个新的涉及到用户交互的功能开发，先在minimal-preview这里产出html的设计，与我确认之后再开始开发
 
 ## 核心开发命令
 

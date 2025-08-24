@@ -1,0 +1,311 @@
+# <!-- Powered by BMAD™ Core -->
+template:
+  id: story-template-v1
+  name: 用户故事规格文档
+  version: 1.0
+  output:
+    format: markdown
+    filename: docs/stories/story-{{epic_number}}-{{story_number}}-{{story_slug}}.md
+    title: "故事 {{epic_number}}.{{story_number}}: {{story_title}}"
+
+workflow:
+  mode: interactive
+  elicitation: intelligent-clarification
+
+sections:
+  - id: story-header
+    title: 故事基本信息
+    elicit: true
+    instruction: |
+      定义用户故事的基本信息，确保故事符合INVEST原则：
+      
+      **故事标识**
+      - 唯一编号和简短标题
+      - 所属Epic和优先级
+      - 故事点估算和复杂度
+      
+      **INVEST原则验证**
+      - Independent: 故事是否独立？
+      - Negotiable: 实现细节是否可协商？
+      - Valuable: 是否提供用户价值？
+      - Estimable: 工作量是否可估算？
+      - Small: 规模是否适中？
+      - Testable: 是否可测试验证？
+    template: |
+      # 故事 {{epic_number}}.{{story_number}}: {{story_title}}
+      
+      ## 基本信息
+      - **故事ID**: {{story_id}}
+      - **所属Epic**: [Epic {{epic_number}}: {{epic_name}}](../epics/epic-{{epic_number}}-{{epic_slug}}.md)
+      - **优先级**: {{story_priority}}
+      - **故事点数**: {{story_points}}
+      - **复杂度**: {{complexity_level}}
+      - **状态**: {{story_status}}
+      
+      ## INVEST原则检查
+      - **Independent**: {{independence_check}}
+      - **Negotiable**: {{negotiable_check}}
+      - **Valuable**: {{value_check}}
+      - **Estimable**: {{estimable_check}}
+      - **Small**: {{size_check}}
+      - **Testable**: {{testable_check}}
+
+  - id: story-statement
+    title: 用户故事陈述
+    elicit: true
+    instruction: |
+      使用标准的用户故事格式，确保清晰表达用户需求：
+      
+      **故事格式**: "作为[用户角色]，我希望[功能描述]，以便[价值实现]"
+      
+      **角色定义** - 具体的用户角色，符合PRD中的用户画像
+      **功能描述** - 清晰、具体的功能或行为描述
+      **价值实现** - 明确用户获得的价值或解决的问题
+      
+      **上下文补充**
+      - 用户的具体使用场景和环境
+      - 触发此功能的条件和时机
+      - 与其他功能的关系和依赖
+    template: |
+      ## 用户故事
+      
+      ### 主要故事
+      **作为** {{user_role}}
+      **我希望** {{desired_functionality}}
+      **以便** {{value_realization}}
+      
+      ### 使用场景
+      {{usage_context}}
+      
+      ### 触发条件
+      {{trigger_conditions}}
+      
+      ### 相关故事
+      {{related_stories}}
+
+  - id: detailed-description
+    title: 详细描述
+    elicit: true
+    instruction: |
+      提供故事的详细描述，包括：
+      
+      **功能细节** - 具体的操作步骤和系统行为
+      **用户界面** - 主要的界面元素和交互方式
+      **数据流** - 涉及的数据输入、处理、输出
+      **业务规则** - 需要遵循的业务逻辑和约束
+    template: |
+      ## 详细描述
+      
+      ### 功能概述
+      {{function_overview}}
+      
+      ### 主要操作流程
+      {{main_workflow}}
+      
+      ### 用户界面要求
+      {{ui_requirements}}
+      
+      ### 数据处理要求
+      {{data_requirements}}
+      
+      ### 业务规则
+      {{business_rules}}
+
+  - id: acceptance-criteria
+    title: 验收标准
+    elicit: true
+    instruction: |
+      使用Given-When-Then格式定义清晰的验收标准：
+      
+      **主要场景** - 正常使用流程的验证
+      **边界场景** - 边界条件和特殊情况
+      **异常场景** - 错误处理和异常情况
+      **性能要求** - 响应时间、并发处理等
+      **安全要求** - 权限验证、数据保护等
+    sections:
+      - id: main-scenarios
+        title: 主要验收场景
+        type: scenario-list
+        template: |
+          **场景{{n}}**: {{scenario_name}}
+          ```gherkin
+          Given {{precondition}}
+          When {{user_action}}
+          Then {{expected_result}}
+          ```
+      - id: edge-scenarios
+        title: 边界场景
+        type: scenario-list
+        template: |
+          **边界场景{{n}}**: {{edge_scenario_name}}
+          ```gherkin
+          Given {{edge_precondition}}
+          When {{edge_action}}
+          Then {{edge_expected_result}}
+          ```
+      - id: error-scenarios
+        title: 异常处理场景
+        type: scenario-list
+        template: |
+          **异常场景{{n}}**: {{error_scenario_name}}
+          ```gherkin
+          Given {{error_precondition}}
+          When {{error_trigger}}
+          Then {{error_handling_result}}
+          ```
+
+  - id: non-functional-requirements
+    title: 非功能性要求
+    elicit: true
+    instruction: |
+      定义故事相关的非功能性要求：
+      
+      **性能要求** - 响应时间、吞吐量等具体指标
+      **安全要求** - 权限控制、数据加密、输入验证等
+      **可用性要求** - 界面友好性、错误提示、帮助信息等
+      **兼容性要求** - 浏览器支持、设备兼容等
+    template: |
+      ## 非功能性要求
+      
+      ### 性能要求
+      {{performance_requirements}}
+      
+      ### 安全要求
+      {{security_requirements}}
+      
+      ### 可用性要求
+      {{usability_requirements}}
+      
+      ### 兼容性要求
+      {{compatibility_requirements}}
+
+  - id: design-notes
+    title: 设计注意事项
+    elicit: true
+    instruction: |
+      为设计和开发团队提供实施指导：
+      
+      **UI/UX设计** - 界面设计要求、交互模式、视觉风格
+      **技术实现** - 技术选择建议、架构考虑、实现难点
+      **数据设计** - 数据模型、存储要求、数据验证
+      **集成要求** - API设计、第三方集成、系统接口
+    template: |
+      ## 设计注意事项
+      
+      ### UI/UX设计要点
+      {{ui_design_notes}}
+      
+      ### 技术实现要点
+      {{technical_notes}}
+      
+      ### 数据设计要点
+      {{data_design_notes}}
+      
+      ### 集成要求
+      {{integration_requirements}}
+
+  - id: testing-guidance
+    title: 测试指导
+    elicit: true
+    instruction: |
+      为测试团队提供测试策略和重点：
+      
+      **测试重点** - 需要重点关注的功能和场景
+      **测试数据** - 测试数据准备要求和数据隐私考虑
+      **测试环境** - 测试环境配置和依赖要求
+      **自动化测试** - 可自动化的测试场景和优先级
+    template: |
+      ## 测试指导
+      
+      ### 测试重点
+      {{testing_priorities}}
+      
+      ### 关键测试场景
+      {{key_test_scenarios}}
+      
+      ### 测试数据要求
+      {{test_data_requirements}}
+      
+      ### 自动化测试建议
+      {{automation_recommendations}}
+      
+      ### 测试工具建议
+      {{testing_tools}}
+
+  - id: dependencies
+    title: 依赖关系
+    elicit: true
+    instruction: |
+      识别故事的依赖关系和阻塞因素：
+      
+      **故事依赖** - 对其他故事的依赖关系
+      **技术依赖** - 技术组件、库、服务的依赖
+      **数据依赖** - 数据可用性、数据质量的依赖
+      **外部依赖** - 第三方服务、外部团队的依赖
+    template: |
+      ## 依赖关系
+      
+      ### 前置故事
+      {{prerequisite_stories}}
+      
+      ### 技术依赖
+      {{technical_dependencies}}
+      
+      ### 数据依赖
+      {{data_dependencies}}
+      
+      ### 外部依赖
+      {{external_dependencies}}
+      
+      ### 阻塞风险
+      {{blocking_risks}}
+
+  - id: definition-of-done
+    title: 完成定义
+    instruction: |
+      明确故事完成的标准，确保交付质量
+    template: |
+      ## 完成定义
+      
+      ### 开发完成标准
+      - [ ] 代码实现符合验收标准
+      - [ ] 代码通过同行评审
+      - [ ] 单元测试编写完成，覆盖率达标
+      - [ ] 集成测试通过
+      - [ ] 代码符合项目编码规范
+      
+      ### 测试完成标准
+      - [ ] 所有验收标准测试通过
+      - [ ] 边界场景测试完成
+      - [ ] 异常处理测试通过
+      - [ ] 性能测试满足要求（如适用）
+      - [ ] 安全测试通过（如适用）
+      
+      ### 文档完成标准
+      - [ ] 用户文档更新（如需要）
+      - [ ] 技术文档更新（如需要）
+      - [ ] API文档更新（如适用）
+      
+      ### 产品负责人验收
+      - [ ] 功能演示通过
+      - [ ] 产品负责人最终验收
+      - [ ] 用户体验满足期望
+      
+      ### 发布就绪标准
+      - [ ] 功能在测试环境稳定运行
+      - [ ] 部署脚本准备完毕
+      - [ ] 监控和日志配置完成
+      - [ ] 回滚方案准备就绪
+
+  - id: notes-history
+    title: 备注和历史
+    instruction: |
+      记录故事的变更历史和重要备注
+    template: |
+      ## 备注
+      {{story_notes}}
+      
+      ## 变更历史
+      | 日期 | 版本 | 变更内容 | 变更原因 | 变更人 |
+      |------|------|----------|----------|--------|
+      | {{change_date}} | {{version}} | {{change_description}} | {{change_reason}} | {{changed_by}} |

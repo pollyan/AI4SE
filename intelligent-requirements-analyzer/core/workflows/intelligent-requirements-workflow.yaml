@@ -1,0 +1,246 @@
+# <!-- Powered by BMAD™ Core -->
+workflow:
+  id: intelligent-requirements
+  name: 智能需求分析工作流
+  description: >-
+    从模糊用户需求到完整产品文档的智能化流程。
+    通过系统化的澄清、分析、文档生成，将用户想法转化为开发就绪的需求规格。
+  type: requirements-analysis
+  project_types:
+    - web-app
+    - mobile-app
+    - saas-platform
+    - enterprise-system
+    - api-service
+    - data-platform
+
+  sequence:
+    - agent: requirements-analyst
+      creates: clarified-requirements
+      uses: intelligent-clarification
+      notes: "执行深度需求澄清，建立完整需求理解。通过多维度澄清（用户、业务、技术）确保需求完整性。CRITICAL: 必须完成所有澄清阶段才能继续。"
+
+    - agent: requirements-analyst
+      creates: requirements-prd.md
+      uses: create-doc
+      template: intelligent-prd-tmpl.yaml
+      requires: clarified-requirements
+      notes: "基于澄清结果生成智能PRD文档。使用interactive模式确保每个章节都经过用户确认。SAVE OUTPUT: 将最终PRD复制到项目docs/目录。"
+
+    - agent: requirements-analyst
+      creates: epic-documents
+      uses: epic-breakdown
+      requires: requirements-prd.md
+      notes: "将PRD功能需求分解为可管理的Epic。每个Epic都有明确的用户价值和合理的规模。SAVE OUTPUT: Epic文档保存到docs/epics/目录。"
+
+    - agent: requirements-analyst
+      creates: user-stories
+      uses: story-generation
+      requires: epic-documents
+      notes: "基于Epic生成符合INVEST原则的用户故事。确保每个故事都有清晰的验收标准。SAVE OUTPUT: 故事文档保存到docs/stories/目录。"
+
+    - validation_checkpoint:
+      agent: requirements-analyst
+      uses: requirements-validation-checklist
+      validates: all_deliverables
+      notes: "使用完整的验证检查清单确保所有交付物质量。任何未通过的检查项都需要修正后才能进入开发阶段。"
+
+  flow_diagram: |
+    ```mermaid
+    graph TD
+        A[用户模糊需求] --> B[requirements-analyst激活]
+        B --> C[intelligent-clarification任务]
+        C --> D[用户维度澄清]
+        D --> E{用户确认完整?}
+        E -->|否| D
+        E -->|是| F[业务维度澄清]
+        F --> G{业务确认完整?}
+        G -->|否| F
+        G -->|是| H[技术维度澄清]
+        H --> I{技术确认完整?}
+        I -->|否| H
+        I -->|是| J[范围边界澄清]
+        J --> K{澄清完整性检查}
+        K -->|不完整| C
+        K -->|完整| L[create-doc + intelligent-prd-tmpl]
+        L --> M[PRD逐章节生成]
+        M --> N{用户确认PRD?}
+        N -->|需修改| M
+        N -->|确认| O[epic-breakdown任务]
+        O --> P[Epic文档生成]
+        P --> Q{Epic质量检查}
+        Q -->|需优化| O
+        Q -->|通过| R[story-generation任务]
+        R --> S[用户故事创建]
+        S --> T{故事质量检查}
+        T -->|需完善| R
+        T -->|通过| U[requirements-validation-checklist]
+        U --> V{验证通过?}
+        V -->|否| W[问题修正]
+        W --> U
+        V -->|是| X[需求分析完成]
+        X --> Y[开发就绪]
+
+        style A fill:#e3f2fd,color:#000
+        style C fill:#fff3e0,color:#000
+        style L fill:#f3e5f5,color:#000
+        style O fill:#e8f5e9,color:#000
+        style R fill:#fce4ec,color:#000
+        style U fill:#f9ab00,color:#fff
+        style X fill:#34a853,color:#fff
+        style Y fill:#4caf50,color:#fff
+    ```
+
+  decision_guidance:
+    when_to_use:
+      - 需求模糊或不完整的项目
+      - 需要系统化需求分析的项目
+      - 多角色参与的复杂项目
+      - 需要高质量需求文档的项目
+      - 希望降低开发风险的项目
+      - 需要标准化需求管理的团队
+
+    prerequisites:
+      - 项目概念或初始想法已确定
+      - 关键干系人可以参与澄清过程
+      - 有明确的业务背景和目标
+      - 具备基础的技术环境信息
+
+  handoff_prompts:
+    start_clarification: "开始需求澄清。请描述您的项目想法，我将通过系统化的澄清帮您完善需求理解。"
+    clarification_to_prd: "需求澄清完成。现在基于澄清结果生成智能PRD文档。保存PRD为docs/requirements-prd.md。"
+    prd_to_epics: "PRD文档完成。现在将功能需求分解为Epic。保存Epic文档到docs/epics/目录。"
+    epics_to_stories: "Epic分解完成。现在基于Epic创建用户故事。保存故事到docs/stories/目录。"
+    validation_check: "所有文档创建完成。执行最终验证检查确保质量。"
+    workflow_complete: "需求分析工作流程完成。所有文档已准备就绪，可以开始设计和开发工作。"
+
+  quality_gates:
+    clarification_gate:
+      criteria:
+        - 用户维度信息完整准确
+        - 业务价值清晰量化
+        - 技术约束明确识别
+        - 功能边界清晰定义
+        - 所有假设都已验证
+      validation_method: "用户确认 + 完整性检查"
+
+    prd_gate:
+      criteria:
+        - 需求澄清摘要准确完整
+        - 功能需求具体可测试
+        - 非功能需求量化明确
+        - Epic路线图合理可行
+        - 验收标准清晰可操作
+      validation_method: "prd-quality-checklist检查"
+
+    epic_gate:
+      criteria:
+        - Epic价值主张明确
+        - Epic规模适中可控
+        - Epic间依赖最小化
+        - 用户旅程完整连贯
+        - 验收标准可测试
+      validation_method: "epic-breakdown-checklist检查"
+
+    story_gate:
+      criteria:
+        - 故事符合INVEST原则
+        - 验收标准使用Given-When-Then格式
+        - 故事点估算合理
+        - 依赖关系明确
+        - 完成定义清晰
+      validation_method: "INVEST原则检查 + 故事质量验证"
+
+  success_metrics:
+    process_metrics:
+      - 需求澄清完成率: 100%
+      - PRD章节完成率: 100%
+      - Epic分解覆盖率: 100%
+      - 故事INVEST合规率: >90%
+      - 质量检查通过率: >95%
+
+    quality_metrics:
+      - 需求变更率: <20%（相比传统方法）
+      - 开发阶段需求返工率: <10%
+      - 验收测试通过率: >90%
+      - 干系人满意度: >85%
+
+    efficiency_metrics:
+      - 需求澄清时间: 比传统方法节省50%
+      - 文档生成时间: 比手工编写节省70%
+      - 开发准备时间: 比传统方法节省40%
+
+  risk_management:
+    common_risks:
+      - risk: "澄清过程中用户参与度不够"
+        impact: "high"
+        mitigation: "建立定期澄清会议机制，确保关键干系人参与"
+      
+      - risk: "需求复杂度超出预期"
+        impact: "medium"
+        mitigation: "采用渐进式澄清，优先处理核心需求"
+      
+      - risk: "技术约束识别不充分"
+        impact: "high"
+        mitigation: "早期邀请技术专家参与澄清过程"
+      
+      - risk: "文档质量不符合标准"
+        impact: "medium"
+        mitigation: "使用质量检查清单，多轮评审验证"
+
+  customization_options:
+    workflow_modes:
+      rapid_mode:
+        description: "快速模式，适用于简单项目或时间紧迫的情况"
+        modifications:
+          - "减少澄清轮次，聚焦核心需求"
+          - "使用YOLO模式生成文档"
+          - "Epic和Story创建可以并行进行"
+
+      thorough_mode:
+        description: "深度模式，适用于复杂项目或高风险项目"
+        modifications:
+          - "增加澄清深度和轮次"
+          - "每个阶段都进行同行评审"
+          - "增加用户验证和反馈环节"
+
+      domain_specific:
+        description: "领域特定模式，根据行业特点定制"
+        modifications:
+          - "添加行业特定的澄清方法"
+          - "使用领域特定的模板和检查清单"
+          - "考虑领域特定的合规和标准要求"
+
+  integration_points:
+    upstream:
+      - "市场研究和竞品分析结果"
+      - "用户研究和访谈数据"
+      - "业务战略和目标定义"
+      - "技术架构和约束条件"
+
+    downstream:
+      - "技术架构设计"
+      - "UI/UX设计"
+      - "项目计划和资源分配"
+      - "开发迭代计划"
+      - "测试策略和计划"
+
+  continuous_improvement:
+    feedback_collection:
+      - "用户对澄清过程的反馈"
+      - "开发团队对需求质量的评价"
+      - "项目成功率和需求变更统计"
+      - "文档使用效果评估"
+
+    improvement_areas:
+      - "澄清方法的有效性优化"
+      - "模板结构和内容改进"
+      - "质量检查标准完善"
+      - "工具和流程自动化"
+
+  reference_materials:
+    - "data/clarification-methods.md - 澄清方法库"
+    - "data/requirements-patterns.md - 需求模式指南"
+    - "data/user-story-patterns.md - 用户故事模式"
+    - "checklists/ - 各种质量检查清单"
+    - "templates/ - 文档生成模板库"

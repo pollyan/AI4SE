@@ -1,0 +1,21 @@
+# <!-- Powered by BMAD™ Core -->
+markdownExploder: true
+qa:
+  qaLocation: docs/qa
+requirements:
+  requirementsFile: docs/requirements-prd.md
+  requirementsVersion: v1
+  requirementsSharded: true
+  requirementsShardedLocation: docs/requirements
+  epicFilePattern: epic-{n}*.md
+epics:
+  epicsLocation: docs/epics
+stories:  
+  storiesLocation: docs/stories
+customTechnicalDocuments: null
+analystLoadAlwaysFiles:
+  - docs/requirements/business-context.md
+  - docs/requirements/user-personas.md
+  - docs/requirements/technical-constraints.md
+analystDebugLog: .ai/requirements-debug.log
+slashPrefix: Requirements
