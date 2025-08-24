@@ -1,0 +1,838 @@
+{% extends "base_layout.html" %}
+
+{% block title %}智能需求分析 - 意图测试平台{% endblock %}
+{% block page_title %}智能需求分析{% endblock %}
+{% block page_subtitle %}与AI助手Mary对话，澄清和完善你的项目需求{% endblock %}
+
+{% block extra_css %}
+/* 需求分析特殊布局样式 */
+.grid-cols-5 { 
+    grid-template-columns: repeat(5, 1fr); 
+}
+
+.requirements-layout {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    gap: 24px;
+    height: calc(100vh - 200px);
+    min-height: 600px;
+}
+
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+}
+
+.chat-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e8e8e8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8f8f8;
+}
+
+.chat-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333333;
+}
+
+.chat-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #28a745;
+}
+
+.status-text {
+    font-size: 13px;
+    color: #666666;
+}
+
+.messages-area {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 450px;
+    max-height: 450px;
+}
+
+.message {
+    display: flex;
+    gap: 12px;
+    max-width: 80%;
+}
+
+.message.user {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+.message.assistant {
+    align-self: flex-start;
+}
+
+.message-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.message.user .message-avatar {
+    background: #333333;
+    color: white;
+}
+
+.message.assistant .message-avatar {
+    background: #f0f0f0;
+    color: #666666;
+}
+
+.message-content {
+    padding: 12px 16px;
+    border-radius: 8px;
+    line-height: 1.5;
+    font-size: 14px;
+}
+
+.message.user .message-content {
+    background: #f0f0f0;
+    color: #333333;
+}
+
+.message.assistant .message-content {
+    background: #ffffff;
+    border: 1px solid #e8e8e8;
+    color: #333333;
+}
+
+.message-time {
+    font-size: 12px;
+    color: #999999;
+    margin-top: 4px;
+}
+
+.input-area {
+    padding: 20px;
+    border-top: 1px solid #e8e8e8;
+    background: #f8f8f8;
+}
+
+.input-form {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+}
+
+.input-wrapper {
+    flex: 1;
+    position: relative;
+}
+
+.message-input {
+    width: 100%;
+    min-height: 40px;
+    max-height: 120px;
+    padding: 12px 16px;
+    border: 1px solid #e8e8e8;
+    border-radius: 20px;
+    background: #ffffff;
+    resize: none;
+    font-size: 14px;
+    line-height: 1.4;
+    font-family: inherit;
+}
+
+.message-input:focus {
+    outline: none;
+    border-color: #333333;
+}
+
+.message-input::placeholder {
+    color: #999999;
+}
+
+.char-counter {
+    position: absolute;
+    bottom: -20px;
+    right: 8px;
+    font-size: 12px;
+    color: #999999;
+}
+
+.send-btn {
+    padding: 12px 20px;
+    background: #333333;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    height: 40px;
+    min-width: 80px;
+}
+
+.send-btn:hover:not(:disabled) {
+    background: #555555;
+}
+
+.send-btn:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+}
+
+.consensus-container {
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+}
+
+.consensus-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e8e8e8;
+    background: #f8f8f8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.consensus-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333333;
+}
+
+.config-btn {
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    color: #666666;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.config-btn:hover {
+    background: #f0f0f0;
+    border-color: #d0d0d0;
+}
+
+.consensus-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.consensus-section {
+    margin-bottom: 24px;
+}
+
+.consensus-section:last-child {
+    margin-bottom: 0;
+}
+
+.section-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333333;
+    margin-bottom: 12px;
+}
+
+.keywords-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.keyword-tag {
+    padding: 4px 8px;
+    background: #f0f0f0;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #666666;
+}
+
+.requirements-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.requirement-item {
+    padding: 8px 0;
+    font-size: 14px;
+    color: #333333;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.requirement-item:last-child {
+    border-bottom: none;
+}
+
+.requirement-item::before {
+    content: '•';
+    color: #666666;
+    margin-right: 8px;
+}
+
+.progress-section {
+    text-align: center;
+    padding: 20px;
+}
+
+.stage-indicator {
+    font-size: 13px;
+    color: #666666;
+    margin-bottom: 8px;
+}
+
+.stage-name {
+    font-weight: 500;
+    color: #333333;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #999999;
+}
+
+.ai-typing {
+    display: none;
+    padding: 12px 16px;
+    background: #f8f8f8;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #666666;
+    font-style: italic;
+}
+
+/* AI配置模态框 */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay.show {
+    display: flex;
+}
+
+.modal {
+    background: white;
+    border-radius: 8px;
+    padding: 24px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    margin-bottom: 20px;
+}
+
+.modal-title {
+    font-size: 18px;
+    font-weight: 500;
+    color: #333333;
+    margin-bottom: 8px;
+}
+
+.modal-subtitle {
+    font-size: 14px;
+    color: #666666;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.modal-actions {
+    margin-top: 24px;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .requirements-layout {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    
+    .consensus-container {
+        order: -1;
+        max-height: 300px;
+    }
+    
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .messages-area {
+        min-height: 300px;
+        max-height: 400px;
+    }
+}
+{% endblock %}
+
+{% block content %}
+<div class="requirements-layout">
+    <!-- 左侧对话区域 -->
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="chat-title">与AI助手Mary对话</div>
+            <div class="chat-status">
+                <div class="status-dot" id="connectionStatus"></div>
+                <span class="status-text" id="statusText">连接中...</span>
+            </div>
+        </div>
+        
+        <div class="messages-area" id="messagesArea">
+            <!-- 消息将动态加载到这里 -->
+        </div>
+        
+        <div class="ai-typing" id="aiTyping">
+            AI正在思考中...
+        </div>
+        
+        <div class="input-area">
+            <form class="input-form" id="messageForm">
+                <div class="input-wrapper">
+                    <textarea 
+                        class="message-input" 
+                        id="messageInput" 
+                        placeholder="请描述你的项目需求或想法..."
+                        maxlength="2000"
+                        rows="1"
+                    ></textarea>
+                    <div class="char-counter">
+                        <span id="charCount">0</span>/2000
+                    </div>
+                </div>
+                <button type="submit" class="send-btn" id="sendBtn">发送</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 右侧共识区域 -->
+    <div class="consensus-container">
+        <div class="consensus-header">
+            <div class="consensus-title">分析成果</div>
+            <button class="config-btn" onclick="openAiConfig()">配置</button>
+        </div>
+        
+        <div class="consensus-content" id="consensusContent">
+            <div class="empty-state">
+                开始对话后，这里将显示AI分析的需求要点和共识内容
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- AI配置模态框 -->
+<div class="modal-overlay" id="aiConfigModal">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title">AI服务配置</div>
+            <div class="modal-subtitle">配置你的AI服务提供商设置</div>
+        </div>
+        
+        <form id="aiConfigForm">
+            <div class="form-group">
+                <label class="form-label">服务提供商</label>
+                <select class="form-select" id="aiProvider" name="provider">
+                    <option value="openai">OpenAI GPT</option>
+                    <option value="dashscope">阿里云灵积 DashScope</option>
+                    <option value="claude">Anthropic Claude</option>
+                </select>
+            </div>
+            
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">API密钥</label>
+                    <input type="password" class="form-input" id="apiKey" name="api_key" placeholder="输入你的API密钥">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">模型名称</label>
+                    <input type="text" class="form-input" id="modelName" name="model_name" placeholder="如: gpt-4o">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">API基础URL (可选)</label>
+                <input type="url" class="form-input" id="baseUrl" name="base_url" placeholder="如: https://api.openai.com/v1">
+            </div>
+            
+            <div class="modal-actions">
+                <button type="button" class="btn btn-ghost" onclick="closeAiConfig()">取消</button>
+                <button type="button" class="btn" onclick="testAiConfig()">测试连接</button>
+                <button type="submit" class="btn btn-primary">保存配置</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 全局变量
+let socket = null;
+let currentSessionId = null;
+let isConnected = false;
+
+// 初始化
+document.addEventListener('DOMContentLoaded', function() {
+    initializeWebSocket();
+    initializeUI();
+    createSession();
+});
+
+// WebSocket连接
+function initializeWebSocket() {
+    socket = io();
+    
+    socket.on('connect', function() {
+        console.log('WebSocket连接成功');
+        isConnected = true;
+        updateConnectionStatus('connected', '已连接');
+    });
+    
+    socket.on('disconnect', function() {
+        console.log('WebSocket连接断开');
+        isConnected = false;
+        updateConnectionStatus('disconnected', '连接断开');
+    });
+    
+    socket.on('error', function(data) {
+        console.error('WebSocket错误:', data);
+        showMessage(data.message || '连接错误', 'error');
+    });
+    
+    // 需求分析相关事件
+    socket.on('joined_session', function(data) {
+        console.log('加入会话成功:', data);
+        loadSessionMessages();
+    });
+    
+    socket.on('new_message', function(data) {
+        console.log('收到新消息:', data);
+        displayMessage(data.message);
+        hideAiTyping();
+    });
+    
+    socket.on('consensus_updated', function(data) {
+        console.log('共识更新:', data);
+        updateConsensusDisplay(data.consensus);
+    });
+}
+
+// 初始化UI事件
+function initializeUI() {
+    const messageInput = document.getElementById('messageInput');
+    const messageForm = document.getElementById('messageForm');
+    const charCount = document.getElementById('charCount');
+    
+    // 自动调整文本框高度
+    messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = this.scrollHeight + 'px';
+        
+        // 更新字符计数
+        charCount.textContent = this.value.length;
+        
+        // 控制发送按钮状态
+        const sendBtn = document.getElementById('sendBtn');
+        sendBtn.disabled = !this.value.trim();
+    });
+    
+    // 支持Shift+Enter换行，Enter发送
+    messageInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            if (this.value.trim()) {
+                sendMessage();
+            }
+        }
+    });
+    
+    // 表单提交
+    messageForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        sendMessage();
+    });
+}
+
+// 创建新会话
+async function createSession() {
+    try {
+        const projectName = prompt('请输入项目名称:') || '未命名项目';
+        
+        const response = await axios.post('/api/requirements/sessions', {
+            project_name: projectName
+        });
+        
+        if (response.data.code === 200) {
+            currentSessionId = response.data.data.id;
+            console.log('会话创建成功:', currentSessionId);
+            
+            // 加入WebSocket房间
+            socket.emit('join_requirements_session', {
+                session_id: currentSessionId
+            });
+        } else {
+            throw new Error(response.data.message);
+        }
+    } catch (error) {
+        console.error('创建会话失败:', error);
+        showMessage('创建会话失败: ' + error.message, 'error');
+    }
+}
+
+// 发送消息
+function sendMessage() {
+    const messageInput = document.getElementById('messageInput');
+    const content = messageInput.value.trim();
+    
+    if (!content || !currentSessionId || !isConnected) {
+        return;
+    }
+    
+    // 显示用户消息
+    displayMessage({
+        message_type: 'user',
+        content: content,
+        created_at: new Date().toISOString()
+    });
+    
+    // 发送到服务器
+    socket.emit('requirements_message', {
+        session_id: currentSessionId,
+        content: content
+    });
+    
+    // 清空输入框
+    messageInput.value = '';
+    messageInput.style.height = 'auto';
+    document.getElementById('charCount').textContent = '0';
+    document.getElementById('sendBtn').disabled = true;
+    
+    // 显示AI思考状态
+    showAiTyping();
+}
+
+// 显示消息
+function displayMessage(message) {
+    const messagesArea = document.getElementById('messagesArea');
+    const messageEl = document.createElement('div');
+    messageEl.className = `message ${message.message_type}`;
+    
+    const avatar = message.message_type === 'user' ? '你' : 'AI';
+    const time = new Date(message.created_at).toLocaleTimeString();
+    
+    messageEl.innerHTML = `
+        <div class="message-avatar">${avatar}</div>
+        <div>
+            <div class="message-content">${escapeHtml(message.content)}</div>
+            <div class="message-time">${time}</div>
+        </div>
+    `;
+    
+    messagesArea.appendChild(messageEl);
+    messagesArea.scrollTop = messagesArea.scrollHeight;
+}
+
+// 加载会话消息
+async function loadSessionMessages() {
+    if (!currentSessionId) return;
+    
+    try {
+        const response = await axios.get(`/api/requirements/sessions/${currentSessionId}/messages`);
+        
+        if (response.data.code === 200) {
+            const messages = response.data.data.messages;
+            const messagesArea = document.getElementById('messagesArea');
+            messagesArea.innerHTML = '';
+            
+            messages.forEach(displayMessage);
+        }
+    } catch (error) {
+        console.error('加载消息失败:', error);
+    }
+}
+
+// 更新连接状态
+function updateConnectionStatus(status, text) {
+    const statusDot = document.getElementById('connectionStatus');
+    const statusText = document.getElementById('statusText');
+    
+    statusDot.className = 'status-dot';
+    if (status === 'connected') {
+        statusDot.style.background = '#28a745';
+    } else {
+        statusDot.style.background = '#dc3545';
+    }
+    
+    statusText.textContent = text;
+}
+
+// 显示AI思考状态
+function showAiTyping() {
+    document.getElementById('aiTyping').style.display = 'block';
+}
+
+// 隐藏AI思考状态
+function hideAiTyping() {
+    document.getElementById('aiTyping').style.display = 'none';
+}
+
+// 更新共识显示
+function updateConsensusDisplay(consensus) {
+    const consensusContent = document.getElementById('consensusContent');
+    
+    if (!consensus || (!consensus.keywords && !consensus.requirements)) {
+        consensusContent.innerHTML = `
+            <div class="empty-state">
+                继续对话以生成更多分析内容
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    
+    // 关键词部分
+    if (consensus.keywords && consensus.keywords.length > 0) {
+        html += `
+            <div class="consensus-section">
+                <div class="section-title">关键词</div>
+                <div class="keywords-list">
+                    ${consensus.keywords.map(keyword => 
+                        `<span class="keyword-tag">${escapeHtml(keyword)}</span>`
+                    ).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // 需求要点部分
+    if (consensus.requirements && consensus.requirements.length > 0) {
+        html += `
+            <div class="consensus-section">
+                <div class="section-title">需求要点</div>
+                <ul class="requirements-list">
+                    ${consensus.requirements.map(req => 
+                        `<li class="requirement-item">${escapeHtml(req)}</li>`
+                    ).join('')}
+                </ul>
+            </div>
+        `;
+    }
+    
+    // 进度指示
+    html += `
+        <div class="consensus-section">
+            <div class="progress-section">
+                <div class="stage-indicator">
+                    当前阶段: <span class="stage-name">${getStageDisplayName(consensus.stage)}</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    consensusContent.innerHTML = html;
+}
+
+// 获取阶段显示名称
+function getStageDisplayName(stage) {
+    const stageNames = {
+        'initial': '初始对话',
+        'clarification': '需求澄清',
+        'consensus': '共识达成',
+        'documentation': '文档生成'
+    };
+    return stageNames[stage] || stage;
+}
+
+// AI配置相关函数
+function openAiConfig() {
+    document.getElementById('aiConfigModal').classList.add('show');
+}
+
+function closeAiConfig() {
+    document.getElementById('aiConfigModal').classList.remove('show');
+}
+
+function testAiConfig() {
+    showMessage('AI配置测试功能待实现', 'warning');
+}
+
+// 工具函数
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function showMessage(message, type) {
+    const messageEl = document.createElement('div');
+    messageEl.className = 'message ' + type;
+    messageEl.textContent = message;
+    messageEl.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: 4px;
+        color: white;
+        z-index: 1001;
+        background-color: ${type === 'success' ? '#28a745' : type === 'warning' ? '#ffc107' : '#dc3545'};
+        border: 1px solid ${type === 'success' ? '#28a745' : type === 'warning' ? '#ffc107' : '#dc3545'};
+    `;
+
+    document.body.appendChild(messageEl);
+
+    setTimeout(() => {
+        if (document.body.contains(messageEl)) {
+            document.body.removeChild(messageEl);
+        }
+    }, 3000);
+}
+</script>
+{% endblock %}

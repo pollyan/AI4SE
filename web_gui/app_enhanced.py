@@ -379,6 +379,17 @@ def init_app():
         app = create_app()
         socketio = SocketIO(app, cors_allowed_origins="*")
         setup_routes(app, socketio)
+        
+        # 注册需求分析WebSocket事件
+        try:
+            from api.requirements import register_requirements_socketio
+            register_requirements_socketio(socketio)
+            print("✅ 需求分析WebSocket事件注册成功")
+        except ImportError:
+            from web_gui.api.requirements import register_requirements_socketio
+            register_requirements_socketio(socketio)
+            print("✅ 需求分析WebSocket事件注册成功")
+            
     return app, socketio
 
 
@@ -498,6 +509,11 @@ def setup_routes(app, socketio):
     def step_editor_page():
         """步骤编辑器页面"""
         return render_template("step_editor.html")
+
+    @app.route("/requirements-analyzer")
+    def requirements_analyzer_page():
+        """智能需求分析页面"""
+        return render_template("requirements_analyzer.html")
 
     @app.route("/static/screenshots/<filename>")
     def screenshot_file(filename):

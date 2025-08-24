@@ -19,12 +19,17 @@ from . import user
 from . import midscene
 from . import database
 from . import health
+from . import requirements
 
 
 # 注册子模块的路由到主蓝图
 def register_api_routes(app):
     """注册所有API路由到Flask应用"""
     app.register_blueprint(api_bp)
+    
+    # 注册需求分析API蓝图
+    from .requirements import requirements_bp
+    app.register_blueprint(requirements_bp)
 
 
 # 导出主要组件供外部使用
