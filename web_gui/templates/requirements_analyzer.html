@@ -423,6 +423,92 @@
     font-style: italic;
 }
 
+/* AI处理中动效 */
+.ai-processing {
+    display: none;
+    padding: 16px;
+    text-align: center;
+    color: #666666;
+    font-size: 14px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px dashed #dee2e6;
+    margin: 12px 0;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.ai-processing.show {
+    display: flex;
+}
+
+.processing-dots {
+    display: flex;
+    gap: 4px;
+    margin-left: 8px;
+}
+
+.processing-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #007bff;
+    animation: processingPulse 1.4s infinite ease-in-out;
+}
+
+.processing-dot:nth-child(1) { animation-delay: 0s; }
+.processing-dot:nth-child(2) { animation-delay: 0.2s; }
+.processing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes processingPulse {
+    0%, 80%, 100% {
+        opacity: 0.3;
+        transform: scale(0.8);
+    }
+    40% {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+}
+
+/* 连接按钮加载动效 */
+.connect-btn.loading {
+    position: relative;
+    color: transparent;
+    pointer-events: none;
+}
+
+.connect-btn.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid #ffffff40;
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: buttonSpin 1s linear infinite;
+}
+
+.connect-btn.disabled {
+    background: #28a745;
+    cursor: not-allowed;
+    opacity: 0.8;
+}
+
+.connect-btn.disabled:hover {
+    background: #28a745;
+    transform: none;
+}
+
+@keyframes buttonSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 
 /* 连接AI助手提示样式 */
 .connect-prompt {
@@ -580,6 +666,14 @@
         
         <div class="messages-area" id="messagesArea">
             <!-- 消息将动态加载到这里 -->
+            <div class="ai-processing" id="aiProcessing">
+                <span>Alex正在分析和思考中</span>
+                <div class="processing-dots">
+                    <div class="processing-dot"></div>
+                    <div class="processing-dot"></div>
+                    <div class="processing-dot"></div>
+                </div>
+            </div>
         </div>
         
         
@@ -690,12 +784,14 @@ async function sendMessageViaHTTP(content) {
             
             // 只显示AI响应（用户消息已在前端立即显示）
             if (data.ai_message) {
+                hideAiProcessing();
                 displayMessage(data.ai_message);
-                hideAiTyping();
                 
                 // 如果是AI消息且包含Alex的回应，更新连接状态
                 if (data.ai_message.message_type === 'ai' && data.ai_message.content.includes('Alex')) {
                     updateConnectionStatus('connected', 'AI助手Alex已激活');
+                    // 激活后禁用连接按钮
+                    setConnectButtonState('activated');
                 }
             }
             
@@ -705,7 +801,7 @@ async function sendMessageViaHTTP(content) {
         }
     } catch (error) {
         console.error('HTTP发送消息失败:', error);
-        hideAiTyping();
+        hideAiProcessing();
         showMessage('发送消息失败: ' + (error.response?.data?.message || error.message), 'error');
         return false;
     }
@@ -931,6 +1027,7 @@ async function connectAIAssistant() {
     
     try {
         updateConnectionStatus('connecting', '正在激活AI助手Alex...');
+        setConnectButtonState('loading');
         
         // 从完整的bundle文件中获取激活消息
         const activationMessage = await loadAlexBundleContent();
@@ -941,8 +1038,35 @@ async function connectAIAssistant() {
     } catch (error) {
         console.error('连接AI助手失败:', error);
         updateConnectionStatus('error', '连接失败');
+        setConnectButtonState('normal');
         showMessage('连接AI助手失败: ' + error.message, 'error');
     }
+}
+
+// 设置连接按钮状态
+function setConnectButtonState(state) {
+    const connectBtns = document.querySelectorAll('.connect-btn');
+    
+    connectBtns.forEach(btn => {
+        btn.classList.remove('loading', 'disabled');
+        
+        switch(state) {
+            case 'loading':
+                btn.classList.add('loading');
+                btn.disabled = true;
+                break;
+            case 'activated':
+                btn.classList.add('disabled');
+                btn.disabled = true;
+                btn.textContent = 'AI助手Alex已激活';
+                break;
+            case 'normal':
+            default:
+                btn.disabled = false;
+                btn.textContent = '连接AI助手Alex';
+                break;
+        }
+    });
 }
 
 // 显示连接AI助手的提示
@@ -1033,11 +1157,15 @@ async function sendMessage() {
     document.getElementById('charCount').textContent = '0';
     document.getElementById('sendBtn').disabled = true;
     
+    // 显示AI处理动效
+    showAiProcessing('Alex正在分析您的消息...');
+    
     try {
         // 使用HTTP发送消息
         await sendMessageViaHTTP(content);
     } catch (error) {
         console.error('发送消息失败:', error);
+        hideAiProcessing();
         showMessage('发送消息失败: ' + error.message, 'error');
     }
 }
@@ -1122,14 +1250,27 @@ function updateConnectionStatus(status, text) {
     statusText.textContent = text;
 }
 
-// 显示AI思考状态 - 已移除动效，仅保留控制台日志
-function showAiTyping(text = 'AI正在思考中') {
-    console.log('AI正在处理:', text);
+// 显示AI处理动效
+function showAiProcessing(text = 'Alex正在分析和思考中') {
+    const aiProcessing = document.getElementById('aiProcessing');
+    const textSpan = aiProcessing.querySelector('span');
+    
+    textSpan.textContent = text;
+    aiProcessing.classList.add('show');
+    
+    // 滚动到动效位置
+    setTimeout(() => {
+        aiProcessing.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'end' 
+        });
+    }, 100);
 }
 
-// 隐藏AI思考状态 - 已移除动效，仅保留控制台日志
-function hideAiTyping() {
-    console.log('AI处理完成');
+// 隐藏AI处理动效
+function hideAiProcessing() {
+    const aiProcessing = document.getElementById('aiProcessing');
+    aiProcessing.classList.remove('show');
 }
 
 // 更新共识显示
