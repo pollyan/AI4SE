@@ -25,13 +25,31 @@ except ImportError:
     from web_gui.utils.error_handler import ValidationError, NotFoundError, DatabaseError
     from web_gui.services.requirements_ai_service import RequirementsAIService
 
-# 初始化AI服务
-try:
-    ai_service = RequirementsAIService()
-    print("✅ 需求分析AI服务初始化成功")
-except Exception as e:
-    print(f"⚠️ 需求分析AI服务初始化失败: {e}")
-    ai_service = None
+# AI服务实例（延迟初始化）
+ai_service = None
+
+def get_ai_service():
+    """获取AI服务实例，延迟初始化避免应用上下文问题"""
+    global ai_service
+    if ai_service is None:
+        try:
+            from ..models import RequirementsAIConfig
+            
+            # 获取默认AI配置
+            default_config = RequirementsAIConfig.get_default_config()
+            if default_config:
+                config_data = default_config.get_config_for_ai_service()
+                ai_service = RequirementsAIService(config=config_data)
+                print(f"✅ 需求分析AI服务初始化成功，使用配置: {default_config.config_name}")
+            else:
+                # 如果没有默认配置，使用环境变量
+                ai_service = RequirementsAIService()
+                print("✅ 需求分析AI服务初始化成功，使用环境变量")
+        except Exception as e:
+            print(f"⚠️ 需求分析AI服务初始化失败: {e}")
+            ai_service = None
+    
+    return ai_service
 
 # 创建蓝图
 requirements_bp = Blueprint("requirements", __name__, url_prefix="/api/requirements")
@@ -257,11 +275,12 @@ def get_welcome_message(session_id):
         if not session:
             raise NotFoundError("会话不存在")
             
-        if ai_service is None:
+        ai_svc = get_ai_service()
+        if ai_svc is None:
             raise Exception("AI服务暂不可用")
         
         # 调用Alex生成欢迎消息
-        welcome_result = ai_service.generate_welcome_message(session.project_name)
+        welcome_result = ai_svc.generate_welcome_message(session.project_name)
         
         # 创建欢迎消息记录
         welcome_message = RequirementsMessage(
@@ -384,7 +403,8 @@ def register_requirements_socketio(socketio: SocketIO):
             }, room=f'requirements_{session_id}')
             
             # 调用真实的Alex AI服务处理用户消息
-            if ai_service is None:
+            ai_svc = get_ai_service()
+            if ai_svc is None:
                 emit('error', {'message': 'AI服务暂不可用，请稍后重试'})
                 return
             
@@ -398,7 +418,7 @@ def register_requirements_socketio(socketio: SocketIO):
                 
                 # 调用Alex智能需求分析服务
                 print(f"🤖 调用Alex分析用户消息: {content[:50]}...")
-                ai_result = ai_service.analyze_user_requirement(
+                ai_result = ai_svc.analyze_user_requirement(
                     user_message=content,
                     session_context=session_context,
                     project_name=session.project_name,
