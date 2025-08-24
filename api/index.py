@@ -801,8 +801,8 @@ REM Step 3: Install dependencies
 echo.
 echo [3/5] Installing dependencies...
 
-if exist "node_modules\@playwright\test" (
-    if exist "node_modules\axios" (
+if exist "node_modules\\@playwright\\test" (
+    if exist "node_modules\\axios" (
         echo + Dependencies already exist, skipping installation
     ) else (
         echo ^ Installing npm dependencies...
