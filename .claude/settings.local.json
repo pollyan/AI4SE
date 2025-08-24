@@ -33,7 +33,9 @@
       "Bash(grep:*)",
       "Bash(git restore:*)",
       "Bash(curl:*)",
-      "Bash(open test_ai_config.html)"
+      "Bash(open test_ai_config.html)",
+      "Bash(PORT=5002 python3:*)",
+      "Bash(pkill:*)"
     ],
     "deny": []
   }
