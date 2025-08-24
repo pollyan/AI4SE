@@ -1446,8 +1446,18 @@ try:
             # 调用AI服务处理
             try:
                 from web_gui.services.requirements_ai_service import RequirementsAIService
+                from web_gui.models import RequirementsAIConfig
                 
-                ai_service = RequirementsAIService()
+                # 获取默认AI配置
+                default_config = RequirementsAIConfig.get_default_config()
+                if default_config:
+                    config_data = default_config.get_config_for_ai_service()
+                    print(f"🔧 使用数据库AI配置: {default_config.config_name}, URL: {config_data['base_url']}, 模型: {config_data['model_name']}")
+                    ai_service = RequirementsAIService(config=config_data)
+                else:
+                    # 如果没有默认配置，使用环境变量
+                    print("⚠️ 未找到默认AI配置，使用环境变量")
+                    ai_service = RequirementsAIService()
                 
                 # 获取会话上下文
                 session_context = {
