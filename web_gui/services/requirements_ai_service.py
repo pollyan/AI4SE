@@ -16,19 +16,60 @@ logger = logging.getLogger(__name__)
 class RequirementsAIService:
     """需求分析AI服务 - 使用智能需求分析师Alex persona，完全基于真实AI模型"""
 
-    def __init__(self):
-        """初始化需求分析AI服务"""
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        self.base_url = os.getenv("OPENAI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-        self.model_name = os.getenv("MIDSCENE_MODEL_NAME", "qwen-vl-max-latest")
+    def __init__(self, config=None):
+        """
+        初始化需求分析AI服务
+        
+        Args:
+            config: 可选的AI配置字典，如果不提供则使用环境变量或默认配置
+        """
+        if config:
+            # 使用传入的配置
+            self.api_key = config.get("api_key")
+            self.base_url = config.get("base_url")
+            self.model_name = config.get("model_name")
+        else:
+            # 尝试从数据库获取默认配置
+            self.api_key, self.base_url, self.model_name = self._load_config_from_db()
         
         if not self.api_key:
-            raise ValueError("缺少OPENAI_API_KEY环境变量")
+            raise ValueError("缺少AI服务配置，请配置API密钥")
             
         # 加载智能需求分析师Alex的完整persona
         self.alex_persona = self._load_alex_persona()
         
         logger.info(f"需求分析AI服务初始化完成，使用智能需求分析师Alex persona，模型: {self.model_name}")
+    
+    def _load_config_from_db(self):
+        """从数据库加载默认AI配置，如果失败则使用环境变量"""
+        try:
+            from ..models import RequirementsAIConfig
+            
+            default_config = RequirementsAIConfig.get_default_config()
+            
+            if default_config:
+                config_data = default_config.get_config_for_ai_service()
+                return (
+                    config_data["api_key"],
+                    config_data["base_url"], 
+                    config_data["model_name"]
+                )
+            else:
+                # 回退到环境变量
+                logger.warning("未找到默认AI配置，使用环境变量")
+                return (
+                    os.getenv("OPENAI_API_KEY"),
+                    os.getenv("OPENAI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+                    os.getenv("MIDSCENE_MODEL_NAME", "qwen-vl-max-latest")
+                )
+        
+        except Exception as e:
+            logger.warning(f"从数据库加载AI配置失败: {e}，使用环境变量")
+            return (
+                os.getenv("OPENAI_API_KEY"),
+                os.getenv("OPENAI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"), 
+                os.getenv("MIDSCENE_MODEL_NAME", "qwen-vl-max-latest")
+            )
 
     def _load_alex_persona(self) -> str:
         """加载智能需求分析师Alex的完整persona和指令"""

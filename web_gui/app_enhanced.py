@@ -511,6 +511,7 @@ def setup_routes(app, socketio):
         return render_template("step_editor.html")
 
     @app.route("/requirements-analyzer")
+    @app.route("/requirements")  # 添加备选路由
     def requirements_analyzer_page():
         """智能需求分析页面"""
         return render_template("requirements_analyzer.html")

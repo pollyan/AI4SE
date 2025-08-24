@@ -662,3 +662,66 @@ class VariableReference(db.Model):
                 else None
             ),
         }
+
+
+
+class RequirementsAIConfig(db.Model):
+    """需求分析AI配置模型 - 简化版"""
+    
+    __tablename__ = "requirements_ai_configs"
+    
+    id = db.Column(db.Integer, primary_key=True)
+    config_name = db.Column(db.String(255), nullable=False)
+    provider = db.Column(db.String(50), nullable=False)  # openai, dashscope, claude
+    api_key = db.Column(db.Text, nullable=False)
+    base_url = db.Column(db.String(500))
+    model_name = db.Column(db.String(100), nullable=False)
+    is_default = db.Column(db.Boolean, default=False)
+    is_active = db.Column(db.Boolean, default=True)
+    
+    # 基础元数据
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        """转换为字典格式"""
+        return {
+            "id": self.id,
+            "config_name": self.config_name,
+            "provider": self.provider,
+            "api_key_masked": self._mask_api_key(self.api_key),  # 只返回脱敏的密钥
+            "base_url": self.base_url,
+            "model_name": self.model_name,
+            "is_default": self.is_default,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+        }
+    
+    def _mask_api_key(self, api_key):
+        """脱敏显示API密钥"""
+        if not api_key:
+            return ""
+        if len(api_key) <= 8:
+            return "*" * len(api_key)
+        return api_key[:4] + "*" * (len(api_key) - 8) + api_key[-4:]
+    
+    def get_config_for_ai_service(self):
+        """获取AI服务所需的配置信息（包含完整API密钥）"""
+        return {
+            "api_key": self.api_key,
+            "base_url": self.base_url,
+            "model_name": self.model_name,
+            "provider": self.provider
+        }
+    
+    @classmethod
+    def get_default_config(cls):
+        """获取默认配置"""
+        return cls.query.filter_by(is_default=True, is_active=True).first()
+    
+    @classmethod
+    def get_all_active_configs(cls):
+        """获取所有启用的配置"""
+        return cls.query.filter_by(is_active=True).order_by(cls.created_at.desc()).all()
+

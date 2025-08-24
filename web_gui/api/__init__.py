@@ -30,6 +30,10 @@ def register_api_routes(app):
     # 注册需求分析API蓝图
     from .requirements import requirements_bp
     app.register_blueprint(requirements_bp)
+    
+    # 注册AI配置管理API蓝图
+    from .ai_configs import ai_configs_bp
+    app.register_blueprint(ai_configs_bp)
 
 
 # 导出主要组件供外部使用
