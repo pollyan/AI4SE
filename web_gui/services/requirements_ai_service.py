@@ -108,39 +108,44 @@ class RequirementsAIService:
                                 project_name: str,
                                 current_stage: str = "initial") -> Dict[str, Any]:
         """
-        使用智能需求分析师Alex分析用户需求并生成澄清引导
+        纯传输模式：直接转发用户消息给AI模型，让Alex完全自主处理
         
         Args:
             user_message: 用户输入的需求描述
-            session_context: 会话上下文
+            session_context: 会话上下文（在纯传输模式下基本不使用）
             project_name: 项目名称
             current_stage: 当前分析阶段
             
         Returns:
-            Dict包含AI回应、共识内容、上下文更新等
+            Dict包含AI回应等基本信息
         """
         try:
-            # 使用Alex persona作为系统提示词
-            system_prompt = self._build_alex_system_prompt(project_name, current_stage)
-            user_prompt = self._build_alex_user_prompt(user_message, session_context)
+            # 纯传输模式：不构建复杂的系统提示词，直接使用用户消息
+            # 如果是激活消息（包含bundle），直接发送
+            # 如果是普通消息，简单转发
             
-            # 调用AI模型
-            ai_response = self._call_ai_model(system_prompt, user_prompt)
+            if "智能需求分析师" in user_message and "Bundle" in user_message:
+                # 这是激活Alex的消息，直接发送
+                ai_response = self._call_ai_model("", user_message)
+            else:
+                # 普通对话消息，简单转发
+                ai_response = self._call_ai_model("", user_message)
             
-            # 解析AI返回结果，将Alex的格式转换为我们的结构
-            parsed_result = self._parse_alex_response(ai_response, user_message)
-            
-            # 添加元数据
-            parsed_result.update({
+            # 纯传输模式：最简化的返回结构
+            result = {
+                'ai_response': ai_response,
                 'processing_time': datetime.utcnow().isoformat(),
                 'model_used': self.model_name,
-                'stage': self._determine_next_stage(parsed_result, current_stage),
-                'alex_persona': True
-            })
+                'stage': current_stage,  # 保持当前阶段不变
+                'alex_persona': True,
+                # 简化的上下文信息
+                'ai_context': session_context.get('ai_context', {}),
+                'consensus_content': session_context.get('consensus_content', {})
+            }
             
-            logger.info(f"Alex需求分析完成，生成了澄清引导")
+            logger.info(f"纯传输模式：消息已转发给Alex")
             
-            return parsed_result
+            return result
             
         except Exception as e:
             logger.error(f"Alex需求分析AI服务调用失败: {str(e)}")

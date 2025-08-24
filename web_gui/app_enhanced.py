@@ -1283,6 +1283,81 @@ def _mock_javascript_result(script: str) -> any:
 # ==================== 初始化数据库 ====================
 
 
+def _fix_table_schema_issues():
+    """自动修复表结构问题，确保与模型定义一致"""
+    try:
+        from sqlalchemy import text, inspect
+        
+        # 检查数据库类型
+        db_url = db.engine.url
+        is_postgresql = 'postgresql' in str(db_url)
+        is_sqlite = 'sqlite' in str(db_url)
+        
+        # 检查 requirements_ai_configs 表是否存在 provider 字段
+        inspector = inspect(db.engine)
+        
+        # 检查表是否存在
+        if 'requirements_ai_configs' not in inspector.get_table_names():
+            print("ℹ️  requirements_ai_configs 表不存在，跳过结构检查")
+            return
+        
+        # 获取表的列信息
+        columns = inspector.get_columns('requirements_ai_configs')
+        column_names = [col['name'] for col in columns]
+        
+        # 检查是否存在过时的 provider 字段
+        if 'provider' in column_names:
+            print("🔧 检测到过时的 provider 字段，正在自动修复...")
+            
+            if is_postgresql:
+                # PostgreSQL: 直接删除字段
+                db.session.execute(text("ALTER TABLE requirements_ai_configs DROP COLUMN IF EXISTS provider;"))
+                db.session.commit()
+                print("✅ PostgreSQL: provider 字段已移除")
+                
+            elif is_sqlite:
+                # SQLite: 需要重建表（因为SQLite不支持DROP COLUMN）
+                print("🔧 SQLite 数据库：重建表以移除 provider 字段...")
+                
+                # 备份数据
+                db.session.execute(text("""
+                    CREATE TABLE requirements_ai_configs_backup AS 
+                    SELECT id, config_name, api_key, base_url, model_name, is_default, is_active, created_at, updated_at
+                    FROM requirements_ai_configs;
+                """))
+                
+                # 删除旧表
+                db.session.execute(text("DROP TABLE requirements_ai_configs;"))
+                
+                # 重新创建表（通过模型定义）
+                from web_gui.models import RequirementsAIConfig
+                RequirementsAIConfig.__table__.create(db.engine)
+                
+                # 恢复数据
+                db.session.execute(text("""
+                    INSERT INTO requirements_ai_configs 
+                    (id, config_name, api_key, base_url, model_name, is_default, is_active, created_at, updated_at)
+                    SELECT id, config_name, api_key, base_url, model_name, is_default, is_active, created_at, updated_at
+                    FROM requirements_ai_configs_backup;
+                """))
+                
+                # 删除备份表
+                db.session.execute(text("DROP TABLE requirements_ai_configs_backup;"))
+                
+                db.session.commit()
+                print("✅ SQLite: 表结构已更新，数据已保留")
+            
+            else:
+                print(f"⚠️  未知数据库类型: {db_url}，跳过自动修复")
+        else:
+            print("✅ requirements_ai_configs 表结构正常")
+            
+    except Exception as e:
+        print(f"⚠️  表结构检查失败: {str(e)}")
+        # 不抛出异常，避免影响应用启动
+        db.session.rollback()
+
+
 def init_database():
     """初始化数据库"""
     # 确保app实例已创建
@@ -1300,6 +1375,10 @@ def init_database():
             # 创建表
             db.create_all()
             print("✅ 数据库表创建完成")
+            
+            # 自动修复表结构问题
+            _fix_table_schema_issues()
+            print("✅ 数据库表结构检查完成")
 
             # 应用数据库优化
             try:

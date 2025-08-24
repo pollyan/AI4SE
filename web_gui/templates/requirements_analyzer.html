@@ -332,6 +332,71 @@
     font-style: italic;
 }
 
+/* 连接AI助手提示样式 */
+.connect-prompt {
+    text-align: center;
+    padding: 40px 20px;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.connect-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+
+.connect-prompt h3 {
+    font-size: 20px;
+    font-weight: 500;
+    color: #333333;
+    margin-bottom: 12px;
+}
+
+.connect-prompt p {
+    color: #666666;
+    line-height: 1.5;
+    margin-bottom: 20px;
+}
+
+.connect-features {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.feature {
+    padding: 8px 12px;
+    background: #f8f8f8;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #555555;
+}
+
+.connect-btn {
+    padding: 12px 24px;
+    background: #333333;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-bottom: 16px;
+}
+
+.connect-btn:hover {
+    background: #555555;
+    transform: translateY(-1px);
+}
+
+.connect-note {
+    font-size: 12px;
+    color: #999999;
+    margin: 0;
+}
+
 /* AI配置模态框 */
 .modal-overlay {
     display: none;
@@ -552,6 +617,11 @@ function initializeWebSocket() {
         console.log('收到新消息:', data);
         displayMessage(data.message);
         hideAiTyping();
+        
+        // 如果是AI消息且包含Alex的回应，更新连接状态
+        if (data.message.message_type === 'ai' && data.message.content.includes('Alex')) {
+            updateConnectionStatus('connected', 'AI助手Alex已激活');
+        }
     });
     
     socket.on('consensus_updated', function(data) {
@@ -611,6 +681,9 @@ async function createSession() {
             socket.emit('join_requirements_session', {
                 session_id: currentSessionId
             });
+            
+            // 显示连接AI助手的提示
+            showConnectPrompt();
         } else {
             throw new Error(response.data.message);
         }
@@ -618,6 +691,93 @@ async function createSession() {
         console.error('创建会话失败:', error);
         showMessage('创建会话失败: ' + error.message, 'error');
     }
+}
+
+// 连接AI助手 - 发送智能需求分析师提示词激活Alex
+async function connectAIAssistant() {
+    if (!currentSessionId) {
+        console.error('没有活跃的会话ID');
+        return;
+    }
+    
+    try {
+        updateConnectionStatus('connecting', '正在激活AI助手Alex...');
+        
+        // 发送智能需求分析师bundle提示词来激活Alex
+        const activationMessage = `你的关键操作指令已附在下方，请严格按照指令中的persona执行，不要打破角色设定。
+
+你是Alex，智能需求分析师。请按照以下激活指令执行：
+
+STEP 1: 采用智能需求分析师Alex的身份
+STEP 2: 以Alex的身份向用户问好
+STEP 3: 立即运行 *help 命令显示所有可用功能
+STEP 4: 等待用户选择功能或直接描述需求
+
+=== 你的身份 ===
+name: Alex
+title: 智能需求分析师  
+role: 深度需求挖掘专家与产品定义大师
+focus: 执行深度需求澄清，生成高质量PRD、Epic和用户故事
+
+=== 核心功能 ===
+- 🔍 智能需求澄清：通过多维度系统化澄清，将模糊需求转化为清晰规格
+- 📋 自动PRD生成：基于澄清结果生成完整的产品需求文档  
+- 📚 Epic智能分解：将需求分解为可管理的开发单元
+- 📝 Story自动创建：生成符合INVEST原则的用户故事
+
+=== 可用命令 ===
+*help - 显示完整帮助信息
+*analyze - 开始智能需求澄清过程
+*create-prd - 生成产品需求文档
+*create-epics - 将PRD分解为Epic
+*create-stories - 创建用户故事
+*validate - 验证需求完整性
+
+现在请以Alex的身份问好并运行 *help 命令。`;
+        
+        // 通过WebSocket发送激活消息
+        socket.emit('requirements_message', {
+            session_id: currentSessionId,
+            content: activationMessage
+        });
+        
+        // 显示用户的连接请求
+        displayMessage({
+            message_type: 'user',
+            content: '连接AI助手Alex...',
+            created_at: new Date().toISOString()
+        });
+        
+        // 显示AI思考状态
+        showAiTyping();
+        
+    } catch (error) {
+        console.error('连接AI助手失败:', error);
+        updateConnectionStatus('error', '连接失败');
+        showMessage('连接AI助手失败: ' + error.message, 'error');
+    }
+}
+
+// 显示连接AI助手的提示
+function showConnectPrompt() {
+    const messagesArea = document.getElementById('messagesArea');
+    messagesArea.innerHTML = `
+        <div class="connect-prompt">
+            <div class="connect-icon">🤖</div>
+            <h3>准备连接AI助手Alex</h3>
+            <p>Alex是您的智能需求分析师，专门帮助您从模糊的想法中提炼出清晰、完整的产品需求文档。</p>
+            <div class="connect-features">
+                <div class="feature">🔍 智能需求澄清</div>
+                <div class="feature">📋 自动PRD生成</div>
+                <div class="feature">📚 Epic智能分解</div>
+                <div class="feature">📝 Story自动创建</div>
+            </div>
+            <button class="connect-btn" onclick="connectAIAssistant()">连接AI助手Alex</button>
+            <p class="connect-note">💡 点击连接后，Alex将自动激活并向您问好</p>
+        </div>
+    `;
+    
+    updateConnectionStatus('ready', '准备连接');
 }
 
 // 发送消息
