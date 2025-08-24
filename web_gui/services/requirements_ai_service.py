@@ -216,13 +216,15 @@ class RequirementsAIService:
                     elif msg.message_type == 'ai':
                         messages.append({"role": "assistant", "content": msg.content})
             
-            # 如果没有历史记录，添加基础的Alex身份
-            if not messages:
+            # 确保有系统提示
+            if not any(msg["role"] == "system" for msg in messages):
                 alex_system_prompt = "你是Alex，智能需求分析师。你专门帮助用户澄清和完善项目需求。请保持专业、友好的态度。"
-                messages.append({"role": "system", "content": alex_system_prompt})
+                messages.insert(0, {"role": "system", "content": alex_system_prompt})
             
-            # 添加当前用户消息
-            messages.append({"role": "user", "content": user_message})
+            # 检查当前用户消息是否已经是最后一条消息
+            # 如果不是，说明需要添加（例如首次对话或者其他情况）
+            if not messages or messages[-1]["role"] != "user" or messages[-1]["content"] != user_message:
+                messages.append({"role": "user", "content": user_message})
             
             # 调用AI模型
             return self._call_ai_model_with_messages(messages)
