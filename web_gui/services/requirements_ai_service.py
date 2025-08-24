@@ -215,8 +215,14 @@ class RequirementsAIService:
         }
         
         try:
+            # 处理base_url的尾部斜杠，避免双斜杠
+            base_url = self.base_url.rstrip('/')
+            api_url = f"{base_url}/chat/completions"
+            
+            logger.info(f"调用AI API: {api_url}, 模型: {self.model_name}")
+            
             response = requests.post(
-                f"{self.base_url}/chat/completions",
+                api_url,
                 headers=headers,
                 json=data,
                 timeout=30

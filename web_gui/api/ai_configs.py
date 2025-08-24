@@ -40,6 +40,11 @@ AI_CONFIG_EXAMPLES = {
         "name": "Claude API",
         "base_url": "https://api.anthropic.com",
         "models": ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"]
+    },
+    "gemini_openai_format": {
+        "name": "Google Gemini (OpenAI格式)",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "models": ["gemini-2.5-pro", "gemini-1.5-pro", "gemini-1.5-flash"]
     }
 }
 
