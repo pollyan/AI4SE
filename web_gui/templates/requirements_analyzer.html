@@ -1151,10 +1151,22 @@ async function checkAIConfiguration() {
     try {
         const response = await axios.get('/api/ai-configs');
         console.log('AI配置检查响应:', response.data); // 调试日志
-        return response.data.code === 200 && 
-               response.data.data && 
-               response.data.data.configs && 
-               response.data.data.configs.length > 0;
+        
+        // 详细检查响应结构
+        const hasValidResponse = response.data.code === 200;
+        const hasData = response.data.data;
+        const hasConfigs = hasData && response.data.data.configs;
+        const hasConfigsLength = hasConfigs && response.data.data.configs.length > 0;
+        
+        console.log('AI配置检查详情:', {
+            hasValidResponse,
+            hasData,
+            hasConfigs,
+            configsLength: hasConfigs ? response.data.data.configs.length : 0,
+            hasConfigsLength
+        });
+        
+        return hasValidResponse && hasData && hasConfigs && hasConfigsLength;
     } catch (error) {
         console.error('检查AI配置失败:', error);
         return false;
