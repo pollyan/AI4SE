@@ -190,11 +190,14 @@ def send_message(session_id):
         if not content:
             raise ValidationError("消息内容不能为空")
             
-        if len(content) > 2000:
-            raise ValidationError("消息内容不能超过2000字符")
+        # 检查是否是激活消息（包含Alex bundle关键标识）
+        is_activation_message = ("智能需求分析师" in content and "Bundle" in content) or len(content) > 10000
         
-        # 检查是否是激活消息（包含Alex激活指令）
-        is_activation_message = "智能需求分析师Alex" in content and "请按照以下激活指令执行" in content
+        # 字符长度限制：激活消息允许更长，常规消息限制2000字符
+        max_length = 50000 if is_activation_message else 2000
+        if len(content) > max_length:
+            message = f"激活消息内容不能超过{max_length}字符" if is_activation_message else "消息内容不能超过2000字符"
+            raise ValidationError(message)
         
         # 创建用户消息（激活消息标记为system类型，不显示给用户）
         user_message = RequirementsMessage(
@@ -547,8 +550,13 @@ def register_requirements_socketio(socketio: SocketIO):
                 emit('error', {'message': '缺少session_id或content参数'})
                 return
                 
-            if len(content) > 2000:
-                emit('error', {'message': '消息内容不能超过2000字符'})
+            # 检查是否是激活消息
+            is_activation_message = ("智能需求分析师" in content and "Bundle" in content) or len(content) > 10000
+            max_length = 50000 if is_activation_message else 2000
+            
+            if len(content) > max_length:
+                message = f"激活消息内容不能超过{max_length}字符" if is_activation_message else "消息内容不能超过2000字符"
+                emit('error', {'message': message})
                 return
             
             # 验证会话
