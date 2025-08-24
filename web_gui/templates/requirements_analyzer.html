@@ -1298,24 +1298,40 @@ function updateConnectionStatus(status, text) {
 // 显示AI处理动效
 function showAiProcessing(text = 'Alex正在分析和思考中') {
     const aiProcessing = document.getElementById('aiProcessing');
-    const textSpan = aiProcessing.querySelector('span');
     
-    textSpan.textContent = text;
-    aiProcessing.classList.add('show');
+    if (!aiProcessing) {
+        console.warn('未找到AI处理动效元素');
+        return;
+    }
+    
+    const textSpan = aiProcessing.querySelector('span');
+    if (textSpan) {
+        textSpan.textContent = text;
+    }
+    
+    if (aiProcessing.classList) {
+        aiProcessing.classList.add('show');
+    }
     
     // 滚动到动效位置
     setTimeout(() => {
-        aiProcessing.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'end' 
-        });
+        if (aiProcessing && typeof aiProcessing.scrollIntoView === 'function') {
+            aiProcessing.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'end' 
+            });
+        }
     }, 100);
 }
 
 // 隐藏AI处理动效
 function hideAiProcessing() {
     const aiProcessing = document.getElementById('aiProcessing');
-    aiProcessing.classList.remove('show');
+    if (aiProcessing && aiProcessing.classList) {
+        aiProcessing.classList.remove('show');
+    } else {
+        console.warn('未找到AI处理动效元素或缺少classList方法');
+    }
 }
 
 // 更新共识显示
