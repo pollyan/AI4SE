@@ -710,7 +710,7 @@ async function testSingleConfig(configId) {
     
     if (statusEl) {
         statusEl.className = 'test-status pending';
-        statusEl.innerHTML = '<span class="test-status-dot"></span>综合测试中...';
+        statusEl.innerHTML = '<span class="test-status-dot"></span>测试中...';
     }
     
     try {
@@ -718,52 +718,51 @@ async function testSingleConfig(configId) {
         
         if (response.data.code === 200) {
             const testData = response.data.data;
-            const summary = testData.summary;
             
-            if (testData.overall_success) {
+            if (testData.test_success) {
                 if (statusEl) {
                     statusEl.className = 'test-status success';
-                    statusEl.innerHTML = '<span class="test-status-dot"></span>全部通过';
+                    statusEl.innerHTML = '<span class="test-status-dot"></span>连接正常';
                 }
                 
-                // 显示详细测试结果
-                const detailMessage = `🎉 ${testData.config_name} 综合测试通过！\n\n` +
-                    `📊 测试汇总:\n` +
-                    `• 总测试: ${summary.total_tests} 项\n` +
-                    `• 通过: ${summary.passed_tests} 项\n` +
-                    `• 成功率: ${summary.success_rate}\n` +
-                    `• 总耗时: ${summary.total_duration_ms}ms\n\n` +
-                    `📋 详细结果:\n` +
-                    testData.test_results.map(result => 
-                        `${result.success ? '✅' : '❌'} ${result.test_name}: ${result.message} (${result.duration_ms}ms)`
-                    ).join('\n');
+                // 显示成功消息和AI回复
+                const successMessage = `✅ ${testData.config_name} 测试成功！\n\n` +
+                    `📱 模型: ${testData.model_name}\n` +
+                    `⏱️ 响应时间: ${testData.duration_ms}ms\n` +
+                    `🤖 AI回复: ${testData.ai_response}`;
                 
-                showMessage(detailMessage, 'success');
+                showMessage(successMessage, 'success');
             } else {
-                const failedTests = testData.test_results.filter(r => !r.success);
                 if (statusEl) {
                     statusEl.className = 'test-status error';
-                    statusEl.innerHTML = `<span class="test-status-dot"></span>${summary.passed_tests}/${summary.total_tests} 通过`;
+                    statusEl.innerHTML = '<span class="test-status-dot"></span>测试失败';
                 }
                 
-                const errorMessage = `⚠️ ${testData.config_name} 部分测试失败\n\n` +
-                    `📊 测试汇总:\n` +
-                    `• 通过: ${summary.passed_tests}/${summary.total_tests} 项\n` +
-                    `• 成功率: ${summary.success_rate}\n` +
-                    `• 总耗时: ${summary.total_duration_ms}ms\n\n` +
-                    `❌ 失败项目:\n` +
-                    failedTests.map(result => 
-                        `• ${result.test_name}: ${result.message}`
-                    ).join('\n');
-                
-                showMessage(errorMessage, 'warning');
+                showMessage(`❌ ${testData.config_name} 测试失败\n\n${response.data.message}`, 'error');
             }
         } else {
             if (statusEl) {
                 statusEl.className = 'test-status error';
                 statusEl.innerHTML = '<span class="test-status-dot"></span>测试失败';
             }
-            showMessage('测试失败: ' + response.data.message, 'error');
+            
+            // 显示详细错误信息
+            let errorMessage = `❌ 测试失败: ${response.data.message}`;
+            
+            // 如果有详细错误信息，显示出来
+            if (response.data.data && response.data.data.error_details) {
+                const details = response.data.data.error_details;
+                errorMessage += `\n\n🔍 详细错误信息:\n`;
+                errorMessage += `配置: ${details.config_name} (${details.model_name})\n`;
+                errorMessage += `接口: ${details.base_url}\n`;
+                errorMessage += `错误类型: ${details.error_type}\n`;
+                errorMessage += `错误信息: ${details.error_message}\n`;
+                if (details.error_traceback) {
+                    errorMessage += `\n📋 错误堆栈:\n${details.error_traceback}`;
+                }
+            }
+            
+            showMessage(errorMessage, 'error');
         }
     } catch (error) {
         console.error('测试配置失败:', error);
@@ -771,7 +770,15 @@ async function testSingleConfig(configId) {
             statusEl.className = 'test-status error';
             statusEl.innerHTML = '<span class="test-status-dot"></span>连接失败';
         }
-        showMessage('测试失败: ' + (error.response?.data?.message || error.message), 'error');
+        
+        // 显示完整的错误信息
+        let errorMessage = `❌ 网络或系统错误: ${error.message}`;
+        
+        if (error.response && error.response.data) {
+            errorMessage += `\n\n🌐 服务器响应:\n${JSON.stringify(error.response.data, null, 2)}`;
+        }
+        
+        showMessage(errorMessage, 'error');
     }
 }
 
@@ -808,20 +815,35 @@ async function testAllConfigs() {
                 }
             });
             
-            // 显示详细批量测试结果
-            const batchMessage = `🎯 批量测试完成！\n\n` +
-                `📊 汇总统计:\n` +
+            // 准备详细结果信息
+            let resultDetails = [];
+            let errorDetails = [];
+            
+            results.test_results.forEach(result => {
+                if (result.test_success) {
+                    resultDetails.push(`✅ ${result.config_name} (${result.model_name}): ${result.ai_response} [${result.duration_ms}ms]`);
+                } else {
+                    let errorInfo = `❌ ${result.config_name} (${result.model_name}): ${result.message}`;
+                    if (result.error_details) {
+                        errorInfo += `\n   错误类型: ${result.error_details.error_type}`;
+                        errorInfo += `\n   错误详情: ${result.error_details.error_message}`;
+                    }
+                    errorDetails.push(errorInfo);
+                    resultDetails.push(errorInfo);
+                }
+            });
+            
+            // 显示批量测试结果
+            let batchMessage = `🎯 批量测试完成！\n\n` +
+                `📊 测试统计:\n` +
                 `• 总配置数: ${summary.total}\n` +
                 `• 成功连接: ${summary.success}\n` +
                 `• 连接失败: ${summary.failed}\n` +
-                `• 成功率: ${summary.success_rate}\n` +
-                `• 总耗时: ${summary.total_duration_ms}ms\n` +
-                `• 平均耗时: ${summary.avg_duration_ms}ms\n\n` +
-                `📋 详细结果:\n` +
-                results.test_results.map(result => 
-                    `${result.test_success ? '✅' : '❌'} ${result.config_name} (${result.model_name}): ${result.message}` +
-                    (result.duration_ms ? ` [${result.duration_ms}ms]` : '')
-                ).join('\n');
+                `• 总耗时: ${summary.total_duration_ms}ms\n\n`;
+            
+            if (summary.success > 0) {
+                batchMessage += `📋 测试结果:\n${resultDetails.join('\n')}`;
+            }
             
             const messageType = summary.success === summary.total ? 'success' : 
                                summary.success > 0 ? 'warning' : 'error';
@@ -832,7 +854,13 @@ async function testAllConfigs() {
         }
     } catch (error) {
         console.error('批量测试失败:', error);
-        showMessage('批量测试失败: ' + (error.response?.data?.message || error.message), 'error');
+        let errorMessage = `❌ 批量测试系统错误: ${error.message}`;
+        
+        if (error.response && error.response.data) {
+            errorMessage += `\n\n🌐 服务器响应:\n${JSON.stringify(error.response.data, null, 2)}`;
+        }
+        
+        showMessage(errorMessage, 'error');
     } finally {
         // 恢复批量测试按钮状态
         const batchButton = document.querySelector('button[onclick="testAllConfigs()"]');
@@ -913,22 +941,47 @@ async function testAiConfig() {
             const testData = response.data.data;
             if (testData.test_success) {
                 showMessage(
-                    `✅ 预览测试成功！\n` +
-                    `模型: ${testData.model_name}\n` +
-                    `响应时间: ${testData.duration_ms}ms\n` +
-                    `AI回复: ${testData.response_preview}`, 
+                    `✅ 预览测试成功！\n\n` +
+                    `📱 配置: ${testData.config_name}\n` +
+                    `🤖 模型: ${testData.model_name}\n` +
+                    `⏱️ 响应时间: ${testData.duration_ms}ms\n` +
+                    `💬 AI回复: ${testData.ai_response}`, 
                     'success'
                 );
             } else {
-                showMessage('⚠️ 预览测试失败，请检查配置参数', 'error');
+                showMessage(`⚠️ 预览测试失败\n\n${response.data.message}`, 'error');
             }
         } else {
-            showMessage('测试失败: ' + response.data.message, 'error');
+            // 显示详细错误信息
+            let errorMessage = `❌ 预览测试失败: ${response.data.message}`;
+            
+            // 如果有详细错误信息，显示出来
+            if (response.data.data && response.data.data.error_details) {
+                const details = response.data.data.error_details;
+                errorMessage += `\n\n🔍 详细错误信息:\n`;
+                errorMessage += `配置: ${details.config_name} (${details.model_name})\n`;
+                errorMessage += `接口: ${details.base_url}\n`;
+                errorMessage += `错误类型: ${details.error_type}\n`;
+                errorMessage += `错误信息: ${details.error_message}\n`;
+                if (details.error_traceback) {
+                    errorMessage += `\n📋 错误堆栈:\n${details.error_traceback}`;
+                }
+            }
+            
+            showMessage(errorMessage, 'error');
         }
         
     } catch (error) {
         console.error('预览测试失败:', error);
-        showMessage('预览测试失败: ' + (error.response?.data?.message || error.message), 'error');
+        
+        // 显示完整的错误信息
+        let errorMessage = `❌ 网络或系统错误: ${error.message}`;
+        
+        if (error.response && error.response.data) {
+            errorMessage += `\n\n🌐 服务器响应:\n${JSON.stringify(error.response.data, null, 2)}`;
+        }
+        
+        showMessage(errorMessage, 'error');
     } finally {
         // 恢复按钮状态
         testButton.textContent = originalText;
