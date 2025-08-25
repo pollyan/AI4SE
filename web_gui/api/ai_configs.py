@@ -182,8 +182,7 @@ def delete_config(config_id):
             if other_configs:
                 # 将第一个其他配置设为默认
                 other_configs[0].is_default = True
-            else:
-                raise ValidationError("不能删除最后一个配置")
+            # 允许删除最后一个配置，不抛出错误
         
         db.session.delete(config)
         db.session.commit()
@@ -263,6 +262,126 @@ def set_default_config(config_id):
     except Exception as e:
         db.session.rollback()
         return standard_error_response(f"设置默认配置失败: {str(e)}", 500)
+
+
+@ai_configs_bp.route("/<int:config_id>/test", methods=["POST"])
+@log_api_call
+def test_config(config_id):
+    """测试AI配置连接"""
+    try:
+        config = RequirementsAIConfig.query.get(config_id)
+        if not config:
+            raise NotFoundError("配置不存在")
+        
+        # 导入AI服务进行测试
+        try:
+            from ..services.requirements_ai_service import RequirementsAIService
+            
+            # 创建临时AI服务实例进行测试
+            config_data = config.get_config_for_ai_service()
+            temp_ai_service = RequirementsAIService(config=config_data)
+            
+            # 发送测试消息
+            test_message = "你好，这是一个配置连接测试。请简单回复'测试成功'。"
+            response = temp_ai_service.send_message(test_message)
+            
+            if response and len(response.strip()) > 0:
+                return standard_success_response(
+                    data={
+                        "config_id": config_id,
+                        "test_success": True,
+                        "response_preview": response[:100] + "..." if len(response) > 100 else response,
+                        "tested_at": datetime.utcnow().isoformat()
+                    },
+                    message="配置连接测试成功"
+                )
+            else:
+                return standard_error_response("AI服务返回空响应", 422)
+                
+        except Exception as e:
+            return standard_error_response(f"连接测试失败: {str(e)}", 422)
+        
+    except NotFoundError as e:
+        return standard_error_response(e.message, 404)
+    except Exception as e:
+        return standard_error_response(f"测试配置失败: {str(e)}", 500)
+
+
+@ai_configs_bp.route("/stats", methods=["GET"])
+@log_api_call
+def get_config_stats():
+    """获取配置统计信息"""
+    try:
+        total_configs = RequirementsAIConfig.query.filter_by(is_active=True).count()
+        current_config = RequirementsAIConfig.get_default_config()
+        
+        stats = {
+            "total_configs": total_configs,
+            "selected_configs": 1 if current_config else 0,
+            "current_config_name": current_config.config_name if current_config else "无"
+        }
+        
+        return standard_success_response(
+            data=stats,
+            message="获取配置统计成功"
+        )
+        
+    except Exception as e:
+        return standard_error_response(f"获取配置统计失败: {str(e)}", 500)
+
+
+@ai_configs_bp.route("/test-all", methods=["POST"])
+@log_api_call
+def test_all_configs():
+    """批量测试所有配置连接"""
+    try:
+        configs = RequirementsAIConfig.get_all_active_configs()
+        test_results = []
+        
+        for config in configs:
+            try:
+                # 导入AI服务进行测试
+                from ..services.requirements_ai_service import RequirementsAIService
+                
+                config_data = config.get_config_for_ai_service()
+                temp_ai_service = RequirementsAIService(config=config_data)
+                
+                # 发送简短测试消息
+                test_message = "测试"
+                response = temp_ai_service.send_message(test_message)
+                
+                test_results.append({
+                    "config_id": config.id,
+                    "config_name": config.config_name,
+                    "test_success": True,
+                    "message": "连接正常"
+                })
+                
+            except Exception as e:
+                test_results.append({
+                    "config_id": config.id,
+                    "config_name": config.config_name,
+                    "test_success": False,
+                    "message": f"连接失败: {str(e)}"
+                })
+        
+        success_count = sum(1 for result in test_results if result["test_success"])
+        total_count = len(test_results)
+        
+        return standard_success_response(
+            data={
+                "test_results": test_results,
+                "summary": {
+                    "total": total_count,
+                    "success": success_count,
+                    "failed": total_count - success_count
+                }
+            },
+            message=f"批量测试完成: {success_count}/{total_count} 配置连接正常"
+        )
+        
+    except Exception as e:
+        return standard_error_response(f"批量测试失败: {str(e)}", 500)
 
 
 def _clear_other_defaults(exclude_id=None):

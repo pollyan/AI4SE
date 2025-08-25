@@ -1,0 +1,915 @@
+{% extends "base_layout.html" %}
+
+{% block title %}AI配置管理 - AI4SE工具集{% endblock %}
+{% block page_title %}AI配置管理{% endblock %}
+{% block page_subtitle %}管理你的AI助手连接配置{% endblock %}
+
+{% block extra_css %}
+/* 配置管理样式 */
+.config-management-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* Card样式 */
+.card {
+    background: #ffffff;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    margin-bottom: 24px;
+}
+
+.card-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333333;
+    margin-bottom: 4px;
+}
+
+.card-subtitle {
+    font-size: 14px;
+    color: #666666;
+    margin-bottom: 20px;
+}
+
+.card-content {
+    padding: 20px;
+}
+
+/* 配置管理部分样式 */
+.config-management-section {
+    margin-top: 0;
+    border-top: 1px solid #e8e8e8;
+    padding-top: 24px;
+}
+
+.config-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 0;
+    border-bottom: 1px solid #e8e8e8;
+}
+
+.config-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.config-section-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333333;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.config-stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.config-stat-item {
+    background: #f8f9fa;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: #666666;
+}
+
+.config-stat-number {
+    font-weight: 500;
+    color: #333333;
+}
+
+.configs-list {
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    background: #ffffff;
+    margin-bottom: 16px;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.config-item {
+    padding: 16px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.2s ease;
+}
+
+.config-item:last-child {
+    border-bottom: none;
+}
+
+.config-item:hover {
+    background: #f8f9fa;
+}
+
+.config-item.active {
+    background: #f0f8ff;
+    border-left: 3px solid #333333;
+}
+
+.config-info {
+    flex: 1;
+}
+
+.config-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333333;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.config-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.config-badge.active {
+    background: #e8f4fd;
+    color: #1c5aa0;
+}
+
+.config-details {
+    font-size: 12px;
+    color: #666666;
+    line-height: 1.4;
+}
+
+.config-model {
+    color: #333333;
+    font-weight: 500;
+}
+
+.config-actions-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.config-action-btn {
+    padding: 6px 12px;
+    border: 1px solid #e8e8e8;
+    background: #ffffff;
+    color: #666666;
+    font-size: 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 60px;
+    box-sizing: border-box;
+}
+
+.config-action-btn:hover {
+    background: #f8f8f8;
+    border-color: #d0d0d0;
+    color: #333333;
+}
+
+.config-action-btn.primary {
+    background: #333333;
+    color: #ffffff;
+    border-color: #333333;
+}
+
+.config-action-btn.primary:hover {
+    background: #555555;
+    border-color: #555555;
+}
+
+.config-action-btn.danger {
+    color: #dc3545;
+    border-color: #dc3545;
+}
+
+.config-action-btn.danger:hover {
+    background: #dc3545;
+    color: #ffffff;
+}
+
+.config-action-btn.current {
+    background: #e8f4fd;
+    color: #1c5aa0;
+    border-color: #e8f4fd;
+    cursor: default;
+    font-weight: 500;
+}
+
+.config-action-btn.current:hover {
+    background: #e8f4fd;
+    color: #1c5aa0;
+    border-color: #e8f4fd;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #666666;
+}
+
+.empty-state-icon {
+    font-size: 48px;
+    color: #e8e8e8;
+    margin-bottom: 16px;
+}
+
+.empty-state-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333333;
+    margin-bottom: 8px;
+}
+
+.empty-state-desc {
+    font-size: 14px;
+    color: #666666;
+    margin-bottom: 20px;
+}
+
+.config-management-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.bulk-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* 测试状态指示器 */
+.test-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    margin-top: 4px;
+}
+
+.test-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+.test-status.success .test-status-dot {
+    background: #28a745;
+}
+
+.test-status.error .test-status-dot {
+    background: #dc3545;
+}
+
+.test-status.pending .test-status-dot {
+    background: #ffc107;
+}
+
+.test-status.unknown .test-status-dot {
+    background: #6c757d;
+}
+
+/* 表单样式 */
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: #333333;
+    margin-bottom: 6px;
+}
+
+.form-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    font-size: 14px;
+    line-height: 1.4;
+    transition: border-color 0.2s ease;
+    box-sizing: border-box;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #333333;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.btn {
+    padding: 10px 16px;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    background: #ffffff;
+    color: #666666;
+}
+
+.btn:hover {
+    background: #f8f8f8;
+    border-color: #d0d0d0;
+    color: #333333;
+}
+
+.btn-ghost {
+    background: transparent;
+    border: 1px solid #e8e8e8;
+    color: #666666;
+}
+
+.btn-ghost:hover {
+    background: #f8f8f8;
+    border-color: #d0d0d0;
+    color: #333333;
+}
+
+.btn-primary {
+    background: #333333;
+    border-color: #333333;
+    color: #ffffff;
+}
+
+.btn-primary:hover {
+    background: #555555;
+    border-color: #555555;
+    color: #ffffff;
+}
+
+@media (max-width: 768px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .config-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .config-actions-row {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    
+    .config-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+}
+{% endblock %}
+
+{% block content %}
+<div class="config-management-layout">
+    <!-- AI配置表单 -->
+    <div class="card">
+        <div class="card-title">AI服务配置</div>
+        <div class="card-subtitle">配置你的AI助手连接设置</div>
+        <div class="card-content">
+            <form id="aiConfigForm">
+                <div class="form-group">
+                    <label class="form-label">配置名称</label>
+                    <input type="text" class="form-input" id="configName" name="config_name" placeholder="给你的AI配置起个名字，如：我的OpenAI配置" required>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">API密钥</label>
+                        <input type="password" class="form-input" id="apiKey" name="api_key" placeholder="输入你的API密钥" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">模型名称</label>
+                        <input type="text" class="form-input" id="modelName" name="model_name" placeholder="如: gpt-4o, qwen-vl-max-latest" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">API基础URL</label>
+                    <input type="url" class="form-input" id="baseUrl" name="base_url" placeholder="如: https://api.openai.com/v1" required>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-ghost" onclick="clearForm()">清空</button>
+                    <button type="button" class="btn" onclick="testAiConfig()">测试连接</button>
+                    <button type="submit" class="btn btn-primary">保存配置</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 配置管理部分 -->
+    <div class="config-management-section">
+        <div class="config-section-title">
+            <span>⚙️</span>
+            配置管理
+        </div>
+
+        <!-- 配置统计 -->
+        <div class="config-stats">
+            <div class="config-stat-item">
+                总配置: <span class="config-stat-number" id="totalConfigs">0</span>
+            </div>
+            <div class="config-stat-item">
+                已选用: <span class="config-stat-number" id="selectedConfigs">0</span>
+            </div>
+            <div class="config-stat-item">
+                当前使用: <span class="config-stat-number" id="currentConfigName">无</span>
+            </div>
+        </div>
+
+        <!-- 配置列表 -->
+        <div class="configs-list" id="configsList">
+            <!-- 配置项将通过JavaScript动态加载 -->
+            <div class="empty-state" id="emptyState">
+                <div class="empty-state-icon">⚙️</div>
+                <div class="empty-state-title">暂无AI配置</div>
+                <div class="empty-state-desc">创建你的第一个AI配置来开始使用智能功能</div>
+            </div>
+        </div>
+
+        <!-- 批量操作 -->
+        <div class="config-management-actions">
+            <div class="bulk-actions">
+                <button class="btn" onclick="testAllConfigs()">批量测试</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}
+
+{% block extra_js %}
+<!-- 引入axios.js用于API调用 -->
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+<script>
+// ===== 配置管理功能 =====
+
+// 初始化配置管理
+async function initializeConfigManagement() {
+    await loadConfigList();
+    await updateConfigStats();
+}
+
+// 加载配置列表
+async function loadConfigList() {
+    try {
+        const response = await axios.get('/api/ai-configs');
+        
+        if (response.data.code === 200) {
+            const configs = response.data.data.configs;
+            renderConfigList(configs);
+        } else {
+            console.error('加载配置列表失败:', response.data.message);
+        }
+    } catch (error) {
+        console.error('加载配置列表失败:', error);
+        renderEmptyState();
+    }
+}
+
+// 渲染配置列表
+function renderConfigList(configs) {
+    const configsList = document.getElementById('configsList');
+    const emptyState = document.getElementById('emptyState');
+    
+    if (configs.length === 0) {
+        renderEmptyState();
+        return;
+    }
+    
+    // 隐藏空状态
+    emptyState.style.display = 'none';
+    
+    // 清除现有内容
+    configsList.innerHTML = '';
+    
+    configs.forEach(config => {
+        const configItem = createConfigItem(config);
+        configsList.appendChild(configItem);
+    });
+}
+
+// 创建配置项DOM元素
+function createConfigItem(config) {
+    const div = document.createElement('div');
+    div.className = `config-item ${config.is_default ? 'active' : ''}`;
+    
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '未知';
+        try {
+            return new Date(dateStr).toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch {
+            return '未知';
+        }
+    };
+    
+    div.innerHTML = `
+        <div class="config-info">
+            <div class="config-name">
+                ${escapeHtml(config.config_name)}
+                ${config.is_default ? '<span class="config-badge active">使用中</span>' : ''}
+            </div>
+            <div class="config-details">
+                模型: <span class="config-model">${escapeHtml(config.model_name)}</span> • 
+                API: ${escapeHtml(new URL(config.base_url).hostname)} • 
+                创建时间: ${formatDate(config.created_at)}
+            </div>
+            <div class="test-status unknown" id="test-status-${config.id}">
+                <span class="test-status-dot"></span>
+                连接状态未知
+            </div>
+        </div>
+        <div class="config-actions-row">
+            <button class="config-action-btn" onclick="editConfig(${config.id})">编辑</button>
+            <button class="config-action-btn" onclick="testSingleConfig(${config.id})">测试</button>
+            ${config.is_default ? 
+                '<span class="config-action-btn current">使用中</span>' : 
+                `<button class="config-action-btn primary" onclick="selectConfig(${config.id})">选用</button>`
+            }
+            <button class="config-action-btn danger" onclick="deleteConfig(${config.id})">删除</button>
+        </div>
+    `;
+    
+    return div;
+}
+
+// 渲染空状态
+function renderEmptyState() {
+    const configsList = document.getElementById('configsList');
+    const emptyState = document.getElementById('emptyState');
+    
+    configsList.innerHTML = '';
+    configsList.appendChild(emptyState);
+    emptyState.style.display = 'block';
+}
+
+// 更新配置统计信息
+async function updateConfigStats() {
+    try {
+        const response = await axios.get('/api/ai-configs/stats');
+        
+        if (response.data.code === 200) {
+            const stats = response.data.data;
+            
+            document.getElementById('totalConfigs').textContent = stats.total_configs;
+            document.getElementById('selectedConfigs').textContent = stats.selected_configs;
+            document.getElementById('currentConfigName').textContent = stats.current_config_name;
+        }
+    } catch (error) {
+        console.error('更新配置统计失败:', error);
+    }
+}
+
+// 选用配置
+async function selectConfig(configId) {
+    try {
+        const response = await axios.post(`/api/ai-configs/${configId}/set-default`);
+        
+        if (response.data.code === 200) {
+            showMessage('配置选用成功', 'success');
+            // 重新加载配置列表和统计信息
+            await loadConfigList();
+            await updateConfigStats();
+        } else {
+            showMessage('选用失败: ' + response.data.message, 'error');
+        }
+    } catch (error) {
+        console.error('选用配置失败:', error);
+        showMessage('选用失败: ' + (error.response?.data?.message || error.message), 'error');
+    }
+}
+
+// 删除配置
+async function deleteConfig(configId) {
+    if (!confirm('确定要删除这个配置吗？删除后无法恢复。')) {
+        return;
+    }
+    
+    try {
+        const response = await axios.delete(`/api/ai-configs/${configId}`);
+        
+        if (response.data.code === 200) {
+            showMessage('配置删除成功', 'success');
+            // 重新加载配置列表和统计信息
+            await loadConfigList();
+            await updateConfigStats();
+        } else {
+            showMessage('删除失败: ' + response.data.message, 'error');
+        }
+    } catch (error) {
+        console.error('删除配置失败:', error);
+        showMessage('删除失败: ' + (error.response?.data?.message || error.message), 'error');
+    }
+}
+
+// 编辑配置
+async function editConfig(configId) {
+    try {
+        // 获取配置详情
+        const response = await axios.get('/api/ai-configs');
+        
+        if (response.data.code === 200) {
+            const configs = response.data.data.configs;
+            const config = configs.find(c => c.id === configId);
+            
+            if (config) {
+                setEditMode(config);
+                showMessage('已加载配置到编辑表单，修改后点击保存', 'success');
+                
+                // 滚动到表单顶部
+                document.querySelector('.card').scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        }
+    } catch (error) {
+        console.error('加载配置详情失败:', error);
+        showMessage('加载配置失败: ' + (error.response?.data?.message || error.message), 'error');
+    }
+}
+
+// 测试单个配置
+async function testSingleConfig(configId) {
+    const statusEl = document.getElementById(`test-status-${configId}`);
+    
+    if (statusEl) {
+        statusEl.className = 'test-status pending';
+        statusEl.innerHTML = '<span class="test-status-dot"></span>测试中...';
+    }
+    
+    try {
+        const response = await axios.post(`/api/ai-configs/${configId}/test`);
+        
+        if (response.data.code === 200) {
+            if (statusEl) {
+                statusEl.className = 'test-status success';
+                statusEl.innerHTML = '<span class="test-status-dot"></span>连接正常';
+            }
+            showMessage('配置测试成功', 'success');
+        } else {
+            if (statusEl) {
+                statusEl.className = 'test-status error';
+                statusEl.innerHTML = '<span class="test-status-dot"></span>连接失败';
+            }
+            showMessage('测试失败: ' + response.data.message, 'error');
+        }
+    } catch (error) {
+        console.error('测试配置失败:', error);
+        if (statusEl) {
+            statusEl.className = 'test-status error';
+            statusEl.innerHTML = '<span class="test-status-dot"></span>连接失败';
+        }
+        showMessage('测试失败: ' + (error.response?.data?.message || error.message), 'error');
+    }
+}
+
+// 批量测试所有配置
+async function testAllConfigs() {
+    try {
+        showMessage('开始批量测试...', 'success');
+        
+        const response = await axios.post('/api/ai-configs/test-all');
+        
+        if (response.data.code === 200) {
+            const results = response.data.data;
+            
+            // 更新每个配置的测试状态
+            results.test_results.forEach(result => {
+                const statusEl = document.getElementById(`test-status-${result.config_id}`);
+                if (statusEl) {
+                    statusEl.className = `test-status ${result.test_success ? 'success' : 'error'}`;
+                    statusEl.innerHTML = `<span class="test-status-dot"></span>${result.message}`;
+                }
+            });
+            
+            showMessage(`批量测试完成: ${results.summary.success}/${results.summary.total} 配置正常`, 'success');
+        } else {
+            showMessage('批量测试失败: ' + response.data.message, 'error');
+        }
+    } catch (error) {
+        console.error('批量测试失败:', error);
+        showMessage('批量测试失败: ' + (error.response?.data?.message || error.message), 'error');
+    }
+}
+
+// 清空表单
+function clearForm() {
+    document.getElementById('configName').value = '';
+    document.getElementById('apiKey').value = '';
+    document.getElementById('baseUrl').value = '';
+    document.getElementById('modelName').value = '';
+    document.getElementById('apiKey').placeholder = '输入你的API密钥';
+    document.getElementById('apiKey').required = true;
+    
+    // 清除编辑模式标识
+    const form = document.getElementById('aiConfigForm');
+    form.removeAttribute('data-edit-mode');
+    form.removeAttribute('data-edit-id');
+    
+    showMessage('表单已清空', 'success');
+}
+
+// 设置编辑模式
+function setEditMode(config) {
+    // 填充表单
+    document.getElementById('configName').value = config.config_name;
+    document.getElementById('baseUrl').value = config.base_url;
+    document.getElementById('modelName').value = config.model_name;
+    // API密钥不填充，需要用户重新输入
+    document.getElementById('apiKey').value = '';
+    document.getElementById('apiKey').placeholder = '保持空白则不修改API密钥';
+    document.getElementById('apiKey').required = false;
+    
+    // 设置编辑模式标识
+    document.getElementById('aiConfigForm').dataset.editMode = 'true';
+    document.getElementById('aiConfigForm').dataset.editId = config.id;
+}
+
+function testAiConfig() {
+    const configName = document.getElementById('configName').value;
+    const apiKey = document.getElementById('apiKey').value;
+    const baseUrl = document.getElementById('baseUrl').value;
+    const modelName = document.getElementById('modelName').value;
+    
+    if (!configName || !apiKey || !baseUrl || !modelName) {
+        showMessage('请填写完整的配置信息', 'error');
+        return;
+    }
+    
+    // 简单的配置验证
+    try {
+        new URL(baseUrl);
+    } catch (e) {
+        showMessage('API基础URL格式不正确', 'error');
+        return;
+    }
+    
+    showMessage('配置格式验证通过！请保存配置后进行真实连接测试。', 'success');
+}
+
+// AI配置提交处理函数
+async function handleAiConfigSubmit(event) {
+    event.preventDefault();
+    
+    const form = event.target;
+    const isEditMode = form.dataset.editMode === 'true';
+    const editId = form.dataset.editId;
+    
+    const formData = new FormData(form);
+    const data = {
+        config_name: formData.get('config_name'),
+        api_key: formData.get('api_key'),
+        base_url: formData.get('base_url'),
+        model_name: formData.get('model_name')
+    };
+    
+    if (!data.config_name || !data.base_url || !data.model_name) {
+        showMessage('请填写完整的配置信息', 'error');
+        return;
+    }
+    
+    // 编辑模式下，如果API密钥为空则不更新
+    if (isEditMode && !data.api_key) {
+        delete data.api_key;
+    }
+    
+    if (!isEditMode && !data.api_key) {
+        showMessage('新建配置时API密钥不能为空', 'error');
+        return;
+    }
+    
+    // 简单的配置验证
+    try {
+        new URL(data.base_url);
+    } catch (e) {
+        showMessage('API基础URL格式不正确', 'error');
+        return;
+    }
+    
+    try {
+        let response;
+        
+        if (isEditMode) {
+            // 更新配置
+            response = await axios.put(`/api/ai-configs/${editId}`, data);
+        } else {
+            // 创建新配置，第一个配置自动设为默认
+            const statsResponse = await axios.get('/api/ai-configs/stats');
+            const isFirstConfig = statsResponse.data.data.total_configs === 0;
+            
+            response = await axios.post('/api/ai-configs', {
+                ...data,
+                is_default: isFirstConfig
+            });
+        }
+        
+        if (response.data.code === 200) {
+            showMessage(isEditMode ? 'AI配置更新成功！' : 'AI配置保存成功！', 'success');
+            
+            // 重新加载配置列表和统计信息
+            await loadConfigList();
+            await updateConfigStats();
+            
+            // 清空表单
+            clearForm();
+        } else {
+            showMessage('保存失败: ' + response.data.message, 'error');
+        }
+    } catch (error) {
+        console.error(isEditMode ? '更新AI配置失败:' : '保存AI配置失败:', error);
+        showMessage('保存失败: ' + (error.response?.data?.message || error.message), 'error');
+    }
+}
+
+// 工具函数
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function showMessage(message, type = 'info') {
+    const messageEl = document.createElement('div');
+    messageEl.textContent = message;
+    messageEl.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: 4px;
+        color: white;
+        z-index: 1001;
+        background-color: ${type === 'success' ? '#28a745' : type === 'warning' ? '#ffc107' : '#dc3545'};
+        border: 1px solid ${type === 'success' ? '#28a745' : type === 'warning' ? '#ffc107' : '#dc3545'};
+    `;
+
+    document.body.appendChild(messageEl);
+
+    setTimeout(() => {
+        if (document.body.contains(messageEl)) {
+            document.body.removeChild(messageEl);
+        }
+    }, 3000);
+}
+
+// 页面加载时初始化配置管理
+document.addEventListener('DOMContentLoaded', async function() {
+    // 绑定表单提交事件
+    document.getElementById('aiConfigForm').addEventListener('submit', handleAiConfigSubmit);
+    
+    // 初始化配置管理
+    await initializeConfigManagement();
+});
+</script>
+{% endblock %}

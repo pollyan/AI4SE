@@ -221,6 +221,18 @@ def requirements_analyzer_page():
         return jsonify({"error": f"无法加载智能需求分析页面: {str(e)}"}), 500
 
 
+@app.route("/config-management")
+@app.route("/configs")  # 备选路由
+def config_management_page():
+    """AI配置管理页面"""
+    try:
+        from flask import render_template
+        
+        return render_template("config_management.html")
+    except Exception as e:
+        return jsonify({"error": f"无法加载配置管理页面: {str(e)}"}), 500
+
+
 @app.route("/testcases/create")
 def testcase_create_page():
     """测试用例创建页面"""

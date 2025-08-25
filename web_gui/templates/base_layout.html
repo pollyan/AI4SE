@@ -507,7 +507,16 @@
                         <a class="nav-dropdown-item {% if request.endpoint == 'local-proxy' %}active{% endif %}" data-page="local-proxy">本地代理</a>
                     </div>
                 </div>
-                <a class="nav-link {% if request.endpoint == 'requirements_analyzer_page' %}active{% endif %}" data-page="requirements-analyzer">智能需求分析</a>
+                <div class="nav-dropdown">
+                    <a class="nav-link nav-dropdown-trigger {% if request.endpoint in ['requirements_analyzer_page', 'config_management_page'] %}active{% endif %}">
+                        智能需求分析
+                        <span class="dropdown-arrow">▼</span>
+                    </a>
+                    <div class="nav-dropdown-menu">
+                        <a class="nav-dropdown-item {% if request.endpoint == 'requirements_analyzer_page' %}active{% endif %}" data-page="requirements-analyzer">需求对话</a>
+                        <a class="nav-dropdown-item {% if request.endpoint == 'config_management_page' %}active{% endif %}" data-page="config-management">配置管理</a>
+                    </div>
+                </div>
             </div>
             <div class="nav-user">用户</div>
         </div>

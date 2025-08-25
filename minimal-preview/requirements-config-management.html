@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>需求分析工具 - 配置管理设计稿</title>
+    <link rel="stylesheet" href="assets/css/minimal-style.css">
+    <style>
+        /* 配置管理专用样式 */
+        .config-management-section {
+            margin-top: 32px;
+            border-top: 1px solid #e8e8e8;
+            padding-top: 24px;
+        }
+
+        .config-section-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #333333;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .config-stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .config-stat-item {
+            background: #f8f9fa;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            padding: 8px 12px;
+            font-size: 13px;
+            color: #666666;
+        }
+
+        .config-stat-number {
+            font-weight: 500;
+            color: #333333;
+        }
+
+        .configs-list {
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            background: #ffffff;
+            margin-bottom: 16px;
+        }
+
+        .config-item {
+            padding: 16px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background 0.2s ease;
+        }
+
+        .config-item:last-child {
+            border-bottom: none;
+        }
+
+        .config-item:hover {
+            background: #f8f9fa;
+        }
+
+        .config-item.active {
+            background: #f0f8ff;
+            border-left: 3px solid #333333;
+        }
+
+        .config-info {
+            flex: 1;
+        }
+
+        .config-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: #333333;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .config-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .config-badge.active {
+            background: #e8f4fd;
+            color: #1c5aa0;
+        }
+
+        .config-details {
+            font-size: 12px;
+            color: #666666;
+            line-height: 1.4;
+        }
+
+        .config-model {
+            color: #333333;
+            font-weight: 500;
+        }
+
+        .config-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .config-action-btn {
+            padding: 6px 12px;
+            border: 1px solid #e8e8e8;
+            background: #ffffff;
+            color: #666666;
+            font-size: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            min-width: 60px;
+            box-sizing: border-box;
+        }
+
+        .config-action-btn:hover {
+            background: #f8f8f8;
+            border-color: #d0d0d0;
+            color: #333333;
+        }
+
+        .config-action-btn.primary {
+            background: #333333;
+            color: #ffffff;
+            border-color: #333333;
+        }
+
+        .config-action-btn.primary:hover {
+            background: #555555;
+            border-color: #555555;
+        }
+
+        .config-action-btn.danger {
+            color: #dc3545;
+            border-color: #dc3545;
+        }
+
+        .config-action-btn.danger:hover {
+            background: #dc3545;
+            color: #ffffff;
+        }
+
+        .config-action-btn.current {
+            background: #e8f4fd;
+            color: #1c5aa0;
+            border-color: #e8f4fd;
+            cursor: default;
+            font-weight: 500;
+        }
+
+        .config-action-btn.current:hover {
+            background: #e8f4fd;
+            color: #1c5aa0;
+            border-color: #e8f4fd;
+        }
+
+
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666666;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            color: #e8e8e8;
+            margin-bottom: 16px;
+        }
+
+        .empty-state-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #333333;
+            margin-bottom: 8px;
+        }
+
+        .empty-state-desc {
+            font-size: 14px;
+            color: #666666;
+            margin-bottom: 20px;
+        }
+
+        .config-management-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 16px;
+        }
+
+        .bulk-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+
+
+        /* 测试状态指示器 */
+        .test-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            margin-top: 4px;
+        }
+
+        .test-status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .test-status.success .test-status-dot {
+            background: #28a745;
+        }
+
+        .test-status.error .test-status-dot {
+            background: #dc3545;
+        }
+
+        .test-status.pending .test-status-dot {
+            background: #ffc107;
+        }
+
+        .test-status.unknown .test-status-dot {
+            background: #6c757d;
+        }
+
+
+    </style>
+</head>
+<body>
+    <!-- 模拟的页面容器 -->
+    <div class="main-container">
+        <div class="page-header">
+            <h1 class="page-title">智能需求分析</h1>
+        </div>
+
+        <!-- 模拟现有的AI配置表单 -->
+        <div class="card">
+            <div class="card-title">AI服务配置</div>
+            <div class="card-subtitle">配置你的AI助手连接设置</div>
+            <div class="card-content">
+                
+                <div class="form-group">
+                    <label class="form-label">配置名称</label>
+                    <input type="text" class="form-input" placeholder="给你的AI配置起个名字，如：我的OpenAI配置">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="form-group">
+                        <label class="form-label">API密钥</label>
+                        <input type="password" class="form-input" placeholder="输入你的API密钥">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">模型名称</label>
+                        <input type="text" class="form-input" placeholder="如: gpt-4o, qwen-vl-max-latest">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">API基础URL</label>
+                    <input type="url" class="form-input" placeholder="如: https://api.openai.com/v1">
+                </div>
+                
+                <div class="flex gap-2">
+                    <button class="btn btn-ghost">测试连接</button>
+                    <button class="btn btn-primary">保存配置</button>
+                </div>
+
+                <!-- 【新增】配置管理部分 -->
+                <div class="config-management-section">
+                    <div class="config-section-title">
+                        <span>⚙️</span>
+                        配置管理
+                    </div>
+
+                    <!-- 配置统计 -->
+                    <div class="config-stats">
+                        <div class="config-stat-item">
+                            总配置: <span class="config-stat-number">3</span>
+                        </div>
+                        <div class="config-stat-item">
+                            已选用: <span class="config-stat-number">1</span>
+                        </div>
+                        <div class="config-stat-item">
+                            当前使用: <span class="config-stat-number">OpenAI GPT-4</span>
+                        </div>
+                    </div>
+
+
+
+
+
+                    <!-- 配置列表 -->
+                    <div class="configs-list">
+                        <!-- 配置项 1 - 当前选用的配置 -->
+                        <div class="config-item active">
+                            <div class="config-info">
+                                <div class="config-name">
+                                    OpenAI GPT-4 配置
+                                    <span class="config-badge active">使用中</span>
+                                </div>
+                                <div class="config-details">
+                                    模型: <span class="config-model">gpt-4o</span> • 
+                                    API: api.openai.com • 
+                                    创建时间: 2024-08-20 10:30
+                                </div>
+                                <div class="test-status success">
+                                    <span class="test-status-dot"></span>
+                                    连接正常 (最后测试: 2分钟前)
+                                </div>
+                            </div>
+                            <div class="config-actions">
+                                <button class="config-action-btn">编辑</button>
+                                <button class="config-action-btn">测试</button>
+                                <span class="config-action-btn current">使用中</span>
+                                <button class="config-action-btn danger">删除</button>
+                            </div>
+                        </div>
+
+                        <!-- 配置项 2 -->
+                        <div class="config-item">
+                            <div class="config-info">
+                                <div class="config-name">阿里云通义千问配置</div>
+                                <div class="config-details">
+                                    模型: <span class="config-model">qwen-vl-max-latest</span> • 
+                                    API: dashscope.aliyuncs.com • 
+                                    创建时间: 2024-08-18 15:45
+                                </div>
+                                <div class="test-status success">
+                                    <span class="test-status-dot"></span>
+                                    连接正常 (最后测试: 1小时前)
+                                </div>
+                            </div>
+                            <div class="config-actions">
+                                <button class="config-action-btn">编辑</button>
+                                <button class="config-action-btn">测试</button>
+                                <button class="config-action-btn primary">选用</button>
+                                <button class="config-action-btn danger">删除</button>
+                            </div>
+                        </div>
+
+                        <!-- 配置项 3 - 有问题的配置 -->
+                        <div class="config-item">
+                            <div class="config-info">
+                                <div class="config-name">本地开发配置</div>
+                                <div class="config-details">
+                                    模型: <span class="config-model">llama-3.1-8b</span> • 
+                                    API: localhost:11434 • 
+                                    创建时间: 2024-08-15 09:20
+                                </div>
+                                <div class="test-status error">
+                                    <span class="test-status-dot"></span>
+                                    连接失败 (最后测试: 30分钟前)
+                                </div>
+                            </div>
+                            <div class="config-actions">
+                                <button class="config-action-btn">编辑</button>
+                                <button class="config-action-btn">测试</button>
+                                <button class="config-action-btn primary">选用</button>
+                                <button class="config-action-btn danger">删除</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 批量操作 -->
+                    <div class="config-management-actions">
+                        <div class="bulk-actions">
+                            <button class="btn btn-small">批量测试</button>
+                        </div>
+                        <div>
+                            <button class="btn btn-small btn-primary">新增配置</button>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+
+        <!-- 显示空状态的示例 -->
+        <div class="card mt-4">
+            <div class="card-title">空状态示例</div>
+            <div class="card-content">
+                <div class="config-management-section">
+                    <div class="config-section-title">
+                        <span>⚙️</span>
+                        配置管理
+                    </div>
+
+                    <div class="configs-list">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">⚙️</div>
+                            <div class="empty-state-title">暂无AI配置</div>
+                            <div class="empty-state-desc">创建你的第一个AI配置来开始使用智能需求分析功能</div>
+                            <button class="btn btn-primary">创建配置</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // 模拟选用配置功能
+        document.querySelectorAll('.config-action-btn.primary').forEach(btn => {
+            btn.addEventListener('click', function() {
+                console.log('选用配置');
+                // 这里可以切换配置状态
+            });
+        });
+    </script>
+</body>
+</html>

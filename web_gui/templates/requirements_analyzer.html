@@ -809,6 +809,8 @@
         min-height: 300px;
     }
 }
+
+
 {% endblock %}
 
 {% block content %}
@@ -905,6 +907,8 @@
                 <button type="submit" class="btn btn-primary">保存配置</button>
             </div>
         </form>
+
+
     </div>
 </div>
 {% endblock %}
@@ -1896,5 +1900,11 @@ function showMessage(message, type) {
         }
     }, 3000);
 }
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', async function() {
+    // 初始化现有功能
+    await initializeAiConfig();
+});
 </script>
 {% endblock %}
