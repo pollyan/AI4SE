@@ -1218,8 +1218,9 @@ npm install
 """
 
 
-# 设置环境变量
-os.environ["VERCEL"] = "1"
+# 设置环境变量 - 只在Vercel环境下设置
+if os.getenv("VERCEL"):
+    os.environ["VERCEL"] = "1"
 
 # 尝试加载API功能
 try:

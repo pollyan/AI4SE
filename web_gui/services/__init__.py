@@ -11,15 +11,13 @@ from .variable_resolver_service import (
 )
 from .ai_service import AIServiceInterface, get_ai_service
 from .execution_service import ExecutionService
-from .websocket_service import WebSocketService
 
 __all__ = [
     "VariableManager",
-    "VariableManagerFactory",
+    "VariableManagerFactory", 
     "get_variable_manager",
     "cleanup_execution_variables",
     "AIServiceInterface",
     "get_ai_service",
     "ExecutionService",
-    "WebSocketService",
 ]

@@ -5,27 +5,29 @@ API测试配置文件
 
 import pytest
 import json
-from web_gui.app_enhanced import create_app
+from api.index import app as main_app
 from web_gui.models import db, TestCase, ExecutionHistory, StepExecution, Template
 
 # 移除单元测试相关导入
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="function") 
 def api_app():
     """创建API测试应用实例"""
-    test_config = {
+    # 配置测试环境
+    main_app.config.update({
         "TESTING": True,
         "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
         "SQLALCHEMY_TRACK_MODIFICATIONS": False,
         "SECRET_KEY": "test-secret-key",
         "WTF_CSRF_ENABLED": False,
-    }
+    })
 
-    app = create_app(test_config=test_config)
-
-    # 确保应用上下文
-    with app.app_context():
+    # 重新初始化数据库以使用新的配置
+    db.init_app(main_app)
+    
+    # 确保应用上下文  
+    with main_app.app_context():
         # 启用SQLite外键约束
         from sqlalchemy import event
         from sqlalchemy.engine import Engine
@@ -39,7 +41,7 @@ def api_app():
         # 创建所有表
         db.create_all()
 
-        yield app
+        yield main_app
 
         # 清理
         db.session.remove()

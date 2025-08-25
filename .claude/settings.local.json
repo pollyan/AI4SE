@@ -47,7 +47,9 @@
       "mcp__playwright__browser_type",
       "mcp__playwright__browser_console_messages",
       "mcp__playwright__browser_hover",
-      "mcp__playwright__browser_navigate_back"
+      "mcp__playwright__browser_navigate_back",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_select_option"
     ],
     "deny": []
   }
