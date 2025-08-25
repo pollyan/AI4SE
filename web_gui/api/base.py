@@ -117,3 +117,55 @@ def log_api_call(f):
             raise
 
     return wrapper
+
+
+def register_blueprints(app):
+    """注册所有API蓝图"""
+    try:
+        # 导入并注册各个API蓝图
+        from .health import health_bp
+        from .testcases import testcases_bp
+        from .executions import executions_bp
+        from .dashboard import dashboard_bp
+        from .statistics import statistics_bp
+        from .ai_configs import ai_configs_bp
+        from .requirements import requirements_bp
+        
+        # 注册蓝图
+        app.register_blueprint(health_bp, url_prefix="/api")
+        app.register_blueprint(testcases_bp, url_prefix="/api")
+        app.register_blueprint(executions_bp, url_prefix="/api")
+        app.register_blueprint(dashboard_bp, url_prefix="/api")
+        app.register_blueprint(statistics_bp, url_prefix="/api")
+        app.register_blueprint(ai_configs_bp, url_prefix="/api")
+        app.register_blueprint(requirements_bp, url_prefix="/api")
+        
+        logger.info("✅ 所有API蓝图注册成功")
+        
+    except ImportError as e:
+        logger.warning(f"⚠️ 部分API蓝图导入失败: {e}")
+        # 至少注册基本的健康检查
+        try:
+            from .health import health_bp
+            app.register_blueprint(health_bp, url_prefix="/api")
+            logger.info("✅ 基础健康检查API注册成功")
+        except ImportError:
+            logger.error("❌ 无法注册任何API蓝图")
+    
+    except Exception as e:
+        logger.error(f"❌ 蓝图注册失败: {e}")
+        
+    # 注册基本路由
+    @app.route("/")
+    def index():
+        """主页路由"""
+        try:
+            from flask import render_template
+            return render_template("index.html")
+        except:
+            return {"message": "AI4SE工具集", "status": "running"}
+            
+    @app.route("/health")
+    def health_check():
+        """健康检查路由"""
+        return {"status": "ok", "message": "Flask app is running"}
