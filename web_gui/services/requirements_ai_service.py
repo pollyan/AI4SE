@@ -172,9 +172,12 @@ class RequirementsAIService:
                     elif msg.message_type == 'ai':
                         messages.append({"role": "assistant", "content": msg.content})
             
-            # 如果没有系统消息，直接使用Alex persona
+            # 如果没有系统消息，使用带激活前缀的Alex persona
             if not any(msg["role"] == "system" for msg in messages):
-                messages.insert(0, {"role": "system", "content": self.alex_persona})
+                full_system_prompt = f"""你的关键操作指令已附在下方，请严格按照指令中的persona执行，不要打破角色设定。
+
+{self.alex_persona}"""
+                messages.insert(0, {"role": "system", "content": full_system_prompt})
             
             # 检查当前用户消息是否已经是最后一条消息
             # 如果不是，说明需要添加（例如首次对话或者其他情况）

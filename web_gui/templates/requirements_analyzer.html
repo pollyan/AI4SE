@@ -9,16 +9,18 @@
     grid-template-columns: repeat(5, 1fr); 
 }
 
-/* 桌面端主布局：左右分栏，充满屏幕 */
+/* 桌面端主布局：左右分栏，动态响应窗口大小 */
 .desktop-layout {
+    --dynamic-height: calc(100vh - 180px);
     display: flex;
     flex-direction: row;
     gap: 20px;
-    height: calc(100vh - 180px); /* 减去导航栏(64px)和标题栏(约116px)的高度 */
+    height: var(--dynamic-height);
     padding: 0 20px 20px 20px; /* 顶部无padding，左右下有padding */
     box-sizing: border-box;
     width: 100vw; /* 横向充满屏幕 */
     margin-left: calc(50% - 50vw); /* 突破容器宽度限制 */
+    overflow: hidden; /* 防止内容溢出 */
 }
 
 /* 左侧对话面板 - 辅助区域 */
@@ -1165,6 +1167,9 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('已设置axios全局超时为3分钟');
     }
     
+    // 初始化响应式布局
+    initializeResponsiveLayout();
+    
     initializeWebSocket();
     initializeUI();
     initializeAiConfig();
@@ -1356,6 +1361,39 @@ function updateSendButtonState() {
     } else {
         sendBtn.title = '发送消息';
     }
+}
+
+// 初始化响应式布局
+function initializeResponsiveLayout() {
+    // 计算并设置动态高度
+    function updateLayoutHeight() {
+        const navHeight = document.querySelector('.navbar')?.offsetHeight || 64;
+        const titleHeight = document.querySelector('.container h1')?.offsetHeight || 40;
+        const additionalSpace = 76; // 其他间距和padding
+        const availableHeight = window.innerHeight - navHeight - titleHeight - additionalSpace;
+        
+        // 更新CSS变量
+        document.documentElement.style.setProperty('--dynamic-height', `${availableHeight}px`);
+        
+        console.log(`响应式布局更新: 窗口=${window.innerHeight}px, 导航=${navHeight}px, 标题=${titleHeight}px, 可用=${availableHeight}px`);
+    }
+    
+    // 初始化设置
+    updateLayoutHeight();
+    
+    // 监听窗口大小变化
+    window.addEventListener('resize', function() {
+        // 使用防抖，避免频繁更新
+        clearTimeout(window.resizeTimeout);
+        window.resizeTimeout = setTimeout(updateLayoutHeight, 100);
+    });
+    
+    // 监听设备方向变化（移动设备）
+    window.addEventListener('orientationchange', function() {
+        setTimeout(updateLayoutHeight, 200); // 方向变化后稍微延迟，等待布局稳定
+    });
+    
+    console.log('✅ 响应式布局初始化完成');
 }
 
 // 初始化UI事件
