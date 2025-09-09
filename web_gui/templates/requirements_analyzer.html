@@ -9,14 +9,16 @@
     grid-template-columns: repeat(5, 1fr); 
 }
 
-/* 桌面端主布局：左右分栏 */
+/* 桌面端主布局：左右分栏，充满屏幕 */
 .desktop-layout {
     display: flex;
     flex-direction: row;
     gap: 20px;
-    height: calc(100vh - 140px); /* 最大化可用高度 */
-    padding: 16px;
+    height: calc(100vh - 180px); /* 减去导航栏(64px)和标题栏(约116px)的高度 */
+    padding: 0 20px 20px 20px; /* 顶部无padding，左右下有padding */
     box-sizing: border-box;
+    width: 100vw; /* 横向充满屏幕 */
+    margin-left: calc(50% - 50vw); /* 突破容器宽度限制 */
 }
 
 /* 左侧对话面板 - 辅助区域 */
@@ -24,8 +26,8 @@
     flex: 0 0 35%; /* 固定35%宽度 */
     display: flex;
     flex-direction: column;
-    min-width: 400px; /* 最小宽度确保可用性 */
-    max-width: 500px; /* 最大宽度避免过宽 */
+    min-width: 350px; /* 减小最小宽度以适应更多分辨率 */
+    max-width: none; /* 移除最大宽度限制 */
 }
 
 /* 右侧分析面板 - 主要区域 */
@@ -33,7 +35,7 @@
     flex: 1; /* 占据剩余所有空间 */
     display: flex;
     flex-direction: column;
-    min-width: 600px; /* 确保分析成果有足够显示空间 */
+    min-width: 500px; /* 减小最小宽度以适应更多分辨率 */
 }
 
 .chat-container {
@@ -991,6 +993,46 @@
 .analysis-results-content h3 {
     font-size: 16px;
     padding: 10px 14px;
+}
+
+/* 响应式布局调整 - 确保在不同分辨率下都能正常显示 */
+@media (max-width: 1200px) {
+    .chat-panel {
+        min-width: 300px;
+        flex: 0 0 40%; /* 小屏时增加对话区域比例 */
+    }
+    
+    .analysis-panel {
+        min-width: 400px;
+    }
+}
+
+@media (max-width: 900px) {
+    .desktop-layout {
+        flex-direction: column; /* 超小屏时垂直排列 */
+        height: auto;
+        gap: 16px;
+    }
+    
+    .chat-panel,
+    .analysis-panel {
+        flex: none;
+        min-width: auto;
+        max-width: none;
+    }
+    
+    .chat-container,
+    .consensus-container {
+        height: 50vh; /* 垂直排列时各占一半屏幕高度 */
+    }
+}
+
+/* 高分辨率优化 */
+@media (min-width: 1920px) {
+    .desktop-layout {
+        gap: 30px;
+        padding: 0 40px 40px 40px;
+    }
 }
 
 
