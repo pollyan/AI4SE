@@ -837,6 +837,172 @@
     }
 }
 
+/* ================================
+   分析成果区域专用样式
+   ================================ */
+.analysis-results-content {
+    line-height: 1.6;
+    color: #333333;
+    font-size: 14px;
+}
+
+.analysis-results-content h1,
+.analysis-results-content h2,
+.analysis-results-content h3,
+.analysis-results-content h4 {
+    color: #2c3e50;
+    margin: 16px 0 12px 0;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.analysis-results-content h1 {
+    font-size: 18px;
+    text-align: center;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 6px;
+    border-left: 4px solid #007bff;
+    margin-bottom: 20px;
+}
+
+.analysis-results-content h2 {
+    font-size: 16px;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-left: 4px solid #28a745;
+    border-radius: 0 4px 4px 0;
+    margin-bottom: 16px;
+}
+
+.analysis-results-content h3 {
+    font-size: 15px;
+    padding: 6px 10px;
+    background: #f9f9f9;
+    border-left: 3px solid #17a2b8;
+    border-radius: 0 3px 3px 0;
+    margin-bottom: 12px;
+}
+
+.analysis-results-content ul,
+.analysis-results-content ol {
+    margin: 12px 0;
+    padding-left: 20px;
+}
+
+.analysis-results-content li {
+    margin: 6px 0;
+    line-height: 1.5;
+    color: #444444;
+}
+
+.analysis-results-content strong {
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+.analysis-results-content em {
+    color: #666666;
+    font-style: italic;
+}
+
+.analysis-results-content code {
+    background: #f1f3f4;
+    color: #d73a49;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: 'Monaco', 'Consolas', monospace;
+    font-size: 13px;
+}
+
+.analysis-results-content blockquote {
+    border-left: 4px solid #007bff;
+    margin: 16px 0;
+    padding: 12px 16px;
+    background: #f8f9fa;
+    color: #555555;
+    font-style: italic;
+    border-radius: 0 4px 4px 0;
+}
+
+.analysis-results-content pre {
+    background: #f6f8fa;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 12px;
+    margin: 12px 0;
+    overflow-x: auto;
+    font-family: 'Monaco', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.analysis-results-content pre code {
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    color: inherit;
+}
+
+/* 分析成果进度指示 */
+.analysis-results-content .current-phase {
+    background: #e3f2fd;
+    border: 1px solid #bbdefb;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 16px 0;
+    text-align: center;
+    font-weight: 500;
+    color: #1565c0;
+}
+
+/* 分析成果状态标签 */
+.analysis-results-content .stage-completed {
+    display: inline-block;
+    background: #d4edda;
+    color: #155724;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-right: 8px;
+    margin-bottom: 4px;
+}
+
+.analysis-results-content .stage-in-progress {
+    display: inline-block;
+    background: #fff3cd;
+    color: #856404;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-right: 8px;
+    margin-bottom: 4px;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .analysis-results-content {
+        font-size: 13px;
+    }
+    
+    .analysis-results-content h1 {
+        font-size: 16px;
+        padding: 10px 12px;
+    }
+    
+    .analysis-results-content h2 {
+        font-size: 15px;
+        padding: 6px 10px;
+    }
+    
+    .analysis-results-content h3 {
+        font-size: 14px;
+        padding: 4px 8px;
+    }
+}
+
 /* 大屏幕通用优化 */
 @media (min-width: 769px) {
     .chat-container {
@@ -1526,10 +1692,22 @@ function displayMessage(message) {
     const avatar = message.message_type === 'user' ? '你' : 'AI';
     const time = new Date(message.created_at).toLocaleTimeString();
     
-    // AI消息使用Markdown渲染，用户消息使用普通HTML转义
-    const contentHtml = message.message_type === 'ai' || message.message_type === 'assistant' 
-        ? parseMarkdown(message.content) 
-        : escapeHtml(message.content);
+    // AI消息处理：提取进展内容并渲染，用户消息使用普通HTML转义
+    let contentHtml;
+    if (message.message_type === 'ai' || message.message_type === 'assistant') {
+        // 从AI消息中提取进展总结内容
+        const extracted = extractProgressContent(message.content);
+        
+        // 如果有进展内容，更新分析成果区域
+        if (extracted.hasProgress) {
+            updateAnalysisResults(extracted.progressContent);
+        }
+        
+        // 使用清理后的内容进行markdown解析和显示
+        contentHtml = parseMarkdown(extracted.cleanedContent);
+    } else {
+        contentHtml = escapeHtml(message.content);
+    }
     
     // 为AI消息添加刷新按钮
     const refreshButton = (message.message_type === 'ai' || message.message_type === 'assistant') 
@@ -1870,6 +2048,76 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ================================
+// 分析成果相关函数
+// ================================
+
+/**
+ * 从AI消息中提取进展总结内容
+ * @param {string} content - AI消息原始内容
+ * @returns {Object} {hasProgress: boolean, progressContent: string, cleanedContent: string}
+ */
+function extractProgressContent(content) {
+    const startMarker = '=== REQUIREMENTS_PROGRESS_START ===';
+    const endMarker = '=== REQUIREMENTS_PROGRESS_END ===';
+    
+    const startIndex = content.indexOf(startMarker);
+    const endIndex = content.indexOf(endMarker);
+    
+    if (startIndex !== -1 && endIndex !== -1) {
+        // 提取进展内容（去掉标记）
+        const progressContent = content.substring(
+            startIndex + startMarker.length, 
+            endIndex
+        ).trim();
+        
+        // 清理后的对话内容（移除整个进展块）
+        const cleanedContent = content.substring(0, startIndex) + 
+                              content.substring(endIndex + endMarker.length);
+        
+        return {
+            hasProgress: true,
+            progressContent,
+            cleanedContent: cleanedContent.trim()
+        };
+    }
+    
+    return {
+        hasProgress: false,
+        progressContent: '',
+        cleanedContent: content
+    };
+}
+
+/**
+ * 将进展markdown内容渲染到分析成果区域
+ * @param {string} progressMarkdown - 进展总结的markdown内容
+ */
+function updateAnalysisResults(progressMarkdown) {
+    const consensusContent = document.getElementById('consensusContent');
+    
+    if (!progressMarkdown) {
+        consensusContent.innerHTML = `
+            <div class="empty-state">
+                开始对话后，这里将显示AI分析的需求要点和共识内容
+            </div>
+        `;
+        return;
+    }
+    
+    // 使用现有的parseMarkdown函数处理内容
+    const htmlContent = parseMarkdown(progressMarkdown);
+    
+    // 应用分析成果专用的CSS类
+    consensusContent.innerHTML = `
+        <div class="analysis-results-content">
+            ${htmlContent}
+        </div>
+    `;
+    
+    console.log('分析成果已更新:', progressMarkdown.substring(0, 100) + '...');
 }
 
 // 增强的Markdown解析函数，结合marked.js和Alex特殊格式
