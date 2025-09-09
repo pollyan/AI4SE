@@ -237,11 +237,7 @@ class TestRequirementsAPI:
         assert_api_response(response, 404)
 
     # test_get_welcome_message_ai_unavailable 已删除 - AI欢迎消息生成需要真实的API密钥，无法在单元测试中验证
-    
-    def test_get_welcome_message_not_found(self, api_client, assert_api_response):
-        """测试获取不存在会话的欢迎消息"""
-        response = api_client.get('/api/requirements/sessions/nonexistent-id/welcome')
-        assert_api_response(response, 404)
+    # test_get_welcome_message_not_found 已删除 - 欢迎消息端点已移除，改为由AI服务处理
 
     def test_session_model_methods(self, api_app, create_test_requirements_session):
         """测试RequirementsSession模型方法"""
