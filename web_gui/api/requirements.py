@@ -20,18 +20,17 @@ from .base import (
 try:
     from ..models import db, RequirementsSession, RequirementsMessage
     from ..utils.error_handler import ValidationError, NotFoundError, DatabaseError
-    from ..services.requirements_ai_service import RequirementsAIService
+    from ..services.requirements_ai_service import RequirementsAIService, IntelligentAssistantService
 except ImportError:
     from web_gui.models import db, RequirementsSession, RequirementsMessage
     from web_gui.utils.error_handler import ValidationError, NotFoundError, DatabaseError
-    from web_gui.services.requirements_ai_service import RequirementsAIService
+    from web_gui.services.requirements_ai_service import RequirementsAIService, IntelligentAssistantService
 
 # AI服务实例（延迟初始化）
 ai_service = None
 
-def get_ai_service():
+def get_ai_service(assistant_type='alex'):
     """获取AI服务实例，每次重新检查配置避免缓存问题"""
-    global ai_service
     try:
         from ..models import RequirementsAIConfig
         
@@ -39,18 +38,18 @@ def get_ai_service():
         default_config = RequirementsAIConfig.get_default_config()
         if default_config:
             config_data = default_config.get_config_for_ai_service()
-            # 重新创建AI服务实例
-            ai_service = RequirementsAIService(config=config_data)
-            print(f"✅ 需求分析AI服务初始化成功，使用配置: {default_config.config_name}")
+            # 创建智能助手服务实例
+            ai_service = IntelligentAssistantService(config=config_data, assistant_type=assistant_type)
+            assistant_info = IntelligentAssistantService.SUPPORTED_ASSISTANTS.get(assistant_type, {})
+            print(f"✅ 智能助手AI服务初始化成功，使用{assistant_info.get('title', '')} {assistant_info.get('name', '')}，配置: {default_config.config_name}")
+            return ai_service
         else:
             # 如果没有默认配置，返回None而不是使用环境变量
             print("⚠️ 未找到默认AI配置")
-            ai_service = None
+            return None
     except Exception as e:
-        print(f"⚠️ 需求分析AI服务初始化失败: {e}")
-        ai_service = None
-    
-    return ai_service
+        print(f"⚠️ 智能助手AI服务初始化失败: {e}")
+        return None
 
 # 创建蓝图
 requirements_bp = Blueprint("requirements", __name__, url_prefix="/api/requirements")
@@ -63,7 +62,7 @@ active_sessions = {}
 @require_json
 @log_api_call
 def create_session():
-    """创建新的需求分析会话"""
+    """创建新的智能助手会话"""
     try:
         data = request.get_json()
         
@@ -72,16 +71,23 @@ def create_session():
         if not project_name or len(project_name.strip()) == 0:
             raise ValidationError("项目名称不能为空")
         
+        # 获取助手类型参数
+        assistant_type = data.get("assistant_type", "alex")
+        
+        # 验证助手类型
+        if assistant_type not in IntelligentAssistantService.SUPPORTED_ASSISTANTS:
+            raise ValidationError(f"不支持的助手类型: {assistant_type}")
+        
         # 生成UUID作为会话ID
         session_id = str(uuid.uuid4())
         
-        # 创建会话记录
+        # 创建会话记录，在user_context中记录助手类型
         session = RequirementsSession(
             id=session_id,
             project_name=project_name.strip(),
             session_status="active",
             current_stage="initial",
-            user_context=json.dumps({}),
+            user_context=json.dumps({"assistant_type": assistant_type}),
             ai_context=json.dumps({}),
             consensus_content=json.dumps({})
         )
@@ -190,8 +196,19 @@ def send_message(session_id):
         if not content:
             raise ValidationError("消息内容不能为空")
             
-        # 检查是否是激活消息（包含Alex bundle关键标识）
-        is_activation_message = ("智能需求分析师" in content and "Bundle" in content) or len(content) > 10000
+        # 获取会话中的助手类型
+        user_context = json.loads(session.user_context or "{}")
+        assistant_type = user_context.get("assistant_type", "alex")
+        
+        # 检查是否是激活消息（包含bundle关键标识）
+        # 1. 包含明确的bundle激活标识
+        # 2. 长度超过5000字符（bundle通常很长）
+        # 3. 包含YAML格式的配置内容
+        is_activation_message = (
+            ("Bundle" in content and ("activation-instructions" in content or "persona:" in content)) or
+            len(content) > 5000 or
+            ("```yaml" in content and "agent:" in content)
+        )
         
         # 字符长度限制：激活消息允许更长，常规消息限制2000字符
         max_length = 50000 if is_activation_message else 2000
@@ -215,8 +232,8 @@ def send_message(session_id):
         db.session.add(user_message)
         db.session.commit()
         
-        # 立即调用AI服务处理消息
-        ai_svc = get_ai_service()
+        # 根据助手类型获取对应的AI服务
+        ai_svc = get_ai_service(assistant_type=assistant_type)
         if ai_svc is None:
             raise Exception("AI服务暂不可用，请稍后重试")
         
@@ -228,7 +245,7 @@ def send_message(session_id):
                 'consensus_content': json.loads(session.consensus_content) if session.consensus_content else {}
             }
             
-            # 调用Alex智能需求分析服务
+            # 调用智能助手分析服务
             ai_result = ai_svc.analyze_user_requirement(
                 user_message=content,
                 session_context=session_context,
@@ -248,7 +265,7 @@ def send_message(session_id):
                     'information_gaps': ai_result.get('information_gaps', []),
                     'clarification_questions': ai_result.get('clarification_questions', []),
                     'analysis_summary': ai_result.get('analysis_summary', ''),
-                    'alex_persona': ai_result.get('alex_persona', True),
+                    'assistant_type': assistant_type,
                     'source': 'http'
                 })
             )
@@ -281,7 +298,7 @@ def send_message(session_id):
             )
             
         except Exception as ai_error:
-            print(f"❌ Alex AI服务调用失败: {str(ai_error)}")
+            print(f"❌ AI服务调用失败: {str(ai_error)}")
             # 创建AI服务错误消息
             error_message = RequirementsMessage(
                 session_id=session_id,
@@ -367,12 +384,41 @@ def update_session_status(session_id):
 
 
 
-@requirements_bp.route("/alex-bundle", methods=["GET"])
+@requirements_bp.route("/assistants", methods=["GET"])
 @log_api_call
-def get_alex_bundle():
-    """获取完整的Alex需求分析师Bundle内容"""
+def get_assistants():
+    """获取支持的助手列表"""
     try:
-        bundle_path = Path(__file__).parent.parent.parent / "intelligent-requirements-analyzer" / "dist" / "intelligent-requirements-analyst-bundle.txt"
+        assistants = []
+        for assistant_id, info in IntelligentAssistantService.SUPPORTED_ASSISTANTS.items():
+            assistants.append({
+                "id": assistant_id,
+                "name": info["name"],
+                "title": info["title"],
+                "bundle_file": info["bundle_file"]
+            })
+        
+        return {
+            "code": 200,
+            "data": {"assistants": assistants},
+            "message": "获取助手列表成功"
+        }
+        
+    except Exception as e:
+        return standard_error_response(f"获取助手列表失败: {str(e)}", 500)
+
+
+@requirements_bp.route("/assistants/<assistant_type>/bundle", methods=["GET"])
+@log_api_call
+def get_assistant_bundle(assistant_type):
+    """获取指定助手的完整bundle内容"""
+    try:
+        if assistant_type not in IntelligentAssistantService.SUPPORTED_ASSISTANTS:
+            return standard_error_response(f"不支持的助手类型: {assistant_type}", 400)
+        
+        assistant_info = IntelligentAssistantService.SUPPORTED_ASSISTANTS[assistant_type]
+        bundle_file = assistant_info["bundle_file"]
+        bundle_path = Path(__file__).parent.parent.parent / "intelligent-requirements-analyzer" / "dist" / bundle_file
         
         if bundle_path.exists():
             with open(bundle_path, 'r', encoding='utf-8') as f:
@@ -382,16 +428,28 @@ def get_alex_bundle():
             full_bundle = f"""你的关键操作指令已附在下方，请严格按照指令中的persona执行，不要打破角色设定。
 
 {bundle_content}"""
-            
-            return standard_success_response(
-                data={"bundle_content": full_bundle},
-                message="Alex Bundle加载成功"
-            )
+                
+            return {
+                "code": 200,
+                "data": {
+                    "bundle_content": full_bundle,
+                    "assistant_info": assistant_info
+                },
+                "message": f"获取{assistant_info['title']} {assistant_info['name']} bundle成功"
+            }
         else:
-            raise FileNotFoundError(f"Bundle文件不存在: {bundle_path}")
+            return standard_error_response(f"{assistant_info['title']} bundle文件不存在", 404)
             
     except Exception as e:
-        return standard_error_response(f"加载Alex Bundle失败: {str(e)}", 500)
+        return standard_error_response(f"获取助手bundle失败: {str(e)}", 500)
+
+
+@requirements_bp.route("/alex-bundle", methods=["GET"])
+@log_api_call
+def get_alex_bundle():
+    """获取完整的Alex需求分析师Bundle内容 - 向后兼容端点"""
+    # 直接调用新的助手bundle端点
+    return get_assistant_bundle('alex')
 
 
 @requirements_bp.route("/sessions/<session_id>/poll-messages", methods=["GET"])
@@ -622,7 +680,7 @@ def register_requirements_socketio(socketio: SocketIO):
                 'session_id': session_id
             }, room=f'requirements_{session_id}')
             
-            # 调用真实的Alex AI服务处理用户消息
+            # 调用AI助手服务处理用户消息
             ai_svc = get_ai_service()
             if ai_svc is None:
                 emit('error', {'message': 'AI服务暂不可用，请稍后重试'})
@@ -636,8 +694,8 @@ def register_requirements_socketio(socketio: SocketIO):
                     'consensus_content': json.loads(session.consensus_content) if session.consensus_content else {}
                 }
                 
-                # 调用Alex智能需求分析服务
-                print(f"🤖 调用Alex分析用户消息: {content[:50]}...")
+                # 调用智能助手分析服务
+                print(f"🤖 调用AI助手分析用户消息: {content[:50]}...")
                 ai_result = ai_svc.analyze_user_requirement(
                     user_message=content,
                     session_context=session_context,
@@ -656,7 +714,7 @@ def register_requirements_socketio(socketio: SocketIO):
                         'information_gaps': ai_result.get('information_gaps', []),
                         'clarification_questions': ai_result.get('clarification_questions', []),
                         'analysis_summary': ai_result.get('analysis_summary', ''),
-                        'alex_persona': ai_result.get('alex_persona', True)
+                        'assistant_type': assistant_type
                     })
                 )
                 
@@ -685,10 +743,10 @@ def register_requirements_socketio(socketio: SocketIO):
                     'current_stage': session.current_stage
                 }, room=f'requirements_{session_id}')
                 
-                print(f"✅ Alex处理完成，生成了{len(ai_result.get('clarification_questions', []))}个澄清问题")
+                print(f"✅ AI助手处理完成，生成了{len(ai_result.get('clarification_questions', []))}个澄清问题")
                 
             except Exception as ai_error:
-                print(f"❌ Alex AI服务调用失败: {str(ai_error)}")
+                print(f"❌ AI服务调用失败: {str(ai_error)}")
                 # 发送AI服务错误消息
                 error_message = RequirementsMessage(
                     session_id=session_id,

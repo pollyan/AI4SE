@@ -1,6 +1,6 @@
 """
-需求分析AI服务
-基于已有的智能需求分析师Alex，使用完整的BMAD架构persona
+智能助手AI服务
+支持多种AI助手类型：需求分析师Alex、测试分析师Song等
 """
 
 import os
@@ -13,16 +13,38 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-class RequirementsAIService:
-    """需求分析AI服务 - 使用智能需求分析师Alex persona，完全基于真实AI模型"""
+class IntelligentAssistantService:
+    """智能助手AI服务 - 支持多种助手类型的统一服务"""
 
-    def __init__(self, config=None):
+    # 支持的助手类型
+    SUPPORTED_ASSISTANTS = {
+        'alex': {
+            'name': 'Alex Chen',
+            'title': '需求分析师',
+            'bundle_file': 'intelligent-requirements-analyst-bundle.txt'
+        },
+        'song': {
+            'name': 'Song Liu', 
+            'title': '测试分析师',
+            'bundle_file': 'testmaster-song-bundle.txt'
+        }
+    }
+
+    def __init__(self, config=None, assistant_type='alex'):
         """
-        初始化需求分析AI服务
+        初始化智能助手AI服务
         
         Args:
             config: 可选的AI配置字典，如果不提供则使用环境变量或默认配置
+            assistant_type: 助手类型，默认为'alex'（需求分析师）
         """
+        self.assistant_type = assistant_type
+        
+        if assistant_type not in self.SUPPORTED_ASSISTANTS:
+            raise ValueError(f"不支持的助手类型: {assistant_type}。支持的类型: {list(self.SUPPORTED_ASSISTANTS.keys())}")
+        
+        self.assistant_info = self.SUPPORTED_ASSISTANTS[assistant_type]
+        
         if config:
             # 使用传入的配置
             self.api_key = config.get("api_key")
@@ -35,10 +57,10 @@ class RequirementsAIService:
         if not self.api_key:
             raise ValueError("缺少AI服务配置，请配置API密钥")
             
-        # 加载智能需求分析师Alex的完整persona
-        self.alex_persona = self._load_alex_persona()
+        # 加载指定助手的完整persona
+        self.assistant_persona = self._load_assistant_persona()
         
-        logger.info(f"需求分析AI服务初始化完成，使用智能需求分析师Alex persona，模型: {self.model_name}")
+        logger.info(f"智能助手AI服务初始化完成，使用{self.assistant_info['title']}{self.assistant_info['name']}，模型: {self.model_name}")
     
     def _load_config_from_db(self):
         """从数据库加载默认AI配置，如果失败则使用环境变量"""
@@ -71,28 +93,30 @@ class RequirementsAIService:
                 os.getenv("MIDSCENE_MODEL_NAME", "qwen-vl-max-latest")
             )
 
-    def _load_alex_persona(self) -> str:
-        """加载智能需求分析师Alex的完整persona和指令"""
+    def _load_assistant_persona(self) -> str:
+        """加载指定助手的完整persona和指令"""
         try:
-            # 读取完整的智能需求分析师bundle
-            bundle_path = Path(__file__).parent.parent.parent / "intelligent-requirements-analyzer" / "dist" / "intelligent-requirements-analyst-bundle.txt"
+            # 读取指定助手的bundle文件
+            bundle_file = self.assistant_info['bundle_file']
+            bundle_path = Path(__file__).parent.parent.parent / "intelligent-requirements-analyzer" / "dist" / bundle_file
             
             if bundle_path.exists():
                 with open(bundle_path, 'r', encoding='utf-8') as f:
-                    alex_content = f.read()
-                logger.info("成功加载智能需求分析师Alex的完整persona")
-                return alex_content
+                    persona_content = f.read()
+                logger.info(f"成功加载{self.assistant_info['title']}{self.assistant_info['name']}的完整persona")
+                return persona_content
             else:
-                logger.warning(f"未找到Alex persona文件: {bundle_path}")
+                logger.warning(f"未找到{self.assistant_info['title']}persona文件: {bundle_path}")
                 return self._get_fallback_persona()
                 
         except Exception as e:
-            logger.error(f"加载Alex persona失败: {e}")
+            logger.error(f"加载{self.assistant_info['title']}persona失败: {e}")
             return self._get_fallback_persona()
 
     def _get_fallback_persona(self) -> str:
         """获取备用的基础persona"""
-        return """你是AI需求分析师Alex，专门帮助用户澄清和完善项目需求。
+        if self.assistant_type == 'alex':
+            return """你是AI需求分析师Alex，专门帮助用户澄清和完善项目需求。
         
 你的职责：
 1. 理解用户需求，识别信息缺口
@@ -101,6 +125,20 @@ class RequirementsAIService:
 4. 生成结构化的共识内容
 
 请始终以专业、友好的方式与用户交互。"""
+        
+        elif self.assistant_type == 'song':
+            return """你是AI测试分析师Song，专门帮助用户进行测试策略分析和测试用例设计。
+
+你的职责：
+1. 分析功能需求，确定测试范围
+2. 设计测试策略和优先级
+3. 生成具体的测试用例
+4. 输出完整的测试计划文档
+
+请始终以专业、友好的方式与用户交互。"""
+        
+        else:
+            return f"""你是AI智能助手{self.assistant_info['name']}，请协助用户完成相关工作。"""
 
     def analyze_user_requirement(self, 
                                 user_message: str, 
@@ -164,19 +202,21 @@ class RequirementsAIService:
                 for msg in history_messages:
                     if msg.message_type == 'system' and "智能需求分析师" in msg.content:
                         # 激活消息作为系统提示词
-                        alex_system_prompt = "你是Alex，智能需求分析师。请严格按照之前加载的指令和身份执行任务。保持专业的Alex身份，使用之前定义的命令和功能来帮助用户。"
-                        messages.append({"role": "system", "content": alex_system_prompt})
+                        assistant_name = self.assistant_info['name']
+                        assistant_title = self.assistant_info['title']
+                        system_prompt = f"你是{assistant_name}，{assistant_title}。请严格按照之前加载的指令和身份执行任务。保持专业的{assistant_name}身份，使用之前定义的命令和功能来帮助用户。"
+                        messages.append({"role": "system", "content": system_prompt})
                         messages.append({"role": "user", "content": msg.content})
                     elif msg.message_type == 'user':
                         messages.append({"role": "user", "content": msg.content})
                     elif msg.message_type == 'ai':
                         messages.append({"role": "assistant", "content": msg.content})
             
-            # 如果没有系统消息，使用带激活前缀的Alex persona
+            # 如果没有系统消息，使用带激活前缀的assistant persona
             if not any(msg["role"] == "system" for msg in messages):
                 full_system_prompt = f"""你的关键操作指令已附在下方，请严格按照指令中的persona执行，不要打破角色设定。
 
-{self.alex_persona}"""
+{self.assistant_persona}"""
                 messages.insert(0, {"role": "system", "content": full_system_prompt})
             
             # 检查当前用户消息是否已经是最后一条消息
@@ -260,6 +300,10 @@ class RequirementsAIService:
         except Exception as e:
             logger.error(f"调用AI模型失败: {str(e)}")
             raise
+
+
+# 为了保持导入兼容，创建别名
+RequirementsAIService = IntelligentAssistantService
 
 
 
