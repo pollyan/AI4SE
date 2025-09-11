@@ -1663,9 +1663,11 @@ function updateSendButtonState() {
                 switchBtn.title = '正在对话中，请稍后...';
             }
             switchBtn.style.opacity = '0.6';
+            switchBtn.style.pointerEvents = 'none'; // 确保禁用时不可点击
         } else {
             switchBtn.title = '切换到其他助手';
             switchBtn.style.opacity = '1';
+            switchBtn.style.pointerEvents = 'auto'; // 恢复点击
         }
     }
 }
@@ -1829,16 +1831,60 @@ function renderAssistantSelector() {
 
 // 选择助手
 async function selectAssistant(assistant) {
-    // 清除保存的切换状态（因为已经选择新助手）
-    savedSwitchState = null;
+    console.log('选择助手:', assistant.name);
     
+    // 如果是在切换状态中，需要清空当前对话记录
+    if (savedSwitchState) {
+        console.log('正在切换助手，清空对话记录');
+        // 清空消息区域
+        const messagesArea = document.getElementById('messagesArea');
+        const messages = messagesArea.querySelectorAll('.message');
+        messages.forEach(msg => msg.remove());
+        
+        // 重置右侧面板内容
+        const consensusContent = document.getElementById('consensusContent');
+        if (consensusContent) {
+            consensusContent.innerHTML = `
+                <div class="empty-state">
+                    开始与AI助手对话后，这里将实时显示结构化的分析成果
+                </div>
+            `;
+        }
+        
+        // 恢复选择器原始内容
+        const assistantSelector = document.getElementById('assistantSelector');
+        const selectorContent = assistantSelector.querySelector('.selector-content');
+        if (assistantSelector.dataset.originalContent) {
+            selectorContent.innerHTML = assistantSelector.dataset.originalContent;
+        }
+        
+        // 清除保存的切换状态
+        savedSwitchState = null;
+    }
+    
+    // 重置状态
     currentAssistant = assistant;
+    currentSessionId = null; // 重要：重置会话ID，创建新会话
+    isAIAssistantInitialized = false; // 重置初始化状态
     connectionRetryCount = 0; // 重置重试次数
     
-    // 更新UI
-    document.getElementById('chatTitle').textContent = `与${assistant.title}${assistant.name}对话`;
-    document.getElementById('assistantSwitchBtn').style.display = 'inline-block';
-    document.getElementById('thinkingText').textContent = `${assistant.name}正在处理您的请求`;
+    // 更新UI（加防空判断，避免元素不存在时报错）
+    const chatTitleEl = document.getElementById('chatTitle');
+    if (chatTitleEl) {
+        chatTitleEl.textContent = `与${assistant.title}${assistant.name}对话`;
+    } else {
+        console.warn('chatTitle 元素未找到');
+    }
+    const switchBtnEl = document.getElementById('assistantSwitchBtn');
+    if (switchBtnEl) {
+        switchBtnEl.style.display = 'inline-block';
+    }
+    const thinkingTextEl = document.getElementById('thinkingText');
+    if (thinkingTextEl) {
+        thinkingTextEl.textContent = `${assistant.name}正在处理您的请求`;
+    } else {
+        console.warn('thinkingText 元素未找到');
+    }
     
     // 更新右侧分析面板标题
     const consensusTitle = document.querySelector('.consensus-title');
@@ -1852,27 +1898,42 @@ async function selectAssistant(assistant) {
         }
     }
     
+    console.log('开始初始化新助手...');
+    
     // 隐藏选择器，显示聊天界面
-    document.getElementById('assistantSelector').style.display = 'none';
+    const assistantSelectorEl = document.getElementById('assistantSelector');
+    if (assistantSelectorEl) {
+        assistantSelectorEl.style.display = 'none';
+    } else {
+        console.warn('assistantSelector 元素未找到');
+    }
     
     // 显示连接加载动画
     showConnectionLoading('正在创建会话...');
     
     try {
+        console.log('步骤1: 创建会话');
         // 创建会话
         await createSessionWithAssistant(assistant.id);
+        console.log('会话创建成功，会话ID:', currentSessionId);
         
         // 更新加载文本
         showConnectionLoading('正在初始化助手...');
         
+        console.log('步骤2: 初始化助手');
         // 初始化助手
         await initializeSelectedAssistant();
         
-        console.log(`已选择助手: ${assistant.title}${assistant.name}`);
+        console.log(`助手初始化完成: ${assistant.title}${assistant.name}`);
         
     } catch (error) {
         console.error('选择助手失败:', error);
         showConnectionError('初始化助手失败: ' + error.message);
+        // 失败时显示选择器，让用户可以重试
+        const selectorForRetry = document.getElementById('assistantSelector');
+        if (selectorForRetry) {
+            selectorForRetry.style.display = 'block';
+        }
     }
 }
 
@@ -1891,16 +1952,20 @@ function saveSwitchState() {
     const messages = Array.from(messagesArea.querySelectorAll('.message'));
     const consensusContent = document.getElementById('consensusContent');
     
+    const chatTitleEl2 = document.getElementById('chatTitle');
+    const statusDotEl = document.getElementById('connectionStatus');
+    const statusTextEl = document.getElementById('statusText');
+
     savedSwitchState = {
         assistant: currentAssistant,
         sessionId: currentSessionId,
         isInitialized: isAIAssistantInitialized,
         messages: messages.map(msg => msg.outerHTML),
         consensusHTML: consensusContent ? consensusContent.innerHTML : '',
-        chatTitle: document.getElementById('chatTitle').textContent,
+        chatTitle: chatTitleEl2 ? chatTitleEl2.textContent : '请选择智能助手',
         connectionStatus: {
-            dot: document.getElementById('connectionStatus').style.background,
-            text: document.getElementById('statusText').textContent
+            dot: statusDotEl ? statusDotEl.style.background : '',
+            text: statusTextEl ? statusTextEl.textContent : '未连接'
         }
     };
     
@@ -1939,8 +2004,20 @@ function showSwitchSelector() {
     
     // 显示选择器并重新渲染助手卡片
     assistantSelector.style.display = 'block';
-    document.getElementById('chatTitle').textContent = '切换智能助手';
+    const chatTitleEl3 = document.getElementById('chatTitle');
+    if (chatTitleEl3) {
+        chatTitleEl3.textContent = '切换智能助手';
+    }
     renderAssistantSelector();
+    
+    // 滚动到顶部，让用户能看到切换界面
+    const messagesArea = document.getElementById('messagesArea');
+    if (messagesArea) {
+        messagesArea.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    }
 }
 
 // 取消切换，恢复之前的状态
@@ -1973,17 +2050,22 @@ function cancelSwitch() {
     }
     
     // 恢复标题
-    document.getElementById('chatTitle').textContent = savedSwitchState.chatTitle;
+    const chatTitleEl4 = document.getElementById('chatTitle');
+    if (chatTitleEl4) {
+        chatTitleEl4.textContent = savedSwitchState.chatTitle;
+    }
     
-    // 恢复连接状态
+    // 恢夏连接状态
     const statusDot = document.getElementById('connectionStatus');
     const statusText = document.getElementById('statusText');
     if (statusDot) statusDot.style.background = savedSwitchState.connectionStatus.dot;
     if (statusText) statusText.textContent = savedSwitchState.connectionStatus.text;
     
     // 隐藏选择器，显示切换按钮
-    document.getElementById('assistantSelector').style.display = 'none';
-    document.getElementById('assistantSwitchBtn').style.display = 'inline-block';
+    const selectorEl = document.getElementById('assistantSelector');
+    const switchBtnEl2 = document.getElementById('assistantSwitchBtn');
+    if (selectorEl) selectorEl.style.display = 'none';
+    if (switchBtnEl2) switchBtnEl2.style.display = 'inline-block';
     
     // 恢复选择器原始内容
     const assistantSelector = document.getElementById('assistantSelector');
@@ -2346,6 +2428,7 @@ async function sendMessage() {
     
     // 设置发送中状态，防止重复发送
     isSending = true;
+    updateSendButtonState(); // 更新按钮状态
     
     // 检查连接状态（Vercel环境不需要WebSocket连接）
     if (!isVercelEnvironment() && !isConnected) {
@@ -2384,6 +2467,7 @@ async function sendMessage() {
     } finally {
         // 无论成功或失败都重置发送状态
         isSending = false;
+        updateSendButtonState(); // 更新按钮状态
     }
 }
 
@@ -2792,6 +2876,8 @@ function hideAiProcessing() {
     } else {
         console.warn('未找到AI处理动效元素');
     }
+    // 更新按钮状态（AI处理完成后可以切换助手）
+    updateSendButtonState();
 }
 
 // 更新共识显示
