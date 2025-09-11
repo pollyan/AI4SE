@@ -242,7 +242,7 @@
 .input-form {
     display: flex;
     gap: 12px;
-    align-items: flex-end;
+    align-items: flex-start;
 }
 
 .input-wrapper {
@@ -252,9 +252,10 @@
 
 .message-input {
     width: 100%;
-    min-height: 40px;
+    min-height: 44px; /* 增加最小高度确保一行文本不被截断 */
     max-height: 200px; /* 增加最大高度以适应更长文本 */
     padding: 12px 16px;
+    padding-right: 90px; /* 为字符计数器留出空间 */
     border: 1px solid #e8e8e8;
     border-radius: 20px;
     background: #ffffff;
@@ -263,6 +264,7 @@
     line-height: 1.4;
     font-family: inherit;
     transition: border-color 0.2s ease; /* 添加平滑边框过渡 */
+    box-sizing: border-box;
 }
 
 .message-input:focus {
@@ -272,15 +274,24 @@
 
 .message-input::placeholder {
     color: #999999;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .char-counter {
     position: absolute;
-    bottom: -20px;
-    right: 8px;
+    top: 50%;
+    right: 16px;
+    transform: translateY(-50%);
     font-size: 12px;
     color: #999999;
     transition: color 0.2s ease;
+    white-space: nowrap;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 2px 6px;
+    border-radius: 10px;
+    pointer-events: none; /* 避免阻挡输入 */
 }
 
 .char-counter.warning {
@@ -301,8 +312,10 @@
     font-size: 14px;
     font-weight: 500;
     transition: all 0.2s ease;
-    height: 40px;
+    height: 44px; /* 与输入框高度保持一致 */
     min-width: 80px;
+    align-self: flex-start; /* 顶部对齐 */
+    flex-shrink: 0;
 }
 
 .send-btn:hover:not(:disabled) {
@@ -1371,7 +1384,7 @@
                         <textarea 
                             class="message-input" 
                             id="messageInput" 
-                            placeholder="请描述你的项目需求或想法，可以粘贴完整的需求文档（最多10000字符）..."
+                            placeholder="请描述项目需求或想法"
                             maxlength="10000"
                             rows="1"
                         ></textarea>
@@ -1423,6 +1436,9 @@ let currentAssistant = null;
 let availableAssistants = [];
 let connectionRetryCount = 0;
 let maxRetries = 3;
+
+// 保存切换前的状态
+let savedSwitchState = null;
 
 // 初始化
 document.addEventListener('DOMContentLoaded', function() {
@@ -1615,6 +1631,7 @@ function scrollToBottom(delay = 100) {
 function updateSendButtonState() {
     const sendBtn = document.getElementById('sendBtn');
     const messageInput = document.getElementById('messageInput');
+    const switchBtn = document.getElementById('assistantSwitchBtn');
     
     if (!sendBtn || !messageInput) return;
     
@@ -1631,6 +1648,25 @@ function updateSendButtonState() {
         sendBtn.title = '请输入消息内容';
     } else {
         sendBtn.title = '发送消息';
+    }
+    
+    // 控制切换助手按钮状态
+    if (switchBtn) {
+        // 正在初始化或正在对话时禁用
+        const shouldDisable = !isAIAssistantInitialized || isSending;
+        switchBtn.disabled = shouldDisable;
+        
+        if (shouldDisable) {
+            if (!isAIAssistantInitialized) {
+                switchBtn.title = '助手正在初始化，请稍后...';
+            } else if (isSending) {
+                switchBtn.title = '正在对话中，请稍后...';
+            }
+            switchBtn.style.opacity = '0.6';
+        } else {
+            switchBtn.title = '切换到其他助手';
+            switchBtn.style.opacity = '1';
+        }
     }
 }
 
@@ -1793,6 +1829,9 @@ function renderAssistantSelector() {
 
 // 选择助手
 async function selectAssistant(assistant) {
+    // 清除保存的切换状态（因为已经选择新助手）
+    savedSwitchState = null;
+    
     currentAssistant = assistant;
     connectionRetryCount = 0; // 重置重试次数
     
@@ -1839,46 +1878,134 @@ async function selectAssistant(assistant) {
 
 // 切换助手
 function switchAssistant() {
-    // 重置状态
-    currentAssistant = null;
-    currentSessionId = null;
-    isAIAssistantInitialized = false;
-    connectionRetryCount = 0;
+    // 保存当前状态
+    saveSwitchState();
     
-    // 隐藏连接加载动画
-    hideConnectionLoading();
-    
-    // 清空消息区域
+    // 显示带取消按钮的选择器
+    showSwitchSelector();
+}
+
+// 保存切换前的状态
+function saveSwitchState() {
     const messagesArea = document.getElementById('messagesArea');
-    const messages = messagesArea.querySelectorAll('.message');
-    messages.forEach(msg => msg.remove());
-    
-    // 显示选择器
-    document.getElementById('assistantSelector').style.display = 'block';
-    document.getElementById('chatTitle').textContent = '请选择智能助手';
-    document.getElementById('assistantSwitchBtn').style.display = 'none';
-    
-    // 重置右侧分析面板标题和内容
-    const consensusTitle = document.querySelector('.consensus-title');
+    const messages = Array.from(messagesArea.querySelectorAll('.message'));
     const consensusContent = document.getElementById('consensusContent');
-    if (consensusTitle) {
-        consensusTitle.textContent = '分析成果';
+    
+    savedSwitchState = {
+        assistant: currentAssistant,
+        sessionId: currentSessionId,
+        isInitialized: isAIAssistantInitialized,
+        messages: messages.map(msg => msg.outerHTML),
+        consensusHTML: consensusContent ? consensusContent.innerHTML : '',
+        chatTitle: document.getElementById('chatTitle').textContent,
+        connectionStatus: {
+            dot: document.getElementById('connectionStatus').style.background,
+            text: document.getElementById('statusText').textContent
+        }
+    };
+    
+    console.log('已保存切换前状态');
+}
+
+// 显示带取消按钮的助手选择器
+function showSwitchSelector() {
+    const assistantSelector = document.getElementById('assistantSelector');
+    const selectorContent = assistantSelector.querySelector('.selector-content');
+    
+    // 保存原始内容
+    if (!assistantSelector.dataset.originalContent) {
+        assistantSelector.dataset.originalContent = selectorContent.innerHTML;
     }
-    if (consensusContent) {
-        consensusContent.innerHTML = `
-            <div class="empty-state">
-                开始与AI助手对话后，这里将实时显示结构化的分析成果
+    
+    const currentName = currentAssistant ? currentAssistant.name : '当前助手';
+    const messageCount = savedSwitchState ? savedSwitchState.messages.length : 0;
+    
+    // 修改选择器内容，添加取消按钮
+    selectorContent.innerHTML = `
+        <h3>切换智能助手</h3>
+        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 16px; margin: 16px 0; color: #856404;">
+            <p><strong>当前助手：</strong>${currentName}</p>
+            ${messageCount > 0 ? `<p><strong>已有对话：</strong>${messageCount}条消息</p>` : ''}
+            <p style="color: #d63384; font-weight: 500;">⚠️ 切换助手将清空当前对话记录</p>
+        </div>
+        
+        <div class="assistant-cards" id="assistantCards">
+            <!-- 助手卡片将动态加载 -->
+        </div>
+        
+        <div class="selector-footer">
+            <div style="display: flex; justify-content: center; margin: 16px 0;">
+                <button onclick="cancelSwitch()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">取消切换</button>
             </div>
-        `;
+            <p class="note">选择新助手即可开始对话</p>
+        </div>
+    `;
+    
+    // 显示选择器并重新渲染助手卡片
+    assistantSelector.style.display = 'block';
+    document.getElementById('chatTitle').textContent = '切换智能助手';
+    renderAssistantSelector();
+}
+
+// 取消切换，恢复之前的状态
+function cancelSwitch() {
+    if (!savedSwitchState) {
+        console.warn('没有保存的状态');
+        return;
     }
     
-    // 重置连接状态
-    updateConnectionStatus('disconnected', '未连接');
+    console.log('取消切换，恢复状态');
     
-    // 更新发送按钮状态
+    // 恢复状态
+    currentAssistant = savedSwitchState.assistant;
+    currentSessionId = savedSwitchState.sessionId;
+    isAIAssistantInitialized = savedSwitchState.isInitialized;
+    
+    // 恢复消息
+    const messagesArea = document.getElementById('messagesArea');
+    const existingMessages = messagesArea.querySelectorAll('.message');
+    existingMessages.forEach(msg => msg.remove());
+    
+    savedSwitchState.messages.forEach(messageHTML => {
+        messagesArea.insertAdjacentHTML('beforeend', messageHTML);
+    });
+    
+    // 恢复右侧内容
+    const consensusContent = document.getElementById('consensusContent');
+    if (consensusContent) {
+        consensusContent.innerHTML = savedSwitchState.consensusHTML;
+    }
+    
+    // 恢复标题
+    document.getElementById('chatTitle').textContent = savedSwitchState.chatTitle;
+    
+    // 恢复连接状态
+    const statusDot = document.getElementById('connectionStatus');
+    const statusText = document.getElementById('statusText');
+    if (statusDot) statusDot.style.background = savedSwitchState.connectionStatus.dot;
+    if (statusText) statusText.textContent = savedSwitchState.connectionStatus.text;
+    
+    // 隐藏选择器，显示切换按钮
+    document.getElementById('assistantSelector').style.display = 'none';
+    document.getElementById('assistantSwitchBtn').style.display = 'inline-block';
+    
+    // 恢复选择器原始内容
+    const assistantSelector = document.getElementById('assistantSelector');
+    const selectorContent = assistantSelector.querySelector('.selector-content');
+    if (assistantSelector.dataset.originalContent) {
+        selectorContent.innerHTML = assistantSelector.dataset.originalContent;
+    }
+    
+    // 更新按钮状态
     updateSendButtonState();
     
-    console.log('已重置助手选择');
+    // 清除保存的状态
+    savedSwitchState = null;
+    
+    // 滚动到底部
+    scrollToBottom();
+    
+    console.log('已恢复到之前的状态');
 }
 
 // 使用指定助手创建会话
