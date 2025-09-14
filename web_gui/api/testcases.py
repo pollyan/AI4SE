@@ -8,7 +8,16 @@ from datetime import datetime
 from typing import Dict, Any, Tuple, List, Optional
 from flask import request, jsonify, Response
 
-from . import api_bp
+from flask import Blueprint
+
+# 提供 testcases_bp 以便 base.register_blueprints 注册
+testcases_bp = Blueprint('testcases', __name__)
+
+# 为向后兼容，保留 api_bp 路由注册（若其他模块仍从 . import api_bp 引用）
+try:
+    from . import api_bp  # 可能不存在，但尽量兼容
+except Exception:
+    api_bp = None
 from .base import (
     api_error_handler,
     db_transaction_handler,
@@ -104,7 +113,7 @@ def validate_step_data(data, is_update=False):
 # ==================== 测试用例CRUD操作 ====================
 
 
-@api_bp.route("/testcases", methods=["GET"])
+@testcases_bp.route("/testcases", methods=["GET"])
 @log_api_call
 def get_testcases() -> Response:
     """获取测试用例列表（使用SQLAlchemy）"""
@@ -170,7 +179,7 @@ def get_testcases() -> Response:
         return standard_error_response(f"获取失败: {str(e)}")
 
 
-@api_bp.route("/testcases", methods=["POST"])
+@testcases_bp.route("/testcases", methods=["POST"])
 @log_api_call
 @require_json
 def create_testcase():
@@ -230,7 +239,7 @@ def create_testcase():
         return standard_error_response(f"创建失败: {str(e)}")
 
 
-@api_bp.route("/testcases/<int:testcase_id>", methods=["GET"])
+@testcases_bp.route("/testcases/<int:testcase_id>", methods=["GET"])
 @log_api_call
 def get_testcase(testcase_id):
     """获取测试用例详情"""
@@ -249,7 +258,7 @@ def get_testcase(testcase_id):
         return standard_error_response(f"获取失败: {str(e)}")
 
 
-@api_bp.route("/testcases/<int:testcase_id>", methods=["PUT"])
+@testcases_bp.route("/testcases/<int:testcase_id>", methods=["PUT"])
 @log_api_call
 @require_json
 def update_testcase(testcase_id):

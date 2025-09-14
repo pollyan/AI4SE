@@ -148,8 +148,9 @@ npm run test:proxy:coverage
   - **端口**: Flask 默认使用 `5001`；MidScene Node 服务器通常在 `3001` (见 `dev.sh` 默认值)。如有需要，可通过环境变量调整。
   - **数据库**: 如果未设置 `DATABASE_URL`，则默认使用 SQLite；支持 Postgres 并可进行连接池调优。对于开发，SQLite 简化了设置过程。
   - **实时 UI**: 如果你更改了服务中执行事件的负载 (payload)，请相应地更新 `web_gui/templates/static` 下的前端消费者。
-  - **智能体系统**: 两个智能体 (Alex/Song) 都使用同一个 `IntelligentAssistantService`，但加载了不同的人设包。智能体对话会话通过 `RequirementsSession` 和 `RequirementsMessage` 模型进行管理。
-  - **智能体 UI 访问**: 需求分析器地址为 `/requirements`，配置管理地址为 `/config-management`。UI 设计模式请参考 `minimal-preview/`。
+- **智能体系统**: 两个智能体 (Alex/Song) 都使用同一个 `IntelligentAssistantService`，但加载了不同的人设包。智能体对话会话通过 `RequirementsSession` 和 `RequirementsMessage` 模型进行管理。
+- **提示词存放**: 运行时从 `assistant-bundles/` 目录加载提示词文件（不再依赖 intelligent-requirements-analyzer/dist）。
+- **智能体 UI 访问**: 需求分析器地址为 `/requirements`，配置管理地址为 `/config-management`。UI 设计模式请参考 `minimal-preview/`。
 
 ## 配置管理 (反硬编码)
 

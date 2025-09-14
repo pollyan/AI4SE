@@ -1,3 +1,17 @@
+from flask import Blueprint
+from datetime import datetime
+
+health_bp = Blueprint('health', __name__)
+
+@health_bp.route('/health', methods=['GET'])
+def health():
+    # 与测试预期对齐，包含状态/时间戳/版本
+    return {
+        "status": "ok",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "version": "1.0.0"
+    }
+
 """
 系统健康检查和监控API
 提供系统状态、错误监控、性能指标等信息

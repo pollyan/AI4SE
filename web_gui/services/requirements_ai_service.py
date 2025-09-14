@@ -13,6 +13,9 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# 仅在运行时使用打包后的助手提示词目录（与代码根目录同级）
+BUNDLE_DIR = Path(__file__).parent.parent.parent / "assistant-bundles"
+
 class IntelligentAssistantService:
     """智能助手AI服务 - 支持多种助手类型的统一服务"""
 
@@ -98,7 +101,7 @@ class IntelligentAssistantService:
         try:
             # 读取指定助手的bundle文件
             bundle_file = self.assistant_info['bundle_file']
-            bundle_path = Path(__file__).parent.parent.parent / "intelligent-requirements-analyzer" / "dist" / bundle_file
+            bundle_path = BUNDLE_DIR / bundle_file
             
             if bundle_path.exists():
                 with open(bundle_path, 'r', encoding='utf-8') as f:
@@ -200,19 +203,21 @@ class IntelligentAssistantService:
                 
                 # 构建消息历史
                 for msg in history_messages:
-                    if msg.message_type == 'system' and "智能需求分析师" in msg.content:
-                        # 激活消息作为系统提示词
-                        assistant_name = self.assistant_info['name']
-                        assistant_title = self.assistant_info['title']
-                        system_prompt = f"你是{assistant_name}，{assistant_title}。请严格按照之前加载的指令和身份执行任务。保持专业的{assistant_name}身份，使用之前定义的命令和功能来帮助用户。"
-                        messages.append({"role": "system", "content": system_prompt})
-                        messages.append({"role": "user", "content": msg.content})
+                    # 解析元数据，安全失败回退为空
+                    try:
+                        metadata = json.loads(msg.message_metadata) if msg.message_metadata else {}
+                    except Exception:
+                        metadata = {}
+                    
+                    # 将激活消息作为系统提示词加入上下文（避免重复当做用户消息）
+                    if msg.message_type == 'system' and metadata.get('is_activation'):
+                        messages.append({"role": "system", "content": msg.content})
                     elif msg.message_type == 'user':
                         messages.append({"role": "user", "content": msg.content})
-                    elif msg.message_type == 'ai':
+                    elif msg.message_type in ('ai', 'assistant'):
                         messages.append({"role": "assistant", "content": msg.content})
             
-            # 如果没有系统消息，使用带激活前缀的assistant persona
+            # 如果没有系统消息，使用带激活前缀的assistant persona（从 dist 加载）
             if not any(msg["role"] == "system" for msg in messages):
                 full_system_prompt = f"""你的关键操作指令已附在下方，请严格按照指令中的persona执行，不要打破角色设定。
 
@@ -274,7 +279,14 @@ class IntelligentAssistantService:
             # 解析响应
             if response.status_code == 200:
                 result = response.json()
-                logger.info(f"AI API响应结构: {json.dumps(result, ensure_ascii=False, indent=2)}")
+                # 避免输出过长日志，仅在DEBUG级别打印概要
+                try:
+                    logger.debug(
+                        "AI API响应概要: keys=%s, has_choices=%s, has_candidates=%s",
+                        list(result.keys()), 'choices' in result, 'candidates' in result
+                    )
+                except Exception:
+                    logger.debug("AI API响应（无法获取概要）")
                 
                 # 统一的AI响应提取逻辑
                 try:

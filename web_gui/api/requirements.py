@@ -5,6 +5,7 @@
 
 import uuid
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from flask import Blueprint, request, jsonify
@@ -374,10 +375,6 @@ def send_message(session_id):
                     content=ai_result['ai_response'],
                     message_metadata=json.dumps({
                         'stage': ai_result.get('stage', session.current_stage),
-                        'identified_requirements': ai_result.get('identified_requirements', []),
-                        'information_gaps': ai_result.get('information_gaps', []),
-                        'clarification_questions': ai_result.get('clarification_questions', []),
-                        'analysis_summary': ai_result.get('analysis_summary', ''),
                         'assistant_type': assistant_type,
                         'source': 'http'
                     })
@@ -387,17 +384,19 @@ def send_message(session_id):
                 print(f"❌ 创建AI响应消息对象失败: {msg_error}")
                 raise Exception(f"AI响应消息创建失败: {str(msg_error)}")
             
-            # 更新会话上下文和共识内容
-            print(f"🔄 更新会话状态")
-            try:
-                session.ai_context = json.dumps(ai_result.get('ai_context', session_context['ai_context']))
-                session.consensus_content = json.dumps(ai_result.get('consensus_content', {}))
-                session.current_stage = ai_result.get('stage', session.current_stage)
-                session.updated_at = datetime.utcnow()
-                print(f"✅ 会话状态更新成功")
-            except Exception as session_error:
-                print(f"❌ 更新会话状态失败: {session_error}")
-                raise Exception(f"会话状态更新失败: {str(session_error)}")
+            # 可配置：是否持久化会话上下文/共识内容，默认不开启以减少写入
+            should_persist_context = os.getenv('REQUIREMENTS_PERSIST_CONTEXT', '0') == '1'
+            print(f"⚙️ 持久化上下文开关: {should_persist_context}")
+            if should_persist_context:
+                try:
+                    session.ai_context = json.dumps(ai_result.get('ai_context', session_context['ai_context']))
+                    session.consensus_content = json.dumps(ai_result.get('consensus_content', {}))
+                    session.current_stage = ai_result.get('stage', session.current_stage)
+                    session.updated_at = datetime.utcnow()
+                    print(f"✅ 会话状态更新成功")
+                except Exception as session_error:
+                    print(f"❌ 更新会话状态失败: {session_error}")
+                    raise Exception(f"会话状态更新失败: {str(session_error)}")
             
             # 保存到数据库
             print(f"💾 提交数据库事务")
@@ -410,19 +409,15 @@ def send_message(session_id):
                 db.session.rollback()
                 raise Exception(f"数据库保存失败: {str(db_error)}")
             
-            # 构建响应数据
+            # 构建响应数据（不强制返回大型分析结构）
             print(f"📦 构建响应数据")
             try:
                 response_data = {
                     'ai_message': ai_message.to_dict(),
-                    'consensus_content': ai_result.get('consensus_content', {}),
-                    'identified_requirements': ai_result.get('identified_requirements', []),
-                    'information_gaps': ai_result.get('information_gaps', []),
-                    'clarification_questions': ai_result.get('clarification_questions', []),
-                    'current_stage': session.current_stage
+                    'current_stage': ai_result.get('stage', session.current_stage)
                 }
                 
-                # 统一返回格式，包含AI响应和用户消息（如果非激活消息）
+                # 向后兼容：用户消息（若非激活）
                 response_data['user_message'] = user_message.to_dict() if not is_activation_message else None
                 print(f"✅ 响应数据构建成功")
             except Exception as resp_error:
@@ -589,7 +584,7 @@ def get_assistant_bundle(assistant_type):
         
         assistant_info = IntelligentAssistantService.SUPPORTED_ASSISTANTS[assistant_type]
         bundle_file = assistant_info["bundle_file"]
-        bundle_path = Path(__file__).parent.parent.parent / "intelligent-requirements-analyzer" / "dist" / bundle_file
+        bundle_path = Path(__file__).parent.parent.parent / "assistant-bundles" / bundle_file
         
         if bundle_path.exists():
             with open(bundle_path, 'r', encoding='utf-8') as f:
