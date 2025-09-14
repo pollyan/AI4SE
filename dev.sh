@@ -20,6 +20,15 @@ LOG_FILE="/tmp/ai4se_flask.log"
 HEALTH_CHECK_TIMEOUT=45
 HEALTH_CHECK_INTERVAL=3
 
+# 关键健康检查端点（可在此数组中增删）
+# 提示：如需增加创建型接口，请谨慎使用POST，避免在健康检查中产生副作用
+HEALTH_ENDPOINTS=(
+  "/api/requirements/assistants"
+  "/api/requirements/assistants/alex/bundle"
+  "/api/testcases"
+  "/api/executions"
+)
+
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -227,7 +236,7 @@ health_check() {
             print_message $GREEN "✅ 服务健康检查通过!"
             print_message $GREEN "🌍 Web界面: $url"
             print_message $GREEN "🔌 API接口: $url/api/"
-            return 0
+            break
         fi
         
         print_message $YELLOW "⏳ 等待服务启动... (${count}/${timeout}s)"
@@ -235,9 +244,31 @@ health_check() {
         count=$((count + HEALTH_CHECK_INTERVAL))
     done
     
-    print_message $RED "❌ 健康检查失败 - 服务可能未正常启动"
-    print_message $YELLOW "💡 请检查日志: tail -f $LOG_FILE"
-    return 1
+    if [ $count -ge $((timeout / HEALTH_CHECK_INTERVAL)) ]; then
+        print_message $RED "❌ 健康检查失败 - 服务可能未正常启动"
+        print_message $YELLOW "💡 请检查日志: tail -f $LOG_FILE"
+        return 1
+    fi
+
+    # 关键接口探活（防止蓝图前缀错误导致的404）
+    print_message $BLUE "🔎 校验关键接口..."
+    local failed=0
+    for ep in "${HEALTH_ENDPOINTS[@]}"; do
+        if curl -s -f "$url$ep" > /dev/null 2>&1; then
+            print_message $GREEN "✅ $ep 正常"
+        else
+            print_message $RED "❌ $ep 校验失败"
+            failed=1
+        fi
+    done
+
+    if [ $failed -eq 1 ]; then
+        print_message $YELLOW "💡 可能的原因：重复叠加 /api 前缀或蓝图未注册"
+        print_message $YELLOW "💡 建议：查看 web_gui/api/base.py 与 web_gui/api/__init__.py 中蓝图注册前缀配置"
+        return 1
+    fi
+
+    return 0
 }
 
 # 显示服务状态

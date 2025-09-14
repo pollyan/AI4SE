@@ -137,8 +137,9 @@ def register_blueprints(app):
         app.register_blueprint(executions_bp, url_prefix="/api")
         app.register_blueprint(dashboard_bp, url_prefix="/api")
         app.register_blueprint(statistics_bp, url_prefix="/api")
-        app.register_blueprint(ai_configs_bp, url_prefix="/api")
-        app.register_blueprint(requirements_bp, url_prefix="/api")
+        # 以下蓝图自身已包含以 /api 开头的 url_prefix，注册时不再叠加 /api，避免 /api/api/*
+        app.register_blueprint(ai_configs_bp)
+        app.register_blueprint(requirements_bp)
         
         logger.info("✅ 所有API蓝图注册成功")
         

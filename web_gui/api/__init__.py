@@ -29,11 +29,12 @@ def register_api_routes(app):
     
     # 注册需求分析API蓝图
     from .requirements import requirements_bp
-    app.register_blueprint(requirements_bp, url_prefix="/api")
+    # requirements_bp 自身已包含 url_prefix='/api/requirements'
+    app.register_blueprint(requirements_bp)
     
-    # 注册AI配置管理API蓝图
+    # 注册AI配置管理API蓝图（自身包含 url_prefix='/api/ai-configs'）
     from .ai_configs import ai_configs_bp
-    app.register_blueprint(ai_configs_bp, url_prefix="/api")
+    app.register_blueprint(ai_configs_bp)
     
     # 兼容：部分模块使用独立蓝图（如 testcases_bp）而非 api_bp 装饰
     try:

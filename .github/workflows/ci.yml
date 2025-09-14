@@ -41,8 +41,8 @@ jobs:
         pip install -r requirements.txt
         pip install -r web_gui/requirements.txt
         
-        # 安装测试相关依赖
-        pip install pytest pytest-cov pytest-mock pytest-asyncio pytest-html
+        # 统一pytest与pytest-asyncio版本，避免FixtureDef导入冲突
+        pip install "pytest>=8.2,<9" "pytest-asyncio>=0.23,<0.24" pytest-cov pytest-mock pytest-html
         pip install coverage[toml] pytest-xdist
 
     - name: Setup test environment variables
@@ -86,6 +86,9 @@ jobs:
     - name: Run API tests
       run: |
         export $(cat .env.test | grep -v '^#' | grep -v '^$' | xargs)
+        # 先跑关键冒烟，确保路由/蓝图
+        python -m pytest tests/api/test_assistant_bundles_smoke.py -q || exit 1
+        # 再跑完整API测试
         python -m pytest tests/api/ \
           --verbose \
           --tb=short \
