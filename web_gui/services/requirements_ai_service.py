@@ -258,8 +258,7 @@ class IntelligentAssistantService:
         data = {
             "model": self.model_name,
             "messages": messages,
-            "temperature": 0.7,
-            "max_tokens": 2000
+            "temperature": 0.7
         }
         
         try:
@@ -273,7 +272,7 @@ class IntelligentAssistantService:
                 api_url,
                 headers=headers,
                 json=data,
-                timeout=180  # 增加到3分钟，避免长回复被截断
+                timeout=300  # 提升至5分钟，优先保证完整输出
             )
             
             # 解析响应

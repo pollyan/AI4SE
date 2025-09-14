@@ -1654,8 +1654,8 @@ let attachedFiles = [];
 document.addEventListener('DOMContentLoaded', function() {
     // 设置axios全局超时为3分钟，避免长AI回复被截断
     if (typeof axios !== 'undefined') {
-        axios.defaults.timeout = 180000; // 3分钟 = 180秒 * 1000毫秒
-        console.log('已设置axios全局超时为3分钟');
+        axios.defaults.timeout = 300000; // 5分钟 = 300秒 * 1000毫秒
+        console.log('已设置axios全局超时为5分钟');
     }
     
     // 初始化响应式布局
