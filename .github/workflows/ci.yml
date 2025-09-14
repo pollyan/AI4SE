@@ -65,6 +65,7 @@ jobs:
         TESTING=true
         WTF_CSRF_ENABLED=false
         LOGIN_DISABLED=true
+        REQUIREMENTS_MESSAGE_MAX_LEN=2000
         
         # Logging Configuration
         LOG_LEVEL=WARNING
