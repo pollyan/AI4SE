@@ -28,7 +28,7 @@
     flex: none;
     display: flex;
     flex-direction: column;
-    min-width: 300px;
+min-width: 500px; /* 安全阈值：500px */
     max-width: none;
 }
 
@@ -113,9 +113,10 @@
     flex: 1; /* 占据剩余所有空间 */
     display: flex;
     flex-direction: column;
-    min-width: 300px;
+    min-width: 200px; /* 安全阈值：200px */
     max-width: none;
     width: 0; /* 让flex正常工作 */
+    overflow: hidden; /* 避免内部内容撑开 */
 }
 
 .chat-container {
@@ -335,6 +336,7 @@
     border-radius: 8px;
     height: 100%; /* 充满父容器高度 */
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    min-width: 0; /* 允许内部收缩 */
 }
 
 .consensus-header {
@@ -356,7 +358,8 @@
 .consensus-content {
     flex: 1;
     padding: 20px;
-    overflow-y: auto;
+    overflow: auto; /* 同时允许横向出现滚动，避免撑开 */
+    min-width: 0; /* 允许内容收缩 */
 }
 
 .consensus-section {
@@ -873,7 +876,7 @@
     }
     
     .chat-panel {
-        max-width: 600px;
+        max-width: none; /* 允许任意拖动，取消上限 */
     }
 }
 
@@ -1045,12 +1048,12 @@
 /* 响应式布局调整 - 确保在不同分辨率下都能正常显示 */
 @media (max-width: 1200px) {
     .chat-panel {
-        min-width: 300px;
+        min-width: 500px; /* 与安全阈值一致 */
         flex: 0 0 40%; /* 小屏时增加对话区域比例 */
     }
     
     .analysis-panel {
-        min-width: 400px;
+        min-width: 500px; /* 与安全阈值一致 */
     }
 }
 
@@ -2919,13 +2922,13 @@ function initializeResize() {
         const deltaX = currentX - startX;
         let newLeftWidth = startLeftWidth + deltaX;
         
-        // 设置最小/最大宽度限制
-        const minWidth = 300;
+// 设置最小/最大宽度限制（安全阈值 500px）
+        const minWidth const minWidth = 500;
         const containerRect = desktopLayout.getBoundingClientRect();
         const containerPadding = 40; // 20px 左右 padding
         const actualContainerWidth = containerRect.width - containerPadding;
         const handleWidth = 12;
-        const rightMinWidth = 300;
+const rightMinWidth = 500; // 恢复安全阈值 500px
         const maxWidth = actualContainerWidth - handleWidth - rightMinWidth;
         
         // 添加安全边距，确保不会卡住
@@ -2942,7 +2945,10 @@ function initializeResize() {
         // 直接设置宽度
         chatPanel.style.width = newLeftWidth + 'px';
         chatPanel.style.flex = 'none';
-        
+
+        // 打印更详细的调试信息
+        const rightWidth = analysisPanel.getBoundingClientRect().width;
+        console.log(`[drag] container=${containerRect.width}px, actual=${actualContainerWidth}px, left=${newLeftWidth}px, right=${rightWidth}px, minLeft=${minWidth}, minRight=${rightMinWidth}`);
         
         e.preventDefault();
     });
@@ -2984,19 +2990,23 @@ function initializeResize() {
         const deltaX = touch.clientX - startX;
         let newLeftWidth = startLeftWidth + deltaX;
         
-        const minWidth = 300;
+        const minWidth = 200;
         const containerRect = desktopLayout.getBoundingClientRect();
         const containerPadding = 40;
         const actualContainerWidth = containerRect.width - containerPadding;
         const handleWidth = 12;
-        const rightMinWidth = 300;
+        const rightMinWidth = 0; // 实验阶段：先设为 0 验证是否还会卡
         const maxWidth = actualContainerWidth - handleWidth - rightMinWidth;
+th - rightMinWidth;
         
         // 添加安全边距，确保不会卡住
         const safetyMargin = 10;
         const safeMaxWidth = Math.max(minWidth + safetyMargin, maxWidth - safetyMargin);
         
         newLeftWidth = Math.max(minWidth, Math.min(newLeftWidth, safeMaxWidth));
+        // 调试日志
+        const rightWidth = analysisPanel.getBoundingClientRect().width;
+        console.log(`[touch-drag] container=${containerRect.width}px, actual=${actualContainerWidth}px, left=${newLeftWidth}px, right=${rightWidth}px, minLeft=${minWidth}, minRight=${rightMinWidth}`);
         
         chatPanel.style.width = newLeftWidth + 'px';
         chatPanel.style.flex = 'none';
