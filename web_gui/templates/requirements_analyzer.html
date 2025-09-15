@@ -113,7 +113,7 @@ min-width: 500px; /* 安全阈值：500px */
     flex: 1; /* 占据剩余所有空间 */
     display: flex;
     flex-direction: column;
-    min-width: 200px; /* 安全阈值：200px */
+    min-width: 500px; /* 安全阈值：500px */
     max-width: none;
     width: 0; /* 让flex正常工作 */
     overflow: hidden; /* 避免内部内容撑开 */
@@ -2922,13 +2922,13 @@ function initializeResize() {
         const deltaX = currentX - startX;
         let newLeftWidth = startLeftWidth + deltaX;
         
-// 设置最小/最大宽度限制（安全阈值 500px）
-        const minWidth const minWidth = 500;
+        // 设置最小/最大宽度限制（安全阈值 500px）
+        const minWidth = 500;
         const containerRect = desktopLayout.getBoundingClientRect();
         const containerPadding = 40; // 20px 左右 padding
         const actualContainerWidth = containerRect.width - containerPadding;
         const handleWidth = 12;
-const rightMinWidth = 500; // 恢复安全阈值 500px
+        const rightMinWidth = 500; // 恢复安全阈值 500px
         const maxWidth = actualContainerWidth - handleWidth - rightMinWidth;
         
         // 添加安全边距，确保不会卡住
@@ -2990,14 +2990,13 @@ const rightMinWidth = 500; // 恢复安全阈值 500px
         const deltaX = touch.clientX - startX;
         let newLeftWidth = startLeftWidth + deltaX;
         
-        const minWidth = 200;
+        const minWidth = 500;
         const containerRect = desktopLayout.getBoundingClientRect();
         const containerPadding = 40;
         const actualContainerWidth = containerRect.width - containerPadding;
         const handleWidth = 12;
-        const rightMinWidth = 0; // 实验阶段：先设为 0 验证是否还会卡
+        const rightMinWidth = 500; // 与桌面一致
         const maxWidth = actualContainerWidth - handleWidth - rightMinWidth;
-th - rightMinWidth;
         
         // 添加安全边距，确保不会卡住
         const safetyMargin = 10;
