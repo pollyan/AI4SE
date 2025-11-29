@@ -1,0 +1,82 @@
+# 版本控制
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+dist
+build
+*.egg
+.pytest_cache
+.coverage
+htmlcov
+.tox
+
+# 虚拟环境
+venv
+env
+ENV
+.venv
+
+# Node.js
+node_modules
+npm-debug.log
+yarn-error.log
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# 环境配置
+.env
+.env.local
+*.env.local
+
+# 日志和临时文件
+*.log
+logs
+tmp
+temp
+*.pid
+
+# 数据库
+*.db
+*.sqlite
+*.sqlite3
+
+# 测试和文档
+tests
+test_results
+docs
+*.md
+README*
+LICENSE
+.github
+
+# Midscene运行文件
+midscene_run
+
+# 开发工具配置
+.bmad-core
+.claude
+.cursor
+.playwright-mcp
+
+# Docker相关
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# 其他
+screenshots
+key
+web-bundles

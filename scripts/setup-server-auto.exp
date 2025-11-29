@@ -1,0 +1,143 @@
+#!/usr/bin/expect -f
+
+# 服务器自动化配置脚本（使用 ubuntu 用户）
+# 服务器: 120.53.220.231
+# 用户: ubuntu
+# 密码: Shunlian04
+
+set timeout 120
+set server_ip "120.53.220.231"
+set server_user "ubuntu"
+set server_password "Shunlian04"
+
+puts "\n=========================================="
+puts "🔧 配置服务器用于 CI/CD 部署"
+puts "服务器: $server_ip"
+puts "用户: $server_user"
+puts "=========================================="
+
+# SSH 连接到服务器
+spawn ssh $server_user@$server_ip
+
+# 处理首次连接的指纹确认
+expect {
+    "Are you sure you want to continue connecting" {
+        send "yes\r"
+        exp_continue
+    }
+    "password:" {
+        send "$server_password\r"
+    }
+}
+
+# 等待登录成功
+expect "ubuntu@*" {
+    puts "\n✅ SSH 连接成功\n"
+}
+
+# 1. 生成 SSH 密钥
+puts "\n1️⃣  生成部署专用 SSH 密钥..."
+send "ssh-keygen -t ed25519 -C 'github-actions-deploy' -f ~/.ssh/github_deploy -N ''\r"
+expect "ubuntu@*"
+send "ls -la ~/.ssh/github_deploy*\r"
+expect "ubuntu@*"
+
+# 2. 配置 authorized_keys
+puts "\n2️⃣  配置 authorized_keys..."
+send "cat ~/.ssh/github_deploy.pub >> ~/.ssh/authorized_keys\r"
+expect "ubuntu@*"
+send "chmod 600 ~/.ssh/authorized_keys\r"
+expect "ubuntu@*"
+
+# 3. 检查 Docker
+puts "\n3️⃣  检查 Docker..."
+send "docker --version\r"
+expect {
+    "Docker version" {
+        puts "\n✅ Docker 已安装"
+        expect "ubuntu@*"
+    }
+    "command not found" {
+        puts "\n📥 安装 Docker..."
+        send "curl -fsSL https://get.docker.com -o get-docker.sh\r"
+        expect "ubuntu@*"
+        send "sudo sh get-docker.sh\r"
+        expect {
+            "password" {
+                send "$server_password\r"
+                expect "ubuntu@*"
+            }
+            "ubuntu@*" {}
+        }
+        send "sudo systemctl start docker\r"
+        expect "ubuntu@*"
+        send "sudo systemctl enable docker\r"
+        expect "ubuntu@*"
+        send "sudo usermod -aG docker ubuntu\r"
+        expect "ubuntu@*"
+    }
+}
+
+# 4. 创建项目目录
+puts "\n4️⃣  准备项目目录..."
+send "sudo mkdir -p /opt/intent-test-framework\r"
+expect {
+    "password" {
+        send "$server_password\r"
+        expect "ubuntu@*"
+    }
+    "ubuntu@*" {}
+}
+send "sudo chown ubuntu:ubuntu /opt/intent-test-framework\r"
+expect "ubuntu@*"
+
+# 5. 克隆代码（如果不存在）
+send "if \[ ! -d /opt/intent-test-framework/.git \]; then echo 'NEED_CLONE'; fi\r"
+expect {
+    "NEED_CLONE" {
+        puts "\n⚠️  项目目录为空，需要手动克隆代码"
+        expect "ubuntu@*"
+    }
+    "ubuntu@*" {
+        puts "\n✅ 项目代码已存在"
+    }
+}
+
+# 6. 配置防火墙
+puts "\n5️⃣  配置防火墙..."
+send "sudo ufw allow 80/tcp\r"
+expect {
+    "password" {
+        send "$server_password\r"
+        expect "ubuntu@*"
+    }
+    "ubuntu@*" {}
+}
+send "sudo ufw allow 443/tcp\r"
+expect "ubuntu@*"
+send "sudo ufw allow 5001/tcp\r"
+expect "ubuntu@*"
+
+# 7. 显示私钥
+puts "\n=========================================="
+puts "✅ 服务器配置完成！"
+puts "=========================================="
+puts "\n📋 GitHub Secrets 配置信息："
+puts "----------------------------------------"
+puts "SSH_PRIVATE_KEY 的值（复制以下完整内容）:\n"
+send "cat ~/.ssh/github_deploy\r"
+expect "ubuntu@*"
+puts "\n----------------------------------------"
+puts "\nSERVER_HOST: 120.53.220.231"
+puts "SERVER_USER: ubuntu\n"
+
+puts "\n📝 下一步操作："
+puts "1. 复制上面的私钥到 GitHub Secrets (SSH_PRIVATE_KEY)"
+puts "2. 添加 SERVER_HOST: 120.53.220.231"
+puts "3. 添加 SERVER_USER: ubuntu"
+puts ""
+
+send "exit\r"
+expect eof
+
+puts "\n🎉 配置完成！"

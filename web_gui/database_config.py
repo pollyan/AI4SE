@@ -143,7 +143,7 @@ class DatabaseConfig:
                         "max_overflow": 10,
                         "connect_args": {
                             "connect_timeout": 15,
-                            "sslmode": "require",
+                            "sslmode": "disable",
                             "application_name": "local-dev",
                         },
                     }

@@ -1,0 +1,129 @@
+#!/usr/bin/expect -f
+
+# 克隆代码并配置服务器环境
+set timeout 60
+set server_ip "120.53.220.231"
+set server_user "ubuntu"
+set server_password "Shunlian04"
+
+puts "\n=========================================="
+puts "📦 克隆代码并配置服务器环境"
+puts "=========================================="
+
+# SSH 连接
+spawn ssh $server_user@$server_ip
+
+expect "password:" {
+    send "$server_password\r"
+}
+
+expect "ubuntu@*" {
+    puts "\n✅ 已连接到服务器\n"
+}
+
+# 克隆代码
+puts "1️⃣  克隆代码仓库..."
+send "cd /opt/intent-test-framework\r"
+expect "ubuntu@*"
+
+# 检查是否需要克隆
+send "if \[ ! -f README.md \]; then echo 'EMPTY'; fi\r"
+expect {
+    "EMPTY" {
+        puts "\n📥 开始克隆代码..."
+        send "git clone https://github.com/pollyan/intent-test-framework.git .\r"
+        expect {
+            "Cloning into" {
+                expect "ubuntu@*"
+                puts "\n✅ 代码克隆成功"
+            }
+            timeout {
+                puts "\n❌ 克隆超时"
+            }
+        }
+    }
+    "ubuntu@*" {
+        puts "\n✅ 代码已存在"
+    }
+}
+
+# 配置 .env
+puts "\n2️⃣  配置 .env 文件..."
+send "cat > .env << 'ENVEOF'\r"
+expect ">"
+send "# 数据库配置 - 使用 Supabase\r"
+expect ">"
+send "DATABASE_URL=postgresql://postgres.jzmqsuxphksbulrbhebp:Shunlian04@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?sslmode=require&connect_timeout=15&application_name=prod\r"
+expect ">"
+send "\r"
+expect ">"
+send "# Flask 配置\r"
+expect ">"
+send "SECRET_KEY=\\\$(openssl rand -hex 32)\r"
+expect ">"  
+send "FLASK_ENV=production\r"
+expect ">"
+send "\r"
+expect ">"
+send "# 服务端口\r"
+expect ">"
+send "WEB_PORT=5001\r"
+expect ">"
+send "ENVEOF\r"
+expect "ubuntu@*"
+
+# 生成并替换 SECRET_KEY
+send "RANDOM_KEY=\\\$(openssl rand -hex 32); sed -i \"s/\\\\\\\$(openssl rand -hex 32)/\\\$RANDOM_KEY/\" .env\r"
+expect "ubuntu@*"
+
+puts "\n✅ .env 文件已创建"
+
+# 显示配置
+puts "\n3️⃣  验证 .env 配置..."
+send "cat .env\r"
+expect "ubuntu@*"
+
+# 修改 docker-compose.prod.yml
+puts "\n4️⃣  修改 docker-compose.prod.yml..."
+send "if grep -q '^  postgres:' docker-compose.prod.yml; then sed -i '/^  postgres:/,/^  web-app:/{ /^  postgres:/,/^  web-app:/{ /^  web-app:/!s/^/#/; } }' docker-compose.prod.yml; echo 'MODIFIED'; fi\r"
+expect {
+    "MODIFIED" {
+        puts "\n✅ docker-compose.prod.yml 已修改（postgres 服务已注释）"
+        expect "ubuntu@*"
+    }
+    "ubuntu@*" {
+        puts "\n⚠️  docker-compose.prod.yml 可能已经配置过"
+    }
+}
+
+# 测试 Docker
+puts "\n5️⃣  测试 Docker（构建镜像）..."
+send "docker-compose -f docker-compose.prod.yml build web-app\r"
+set timeout 300
+expect {
+    "Successfully built" {
+        puts "\n✅ Docker 镜像构建成功"
+        expect "ubuntu@*"
+    }
+    "Successfully tagged" {
+        puts "\n✅ Docker 镜像构建成功"
+        expect "ubuntu@*"
+    }
+    timeout {
+        puts "\n⏳ 构建时间较长，请稍候..."
+        expect "ubuntu@*"
+    }
+}
+
+puts "\n=========================================="
+puts "✅ 服务器环境配置完成！"
+puts "=========================================="
+puts "\n📋 下一步："
+puts "1. 配置 GitHub Secrets（私钥已在上一步显示）"
+puts "2. 推送代码触发部署"
+puts "3. 访问 http://120.53.220.231:5001 验证\n"
+
+send "exit\r"
+expect eof
+
+puts "\n🎉 配置完成！"

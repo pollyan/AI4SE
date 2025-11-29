@@ -1,0 +1,36 @@
+# 本地开发环境配置
+# 使用方式: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+# 
+# 注意：MidScene Server需要手动启动（模拟真实用户场景）
+# 启动命令：node midscene_server.js
+
+version: '3.8'
+
+services:
+  web-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # 开发环境可以使用缓存加速构建
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    volumes:
+      # 挂载源代码，支持热重载
+      - ./web_gui:/app/web_gui
+      - ./midscene_python.py:/app/midscene_python.py
+      - ./start.py:/app/start.py
+      - ./api:/app/api
+      - ./midscene_framework:/app/midscene_framework
+    command: python start.py
+    # 开发环境不做健康检查加快启动
+    healthcheck:
+      disable: true
+
+  postgres:
+    ports:
+      # 暴露数据库端口，方便使用GUI工具连接
+      - "5432:5432"
+    environment:
+      # 开发环境使用简单密码
+      - POSTGRES_PASSWORD=dev_password
