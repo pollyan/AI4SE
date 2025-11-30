@@ -86,10 +86,10 @@ jobs:
             
             echo "📝 创建 .env 文件..."
             cat > .env << 'ENVEOF'
-          DATABASE_URL=postgresql://postgres.jzmqsuxphksbulrbhebp:Shunlian04@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?sslmode=require&connect_timeout=15&application_name=prod
-          FLASK_ENV=production
-          WEB_PORT=5001
-          ENVEOF
+DATABASE_URL=postgresql://postgres.jzmqsuxphksbulrbhebp:Shunlian04@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?sslmode=require&connect_timeout=15&application_name=prod
+FLASK_ENV=production
+WEB_PORT=5001
+ENVEOF
             # 生成 SECRET_KEY
             echo "SECRET_KEY=$(openssl rand -hex 32)" >> .env
             
