@@ -82,7 +82,7 @@ jobs:
             sudo mkdir -p intent-test-framework
             sudo chown $USER:$USER intent-test-framework
             cd intent-test-framework
-            git clone https://github.com/$GITHUB_REPOSITORY.git .
+            git clone https://github.com/pollyan/intent-test-framework.git .
             
             echo "📝 创建 .env 文件..."
             echo "DATABASE_URL=postgresql://postgres.jzmqsuxphksbulrbhebp:Shunlian04@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?sslmode=require&connect_timeout=15&application_name=prod" > .env
