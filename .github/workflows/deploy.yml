@@ -62,9 +62,31 @@ jobs:
           
           echo "🚀 开始部署..."
           
+          # 检查项目目录是否存在
+          if [ ! -d "/opt/intent-test-framework/.git" ]; then
+            echo "📦 首次部署，克隆代码仓库..."
+            cd /opt
+            sudo rm -rf intent-test-framework
+            sudo mkdir -p intent-test-framework
+            sudo chown $USER:$USER intent-test-framework
+            cd intent-test-framework
+            git clone https://github.com/$GITHUB_REPOSITORY.git .
+            
+            echo "📝 创建 .env 文件..."
+            cat > .env << 'ENVEOF'
+DATABASE_URL=postgresql://postgres.jzmqsuxphksbulrbhebp:Shunlian04@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?sslmode=require&connect_timeout=15&application_name=prod
+FLASK_ENV=production
+WEB_PORT=5001
+ENVEOF
+            # 生成 SECRET_KEY
+            echo "SECRET_KEY=$(openssl rand -hex 32)" >> .env
+            
+            echo "✅ 代码克隆完成"
+          fi
+          
           # 进入项目目录
           cd /opt/intent-test-framework || {
-            echo "❌ 项目目录不存在，首次部署请先手动克隆代码"
+            echo "❌ 项目目录不存在"
             exit 1
           }
           
