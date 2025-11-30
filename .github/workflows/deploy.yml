@@ -68,6 +68,13 @@ jobs:
         chmod 600 ~/.ssh/deploy_key
         ssh-keyscan -H $SERVER_HOST >> ~/.ssh/known_hosts
         
+        # 配置 SSH keep-alive 防止连接断开
+        cat >> ~/.ssh/config << 'SSHCONFIG'
+        Host *
+          ServerAliveInterval 60
+          ServerAliveCountMax 10
+        SSHCONFIG
+        
         # 部署到服务器
         ssh -i ~/.ssh/deploy_key $SERVER_USER@$SERVER_HOST << 'ENDSSH'
           set -e
@@ -82,6 +89,12 @@ jobs:
             sudo mkdir -p intent-test-framework
             sudo chown $USER:$USER intent-test-framework
             cd intent-test-framework
+            
+            # 配置 git 以处理大仓库和慢速网络
+            git config --global http.postBuffer 524288000
+            git config --global http.lowSpeedLimit 0
+            git config --global http.lowSpeedTime 999999
+            
             git clone https://github.com/pollyan/intent-test-framework.git .
             
             echo "📝 创建 .env 文件..."
