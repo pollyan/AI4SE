@@ -1,4 +1,4 @@
-name: API Testing and Deployment Pipeline
+name: Deploy to Tencent Cloud via SCP/SSH
 
 on:
   push:
@@ -44,10 +44,10 @@ jobs:
         echo "::endgroup::"
 
   # ====================================
-  # 阶段 2: 生产环境部署（串行执行，依赖测试通过）
+  # 阶段 2: 构建和部署（SCP/SSH 推送模式）
   # ====================================
   deploy-to-production:
-    name: Deploy to Tencent Cloud
+    name: Build and Deploy to Tencent Cloud
     needs: api-test  # 必须等待 api-test 完成且成功
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
@@ -56,134 +56,106 @@ jobs:
     - name: 📥 Checkout code
       uses: actions/checkout@v3
     
-    - name: 🚀 Deploy to Tencent Cloud Server
-      env:
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        SERVER_HOST: ${{ secrets.SERVER_HOST }}
-        SERVER_USER: ${{ secrets.SERVER_USER }}
+    - name: 📦 Prepare deployment package
       run: |
-        # 配置 SSH
-        mkdir -p ~/.ssh
-        echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
-        chmod 600 ~/.ssh/deploy_key
-        ssh-keyscan -H $SERVER_HOST >> ~/.ssh/known_hosts
+        echo "准备部署包..."
         
-        # 配置 SSH keep-alive 防止连接断开
-        cat >> ~/.ssh/config << 'SSHCONFIG'
-        Host *
-          ServerAliveInterval 60
-          ServerAliveCountMax 10
-        SSHCONFIG
+        # 创建部署目录
+        mkdir -p deploy-package
         
-        # 部署到服务器
-        ssh -i ~/.ssh/deploy_key $SERVER_USER@$SERVER_HOST << 'ENDSSH'
+        # 复制必要的文件（排除不需要的文件）
+        rsync -av --progress \
+          --exclude='.git' \
+          --exclude='node_modules' \
+          --exclude='__pycache__' \
+          --exclude='*.pyc' \
+          --exclude='.pytest_cache' \
+          --exclude='.coverage' \
+          --exclude='logs' \
+          --exclude='.env' \
+          --exclude='.DS_Store' \
+          --exclude='*.md' \
+          --exclude='dist' \
+          --exclude='.github' \
+          --exclude='.claude' \
+          --exclude='.cursor' \
+          --exclude='.bmad-core' \
+          --exclude='.playwright-mcp' \
+          --exclude='deploy-package' \
+          ./ deploy-package/
+        
+        echo "✅ 部署包准备完成"
+        
+        # 显示包大小
+        echo "部署包大小:"
+        du -sh deploy-package
+    
+    - name: 🚀 Upload to Tencent Cloud Server
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        source: "deploy-package/*"
+        target: "/opt/intent-test-framework-upload-tmp"
+        strip_components: 1
+        rm: true
+        timeout: 300s
+    
+    - name: 🔧 Deploy on Server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        timeout: 600s
+        command_timeout: 600s
+        script: |
           set -e
           
-          echo "🚀 开始部署..."
+          echo "=========================================="
+          echo "🚀 开始部署流程"
+          echo "=========================================="
           
-          # 检查项目目录是否存在
-          if [ ! -d "/opt/intent-test-framework/.git" ]; then
-            echo "📦 首次部署，克隆代码仓库..."
-            cd /opt
-            sudo rm -rf intent-test-framework
-            sudo mkdir -p intent-test-framework
-            sudo chown $USER:$USER intent-test-framework
-            cd intent-test-framework
-            
-            # 配置 git 以处理大仓库和慢速网络
-            echo "⚙️  配置 Git..."
-            git config --global http.postBuffer 524288000
-            git config --global http.lowSpeedLimit 0
-            git config --global http.lowSpeedTime 999999
-            
-            # 尝试克隆代码，最多重试 3 次
-            echo "📦 开始克隆代码仓库..."
-            echo "仓库: https://github.com/pollyan/intent-test-framework.git"
-            RETRY_COUNT=0
-            MAX_RETRIES=3
-            
-            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-              echo ""
-              echo "🔄 尝试 $((RETRY_COUNT + 1))/$MAX_RETRIES..."
-              
-              # 使用 --verbose 和 --progress 显示详细进度
-              if git clone --verbose --progress https://github.com/pollyan/intent-test-framework.git . 2>&1; then
-                echo "✅ 代码克隆成功！"
-                break
-              else
-                RETRY_COUNT=$((RETRY_COUNT + 1))
-                if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-                  echo "❌ 克隆失败，等待 10 秒后重试..."
-                  sleep 10
-                  # 清理失败的克隆
-                  rm -rf .git *
-                else
-                  echo "❌ 克隆失败，已达到最大重试次数"
-                  exit 1
-                fi
-              fi
-            done
-            
-            echo "📝 创建 .env 文件..."
-            echo "DATABASE_URL=postgresql://postgres.jzmqsuxphksbulrbhebp:Shunlian04@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?sslmode=require&connect_timeout=15&application_name=prod" > .env
-            echo "FLASK_ENV=production" >> .env
-            echo "WEB_PORT=5001" >> .env
-            # 生成 SECRET_KEY
-            echo "SECRET_KEY=$(openssl rand -hex 32)" >> .env
-            
-            echo "✅ 代码克隆完成"
-          fi
+          # 移动上传的文件到正式的上传目录
+          echo "📦 整理上传文件..."
+          sudo rm -rf /opt/intent-test-framework-upload
+          sudo mv /opt/intent-test-framework-upload-tmp /opt/intent-test-framework-upload
+          sudo chown -R $USER:$USER /opt/intent-test-framework-upload
           
-          # 进入项目目录
-          cd /opt/intent-test-framework || {
-            echo "❌ 项目目录不存在"
-            exit 1
-          }
+          # 确保部署脚本有执行权限
+          chmod +x /opt/intent-test-framework-upload/scripts/deploy-from-upload.sh
           
-          # 拉取最新代码
-          echo "📥 拉取最新代码..."
-          git pull origin main || git pull origin master
+          # 执行部署脚本
+          echo "🔨 执行部署脚本..."
+          sudo bash /opt/intent-test-framework-upload/scripts/deploy-from-upload.sh
           
-          # 备份当前运行的容器（可选）
-          echo "💾 备份当前配置..."
-          docker-compose -f docker-compose.prod.yml ps > /tmp/deploy_backup.txt || true
-          
-          # 重新构建镜像
-          echo "🔨 构建 Docker 镜像..."
-          docker-compose -f docker-compose.prod.yml build --no-cache web-app
-          
-          # 重启服务
-          echo "♻️  重启服务..."
-          docker-compose -f docker-compose.prod.yml up -d
-          
-          # 清理旧镜像
-          echo "🧹 清理未使用的镜像..."
-          docker image prune -f
-          
-          # 等待服务启动
-          echo "⏳ 等待服务启动..."
-          sleep 10
-          
-          # 健康检查
-          echo "🏥 健康检查..."
-          if curl -f http://localhost:5001/health; then
-            echo "✅ 部署成功！"
-          else
-            echo "❌ 健康检查失败"
-            docker-compose -f docker-compose.prod.yml logs --tail=50 web-app
-            exit 1
-          fi
-          
-          # 显示服务状态
-          echo "📊 服务状态:"
-          docker-compose -f docker-compose.prod.yml ps
-        ENDSSH
-        
+          echo "=========================================="
+          echo "✅ 部署完成"
+          echo "=========================================="
+    
+    - name: 📊 Deployment Summary
+      if: success()
+      run: |
         echo ""
         echo "=========================================="
-        echo "🎉 部署流程完成！"
+        echo "🎉 部署成功！"
         echo "=========================================="
         echo "✅ API 测试已通过"
-        echo "✅ 代码已部署到腾讯云服务器"
+        echo "✅ 代码已通过 SCP 推送到腾讯云服务器"
+        echo "✅ 服务已重启并通过健康检查"
         echo "🌐 访问地址: http://${{ secrets.SERVER_HOST }}:5001"
+        echo "=========================================="
+    
+    - name: 📊 Deployment Failed
+      if: failure()
+      run: |
+        echo ""
+        echo "=========================================="
+        echo "❌ 部署失败"
+        echo "=========================================="
+        echo "请检查 GitHub Actions 日志以获取详细错误信息"
+        echo "如果是服务器端错误，SSH 登录服务器查看日志："
+        echo "  ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}"
+        echo "  docker-compose -f /opt/intent-test-framework/docker-compose.prod.yml logs"
         echo "=========================================="

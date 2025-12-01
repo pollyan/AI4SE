@@ -49,23 +49,36 @@
 
 ## 部署方案
 
-### 云服务器部署
+### 云服务器部署 (GitHub Actions + SCP Push)
 
-```bash
-# 1. 克隆代码
-git clone your-repo
-cd intent-test-framework
+采用 **GitHub Actions + SCP 推送模式**，完全规避服务器访问 GitHub 的网络问题。
 
-# 2. 配置环境变量
-cp .env.docker.example .env
-nano .env  # 配置数据库密码、SECRET_KEY等
-
-# 3. 启动生产服务（不包含MidScene）
-docker-compose -f docker-compose.prod.yml up -d
-
-# 4. 配置Nginx SSL（可选）
-# 使用Let's Encrypt配置HTTPS
+```mermaid
+graph LR
+    A[GitHub Actions 构建] -->|SCP| B[推送到服务器]
+    B -->|SSH| C[执行部署脚本]
+    C --> D[Docker 重建 & 重启]
 ```
+
+1. **GitHub 端构建**：
+   - 运行自动化测试
+   - 打包应用代码（排除 git、node_modules 等）
+
+2. **推送部署**：
+   - 通过 SCP 将部署包推送到服务器临时目录
+   - SSH 执行 `scripts/deploy-from-upload.sh`
+
+3. **服务器端执行**：
+   - 备份当前版本
+   - 应用新代码
+   - 重建 Docker 镜像
+   - 重启服务并进行健康检查
+   - 失败自动回滚
+
+**服务器只运行**：
+- Flask Web应用（端口5001）
+- PostgreSQL数据库（端口5432）
+- Nginx（端口80/443）
 
 **云服务器只运行**：
 - Flask Web应用（端口5001）
