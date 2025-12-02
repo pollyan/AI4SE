@@ -32,18 +32,21 @@ log_error() {
 ENVIRONMENT=${1:-local}
 COMPOSE_FILE=""
 BACKUP_ENABLED=false
+DOCKER_CMD="docker-compose"  # 默认不使用 sudo
 
 case "$ENVIRONMENT" in
     local|dev|development)
         COMPOSE_FILE="docker-compose.yml"
         DEPLOY_DIR="."
         BACKUP_ENABLED=false
+        DOCKER_CMD="docker-compose"
         log_info "部署环境: 本地开发"
         ;;
     prod|production|remote)
         COMPOSE_FILE="docker-compose.prod.yml"
         DEPLOY_DIR="/opt/intent-test-framework"
         BACKUP_ENABLED=true
+        DOCKER_CMD="sudo docker-compose"  # 生产环境使用 sudo
         log_info "部署环境: 生产环境"
         ;;
     *)
@@ -72,25 +75,30 @@ fi
 
 # 停止现有服务
 log_info "停止现有服务..."
-docker-compose -f "$COMPOSE_FILE" down -v || true
+$DOCKER_CMD -f "$COMPOSE_FILE" down -v || true
 sleep 3
 
 # 强制清理残留容器和网络（本地和生产环境都需要）
 log_info "清理残留资源..."
-docker ps -a | grep intent-test | awk '{print $1}' | xargs docker rm -f 2>/dev/null || true
-docker network ls | grep intent-test | awk '{print $1}' | xargs docker network rm 2>/dev/null || true
+if [ "$BACKUP_ENABLED" = true ]; then
+    sudo docker ps -a | grep intent-test | awk '{print $1}' | xargs sudo docker rm -f 2>/dev/null || true
+    sudo docker network ls | grep intent-test | awk '{print $1}' | xargs sudo docker network rm 2>/dev/null || true
+else
+    docker ps -a | grep intent-test | awk '{print $1}' | xargs docker rm -f 2>/dev/null || true
+    docker network ls | grep intent-test | awk '{print $1}' | xargs docker network rm 2>/dev/null || true
+fi
 
 log_info "✅ 服务已停止"
 
 # 构建镜像
 log_info "构建 Docker 镜像..."
-docker-compose -f "$COMPOSE_FILE" build
+$DOCKER_CMD -f "$COMPOSE_FILE" build
 
 log_info "✅ 镜像构建完成"
 
 # 启动服务
 log_info "启动服务..."
-docker-compose -f "$COMPOSE_FILE" up -d
+$DOCKER_CMD -f "$COMPOSE_FILE" up -d
 
 log_info "✅ 服务已启动"
 
@@ -120,7 +128,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         if [ "$BACKUP_ENABLED" = true ] && [ -d "$BACKUP_DIR" ]; then
             log_error "开始回滚..."
             rsync -a --delete "$BACKUP_DIR/" "$DEPLOY_DIR/"
-            docker-compose -f "$COMPOSE_FILE" up -d
+            $DOCKER_CMD -f "$COMPOSE_FILE" up -d
             log_info "已回滚到上一版本"
         fi
         
@@ -132,11 +140,15 @@ done
 log_info "=========================================="
 log_info "服务状态:"
 log_info "=========================================="
-docker-compose -f "$COMPOSE_FILE" ps
+$DOCKER_CMD -f "$COMPOSE_FILE" ps
 
 # 清理旧镜像
 log_info "清理未使用的镜像..."
-docker image prune -f || true
+if [ "$BACKUP_ENABLED" = true ]; then
+    sudo docker image prune -f || true
+else
+    docker image prune -f || true
+fi
 
 log_info "=========================================="
 log_info "🎉 部署成功！"
