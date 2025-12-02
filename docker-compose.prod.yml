@@ -61,8 +61,7 @@ services:
           memory: 256M
 
 volumes:
-  postgres_data:
-    driver: local
+  # postgres_data 已移除 - 使用现有数据库
 
 networks:
   default:
