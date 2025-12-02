@@ -115,12 +115,24 @@ main() {
         mkdir -p "$DEPLOY_DIR"
     fi
     
-    # 4. 停止当前服务
+    # 4. 停止并清理当前服务
     if [ -f "$DEPLOY_DIR/docker-compose.prod.yml" ]; then
         log_info "停止当前服务..."
         cd "$DEPLOY_DIR"
-        docker-compose -f docker-compose.prod.yml down || true
-        log_info "✅ 服务已停止"
+        
+        # 停止并删除容器、网络、卷
+        docker-compose -f docker-compose.prod.yml down -v || true
+        
+        # 等待容器完全停止
+        sleep 5
+        
+        # 强制清理可能残留的容器
+        docker ps -a | grep intent-test | awk '{print $1}' | xargs -r docker rm -f || true
+        
+        # 清理可能残留的网络
+        docker network ls | grep intent-test | awk '{print $1}' | xargs -r docker network rm || true
+        
+        log_info "✅ 服务已停止并清理"
     fi
     
     # 5. 复制新代码
