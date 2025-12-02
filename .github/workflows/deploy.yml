@@ -127,7 +127,7 @@ jobs:
         # 清理 SSH 密钥
         rm -f ~/.ssh/deploy_key
     
-    - name: 🔧 Deploy on Server
+    - name: 🚀 Deploy on Server
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.SERVER_HOST }}
@@ -136,24 +136,24 @@ jobs:
         timeout: 1800s
         command_timeout: 1800s
         script: |
-          set -e
           
           echo "=========================================="
-          echo "🚀 开始部署流程"
+          echo "🚀 开始部署"
           echo "=========================================="
           
-          # 移动上传的文件到正式的上传目录
-          echo "📦 整理上传文件..."
-          sudo rm -rf /opt/intent-test-framework-upload
-          sudo mv /opt/intent-test-framework-upload-tmp /opt/intent-test-framework-upload
-          sudo chown -R $USER:$USER /opt/intent-test-framework-upload
+          # 复制上传的文件到部署目录
+          echo "📦 同步文件..."
+          sudo rsync -a --delete /opt/intent-test-framework-upload-tmp/ /opt/intent-test-framework/
+          sudo chown -R $USER:$USER /opt/intent-test-framework
           
-          # 确保部署脚本有执行权限
-          chmod +x /opt/intent-test-framework-upload/scripts/deploy-from-upload.sh
+          # 切换到部署目录
+          cd /opt/intent-test-framework
           
-          # 执行部署脚本
-          echo "🔨 执行部署脚本..."
-          sudo bash /opt/intent-test-framework-upload/scripts/deploy-from-upload.sh
+          # 确保脚本有执行权限
+          chmod +x scripts/deploy.sh
+          
+          # 执行统一部署脚本（生产环境）
+          bash scripts/deploy.sh production
           
           echo "=========================================="
           echo "✅ 部署完成"
