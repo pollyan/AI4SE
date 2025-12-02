@@ -60,8 +60,7 @@ services:
           cpus: '0.5'
           memory: 256M
 
-volumes:
-  # postgres_data 已移除 - 使用现有数据库
+# 不再需要 volumes 定义（使用现有数据库）
 
 networks:
   default:
