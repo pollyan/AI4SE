@@ -75,7 +75,7 @@ fi
 
 # 停止现有服务
 log_info "停止现有服务..."
-$DOCKER_CMD -f "$COMPOSE_FILE" down -v || true
+$DOCKER_CMD -f "$COMPOSE_FILE" down || true  # 移除 -v 以保留数据卷
 sleep 3
 
 # 强制清理残留容器和网络（本地和生产环境都需要）
