@@ -1,0 +1,19 @@
+# 生产环境 Python 依赖（优化版）
+# 精简版：移除开发和测试工具，只保留运行时必需的依赖
+
+# Web框架
+flask>=2.0.0
+flask-socketio>=5.0.0
+flask-cors>=4.0.0
+python-socketio>=5.0.0
+
+# 数据库支持
+flask-sqlalchemy>=3.0.0
+psycopg2-binary>=2.9.0
+
+# Supabase客户端
+supabase>=1.0.0
+
+# 基础工具
+python-dotenv==1.0.0
+requests==2.31.0
