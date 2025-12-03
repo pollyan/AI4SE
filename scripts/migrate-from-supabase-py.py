@@ -62,9 +62,7 @@ def migrate():
         # 4. 清空本地核心表
         log("清空本地表...")
         with target_engine.connect() as conn:
-            # 禁用外键约束
-            conn.execute(text("SET session_replication_role = 'replica';"))
-            
+            # 简单清空表，不使用 session_replication_role（需要超级用户权限）
             for table_name in reversed(core_tables):
                 try:
                     conn.execute(text(f"TRUNCATE TABLE {table_name} CASCADE"))
@@ -72,8 +70,6 @@ def migrate():
                 except Exception as e:
                     log(f"  跳过表 {table_name}: {e}", "WARNING")
             
-            # 恢复外键约束
-            conn.execute(text("SET session_replication_role = 'origin';"))
             conn.commit()
         
         log("✅ 本地表已准备好")
