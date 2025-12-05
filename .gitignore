@@ -1,7 +1,14 @@
-# Byte-compiled / optimized / DLL files
+# Byte-compiled / optimized /# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Database backups
+database_backups/*.sql
+
+# Temporary/debugging scripts
+scripts/*-temp*.sh
+scripts/*-debug*.exp
 
 # C extensions
 *.so
