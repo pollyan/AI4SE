@@ -29,7 +29,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5001/health')"]
+      test: [ "CMD", "python", "-c", "import requests; requests.get('http://localhost:5001/health')" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -64,4 +64,5 @@ services:
 
 networks:
   default:
-    name: intent-test-network
+    external: true
+    name: langfuse_default

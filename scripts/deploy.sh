@@ -102,6 +102,17 @@ $DOCKER_CMD -f "$COMPOSE_FILE" up -d
 
 log_info "✅ 服务已启动"
 
+# 复制assistant-bundles到容器（生产环境）
+if [ "$BACKUP_ENABLED" = true ]; then
+    log_info "复制assistant-bundles到容器..."
+    if [ -d "$DEPLOY_DIR/assistant-bundles" ]; then
+        sudo docker cp "$DEPLOY_DIR/assistant-bundles" intent-test-web:/app/ 2>/dev/null || log_warn "复制assistant-bundles失败"
+        log_info "✅ Assistant bundles已复制"
+    else
+        log_warn "assistant-bundles目录不存在"
+    fi
+fi
+
 # 等待服务启动
 log_info "等待服务启动..."
 sleep 10
