@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -56,6 +57,81 @@
             color: #999999;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+        }
+
+        /* 视频演示区域 */
+        .video-demo-section {
+            margin: 60px 0;
+            padding: 40px;
+            background: linear-gradient(135deg, #f0f4f8 0%, #ffffff 100%);
+            border-radius: 12px;
+            border: 1px solid #e0e6ed;
+        }
+
+        .video-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .video-title {
+            font-size: 32px;
+            font-weight: 300;
+            color: #333333;
+            margin-bottom: 12px;
+            letter-spacing: -1px;
+        }
+
+        .video-subtitle {
+            font-size: 16px;
+            color: #666666;
+            max-width: 700px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+            background: #000;
+        }
+
+        .video-wrapper {
+            position: relative;
+            padding-bottom: 56.25%;
+            /* 16:9 宽高比 */
+            height: 0;
+            overflow: hidden;
+        }
+
+        .video-wrapper iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .video-caption {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 14px;
+            color: #888;
+        }
+
+        .video-caption a {
+            color: #00a1d6;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .video-caption a:hover {
+            text-decoration: underline;
         }
 
         .modules-section {
@@ -231,22 +307,45 @@
             .hero-title {
                 font-size: 28px;
             }
-            
+
             .hero-subtitle {
                 font-size: 16px;
             }
-            
+
             .hero-stats {
                 flex-direction: column;
                 gap: 20px;
             }
-            
+
+            .video-demo-section {
+                margin: 40px 0;
+                padding: 24px 16px;
+            }
+
+            .video-title {
+                font-size: 24px;
+            }
+
+            .video-subtitle {
+                font-size: 14px;
+            }
+
+            .video-container {
+                border-radius: 6px;
+            }
+
+            .video-caption {
+                font-size: 12px;
+                padding: 0 8px;
+            }
+
             .cta-buttons {
                 justify-content: center;
             }
         }
     </style>
 </head>
+
 <body>
     <!-- 顶部导航 -->
     <nav class="top-nav">
@@ -308,7 +407,7 @@
                     </div>
                     <div class="module-content">
                         <div class="difficulty-badge difficulty-moderate">配置难度：中等</div>
-                        
+
                         <div class="module-description">
                             无需编写复杂的测试代码，只需用自然语言描述测试意图，AI将自动识别页面元素并执行测试操作。支持智能断言和自适应执行策略。
                         </div>
@@ -362,7 +461,7 @@
                     </div>
                     <div class="module-content">
                         <div class="difficulty-badge difficulty-easy">配置难度：简单</div>
-                        
+
                         <div class="module-description">
                             AI助手Alex帮助您将模糊的业务想法转化为清晰的需求文档。通过智能对话，逐步澄清需求细节，自动生成标准化的PRD文档和用户故事。
                         </div>
@@ -406,6 +505,33 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- 视频演示区域 -->
+        <div class="video-demo-section">
+            <div class="video-header">
+                <h2 class="video-title">🎬 工具演示视频</h2>
+                <p class="video-subtitle">
+                    3分钟快速了解意图驱动测试框架的核心功能与使用方法，无需配置即可直观预览工具能力
+                </p>
+            </div>
+
+            <div class="video-container">
+                <div class="video-wrapper">
+                    <!-- B站视频嵌入 - 使用https协议以支持本地file://预览 -->
+                    <iframe
+                        src="https://player.bilibili.com/player.html?bvid=BV1i92LBsEDQ&page=1&high_quality=1&danmaku=0"
+                        scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"
+                        sandbox="allow-top-navigation allow-same-origin allow-forms allow-scripts"></iframe>
+                </div>
+            </div>
+
+            <div class="video-caption">
+                <p>
+                    💡 视频展示了用自然语言编写测试用例的完整流程 |
+                    <a href="https://www.bilibili.com/video/BV1i92LBsEDQ/" target="_blank">在B站观看完整版 →</a>
+                </p>
             </div>
         </div>
 
@@ -470,4 +596,5 @@
         </div>
     </main>
 </body>
+
 </html>
