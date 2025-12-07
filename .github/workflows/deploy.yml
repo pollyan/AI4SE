@@ -160,6 +160,17 @@ jobs:
           # 切换到部署目录
           cd /opt/intent-test-framework
           
+          # 构建代理包（在服务器上构建，确保 dist/ 目录存在）
+          echo "📦 构建本地代理包..."
+          if command -v node &> /dev/null; then
+            node scripts/build-proxy-package.js
+            echo "✅ 代理包构建完成"
+            ls -lh dist/intent-test-proxy.zip
+          else
+            echo "⚠️ Node.js 未安装，使用 GitHub Actions 构建的代理包"
+            # 代理包已经在 GitHub Actions 中构建并包含在部署文件中
+          fi
+          
           # 确保脚本有执行权限
           chmod +x scripts/deploy.sh
           
