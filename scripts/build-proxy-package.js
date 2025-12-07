@@ -729,20 +729,34 @@ try {
         fs.unlinkSync(zipPath);
     }
 
-    // 使用系统zip命令创建压缩包
+    // 尝试使用系统zip命令创建压缩包
     const cwd = path.join(__dirname, '..', 'dist');
-    execSync(`zip -r "${PACKAGE_NAME}.zip" "${PACKAGE_NAME}"`, {
-        cwd: cwd,
-        stdio: 'pipe'
-    });
+    try {
+        execSync(`zip -r "${PACKAGE_NAME}.zip" "${PACKAGE_NAME}"`, {
+            cwd: cwd,
+            stdio: 'pipe'
+        });
 
-    console.log('✅ ZIP文件创建成功！');
-    console.log(`📦 ZIP文件位置: ${zipPath}`);
+        console.log('✅ ZIP文件创建成功！');
+        console.log(`📦 ZIP文件位置: ${zipPath}`);
 
-    // 获取文件大小
-    const stats = fs.statSync(zipPath);
-    const fileSizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
-    console.log(`📊 文件大小: ${fileSizeInMB} MB`);
+        // 获取文件大小
+        const stats = fs.statSync(zipPath);
+        const fileSizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
+        console.log(`📊 文件大小: ${fileSizeInMB} MB`);
+    } catch (zipError) {
+        // zip 命令不可用，使用 Python 后备方案
+        console.log('⚠️ zip 命令不可用，使用 Python 创建 ZIP 文件');
+
+        const pythonScript = path.join(__dirname, 'create-proxy-zip.py');
+        execSync(`python3 "${pythonScript}"`, {
+            cwd: path.join(__dirname, '..'),
+            stdio: 'inherit'
+        });
+
+        console.log('✅ ZIP文件创建成功（Python）！');
+        console.log(`📦 ZIP文件位置: ${zipPath}`);
+    }
 } catch (error) {
     console.error('⚠️ ZIP文件创建失败:', error.message);
     console.log('💡 提示: 可以手动压缩 dist/intent-test-proxy 文件夹');
