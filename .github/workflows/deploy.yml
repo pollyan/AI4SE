@@ -175,14 +175,14 @@ jobs:
               # 后备方案：使用 Python 创建 ZIP（服务器肯定有 Python）
               echo "⚠️ Node.js 未安装，使用 Python 创建 ZIP 文件"
               
-              python3 << 'PYEOF'
+              python3 -c '
 import zipfile
 import os
 from pathlib import Path
 
-dist_dir = Path('dist')
-source_dir = dist_dir / 'intent-test-proxy'
-zip_path = dist_dir / 'intent-test-proxy.zip'
+dist_dir = Path("dist")
+source_dir = dist_dir / "intent-test-proxy"
+zip_path = dist_dir / "intent-test-proxy.zip"
 
 # 删除旧的 ZIP 文件
 if zip_path.exists():
@@ -191,8 +191,8 @@ if zip_path.exists():
 
 # 创建 ZIP 文件
 print(f"创建 ZIP 文件: {zip_path}")
-with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-    for file_path in source_dir.rglob('*'):
+with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+    for file_path in source_dir.rglob("*"):
         if file_path.is_file():
             arcname = file_path.relative_to(dist_dir)
             zipf.write(file_path, arcname)
@@ -206,7 +206,7 @@ if zip_path.exists():
 else:
     print("❌ ZIP 文件创建失败")
     exit(1)
-PYEOF
+'
               
               echo "✅ Python ZIP 创建完成"
               ls -lh dist/intent-test-proxy.zip
