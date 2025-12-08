@@ -160,7 +160,87 @@ jobs:
           # 切换到部署目录
           cd /opt/intent-test-framework
           
-          # 构建代理包（确保 ZIP 文件存在）
+          # ==========================================
+          # 步骤1: 配置环境变量
+          # ==========================================
+          echo "🔧 配置环境变量..."
+          
+          # 创建.env文件（如果不存在）
+          if [ ! -f .env ]; then
+            echo "创建新的.env文件..."
+            cat > .env << 'ENVEOF'
+          DB_USER=intent_user
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
+          FLASK_ENV=production
+          ENVEOF
+            echo "✅ .env文件已创建"
+          else
+            echo "✅ .env文件已存在，更新关键配置..."
+            # 更新密码和密钥（如果缺失）
+            grep -q "DB_PASSWORD=" .env || echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
+            grep -q "SECRET_KEY=" .env || echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> .env
+          fi
+          
+          # ==========================================
+          # 步骤2: 检查数据库迁移需求
+          # ==========================================
+          echo "🔍 检查数据库迁移需求..."
+          
+          NEED_MIGRATION=false
+          
+          # 检查是否存在旧的langfuse数据库容器
+          if docker ps -a --format '{{.Names}}' | grep -q "^langfuse-postgres-1$"; then
+            echo "⚠️ 检测到旧的langfuse-postgres-1容器"
+            
+            # 检查是否已经有新的数据库容器
+            if docker ps -a --format '{{.Names}}' | grep -q "^intent-test-db-prod$"; then
+              echo "✅ 新数据库容器已存在，跳过迁移"
+              NEED_MIGRATION=false
+            else
+              echo "需要执行数据库迁移"
+              NEED_MIGRATION=true
+            fi
+          else
+            echo "✅ 未检测到旧数据库，全新部署"
+            NEED_MIGRATION=false
+          fi
+          
+          # ==========================================
+          # 步骤3: 执行数据库迁移（如需要）
+          # ==========================================
+          if [ "$NEED_MIGRATION" = true ]; then
+            echo "📊 开始数据库迁移..."
+            echo "::group::Database Migration"
+            
+            # 先启动新的PostgreSQL容器
+            echo "启动新的PostgreSQL容器..."
+            sudo docker-compose -f docker-compose.prod.yml up -d postgres
+            
+            # 等待数据库就绪
+            echo "等待数据库就绪..."
+            sleep 10
+            
+            # 执行迁移脚本
+            chmod +x scripts/migrate_langfuse_to_local.sh
+            
+            # 非交互模式执行迁移
+            if ./scripts/migrate_langfuse_to_local.sh; then
+              echo "✅ 数据库迁移成功"
+            else
+              echo "❌ 数据库迁移失败"
+              echo "::endgroup::"
+              exit 1
+            fi
+            
+            echo "::endgroup::"
+          else
+            echo "跳过数据库迁移步骤"
+          fi
+          
+          # ==========================================
+          # 步骤4: 构建代理包
+          # ==========================================
           echo "📦 构建本地代理包..."
           
           # 检查 dist/intent-test-proxy 目录是否存在
@@ -186,6 +266,9 @@ jobs:
             fi
           fi
           
+          # ==========================================
+          # 步骤5: 执行部署
+          # ==========================================
           # 确保脚本有执行权限
           chmod +x scripts/deploy.sh
           

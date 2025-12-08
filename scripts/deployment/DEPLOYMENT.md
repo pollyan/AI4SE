@@ -46,6 +46,100 @@ sudo bash scripts/deployment/setup-database.sh
 postgresql://用户名:密码@localhost:5432/数据库名
 ```
 
+---
+
+## Docker部署方式（推荐）
+
+> [!TIP]
+> 使用Docker部署能确保本地和云端环境完全一致，推荐用于生产环境。
+
+### 1. Docker环境准备
+
+```bash
+# 安装Docker和Docker Compose（如果未安装）
+curl -fsSL https://get.docker.com | bash
+sudo usermod -aG docker $USER
+```
+
+### 2. 配置环境变量
+
+```bash
+cd /root/intent-test-framework
+cp .env.docker.example .env
+nano .env
+```
+
+**必须修改的配置**：
+```env
+DB_USER=intent_user
+DB_PASSWORD=你的强密码  # 必须修改！
+SECRET_KEY=你的随机密钥  # 必须修改！
+FLASK_ENV=production
+```
+
+### 3. 数据迁移（如果从旧环境升级）
+
+**如果你之前使用了共享的 `langfuse-postgres-1` 数据库**，需要执行数据迁移：
+
+```bash
+# 执行迁移脚本
+chmod +x scripts/migrate_langfuse_to_local.sh
+./scripts/migrate_langfuse_to_local.sh
+```
+
+详细迁移指南请参考：[数据库迁移指南](../../docs/database-migration-guide.md)
+
+### 4. 启动服务
+
+```bash
+# 启动所有服务（数据库 + Web应用 + Nginx）
+docker-compose -f docker-compose.prod.yml up -d
+
+# 查看服务状态
+docker-compose -f docker-compose.prod.yml ps
+
+# 查看日志
+docker-compose -f docker-compose.prod.yml logs -f
+```
+
+### 5. 验证部署
+
+```bash
+# 检查数据库连接
+docker exec -it intent-test-db-prod psql -U intent_user -d intent_test -c "\dt"
+
+# 测试Web应用
+curl http://localhost:5001/health
+curl http://服务器IP/health
+```
+
+### Docker服务管理
+
+```bash
+# 停止所有服务
+docker-compose -f docker-compose.prod.yml down
+
+# 重启服务
+docker-compose -f docker-compose.prod.yml restart
+
+# 查看日志
+docker-compose -f docker-compose.prod.yml logs -f web-app
+docker-compose -f docker-compose.prod.yml logs -f postgres
+
+# 进入容器调试
+docker-compose -f docker-compose.prod.yml exec web-app bash
+docker-compose -f docker-compose.prod.yml exec postgres psql -U intent_user -d intent_test
+```
+
+### 数据库访问
+
+- **从宿主机**: `psql -h localhost -p 5433 -U intent_user -d intent_test`
+- **从容器内**: `docker exec -it intent-test-db-prod psql -U intent_user -d intent_test`
+
+---
+
+## 传统部署方式
+
 ### 3. 应用代码部署
 
 ```bash
