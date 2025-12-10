@@ -60,11 +60,11 @@
         color: #333333;
     }
 
-    /* New QR Section */
+    /* New QR Section - Image Only */
     .qr-section {
         display: flex;
         justify-content: center;
-        gap: 24px;
+        gap: 32px;
         margin: 30px 0;
         padding: 24px;
         background: rgba(255, 255, 255, 0.5);
@@ -73,11 +73,8 @@
     }
 
     .qr-card {
-        display: flex;
-        align-items: center;
-        gap: 16px;
         background: #ffffff;
-        padding: 12px 20px;
+        padding: 12px;
         border-radius: 8px;
         border: 1px solid #e8e8e8;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -90,36 +87,19 @@
     }
 
     .qr-image-wrapper {
-        width: 80px;
-        height: 80px;
+        width: 140px;
+        height: 140px;
         display: flex;
         align-items: center;
         justify-content: center;
         overflow: hidden;
         border-radius: 4px;
-        background: #f8f8f8;
     }
 
     .qr-image-wrapper img {
         width: 100%;
         height: 100%;
-        object-fit: cover;
-    }
-
-    .qr-info {
-        text-align: left;
-    }
-
-    .qr-title {
-        font-size: 14px;
-        font-weight: 600;
-        color: #333333;
-        margin-bottom: 4px;
-    }
-
-    .qr-desc {
-        font-size: 12px;
-        color: #999999;
+        object-fit: contain;
     }
 
     .profile-links {
@@ -304,11 +284,7 @@
         .qr-section {
             flex-direction: column;
             align-items: center;
-        }
-
-        .qr-card {
-            width: 100%;
-            justify-content: center;
+            gap: 20px;
         }
 
         .profile-name {
@@ -361,22 +337,13 @@
         <div class="qr-section">
             <div class="qr-card">
                 <div class="qr-image-wrapper">
-                    <img src="/static/wechat-qr.jpg" alt="个人微信" title="个人微信">
-                </div>
-                <div class="qr-info">
-                    <div class="qr-title">个人微信</div>
-                    <div class="qr-desc">扫码添加好友</div>
+                    <img src="/static/wechat-qr.jpg" alt="个人微信" title="扫码添加个人微信">
                 </div>
             </div>
 
             <div class="qr-card">
                 <div class="qr-image-wrapper">
-                    <!-- 使用 object-fit: cover 自动裁剪白边 -->
-                    <img src="/static/wechat_oa_qr.png" alt="公众号" title="IT老兵-大头">
-                </div>
-                <div class="qr-info">
-                    <div class="qr-title">IT老兵-大头</div>
-                    <div class="qr-desc">扫码关注公众号</div>
+                    <img src="/static/wechat_oa_qr.png" alt="公众号" title="扫码关注公众号: IT老兵-大头">
                 </div>
             </div>
         </div>
