@@ -664,6 +664,21 @@
         text-decoration: underline;
     }
 
+    /* 开发中标签样式 */
+    .dev-badge {
+        display: inline-block;
+        background: #ffc107;
+        color: #333;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-left: 8px;
+        vertical-align: middle;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
     /* 消息结构调整 */
     .message-body {
         flex: 1;
@@ -786,6 +801,28 @@
 
         100% {
             transform: rotate(360deg);
+        }
+    }
+
+    /* 流式消息光标动画 */
+    .streaming-cursor {
+        display: inline-block;
+        margin-left: 2px;
+        animation: cursorBlink 1s step-end infinite;
+        color: #333333;
+        font-weight: bold;
+    }
+
+    @keyframes cursorBlink {
+
+        0%,
+        50% {
+            opacity: 1;
+        }
+
+        50.01%,
+        100% {
+            opacity: 0;
         }
     }
 
@@ -1767,6 +1804,149 @@
         }
     }
 
+    // 🆕 LangGraph 流式发送消息函数（使用 SSE）
+    async function sendMessageViaStream(content, showProcessing = true) {
+        try {
+            // 立即显示用户消息已在 sendMessage 中完成
+            // 这里只负责获取流式 AI 回复
+
+            // 🔧 流式模式下不显示"正在处理"动画，直接创建流式占位符
+            // 流式占位符的闪烁光标已经表示 AI 正在响应
+
+            // 创建一个空的 AI 消息占位符，用于流式更新
+            const aiMessageEl = createStreamingMessagePlaceholder();
+
+            // 准备请求配置（支持 FormData 或 JSON）
+            const isFormData = content instanceof FormData;
+            const requestOptions = {
+                method: 'POST',
+                headers: {},
+                body: isFormData ? content : JSON.stringify({ content: content })
+            };
+
+            if (!isFormData) {
+                requestOptions.headers['Content-Type'] = 'application/json';
+            }
+
+            // 使用 fetch 发送请求并接收流式响应
+            const response = await fetch(`/api/requirements/sessions/${currentSessionId}/messages/stream`, requestOptions);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            // 流式模式下无需 hideAiProcessing，因为从未调用 showAiProcessing
+
+            // 读取流式响应
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let fullContent = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+
+                if (done) {
+                    console.log('✅ 流式响应完成');
+                    break;
+                }
+
+                // 解码数据块
+                buffer += decoder.decode(value, { stream: true });
+
+                // 处理 SSE 格式的数据（data: {...}\n\n）
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop() || ''; // 保留未完成的行
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const jsonData = JSON.parse(line.slice(6)); // 移除 "data: " 前缀
+
+                            if (jsonData.type === 'content') {
+                                // 追加内容到 AI 消息
+                                fullContent += jsonData.chunk;
+                                updateStreamingMessage(aiMessageEl, fullContent);
+                            } else if (jsonData.type === 'done') {
+                                console.log('✅ AI 回复完成，消息ID:', jsonData.message_id);
+                                // 标记消息为完成状态
+                                finalizeStreamingMessage(aiMessageEl, jsonData.message_id);
+
+                                // 更新连接状态
+                                if (currentAssistant) {
+                                    updateConnectionStatus('connected', `AI助手${currentAssistant.name}已激活`);
+                                    isAIAssistantInitialized = true;
+                                    updateSendButtonState();
+                                }
+                            } else if (jsonData.type === 'error') {
+                                throw new Error(jsonData.message || '流式处理出错');
+                            }
+                        } catch (parseError) {
+                            console.error('解析 SSE 数据失败:', parseError, line);
+                        }
+                    }
+                }
+            }
+
+            // 确保滚动到底部
+            scrollToBottom();
+            return true;
+
+        } catch (error) {
+            console.error('流式发送消息失败:', error);
+            // 流式模式下无需 hideAiProcessing
+            showMessage('发送消息失败: ' + error.message, 'error');
+            return false;
+        }
+    }
+
+    // 创建流式消息占位符
+    function createStreamingMessagePlaceholder() {
+        const messagesArea = document.getElementById('messagesArea');
+        const messageEl = document.createElement('div');
+        messageEl.className = 'message assistant streaming';
+
+        messageEl.innerHTML = `
+            \u003cdiv class="message-avatar"\u003eAI\u003c/div\u003e
+            \u003cdiv class="message-body"\u003e
+                \u003cdiv class="message-content ai-formatted"\u003e
+                    \u003cspan class="streaming-cursor"\u003e▊\u003c/span\u003e
+                \u003c/div\u003e
+            \u003c/div\u003e
+        `;
+
+        messagesArea.appendChild(messageEl);
+        scrollToBottom();
+        return messageEl;
+    }
+
+    // 更新流式消息内容
+    function updateStreamingMessage(messageEl, content) {
+        const contentEl = messageEl.querySelector('.message-content');
+        if (contentEl) {
+            // 使用 marked 库渲染 Markdown（如果可用）
+            if (typeof marked !== 'undefined') {
+                contentEl.innerHTML = marked.parse(content) + '\u003cspan class="streaming-cursor"\u003e▊\u003c/span\u003e';
+            } else {
+                // 简单的换行处理
+                contentEl.innerHTML = content.replace(/\n/g, '\u003cbr\u003e') + '\u003cspan class="streaming-cursor"\u003e▊\u003c/span\u003e';
+            }
+            scrollToBottom();
+        }
+    }
+
+    // 完成流式消息
+    function finalizeStreamingMessage(messageEl, messageId) {
+        messageEl.classList.remove('streaming');
+        const cursor = messageEl.querySelector('.streaming-cursor');
+        if (cursor) {
+            cursor.remove();
+        }
+        if (messageId) {
+            messageEl.dataset.messageId = messageId;
+        }
+    }
+
     // 支持文件上传的HTTP发送消息函数
     async function sendMessageWithFiles(content, files) {
         console.log('📎 发送文件消息:', {
@@ -2282,13 +2462,8 @@
         const chatTitleEl = document.getElementById('chatTitle');
 
         if (chatTitleEl) {
-            chatTitleEl.textContent = `与${assistant.title
-                }
-
-            ${assistant.name
-                }
-
-            对话`;
+            // 🔧 添加 DEV 标签
+            chatTitleEl.innerHTML = `与${assistant.title} ${assistant.name} 对话 <span class="dev-badge">Dev</span>`;
         }
 
         else {
@@ -2986,27 +3161,28 @@
         updateAttachmentPreview(); // 更新附件预览
         updateSendButtonState();
 
-        // 延迟显示AI处理动效，确保用户消息先完成渲染和滚动
-        setTimeout(() => {
-            const assistantName = currentAssistant ? currentAssistant.name : 'AI助手';
 
-            showAiProcessing(`${assistantName
-                }
 
-                正在处理您的请求`);
-        }
-
-            , 200);
+        // 🔧 已全面启用流式模式，不再需要旧的 setTimeout "正在处理" 动画
+        // 流式占位符自带光标动画
 
         try {
-
-            // 使用HTTP发送消息（支持文件附件）
+            // 统一使用流式 API 发送消息
             if (filesToSend.length > 0) {
-                await sendMessageWithFiles(content, filesToSend);
-            }
+                // 构建 FormData 用于上传文件
+                const formData = new FormData();
+                formData.append('content', content || '');
 
-            else {
-                await sendMessageViaHTTP(content);
+                console.log('📎 准备发送带附件的消息:', filesToSend.length);
+                filesToSend.forEach((file, index) => {
+                    console.log(`📎 文件 ${index}:`, file.name, file.size);
+                    formData.append('files', file);
+                });
+
+                await sendMessageViaStream(formData);
+            } else {
+                // 纯文本消息
+                await sendMessageViaStream(content);
             }
         }
 

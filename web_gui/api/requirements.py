@@ -146,8 +146,9 @@ def create_session():
         # 获取助手类型参数
         assistant_type = data.get("assistant_type", "alex")
         
-        # 验证助手类型
-        if assistant_type not in IntelligentAssistantService.SUPPORTED_ASSISTANTS:
+        # 验证助手类型（支持 lisa 别名）
+        supported_types = list(IntelligentAssistantService.SUPPORTED_ASSISTANTS.keys()) + ['lisa']
+        if assistant_type not in supported_types:
             raise ValidationError(f"不支持的助手类型: {assistant_type}")
         
         # 生成UUID作为会话ID
@@ -628,6 +629,161 @@ def get_alex_bundle():
     """获取完整的Alex需求分析师Bundle内容 - 向后兼容端点"""
     # 直接调用新的助手bundle端点
     return get_assistant_bundle('alex')
+
+
+@requirements_bp.route("/sessions/<session_id>/messages/stream", methods=["POST"])
+def send_message_stream(session_id):
+    """
+    流式发送消息到会话（SSE 模式）
+    
+    使用 LangGraph 流式响应，逐块返回 AI 回复。
+    前端通过 EventSource 或 fetch 接收 SSE 数据。
+    """
+    from flask import Response, stream_with_context, current_app
+    import asyncio
+    
+    try:
+        # 验证会话是否存在
+        session = RequirementsSession.query.get(session_id)
+        if not session:
+            return standard_error_response("会话不存在", 404)
+            
+        if session.session_status != "active":
+            return standard_error_response("会话不在活跃状态", 400)
+        
+        # 获取请求数据（支持 JSON 和 Multipart）
+        content = ""
+        attached_files = []
+        
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            # Multipart 模式（支持文件）
+            content = request.form.get('content', '').strip()
+            files = request.files.getlist('files')
+            if files:
+                try:
+                    attached_files = process_uploaded_files(files)
+                    # 构建包含文件内容的完整消息
+                    content = build_message_with_files(content, attached_files)
+                except Exception as e:
+                    return standard_error_response(f"文件处理失败: {str(e)}", 400)
+        elif request.is_json:
+            # JSON 模式
+            data = request.get_json()
+            content = data.get("content", "").strip()
+        else:
+            return standard_error_response("请求格式错误：需要JSON或multipart/form-data格式", 400)
+        
+        if not content:
+            return standard_error_response("消息内容不能为空", 400)
+        
+        # 在生成器外部提取会话数据（避免 SQLAlchemy detached instance 错误）
+        user_context = json.loads(session.user_context or "{}")
+        assistant_type = user_context.get("assistant_type", "alex")
+        project_name = session.project_name
+        current_stage = session.current_stage
+        
+        # 保存用户消息
+        user_message = RequirementsMessage(
+            session_id=session_id,
+            message_type="user",
+            content=content,
+            message_metadata=json.dumps({
+                "stage": current_stage,
+                "char_count": len(content),
+                "source": "http_stream"
+            })
+        )
+        db.session.add(user_message)
+        db.session.commit()
+        
+        # 获取 Flask app 用于在生成器中创建应用上下文
+        app = current_app._get_current_object()
+        
+        def generate_stream():
+            """生成 SSE 流"""
+            full_response = []
+            
+            try:
+                # 导入 LangGraph 服务
+                from ..services.langgraph_agents import LangGraphAssistantService
+                
+                # 创建服务实例（禁用检查点以避免异步初始化复杂度）
+                service = LangGraphAssistantService(
+                    assistant_type=assistant_type,
+                    use_checkpointer=False  # 第一阶段暂不使用持久化
+                )
+                
+                # 运行异步流式处理
+                async def stream_async():
+                    await service.initialize()
+                    async for chunk in service.stream_message(
+                        session_id=session_id,
+                        user_message=content,
+                        project_name=project_name
+                    ):
+                        yield chunk
+                
+                # 在同步环境中运行异步代码
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                try:
+                    async_gen = stream_async()
+                    while True:
+                        try:
+                            chunk = loop.run_until_complete(async_gen.__anext__())
+                            full_response.append(chunk)
+                            # SSE 格式：data: <内容>\n\n
+                            yield f"data: {json.dumps({'chunk': chunk, 'type': 'content'})}\n\n"
+                        except StopAsyncIteration:
+                            break
+                finally:
+                    loop.close()
+                
+                # 流式完成后保存完整的 AI 回复
+                complete_response = "".join(full_response)
+                
+                if complete_response:
+                    # 在应用上下文中保存消息
+                    with app.app_context():
+                        ai_message = RequirementsMessage(
+                            session_id=session_id,
+                            message_type='ai',
+                            content=complete_response,
+                            message_metadata=json.dumps({
+                                'stage': current_stage,
+                                'assistant_type': assistant_type,
+                                'source': 'langgraph_stream'
+                            })
+                        )
+                        db.session.add(ai_message)
+                        db.session.commit()
+                        message_id = ai_message.id
+                    
+                    # 发送完成信号
+                    yield f"data: {json.dumps({'type': 'done', 'message_id': message_id})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'type': 'error', 'message': '未能获取 AI 回复'})}\n\n"
+                    
+            except Exception as e:
+                print(f"❌ 流式处理失败: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        
+        return Response(
+            stream_with_context(generate_stream()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no',  # 禁用 Nginx 缓冲
+                'Connection': 'keep-alive'
+            }
+        )
+        
+    except Exception as e:
+        print(f"❌ 流式端点错误: {str(e)}")
+        return standard_error_response(f"发送消息失败: {str(e)}", 500)
 
 
 @requirements_bp.route("/sessions/<session_id>/poll-messages", methods=["GET"])
