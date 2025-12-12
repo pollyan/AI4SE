@@ -2,20 +2,28 @@
 LangGraph 智能体服务封装
 
 提供统一的服务接口，支持：
-- 异步消息处理
-- 流式响应
-- 状态持久化（PostgreSQL）
-- 会话管理
+- 多种助手类型（Alex、Lisa 等）
+- 流式和非流式对话
+- PostgreSQL 持久化检查点
+- Langfuse 追踪和观测
 """
 
 import os
 import logging
-from typing import Dict, Any, AsyncIterator, Optional
+from typing import AsyncIterator, Optional, Dict, Any
 from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-from .state import AssistantState, create_initial_state
 from .graph import get_graph_for_assistant
+from .state import AssistantState
+
+# Langfuse 追踪支持
+try:
+    from langfuse.callback import CallbackHandler
+    LANGFUSE_AVAILABLE = True
+except ImportError:
+    LANGFUSE_AVAILABLE = False
+    CallbackHandler = None
 
 logger = logging.getLogger(__name__)
 
@@ -24,23 +32,51 @@ class LangGraphAssistantService:
     """
     LangGraph 智能体服务
     
-    管理智能体图的生命周期、状态持久化和消息处理。
+    提供基于 LangGraph 的智能助手功能，支持流式对话和检查点持久化。
     """
     
-    def __init__(self, assistant_type: str = 'alex', use_checkpointer: bool = True):
+    def __init__(self, assistant_type: str, database_url: Optional[str] = None, use_checkpointer: bool = True):
         """
-        初始化智能体服务
+        初始化 LangGraph 服务
         
         Args:
-            assistant_type: 智能体类型（alex 或 lisa）
-            use_checkpointer: 是否使用状态持久化
+            assistant_type: 助手类型 ('alex' 或 'lisa')
+            database_url: PostgreSQL 数据库连接 URL (可选)
+            use_checkpointer: 是否使用检查点持久化 (默认 True)
         """
         self.assistant_type = assistant_type
+        self.database_url = database_url
         self.use_checkpointer = use_checkpointer
-        self.checkpointer = None
+        self.session_id = None
         self.graph = None
+        self.checkpointer = None
+        self.langfuse_handler = None
         
         logger.info(f"初始化 LangGraph 智能体服务: {assistant_type}")
+        
+        # 配置 Langfuse 追踪（如果环境变量已设置且 SDK 可用）
+        if LANGFUSE_AVAILABLE:
+            langfuse_config = {
+                'public_key': os.getenv('LANGFUSE_PUBLIC_KEY'),
+                'secret_key': os.getenv('LANGFUSE_SECRET_KEY'),
+                'host': os.getenv('LANGFUSE_HOST', 'http://localhost:3000')
+            }
+            
+            if all(langfuse_config.values()):
+                try:
+                    self.langfuse_handler = CallbackHandler(
+                        public_key=langfuse_config['public_key'],
+                        secret_key=langfuse_config['secret_key'],
+                        host=langfuse_config['host']
+                    )
+                    logger.info(f"✅ Langfuse 追踪已启用 (host: {langfuse_config['host']})")
+                except Exception as e:
+                    logger.warning(f"⚠️ Langfuse 初始化失败: {e}")
+                    self.langfuse_handler = None
+            else:
+                logger.info("ℹ️ Langfuse 环境变量未完全配置，追踪功能已禁用")
+        else:
+            logger.info("ℹ️ Langfuse SDK 未安装，追踪功能已禁用")
     
     async def _setup_checkpointer(self):
         """
@@ -123,6 +159,11 @@ class LangGraphAssistantService:
                 }
             }
             
+            # 添加 Langfuse callbacks（如果已初始化）
+            if self.langfuse_handler:
+                config["configurable"]["callbacks"] = [self.langfuse_handler]
+                logger.info("Langfuse 追踪已添加到配置")
+            
             # 构建输入
             input_data = {
                 "messages": [HumanMessage(content=user_message)],
@@ -188,6 +229,11 @@ class LangGraphAssistantService:
                     "thread_id": session_id
                 }
             }
+            
+            # 添加 Langfuse callbacks（如果已初始化）
+            if self.langfuse_handler:
+                config["configurable"]["callbacks"] = [self.langfuse_handler]
+                logger.info("Langfuse 追踪已添加到流式配置")
             
             # 构建输入
             input_data = {

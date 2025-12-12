@@ -682,15 +682,49 @@ def send_message_stream(session_id):
         project_name = session.project_name
         current_stage = session.current_stage
         
+        # 检查是否是激活消息（仅依靠内容特征，不依赖长度）
+        # 1. Bundle + 激活指令组合
+        # 2. YAML格式配置 + agent定义  
+        # 3. 关键操作指令的组合模式
+        is_activation_message = (
+            # Bundle激活模式：包含明确的Bundle标识和激活指令
+            ("Bundle" in content and ("activation-instructions" in content or "persona:" in content)) or
+            # YAML配置模式：包含YAML格式的agent配置
+            ("```yaml" in content and "agent:" in content) or
+            # 操作指令模式：包含关键操作指令的组合
+            ("你的关键操作指令" in content and "请严格按照" in content and "persona执行" in content)
+        )
+        
+        # 字符长度限制：支持环境变量覆盖
+        max_len_env = os.getenv('REQUIREMENTS_MESSAGE_MAX_LEN')
+        is_testing_env = os.getenv('TESTING', '').lower() in ['1', 'true', 'yes']
+        if max_len_env and max_len_env.isdigit():
+            max_length = int(max_len_env)
+        else:
+            if is_activation_message:
+                max_length = 50000
+            else:
+                max_length = 2000 if is_testing_env else 10000
+                
+        if len(content) > max_length:
+            message = (
+                f"激活消息内容不能超过{max_length}字符"
+                if is_activation_message
+                else f"消息内容不能超过{max_length}字符"
+            )
+            return standard_error_response(message, 400)
+        
         # 保存用户消息
         user_message = RequirementsMessage(
             session_id=session_id,
-            message_type="user",
+            message_type="system" if is_activation_message else "user",
             content=content,
             message_metadata=json.dumps({
                 "stage": current_stage,
                 "char_count": len(content),
-                "source": "http_stream"
+                "source": "http_stream",
+                "is_activation": is_activation_message,
+                "has_attachments": len(attached_files) > 0
             })
         )
         db.session.add(user_message)

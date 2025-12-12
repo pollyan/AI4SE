@@ -1,13 +1,15 @@
 """
-LangGraph 图节点定义
+LangGraph 节点定义
 
-第一阶段：纯提示词驱动
-只需要核心的 chat_node，其他分析逻辑都由 LLM 在对话中完成。
+定义 LangGraph 图中的节点函数。
 """
 
 import logging
+import os
 from pathlib import Path
-from langchain_core.messages import AIMessage, SystemMessage
+from typing import Optional
+from langchain_core.messages import SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
 from .state import AssistantState
@@ -86,15 +88,13 @@ def get_fallback_persona(assistant_type: str) -> str:
         return "你是一个专业的 AI 助手。"
 
 
-def chat_node(state: AssistantState) -> AssistantState:
+def chat_node(state: AssistantState, config: Optional[RunnableConfig] = None) -> AssistantState:
     """
-    核心对话节点 - 调用 LLM 生成回复
-    
-    这是第一阶段唯一需要的节点，所有分析逻辑都在 Bundle 提示词中
-    由 LLM 自动完成。
+    执行 AI 对话节点
     
     Args:
         state: 当前状态
+        config: LangGraph 运行时配置（可包含 callbacks）
         
     Returns:
         更新后的状态（包含 AI 回复）
@@ -107,18 +107,25 @@ def chat_node(state: AssistantState) -> AssistantState:
     try:
         # 获取 AI 配置
         from ...models import RequirementsAIConfig
-        config = RequirementsAIConfig.get_default_config()
+        config_obj = RequirementsAIConfig.get_default_config()
         
-        if not config:
+        if not config_obj:
             raise ValueError("未找到 AI 配置，请先在系统中配置 AI 服务")
+        
+        # 获取 callbacks（从 LangGraph config）
+        callbacks = []
+        if config and 'callbacks' in config.get('configurable', {}):
+            callbacks = config['configurable']['callbacks']
+            logger.info(f"使用 Langfuse callbacks: {len(callbacks)} 个")
         
         # 初始化 LLM（启用流式响应）
         llm = ChatOpenAI(
-            api_key=config.api_key,
-            base_url=config.base_url,
-            model=config.model_name,
+            api_key=config_obj.api_key,
+            base_url=config_obj.base_url,
+            model=config_obj.model_name,
             temperature=0.7,
             streaming=True,
+            callbacks=callbacks  # 传递 Langfuse callbacks
         )
         
         # 准备消息列表

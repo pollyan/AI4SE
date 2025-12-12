@@ -39,3 +39,6 @@ langgraph-checkpoint-postgres>=3.0.1
 
 # 异步支持（LangGraph 需要）
 aiohttp>=3.9.0
+
+# Langfuse - LLM 追踪和观测
+langfuse>=3.0.0
