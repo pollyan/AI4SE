@@ -36,6 +36,8 @@ def register_api_routes(app):
     from .ai_configs import ai_configs_bp
     app.register_blueprint(ai_configs_bp)
     
+
+    
     # 兼容：部分模块使用独立蓝图（如 testcases_bp）而非 api_bp 装饰
     try:
         from .testcases import testcases_bp

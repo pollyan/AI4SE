@@ -187,13 +187,24 @@ def register_blueprints(app):
     @app.route("/requirements-analyzer")
     @app.route("/requirements")
     def requirements_analyzer_page():
-        """需求分析页面"""
+        """智能需求分析助手页面"""
         try:
             from flask import render_template
             return render_template("requirements_analyzer.html")
-        except:
-            return {"error": "无法加载页面"}
+        except Exception as e:
+            logger.error(f"渲染需求分析页面失败: {str(e)}")
+            return render_template("error.html", error_message=str(e)), 500
     
+    @app.route("/testgen")
+    def testgen_page():
+        """测试用例生成器页面"""
+        try:
+            from flask import render_template
+            return render_template("testgen.html")
+        except Exception as e:
+            logger.error(f"渲染测试生成页面失败: {str(e)}")
+            return render_template("error.html", error_message=str(e)), 500
+
     @app.route("/config-management")
     @app.route("/configs")
     def config_management_page():

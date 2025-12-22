@@ -1,12 +1,13 @@
 """
 LangGraph 图定义
 
-定义智能体的工作流图（第一阶段：纯提示词驱动）：
-- create_alex_graph: Alex 需求分析师的图
-- create_lisa_graph: Lisa Song 测试分析师的图
+定义智能体的工作流图：
+- create_alex_graph: Alex 需求分析师的图（纯提示词驱动）
+- create_lisa_graph: Lisa Song 测试分析师的图（向后兼容）
+- create_lisa_v2_graph: Lisa v2 图（LangGraph 驱动，MVP）
 
-当前两个智能体都使用最简单的流程：START → chat → END
-所有分析逻辑都在 Bundle 提示词中由 LLM 自动完成。
+Alex 使用最简单的流程：START → chat → END
+Lisa v2 使用结构化工作流：意图识别 → 工作流子图
 """
 
 import logging
@@ -14,6 +15,9 @@ from langgraph.graph import StateGraph, START, END
 
 from .state import AssistantState
 from .nodes import chat_node
+
+# 导入 Lisa v2
+from .lisa_v2.graph import create_lisa_v2_graph
 
 logger = logging.getLogger(__name__)
 
@@ -88,13 +92,14 @@ def create_lisa_graph(checkpointer=None):
     return graph
 
 
-def get_graph_for_assistant(assistant_type: str, checkpointer=None):
+def get_graph_for_assistant(assistant_type: str, checkpointer=None, use_v2: bool = True):
     """
     根据智能体类型获取对应的图
     
     Args:
         assistant_type: 智能体类型（alex 或 lisa）
         checkpointer: 可选的检查点保存器
+        use_v2: 是否使用 Lisa v2（LangGraph 驱动版本），默认启用
         
     Returns:
         编译后的图
@@ -102,6 +107,11 @@ def get_graph_for_assistant(assistant_type: str, checkpointer=None):
     if assistant_type == "alex":
         return create_alex_graph(checkpointer)
     elif assistant_type in ("lisa", "song"):  # 兼容旧名称
-        return create_lisa_graph(checkpointer)
+        if use_v2:
+            logger.info("使用 Lisa v2（LangGraph 驱动）")
+            return create_lisa_v2_graph(checkpointer)
+        else:
+            logger.info("使用 Lisa v1（纯提示词驱动，向后兼容）")
+            return create_lisa_graph(checkpointer)
     else:
         raise ValueError(f"未知的智能体类型: {assistant_type}")

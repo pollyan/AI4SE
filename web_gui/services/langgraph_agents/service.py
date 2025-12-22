@@ -224,6 +224,23 @@ class LangGraphAssistantService:
                 "is_activated": is_activated,  # ✨ 传递激活状态
             }
             
+            # 🚨 临时调试：绕过图，直接返回固定响应
+            BYPASS_GRAPH = False  # 设为 False 恢复正常
+            
+            if BYPASS_GRAPH and self.assistant_type == "lisa_v2":
+                logger.warning("🚨 使用调试绕过模式")
+                test_response = """您好！我是 **Lisa Song**，您的首席测试领域专家。
+
+**【调试模式】** 这是一个固定的测试响应，用于排查问题。
+
+请告诉我您的测试需求。"""
+                
+                # 模拟打字效果
+                for char in test_response:
+                    yield char
+                    await asyncio.sleep(0.01)
+                return
+            
             # 流式调用图
             has_streamed_content = False
             async for event in self.graph.astream_events(input_data, config=config, version="v2"):
