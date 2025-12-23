@@ -420,8 +420,23 @@ def send_message(session_id):
                     raise Exception(f"AI服务返回的结果无效: {ai_result}")
                 
                 # ✨ 清理 JSON 元数据
-                from web_gui.services.langgraph_agents.lisa_v2.utils.metadata_parser import extract_natural_response
-                cleaned_ai_response = extract_natural_response(ai_result['ai_response'])
+                # ✨ 清理 JSON 元数据
+                # 简单的内联清理逻辑，替代之前的 extract_natural_response
+                raw_response = ai_result['ai_response']
+                if isinstance(raw_response, str):
+                    # 移除可能的 markdown 代码块标记
+                    cleaned_ai_response = raw_response.strip()
+                    if cleaned_ai_response.startswith('```json'):
+                        cleaned_ai_response = cleaned_ai_response[7:]
+                    elif cleaned_ai_response.startswith('```'):
+                        cleaned_ai_response = cleaned_ai_response[3:]
+                    
+                    if cleaned_ai_response.endswith('```'):
+                        cleaned_ai_response = cleaned_ai_response[:-3]
+                    
+                    cleaned_ai_response = cleaned_ai_response.strip()
+                else:
+                    cleaned_ai_response = str(raw_response)
                 
                 ai_message = RequirementsMessage(
                     session_id=session_id,
@@ -791,23 +806,15 @@ def send_message_stream(session_id):
                 if is_testing_env:
                    import traceback
                    traceback.print_exc()
-                # 降级使用 LangGraph
-                from ..services.langgraph_agents import LangGraphAssistantService
-                service = LangGraphAssistantService(
-                    assistant_type=assistant_type,
-                    use_checkpointer=False
-                )
+                # ADK失败则直接报错，不再回退到LangGraph
+                raise import_err
             except Exception as create_err:
                 logger.error(f"ADK 服务创建失败: {create_err}")
                 if is_testing_env:
                    import traceback
                    traceback.print_exc()
-                # 降级使用 LangGraph
-                from ..services.langgraph_agents import LangGraphAssistantService
-                service = LangGraphAssistantService(
-                    assistant_type=assistant_type,
-                    use_checkpointer=False
-                )
+                # ADK失败则直接报错，不再回退到LangGraph
+                raise create_err
                 
             try:
                 async def stream_async():
