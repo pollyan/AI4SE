@@ -41,7 +41,7 @@ def _cleanup_expired_sessions():
     ]
     for sid in expired_sessions:
         del _session_state_cache[sid]
-        print(f"🗑️ 清理过期会话状态: {sid[:8]}")
+
 
 def _get_session_activated(session_id: str) -> bool:
     """获取会话的激活状态"""
@@ -54,13 +54,13 @@ def _set_session_activated(session_id: str, is_activated: bool = True):
         'is_activated': is_activated,
         'last_access': datetime.now()
     }
-    print(f"✅ 会话状态已{'激活' if is_activated else '重置'}: {session_id[:8]}")
+
 
 def _clear_session_state(session_id: str):
     """清除会话状态（用户退出时调用）"""
     if session_id in _session_state_cache:
         del _session_state_cache[session_id]
-        print(f"🗑️ 清除会话状态: {session_id[:8]}")
+
 
 # 初始化 logger
 logger = logging.getLogger(__name__)
@@ -83,23 +83,23 @@ def get_ai_service(assistant_type='alex'):
             missing_fields = [field for field in required_fields if not config_data.get(field)]
             
             if missing_fields:
-                print(f"❌ AI配置不完整，缺少字段: {missing_fields}")
+
                 return None
             
             # 创建AI服务实例
             ai_service = IntelligentAssistantService(config=config_data, assistant_type=assistant_type)
             assistant_info = IntelligentAssistantService.SUPPORTED_ASSISTANTS.get(assistant_type, {})
-            print(f"✅ 智能助手AI服务初始化成功，使用{assistant_info.get('title', '')} {assistant_info.get('name', '')}，配置: {default_config.config_name}")
+
             return ai_service
         else:
             # 如果没有默认配置，返回None而不是使用环境变量
-            print("⚠️ 未找到默认AI配置")
+
             return None
     except ImportError as e:
-        print(f"❌ 无法导入AI配置模块: {e}")
+
         return None
     except Exception as e:
-        print(f"⚠️ 智能助手AI服务初始化失败: {e}")
+
         return None
 
 # 创建蓝图
@@ -163,8 +163,7 @@ def build_message_with_files(message_content, attached_files):
         parts.append(message_content)
     
     combined_message = "\n".join(parts)
-    print(f"📎 构建完整消息: 文件数={len(attached_files)}, 原始消息长度={len(message_content) if message_content else 0}, 合并后长度={len(combined_message)}")
-    print(f"📎 文件列表: {[f['filename'] for f in attached_files]}")
+
     return combined_message
 
 
@@ -375,21 +374,21 @@ def send_message(session_id):
         db.session.commit()
         
         # 根据助手类型获取对应的AI服务
-        print(f"🔧 初始化AI服务: 助手类型={assistant_type}")
+
         try:
             ai_svc = get_ai_service(assistant_type=assistant_type)
             if ai_svc is None:
                 error_msg = f"AI服务初始化失败：未找到有效的AI配置或服务初始化失败。请检查AI服务配置或联系管理员。"
-                print(f"❌ {error_msg}")
+                logger.error(error_msg)
                 raise Exception(error_msg)
-            print(f"✅ AI服务初始化成功")
+
         except Exception as ai_init_error:
-            print(f"❌ AI服务初始化异常: {ai_init_error}")
+            logger.error(f"AI服务初始化异常: {ai_init_error}")
             # 直接抛出异常，让外层的try-catch处理
             raise ai_init_error
         
         try:
-            print(f"🔍 开始处理消息: 会话ID={session_id}, 助手类型={assistant_type}, 消息长度={len(full_content)}, 激活消息={is_activation_message}")
+            logger.debug(f"开始处理消息: 会话ID={session_id}, 助手类型={assistant_type}, 消息长度={len(full_content)}, 激活消息={is_activation_message}")
             
             # 构建会话上下文
             try:
@@ -398,13 +397,13 @@ def send_message(session_id):
                     'ai_context': json.loads(session.ai_context) if session.ai_context else {},
                     'consensus_content': json.loads(session.consensus_content) if session.consensus_content else {}
                 }
-                print(f"✅ 会话上下文构建成功")
+
             except Exception as ctx_error:
-                print(f"❌ 构建会话上下文失败: {ctx_error}")
+                logger.error(f"构建会话上下文失败: {ctx_error}")
                 raise Exception(f"会话上下文构建失败: {str(ctx_error)}")
             
             # 调用智能助手分析服务（传入包含文件内容的完整消息）
-            print(f"🤖 开始调用AI服务: {ai_svc.__class__.__name__}")
+            logger.info(f"开始调用AI服务: {ai_svc.__class__.__name__}")
             ai_result = ai_svc.analyze_user_requirement(
                 user_message=full_content,  # 使用包含文件内容的完整消息
                 session_context=session_context,
@@ -412,10 +411,10 @@ def send_message(session_id):
                 current_stage=session.current_stage,
                 session_id=session_id
             )
-            print(f"✅ AI服务调用完成")
+
             
             # 创建AI响应消息
-            print(f"💾 开始创建数据库记录")
+
             try:
                 if not ai_result or 'ai_response' not in ai_result:
                     raise Exception(f"AI服务返回的结果无效: {ai_result}")
@@ -434,38 +433,38 @@ def send_message(session_id):
                         'source': 'http'
                     })
                 )
-                print(f"✅ AI响应消息对象创建成功")
+
             except Exception as msg_error:
-                print(f"❌ 创建AI响应消息对象失败: {msg_error}")
+                logger.error(f"创建AI响应消息对象失败: {msg_error}")
                 raise Exception(f"AI响应消息创建失败: {str(msg_error)}")
             
             # 可配置：是否持久化会话上下文/共识内容，默认不开启以减少写入
             should_persist_context = os.getenv('REQUIREMENTS_PERSIST_CONTEXT', '0') == '1'
-            print(f"⚙️ 持久化上下文开关: {should_persist_context}")
+
             if should_persist_context:
                 try:
                     session.ai_context = json.dumps(ai_result.get('ai_context', session_context['ai_context']))
                     session.consensus_content = json.dumps(ai_result.get('consensus_content', {}))
                     session.current_stage = ai_result.get('stage', session.current_stage)
                     session.updated_at = datetime.utcnow()
-                    print(f"✅ 会话状态更新成功")
+
                 except Exception as session_error:
-                    print(f"❌ 更新会话状态失败: {session_error}")
+                    logger.error(f"更新会话状态失败: {session_error}")
                     raise Exception(f"会话状态更新失败: {str(session_error)}")
             
             # 保存到数据库
-            print(f"💾 提交数据库事务")
+
             try:
                 db.session.add(ai_message)
                 db.session.commit()
-                print(f"✅ 数据库事务提交成功")
+
             except Exception as db_error:
-                print(f"❌ 数据库事务失败: {db_error}")
+                logger.error(f"数据库事务失败: {db_error}")
                 db.session.rollback()
                 raise Exception(f"数据库保存失败: {str(db_error)}")
             
             # 构建响应数据（不强制返回大型分析结构）
-            print(f"📦 构建响应数据")
+
             try:
                 response_data = {
                     'ai_message': ai_message.to_dict(),
@@ -474,12 +473,12 @@ def send_message(session_id):
                 
                 # 向后兼容：用户消息（若非激活）
                 response_data['user_message'] = user_message.to_dict() if not is_activation_message else None
-                print(f"✅ 响应数据构建成功")
+
             except Exception as resp_error:
-                print(f"❌ 构建响应数据失败: {resp_error}")
+                logger.error(f"构建响应数据失败: {resp_error}")
                 raise Exception(f"响应数据构建失败: {str(resp_error)}")
             
-            print(f"✅ 消息处理完成")
+
             return standard_success_response(
                 data=response_data,
                 message="消息处理成功"
@@ -487,7 +486,7 @@ def send_message(session_id):
             
         except Exception as ai_error:
             error_details = str(ai_error)
-            print(f"❌ AI服务调用失败: {error_details}")
+            logger.error(f"AI服务调用失败: {error_details}")
             
             # 分析具体的错误类型，提供更有用的错误信息
             if "api_key" in error_details.lower() or "unauthorized" in error_details.lower():
@@ -541,19 +540,16 @@ def send_message(session_id):
                 )
         
     except (ValidationError, NotFoundError) as e:
-        print(f"❌ 验证或查找错误: {e.__class__.__name__}: {e}")
+
         return standard_error_response(e.message, e.code if hasattr(e, 'code') else 400)
     except Exception as e:
-        print(f"❌ 未处理的异常发生: {e.__class__.__name__}: {str(e)}")
-        print(f"❌ 异常堆栈信息:")
+        logger.error(f"未处理的异常发生: {str(e)}")
         import traceback
         traceback.print_exc()
         
         db.session.rollback()
-        print(f"❌ 数据库事务已回滚")
         
         error_response = standard_error_response(f"发送消息失败: {str(e)}", 500)
-        print(f"❌ 返回500错误响应: {error_response}")
         return error_response
 
 
@@ -775,21 +771,45 @@ def send_message_stream(session_id):
         # 获取 Flask app 用于在生成器中创建应用上下文
         app = current_app._get_current_object()
         
+        import sys
+        
         def generate_stream():
             """生成 SSE 流"""
             full_response = []
             
             try:
-                # 导入 LangGraph 服务
-                from ..services.langgraph_agents import LangGraphAssistantService
+                # 导入 ADK 服务
+                from ..services.adk_agents import AdkAssistantService
                 
-                # 创建服务实例（禁用检查点以避免异步初始化复杂度）
-                service = LangGraphAssistantService(
-                    assistant_type=assistant_type,
-                    use_checkpointer=False  # 第一阶段暂不使用持久化
+                # 创建服务实例
+                service = AdkAssistantService(
+                    assistant_type=assistant_type
                 )
                 
-                # 运行异步流式处理
+            except ImportError as import_err:
+                logger.error(f"ADK 导入失败: {import_err}")
+                if is_testing_env:
+                   import traceback
+                   traceback.print_exc()
+                # 降级使用 LangGraph
+                from ..services.langgraph_agents import LangGraphAssistantService
+                service = LangGraphAssistantService(
+                    assistant_type=assistant_type,
+                    use_checkpointer=False
+                )
+            except Exception as create_err:
+                logger.error(f"ADK 服务创建失败: {create_err}")
+                if is_testing_env:
+                   import traceback
+                   traceback.print_exc()
+                # 降级使用 LangGraph
+                from ..services.langgraph_agents import LangGraphAssistantService
+                service = LangGraphAssistantService(
+                    assistant_type=assistant_type,
+                    use_checkpointer=False
+                )
+                
+            try:
                 async def stream_async():
                     await service.initialize()
                     
@@ -855,7 +875,7 @@ def send_message_stream(session_id):
                     yield f"data: {json.dumps({'type': 'error', 'message': '未能获取 AI 回复'})}\n\n"
                     
             except Exception as e:
-                print(f"❌ 流式处理失败: {str(e)}")
+                logger.error(f"流式处理失败: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
@@ -871,7 +891,7 @@ def send_message_stream(session_id):
         )
         
     except Exception as e:
-        print(f"❌ 流式端点错误: {str(e)}")
+        logger.error(f"流式端点错误: {str(e)}")
         return standard_error_response(f"发送消息失败: {str(e)}", 500)
 
 
@@ -1041,7 +1061,7 @@ def register_requirements_socketio(socketio: SocketIO):
             'session_info': session.to_dict()
         })
         
-        print(f"用户 {request.sid} 加入需求分析会话: {session_id}")
+
     
     @socketio.on('leave_requirements_session')
     def on_leave_session(data):
@@ -1054,7 +1074,7 @@ def register_requirements_socketio(socketio: SocketIO):
             del active_sessions[request.sid]
             
         emit('left_session', {'session_id': session_id})
-        print(f"用户 {request.sid} 离开需求分析会话: {session_id}")
+
     
     @socketio.on('requirements_message')
     def on_requirements_message(data):
@@ -1125,7 +1145,7 @@ def register_requirements_socketio(socketio: SocketIO):
                 }
                 
                 # 调用智能助手分析服务
-                print(f"🤖 调用AI助手分析用户消息: {content[:50]}...")
+
                 ai_result = ai_svc.analyze_user_requirement(
                     user_message=content,
                     session_context=session_context,
@@ -1173,10 +1193,10 @@ def register_requirements_socketio(socketio: SocketIO):
                     'current_stage': session.current_stage
                 }, room=f'requirements_{session_id}')
                 
-                print(f"✅ AI助手处理完成，生成了{len(ai_result.get('clarification_questions', []))}个澄清问题")
+
                 
             except Exception as ai_error:
-                print(f"❌ AI服务调用失败: {str(ai_error)}")
+                logger.error(f"AI服务调用失败: {str(ai_error)}")
                 # 发送AI服务错误消息
                 error_message = RequirementsMessage(
                     session_id=session_id,
@@ -1198,7 +1218,7 @@ def register_requirements_socketio(socketio: SocketIO):
                 }, room=f'requirements_{session_id}')
             
         except Exception as e:
-            print(f"处理需求分析消息时出错: {str(e)}")
+            logger.error(f"处理需求分析消息时出错: {str(e)}")
             emit('error', {'message': f'处理消息失败: {str(e)}'})
     
     @socketio.on('disconnect')
@@ -1208,7 +1228,7 @@ def register_requirements_socketio(socketio: SocketIO):
             session_id = active_sessions[request.sid]
             leave_room(f'requirements_{session_id}')
             del active_sessions[request.sid]
-            print(f"客户端 {request.sid} 断开连接，清理会话: {session_id}")
+
 
 
 # 注意：根据BMAD架构原则，以下函数已移除

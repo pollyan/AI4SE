@@ -43,3 +43,9 @@ aiohttp>=3.9.0
 
 # LangSmith - LLM 追踪和观测（LangChain 官方方案）
 langsmith>=0.1.0
+
+# Google ADK - Agent Development Kit
+google-adk>=1.2.1
+litellm>=1.0.0
+google-genai>=0.3.0
+openai>=1.12.0

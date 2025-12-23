@@ -1,0 +1,155 @@
+"""
+ADK Assistant Service
+
+提供统一的服务接口，与原 LangGraphAssistantService 保持相同签名。
+"""
+
+import logging
+from typing import AsyncIterator, Optional
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.adk.agents import RunConfig
+from google.adk.agents.run_config import StreamingMode
+from google.genai import types
+
+logger = logging.getLogger(__name__)
+
+
+class AdkAssistantService:
+    """
+    Google ADK 智能体服务
+    
+    替代 LangGraphAssistantService，提供相同的接口。
+    """
+    
+    def __init__(self, assistant_type: str):
+        """
+        初始化 ADK 服务
+        
+        Args:
+            assistant_type: 智能体类型 ('alex' 或 'lisa')
+        """
+        self.assistant_type = assistant_type
+        self.runner = None
+        self.session_service = InMemorySessionService()
+        
+        logger.info(f"初始化 ADK 智能体服务: {assistant_type}")
+    
+    async def initialize(self):
+        """异步初始化服务"""
+        logger.info(f"异步初始化 {self.assistant_type} 智能体")
+        
+        # 获取模型配置
+        from ...models import RequirementsAIConfig
+        
+        config = RequirementsAIConfig.get_default_config()
+        if not config:
+            raise ValueError("未找到 AI 配置，请先在系统中配置 AI 服务")
+        
+        model_config = config.get_config_for_ai_service()
+        
+        # 创建对应的 Agent
+        if self.assistant_type == "alex":
+            from .alex import create_alex_agent
+            agent = create_alex_agent(model_config)
+        elif self.assistant_type in ("lisa", "song"):
+            from .lisa import create_lisa_agent
+            agent = create_lisa_agent(model_config)
+        else:
+            raise ValueError(f"未知的智能体类型: {self.assistant_type}")
+        
+        # 创建 Runner
+        self.runner = Runner(
+            agent=agent,
+            app_name="intent-test-framework",
+            session_service=self.session_service
+        )
+        
+        logger.info(f"{self.assistant_type} 智能体初始化完成")
+    
+    async def stream_message(
+        self,
+        session_id: str,
+        user_message: str,
+        project_name: Optional[str] = None,
+        is_activated: bool = False
+    ) -> AsyncIterator[str]:
+        """
+        流式处理消息
+        
+        接口与 LangGraphAssistantService.stream_message 保持一致。
+        
+        Args:
+            session_id: 会话 ID
+            user_message: 用户消息内容
+            project_name: 可选的项目名称
+            is_activated: 会话是否已激活（保留参数，兼容接口）
+            
+        Yields:
+            AI 回复的文本片段
+        """
+        if not self.runner:
+            await self.initialize()
+        
+        logger.info(f"流式处理消息 - 会话: {session_id}, 消息长度: {len(user_message)}")
+        
+        try:
+            # 创建或获取 session
+            session = await self.session_service.get_session(
+                app_name="intent-test-framework",
+                user_id="default",
+                session_id=session_id
+            )
+            
+            if not session:
+                session = await self.session_service.create_session(
+                    app_name="intent-test-framework",
+                    user_id="default",
+                    session_id=session_id
+                )
+                logger.info(f"创建新会话: {session_id}")
+            
+            # 构建消息
+            content = types.Content(
+                role="user",
+                parts=[types.Part(text=user_message)]
+            )
+            
+            # 流式运行 - ADK 会产生多个增量事件
+            logger.info(f"开始流式运行 ADK agent...")
+            previous_text = ""
+            event_count = 0
+            
+            async for event in self.runner.run_async(
+                user_id="default",
+                session_id=session_id,
+                new_message=content,
+                run_config=RunConfig(streaming_mode=StreamingMode.SSE)
+            ):
+                event_count += 1
+                
+                # ADK 事件包含累积的完整文本，需要提取增量部分
+                if event.content and event.content.parts:
+                    for part in event.content.parts:
+                        if part.text:
+                            current_text = part.text
+                            # 提取新增的文本（增量）
+                            if current_text.startswith(previous_text):
+                                delta = current_text[len(previous_text):]
+                                if delta:
+                                    logger.debug(f"流式输出增量: {len(delta)} 字符")
+                                    yield delta
+                                    previous_text = current_text
+                            else:
+                                # 如果文本不是累积的，直接输出
+                                logger.debug(f"流式输出完整: {len(current_text)} 字符")
+                                yield current_text
+                                previous_text = current_text
+            
+            logger.info(f"流式消息处理完成，总计: {len(previous_text)} 字符")
+            
+        except Exception as e:
+            logger.error(f"流式处理消息失败: {str(e)}")
+            yield f"\n\n错误: {str(e)}"
+
+

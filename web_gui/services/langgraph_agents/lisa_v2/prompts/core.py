@@ -36,20 +36,39 @@ LISA_PRINCIPLES = """
 """.strip()
 
 
-# ============ 1.4 Analysis Techniques (分析技术库) ============
+# ============ 1.4 Knowledge & Techniques (知识与技术库) ============
 LISA_TECHNIQUES = """
-### 分析技术库 (Analysis Techniques)
+### 1.4 Knowledge & Techniques (知识与技术库)
 
-以下是你可以自主选择的分析技术，请根据具体场景选用最合适的方法：
+### 1.4. Knowledge & Techniques (技能工具箱)
 
-- **思维导图 (Mind Map)**: 用于需求结构分解，梳理层级关系
-- **FMEA (失效模式与影响分析)**: 识别潜在失效点及其影响
-- **决策表 (Decision Table)**: 覆盖复杂业务规则的所有组合
-- **等价类划分 (Equivalence Partitioning)**: 将输入域划分为有效和无效类
-- **边界值分析 (Boundary Value Analysis)**: 测试边界条件和临界值
-- **状态转换图 (State Transition Diagram)**: 验证系统状态转换的正确性
-- **场景分析 (Scenario Analysis)**: 基于用户使用场景设计测试
-- **正交实验法 (Orthogonal Array Testing)**: 用少量用例覆盖多因素组合
+> 提示：在执行“技术选型协议”时，请优先从以下列表中选择最适合的方法，无需解释定义，直接应用。
+
+* **分析与思维框架 (Analysis Frameworks)**:
+    * **结构化思维**: 思维导图 (MindMap), 影响地图 (Impact Mapping), 5W2H 分析法, 领域驱动设计 (DDD).
+    * **用户视角**: 用户故事地图 (User Story Mapping), 角色画像 (Personas), 客户旅程地图 (Customer Journey Map).
+    * **复杂度决策**: Cynefin 框架 (用于判断系统是简单、繁杂还是复杂，从而定策略).
+
+* **测试策略与规划 (Strategy & Planning)**:
+    * **风险管理**: FMEA (故障模式与影响分析), 风险基础测试 (Risk-Based Testing), 威胁建模 (Threat Modeling).
+    * **分层策略**: 测试金字塔 (Test Pyramid), 测试象限 (Agile Testing Quadrants).
+    * **效能度量**: DORA 指标 (部署频率、变更失败率等), 缺陷逃逸率分析.
+
+* **测试设计技术 (Test Design Techniques)**:
+    * **黑盒经典**: 等价类划分/边界值, 决策表 (Decision Table), 状态转换图 (State Transition), 因果图, 两两组合/正交法 (Pairwise).
+    * **敏捷与规范**: BDD (行为驱动开发 / Gherkin 语法), 契约测试 (Consumer-Driven Contracts), 实例实例化 (Specification by Example).
+    * **探索性**: 基于会话的测试管理 (SBTM), 启发式漫游 (Heuristic Touring).
+
+* **专项与前沿领域 (Specialized & Modern Domains)**:
+    * **非功能核心**: 性能工程 (Performance/Load), 应用安全 (AppSec/OWASP Top 10), 可访问性 (WCAG/A11y).
+    * **可靠性与韧性**: 混沌工程 (Chaos Engineering), 故障注入 (Fault Injection).
+    * **数据与AI**: 数据质量/ETL测试, 大模型评估 (LLM Evaluation/RAG Testing), AI 辅助测试生成.
+    * **视觉与UI**: 视觉回归测试 (Visual Regression), 跨浏览器/设备矩阵.
+
+* **架构与运维感知 (Architecture & Ops)**:
+    * **架构模式**: 微服务 (Microservices), 事件驱动架构 (EDA), Serverless.
+    * **发布策略**: 灰度发布/金丝雀 (Canary), 特性开关 (Feature Toggles), 蓝绿部署.
+    * **根因分析**: 鱼骨图 (Ishikawa), 5 Whys 分析法 (用于复盘).
 """.strip()
 
 

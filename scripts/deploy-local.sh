@@ -1,6 +1,7 @@
 #!/bin/bash
-# 本地 Docker 环境完整部署脚本
-# 确保代码更改完全应用到容器中
+# 本地 Docker 开发环境部署脚本
+# 启用代码热更新 - 代码改动实时同步,Flask 自动重载
+# 注意: 如果修改了依赖(requirements.txt),需要重新运行此脚本重新构建镜像
 
 set -e  # 遇到错误立即退出
 
@@ -15,8 +16,8 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# 项目根目录
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# 项目根目录(脚本在 scripts/ 目录下,需要向上一级)
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 # 步骤 1: 停止并删除现有容器
@@ -38,10 +39,10 @@ docker-compose build --no-cache web-app
 echo -e "${GREEN}✓${NC} 镜像构建完成"
 echo ""
 
-# 步骤 4: 启动所有服务
-echo -e "${YELLOW}[3/6]${NC} 启动容器..."
-docker-compose up -d
-echo -e "${GREEN}✓${NC} 容器已启动"
+# 步骤 4: 启动所有服务(开发模式 - 支持代码热更新)
+echo -e "${YELLOW}[3/6]${NC} 启动容器(开发模式 - 代码实时同步)..."
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+echo -e "${GREEN}✓${NC} 容器已启动(代码热更新已启用)"
 echo ""
 
 # 步骤 5: 等待服务健康
@@ -97,6 +98,11 @@ echo "  - 数据库: localhost:5432"
 echo ""
 echo "常用命令："
 echo "  - 查看日志: docker logs intent-test-web -f"
-echo "  - 重启服务: docker-compose restart web-app"
+echo "  - 重启服务: docker-compose restart web-app (通常不需要,代码会自动重载)"
 echo "  - 停止服务: docker-compose down"
+echo ""
+echo "💡 代码热更新已启用："
+echo "  - Python 代码改动后会自动重载"
+echo "  - 前端静态文件改动立即生效"
+echo "  - 只有修改依赖时才需要重新运行此脚本"
 echo ""

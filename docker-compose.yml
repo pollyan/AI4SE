@@ -77,7 +77,6 @@ services:
     profiles:
       - production # 只在生产环境启动
 
-
 volumes:
   postgres_data:
     driver: local

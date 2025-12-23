@@ -1,5 +1,7 @@
 #!/bin/bash
-# 快速重启脚本 - 当只需要重启容器而不需要重新构建时使用
+# 快速重启脚本 - 用于重新加载配置或重启服务
+# 注意: 代码更改无需重启,volumes 挂载会自动同步,Flask 会自动重载
+# 仅在需要重新加载环境变量或重启服务时使用
 
 set -e
 
@@ -16,7 +18,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 echo -e "${YELLOW}[1/2]${NC} 重启容器..."
-docker-compose restart web-app
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml restart web-app
 
 echo -e "${YELLOW}[2/2]${NC} 等待服务启动..."
 sleep 10
