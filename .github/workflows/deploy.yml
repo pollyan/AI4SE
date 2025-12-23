@@ -86,7 +86,6 @@ jobs:
           --exclude='logs' \
           --exclude='.env' \
           --exclude='.DS_Store' \
-
           --exclude='.github' \
           --exclude='.claude' \
           --exclude='.cursor' \
