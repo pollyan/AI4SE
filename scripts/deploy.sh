@@ -98,10 +98,24 @@ cd "$DEPLOY_DIR"
 if [ "$BACKUP_ENABLED" = true ]; then
     log_info "创建备份..."
     BACKUP_DIR="/opt/intent-test-framework-backup/latest"
-    mkdir -p "$BACKUP_DIR"
-    rsync -a --exclude='node_modules' --exclude='.git' --exclude='__pycache__' \
+    # 使用 sudo 创建备份目录
+    if ! sudo mkdir -p "$BACKUP_DIR"; then
+        log_warn "无法创建备份目录 $BACKUP_DIR (权限不足)，尝试使用用户目录..."
+        BACKUP_DIR="$HOME/backups/intent-test-framework/latest"
+        mkdir -p "$BACKUP_DIR"
+    else
+        # 确保当前用户有权访问，或者后续操作都用sudo
+        sudo chown $USER:$USER "$BACKUP_DIR"
+    fi
+    
+    log_info "备份至: $BACKUP_DIR"
+    
+    # 使用 rsync 备份 (如果目录属于当前用户，不需要sudo；如果是系统目录，可能需要)
+    # 为安全起见，如果有sudo权限，可以用sudo rsync确保读取所有文件
+    sudo rsync -a --exclude='node_modules' --exclude='.git' --exclude='__pycache__' \
           --exclude='logs' --exclude='*.pyc' \
-          "$DEPLOY_DIR/" "$BACKUP_DIR/" || true
+          "$DEPLOY_DIR/" "$BACKUP_DIR/" || log_warn "备份过程中出现非致命错误"
+          
     log_info "✅ 备份完成"
 fi
 
