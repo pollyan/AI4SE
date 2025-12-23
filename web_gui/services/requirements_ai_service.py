@@ -29,7 +29,7 @@ class IntelligentAssistantService:
         'song': {
             'name': 'Lisa Song', 
             'title': '测试分析师',
-            'bundle_file': 'testmaster-song-bundle.txt'
+            'bundle_file': 'lisa_v5_bundle.txt'
         }
     }
 

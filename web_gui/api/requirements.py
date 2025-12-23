@@ -854,8 +854,22 @@ def send_message_stream(session_id):
                 
                 if complete_response:
                     # ✨ 清理 JSON 元数据
-                    from ..services.langgraph_agents.lisa_v2.utils.metadata_parser import extract_natural_response
-                    cleaned_response = extract_natural_response(complete_response)
+                    # ✨ 清理 JSON 元数据
+                    # 简单的内联清理逻辑，替代之前的 extract_natural_response
+                    if isinstance(complete_response, str):
+                        # 移除可能的 markdown 代码块标记
+                        cleaned_response = complete_response.strip()
+                        if cleaned_response.startswith('```json'):
+                            cleaned_response = cleaned_response[7:]
+                        elif cleaned_response.startswith('```'):
+                            cleaned_response = cleaned_response[3:]
+                        
+                        if cleaned_response.endswith('```'):
+                            cleaned_response = cleaned_response[:-3]
+                        
+                        cleaned_response = cleaned_response.strip()
+                    else:
+                        cleaned_response = str(complete_response)
                     
                     # 在应用上下文中保存消息（保存清理后的内容）
                     with app.app_context():
