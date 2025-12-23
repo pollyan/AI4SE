@@ -22,11 +22,12 @@ from .base import (
 try:
     from ..models import db, RequirementsSession, RequirementsMessage
     from ..utils.error_handler import ValidationError, NotFoundError, DatabaseError
-    from ..services.requirements_ai_service import RequirementsAIService, IntelligentAssistantService
+    # Removed legacy RequirementsAIService
+    from ..services.adk_agents import AdkAssistantService
 except ImportError:
     from web_gui.models import db, RequirementsSession, RequirementsMessage
     from web_gui.utils.error_handler import ValidationError, NotFoundError, DatabaseError
-    from web_gui.services.requirements_ai_service import RequirementsAIService, IntelligentAssistantService
+    from web_gui.services.adk_agents import AdkAssistantService
 
 # ✨ 临时会话状态缓存（内存存储，24小时过期）
 _session_state_cache = {}  # {session_id: {'is_activated': bool, 'last_access': datetime}}
@@ -72,6 +73,7 @@ def get_ai_service(assistant_type='alex'):
     """获取AI服务实例，每次重新检查配置避免缓存问题"""
     try:
         from ..models import RequirementsAIConfig
+        from ..services.adk_agents import AdkAssistantService
         
         # 每次都重新获取默认AI配置，避免缓存问题
         default_config = RequirementsAIConfig.get_default_config()
@@ -83,23 +85,17 @@ def get_ai_service(assistant_type='alex'):
             missing_fields = [field for field in required_fields if not config_data.get(field)]
             
             if missing_fields:
-
                 return None
             
             # 创建AI服务实例
-            ai_service = IntelligentAssistantService(config=config_data, assistant_type=assistant_type)
-            assistant_info = IntelligentAssistantService.SUPPORTED_ASSISTANTS.get(assistant_type, {})
-
+            ai_service = AdkAssistantService(assistant_type=assistant_type, config=config_data)
             return ai_service
         else:
-            # 如果没有默认配置，返回None而不是使用环境变量
-
+            # 如果没有默认配置，返回None
             return None
     except ImportError as e:
-
         return None
     except Exception as e:
-
         return None
 
 # 创建蓝图
@@ -404,13 +400,21 @@ def send_message(session_id):
             
             # 调用智能助手分析服务（传入包含文件内容的完整消息）
             logger.info(f"开始调用AI服务: {ai_svc.__class__.__name__}")
-            ai_result = ai_svc.analyze_user_requirement(
-                user_message=full_content,  # 使用包含文件内容的完整消息
-                session_context=session_context,
-                project_name=session.project_name,
-                current_stage=session.current_stage,
-                session_id=session_id
-            )
+            
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                ai_result = loop.run_until_complete(ai_svc.analyze_user_requirement(
+                    user_message=full_content,  # 使用包含文件内容的完整消息
+                    session_context=session_context,
+                    project_name=session.project_name,
+                    current_stage=session.current_stage,
+                    session_id=session_id
+                ))
+            finally:
+                loop.close()
 
             
             # 创建AI响应消息

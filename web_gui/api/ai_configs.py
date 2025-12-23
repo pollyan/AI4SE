@@ -275,21 +275,29 @@ def test_config(config_id):
         
         # 导入AI服务进行测试
         try:
-            from ..services.requirements_ai_service import RequirementsAIService
+            from ..services.adk_agents import AdkAssistantService
             import time
+            import asyncio
             
             # 创建临时AI服务实例进行测试
             config_data = config.get_config_for_ai_service()
-            temp_ai_service = RequirementsAIService(config=config_data)
+            # 默认使用 alex 进行连接测试
+            temp_ai_service = AdkAssistantService(assistant_type="alex", config=config_data)
             
             start_time = time.time()
             
             # 使用消息格式测试AI模型
             messages = [
-                {"role": "system", "content": "你是一个AI助手测试程序。"},
                 {"role": "user", "content": "你好"}
             ]
-            response = temp_ai_service._call_ai_model_with_messages(messages)
+            
+            # 使用 asyncio 运行异步测试
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                response = loop.run_until_complete(temp_ai_service.test_connection(messages))
+            finally:
+                loop.close()
             duration = time.time() - start_time
             
             if response and len(response.strip()) > 0:
@@ -347,8 +355,9 @@ def test_config_preview():
         
         # 导入AI服务进行测试
         try:
-            from ..services.requirements_ai_service import RequirementsAIService
+            from ..services.adk_agents import AdkAssistantService
             import time
+            import asyncio
             
             # 创建临时配置数据
             config_data = {
@@ -358,16 +367,22 @@ def test_config_preview():
             }
             
             # 创建临时AI服务实例进行测试
-            temp_ai_service = RequirementsAIService(config=config_data)
+            temp_ai_service = AdkAssistantService(assistant_type="alex", config=config_data)
             
             start_time = time.time()
             
             # 使用消息格式测试AI模型
             messages = [
-                {"role": "system", "content": "你是一个AI助手测试程序。"},
                 {"role": "user", "content": "你好"}
             ]
-            response = temp_ai_service._call_ai_model_with_messages(messages)
+            
+            # 使用 asyncio 运行异步测试
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                response = loop.run_until_complete(temp_ai_service.test_connection(messages))
+            finally:
+                loop.close()
             duration = time.time() - start_time
             
             if response and len(response.strip()) > 0:
@@ -446,17 +461,24 @@ def test_all_configs():
             config_start_time = time.time()
             try:
                 # 导入AI服务进行测试
-                from ..services.requirements_ai_service import RequirementsAIService
+                from ..services.adk_agents import AdkAssistantService
+                import asyncio
                 
                 config_data = config.get_config_for_ai_service()
-                temp_ai_service = RequirementsAIService(config=config_data)
+                temp_ai_service = AdkAssistantService(assistant_type="alex", config=config_data)
                 
                 # 使用消息格式测试AI模型
                 messages = [
-                    {"role": "system", "content": "你是一个AI助手测试程序。"},
                     {"role": "user", "content": "你好"}
                 ]
-                response = temp_ai_service._call_ai_model_with_messages(messages)
+                
+                # 使用 asyncio 运行异步测试
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    response = loop.run_until_complete(temp_ai_service.test_connection(messages))
+                finally:
+                    loop.close()
                 duration = time.time() - config_start_time
                 
                 success = response and len(response.strip()) > 0
