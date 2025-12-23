@@ -20,7 +20,7 @@ def test_get_assistant_bundle_endpoint(api_client, assert_api_response):
     assert "assistant_info" in data
     assert "Alex" in json.dumps(data["assistant_info"], ensure_ascii=False)
 
-    resp2 = api_client.get("/api/requirements/assistants/song/bundle")
+    resp2 = api_client.get("/api/requirements/assistants/lisa/bundle")
     data2 = assert_api_response(resp2, 200)
     assert "bundle_content" in data2
     assert "assistant_info" in data2
