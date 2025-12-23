@@ -238,31 +238,14 @@ jobs:
           fi
           
           # ==========================================
-          # 步骤4: 构建代理包
+          # 步骤4: 检查代理包
           # ==========================================
-          echo "📦 构建本地代理包..."
-          
-          # 检查 dist/intent-test-proxy 目录是否存在
-          if [ ! -d "dist/intent-test-proxy" ]; then
-            echo "❌ 错误：dist/intent-test-proxy 目录不存在"
+          echo "📦 检查代理包..."
+          if [ -d "dist/intent-test-proxy" ] || [ -f "dist/intent-test-proxy.zip" ]; then
+             echo "✅ 代理包已通过 rsync 同步"
+             ls -lh dist/intent-test-proxy.zip || true
           else
-            # 尝试使用 Node.js 构建（包含所有功能）
-            if command -v node &> /dev/null; then
-              node scripts/build-proxy-package.js
-              echo "✅ 使用 Node.js 构建代理包完成"
-            else
-              # 后备方案：使用 Python 创建 ZIP（服务器肯定有 Python）
-              echo "⚠️ Node.js 未安装，使用 Python 创建 ZIP 文件"
-              python3 scripts/create-proxy-zip.py
-              
-              if [ -f "dist/intent-test-proxy.zip" ]; then
-                echo "✅ Python ZIP 创建完成"
-                ls -lh dist/intent-test-proxy.zip
-              else
-                echo "❌ ZIP 创建失败"
-                exit 1
-              fi
-            fi
+             echo "⚠️ 警告: dist/intent-test-proxy 未找到"
           fi
           
           # ==========================================

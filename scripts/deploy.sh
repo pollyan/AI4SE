@@ -61,16 +61,34 @@ log_info "部署目录: $DEPLOY_DIR"
 
 # 构建本地代理包（必须在Docker构建前完成）
 log_info "构建本地代理包..."
-if [ -f "scripts/build-proxy-package.js" ]; then
-    if command -v node &> /dev/null; then
-        node scripts/build-proxy-package.js
-        log_info "✅ 本地代理包构建完成"
+# 生产环境如果已经有dist artifact，则跳过构建
+if [ "$ENVIRONMENT" = "production" ] || [ "$ENVIRONMENT" = "prod" ] || [ "$ENVIRONMENT" = "remote" ]; then
+    if [ -f "dist/intent-test-proxy.zip" ]; then
+        log_info "✅ 检测到现有的代理包 artifact，跳过重新构建"
     else
-        log_warn "⚠️ Node.js未安装，跳过代理包构建"
-        log_warn "   代理包可能不是最新版本"
+        # 只有在缺失时才构建
+        if [ -f "scripts/deployment/build-proxy-package.js" ]; then
+            if command -v node &> /dev/null; then
+                node scripts/deployment/build-proxy-package.js
+                log_info "✅ 本地代理包构建完成"
+            else
+                log_warn "⚠️ Node.js未安装，跳过代理包构建"
+            fi
+        fi
     fi
 else
-    log_warn "⚠️ 构建脚本不存在，跳过代理包构建"
+    # 本地环境始终尝试构建
+    if [ -f "scripts/deployment/build-proxy-package.js" ]; then
+        if command -v node &> /dev/null; then
+            node scripts/deployment/build-proxy-package.js
+            log_info "✅ 本地代理包构建完成"
+        fi
+    elif [ -f "scripts/build-proxy-package.js" ]; then
+         if command -v node &> /dev/null; then
+            node scripts/build-proxy-package.js
+            log_info "✅ 本地代理包构建完成 (旧脚本)"
+        fi
+    fi
 fi
 
 # 切换到部署目录
@@ -106,7 +124,12 @@ log_info "✅ 服务已停止"
 
 # 构建镜像
 log_info "构建 Docker 镜像..."
-$DOCKER_CMD -f "$COMPOSE_FILE" build
+if [ "$BACKUP_ENABLED" = true ]; then
+    # 生产环境强制无缓存构建，确保包含最新代码
+    $DOCKER_CMD -f "$COMPOSE_FILE" build --no-cache
+else
+    $DOCKER_CMD -f "$COMPOSE_FILE" build
+fi
 
 log_info "✅ 镜像构建完成"
 
@@ -116,16 +139,8 @@ $DOCKER_CMD -f "$COMPOSE_FILE" up -d
 
 log_info "✅ 服务已启动"
 
-# 复制assistant-bundles到容器（生产环境）
-if [ "$BACKUP_ENABLED" = true ]; then
-    log_info "复制assistant-bundles到容器..."
-    if [ -d "$DEPLOY_DIR/assistant-bundles" ]; then
-        sudo docker cp "$DEPLOY_DIR/assistant-bundles" intent-test-web:/app/ 2>/dev/null || log_warn "复制assistant-bundles失败"
-        log_info "✅ Assistant bundles已复制"
-    else
-        log_warn "assistant-bundles目录不存在"
-    fi
-fi
+# 复制assistant-bundles到容器 (已移除: Dockerfile COPY 指令已处理，且避免覆盖/权限问题)
+
 
 # 等待服务启动
 log_info "等待服务启动..."
