@@ -71,17 +71,17 @@ echo -e "${YELLOW}[6/6]${NC} 验证代码更新..."
 if docker exec intent-test-web python3 -c "
 import sys
 sys.path.insert(0, '/app')
-from web_gui.services.langgraph_agents.lisa_v2.graph import create_lisa_v2_graph
+from web_gui.services.adk_agents.lisa.agent import create_lisa_agent
 print('SUCCESS')
 " 2>&1 | grep -q "SUCCESS"; then
-    echo -e "${GREEN}✓${NC} Lisa 模块加载成功"
+    echo -e "${GREEN}✓${NC} Lisa 模块 (ADK) 加载成功"
 else
-    echo -e "${RED}✗${NC} Lisa 模块加载失败！"
+    echo -e "${RED}✗${NC} Lisa 模块 (ADK) 加载失败！"
     echo "查看错误日志："
     docker exec intent-test-web python3 -c "
 import sys
 sys.path.insert(0, '/app')
-from web_gui.services.langgraph_agents.lisa_v2.graph import create_lisa_v2_graph
+from web_gui.services.adk_agents.lisa.agent import create_lisa_agent
 " 2>&1 || true
     exit 1
 fi
