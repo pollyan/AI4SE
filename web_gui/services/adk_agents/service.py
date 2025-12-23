@@ -31,9 +31,9 @@ class AdkAssistantService:
         },
         "lisa": {
             "name": "Lisa",
-            "title": "测试专家",
+            "title": "测试专家 (v5.0)",
             "bundle_file": "lisa_v5_bundle.txt",
-            "description": "资深测试专家，专注于制定测试策略、设计测试用例和探索性测试。"
+            "description": "资深测试专家，专注于制定测试策略、设计测试用例和探索性测试。 (已更新)"
         }
     }
     
