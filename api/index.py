@@ -29,6 +29,74 @@ app.config["SECRET_KEY"] = os.getenv(
 )
 
 
+# 捕获启动时的导入错误
+STARTUP_ERROR = None
+
+# 尝试加载API功能
+try:
+    print("🔄 开始加载API功能...")
+
+    # 导入数据库配置
+    from web_gui.database_config import get_flask_config
+
+    # 应用数据库配置
+    db_config = get_flask_config()
+    app.config.update(db_config)
+
+    print("✅ 数据库配置加载成功")
+
+    # 导入模型和新的模块化API路由
+    from web_gui.models import db
+    from web_gui.api import register_api_routes
+
+    print("✅ 模型和路由导入成功")
+
+    # 初始化数据库
+    db.init_app(app)
+
+    # 注册模块化API路由
+    register_api_routes(app)
+
+    print("✅ API路由注册成功")
+
+    # 添加CORS支持
+    try:
+        from flask_cors import CORS
+
+        CORS(app, origins="*")
+        print("✅ CORS配置成功")
+    except ImportError:
+        print("⚠️ CORS模块未找到，跳过")
+
+    # 在应用启动时创建数据库表
+    try:
+        with app.app_context():
+            db.create_all()
+            print("✅ 数据库表创建成功")
+    except Exception as e:
+        print(f"⚠️ 数据库表创建失败: {e}")
+
+    # API状态检查
+    @app.route("/api/status")
+    def api_status():
+        return jsonify(
+            {
+                "status": "ok",
+                "message": "API is working",
+                "database": "connected",
+                "environment": "Vercel Serverless",
+            }
+        )
+    
+    # ... (Keep existing init-db and other API routes logic if needed, but for simplicity in this replacement block, I will focus on the error handling structure requested. Wait, replacing lines 371-142 means I am replacing the route definitions too. I should be careful not to delete the API routes if they are within this range? Actually the replacement target is lines 45-142 for the template and home route, but the start capture logic is lower down. I should split this into two edits or one larger edit.)
+    
+except Exception as e:
+    import traceback
+    STARTUP_ERROR = f"{str(e)}\n\n{traceback.format_exc()}"
+    print(f"⚠️ API功能加载失败: {e}")
+    traceback.print_exc()
+
+
 # 添加时区格式化过滤器
 @app.template_filter("utc_to_local")
 def utc_to_local_filter(dt):
@@ -48,7 +116,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>意图测试平台</title>
+    <title>意图测试平台 - 降级模式</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
         .container {
@@ -60,12 +128,15 @@ HTML_TEMPLATE = """
         .status { padding: 15px; border-radius: 5px; margin: 10px 0; }
         .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; overflow-x: auto; }
         .api-list { margin: 20px 0; }
         .api-item {
             margin: 10px 0; padding: 10px; background: #f8f9fa;
             border-left: 4px solid #007bff;
         }
         .api-url { font-family: monospace; color: #007bff; }
+        pre { white-space: pre-wrap; word-wrap: break-word; font-family: monospace; margin: 0; }
     </style>
 </head>
 <body>
@@ -75,15 +146,28 @@ HTML_TEMPLATE = """
             <p>AI驱动的Web自动化测试平台</p>
         </div>
 
+        {% if error %}
+        <div class="status error">
+            <h3>⚠️ 系统启动错误</h3>
+            <p>系统未能完整加载，已进入降级模式。错误信息如下：</p>
+            <pre>{{ error }}</pre>
+            <p style="margin-top: 10px; font-weight: bold;">尝试修复：</p>
+            <ul>
+                <li>如果是缺少依赖，请运行: <code>./scripts/deploy-local.sh</code> 重新构建容器</li>
+                <li>检查日志获取更多信息: <code>docker logs intent-test-web</code></li>
+            </ul>
+        </div>
+        {% else %}
         <div class="status success">
             ✅ 应用运行正常 - Vercel Serverless环境
         </div>
+        {% endif %}
 
         <div class="status info">
             🗄️ 数据库: {{ database_status }}
         </div>
 
-        <h3>📋 可用的API端点</h3>
+        <h3>📋 可用的API端点（降级模式）</h3>
         <div class="api-list">
             <div class="api-item">
                 <strong>健康检查:</strong><br>
@@ -92,22 +176,6 @@ HTML_TEMPLATE = """
             <div class="api-item">
                 <strong>API状态:</strong><br>
                 <span class="api-url">GET /api/status</span>
-            </div>
-            <div class="api-item">
-                <strong>测试用例:</strong><br>
-                <span class="api-url">GET /api/testcases</span>
-            </div>
-            <div class="api-item">
-                <strong>执行历史:</strong><br>
-                <span class="api-url">GET /api/executions</span>
-            </div>
-            <div class="api-item">
-                <strong>模板管理:</strong><br>
-                <span class="api-url">GET /api/templates</span>
-            </div>
-            <div class="api-item">
-                <strong>统计数据:</strong><br>
-                <span class="api-url">GET /api/stats/dashboard</span>
             </div>
         </div>
 
@@ -124,13 +192,31 @@ HTML_TEMPLATE = """
 @app.route("/")
 @app.route("/dashboard")
 def home():
+    # 优先检查是否有启动错误
+    if STARTUP_ERROR:
+        print(f"⚠️ 检测到启动错误，渲染降级页面: {STARTUP_ERROR[:100]}...")
+        database_url = os.getenv("DATABASE_URL", "Not configured")
+        database_status = (
+            "PostgreSQL (Supabase)"
+            if database_url.startswith("postgresql://")
+            else "Not configured"
+        )
+        return render_template_string(
+            HTML_TEMPLATE, 
+            database_status=database_status,
+            error=STARTUP_ERROR
+        )
+
     try:
         # 尝试渲染原来的完整界面
         from flask import render_template
 
         return render_template("index.html")
     except Exception as e:
+        import traceback
+        error_msg = f"{str(e)}\n\n{traceback.format_exc()}"
         print(f"⚠️ 无法加载完整界面: {e}")
+        
         # 备用方案：简单状态页面
         database_url = os.getenv("DATABASE_URL", "Not configured")
         database_status = (
@@ -138,7 +224,11 @@ def home():
             if database_url.startswith("postgresql://")
             else "Not configured"
         )
-        return render_template_string(HTML_TEMPLATE, database_status=database_status)
+        return render_template_string(
+            HTML_TEMPLATE, 
+            database_status=database_status,
+            error=error_msg
+        )
 
 
 @app.route("/health")
@@ -369,61 +459,8 @@ if os.getenv("VERCEL"):
     os.environ["VERCEL"] = "1"
 
 # 尝试加载API功能
-try:
-    print("🔄 开始加载API功能...")
-
-    # 导入数据库配置
-    from web_gui.database_config import get_flask_config
-
-    # 应用数据库配置
-    db_config = get_flask_config()
-    app.config.update(db_config)
-
-    print("✅ 数据库配置加载成功")
-
-    # 导入模型和新的模块化API路由
-    from web_gui.models import db
-    from web_gui.api import register_api_routes
-
-    print("✅ 模型和路由导入成功")
-
-    # 初始化数据库
-    db.init_app(app)
-
-    # 注册模块化API路由
-    register_api_routes(app)
-
-    print("✅ API路由注册成功")
-
-    # 添加CORS支持
-    try:
-        from flask_cors import CORS
-
-        CORS(app, origins="*")
-        print("✅ CORS配置成功")
-    except ImportError:
-        print("⚠️ CORS模块未找到，跳过")
-
-    # 在应用启动时创建数据库表
-    try:
-        with app.app_context():
-            db.create_all()
-            print("✅ 数据库表创建成功")
-    except Exception as e:
-        print(f"⚠️ 数据库表创建失败: {e}")
-
-    # API状态检查
-    @app.route("/api/status")
-    def api_status():
-        return jsonify(
-            {
-                "status": "ok",
-                "message": "API is working",
-                "database": "connected",
-                "environment": "Vercel Serverless",
-            }
-        )
-
+# Main application logic
+if True:
     # 数据库初始化API
     @app.route("/api/init-db", methods=["POST"])
     def init_database():
@@ -1147,25 +1184,7 @@ try:
 
     print("✅ API功能加载成功")
 
-except Exception as e:
-    print(f"⚠️ API功能加载失败: {e}")
-    import traceback
-
-    traceback.print_exc()
-
-    # 简单的错误API
-    @app.route("/api/status")
-    def api_status_error():
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": f"API加载失败: {str(e)}",
-                    "suggestion": "请检查环境变量和依赖配置",
-                }
-            ),
-            500,
-        )
+# End of application logic
 
 
 # Vercel需要的应用对象

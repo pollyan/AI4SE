@@ -7,7 +7,7 @@ from ..llm import OpenAICompatibleLlm
 logger = logging.getLogger(__name__)
 
 # Bundle 文件路径
-BUNDLE_DIR = Path(__file__).parent.parent.parent.parent.parent / "assistant-bundles"
+BUNDLE_PATH = Path(__file__).parent / "alex_v1_bundle.txt"
 
 # 类型别名
 AlexAgent = LlmAgent
@@ -20,14 +20,12 @@ def load_alex_persona() -> str:
     Returns:
         Persona 内容字符串
     """
-    bundle_path = BUNDLE_DIR / "intelligent-requirements-analyst-bundle.txt"
-    
-    if bundle_path.exists():
-        logger.info(f"从 Bundle 文件加载 Alex persona: {bundle_path}")
-        return bundle_path.read_text(encoding="utf-8")
+    if BUNDLE_PATH.exists():
+        logger.info(f"从 Bundle 文件加载 Alex persona: {BUNDLE_PATH}")
+        return BUNDLE_PATH.read_text(encoding="utf-8")
     
     # Fallback
-    logger.warning(f"Bundle 文件不存在: {bundle_path}，使用 fallback persona")
+    logger.warning(f"Bundle 文件不存在: {BUNDLE_PATH}，使用 fallback persona")
     return """你是 AI 需求分析师 Alex Chen，专门帮助用户澄清和完善项目需求。
 
 你的职责：
@@ -56,8 +54,6 @@ def create_alex_agent(model_config: Dict[str, str]) -> LlmAgent:
     
     # 使用自定义的 OpenAICompatibleLlm
     model_name = model_config['model_name']
-    # 如果是 OpenAI 格式的模型名（例如 qwen/qwen-plus），可能需要处理一下，
-    # 但根据 service.py 的逻辑，这里传进来的应该是配置里的原始名称
     
     model = OpenAICompatibleLlm(
         model=model_name,
