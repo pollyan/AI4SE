@@ -47,11 +47,37 @@ jobs:
         echo "::endgroup::"
 
   # ====================================
+  # 阶段 1.5: MidScene 代理测试 (Node.js)
+  # ====================================
+  proxy-test:
+    name: MidScene Proxy Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v3
+    
+    - name: 🟢 Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+    
+    - name: 📦 Install dependencies
+      run: |
+        npm ci
+    
+    - name: 🧪 Run proxy tests
+      run: |
+        echo "::group::Running MidScene Proxy Tests"
+        npm test -- --testPathPattern="tools/intent-tester/tests/proxy" --passWithNoTests
+        echo "::endgroup::"
+
+  # ====================================
   # 阶段 2: 构建和部署（SCP/SSH 推送模式）
   # ====================================
   deploy-to-production:
     name: Build and Deploy to Tencent Cloud
-    needs: api-test  # 必须等待 api-test 完成且成功
+    needs: [api-test, proxy-test]  # 必须等待所有测试完成且成功
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
     

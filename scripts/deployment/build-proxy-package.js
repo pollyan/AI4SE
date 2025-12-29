@@ -19,20 +19,21 @@ if (fs.existsSync(ZIP_FILE)) {
 }
 fs.mkdirSync(PROXY_DIST_DIR, { recursive: true });
 
-// 2. Copy core files
-const filesFromRoot = [
-    'midscene_server.js',
-    'package.json'
+// 2. Copy core files from browser-automation
+const BROWSER_AUTOMATION_DIR = path.join(ROOT_DIR, 'tools', 'intent-tester', 'browser-automation');
+
+const coreFiles = [
+    { src: path.join(BROWSER_AUTOMATION_DIR, 'midscene_server.js'), dest: 'midscene_server.js' },
+    { src: path.join(ROOT_DIR, 'package.json'), dest: 'package.json' }
 ];
 
-filesFromRoot.forEach(file => {
-    const src = path.join(ROOT_DIR, file);
-    const dest = path.join(PROXY_DIST_DIR, file);
+coreFiles.forEach(({ src, dest }) => {
+    const destPath = path.join(PROXY_DIST_DIR, dest);
     if (fs.existsSync(src)) {
-        fs.copyFileSync(src, dest);
-        console.log(`Copied ${file} from root`);
+        fs.copyFileSync(src, destPath);
+        console.log(`Copied ${dest}`);
     } else {
-        console.warn(`Warning: ${file} not found in root.`);
+        console.warn(`Warning: ${src} not found.`);
     }
 });
 
@@ -69,10 +70,12 @@ function copyDir(src, dest) {
     }
 }
 
-const dirsToCopy = ['midscene_framework'];
-dirsToCopy.forEach(dir => {
-    copyDir(path.join(ROOT_DIR, dir), path.join(PROXY_DIST_DIR, dir));
-    console.log(`Copied directory ${dir}`);
+const dirsToCopy = [
+    { src: path.join(BROWSER_AUTOMATION_DIR, 'midscene_framework'), dest: 'midscene_framework' }
+];
+dirsToCopy.forEach(({ src, dest }) => {
+    copyDir(src, path.join(PROXY_DIST_DIR, dest));
+    console.log(`Copied directory ${dest}`);
 });
 
 // 4. Create ZIP
