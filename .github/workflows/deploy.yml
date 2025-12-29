@@ -69,7 +69,7 @@ jobs:
     - name: 🧪 Run proxy tests
       run: |
         echo "::group::Running MidScene Proxy Tests"
-        npm test -- --testPathPattern="tools/intent-tester/tests/proxy" --passWithNoTests
+        npx jest --testPathPattern="tools/intent-tester/tests/proxy" --passWithNoTests --forceExit
         echo "::endgroup::"
 
   # ====================================
