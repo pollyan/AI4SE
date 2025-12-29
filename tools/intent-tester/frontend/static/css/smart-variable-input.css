@@ -1,0 +1,353 @@
+/**
+ * SmartVariableInput智能变量输入组件样式
+ * 基于minimal design设计系统
+ */
+
+/* ===== 主容器样式 ===== */
+.smart-variable-input {
+    position: relative;
+    width: 100%;
+    display: block;
+}
+
+/* ===== 输入框样式 ===== */
+.smart-variable-input .smart-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-family: 'Monaco', 'Menlo', 'SF Mono', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.4;
+    background-color: #ffffff;
+    color: #1f2937;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.smart-variable-input .smart-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.smart-variable-input .smart-input:disabled {
+    background-color: #f9fafb;
+    color: #9ca3af;
+    cursor: not-allowed;
+}
+
+.smart-variable-input .smart-input::placeholder {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+/* ===== 建议下拉框样式 ===== */
+.variable-suggestion-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    max-height: 300px;
+    overflow-y: auto;
+    margin-top: 2px;
+    min-width: 200px;
+}
+
+/* ===== 建议项样式 ===== */
+.suggestion-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #f3f4f6;
+    transition: background-color 0.15s ease;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-item:hover,
+.suggestion-item.selected {
+    background-color: #f3f4f6;
+}
+
+.suggestion-item.selected {
+    background-color: #eff6ff;
+    border-left: 3px solid #3b82f6;
+}
+
+/* ===== 建议项头部样式 ===== */
+.suggestion-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+}
+
+.suggestion-item-name {
+    font-weight: 500;
+    font-family: 'Monaco', 'Menlo', 'SF Mono', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
+    color: #1f2937;
+    font-size: 14px;
+}
+
+.suggestion-item-name mark {
+    background-color: #fef3c7;
+    color: #92400e;
+    padding: 0 2px;
+    border-radius: 2px;
+    font-weight: 600;
+}
+
+.suggestion-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.step-info {
+    background-color: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.property-indicator {
+    background-color: #dbeafe;
+    color: #1e40af;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 11px;
+}
+
+.type-info {
+    font-family: 'Monaco', 'Menlo', 'SF Mono', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
+    background-color: #e5e7eb;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-weight: 500;
+}
+
+/* ===== 建议项预览样式 ===== */
+.suggestion-item-preview {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-top: 4px;
+    font-family: 'Monaco', 'Menlo', 'SF Mono', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
+    line-height: 1.3;
+    word-break: break-all;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ===== 状态样式 ===== */
+.suggestion-loading,
+.suggestion-empty,
+.suggestion-error {
+    padding: 12px;
+    text-align: center;
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.suggestion-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.suggestion-loading::before {
+    content: '';
+    width: 16px;
+    height: 16px;
+    border: 2px solid #e5e7eb;
+    border-top: 2px solid #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.suggestion-empty {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+.suggestion-error {
+    color: #dc2626;
+    background-color: #fef2f2;
+    border-radius: 4px;
+    margin: 4px;
+}
+
+/* ===== 动画 ===== */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* ===== 响应式设计 ===== */
+@media (max-width: 640px) {
+    .variable-suggestion-dropdown {
+        max-height: 200px;
+        font-size: 13px;
+    }
+    
+    .suggestion-item {
+        padding: 10px 12px;
+    }
+    
+    .suggestion-item-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+    
+    .suggestion-item-meta {
+        gap: 6px;
+    }
+    
+    .suggestion-item-preview {
+        margin-top: 6px;
+    }
+}
+
+/* ===== 可访问性样式 ===== */
+@media (prefers-reduced-motion: reduce) {
+    .suggestion-item,
+    .smart-input {
+        transition: none;
+    }
+    
+    .suggestion-loading::before {
+        animation: none;
+    }
+}
+
+/* ===== 高对比度支持 ===== */
+@media (prefers-contrast: high) {
+    .smart-variable-input .smart-input {
+        border-color: #000000;
+    }
+    
+    .smart-variable-input .smart-input:focus {
+        border-color: #0066cc;
+        box-shadow: 0 0 0 2px #0066cc;
+    }
+    
+    .variable-suggestion-dropdown {
+        border-color: #000000;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    
+    .suggestion-item.selected {
+        background-color: #0066cc;
+        color: #ffffff;
+        border-left-color: #ffffff;
+    }
+    
+    .suggestion-item.selected .suggestion-item-name,
+    .suggestion-item.selected .suggestion-item-meta,
+    .suggestion-item.selected .suggestion-item-preview {
+        color: #ffffff;
+    }
+}
+
+/* ===== 深色模式支持 ===== */
+@media (prefers-color-scheme: dark) {
+    .smart-variable-input .smart-input {
+        background-color: #1f2937;
+        border-color: #374151;
+        color: #f9fafb;
+    }
+    
+    .smart-variable-input .smart-input:focus {
+        border-color: #60a5fa;
+        box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+    }
+    
+    .smart-variable-input .smart-input:disabled {
+        background-color: #111827;
+        color: #6b7280;
+    }
+    
+    .smart-variable-input .smart-input::placeholder {
+        color: #6b7280;
+    }
+    
+    .variable-suggestion-dropdown {
+        background-color: #1f2937;
+        border-color: #374151;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+    }
+    
+    .suggestion-item {
+        border-bottom-color: #374151;
+    }
+    
+    .suggestion-item:hover,
+    .suggestion-item.selected {
+        background-color: #374151;
+    }
+    
+    .suggestion-item.selected {
+        background-color: #1e3a8a;
+        border-left-color: #60a5fa;
+    }
+    
+    .suggestion-item-name {
+        color: #f9fafb;
+    }
+    
+    .suggestion-item-name mark {
+        background-color: #fbbf24;
+        color: #92400e;
+    }
+    
+    .suggestion-item-meta {
+        color: #9ca3af;
+    }
+    
+    .step-info {
+        background-color: #374151;
+    }
+    
+    .property-indicator {
+        background-color: #1e3a8a;
+        color: #93c5fd;
+    }
+    
+    .type-info {
+        background-color: #4b5563;
+        color: #d1d5db;
+    }
+    
+    .suggestion-item-preview {
+        color: #6b7280;
+    }
+    
+    .suggestion-loading,
+    .suggestion-empty {
+        color: #9ca3af;
+    }
+    
+    .suggestion-error {
+        color: #f87171;
+        background-color: #7f1d1d;
+    }
+}
+
+/* ===== 打印样式 ===== */
+@media print {
+    .variable-suggestion-dropdown {
+        display: none !important;
+    }
+}

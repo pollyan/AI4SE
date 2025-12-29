@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>步骤编辑器 - AI4SE工具集</title>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0f2f5;
+        }
+
+        .header {
+            background: white;
+            padding: 16px 24px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #1890ff;
+            color: white;
+            border-color: #1890ff;
+        }
+
+        .btn-primary:hover {
+            background: #40a9ff;
+        }
+
+        .btn-success {
+            background: #52c41a;
+            color: white;
+            border-color: #52c41a;
+        }
+
+        .btn-success:hover {
+            background: #73d13d;
+        }
+
+        .btn-default {
+            background: white;
+            color: #666;
+        }
+
+        .btn-default:hover {
+            border-color: #1890ff;
+            color: #1890ff;
+        }
+
+        .content {
+            padding: 24px;
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 24px;
+            height: calc(100vh - 120px);
+        }
+
+        .main-panel {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid #f0f0f0;
+            font-weight: 600;
+            font-size: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-content {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .step-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .step-item {
+            border: 1px solid #f0f0f0;
+            border-radius: 8px;
+            padding: 16px;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .step-item:hover {
+            border-color: #1890ff;
+            box-shadow: 0 2px 8px rgba(24, 144, 255, 0.15);
+        }
+
+        .step-item.editing {
+            border-color: #52c41a;
+            background: #f6ffed;
+        }
+
+        .step-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .step-number {
+            background: #1890ff;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: #262626;
+        }
+
+        .step-description {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .step-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .step-action-btn {
+            padding: 4px 8px;
+            border: none;
+            background: #f0f0f0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+
+        .step-action-btn:hover {
+            background: #1890ff;
+            color: white;
+        }
+
+        .step-action-btn.danger:hover {
+            background: #ff4d4f;
+        }
+
+        .step-form {
+            margin-top: 16px;
+            padding: 16px;
+            background: #fafafa;
+            border-radius: 6px;
+            border: 1px solid #e8e8e8;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            align-items: center;
+        }
+
+        .form-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .form-label {
+            min-width: 80px;
+            font-weight: 500;
+            color: #262626;
+        }
+
+        .form-input,
+        .form-select,
+        .form-textarea {
+            flex: 1;
+            padding: 6px 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 12px;
+        }
+
+        .sidebar {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .action-palette {
+            padding: 16px;
+        }
+
+        .action-category {
+            margin-bottom: 20px;
+        }
+
+        .category-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #262626;
+            font-size: 14px;
+        }
+
+        .action-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .action-item {
+            padding: 12px;
+            border: 1px solid #f0f0f0;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: white;
+        }
+
+        .action-item:hover {
+            border-color: #1890ff;
+            background: #f0f8ff;
+        }
+
+        .action-name {
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: #262626;
+        }
+
+        .action-desc {
+            font-size: 12px;
+            color: #666;
+            line-height: 1.3;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #8c8c8c;
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .add-step-btn {
+            width: 100%;
+            padding: 16px;
+            border: 2px dashed #d9d9d9;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            color: #666;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .add-step-btn:hover {
+            border-color: #1890ff;
+            color: #1890ff;
+            background: #f0f8ff;
+        }
+
+        .testcase-info {
+            background: #f6ffed;
+            border: 1px solid #b7eb8f;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 20px;
+        }
+
+        .testcase-name {
+            font-weight: 600;
+            color: #389e0d;
+            margin-bottom: 4px;
+        }
+
+        .testcase-desc {
+            color: #52c41a;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 id="pageTitle">步骤编辑器</h1>
+        <div class="header-actions">
+            <button class="btn btn-success" onclick="saveTestcase()">保存</button>
+            <button class="btn btn-primary" onclick="previewExecution()">预览</button>
+            <a href="/testcases" class="btn btn-default">返回列表</a>
+        </div>
+    </div>
+
+    <div class="content">
+        <!-- 主编辑区域 -->
+        <div class="main-panel">
+            <div class="panel-header">
+                <span>测试步骤</span>
+                <span id="stepCount">0 个步骤</span>
+            </div>
+            <div class="panel-content">
+                <!-- 测试用例信息 -->
+                <div id="testcaseInfo" class="testcase-info" style="display: none;">
+                    <div class="testcase-name" id="testcaseName"></div>
+                    <div class="testcase-desc" id="testcaseDesc"></div>
+                </div>
+
+                <!-- 步骤列表 -->
+                <div id="stepList" class="step-list">
+                    <div class="empty-state">
+                        <div>还没有添加测试步骤</div>
+                        <div style="margin-top: 8px; font-size: 14px;">从右侧操作面板选择操作类型开始创建</div>
+                    </div>
+                </div>
+
+                <!-- 添加步骤按钮 -->
+                <button class="add-step-btn" onclick="addNewStep()">
+                    ➕ 添加新步骤
+                </button>
+            </div>
+        </div>
+
+        <!-- 操作面板 -->
+        <div class="sidebar">
+            <div class="panel-header">操作面板</div>
+            <div class="panel-content">
+                <div class="action-palette">
+                    <div class="action-category">
+                        <div class="category-title">页面操作</div>
+                        <div class="action-list">
+                            <div class="action-item" onclick="addStepByType('goto')">
+                                <div class="action-name">访问页面</div>
+                                <div class="action-desc">导航到指定URL</div>
+                            </div>
+                            <div class="action-item" onclick="addStepByType('ai_scroll')">
+                                <div class="action-name">滚动页面</div>
+                                <div class="action-desc">滚动到指定位置</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="action-category">
+                        <div class="category-title">交互操作</div>
+                        <div class="action-list">
+                            <div class="action-item" onclick="addStepByType('ai_input')">
+                                <div class="action-name">输入文本</div>
+                                <div class="action-desc">在输入框中输入内容</div>
+                            </div>
+                            <div class="action-item" onclick="addStepByType('ai_tap')">
+                                <div class="action-name">点击元素</div>
+                                <div class="action-desc">点击按钮或链接</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="action-category">
+                        <div class="category-title">验证等待</div>
+                        <div class="action-list">
+                            <div class="action-item" onclick="addStepByType('ai_assert')">
+                                <div class="action-name">验证内容</div>
+                                <div class="action-desc">检查页面是否包含预期内容</div>
+                            </div>
+                            <div class="action-item" onclick="addStepByType('ai_wait_for')">
+                                <div class="action-name">等待元素</div>
+                                <div class="action-desc">等待页面元素出现</div>
+                            </div>
+                            <div class="action-item" onclick="addStepByType('sleep')">
+                                <div class="action-name">等待时间</div>
+                                <div class="action-desc">等待指定时间</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="action-category">
+                        <div class="category-title">数据工具</div>
+                        <div class="action-list">
+                            <div class="action-item" onclick="addStepByType('ai_query')">
+                                <div class="action-name">数据提取</div>
+                                <div class="action-desc">从页面提取数据</div>
+                            </div>
+                            <div class="action-item" onclick="addStepByType('logScreenshot')">
+                                <div class="action-name">截图记录</div>
+                                <div class="action-desc">保存当前页面截图</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/axios@1.6.0/dist/axios.min.js"></script>
+    <script>
+        // 全局变量
+        const API_BASE = '/api';
+        let currentTestcase = null;
+        let steps = [];
+        let editingStepIndex = -1;
+
+        // 操作类型配置
+        const actionConfigs = {
+            goto: {
+                name: '访问页面',
+                params: [
+                    { name: 'url', label: 'URL地址', type: 'text', required: true, placeholder: 'https://example.com' }
+                ]
+            },
+            ai_input: {
+                name: '输入文本',
+                params: [
+                    { name: 'text', label: '输入内容', type: 'text', required: true, placeholder: '要输入的文本' },
+                    { name: 'locate', label: '定位描述', type: 'text', required: true, placeholder: '输入框的描述，如"用户名输入框"' }
+                ]
+            },
+            ai_tap: {
+                name: '点击元素',
+                params: [
+                    { name: 'locate', label: '元素描述', type: 'text', required: true, placeholder: '要点击的元素描述，如"登录按钮"' }
+                ]
+            },
+            ai_assert: {
+                name: '验证内容',
+                params: [
+                    { name: 'prompt', label: '验证描述', type: 'text', required: true, placeholder: '期望看到的内容描述' }
+                ]
+            },
+            ai_wait_for: {
+                name: '等待元素',
+                params: [
+                    { name: 'prompt', label: '等待描述', type: 'text', required: true, placeholder: '等待出现的元素描述' },
+                    { name: 'timeout', label: '超时时间(ms)', type: 'number', required: false, placeholder: '10000' }
+                ]
+            },
+            ai_scroll: {
+                name: '滚动页面',
+                params: [
+                    { name: 'direction', label: '滚动方向', type: 'select', required: false, options: [
+                        { value: 'down', text: '向下' },
+                        { value: 'up', text: '向上' }
+                    ]},
+                    { name: 'scroll_type', label: '滚动类型', type: 'select', required: false, options: [
+                        { value: 'once', text: '滚动一次' },
+                        { value: 'to_bottom', text: '滚动到底部' },
+                        { value: 'to_top', text: '滚动到顶部' }
+                    ]},
+                    { name: 'locate_prompt', label: '定位描述', type: 'text', required: false, placeholder: '滚动到指定元素位置（可选）' }
+                ]
+            },
+            ai_query: {
+                name: '数据提取',
+                params: [
+                    { name: 'query', label: '提取描述', type: 'text', required: true, placeholder: '描述要提取的数据内容' },
+                    { name: 'name', label: '变量名', type: 'text', required: false, placeholder: '存储结果的变量名' }
+                ]
+            },
+            sleep: {
+                name: '等待时间',
+                params: [
+                    { name: 'duration', label: '等待时长(ms)', type: 'number', required: true, placeholder: '3000' }
+                ]
+            },
+            logScreenshot: {
+                name: '截图记录',
+                params: [
+                    { name: 'name', label: '截图名称', type: 'text', required: false, placeholder: '截图描述' }
+                ]
+            }
+        };
+
+        // 测试函数 - 验证函数是否可用
+        function testFunction() {
+            console.log('Test function works!');
+            alert('Test function works!');
+        }
+
+        // 全局测试 handleActionTypeChange 函数
+        window.handleActionTypeChange = function(index, newActionType) {
+            console.log('Global handleActionTypeChange called:', index, newActionType);
+            
+            if (!newActionType || !actionConfigs[newActionType]) {
+                console.log('Invalid action type:', newActionType);
+                return;
+            }
+
+            const currentStep = steps[index];
+            if (!currentStep) {
+                console.log('Step not found at index:', index);
+                return;
+            }
+            
+            const oldActionType = currentStep.action;
+            console.log('Action type change:', oldActionType, '->', newActionType);
+            
+            // 如果动作类型没有改变，直接返回
+            if (oldActionType === newActionType) {
+                console.log('No action type change needed');
+                return;
+            }
+
+            // 保存当前参数用于智能保留
+            const oldParams = currentStep.params || {};
+            console.log('Old params:', oldParams);
+            
+            // 更新步骤的动作类型
+            currentStep.action = newActionType;
+            
+            // 智能合并参数
+            const newParams = mergeParamsOnActionChange(oldActionType, newActionType, oldParams);
+            console.log('New params after merge:', newParams);
+            currentStep.params = newParams;
+            
+            // 重新渲染参数表单区域
+            const paramsContainer = document.getElementById(`params-container-${index}`);
+            if (!paramsContainer) {
+                console.log('Params container not found:', `params-container-${index}`);
+                return;
+            }
+            
+            const newConfig = actionConfigs[newActionType];
+            console.log('New config:', newConfig);
+            
+            const newFormFields = renderParamFields(currentStep, newConfig);
+            console.log('New form fields HTML:', newFormFields);
+            paramsContainer.innerHTML = newFormFields;
+            
+            // 确保新的表单字段正确显示参数值
+            setTimeout(() => {
+                newConfig.params.forEach(param => {
+                    const fieldElement = paramsContainer.querySelector(`[data-param="${param.name}"]`);
+                    if (fieldElement && currentStep.params[param.name] !== undefined) {
+                        const value = currentStep.params[param.name];
+                        if (fieldElement.tagName === 'SELECT') {
+                            fieldElement.value = value;
+                        } else if (fieldElement.tagName === 'TEXTAREA') {
+                            fieldElement.value = value;
+                        } else if (fieldElement.tagName === 'INPUT') {
+                            fieldElement.value = value;
+                        }
+                        console.log(`Set field ${param.name} to:`, value);
+                    }
+                });
+            }, 10);
+            
+            console.log('Final step params:', currentStep.params);
+            
+            // 显示参数更新提示
+            showActionTypeChangeNotification(oldActionType, newActionType);
+        };
+
+        // 页面初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, actionConfigs available:', Object.keys(actionConfigs));
+            console.log('Global handleActionTypeChange available:', typeof window.handleActionTypeChange);
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const testcaseId = urlParams.get('id');
+            
+            if (testcaseId) {
+                loadTestcase(testcaseId);
+            } else {
+                // 新建测试用例模式
+                document.getElementById('pageTitle').textContent = '新建测试用例 - 步骤编辑器';
+            }
+        });
+
+        async function loadTestcase(id) {
+            try {
+                const response = await axios.get(`${API_BASE}/testcases/${id}`);
+                if (response.data.code === 200) {
+                    currentTestcase = response.data.data;
+                    steps = currentTestcase.steps || [];
+                    
+                    // 更新页面标题和信息
+                    document.getElementById('pageTitle').textContent = `编辑测试用例 - ${currentTestcase.name}`;
+                    document.getElementById('testcaseName').textContent = currentTestcase.name;
+                    document.getElementById('testcaseDesc').textContent = currentTestcase.description || '无描述';
+                    document.getElementById('testcaseInfo').style.display = 'block';
+                    
+                    renderSteps();
+                } else {
+                    alert('加载测试用例失败: ' + response.data.message);
+                }
+            } catch (error) {
+                alert('加载测试用例失败');
+                console.error(error);
+            }
+        }
+
+        function renderSteps() {
+            const stepList = document.getElementById('stepList');
+            const stepCount = document.getElementById('stepCount');
+            
+            stepCount.textContent = `${steps.length} 个步骤`;
+            
+            if (steps.length === 0) {
+                stepList.innerHTML = `
+                    <div class="empty-state">
+                        <div>还没有添加测试步骤</div>
+                        <div style="margin-top: 8px; font-size: 14px;">从右侧操作面板选择操作类型开始创建</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            stepList.innerHTML = steps.map((step, index) => `
+                <div class="step-item ${editingStepIndex === index ? 'editing' : ''}" id="step-${index}">
+                    <div class="step-header">
+                        <div style="display: flex; align-items: flex-start;">
+                            <div class="step-number">${index + 1}</div>
+                            <div class="step-content">
+                                <div class="step-title">${step.description || actionConfigs[step.action]?.name || step.action}</div>
+                                <div class="step-description">${formatStepParams(step)}</div>
+                            </div>
+                        </div>
+                        <div class="step-actions">
+                            <button class="step-action-btn" onclick="editStep(${index})">编辑</button>
+                            <button class="step-action-btn" onclick="moveStep(${index}, -1)" ${index === 0 ? 'disabled' : ''}>↑</button>
+                            <button class="step-action-btn" onclick="moveStep(${index}, 1)" ${index === steps.length - 1 ? 'disabled' : ''}>↓</button>
+                            <button class="step-action-btn danger" onclick="deleteStep(${index})">删除</button>
+                        </div>
+                    </div>
+                    ${editingStepIndex === index ? renderStepForm(step, index) : ''}
+                </div>
+            `).join('');
+        }
+
+        function formatStepParams(step) {
+            const params = step.params || {};
+            const config = actionConfigs[step.action];
+            
+            if (!config) return JSON.stringify(params);
+            
+            return config.params.map(param => {
+                const value = params[param.name];
+                if (value !== undefined && value !== '') {
+                    return `${param.label}: ${value}`;
+                }
+                return null;
+            }).filter(Boolean).join(' | ') || '无参数';
+        }
+
+        function renderStepForm(step, index) {
+            const config = actionConfigs[step.action];
+            if (!config) return '';
+            
+            // 生成动作类型选择器选项
+            const actionOptions = Object.keys(actionConfigs).map(actionType => 
+                `<option value="${actionType}" ${step.action === actionType ? 'selected' : ''}>${actionConfigs[actionType].name}</option>`
+            ).join('');
+            
+            const formFields = renderParamFields(step, config);
+            
+            return `
+                <div class="step-form">
+                    <div class="form-row">
+                        <label class="form-label">动作类型:</label>
+                        <select class="form-select" id="edit-action-${index}" onchange="handleActionTypeChange(${index}, this.value)">
+                            ${actionOptions}
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">描述:</label>
+                        <input type="text" class="form-input" data-param="description" value="${step.description || ''}" placeholder="步骤描述（可选）">
+                    </div>
+                    <div id="params-container-${index}">
+                        ${formFields}
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" onclick="saveStep(${index})">保存</button>
+                        <button class="btn btn-default" onclick="cancelEdit()">取消</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderParamFields(step, config) {
+            console.log('renderParamFields called with step:', step, 'config:', config);
+            
+            return config.params.map(param => {
+                const value = step.params?.[param.name] || '';
+                console.log(`Rendering param ${param.name} with value:`, value);
+                
+                if (param.type === 'select') {
+                    const options = param.options.map(opt => 
+                        `<option value="${opt.value}" ${value === opt.value ? 'selected' : ''}>${opt.text}</option>`
+                    ).join('');
+                    return `
+                        <div class="form-row">
+                            <label class="form-label">${param.label}:</label>
+                            <select class="form-select" data-param="${param.name}" ${param.required ? 'required' : ''}>
+                                <option value="">请选择</option>
+                                ${options}
+                            </select>
+                        </div>
+                    `;
+                } else if (param.type === 'textarea') {
+                    return `
+                        <div class="form-row">
+                            <label class="form-label">${param.label}:</label>
+                            <textarea class="form-textarea" data-param="${param.name}" placeholder="${param.placeholder || ''}" ${param.required ? 'required' : ''}>${value}</textarea>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="form-row">
+                            <label class="form-label">${param.label}:</label>
+                            <input type="${param.type}" class="form-input" data-param="${param.name}" value="${value}" placeholder="${param.placeholder || ''}" ${param.required ? 'required' : ''}>
+                        </div>
+                    `;
+                }
+            }).join('');
+        }
+
+        function addStepByType(actionType) {
+            const newStep = {
+                action: actionType,
+                params: {},
+                description: ''
+            };
+            
+            steps.push(newStep);
+            editingStepIndex = steps.length - 1;
+            renderSteps();
+        }
+
+        function addNewStep() {
+            // 显示操作类型选择
+            const actionType = prompt('请输入操作类型 (goto, ai_input, ai_tap, ai_assert, ai_wait_for, ai_scroll):');
+            if (actionType && actionConfigs[actionType]) {
+                addStepByType(actionType);
+            } else if (actionType) {
+                alert('不支持的操作类型');
+            }
+        }
+
+        function editStep(index) {
+            editingStepIndex = index;
+            renderSteps();
+        }
+
+        function saveStep(index) {
+            const stepForm = document.querySelector(`#step-${index} .step-form`);
+            const inputs = stepForm.querySelectorAll('[data-param]');
+            
+            const params = {};
+            let description = '';
+            
+            inputs.forEach(input => {
+                const paramName = input.dataset.param;
+                const value = input.value.trim();
+                
+                if (paramName === 'description') {
+                    description = value;
+                } else if (value) {
+                    params[paramName] = input.type === 'number' ? parseInt(value) : value;
+                }
+            });
+            
+            steps[index].params = params;
+            steps[index].description = description;
+            
+            editingStepIndex = -1;
+            renderSteps();
+        }
+
+        function cancelEdit() {
+            editingStepIndex = -1;
+            renderSteps();
+        }
+
+        function deleteStep(index) {
+            if (confirm('确定要删除这个步骤吗？')) {
+                steps.splice(index, 1);
+                editingStepIndex = -1;
+                renderSteps();
+            }
+        }
+
+        function moveStep(index, direction) {
+            const newIndex = index + direction;
+            if (newIndex >= 0 && newIndex < steps.length) {
+                [steps[index], steps[newIndex]] = [steps[newIndex], steps[index]];
+                renderSteps();
+            }
+        }
+
+
+        // 智能参数合并算法
+        function mergeParamsOnActionChange(oldAction, newAction, oldParams) {
+            const oldConfig = actionConfigs[oldAction];
+            const newConfig = actionConfigs[newAction];
+            
+            if (!oldConfig || !newConfig) {
+                return getDefaultParams(newAction);
+            }
+
+            const newParams = {};
+            
+            // 1. 先设置新动作类型的默认参数
+            const defaultParams = getDefaultParams(newAction);
+            Object.assign(newParams, defaultParams);
+            
+            // 2. 尝试保留兼容的参数
+            newConfig.params.forEach(newParam => {
+                const paramName = newParam.name;
+                
+                // 检查旧参数中是否有同名参数
+                if (oldParams.hasOwnProperty(paramName)) {
+                    const oldValue = oldParams[paramName];
+                    
+                    // 进行类型兼容性检查
+                    if (isParamValueCompatible(oldValue, newParam)) {
+                        newParams[paramName] = oldValue;
+                    }
+                }
+                
+                // 特殊处理常见的参数映射
+                if (!newParams[paramName] || newParams[paramName] === '') {
+                    const mappedValue = mapCommonParams(paramName, oldParams, oldAction, newAction);
+                    if (mappedValue !== null) {
+                        newParams[paramName] = mappedValue;
+                    }
+                }
+            });
+            
+            return newParams;
+        }
+
+        // 获取动作类型的默认参数
+        function getDefaultParams(actionType) {
+            const config = actionConfigs[actionType];
+            if (!config) return {};
+            
+            const params = {};
+            config.params.forEach(param => {
+                if (param.type === 'select' && param.options && param.options.length > 0) {
+                    // 选择类型参数，使用第一个选项作为默认值
+                    params[param.name] = param.options[0].value;
+                } else if (param.type === 'number') {
+                    // 数字类型参数的默认值
+                    if (param.name === 'timeout') {
+                        params[param.name] = 10000;
+                    } else {
+                        params[param.name] = 0;
+                    }
+                } else {
+                    // 文本类型参数保持空字符串
+                    params[param.name] = '';
+                }
+            });
+            
+            return params;
+        }
+
+        // 检查参数值兼容性
+        function isParamValueCompatible(value, paramConfig) {
+            if (value === null || value === undefined) {
+                return false;
+            }
+            
+            switch (paramConfig.type) {
+                case 'number':
+                    return !isNaN(Number(value));
+                case 'select':
+                    return paramConfig.options.some(opt => opt.value === value);
+                case 'text':
+                case 'textarea':
+                default:
+                    return typeof value === 'string' || typeof value === 'number';
+            }
+        }
+
+        // 常见参数映射处理
+        function mapCommonParams(paramName, oldParams, oldAction, newAction) {
+            // locate 参数在多个动作类型中通用
+            if (paramName === 'locate') {
+                if (oldParams.locate) {
+                    return oldParams.locate;
+                }
+                // 从 prompt 参数映射到 locate
+                if (oldParams.prompt) {
+                    return oldParams.prompt;
+                }
+            }
+            
+            // prompt 参数映射
+            if (paramName === 'prompt') {
+                if (oldParams.prompt) {
+                    return oldParams.prompt;
+                }
+                // 从 locate 参数映射到 prompt
+                if (oldParams.locate) {
+                    return oldParams.locate;
+                }
+            }
+            
+            // text 参数特殊处理
+            if (paramName === 'text' && newAction === 'ai_input') {
+                if (oldParams.text) {
+                    return oldParams.text;
+                }
+                return '';
+            }
+            
+            // url 参数处理
+            if (paramName === 'url' && oldParams.url) {
+                return oldParams.url;
+            }
+            
+            // query 参数映射
+            if (paramName === 'query' && oldParams.query) {
+                return oldParams.query;
+            }
+            
+            // name 参数映射
+            if (paramName === 'name' && oldParams.name) {
+                return oldParams.name;
+            }
+            
+            // duration 参数映射
+            if (paramName === 'duration') {
+                if (oldParams.duration) {
+                    return oldParams.duration;
+                }
+                if (oldParams.timeout) {
+                    return oldParams.timeout;
+                }
+            }
+            
+            // timeout 参数映射
+            if (paramName === 'timeout') {
+                if (oldParams.timeout) {
+                    return oldParams.timeout;
+                }
+                if (oldParams.duration) {
+                    return oldParams.duration;
+                }
+            }
+            
+            return null;
+        }
+
+        // 显示动作类型切换通知
+        function showActionTypeChangeNotification(oldAction, newAction) {
+            const oldName = actionConfigs[oldAction]?.name || oldAction;
+            const newName = actionConfigs[newAction]?.name || newAction;
+            
+            // 创建通知元素
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #52c41a;
+                color: white;
+                padding: 12px 16px;
+                border-radius: 4px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+                z-index: 1000;
+                font-size: 14px;
+                transition: all 0.3s ease;
+            `;
+            notification.textContent = `动作类型已从 "${oldName}" 切换为 "${newName}"，参数已自动更新`;
+            
+            document.body.appendChild(notification);
+            
+            // 3秒后自动移除通知
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 300);
+            }, 3000);
+        }
+
+        async function saveTestcase() {
+            if (editingStepIndex !== -1) {
+                alert('请先保存正在编辑的步骤');
+                return;
+            }
+            
+            try {
+                const data = {
+                    steps: steps
+                };
+                
+                let response;
+                if (currentTestcase) {
+                    // 更新现有测试用例
+                    response = await axios.put(`${API_BASE}/testcases/${currentTestcase.id}`, data);
+                } else {
+                    // 创建新测试用例
+                    const name = prompt('请输入测试用例名称:');
+                    if (!name) return;
+                    
+                    data.name = name;
+                    data.description = prompt('请输入测试用例描述（可选）:') || '';
+                    data.category = '功能测试';
+                    data.priority = 3;
+                    data.tags = [];
+                    
+                    response = await axios.post(`${API_BASE}/testcases`, data);
+                }
+                
+                if (response.data.code === 200) {
+                    alert('保存成功！');
+                    if (!currentTestcase) {
+                        // 新建的测试用例，跳转到编辑模式
+                        window.location.href = `/step_editor?id=${response.data.data.id}`;
+                    }
+                } else {
+                    alert('保存失败: ' + response.data.message);
+                }
+            } catch (error) {
+                alert('保存失败');
+                console.error(error);
+            }
+        }
+
+        function previewExecution() {
+            if (currentTestcase) {
+                window.open(`/execution?testcase=${currentTestcase.id}`, '_blank');
+            } else {
+                alert('请先保存测试用例');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,442 @@
+{% extends "base_layout.html" %}
+
+{% block title %}本地代理下载 - AI4SE工具集{% endblock %}
+
+{% block page_title %}本地代理下载{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* 状态指示器样式 */
+    .status-indicator {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px;
+        border-radius: 4px;
+        margin-bottom: 16px;
+        font-size: 14px;
+        border: 1px solid #e8e8e8;
+        background: #f8f8f8;
+        color: #666666;
+    }
+
+    .status-indicator.checking {
+        background: #fff7e6;
+        border-color: #ffd591;
+        color: #d48806;
+    }
+
+    .status-indicator.connected {
+        background: #f6ffed;
+        border-color: #b7eb8f;
+        color: #389e0d;
+    }
+
+    .status-indicator.disconnected {
+        background: #fff2f0;
+        border-color: #ffb3b3;
+        color: #cf1322;
+    }
+
+    .status-light {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+    }
+
+    .status-light.checking {
+        background: #fadb14;
+        animation: pulse 2s infinite;
+    }
+
+    .status-light.connected {
+        background: #52c41a;
+        animation: pulse 2s infinite;
+    }
+
+    .status-light.disconnected {
+        background: #ff4d4f;
+    }
+
+    @keyframes pulse {
+        0% {
+            transform: scale(0.95);
+            opacity: 0.7;
+        }
+        50% {
+            transform: scale(1.05);
+            opacity: 1;
+        }
+        100% {
+            transform: scale(0.95);
+            opacity: 0.7;
+        }
+    }
+
+    /* 步骤样式 */
+    .step-list {
+        list-style: none;
+        padding: 0;
+    }
+
+    .step-item {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 16px;
+        padding: 16px;
+        border-radius: 4px;
+        background: #f8f8f8;
+        border-left: 4px solid #333333;
+        border: 1px solid #e8e8e8;
+    }
+
+    .step-number {
+        background: #333333;
+        color: white;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 500;
+        font-size: 12px;
+        margin-right: 12px;
+        flex-shrink: 0;
+    }
+
+    .step-content {
+        flex: 1;
+    }
+
+    .step-title {
+        font-weight: 500;
+        margin-bottom: 4px;
+        color: #333333;
+    }
+
+    .step-description {
+        color: #666666;
+        line-height: 1.5;
+        font-size: 14px;
+    }
+
+    /* 代码块样式 */
+    .code-block {
+        background: #f8f8f8;
+        border: 1px solid #e8e8e8;
+        border-radius: 4px;
+        padding: 8px 12px;
+        margin-top: 8px;
+        font-family: 'SF Mono', Monaco, monospace;
+        font-size: 13px;
+        color: #333333;
+        overflow-x: auto;
+    }
+
+    /* 系统要求样式 */
+    .system-requirements {
+        background: #f8f8f8;
+        border: 1px solid #e8e8e8;
+        border-radius: 4px;
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+
+    .requirements-title {
+        font-weight: 500;
+        margin-bottom: 8px;
+        color: #333333;
+    }
+
+    .requirements-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .requirements-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 4px;
+        font-size: 14px;
+        color: #666666;
+    }
+
+
+    /* 版本信息样式 */
+    .version-info {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-top: 12px;
+        font-size: 12px;
+        color: #999999;
+    }
+
+    .version-badge {
+        padding: 2px 6px;
+        background: #f0f0f0;
+        border-radius: 4px;
+        font-family: 'SF Mono', Monaco, monospace;
+        color: #333333;
+    }
+
+    /* 下载操作样式 */
+    .download-actions {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .download-description {
+        color: #666666;
+        margin-bottom: 20px;
+        line-height: 1.6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 重要提示 -->
+<div class="card mb-3">
+    <div class="flex items-start">
+        <div>
+            <strong>重要提示：</strong>本地代理服务器是进行AI测试的必备组件。
+            如果您需要在本地调试和执行测试脚本，请务必下载并运行本地代理服务器。
+            云端执行不需要本地代理，但功能会受到一定限制。
+        </div>
+    </div>
+</div>
+
+<!-- 连接状态检查 -->
+<div class="card mb-3">
+    <div class="flex items-center mb-3">
+        <span class="text-xl mr-2">🔗</span>
+        <h3 class="card-title mb-0">连接状态</h3>
+    </div>
+    
+    <div id="connection-status" class="status-indicator checking">
+        <span class="status-light checking"></span>
+        <span>正在检查本地代理服务器连接状态...</span>
+    </div>
+    
+    <button id="check-connection" class="btn btn-ghost" onclick="checkConnection()">
+        <span>🔄</span>
+        重新检查
+    </button>
+</div>
+
+<!-- 下载区域 -->
+<div class="card mb-3">
+    <div class="flex items-center mb-3">
+        <h3 class="card-title mb-0">下载本地代理包</h3>
+    </div>
+    
+    <div class="download-description">
+        本地代理包包含了完整的AI测试执行环境，包括MidSceneJS引擎、浏览器驱动和所有必要的依赖。
+        下载后无需额外安装，可直接运行。
+    </div>
+    
+    <div class="system-requirements">
+        <div class="requirements-title">系统要求</div>
+        <ul class="requirements-list">
+            <li class="requirements-item">
+                Node.js 18.0 或更高版本
+            </li>
+            <li class="requirements-item">
+                支持的操作系统：Windows、macOS、Linux
+            </li>
+            <li class="requirements-item">
+                至少 2GB 可用磁盘空间
+            </li>
+            <li class="requirements-item">
+                网络连接（用于AI模型API调用）
+            </li>
+        </ul>
+    </div>
+    
+    <div class="download-actions">
+        <a href="/api/download-proxy" class="btn btn-primary" id="download-btn">
+            立即下载
+        </a>
+        <button class="btn btn-ghost" onclick="checkVersion()">
+            检查版本
+        </button>
+    </div>
+    
+    <div class="version-info">
+        <span>当前版本：</span>
+        <span class="version-badge" id="current-version">v1.0.0</span>
+        <span>更新日期：</span>
+        <span id="update-date">{{ current_date }}</span>
+    </div>
+</div>
+
+<!-- 使用说明 -->
+<div class="card">
+    <div class="flex items-center mb-3">
+        <h3 class="card-title mb-0">使用说明</h3>
+    </div>
+    
+    <ol class="step-list">
+        <li class="step-item">
+            <div class="step-number">1</div>
+            <div class="step-content">
+                <div class="step-title">下载代理包</div>
+                <div class="step-description">
+                    点击上方"立即下载"按钮，下载最新的本地代理包压缩文件。
+                </div>
+            </div>
+        </li>
+        
+        <li class="step-item">
+            <div class="step-number">2</div>
+            <div class="step-content">
+                <div class="step-title">解压文件</div>
+                <div class="step-description">
+                    将下载的压缩文件解压到您选择的目录中。
+                    <div class="code-block">
+                        # Windows
+                        右键 → 解压到当前文件夹
+                        
+                        # macOS/Linux
+                        unzip local-proxy-package.zip
+                    </div>
+                </div>
+            </div>
+        </li>
+        
+        <li class="step-item">
+            <div class="step-number">3</div>
+            <div class="step-content">
+                <div class="step-title">配置环境变量</div>
+                <div class="step-description">
+                    在解压后的目录中找到 .env.example 文件，复制为 .env 并配置您的AI模型API密钥。
+                    <div class="code-block">
+                        # 复制配置文件
+                        cp .env.example .env
+                        
+                        # 编辑配置文件，设置您的API密钥
+                        OPENAI_API_KEY=sk-your-api-key
+                        OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+                        MIDSCENE_MODEL_NAME=qwen-vl-max-latest
+                    </div>
+                </div>
+            </div>
+        </li>
+        
+        <li class="step-item">
+            <div class="step-number">4</div>
+            <div class="step-content">
+                <div class="step-title">启动服务</div>
+                <div class="step-description">
+                    使用提供的启动脚本启动本地代理服务器。
+                    <div class="code-block">
+                        # Windows
+                        start.bat
+                        
+                        # macOS/Linux
+                        ./start.sh
+                    </div>
+                </div>
+            </div>
+        </li>
+        
+        <li class="step-item">
+            <div class="step-number">5</div>
+            <div class="step-content">
+                <div class="step-title">验证连接</div>
+                <div class="step-description">
+                    启动成功后，本页面的连接状态应该显示为"已连接"。
+                    如果显示连接失败，请检查服务器是否正常启动，端口3001是否被占用。
+                </div>
+            </div>
+        </li>
+    </ol>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let connectionCheckInterval;
+    
+    // 页面加载完成后开始检查连接
+    document.addEventListener('DOMContentLoaded', function() {
+        checkConnection();
+        // 每30秒自动检查一次连接状态
+        connectionCheckInterval = setInterval(checkConnection, 30000);
+    });
+    
+    // 页面卸载时清除定时器
+    window.addEventListener('beforeunload', function() {
+        if (connectionCheckInterval) {
+            clearInterval(connectionCheckInterval);
+        }
+    });
+    
+    // 检查连接状态
+    async function checkConnection() {
+        const statusElement = document.getElementById('connection-status');
+        const statusLight = statusElement.querySelector('.status-light');
+        const statusText = statusElement.querySelector('span:last-child');
+        
+        // 设置检查状态
+        statusElement.className = 'status-indicator checking';
+        statusLight.className = 'status-light checking';
+        statusText.textContent = '正在检查本地代理服务器连接状态...';
+        
+        try {
+            const response = await fetch('http://localhost:3001/health', {
+                method: 'GET',
+                timeout: 5000
+            });
+            
+            if (response.ok) {
+                // 连接成功
+                statusElement.className = 'status-indicator connected';
+                statusLight.className = 'status-light connected';
+                statusText.textContent = '本地代理服务器连接正常 (http://localhost:3001)';
+            } else {
+                throw new Error('服务器响应异常');
+            }
+        } catch (error) {
+            // 连接失败
+            statusElement.className = 'status-indicator disconnected';
+            statusLight.className = 'status-light disconnected';
+            statusText.textContent = '本地代理服务器未连接 - 请确保服务器已启动并运行在端口3001';
+        }
+    }
+    
+    // 检查版本信息
+    async function checkVersion() {
+        try {
+            const response = await axios.get('/api/proxy-version');
+            if (response.data.code === 200) {
+                const versionInfo = response.data.data;
+                document.getElementById('current-version').textContent = versionInfo.version;
+                document.getElementById('update-date').textContent = versionInfo.date;
+                showMessage('版本信息已更新', 'success');
+            }
+        } catch (error) {
+            console.error('获取版本信息失败:', error);
+            showMessage('获取版本信息失败', 'error');
+        }
+    }
+    
+    // 下载按钮点击事件
+    document.getElementById('download-btn').addEventListener('click', function(e) {
+        // 添加下载统计
+        if (typeof gtag !== 'undefined') {
+            gtag('event', 'download', {
+                event_category: 'proxy',
+                event_label: 'local-proxy-package'
+            });
+        }
+        
+        showMessage('开始下载本地代理包...', 'info');
+    });
+</script>
+{% endblock %}

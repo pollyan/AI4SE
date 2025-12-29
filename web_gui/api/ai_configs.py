@@ -273,9 +273,12 @@ def test_config(config_id):
         if not config:
             raise NotFoundError("配置不存在")
         
-        # 导入AI服务进行测试
         try:
             from ..services.adk_agents import AdkAssistantService
+        except ImportError:
+            return standard_error_response("ADK library not installed", 503)
+
+        try:
             import time
             import asyncio
             
@@ -356,6 +359,10 @@ def test_config_preview():
         # 导入AI服务进行测试
         try:
             from ..services.adk_agents import AdkAssistantService
+        except ImportError:
+            return standard_error_response("ADK library not installed", 503)
+
+        try:
             import time
             import asyncio
             
@@ -461,36 +468,51 @@ def test_all_configs():
             config_start_time = time.time()
             try:
                 # 导入AI服务进行测试
-                from ..services.adk_agents import AdkAssistantService
-                import asyncio
-                
-                config_data = config.get_config_for_ai_service()
-                temp_ai_service = AdkAssistantService(assistant_type="alex", config=config_data)
-                
-                # 使用消息格式测试AI模型
-                messages = [
-                    {"role": "user", "content": "你好"}
-                ]
-                
-                # 使用 asyncio 运行异步测试
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
                 try:
-                    response = loop.run_until_complete(temp_ai_service.test_connection(messages))
-                finally:
-                    loop.close()
-                duration = time.time() - config_start_time
-                
-                success = response and len(response.strip()) > 0
-                test_results.append({
-                    "config_id": config.id,
-                    "config_name": config.config_name,
-                    "model_name": config.model_name,
-                    "test_success": success,
-                    "duration_ms": round(duration * 1000, 2),
-                    "ai_response": response.strip() if response else "",
-                    "message": "连接正常" if success else "连接失败"
-                })
+                    from ..services.adk_agents import AdkAssistantService
+                except ImportError:
+                     test_results.append({
+                        "config_id": config.id,
+                        "config_name": config.config_name,
+                        "model_name": config.model_name,
+                        "test_success": False,
+                        "duration_ms": 0,
+                        "message": "ADK library not installed"
+                    })
+                     continue
+
+                try:
+                    import asyncio
+                    
+                    config_data = config.get_config_for_ai_service()
+                    temp_ai_service = AdkAssistantService(assistant_type="alex", config=config_data)
+                    
+                    # 使用消息格式测试AI模型
+                    messages = [
+                        {"role": "user", "content": "你好"}
+                    ]
+                    
+                    # 使用 asyncio 运行异步测试
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        response = loop.run_until_complete(temp_ai_service.test_connection(messages))
+                    finally:
+                        loop.close()
+                    duration = time.time() - config_start_time
+                    
+                    success = response and len(response.strip()) > 0
+                    test_results.append({
+                        "config_id": config.id,
+                        "config_name": config.config_name,
+                        "model_name": config.model_name,
+                        "test_success": success,
+                        "duration_ms": round(duration * 1000, 2),
+                        "ai_response": response.strip() if response else "",
+                        "message": "连接正常" if success else "连接失败"
+                    })
+                except Exception as e:
+                    raise e
                 
             except Exception as e:
                 duration = time.time() - config_start_time

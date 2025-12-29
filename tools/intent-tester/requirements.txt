@@ -1,0 +1,45 @@
+# Playwright
+playwright==1.56.0
+
+# 测试框架
+pytest>=8.4.0,<9.0.0
+pytest-playwright==0.7.1
+pytest-asyncio==1.2.0
+pytest-cov>=3.0.0
+pytest-mock>=3.10.0
+
+# 环境配置
+python-dotenv==1.2.1
+requests==2.32.5
+
+# Web框架
+flask>=2.0.0
+flask-socketio>=5.0.0
+flask-cors>=4.0.0
+python-socketio>=5.0.0
+
+# 数据库支持
+flask-sqlalchemy>=3.0.0
+psycopg2-binary>=2.9.0
+
+# Supabase客户端
+supabase>=1.0.0
+
+# 开发工具
+black>=22.0.0
+flake8>=4.0.0
+factory-boy>=3.2.0
+faker>=18.0.0
+
+# LangGraph 智能体框架（2025年12月最新版）
+langgraph>=1.0.4
+langchain>=1.1.3
+langchain-core>=1.1.0
+langchain-openai>=1.1.1
+langgraph-checkpoint-postgres>=3.0.1
+
+# 异步支持（LangGraph 需要）
+aiohttp>=3.9.0
+
+# LangSmith - LLM 追踪和观测（LangChain 官方方案）
+langsmith>=0.1.0

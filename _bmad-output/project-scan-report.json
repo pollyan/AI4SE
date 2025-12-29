@@ -1,79 +1,17 @@
 {
   "workflow_version": "1.2.0",
   "timestamps": {
-    "started": "2025-12-19T12:40:00+0800",
-    "last_updated": "2025-12-19T12:50:00+0800",
-    "completed": "2025-12-19T12:50:00+0800"
+    "started": "2025-12-29T17:10:57+0800",
+    "last_updated": "2025-12-29T17:10:57+0800"
   },
-  "mode": "initial_scan",
-  "scan_level": "exhaustive",
+  "mode": "full_rescan",
+  "scan_level": "deep",
   "project_root": "/Users/anhui/Documents/myProgram/intent-test-framework",
   "output_folder": "_bmad-output",
-  "project_name": "AI4SE Toolbox",
-  "repository_type": "multi-part",
-  "project_types": [
-    {
-      "part_id": "backend",
-      "project_type_id": "backend",
-      "display_name": "Backend API Server (Flask + LangGraph)",
-      "root_path": "web_gui/",
-      "tech_stack": ["Python 3.8+", "Flask 2.3.3", "LangGraph 1.0+", "PostgreSQL", "SQLAlchemy"]
-    },
-    {
-      "part_id": "local-proxy",
-      "project_type_id": "cli",
-      "display_name": "Local Browser Proxy Agent (MidSceneJS)",
-      "root_path": "/",
-      "tech_stack": ["Node.js 18+", "Express 4.21", "Playwright 1.57", "MidSceneJS 0.30", "Socket.IO 4.7"]
-    }
-  ],
-  "completed_steps": [
-    {"step": "step_1", "status": "completed", "summary": "Classified as multi-part: backend + local-proxy"},
-    {"step": "step_2", "status": "completed", "summary": "Analyzed technology stack"},
-    {"step": "step_3", "status": "completed", "summary": "Scanned API modules and data models"},
-    {"step": "step_4", "status": "completed", "summary": "Analyzed LangGraph agents (Alex, Lisa)"},
-    {"step": "step_5", "status": "completed", "summary": "Reviewed existing PRD document"},
-    {"step": "step_6", "status": "completed", "summary": "Generated all documentation files"}
-  ],
-  "current_step": "completed",
-  "findings": {
-    "project_classification": {
-      "repository_type": "multi-part",
-      "parts_count": 2,
-      "primary_tech": "Python (Flask + LangGraph) + Node.js (MidSceneJS)"
-    },
-    "technology_stack": {
-      "backend": {
-        "language": "Python 3.8+",
-        "framework": "Flask 2.3.3",
-        "orm": "Flask-SQLAlchemy 3.0.5",
-        "database": "PostgreSQL / SQLite",
-        "ai_framework": "LangGraph 1.0+ + LangChain 1.1+",
-        "key_features": ["REST API", "LangGraph Agents (Alex, Lisa)", "Web GUI (Jinja2)", "RAG Middleware"]
-      },
-      "local_proxy": {
-        "language": "Node.js 18+",
-        "framework": "Express 4.21",
-        "browser_automation": "Playwright 1.57 + MidSceneJS 0.30",
-        "realtime": "Socket.IO 4.7",
-        "key_features": ["AI-Powered Browser Control", "WebSocket Communication", "Variable Resolution", "Multi-step Test Execution"]
-      }
-    },
-    "code_analysis": {
-      "langgraph_agents": ["Alex (需求分析师)", "Lisa (测试分析师)"],
-      "api_modules": ["testcases", "executions", "templates", "requirements", "ai_configs", "midscene", "statistics", "dashboard"],
-      "database_models": ["TestCase", "ExecutionHistory", "StepExecution", "Template", "ExecutionVariable", "RequirementsSession", "RequirementsMessage", "RequirementsAIConfig", "VariableReference"],
-      "web_templates": ["index", "testcases", "execution", "reports", "requirements_analyzer", "config_management", "local_proxy"]
-    }
-  },
-  "outputs_generated": [
-    {"file": "index.md", "type": "index", "description": "项目文档主索引"},
-    {"file": "project-overview.md", "type": "overview", "description": "项目概述与架构总览"},
-    {"file": "architecture-backend.md", "type": "architecture", "description": "Backend (Flask + LangGraph) 架构文档"},
-    {"file": "architecture-local-proxy.md", "type": "architecture", "description": "Local Proxy (MidSceneJS) 架构文档"},
-    {"file": "api-contracts.md", "type": "api", "description": "REST API 接口规范"},
-    {"file": "data-models.md", "type": "data", "description": "数据库模型与实体定义"},
-    {"file": "development-guide.md", "type": "guide", "description": "开发环境与流程指南"}
-  ],
-  "workflow_status": "completed"
+  "project_name": "Intent Test Framework",
+  "completed_steps": [],
+  "current_step": "step_1",
+  "findings": {},
+  "outputs_generated": ["project-scan-report.json"],
+  "resume_instructions": "Starting from step 1"
 }

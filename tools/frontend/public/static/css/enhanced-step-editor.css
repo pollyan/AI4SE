@@ -1,0 +1,463 @@
+/**
+ * 增强步骤编辑器样式
+ * 实现STORY-012的UI/UX设计
+ */
+
+/* 增强参数表单容器 */
+.enhanced-parameter-form {
+    background: #fff;
+    border-radius: 6px;
+    padding: 16px;
+    margin: 12px 0;
+    border: 1px solid #e2e8f0;
+}
+
+/* 参数字段容器 */
+.parameter-field {
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.parameter-field:last-child {
+    margin-bottom: 0;
+}
+
+/* 字段头部 */
+.field-header {
+    margin-bottom: 8px;
+}
+
+.field-header .form-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 4px;
+}
+
+.field-header .required {
+    color: #ef4444;
+    font-weight: 600;
+}
+
+.field-header .variable-support-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    background: #dbeafe;
+    color: #1e40af;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.field-hint {
+    font-size: 12px;
+    color: #6b7280;
+    line-height: 1.4;
+}
+
+/* 输入字段容器 */
+.field-input-container {
+    position: relative;
+}
+
+/* 支持变量的输入字段样式 */
+.form-input.variable-supported {
+    padding-right: 32px;
+    border: 1px solid #d1d5db;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-input.variable-supported:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgb(59 130 246 / 0.1);
+}
+
+.form-input.variable-supported::placeholder {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+/* 变量引用语法高亮 */
+.form-input.variable-supported[value*="${"] {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 13px;
+}
+
+/* 错误状态 */
+.form-input.error {
+    border-color: #ef4444;
+    background-color: #fef2f2;
+}
+
+.form-input.error:focus {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgb(239 68 68 / 0.1);
+}
+
+/* 字段反馈区域 */
+.field-feedback {
+    margin-top: 6px;
+}
+
+/* 验证错误消息 */
+.validation-error {
+    color: #ef4444;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 4px 8px;
+    background: #fef2f2;
+    border-radius: 4px;
+    border-left: 3px solid #ef4444;
+    margin-bottom: 6px;
+}
+
+/* 预览值显示 */
+.preview-value {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.preview-label {
+    color: #0369a1;
+    font-weight: 500;
+    margin-right: 8px;
+}
+
+.preview-content {
+    color: #1e293b;
+    font-family: 'SF Mono', Monaco, monospace;
+    background: #fff;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #cbd5e1;
+}
+
+/* 字段元信息 */
+.field-meta {
+    font-size: 11px;
+    color: #9ca3af;
+    text-align: right;
+}
+
+/* 无参数提示 */
+.no-parameters {
+    text-align: center;
+    padding: 24px;
+    color: #6b7280;
+    background: #f9fafb;
+    border-radius: 6px;
+    border: 1px dashed #d1d5db;
+}
+
+/* 智能提示下拉菜单增强 */
+.parameter-field .variable-suggestion-dropdown {
+    z-index: 1002;
+    min-width: 320px;
+    max-width: 480px;
+}
+
+.parameter-field .suggestion-item {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.parameter-field .suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.parameter-field .suggestion-item:hover {
+    background: #f8fafc;
+}
+
+.parameter-field .suggestion-item.selected {
+    background: #eff6ff;
+    border-left: 3px solid #3b82f6;
+}
+
+/* 变量信息显示 */
+.variable-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.variable-name {
+    font-weight: 600;
+    color: #1f2937;
+    font-family: 'SF Mono', Monaco, monospace;
+}
+
+.variable-type {
+    background: #f3f4f6;
+    color: #374151;
+    padding: 2px 6px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.variable-source {
+    color: #6b7280;
+    font-size: 11px;
+}
+
+.variable-preview {
+    color: #4b5563;
+    font-size: 12px;
+    font-family: 'SF Mono', Monaco, monospace;
+    background: #f9fafb;
+    padding: 2px 6px;
+    border-radius: 3px;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 属性路径显示 */
+.property-path {
+    color: #059669;
+    font-size: 11px;
+    font-family: 'SF Mono', Monaco, monospace;
+    background: #ecfdf5;
+    padding: 1px 4px;
+    border-radius: 2px;
+}
+
+/* 快捷键提示 */
+.keyboard-hint {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #f3f4f6;
+    color: #6b7280;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 500;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.form-input.variable-supported:focus + .keyboard-hint {
+    opacity: 1;
+}
+
+/* 批量编辑模式样式 */
+.batch-edit-mode .parameter-field {
+    position: relative;
+    border-left: 3px solid #3b82f6;
+    padding-left: 12px;
+    background: #f8fafc;
+}
+
+.batch-edit-mode .parameter-field::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: -8px;
+    width: 12px;
+    height: 12px;
+    background: #3b82f6;
+    border-radius: 50%;
+    border: 2px solid #fff;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .enhanced-parameter-form {
+        padding: 12px;
+        margin: 8px 0;
+    }
+    
+    .parameter-field {
+        margin-bottom: 16px;
+    }
+    
+    .field-header .form-label {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+    
+    .variable-support-badge {
+        align-self: flex-start;
+    }
+    
+    .preview-value {
+        padding: 6px 8px;
+    }
+    
+    .preview-content {
+        display: block;
+        margin-top: 4px;
+        word-break: break-all;
+    }
+}
+
+/* 高对比度模式支持 */
+@media (prefers-contrast: high) {
+    .form-input.variable-supported {
+        border: 2px solid #374151;
+    }
+    
+    .form-input.error {
+        border: 2px solid #dc2626;
+        background-color: #fef2f2;
+    }
+    
+    .validation-error {
+        border-left-width: 4px;
+    }
+    
+    .preview-value {
+        border: 2px solid #0369a1;
+    }
+}
+
+/* 深色模式支持 */
+@media (prefers-color-scheme: dark) {
+    .enhanced-parameter-form {
+        background: #1f2937;
+        border-color: #4b5563;
+    }
+    
+    .field-header .form-label {
+        color: #f3f4f6;
+    }
+    
+    .field-hint {
+        color: #9ca3af;
+    }
+    
+    .form-input.variable-supported {
+        background: #374151;
+        border-color: #4b5563;
+        color: #f3f4f6;
+    }
+    
+    .form-input.variable-supported:focus {
+        border-color: #60a5fa;
+        box-shadow: 0 0 0 3px rgb(96 165 250 / 0.1);
+    }
+    
+    .validation-error {
+        background: #450a0a;
+        color: #fca5a5;
+    }
+    
+    .preview-value {
+        background: #0c4a6e;
+        border-color: #0284c7;
+    }
+    
+    .preview-label {
+        color: #7dd3fc;
+    }
+    
+    .preview-content {
+        background: #1e293b;
+        border-color: #475569;
+        color: #e2e8f0;
+    }
+    
+    .no-parameters {
+        background: #374151;
+        border-color: #4b5563;
+        color: #9ca3af;
+    }
+}
+
+/* 动画效果 */
+@keyframes slideInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.validation-error,
+.preview-value {
+    animation: slideInDown 0.2s ease;
+}
+
+.field-meta {
+    animation: fadeIn 0.3s ease;
+}
+
+/* 焦点指示器 */
+.form-input.variable-supported:focus {
+    outline: none;
+}
+
+.form-input.variable-supported:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* 高级视觉反馈 */
+.parameter-field.validating {
+    opacity: 0.7;
+}
+
+.parameter-field.valid .form-input {
+    border-color: #10b981;
+}
+
+.parameter-field.invalid .form-input {
+    border-color: #ef4444;
+}
+
+/* 工具提示样式 */
+.tooltip {
+    position: absolute;
+    z-index: 1003;
+    background: #1f2937;
+    color: #f3f4f6;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.tooltip.visible {
+    opacity: 1;
+}
+
+.tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -4px;
+    border: 4px solid transparent;
+    border-top-color: #1f2937;
+}

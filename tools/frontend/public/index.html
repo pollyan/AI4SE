@@ -1,0 +1,1578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="安辉（老兵大头）">
+    <meta name="description" content="老兵大头的 AI4SE 工具集，提供意图驱动测试和智能需求分析">
+    <meta name="keywords" content="AI4SE, 自动化测试, 意图驱动, 需求分析, 安辉, 老兵大头">
+
+    <!-- Open Graph 标签 - 用于社交分享 -->
+    <meta property="og:title" content="老兵大头的 AI4SE 工具集">
+    <meta property="og:description" content="AI 驱动的软件工程智能化平台">
+    <meta property="og:author" content="安辉（老兵大头）">
+
+    <title>老兵大头的 AI4SE 工具集 - 智能化软件工程平台</title>
+
+    <!-- 极简风格样式 -->
+    <style>
+        /* 基础重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #ffffff;
+            color: #333333;
+            line-height: 1.6;
+            font-size: 14px;
+            min-height: 100vh;
+        }
+
+        /* 顶部导航 */
+        .top-nav {
+            background: #ffffff;
+            border-bottom: 1px solid #e8e8e8;
+            padding: 0 40px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 1200px;
+            margin: 0 auto;
+            height: 64px;
+        }
+
+        .nav-brand {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333333;
+            letter-spacing: -0.5px;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .nav-brand:hover {
+            color: #555555;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 40px;
+        }
+
+        .nav-link {
+            color: #666666;
+            text-decoration: none;
+            font-weight: 400;
+            font-size: 14px;
+            transition: color 0.2s ease;
+            padding: 8px 0;
+            cursor: pointer;
+        }
+
+        .nav-link:hover {
+            color: #333333;
+        }
+
+        .nav-link.active {
+            color: #333333;
+            position: relative;
+        }
+
+        .nav-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #333333;
+        }
+
+        .nav-user {
+            color: #666666;
+            font-size: 14px;
+        }
+
+        /* 下拉菜单样式 */
+        .nav-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .nav-dropdown-trigger {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dropdown-arrow {
+            font-size: 10px;
+            transition: transform 0.2s ease;
+        }
+
+        .nav-dropdown:hover .dropdown-arrow {
+            transform: rotate(180deg);
+        }
+
+        .nav-dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: #ffffff;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            min-width: 160px;
+            padding: 8px 0;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.2s ease;
+            z-index: 1000;
+        }
+
+        .nav-dropdown:hover .nav-dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .nav-dropdown-item {
+            display: block;
+            padding: 8px 16px;
+            color: #666666;
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .nav-dropdown-item:hover {
+            background: #f8f8f8;
+            color: #333333;
+        }
+
+        .nav-dropdown-item.active {
+            background: #f0f0f0;
+            color: #333333;
+            font-weight: 500;
+        }
+
+        /* 主容器 */
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        /* 页面标题 */
+        .page-header {
+            margin-bottom: 40px;
+        }
+
+        .page-title {
+            font-size: 32px;
+            font-weight: 300;
+            color: #333333;
+            margin-bottom: 8px;
+            letter-spacing: -1px;
+        }
+
+        .page-subtitle {
+            font-size: 16px;
+            color: #666666;
+            font-weight: 400;
+        }
+
+        /* 网格布局 */
+        .grid {
+            display: grid;
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .grid-cols-1 {
+            grid-template-columns: 1fr;
+        }
+
+        .grid-cols-2 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .grid-cols-3 {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .grid-cols-4 {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        /* 卡片样式 */
+        .card {
+            background: #ffffff;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            padding: 24px;
+            transition: border-color 0.2s ease;
+        }
+
+        .card:hover {
+            border-color: #d0d0d0;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #333333;
+            margin-bottom: 8px;
+        }
+
+        .card-subtitle {
+            font-size: 13px;
+            color: #999999;
+            margin-bottom: 16px;
+        }
+
+        .card-content {
+            color: #666666;
+            line-height: 1.6;
+        }
+
+        /* 按钮样式 */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border: 1px solid #e8e8e8;
+            background: #ffffff;
+            color: #333333;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 400;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            background: #f8f8f8;
+            border-color: #d0d0d0;
+        }
+
+        .btn-primary {
+            background: #333333;
+            color: #ffffff;
+            border-color: #333333;
+        }
+
+        .btn-primary:hover {
+            background: #555555;
+            border-color: #555555;
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 13px;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: #666666;
+            border: 1px solid #e8e8e8;
+        }
+
+        .btn-ghost:hover {
+            background: #f8f8f8;
+            color: #333333;
+        }
+
+        /* 表单元素 */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: #666666;
+            font-weight: 400;
+        }
+
+        .form-input,
+        .form-select,
+        .form-textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            font-size: 14px;
+            background: #ffffff;
+            color: #333333;
+            transition: border-color 0.2s ease;
+        }
+
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: #333333;
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        /* 列表样式 */
+        .list {
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            background: #ffffff;
+        }
+
+        .list-item {
+            padding: 16px;
+            border-bottom: 1px solid #e8e8e8;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background 0.2s ease;
+        }
+
+        .list-item:last-child {
+            border-bottom: none;
+        }
+
+        .list-item:hover {
+            background: #f8f8f8;
+        }
+
+        .list-item-content {
+            flex: 1;
+        }
+
+        .list-item-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: #333333;
+            margin-bottom: 4px;
+        }
+
+        .list-item-subtitle {
+            font-size: 13px;
+            color: #666666;
+        }
+
+        .list-item-meta {
+            font-size: 12px;
+            color: #999999;
+            margin-top: 4px;
+        }
+
+        /* 状态指示器 */
+        .status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: 16px;
+        }
+
+        .status-success {
+            background: #28a745;
+        }
+
+        .status-warning {
+            background: #ffc107;
+        }
+
+        .status-error {
+            background: #dc3545;
+        }
+
+        .status-inactive {
+            background: #6c757d;
+        }
+
+        /* 进度条 */
+        .progress {
+            width: 100%;
+            height: 4px;
+            background: #f0f0f0;
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 12px 0;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: #333333;
+            transition: width 0.3s ease;
+        }
+
+        /* 分隔线 */
+        .divider {
+            height: 1px;
+            background: #e8e8e8;
+            margin: 24px 0;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 20px;
+            }
+
+            .nav-container {
+                padding: 0 20px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .grid-cols-2,
+            .grid-cols-3,
+            .grid-cols-4 {
+                grid-template-columns: 1fr;
+            }
+
+            .page-title {
+                font-size: 24px;
+            }
+        }
+
+        /* 工具类 */
+        .text-center {
+            text-align: center;
+        }
+
+        .text-left {
+            text-align: left;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .mb-0 {
+            margin-bottom: 0;
+        }
+
+        .mb-1 {
+            margin-bottom: 8px;
+        }
+
+        .mb-2 {
+            margin-bottom: 16px;
+        }
+
+        .mb-3 {
+            margin-bottom: 24px;
+        }
+
+        .mb-4 {
+            margin-bottom: 32px;
+        }
+
+        .mt-0 {
+            margin-top: 0;
+        }
+
+        .mt-1 {
+            margin-top: 8px;
+        }
+
+        .mt-2 {
+            margin-top: 16px;
+        }
+
+        .mt-3 {
+            margin-top: 24px;
+        }
+
+        .mt-4 {
+            margin-top: 32px;
+        }
+
+        .flex {
+            display: flex;
+        }
+
+        .flex-column {
+            flex-direction: column;
+        }
+
+        .flex-wrap {
+            flex-wrap: wrap;
+        }
+
+        .items-center {
+            align-items: center;
+        }
+
+        .justify-between {
+            justify-content: space-between;
+        }
+
+        .justify-center {
+            justify-content: center;
+        }
+
+        .gap-1 {
+            gap: 8px;
+        }
+
+        .gap-2 {
+            gap: 16px;
+        }
+
+        .gap-3 {
+            gap: 24px;
+        }
+
+        .w-full {
+            width: 100%;
+        }
+
+        .h-full {
+            height: 100%;
+        }
+
+        .text-sm {
+            font-size: 12px;
+        }
+
+        .text-base {
+            font-size: 14px;
+        }
+
+        .text-lg {
+            font-size: 16px;
+        }
+
+        .text-xl {
+            font-size: 18px;
+        }
+
+        .text-2xl {
+            font-size: 24px;
+        }
+
+        .font-light {
+            font-weight: 300;
+        }
+
+        .font-normal {
+            font-weight: 400;
+        }
+
+        .font-medium {
+            font-weight: 500;
+        }
+
+        .font-semibold {
+            font-weight: 600;
+        }
+
+        .text-gray-300 {
+            color: #d0d0d0;
+        }
+
+        .text-gray-400 {
+            color: #bbbbbb;
+        }
+
+        .text-gray-500 {
+            color: #999999;
+        }
+
+        .text-gray-600 {
+            color: #666666;
+        }
+
+        .text-gray-700 {
+            color: #555555;
+        }
+
+        .text-gray-800 {
+            color: #333333;
+        }
+
+        .text-gray-900 {
+            color: #222222;
+        }
+
+        /* 页脚样式 */
+        .site-footer {
+            background: #f8f9fa;
+            border-top: 1px solid #e8e8e8;
+            padding: 40px 20px 20px 20px;
+            margin-top: 80px;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 30px;
+        }
+
+        .footer-section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333333;
+            margin-bottom: 16px;
+        }
+
+        .footer-bio {
+            font-size: 13px;
+            color: #666666;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .footer-links {
+            list-style: none;
+            padding: 0;
+        }
+
+        .footer-links li {
+            margin-bottom: 8px;
+        }
+
+        .footer-links a {
+            color: #666666;
+            text-decoration: none;
+            font-size: 13px;
+            transition: color 0.2s ease;
+        }
+
+        .footer-links a:hover {
+            color: #333333;
+        }
+
+        .footer-contact {
+            font-size: 13px;
+            color: #666666;
+            line-height: 1.8;
+        }
+
+        .footer-contact a {
+            color: #666666;
+            text-decoration: none;
+            border-bottom: 1px solid #e8e8e8;
+            transition: all 0.2s ease;
+        }
+
+        .footer-contact a:hover {
+            color: #333333;
+            border-bottom-color: #333333;
+        }
+
+        .footer-bottom {
+            text-align: center;
+            padding-top: 20px;
+            border-top: 1px solid #e8e8e8;
+            font-size: 12px;
+            color: #999999;
+        }
+
+        .footer-bottom a {
+            color: #999999;
+            text-decoration: none;
+        }
+
+        .footer-bottom a:hover {
+            color: #333333;
+        }
+
+        @media (max-width: 768px) {
+            .footer-content {
+                grid-template-columns: 1fr;
+                gap: 30px;
+            }
+        }
+    </style>
+    <style>
+    /* 首页特有样式 - 全新简化设计 */
+    .hero-section {
+        text-align: center;
+        padding: 50px 40px;
+        margin-bottom: 40px;
+        border: 1px solid #e8e8e8;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .hero-title {
+        font-size: 42px;
+        font-weight: 200;
+        color: #333333;
+        margin: 0 auto 16px auto;
+        letter-spacing: -1.8px;
+        line-height: 1.2;
+        text-align: center;
+        width: 100%;
+    }
+
+    .hero-subtitle {
+        font-size: 20px;
+        color: #666666;
+        margin: 0 auto 40px auto;
+        max-width: 700px;
+        line-height: 1.5;
+        font-weight: 300;
+        text-align: center;
+        width: 100%;
+    }
+
+    .hero-stats {
+        display: flex;
+        justify-content: center;
+        gap: 60px;
+        margin-top: 32px;
+    }
+
+    .hero-stat {
+        text-align: center;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.8);
+        border-radius: 8px;
+        border: 1px solid #e8e8e8;
+        min-width: 120px;
+    }
+
+    .hero-stat-number {
+        font-size: 32px;
+        font-weight: 200;
+        color: #333333;
+        margin-bottom: 6px;
+        line-height: 1;
+    }
+
+    .hero-stat-label {
+        font-size: 13px;
+        color: #888888;
+        font-weight: 500;
+        letter-spacing: 0.5px;
+    }
+
+    .modules-section {
+        margin-bottom: 60px;
+    }
+
+    .section-header {
+        text-align: center;
+        margin-bottom: 50px;
+    }
+
+    .section-title {
+        font-size: 36px;
+        font-weight: 200;
+        color: #333333;
+        margin-bottom: 12px;
+        letter-spacing: -1.2px;
+    }
+
+    .section-subtitle {
+        font-size: 18px;
+        color: #666666;
+        font-weight: 300;
+        max-width: 600px;
+        margin: 0 auto;
+        line-height: 1.6;
+    }
+
+    .module-card {
+        border: 1px solid #e8e8e8;
+        border-radius: 12px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        height: 100%;
+        background: #ffffff;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+
+    .module-card:hover {
+        border-color: #d0d0d0;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+        transform: translateY(-4px);
+    }
+
+    .module-header {
+        background: linear-gradient(135deg, #333333 0%, #555555 100%);
+        color: #ffffff;
+        padding: 32px 24px;
+        text-align: center;
+    }
+
+    .module-title {
+        font-size: 24px;
+        font-weight: 300;
+        margin-bottom: 10px;
+        letter-spacing: -0.5px;
+    }
+
+    .module-tagline {
+        font-size: 15px;
+        opacity: 0.9;
+        font-weight: 300;
+    }
+
+    .module-content {
+        padding: 32px 24px;
+    }
+
+    .module-description {
+        font-size: 15px;
+        color: #666666;
+        line-height: 1.6;
+        margin-bottom: 24px;
+    }
+
+    .feature-list {
+        margin-bottom: 32px;
+    }
+
+    .feature-item {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 12px;
+        font-size: 14px;
+        color: #666666;
+    }
+
+    .setup-guide {
+        background: #f8f9fa;
+        border-radius: 6px;
+        padding: 20px;
+        margin-bottom: 24px;
+    }
+
+    .setup-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: #333333;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+    }
+
+    .setup-steps {
+        list-style: none;
+        counter-reset: step-counter;
+    }
+
+    .setup-step {
+        counter-increment: step-counter;
+        margin-bottom: 8px;
+        padding-left: 24px;
+        position: relative;
+        font-size: 13px;
+        color: #666666;
+        line-height: 1.5;
+    }
+
+    .setup-step::before {
+        content: counter(step-counter);
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 16px;
+        height: 16px;
+        background: #333333;
+        color: #ffffff;
+        border-radius: 50%;
+        font-size: 10px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .cta-buttons {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .btn-large {
+        padding: 14px 28px;
+        font-size: 15px;
+        font-weight: 500;
+        min-width: 140px;
+        justify-content: center;
+    }
+
+    .value-proposition {
+        background: #ffffff;
+        border: 1px solid #e8e8e8;
+        border-radius: 6px;
+        padding: 16px;
+        margin-bottom: 20px;
+    }
+
+    .value-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: #333333;
+        margin-bottom: 6px;
+    }
+
+    .value-text {
+        font-size: 12px;
+        color: #666666;
+        line-height: 1.4;
+    }
+
+    .difficulty-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        margin-bottom: 16px;
+    }
+
+    .difficulty-easy {
+        background: #e8f5e8;
+        color: #2d6a2d;
+    }
+
+    .difficulty-moderate {
+        background: #fff3cd;
+        color: #8b6914;
+    }
+
+    /* 视频演示区域 */
+    .video-demo-section {
+        margin: 60px 0;
+        padding: 40px;
+        background: linear-gradient(135deg, #f0f4f8 0%, #ffffff 100%);
+        border-radius: 12px;
+        border: 1px solid #e0e6ed;
+    }
+
+    .video-header {
+        text-align: center;
+        margin-bottom: 32px;
+    }
+
+    .video-title {
+        font-size: 32px;
+        font-weight: 300;
+        color: #333333;
+        margin-bottom: 12px;
+        letter-spacing: -1px;
+    }
+
+    .video-subtitle {
+        font-size: 16px;
+        color: #666666;
+        max-width: 700px;
+        margin: 0 auto;
+        line-height: 1.6;
+    }
+
+    .video-container {
+        position: relative;
+        width: 100%;
+        max-width: 900px;
+        margin: 0 auto;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+        background: #000;
+    }
+
+    .video-wrapper {
+        position: relative;
+        padding-bottom: 56.25%;
+        /* 16:9 宽高比 */
+        height: 0;
+        overflow: hidden;
+    }
+
+    .video-wrapper iframe {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        border: none;
+    }
+
+    .video-caption {
+        text-align: center;
+        margin-top: 24px;
+        font-size: 14px;
+        color: #888;
+    }
+
+    .video-caption a {
+        color: #00a1d6;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .video-caption a:hover {
+        text-decoration: underline;
+    }
+
+    /* 响应式设计 */
+    @media (max-width: 768px) {
+        .hero-section {
+            padding: 60px 30px;
+            margin-bottom: 40px;
+        }
+
+        .hero-title {
+            font-size: 36px;
+            letter-spacing: -1.2px;
+            margin: 0 auto 16px auto;
+            text-align: center;
+        }
+
+        .hero-subtitle {
+            font-size: 18px;
+            margin: 0 auto 30px auto;
+            text-align: center;
+            max-width: 90%;
+        }
+
+        .hero-stats {
+            flex-direction: column;
+            gap: 20px;
+            margin-top: 40px;
+        }
+
+        .hero-stat {
+            max-width: 200px;
+            margin: 0 auto;
+        }
+
+        .video-demo-section {
+            margin: 40px 0;
+            padding: 24px 16px;
+        }
+
+        .video-title {
+            font-size: 24px;
+        }
+
+        .video-subtitle {
+            font-size: 14px;
+        }
+
+        .video-container {
+            border-radius: 6px;
+        }
+
+        .video-caption {
+            font-size: 12px;
+            padding: 0 8px;
+        }
+
+        .section-title {
+            font-size: 28px;
+        }
+
+        .section-subtitle {
+            font-size: 16px;
+        }
+
+        .module-title {
+            font-size: 20px;
+        }
+
+        .module-tagline {
+            font-size: 14px;
+        }
+
+        .cta-buttons {
+            justify-content: center;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .hero-section {
+            padding: 50px 20px;
+        }
+
+        .hero-title {
+            font-size: 30px;
+            margin: 0 auto 16px auto;
+            text-align: center;
+        }
+
+        .hero-subtitle {
+            font-size: 16px;
+            margin: 0 auto 25px auto;
+            text-align: center;
+            max-width: 95%;
+        }
+
+        .hero-stats {
+            gap: 15px;
+            margin-top: 35px;
+        }
+
+        .section-title {
+            font-size: 24px;
+        }
+    }
+</style>
+
+    <!-- 标准列表组件样式 -->
+    <link rel="stylesheet" href="/static/css/list-components.css">
+</head>
+
+<body>
+    <!-- 顶部导航 -->
+    <nav class="top-nav">
+        <div class="nav-container">
+            <a href="/" class="nav-brand">老兵大头的 AI4SE 工具集</a>
+            <div class="nav-links">
+                <a class="nav-link "
+                    href="/">首页</a>
+                <div class="nav-dropdown">
+                    <a
+                        class="nav-link nav-dropdown-trigger ">
+                        意图测试工具
+                        <span class="dropdown-arrow">▼</span>
+                    </a>
+                    <div class="nav-dropdown-menu">
+                        <a class="nav-dropdown-item "
+                            href="/intent-tester/testcases">测试用例</a>
+                        <a class="nav-dropdown-item "
+                            href="/intent-tester/execution">执行控制台</a>
+                        <a class="nav-dropdown-item "
+                            href="/intent-tester/local-proxy">本地代理</a>
+                    </div>
+                </div>
+                <div class="nav-dropdown">
+                    <a
+                        class="nav-link nav-dropdown-trigger ">
+                        AI智能体们
+                        <span class="dropdown-arrow">▼</span>
+                    </a>
+                    <div class="nav-dropdown-menu">
+                        <a class="nav-dropdown-item "
+                            href="/ai-agents/">智能助手</a>
+
+                        <a class="nav-dropdown-item "
+                            href="/ai-agents/config">配置管理</a>
+                    </div>
+                </div>
+                <a class="nav-link "
+                    href="/intent-tester/profile">个人简介</a>
+            </div>
+            <div class="nav-user"></div>
+        </div>
+    </nav>
+
+    <!-- 主内容 -->
+    <main class="main-container">
+        <!-- 页面标题 -->
+        
+        </div>
+
+        <!-- 页面内容 -->
+        <!-- 英雄区域 -->
+<div class="hero-section">
+    <h1 class="hero-title">老兵大头的 AI4SE 工具集</h1>
+    <p class="hero-subtitle">
+        融合人工智能与软件工程的智能化平台<br>
+        让测试自动化和需求分析变得前所未有的简单高效
+    </p>
+    <div class="hero-stats">
+        <div class="hero-stat">
+            <div class="hero-stat-number">2</div>
+            <div class="hero-stat-label">核心模块</div>
+        </div>
+        <div class="hero-stat">
+            <div class="hero-stat-number">AI</div>
+            <div class="hero-stat-label">驱动引擎</div>
+        </div>
+        <div class="hero-stat">
+            <div class="hero-stat-number">0</div>
+            <div class="hero-stat-label">编码要求</div>
+        </div>
+    </div>
+</div>
+
+<!-- 核心模块介绍 -->
+<div class="modules-section">
+    <div class="section-header">
+        <h2 class="section-title">核心功能模块</h2>
+        <p class="section-subtitle">两个强大的AI驱动工具，覆盖软件工程的关键环节</p>
+    </div>
+
+    <div class="grid grid-cols-2">
+        <!-- 意图驱动测试模块 -->
+        <div class="module-card">
+            <div class="module-header">
+                <div class="module-title">意图驱动测试</div>
+                <div class="module-tagline">AI自动化Web测试平台</div>
+            </div>
+            <div class="module-content">
+                <div class="difficulty-badge difficulty-moderate">配置难度：中等</div>
+
+                <div class="module-description">
+                    你见过没有代码的自动化测试吗?只需用自然语言描述测试意图，AI将自动识别页面元素并执行测试操作。支持智能断言和自适应执行策略。
+                </div>
+
+                <div class="value-proposition">
+                    <div class="value-title">核心价值</div>
+                    <div class="value-text">真正具备智能的、可自愈的自动化测试！以前需要数小时编写的测试代码现在只要几分钟的自然语言测试场景描述，效率提升10倍以上</div>
+                </div>
+
+                <div class="feature-list">
+                    <div class="feature-item">
+                        <span>AI视觉识别：自动识别页面元素，无需XPath或CSS选择器</span>
+                    </div>
+                    <div class="feature-item">
+                        <span>BDD的终极形态：用普通话描述测试步骤即可</span>
+                    </div>
+                    <div class="feature-item">
+                        <span>智能自愈：页面变化时自动调整测试策略</span>
+                    </div>
+                    <div class="feature-item">
+                        <span>缓存策略：缓存页面元素，测试更快，Token消耗更低</span>
+                    </div>
+                </div>
+
+                <div class="setup-guide">
+                    <div class="setup-title">
+                        本地代理服务器配置指南
+                    </div>
+                    <ol class="setup-steps">
+                        <li class="setup-step">下载本地代理包：点击"下载本地代理"按钮</li>
+                        <li class="setup-step">解压并运行：Windows双击start.bat，Mac/Linux运行./start.sh</li>
+                        <li class="setup-step">配置AI密钥：编辑.env文件，填入视觉大模型API密钥</li>
+                        <li class="setup-step">启动服务：确保看到"服务器就绪"提示信息</li>
+                        <li class="setup-step">选择模式：在Web界面选择"本地代理模式"开始测试</li>
+                    </ol>
+                </div>
+
+                <div class="cta-buttons">
+                    <a href="/intent-tester/testcases" class="btn btn-primary btn-large">开始测试</a>
+                    <a href="/intent-tester/execution" class="btn btn-ghost btn-large">查看控制台</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 智能助手模块 -->
+        <div class="module-card">
+            <div class="module-header">
+                <div class="module-title">AI智能助手</div>
+                <div class="module-tagline">专业的需求分析师Alex & 测试分析师Song</div>
+            </div>
+            <div class="module-content">
+                <div class="difficulty-badge difficulty-easy">配置难度：简单</div>
+
+                <div class="module-description">
+                    选择专业的AI助手开始对话。Alex专注需求分析，通过提问引导您澄清业务需求；Song专注测试分析，协助您设计测试策略和用例。
+                </div>
+
+                <div class="value-proposition">
+                    <div class="value-title">核心价值</div>
+                    <div class="value-text">专业的AI助手团队，基于成熟的方法论，引导您完成需求分析或测试设计，输出标准化的专业文档。</div>
+                </div>
+
+                <div class="feature-list">
+                    <div class="feature-item">
+                        <span>智能对话：AI提问引导交流，逐步澄清需求细节</span>
+                    </div>
+                    <div class="feature-item">
+                        <span>盲点识别：主动发现被遗漏的需求场景</span>
+                    </div>
+                    <div class="feature-item">
+                        <span>质量保证：基于最佳实践的需求验证</span>
+                    </div>
+                    <div class="feature-item">
+                        <span>自动生成：标准化PRD文档和用户故事</span>
+                    </div>
+                </div>
+
+                <div class="setup-guide">
+                    <div class="setup-title">
+                        快速开始指南
+                    </div>
+                    <ol class="setup-steps">
+                        <li class="setup-step">点击"开始对话"进入智能助手界面</li>
+                        <li class="setup-step">选择合适的AI助手（Alex或Song）</li>
+                        <li class="setup-step">与选中的助手对话，描述您的需求</li>
+                        <li class="setup-step">助手会引导您完善相关细节</li>
+                        <li class="setup-step">自动生成完整的专业文档</li>
+                    </ol>
+                </div>
+
+                <div class="cta-buttons">
+                    <a href="/ai-agents/" class="btn btn-primary btn-large">开始对话</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 视频演示区域 -->
+<div class="video-demo-section">
+    <div class="video-header">
+        <h2 class="video-title">🎬 工具演示视频</h2>
+        <p class="video-subtitle">
+            3分钟快速了解意图驱动测试框架的核心功能与使用方法，无需配置即可直观预览工具能力
+        </p>
+    </div>
+
+    <div class="video-container">
+        <div class="video-wrapper">
+            <!-- B站视频嵌入 -->
+            <iframe src="https://player.bilibili.com/player.html?bvid=BV1i92LBsEDQ&page=1&high_quality=1&danmaku=0"
+                scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"
+                sandbox="allow-top-navigation allow-same-origin allow-forms allow-scripts"></iframe>
+        </div>
+    </div>
+
+    <div class="video-caption">
+        <p>
+            💡 视频展示了用自然语言编写测试用例的完整流程 |
+            <a href="https://www.bilibili.com/video/BV1i92LBsEDQ/" target="_blank">在B站观看完整版 →</a>
+        </p>
+    </div>
+</div>
+
+<!-- 使用场景说明 -->
+<div class="card">
+    <h3 class="card-title">典型使用场景</h3>
+    <p class="card-subtitle">了解如何在项目中最大化这些工具的价值</p>
+    <div class="card-content">
+        <div class="grid grid-cols-2">
+            <div>
+                <h4 class="font-medium mb-2">意图驱动测试适用场景</h4>
+                <ul class="text-sm text-gray-600">
+                    <li class="mb-1">• <strong>Web应用回归测试</strong>：频繁发布的Web应用需要快速验证核心功能</li>
+                    <li class="mb-1">• <strong>用户流程验证</strong>：电商购买、用户注册等关键业务流程测试</li>
+                    <li class="mb-1">• <strong>跨浏览器兼容性</strong>：需要在多种浏览器环境下验证功能</li>
+                    <li class="mb-1">• <strong>敏捷开发团队</strong>：需要快速创建和维护自动化测试的团队</li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="font-medium mb-2">AI智能助手适用场景</h4>
+                <ul class="text-sm text-gray-600">
+                    <li class="mb-1">• <strong>需求分析师Alex</strong>：澄清业务需求，生成PRD文档</li>
+                    <li class="mb-1">• <strong>测试分析师Song</strong>：设计测试策略，生成测试用例</li>
+                    <li class="mb-1">• <strong>团队协作</strong>：标准化分析流程和文档模板</li>
+                    <li class="mb-1">• <strong>知识传承</strong>：新人培训和方法论学习</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 快速链接 -->
+<div class="grid grid-cols-4 mt-4">
+    <div class="card text-center">
+        <div class="card-title">本地代理下载</div>
+        <div class="card-content">
+            <p class="text-sm text-gray-600 mb-3">配置本地测试环境</p>
+            <a href="/intent-tester/download/local-proxy" class="btn btn-small">下载代理包</a>
+        </div>
+    </div>
+    <div class="card text-center">
+        <div class="card-title">使用文档</div>
+        <div class="card-content">
+            <p class="text-sm text-gray-600 mb-3">详细的操作指南</p>
+            <a href="#" class="btn btn-small">查看文档</a>
+        </div>
+    </div>
+    <div class="card text-center">
+        <div class="card-title">视频教程</div>
+        <div class="card-content">
+            <p class="text-sm text-gray-600 mb-3">分步骤操作演示</p>
+            <a href="https://www.bilibili.com/video/BV1i92LBsEDQ/?vd_source=ad6fbbd18ca0ad650ac287e227c42b9e"
+                target="_blank" class="btn btn-small">观看教程</a>
+        </div>
+    </div>
+    <div class="card text-center">
+        <div class="card-title">技术支持</div>
+        <div class="card-content">
+            <p class="text-sm text-gray-600 mb-3">遇到问题时的帮助</p>
+            <a href="#" class="btn btn-small">联系支持</a>
+        </div>
+    </div>
+</div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="site-footer">
+        <div class="footer-content">
+            <!-- 关于作者 -->
+            <div>
+                <h3 class="footer-section-title">👨‍💻 关于作者</h3>
+                <p class="footer-bio">
+                    由 <strong>安辉（老兵大头）</strong> 独立开发与维护
+                </p>
+                <p class="footer-bio">
+                    19年研发经验 | AI4SE 实践者 | ThoughtWorks校友
+                </p>
+                <p class="footer-bio" style="margin-top: 16px;">
+                    作为一名在软件工程领域深耕近 20 年的老兵，致力于将 AI 技术转化为企业级生产力工具。
+                    如果这些工具对你有帮助，欢迎反馈和交流！
+                </p>
+            </div>
+
+            <!-- 快速链接 -->
+            <div>
+                <h3 class="footer-section-title">快速链接</h3>
+                <ul class="footer-links">
+                    <li><a href="/">首页</a></li>
+                    <li><a href="/intent-tester/testcases">意图测试工具</a></li>
+                    <li><a href="/ai-agents/">AI智能助手</a></li>
+                    <li><a href="/intent-tester/profile">个人简介</a></li>
+                    <li><a href="https://github.com/pollyan/intent-test-framework" target="_blank">GitHub 仓库</a></li>
+                </ul>
+            </div>
+
+            <!-- 联系方式 -->
+            <div>
+                <h3 class="footer-section-title">联系方式</h3>
+                <div class="footer-contact">
+                    📧 <a href="mailto:pollyan@163.com">pollyan@163.com</a><br>
+                    📱 18910027087<br>
+                    🌐 <a href="/intent-tester/profile">个人简介</a><br>
+                    📝 <a href="https://mp.weixin.qq.com/s/fRoYm3R58VNBNKzQ5go2Uw" target="_blank">技术文章</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 版权信息 -->
+        <div class="footer-bottom">
+            <p>© 2024 老兵大头的 AI4SE 工具集 | 基于 <a
+                    href="https://github.com/pollyan/intent-test-framework/blob/master/LICENSE" target="_blank">MIT
+                    协议</a>开源</p>
+            <p style="margin-top: 8px;">让 AI 驱动的软件工程变得简单而强大</p>
+        </div>
+    </footer>
+
+    <!-- 基础库 -->
+    <script src="https://unpkg.com/axios@1.6.0/dist/axios.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+    <!-- 通用脚本 -->
+    <script>
+        // 设置导航点击事件
+        document.addEventListener('DOMContentLoaded', function () {
+            // 设置axios全局超时为3分钟，避免长AI回复被截断
+            if (typeof axios !== 'undefined') {
+                axios.defaults.timeout = 180000; // 3分钟 = 180秒 * 1000毫秒
+                console.log('已设置axios全局超时为3分钟');
+            }
+            // 处理普通导航链接
+            // 导航点击事件处理已移除，现在使用标准的 href 属性进行跳转
+
+        });
+
+        // 通用消息提示函数
+        function showMessage(message, type) {
+            const messageEl = document.createElement('div');
+            messageEl.className = 'message ' + type;
+            messageEl.textContent = message;
+            messageEl.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 12px 20px;
+                border-radius: 4px;
+                color: white;
+                z-index: 1000;
+                background-color: ${type === 'success' ? '#28a745' : '#dc3545'};
+                border: 1px solid ${type === 'success' ? '#28a745' : '#dc3545'};
+            `;
+
+            document.body.appendChild(messageEl);
+
+            setTimeout(() => {
+                if (document.body.contains(messageEl)) {
+                    document.body.removeChild(messageEl);
+                }
+            }, 3000);
+        }
+    </script>
+
+    <!-- 标准列表组件脚本 -->
+    <script src="/static/js/list-components.js"></script>
+    <!-- 按钮保护脚本 -->
+    <script src="/static/js/button-protection.js"></script>
+
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 简单的下拉菜单点击处理（针对移动端或hover失效情况）
+        const dropdowns = document.querySelectorAll('.nav-dropdown');
+        dropdowns.forEach(dropdown => {
+            const trigger = dropdown.querySelector('.nav-dropdown-trigger');
+            if (trigger) {
+                trigger.addEventListener('click', function(e) {
+                    // 如果点击的是链接但没有href，或者屏幕较小，则切换菜单显示
+                    if (!this.getAttribute('href') || window.innerWidth < 768) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // 切换当前菜单的显示状态
+                        const menu = dropdown.querySelector('.nav-dropdown-menu');
+                        if (menu) {
+                            const isVisible = menu.style.display === 'block' || menu.style.opacity === '1';
+                            if (isVisible) {
+                                menu.style.opacity = '';
+                                menu.style.visibility = '';
+                                menu.style.transform = '';
+                            } else {
+                                menu.style.opacity = '1';
+                                menu.style.visibility = 'visible';
+                                menu.style.transform = 'translateY(0)';
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        
+        // 点击页面其他地方关闭菜单
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.nav-dropdown')) {
+                document.querySelectorAll('.nav-dropdown-menu').forEach(menu => {
+                    menu.style.opacity = '';
+                    menu.style.visibility = '';
+                    menu.style.transform = '';
+                });
+            }
+        });
+    });
+    </script>
+    
+</body>
+
+</html>

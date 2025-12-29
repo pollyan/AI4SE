@@ -5,6 +5,7 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   # ====================================
@@ -32,8 +33,10 @@ jobs:
     - name: 🧪 Run API tests
       run: |
         echo "::group::Running API Integration Tests"
-        # 使用内存数据库运行测试
-        DATABASE_URL=sqlite:///:memory: pytest tests/api/ -v --cov=web_gui --cov-report=term
+        # 使用内存数据库运行新版 intent-tester 测试
+        export PYTHONPATH=$PYTHONPATH:.
+        # 排除需要AI配置的测试（如果环境变量未设置）或运行所有测试但允许skip
+        pytest tools/intent-tester/tests/api/ -v --cov=web_gui --cov-report=term
         echo "::endgroup::"
     
     - name: 📊 Code quality check
@@ -50,7 +53,7 @@ jobs:
     name: Build and Deploy to Tencent Cloud
     needs: api-test  # 必须等待 api-test 完成且成功
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    if: github.event_name == 'workflow_dispatch'
     
     steps:
     - name: 📥 Checkout code

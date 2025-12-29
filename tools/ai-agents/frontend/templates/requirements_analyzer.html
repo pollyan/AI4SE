@@ -1,0 +1,4333 @@
+{% extends "base_layout.html" %}
+
+{% block title %}AI智能助手 - 老兵大头的 AI4SE 工具集{% endblock %}
+{% block page_title %}智能助手{% endblock %}
+
+{% block container_class %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* 智能助手特殊布局样式 */
+    .grid-cols-5 {
+        grid-template-columns: repeat(5, 1fr);
+    }
+
+    /* 桌面端主布局：左右分栏，动态响应窗口大小 */
+    .desktop-layout {
+        --dynamic-height: calc(100vh - 180px);
+        display: flex;
+        flex-direction: row;
+        height: var(--dynamic-height);
+        padding: 0 20px 20px 20px;
+        /* 顶部无padding，左右下有padding */
+        box-sizing: border-box;
+        width: 100%;
+        /* 横向充满屏幕 */
+    }
+
+    /* 左侧对话面板 - 辅助区域 */
+    .chat-panel {
+        width: 600px;
+        /* 调整初始宽度到600px */
+        flex: none;
+        display: flex;
+        flex-direction: column;
+        min-width: 500px;
+        /* 安全阈值：500px */
+        max-width: none;
+    }
+
+    /* 可拖拽分隔条 */
+    .resize-handle {
+        width: 12px;
+        background: transparent;
+        cursor: col-resize;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+
+    .resize-handle:hover {
+        background: rgba(0, 0, 0, 0.05);
+    }
+
+    .resize-handle-line {
+        width: 1px;
+        height: 60%;
+        background: #d0d0d0;
+        position: relative;
+        transition: all 0.2s ease;
+    }
+
+    /* 添加三点提示 */
+    .resize-handle-line::before,
+    .resize-handle-line::after {
+        content: '';
+        position: absolute;
+        width: 3px;
+        height: 3px;
+        background: #999999;
+        border-radius: 50%;
+        left: 50%;
+        transform: translateX(-50%);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+
+    .resize-handle-line::before {
+        top: 30%;
+    }
+
+    .resize-handle-line::after {
+        bottom: 30%;
+    }
+
+    /* hover时显示提示点 */
+    .resize-handle:hover .resize-handle-line {
+        background: #999999;
+    }
+
+    .resize-handle:hover .resize-handle-line::before,
+    .resize-handle:hover .resize-handle-line::after {
+        opacity: 1;
+    }
+
+    /* 拖拽时的样式 */
+    .desktop-layout.resizing {
+        user-select: none;
+    }
+
+    .desktop-layout.resizing .resize-handle {
+        background: rgba(0, 0, 0, 0.05);
+    }
+
+    .desktop-layout.resizing .resize-handle-line {
+        background: #999999;
+    }
+
+    .desktop-layout.resizing .resize-handle-line::before,
+    .desktop-layout.resizing .resize-handle-line::after {
+        opacity: 1;
+    }
+
+    /* 右侧分析面板 - 主要区域 */
+    .analysis-panel {
+        flex: 1;
+        /* 占据剩余所有空间 */
+        display: flex;
+        flex-direction: column;
+        min-width: 500px;
+        /* 安全阈值：500px */
+        max-width: none;
+        width: 0;
+        /* 让flex正常工作 */
+        overflow: hidden;
+        /* 避免内部内容撑开 */
+    }
+
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        background: #ffffff;
+        border: 1px solid #e8e8e8;
+        border-radius: 8px;
+        height: 100%;
+        /* 充满父容器高度 */
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .chat-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid #e8e8e8;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #f8f8f8;
+    }
+
+    .chat-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: #333333;
+    }
+
+    .chat-status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #dc3545;
+    }
+
+    .status-text {
+        font-size: 13px;
+        color: #666666;
+    }
+
+    .messages-area {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        min-height: 400px;
+        position: relative;
+        /* 支持绝对定位的遮罩 */
+    }
+
+    .message {
+        display: flex;
+        gap: 12px;
+        max-width: 80%;
+    }
+
+    .message.user {
+        align-self: flex-end;
+        flex-direction: row-reverse;
+    }
+
+    .message.assistant {
+        align-self: flex-start;
+    }
+
+    .message-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 500;
+        flex-shrink: 0;
+    }
+
+    .message.user .message-avatar {
+        background: #333333;
+        color: white;
+    }
+
+    .message.assistant .message-avatar {
+        background: #f0f0f0;
+        color: #666666;
+    }
+
+    .message-content {
+        padding: 12px 16px;
+        border-radius: 8px;
+        line-height: 1.5;
+        font-size: 14px;
+    }
+
+    .message.user .message-content {
+        background: #f0f0f0;
+        color: #333333;
+    }
+
+    .message.assistant .message-content {
+        background: #ffffff;
+        border: 1px solid #e8e8e8;
+        color: #333333;
+    }
+
+    .message-time {
+        font-size: 12px;
+        color: #999999;
+        margin-top: 4px;
+    }
+
+    .input-area {
+        padding: 20px;
+        border-top: 1px solid #e8e8e8;
+        background: #f8f8f8;
+    }
+
+    .input-form {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+    }
+
+    .input-wrapper {
+        flex: 1;
+        position: relative;
+    }
+
+    .message-input {
+        width: 100%;
+        min-height: 44px;
+        /* 增加最小高度确保一行文本不被截断 */
+        max-height: 200px;
+        /* 增加最大高度以适应更长文本 */
+        padding: 12px 16px;
+        padding-right: 90px;
+        /* 为字符计数器留出空间 */
+        border: 1px solid #e8e8e8;
+        border-radius: 20px;
+        background: #ffffff;
+        resize: none;
+        font-size: 14px;
+        line-height: 1.4;
+        font-family: inherit;
+        transition: border-color 0.2s ease;
+        /* 添加平滑边框过渡 */
+        box-sizing: border-box;
+    }
+
+    .message-input:focus {
+        outline: none;
+        border-color: #333333;
+    }
+
+    .message-input::placeholder {
+        color: #999999;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .char-counter {
+        position: absolute;
+        top: 50%;
+        right: 16px;
+        transform: translateY(-50%);
+        font-size: 12px;
+        color: #999999;
+        transition: color 0.2s ease;
+        white-space: nowrap;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 2px 6px;
+        border-radius: 10px;
+        pointer-events: none;
+        /* 避免阻挡输入 */
+    }
+
+    .char-counter.warning {
+        color: #ff9800;
+        /* 接近限制时显示橙色 */
+    }
+
+    .char-counter.danger {
+        color: #f44336;
+        /* 超过限制时显示红色 */
+    }
+
+    .send-btn {
+        padding: 12px 20px;
+        background: #333333;
+        color: white;
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        height: 44px;
+        /* 与输入框高度保持一致 */
+        min-width: 80px;
+        align-self: flex-start;
+        /* 顶部对齐 */
+        flex-shrink: 0;
+    }
+
+    .send-btn:hover:not(:disabled) {
+        background: #555555;
+    }
+
+    .send-btn:disabled {
+        background: #cccccc;
+        cursor: not-allowed;
+    }
+
+    .consensus-container {
+        display: flex;
+        flex-direction: column;
+        background: #ffffff;
+        border: 1px solid #e8e8e8;
+        border-radius: 8px;
+        height: 100%;
+        /* 充满父容器高度 */
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        min-width: 0;
+        /* 允许内部收缩 */
+    }
+
+    .consensus-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid #e8e8e8;
+        background: #f8f8f8;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .consensus-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #333333;
+    }
+
+
+    .consensus-content {
+        flex: 1;
+        padding: 20px;
+        overflow: auto;
+        /* 同时允许横向出现滚动，避免撑开 */
+        min-width: 0;
+        /* 允许内容收缩 */
+    }
+
+    .consensus-section {
+        margin-bottom: 24px;
+    }
+
+    .consensus-section:last-child {
+        margin-bottom: 0;
+    }
+
+    .section-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: #333333;
+        margin-bottom: 12px;
+    }
+
+    .keywords-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .keyword-tag {
+        padding: 4px 8px;
+        background: #f0f0f0;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #666666;
+    }
+
+    .requirements-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .requirement-item {
+        padding: 8px 0;
+        font-size: 14px;
+        color: #333333;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .requirement-item:last-child {
+        border-bottom: none;
+    }
+
+    .requirement-item::before {
+        content: '•';
+        color: #666666;
+        margin-right: 8px;
+    }
+
+    .progress-section {
+        text-align: center;
+        padding: 20px;
+    }
+
+    .stage-indicator {
+        font-size: 13px;
+        color: #666666;
+        margin-bottom: 8px;
+    }
+
+    .stage-name {
+        font-weight: 500;
+        color: #333333;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: #999999;
+    }
+
+    /* AI消息格式化样式 */
+    .ai-formatted {
+        line-height: 1.6;
+    }
+
+    .ai-formatted .ai-paragraph {
+        margin: 8px 0;
+        color: #333333;
+    }
+
+    .ai-formatted .ai-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #2c3e50;
+        margin: 16px 0 12px 0;
+        text-align: center;
+        padding: 8px 0;
+        border-bottom: 2px solid #3498db;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 4px;
+    }
+
+    .ai-formatted .ai-subtitle {
+        font-size: 14px;
+        font-weight: 600;
+        color: #34495e;
+        margin: 16px 0 10px 0;
+        padding: 8px 12px;
+        background: #f8f9fa;
+        border-left: 4px solid #3498db;
+        border-radius: 0 4px 4px 0;
+    }
+
+    .ai-formatted .ai-command-item {
+        margin: 10px 0;
+        padding: 12px;
+        background: #f8f9fa;
+        border-radius: 6px;
+        border-left: 4px solid #007bff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        transition: all 0.2s ease;
+    }
+
+    .ai-formatted .ai-command-item:hover {
+        background: #e9ecef;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
+
+    .ai-formatted .ai-command-num {
+        font-weight: 600;
+        color: #007bff;
+        margin-right: 8px;
+    }
+
+    .ai-formatted .ai-command {
+        background: #e9ecef;
+        color: #495057;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: 'Monaco', 'Consolas', monospace;
+        font-size: 13px;
+    }
+
+    .ai-formatted .ai-feature-item {
+        margin: 6px 0 6px 16px;
+        padding: 4px 0;
+    }
+
+    .ai-formatted .ai-feature-label {
+        font-weight: 600;
+        color: #2c3e50;
+    }
+
+    .ai-formatted .ai-feature-desc {
+        color: #555555;
+    }
+
+    .ai-formatted .ai-list-item {
+        margin: 4px 0 4px 12px;
+        color: #555555;
+    }
+
+    .ai-formatted .inline-code {
+        background: #f1f3f4;
+        color: #d73a49;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-family: 'Monaco', 'Consolas', monospace;
+        font-size: 13px;
+    }
+
+    .ai-formatted strong {
+        color: #2c3e50;
+        font-weight: 600;
+    }
+
+    .ai-formatted em {
+        color: #555555;
+        font-style: italic;
+    }
+
+    /* 标准markdown元素样式 */
+    .ai-formatted h1,
+    .ai-formatted h2 {
+        color: #2c3e50;
+        margin: 16px 0 12px 0;
+        font-weight: 600;
+    }
+
+    .ai-formatted h1 {
+        font-size: 24px;
+        border-bottom: 2px solid #e8e8e8;
+        padding-bottom: 8px;
+    }
+
+    .ai-formatted h2 {
+        font-size: 20px;
+        border-bottom: 1px solid #e8e8e8;
+        padding-bottom: 4px;
+    }
+
+    .ai-formatted ul,
+    .ai-formatted ol {
+        margin: 12px 0;
+        padding-left: 24px;
+    }
+
+    .ai-formatted li {
+        margin: 4px 0;
+        line-height: 1.6;
+    }
+
+    .ai-formatted blockquote {
+        border-left: 4px solid #007bff;
+        margin: 16px 0;
+        padding: 12px 16px;
+        background: #f8f9fa;
+        color: #555555;
+        font-style: italic;
+    }
+
+    .ai-formatted pre {
+        background: #f6f8fa;
+        border: 1px solid #e1e4e8;
+        border-radius: 6px;
+        padding: 16px;
+        margin: 16px 0;
+        overflow-x: auto;
+        font-family: 'Monaco', 'Consolas', monospace;
+        font-size: 13px;
+        line-height: 1.45;
+    }
+
+    .ai-formatted pre code {
+        background: none;
+        padding: 0;
+        border-radius: 0;
+        color: inherit;
+    }
+
+    .ai-formatted table {
+        border-collapse: collapse;
+        margin: 16px 0;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .ai-formatted table th,
+    .ai-formatted table td {
+        border: 1px solid #e1e4e8;
+        padding: 8px 12px;
+        text-align: left;
+    }
+
+    .ai-formatted table th {
+        background: #f6f8fa;
+        font-weight: 600;
+    }
+
+    .ai-formatted table tr:nth-child(even) {
+        background: #f9f9f9;
+    }
+
+    .ai-formatted del {
+        color: #6a737d;
+        text-decoration: line-through;
+    }
+
+    .ai-formatted hr {
+        border: none;
+        border-top: 1px solid #e1e4e8;
+        margin: 24px 0;
+    }
+
+    .ai-formatted a {
+        color: #007bff;
+        text-decoration: none;
+    }
+
+    .ai-formatted a:hover {
+        text-decoration: underline;
+    }
+
+    /* 开发中标签样式 */
+    .dev-badge {
+        display: inline-block;
+        background: #ffc107;
+        color: #333;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-left: 8px;
+        vertical-align: middle;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* 消息结构调整 */
+    .message-body {
+        flex: 1;
+    }
+
+    .message-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 8px;
+    }
+
+
+    /* AI处理中动效 */
+    .ai-processing {
+        display: none;
+        gap: 12px;
+        max-width: 80%;
+        margin: 16px 0;
+        align-items: flex-start;
+    }
+
+    .ai-processing.show {
+        display: flex;
+    }
+
+    .ai-processing .message-avatar {
+        background: #f0f0f0;
+        color: #666666;
+        border-radius: 50%;
+    }
+
+    .thinking-content {
+        flex: 1;
+    }
+
+    .thinking-text {
+        color: #666666;
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+
+    .processing-dots {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+    }
+
+    .processing-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #666666;
+        animation: processingPulse 1.4s infinite ease-in-out;
+    }
+
+    .processing-dot:nth-child(1) {
+        animation-delay: -0.32s;
+    }
+
+    .processing-dot:nth-child(2) {
+        animation-delay: -0.16s;
+    }
+
+    .processing-dot:nth-child(3) {
+        animation-delay: 0s;
+    }
+
+    @keyframes processingPulse {
+
+        0%,
+        80%,
+        100% {
+            opacity: 0.3;
+            transform: scale(0.8);
+        }
+
+        40% {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+    }
+
+    /* 连接按钮加载动效 */
+    .connect-btn.loading {
+        position: relative;
+        pointer-events: none;
+        padding-left: 35px;
+    }
+
+    .connect-btn.loading::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 12px;
+        width: 16px;
+        height: 16px;
+        margin: -8px 0 0 0;
+        border: 2px solid #ffffff40;
+        border-top-color: #ffffff;
+        border-radius: 50%;
+        animation: buttonSpin 1s linear infinite;
+    }
+
+    .connect-btn.disabled {
+        background: #28a745;
+        cursor: not-allowed;
+        opacity: 0.8;
+    }
+
+    .connect-btn.disabled:hover {
+        background: #28a745;
+        transform: none;
+    }
+
+    @keyframes buttonSpin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* 流式消息光标动画 */
+    .streaming-cursor {
+        display: inline-block;
+        margin-left: 2px;
+        animation: cursorBlink 1s step-end infinite;
+        color: #333333;
+        font-weight: bold;
+    }
+
+    @keyframes cursorBlink {
+
+        0%,
+        50% {
+            opacity: 1;
+        }
+
+        50.01%,
+        100% {
+            opacity: 0;
+        }
+    }
+
+
+    /* 连接AI助手提示样式 */
+    .connect-prompt {
+        text-align: center;
+        padding: 40px 20px;
+        max-width: 400px;
+        margin: 0 auto;
+    }
+
+
+
+    .connect-prompt h3 {
+        font-size: 20px;
+        font-weight: 500;
+        color: #333333;
+        margin-bottom: 12px;
+    }
+
+    .connect-prompt p {
+        color: #666666;
+        line-height: 1.5;
+        margin-bottom: 20px;
+    }
+
+    .connect-features {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+
+    .feature {
+        padding: 8px 12px;
+        background: #f8f8f8;
+        border-radius: 6px;
+        font-size: 13px;
+        color: #555555;
+    }
+
+    .connect-btn {
+        padding: 12px 24px;
+        background: #333333;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 16px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin-bottom: 16px;
+    }
+
+    .connect-btn:hover {
+        background: #555555;
+        transform: translateY(-1px);
+    }
+
+    .connect-note {
+        font-size: 12px;
+        color: #999999;
+        margin: 0;
+    }
+
+    /* AI配置模态框 */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-overlay.show {
+        display: flex;
+    }
+
+    .modal {
+        background: white;
+        border-radius: 8px;
+        padding: 24px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+
+    .modal-header {
+        margin-bottom: 20px;
+    }
+
+    .modal-title {
+        font-size: 18px;
+        font-weight: 500;
+        color: #333333;
+        margin-bottom: 8px;
+    }
+
+    .modal-subtitle {
+        font-size: 14px;
+        color: #666666;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .modal-actions {
+        margin-top: 24px;
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+    }
+
+    /* 桌面端专用样式优化 */
+
+    /* 针对不同屏幕尺寸的布局优化 */
+    @media (min-width: 1400px) {
+        .desktop-layout {
+            padding: 20px;
+            gap: 24px;
+        }
+
+        .chat-panel {
+            max-width: none;
+            /* 允许任意拖动，取消上限 */
+        }
+    }
+
+    /* ================================
+分析成果区域专用样式
+================================ */
+    .analysis-results-content {
+        line-height: 1.6;
+        color: #333333;
+        font-size: 14px;
+    }
+
+    .analysis-results-content h1,
+    .analysis-results-content h2,
+    .analysis-results-content h3,
+    .analysis-results-content h4 {
+        color: #2c3e50;
+        margin: 16px 0 12px 0;
+        font-weight: 600;
+        line-height: 1.4;
+    }
+
+    .analysis-results-content h1 {
+        font-size: 18px;
+        text-align: center;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 6px;
+        border-left: 4px solid #007bff;
+        margin-bottom: 20px;
+    }
+
+    .analysis-results-content h2 {
+        font-size: 16px;
+        padding: 8px 12px;
+        background: #f8f9fa;
+        border-left: 4px solid #28a745;
+        border-radius: 0 4px 4px 0;
+        margin-bottom: 16px;
+    }
+
+    .analysis-results-content h3 {
+        font-size: 15px;
+        padding: 6px 10px;
+        background: #f9f9f9;
+        border-left: 3px solid #17a2b8;
+        border-radius: 0 3px 3px 0;
+        margin-bottom: 12px;
+    }
+
+    .analysis-results-content ul,
+    .analysis-results-content ol {
+        margin: 12px 0;
+        padding-left: 20px;
+    }
+
+    .analysis-results-content li {
+        margin: 6px 0;
+        line-height: 1.5;
+        color: #444444;
+    }
+
+    .analysis-results-content strong {
+        color: #2c3e50;
+        font-weight: 600;
+    }
+
+    .analysis-results-content em {
+        color: #666666;
+        font-style: italic;
+    }
+
+    .analysis-results-content code {
+        background: #f1f3f4;
+        color: #d73a49;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-family: 'Monaco', 'Consolas', monospace;
+        font-size: 13px;
+    }
+
+    .analysis-results-content blockquote {
+        border-left: 4px solid #007bff;
+        margin: 16px 0;
+        padding: 12px 16px;
+        background: #f8f9fa;
+        color: #555555;
+        font-style: italic;
+        border-radius: 0 4px 4px 0;
+    }
+
+    .analysis-results-content pre {
+        background: #f6f8fa;
+        border: 1px solid #e1e4e8;
+        border-radius: 6px;
+        padding: 12px;
+        margin: 12px 0;
+        overflow-x: auto;
+        font-family: 'Monaco', 'Consolas', monospace;
+        font-size: 13px;
+        line-height: 1.4;
+    }
+
+    .analysis-results-content pre code {
+        background: none;
+        padding: 0;
+        border-radius: 0;
+        color: inherit;
+    }
+
+    /* 分析成果进度指示 */
+    .analysis-results-content .current-phase {
+        background: #e3f2fd;
+        border: 1px solid #bbdefb;
+        border-radius: 6px;
+        padding: 12px 16px;
+        margin: 16px 0;
+        text-align: center;
+        font-weight: 500;
+        color: #1565c0;
+    }
+
+    /* 分析成果状态标签 */
+    .analysis-results-content .stage-completed {
+        display: inline-block;
+        background: #d4edda;
+        color: #155724;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+        margin-right: 8px;
+        margin-bottom: 4px;
+    }
+
+    .analysis-results-content .stage-in-progress {
+        display: inline-block;
+        background: #fff3cd;
+        color: #856404;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+        margin-right: 8px;
+        margin-bottom: 4px;
+    }
+
+    /* 分析成果内容优化 */
+    .analysis-results-content {
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    .analysis-results-content h1 {
+        font-size: 20px;
+        padding: 16px 20px;
+    }
+
+    .analysis-results-content h2 {
+        font-size: 18px;
+        padding: 12px 16px;
+    }
+
+    .analysis-results-content h3 {
+        font-size: 16px;
+        padding: 10px 14px;
+    }
+
+    /* 响应式布局调整 - 确保在不同分辨率下都能正常显示 */
+    @media (max-width: 1200px) {
+        .chat-panel {
+            min-width: 500px;
+            /* 与安全阈值一致 */
+            flex: 0 0 40%;
+            /* 小屏时增加对话区域比例 */
+        }
+
+        .analysis-panel {
+            min-width: 500px;
+            /* 与安全阈值一致 */
+        }
+    }
+
+    @media (max-width: 900px) {
+        .desktop-layout {
+            flex-direction: column;
+            /* 超小屏时垂直排列 */
+            height: auto;
+            gap: 16px;
+        }
+
+        .chat-panel,
+        .analysis-panel {
+            flex: none;
+            min-width: auto;
+            max-width: none;
+        }
+
+        .chat-container,
+        .consensus-container {
+            height: 50vh;
+            /* 垂直排列时各占一半屏幕高度 */
+        }
+    }
+
+    /* 高分辨率优化 */
+    @media (min-width: 1920px) {
+        .desktop-layout {
+            gap: 30px;
+            padding: 0 40px 40px 40px;
+        }
+    }
+
+    /* 助手选择器样式 */
+    .assistant-selector {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        padding: 24px 20px;
+    }
+
+    .selector-content {
+        text-align: center;
+        max-width: 600px;
+        width: 100%;
+    }
+
+    .selector-content h3 {
+        font-size: 22px;
+        font-weight: 600;
+        color: #333;
+        margin: 0 0 12px 0;
+    }
+
+    .selector-content p {
+        font-size: 15px;
+        color: #666;
+        margin: 0 0 20px 0;
+    }
+
+    .assistant-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .assistant-card {
+        background: #ffffff;
+        border: 2px solid #e8e8e8;
+        border-radius: 8px;
+        padding: 16px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-align: left;
+    }
+
+    .assistant-card:hover {
+        border-color: #4f46e5;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.1);
+        transform: translateY(-2px);
+    }
+
+    .assistant-card.selected {
+        border-color: #4f46e5;
+        background: #f8faff;
+    }
+
+    .assistant-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 16px;
+        margin-bottom: 12px;
+    }
+
+    .assistant-card.alex .assistant-avatar {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .assistant-card.song .assistant-avatar {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .assistant-name {
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+        margin: 0 0 4px 0;
+    }
+
+    .assistant-title {
+        font-size: 13px;
+        color: #4f46e5;
+        font-weight: 500;
+        margin: 0 0 8px 0;
+    }
+
+    .assistant-description {
+        font-size: 13px;
+        color: #666;
+        line-height: 1.4;
+        margin: 0;
+    }
+
+    .assistant-switch-btn {
+        background: #f3f4f6;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 12px;
+        color: #374151;
+        cursor: pointer;
+        margin-left: 12px;
+        transition: all 0.2s ease;
+    }
+
+    .assistant-switch-btn:hover {
+        background: #e5e7eb;
+        border-color: #9ca3af;
+    }
+
+    .selector-footer .note {
+        font-size: 14px;
+        color: #9ca3af;
+        margin: 0;
+    }
+
+    /* 连接加载遮罩样式 */
+    .connection-loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.95);
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        border-radius: 8px;
+    }
+
+    .connection-loading-overlay.show {
+        display: flex;
+    }
+
+    .connection-loading-content {
+        text-align: center;
+        padding: 40px 20px;
+    }
+
+    .connection-loading-text {
+        font-size: 16px;
+        color: #333333;
+        margin-bottom: 20px;
+        font-weight: 500;
+    }
+
+    .connection-loading-dots {
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+    }
+
+    .connection-loading-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #333333;
+        animation: connectionDotJump 1.4s infinite ease-in-out;
+    }
+
+    .connection-loading-dot:nth-child(1) {
+        animation-delay: -0.32s;
+    }
+
+    .connection-loading-dot:nth-child(2) {
+        animation-delay: -0.16s;
+    }
+
+    .connection-loading-dot:nth-child(3) {
+        animation-delay: 0s;
+    }
+
+    @keyframes connectionDotJump {
+
+        0%,
+        80%,
+        100% {
+            opacity: 0.4;
+            transform: translateY(0);
+        }
+
+        40% {
+            opacity: 1;
+            transform: translateY(-8px);
+        }
+    }
+
+    .connection-success {
+        color: #28a745;
+        font-weight: 500;
+    }
+
+    .connection-error {
+        color: #dc3545;
+        font-weight: 500;
+        margin-bottom: 16px;
+    }
+
+    .connection-retry-btn {
+        background: none;
+        border: 1px solid #333333;
+        color: #333333;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .connection-retry-btn:hover {
+        background: #333333;
+        color: white;
+    }
+
+    /* 系统消息样式 */
+    .message.system {
+        background: #f8f9fa;
+        border-left: 4px solid #6c757d;
+        margin: 10px 0;
+    }
+
+    .message.system.error {
+        background: #fff5f5;
+        border-left-color: #e53e3e;
+    }
+
+    .message.system.success {
+        background: #f0fff4;
+        border-left-color: #38a169;
+    }
+
+    .message.system .message-sender {
+        color: #6c757d;
+        font-weight: 500;
+    }
+
+    /* 文件附件预览区域 */
+    .attachment-preview {
+        background: #f8f9fa;
+        border: 1px solid #e8e8e8;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        padding: 12px;
+    }
+
+    .attachment-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #666;
+    }
+
+    .clear-all-btn {
+        background: none;
+        border: none;
+        color: #dc3545;
+        font-size: 12px;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+
+    .clear-all-btn:hover {
+        background: #f5c6cb;
+    }
+
+    .attachment-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .attachment-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: #ffffff;
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid #e8e8e8;
+        font-size: 12px;
+    }
+
+    .attachment-icon {
+        width: 16px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #333333;
+        color: white;
+        border-radius: 3px;
+        font-size: 9px;
+        font-weight: 600;
+    }
+
+    .attachment-info {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+    }
+
+    .attachment-name {
+        color: #333333;
+        font-weight: 500;
+    }
+
+    .attachment-size {
+        color: #666666;
+        font-size: 10px;
+    }
+
+    .remove-attachment {
+        width: 14px;
+        height: 14px;
+        border: none;
+        background: #f0f0f0;
+        color: #999999;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .remove-attachment:hover {
+        background: #ffebee;
+        color: #d32f2f;
+    }
+
+    /* 输入操作区域 */
+    .input-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 10px;
+    }
+
+    .file-btn {
+        background: #f8f9fa;
+        border: 1px solid #e8e8e8;
+        color: #666;
+        padding: 12px 16px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 13px;
+        transition: all 0.2s ease;
+    }
+
+    .file-btn:hover {
+        background: #e9ecef;
+        border-color: #d6d9dd;
+    }
+
+    /* 拖拽效果 */
+    .input-wrapper {
+        position: relative;
+    }
+
+    .drag-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(40, 167, 69, 0.1);
+        border: 2px dashed #28a745;
+        border-radius: 20px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 10;
+    }
+
+    .drag-overlay.active {
+        display: flex;
+    }
+
+    .drag-text {
+        color: #28a745;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .drag-subtext {
+        color: #666666;
+        font-size: 12px;
+    }
+
+    .message-input.drag-over {
+        border-color: #28a745;
+        background: rgba(40, 167, 69, 0.05);
+    }
+
+    /* 消息中的附件显示 */
+    .message-attachments {
+        margin-top: 8px;
+        padding: 6px 8px;
+        background: #f8f9fa;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #666;
+    }
+
+    .attachment-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-right: 12px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="desktop-layout">
+    <!-- 左侧：对话区域 -->
+    <div class="chat-panel">
+        <div class="chat-container">
+            <div class="chat-header">
+                <div class="chat-title"><span id="chatTitle">请选择智能助手</span><button class="assistant-switch-btn"
+                        id="assistantSwitchBtn" style="display: none;">切换助手</button></div>
+                <div class="chat-status" title="助手连接状态">
+                    <div class="status-dot" id="connectionStatus"></div><span class="status-text"
+                        id="statusText">未连接</span>
+                </div>
+            </div>
+            <div class="messages-area" id="messagesArea">
+                <!-- 连接加载遮罩 -->
+                <div class="connection-loading-overlay" id="connectionLoadingOverlay">
+                    <div class="connection-loading-content">
+                        <div class="connection-loading-text" id="connectionLoadingText">正在初始化...</div>
+                        <div class="connection-loading-dots" id="connectionLoadingDots">
+                            <div class="connection-loading-dot"></div>
+                            <div class="connection-loading-dot"></div>
+                            <div class="connection-loading-dot"></div>
+                        </div>
+                        <div class="connection-error" id="connectionError" style="display: none;"></div><button
+                            class="connection-retry-btn" id="connectionRetryBtn" style="display: none;"
+                            onclick="retryConnection()">重试</button>
+                    </div>
+                </div>
+                <!-- 助手选择器界面 -->
+                <div class="assistant-selector" id="assistantSelector">
+                    <div class="selector-content">
+                        <h3>选择您的智能助手</h3>
+                        <p>请选择一位专业的AI助手开始对话：</p>
+                        <div class="assistant-cards" id="assistantCards">
+                            <!-- 助手卡片将动态加载 -->
+                        </div>
+                        <div class="selector-footer">
+                            <p class="note">选择后即可开始专业的AI辅助对话</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- 消息将动态加载到这里 -->
+                <div class="ai-processing" id="aiProcessing" style="display: none;">
+                    <div class="message-avatar">AI</div>
+                    <div class="thinking-content">
+                        <div class="thinking-text" id="thinkingText">AI正在处理您的请求</div>
+                        <div class="processing-dots">
+                            <div class="processing-dot"></div>
+                            <div class="processing-dot"></div>
+                            <div class="processing-dot"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="input-area">
+                <!-- 文件附件预览区域 -->
+                <div id="attachmentPreview" class="attachment-preview" style="display: none;">
+                    <div class="attachment-header"><span>已选择的文件</span><button type="button"
+                            onclick="clearAllAttachments()" class="clear-all-btn">清除全部</button></div>
+                    <div id="attachmentList" class="attachment-list"></div>
+                </div>
+                <form class="input-form" id="messageForm">
+                    <div class="input-wrapper"><textarea class="message-input" id="messageInput"
+                            placeholder="请描述项目需求或想法，也可以上传 txt/md 文档" maxlength="10000" rows="1"></textarea>
+                        <div class="char-counter"><span id="charCount">0</span>/10000 </div>
+                        <!-- 拖拽覆盖层 -->
+                        <div class="drag-overlay" id="dragOverlay">
+                            <div class="drag-text">释放文件即可上传</div>
+                            <div class="drag-subtext">仅支持 .txt 和 .md 格式</div>
+                        </div>
+                    </div>
+                    <div class="input-actions">
+                        <!-- 文件上传按钮 --><button type="button" onclick="document.getElementById('fileInput').click()"
+                            class="file-btn">📎
+                        </button>
+                        <!-- 发送按钮 --><button type="submit" class="send-btn" id="sendBtn">发送</button>
+                    </div>
+                </form>
+                <!-- 隐藏的文件输入 --><input type="file" id="fileInput" multiple accept=".txt,.md" style="display: none;">
+            </div>
+        </div>
+    </div>
+    <!-- 可拖拽分隔条 -->
+    <div class="resize-handle" id="resizeHandle">
+        <div class="resize-handle-line"></div>
+    </div>
+    <!-- 右侧：分析成果区域（主要区域） -->
+    <div class="analysis-panel">
+        <div class="consensus-container">
+            <div class="consensus-header">
+                <div class="consensus-title">分析成果</div>
+            </div>
+            <div class="consensus-content" id="consensusContent">
+                <div class="empty-state">开始与AI助手对话后，这里将实时显示结构化的分析成果 </div>
+            </div>
+        </div>
+    </div>
+</div>{% endblock %}
+
+{% block extra_js %}
+
+<!-- 引入marked.js用于完整markdown解析 -->
+<script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
+<!-- 引入DOMPurify用于HTML安全过滤 -->
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.5/dist/purify.min.js"></script>
+<script> // 全局变量
+    let socket = null;
+    let currentSessionId = null;
+    let isConnected = false;
+    let isAIAssistantInitialized = false;
+    let currentAssistant = null;
+    let availableAssistants = [];
+    let connectionRetryCount = 0;
+    let maxRetries = 3;
+
+    // 保存切换前的状态
+    let savedSwitchState = null;
+
+    // 文件上传相关变量
+    let attachedFiles = [];
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', function () {
+
+        // 设置axios全局超时为3分钟，避免长AI回复被截断
+        if (typeof axios !== 'undefined') {
+            axios.defaults.timeout = 300000; // 5分钟 = 300秒 * 1000毫秒
+            console.log('已设置axios全局超时为5分钟');
+        }
+
+        // 初始化响应式布局
+        initializeResponsiveLayout();
+
+        // 初始化拖拽功能
+        initializeResize();
+
+        initializeWebSocket();
+        initializeUI();
+        initializeFileUpload(); // 初始化文件上传功能
+        loadAvailableAssistants();
+        // 先不创建会话，等用户选择助手后再创建
+        // createSession();
+        // 初始化发送按钮状态（AI助手未初始化时禁用）
+        updateSendButtonState();
+    });
+
+    // 环境检测 - 现在所有环境都使用HTTP轮询，不再使用WebSocket
+    function isVercelEnvironment() {
+        // 始终返回true，因为我们已经移除了WebSocket支持
+        return true;
+    }
+
+    // HTTP方式发送消息（替代WebSocket）
+    async function sendMessageViaHTTP(content, showProcessing = true) {
+        try {
+            const response = await axios.post(`/ai-agents/api/requirements/sessions/${currentSessionId}/messages`, {
+                content: content
+            });
+
+            if (response.data.code === 200) {
+                const data = response.data.data;
+
+                // 只显示AI响应（用户消息已在前端立即显示）
+                if (data.ai_message) {
+                    hideAiProcessing();
+                    displayMessage(data.ai_message);
+
+                    // 确保AI回复显示后滚动到底部
+                    scrollToBottom();
+
+                    // 如果是AI消息且助手已初始化，更新连接状态
+                    if (data.ai_message.message_type === 'ai' && currentAssistant) {
+                        const assistantName = currentAssistant.name;
+
+                        updateConnectionStatus('connected', `AI助手${assistantName
+                            }
+
+                        已激活`);
+                        // 设置AI助手已初始化
+                        isAIAssistantInitialized = true;
+                        updateSendButtonState();
+
+                        console.log(`助手${assistantName
+                            }
+
+                        已激活并更新连接状态`);
+                    }
+                }
+
+                return true;
+            }
+
+            else {
+                throw new Error(response.data.message || '发送失败');
+            }
+        }
+
+        catch (error) {
+            console.error('HTTP发送消息失败:', error);
+            hideAiProcessing();
+            showMessage('发送消息失败: ' + (error.response?.data?.message || error.message), 'error');
+            return false;
+        }
+    }
+
+    // 🆕 LangGraph 流式发送消息函数（使用 SSE）
+    async function sendMessageViaStream(content, showProcessing = true) {
+        try {
+            // 立即显示用户消息已在 sendMessage 中完成
+            // 这里只负责获取流式 AI 回复
+
+            // 🔧 流式模式下不显示"正在处理"动画，直接创建流式占位符
+            // 流式占位符的闪烁光标已经表示 AI 正在响应
+
+            // 创建一个空的 AI 消息占位符，用于流式更新
+            const aiMessageEl = createStreamingMessagePlaceholder();
+
+            // 准备请求配置（支持 FormData 或 JSON）
+            const isFormData = content instanceof FormData;
+            const requestOptions = {
+                method: 'POST',
+                headers: {},
+                body: isFormData ? content : JSON.stringify({ content: content })
+            };
+
+            if (!isFormData) {
+                requestOptions.headers['Content-Type'] = 'application/json';
+            }
+
+            // 使用 fetch 发送请求并接收流式响应
+            const response = await fetch(`/ai-agents/api/requirements/sessions/${currentSessionId}/messages/stream`, requestOptions);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            // 流式模式下无需 hideAiProcessing，因为从未调用 showAiProcessing
+
+            // 读取流式响应
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let fullContent = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+
+                if (done) {
+                    console.log('✅ 流式响应完成');
+                    break;
+                }
+
+                // 解码数据块
+                buffer += decoder.decode(value, { stream: true });
+
+                // 处理 SSE 格式的数据（data: {...}\n\n）
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop() || ''; // 保留未完成的行
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const jsonData = JSON.parse(line.slice(6)); // 移除 "data: " 前缀
+
+                            if (jsonData.type === 'content') {
+                                // 追加内容到 AI 消息
+                                fullContent += jsonData.chunk;
+                                updateStreamingMessage(aiMessageEl, fullContent);
+                            } else if (jsonData.type === 'done') {
+                                console.log('✅ AI 回复完成，消息ID:', jsonData.message_id);
+                                // 标记消息为完成状态
+                                finalizeStreamingMessage(aiMessageEl, jsonData.message_id);
+
+                                // 更新连接状态
+                                if (currentAssistant) {
+                                    updateConnectionStatus('connected', `AI助手${currentAssistant.name}已激活`);
+                                    isAIAssistantInitialized = true;
+                                    updateSendButtonState();
+                                }
+                            } else if (jsonData.type === 'error') {
+                                throw new Error(jsonData.message || '流式处理出错');
+                            }
+                        } catch (parseError) {
+                            console.error('解析 SSE 数据失败:', parseError, line);
+                        }
+                    }
+                }
+            }
+
+            // 确保滚动到底部
+            scrollToBottom();
+            return true;
+
+        } catch (error) {
+            console.error('流式发送消息失败:', error);
+            // 流式模式下无需 hideAiProcessing
+            showMessage('发送消息失败: ' + error.message, 'error');
+            return false;
+        }
+    }
+
+    // 创建流式消息占位符
+    function createStreamingMessagePlaceholder() {
+        const messagesArea = document.getElementById('messagesArea');
+        const messageEl = document.createElement('div');
+        messageEl.className = 'message assistant streaming';
+
+        messageEl.innerHTML = `
+            \u003cdiv class="message-avatar"\u003eAI\u003c/div\u003e
+            \u003cdiv class="message-body"\u003e
+                \u003cdiv class="message-content ai-formatted"\u003e
+                    \u003cspan class="streaming-cursor"\u003e▊\u003c/span\u003e
+                \u003c/div\u003e
+            \u003c/div\u003e
+        `;
+
+        messagesArea.appendChild(messageEl);
+        scrollToBottom();
+        return messageEl;
+    }
+
+    // 更新流式消息内容
+    function updateStreamingMessage(messageEl, content) {
+        const contentEl = messageEl.querySelector('.message-content');
+        if (contentEl) {
+            // 使用 marked 库渲染 Markdown（如果可用）
+            if (typeof marked !== 'undefined') {
+                contentEl.innerHTML = marked.parse(content) + '\u003cspan class="streaming-cursor"\u003e▊\u003c/span\u003e';
+            } else {
+                // 简单的换行处理
+                contentEl.innerHTML = content.replace(/\n/g, '\u003cbr\u003e') + '\u003cspan class="streaming-cursor"\u003e▊\u003c/span\u003e';
+            }
+            scrollToBottom();
+        }
+    }
+
+    // 完成流式消息
+    function finalizeStreamingMessage(messageEl, messageId) {
+        messageEl.classList.remove('streaming');
+        const cursor = messageEl.querySelector('.streaming-cursor');
+        if (cursor) {
+            cursor.remove();
+        }
+        if (messageId) {
+            messageEl.dataset.messageId = messageId;
+        }
+    }
+
+    // 支持文件上传的HTTP发送消息函数
+    async function sendMessageWithFiles(content, files) {
+        console.log('📎 发送文件消息:', {
+            contentLength: content ? content.length : 0,
+            filesCount: files.length,
+            fileNames: files.map(f => f.name),
+            fileSizes: files.map(f => f.content.length)
+        });
+
+        try {
+            // 构建 FormData
+            const formData = new FormData();
+
+            if (content) {
+                formData.append('content', content);
+                console.log('📎 添加用户消息内容:', content.substring(0, 100) + '...');
+            }
+
+            // 添加文件
+            files.forEach(fileInfo => {
+                const blob = new Blob([fileInfo.content], {
+                    type: 'text/plain'
+                });
+                formData.append('files', blob, fileInfo.name);
+
+                console.log(`📎 添加文件 ${fileInfo.name
+                    }
+
+                , 内容预览:`, fileInfo.content.substring(0, 100) + '...');
+            });
+
+            // 发送请求
+            console.log('📎 即将发送请求到:', `/ai-agents/api/requirements/sessions/${currentSessionId
+                }
+
+        /messages`);
+            const response = await axios.post(`/ai-agents/api/requirements/sessions/${currentSessionId}/messages`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+
+            if (response.data.code === 200) {
+                const data = response.data.data;
+
+                // 只显示AI响应（用户消息已在前端立即显示）
+                if (data.ai_message) {
+                    hideAiProcessing();
+                    displayMessage(data.ai_message);
+
+                    // 确俚AI回复显示后滚动到底部
+                    scrollToBottom();
+
+                    // 如果是AI消息且助手已初始化，更新连接状态
+                    if (data.ai_message.message_type === 'ai' && currentAssistant) {
+                        const assistantName = currentAssistant.name;
+
+                        updateConnectionStatus('connected', `AI助手${assistantName
+                            }
+
+                    已激活`);
+                        isAIAssistantInitialized = true;
+                        updateSendButtonState();
+
+                        console.log(`助手${assistantName
+                            }
+
+                    已激活并更新连接状态`);
+                    }
+                }
+
+                return true;
+            }
+
+            else {
+                throw new Error(response.data.message || '发送失败');
+            }
+        }
+
+        catch (error) {
+            console.error('HTTP文件上传发送消息失败:', error);
+            hideAiProcessing();
+            showMessage('发送消息失败: ' + (error.response?.data?.message || error.message), 'error');
+            return false;
+        }
+    }
+
+    // 轮询获取新消息（Vercel环境专用）
+    let lastMessageTimestamp = null;
+    let pollingInterval = null;
+
+    function startMessagePolling() {
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+        }
+
+        pollingInterval = setInterval(async () => {
+            try {
+                const params = new URLSearchParams();
+
+                if (lastMessageTimestamp) {
+                    params.append('since', lastMessageTimestamp);
+                }
+
+                params.append('limit', '10');
+
+                const response = await axios.get(`/ai-agents/api/requirements/sessions/${currentSessionId}/poll-messages?${params}`);
+
+                if (response.data.code === 200) {
+                    const messages = response.data.data.messages;
+
+                    messages.forEach(message => {
+                        displayMessage(message);
+                        lastMessageTimestamp = message.created_at;
+
+                        // 如果是AI消息且助手已初始化，更新连接状态
+                        if (message.message_type === 'ai' && currentAssistant) {
+                            const assistantName = currentAssistant.name;
+
+                            updateConnectionStatus('connected', `AI助手${assistantName
+                                }
+
+                                        已激活`);
+                            hideAiTyping();
+                            // 设置AI助手已初始化
+                            isAIAssistantInitialized = true;
+                            updateSendButtonState();
+                        }
+                    });
+                }
+            }
+
+            catch (error) {
+                console.error('轮询消息失败:', error);
+            }
+        }
+
+            , 2000); // 每2秒轮询一次
+    }
+
+    function stopMessagePolling() {
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+            pollingInterval = null;
+        }
+    }
+
+    // WebSocket连接（本地环境）
+    function initializeWebSocket() {
+        if (isVercelEnvironment()) {
+            console.log('检测到Vercel环境，使用HTTP轮询模式');
+            updateConnectionStatus('ready', '准备就绪');
+            return;
+        }
+
+        socket = io();
+
+        socket.on('connect', function () {
+            console.log('WebSocket连接成功');
+            isConnected = true;
+            updateConnectionStatus('connected', '已连接');
+        });
+
+        socket.on('disconnect', function () {
+            console.log('WebSocket连接断开');
+            isConnected = false;
+            updateConnectionStatus('disconnected', '连接断开');
+        });
+
+        socket.on('error', function (data) {
+            console.error('WebSocket错误:', data);
+            showMessage(data.message || '连接错误', 'error');
+        });
+
+        // 需求分析相关事件
+        socket.on('joined_session', function (data) {
+            console.log('加入会话成功:', data);
+            loadSessionMessages();
+        });
+
+        socket.on('new_message', function (data) {
+            console.log('收到新消息:', data);
+            displayMessage(data.message);
+            hideAiTyping();
+
+            // 如果是AI消息且助手已初始化，更新连接状态
+            if (data.message.message_type === 'ai' && currentAssistant) {
+                const assistantName = currentAssistant.name;
+
+                updateConnectionStatus('connected', `AI助手${assistantName
+                    }
+
+                        已激活`);
+                // 设置AI助手已初始化
+                isAIAssistantInitialized = true;
+                updateSendButtonState();
+            }
+        });
+
+        socket.on('consensus_updated', function (data) {
+            console.log('共识更新:', data);
+            updateConsensusDisplay(data.consensus);
+        });
+    }
+
+    // 滚动消息区域到底部
+    function scrollToBottom(delay = 100) {
+        setTimeout(() => {
+            const messagesArea = document.getElementById('messagesArea');
+
+            if (messagesArea) {
+                messagesArea.scrollTo({
+                    top: messagesArea.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }
+        }
+
+            , delay);
+    }
+
+    // 统一控制发送按钮状态
+    function updateSendButtonState() {
+        const sendBtn = document.getElementById('sendBtn');
+        const messageInput = document.getElementById('messageInput');
+        const switchBtn = document.getElementById('assistantSwitchBtn');
+
+        if (!sendBtn || !messageInput) return;
+
+        // 必须有文本内容才能发送（仅有附件不允许发送）
+        const hasContent = messageInput.value.trim().length > 0;
+        const hasAttachments = attachedFiles && attachedFiles.length > 0;
+        const canSend = isAIAssistantInitialized && hasContent;
+
+        sendBtn.disabled = !canSend;
+
+        // 更新按钮文字提示
+        if (!isAIAssistantInitialized) {
+            sendBtn.title = 'AI助手尚未初始化';
+        }
+
+        else if (!hasContent) {
+            sendBtn.title = hasAttachments ? '请输入消息内容（仅有附件无法发送）' : '请输入消息内容';
+        }
+
+        else {
+            sendBtn.title = hasAttachments ? '发送消息和附件' : '发送消息';
+        }
+
+        // 控制切换助手按钮状态
+        if (switchBtn) {
+            // 正在初始化或正在对话时禁用
+            const shouldDisable = !isAIAssistantInitialized || isSending;
+            switchBtn.disabled = shouldDisable;
+
+            if (shouldDisable) {
+                if (!isAIAssistantInitialized) {
+                    switchBtn.title = '助手正在初始化，请稍后...';
+                }
+
+                else if (isSending) {
+                    switchBtn.title = '正在对话中，请稍后...';
+                }
+
+                switchBtn.style.opacity = '0.6';
+                switchBtn.style.pointerEvents = 'none'; // 确保禁用时不可点击
+            }
+
+            else {
+                switchBtn.title = '切换到其他助手';
+                switchBtn.style.opacity = '1';
+                switchBtn.style.pointerEvents = 'auto'; // 恢复点击
+            }
+        }
+    }
+
+    // 初始化响应式布局
+    function initializeResponsiveLayout() {
+
+        // 计算并设置动态高度
+        function updateLayoutHeight() {
+            const navHeight = document.querySelector('.navbar')?.offsetHeight || 64;
+            const titleHeight = document.querySelector('.container h1')?.offsetHeight || 40;
+            const additionalSpace = 76; // 其他间距和padding
+            const availableHeight = window.innerHeight - navHeight - titleHeight - additionalSpace;
+
+            // 更新CSS变量
+            document.documentElement.style.setProperty('--dynamic-height', `${availableHeight
+                }
+
+                px`);
+
+            console.log(`响应式布局更新: 窗口=${window.innerHeight
+                }
+
+                px, 导航=${navHeight
+                }
+
+                px, 标题=${titleHeight
+                }
+
+                px, 可用=${availableHeight
+                }
+
+                px`);
+        }
+
+        // 初始化设置
+        updateLayoutHeight();
+
+        // 监听窗口大小变化
+        window.addEventListener('resize', function () {
+            // 使用防抖，避免频繁更新
+            clearTimeout(window.resizeTimeout);
+            window.resizeTimeout = setTimeout(updateLayoutHeight, 100);
+        });
+
+        // 监听设备方向变化（移动设备）
+        window.addEventListener('orientationchange', function () {
+            setTimeout(updateLayoutHeight, 200); // 方向变化后稍微延迟，等待布局稳定
+        });
+
+        console.log('✅ 响应式布局初始化完成');
+    }
+
+    // 初始化UI事件
+    function initializeUI() {
+        const messageInput = document.getElementById('messageInput');
+        const messageForm = document.getElementById('messageForm');
+        const charCount = document.getElementById('charCount');
+        const assistantSwitchBtn = document.getElementById('assistantSwitchBtn');
+
+        // 添加切换助手按钮事件监听器
+        if (assistantSwitchBtn) {
+            assistantSwitchBtn.addEventListener('click', switchAssistant);
+        }
+
+        // 自动调整文本框高度
+        messageInput.addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = this.scrollHeight + 'px';
+
+            // 更新字符计数和颜色反馈
+            const currentLength = this.value.length;
+            const maxLength = 10000;
+            charCount.textContent = currentLength;
+
+            // 清除之前的样式类
+            charCount.classList.remove('warning', 'danger');
+
+            // 根据字符数量添加适当的样式
+            if (currentLength >= maxLength) {
+                charCount.classList.add('danger');
+            }
+
+            else if (currentLength >= maxLength * 0.8) {
+                // 80%时显示警告
+                charCount.classList.add('warning');
+            }
+
+            // 控制发送按钮状态
+            updateSendButtonState();
+        });
+
+        // 支持Shift+Enter换行，Enter发送
+        // 添加输入法状态跟踪
+        let isComposing = false;
+
+        messageInput.addEventListener('compositionstart', function () {
+            isComposing = true;
+        });
+
+        messageInput.addEventListener('compositionend', function () {
+            isComposing = false;
+        });
+
+        messageInput.addEventListener('keydown', function (e) {
+
+            // 如果正在输入法组合中，不触发发送
+            if (isComposing) {
+                return;
+            }
+
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+
+                if (this.value.trim()) {
+                    sendMessage();
+                }
+            }
+        });
+
+        // 表单提交
+        messageForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            sendMessage();
+        });
+    }
+
+    // 加载可用的助手列表
+    async function loadAvailableAssistants() {
+        console.log('开始加载助手列表...');
+
+        try {
+            const response = await axios.get('/ai-agents/api/requirements/assistants');
+            console.log('API响应:', response.data);
+
+            if (response.data.code === 200) {
+                availableAssistants = response.data.data.assistants;
+                console.log('加载助手列表成功:', availableAssistants);
+                renderAssistantSelector();
+            }
+
+            else {
+                console.error('加载助手列表失败:', response.data);
+                displaySystemMessage('加载助手列表失败: ' + (response.data.message || '未知错误'), 'error');
+            }
+        }
+
+        catch (error) {
+            console.error('加载助手列表失败:', error);
+            displaySystemMessage('加载助手列表失败，请刷新页面重试: ' + error.message, 'error');
+        }
+    }
+
+    // 渲染助手选择器
+    function renderAssistantSelector() {
+        console.log('开始渲染助手选择器...');
+        const assistantCards = document.getElementById('assistantCards');
+        console.log('assistantCards元素:', assistantCards);
+
+        if (!assistantCards) {
+            console.error('找不到assistantCards元素 - 请检查HTML结构');
+            return;
+        }
+
+        console.log('清空现有内容并渲染', availableAssistants.length, '个助手');
+        assistantCards.innerHTML = '';
+
+        availableAssistants.forEach((assistant, index) => {
+            console.log(`渲染助手 ${index + 1
+                }
+
+                    :`, assistant);
+            const card = document.createElement('div');
+
+            card.className = `assistant-card ${assistant.id
+                }
+
+                `;
+            card.onclick = () => selectAssistant(assistant);
+
+            const avatar = assistant.id === 'alex' ? 'A' : 'S';
+            const description = assistant.id === 'alex'
+                ? '专业的需求分析师，帮助您澄清和完善项目需求，生成结构化需求文档'
+                : '资深的测试分析师，协助您设计测试策略、分析测试点并生成完整测试用例';
+
+            card.innerHTML = ` <div class="assistant-avatar" >${avatar
+                }
+
+                </div> <div class="assistant-name" >${assistant.name
+                }
+
+                </div> <div class="assistant-title" >${assistant.title
+                }
+
+                </div> <div class="assistant-description" >${description
+                }
+
+                </div> `;
+
+            assistantCards.appendChild(card);
+        });
+    }
+
+    // 选择助手
+    async function selectAssistant(assistant) {
+        console.log('选择助手:', assistant.name);
+
+        // 如果是在切换状态中，需要清空当前对话记录
+        if (savedSwitchState) {
+            console.log('正在切换助手，清空对话记录');
+            // 清空消息区域
+            const messagesArea = document.getElementById('messagesArea');
+            const messages = messagesArea.querySelectorAll('.message');
+            messages.forEach(msg => msg.remove());
+
+            // 重置右侧面板内容
+            const consensusContent = document.getElementById('consensusContent');
+
+            if (consensusContent) {
+                consensusContent.innerHTML = ` <div class="empty-state">开始与AI助手对话后，这里将实时显示结构化的分析成果 </div>`;
+            }
+
+            // 恢复选择器原始内容
+            const assistantSelector = document.getElementById('assistantSelector');
+            const selectorContent = assistantSelector.querySelector('.selector-content');
+
+            if (assistantSelector.dataset.originalContent) {
+                selectorContent.innerHTML = assistantSelector.dataset.originalContent;
+            }
+
+            // 清除保存的切换状态
+            savedSwitchState = null;
+        }
+
+        // 重置状态
+        currentAssistant = assistant;
+        currentSessionId = null; // 重要：重置会话ID，创建新会话
+        isAIAssistantInitialized = false; // 重置初始化状态
+        connectionRetryCount = 0; // 重置重试次数
+
+        // 更新UI（加防空判断，避免元素不存在时报错）
+        const chatTitleEl = document.getElementById('chatTitle');
+
+        if (chatTitleEl) {
+            // 🔧 添加 DEV 标签
+            chatTitleEl.innerHTML = `与${assistant.title} ${assistant.name} 对话 <span class="dev-badge">Dev</span>`;
+        }
+
+        else {
+            console.warn('chatTitle 元素未找到');
+        }
+
+        const switchBtnEl = document.getElementById('assistantSwitchBtn');
+
+        if (switchBtnEl) {
+            switchBtnEl.style.display = 'inline-block';
+        }
+
+        const thinkingTextEl = document.getElementById('thinkingText');
+
+        if (thinkingTextEl) {
+            thinkingTextEl.textContent = `${assistant.name
+                }
+
+            正在处理您的请求`;
+        }
+
+        else {
+            console.warn('thinkingText 元素未找到');
+        }
+
+        // 更新右侧分析面板标题
+        const consensusTitle = document.querySelector('.consensus-title');
+
+        if (consensusTitle) {
+            if (assistant.id === 'alex') {
+                consensusTitle.textContent = '需求分析成果';
+            }
+
+            else if (assistant.id === 'song') {
+                consensusTitle.textContent = '测试分析成果';
+            }
+
+            else {
+                consensusTitle.textContent = '分析成果';
+            }
+        }
+
+        console.log('开始初始化新助手...');
+
+        // 隐藏选择器，显示聊天界面
+        const assistantSelectorEl = document.getElementById('assistantSelector');
+
+        if (assistantSelectorEl) {
+            assistantSelectorEl.style.display = 'none';
+        }
+
+        else {
+            console.warn('assistantSelector 元素未找到');
+        }
+
+        // 显示连接加载动画
+        showConnectionLoading('正在创建会话...');
+
+        try {
+            console.log('步骤1: 创建会话');
+            // 创建会话
+            await createSessionWithAssistant(assistant.id);
+            console.log('会话创建成功，会话ID:', currentSessionId);
+
+            // 更新加载文本
+            showConnectionLoading('正在初始化助手...');
+
+            console.log('步骤2: 初始化助手');
+            // 初始化助手
+            await initializeSelectedAssistant();
+
+            console.log(`助手初始化完成: ${assistant.title
+                }
+
+                ${assistant.name
+                }
+
+                `);
+
+        }
+
+        catch (error) {
+            console.error('选择助手失败:', error);
+            showConnectionError('初始化助手失败: ' + error.message);
+            // 失败时显示选择器，让用户可以重试
+            const selectorForRetry = document.getElementById('assistantSelector');
+
+            if (selectorForRetry) {
+                selectorForRetry.style.display = 'block';
+            }
+        }
+    }
+
+    // 切换助手
+    function switchAssistant() {
+        // 保存当前状态
+        saveSwitchState();
+
+        // 显示带取消按钮的选择器
+        showSwitchSelector();
+    }
+
+    // 保存切换前的状态
+    function saveSwitchState() {
+        const messagesArea = document.getElementById('messagesArea');
+        const messages = Array.from(messagesArea.querySelectorAll('.message'));
+        const consensusContent = document.getElementById('consensusContent');
+
+        const chatTitleEl2 = document.getElementById('chatTitle');
+        const statusDotEl = document.getElementById('connectionStatus');
+        const statusTextEl = document.getElementById('statusText');
+
+        savedSwitchState = {
+
+            assistant: currentAssistant,
+            sessionId: currentSessionId,
+            isInitialized: isAIAssistantInitialized,
+            messages: messages.map(msg => msg.outerHTML),
+            consensusHTML: consensusContent ? consensusContent.innerHTML : '',
+            chatTitle: chatTitleEl2 ? chatTitleEl2.textContent : '请选择智能助手',
+            connectionStatus: {
+                dot: statusDotEl ? statusDotEl.style.background : '',
+                text: statusTextEl ? statusTextEl.textContent : '未连接'
+            }
+        }
+
+            ;
+
+        console.log('已保存切换前状态');
+    }
+
+    // 显示带取消按钮的助手选择器
+    function showSwitchSelector() {
+        const assistantSelector = document.getElementById('assistantSelector');
+        const selectorContent = assistantSelector.querySelector('.selector-content');
+
+        // 保存原始内容
+        if (!assistantSelector.dataset.originalContent) {
+            assistantSelector.dataset.originalContent = selectorContent.innerHTML;
+        }
+
+        const currentName = currentAssistant ? currentAssistant.name : '当前助手';
+        const messageCount = savedSwitchState ? savedSwitchState.messages.length : 0;
+
+        // 修改选择器内容，添加取消按钮
+        selectorContent.innerHTML = ` <h3>切换智能助手</h3><p>请选择一位专业的AI助手开始对话：</p><div class="assistant-cards" id="assistantCards"><!-- 助手卡片将动态加载 --></div><div class="selector-footer"><div style="display: flex; justify-content: center; margin: 16px 0;"><button onclick="cancelSwitch()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">取消切换</button></div><p class="note">选择新助手即可开始对话</p></div>`;
+
+        // 显示选择器并重新渲染助手卡片
+        assistantSelector.style.display = 'block';
+        const chatTitleEl3 = document.getElementById('chatTitle');
+
+        if (chatTitleEl3) {
+            chatTitleEl3.textContent = '切换智能助手';
+        }
+
+        renderAssistantSelector();
+
+        // 滚动到顶部，让用户能看到切换界面
+        const messagesArea = document.getElementById('messagesArea');
+
+        if (messagesArea) {
+            messagesArea.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+    }
+
+    // 取消切换，恢复之前的状态
+    function cancelSwitch() {
+        if (!savedSwitchState) {
+            console.warn('没有保存的状态');
+            return;
+        }
+
+        console.log('取消切换，恢复状态');
+
+        // 恢复状态
+        currentAssistant = savedSwitchState.assistant;
+        currentSessionId = savedSwitchState.sessionId;
+        isAIAssistantInitialized = savedSwitchState.isInitialized;
+
+        // 恢复消息
+        const messagesArea = document.getElementById('messagesArea');
+        const existingMessages = messagesArea.querySelectorAll('.message');
+        existingMessages.forEach(msg => msg.remove());
+
+        savedSwitchState.messages.forEach(messageHTML => {
+            messagesArea.insertAdjacentHTML('beforeend', messageHTML);
+        });
+
+        // 恢复右侧内容
+        const consensusContent = document.getElementById('consensusContent');
+
+        if (consensusContent) {
+            consensusContent.innerHTML = savedSwitchState.consensusHTML;
+        }
+
+        // 恢复标题
+        const chatTitleEl4 = document.getElementById('chatTitle');
+
+        if (chatTitleEl4) {
+            chatTitleEl4.textContent = savedSwitchState.chatTitle;
+        }
+
+        // 恢夏连接状态
+        const statusDot = document.getElementById('connectionStatus');
+        const statusText = document.getElementById('statusText');
+        if (statusDot) statusDot.style.background = savedSwitchState.connectionStatus.dot;
+        if (statusText) statusText.textContent = savedSwitchState.connectionStatus.text;
+
+        // 隐藏选择器，显示切换按钮
+        const selectorEl = document.getElementById('assistantSelector');
+        const switchBtnEl2 = document.getElementById('assistantSwitchBtn');
+        if (selectorEl) selectorEl.style.display = 'none';
+        if (switchBtnEl2) switchBtnEl2.style.display = 'inline-block';
+
+        // 恢复选择器原始内容
+        const assistantSelector = document.getElementById('assistantSelector');
+        const selectorContent = assistantSelector.querySelector('.selector-content');
+
+        if (assistantSelector.dataset.originalContent) {
+            selectorContent.innerHTML = assistantSelector.dataset.originalContent;
+        }
+
+        // 更新按钮状态
+        updateSendButtonState();
+
+        // 清除保存的状态
+        savedSwitchState = null;
+
+        // 滚动到底部
+        scrollToBottom();
+
+        console.log('已恢复到之前的状态');
+    }
+
+    // 使用指定助手创建会话
+    async function createSessionWithAssistant(assistantType) {
+        console.log(`开始创建${assistantType
+            }
+
+            助手会话...`);
+
+        const response = await axios.post('/ai-agents/api/requirements/sessions', {
+            project_name: `${assistantType.toUpperCase()}助手会话`,
+            assistant_type: assistantType
+        });
+
+        console.log('创建会话 API响应:', response.data);
+
+        if (response.data.code === 200) {
+            currentSessionId = response.data.data.id;
+
+            console.log(`会话创建成功，ID: ${currentSessionId
+                }
+
+            , 助手类型: ${assistantType
+                }
+
+            `);
+            updateConnectionStatus('ready', '就绪');
+        }
+
+        else {
+            throw new Error(response.data.message || '创建会话失败');
+        }
+    }
+
+    // 初始化选中的助手
+    async function initializeSelectedAssistant() {
+        console.log('开始初始化助手...', {
+            currentAssistant, currentSessionId
+        });
+
+        if (!currentAssistant || !currentSessionId) {
+            const errorMsg = '助手或会话未初始化';
+            console.error(errorMsg);
+            showConnectionError(errorMsg);
+            return;
+        }
+
+        try {
+            console.log(`获取${currentAssistant.id
+                }
+
+            助手的bundle...`);
+
+            // 获取助手的bundle内容
+            const bundleResponse = await axios.get(`/api/requirements/assistants/${currentAssistant.id}/bundle`);
+
+            console.log('Bundle API响应:', bundleResponse.data);
+
+            if (bundleResponse.data.code === 200) {
+                const bundleContent = bundleResponse.data.data.bundle_content;
+
+                console.log('Bundle内容长度:', bundleContent.length);
+
+                // 更新加载状态 - 实际上我们需要在这里关闭加载遮罩，
+                // 因为流式传输需要立即显示界面让用户看到打字效果
+                hideConnectionLoading();
+
+                // 发送bundle激活消息
+                console.log('发送bundle激活消息(流式)...');
+                await sendBundleMessage(bundleContent);
+
+                isAIAssistantInitialized = true;
+                updateSendButtonState();
+
+                // 显示成功动画 - 此时流式传输可能还在进行中，或者刚开始
+                // 我们不需要全屏遮罩的成功动画，只需要更新顶部状态即可
+                // showConnectionSuccess(currentAssistant.name);
+
+                // 更新连接状态为已连接
+                updateConnectionStatus('connected', `AI助手${currentAssistant.name}已激活`);
+
+                console.log('助手初始化流程已触发');
+            }
+
+            else {
+                throw new Error('获取bundle失败: ' + bundleResponse.data.message);
+            }
+        }
+
+        catch (error) {
+            console.error('初始化助手失败:', error);
+            showConnectionError('助手初始化失败: ' + error.message);
+            throw error; // 重新抛出错误供上层处理
+        }
+    }
+
+    // 发送Bundle激活消息
+    async function sendBundleMessage(bundleContent) {
+        console.log('开始发送Bundle激活消息(流式)...');
+
+        try {
+            // 使用流式发送，不显示处理中动画(false)
+            // 因为我们已经手动去除了遮罩，这里会自动创建流式占位符
+            const success = await sendMessageViaStream(bundleContent, false);
+
+            if (success) {
+                console.log('Bundle激活流式请求已发送');
+                return true;
+            } else {
+                throw new Error('Bundle激活请求失败');
+            }
+        } catch (error) {
+            console.error('发送Bundle消息失败:', error);
+            throw error;
+        }
+    }
+
+    // 显示系统消息（在聊天界面中显示而不是弹出对话框）
+    function displaySystemMessage(content, type = 'info') {
+        const messagesArea = document.getElementById('messagesArea');
+        const messageEl = document.createElement('div');
+
+        messageEl.className = `message system ${type
+            }
+
+        `;
+
+        const time = new Date().toLocaleTimeString();
+        const icon = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
+
+        messageEl.innerHTML = ` <div class="message-header"><div class="message-avatar">${icon
+            }
+
+        </div><div class="message-meta"><div class="message-sender">系统</div><div class="message-time">${time
+            }
+
+        </div></div></div><div class="message-content">${content
+            }
+
+        </div>`;
+
+        messagesArea.appendChild(messageEl);
+        scrollToBottom();
+    }
+
+    // 创建新会话  
+    async function createSession() {
+        try {
+            const response = await axios.post('/ai-agents/api/requirements/sessions', {
+                project_name: '需求分析会话' // 使用固定的默认名称
+            });
+
+            if (response.data.code === 200) {
+                currentSessionId = response.data.data.id;
+                console.log('会话创建成功:', currentSessionId);
+
+                // 加入WebSocket房间（仅本地环境）
+                if (!isVercelEnvironment()) {
+                    socket.emit('join_requirements_session', {
+                        session_id: currentSessionId
+                    });
+                }
+
+                // 显示连接AI助手的提示
+                showConnectPrompt();
+            }
+
+            else {
+                throw new Error(response.data.message);
+            }
+        }
+
+        catch (error) {
+            console.error('创建会话失败:', error);
+            showMessage('创建会话失败: ' + error.message, 'error');
+        }
+    }
+
+    // 加载完整的AI助手Bundle内容
+    async function loadAssistantBundleContent() {
+        try {
+            const assistantId = currentAssistant ? currentAssistant.id : 'alex';
+
+            const response = await axios.get(`/ai-agents/api/requirements/assistants/${assistantId}/bundle`);
+            if (response.data.code === 200) {
+                return response.data.data.bundle_content;
+            }
+
+            else {
+                // 如果API不可用，使用fallback bundle
+                return getFallbackAssistantBundle();
+            }
+        }
+
+        catch (error) {
+            console.warn('无法加载完整bundle，使用fallback版本:', error);
+            return getFallbackAssistantBundle();
+        }
+    }
+
+    // 获取fallback的AI助手 bundle（简化版）
+    function getFallbackAssistantBundle() {
+        const assistantName = currentAssistant ? currentAssistant.name : 'AI助手';
+        const assistantTitle = currentAssistant ? currentAssistant.title : '智能助手';
+
+        return `你的关键操作指令已附在下方，请严格按照指令中的persona执行，不要打破角色设定。 你是${assistantName
+            }
+
+        ，${assistantTitle
+            }
+
+        。请按照以下激活指令执行： STEP 1: 采用${assistantTitle
+            }
+
+        ${assistantName
+            }
+
+        的身份 STEP 2: 以${assistantName
+            }
+
+        的身份向用户问好 STEP 3: 立即运行 *help 命令显示所有可用功能 STEP 4: 等待用户选择功能或直接描述需求===你的身份===name: ${assistantName
+            }
+
+        title: ${assistantTitle
+            }
+
+        role: 专业的AI助手 focus: 为用户提供专业的帮助和指导 现在请以${assistantName
+            }
+
+        的身份问好并运行 *help 命令。`;
+    }
+
+    // 防重复连接标志
+    let isConnecting = false;
+
+    // 连接AI助手 - 发送智能需求分析师提示词激活Alex
+    async function connectAIAssistant() {
+        if (!currentSessionId || isConnecting) {
+            console.error('没有活跃的会话ID或正在连接中');
+            return;
+        }
+
+        isConnecting = true;
+
+        try {
+            const assistantName = currentAssistant ? currentAssistant.name : 'AI助手';
+
+            updateConnectionStatus('connecting', `正在激活${assistantName
+                }
+
+                ...`);
+            // 立即设置按钮状态，内部已有延迟处理
+            setConnectButtonState('loading');
+
+            // 从完整的bundle文件中获取激活消息
+            const activationMessage = await loadAssistantBundleContent();
+
+            // 使用HTTP发送激活消息（初始化时不显示处理动画）
+            await sendMessageViaHTTP(activationMessage, false);
+
+        }
+
+        catch (error) {
+            console.error('连接AI助手失败:', error);
+            updateConnectionStatus('error', '连接失败');
+            // 恢复按钮状态
+            setConnectButtonState('normal');
+            showMessage('连接AI助手失败: ' + error.message, 'error');
+        }
+
+        finally {
+            // 无论成功或失败都重置连接状态
+            isConnecting = false;
+        }
+    }
+
+    // 设置连接按钮状态
+    function setConnectButtonState(state) {
+
+        // 使用更长的延迟确保DOM完全渲染
+        setTimeout(() => {
+            try {
+                const connectBtns = document.querySelectorAll('.connect-btn');
+
+                if (!connectBtns || connectBtns.length === 0) {
+                    console.log('未找到连接按钮，可能还未渲染完成');
+                    // 如果仍然找不到，再次尝试
+                    setTimeout(() => setConnectButtonState(state), 500);
+                    return;
+                }
+
+                connectBtns.forEach(btn => {
+                    if (!btn || typeof btn !== 'object') {
+                        console.warn('发现无效按钮元素，跳过处理');
+                        return;
+                    }
+
+                    try {
+
+                        // 彻底检查classList属性
+                        if (!btn.classList || typeof btn.classList.remove !== 'function') {
+                            console.warn('按钮元素缺少classList方法，跳过处理');
+                            return;
+                        }
+
+                        // 安全地移除类
+                        btn.classList.remove('loading', 'disabled');
+
+                        const assistantName = currentAssistant ? currentAssistant.name : 'AI助手';
+
+                        switch (state) {
+                            case 'loading': btn.classList.add('loading');
+                                btn.disabled = true;
+
+                                btn.textContent = `正在初始化${assistantName
+                                    }
+
+                                    ...`;
+                                break;
+                            case 'activated': btn.classList.add('disabled');
+                                btn.disabled = true;
+
+                                btn.textContent = `${assistantName
+                                    }
+
+                                    已激活`;
+                                break;
+                            case 'normal': default: btn.disabled = false;
+
+                                btn.textContent = `连接${assistantName
+                                    }
+
+                                    `;
+                                break;
+                        }
+                    }
+
+                    catch (innerError) {
+                        console.error('设置单个按钮状态时出错:', innerError, btn);
+                    }
+                });
+            }
+
+            catch (error) {
+                console.error('setConnectButtonState执行失败:', error);
+            }
+        }
+
+            , 200);
+    }
+
+    // 显示连接AI助手的提示 - 已禁用，使用新的助手选择器
+    async function showConnectPrompt() {
+        console.log('showConnectPrompt 被调用，但已禁用 - 使用新的助手选择器');
+        // 不做任何操作，让助手选择器正常显示
+    }
+
+    // 检查AI配置是否存在
+    async function checkAIConfiguration() {
+        try {
+            const response = await axios.get('/api/ai-configs');
+            console.log('AI配置检查响应:', response.data); // 调试日志
+
+            // 详细检查响应结构
+            const hasValidResponse = response.data.code === 200;
+            const hasData = response.data.data;
+            const hasConfigs = hasData && response.data.data.configs;
+            const hasConfigsLength = hasConfigs && response.data.data.configs.length > 0;
+
+            console.log('AI配置检查详情:', {
+                hasValidResponse,
+                hasData,
+                hasConfigs,
+                configsLength: hasConfigs ? response.data.data.configs.length : 0,
+                hasConfigsLength
+            });
+
+            return hasValidResponse && hasData && hasConfigs && hasConfigsLength;
+        }
+
+        catch (error) {
+            console.error('检查AI配置失败:', error);
+            return false;
+        }
+    }
+
+    // 防重复发送标志
+    let isSending = false;
+
+    // 发送消息
+    async function sendMessage() {
+        const messageInput = document.getElementById('messageInput');
+        const content = messageInput.value.trim();
+
+        // 必须有文本内容才能发送（仅有附件不允许发送）
+        if (!content || !currentSessionId || isSending) {
+            console.log('发送被阻止:', {
+                hasContent: ! !content,
+                hasSession: ! !currentSessionId,
+                isSending: isSending,
+                attachedFilesCount: attachedFiles.length
+            });
+            return;
+        }
+
+        // 设置发送中状态，防止重复发送
+        isSending = true;
+        updateSendButtonState(); // 更新按钮状态
+
+        // 检查连接状态（Vercel环境不需要WebSocket连接）
+        if (!isVercelEnvironment() && !isConnected) {
+            isSending = false; // 重置发送状态
+            showMessage('WebSocket未连接，请稍后重试', 'error');
+            return;
+        }
+
+        // 保存当前附件副本，用于发送
+        const filesToSend = [...attachedFiles];
+
+        // 立即显示用户消息（包含附件信息）
+        const userMessage = {
+
+            message_type: 'user',
+            content: content,
+            attached_files: filesToSend.map(f => ({
+                filename: f.name,
+                size: f.size
+            })),
+            created_at: new Date().toISOString()
+        }
+
+            ;
+        displayMessage(userMessage);
+
+        // 清空输入框和附件
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        document.getElementById('charCount').textContent = '0';
+        attachedFiles = []; // 清空附件
+        updateAttachmentPreview(); // 更新附件预览
+        updateSendButtonState();
+
+
+
+        // 🔧 已全面启用流式模式，不再需要旧的 setTimeout "正在处理" 动画
+        // 流式占位符自带光标动画
+
+        try {
+            // 统一使用流式 API 发送消息
+            if (filesToSend.length > 0) {
+                // 构建 FormData 用于上传文件
+                const formData = new FormData();
+                formData.append('content', content || '');
+
+                console.log('📎 准备发送带附件的消息:', filesToSend.length);
+                filesToSend.forEach((file, index) => {
+                    console.log(`📎 文件 ${index}:`, file.name, file.size);
+                    formData.append('files', file);
+                });
+
+                await sendMessageViaStream(formData);
+            } else {
+                // 纯文本消息
+                await sendMessageViaStream(content);
+            }
+        }
+
+        catch (error) {
+            console.error('发送消息失败:', error);
+            hideAiProcessing();
+            showMessage('发送消息失败: ' + error.message, 'error');
+        }
+
+        finally {
+            // 无论成功或失败都重置发送状态
+            isSending = false;
+            updateSendButtonState(); // 更新按钮状态
+        }
+    }
+
+    // 显示消息
+    function displayMessage(message) {
+        const messagesArea = document.getElementById('messagesArea');
+        const messageEl = document.createElement('div');
+
+        messageEl.className = `message ${message.message_type
+            }
+
+        `;
+        messageEl.dataset.messageId = message.id; // 添加消息ID，用于刷新时定位
+
+        const avatar = message.message_type === 'user' ? '你' : 'AI';
+        const time = new Date(message.created_at).toLocaleTimeString();
+
+        // AI消息处理：提取进展内容并渲染，用户消息使用普通HTML转义
+        let contentHtml;
+
+        if (message.message_type === 'ai' || message.message_type === 'assistant') {
+            console.log('处理AI消息，原始长度:', message.content.length);
+            console.log('原始内容预览:', message.content.substring(0, 200) + '...');
+
+            // 从AI消息中提取进展总结内容
+            const extracted = extractProgressContent(message.content);
+
+            console.log('提取结果:', {
+                hasProgress: extracted.hasProgress,
+                progressContentLength: extracted.progressContent.length,
+                cleanedContentLength: extracted.cleanedContent.length
+            });
+
+            // 如果有进展内容，更新分析成果区域
+            if (extracted.hasProgress) {
+                console.log('更新分析成果区域');
+                updateAnalysisResults(extracted.progressContent);
+            }
+
+            // 使用清理后的内容进行markdown解析和显示
+            contentHtml = parseMarkdown(extracted.cleanedContent);
+
+            console.log('最终显示内容长度:', extracted.cleanedContent.length);
+        }
+
+        else {
+            contentHtml = escapeHtml(message.content);
+        }
+
+        // 为用户消息添加附件显示
+        let attachmentHtml = '';
+
+        if (message.message_type === 'user' && message.attached_files && message.attached_files.length > 0) {
+            attachmentHtml = ` <div class="message-attachments">${message.attached_files.map(file => ` <div class="attachment-indicator" > 📎 ${escapeHtml(file.filename)
+                }
+
+                    (${formatFileSize(file.size || 0)
+                }) </div > `).join('')
+                }
+
+        </div>`;
+        }
+
+        // 移除了AI消息刷新功能
+        const refreshButton = '';
+
+        messageEl.innerHTML = ` <div class="message-avatar">${avatar
+            }
+
+    </div><div class="message-body"><div class="message-content ${message.message_type === 'ai' || message.message_type === 'assistant' ? 'ai-formatted' : ''}">${contentHtml
+            }
+
+    </div>${attachmentHtml
+            }
+
+    <div class="message-footer"><div class="message-time">${time
+            }
+
+    </div>${refreshButton
+            }
+
+    </div></div>`;
+
+        messagesArea.appendChild(messageEl);
+
+        // 平滑滚动到底部，避免突然跳转
+        scrollToBottom();
+    }
+
+
+    // 加载会话消息
+    async function loadSessionMessages() {
+        if (!currentSessionId) return;
+
+        try {
+            const response = await axios.get(`/ai-agents/api/requirements/sessions/${currentSessionId}/messages`);
+
+            if (response.data.code === 200) {
+                const messages = response.data.data.messages;
+                const messagesArea = document.getElementById('messagesArea');
+                messagesArea.innerHTML = '';
+
+                messages.forEach(displayMessage);
+            }
+        }
+
+        catch (error) {
+            console.error('加载消息失败:', error);
+        }
+    }
+
+    // ================================
+    // 拖拽分隔条功能
+    // ================================
+
+    let isResizing = false;
+    let startX = 0;
+    let startLeftWidth = 0;
+
+    // 初始化拖拽功能
+    function initializeResize() {
+        const resizeHandle = document.getElementById('resizeHandle');
+        const desktopLayout = document.querySelector('.desktop-layout');
+        const chatPanel = document.querySelector('.chat-panel');
+        const analysisPanel = document.querySelector('.analysis-panel');
+
+        if (!resizeHandle || !desktopLayout || !chatPanel || !analysisPanel) {
+            console.warn('拖拽功能初始化失败：找不到必要元素', {
+                resizeHandle: ! !resizeHandle,
+                desktopLayout: ! !desktopLayout,
+                chatPanel: ! !chatPanel,
+                analysisPanel: ! !analysisPanel
+            });
+            return;
+        }
+
+        console.log('拖拽功能初始化: 找到所有必要元素');
+
+        // 鼠标按下事件
+        resizeHandle.addEventListener('mousedown', function (e) {
+            isResizing = true;
+            startX = e.clientX;
+
+            // 获取当前宽度
+            const chatRect = chatPanel.getBoundingClientRect();
+            startLeftWidth = chatRect.width;
+
+            // 添加拖拽状态样式
+            desktopLayout.classList.add('resizing');
+
+            // 禁用文本选择
+            document.body.style.userSelect = 'none';
+
+            e.preventDefault();
+
+            const containerWidth = desktopLayout.getBoundingClientRect().width;
+
+            console.log(`开始拖拽: startX=${startX
+                }
+
+                , startLeftWidth=${startLeftWidth
+                }
+
+                px, 容器宽度=${containerWidth
+                }
+
+                px`);
+        });
+
+        // 鼠标移动事件
+        document.addEventListener('mousemove', function (e) {
+            if (!isResizing) return;
+
+            const currentX = e.clientX;
+            const deltaX = currentX - startX;
+            let newLeftWidth = startLeftWidth + deltaX;
+
+            // 设置最小/最大宽度限制（安全阈值 500px）
+            const minWidth = 500;
+            const containerRect = desktopLayout.getBoundingClientRect();
+            const containerPadding = 40; // 20px 左右 padding
+            const actualContainerWidth = containerRect.width - containerPadding;
+            const handleWidth = 12;
+            const rightMinWidth = 500; // 恢复安全阈值 500px
+            const maxWidth = actualContainerWidth - handleWidth - rightMinWidth;
+
+            // 添加安全边距，确保不会卡住
+            const safetyMargin = 10;
+            const safeMaxWidth = Math.max(minWidth + safetyMargin, maxWidth - safetyMargin);
+
+            newLeftWidth = Math.max(minWidth, Math.min(newLeftWidth, safeMaxWidth));
+
+            // 调试: 显示计算结果
+            if (deltaX !== 0) {
+                console.log(`容器: ${containerRect.width
+                    }
+
+                    px, 实际: ${actualContainerWidth
+                    }
+
+                    px, 理论最大: ${maxWidth
+                    }
+
+                    px, 安全最大: ${safeMaxWidth
+                    }
+
+                    px, 当前: ${newLeftWidth
+                    }
+
+                    px`);
+            }
+
+            // 直接设置宽度
+            chatPanel.style.width = newLeftWidth + 'px';
+            chatPanel.style.flex = 'none';
+
+            // 打印更详细的调试信息
+            const rightWidth = analysisPanel.getBoundingClientRect().width;
+
+            console.log(`[drag] container=${containerRect.width
+                }
+
+                px, actual=${actualContainerWidth
+                }
+
+                px, left=${newLeftWidth
+                }
+
+                px, right=${rightWidth
+                }
+
+                px, minLeft=${minWidth
+                }
+
+                , minRight=${rightMinWidth
+                }
+
+                `);
+
+            e.preventDefault();
+        });
+
+        // 鼠标释放事件
+        document.addEventListener('mouseup', function (e) {
+            if (!isResizing) return;
+
+            isResizing = false;
+
+            // 移除拖拽状态样式
+            desktopLayout.classList.remove('resizing');
+
+            // 恢复文本选择
+            document.body.style.userSelect = '';
+
+            // 获取最终宽度
+            const finalWidth = chatPanel.getBoundingClientRect().width;
+
+            console.log(`拖拽结束: 最终宽度=${finalWidth
+                }
+
+                px, 变化=${finalWidth - startLeftWidth
+                }
+
+                px`);
+        });
+
+        // 触摸支持（移动设备）
+        resizeHandle.addEventListener('touchstart', function (e) {
+            const touch = e.touches[0];
+            isResizing = true;
+            startX = touch.clientX;
+
+            const chatRect = chatPanel.getBoundingClientRect();
+            startLeftWidth = chatRect.width;
+
+            desktopLayout.classList.add('resizing');
+            e.preventDefault();
+        });
+
+        document.addEventListener('touchmove', function (e) {
+            if (!isResizing) return;
+
+            const touch = e.touches[0];
+            const deltaX = touch.clientX - startX;
+            let newLeftWidth = startLeftWidth + deltaX;
+
+            const minWidth = 500;
+            const containerRect = desktopLayout.getBoundingClientRect();
+            const containerPadding = 40;
+            const actualContainerWidth = containerRect.width - containerPadding;
+            const handleWidth = 12;
+            const rightMinWidth = 500; // 与桌面一致
+            const maxWidth = actualContainerWidth - handleWidth - rightMinWidth;
+
+            // 添加安全边距，确保不会卡住
+            const safetyMargin = 10;
+            const safeMaxWidth = Math.max(minWidth + safetyMargin, maxWidth - safetyMargin);
+
+            newLeftWidth = Math.max(minWidth, Math.min(newLeftWidth, safeMaxWidth));
+            // 调试日志
+            const rightWidth = analysisPanel.getBoundingClientRect().width;
+
+            console.log(`[touch-drag] container=${containerRect.width
+                }
+
+                px, actual=${actualContainerWidth
+                }
+
+                px, left=${newLeftWidth
+                }
+
+                px, right=${rightWidth
+                }
+
+                px, minLeft=${minWidth
+                }
+
+                , minRight=${rightMinWidth
+                }
+
+                `);
+
+            chatPanel.style.width = newLeftWidth + 'px';
+            chatPanel.style.flex = 'none';
+
+            e.preventDefault();
+        });
+
+        document.addEventListener('touchend', function (e) {
+            if (!isResizing) return;
+
+            isResizing = false;
+            desktopLayout.classList.remove('resizing');
+        });
+
+        console.log('拖拽分隔条功能初始化完成');
+    }
+
+    // ================================
+    // 连接加载动画控制函数
+    // ================================
+
+    // 显示连接加载动画
+    function showConnectionLoading(text = '正在初始化...') {
+        const overlay = document.getElementById('connectionLoadingOverlay');
+        const loadingText = document.getElementById('connectionLoadingText');
+        const loadingDots = document.getElementById('connectionLoadingDots');
+        const errorElement = document.getElementById('connectionError');
+        const retryBtn = document.getElementById('connectionRetryBtn');
+
+        if (!overlay) {
+            console.warn('找不到连接加载遮罩元素');
+            return;
+        }
+
+        // 设置加载状态
+        loadingText.textContent = text;
+        loadingDots.style.display = 'inline-flex';
+        errorElement.style.display = 'none';
+        retryBtn.style.display = 'none';
+
+        // 显示遮罩
+        overlay.classList.add('show');
+
+        console.log('显示连接加载动画:', text);
+    }
+
+    // 隐藏连接加载动画
+    function hideConnectionLoading() {
+        const overlay = document.getElementById('connectionLoadingOverlay');
+
+        if (overlay) {
+            overlay.classList.remove('show');
+            console.log('隐藏连接加载动画');
+        }
+    }
+
+    // AI响应后直接隐藏连接动画
+    function showConnectionSuccess(assistantName) {
+        // 直接隐藏加载遮罩，不显示成功信息
+        hideConnectionLoading();
+    }
+
+    // 显示连接错误
+    function showConnectionError(errorMessage) {
+        const loadingText = document.getElementById('connectionLoadingText');
+        const loadingDots = document.getElementById('connectionLoadingDots');
+        const errorElement = document.getElementById('connectionError');
+        const retryBtn = document.getElementById('connectionRetryBtn');
+
+        if (loadingText && loadingDots && errorElement && retryBtn) {
+            loadingText.textContent = '连接失败';
+            loadingText.className = 'connection-loading-text connection-error';
+            loadingDots.style.display = 'none';
+            errorElement.textContent = errorMessage;
+            errorElement.style.display = 'block';
+
+            // 显示重试按钮（如果未超过最大重试次数）
+            if (connectionRetryCount < maxRetries) {
+                retryBtn.style.display = 'inline-block';
+            }
+
+            console.log('显示连接错误:', errorMessage);
+        }
+    }
+
+    // 重试连接
+    function retryConnection() {
+        if (connectionRetryCount >= maxRetries) {
+            console.log('已超过最大重试次数');
+            return;
+        }
+
+        connectionRetryCount++;
+
+        console.log(`第${connectionRetryCount
+            }
+
+            次重试连接`);
+
+        // 重新初始化助手
+        if (currentAssistant) {
+            initializeSelectedAssistant();
+        }
+    }
+
+    // 更新连接状态
+    function updateConnectionStatus(status, text) {
+        const statusDot = document.getElementById('connectionStatus');
+        const statusText = document.getElementById('statusText');
+
+        if (!statusDot || !statusText) {
+            console.warn('找不到状态显示元素');
+            return;
+        }
+
+        // 重置状态点的基础样式
+        statusDot.className = 'status-dot';
+
+        // 根据状态设置颜色和文本
+        switch (status) {
+            case 'connected':
+            case true: // 兼容旧版本
+                statusDot.style.background = '#28a745';
+                statusText.textContent = text || '已连接';
+                console.log('状态更新为已连接:', text);
+                break;
+            case 'connecting':
+                statusDot.style.background = '#ffc107';
+                statusText.textContent = text || '连接中';
+                break;
+            case 'ready':
+                statusDot.style.background = '#17a2b8';
+                statusText.textContent = text || '就绪';
+                break;
+            case 'config-needed':
+                statusDot.style.background = '#6c757d';
+                statusText.textContent = text || '需要配置';
+                break;
+            case 'disconnected':
+            case 'error': case false: // 兼容旧版本
+            default: statusDot.style.background = '#dc3545';
+                statusText.textContent = text || '未连接';
+                break;
+        }
+
+        console.log(`状态更新: ${status
+            }
+
+            -> ${statusText.textContent
+            }
+
+            `);
+    }
+
+    // 显示AI处理动效
+    function showAiProcessing(text = 'AI助手正在处理您的请求') {
+        const messagesArea = document.getElementById('messagesArea');
+
+        if (!messagesArea) {
+            console.warn('未找到消息区域');
+            return;
+        }
+
+        // 移除现有的AI处理元素（如果存在）
+        let existingAiProcessing = document.getElementById('aiProcessing');
+
+        if (existingAiProcessing) {
+            existingAiProcessing.remove();
+        }
+
+        // 创建新的AI处理元素并添加到消息区域末尾
+        const aiProcessing = document.createElement('div');
+        aiProcessing.id = 'aiProcessing';
+        aiProcessing.className = 'ai-processing show';
+
+        aiProcessing.innerHTML = ` <div class="message-avatar">AI</div><div class="thinking-content"><div class="thinking-text">${text
+            }
+
+        </div><div class="processing-dots"><div class="processing-dot"></div><div class="processing-dot"></div><div class="processing-dot"></div></div></div>`;
+
+        // 确保添加到消息区域的最后位置
+        messagesArea.appendChild(aiProcessing);
+
+        // 滚动到消息区域底部
+        scrollToBottom(150);
+    }
+
+    // 隐藏AI处理动效
+    function hideAiProcessing() {
+        const aiProcessing = document.getElementById('aiProcessing');
+
+        if (aiProcessing) {
+            // 完全移除AI处理动画元素，而不仅仅是隐藏
+            aiProcessing.remove();
+        }
+
+        else {
+            console.warn('未找到AI处理动效元素');
+        }
+
+        // 更新按钮状态（AI处理完成后可以切换助手）
+        updateSendButtonState();
+    }
+
+    // 更新共识显示
+    function updateConsensusDisplay(consensus) {
+        const consensusContent = document.getElementById('consensusContent');
+
+        if (!consensus || (!consensus.keywords && !consensus.requirements)) {
+            consensusContent.innerHTML = ` <div class="empty-state">继续对话以生成更多分析内容 </div>`;
+            return;
+        }
+
+        let html = '';
+
+        // 关键词部分
+        if (consensus.keywords && consensus.keywords.length > 0) {
+            html += ` <div class="consensus-section"><div class="section-title">关键词</div><div class="keywords-list">${consensus.keywords.map(keyword => `<span class="keyword-tag" > ${escapeHtml(keyword)
+                }
+
+                    </span> `).join('')
+                }
+
+            </div></div>`;
+        }
+
+        // 需求要点部分
+        if (consensus.requirements && consensus.requirements.length > 0) {
+            html += ` <div class="consensus-section"><div class="section-title">需求要点</div><ul class="requirements-list">${consensus.requirements.map(req => `<li class="requirement-item" > ${escapeHtml(req)
+                }
+
+                    </li > `).join('')
+                }
+
+            </ul></div>`;
+        }
+
+        // 进度指示
+        html += ` <div class="consensus-section"><div class="progress-section"><div class="stage-indicator">当前阶段: <span class="stage-name">${getStageDisplayName(consensus.stage)
+            }
+
+        </span></div></div></div>`;
+
+        consensusContent.innerHTML = html;
+    }
+
+    // 获取阶段显示名称
+    function getStageDisplayName(stage) {
+        const stageNames = {
+            'initial': '初始对话',
+            'clarification': '需求澄清',
+            'consensus': '共识达成',
+            'documentation': '文档生成'
+        }
+
+            ;
+        return stageNames[stage] || stage;
+    }
+
+
+    // 工具函数
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // ================================
+    // 分析成果相关函数
+    // ================================
+
+    /**
+     * 从AI消息中提取进展总结内容
+     * @param {string} content - AI消息原始内容
+     * @returns {Object} {hasProgress: boolean, progressContent: string, cleanedContent: string}
+     */
+    function extractProgressContent(content) {
+        // 支持多种标记格式，包括需求分析师和测试分析师的标记
+        const markers = [ // 需求分析师标记
+
+            {
+                start: '=== REQUIREMENTS_PROGRESS_START ===', end: '=== REQUIREMENTS_PROGRESS_END ==='
+            }
+
+            ,
+            {
+                start: 'REQUIREMENTS_PROGRESS_START', end: 'REQUIREMENTS_PROGRESS_END'
+            }
+
+            ,
+            {
+                start: '--- REQUIREMENTS_PROGRESS_START ---', end: '--- REQUIREMENTS_PROGRESS_END ---'
+            }
+
+            ,
+            // 测试分析师标记
+            {
+                start: '=== TEST_ANALYSIS_PROGRESS_START ===', end: '=== TEST_ANALYSIS_PROGRESS_END ==='
+            }
+
+            ,
+            {
+                start: 'TEST_ANALYSIS_PROGRESS_START', end: 'TEST_ANALYSIS_PROGRESS_END'
+            }
+
+            ,
+            {
+                start: '--- TEST_ANALYSIS_PROGRESS_START ---', end: '--- TEST_ANALYSIS_PROGRESS_END ---'
+            }
+
+        ];
+
+        for (const marker of markers) {
+            const startIndex = content.indexOf(marker.start);
+            const endIndex = content.indexOf(marker.end);
+
+            if (startIndex !== -1 && endIndex !== -1) {
+                // 提取进展内容（去掉标记）
+                const progressContent = content.substring(startIndex + marker.start.length,
+                    endIndex).trim();
+
+                // 清理后的对话内容（移除整个进展块）
+                const cleanedContent = content.substring(0, startIndex) + content.substring(endIndex + marker.end.length);
+
+                console.log('检测到进展内容，标记格式:', marker.start);
+                console.log('提取的进展内容:', progressContent.substring(0, 200) + '...');
+
+                return {
+                    hasProgress: true,
+                    progressContent,
+                    cleanedContent: cleanedContent.trim()
+                }
+
+                    ;
+            }
+        }
+
+        return {
+            hasProgress: false,
+            progressContent: '',
+            cleanedContent: content
+        }
+
+            ;
+    }
+
+    /**
+     * 将进展内容渲染到分析成果区域
+     * @param {string} progressContent - 进展总结内容（可能是markdown或JSON格式）
+     */
+    function updateAnalysisResults(progressContent) {
+        const consensusContent = document.getElementById('consensusContent');
+
+        if (!progressContent) {
+            // 根据当前助手类型显示不同的默认文本
+            let defaultText = '开始对话后，这里将显示分析成果';
+
+            if (currentAssistant && currentAssistant.id === 'alex') {
+                defaultText = '开始对话后，这里将显示需求分析的要点和共识内容';
+            }
+
+            else if (currentAssistant && currentAssistant.id === 'song') {
+                defaultText = '开始对话后，这里将显示测试分析的成果和进展内容';
+            }
+
+            consensusContent.innerHTML = ` <div class="empty-state">${defaultText
+                }
+
+            </div>`;
+            return;
+        }
+
+        let htmlContent = '';
+
+        try {
+            // 尝试解析为JSON（仅限需求分析师）
+            const jsonData = JSON.parse(progressContent);
+            htmlContent = formatProgressJSON(jsonData);
+            console.log('解析需求分析JSON格式的进展内容');
+        }
+
+        catch (e) {
+            // 如果不是JSON（包括测试分析师的markdown），则按markdown处理
+            htmlContent = parseMarkdown(progressContent);
+            console.log('解析markdown格式的进展内容');
+        }
+
+        // 应用分析成果专用的CSS类
+        consensusContent.innerHTML = ` <div class="analysis-results-content">${htmlContent
+            }
+
+        </div>`;
+
+        console.log('分析成果已更新');
+    }
+
+    /**
+     * 将JSON格式的进展数据转换为用户友好的HTML
+     * @param {Object} jsonData - 进展数据对象
+     * @returns {string} HTML内容
+     */
+    function formatProgressJSON(jsonData) {
+        let html = '';
+
+        // 当前阶段
+        if (jsonData.current_step) {
+            html += ` <div class="current-phase"><h2>📍 当前阶段</h2><p><strong>${jsonData.current_step
+                }
+
+            </strong></p></div>`;
+        }
+
+        // 电梯演讲阶段
+        if (jsonData.elevator_pitch) {
+            const ep = jsonData.elevator_pitch;
+            html += `<div class="consensus-section"><h3>🎤 电梯演讲 - 价值定位澄清</h3>`;
+
+            if (ep.for_target_customer) html += `<p><strong>目标用户：</strong>${ep.for_target_customer
+                }
+
+            </p>`;
+
+            if (ep.who_need_statement) html += `<p><strong>需求描述：</strong>${ep.who_need_statement
+                }
+
+            </p>`;
+
+            if (ep.product_name) html += `<p><strong>产品名称：</strong>${ep.product_name
+                }
+
+            </p>`;
+
+            if (ep.is_a_product_category) html += `<p><strong>产品类别：</strong>${ep.is_a_product_category
+                }
+
+            </p>`;
+
+            if (ep.that_key_benefit) html += `<p><strong>核心价值：</strong>${ep.that_key_benefit
+                }
+
+            </p>`;
+
+            if (ep.unlike_competitor) html += `<p><strong>竞争优势：</strong>${ep.unlike_competitor
+                }
+
+            </p>`;
+
+            if (ep.our_product_differentiation) html += `<p><strong>差异化：</strong>${ep.our_product_differentiation
+                }
+
+            </p>`;
+
+            html += `</div>`;
+        }
+
+        // 用户画像阶段
+        if (jsonData.user_personas && jsonData.user_personas.length > 0) {
+            html += ` <div class="consensus-section"><h3>👤 用户画像 - 目标用户分析</h3><ul>${jsonData.user_personas.map(persona => `<li > ${persona
+                }
+
+                    </li > `).join('')
+                }
+
+            </ul></div>`;
+        }
+
+        // 用户旅程阶段
+        if (jsonData.user_journeys && jsonData.user_journeys.length > 0) {
+            html += ` <div class="consensus-section"><h3>🗺️ 用户旅程 - 痛点挖掘与机会识别</h3><ul>${jsonData.user_journeys.map(journey => `<li > ${journey
+                }
+
+                    </li > `).join('')
+                }
+
+            </ul></div>`;
+        }
+
+        // BRD阶段
+        if (jsonData.brd) {
+            const brd = jsonData.brd;
+            html += ` <div class="consensus-section"><h3>📋 业务需求文档</h3>`;
+
+            if (brd.product_name) html += `<p><strong>产品名称：</strong>${brd.product_name
+                }
+
+            </p>`;
+
+            if (brd.target_market) html += `<p><strong>目标市场：</strong>${brd.target_market
+                }
+
+            </p>`;
+
+            if (brd.business_model) html += `<p><strong>商业模式：</strong>${brd.business_model
+                }
+
+            </p>`;
+
+            html += `</div>`;
+        }
+
+        // 如果没有内容，显示默认信息
+        if (!html) {
+            html = ` <div class="empty-state">需求分析正在进行中，请继续对话... </div>`;
+        }
+
+        return html;
+    }
+
+    // 增强的Markdown解析函数，结合marked.js和AI助手特殊格式
+    function parseMarkdown(text) {
+        if (!text) return '';
+
+        // 检查是否存在marked库
+        if (typeof marked === 'undefined') {
+            console.warn('marked.js未加载，使用简化解析');
+            return parseMarkdownSimple(text);
+        }
+
+        // 先处理AI助手的特殊格式，再交给marked.js处理标准markdown
+        let processedText = text;
+
+        // 1. 预处理AI助手特有的格式，转换为标准markdown或保留标记
+        processedText = processedText // AI助手标题格式转为标准markdown标题
+            .replace(/^===(.*?)===/gm, '### $1') // AI助手命令项转为代码块+描述
+            .replace(/^(\d+)\.\s+`([^`]+)`\s*$/gm, '$1. `$2`') // 带描述的命令项
+            .replace(/^(\d+)\.\s+`([^`]+)`\s*\*\s*\*\*(.*?)\*\*[：:]\s*(.*?)$/gm,
+                '$1. `$2`\n   **$3：** $4') // 功能描述项保持markdown格式
+            .replace(/^\*\s+\*\*(.*?)\*\*[：:]\s*(.*?)$/gm, '* **$1：** $2');
+
+        // 2. 使用marked.js解析标准markdown
+        try {
+
+            // 配置marked选项
+            marked.setOptions({
+                breaks: true, // 支持换行
+                gfm: true, // 启用GitHub Flavored Markdown
+                sanitize: false, // 不清理HTML，我们用DOMPurify
+                silent: false // 显示警告信息
+            });
+
+            let html = marked.parse(processedText);
+
+            // 3. 应用AI助手特定的CSS类
+            html = html.replace(/<h3>/g, '<h3 class="ai-title">').replace(/<h4>/g, '<h4 class="ai-subtitle">').replace(/<code>/g, '<code class="inline-code">').replace(/<p>/g, '<p class="ai-paragraph">').replace(/<li>/g, '<li class="ai-list-item">');
+
+            // 4. 使用DOMPurify清理HTML（如果可用）
+            if (typeof DOMPurify !== 'undefined') {
+                html = DOMPurify.sanitize(html, {
+                    ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'blockquote', 'a', 'del', 'hr', 'table', 'thead', 'tbody', 'tr', 'td', 'th'],
+                    ALLOWED_ATTR: ['href', 'title', 'class']
+                });
+            }
+
+            return html;
+
+        }
+
+        catch (error) {
+            console.error('marked.js解析失败:', error);
+            return parseMarkdownSimple(text);
+        }
+    }
+
+    // 简化的markdown解析器（备用）
+    function parseMarkdownSimple(text) {
+        if (!text) return '';
+
+        let html = escapeHtml(text);
+
+        // 基础markdown语法支持
+        html = html // 标题
+            .replace(/^### (.*?)$/gm, '<h3 class="ai-title">$1</h3>').replace(/^## (.*?)$/gm, '<h2>$1</h2>').replace(/^# (.*?)$/gm, '<h1>$1</h1>') // AI助手特殊格式
+            .replace(/^===(.*?)===/gm, '<h3 class="ai-title">$1</h3>').replace(/^(\d+)\.\s+`([^`]+)`\s*$/gm, '<div class="ai-command-item"><span class="ai-command-num">$1.</span><code class="ai-command">$2</code></div>') // 列表
+            .replace(/^\*\s+(.*)$/gm, '<div class="ai-list-item">• $1</div>').replace(/^-\s+(.*)$/gm, '<div class="ai-list-item">• $1</div>').replace(/^(\d+)\.\s+(.*)$/gm, '<div class="ai-list-item">$1. $2</div>') // 格式化
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>').replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>').replace(/~~(.*?)~~/g, '<del>$1</del>') // 段落和换行
+            .replace(/\n\n/g, '</p><p class="ai-paragraph">').replace(/\n/g, '<br>');
+
+        // 包装段落
+        if (html && !html.startsWith('<')) {
+            html = '<p class="ai-paragraph">' + html + '</p>';
+        }
+
+        return html;
+    }
+
+    // ================================
+    // 文件上传相关函数
+    // ================================
+
+    // 初始化文件上传功能
+    function initializeFileUpload() {
+        const fileInput = document.getElementById('fileInput');
+        const messageInput = document.getElementById('messageInput');
+        const dragOverlay = document.getElementById('dragOverlay');
+
+        if (!fileInput || !messageInput) {
+            console.warn('文件上传初始化失败：找不到必要元素');
+            return;
+        }
+
+        // 文件选择处理
+        fileInput.addEventListener('change', handleFileSelect);
+
+        // 拖拽上传事件
+        messageInput.addEventListener('dragenter', handleDragEnter);
+        messageInput.addEventListener('dragover', handleDragOver);
+        messageInput.addEventListener('dragleave', handleDragLeave);
+        messageInput.addEventListener('drop', handleFileDrop);
+
+        console.log('✅ 文件上传功能初始化完成');
+    }
+
+    function handleFileSelect(e) {
+        const files = Array.from(e.target.files);
+        processFiles(files);
+        e.target.value = ''; // 清空以允许重复选择
+    }
+
+    let dragCounter = 0;
+
+    function handleDragEnter(e) {
+        e.preventDefault();
+        dragCounter++;
+        showDragOverlay();
+    }
+
+    function handleDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+    }
+
+    function handleDragLeave(e) {
+        e.preventDefault();
+        dragCounter--;
+
+        if (dragCounter === 0) {
+            hideDragOverlay();
+        }
+    }
+
+    function handleFileDrop(e) {
+        e.preventDefault();
+        dragCounter = 0;
+        hideDragOverlay();
+
+        const files = Array.from(e.dataTransfer.files);
+        processFiles(files);
+    }
+
+    function showDragOverlay() {
+        const dragOverlay = document.getElementById('dragOverlay');
+        const messageInput = document.getElementById('messageInput');
+
+        if (dragOverlay) {
+            dragOverlay.classList.add('active');
+        }
+
+        if (messageInput) {
+            messageInput.classList.add('drag-over');
+        }
+    }
+
+    function hideDragOverlay() {
+        const dragOverlay = document.getElementById('dragOverlay');
+        const messageInput = document.getElementById('messageInput');
+
+        if (dragOverlay) {
+            dragOverlay.classList.remove('active');
+        }
+
+        if (messageInput) {
+            messageInput.classList.remove('drag-over');
+        }
+    }
+
+    function processFiles(files) {
+        for (const file of files) {
+            // 验证文件格式
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+
+            if (!ext.match(/\.(txt|md)$/)) {
+                showMessage(`文件 ${file.name
+                    }
+
+                    格式不支持，仅支持 txt 和 md 文件`, 'error');
+                continue;
+            }
+
+            // 验证文件大小
+            if (file.size > 10 * 1024 * 1024) {
+                showMessage(`文件 ${file.name
+                    }
+
+                    过大，最大支持 10MB`, 'error');
+                continue;
+            }
+
+            // 检查是否已存在
+            if (attachedFiles.some(f => f.name === file.name && f.size === file.size)) {
+                showMessage(`文件 ${file.name
+                    }
+
+                    已存在`, 'warning');
+                continue;
+            }
+
+            // 读取文件内容
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                const fileInfo = {
+                    id: Date.now() + Math.random(),
+                    name: file.name,
+                    size: file.size,
+                    content: e.target.result
+                }
+
+                    ;
+
+                attachedFiles.push(fileInfo);
+                updateAttachmentPreview();
+                updateSendButtonState(); // 更新发送按钮状态
+
+                showMessage(`文件 ${file.name
+                    }
+
+                    上传成功`, 'success');
+            }
+
+                ;
+
+            reader.onerror = () => {
+                showMessage(`读取文件 ${file.name
+                    }
+
+                    失败`, 'error');
+            }
+
+                ;
+
+            reader.readAsText(file, 'utf-8');
+        }
+    }
+
+    function updateAttachmentPreview() {
+        const preview = document.getElementById('attachmentPreview');
+        const list = document.getElementById('attachmentList');
+
+        if (!preview || !list) {
+            console.warn('找不到附件预览元素');
+            return;
+        }
+
+        if (attachedFiles.length === 0) {
+            preview.style.display = 'none';
+            return;
+        }
+
+        preview.style.display = 'block';
+
+        list.innerHTML = attachedFiles.map(file => ` <div class="attachment-item" data-file-id="${file.id}" > <div class="attachment-icon" >${file.name.toLowerCase().endsWith('.md') ? 'MD' : 'TXT'
+            }
+
+            </div> <div class="attachment-info" > <div class="attachment-name" >${escapeHtml(file.name)
+            }
+
+            </div> <div class="attachment-size" >${formatFileSize(file.size)
+            }
+
+            </div> </div> <button onclick="removeAttachment(${file.id})" class="remove-attachment" >×</button> </div> `).join('');
+    }
+
+    function removeAttachment(fileId) {
+        console.log('删除附件:', fileId, '当前附件:', attachedFiles.map(f => f.id));
+        attachedFiles = attachedFiles.filter(file => file.id.toString() !== fileId.toString());
+        updateAttachmentPreview();
+        updateSendButtonState(); // 更新发送按钮状态
+        console.log('删除后剩余附件:', attachedFiles.length);
+    }
+
+    function clearAllAttachments() {
+        attachedFiles = [];
+        updateAttachmentPreview();
+        updateSendButtonState(); // 更新发送按钮状态
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B',
+            'KB',
+            'MB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function showMessage(message, type) {
+        const messageEl = document.createElement('div');
+        messageEl.className = 'message ' + type;
+        messageEl.textContent = message;
+        messageEl.style.cssText = ` position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: 4px;
+        color: white;
+        z-index: 1001;
+
+        background-color: ${type === 'success' ? '#28a745' : type === 'warning' ? '#ffc107' : '#dc3545'
+            }
+
+        ;
+
+        border: 1px solid ${type === 'success' ? '#28a745' : type === 'warning' ? '#ffc107' : '#dc3545'
+            }
+
+        ;
+        `;
+
+        document.body.appendChild(messageEl);
+
+        setTimeout(() => {
+            if (document.body.contains(messageEl)) {
+                document.body.removeChild(messageEl);
+            }
+        }
+
+            , 3000);
+    }
+
+</script>
+
+{% endblock %}

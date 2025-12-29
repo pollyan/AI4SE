@@ -20,7 +20,7 @@ communication_language: "{config_source}:communication_language"
 user_skill_level: "{config_source}:user_skill_level"
 document_output_language: "{config_source}:document_output_language"
 date: system-generated
-sprint_artifacts: "{config_source}:sprint_artifacts"
+implementation_artifacts: "{config_source}:implementation_artifacts"
 
 installed_path: "{project-root}/_bmad/bmm/workflows/4-implementation/retrospective"
 template: false
@@ -41,7 +41,7 @@ input_file_patterns:
     load_strategy: "SELECTIVE_LOAD"
   previous_retrospective:
     description: "Previous epic's retrospective (optional)"
-    pattern: "{sprint_artifacts}/**/epic-{{prev_epic_num}}-retro-*.md"
+    pattern: "{implementation_artifacts}/**/epic-{{prev_epic_num}}-retro-*.md"
     load_strategy: "SELECTIVE_LOAD"
   architecture:
     description: "System architecture for context"
@@ -59,9 +59,9 @@ input_file_patterns:
     load_strategy: "INDEX_GUIDED"
 
 # Required files
-sprint_status_file: "{sprint_artifacts}/sprint-status.yaml || {output_folder}/sprint-status.yaml"
-story_directory: "{sprint_artifacts}"
-retrospectives_folder: "{sprint_artifacts}"
+sprint_status_file: "{implementation_artifacts}/sprint-status.yaml || {output_folder}/sprint-status.yaml"
+story_directory: "{implementation_artifacts}"
+retrospectives_folder: "{implementation_artifacts}"
 
 standalone: true
 

@@ -1,0 +1,440 @@
+{% extends "base_layout.html" %}
+
+{% block title %}个人简介 - 安辉{% endblock %}
+
+{% block page_title %}{% endblock %}
+
+{% block page_subtitle %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* 简历页面特有样式 */
+    .profile-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .profile-header {
+        text-align: center;
+        padding: 60px 40px 40px 40px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        border: 1px solid #e8e8e8;
+        border-radius: 8px;
+        margin-bottom: 40px;
+        position: relative;
+    }
+
+    .profile-name {
+        font-size: 42px;
+        font-weight: 300;
+        color: #333333;
+        margin-bottom: 16px;
+        letter-spacing: -1.5px;
+    }
+
+    .profile-title {
+        font-size: 18px;
+        color: #666666;
+        margin-bottom: 24px;
+        font-weight: 400;
+    }
+
+    .profile-contact {
+        display: flex;
+        justify-content: center;
+        gap: 32px;
+        margin-bottom: 30px;
+        flex-wrap: wrap;
+    }
+
+    .contact-item {
+        font-size: 14px;
+        color: #666666;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .contact-label {
+        font-weight: 500;
+        color: #333333;
+    }
+
+    /* New QR Section - Image Only */
+    .qr-section {
+        display: flex;
+        justify-content: center;
+        gap: 32px;
+        margin: 30px 0;
+        padding: 24px;
+        background: rgba(255, 255, 255, 0.5);
+        border-radius: 12px;
+        border: 1px dashed #e0e0e0;
+    }
+
+    .qr-card {
+        background: #ffffff;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid #e8e8e8;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .qr-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .qr-image-wrapper {
+        width: 140px;
+        height: 140px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        border-radius: 4px;
+    }
+
+    .qr-image-wrapper img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    .profile-links {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        margin-top: 20px;
+    }
+
+    .profile-link {
+        font-size: 13px;
+        color: #666666;
+        text-decoration: none;
+        padding: 8px 16px;
+        border: 1px solid #e8e8e8;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+    }
+
+    .profile-link:hover {
+        background: #f8f8f8;
+        border-color: #d0d0d0;
+        color: #333333;
+    }
+
+    .profile-highlight {
+        background: #ffffff;
+        border: 1px solid #e8e8e8;
+        border-radius: 8px;
+        padding: 32px;
+        margin-bottom: 32px;
+    }
+
+    .section-title {
+        font-size: 24px;
+        font-weight: 400;
+        color: #333333;
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #e8e8e8;
+        letter-spacing: -0.8px;
+    }
+
+    .intro-text {
+        font-size: 15px;
+        color: #666666;
+        line-height: 1.8;
+        margin-bottom: 20px;
+    }
+
+    .intro-highlight {
+        font-weight: 500;
+        color: #333333;
+    }
+
+    .competencies-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+        margin-top: 20px;
+    }
+
+    .competency-item {
+        background: #f8f9fa;
+        padding: 16px;
+        border-radius: 6px;
+        border: 1px solid #e8e8e8;
+    }
+
+    .competency-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: #333333;
+        margin-bottom: 8px;
+    }
+
+    .competency-content {
+        font-size: 13px;
+        color: #666666;
+        line-height: 1.6;
+    }
+
+    .achievements-section {
+        background: #ffffff;
+        border: 1px solid #e8e8e8;
+        border-radius: 8px;
+        padding: 32px;
+        margin-bottom: 32px;
+    }
+
+    .achievement-category {
+        margin-bottom: 24px;
+    }
+
+    .achievement-category:last-child {
+        margin-bottom: 0;
+    }
+
+    .category-title {
+        font-size: 15px;
+        font-weight: 500;
+        color: #333333;
+        margin-bottom: 12px;
+    }
+
+    .achievement-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .achievement-item {
+        padding-left: 20px;
+        margin-bottom: 8px;
+        position: relative;
+        font-size: 14px;
+        color: #666666;
+        line-height: 1.6;
+    }
+
+    .achievement-item::before {
+        content: '•';
+        position: absolute;
+        left: 0;
+        color: #333333;
+        font-weight: 600;
+    }
+
+    .achievement-link {
+        color: #666666;
+        text-decoration: none;
+        border-bottom: 1px solid #e8e8e8;
+        transition: all 0.2s ease;
+    }
+
+    .achievement-link:hover {
+        color: #333333;
+        border-bottom-color: #333333;
+    }
+
+    .certifications-section,
+    .education-section {
+        background: #ffffff;
+        border: 1px solid #e8e8e8;
+        border-radius: 8px;
+        padding: 32px;
+        margin-bottom: 32px;
+    }
+
+    .cert-list,
+    .edu-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .cert-item,
+    .edu-item {
+        padding-left: 20px;
+        margin-bottom: 8px;
+        position: relative;
+        font-size: 14px;
+        color: #666666;
+        line-height: 1.6;
+    }
+
+    .cert-item::before,
+    .edu-item::before {
+        content: '•';
+        position: absolute;
+        left: 0;
+        color: #333333;
+        font-weight: 600;
+    }
+
+    /* 响应式设计 */
+    @media (max-width: 768px) {
+        .profile-header {
+            padding: 40px 24px 32px 24px;
+        }
+
+        .qr-section {
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .profile-name {
+            font-size: 32px;
+        }
+
+        .profile-title {
+            font-size: 16px;
+        }
+
+        .profile-contact {
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .competencies-grid {
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+
+        .profile-highlight,
+        .achievements-section,
+        .certifications-section,
+        .education-section {
+            padding: 24px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="profile-container">
+    <!-- 个人信息头部 -->
+    <div class="profile-header">
+        <h1 class="profile-name">安辉</h1>
+        <p class="profile-title">AI 产品经理 | AI 解决方案专家 | 资深技术咨询</p>
+
+        <div class="profile-contact">
+            <div class="contact-item">
+                <span class="contact-label">电话：</span>
+                <span>18910027087</span>
+            </div>
+            <div class="contact-item">
+                <span class="contact-label">邮箱：</span>
+                <span>pollyan@163.com</span>
+            </div>
+        </div>
+
+        <!-- QR Code Section -->
+        <div class="qr-section">
+            <div class="qr-card">
+                <div class="qr-image-wrapper">
+                    <img src="/static/wechat-qr.jpg" alt="个人微信" title="扫码添加个人微信">
+                </div>
+            </div>
+
+            <div class="qr-card">
+                <div class="qr-image-wrapper">
+                    <img src="/static/wechat_oa_qr.png" alt="公众号" title="扫码关注公众号: IT老兵-大头">
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 24px; font-size: 14px; color: #666666; line-height: 1.6;">
+            <strong style="color: #333333;">核心优势：</strong>19 年研发与管理经验 | 14 年 ThoughtWorks 咨询背景 | 精通 AI4SE | 具备由 0 到 1
+            的产品规划与百人团队交付能力
+        </div>
+    </div>
+
+    <!-- 个人简介 -->
+    <div class="profile-highlight">
+        <h2 class="section-title">个人简介</h2>
+        <p class="intro-text">
+            <span class="intro-highlight">具备"工程思维"的实战型 AI 产品专家</span>。
+            拥有 19 年软件研发经验，近 14 年任职于全球顶尖咨询公司 <strong>ThoughtWorks</strong>。近年来深耕 <strong>AI4SE（AI 赋能软件工程）</strong>
+            领域，致力于将 LLM、Agent 等前沿技术转化为企业级生产力工具。
+        </p>
+        <ul class="achievement-list">
+            <li class="achievement-item"><strong>AI 落地能力：</strong>不仅理解 AI 理论，更具备动手构建 AI Agent、编写复杂 Prompt、开发 AI
+                辅助工具（Vibe Coding）的实战能力。</li>
+            <li class="achievement-item">
+                <strong>产品与商业化：</strong>具备成熟的产品经理方法论（用户画像、MVP、Roadmap），曾主导联想百人规模全球交付项目的产品全生命周期管理。
+            </li>
+            <li class="achievement-item"><strong>咨询与赋能：</strong>擅长通过 Design Thinking
+                和敏捷方法论，帮助企业（如银行、大疆）重构研发价值流，具备极强的用户需求洞察与业务分析（BA）能力。</li>
+        </ul>
+    </div>
+
+    <!-- 核心技能 -->
+    <div class="profile-highlight">
+        <h2 class="section-title">核心技能</h2>
+        <div class="competencies-grid">
+            <div class="competency-item">
+                <div class="competency-title">AI 技术栈</div>
+                <div class="competency-content">LLM 应用落地、Prompt Engineering、RAG、AI Agent 设计、AI4SE 工具链规划</div>
+            </div>
+            <div class="competency-item">
+                <div class="competency-title">产品技能</div>
+                <div class="competency-content">产品战略与投资组合管理、竞品分析、用户故事（User Story）、MVP 规划、产品路线图（Roadmap）、数据度量体系建设</div>
+            </div>
+            <div class="competency-item">
+                <div class="competency-title">研发管理</div>
+                <div class="competency-content">Scrum/Kanban/SAFe、BizDevOps、百人团队管理、跨国协作</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 重点 AI 与技术成果 -->
+    <div class="achievements-section">
+        <h2 class="section-title">重点 AI 与技术成果（个人与社区）</h2>
+
+        <div class="achievement-category">
+            <div class="category-title">原创行业洞见发表</div>
+            <ul class="achievement-list">
+                <li class="achievement-item">
+                    <a href="https://mp.weixin.qq.com/s/rGOmGJF3ptFPw15h0nUI2g" target="_blank"
+                        class="achievement-link">元提示词驱动：领域专家级 AI Agent 的构建框架</a>
+                </li>
+                <li class="achievement-item">
+                    <a href="https://mp.weixin.qq.com/s/CBUn4MV7zz61fuMRStIw-g" target="_blank"
+                        class="achievement-link">从氛围编程到规约驱动：AI 时代的工程纪律回归</a>
+                </li>
+                <li class="achievement-item">
+                    <a href="https://mp.weixin.qq.com/s/fRoYm3R58VNBNKzQ5go2Uw" target="_blank"
+                        class="achievement-link">ThoughtWorks洞见《AI 自动化测试新范式："意图驱动"》</a>
+                </li>
+                <li class="achievement-item">
+                    <a href="https://zhuanlan.zhihu.com/p/389339077" target="_blank"
+                        class="achievement-link">ThoughtWorks洞见《敏捷转型中的敏态与稳态》</a>
+                </li>
+                <li class="achievement-item">
+                    <a href="https://mp.weixin.qq.com/s/6qtjW_DL7eSXu-4Kc4z29A" target="_blank"
+                        class="achievement-link">ThoughtWorks洞见《测试分层策略实践模型》</a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="achievement-category">
+            <div class="category-title">独立开发 AI 工具</div>
+            <ul class="achievement-list">
+                <li class="achievement-item">
+                    构建 <a href="https://intent-test-framework.vercel.app/requirements-analyzer" target="_blank"
+                        class="achievement-link">产品经理与测试专家智能体</a>，基于 LangGraph 探索产品经理与测试专家智能体开发。
+                </li>
+                <li class="achievement-item">
+                    构建 <a href="https://intent-test-framework.vercel.app/testcases" target="_blank"
+                        class="achievement-link">Intent Test Framework</a>，探索基于"意图驱动"的 AI 测试生成框架。
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
