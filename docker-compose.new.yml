@@ -1,0 +1,123 @@
+version: '3.8'
+
+# 统一的 Docker Compose 配置
+# 包含：Nginx 网关、意图测试工具、AI 智能体、PostgreSQL
+
+services:
+  # PostgreSQL 数据库（共享）
+  postgres:
+    image: postgres:15-alpine
+    container_name: ai4se-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai4se
+      POSTGRES_USER: ${DB_USER:-ai4se_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_in_production}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-ai4se_user}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai4se-network
+
+  # 意图测试工具应用
+  intent-tester:
+    build:
+      context: .
+      dockerfile: tools/intent-tester/docker/Dockerfile
+
+    container_name: ai4se-intent-tester
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-ai4se_user}:${DB_PASSWORD:-change_me_in_production}@postgres:5432/ai4se
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-please-change}
+      - MIDSCENE_SERVER_URL=http://host.docker.internal:3001
+      - FLASK_ENV=${FLASK_ENV:-production}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
+      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-intent-test-framework}
+
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./tools/intent-tester/frontend/static/screenshots:/app/frontend/static/screenshots
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import requests; requests.get('http://localhost:5001/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ai4se-network
+
+  # AI 智能体应用
+  ai-agents:
+    build:
+      context: .
+      dockerfile: tools/ai-agents/docker/Dockerfile
+
+    container_name: ai4se-agents
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-ai4se_user}:${DB_PASSWORD:-change_me_in_production}@postgres:5432/ai4se
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-please-change}
+      - FLASK_ENV=${FLASK_ENV:-production}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
+      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-ai-agents}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+
+    ports:
+      - "5002:5002"
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import requests; requests.get('http://localhost:5002/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ai4se-network
+
+  # Nginx 反向代理（统一入口）
+  nginx:
+    image: nginx:alpine
+    container_name: ai4se-gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./tools/frontend/public:/app/tools/frontend/public:ro
+    depends_on:
+      - intent-tester
+      - ai-agents
+    networks:
+      - ai4se-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  ai4se-network:
+    name: ai4se-network

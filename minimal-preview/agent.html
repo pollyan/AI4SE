@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AI 专家智能体工作台</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries,typography"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              gray: {
+                50: '#f9fafb',
+                100: '#f3f4f6',
+                200: '#e5e7eb',
+                300: '#d1d5db',
+                400: '#9ca3af',
+                500: '#6b7280',
+                600: '#4b5563',
+                700: '#374151',
+                800: '#1f2937',
+                900: '#111827',
+                950: '#030712',
+              },
+              primary: {
+                DEFAULT: '#000000', 
+                hover: '#333333',
+              },
+            },
+            fontFamily: {
+              sans: ["Inter", "PingFang SC", "Microsoft YaHei", "sans-serif"],
+              mono: ["JetBrains Mono", "monospace"],
+            },
+            boxShadow: {
+                'sm': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                'card': '0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02)',
+            },
+            cursor: {
+                'col-resize': 'col-resize',
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #e5e7eb;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #d1d5db;
+        }
+        .mermaid-node {
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 8px 16px;
+            background-color: white;
+            color: #111827;
+            font-size: 12px;
+            font-weight: 500;
+            display: inline-block;
+            position: relative;
+            z-index: 10;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .zoom-overlay {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(2px);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .group:hover .zoom-overlay {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="font-sans bg-white text-gray-900 flex flex-col h-screen overflow-hidden selection:bg-gray-200">
+<header class="flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3 shrink-0 z-30">
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2">
+<div class="size-8 bg-black rounded-lg flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-[20px]">deployed_code</span>
+</div>
+<span class="font-semibold text-sm tracking-tight text-gray-900">AI 工具集</span>
+</div>
+<div class="hidden md:flex items-center text-sm gap-2">
+<span class="text-gray-300">/</span>
+<span class="text-gray-500 font-medium">专家智能体</span>
+<span class="text-gray-300">/</span>
+<span class="text-gray-900 font-medium">金融科技需求分析</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-3">
+<button class="text-gray-500 hover:text-gray-900 transition-colors">
+<span class="material-symbols-outlined text-[20px]">history</span>
+</button>
+<button class="text-gray-500 hover:text-gray-900 transition-colors">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+</button>
+<div class="size-8 rounded-full bg-gray-200 border border-gray-200 overflow-hidden ml-2" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCxTfArh3lO2qXy4lPSyH8mCkIwO77PwHHx4jDLK1ZCqUAGHoa6i3ZBxq4UUmz18lZHclBTk9etxbEzx3GDodIVV71zL8FCGg2Pi2CLdizyy1RZg9RwOGFLPNmmWZVm2bqftGhXOXD5nxNMp7r5y3faGoJXPiSMHSnAZFv4IzfwyG881LBO2MU6Ng14Hj6ZCVe3a0s_XHRsGPGFI9NyPorvlhCaZgbVHWukeaTAzy-rzToAiNuxneoeIhrx6GExc7fBw9fPjdd8cLI"); background-size: cover;'></div>
+</div>
+</div>
+</header>
+<main class="flex flex-1 overflow-hidden relative">
+<section class="flex flex-col w-[500px] min-w-[320px] max-w-[50vw] bg-[#FAFAFA] relative z-10 border-r border-gray-200">
+<div class="px-5 py-4 border-b border-gray-100 bg-white shrink-0">
+<div class="flex items-center gap-3">
+<button class="group flex items-center gap-3 flex-1 text-left bg-white border border-gray-200 hover:border-gray-300 hover:shadow-sm rounded-xl px-3 py-2 transition-all">
+<div class="size-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
+<span class="material-symbols-outlined">smart_toy</span>
+</div>
+<div class="flex flex-col flex-1 min-w-0">
+<span class="text-[10px] font-bold text-gray-400 tracking-wider uppercase">智能体角色</span>
+<div class="flex items-center justify-between">
+<div class="flex items-baseline gap-2 overflow-hidden">
+<span class="text-sm font-bold text-gray-900 truncate">Lisa</span>
+<span class="text-xs text-gray-500 truncate">业务分析师</span>
+</div>
+<span class="material-symbols-outlined text-gray-400 text-[18px]">expand_more</span>
+</div>
+</div>
+</button>
+<button class="bg-black hover:bg-gray-800 text-white rounded-lg px-3 h-8 flex items-center justify-center gap-1.5 transition-all shadow-sm shrink-0">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span class="text-xs font-medium whitespace-nowrap">新对话</span>
+</button>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col gap-6 scroll-smooth">
+<div class="flex justify-center mb-2">
+<span class="text-[10px] font-medium text-gray-400 uppercase tracking-widest">今天</span>
+</div>
+<div class="flex gap-4 group">
+<div class="size-8 rounded-full bg-white border border-gray-200 flex items-center justify-center shrink-0 shadow-sm text-gray-700 mt-1">
+<span class="material-symbols-outlined text-[16px]">smart_toy</span>
+</div>
+<div class="flex flex-col gap-1 max-w-[90%]">
+<div class="flex items-center gap-2">
+<span class="text-xs font-semibold text-gray-900">Lisa</span>
+<span class="text-[10px] text-gray-400">10:23 AM</span>
+</div>
+<div class="bg-white border border-gray-200 p-3.5 rounded-2xl rounded-tl-sm shadow-sm text-sm text-gray-700 leading-relaxed">
+<p>你好！我是你的业务分析专家。请描述你想实现的功能，我会为你起草需求文档，并可以绘制图表和格式化规范。</p>
+</div>
+</div>
+</div>
+<div class="flex gap-4 flex-row-reverse group">
+<div class="size-8 rounded-full bg-gray-900 flex items-center justify-center shrink-0 mt-1 overflow-hidden border border-transparent">
+<div class="w-full h-full bg-cover" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDP3iuamX5ARrh-mKBJd5P9TrcKYvqHI-sJhSW812blr4L0wbtleOX8kF33fNlF027CPPTqK0sBYu-vQyeD-ubDR4hskyVVe-Wrui06FJGHQlZt2jweKzJUCfHoCyYGSv248F3_AeSm9pPEU_EZBveYRmL6nFA0BiGURCxJhkZ3wb2DDGmk6r6WMCCuI5uAY_-evNYGjF04MLPUcmp-611UlRSc4howe0McBEg17xPFo7LEDLmENxeqdkwdK6jJhTyQbdmb92T6_RY");'></div>
+</div>
+<div class="flex flex-col gap-1 max-w-[90%] items-end">
+<div class="flex items-center gap-2 flex-row-reverse">
+<span class="text-xs font-semibold text-gray-900">你</span>
+<span class="text-[10px] text-gray-400">10:25 AM</span>
+</div>
+<div class="bg-black text-white p-3.5 rounded-2xl rounded-tr-sm shadow-md text-sm leading-relaxed text-right md:text-left">
+<p>请帮我定义登录接口的请求数据结构（JSON格式），另外，能不能对比一下临时锁定和永久锁定这两种策略的区别？</p>
+</div>
+</div>
+</div>
+<div class="flex gap-4 group">
+<div class="size-8 rounded-full bg-white border border-gray-200 flex items-center justify-center shrink-0 shadow-sm text-gray-700 mt-1">
+<span class="material-symbols-outlined text-[16px]">smart_toy</span>
+</div>
+<div class="flex flex-col gap-1 max-w-[95%]">
+<div class="flex items-center gap-2">
+<span class="text-xs font-semibold text-gray-900">Lisa</span>
+<span class="text-[10px] text-gray-400">10:26 AM</span>
+</div>
+<div class="bg-white border border-gray-200 p-4 rounded-2xl rounded-tl-sm shadow-sm text-sm text-gray-700 leading-relaxed space-y-4">
+<p>好的，已为您生成 <strong class="text-gray-900">登录验证 API</strong> 的技术规范草案。建议后端接口路径定为 <code class="bg-gray-100 px-1 py-0.5 rounded text-pink-600 font-mono text-xs">POST /api/auth/login</code>，重点内容如下：</p>
+<div class="space-y-1.5">
+<div class="flex items-center justify-between px-1">
+<span class="text-xs font-bold text-gray-900">请求体定义 (Request Payload)</span>
+<span class="text-[10px] font-mono text-gray-400">TypeScript / JSON</span>
+</div>
+<div class="bg-[#1e1e1e] rounded-lg p-3 overflow-x-auto shadow-inner border border-gray-800 relative group/code">
+<button class="absolute top-2 right-2 text-gray-500 hover:text-gray-300 opacity-0 group-hover/code:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-[16px]">content_copy</span>
+</button>
+<pre class="font-mono text-xs leading-5 text-gray-300"><code><span class="text-purple-400">interface</span> <span class="text-yellow-200">LoginRequest</span> {
+  <span class="text-blue-400">email</span>: <span class="text-green-400">string</span>;      <span class="text-gray-500">// 用户注册邮箱</span>
+  <span class="text-blue-400">password</span>: <span class="text-green-400">string</span>;   <span class="text-gray-500">// SHA-256 哈希值</span>
+  <span class="text-blue-400">device_id</span>: <span class="text-green-400">string</span>;  <span class="text-gray-500">// 设备指纹 ID</span>
+}</code></pre>
+</div>
+</div>
+<div class="space-y-2">
+<span class="text-xs font-bold text-gray-900 px-1">安全策略对比表</span>
+<div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+<table class="w-full text-left text-xs">
+<thead class="bg-gray-50 border-b border-gray-200 text-gray-500 font-medium">
+<tr>
+<th class="px-3 py-2 w-[30%]">策略类型</th>
+<th class="px-3 py-2 w-[30%]">触发阈值</th>
+<th class="px-3 py-2 w-[40%]">恢复机制</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-gray-100 bg-white">
+<tr>
+<td class="px-3 py-2 font-medium text-gray-900">临时锁定 (Soft)</td>
+<td class="px-3 py-2 text-gray-600">5 次/分</td>
+<td class="px-3 py-2 text-gray-600">自动恢复 (30分钟)</td>
+</tr>
+<tr>
+<td class="px-3 py-2 font-medium text-gray-900">永久锁定 (Hard)</td>
+<td class="px-3 py-2 text-gray-600">10 次累计</td>
+<td class="px-3 py-2 text-blue-600 cursor-pointer hover:underline font-medium">需管理员重置</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="space-y-1">
+<span class="text-xs font-bold text-gray-900 px-1 block mb-1">关键状态码说明：</span>
+<ul class="list-disc pl-5 space-y-1 text-gray-600 marker:text-gray-300">
+<li><code class="text-[11px] bg-red-50 text-red-600 px-1 py-0.5 rounded border border-red-100 font-mono">401</code> 认证失败 (密码错误)</li>
+<li><code class="text-[11px] bg-orange-50 text-orange-600 px-1 py-0.5 rounded border border-orange-100 font-mono">403</code> 账户已被锁定</li>
+<li><code class="text-[11px] bg-green-50 text-green-600 px-1 py-0.5 rounded border border-green-100 font-mono">200</code> 登录成功，返回 JWT</li>
+</ul>
+</div>
+<div class="flex gap-2.5 p-3 bg-yellow-50 border border-yellow-100 rounded-lg items-start">
+<span class="material-symbols-outlined text-yellow-600 text-[18px] shrink-0 mt-0.5">warning</span>
+<p class="text-xs text-yellow-800 leading-relaxed">
+<span class="font-bold text-yellow-900">注意：</span> 为了防止撞库攻击，建议在生产环境中配合 CDN 层的 WAF 防火墙使用。
+                            </p>
+</div>
+</div>
+</div>
+</div>
+<div class="h-4"></div>
+</div>
+<div class="p-4 bg-white border-t border-gray-200 z-10">
+<div class="relative group shadow-sm rounded-xl">
+<textarea class="w-full bg-white border border-gray-200 rounded-xl pl-4 pr-12 py-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none resize-none text-gray-900 placeholder-gray-400 min-h-[56px] transition-shadow" placeholder="回复 Lisa..." rows="1"></textarea>
+<div class="absolute bottom-2 right-2">
+<button class="size-8 bg-black hover:bg-gray-800 text-white rounded-lg transition-colors flex items-center justify-center shadow-md">
+<span class="material-symbols-outlined text-[18px]">arrow_upward</span>
+</button>
+</div>
+</div>
+<div class="flex items-center justify-between mt-2 px-1">
+<div class="flex gap-2">
+<button class="p-1 text-gray-400 hover:text-gray-600 rounded transition-colors" title="Attach">
+<span class="material-symbols-outlined text-[18px]">attach_file</span>
+</button>
+<button class="p-1 text-gray-400 hover:text-gray-600 rounded transition-colors" title="Use Microphone">
+<span class="material-symbols-outlined text-[18px]">mic</span>
+</button>
+</div>
+<span class="text-[10px] text-gray-400">AI 可能会犯错，请核对重要信息。</span>
+</div>
+</div>
+</section>
+<div class="w-1 bg-gray-200 hover:bg-blue-500 cursor-col-resize flex-shrink-0 transition-colors z-20 hover:w-1.5 active:bg-blue-600 relative group" title="拖动调整宽度">
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+<div class="w-0.5 h-4 bg-white rounded-full"></div>
+</div>
+</div>
+<section class="flex flex-col flex-1 min-w-0 bg-white relative">
+<div class="h-12 border-b border-gray-100 flex items-center justify-between px-6 bg-white shrink-0">
+<div class="flex items-center h-full gap-1 overflow-x-auto no-scrollbar mask-gradient-r">
+<button class="group relative h-full px-4 flex items-center justify-center text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors border-b-2 border-transparent hover:border-gray-200 whitespace-nowrap">
+<span>v1.0 初稿</span>
+</button>
+<button class="group relative h-full px-4 flex items-center justify-center text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors border-b-2 border-transparent hover:border-gray-200 whitespace-nowrap">
+<span>v1.1 需求细化</span>
+</button>
+<button class="group relative h-full px-4 flex items-center justify-center text-xs font-bold text-gray-900 bg-gray-50 border-x border-gray-100 whitespace-nowrap">
+<span class="flex items-center gap-2">
+                            v1.2 规格定稿
+                            <span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+</span>
+</span>
+<span class="absolute bottom-[-1px] left-0 w-full h-0.5 bg-black"></span>
+</button>
+</div>
+<div class="flex gap-4 items-center">
+<div class="hidden lg:flex items-center gap-3 pr-4 border-r border-gray-200 text-[10px] font-medium text-gray-500">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-green-100 border border-green-400"></span>
+<span>新增 <span class="text-gray-400 font-normal ml-0.5">4</span></span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-yellow-100 border border-yellow-400"></span>
+<span>修改 <span class="text-gray-400 font-normal ml-0.5">2</span></span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-red-50 border border-red-400 relative overflow-hidden">
+<span class="absolute top-1/2 left-0 w-full h-px bg-red-400 -translate-y-1/2 rotate-[-45deg]"></span>
+</span>
+<span>删除 <span class="text-gray-400 font-normal ml-0.5">1</span></span>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-md hover:bg-gray-50 hover:text-gray-900 transition-colors">
+<span class="material-symbols-outlined text-[16px]">download</span>
+                            导出
+                        </button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-black border border-black rounded-md hover:bg-gray-800 transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[16px]">content_copy</span>
+                            复制
+                        </button>
+</div>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto bg-white p-8 md:px-12">
+<div class="max-w-4xl mx-auto">
+<div class="mb-10 pb-6 border-b border-gray-100">
+<h1 class="font-sans text-3xl font-bold text-gray-900 tracking-tight mb-3">功能规格说明书：金融科技登录模块</h1>
+<div class="flex items-center gap-3 text-xs text-gray-500 font-mono">
+<span class="bg-gray-100 px-2 py-1 rounded text-gray-600">v1.2</span>
+<span>SHA: <span class="text-gray-400">8f3a2c</span></span>
+<span>•</span>
+<span>对比版本 v1.1</span>
+</div>
+</div>
+<div class="space-y-8 font-sans">
+<section class="group">
+<h2 class="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                1. 概述
+                            </h2>
+<p class="text-sm leading-7 text-gray-600">
+                                本文档概述了金融科技应用程序用户认证系统的功能需求。目标是提供安全、合规且用户友好的登录体验。
+                            </p>
+</section>
+<section>
+<h2 class="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                2. 认证流程
+                            </h2>
+<p class="text-sm leading-7 text-gray-600 mb-4">
+                                登录过程需要验证邮箱和密码，<span class="bg-yellow-100 text-yellow-800 px-1 mx-0.5 rounded" title="修改内容">随后进行强制性的第二因素认证 (2FA)</span>。系统将优先使用生物识别技术（如果可用）。
+                            </p>
+<div class="bg-white border border-gray-200 rounded-md p-4 shadow-sm">
+<h3 class="font-semibold text-sm text-gray-900 mb-2">2.1 多因素认证 (MFA)</h3>
+<ul class="list-disc pl-5 text-sm text-gray-600 space-y-2 marker:text-gray-300">
+<li>用户必须通过<span class="bg-green-100 text-green-800 px-1 mx-0.5 rounded" title="新增内容">身份验证器应用 (Authenticator App)</span>或短信验证码验证身份。</li>
+<li>
+<span class="line-through decoration-red-500 text-red-500 bg-red-50 px-1 rounded mx-0.5" title="删除内容">OTP 在 120 秒后过期。</span>
+<span class="bg-green-100 text-green-800 px-1 mx-0.5 rounded" title="新增内容">OTP 有效期缩短为 60 秒。</span>
+</li>
+<li>30 秒后可使用“重新发送验证码”功能。</li>
+</ul>
+</div>
+</section>
+<section class="relative">
+<div class="absolute -left-5 top-1 bottom-1 w-0.5 bg-green-200"></div>
+<h2 class="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+<span class="bg-green-100 text-green-900 px-1.5 py-0.5 rounded border border-green-200">3. 安全协议</span>
+</h2>
+<div class="bg-green-50/40 rounded-lg p-5 border border-green-100 shadow-sm">
+<h4 class="font-semibold text-sm text-gray-900 mb-2">3.1 账户锁定策略</h4>
+<p class="text-sm text-gray-600 mb-3"><span class="bg-green-100 text-green-800 px-1 rounded">为防止暴力破解攻击，系统将执行以下规则：</span></p>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+<div class="bg-white p-3 rounded border border-green-100 shadow-sm">
+<span class="block text-xs text-gray-500 uppercase font-bold mb-1">阈值</span>
+<span class="text-sm font-medium text-gray-900">5 次失败尝试</span>
+</div>
+<div class="bg-white p-3 rounded border border-green-100 shadow-sm">
+<span class="block text-xs text-gray-500 uppercase font-bold mb-1">锁定时长</span>
+<span class="text-sm font-medium text-gray-900">30 分钟</span>
+</div>
+<div class="bg-white p-3 rounded border border-green-100 shadow-sm">
+<span class="block text-xs text-gray-500 uppercase font-bold mb-1">警报</span>
+<span class="text-sm font-medium text-gray-900">发送邮件通知用户</span>
+</div>
+</div>
+</div>
+</section>
+<section class="opacity-70 hover:opacity-100 transition-opacity">
+<h2 class="text-lg font-bold text-gray-400 mb-2 line-through decoration-red-400 decoration-2">
+                                4. 社交登录
+                            </h2>
+<div class="bg-red-50/50 p-4 rounded-lg border border-red-100 text-red-800 text-sm leading-relaxed">
+<p class="line-through decoration-red-400">
+                                    用户可选择使用 Google 或 Facebook OAuth 提供商登录。此功能在 MVP 阶段暂缓开发，以降低第三方依赖风险。
+                                </p>
+<span class="inline-block mt-2 text-[10px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded uppercase tracking-wider border border-red-200">已删除</span>
+</div>
+</section>
+</div>
+<div class="h-20"></div>
+</div>
+</div>
+</section>
+</main>
+<div class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" id="image-modal">
+<div class="bg-white rounded-lg shadow-2xl w-full max-w-5xl h-[80vh] flex flex-col overflow-hidden relative animate-in fade-in zoom-in duration-200">
+<div class="flex items-center justify-between p-4 border-b border-gray-100">
+<h3 class="font-semibold text-gray-900">时序图预览</h3>
+<button class="p-1 hover:bg-gray-100 rounded-full transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="flex-1 bg-gray-50 flex items-center justify-center p-8 overflow-auto">
+<div class="mermaid-node scale-150">用户</div>
+</div>
+</div>
+</div>
+</body></html>

@@ -28,7 +28,7 @@ RUN npm ci --only=production
 RUN npx playwright install chromium
 
 # 复制应用代码
-COPY midscene_server.js .
+COPY tools/intent-tester/browser-automation/midscene_server.js .
 COPY .env.example .env.example
 
 # 暴露端口
