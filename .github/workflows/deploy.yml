@@ -6,6 +6,22 @@ on:
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: '跳过测试直接部署 (仅用于紧急修复)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      environment:
+        description: '部署环境'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - 'production'
 
 jobs:
   # ====================================
@@ -89,7 +105,10 @@ jobs:
     name: Build and Deploy to Tencent Cloud
     needs: [api-test, proxy-test]  # 必须等待所有测试完成且成功
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    environment:
+      name: production
+      url: http://www.datou212.tech
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
     
     steps:
     - name: 📥 Checkout code
