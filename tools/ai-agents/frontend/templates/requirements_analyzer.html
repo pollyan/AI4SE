@@ -2754,7 +2754,7 @@
             助手的bundle...`);
 
             // 获取助手的bundle内容
-            const bundleResponse = await axios.get(`/api/requirements/assistants/${currentAssistant.id}/bundle`);
+            const bundleResponse = await axios.get(`/ai-agents/api/requirements/assistants/${currentAssistant.id}/bundle`);
 
             console.log('Bundle API响应:', bundleResponse.data);
 
@@ -3060,7 +3060,7 @@
     // 检查AI配置是否存在
     async function checkAIConfiguration() {
         try {
-            const response = await axios.get('/api/ai-configs');
+            const response = await axios.get('/ai-agents/api/ai-configs');
             console.log('AI配置检查响应:', response.data); // 调试日志
 
             // 详细检查响应结构
