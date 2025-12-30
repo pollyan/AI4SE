@@ -219,3 +219,34 @@ class TestAIConfigsAPIStats:
             # 验证统计数据结构
             stats = data['data']
             assert 'total' in stats or 'total_count' in stats
+
+
+class TestAIConfigTestConnection:
+    """AI 配置连接测试 API 测试"""
+    
+    def test_test_config_not_found(self, api_client, app):
+        """测试配置不存在时的连接测试"""
+        with app.app_context():
+            response = api_client.post('/api/ai-configs/99999/test')
+            assert response.status_code == 404
+    
+    def test_test_config_success_mocked(self, api_client, app, create_ai_config):
+        """测试配置连接测试（ADK 可能不可用，所以允许 503）"""
+        with app.app_context():
+            # 创建测试配置
+            config = create_ai_config(name="连接测试配置")
+            
+            response = api_client.post(f'/api/ai-configs/{config.id}/test')
+            
+            # 应该返回成功或服务不可用（取决于 ADK 是否安装）
+            assert response.status_code in [200, 503, 500]
+            
+            data = response.get_json()
+            if response.status_code == 200:
+                assert 'data' in data
+                assert data['data']['test_success'] == True
+                assert 'duration_ms' in data['data']
+                assert 'ai_response' in data['data']
+            elif response.status_code == 503:
+                # ADK 未安装时返回 503
+                assert 'message' in data

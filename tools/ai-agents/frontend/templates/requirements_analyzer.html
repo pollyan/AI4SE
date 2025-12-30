@@ -2034,65 +2034,7 @@
         }
     }
 
-    // 轮询获取新消息（Vercel环境专用）
-    let lastMessageTimestamp = null;
-    let pollingInterval = null;
 
-    function startMessagePolling() {
-        if (pollingInterval) {
-            clearInterval(pollingInterval);
-        }
-
-        pollingInterval = setInterval(async () => {
-            try {
-                const params = new URLSearchParams();
-
-                if (lastMessageTimestamp) {
-                    params.append('since', lastMessageTimestamp);
-                }
-
-                params.append('limit', '10');
-
-                const response = await axios.get(`/ai-agents/api/requirements/sessions/${currentSessionId}/poll-messages?${params}`);
-
-                if (response.data.code === 200) {
-                    const messages = response.data.data.messages;
-
-                    messages.forEach(message => {
-                        displayMessage(message);
-                        lastMessageTimestamp = message.created_at;
-
-                        // 如果是AI消息且助手已初始化，更新连接状态
-                        if (message.message_type === 'ai' && currentAssistant) {
-                            const assistantName = currentAssistant.name;
-
-                            updateConnectionStatus('connected', `AI助手${assistantName
-                                }
-
-                                        已激活`);
-                            hideAiTyping();
-                            // 设置AI助手已初始化
-                            isAIAssistantInitialized = true;
-                            updateSendButtonState();
-                        }
-                    });
-                }
-            }
-
-            catch (error) {
-                console.error('轮询消息失败:', error);
-            }
-        }
-
-            , 2000); // 每2秒轮询一次
-    }
-
-    function stopMessagePolling() {
-        if (pollingInterval) {
-            clearInterval(pollingInterval);
-            pollingInterval = null;
-        }
-    }
 
     // WebSocket连接（本地环境）
     function initializeWebSocket() {

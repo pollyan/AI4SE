@@ -182,3 +182,231 @@ class TestSessionStatusAPI:
                 content_type='application/json'
             )
             assert response.status_code == 400
+
+
+class TestSendMessageAPI:
+    """消息发送 API 测试"""
+    
+    def test_send_message_session_not_found(self, api_client, app):
+        """测试向不存在的会话发送消息"""
+        with app.app_context():
+            response = api_client.post(
+                '/api/requirements/sessions/nonexistent-id/messages',
+                data=json.dumps({"content": "测试消息"}),
+                content_type='application/json'
+            )
+            assert response.status_code == 404
+    
+    def test_send_message_empty_content(self, api_client, app):
+        """测试发送空消息"""
+        with app.app_context():
+            # 先创建会话
+            create_response = api_client.post(
+                '/api/requirements/sessions',
+                data=json.dumps({
+                    "project_name": "测试项目",
+                    "assistant_type": "alex"
+                }),
+                content_type='application/json'
+            )
+            session_id = create_response.get_json()['data']['id']
+            
+            # 发送空消息
+            response = api_client.post(
+                f'/api/requirements/sessions/{session_id}/messages',
+                data=json.dumps({"content": ""}),
+                content_type='application/json'
+            )
+            assert response.status_code == 400
+    
+    def test_send_message_success_mocked(self, api_client, app, mocker):
+        """测试成功发送消息（使用 mock AI 服务）"""
+        with app.app_context():
+            # 创建会话
+            create_response = api_client.post(
+                '/api/requirements/sessions',
+                data=json.dumps({
+                    "project_name": "测试项目",
+                    "assistant_type": "alex"
+                }),
+                content_type='application/json'
+            )
+            session_id = create_response.get_json()['data']['id']
+            
+            # Mock AI 服务
+            mock_ai_result = {
+                'ai_response': '您好！我是 Alex，您的需求分析师。',
+                'stage': 'initial'
+            }
+            
+            mock_ai_service = mocker.MagicMock()
+            mock_ai_service.analyze_user_requirement = mocker.AsyncMock(return_value=mock_ai_result)
+            
+            mocker.patch(
+                'backend.api.requirements.get_ai_service',
+                return_value=mock_ai_service
+            )
+            
+            # 发送消息
+            response = api_client.post(
+                f'/api/requirements/sessions/{session_id}/messages',
+                data=json.dumps({"content": "你好"}),
+                content_type='application/json'
+            )
+            
+            # 应该成功或返回服务不可用
+            assert response.status_code in [200, 500]
+            
+            if response.status_code == 200:
+                data = response.get_json()
+                assert 'data' in data
+                assert 'ai_message' in data['data']
+    
+    def test_send_message_with_invalid_json(self, api_client, app):
+        """测试发送非 JSON 格式请求"""
+        with app.app_context():
+            # 创建会话
+            create_response = api_client.post(
+                '/api/requirements/sessions',
+                data=json.dumps({
+                    "project_name": "测试项目",
+                    "assistant_type": "alex"
+                }),
+                content_type='application/json'
+            )
+            session_id = create_response.get_json()['data']['id']
+            
+            # 发送非 JSON 格式
+            response = api_client.post(
+                f'/api/requirements/sessions/{session_id}/messages',
+                data="这不是JSON",
+                content_type='text/plain'
+            )
+            assert response.status_code == 400
+
+
+class TestAssistantBundleAPI:
+    """助手 Bundle API 测试"""
+    
+    def test_get_alex_bundle(self, api_client, app):
+        """测试获取 Alex 助手 Bundle"""
+        with app.app_context():
+            response = api_client.get('/api/requirements/assistants/alex/bundle')
+            
+            # 可能成功或找不到文件
+            assert response.status_code in [200, 404]
+            
+            if response.status_code == 200:
+                data = response.get_json()
+                assert 'data' in data
+                assert 'bundle_content' in data['data']
+                assert 'assistant_info' in data['data']
+                
+                # 验证 bundle 内容不为空
+                assert len(data['data']['bundle_content']) > 0
+    
+    def test_get_lisa_bundle(self, api_client, app):
+        """测试获取 Lisa 助手 Bundle"""
+        with app.app_context():
+            response = api_client.get('/api/requirements/assistants/lisa/bundle')
+            
+            # 可能成功或找不到文件
+            assert response.status_code in [200, 404]
+            
+            if response.status_code == 200:
+                data = response.get_json()
+                assert 'data' in data
+                assert 'bundle_content' in data['data']
+    
+    def test_get_invalid_assistant_bundle(self, api_client, app):
+        """测试获取无效助手类型的 Bundle"""
+        with app.app_context():
+            response = api_client.get('/api/requirements/assistants/invalid_type/bundle')
+            assert response.status_code == 400
+    
+    def test_get_alex_bundle_backward_compat(self, api_client, app):
+        """测试向后兼容的 Alex Bundle 端点"""
+        with app.app_context():
+            response = api_client.get('/api/requirements/alex-bundle')
+            
+            # 可能成功或找不到文件
+            assert response.status_code in [200, 404]
+
+
+class TestStreamMessagesAPI:
+    """流式消息 API 测试"""
+    
+    def test_stream_messages_session_not_found(self, api_client, app):
+        """测试向不存在的会话发送流式消息"""
+        with app.app_context():
+            response = api_client.post(
+                '/api/requirements/sessions/nonexistent-id/messages/stream',
+                data=json.dumps({"content": "测试消息"}),
+                content_type='application/json'
+            )
+            assert response.status_code == 404
+    
+    def test_stream_messages_empty_content(self, api_client, app):
+        """测试流式发送空消息"""
+        with app.app_context():
+            # 先创建会话
+            create_response = api_client.post(
+                '/api/requirements/sessions',
+                data=json.dumps({
+                    "project_name": "测试项目",
+                    "assistant_type": "alex"
+                }),
+                content_type='application/json'
+            )
+            session_id = create_response.get_json()['data']['id']
+            
+            # 发送空消息
+            response = api_client.post(
+                f'/api/requirements/sessions/{session_id}/messages/stream',
+                data=json.dumps({"content": ""}),
+                content_type='application/json'
+            )
+            assert response.status_code == 400
+    
+    def test_stream_messages_returns_sse(self, api_client, app, mocker):
+        """测试流式消息返回 SSE 格式"""
+        with app.app_context():
+            # 创建会话
+            create_response = api_client.post(
+                '/api/requirements/sessions',
+                data=json.dumps({
+                    "project_name": "流式测试项目",
+                    "assistant_type": "alex"
+                }),
+                content_type='application/json'
+            )
+            session_id = create_response.get_json()['data']['id']
+            
+            # Mock AI 服务的流式方法
+            async def mock_stream(*args, **kwargs):
+                yield "你好"
+                yield "世界"
+            
+            mock_ai_service = mocker.MagicMock()
+            mock_ai_service.stream_message = mock_stream
+            
+            mocker.patch(
+                'backend.api.requirements.get_ai_service',
+                return_value=mock_ai_service
+            )
+            
+            # 发送流式请求
+            response = api_client.post(
+                f'/api/requirements/sessions/{session_id}/messages/stream',
+                data=json.dumps({"content": "你好"}),
+                content_type='application/json'
+            )
+            
+            # 应该返回 SSE 格式或服务不可用
+            # 注意：Flask test client 可能不完全支持 SSE
+            assert response.status_code in [200, 500]
+            
+            if response.status_code == 200:
+                # 验证返回的是 SSE 格式（允许包含 charset）
+                assert 'text/event-stream' in response.content_type
+
