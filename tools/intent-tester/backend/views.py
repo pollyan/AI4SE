@@ -71,10 +71,6 @@ def local_proxy():
         build_time=datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
     )
 
-@views_bp.route('/profile')
-def profile():
-    return render_template('profile.html')
 
-@views_bp.route('/reports')
-def reports():
-    return render_template('reports.html')
+
+

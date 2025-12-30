@@ -80,13 +80,13 @@ def merge_templates(base_path, index_path, output_path):
         'href="/download/local-proxy"': 'href="/intent-tester/download/local-proxy"',
         'href="/requirements-analyzer"': 'href="/ai-agents/"',
         'href="/config-management"': 'href="/ai-agents/config"',
-        'href="/profile"': 'href="/intent-tester/profile"',
+        'href="/profile"': 'href="/profile"',
         'data-page="testcases"': 'href="/intent-tester/testcases"',
         'data-page="execution"': 'href="/intent-tester/execution"',
         'data-page="local-proxy"': 'href="/intent-tester/local-proxy"',
         'data-page="requirements-analyzer"': 'href="/ai-agents/"',
         'data-page="config-management"': 'href="/ai-agents/config"',
-        'data-page="profile"': 'href="/intent-tester/profile"',
+        'data-page="profile"': 'href="/profile"',
         'data-page=""': 'href="/"',
     }
     

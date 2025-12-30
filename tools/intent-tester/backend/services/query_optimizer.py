@@ -21,7 +21,7 @@ try:
 except ImportError:
     try:
         # 绝对导入（用于测试环境）
-        from web_gui.models import (
+        from ..models import (
             db,
             TestCase,
             ExecutionHistory,
@@ -35,7 +35,7 @@ except ImportError:
         import os
 
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-        from web_gui.models import (
+        from ..models import (
             db,
             TestCase,
             ExecutionHistory,

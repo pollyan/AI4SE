@@ -7,7 +7,7 @@ import json
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
-from web_gui.models import db, TestCase, ExecutionHistory, StepExecution
+from .models import db, TestCase, ExecutionHistory, StepExecution
 
 
 class TestCaseProxy:

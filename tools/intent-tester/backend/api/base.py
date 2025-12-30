@@ -190,24 +190,9 @@ def register_blueprints(app):
         except:
             return {"error": "无法加载页面"}
     
-    @app.route("/reports")
-    def reports():
-        """报告页面"""
-        try:
-            from flask import render_template
-            return render_template("reports.html")
-        except:
-            return {"error": "无法加载页面"}
+
     
-    @app.route("/profile")
-    @app.route("/about")
-    def profile_page():
-        """个人简介页面"""
-        try:
-            from flask import render_template
-            return render_template("profile.html")
-        except:
-            return {"error": "无法加载页面"}
+
             
     @app.route("/health")
     def health_check():

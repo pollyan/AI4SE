@@ -20,20 +20,31 @@ from .base import (
 
 # 导入数据模型和服务
 try:
-    from ..models import db, RequirementsSession, RequirementsMessage
-    from ..utils.error_handler import ValidationError, NotFoundError, DatabaseError
-    # Removed legacy RequirementsAIService
-    try:
-        from ..services.adk_agents import AdkAssistantService
-    except ImportError:
-        AdkAssistantService = None # Handle dependency missing gracefully
+    # 优先使用本地 agents 模块
+    from ..agents import AdkAssistantService
 except ImportError:
-    from web_gui.models import db, RequirementsSession, RequirementsMessage
-    from web_gui.utils.error_handler import ValidationError, NotFoundError, DatabaseError
     try:
         from web_gui.services.adk_agents import AdkAssistantService
     except ImportError:
-        AdkAssistantService = None # Handle dependency missing gracefully
+        AdkAssistantService = None  # Handle dependency missing gracefully
+
+try:
+    from web_gui.models import db, RequirementsSession, RequirementsMessage
+    from web_gui.utils.error_handler import ValidationError, NotFoundError, DatabaseError
+except ImportError:
+    # 回退定义
+    db = None
+    RequirementsSession = None
+    RequirementsMessage = None
+    class ValidationError(Exception):
+        def __init__(self, message):
+            self.message = message
+    class NotFoundError(Exception):
+        def __init__(self, message):
+            self.message = message
+    class DatabaseError(Exception):
+        def __init__(self, message):
+            self.message = message
 
 # ✨ 临时会话状态缓存（内存存储，24小时过期）
 _session_state_cache = {}  # {session_id: {'is_activated': bool, 'last_access': datetime}}
@@ -72,80 +83,36 @@ def _clear_session_state(session_id: str):
 # 初始化 logger
 logger = logging.getLogger(__name__)
 
-# AI服务实例缓存（按会话ID和助手类型缓存）
-# 格式: {(session_id, assistant_type): {'service': AdkAssistantService, 'last_access': datetime}}
-_ai_service_cache = {}
-_SERVICE_CACHE_TTL_HOURS = 24  # 服务实例缓存24小时
+# AI服务实例（延迟初始化）
+ai_service = None
 
-
-def _cleanup_expired_services():
-    """清理过期的服务实例"""
-    now = datetime.now()
-    expired_keys = [
-        key for key, data in _ai_service_cache.items()
-        if (now - data['last_access']).total_seconds() > _SERVICE_CACHE_TTL_HOURS * 3600
-    ]
-    for key in expired_keys:
-        del _ai_service_cache[key]
-
-
-def get_ai_service(assistant_type='alex', session_id=None):
-    """
-    获取AI服务实例
-    
-    如果提供 session_id，尝试复用已缓存的服务实例以保持会话上下文。
-    否则创建新实例。
-    """
-    global _ai_service_cache
-    
+def get_ai_service(assistant_type='alex'):
+    """获取AI服务实例，每次重新检查配置避免缓存问题"""
     try:
         from ..models import RequirementsAIConfig
         from ..services.adk_agents import AdkAssistantService
         
-        # 清理过期缓存
-        _cleanup_expired_services()
-        
-        # 如果有 session_id，尝试复用缓存的服务实例
-        cache_key = (session_id, assistant_type) if session_id else None
-        
-        if cache_key and cache_key in _ai_service_cache:
-            cached = _ai_service_cache[cache_key]
-            cached['last_access'] = datetime.now()
-            logger.debug(f"复用缓存的AI服务实例: session={session_id}, type={assistant_type}")
-            return cached['service']
-        
-        # 获取默认AI配置
+        # 每次都重新获取默认AI配置，避免缓存问题
         default_config = RequirementsAIConfig.get_default_config()
-        if not default_config:
-            return None
+        if default_config:
+            config_data = default_config.get_config_for_ai_service()
             
-        config_data = default_config.get_config_for_ai_service()
-        
-        # 验证配置的完整性
-        required_fields = ['api_key', 'base_url', 'model_name']
-        missing_fields = [field for field in required_fields if not config_data.get(field)]
-        
-        if missing_fields:
+            # 验证配置的完整性
+            required_fields = ['api_key', 'base_url', 'model_name']
+            missing_fields = [field for field in required_fields if not config_data.get(field)]
+            
+            if missing_fields:
+                return None
+            
+            # 创建AI服务实例
+            ai_service = AdkAssistantService(assistant_type=assistant_type, config=config_data)
+            return ai_service
+        else:
+            # 如果没有默认配置，返回None
             return None
-        
-        # 创建AI服务实例
-        ai_service = AdkAssistantService(assistant_type=assistant_type, config=config_data)
-        
-        # 如果有 session_id，缓存服务实例
-        if cache_key:
-            _ai_service_cache[cache_key] = {
-                'service': ai_service,
-                'last_access': datetime.now()
-            }
-            logger.info(f"创建并缓存AI服务实例: session={session_id}, type={assistant_type}")
-        
-        return ai_service
-        
     except ImportError as e:
-        logger.warning(f"AI服务导入失败: {e}")
         return None
     except Exception as e:
-        logger.error(f"获取AI服务失败: {e}")
         return None
 
 # 创建蓝图
@@ -428,7 +395,7 @@ def send_message(session_id):
         # 根据助手类型获取对应的AI服务
 
         try:
-            ai_svc = get_ai_service(assistant_type=assistant_type, session_id=session_id)
+            ai_svc = get_ai_service(assistant_type=assistant_type)
             if ai_svc is None:
                 error_msg = f"AI服务初始化失败：未找到有效的AI配置或服务初始化失败。请检查AI服务配置或联系管理员。"
                 logger.error(error_msg)
@@ -867,16 +834,27 @@ def send_message_stream(session_id):
             full_response = []
             
             try:
-                # 使用缓存的 AI 服务实例（保持会话上下文连续）
-                service = get_ai_service(assistant_type=assistant_type, session_id=session_id)
-                if service is None:
-                    raise Exception("AI服务初始化失败：未找到有效的AI配置")
+                # 导入 ADK 服务
+                from ..services.adk_agents import AdkAssistantService
                 
-            except Exception as create_err:
-                logger.error(f"获取 AI 服务失败: {create_err}")
+                # 创建服务实例
+                service = AdkAssistantService(
+                    assistant_type=assistant_type
+                )
+                
+            except ImportError as import_err:
+                logger.error(f"ADK 导入失败: {import_err}")
                 if is_testing_env:
                    import traceback
                    traceback.print_exc()
+                # ADK失败则直接报错，不再回退到LangGraph
+                raise import_err
+            except Exception as create_err:
+                logger.error(f"ADK 服务创建失败: {create_err}")
+                if is_testing_env:
+                   import traceback
+                   traceback.print_exc()
+                # ADK失败则直接报错，不再回退到LangGraph
                 raise create_err
                 
             try:
@@ -1048,7 +1026,7 @@ def refresh_message(session_id, message_id):
             raise NotFoundError("AI消息不存在")
         
         # 获取AI服务实例
-        ai_service_instance = get_ai_service(session_id=session_id)
+        ai_service_instance = get_ai_service()
         if not ai_service_instance:
             return standard_error_response("AI服务未初始化", 500)
         
@@ -1215,7 +1193,7 @@ def register_requirements_socketio(socketio: SocketIO):
             }, room=f'requirements_{session_id}')
             
             # 调用AI助手服务处理用户消息
-            ai_svc = get_ai_service(session_id=session_id)
+            ai_svc = get_ai_service()
             if ai_svc is None:
                 emit('error', {'message': 'AI服务暂不可用，请稍后重试'})
                 return

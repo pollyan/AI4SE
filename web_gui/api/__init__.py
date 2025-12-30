@@ -8,23 +8,25 @@ from flask import Blueprint
 # 创建主API蓝图
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
-# 导入各个子模块并注册路由
-# 这些导入会自动注册路由到api_bp蓝图
-from . import testcases
-from . import executions
-from . import templates
-from . import statistics
-from . import dashboard
-from . import user
-from . import midscene
-from . import database
-from . import health
-from . import requirements
+# 注意：模块导入已移至 register_api_routes 函数中
+# 以避免循环导入问题（特别是当从其他应用直接导入特定蓝图时）
 
 
 # 注册子模块的路由到主蓝图
 def register_api_routes(app):
     """注册所有API路由到Flask应用"""
+    # 延迟导入子模块以避免循环导入
+    from . import testcases
+    from . import executions
+    from . import templates
+    from . import statistics
+    from . import dashboard
+    from . import user
+    from . import midscene
+    from . import database
+    from . import health
+    from . import requirements as req_module  # 避免名称冲突
+    
     app.register_blueprint(api_bp)
     
     # 注册需求分析API蓝图
@@ -36,8 +38,6 @@ def register_api_routes(app):
     from .ai_configs import ai_configs_bp
     app.register_blueprint(ai_configs_bp)
     
-
-    
     # 兼容：部分模块使用独立蓝图（如 testcases_bp）而非 api_bp 装饰
     try:
         from .testcases import testcases_bp
@@ -48,3 +48,4 @@ def register_api_routes(app):
 
 # 导出主要组件供外部使用
 __all__ = ["api_bp", "register_api_routes"]
+

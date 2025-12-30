@@ -42,13 +42,17 @@ def create_app():
             return ""
     
     # 注册 AI 智能体相关的蓝图
+    # 目前仍使用 web_gui.api 模块，后续将逐步迁移到本地 api 模块
     try:
         from web_gui.api.requirements import requirements_bp
         from web_gui.api.ai_configs import ai_configs_bp
         app.register_blueprint(requirements_bp)
         app.register_blueprint(ai_configs_bp)
+        print("✅ API 蓝图注册成功")
     except Exception as e:
+        import traceback
         print(f"⚠️ 蓝图注册失败: {e}")
+        traceback.print_exc()
     
     # 注册页面路由
     from flask import render_template

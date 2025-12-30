@@ -33,6 +33,10 @@ def create_app():
     # 使用本地 models 模块
     from .models import db
     db.init_app(app)
+    
+    with app.app_context():
+        db.create_all()
+        app.logger.info("Database tables created/verified")
 
     # 初始化SocketIO
     from .extensions import socketio
@@ -56,14 +60,14 @@ def create_app():
     # 注册视图蓝图 (Frontend Pages)
     from .views import views_bp
     
-    # 注册到 /intent-tester 前缀，这是标准的访问路径
-    app.register_blueprint(views_bp, url_prefix='/intent-tester')
+    # 注册蓝图到根路径 (由 Nginx 处理 /intent-tester 前缀)
+    app.register_blueprint(views_bp, url_prefix='/')
 
     # 根路径重定向到标准路径
     from flask import redirect
-    @app.route('/')
+    @app.route('/redirect-to-testcases')
     def root_redirect():
-        return redirect('/intent-tester/testcases')
+        return redirect('/testcases')
 
     # 健康检查
     @app.route('/health')

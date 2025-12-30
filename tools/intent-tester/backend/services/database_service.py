@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 try:
     from backend.models import db, TestCase, ExecutionHistory, StepExecution, Template
 except ImportError:
-    from web_gui.models import db, TestCase, ExecutionHistory, StepExecution, Template
+    from ..models import db, TestCase, ExecutionHistory, StepExecution, Template
 
 # 验证db实例导入
 logger.debug(f"DatabaseService导入的db实例: {id(db)}")
