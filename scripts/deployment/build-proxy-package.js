@@ -3,6 +3,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const ROOT_DIR = path.resolve(__dirname, '../../');
+const INTENT_TESTER_DIR = path.join(ROOT_DIR, 'tools', 'intent-tester');
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 const PROXY_DIST_DIR = path.join(DIST_DIR, 'intent-test-proxy');
 const ZIP_FILE = path.join(DIST_DIR, 'intent-test-proxy.zip');
@@ -24,7 +25,7 @@ const BROWSER_AUTOMATION_DIR = path.join(ROOT_DIR, 'tools', 'intent-tester', 'br
 
 const coreFiles = [
     { src: path.join(BROWSER_AUTOMATION_DIR, 'midscene_server.js'), dest: 'midscene_server.js' },
-    { src: path.join(ROOT_DIR, 'package.json'), dest: 'package.json' }
+    { src: path.join(INTENT_TESTER_DIR, 'package.json'), dest: 'package.json' }
 ];
 
 coreFiles.forEach(({ src, dest }) => {
@@ -38,7 +39,7 @@ coreFiles.forEach(({ src, dest }) => {
 });
 
 // Copy start scripts from templates
-const templatesDir = path.join(ROOT_DIR, 'scripts', 'proxy_templates');
+const templatesDir = path.join(INTENT_TESTER_DIR, 'proxy_templates');
 const startScripts = ['start.sh', 'start.bat'];
 
 startScripts.forEach(file => {
@@ -71,7 +72,7 @@ function copyDir(src, dest) {
 }
 
 const dirsToCopy = [
-    { src: path.join(TOOL_DIR, 'midscene_framework'), dest: 'midscene_framework' }
+    { src: path.join(INTENT_TESTER_DIR, 'midscene_framework'), dest: 'midscene_framework' }
 ];
 dirsToCopy.forEach(({ src, dest }) => {
     copyDir(src, path.join(PROXY_DIST_DIR, dest));
