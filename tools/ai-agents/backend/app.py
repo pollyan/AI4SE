@@ -7,16 +7,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
 
-from flask import Flask
-from shared.config import SharedConfig
+from flask import Flask, send_from_directory
+
+# React 静态文件目录 (npm run build 后的产物)
+REACT_BUILD_DIR = os.path.join(os.path.dirname(__file__), '../frontend/dist')
 
 def create_app():
     """创建并配置 Flask 应用"""
+    from shared.config import SharedConfig
+    
     app = Flask(
         __name__,
-        template_folder='../frontend/templates',
-        static_folder='../../frontend/public/static',
-        static_url_path='/static'
+        static_folder=REACT_BUILD_DIR,
+        static_url_path=''
     )
     
     # 应用配置
@@ -38,17 +41,6 @@ def create_app():
         except Exception as e:
             print(f"⚠️ 数据库表创建失败: {e}")
     
-    # 添加时区格式化过滤器
-    @app.template_filter('utc_to_local')
-    def utc_to_local_filter(dt):
-        """将UTC时间转换为带时区标识的ISO格式"""
-        if dt is None:
-            return ""
-        try:
-            return dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        except AttributeError:
-            return ""
-    
     # 注册 AI 智能体相关的蓝图
     try:
         from backend.api import requirements_bp, ai_configs_bp
@@ -60,25 +52,36 @@ def create_app():
         print(f"⚠️ 蓝图注册失败: {e}")
         traceback.print_exc()
     
-    # 注册页面路由
-    from flask import render_template
-    
-    @app.route('/')
-    @app.route('/ai-agents/')
-    def index():
-        return render_template('requirements_analyzer.html')
-    
-    @app.route('/config')
-    @app.route('/config-management')
-    @app.route('/ai-agents/config')
-    @app.route('/ai-agents/config-management')
-    def config():
-        return render_template('config_management.html')
-    
+    # 健康检查路由
     @app.route('/health')
     @app.route('/ai-agents/health')
     def health():
         return {"status": "ok", "service": "ai-agents"}
+    
+    # React SPA 路由 - 所有非 API 路由都返回 index.html
+    @app.route('/')
+    @app.route('/ai-agents/')
+    @app.route('/ai-agents/config')
+    @app.route('/config')
+    def serve_react():
+        """服务 React 单页应用"""
+        index_path = os.path.join(REACT_BUILD_DIR, 'index.html')
+        if os.path.exists(index_path):
+            return send_from_directory(REACT_BUILD_DIR, 'index.html')
+        else:
+            # 开发模式下，React dev server 运行在 localhost:3000
+            return """
+            <h1>React 前端未构建</h1>
+            <p>请运行以下命令构建 React 应用:</p>
+            <pre>cd tools/ai-agents/frontend && npm run build</pre>
+            <p>或者访问 <a href="http://localhost:3000">http://localhost:3000</a> (开发模式)</p>
+            """, 404
+    
+    # 处理 React 路由的静态资源 (Nginx 转发时保留 /ai-agents 前缀)
+    @app.route('/ai-agents/assets/<path:filename>')
+    @app.route('/assets/<path:filename>')
+    def serve_assets(filename):
+        return send_from_directory(os.path.join(REACT_BUILD_DIR, 'assets'), filename)
     
     return app
 
