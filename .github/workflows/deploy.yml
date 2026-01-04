@@ -99,10 +99,34 @@ jobs:
 
     - name: 📦 Install and Test
       run: |
-        echo "::group::Running Frontend Tests"
+        echo "::group::Running AI Agents Frontend Tests"
         cd tools/ai-agents/frontend
         npm ci
         npm run test -- --run
+        echo "::endgroup::"
+
+  # ====================================
+  # 阶段 1b-3: Common Frontend 测试
+  # ====================================
+  common-frontend-test:
+    name: Common Frontend Tests (Homepage/Profile)
+    runs-on: ubuntu-latest
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v3
+
+    - name: 🟢 Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+
+    - name: 📦 Lint and Build
+      run: |
+        echo "::group::Running Common Frontend Lint and Build"
+        cd tools/frontend
+        npm ci
+        npm run lint
+        npm run build
         echo "::endgroup::"
 
 
@@ -170,7 +194,7 @@ jobs:
   # ====================================
   deploy-to-production:
     name: Build and Deploy to Tencent Cloud
-    needs: [intent-tester-test, ai-agents-test, ai-agents-frontend-test, proxy-test]  # 必须等待所有测试完成且成功
+    needs: [intent-tester-test, ai-agents-test, ai-agents-frontend-test, common-frontend-test, proxy-test]  # 必须等待所有测试完成且成功
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -195,11 +219,20 @@ jobs:
     
     - name: ⚛️ Build React frontend (AI Agents)
       run: |
-        echo "构建 React 前端..."
+        echo "构建 AI Agents React 前端..."
         cd tools/ai-agents/frontend
         npm ci
         npm run build
-        echo "✅ React 前端构建完成"
+        echo "✅ AI Agents React 前端构建完成"
+        ls -lh dist/
+    
+    - name: ⚛️ Build React frontend (Common - Homepage/Profile)
+      run: |
+        echo "构建 Common React 前端 (首页/Profile)..."
+        cd tools/frontend
+        npm ci
+        npm run build
+        echo "✅ Common React 前端构建完成"
         ls -lh dist/
     
     - name: 📦 Prepare deployment package
