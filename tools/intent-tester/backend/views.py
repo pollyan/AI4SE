@@ -80,8 +80,5 @@ def local_proxy():
     )
 
 
-@views_bp.route('/profile')
-@views_bp.route('/intent-tester/profile')
-def profile():
-    return render_template('profile.html')
+
 

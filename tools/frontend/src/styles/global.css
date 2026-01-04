@@ -1,0 +1,376 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 基础重置 - 来自原 index.html */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #ffffff;
+    color: #333333;
+    line-height: 1.6;
+    font-size: 14px;
+    min-height: 100vh;
+}
+
+/* 顶部导航 */
+.top-nav {
+    background: #ffffff;
+    border-bottom: 1px solid #e8e8e8;
+    padding: 0 40px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.nav-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1200px;
+    margin: 0 auto;
+    height: 64px;
+}
+
+.nav-brand {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333333;
+    letter-spacing: -0.5px;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.nav-brand:hover {
+    color: #555555;
+}
+
+.nav-links {
+    display: flex;
+    gap: 40px;
+}
+
+.nav-link {
+    color: #666666;
+    text-decoration: none;
+    font-weight: 400;
+    font-size: 14px;
+    transition: color 0.2s ease;
+    padding: 8px 0;
+    cursor: pointer;
+}
+
+.nav-link:hover {
+    color: #333333;
+}
+
+.nav-link.active {
+    color: #333333;
+    position: relative;
+}
+
+.nav-link.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #333333;
+}
+
+/* 下拉菜单样式 */
+.nav-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.nav-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.dropdown-arrow {
+    font-size: 10px;
+    transition: transform 0.2s ease;
+}
+
+.nav-dropdown:hover .dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.nav-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: #ffffff;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    min-width: 160px;
+    padding: 8px 0;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.2s ease;
+    z-index: 1000;
+}
+
+.nav-dropdown:hover .nav-dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.nav-dropdown-item {
+    display: block;
+    padding: 8px 16px;
+    color: #666666;
+    text-decoration: none;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.nav-dropdown-item:hover {
+    background: #f8f8f8;
+    color: #333333;
+}
+
+.nav-dropdown-item.active {
+    background: #f0f0f0;
+    color: #333333;
+    font-weight: 500;
+}
+
+/* 主容器 */
+.main-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px;
+}
+
+/* 页脚样式 */
+.site-footer {
+    background: #f8f9fa;
+    border-top: 1px solid #e8e8e8;
+    padding: 40px 20px 20px 20px;
+    margin-top: 80px;
+}
+
+.footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 40px;
+    margin-bottom: 30px;
+}
+
+.footer-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333333;
+    margin-bottom: 16px;
+}
+
+.footer-bio {
+    font-size: 13px;
+    color: #666666;
+    line-height: 1.6;
+    margin-bottom: 12px;
+}
+
+.footer-links {
+    list-style: none;
+    padding: 0;
+}
+
+.footer-links li {
+    margin-bottom: 8px;
+}
+
+.footer-links a {
+    color: #666666;
+    text-decoration: none;
+    font-size: 13px;
+    transition: color 0.2s ease;
+}
+
+.footer-links a:hover {
+    color: #333333;
+}
+
+.footer-contact {
+    font-size: 13px;
+    color: #666666;
+    line-height: 1.8;
+}
+
+.footer-contact a {
+    color: #666666;
+    text-decoration: none;
+    border-bottom: 1px solid #e8e8e8;
+    transition: all 0.2s ease;
+}
+
+.footer-contact a:hover {
+    color: #333333;
+    border-bottom-color: #333333;
+}
+
+.footer-bottom {
+    text-align: center;
+    padding-top: 20px;
+    border-top: 1px solid #e8e8e8;
+    font-size: 12px;
+    color: #999999;
+}
+
+.footer-bottom a {
+    color: #999999;
+    text-decoration: none;
+}
+
+.footer-bottom a:hover {
+    color: #333333;
+}
+
+/* 卡片样式 */
+.card {
+    background: #ffffff;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    padding: 24px;
+    transition: border-color 0.2s ease;
+}
+
+.card:hover {
+    border-color: #d0d0d0;
+}
+
+.card-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333333;
+    margin-bottom: 8px;
+}
+
+.card-subtitle {
+    font-size: 13px;
+    color: #999999;
+    margin-bottom: 16px;
+}
+
+.card-content {
+    color: #666666;
+    line-height: 1.6;
+}
+
+/* 按钮样式 */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border: 1px solid #e8e8e8;
+    background: #ffffff;
+    color: #333333;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 400;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn:hover {
+    background: #f8f8f8;
+    border-color: #d0d0d0;
+}
+
+.btn-primary {
+    background: #333333;
+    color: #ffffff;
+    border-color: #333333;
+}
+
+.btn-primary:hover {
+    background: #555555;
+    border-color: #555555;
+}
+
+.btn-small {
+    padding: 8px 16px;
+    font-size: 13px;
+}
+
+.btn-large {
+    padding: 14px 28px;
+    font-size: 15px;
+    font-weight: 500;
+    min-width: 140px;
+    justify-content: center;
+}
+
+.btn-ghost {
+    background: transparent;
+    color: #666666;
+    border: 1px solid #e8e8e8;
+}
+
+.btn-ghost:hover {
+    background: #f8f8f8;
+    color: #333333;
+}
+
+/* 网格布局 */
+.grid {
+    display: grid;
+    gap: 24px;
+    margin-bottom: 40px;
+}
+
+.grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.grid-cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.grid-cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .main-container {
+        padding: 20px;
+    }
+
+    .nav-container {
+        padding: 0 20px;
+    }
+
+    .nav-links {
+        display: none;
+    }
+
+    .grid-cols-2,
+    .grid-cols-3,
+    .grid-cols-4 {
+        grid-template-columns: 1fr;
+    }
+
+    .footer-content {
+        grid-template-columns: 1fr;
+        gap: 30px;
+    }
+}

@@ -194,6 +194,51 @@ run_frontend_tests() {
 }
 
 # ==========================================
+# Common Frontend 测试 (React - Homepage/Profile)
+# ==========================================
+run_common_frontend_tests() {
+    log_section "⚛️ Common Frontend Tests (Homepage/Profile)"
+
+    # 检查 Node.js 环境
+    if ! command -v node &> /dev/null; then
+        log_error "Node.js 未安装"
+        return 1
+    fi
+
+    # 切换到 common frontend 目录
+    cd "$PROJECT_ROOT/tools/frontend"
+
+    # 安装依赖 (如果需要)
+    log_info "检查依赖..."
+    if [ ! -d "node_modules" ]; then
+        log_info "安装 Common Frontend 依赖..."
+        npm ci --silent 2>/dev/null || npm install --silent
+    fi
+
+    # 运行 Lint
+    log_info "运行 Common Frontend Lint..."
+    if npm run lint; then
+        log_info "✅ Common Frontend Lint 通过"
+    else
+        log_error "❌ Common Frontend Lint 失败"
+        cd "$PROJECT_ROOT"
+        return 1
+    fi
+
+    # 运行 Build (作为测试)
+    log_info "运行 Common Frontend Build (作为验证)..."
+    if npm run build; then
+        log_info "✅ Common Frontend Build 通过"
+    else
+        log_error "❌ Common Frontend Build 失败"
+        cd "$PROJECT_ROOT"
+        return 1
+    fi
+
+    cd "$PROJECT_ROOT"
+}
+
+# ==========================================
 # 主流程
 # ==========================================
 log_section "🚀 本地测试开始"
@@ -215,6 +260,7 @@ case "$TEST_TYPE" in
         run_lint || true  # lint 失败不中断
         run_proxy_tests || FAILED=1
         run_frontend_tests || FAILED=1
+        run_common_frontend_tests || FAILED=1
         ;;
     *)
         log_error "未知测试类型: $TEST_TYPE"
