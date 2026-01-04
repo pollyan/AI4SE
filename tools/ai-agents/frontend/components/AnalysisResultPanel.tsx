@@ -11,7 +11,7 @@ interface AnalysisResultPanelProps {
 const AnalysisResultPanel: React.FC<AnalysisResultPanelProps> = ({ result, isProcessing, hasStarted }) => {
   return (
     <div className="w-full bg-surface-light dark:bg-surface-dark rounded-xl shadow-lg border border-border-light dark:border-border-dark flex flex-col h-full overflow-hidden">
-      <div className="px-6 py-4 border-b border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50">
+      <div className="px-6 py-4 border-b border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50 h-16 flex items-center">
         <h2 className="font-semibold text-lg text-gray-800 dark:text-white flex items-center gap-2">
           <BarChart2 className="text-secondary" size={24} />
           分析成果

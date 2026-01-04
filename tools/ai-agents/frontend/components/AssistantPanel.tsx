@@ -63,7 +63,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = ({
   if (!selectedAssistantId) {
     return (
       <div className="w-full flex flex-col bg-surface-light dark:bg-surface-dark rounded-xl shadow-lg border border-border-light dark:border-border-dark overflow-hidden h-full">
-        <div className="px-6 py-4 border-b border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50">
+        <div className="px-6 py-4 border-b border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50 h-16 flex items-center">
           <h2 className="font-semibold text-lg text-gray-800 dark:text-white flex items-center gap-2">
             <Bot className="text-primary" size={24} />
             选择智能助手
@@ -92,7 +92,7 @@ const AssistantPanel: React.FC<AssistantPanelProps> = ({
   return (
     <div className="w-full flex flex-col bg-surface-light dark:bg-surface-dark rounded-xl shadow-lg border border-border-light dark:border-border-dark overflow-hidden h-full">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-border-light dark:border-border-dark flex justify-between items-center bg-gray-50 dark:bg-gray-800/50 shrink-0">
+      <div className="px-6 py-4 border-b border-border-light dark:border-border-dark flex justify-between items-center bg-gray-50 dark:bg-gray-800/50 shrink-0 h-16">
         <div className="flex items-center gap-3">
           <button
             onClick={() => onSelectAssistant('' as any)} // Hack to reset, or pass a clear function

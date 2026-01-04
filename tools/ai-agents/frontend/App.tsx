@@ -139,7 +139,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const [leftWidth, setLeftWidth] = useState<number>(50); // percentage
+  const [leftWidth, setLeftWidth] = useState<number>(40); // percentage
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isDesktop, setIsDesktop] = useState<boolean>(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
   const containerRef = useRef<HTMLDivElement>(null);
