@@ -1,108 +1,35 @@
 {
     "workflow_version": "1.2.0",
     "timestamps": {
-        "started": "2025-12-30T19:16:45+08:00",
-        "last_updated": "2025-12-30T19:20:02+08:00"
+        "started": "2026-01-05T07:50:20+08:00",
+        "last_updated": "{{current_timestamp}}",
+        "completed": "{{current_timestamp}}"
     },
-    "mode": "initial_scan",
-    "scan_level": "exhaustive",
-    "document_language": "Chinese",
+    "mode": "full_rescan",
+    "scan_level": "quick",
     "project_root": "/Users/anhui/Documents/myProgram/AI4SE",
     "output_folder": "/Users/anhui/Documents/myProgram/AI4SE/docs",
     "completed_steps": [
-        {
-            "step": "step_1",
-            "status": "completed",
-            "timestamp": "2025-12-30T19:20:02+08:00",
-            "summary": "分类为模块化单体仓库，4个主要部分"
-        },
-        {
-            "step": "step_2",
-            "status": "completed",
-            "timestamp": "2025-12-30T19:22:00+08:00",
-            "summary": "发现现有文档: 2个README"
-        },
-        {
-            "step": "step_3-4",
-            "status": "completed",
-            "timestamp": "2025-12-30T19:24:00+08:00",
-            "summary": "穷尽扫描完成，分析了所有核心源文件"
-        },
-        {
-            "step": "step_10",
-            "status": "completed",
-            "timestamp": "2025-12-30T19:26:00+08:00",
-            "summary": "生成主索引文档 index.md (中文)"
-        }
+        "step_1_classify",
+        "step_2_existing_docs",
+        "step_3_tech_stack",
+        "step_4_detailed_scan",
+        "step_5_source_tree",
+        "step_6_data_models",
+        "step_7_api_contracts",
+        "step_8_components",
+        "step_9_master_index"
     ],
     "current_step": "completed",
     "findings": {
-        "repository_type": "modular_monorepo",
-        "primary_language": "Python",
-        "secondary_languages": [
-            "JavaScript",
-            "TypeScript"
-        ],
-        "architecture_notes": "MidScene Server 是一个运行在客户端的代理服务器，用于驱动客户端浏览器进行自动化测试，是意图测试工具的核心组件之一。",
-        "project_parts": [
-            {
-                "part_id": "ai-agents",
-                "display_name": "AI 智能体",
-                "project_type_id": "backend",
-                "root_path": "tools/ai-agents",
-                "tech_stack": [
-                    "Python",
-                    "Flask",
-                    "Google ADK",
-                    "PostgreSQL"
-                ],
-                "description": "AI 对话智能体服务，支持 Alex 和 Lisa 两个助手角色"
-            },
-            {
-                "part_id": "intent-tester",
-                "display_name": "意图测试工具",
-                "project_type_id": "web",
-                "root_path": "tools/intent-tester",
-                "tech_stack": [
-                    "Python",
-                    "Flask",
-                    "Node.js",
-                    "Playwright",
-                    "MidSceneJS"
-                ],
-                "description": "意图驱动的自动化测试框架，包含 MidScene Server 客户端代理",
-                "components": {
-                    "backend": "Flask Web 服务端",
-                    "browser-automation": "MidScene Server (客户端代理，驱动浏览器)",
-                    "midscene_framework": "MidScene 测试框架封装"
-                }
-            },
-            {
-                "part_id": "frontend",
-                "display_name": "共享前端资源",
-                "project_type_id": "web",
-                "root_path": "tools/frontend",
-                "tech_stack": [
-                    "HTML",
-                    "CSS",
-                    "JavaScript"
-                ],
-                "description": "统一入口页面和共享静态资源"
-            },
-            {
-                "part_id": "shared",
-                "display_name": "共享工具库",
-                "project_type_id": "library",
-                "root_path": "tools/shared",
-                "tech_stack": [
-                    "Python"
-                ],
-                "description": "数据库连接和配置等共享模块"
-            }
-        ]
+        "summary": "Full project rescan completed. React frontend migration documented."
     },
     "outputs_generated": [
-        "project-scan-report.json"
-    ],
-    "resume_instructions": "Continuing from step 2 - Discovering existing documentation"
+        "project-scan-report.json",
+        "source-tree-analysis.md",
+        "data-models.md",
+        "api-contracts.md",
+        "component-inventory.md",
+        "index.md"
+    ]
 }
