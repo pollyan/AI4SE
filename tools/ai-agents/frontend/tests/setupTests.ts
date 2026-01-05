@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { beforeAll, afterEach, afterAll } from 'vitest';
+import { beforeAll, afterEach, afterAll, vi } from 'vitest';
 import { server } from './mocks/server';
 import { cleanup } from '@testing-library/react';
 
@@ -29,3 +29,28 @@ if (typeof ReadableStream === 'undefined') {
     const { ReadableStream } = require('stream/web');
     global.ReadableStream = ReadableStream;
 }
+
+// Polyfill for ResizeObserver (required by @assistant-ui/react)
+if (typeof ResizeObserver === 'undefined') {
+    global.ResizeObserver = class ResizeObserver {
+        observe() { }
+        unobserve() { }
+        disconnect() { }
+    };
+}
+
+// Polyfill for scrollTo and scrollIntoView (JSDOM doesn't support these)
+Element.prototype.scrollTo = vi.fn();
+Element.prototype.scrollIntoView = vi.fn();
+window.scrollTo = vi.fn();
+
+// Suppress MutationObserver errors during test cleanup (jsdom limitation)
+const originalError = console.error;
+console.error = (...args) => {
+    const message = args[0]?.toString?.() || '';
+    if (message.includes('MutationObserver') ||
+        message.includes('notifyMutationObservers')) {
+        return;
+    }
+    originalError.call(console, ...args);
+};
