@@ -34,16 +34,70 @@ fi
 
 MODE="incremental"
 DOCKER_BUILD_ARGS="--build"
+SKIP_FRONTEND=false
 
 # 解析参数
-if [[ "$1" == "full" ]] || [[ "$1" == "--full" ]]; then
-    MODE="full-rebuild"
+for arg in "$@"; do
+    case $arg in
+        full|--full)
+            MODE="full-rebuild"
+            ;;
+        --no-frontend|--skip-frontend)
+            SKIP_FRONTEND=true
+            ;;
+    esac
+done
+
+if [[ "$MODE" == "full-rebuild" ]]; then
     echo "🧹 检测到全量重建模式，正在清理旧资源..."
     docker-compose -f docker-compose.dev.yml down --rmi local --remove-orphans
     DOCKER_BUILD_ARGS="--build --force-recreate"
-    # 这里也可以加上 --no-cache，如果想极致干净，但通常 --force-recreate + down 已经足够
-    # 如果用户非常明确要无缓存，可以解开下行注释
-    # DOCKER_BUILD_ARGS="--build --no-cache"
+fi
+
+# ========================================
+# 3. 前端构建 (本地代码同步)
+# ========================================
+
+if [ "$SKIP_FRONTEND" = false ]; then
+    echo "🏗️  正在准备项目构建..."
+    
+    # 定义所有包含 package.json 的项目路径
+    JS_PROJECTS=("tools/frontend" "tools/ai-agents/frontend" "tools/intent-tester")
+    
+    for PROJECT_PATH in "${JS_PROJECTS[@]}"; do
+        if [ -d "$PROJECT_PATH" ] && [ -f "$PROJECT_PATH/package.json" ]; then
+            echo "📦 处理项目: $PROJECT_PATH"
+            (
+                cd "$PROJECT_PATH"
+                # 1. 检查 node_modules
+                if [ ! -d "node_modules" ]; then
+                    echo "   📥 正在安装依赖..."
+                    npm install
+                fi
+                
+                # 2. 检查并运行 build 脚本
+                if grep -q "\"build\":" package.json; then
+                    echo "   🔨 正在执行构建 (npm run build)..."
+                    npm run build
+                else
+                    echo "   ℹ️  项目无 build 脚本，跳过构建步骤"
+                fi
+            )
+        fi
+    done
+
+    # 特殊处理：意图测试工具的代理包构建
+    if [ -f "scripts/ci/build-proxy-package.js" ]; then
+        echo "📦 正在构建意图测试工具代理包..."
+        node scripts/ci/build-proxy-package.js
+        # 将产物复制到 intent-tester 的静态目录，以便本地下载
+        mkdir -p tools/intent-tester/frontend/static
+        cp dist/intent-test-proxy.zip tools/intent-tester/frontend/static/ 2>/dev/null || true
+    fi
+
+    echo "✅ 项目构建/准备完成"
+else
+    echo "⏭️  跳过构建模式"
 fi
 
 echo "🚀 正在启动本地 Docker 环境..."
@@ -61,7 +115,7 @@ else
     docker-compose -f docker-compose.dev.yml up -d --build
 fi
 
-# 4. 重启 Nginx (确保获取最新的 Upstream IP)
+# 5. 重启 Nginx (确保获取最新的 Upstream IP)
 echo "🔄 重启 Nginx 以刷新 DNS 解析..."
 docker-compose -f docker-compose.dev.yml restart nginx
 

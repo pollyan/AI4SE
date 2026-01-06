@@ -9,6 +9,7 @@ import {
     ThreadPrimitive,
     ComposerPrimitive,
     MessagePrimitive,
+    useMessage,
 } from '@assistant-ui/react';
 import type {
     ExternalStoreAdapter,
@@ -289,8 +290,24 @@ function CustomUserMessage() {
     );
 }
 
+// 等待动画组件
+function TypingIndicator() {
+    return (
+        <div className="flex items-center gap-1 py-1">
+            <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+        </div>
+    );
+}
+
 // 自定义助手消息组件
 function CustomAssistantMessage({ assistant }: { assistant: Assistant }) {
+    const message = useMessage();
+    const isInProgress = message.status?.type === 'running';
+    const hasNoContent = !message.content || message.content.length === 0 ||
+        (message.content.length === 1 && message.content[0].type === 'text' && !message.content[0].text);
+
     return (
         <MessagePrimitive.Root className="flex gap-3 flex-row">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 text-white ${assistant.id === 'alex' ? 'bg-primary' : 'bg-secondary'}`}>
@@ -299,6 +316,7 @@ function CustomAssistantMessage({ assistant }: { assistant: Assistant }) {
             <div className="flex flex-col max-w-[85%] items-start">
                 <div className="px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-200 dark:border-gray-700">
                     <MessagePrimitive.Content components={{ Text: MarkdownText }} />
+                    {isInProgress && hasNoContent && <TypingIndicator />}
                 </div>
             </div>
         </MessagePrimitive.Root>

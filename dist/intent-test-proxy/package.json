@@ -1,11 +1,12 @@
 {
-  "name": "midscenejs-python-demo",
+  "name": "ai4se-intent-tester",
   "version": "1.0.0",
-  "description": "Python + MidSceneJS Web UI自动化测试演示",
-  "main": "index.js",
+  "description": "Intent Tester Node.js component for MidSceneJS automation",
+  "main": "browser-automation/midscene_server.js",
   "scripts": {
     "install-deps": "npm install",
-    "test": "python -m pytest tests/ -v",
+    "start": "node browser-automation/midscene_server.js",
+    "test": "python -m pytest tests -v",
     "test:proxy": "jest tests/proxy --verbose",
     "test:proxy:watch": "jest tests/proxy --watch",
     "test:proxy:coverage": "jest tests/proxy --coverage",
