@@ -1,113 +1,61 @@
 """
-通用 OpenAI 兼容 LLM 模型适配器
+LangChain LLM 适配器
 
-用于替代 LiteLLM，提供更稳定、可控的流式输出（解决 Docker 缓冲问题和重复响应问题）。
+提供基于 LangChain ChatOpenAI 的 LLM 封装，支持流式输出。
 """
 
-import sys
 import logging
-from typing import AsyncGenerator
-from pydantic import Field
-from google.adk.models import BaseLlm
-from google.adk.models import LlmRequest, LlmResponse
-from google.genai import types
-from openai import AsyncOpenAI
+from typing import Dict
+from langchain_openai import ChatOpenAI
+from langchain_core.language_models import BaseChatModel
 
 logger = logging.getLogger(__name__)
 
 
-class OpenAICompatibleLlm(BaseLlm):
+class LangchainLlm:
     """
-    自定义 OpenAI 兼容 LLM 模型适配器
+    LangChain LLM 封装
     
-    目的：
-    1. 替代 LiteLLM 以避免其默认行为（如发送重复的最终聚合文本）。
-    2. 解决 Docker 环境下的 Python stdout 缓冲导致流式输出不流畅的问题。
+    封装 ChatOpenAI，提供统一的接口用于创建 Agent。
+    支持 OpenAI 兼容的第三方 API 端点。
     """
     
-    api_key: str = Field(..., description="API 密钥")
-    base_url: str = Field(..., description="API 基础 URL")
-    
-    _client: AsyncOpenAI = None
-    
-    def __init__(self, **data):
-        super().__init__(**data)
-        self._client = AsyncOpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url
+    def __init__(self, model_name: str, base_url: str, api_key: str):
+        """
+        初始化 LLM
+        
+        Args:
+            model_name: 模型名称（如 "qwen-plus"）
+            base_url: API 基础 URL
+            api_key: API 密钥
+        """
+        logger.info(f"初始化 LangChain LLM: {model_name}, base_url: {base_url[:30]}...")
+        
+        self._chat_model = ChatOpenAI(
+            model=model_name,
+            openai_api_base=base_url,
+            openai_api_key=api_key,
+            streaming=True
         )
-        
-    async def generate_content_async(
-        self, llm_request: LlmRequest, stream: bool = False
-    ) -> AsyncGenerator[LlmResponse, None]:
-        """
-        生成内容（支持流式）
-        """
-        # 转换 ADK 请求到 OpenAI 格式
-        messages = []
-        
-        # [Critical Fix] 处理 System Instruction - 从 llm_request.config 提取
-        # ADK 的 LlmAgent 会将 instruction 放入 config.system_instruction
-        if llm_request.config and llm_request.config.system_instruction:
-            system_text = llm_request.config.system_instruction
-            # 如果是 Content 对象，提取文本
-            if hasattr(system_text, 'parts'):
-                system_text = "".join(p.text for p in system_text.parts if p.text)
-            messages.append({
-                "role": "system",
-                "content": system_text
-            })
-        
-        for content in llm_request.contents:
-            role = "user" if content.role == "user" else "assistant"
-            # 简单的文本合并
-            text_parts = [p.text for p in content.parts if p.text]
-            if text_parts:
-                messages.append({
-                    "role": role,
-                    "content": "".join(text_parts)
-                })
-                
-        # 调用 OpenAI API
-        try:
-            response = await self._client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                stream=stream
-            )
-            
-            if stream:
-                async for chunk in response:
-                    content = chunk.choices[0].delta.content
-                    if content:
-                        # 构造 ADK 响应
-                        yield LlmResponse(
-                            content=types.Content(
-                                role="model", 
-                                parts=[types.Part(text=content)]
-                            ),
-                            partial=True,
-                            model_version=self.model
-                        )
-                        
-                        # [Critical Fix] 强制刷新 stdout 解决 Docker 缓冲问题
-                        try:
-                            sys.stdout.write('.')
-                            sys.stdout.flush()
-                        except Exception:
-                            pass
-            else:
-                # 非流式处理
-                content = response.choices[0].message.content
-                yield LlmResponse(
-                    content=types.Content(
-                        role="model",
-                        parts=[types.Part(text=content)]
-                    ),
-                    partial=False,
-                    model_version=self.model
-                )
-                
-        except Exception as e:
-            logger.error(f"OpenAI API 调用失败: {e}")
-            raise
+    
+    @property
+    def model(self) -> BaseChatModel:
+        """获取底层 ChatModel 实例"""
+        return self._chat_model
+
+
+def create_llm_from_config(config: Dict[str, str]) -> LangchainLlm:
+    """
+    从配置字典创建 LLM 实例
+    
+    Args:
+        config: 包含 model_name, base_url, api_key 的配置字典
+    
+    Returns:
+        LangchainLlm 实例
+    """
+    return LangchainLlm(
+        model_name=config['model_name'],
+        base_url=config['base_url'],
+        api_key=config['api_key']
+    )

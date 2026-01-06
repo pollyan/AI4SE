@@ -20,10 +20,7 @@ from .base import (
 )
 
 # 导入数据模型和服务
-try:
-    from ..agents import AdkAssistantService
-except ImportError:
-    AdkAssistantService = None
+from ..agents import LangchainAssistantService
 
 try:
     from ..models import db, RequirementsSession, RequirementsMessage, RequirementsAIConfig
@@ -119,7 +116,8 @@ def get_ai_service(assistant_type='alex', session_id=None):
                 return None
             
             # 创建AI服务实例
-            ai_service = AdkAssistantService(assistant_type=assistant_type, config=config_data)
+            # 创建AI服务实例
+            ai_service = LangchainAssistantService(assistant_type=assistant_type, config=config_data)
             
             # 缓存实例
             if session_id:
@@ -222,10 +220,7 @@ def create_session():
         # 验证助手类型（支持 lisa 别名）
         # 验证助手类型（支持 lisa 别名）
         # 验证助手类型（支持 lisa 别名）
-        if AdkAssistantService:
-            supported_types = list(AdkAssistantService.SUPPORTED_ASSISTANTS.keys()) + ['lisa']
-        else:
-            supported_types = ['alex', 'lisa']  # Fallback when ADK is not available
+        supported_types = list(LangchainAssistantService.SUPPORTED_ASSISTANTS.keys()) + ['lisa']
 
         if assistant_type not in supported_types:
             raise ValidationError(f"不支持的助手类型: {assistant_type}")
@@ -785,17 +780,13 @@ def get_assistants():
     """获取支持的助手列表"""
     try:
         assistants = []
-        if AdkAssistantService:
-            for assistant_id, info in AdkAssistantService.SUPPORTED_ASSISTANTS.items():
-                assistants.append({
-                    "id": assistant_id,
-                    "name": info["name"],
-                    "title": info["title"],
-                    "bundle_file": info["bundle_file"]
-                })
-        else:
-             # Fallback
-             assistants.append({"id": "alex", "name": "Alex", "title": "需求分析师", "bundle_file": "alex_v4_bundle.txt"})
+        for assistant_id, info in LangchainAssistantService.SUPPORTED_ASSISTANTS.items():
+            assistants.append({
+                "id": assistant_id,
+                "name": info["name"],
+                "title": info["title"],
+                "bundle_file": info["bundle_file"]
+            })
         
         return {
             "code": 200,
@@ -812,18 +803,10 @@ def get_assistants():
 def get_assistant_bundle(assistant_type):
     """获取指定助手的完整bundle内容"""
     try:
-        if AdkAssistantService:
-            if assistant_type not in AdkAssistantService.SUPPORTED_ASSISTANTS:
-                return standard_error_response(f"不支持的助手类型: {assistant_type}", 400)
-            
-            assistant_info = AdkAssistantService.SUPPORTED_ASSISTANTS[assistant_type]
-        else:
-            if assistant_type == 'alex':
-                assistant_info = {"name": "Alex", "title": "需求分析师", "bundle_file": "intelligent-requirements-analyst-bundle.txt"}
-            elif assistant_type == 'lisa':
-                assistant_info = {"name": "Lisa", "title": "测试专家", "bundle_file": "testmaster-song-bundle.txt"}
-            else:
-                 return standard_error_response(f"不支持的助手类型: {assistant_type} (ADK不可用)", 400)
+        if assistant_type not in LangchainAssistantService.SUPPORTED_ASSISTANTS:
+            return standard_error_response(f"不支持的助手类型: {assistant_type}", 400)
+        
+        assistant_info = LangchainAssistantService.SUPPORTED_ASSISTANTS[assistant_type]
 
         bundle_file = assistant_info["bundle_file"]
         # 动态解析 bundle 路径 (相对于 backend/agents/...)

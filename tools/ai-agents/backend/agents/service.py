@@ -1,23 +1,20 @@
 """
-ADK Assistant Service
+LangChain Assistant Service
 
-提供统一的服务接口，与原 LangGraphAssistantService 保持相同签名。
+提供统一的服务接口。
+使用 LangChain V1 的 create_agent 实现。
 """
 
 import logging
-from typing import AsyncIterator, Optional
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-from google.adk.agents import RunConfig
-from google.adk.agents.run_config import StreamingMode
-from google.genai import types
+from typing import AsyncIterator, Optional, Dict, List
+from langchain_core.messages import HumanMessage, AIMessage
 
 logger = logging.getLogger(__name__)
 
 
-class AdkAssistantService:
+class LangchainAssistantService:
     """
-    Google ADK 智能体服务
+    LangChain 智能体服务
     
     """
     
@@ -32,13 +29,13 @@ class AdkAssistantService:
             "name": "Lisa",
             "title": "测试专家 (v5.0)",
             "bundle_file": "lisa_v5_bundle.txt",
-            "description": "资深测试专家，专注于制定测试策略、设计测试用例和探索性测试。 (已更新)"
+            "description": "资深测试专家，专注于制定测试策略、设计测试用例和探索性测试。"
         }
     }
     
     def __init__(self, assistant_type: str, config: Optional[dict] = None):
         """
-        初始化 ADK 服务
+        初始化 LangChain 服务
         
         Args:
             assistant_type: 智能体类型 ('alex' 或 'lisa')
@@ -46,10 +43,10 @@ class AdkAssistantService:
         """
         self.assistant_type = assistant_type
         self.config = config
-        self.runner = None
-        self.session_service = InMemorySessionService()
+        self.agent = None
+        self._session_histories: Dict[str, List[dict]] = {}  # {session_id: [messages]}
         
-        logger.info(f"初始化 ADK 智能体服务: {assistant_type}")
+        logger.info(f"初始化 LangChain 智能体服务: {assistant_type}")
     
     async def initialize(self):
         """异步初始化服务"""
@@ -74,21 +71,41 @@ class AdkAssistantService:
         # 创建对应的 Agent
         if self.assistant_type == "alex":
             from .alex import create_alex_agent
-            agent = create_alex_agent(model_config)
+            self.agent = create_alex_agent(model_config)
         elif self.assistant_type in ("lisa", "song"):
             from .lisa import create_lisa_agent
-            agent = create_lisa_agent(model_config)
+            self.agent = create_lisa_agent(model_config)
         else:
             raise ValueError(f"未知的智能体类型: {self.assistant_type}")
         
-        # 创建 Runner
-        self.runner = Runner(
-            agent=agent,
-            app_name="intent-test-framework",
-            session_service=self.session_service
-        )
-        
         logger.info(f"{self.assistant_type} 智能体初始化完成")
+
+    def _get_session_history(self, session_id: str) -> List[dict]:
+        """获取或创建会话历史"""
+        if session_id not in self._session_histories:
+            self._session_histories[session_id] = []
+        return self._session_histories[session_id]
+    
+    def _add_to_history(self, session_id: str, role: str, content: str):
+        """添加消息到会话历史"""
+        history = self._get_session_history(session_id)
+        history.append({"role": role, "content": content})
+    
+    def _build_messages(self, session_id: str, user_message: str) -> list:
+        """构建消息列表用于 Agent 调用"""
+        history = self._get_session_history(session_id)
+        
+        messages = []
+        for msg in history:
+            if msg["role"] == "user":
+                messages.append(HumanMessage(content=msg["content"]))
+            else:
+                messages.append(AIMessage(content=msg["content"]))
+        
+        # 添加当前用户消息
+        messages.append(HumanMessage(content=user_message))
+        
+        return messages
 
     async def analyze_user_requirement(self, 
                                 user_message: str, 
@@ -97,54 +114,35 @@ class AdkAssistantService:
                                 current_stage: str = "initial",
                                 session_id: str = None) -> dict:
         """
-        处理非流式消息 (兼容 RequirementsAIService 接口)
+        处理非流式消息
         """
-        if not self.runner:
+        if not self.agent:
             await self.initialize()
 
         logger.info(f"非流式处理消息 - 会话: {session_id}, 消息长度: {len(user_message)}")
 
         try:
-            # 创建或获取 session
-            session = await self.session_service.get_session(
-                app_name="intent-test-framework",
-                user_id="default",
-                session_id=session_id
-            )
-            
-            if not session:
-                session = await self.session_service.create_session(
-                    app_name="intent-test-framework",
-                    user_id="default",
-                    session_id=session_id
-                )
-            
             # 构建消息
-            content = types.Content(
-                role="user",
-                parts=[types.Part(text=user_message)]
-            )
+            messages = self._build_messages(session_id, user_message)
             
-            # 运行 (非流式)
-            # ADK 的 run_async 返回事件流，标准 LlmAgent 通常产生增量文本 (deltas)
-            # 我们累积所有文本部分以构建完整响应
+            # 调用 Agent (非流式)
+            result = await self.agent.ainvoke({"messages": messages})
             
-            full_response_text = []
+            # 提取 AI 响应
+            ai_response = ""
+            if result and "messages" in result:
+                last_message = result["messages"][-1]
+                if hasattr(last_message, "content"):
+                    ai_response = last_message.content
             
-            async for event in self.runner.run_async(
-                user_id="default",
-                session_id=session_id,
-                new_message=content
-            ):
-                if event.content and event.content.parts:
-                    for part in event.content.parts:
-                        if part.text:
-                            full_response_text.append(part.text)
+            # 保存到会话历史
+            self._add_to_history(session_id, "user", user_message)
+            self._add_to_history(session_id, "assistant", ai_response)
 
             return {
-                'ai_response': "".join(full_response_text),
+                'ai_response': ai_response,
                 'stage': current_stage,
-                'ai_context': {},  # ADK 管理状态，不需要返回给前端/DB存储
+                'ai_context': {},
                 'consensus_content': {}
             }
 
@@ -156,38 +154,24 @@ class AdkAssistantService:
         """
         测试连接
         """
-        if not self.runner:
+        if not self.agent:
             await self.initialize()
             
         user_msg = messages[-1]['content']
         
-        # 使用临时 session ID
-        session_id = "test_connection_session"
+        # 构建消息
+        input_messages = [HumanMessage(content=user_msg)]
         
-        # 确保 session 存在 (InMemory)
-        await self.session_service.create_session(
-            app_name="intent-test-framework",
-            user_id="default",
-            session_id=session_id
-        )
-
-        content = types.Content(
-            role="user",
-            parts=[types.Part(text=user_msg)]
-        )
-
-        full_response_text = []
-        async for event in self.runner.run_async(
-            user_id="default",
-            session_id=session_id,
-            new_message=content
-        ):
-             if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.text:
-                        full_response_text.append(part.text)
+        # 调用 Agent
+        result = await self.agent.ainvoke({"messages": input_messages})
         
-        return "".join(full_response_text)
+        # 提取响应
+        if result and "messages" in result:
+            last_message = result["messages"][-1]
+            if hasattr(last_message, "content"):
+                return last_message.content
+        
+        return ""
     
     async def stream_message(
         self,
@@ -199,7 +183,7 @@ class AdkAssistantService:
         """
         流式处理消息
         
-        接口与 LangGraphAssistantService.stream_message 保持一致。
+        使用 LangChain V1 的 .astream() 实现真正的增量流式。
         
         Args:
             session_id: 会话 ID
@@ -208,68 +192,47 @@ class AdkAssistantService:
             is_activated: 会话是否已激活（保留参数，兼容接口）
             
         Yields:
-            AI 回复的文本片段
+            AI 回复的文本片段（真流式，每个 chunk 直接是增量内容）
         """
-        if not self.runner:
+        if not self.agent:
             await self.initialize()
         
         logger.info(f"流式处理消息 - 会话: {session_id}, 消息长度: {len(user_message)}")
         
         try:
-            # 创建或获取 session
-            session = await self.session_service.get_session(
-                app_name="intent-test-framework",
-                user_id="default",
-                session_id=session_id
-            )
-            
-            if not session:
-                session = await self.session_service.create_session(
-                    app_name="intent-test-framework",
-                    user_id="default",
-                    session_id=session_id
-                )
-                logger.info(f"创建新会话: {session_id}")
-            
             # 构建消息
-            content = types.Content(
-                role="user",
-                parts=[types.Part(text=user_message)]
-            )
+            messages = self._build_messages(session_id, user_message)
             
-            # 流式运行 - ADK 会产生多个增量事件
-            logger.info(f"开始流式运行 ADK agent...")
-            previous_text = ""
-            event_count = 0
+            logger.info(f"开始流式运行 LangChain agent...")
+            full_response = ""
             
-            async for event in self.runner.run_async(
-                user_id="default",
-                session_id=session_id,
-                new_message=content,
-                run_config=RunConfig(streaming_mode=StreamingMode.SSE)
+            # 真流式！使用 stream_mode="messages" 获取增量输出
+            async for chunk in self.agent.astream(
+                {"messages": messages},
+                stream_mode="messages"
             ):
-                event_count += 1
-                
-                # ADK 事件包含累积的完整文本，需要提取增量部分
-                if event.content and event.content.parts:
-                    for part in event.content.parts:
-                        if part.text:
-                            current_text = part.text
-                            # 提取新增的文本（增量）
-                            if current_text.startswith(previous_text):
-                                delta = current_text[len(previous_text):]
-                                if delta:
-                                    logger.debug(f"流式输出增量: {len(delta)} 字符")
-                                    yield delta
-                                    previous_text = current_text
-                            else:
-                                # 如果文本不是累积的，直接输出
-                                logger.debug(f"流式输出完整: {len(current_text)} 字符")
-                                yield current_text
-                                previous_text = current_text
+                # chunk 格式: (message, metadata) 元组
+                if isinstance(chunk, tuple) and len(chunk) >= 1:
+                    message = chunk[0]
+                    if hasattr(message, 'content') and message.content:
+                        content = message.content
+                        # 直接输出增量内容
+                        yield content
+                        full_response += content
+                elif hasattr(chunk, 'content') and chunk.content:
+                    # 备用格式处理
+                    yield chunk.content
+                    full_response += chunk.content
             
-            logger.info(f"流式消息处理完成，总计: {len(previous_text)} 字符")
+            # 保存完整响应到会话历史
+            self._add_to_history(session_id, "user", user_message)
+            self._add_to_history(session_id, "assistant", full_response)
+            
+            logger.info(f"流式消息处理完成，总计: {len(full_response)} 字符")
             
         except Exception as e:
             logger.error(f"流式处理消息失败: {str(e)}")
             yield f"\n\n错误: {str(e)}"
+
+
+

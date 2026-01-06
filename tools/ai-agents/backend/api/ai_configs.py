@@ -338,17 +338,14 @@ def test_config(config_id):
         if not config:
             raise NotFoundError("配置不存在")
         
-        try:
-            # 使用本地 agents 模块
-            from ..agents import AdkAssistantService
-        except ImportError:
-            return standard_error_response("ADK library not installed", 503)
+        # 使用本地 agents 模块
+        from ..agents import LangchainAssistantService
         
         import time
         import asyncio
         
         config_data = config.get_config_for_ai_service()
-        temp_ai_service = AdkAssistantService(assistant_type="alex", config=config_data)
+        temp_ai_service = LangchainAssistantService(assistant_type="alex", config=config_data)
         
         start_time = time.time()
         messages = [{"role": "user", "content": "你好"}]
