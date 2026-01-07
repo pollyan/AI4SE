@@ -59,7 +59,7 @@ async def test_stream_lisa_message_deduplication():
     
     # 3. Run and Collect Output
     collected_output = []
-    async for chunk in service._stream_lisa_message("test_session", "User input"):
+    async for chunk in service._stream_graph_message("test_session", "User input"):
         collected_output.append(chunk)
         
     full_text = "".join(collected_output)
@@ -102,7 +102,7 @@ async def test_stream_lisa_message_duplicate_chunks():
     service.agent.astream = mock_astream
     
     collected_output = []
-    async for chunk in service._stream_lisa_message("sess", "input"):
+    async for chunk in service._stream_graph_message("sess", "input"):
         collected_output.append(chunk)
         
     assert "".join(collected_output) == "ABC"

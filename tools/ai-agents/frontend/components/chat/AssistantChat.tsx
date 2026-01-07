@@ -301,7 +301,7 @@ function useChatState(assistantId: AssistantId) {
                     size: a.size,
                     content: `File: ${a.filename}`, // 简化处理
                     type: 'text/plain'
-                  })))
+                })))
                 : userText;
 
             // 添加新的 AI 占位消息
@@ -443,16 +443,15 @@ export function AssistantChat({ assistant, onBack }: AssistantChatProps) {
                         />
 
                         <ComposerPrimitive.Root className="relative flex items-center gap-2">
-                            {/* 附件按钮 */}
-                            <AttachmentButton
-                                onFilesSelected={handleFilesSelected}
-                                disabled={isRunning}
-                            />
-
                             <ComposerPrimitive.Input
                                 autoFocus
                                 placeholder="请输入..."
-                                className="flex-grow pl-4 pr-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-full focus:ring-2 focus:ring-primary focus:border-primary text-sm shadow-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex-grow pl-4 pr-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-sm shadow-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                            />
+                            {/* 附件按钮 - 在输入框和发送按钮之间 */}
+                            <AttachmentButton
+                                onFilesSelected={handleFilesSelected}
+                                disabled={isRunning}
                             />
                             <ComposerPrimitive.Send className="p-3 rounded-full shadow-sm transition-colors flex items-center justify-center bg-primary hover:bg-indigo-600 text-white cursor-pointer disabled:bg-gray-200 disabled:dark:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed">
                                 <Send size={20} />

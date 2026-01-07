@@ -5,6 +5,5 @@ AI Agents 模块
 """
 
 from .service import LangchainAssistantService
-from .alex import AlexAgent
 
-__all__ = ["LangchainAssistantService", "AlexAgent"]
+__all__ = ["LangchainAssistantService"]
