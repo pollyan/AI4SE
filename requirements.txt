@@ -13,7 +13,7 @@ python-dotenv==1.2.1
 requests==2.32.5
 
 # Web框架
-flask>=2.0.0
+flask[async]>=2.0.0
 flask-socketio>=5.0.0
 flask-cors>=4.0.0
 python-socketio>=5.0.0
@@ -32,9 +32,9 @@ factory-boy>=3.2.0
 faker>=18.0.0
 
 
-# Google ADK - Agent Development Kit
-# Google ADK - Agent Development Kit
-google-adk>=1.2.1
-litellm>=1.0.0
-google-genai>=0.3.0
+# LangChain V1 (Stable)
+langchain>=1.0.0
+langchain-core>=1.0.0
+langchain-openai>=1.0.0
+langgraph>=1.0.0
 openai>=1.12.0
