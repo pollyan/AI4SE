@@ -249,10 +249,14 @@ class LangchainAssistantService:
         user_facing_nodes = {"clarify_intent", "workflow_test_design"}
         
         # 使用 stream_mode="messages" 获取真正的 token 级增量
+        seen_content = set()  # 用于去重
         async for event in self.agent.astream(
             state,
             stream_mode="messages"
         ):
+            # 调试日志：记录 event 格式
+            logger.info(f"Stream event type: {type(event)}, len: {len(event) if isinstance(event, tuple) else 'N/A'}")
+            
             # event 格式: (message, metadata) 元组
             if isinstance(event, tuple) and len(event) >= 2:
                 message, metadata = event[0], event[1]
@@ -260,29 +264,41 @@ class LangchainAssistantService:
                 # 从 metadata 获取当前节点名（langgraph_node）
                 node_name = metadata.get("langgraph_node", "")
                 
-                # 只输出用户面向节点的内容，过滤掉 intent_router
+                # 调试日志
+                content_preview = message.content[:50] if hasattr(message, 'content') and message.content else '(empty)'
+                logger.info(f"Stream event: node={node_name}, content_len={len(message.content) if hasattr(message, 'content') and message.content else 0}, preview={content_preview}")
+                
                 if node_name in user_facing_nodes:
                     if hasattr(message, 'content') and message.content:
                         content = message.content
-                        yield content
-                        full_response += content
+                        
+                        # 增量输出逻辑：
+                        # 由于 stream_mode="messages" 可能返回多次累积内容（或 chunk + 完整消息），
+                        # 我们需要只输出相对于当前 full_response 的新增部分。
+                        
+                        if content.startswith(full_response):
+                            # Case 1: 新内容包含之前的完整响应（如 chunk 不断累积）
+                            # 输出新增的后缀部分
+                            new_part = content[len(full_response):]
+                            if new_part:
+                                yield new_part
+                                full_response = content
+                        elif not full_response.endswith(content):
+                            # Case 2: 新内容是全新的一部分（如独立的 chunk），且不是当前响应的后缀
+                            # 直接输出并追加
+                            yield content
+                            full_response += content
+                        else:
+                            # Case 3: 重复内容（如 content 已经是 full_response 的一部分），跳过
+                            pass
                 else:
-                    # 其他节点（如 intent_router）静默处理
-                    logger.debug(f"过滤节点输出: {node_name}")
-                    
-            elif isinstance(event, tuple) and len(event) == 1:
-                # 单元素元组
-                message = event[0]
-                if hasattr(message, 'content') and message.content:
-                    content = message.content
-                    yield content
-                    full_response += content
-                    
-            elif hasattr(event, 'content') and event.content:
-                # 直接是 message 对象
-                content = event.content
-                yield content
-                full_response += content
+                    # 其他节点（如 intent_router）静默处理，不输出
+                    if node_name:
+                        logger.debug(f"过滤节点输出: {node_name}")
+            else:
+                logger.warning(f"未知 event 格式: {type(event)}")
+            
+            # 注意：不处理其他格式的 event，避免意外输出内部节点的内容
         
         # 更新状态 - 添加 AI 响应
         if full_response:
