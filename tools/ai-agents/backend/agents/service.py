@@ -3,10 +3,11 @@ LangChain Assistant Service
 
 提供统一的服务接口。
 使用 LangChain V1 的 create_agent 实现。
+Lisa 智能体使用 LangGraph StateGraph 实现。
 """
 
 import logging
-from typing import AsyncIterator, Optional, Dict, List
+from typing import AsyncIterator, Optional, Dict, List, Any, Union
 from langchain_core.messages import HumanMessage, AIMessage
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,7 @@ class LangchainAssistantService:
         self.config = config
         self.agent = None
         self._session_histories: Dict[str, List[dict]] = {}  # {session_id: [messages]}
+        self._lisa_session_states: Dict[str, Any] = {}  # Lisa Graph 专用状态存储
         
         logger.info(f"初始化 LangChain 智能体服务: {assistant_type}")
     
@@ -73,8 +75,9 @@ class LangchainAssistantService:
             from .alex import create_alex_agent
             self.agent = create_alex_agent(model_config)
         elif self.assistant_type in ("lisa", "song"):
-            from .lisa import create_lisa_agent
-            self.agent = create_lisa_agent(model_config)
+            # Lisa 使用新的 LangGraph 实现
+            from .lisa import create_lisa_graph
+            self.agent = create_lisa_graph(model_config)
         else:
             raise ValueError(f"未知的智能体类型: {self.assistant_type}")
         
@@ -184,6 +187,7 @@ class LangchainAssistantService:
         流式处理消息
         
         使用 LangChain V1 的 .astream() 实现真正的增量流式。
+        Lisa 智能体使用 LangGraph StateGraph 管理状态。
         
         Args:
             session_id: 会话 ID
@@ -200,39 +204,142 @@ class LangchainAssistantService:
         logger.info(f"流式处理消息 - 会话: {session_id}, 消息长度: {len(user_message)}")
         
         try:
-            # 构建消息
-            messages = self._build_messages(session_id, user_message)
-            
-            logger.info(f"开始流式运行 LangChain agent...")
-            full_response = ""
-            
-            # 真流式！使用 stream_mode="messages" 获取增量输出
-            async for chunk in self.agent.astream(
-                {"messages": messages},
-                stream_mode="messages"
-            ):
-                # chunk 格式: (message, metadata) 元组
-                if isinstance(chunk, tuple) and len(chunk) >= 1:
-                    message = chunk[0]
-                    if hasattr(message, 'content') and message.content:
-                        content = message.content
-                        # 直接输出增量内容
-                        yield content
-                        full_response += content
-                elif hasattr(chunk, 'content') and chunk.content:
-                    # 备用格式处理
-                    yield chunk.content
-                    full_response += chunk.content
-            
-            # 保存完整响应到会话历史
-            self._add_to_history(session_id, "user", user_message)
-            self._add_to_history(session_id, "assistant", full_response)
-            
-            logger.info(f"流式消息处理完成，总计: {len(full_response)} 字符")
-            
+            # Lisa 使用 LangGraph 状态管理
+            if self.assistant_type in ("lisa", "song"):
+                async for chunk in self._stream_lisa_message(session_id, user_message):
+                    yield chunk
+            else:
+                # 其他智能体使用原有逻辑
+                async for chunk in self._stream_legacy_message(session_id, user_message):
+                    yield chunk
+                    
         except Exception as e:
             logger.error(f"流式处理消息失败: {str(e)}")
             yield f"\n\n错误: {str(e)}"
+    
+    async def _stream_lisa_message(
+        self,
+        session_id: str,
+        user_message: str
+    ) -> AsyncIterator[str]:
+        """
+        Lisa Graph 专用流式处理
+        
+        使用 LisaState 管理会话状态，支持工作流控制和产出物存储。
+        使用 stream_mode="messages" 获取真正的 token 级流式输出。
+        """
+        from .lisa import get_initial_state
+        
+        # 获取或初始化 Lisa 状态
+        if session_id not in self._lisa_session_states:
+            self._lisa_session_states[session_id] = get_initial_state()
+        
+        state = self._lisa_session_states[session_id]
+        
+        # 添加用户消息到状态
+        state["messages"].append(HumanMessage(content=user_message))
+        
+        logger.info(f"Lisa Graph 流式处理 - 工作流: {state.get('current_workflow')}, 阶段: {state.get('workflow_stage')}")
+        
+        full_response = ""
+        
+        # 追踪当前节点，用于过滤 intent_router 的输出
+        current_node = None
+        # 用户输出节点（需要流式输出的节点）
+        user_facing_nodes = {"clarify_intent", "workflow_test_design"}
+        
+        # 使用 stream_mode="messages" 获取真正的 token 级增量
+        async for event in self.agent.astream(
+            state,
+            stream_mode="messages"
+        ):
+            # event 格式: (message, metadata) 元组
+            if isinstance(event, tuple) and len(event) >= 2:
+                message, metadata = event[0], event[1]
+                
+                # 从 metadata 获取当前节点名（langgraph_node）
+                node_name = metadata.get("langgraph_node", "")
+                
+                # 只输出用户面向节点的内容，过滤掉 intent_router
+                if node_name in user_facing_nodes:
+                    if hasattr(message, 'content') and message.content:
+                        content = message.content
+                        yield content
+                        full_response += content
+                else:
+                    # 其他节点（如 intent_router）静默处理
+                    logger.debug(f"过滤节点输出: {node_name}")
+                    
+            elif isinstance(event, tuple) and len(event) == 1:
+                # 单元素元组
+                message = event[0]
+                if hasattr(message, 'content') and message.content:
+                    content = message.content
+                    yield content
+                    full_response += content
+                    
+            elif hasattr(event, 'content') and event.content:
+                # 直接是 message 对象
+                content = event.content
+                yield content
+                full_response += content
+        
+        # 更新状态 - 添加 AI 响应
+        if full_response:
+            state["messages"].append(AIMessage(content=full_response))
+        
+        # 更新工作流信息（从最后的 Graph 状态获取）
+        # 注意：由于使用 stream_mode="messages"，无法直接获取状态更新
+        # 这里暂时通过检查响应内容来推断是否进入了工作流
+        if "测试设计" in user_message or state.get("current_workflow") == "test_design":
+            state["current_workflow"] = "test_design"
+        
+        # 保存更新后的状态
+        self._lisa_session_states[session_id] = state
+        
+        # 同时保存到传统历史记录（用于兼容）
+        self._add_to_history(session_id, "user", user_message)
+        self._add_to_history(session_id, "assistant", full_response)
+        
+        logger.info(f"Lisa Graph 流式消息处理完成，总计: {len(full_response)} 字符")
+    
+    async def _stream_legacy_message(
+        self,
+        session_id: str,
+        user_message: str
+    ) -> AsyncIterator[str]:
+        """
+        传统智能体流式处理（Alex 等）
+        """
+        # 构建消息
+        messages = self._build_messages(session_id, user_message)
+        
+        logger.info(f"开始流式运行 LangChain agent...")
+        full_response = ""
+        
+        # 真流式！使用 stream_mode="messages" 获取增量输出
+        async for chunk in self.agent.astream(
+            {"messages": messages},
+            stream_mode="messages"
+        ):
+            # chunk 格式: (message, metadata) 元组
+            if isinstance(chunk, tuple) and len(chunk) >= 1:
+                message = chunk[0]
+                if hasattr(message, 'content') and message.content:
+                    content = message.content
+                    # 直接输出增量内容
+                    yield content
+                    full_response += content
+            elif hasattr(chunk, 'content') and chunk.content:
+                # 备用格式处理
+                yield chunk.content
+                full_response += chunk.content
+        
+        # 保存完整响应到会话历史
+        self._add_to_history(session_id, "user", user_message)
+        self._add_to_history(session_id, "assistant", full_response)
+        
+        logger.info(f"流式消息处理完成，总计: {len(full_response)} 字符")
 
 
 
