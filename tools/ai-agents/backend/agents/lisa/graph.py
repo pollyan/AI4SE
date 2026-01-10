@@ -17,7 +17,7 @@ from ..llm import create_llm_from_config
 logger = logging.getLogger(__name__)
 
 
-def route_by_intent(state: LisaState) -> Literal["test_design", "clarify"]:
+def route_by_intent(state: LisaState) -> Literal["test_design", "requirement_review", "clarify"]:
     """
     根据意图路由到对应节点
     
@@ -36,6 +36,9 @@ def route_by_intent(state: LisaState) -> Literal["test_design", "clarify"]:
     
     if current_workflow == "test_design":
         return "test_design"
+    
+    if current_workflow == "requirement_review":
+        return "requirement_review"
     
     # 无工作流或工作流未识别，进入澄清
     return "clarify"
@@ -71,6 +74,8 @@ def create_lisa_graph(model_config: Dict[str, str]):
     graph.add_node("intent_router", lambda state: intent_router_node(state, llm))
     graph.add_node("clarify_intent", lambda state: clarify_intent_node(state, llm))
     graph.add_node("workflow_test_design", lambda state: workflow_test_design_node(state, llm))
+    # 需求评审使用与测试设计同样的工作流节点，区别在于 plan 不同
+    graph.add_node("workflow_requirement_review", lambda state: workflow_test_design_node(state, llm))
     
     # 添加边 - 简化结构，避免循环
     graph.add_edge(START, "intent_router")
@@ -79,12 +84,14 @@ def create_lisa_graph(model_config: Dict[str, str]):
         route_by_intent,
         {
             "test_design": "workflow_test_design",
+            "requirement_review": "workflow_requirement_review",
             "clarify": "clarify_intent",
         }
     )
     # clarify_intent 直接结束，等待用户下一次输入
     graph.add_edge("clarify_intent", END)
     graph.add_edge("workflow_test_design", END)
+    graph.add_edge("workflow_requirement_review", END)
     
     # 编译图
     compiled = graph.compile()

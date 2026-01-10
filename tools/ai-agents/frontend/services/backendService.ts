@@ -52,13 +52,23 @@ export async function createSession(
 }
 
 /**
+ * Progress info from state events
+ */
+export interface ProgressInfo {
+    stages: { id: string; name: string; status: 'pending' | 'active' | 'completed' }[];
+    currentStageIndex: number;
+    currentTask: string | null;
+}
+
+/**
  * Sends a message to the backend and streams the response via SSE.
  * The backend returns text/event-stream with format: data: {"type": "content", "chunk": "..."}
  */
 export async function sendMessageStream(
     sessionId: string,
     message: string,
-    onChunk: (fullText: string) => void
+    onChunk: (fullText: string) => void,
+    onStateChange?: (progress: ProgressInfo) => void
 ): Promise<string> {
     const response = await fetch(`${API_BASE}/sessions/${sessionId}/messages/stream`, {
         method: 'POST',
@@ -106,6 +116,9 @@ export async function sendMessageStream(
                         if (data.type === 'content' && data.chunk) {
                             fullText += data.chunk;
                             onChunk(fullText);
+                        } else if (data.type === 'state' && data.progress && onStateChange) {
+                            // Handle state events for workflow progress
+                            onStateChange(data.progress);
                         } else if (data.type === 'done') {
                             // Stream completed
                             return fullText;

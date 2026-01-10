@@ -39,6 +39,19 @@ class LisaState(TypedDict):
     workflow_stage: Optional[WorkflowStage]
     
     # ═══════════════════════════════════════════════════════════
+    # 动态进度计划
+    # ═══════════════════════════════════════════════════════════
+    # 列表中的每个 item 结构:
+    # {
+    #     "id": "stage_id",
+    #     "name": "阶段名称",
+    #     "status": "pending" | "active" | "completed",
+    #     "description": "阶段描述 (可选)"
+    # }
+    plan: list[dict]
+    current_stage_id: Optional[str]
+    
+    # ═══════════════════════════════════════════════════════════
     # 产出物存储 (Markdown 格式，支持 Mermaid)
     # ═══════════════════════════════════════════════════════════
     # 命名规范:
@@ -60,6 +73,7 @@ def get_initial_state() -> LisaState:
     获取 LisaState 的初始状态
     
     用于创建新会话时初始化状态。
+    Plan 由 LLM 在首次响应时动态生成。
     
     Returns:
         LisaState: 初始化后的状态字典
@@ -68,6 +82,8 @@ def get_initial_state() -> LisaState:
         "messages": [],
         "current_workflow": None,
         "workflow_stage": None,
+        "plan": [],  # 空 plan，由 LLM 动态生成
+        "current_stage_id": None,
         "artifacts": {},
         "pending_clarifications": [],
         "consensus_items": [],
@@ -90,6 +106,8 @@ def clear_workflow_state(state: LisaState) -> LisaState:
         **state,
         "current_workflow": None,
         "workflow_stage": None,
+        "plan": [],  # 清空 plan，由新工作流的 LLM 动态生成
+        "current_stage_id": None,
         "artifacts": {},
         "pending_clarifications": [],
         "consensus_items": [],
@@ -105,3 +123,8 @@ class ArtifactKeys:
     TEST_DESIGN_STRATEGY = "test_design_strategy"
     TEST_DESIGN_CASES = "test_design_cases"
     TEST_DESIGN_FINAL = "test_design_final"
+    
+    # 需求评审工作流
+    REQ_REVIEW_RECORD = "req_review_record"      # 需求评审记录
+    REQ_REVIEW_RISK = "req_review_risk"          # 风险评估
+    REQ_REVIEW_REPORT = "req_review_report"      # 最终报告

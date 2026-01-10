@@ -34,6 +34,9 @@ WORKFLOW_TEST_DESIGN_SYSTEM = """
 - 待澄清问题: {pending_clarifications}
 - 已达成共识: {consensus_count} 项
 
+### 进度计划
+{plan_context}
+
 ### 阶段定义
 
 #### clarify (需求澄清)
@@ -69,6 +72,28 @@ WORKFLOW_TEST_DESIGN_SYSTEM = """
    > 2. [如有后续影响] 评估了《[后续文档]》，[调整说明]
    > 
    > 以下是更新后的内容：..."
+
+### 工作计划生成 (首次响应必须)
+
+**重要**: 如果当前没有进度计划(plan_context 为空)，你必须在首次响应的**最开头**生成工作计划。
+
+**格式**: 在回复的**第一行**输出 plan 标签 (系统自动解析后移除，用户看不到):
+<plan>[{{"id": "clarify", "name": "需求澄清"}}, {{"id": "strategy", "name": "策略制定"}}, {{"id": "cases", "name": "用例编写"}}, {{"id": "delivery", "name": "文档交付"}}]</plan>
+
+**规则**:
+- 必须放在回复的第一行，在任何其他内容之前
+- 可以根据具体任务调整阶段名称和数量
+- 必须保持 JSON 格式
+
+### 进度更新指令 (阶段切换时使用)
+
+当你完成当前阶段并准备进入下一个阶段时，请在回复中包含以下标签：
+<update_status stage="下一阶段ID">active</update_status>
+
+例如，完成 clarify 阶段后：
+<update_status stage="strategy">active</update_status>
+
+**注意**: 这些标签将被系统自动处理，不会显示给用户。
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -324,11 +349,12 @@ STAGE_DELIVERY_PROMPT = """
 """
 
 
-def build_workflow_prompt(
+def build_test_design_prompt(
     stage: str,
     artifacts_summary: str,
     pending_clarifications: str,
-    consensus_count: int
+    consensus_count: int,
+    plan_context: str = "(无进度计划)"
 ) -> str:
     """
     构建测试设计工作流的完整 Prompt
@@ -338,6 +364,7 @@ def build_workflow_prompt(
         artifacts_summary: 产出物摘要
         pending_clarifications: 待澄清问题
         consensus_count: 共识数量
+        plan_context: 进度计划上下文 (可选)
     
     Returns:
         完整的 System Prompt
@@ -350,6 +377,7 @@ def build_workflow_prompt(
         artifacts_summary=artifacts_summary,
         pending_clarifications=pending_clarifications,
         consensus_count=consensus_count,
+        plan_context=plan_context,
     )
     
     # 添加阶段特定 Prompt
@@ -363,3 +391,4 @@ def build_workflow_prompt(
     stage_prompt = stage_prompts.get(stage, STAGE_CLARIFY_PROMPT)
     
     return f"{system}\n\n---\n\n{stage_prompt}"
+

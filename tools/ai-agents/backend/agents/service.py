@@ -184,7 +184,7 @@ class LangchainAssistantService:
         user_message: str,
         project_name: Optional[str] = None,
         is_activated: bool = False
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[Union[str, dict]]:
         """
         流式处理消息
         
@@ -198,7 +198,8 @@ class LangchainAssistantService:
             is_activated: 会话是否已激活（保留参数，兼容接口）
             
         Yields:
-            AI 回复的文本片段（真流式，每个 chunk 直接是增量内容）
+            str: AI 回复的文本片段
+            dict: state 事件，格式 {"type": "state", "progress": {...}}
         """
         if not self.agent:
             await self.initialize()
@@ -219,12 +220,16 @@ class LangchainAssistantService:
         self,
         session_id: str,
         user_message: str
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[Union[str, dict]]:
         """
         通用 Graph 专用流式处理
         
         使用 StateGraph 管理会话状态，支持工作流控制和产出物存储。
         使用 stream_mode="messages" 获取真正的 token 级流式输出。
+        
+        Yields:
+            str: 文本内容片段
+            dict: state 事件 {"type": "state", "progress": {...}}
         """
         
         # 获取或初始化 Graph 状态
@@ -246,13 +251,29 @@ class LangchainAssistantService:
         workflow_info = state.get('current_workflow', 'N/A')
         logger.info(f"Graph 流式处理 - 智能体: {self.assistant_type}, 工作流: {workflow_info}")
         
+        # 注意: 不再使用关键词检测工作流类型
+        # 工作流类型由 intent_router 节点基于语义判断设置
+        
+        # Lisa: 发送初始 state 事件
+        if self.assistant_type in ("lisa", "song"):
+            from .lisa.progress import get_progress_info
+            progress = get_progress_info(state)
+            if progress:
+                yield {"type": "state", "progress": progress}
+        
         full_response = ""
         
         # 用户输出节点（需要流式输出的节点）
         # Lisa 需要过滤 intent_router，Alex 主要是 model 节点
-        user_facing_nodes = {"clarify_intent", "workflow_test_design", "model"}
+        user_facing_nodes = {"clarify_intent", "workflow_test_design", "workflow_requirement_review", "model"}
         
         # 使用 stream_mode="messages" 获取真正的 token 级增量
+        # 导入清理函数用于流式过滤
+        from .shared.progress_utils import clean_response_streaming
+        
+        # 记录已输出的清理后的文本长度
+        yielded_len = 0
+        
         async for event in self.agent.astream(
             state,
             stream_mode="messages"
@@ -269,40 +290,75 @@ class LangchainAssistantService:
                         content = message.content
                         
                         # 增量输出逻辑：
-                        # 由于 stream_mode="messages" 可能返回多次累积内容（或 chunk + 完整消息），
-                        # 需去重
+                        # 基于全量内容进行清理，然后计算新增的 delta
+                        # 这种方式可以处理跨 chunk 的 XML 标签，以及临时隐藏未完成的标签
                         
                         if content.startswith(full_response):
-                            # Case 1: 新内容包含之前的完整响应
-                            new_part = content[len(full_response):]
-                            if new_part:
-                                yield new_part
-                                full_response = content
-                        elif not full_response.endswith(content):
-                            # Case 2: 新内容是全新的一部分
-                            yield content
-                            full_response += content
+                             # Case 1: content 是累积的完整响应 (LangGraph 默认行为)
+                             # 无需额外拼接
+                             full_response = content
                         else:
-                            # Case 3: 重复内容
-                            pass
+                             # Case 2: content 只是增量 chunk (某些 LLM 的行为)
+                             # 需要累积到 full_response
+                             # 注意：这里假设 content 确实是增量，不包含之前的 duplicated 内容
+                             # LangGraph stream_mode="messages" 通常返回的是 MessageChunk，会自动合并
+                             # 如果这里返回的是增量 chunk，我们需要自己拼接
+                             # 但根据之前的代码，似乎之前的 content 包含了 full_response
+                             # 为了安全，我们只信任 MessageChunk 的累积能力，或者只处理 case 1
+                             if not full_response.endswith(content):
+                                 full_response += content
+
+                        # 核心逻辑：对当前完整的 full_response 进行智能流式清理
+                        cleaned_full = clean_response_streaming(full_response)
+                        
+                        # 计算需要输出的 delta
+                        if len(cleaned_full) > yielded_len:
+                            delta = cleaned_full[yielded_len:]
+                            yield delta
+                            yielded_len += len(delta)
             
         # 更新状态 - 添加 AI 响应
-        if full_response:
-            state["messages"].append(AIMessage(content=full_response))
+        # Lisa/Song: 解析 XML 进度更新指令和动态 Plan，并清理响应
+        cleaned_response = full_response
+        if self.assistant_type in ("lisa", "song") and full_response:
+            from .shared.progress_utils import parse_progress_update, parse_plan, clean_response_text
+            
+            # 解析动态 Plan (LLM 首次规划工作阶段)
+            parsed_plan = parse_plan(full_response)
+            if parsed_plan:
+                state["plan"] = parsed_plan
+                state["current_stage_id"] = parsed_plan[0]["id"] if parsed_plan else None
+                logger.info(f"动态 Plan 已更新: {len(parsed_plan)} 个阶段")
+            
+            # 解析进度更新指令 (阶段切换)
+            update_result = parse_progress_update(full_response)
+            if update_result:
+                stage_id, new_status = update_result
+                state["current_stage_id"] = stage_id
+                logger.info(f"进度更新: current_stage_id -> {stage_id}")
+            
+            # 清理 XML 标签
+            cleaned_response = clean_response_text(full_response)
         
-        # Lisa 特有: 更新工作流信息
-        if self.assistant_type in ("lisa", "song"):
-            if "测试设计" in user_message or state.get("current_workflow") == "test_design":
-                state["current_workflow"] = "test_design"
+        # 将清理后的响应添加到消息历史
+        if cleaned_response:
+            state["messages"].append(AIMessage(content=cleaned_response))
         
         # 保存更新后的状态
         self._lisa_session_states[session_id] = state
         
+        # Lisa: 发送最终 state 事件
+        if self.assistant_type in ("lisa", "song"):
+            from .lisa.progress import get_progress_info
+            progress = get_progress_info(state)
+            if progress:
+                yield {"type": "state", "progress": progress}
+        
         # 同时保存到传统历史记录（用于兼容）
         self._add_to_history(session_id, "user", user_message)
-        self._add_to_history(session_id, "assistant", full_response)
+        self._add_to_history(session_id, "assistant", cleaned_response)
         
-        logger.info(f"Graph 流式消息处理完成，总计: {len(full_response)} 字符")
+        logger.info(f"Graph 流式消息处理完成，总计: {len(cleaned_response)} 字符")
         
     
     async def _stream_legacy_message(

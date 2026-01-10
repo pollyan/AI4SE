@@ -688,9 +688,16 @@ def stream_messages(session_id):
                     try:
                         # 使用 loop.run_until_complete 等待下一个 chunk
                         # 注意：__anext__() 在 Python 3.10+
-                        chunk = loop.run_until_complete(async_gen.__anext__())
-                        full_content += chunk
-                        yield f"data: {json.dumps({'type': 'content', 'chunk': chunk})}\n\n"
+                        item = loop.run_until_complete(async_gen.__anext__())
+                        
+                        # 支持混合类型：str (content) 和 dict (state event)
+                        if isinstance(item, dict):
+                            # state 事件直接序列化输出
+                            yield f"data: {json.dumps(item)}\n\n"
+                        else:
+                            # 文本内容
+                            full_content += item
+                            yield f"data: {json.dumps({'type': 'content', 'chunk': item})}\n\n"
                     except StopAsyncIteration:
                         break
                 

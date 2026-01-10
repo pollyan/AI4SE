@@ -115,10 +115,24 @@ def intent_router_node(state: LisaState, llm: Any) -> LisaState:
         logger.info(f"意图识别结果: {intent} (置信度: {confidence})")
         
         # 根据意图更新状态
-        if intent in ["START_TEST_DESIGN", "CONTINUE", "SUPPLEMENT"]:
+        # 注意: plan 不在这里硬编码，由 workflow 节点让 LLM 动态生成
+        if intent == "START_TEST_DESIGN":
             return {
                 **state,
                 "current_workflow": "test_design",
+                # plan 将由 workflow_test_design 节点通过 LLM 动态生成
+            }
+        elif intent == "START_REQUIREMENT_REVIEW":
+            return {
+                **state,
+                "current_workflow": "requirement_review",
+                # plan 将由 workflow_requirement_review 节点通过 LLM 动态生成
+            }
+        elif intent in ["CONTINUE", "SUPPLEMENT"]:
+            # 继续当前工作流，保持 plan 不变
+            return {
+                **state,
+                "current_workflow": state.get("current_workflow"),
             }
         else:
             # UNCLEAR - 保持当前状态
@@ -130,3 +144,4 @@ def intent_router_node(state: LisaState, llm: Any) -> LisaState:
         if state.get("current_workflow"):
             return state
         return state
+

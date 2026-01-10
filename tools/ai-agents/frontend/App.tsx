@@ -5,6 +5,7 @@ import AssistantCard from './components/AssistantCard';
 import AnalysisResultPanel from './components/AnalysisResultPanel';
 import { ASSISTANTS } from './constants';
 import { AssistantId, Assistant } from './types';
+import type { ProgressInfo } from './services/backendService';
 import { Bot } from 'lucide-react';
 import '@assistant-ui/styles/index.css';
 
@@ -12,6 +13,7 @@ const App: React.FC = () => {
   const [selectedAssistantId, setSelectedAssistantId] = useState<AssistantId | null>(null);
   const [analysisResult, setAnalysisResult] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [workflowProgress, setWorkflowProgress] = useState<ProgressInfo | null>(null);
 
   const handleSelectAssistant = (id: AssistantId) => {
     if (!id) {
@@ -25,6 +27,7 @@ const App: React.FC = () => {
 
     setSelectedAssistantId(id);
     setAnalysisResult('');
+    setWorkflowProgress(null);  // 切换助手时清空进度
   };
 
   const handleBack = () => {
@@ -132,6 +135,7 @@ const App: React.FC = () => {
             <AssistantChat
               assistant={selectedAssistant}
               onBack={handleBack}
+              onProgressChange={setWorkflowProgress}
             />
           ) : (
             <AssistantSelectionPanel />
@@ -154,6 +158,8 @@ const App: React.FC = () => {
             result={analysisResult}
             isProcessing={isProcessing}
             hasStarted={!!analysisResult}
+            progress={workflowProgress}
+            assistantId={selectedAssistantId}
           />
         </div>
       </div>

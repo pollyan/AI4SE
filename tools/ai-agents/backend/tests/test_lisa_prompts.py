@@ -69,9 +69,9 @@ class TestPromptComponents:
     
     def test_response_template_has_structure(self):
         """响应模板应包含结构定义"""
-        assert "任务进展" in RESPONSE_TEMPLATE
         assert "共识总结" in RESPONSE_TEMPLATE
-        assert "[-] 进行中" in RESPONSE_TEMPLATE
+        assert "核心交互内容" in RESPONSE_TEMPLATE
+        assert "不要" in RESPONSE_TEMPLATE  # 进度条指引
 
 
 class TestPromptCombination:
@@ -109,7 +109,7 @@ class TestPromptCombination:
         assert "全景-聚焦" in full
         assert "技术选型协议" in full
         # 响应模板
-        assert "任务进展" in full
+        assert "共识总结" in full
     
     def test_full_prompt_has_section_separators(self):
         """完整 Prompt 应有分节符"""

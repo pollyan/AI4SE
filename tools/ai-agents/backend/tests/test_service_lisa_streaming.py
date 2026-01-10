@@ -107,3 +107,129 @@ async def test_stream_lisa_message_duplicate_chunks():
         
     assert "".join(collected_output) == "ABC"
     assert collected_output == ["A", "B", "C"]
+
+
+@pytest.mark.asyncio
+async def test_stream_lisa_message_parses_progress_xml():
+    """
+    Test that _stream_graph_message correctly parses XML progress update tags
+    and updates current_stage_id in state.
+    """
+    service = LangchainAssistantService("lisa")
+    service.agent = MagicMock()
+    
+    # Setup state with default plan
+    from backend.agents.lisa.state import get_initial_state
+    initial_state = get_initial_state()
+    initial_state["current_workflow"] = "test_design"
+    service._lisa_session_states = {"test_session": initial_state}
+    
+    target_node = "workflow_test_design"
+    
+    # LLM response contains XML progress update tag
+    response_with_xml = '好的，需求澄清已完成。<update_status stage="strategy">active</update_status>\n\n接下来我们进入策略制定阶段。'
+    
+    mock_events = [
+        (AIMessage(content=response_with_xml), {"langgraph_node": target_node}),
+    ]
+    
+    async def mock_astream(*args, **kwargs):
+        for event in mock_events:
+            yield event
+    service.agent.astream = mock_astream
+    
+    collected_output = []
+    async for chunk in service._stream_graph_message("test_session", "确认需求"):
+        # Skip state events (dicts)
+        if isinstance(chunk, str):
+            collected_output.append(chunk)
+    
+    # Verify state was updated
+    updated_state = service._lisa_session_states["test_session"]
+    assert updated_state["current_stage_id"] == "strategy", \
+        f"Expected current_stage_id to be 'strategy', got '{updated_state.get('current_stage_id')}'"
+
+
+@pytest.mark.asyncio
+async def test_stream_lisa_message_cleans_xml_from_stored_message():
+    """
+    Test that XML tags are removed from the message stored in state.messages
+    """
+    service = LangchainAssistantService("lisa")
+    service.agent = MagicMock()
+    
+    from backend.agents.lisa.state import get_initial_state
+    initial_state = get_initial_state()
+    initial_state["current_workflow"] = "test_design"
+    service._lisa_session_states = {"test_session": initial_state}
+    
+    target_node = "workflow_test_design"
+    
+    # Response with XML tag in the middle
+    response_with_xml = '开始<update_status stage="cases">active</update_status>结束'
+    
+    mock_events = [
+        (AIMessage(content=response_with_xml), {"langgraph_node": target_node}),
+    ]
+    
+    async def mock_astream(*args, **kwargs):
+        for event in mock_events:
+            yield event
+    service.agent.astream = mock_astream
+    
+    async for _ in service._stream_graph_message("test_session", "test"):
+        pass
+    
+    # Check the stored message content is cleaned
+    updated_state = service._lisa_session_states["test_session"]
+    last_message = updated_state["messages"][-1]
+    
+    assert "update_status" not in last_message.content, \
+        f"XML tag should be removed from stored message, got: {last_message.content}"
+    assert "开始" in last_message.content
+    assert "结束" in last_message.content
+
+
+@pytest.mark.asyncio
+async def test_stream_lisa_message_emits_updated_progress_state():
+    """
+    Test that after parsing XML update, the final state event reflects the new progress.
+    """
+    service = LangchainAssistantService("lisa")
+    service.agent = MagicMock()
+    
+    from backend.agents.lisa.state import get_initial_state
+    initial_state = get_initial_state()
+    initial_state["current_workflow"] = "test_design"
+    initial_state["current_stage_id"] = "clarify"
+    service._lisa_session_states = {"test_session": initial_state}
+    
+    target_node = "workflow_test_design"
+    
+    response_with_xml = '完成<update_status stage="strategy">active</update_status>'
+    
+    mock_events = [
+        (AIMessage(content=response_with_xml), {"langgraph_node": target_node}),
+    ]
+    
+    async def mock_astream(*args, **kwargs):
+        for event in mock_events:
+            yield event
+    service.agent.astream = mock_astream
+    
+    # Collect all events including state events
+    state_events = []
+    async for chunk in service._stream_graph_message("test_session", "test"):
+        if isinstance(chunk, dict) and chunk.get("type") == "state":
+            state_events.append(chunk)
+    
+    # Should have at least one state event at the end with updated progress
+    assert len(state_events) >= 1, "Should emit at least one state event"
+    
+    final_state_event = state_events[-1]
+    progress = final_state_event.get("progress", {})
+    
+    # The final progress should show "strategy" as active (index 1)
+    assert progress.get("currentStageIndex") == 1, \
+        f"Expected currentStageIndex to be 1 (strategy), got {progress.get('currentStageIndex')}"
+

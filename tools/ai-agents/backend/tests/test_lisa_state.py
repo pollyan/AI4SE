@@ -30,12 +30,16 @@ class TestLisaStateDefinition:
         assert "consensus_items" in state
     
     def test_initial_state_values_are_empty(self):
-        """初始状态各字段应为空值"""
+        """初始状态各字段应为预期初始值 - plan 由 LLM 动态生成"""
         state = get_initial_state()
         
         assert state["messages"] == []
         assert state["current_workflow"] is None
+        # workflow_stage 和 current_stage_id 现在初始化为 None
         assert state["workflow_stage"] is None
+        # plan 初始为空，由 LLM 在首次响应时动态生成
+        assert state["plan"] == []
+        assert state["current_stage_id"] is None
         assert state["artifacts"] == {}
         assert state["pending_clarifications"] == []
         assert state["consensus_items"] == []

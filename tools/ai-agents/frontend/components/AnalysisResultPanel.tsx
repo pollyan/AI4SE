@@ -1,14 +1,32 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { BarChart2, Search } from 'lucide-react';
+import { WorkflowProgress, Stage } from './WorkflowProgress';
+
+interface ProgressInfo {
+  stages: Stage[];
+  currentStageIndex: number;
+  currentTask: string | null;
+}
 
 interface AnalysisResultPanelProps {
   result: string;
   isProcessing: boolean;
   hasStarted: boolean;
+  progress?: ProgressInfo | null;
+  assistantId?: string | null;
 }
 
-const AnalysisResultPanel: React.FC<AnalysisResultPanelProps> = ({ result, isProcessing, hasStarted }) => {
+const AnalysisResultPanel: React.FC<AnalysisResultPanelProps> = ({
+  result,
+  isProcessing,
+  hasStarted,
+  progress,
+  assistantId
+}) => {
+  // 只对 Lisa 显示进度
+  const showProgress = assistantId === 'lisa' && progress && progress.stages.length > 0;
+
   return (
     <div className="w-full bg-surface-light dark:bg-surface-dark rounded-xl shadow-lg border border-border-light dark:border-border-dark flex flex-col h-full overflow-hidden">
       <div className="px-6 py-4 border-b border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50 h-16 flex items-center">
@@ -17,6 +35,15 @@ const AnalysisResultPanel: React.FC<AnalysisResultPanelProps> = ({ result, isPro
           分析成果
         </h2>
       </div>
+
+      {/* 进度条 - 只对 Lisa 显示 */}
+      {showProgress && (
+        <WorkflowProgress
+          stages={progress.stages}
+          currentStageIndex={progress.currentStageIndex}
+          currentTask={progress.currentTask}
+        />
+      )}
 
       <div className="flex-grow flex flex-col p-6 overflow-y-auto bg-gray-50/50 dark:bg-gray-900/20">
         {!hasStarted && (

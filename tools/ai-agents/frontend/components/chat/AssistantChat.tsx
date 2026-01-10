@@ -22,13 +22,14 @@ import { MarkdownText } from './MarkdownText';
 import { AttachmentList } from './AttachmentList';
 import { AttachmentButton } from './AttachmentButton';
 import { MessageAttachments } from './MessageAttachments';
-import { createSession, sendMessageStream } from '../../services/backendService';
+import { createSession, sendMessageStream, ProgressInfo } from '../../services/backendService';
 import { Assistant, AssistantId, PendingAttachment, MessageAttachment } from '../../types';
 import { processFile, buildMessageWithAttachments } from '../../utils/attachmentUtils';
 
 interface AssistantChatProps {
     assistant: Assistant;
     onBack: () => void;
+    onProgressChange?: (progress: ProgressInfo | null) => void;
 }
 
 // 将后端消息格式转换为 Assistant-ui 格式
@@ -73,7 +74,7 @@ function convertToThreadMessage(msg: BackendMessage, index: number) {
 }
 
 // 内部聊天状态管理
-function useChatState(assistantId: AssistantId) {
+function useChatState(assistantId: AssistantId, onProgressChange?: (progress: ProgressInfo | null) => void) {
     const [messages, setMessages] = useState<BackendMessage[]>([]);
     const [isRunning, setIsRunning] = useState(false);
     const sessionIdRef = useRef<string | null>(null);
@@ -236,7 +237,8 @@ function useChatState(assistantId: AssistantId) {
                         }
                         return newMessages;
                     });
-                }
+                },
+                onProgressChange  // 传递进度回调
             );
         } catch (error) {
             console.error('Message send failed:', error);
@@ -369,7 +371,7 @@ function useChatState(assistantId: AssistantId) {
 }
 
 // 主组件
-export function AssistantChat({ assistant, onBack }: AssistantChatProps) {
+export function AssistantChat({ assistant, onBack, onProgressChange }: AssistantChatProps) {
     const {
         messages,
         isRunning,
@@ -379,7 +381,7 @@ export function AssistantChat({ assistant, onBack }: AssistantChatProps) {
         pendingAttachments,
         handleFilesSelected,
         removeAttachment
-    } = useChatState(assistant.id);
+    } = useChatState(assistant.id, onProgressChange);
 
     // 创建 External Store 适配器
     const adapter: ExternalStoreAdapter = {
