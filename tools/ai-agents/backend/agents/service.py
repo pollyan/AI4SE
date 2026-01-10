@@ -254,8 +254,8 @@ class LangchainAssistantService:
         # 注意: 不再使用关键词检测工作流类型
         # 工作流类型由 intent_router 节点基于语义判断设置
         
-        # Lisa: 发送初始 state 事件
-        if self.assistant_type in ("lisa", "song"):
+        # Lisa/Alex: 发送初始 state 事件
+        if self.assistant_type in ("lisa", "song", "alex", "chen"):
             from .lisa.progress import get_progress_info
             progress = get_progress_info(state)
             if progress:
@@ -264,8 +264,14 @@ class LangchainAssistantService:
         full_response = ""
         
         # 用户输出节点（需要流式输出的节点）
-        # Lisa 需要过滤 intent_router，Alex 主要是 model 节点
-        user_facing_nodes = {"clarify_intent", "workflow_test_design", "workflow_requirement_review", "model"}
+        # Lisa 需要过滤 intent_router，Alex 主要是 workflow_product_design
+        user_facing_nodes = {
+            "clarify_intent", 
+            "workflow_test_design", 
+            "workflow_requirement_review", 
+            "workflow_product_design", # Alex
+            "model"
+        }
         
         # 使用 stream_mode="messages" 获取真正的 token 级增量
         # 导入清理函数用于流式过滤
@@ -318,9 +324,9 @@ class LangchainAssistantService:
                             yielded_len += len(delta)
             
         # 更新状态 - 添加 AI 响应
-        # Lisa/Song: 解析 XML 进度更新指令和动态 Plan，并清理响应
+        # Lisa/Alex: 解析 XML 进度更新指令和动态 Plan，并清理响应
         cleaned_response = full_response
-        if self.assistant_type in ("lisa", "song") and full_response:
+        if self.assistant_type in ("lisa", "song", "alex", "chen") and full_response:
             from .shared.progress_utils import parse_progress_update, parse_plan, clean_response_text
             
             # 解析动态 Plan (LLM 首次规划工作阶段)
@@ -347,8 +353,8 @@ class LangchainAssistantService:
         # 保存更新后的状态
         self._lisa_session_states[session_id] = state
         
-        # Lisa: 发送最终 state 事件
-        if self.assistant_type in ("lisa", "song"):
+        # Lisa/Alex: 发送最终 state 事件
+        if self.assistant_type in ("lisa", "song", "alex", "chen"):
             from .lisa.progress import get_progress_info
             progress = get_progress_info(state)
             if progress:

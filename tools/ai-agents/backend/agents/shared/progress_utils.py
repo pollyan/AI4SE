@@ -74,12 +74,45 @@ def parse_plan(text: str) -> Optional[List[Dict]]:
     """
     import json
     
+    # 1. 尝试标准 XML 提取
     match = PLAN_PATTERN.search(text)
-    if not match:
+    json_str = ""
+    
+    if match:
+        json_str = match.group(1)
+    else:
+        # 2. Fallback: 尝试直接提取 <plan> 后的 JSON 列表
+        # 即使缺少 </plan> 也能工作
+        start_tag = "<plan>"
+        start_idx = text.lower().find(start_tag)
+        if start_idx != -1:
+            content_start = start_idx + len(start_tag)
+            # 从 content_start 开始找第一个 [
+            list_start = text.find("[", content_start)
+            if list_start != -1:
+                # 尝试找到匹配的 ]
+                # 简单处理：找最后一个 ]，或者尝试解析
+                # 这里我们假设 plan 是单行的或者紧凑的，尝试提取一段可能的 JSON
+                # 更稳健的方法是逐字符匹配
+                balance = 0
+                list_end = -1
+                for i in range(list_start, len(text)):
+                    if text[i] == "[":
+                        balance += 1
+                    elif text[i] == "]":
+                        balance -= 1
+                        if balance == 0:
+                            list_end = i + 1
+                            break
+                
+                if list_end != -1:
+                    json_str = text[list_start:list_end]
+                    logger.warning("使用 Fallback 逻辑提取 Plan JSON")
+
+    if not json_str:
         return None
     
     try:
-        json_str = match.group(1)
         plan_data = json.loads(json_str)
         
         if not isinstance(plan_data, list):
@@ -142,17 +175,22 @@ def clean_response_streaming(text: str) -> str:
     for pattern in CLEANUP_PATTERNS:
         cleaned = pattern.sub('', cleaned)
     
-    # 2. 检查是否有未闭合的特定标签
+    # 2. 检查是否有未闭合的特定标签 (Plan B)
+    # 如果经过正则清理后，开头仍然是敏感标签，说明该标签未闭合
+    lower_cleaned = cleaned.lower()
+    sensitive_prefixes = ["<plan", "<update_status"]
+    
+    for prefix in sensitive_prefixes:
+        if lower_cleaned.startswith(prefix):
+            # 标签位于开头且未被移除，说明未闭合 -> 隐藏全部
+            return ""
+            
+    # 3. 检查末尾是否有未闭合的标签片段 (Plan C)
     # 查找最后一个 '<' 的位置
     last_open_bracket = cleaned.rfind('<')
     if last_open_bracket != -1:
         # 获取从 '<' 开始的后缀
         suffix = cleaned[last_open_bracket:]
-        
-        # 定义需要隐藏的标签前缀（全部小写）
-        # 注意: 包含 < 
-        sensitive_prefixes = ["<plan", "<update_status"]
-        
         suffix_lower = suffix.lower()
         
         for prefix in sensitive_prefixes:
