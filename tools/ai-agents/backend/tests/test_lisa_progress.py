@@ -1,13 +1,13 @@
 """
-Lisa Progress 模块单元测试
+Progress 模块单元测试
 
-测试 progress.py 中的 get_progress_info 函数，
+测试 shared/progress.py 中的 get_progress_info 函数，
 验证动态进度条基于 current_stage_id 正确计算。
 """
 
 import pytest
-from backend.agents.lisa.progress import get_progress_info, STAGE_ARTIFACT_MAP
-from backend.agents.lisa.state import get_initial_state, ArtifactKeys
+from backend.agents.shared.progress import get_progress_info
+from backend.agents.lisa.state import get_initial_state
 
 
 class TestGetProgressInfo:
@@ -119,20 +119,3 @@ class TestGetProgressInfo:
         # 未找到匹配时 index 保持 0
         assert result["currentStageIndex"] == 0
 
-
-class TestStageArtifactMap:
-    """测试阶段产出物映射常量"""
-    
-    def test_all_stages_have_mapping(self):
-        """所有阶段都应有对应的产出物 Key"""
-        expected_stages = ["clarify", "strategy", "cases", "delivery"]
-        
-        for stage in expected_stages:
-            assert stage in STAGE_ARTIFACT_MAP
-    
-    def test_mapping_values_are_artifact_keys(self):
-        """映射值应为有效的 ArtifactKeys"""
-        assert STAGE_ARTIFACT_MAP["clarify"] == ArtifactKeys.TEST_DESIGN_REQUIREMENTS
-        assert STAGE_ARTIFACT_MAP["strategy"] == ArtifactKeys.TEST_DESIGN_STRATEGY
-        assert STAGE_ARTIFACT_MAP["cases"] == ArtifactKeys.TEST_DESIGN_CASES
-        assert STAGE_ARTIFACT_MAP["delivery"] == ArtifactKeys.TEST_DESIGN_FINAL

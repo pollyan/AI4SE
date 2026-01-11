@@ -254,12 +254,9 @@ class LangchainAssistantService:
         # 注意: 不再使用关键词检测工作流类型
         # 工作流类型由 intent_router 节点基于语义判断设置
         
-        # Lisa/Alex: 发送初始 state 事件
-        if self.assistant_type in ("lisa", "song", "alex", "chen"):
-            from .lisa.progress import get_progress_info
-            progress = get_progress_info(state)
-            if progress:
-                yield {"type": "state", "progress": progress}
+        # 注意: 不在此处发送初始进度事件
+        # 进度条应该在 LLM 响应中解析到 <plan> 后才显示
+        # 这样可以避免第二轮对话时显示上一轮的旧进度
         
         full_response = ""
         
@@ -323,12 +320,11 @@ class LangchainAssistantService:
                             yield delta
                             yielded_len += len(delta)
             
-        # 更新状态 - 添加 AI 响应
         # Lisa/Alex: 解析 XML 进度更新指令和动态 Plan，并清理响应
         cleaned_response = full_response
         if self.assistant_type in ("lisa", "song", "alex", "chen") and full_response:
             from .shared.progress_utils import parse_progress_update, parse_plan, clean_response_text
-            
+
             # 解析动态 Plan (LLM 首次规划工作阶段)
             parsed_plan = parse_plan(full_response)
             if parsed_plan:
@@ -353,12 +349,15 @@ class LangchainAssistantService:
         # 保存更新后的状态
         self._lisa_session_states[session_id] = state
         
-        # Lisa/Alex: 发送最终 state 事件
+        # Lisa/Alex: 发送最终 state 事件（进度条在 LLM 响应完成后显示）
         if self.assistant_type in ("lisa", "song", "alex", "chen"):
-            from .lisa.progress import get_progress_info
+            from .shared.progress import get_progress_info
             progress = get_progress_info(state)
             if progress:
                 yield {"type": "state", "progress": progress}
+                logger.info(f"进度事件已发送: 当前阶段索引 {progress['currentStageIndex']}")
+            else:
+                logger.debug("未发送进度事件 (无 plan 或 plan 为空)")
         
         # 同时保存到传统历史记录（用于兼容）
         self._add_to_history(session_id, "user", user_message)
