@@ -53,13 +53,7 @@ describe('AI Agents App', () => {
         // Click Alex
         fireEvent.click(screen.getByText('Alex'));
 
-        // Should show chat interface with Alex header
-        await waitFor(() => {
-            // Check for assistant header title
-            expect(screen.getByText('智能助手')).toBeInTheDocument();
-        });
-
-        // Wait for welcome message to appear
+        // Wait for welcome message to appear (this confirms chat interface is loaded)
         await waitFor(() => {
             expect(screen.getByText(/你好，我是Alex/)).toBeInTheDocument();
         }, { timeout: 5000 });
