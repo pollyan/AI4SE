@@ -197,11 +197,18 @@ async def test_stream_lisa_message_emits_updated_progress_state():
     """
     service = LangchainAssistantService("lisa")
     service.agent = MagicMock()
-    
+
     from backend.agents.lisa.state import get_initial_state
     initial_state = get_initial_state()
     initial_state["current_workflow"] = "test_design"
     initial_state["current_stage_id"] = "clarify"
+    # 添加plan字段，使get_progress_info能够返回进度信息
+    initial_state["plan"] = [
+        {"id": "clarify", "name": "需求澄清", "status": "pending"},
+        {"id": "strategy", "name": "测试策略", "status": "pending"},
+        {"id": "cases", "name": "用例设计", "status": "pending"},
+        {"id": "delivery", "name": "文档交付", "status": "pending"},
+    ]
     service._lisa_session_states = {"test_session": initial_state}
     
     target_node = "workflow_test_design"

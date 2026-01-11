@@ -151,35 +151,35 @@ class TestWorkflowTestDesignNode:
     def test_determine_stage_empty(self):
         """无产出物时应从 clarify 开始"""
         from backend.agents.lisa.nodes.workflow_test_design import determine_stage
-        
+
         state = get_initial_state()
-        
-        result = determine_stage(state)
-        
+
+        result = determine_stage(state, "test_design")
+
         assert result == "clarify"
     
     def test_determine_stage_with_requirements(self):
         """有需求文档时应进入 strategy"""
         from backend.agents.lisa.nodes.workflow_test_design import determine_stage
         from backend.agents.lisa.state import ArtifactKeys
-        
+
         state = get_initial_state()
         state["artifacts"][ArtifactKeys.TEST_DESIGN_REQUIREMENTS] = "需求内容"
-        
-        result = determine_stage(state)
-        
+
+        result = determine_stage(state, "test_design")
+
         assert result == "strategy"
     
     def test_determine_stage_with_strategy(self):
         """有策略文档时应进入 cases"""
         from backend.agents.lisa.nodes.workflow_test_design import determine_stage
         from backend.agents.lisa.state import ArtifactKeys
-        
+
         state = get_initial_state()
         state["artifacts"][ArtifactKeys.TEST_DESIGN_STRATEGY] = "策略内容"
-        
-        result = determine_stage(state)
-        
+
+        result = determine_stage(state, "test_design")
+
         # 有 strategy 时进入 cases 阶段
         assert result == "cases"
     

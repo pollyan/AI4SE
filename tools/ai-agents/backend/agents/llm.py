@@ -72,12 +72,22 @@ class LangchainLlm:
         
         logger.info(f"初始化 LangChain LLM: {model_name}, base_url: {normalized_url[:30]}...")
         
-        self._chat_model = ChatOpenAI(
-            model=model_name,
-            openai_api_base=normalized_url,
-            openai_api_key=api_key,
-            streaming=True
-        )
+        try:
+            # 尝试使用新参数名
+            self._chat_model = ChatOpenAI(
+                model=model_name,
+                base_url=normalized_url,
+                api_key=api_key,
+                streaming=True
+            )
+        except TypeError:
+            # 兼容旧版本
+            self._chat_model = ChatOpenAI(
+                model=model_name,
+                openai_api_base=normalized_url,
+                openai_api_key=api_key,
+                streaming=True
+            )
     
     @property
     def model(self) -> BaseChatModel:

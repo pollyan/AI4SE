@@ -124,7 +124,7 @@ async def test_lisa_full_workflow_integration():
         # Note: The 'workflow_stage' field in the returned state reflects the stage *during* execution (clarify).
         # The next turn would pick up 'strategy' based on the presence of the artifact.
         # So we assert the artifact presence and that determine_stage would now return 'strategy'.
-        
+
         from backend.agents.lisa.nodes.workflow_test_design import determine_stage
-        assert determine_stage(result_2) == "strategy"
+        assert determine_stage(result_2, "test_design") == "strategy"
 

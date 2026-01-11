@@ -159,8 +159,20 @@ class LangchainAssistantService:
         """
         测试连接
         
+        向 AI 模型发送测试请求并验证响应有效性。
         如果连接失败会抛出异常，调用方需要处理。
+        
+        Args:
+            messages: 消息列表，格式 [{"role": "user", "content": "..."}]
+            
+        Returns:
+            str: AI 模型的有效响应内容
+            
+        Raises:
+            Exception: 连接失败、超时、响应无效等各种错误
         """
+        import asyncio
+        
         if not self.agent:
             await self.initialize()
             
@@ -169,25 +181,76 @@ class LangchainAssistantService:
         # 构建消息
         input_messages = [HumanMessage(content=user_msg)]
         
+        # 记录测试开始（脱敏配置信息）
+        config_info = {
+            "model": self.config.get("model_name", "N/A") if self.config else "使用默认配置",
+            "base_url": self.config.get("base_url", "N/A")[:50] + "..." if self.config else "N/A"
+        }
+        logger.info(f"开始测试连接 - 配置: {config_info}")
+        
         try:
-            # 调用 Agent（不捕获异常，让调用方处理）
-            result = await self.agent.ainvoke({"messages": input_messages})
+            # 添加 30 秒超时控制
+            result = await asyncio.wait_for(
+                self.agent.ainvoke({"messages": input_messages}),
+                timeout=30.0
+            )
             
             # 提取响应
             if result and "messages" in result:
                 last_message = result["messages"][-1]
                 if hasattr(last_message, "content"):
                     content = last_message.content
-                    if content and len(content.strip()) > 0:
-                        return content
+                    
+                    # 验证响应非空
+                    if not content or len(content.strip()) == 0:
+                        raise Exception("LLM 返回了空响应")
+                    
+                    # 验证响应不是常见的错误信息
+                    content_lower = content.lower()
+                    error_indicators = [
+                        "error", "错误", "failed", "失败",
+                        "invalid", "无效", "unauthorized", "未授权",
+                        "forbidden", "禁止", "not found", "找不到",
+                        "timeout", "超时", "quota", "配额",
+                        "rate limit", "限流", "insufficient", "余额不足"
+                    ]
+                    
+                    if any(indicator in content_lower for indicator in error_indicators):
+                        logger.warning(f"疑似错误响应: {content[:200]}")
+                        raise Exception(f"LLM 返回了错误响应: {content[:200]}")
+                    
+                    # 验证响应长度合理（至少应该有几个字符）
+                    if len(content.strip()) < 2:
+                        raise Exception(f"LLM 响应过短，疑似无效: '{content}'")
+                    
+                    logger.info(f"测试连接成功 - 响应长度: {len(content)} 字符")
+                    return content
             
             # 如果没有有效响应，抛出异常
-            raise Exception("LLM 未返回有效响应")
+            raise Exception("LLM 未返回有效的消息格式")
             
+        except asyncio.TimeoutError:
+            logger.error(f"测试连接超时（30秒）- 配置: {config_info}")
+            raise Exception("连接超时：AI 服务在 30 秒内未响应，请检查网络连接和 Base URL 配置")
         except Exception as e:
             # 记录详细错误信息并向上抛出
-            logger.error(f"测试连接失败: {type(e).__name__}: {str(e)}")
-            raise
+            error_type = type(e).__name__
+            error_msg = str(e)
+            logger.error(f"测试连接失败 [{error_type}]: {error_msg} - 配置: {config_info}")
+            
+            # 如果是我们自己抛出的异常，直接向上传递
+            if "LLM" in error_msg or "连接超时" in error_msg:
+                raise
+            
+            # 对于其他异常，提供更友好的错误信息
+            if "api" in error_msg.lower() and "key" in error_msg.lower():
+                raise Exception(f"API 密钥验证失败: {error_msg}")
+            elif "connection" in error_msg.lower() or "网络" in error_msg:
+                raise Exception(f"网络连接失败: {error_msg}")
+            elif "404" in error_msg or "not found" in error_msg.lower():
+                raise Exception(f"API 端点不存在，请检查 Base URL 配置: {error_msg}")
+            else:
+                raise Exception(f"连接测试失败: {error_msg}")
     
     async def stream_message(
         self,

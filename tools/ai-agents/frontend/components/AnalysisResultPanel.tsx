@@ -25,7 +25,8 @@ const AnalysisResultPanel: React.FC<AnalysisResultPanelProps> = ({
   assistantId
 }) => {
   // 只对 Lisa 显示进度
-  const showProgress = assistantId === 'lisa' && progress && progress.stages.length > 0;
+  // 对 Lisa 和 Alex 显示进度
+  const showProgress = (assistantId === 'lisa' || assistantId === 'alex') && progress && progress.stages.length > 0;
 
   return (
     <div className="w-full bg-surface-light dark:bg-surface-dark rounded-xl shadow-lg border border-border-light dark:border-border-dark flex flex-col h-full overflow-hidden">

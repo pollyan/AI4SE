@@ -169,7 +169,7 @@ def update_config(config_id):
             new_name = data.get("config_name") or data.get("name")
             config.config_name = new_name.strip()
         
-        if "api_key" in data:
+        if "api_key" in data and data["api_key"].strip():
             config.api_key = data["api_key"].strip()
         
         if "base_url" in data:
@@ -359,28 +359,42 @@ def test_config(config_id):
         
         duration = time.time() - start_time
         
-        if response and len(response.strip()) > 0:
-            return standard_success_response(
-                data={
-                    "config_id": config_id,
-                    "config_name": config.config_name,
-                    "model_name": config.model_name,
-                    "test_success": True,
-                    "duration_ms": round(duration * 1000, 2),
-                    "ai_response": response.strip(),
-                    "tested_at": datetime.utcnow().isoformat()
-                },
-                message="配置测试成功"
-            )
-        else:
-            return standard_error_response(
-                f"AI 未返回有效响应", 422
-            )
+        # test_connection 方法已经验证了响应的有效性
+        # 如果能执行到这里，说明测试成功
+        return standard_success_response(
+            data={
+                "config_id": config_id,
+                "config_name": config.config_name,
+                "model_name": config.model_name,
+                "test_success": True,
+                "duration_ms": round(duration * 1000, 2),
+                "ai_response": response.strip()[:200],  # 只返回前200字符用于显示
+                "tested_at": datetime.utcnow().isoformat()
+            },
+            message="配置测试成功"
+        )
             
     except NotFoundError as e:
         return standard_error_response(e.message, 404)
+    except asyncio.TimeoutError:
+        return standard_error_response(
+            "测试超时：AI 服务在 30 秒内未响应，请检查网络连接和配置",
+            408
+        )
     except Exception as e:
-        return standard_error_response(f"测试配置失败: {str(e)}", 500)
+        error_msg = str(e)
+        
+        # 根据错误类型返回不同的状态码和消息
+        if "API 密钥" in error_msg or "api" in error_msg.lower() and "key" in error_msg.lower():
+            return standard_error_response(f"API 密钥验证失败: {error_msg}", 401)
+        elif "网络" in error_msg or "connection" in error_msg.lower():
+            return standard_error_response(f"网络连接失败: {error_msg}", 503)
+        elif "Base URL" in error_msg or "端点不存在" in error_msg:
+            return standard_error_response(f"配置错误: {error_msg}", 400)
+        elif "LLM 返回" in error_msg:
+            return standard_error_response(f"AI 响应异常: {error_msg}", 502)
+        else:
+            return standard_error_response(f"测试配置失败: {error_msg}", 500)
 
 
 @ai_configs_bp.route("/test", methods=["POST"])
@@ -430,25 +444,39 @@ def test_new_config():
         
         duration = time.time() - start_time
         
-        if response and len(response.strip()) > 0:
-            return standard_success_response(
-                data={
-                    "config_name": data.get("config_name", "新配置"),
-                    "model_name": model_name,
-                    "test_success": True,
-                    "duration_ms": round(duration * 1000, 2),
-                    "ai_response": response.strip(),
-                    "tested_at": datetime.utcnow().isoformat()
-                },
-                message="配置测试成功"
-            )
-        else:
-            return standard_error_response(
-                f"AI 未返回有效响应", 422
-            )
+        # test_connection 方法已经验证了响应的有效性
+        # 如果能执行到这里，说明测试成功
+        return standard_success_response(
+            data={
+                "config_name": data.get("config_name", "新配置"),
+                "model_name": model_name,
+                "test_success": True,
+                "duration_ms": round(duration * 1000, 2),
+                "ai_response": response.strip()[:200],  # 只返回前200字符用于显示
+                "tested_at": datetime.utcnow().isoformat()
+            },
+            message="配置测试成功"
+        )
             
     except ValidationError as e:
         return standard_error_response(e.message, 400)
+    except asyncio.TimeoutError:
+        return standard_error_response(
+            "测试超时：AI 服务在 30 秒内未响应，请检查网络连接和配置",
+            408
+        )
     except Exception as e:
-        return standard_error_response(f"测试配置失败: {str(e)}", 500)
+        error_msg = str(e)
+        
+        # 根据错误类型返回不同的状态码和消息
+        if "API 密钥" in error_msg or "api" in error_msg.lower() and "key" in error_msg.lower():
+            return standard_error_response(f"API 密钥验证失败: {error_msg}", 401)
+        elif "网络" in error_msg or "connection" in error_msg.lower():
+            return standard_error_response(f"网络连接失败: {error_msg}", 503)
+        elif "Base URL" in error_msg or "端点不存在" in error_msg:
+            return standard_error_response(f"配置错误: {error_msg}", 400)
+        elif "LLM 返回" in error_msg:
+            return standard_error_response(f"AI 响应异常: {error_msg}", 502)
+        else:
+            return standard_error_response(f"测试配置失败: {error_msg}", 500)
 
