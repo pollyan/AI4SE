@@ -343,6 +343,9 @@ class LangchainAssistantService:
                 state["plan"] = parsed_plan
                 state["current_stage_id"] = parsed_plan[0]["id"] if parsed_plan else None
                 logger.info(f"动态 Plan 已更新: {len(parsed_plan)} 个阶段")
+                logger.info(f"Plan 内容: {parsed_plan}")
+            else:
+                logger.warning(f"未能解析到 Plan 标签。响应前200字符: {full_response[:200]}")
             
             # 解析进度更新指令 (阶段切换)
             update_result = parse_progress_update(full_response)
@@ -377,8 +380,9 @@ class LangchainAssistantService:
             if progress:
                 yield {"type": "state", "progress": progress}
                 logger.info(f"进度事件已发送: 当前阶段索引 {progress['currentStageIndex']}")
+                logger.info(f"进度事件内容: stages={len(progress['stages'])}, currentTask={progress['currentTask']}")
             else:
-                logger.debug("未发送进度事件 (无 plan 或 plan 为空)")
+                logger.warning(f"未发送进度事件 - plan: {state.get('plan')}, current_stage_id: {state.get('current_stage_id')}")
         
         # 同时保存到传统历史记录（用于兼容）
         self._add_to_history(session_id, "user", user_message)
