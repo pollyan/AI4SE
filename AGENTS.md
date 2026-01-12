@@ -22,9 +22,7 @@ AI4SE 是一个 Python/TypeScript 单体仓库，包含 AI 驱动的软件工程
 ## 核心规则（必须遵守）
 ### 通用开发行为准则
 
-以下规则适用于在本仓库中操作的所有 AI 编程智能体，涵盖所有模块（backend, frontend, intent-tester 等）：
-
-1. **【强制】TDD 开发模式 (Test-Driven Development)**
+1. **【强制】TDD 开发模式**
    在此项目中，**所有**功能开发和 Bug 修复必须严格遵循 TDD 流程。你必须在编写实现代码之前先编写测试代码。
 
    **TDD 标准工作流：**
@@ -142,6 +140,12 @@ GitHub Actions 会在每次推送时运行以下工作流：
 3. **Proxy Tests**: 运行 intent-tester 代理服务的 jest 测试。
 4. **Code Quality**: 运行 flake8 检查。
 
+**本地全量测试**
+在提交代码前，使用以下脚本运行与 CI 一致的全量测试：
+```bash
+./scripts/test/test-local.sh
+```
+
 ---
 
 ## 架构与项目结构
@@ -255,6 +259,33 @@ AI4SE/
     // ...
   }
   ```
+
+### Prompt 工程规范
+
+**1. 存储与管理**
+- **禁止硬编码**: 禁止在业务逻辑代码（如节点函数、工具类）中直接编写长字符串 Prompt。
+- **独立文件**: 所有 Prompt 模板必须提取到专门的 `prompts/` 目录中。
+- **文件结构**:
+  ```
+  agents/lisa/prompts/
+  ├── __init__.py
+  ├── shared.py          # 共享的基础 Prompt (身份、风格、通用协议)
+  ├── artifacts.py       # 产出物模板定义
+  ├── workflow_engine.py # 引擎逻辑 (仅包含逻辑，Prompt 引用 shared.py)
+  └── workflows/         # 具体工作流的 Prompt
+      └── test_design.py
+  ```
+
+**2. 命名与格式**
+- **常量命名**: 使用全大写蛇形命名法，并以 `_PROMPT` 或 `_TEMPLATE` 结尾。
+  - ✅ `PLAN_SYNC_MECHANISM_PROMPT`
+  - ✅ `RESPONSE_TEMPLATE`
+  - ❌ `plan_prompt`
+- **使用 f-string**: 在业务代码中通过 `.format()` 或 f-string 注入动态变量，保持模板的纯粹性。
+
+**3. 复用原则**
+- **共享优先**: 通用的机制（如进度同步、产出物格式）应定义在 `shared.py` 或专门的模块中，供多个工作流复用。
+- **逻辑分离**: 生成复杂 Prompt 的逻辑（如根据参数拼接字符串）应封装为 Python 函数，而其使用的静态文本模板应作为常量分离存储。
 
 ### 错误处理 (Python)
 

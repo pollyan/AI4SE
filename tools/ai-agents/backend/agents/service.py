@@ -355,10 +355,10 @@ class LangchainAssistantService:
 
         # 引入解析函数
         from .shared.progress_utils import (
-            parse_progress_update, 
             parse_plan, 
             parse_all_artifact_templates,
-            clean_response_text
+            clean_response_text,
+            get_current_stage_id
         )
         from .shared.artifact_utils import parse_all_artifacts
         
@@ -418,7 +418,7 @@ class LangchainAssistantService:
                                     parsed_plan = parse_plan(full_response)
                                     if parsed_plan:
                                         state["plan"] = parsed_plan
-                                        state["current_stage_id"] = parsed_plan[0]["id"] if parsed_plan else None
+                                        state["current_stage_id"] = get_current_stage_id(parsed_plan)
                                         plan_parsed = True
                                         # 发送状态更新
                                         from .shared.progress import get_progress_info
@@ -491,7 +491,7 @@ class LangchainAssistantService:
             parsed_plan = parse_plan(full_response)
             if parsed_plan and not plan_parsed:
                 state["plan"] = parsed_plan
-                state["current_stage_id"] = parsed_plan[0]["id"]
+                state["current_stage_id"] = get_current_stage_id(parsed_plan)
             
             # 解析最终产出物内容 (artifact 标签)
             artifacts = parse_all_artifacts(full_response)
@@ -500,11 +500,6 @@ class LangchainAssistantService:
                      state["artifacts"] = {}
                  for artifact in artifacts:
                      state["artifacts"][artifact["key"]] = artifact["content"]
-            
-            # 解析进度更新
-            update_result = parse_progress_update(full_response)
-            if update_result:
-                state["current_stage_id"] = update_result[0]
             
             # 最终的 clean
             cleaned_response = clean_response_text(full_response)

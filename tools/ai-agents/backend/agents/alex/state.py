@@ -34,6 +34,7 @@ class AlexState(TypedDict):
     
     # 产出物与上下文
     artifacts: dict[str, str]        # 产出物内容
+    artifact_templates: list[dict]   # 产出物模板列表
     pending_clarifications: List[str]# 待澄清问题
     consensus_items: List[str]       # 已达成共识项
 
@@ -44,5 +45,4 @@ def get_initial_state() -> AlexState:
     """
     # 使用共享模块的基础初始状态
     from ..shared.state import get_base_initial_state
-    return get_base_initial_state()
-
+    return get_base_initial_state()  # type: ignore

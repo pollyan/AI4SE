@@ -24,6 +24,20 @@ from ..artifacts import (
     SKELETON_CASES_SET,
     SKELETON_DELIVERY_FINAL,
 )
+from ..workflow_engine import get_plan_sync_instruction
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 测试设计工作流默认阶段定义
+# ═══════════════════════════════════════════════════════════════════════════════
+
+DEFAULT_TEST_DESIGN_STAGES = [
+    {"id": "clarify", "name": "需求澄清"},
+    {"id": "strategy", "name": "策略制定"},
+    {"id": "cases", "name": "用例编写"},
+    {"id": "delivery", "name": "文档交付"},
+]
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 测试设计工作流主 Prompt
@@ -44,6 +58,8 @@ WORKFLOW_TEST_DESIGN_SYSTEM = """
 
 ### 进度计划
 {plan_context}
+
+{plan_sync_instruction}
 
 ### 阶段定义
 
@@ -67,26 +83,6 @@ WORKFLOW_TEST_DESIGN_SYSTEM = """
 #### delivery (文档交付)
 - **目标**: 整合形成最终测试设计文档
 - **产出**: `test_design_final` (完整 Markdown)
-
-### 工作计划生成 (首次响应必须)
-
-**重要**: 如果当前没有进度计划(plan_context 为空)，你必须在首次响应的**最开头**生成工作计划。
-
-**格式**: 在回复的**第一行**输出 plan 标签 (系统自动解析后移除，用户看不到):
-<plan>[{{"id": "clarify", "name": "需求澄清"}}, {{"id": "strategy", "name": "策略制定"}}, {{"id": "cases", "name": "用例编写"}}, {{"id": "delivery", "name": "文档交付"}}]</plan>
-
-**规则**:
-- 必须放在回复的第一行，在任何其他内容之前
-- 可以根据具体任务调整阶段名称和数量
-- 必须保持 JSON 格式
-
-### 进度更新指令 (阶段切换时使用)
-
-当你完成当前阶段并准备进入下一个阶段时，请在回复中包含以下标签：
-<update_status stage="下一阶段ID">active</update_status>
-
-例如，完成 clarify 阶段后：
-<update_status stage="strategy">active</update_status>
 
 ### 产出物模板声明 (每个阶段开始时使用)
 
@@ -125,7 +121,7 @@ WORKFLOW_TEST_DESIGN_SYSTEM = """
 ...内容...
 </artifact>
 
-**注意**: 所有 XML 标签 (plan, update_status, artifact_template, artifact) 将被系统自动处理，不会显示给用户。
+**注意**: 所有 XML 标签 (plan, artifact_template, artifact) 将被系统自动处理，不会显示给用户。
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -321,6 +317,9 @@ def build_test_design_prompt(
     """
     base = build_full_prompt_with_protocols()
     
+    # 获取进度同步机制指令
+    plan_sync_instruction = get_plan_sync_instruction(DEFAULT_TEST_DESIGN_STAGES)
+    
     system = WORKFLOW_TEST_DESIGN_SYSTEM.format(
         base_prompt=base,
         workflow_stage=stage,
@@ -328,6 +327,7 @@ def build_test_design_prompt(
         pending_clarifications=pending_clarifications,
         consensus_count=consensus_count,
         plan_context=plan_context,
+        plan_sync_instruction=plan_sync_instruction,
     )
     
     # 添加阶段特定 Prompt
@@ -341,4 +341,3 @@ def build_test_design_prompt(
     stage_prompt = stage_prompts.get(stage, STAGE_CLARIFY_PROMPT)
     
     return f"{system}\n\n---\n\n{stage_prompt}"
-

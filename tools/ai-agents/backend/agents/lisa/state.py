@@ -50,6 +50,7 @@ class LisaState(TypedDict):
     # }
     plan: list[dict]
     current_stage_id: Optional[str]
+    artifact_templates: list[dict]  # 产出物模板列表
     
     # ═══════════════════════════════════════════════════════════
     # 产出物存储 (Markdown 格式，支持 Mermaid)
@@ -64,7 +65,7 @@ class LisaState(TypedDict):
     # ═══════════════════════════════════════════════════════════
     # 交互追踪
     # ═══════════════════════════════════════════════════════════
-    pending_clarifications: list[str]  # 待澄清问题列表
+    pending_clarifications: list[str] # 待澄清问题列表
     consensus_items: list[dict]        # [{"question": "...", "answer": "..."}]
 
 
@@ -80,7 +81,10 @@ def get_initial_state() -> LisaState:
     """
     # 使用共享模块的基础初始状态
     from ..shared.state import get_base_initial_state
-    return get_base_initial_state()
+    # 注意: get_base_initial_state 返回的是 Dict[str, Any]，需要转型
+    # 且确保包含 LisaState 特有的字段
+    base_state = get_base_initial_state()
+    return base_state  # type: ignore
 
 
 def clear_workflow_state(state: LisaState) -> LisaState:
@@ -97,7 +101,7 @@ def clear_workflow_state(state: LisaState) -> LisaState:
     """
     # 使用共享模块的清空函数
     from ..shared.state import clear_workflow_state as base_clear
-    return base_clear(state)
+    return base_clear(state)  # type: ignore
 
 
 # Artifact 命名常量

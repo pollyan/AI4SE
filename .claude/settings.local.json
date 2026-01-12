@@ -51,7 +51,13 @@
       "mcp__playwright__browser_snapshot",
       "mcp__playwright__browser_select_option",
       "Bash(.claude/hooks/play-tts.sh:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(/Users/anhui/Documents/myProgram/AI4SE/.claude/hooks/play-tts.sh:*)",
+      "Bash(ls:*)",
+      "Bash(bash scripts/dev/deploy-dev.sh:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker-compose:*)",
+      "Bash(docker:*)"
     ],
     "deny": []
   },
