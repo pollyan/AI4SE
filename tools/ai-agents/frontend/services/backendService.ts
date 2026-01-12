@@ -116,10 +116,10 @@ export async function sendMessageStream(
 
     // Regex patterns to clean system tags from chat display
     const patterns = [
+        /```json[\s\S]*?```/g,
         /<plan>[\s\S]*?<\/plan>/g,
         /<update_status[^>]*>[\s\S]*?<\/update_status>/g,
         /<artifact_template\s+[^>]*>/g,
-        // Hide artifact content fully from chat as it shows in right panel
         /<artifact\s+key="[^"]*">[\s\S]*?<\/artifact>/g
     ];
 

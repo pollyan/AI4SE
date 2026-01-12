@@ -349,18 +349,21 @@ class LangchainAssistantService:
         # 使用 stream_mode="messages" 获取真正的 token 级增量
         # 导入清理函数用于流式过滤
         from .shared.progress_utils import clean_response_streaming
-        # 记录已处理的模板和 Plan，避免重复更新
         processed_templates = set()
         plan_parsed = False
+        json_parsed = False
 
-        # 引入解析函数
         from .shared.progress_utils import (
             parse_plan, 
             parse_all_artifact_templates,
             clean_response_text,
-            get_current_stage_id
+            get_current_stage_id,
+            parse_structured_json,
+            extract_plan_from_structured,
+            extract_artifacts_from_structured,
         )
         from .shared.artifact_utils import parse_all_artifacts
+        from .shared.output_parser import split_message_and_json
         
         # 记录已输出的清理后的文本长度
         yielded_len = 0
@@ -406,12 +409,42 @@ class LangchainAssistantService:
                                  if not full_response.endswith(content):
                                      full_response += content
     
-                            # 1. 实时解析 Plan (仅一次)
-                            # 使用宽松的检查条件，只要包含 plan 标签且没有解析过
-                            if not plan_parsed:
-                                # 检查是否有 <plan> (大小写不敏感)
+                            # 1. 实时解析结构化输出 (优先 JSON，fallback XML)
+                            if not json_parsed and not plan_parsed:
+                                # 优先尝试 JSON 解析 (新格式)
+                                if '```json' in full_response and '```' in full_response[full_response.find('```json')+7:]:
+                                    structured_data, _ = parse_structured_json(full_response)
+                                    if structured_data:
+                                        parsed_plan = extract_plan_from_structured(structured_data)
+                                        if parsed_plan:
+                                            state["plan"] = parsed_plan
+                                            stage_id = structured_data.get("current_stage_id") or get_current_stage_id(parsed_plan) or ""
+                                            state["current_stage_id"] = stage_id
+                                            plan_parsed = True
+                                            json_parsed = True
+                                        
+                                        templates, artifacts_dict = extract_artifacts_from_structured(structured_data)
+                                        if templates:
+                                            if "artifact_templates" not in state:
+                                                state["artifact_templates"] = []
+                                            existing_keys = {t.get("artifact_key") for t in state["artifact_templates"]}
+                                            for tmpl in templates:
+                                                if tmpl.get("artifact_key") not in existing_keys:
+                                                    state["artifact_templates"].append(tmpl)
+                                        
+                                        if artifacts_dict:
+                                            if "artifacts" not in state:
+                                                state["artifacts"] = {}
+                                            state["artifacts"].update(artifacts_dict)
+                                        
+                                        from .shared.progress import get_progress_info
+                                        progress_info = get_progress_info(state)
+                                        yield {"type": "state", "progress": progress_info}
+                                        logger.info("JSON 结构化输出解析成功")
+
+                            # ... (XML Fallback 逻辑保持不变) ...
+                            if not plan_parsed and not json_parsed:
                                 has_plan_start = re.search(r'<plan\b', full_response, re.IGNORECASE)
-                                # 检查是否有 </plan> (大小写不敏感, 允许空格)
                                 has_plan_end = re.search(r'</\s*plan\s*>', full_response, re.IGNORECASE)
                                 
                                 if has_plan_start and has_plan_end:
@@ -420,12 +453,11 @@ class LangchainAssistantService:
                                         state["plan"] = parsed_plan
                                         state["current_stage_id"] = get_current_stage_id(parsed_plan)
                                         plan_parsed = True
-                                        # 发送状态更新
                                         from .shared.progress import get_progress_info
                                         progress_info = get_progress_info(state)
                                         yield {"type": "state", "progress": progress_info}
     
-                            # 2. 实时解析 Artifact Templates
+                            # ... (Artifact Templates 逻辑保持不变) ...
                             # 只有当响应中有 artifact_template 标签时才尝试解析
                             if "artifact_template" in full_response:
                                 current_templates = parse_all_artifact_templates(full_response)
@@ -450,7 +482,7 @@ class LangchainAssistantService:
                                     progress_info = get_progress_info(state)
                                     yield {"type": "state", "progress": progress_info}
     
-                            # 3. 实时解析 Artifact 内容 (完整闭合后)
+                            # ... (Artifact 内容解析逻辑保持不变) ...
                             if "<artifact" in full_response.lower() and "</artifact>" in full_response.lower():
                                 current_artifacts = parse_all_artifacts(full_response)
                                 has_new_artifact = False
@@ -473,41 +505,92 @@ class LangchainAssistantService:
                                     progress_info = get_progress_info(state)
                                     yield {"type": "state", "progress": progress_info}
     
-                        # 4. 实时输出内容 (尝试清理标签)
-                        cleaned_full = clean_response_streaming(full_response)
+                        # 4. 实时输出内容 (混合模式清理)
+                        # 使用 split_message_and_json 分离出 Message 部分
+                        # 这样即使 JSON 只输出了一半，或者还在输出中，
+                        # 只要正则匹配到开始部分，或者启发式检测到，就能保持 Message 纯净
+                        
+                        # 先做基本的 XML 清理 (兼容旧模式)
+                        temp_cleaned = clean_response_streaming(full_response)
+                        
+                        # 再做 JSON 分离 (新模式)
+                        message_part, _ = split_message_and_json(temp_cleaned)
                         
                         # 计算需要输出的 delta
-                        if len(cleaned_full) > yielded_len:
-                            delta = cleaned_full[yielded_len:]
+                        if len(message_part) > yielded_len:
+                            delta = message_part[yielded_len:]
                             yielded_len += len(delta)
                             yield delta
-
             
         # 循环结束后的最终清理和状态确认
-        cleaned_response = full_response
+        
+        # 最终分离 Message 和 JSON
+        final_message, final_json = split_message_and_json(full_response)
+        cleaned_response = clean_response_text(final_message)
+
         if self.assistant_type in ("lisa", "song", "alex", "chen") and full_response:
             
-            # 最后一次全面解析，确保没有遗漏
-            parsed_plan = parse_plan(full_response)
-            if parsed_plan and not plan_parsed:
-                state["plan"] = parsed_plan
-                state["current_stage_id"] = get_current_stage_id(parsed_plan)
-            
-            # 解析最终产出物内容 (artifact 标签)
-            artifacts = parse_all_artifacts(full_response)
-            if artifacts:
-                 if "artifacts" not in state:
-                     state["artifacts"] = {}
-                 for artifact in artifacts:
-                     state["artifacts"][artifact["key"]] = artifact["content"]
-            
-            # 最终的 clean
-            cleaned_response = clean_response_text(full_response)
+            # 如果还没解析过 JSON，现在尝试解析
+            if not json_parsed and not plan_parsed:
+                structured_data = None
+                parsed_plan = None
+                
+                # 优先使用分离出的 JSON 字符串
+                if final_json:
+                    from .shared.output_parser import parse_structured_output
+                    from .shared.schemas import LisaStructuredOutput
+                    
+                    # 注意：这里直接使用 parse_structured_output，不再经过 extract_json_from_response (因为已经分离了)
+                    structured_obj = parse_structured_output(final_json, LisaStructuredOutput)
+                    
+                    if structured_obj:
+                        # 将 Pydantic 对象转换为字典，以适配 extract_* 工具函数
+                        structured_data = structured_obj.model_dump()
+                        
+                        parsed_plan = extract_plan_from_structured(structured_data)
+                        if parsed_plan:
+                            state["plan"] = parsed_plan
+                            # structured_data 必定非空
+                            stage_id = structured_data.get("current_stage_id") or get_current_stage_id(parsed_plan) or ""
+                            state["current_stage_id"] = stage_id
+                        
+                        templates, artifacts_dict = extract_artifacts_from_structured(structured_data)
+                        
+                        if templates:
+                            if "artifact_templates" not in state:
+                                state["artifact_templates"] = []
+                            existing_keys = {t.get("artifact_key") for t in state["artifact_templates"]}
+                            for tmpl in templates:
+                                if tmpl.get("artifact_key") not in existing_keys:
+                                    state["artifact_templates"].append(tmpl)
+                        
+                        if artifacts_dict:
+                            if "artifacts" not in state:
+                                state["artifacts"] = {}
+                            state["artifacts"].update(artifacts_dict)
+                        
+                        json_parsed = True
+                
+                # 如果上面没解析出来，尝试旧的 XML 逻辑
+                if not json_parsed:
+                    # ... (XML Fallback 逻辑保持不变) ...
+                    parsed_plan = parse_plan(full_response)
+                    if parsed_plan:
+                        state["plan"] = parsed_plan
+                        state["current_stage_id"] = get_current_stage_id(parsed_plan)
+                    
+                    artifacts = parse_all_artifacts(full_response)
+                    if artifacts:
+                        if "artifacts" not in state:
+                            state["artifacts"] = {}
+                        for artifact in artifacts:
+                            state["artifacts"][artifact["key"]] = artifact["content"]
             
             # 发送最终状态
             from .shared.progress import get_progress_info
             progress_info = get_progress_info(state)
-            yield {"type": "state", "progress": progress_info}
+            if progress_info:
+                yield {"type": "state", "progress": progress_info}
         
         # 将清理后的响应添加到消息历史
         if cleaned_response:
@@ -571,6 +654,3 @@ class LangchainAssistantService:
         self._add_to_history(session_id, "assistant", full_response)
         
         logger.info(f"流式消息处理完成，总计: {len(full_response)} 字符")
-
-
-

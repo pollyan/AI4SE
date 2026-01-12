@@ -97,48 +97,55 @@ PROTOCOL_TECH_SELECTION = """
 # 7. 进度同步机制
 # ═══════════════════════════════════════════════════════════════════════════════
 
-PLAN_SYNC_MECHANISM_PROMPT = """
-### 进度同步机制 (Progress Sync)
+STRUCTURED_OUTPUT_PROMPT = """
+### 结构化输出协议 (Structured Output Protocol)
 
-本系统采用**全量状态快照**来管理任务进度。你拥有动态调整计划的完全控制权。
+本系统采用**混合模式 (Mixed Mode)**进行响应：
+1. 先输出自然语言回复（Markdown 格式），用于与用户交互。
+2. 最后输出**全量状态快照 JSON**，用于更新系统状态。
 
 #### 核心规则
-**每次回复**都必须在回复的**第一行**输出当前的**完整计划表**，反映最新的任务进度。
+- **顺序强制**: 必须 **先** 输出回复内容，**最后** 输出 JSON 代码块。
+- **位置强制**: JSON 代码块必须位于回复的**最末尾**。
+- **JSON 格式**: 使用 ```json 代码块包裹。
 
-#### 数据格式
-使用 `<plan>` 标签包裹一个 JSON 对象列表。每个对象必须包含以下字段：
+#### JSON 数据格式
+必须包含以下字段（注意：回复内容**不**包含在 JSON 中）：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | string | 阶段唯一标识符（英文，如 "clarify"）|
-| `name` | string | 阶段显示名称（如 "需求澄清"）|
-| `status` | string | 当前状态，取值见下方枚举 |
+| `plan` | array | 工作流阶段列表，每个元素包含 id、name、status |
+| `current_stage_id` | string | 当前活跃阶段的 ID |
+| `artifacts` | array | 产出物列表，包含 stage_id、key、name、content |
 
-**状态(status)枚举**:
-- `pending`: 尚未开始
-- `active`: 当前正在进行（同一时间只能有一个 active）
-- `completed`: 已完成
+**plan 中每个阶段的字段**:
+- `id`: 阶段唯一标识符
+- `name`: 阶段显示名称
+- `status`: 当前状态 (pending/active/completed)
 
-#### 格式约束
-1. **位置强制**: 必须位于回复的第一行，严禁有任何前缀字符或空行。
-2. **JSON 严格**: 必须使用双引号，符合标准 JSON 语法，严禁使用 Python 单引号。
-3. **单行输出**: JSON 内容必须在一行内，不要换行。
-
-#### 默认推荐流程
-<plan>{example_json}</plan>
+**artifacts 中每个产出物的字段**:
+- `stage_id`: 所属阶段 ID
+- `key`: 产出物唯一键
+- `name`: 产出物显示名称
+- `content`: 产出物内容（Markdown 格式），未生成时为 null
 
 #### One-Shot 样例
 
-以下是一个完整的多阶段计划示例，展示正确的 JSON 格式：
+**场景**: 策略制定阶段，先回复用户，然后更新状态。
 
-**场景**: 当前处于"策略制定"阶段（第1阶段已完成，第2阶段进行中）
+> 好的，基于需求分析，我将使用 FMEA 来制定测试策略。
+> 
+> 首先，让我分析主要风险点...
+>
+> ```json
+> {example_json}
+> ```
 
-<plan>[{{"id": "clarify", "name": "需求澄清", "status": "completed"}}, {{"id": "strategy", "name": "策略制定", "status": "active"}}, {{"id": "cases", "name": "用例编写", "status": "pending"}}, {{"id": "delivery", "name": "文档交付", "status": "pending"}}]</plan>
-
-好的，基于已澄清的需求，我将使用 FMEA 来制定测试策略...
-
-**注意**: `<plan>` 标签会被系统自动解析并移除，用户不会看到它。
+**注意**: JSON 代码块会被系统自动隐藏，用户只会看到前面的回复内容。
 """.strip()
+
+# 保留旧变量名以兼容现有代码
+PLAN_SYNC_MECHANISM_PROMPT = STRUCTURED_OUTPUT_PROMPT
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

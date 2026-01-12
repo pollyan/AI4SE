@@ -31,6 +31,13 @@ def get_plan_sync_instruction(default_stages: List[Dict]) -> str:
         s["status"] = "active" if i == 0 else "pending"
         example_stages.append(s)
     
-    example_json = json.dumps(example_stages, ensure_ascii=False)
+    # 构建符合 LisaStructuredOutput Schema 的完整示例对象
+    example_obj = {
+        "plan": example_stages,
+        "current_stage_id": example_stages[0]["id"] if example_stages else "",
+        "artifacts": []
+    }
+    
+    example_json = json.dumps(example_obj, ensure_ascii=False, indent=2)
 
     return PLAN_SYNC_MECHANISM_PROMPT.format(example_json=example_json)

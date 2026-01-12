@@ -1,28 +1,164 @@
 """
 共享进度工具模块
 
-提供 XML 解析、响应清理等通用功能。
+提供 XML/JSON 解析、响应清理等通用功能。
 Lisa 和 Alex 智能体共用此模块。
 
 采用"全量状态快照"模式：LLM 每次回复都输出完整的 Plan JSON（含 status）。
+
+### 输出格式演进
+- **Legacy**: XML 标签 (<plan>, <artifact>, <artifact_template>)
+- **New**: 末尾 JSON 代码块 (```json ... ```)
+
+本模块同时支持两种格式，优先尝试 JSON 解析。
 """
 
 import re
 import json
 import logging
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 
 logger = logging.getLogger(__name__)
 
 
-# Plan 标签正则表达式 - 用于提取 LLM 动态生成的阶段计划
+# ═══════════════════════════════════════════════════════════════════════════════
+# JSON 代码块解析 (新格式)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+JSON_BLOCK_PATTERN = re.compile(
+    r'```json\s*([\s\S]*?)\s*```',
+    re.IGNORECASE
+)
+
+
+def parse_structured_json(text: str) -> Tuple[Optional[Dict], Optional[str]]:
+    """
+    从响应文本末尾提取结构化 JSON 块
+    
+    期望格式:
+    ```json
+    {
+      "plan": [...],
+      "current_stage_id": "...",
+      "artifacts": [...],
+      "message": "..."
+    }
+    ```
+    
+    Args:
+        text: LLM 响应文本
+        
+    Returns:
+        (parsed_data, message) 元组:
+        - parsed_data: 解析后的字典，包含 plan, current_stage_id, artifacts
+        - message: 用户可见的消息内容
+        若解析失败则返回 (None, None)
+    """
+    matches = list(JSON_BLOCK_PATTERN.finditer(text))
+    if not matches:
+        return None, None
+    
+    last_match = matches[-1]
+    json_str = last_match.group(1).strip()
+    
+    try:
+        data = json.loads(json_str)
+        
+        if not isinstance(data, dict):
+            logger.warning(f"JSON 格式错误: 期望字典，得到 {type(data)}")
+            return None, None
+        
+        required_fields = ["plan", "current_stage_id", "message"]
+        for field in required_fields:
+            if field not in data:
+                logger.warning(f"JSON 缺少必要字段: {field}")
+                return None, None
+        
+        message = data.get("message", "")
+        
+        logger.info(f"解析到结构化 JSON: plan={len(data.get('plan', []))} 阶段, "
+                   f"artifacts={len(data.get('artifacts', []))} 个")
+        
+        return data, message
+        
+    except json.JSONDecodeError as e:
+        logger.warning(f"结构化 JSON 解析失败: {e}")
+        return None, None
+
+
+def extract_plan_from_structured(data: Dict) -> Optional[List[Dict]]:
+    """
+    从结构化 JSON 中提取 Plan 列表
+    
+    Args:
+        data: parse_structured_json 返回的字典
+        
+    Returns:
+        Plan 列表，每个阶段包含 id, name, status
+    """
+    plan = data.get("plan", [])
+    if not isinstance(plan, list):
+        return None
+    
+    normalized_plan = []
+    for i, stage in enumerate(plan):
+        normalized_stage = {
+            "id": stage.get("id", f"stage_{i}"),
+            "name": stage.get("name", f"阶段 {i+1}"),
+            "status": stage.get("status", "pending"),
+        }
+        normalized_plan.append(normalized_stage)
+    
+    return normalized_plan
+
+
+def extract_artifacts_from_structured(data: Dict) -> Tuple[List[Dict], Dict[str, str]]:
+    """
+    从结构化 JSON 中提取产出物信息
+    
+    Args:
+        data: parse_structured_json 返回的字典
+        
+    Returns:
+        (templates, artifacts) 元组:
+        - templates: 产出物模板列表 [{stage_id, artifact_key, name}, ...]
+        - artifacts: 已生成的产出物 {key: content, ...}
+    """
+    artifacts_list = data.get("artifacts", [])
+    if not isinstance(artifacts_list, list):
+        return [], {}
+    
+    templates = []
+    artifacts = {}
+    
+    for item in artifacts_list:
+        stage_id = item.get("stage_id")
+        key = item.get("key")
+        name = item.get("name")
+        content = item.get("content")
+        
+        if stage_id and key and name:
+            templates.append({
+                "stage_id": stage_id,
+                "artifact_key": key,
+                "name": name,
+            })
+        
+        if key and content:
+            artifacts[key] = content
+    
+    return templates, artifacts
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# XML 标签解析 (Legacy 格式)
+# ═══════════════════════════════════════════════════════════════════════════════
+
 PLAN_PATTERN = re.compile(
     r'<plan>\s*(\[.*?\])\s*</plan>',
     re.IGNORECASE | re.DOTALL
 )
 
-# Artifact Template 标签正则表达式 - 用于提取产出物模板声明
-# 匹配: <artifact_template stage="xxx" key="yyy" name="zzz"/>
 ARTIFACT_TEMPLATE_PATTERN = re.compile(
     r'<artifact_template\s+'
     r'stage=["\']([^"\']+)["\']\s+'
@@ -32,13 +168,10 @@ ARTIFACT_TEMPLATE_PATTERN = re.compile(
     re.IGNORECASE
 )
 
-# 所有需要清理的 XML 标签模式
 CLEANUP_PATTERNS = [
     re.compile(r'<plan>.*?</plan>', re.IGNORECASE | re.DOTALL),
-    # 注意：不再在后端清理 <artifact> 标签，交由前端处理显示逻辑
-    # re.compile(r'<artifact[^>]*>.*?</artifact>', re.IGNORECASE | re.DOTALL),
-    # 支持 <artifact_template ... /> 和 <artifact_template ... >
     re.compile(r'<artifact_template[^>]*>', re.IGNORECASE),
+    JSON_BLOCK_PATTERN,
 ]
 
 
@@ -241,6 +374,22 @@ def clean_response_streaming(text: str) -> str:
             if suffix_lower.startswith(prefix):
                 return cleaned[:last_open_bracket]
             
+    # 4. 检查是否有 JSON 代码块片段 (混合模式)
+    # 查找最后一个 ``` 的位置
+    last_code_block = cleaned.rfind('```')
+    if last_code_block != -1:
+        suffix = cleaned[last_code_block:]
+        # Case A: 正在输入 ```json (例如 "`", "``", "```j", "```json")
+        json_marker = "```json"
+        if json_marker.startswith(suffix.lower()):
+            # 只有当它看起来不像正常的代码块结束（即前面没有配对的 ```json）时才截断
+            # 但流式传输中很难判断，这里宁可错杀不可放过（只截断末尾）
+            return cleaned[:last_code_block]
+        
+        # Case B: 已经开始了 ```json ...
+        if suffix.lower().startswith(json_marker):
+            return cleaned[:last_code_block]
+
     return cleaned
 
 

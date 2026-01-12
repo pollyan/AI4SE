@@ -8,7 +8,7 @@ Lisa 工作流产出物模板定义
 # 1. 需求澄清阶段 (Clarify) - 需求分析文档
 # ═══════════════════════════════════════════════════════════════════════════════
 
-ARTIFACT_CLARIFY_REQUIREMENTS = """<artifact key="test_design_requirements">
+ARTIFACT_CLARIFY_REQUIREMENTS = """
 # 需求分析文档
 
 ## 1. 需求全景图
@@ -49,14 +49,14 @@ graph TD
 ## 5. 待确认事项 (TBD)
 - [ ] [事项1]
 - [ ] [事项2]
-</artifact>"""
+"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 2. 策略制定阶段 (Strategy) - 测试策略蓝图
 # ═══════════════════════════════════════════════════════════════════════════════
 
-ARTIFACT_STRATEGY_BLUEPRINT = """<artifact key="test_design_strategy">
+ARTIFACT_STRATEGY_BLUEPRINT = """
 # 测试策略蓝图
 
 ## 1. 风险分析 (FMEA)
@@ -107,14 +107,14 @@ columns 1
 - **测试环境**: [Dev / Staging / Prod]
 - **数据准备**: [造数脚本 / 生产脱敏]
 - **人力投入**: [估算]
-</artifact>"""
+"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 3. 用例编写阶段 (Cases) - 测试用例集
 # ═══════════════════════════════════════════════════════════════════════════════
 
-ARTIFACT_CASES_SET = """<artifact key="test_design_cases">
+ARTIFACT_CASES_SET = """
 # 测试用例集
 
 ## 1. 测试用例架构
@@ -161,14 +161,14 @@ graph LR
 | 参数 | 类型 | 范围/规则 | 上点 | 内点 | 离点 | 预期 |
 |------|------|-----------|------|------|------|------|
 | [P1] | int  | [1, 100]  | 1, 100 | 50 | 0, 101 | ... |
-</artifact>"""
+"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 4. 文档交付阶段 (Delivery) - 最终交付文档
 # ═══════════════════════════════════════════════════════════════════════════════
 
-ARTIFACT_DELIVERY_FINAL = """<artifact key="test_design_final">
+ARTIFACT_DELIVERY_FINAL = """
 # 测试设计文档 (Final)
 
 ## 文档概览
@@ -212,14 +212,14 @@ pie title 测试用例分布
 - [ ] 产品经理确认
 - [ ] 开发负责人确认
 - [ ] 测试负责人确认
-</artifact>"""
+"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 骨架模板 (Skeleton) - 首次回复时用于展示文档结构框架
 # ═══════════════════════════════════════════════════════════════════════════════
 
-SKELETON_CLARIFY_REQUIREMENTS = """<artifact key="test_design_requirements">
+SKELETON_CLARIFY_REQUIREMENTS = """
 # 需求分析文档
 
 ## 1. 需求全景图
@@ -240,9 +240,9 @@ SKELETON_CLARIFY_REQUIREMENTS = """<artifact key="test_design_requirements">
 
 ## 5. 待确认事项 (TBD)
 - [ ] *根据对话过程逐步补充...*
-</artifact>"""
+"""
 
-SKELETON_STRATEGY_BLUEPRINT = """<artifact key="test_design_strategy">
+SKELETON_STRATEGY_BLUEPRINT = """
 # 测试策略蓝图
 
 ## 1. 风险分析 (FMEA)
@@ -264,9 +264,9 @@ SKELETON_STRATEGY_BLUEPRINT = """<artifact key="test_design_strategy">
 - **测试环境**: *[待规划]*
 - **数据准备**: *[待规划]*
 - **人力投入**: *[待估算]*
-</artifact>"""
+"""
 
-SKELETON_CASES_SET = """<artifact key="test_design_cases">
+SKELETON_CASES_SET = """
 # 测试用例集
 
 ## 1. 测试用例架构
@@ -284,9 +284,9 @@ SKELETON_CASES_SET = """<artifact key="test_design_cases">
 | 参数 | 类型 | 范围/规则 | 上点 | 内点 | 离点 | 预期 |
 |------|------|-----------|------|------|------|------|
 | *待生成* | ... | ... | ... | ... | ... | ... |
-</artifact>"""
+"""
 
-SKELETON_DELIVERY_FINAL = """<artifact key="test_design_final">
+SKELETON_DELIVERY_FINAL = """
 # 测试设计文档 (Final)
 
 ## 文档概览
@@ -304,4 +304,4 @@ SKELETON_DELIVERY_FINAL = """<artifact key="test_design_final">
 - [ ] 产品经理确认
 - [ ] 开发负责人确认
 - [ ] 测试负责人确认
-</artifact>"""
+"""

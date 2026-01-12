@@ -6,6 +6,7 @@
 - 无 XML 指令
 - 文本清理
 - 动态 Plan 解析（全量快照模式）
+- JSON 结构化输出解析（新格式）
 """
 
 import pytest
@@ -14,6 +15,9 @@ from backend.agents.shared.progress_utils import (
     clean_response_text,
     clean_response_streaming,
     get_current_stage_id,
+    parse_structured_json,
+    extract_plan_from_structured,
+    extract_artifacts_from_structured,
 )
 
 
@@ -134,3 +138,130 @@ class TestCleanResponseStreaming:
         """不截断其他标签"""
         text = "text <br"
         assert clean_response_streaming(text) == "text <br"
+
+
+class TestParseStructuredJson:
+
+    def test_parse_valid_json_block(self):
+        response = '''对话内容...
+
+```json
+{
+  "plan": [{"id": "clarify", "name": "需求澄清", "status": "active"}],
+  "current_stage_id": "clarify",
+  "artifacts": [],
+  "message": "让我们开始需求澄清"
+}
+```'''
+        data, message = parse_structured_json(response)
+
+        assert data is not None
+        assert message == "让我们开始需求澄清"
+        assert len(data["plan"]) == 1
+        assert data["current_stage_id"] == "clarify"
+
+    def test_parse_json_with_artifacts(self):
+        response = '''```json
+{
+  "plan": [{"id": "clarify", "name": "需求澄清", "status": "completed"}],
+  "current_stage_id": "clarify",
+  "artifacts": [
+    {"stage_id": "clarify", "key": "requirements", "name": "需求文档", "content": "# 需求内容"}
+  ],
+  "message": "已完成需求分析"
+}
+```'''
+        data, message = parse_structured_json(response)
+
+        assert data is not None
+        assert len(data["artifacts"]) == 1
+        assert data["artifacts"][0]["content"] == "# 需求内容"
+
+    def test_parse_no_json_block(self):
+        response = "这是普通文本，没有 JSON 块"
+        data, message = parse_structured_json(response)
+
+        assert data is None
+        assert message is None
+
+    def test_parse_invalid_json(self):
+        response = '''```json
+{ invalid json }
+```'''
+        data, message = parse_structured_json(response)
+
+        assert data is None
+        assert message is None
+
+    def test_parse_missing_required_field(self):
+        response = '''```json
+{"plan": [], "current_stage_id": "test"}
+```'''
+        data, message = parse_structured_json(response)
+
+        assert data is None
+
+    def test_parse_uses_last_json_block(self):
+        response = '''First block:
+```json
+{"plan": [], "current_stage_id": "first", "message": "first", "artifacts": []}
+```
+
+Second block:
+```json
+{"plan": [], "current_stage_id": "second", "message": "second", "artifacts": []}
+```'''
+        data, message = parse_structured_json(response)
+
+        assert data is not None
+        assert data["current_stage_id"] == "second"
+        assert message == "second"
+
+
+class TestExtractPlanFromStructured:
+
+    def test_extract_plan_normalizes_stages(self):
+        data = {
+            "plan": [
+                {"id": "step1", "name": "步骤1", "status": "active"},
+                {"name": "步骤2"},
+            ]
+        }
+        plan = extract_plan_from_structured(data)
+
+        assert plan is not None
+        assert len(plan) == 2
+        assert plan[0]["id"] == "step1"
+        assert plan[0]["status"] == "active"
+        assert "stage_" in plan[1]["id"]
+        assert plan[1]["status"] == "pending"
+
+    def test_extract_empty_plan(self):
+        data = {"plan": []}
+        plan = extract_plan_from_structured(data)
+
+        assert plan == []
+
+
+class TestExtractArtifactsFromStructured:
+
+    def test_extract_templates_and_content(self):
+        data = {
+            "artifacts": [
+                {"stage_id": "clarify", "key": "req", "name": "需求", "content": "# 内容"},
+                {"stage_id": "strategy", "key": "strat", "name": "策略", "content": None},
+            ]
+        }
+        templates, artifacts = extract_artifacts_from_structured(data)
+
+        assert len(templates) == 2
+        assert templates[0]["artifact_key"] == "req"
+        assert len(artifacts) == 1
+        assert artifacts["req"] == "# 内容"
+
+    def test_extract_empty_artifacts(self):
+        data = {"artifacts": []}
+        templates, artifacts = extract_artifacts_from_structured(data)
+
+        assert templates == []
+        assert artifacts == {}
