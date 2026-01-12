@@ -7,6 +7,8 @@ Lisa 智能体使用 LangGraph StateGraph 实现。
 """
 
 import logging
+import json
+import re
 from typing import AsyncIterator, Optional, Dict, List, Any, Union
 from langchain_core.messages import HumanMessage, AIMessage
 
@@ -347,6 +349,18 @@ class LangchainAssistantService:
         # 使用 stream_mode="messages" 获取真正的 token 级增量
         # 导入清理函数用于流式过滤
         from .shared.progress_utils import clean_response_streaming
+        # 记录已处理的模板和 Plan，避免重复更新
+        processed_templates = set()
+        plan_parsed = False
+
+        # 引入解析函数
+        from .shared.progress_utils import (
+            parse_progress_update, 
+            parse_plan, 
+            parse_all_artifact_templates,
+            clean_response_text
+        )
+        from .shared.artifact_utils import parse_all_artifacts
         
         # 记录已输出的清理后的文本长度
         yielded_len = 0
@@ -366,68 +380,118 @@ class LangchainAssistantService:
                     if hasattr(message, 'content') and message.content:
                         content = message.content
                         
-                        # 增量输出逻辑：
-                        # 基于全量内容进行清理，然后计算新增的 delta
-                        # 这种方式可以处理跨 chunk 的 XML 标签，以及临时隐藏未完成的标签
-                        
                         if content.startswith(full_response):
-                             # Case 1: content 是累积的完整响应 (LangGraph 默认行为)
-                             # 无需额外拼接
                              full_response = content
                         else:
-                             # Case 2: content 只是增量 chunk (某些 LLM 的行为)
-                             # 需要累积到 full_response
-                             # 注意：这里假设 content 确实是增量，不包含之前的 duplicated 内容
-                             # LangGraph stream_mode="messages" 通常返回的是 MessageChunk，会自动合并
-                             # 如果这里返回的是增量 chunk，我们需要自己拼接
-                             # 但根据之前的代码，似乎之前的 content 包含了 full_response
-                             # 为了安全，我们只信任 MessageChunk 的累积能力，或者只处理 case 1
                              if not full_response.endswith(content):
                                  full_response += content
 
-                        # 核心逻辑：对当前完整的 full_response 进行智能流式清理
+                        # 1. 实时解析 Plan (仅一次)
+                        # 使用宽松的检查条件，只要包含 plan 标签且没有解析过
+                        if not plan_parsed:
+                            # 检查是否有 <plan> (大小写不敏感)
+                            has_plan_start = re.search(r'<plan\b', full_response, re.IGNORECASE)
+                            # 检查是否有 </plan> (大小写不敏感, 允许空格)
+                            has_plan_end = re.search(r'</\s*plan\s*>', full_response, re.IGNORECASE)
+                            
+                            if has_plan_start and has_plan_end:
+                                parsed_plan = parse_plan(full_response)
+                                if parsed_plan:
+                                    state["plan"] = parsed_plan
+                                    state["current_stage_id"] = parsed_plan[0]["id"] if parsed_plan else None
+                                    plan_parsed = True
+                                    # 发送状态更新
+                                    from .shared.progress import get_progress_info
+                                    progress_info = get_progress_info(state)
+                                    yield {"type": "state", "progress": progress_info}
+
+                        # 2. 实时解析 Artifact Templates
+                        # 只有当响应中有 artifact_template 标签时才尝试解析
+                        if "artifact_template" in full_response:
+                            current_templates = parse_all_artifact_templates(full_response)
+                            has_new_template = False
+                            
+                            if "artifact_templates" not in state:
+                                state["artifact_templates"] = []
+                            
+                            # 获取当前已有的 key，防止重复添加
+                            existing_keys = {t.get("artifact_key") for t in state["artifact_templates"]}
+                            
+                            for tmpl in current_templates:
+                                key = tmpl.get("artifact_key")
+                                if key and key not in processed_templates:
+                                    if key not in existing_keys:
+                                        state["artifact_templates"].append(tmpl)
+                                        has_new_template = True
+                                    processed_templates.add(key)
+                            
+                            if has_new_template:
+                                from .shared.progress import get_progress_info
+                                progress_info = get_progress_info(state)
+                                yield {"type": "state", "progress": progress_info}
+
+                        # 3. 实时解析 Artifact 内容 (完整闭合后)
+                        if "<artifact" in full_response.lower() and "</artifact>" in full_response.lower():
+                            current_artifacts = parse_all_artifacts(full_response)
+                            has_new_artifact = False
+                            
+                            if "artifacts" not in state:
+                                state["artifacts"] = {}
+                            
+                            for artifact in current_artifacts:
+                                key = artifact.get("key")
+                                content = artifact.get("content")
+                                if key and content:
+                                    existing = state["artifacts"].get(key)
+                                    if existing != content:
+                                        state["artifacts"][key] = content
+                                        has_new_artifact = True
+                                        logger.info(f"流式解析到产出物: {key} ({len(content)} 字符)")
+                            
+                            if has_new_artifact:
+                                from .shared.progress import get_progress_info
+                                progress_info = get_progress_info(state)
+                                yield {"type": "state", "progress": progress_info}
+
+                        # 4. 实时输出内容 (尝试清理标签)
                         cleaned_full = clean_response_streaming(full_response)
                         
                         # 计算需要输出的 delta
                         if len(cleaned_full) > yielded_len:
                             delta = cleaned_full[yielded_len:]
-                            yield delta
                             yielded_len += len(delta)
+                            yield delta
             
-        # Lisa/Alex: 解析 XML 进度更新指令和动态 Plan，并清理响应
+        # 循环结束后的最终清理和状态确认
         cleaned_response = full_response
         if self.assistant_type in ("lisa", "song", "alex", "chen") and full_response:
-            from .shared.progress_utils import parse_progress_update, parse_plan, clean_response_text
-            from .shared.artifact_utils import parse_all_artifacts
-
-            # 解析动态 Plan (LLM 首次规划工作阶段)
+            
+            # 最后一次全面解析，确保没有遗漏
             parsed_plan = parse_plan(full_response)
-            if parsed_plan:
+            if parsed_plan and not plan_parsed:
                 state["plan"] = parsed_plan
-                state["current_stage_id"] = parsed_plan[0]["id"] if parsed_plan else None
-                logger.info(f"动态 Plan 已更新: {len(parsed_plan)} 个阶段")
-                logger.info(f"Plan 内容: {parsed_plan}")
-            else:
-                logger.warning(f"未能解析到 Plan 标签。响应前200字符: {full_response[:200]}")
+                state["current_stage_id"] = parsed_plan[0]["id"]
             
-            # 解析进度更新指令 (阶段切换)
-            update_result = parse_progress_update(full_response)
-            if update_result:
-                stage_id, new_status = update_result
-                state["current_stage_id"] = stage_id
-                logger.info(f"进度更新: current_stage_id -> {stage_id}")
-            
-            # 解析产出物 (统一处理 <artifact> 标签)
+            # 解析最终产出物内容 (artifact 标签)
             artifacts = parse_all_artifacts(full_response)
             if artifacts:
-                if "artifacts" not in state:
-                    state["artifacts"] = {}
-                for artifact in artifacts:
-                    state["artifacts"][artifact["key"]] = artifact["content"]
-                    logger.info(f"产出物已保存: {artifact['key']} ({len(artifact['content'])} 字符)")
+                 if "artifacts" not in state:
+                     state["artifacts"] = {}
+                 for artifact in artifacts:
+                     state["artifacts"][artifact["key"]] = artifact["content"]
             
-            # 清理 XML 标签 (包括 plan, update_status, artifact)
+            # 解析进度更新
+            update_result = parse_progress_update(full_response)
+            if update_result:
+                state["current_stage_id"] = update_result[0]
+            
+            # 最终的 clean
             cleaned_response = clean_response_text(full_response)
+            
+            # 发送最终状态
+            from .shared.progress import get_progress_info
+            progress_info = get_progress_info(state)
+            yield {"type": "state", "progress": progress_info}
         
         # 将清理后的响应添加到消息历史
         if cleaned_response:

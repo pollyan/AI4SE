@@ -24,11 +24,25 @@ PLAN_PATTERN = re.compile(
     re.IGNORECASE | re.DOTALL
 )
 
+# Artifact Template 标签正则表达式 - 用于提取产出物模板声明
+# 匹配: <artifact_template stage="xxx" key="yyy" name="zzz"/>
+ARTIFACT_TEMPLATE_PATTERN = re.compile(
+    r'<artifact_template\s+'
+    r'stage=["\']([^"\']+)["\']\s+'
+    r'key=["\']([^"\']+)["\']\s+'
+    r'name=["\']([^"\']+)["\']\s*'
+    r'/?>',
+    re.IGNORECASE
+)
+
 # 所有需要清理的 XML 标签模式
 CLEANUP_PATTERNS = [
     re.compile(r'<update_status[^>]*>.*?</update_status>', re.IGNORECASE | re.DOTALL),
     re.compile(r'<plan>.*?</plan>', re.IGNORECASE | re.DOTALL),
-    re.compile(r'<artifact[^>]*>.*?</artifact>', re.IGNORECASE | re.DOTALL),
+    # 注意：不再在后端清理 <artifact> 标签，交由前端处理显示逻辑
+    # re.compile(r'<artifact[^>]*>.*?</artifact>', re.IGNORECASE | re.DOTALL),
+    # 支持 <artifact_template ... /> 和 <artifact_template ... >
+    re.compile(r'<artifact_template[^>]*>', re.IGNORECASE),
 ]
 
 
@@ -138,6 +152,56 @@ def parse_plan(text: str) -> Optional[List[Dict]]:
         return None
 
 
+def parse_artifact_template(text: str) -> Optional[Dict[str, str]]:
+    """
+    解析响应文本中的第一个 artifact_template 标签
+    
+    Args:
+        text: LLM 响应文本
+        
+    Returns:
+        {"stage_id": "xxx", "artifact_key": "yyy", "name": "zzz"} 或 None
+        
+    Example:
+        >>> parse_artifact_template('<artifact_template stage="cases" key="test_cases" name="测试用例集"/>')
+        {"stage_id": "cases", "artifact_key": "test_cases", "name": "测试用例集"}
+    """
+    match = ARTIFACT_TEMPLATE_PATTERN.search(text)
+    if match:
+        result = {
+            "stage_id": match.group(1),
+            "artifact_key": match.group(2),
+            "name": match.group(3),
+        }
+        logger.info(f"解析到产出物模板: stage={result['stage_id']}, key={result['artifact_key']}, name={result['name']}")
+        return result
+    return None
+
+
+def parse_all_artifact_templates(text: str) -> List[Dict[str, str]]:
+    """
+    解析响应文本中的所有 artifact_template 标签
+    
+    Args:
+        text: LLM 响应文本
+        
+    Returns:
+        [{"stage_id": "...", "artifact_key": "...", "name": "..."}, ...] 列表
+    """
+    results = []
+    for match in ARTIFACT_TEMPLATE_PATTERN.finditer(text):
+        results.append({
+            "stage_id": match.group(1),
+            "artifact_key": match.group(2),
+            "name": match.group(3),
+        })
+    
+    if results:
+        logger.info(f"解析到 {len(results)} 个产出物模板")
+    
+    return results
+
+
 def clean_response_text(text: str) -> str:
     """
     移除响应文本中的所有进度相关 XML 标签
@@ -179,7 +243,7 @@ def clean_response_streaming(text: str) -> str:
     # 2. 检查是否有未闭合的特定标签 (Plan B)
     # 如果经过正则清理后，开头仍然是敏感标签，说明该标签未闭合
     lower_cleaned = cleaned.lower()
-    sensitive_prefixes = ["<plan", "<update_status"]
+    sensitive_prefixes = ["<plan", "<update_status", "<artifact_template"]
     
     for prefix in sensitive_prefixes:
         if lower_cleaned.startswith(prefix):

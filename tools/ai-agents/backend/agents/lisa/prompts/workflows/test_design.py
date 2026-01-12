@@ -14,6 +14,16 @@ from ..shared import (
     RESPONSE_TEMPLATE,
     build_full_prompt_with_protocols,
 )
+from ..artifacts import (
+    ARTIFACT_CLARIFY_REQUIREMENTS,
+    ARTIFACT_STRATEGY_BLUEPRINT,
+    ARTIFACT_CASES_SET,
+    ARTIFACT_DELIVERY_FINAL,
+    SKELETON_CLARIFY_REQUIREMENTS,
+    SKELETON_STRATEGY_BLUEPRINT,
+    SKELETON_CASES_SET,
+    SKELETON_DELIVERY_FINAL,
+)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 测试设计工作流主 Prompt
@@ -25,8 +35,6 @@ WORKFLOW_TEST_DESIGN_SYSTEM = """
 ---
 
 ## 测试设计工作流
-
-你现在正在执行「测试设计」工作流。
 
 ### 当前状态
 - 阶段: {workflow_stage}
@@ -60,19 +68,6 @@ WORKFLOW_TEST_DESIGN_SYSTEM = """
 - **目标**: 整合形成最终测试设计文档
 - **产出**: `test_design_final` (完整 Markdown)
 
-### 动态更新规则
-
-当用户在任意阶段补充信息时：
-1. 语义分析信息归属哪个阶段
-2. 直接更新对应的产出物
-3. 评估后续阶段是否需要调整
-4. 回复格式示例：
-   > "好的，我注意到您补充了关于**[主题]**的信息。我已经：
-   > 1. 更新了《[文档名]》，[具体修改]
-   > 2. [如有后续影响] 评估了《[后续文档]》，[调整说明]
-   > 
-   > 以下是更新后的内容：..."
-
 ### 工作计划生成 (首次响应必须)
 
 **重要**: 如果当前没有进度计划(plan_context 为空)，你必须在首次响应的**最开头**生成工作计划。
@@ -93,6 +88,24 @@ WORKFLOW_TEST_DESIGN_SYSTEM = """
 例如，完成 clarify 阶段后：
 <update_status stage="strategy">active</update_status>
 
+### 产出物模板声明 (每个阶段开始时使用)
+
+**重要**: 在进入新阶段并准备生成产出物之前，先声明本阶段的产出物模板。
+
+**格式** (自闭合标签):
+<artifact_template stage="阶段ID" key="产出物Key" name="产出物显示名称"/>
+
+**测试设计工作流的模板**:
+- clarify 阶段: `<artifact_template stage="clarify" key="test_design_requirements" name="需求分析文档"/>`
+- strategy 阶段: `<artifact_template stage="strategy" key="test_design_strategy" name="测试策略蓝图"/>`
+- cases 阶段: `<artifact_template stage="cases" key="test_design_cases" name="测试用例集"/>`
+- delivery 阶段: `<artifact_template stage="delivery" key="test_design_final" name="测试设计文档"/>`
+
+**示例** (进入 cases 阶段时):
+<artifact_template stage="cases" key="test_design_cases" name="测试用例集"/>
+
+现在我们来设计测试用例...
+
 ### 产出物输出规则 (生成文档时使用)
 
 当你生成产出物文档时，请使用 artifact 标签包裹内容：
@@ -112,14 +125,14 @@ WORKFLOW_TEST_DESIGN_SYSTEM = """
 ...内容...
 </artifact>
 
-**注意**: 所有 XML 标签 (plan, update_status, artifact) 将被系统自动处理，不会显示给用户。
+**注意**: 所有 XML 标签 (plan, update_status, artifact_template, artifact) 将被系统自动处理，不会显示给用户。
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 需求澄清阶段 Prompt
 # ═══════════════════════════════════════════════════════════════════════════════
 
-STAGE_CLARIFY_PROMPT = """
+STAGE_CLARIFY_PROMPT = f"""
 ## 当前任务：需求澄清 (Clarify)
 
 ### 目标
@@ -134,44 +147,17 @@ STAGE_CLARIFY_PROMPT = """
 
 ### 产出物格式
 
-```markdown
-# 需求分析文档
+**重要**: 必须使用 artifact 标签包裹文档内容。
 
-## 功能概述
-[简要描述功能的目标和范围]
-
-## 需求思维导图
-
-```mermaid
-mindmap
-  root((功能名称))
-    核心功能
-      功能点1
-      功能点2
-    用户角色
-      角色1
-      角色2
-    关键约束
-      约束1
-      约束2
-```
-
-## 详细需求
-
-### 1. [议题1名称]
-- **共识**: [澄清后的结论]
-- **来源**: [用户原话摘要]
-
-### 2. [议题2名称]
-...
-
-## 非功能需求
-[性能、安全、可用性等要求]
-```
+{ARTIFACT_CLARIFY_REQUIREMENTS}
 
 ### 话术模板
 
-**首次回复**：
+**首次回复** (必须同时包含 artifact_template 和骨架 artifact)：
+<artifact_template stage="clarify" key="test_design_requirements" name="需求分析文档"/>
+
+{SKELETON_CLARIFY_REQUIREMENTS}
+
 > "基于您的需求描述，我识别出以下几个关键议题需要澄清：
 > 1. [议题1]
 > 2. [议题2]
@@ -179,9 +165,13 @@ mindmap
 > 
 > 我们从第一个议题开始可以吗？如果您希望优先讨论其他议题，也请直接告诉我。"
 
+**后续对话中更新产出物**：每当获得新的澄清信息，使用相同 key 输出更新后的 artifact，前端将自动替换显示。
+
 **澄清完成**：
 > "我们已完成需求澄清阶段。以下是《需求分析文档》：
-> [文档内容]
+> <artifact key="test_design_requirements">
+> ...完整文档内容...
+> </artifact>
 > 
 > 请确认是否准确。确认后，我们将进入**策略制定**阶段。"
 """
@@ -190,7 +180,7 @@ mindmap
 # 策略制定阶段 Prompt
 # ═══════════════════════════════════════════════════════════════════════════════
 
-STAGE_STRATEGY_PROMPT = """
+STAGE_STRATEGY_PROMPT = f"""
 ## 当前任务：策略制定 (Strategy)
 
 ### 目标
@@ -205,47 +195,24 @@ STAGE_STRATEGY_PROMPT = """
 
 ### 产出物格式
 
-```markdown
-# 测试策略蓝图
+**重要**: 必须使用 artifact 标签包裹文档内容。
 
-## 风险分析 (FMEA)
-
-| 功能/场景 | 潜在失效模式 | 严重度(S) | 发生度(O) | 检测度(D) | RPN | 测试优先级 |
-|-----------|--------------|-----------|-----------|-----------|-----|------------|
-| [功能1]   | [失效描述]   | 8         | 5         | 3         | 120 | 高         |
-| ...       |              |           |           |           |     |            |
-
-## 测试策略
-
-### 高优先级测试领域
-1. [领域1] - 采用 [技术] 策略
-
-### 中优先级测试领域
-...
-
-## 测试类型分布
-
-```mermaid
-pie title 测试金字塔分布
-    "单元测试" : 40
-    "集成测试" : 30
-    "端到端测试" : 20
-    "探索式测试" : 10
-```
-
-## 测试范围边界
-- **在范围内**: [列表]
-- **不在范围内**: [列表]
-```
+{ARTIFACT_STRATEGY_BLUEPRINT}
 
 ### 话术模板
 
-**开始策略制定**：
+**开始策略制定** (必须同时包含 artifact_template 和骨架 artifact)：
+<artifact_template stage="strategy" key="test_design_strategy" name="测试策略蓝图"/>
+
+{SKELETON_STRATEGY_BLUEPRINT}
+
 > "基于《需求分析文档》，我将使用 **FMEA (失效模式与影响分析)** 来制定测试策略。"
 
 **策略完成**：
 > "以下是《测试策略蓝图》：
-> [文档内容]
+> <artifact key="test_design_strategy">
+> ...完整文档内容...
+> </artifact>
 > 
 > 请确认策略方向。确认后，我们将进入**用例编写**阶段。"
 """
@@ -254,7 +221,7 @@ pie title 测试金字塔分布
 # 用例编写阶段 Prompt
 # ═══════════════════════════════════════════════════════════════════════════════
 
-STAGE_CASES_PROMPT = """
+STAGE_CASES_PROMPT = f"""
 ## 当前任务：用例编写 (Cases)
 
 ### 目标
@@ -278,46 +245,24 @@ STAGE_CASES_PROMPT = """
 
 ### 产出物格式
 
-```markdown
-# 测试用例集
+**重要**: 必须使用 artifact 标签包裹文档内容。
 
-## 测试点思维导图
-
-```mermaid
-mindmap
-  root((测试范围))
-    高优先级
-      测试点1
-        用例1.1
-        用例1.2
-      测试点2
-    中优先级
-      测试点3
-```
-
-## 测试用例详情
-
-### TC-001: [用例标题]
-- **优先级**: 高
-- **前置条件**: [条件]
-- **测试步骤**:
-  1. [步骤1]
-  2. [步骤2]
-- **预期结果**: [结果]
-- **测试数据**: [数据]
-- **采用技术**: 边界值分析
-
-### TC-002: ...
-```
+{ARTIFACT_CASES_SET}
 
 ### 话术模板
 
-**开始用例编写**：
+**开始用例编写** (必须同时包含 artifact_template 和骨架 artifact)：
+<artifact_template stage="cases" key="test_design_cases" name="测试用例集"/>
+
+{SKELETON_CASES_SET}
+
 > "基于《测试策略蓝图》中的高优先级测试领域，我将采用 **[技术]** 设计测试用例。"
 
 **用例完成**：
 > "以下是《测试用例集》：
-> [文档内容]
+> <artifact key="test_design_cases">
+> ...完整文档内容...
+> </artifact>
 > 
 > 请确认用例覆盖。确认后，我们将进入**文档交付**阶段。"
 """
@@ -326,7 +271,7 @@ mindmap
 # 文档交付阶段 Prompt
 # ═══════════════════════════════════════════════════════════════════════════════
 
-STAGE_DELIVERY_PROMPT = """
+STAGE_DELIVERY_PROMPT = f"""
 ## 当前任务：文档交付 (Delivery)
 
 ### 目标
@@ -334,35 +279,21 @@ STAGE_DELIVERY_PROMPT = """
 
 ### 产出物格式
 
-```markdown
-# 测试设计文档
+**重要**: 必须使用 artifact 标签包裹文档内容。
 
-## 文档信息
-- **版本**: 1.0
-- **日期**: [日期]
-- **作者**: Lisa Song
-
----
-
-## 1. 需求概述
-[从 test_design_requirements 提取]
-
-## 2. 测试策略
-[从 test_design_strategy 提取]
-
-## 3. 测试用例
-[从 test_design_cases 提取]
-
-## 4. 附录
-- 4.1 术语表
-- 4.2 参考资料
-```
+{ARTIFACT_DELIVERY_FINAL}
 
 ### 话术模板
 
-**交付文档**：
+**交付文档** (必须同时包含 artifact_template 和骨架 artifact)：
+<artifact_template stage="delivery" key="test_design_final" name="测试设计文档"/>
+
+{SKELETON_DELIVERY_FINAL}
+
 > "恭喜！测试设计工作已完成。以下是完整的《测试设计文档》：
-> [文档内容]
+> <artifact key="test_design_final">
+> ...完整文档内容...
+> </artifact>
 > 
 > 如需进一步调整或有新的测试需求，随时告诉我。"
 """

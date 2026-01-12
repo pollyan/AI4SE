@@ -216,14 +216,12 @@ function useChatState(assistantId: AssistantId, onProgressChange?: (progress: Pr
                 sessionIdRef.current,
                 fullMessageText,  // 发送包含文件内容的完整消息
                 (fullText) => {
-                    // 处理 Artifact 格式（右侧面板内容）
-                    const artifactRegex = /:::artifact\s*([\s\S]*?)(\s*:::|$)/;
-                    const match = fullText.match(artifactRegex);
-                    let displayMessage = fullText;
-
-                    if (match) {
-                        displayMessage = fullText.replace(artifactRegex, '\n*(已更新右侧分析成果)*\n');
-                    }
+                    // XML artifact: 匹配闭合和未闭合(流式)两种情况
+                    const xmlArtifactRegex = /<artifact\s+key="[^"]*"\s*>[\s\S]*?(<\/artifact>|$)/g;
+                    const mdArtifactRegex = /:::artifact\s*([\s\S]*?)(\s*:::|$)/g;
+                    let displayMessage = fullText
+                        .replace(xmlArtifactRegex, '\n*(已更新右侧分析成果)*\n')
+                        .replace(mdArtifactRegex, '\n*(已更新右侧分析成果)*\n');
 
                     setMessages(prev => {
                         const newMessages = [...prev];
@@ -323,13 +321,11 @@ function useChatState(assistantId: AssistantId, onProgressChange?: (progress: Pr
                     sessionIdRef.current!,
                     fullMessageText,
                     (fullText) => {
-                        const artifactRegex = /:::artifact\s*([\s\S]*?)(\s*:::|$)/;
-                        const match = fullText.match(artifactRegex);
-                        let displayMessage = fullText;
-
-                        if (match) {
-                            displayMessage = fullText.replace(artifactRegex, '\n*(已更新右侧分析成果)*\n');
-                        }
+                        const xmlArtifactRegex = /<artifact\s+key="[^"]*"\s*>[\s\S]*?<\/artifact>/g;
+                        const mdArtifactRegex = /:::artifact\s*([\s\S]*?)(\s*:::|$)/g;
+                        let displayMessage = fullText
+                            .replace(xmlArtifactRegex, '\n*(已更新右侧分析成果)*\n')
+                            .replace(mdArtifactRegex, '\n*(已更新右侧分析成果)*\n');
 
                         setMessages(prev => {
                             const newMessages = [...prev];

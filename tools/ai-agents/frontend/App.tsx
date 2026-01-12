@@ -14,6 +14,7 @@ const App: React.FC = () => {
   const [analysisResult, setAnalysisResult] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [workflowProgress, setWorkflowProgress] = useState<ProgressInfo | null>(null);
+  const [artifacts, setArtifacts] = useState<Record<string, string>>({});
 
   const handleSelectAssistant = (id: AssistantId) => {
     if (!id) {
@@ -27,11 +28,19 @@ const App: React.FC = () => {
 
     setSelectedAssistantId(id);
     setAnalysisResult('');
-    setWorkflowProgress(null);  // 切换助手时清空进度
+    setWorkflowProgress(null);
+    setArtifacts({});
   };
 
   const handleBack = () => {
     setSelectedAssistantId(null);
+  };
+
+  const handleProgressChange = (progress: ProgressInfo | null) => {
+    setWorkflowProgress(progress);
+    if (progress?.artifacts) {
+      setArtifacts(progress.artifacts);
+    }
   };
 
   const selectedAssistant = ASSISTANTS.find(a => a.id === selectedAssistantId);
@@ -132,7 +141,7 @@ const App: React.FC = () => {
             <AssistantChat
               assistant={selectedAssistant}
               onBack={handleBack}
-              onProgressChange={setWorkflowProgress}
+              onProgressChange={handleProgressChange}
             />
           ) : (
             <AssistantSelectionPanel />
@@ -154,9 +163,10 @@ const App: React.FC = () => {
           <AnalysisResultPanel
             result={analysisResult}
             isProcessing={isProcessing}
-            hasStarted={!!analysisResult}
+            hasStarted={!!analysisResult || Object.keys(artifacts).length > 0 || (workflowProgress && workflowProgress.stages.length > 0)}
             progress={workflowProgress}
             assistantId={selectedAssistantId}
+            artifacts={artifacts}
           />
         </div>
       </div>
