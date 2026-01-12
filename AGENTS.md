@@ -57,9 +57,9 @@ def bad_intent_router(message: str):  # ❌ 不要这样做
         return "requirement"
 ```
 
-### AI 智能体专有规则
+### 通用开发行为准则
 
-以下规则适用于在本仓库中操作的 AI 编程智能体：
+以下规则适用于在本仓库中操作的所有 AI 编程智能体，涵盖所有模块（backend, frontend, intent-tester 等）：
 
 1. **【强制】TDD 开发模式 (Test-Driven Development)**
    在此项目中，**所有**功能开发和 Bug 修复必须严格遵循 TDD 流程。你必须在编写实现代码之前先编写测试代码。
