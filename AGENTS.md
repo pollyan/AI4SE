@@ -69,19 +69,7 @@ def bad_intent_router(message: str):  # ❌ 不要这样做
    2. **Green (绿)**: 编写最小量的实现代码以通过测试。运行测试，确认所有测试通过。
    3. **Refactor (重构)**: 优化代码结构，同时确保测试保持通过状态。
 
-   **测试策略与分层：**
-   * **L1 单元测试 (Unit)**:
-     * **后端**: 使用 `pytest`。覆盖独立的 Graph 节点、工具函数、Prompt 构建逻辑。
-       * 路径: `tools/ai-agents/backend/tests/`
-       * 标记: `@pytest.mark.unit`
-     * **前端**: 使用 `vitest`。覆盖 React 组件渲染、Hooks 逻辑、正则表达式、数据处理工具。
-       * 路径: `tools/ai-agents/frontend/tests/`
-   * **L2 集成测试 (Integration)**:
-     * **后端**: 覆盖 Service 层调用、Graph 完整流转、数据库交互。
-       * 路径: `tools/ai-agents/backend/tests/` (如 `test_lisa_integration.py`)
-       * 标记: `@pytest.mark.integration`
-   * **L3 意图/E2E 测试**:
-     * **MidScene**: 用于验证完整的浏览器端业务流程。
+   具体测试策略与分层请参考下文 **[项目测试策略](#项目测试策略)** 章节。
 
    **禁止事项：**
    * 禁止在没有失败测试的情况下直接修改业务代码。
@@ -98,6 +86,37 @@ def bad_intent_router(message: str):  # ❌ 不要这样做
    - 推理过程说明
    - 计划与任务列表
    - 错误信息与建议
+
+---
+
+## 项目测试策略
+
+本项目采用分层测试策略，确保代码质量和系统稳定性。
+
+### 测试分层 (Test Pyramid)
+
+1. **L1 单元测试 (Unit Tests)**
+   - **目标**: 验证独立的函数、类、组件或模块的行为。
+   - **后端 (Python)**:
+     - **工具**: `pytest`
+     - **覆盖范围**: 独立的 Graph 节点、工具函数、Prompt 构建逻辑、状态转换。
+     - **路径**: `tools/ai-agents/backend/tests/` (标记 `@pytest.mark.unit`)
+   - **前端 (TypeScript/React)**:
+     - **工具**: `vitest`
+     - **覆盖范围**: React 组件渲染、Hooks 逻辑、正则表达式、数据处理工具。
+     - **路径**: `tools/ai-agents/frontend/tests/`
+
+2. **L2 集成测试 (Integration Tests)**
+   - **目标**: 验证多个模块或服务之间的交互。
+   - **后端**:
+     - **覆盖范围**: Service 层调用、LangGraph 完整工作流流转、数据库交互、API 端点。
+     - **路径**: `tools/ai-agents/backend/tests/` (标记 `@pytest.mark.integration`)
+
+3. **L3 意图/E2E 测试 (Intent/E2E Tests)**
+   - **目标**: 从用户视角验证完整的业务流程。
+   - **工具**: `intent-tester` (集成 MidSceneJS)
+   - **覆盖范围**: 浏览器端的完整交互流程、跨系统集成。
+   - **路径**: `tools/intent-tester/tests/`
 
 ---
 
