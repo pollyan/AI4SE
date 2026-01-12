@@ -52,12 +52,32 @@ export async function createSession(
 }
 
 /**
+ * Artifact template item from backend
+ */
+export interface ArtifactTemplateItem {
+    stageId: string;
+    artifactKey: string;
+    name: string;
+}
+
+/**
+ * Artifact progress info from state events
+ */
+export interface ArtifactProgress {
+    template: ArtifactTemplateItem[];
+    completed: string[];          // 已完成的 artifact keys
+    generating: string | null;    // 正在生成的 artifact key
+}
+
+/**
  * Progress info from state events
  */
 export interface ProgressInfo {
     stages: { id: string; name: string; status: 'pending' | 'active' | 'completed' }[];
     currentStageIndex: number;
     currentTask: string | null;
+    artifactProgress?: ArtifactProgress | null;
+    artifacts?: Record<string, string>;
 }
 
 /**
@@ -94,6 +114,23 @@ export async function sendMessageStream(
     let fullText = '';
     let buffer = '';
 
+    // Regex patterns to clean system tags from chat display
+    const patterns = [
+        /<plan>[\s\S]*?<\/plan>/g,
+        /<update_status[^>]*>[\s\S]*?<\/update_status>/g,
+        /<artifact_template\s+[^>]*>/g,
+        // Hide artifact content fully from chat as it shows in right panel
+        /<artifact\s+key="[^"]*">[\s\S]*?<\/artifact>/g
+    ];
+
+    const cleanText = (text: string): string => {
+        let cleaned = text;
+        patterns.forEach(pattern => {
+            cleaned = cleaned.replace(pattern, '');
+        });
+        return cleaned;
+    };
+
     try {
         while (true) {
             const { done, value } = await reader.read();
@@ -115,13 +152,16 @@ export async function sendMessageStream(
 
                         if (data.type === 'content' && data.chunk) {
                             fullText += data.chunk;
-                            onChunk(fullText);
+                            // Clean text before sending to UI
+                            const cleanedText = cleanText(fullText);
+                            onChunk(cleanedText);
                         } else if (data.type === 'state' && data.progress && onStateChange) {
                             // Handle state events for workflow progress
                             onStateChange(data.progress);
                         } else if (data.type === 'done') {
                             // Stream completed
-                            return fullText;
+                            const finalCleaned = cleanText(fullText);
+                            return finalCleaned;
                         } else if (data.type === 'error') {
                             throw new Error(data.message || 'Stream error from server');
                         }
@@ -135,7 +175,7 @@ export async function sendMessageStream(
         reader.releaseLock();
     }
 
-    return fullText;
+    return cleanText(fullText);
 }
 
 /**

@@ -635,9 +635,13 @@ def stream_messages(session_id):
         session.updated_at = datetime.utcnow()
         db.session.commit()
         
+        # 从 user_context 获取 assistant_type
+        user_context = json.loads(session.user_context or "{}")
+        assistant_type = user_context.get("assistant_type", "alex")
+        
         # 获取 AI 服务
         try:
-            ai_service = get_ai_service(session.assistant_type, session_id)
+            ai_service = get_ai_service(assistant_type, session_id)
             if not ai_service:
                 return standard_error_response(f"无法初始化 {session.assistant_type} 助手", 500)
         except Exception as e:
@@ -664,7 +668,6 @@ def stream_messages(session_id):
         
         # 预先获取需要的会话数据，避免在 generator 中访问 session 对象导致 DetachedInstanceError
         project_name = session.project_name
-        assistant_type = session.assistant_type
         
         def generate():
             import asyncio

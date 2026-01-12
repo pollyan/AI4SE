@@ -24,6 +24,7 @@ class BaseAgentState(TypedDict):
     - plan: 动态进度计划列表
     - current_stage_id: 当前活跃阶段 ID
     - artifacts: 产出物存储 (Markdown 格式)
+    - artifact_templates: 产出物模板列表 (阶段与产出物的映射)
     - pending_clarifications: 待澄清问题列表
     - consensus_items: 已达成共识项
     """
@@ -49,6 +50,15 @@ class BaseAgentState(TypedDict):
     # 产出物存储 (Markdown 格式，支持 Mermaid)
     artifacts: Dict[str, str]
     
+    # 产出物模板列表
+    # 列表中的每个 item 结构:
+    # {
+    #     "stage_id": "阶段ID",
+    #     "artifact_key": "产出物存储key",
+    #     "name": "产出物显示名称"
+    # }
+    artifact_templates: List[Dict[str, str]]
+    
     # 交互追踪
     pending_clarifications: List[str]
     consensus_items: List[Any]
@@ -71,6 +81,7 @@ def get_base_initial_state() -> Dict[str, Any]:
         "plan": [],
         "current_stage_id": None,
         "artifacts": {},
+        "artifact_templates": [],
         "pending_clarifications": [],
         "consensus_items": [],
     }
@@ -95,6 +106,7 @@ def clear_workflow_state(state: Dict[str, Any]) -> Dict[str, Any]:
         "plan": [],
         "current_stage_id": None,
         "artifacts": {},
+        "artifact_templates": [],
         "pending_clarifications": [],
         "consensus_items": [],
     }

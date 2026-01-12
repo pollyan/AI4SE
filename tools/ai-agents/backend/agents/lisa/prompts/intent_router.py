@@ -1,6 +1,5 @@
 """
 意图路由 Prompt
-
 用于 intent_router_node 识别用户意图。
 """
 

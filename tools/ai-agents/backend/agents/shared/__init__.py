@@ -7,6 +7,8 @@
 from .progress_utils import (
     parse_progress_update,
     parse_plan,
+    parse_artifact_template,
+    parse_all_artifact_templates,
     clean_response_text,
     clean_response_streaming,
     update_plan_status,
@@ -31,6 +33,8 @@ __all__ = [
     # Progress Utils
     "parse_progress_update",
     "parse_plan",
+    "parse_artifact_template",
+    "parse_all_artifact_templates",
     "clean_response_text",
     "clean_response_streaming",
     "update_plan_status",
