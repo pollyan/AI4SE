@@ -91,7 +91,7 @@ def bad_intent_router(message: str):  # ❌ 不要这样做
 
 ## 项目测试策略
 
-本项目采用分层测试策略，确保代码质量和系统稳定性。
+本项目采用分层测试策略，确保代码质量和系统稳定性。所有 PR 必须通过 CI/CD 流水线的所有检查（包含测试、构建和 Lint）。
 
 ### 测试分层 (Test Pyramid)
 
@@ -99,24 +99,46 @@ def bad_intent_router(message: str):  # ❌ 不要这样做
    - **目标**: 验证独立的函数、类、组件或模块的行为。
    - **后端 (Python)**:
      - **工具**: `pytest`
-     - **覆盖范围**: 独立的 Graph 节点、工具函数、Prompt 构建逻辑、状态转换。
-     - **路径**: `tools/ai-agents/backend/tests/` (标记 `@pytest.mark.unit`)
-   - **前端 (TypeScript/React)**:
+     - **覆盖范围**: 
+       - `ai-agents`: 独立的 Graph 节点、工具函数、Prompt 构建逻辑。
+       - `intent-tester`: API 端点逻辑、服务层。
+     - **路径**: 
+       - `tools/ai-agents/backend/tests/`
+       - `tools/intent-tester/tests/`
+   - **前端 (AI Agents)**:
      - **工具**: `vitest`
      - **覆盖范围**: React 组件渲染、Hooks 逻辑、正则表达式、数据处理工具。
      - **路径**: `tools/ai-agents/frontend/tests/`
+   - **代理服务器 (Node.js)**:
+     - **工具**: `jest`
+     - **覆盖范围**: Intent Tester 的本地代理服务 (HTTP/WebSocket/Mock)。
+     - **路径**: `tools/intent-tester/tests/proxy/` (运行 `npm run test:proxy`)
 
-2. **L2 集成测试 (Integration Tests)**
-   - **目标**: 验证多个模块或服务之间的交互。
-   - **后端**:
-     - **覆盖范围**: Service 层调用、LangGraph 完整工作流流转、数据库交互、API 端点。
-     - **路径**: `tools/ai-agents/backend/tests/` (标记 `@pytest.mark.integration`)
+2. **L2 集成测试 & 构建验证 (Integration & Build)**
+   - **目标**: 验证模块交互、构建完整性及代码规范。
+   - **后端集成**:
+     - **覆盖范围**: LangGraph 完整工作流、数据库交互、跨服务调用。
+     - **标记**: `@pytest.mark.integration`
+   - **Common Frontend (共享组件)**:
+     - **策略**: 目前通过静态代码分析 (Lint) 和 生产构建 (Build) 进行验证。
+     - **命令**: `npm run lint && npm run build`
+   - **代码质量**:
+     - **工具**: `flake8` (Python), `eslint` (TypeScript)
+     - **策略**: CI 强制检查代码风格和潜在错误。
 
 3. **L3 意图/E2E 测试 (Intent/E2E Tests)**
    - **目标**: 从用户视角验证完整的业务流程。
    - **工具**: `intent-tester` (集成 MidSceneJS)
    - **覆盖范围**: 浏览器端的完整交互流程、跨系统集成。
    - **路径**: `tools/intent-tester/tests/`
+
+### 持续集成 (CI)
+
+GitHub Actions 会在每次推送时运行以下工作流：
+1. **Python Tests**: 运行 ai-agents 和 intent-tester 的 pytest。
+2. **Frontend Tests**: 运行 ai-agents 的 vitest 和 common frontend 的构建验证。
+3. **Proxy Tests**: 运行 intent-tester 代理服务的 jest 测试。
+4. **Code Quality**: 运行 flake8 检查。
 
 ---
 
