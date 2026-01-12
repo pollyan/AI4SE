@@ -141,8 +141,26 @@ def bad_intent_router(message: str):  # ❌ 不要这样做
 - **路径**: `tools/intent-tester/tests/proxy/`
 - **命令**: `cd tools/intent-tester && npm run test:proxy`
 
-### 持续集成 (CI)
+### 4. 测试规范与最佳实践
 
+**Pytest (后端)**
+- **文件命名**: `test_*.py`
+- **Fixtures 模式**:
+  ```python
+  @pytest.fixture(scope='function')
+  def app():
+      """为测试创建应用实例"""
+      _app = create_app()
+      ...
+      yield _app
+  ```
+- **常用标记**:
+  - `@pytest.mark.unit` - 单元测试
+  - `@pytest.mark.integration` - 集成测试
+  - `@pytest.mark.slow` - 慢速测试
+  - `@pytest.mark.asyncio` - 异步测试
+
+**持续集成 (CI)**
 GitHub Actions 会在每次推送时运行以下工作流：
 1. **Python Tests**: 运行 ai-agents 和 intent-tester 的 pytest。
 2. **Frontend Tests**: 运行 ai-agents 的 vitest 和 common frontend 的构建验证。
@@ -151,7 +169,7 @@ GitHub Actions 会在每次推送时运行以下工作流：
 
 ---
 
-## 架构说明
+## 架构与项目结构
 
 ### 系统架构
 
@@ -199,200 +217,7 @@ MidScene Server 是**运行在客户端本地**的代理服务器：
                               └──────────────────┘
 ```
 
-### 模块化单体架构
-
-- 核心业务逻辑封装在 `tools/` 下的独立模块中
-- 各模块独立开发、独立测试，但共享部署
-- 通用工具类放置在 `tools/shared/` 中，避免代码复制
-
----
-
-## 构建与测试命令
-
-### Python 后端（根目录）
-
-```bash
-# 运行所有测试
-pytest
-
-# 运行单个测试文件
-pytest tests/path/to/test_file.py
-
-# 运行单个测试函数
-pytest tests/path/to/test_file.py::test_function_name
-
-# 按标记运行
-pytest -m unit          # 仅单元测试
-pytest -m integration   # 集成测试
-pytest -m "not slow"    # 跳过慢速测试
-
-# 覆盖率
-pytest --cov=tools --cov-report=html
-```
-
-### AI Agents 模块
-
-```bash
-# 运行测试（从 tools/ai-agents/ 目录）
-cd tools/ai-agents && pytest
-
-# 单个测试
-pytest backend/tests/test_lisa_graph.py::test_specific_function
-
-# 代码检查
-black backend/ --check
-flake8 backend/
-```
-
-### 前端（React/Vite）
-
-```bash
-# tools/frontend/ 或 tools/ai-agents/frontend/
-npm install
-npm run dev      # 开发服务器
-npm run build    # 生产构建
-npm run lint     # ESLint 检查
-npm run test     # Vitest（仅 ai-agents）
-```
-
-### Docker 本地环境
-
-```bash
-# 启动/更新本地开发环境（必须使用此脚本）
-./scripts/deploy-dev.sh
-
-# 查看日志
-docker logs -f ai4se-intent-tester
-docker logs -f ai4se-agents
-```
-
----
-
-## 代码风格指南
-
-### Python
-
-**导入顺序：**
-```python
-# 1. 标准库
-import logging
-import json
-from typing import Dict, List, Optional, Any
-
-# 2. 第三方库
-from flask import Flask, request
-from langchain_core.messages import HumanMessage, AIMessage
-from langgraph.graph import StateGraph, START, END
-
-# 3. 本地导入
-from ..models import RequirementsAIConfig
-from .state import LisaState, get_initial_state
-```
-
-**命名规范：**
-- 类名：`PascalCase`（如 `LangchainAssistantService`、`BaseAgentState`）
-- 函数/方法：`snake_case`（如 `create_lisa_graph`、`get_initial_state`）
-- 常量：`UPPER_SNAKE_CASE`（如 `SUPPORTED_ASSISTANTS`）
-- 私有方法：`_单下划线` 前缀
-
-**类型提示（必需）：**
-```python
-def create_lisa_graph(model_config: Dict[str, str]) -> CompiledStateGraph:
-    """创建 Lisa LangGraph 图。"""
-    ...
-```
-
-**文档字符串（Google 风格）：**
-```python
-def route_by_intent(state: LisaState) -> Literal["test_design", "clarify"]:
-    """
-    根据意图路由到对应节点。
-    
-    Args:
-        state: 包含工作流信息的当前状态
-        
-    Returns:
-        下一个节点名称
-    """
-```
-
-### TypeScript/React
-
-**导入顺序：**
-```typescript
-// 1. React/框架
-import React, { useState, useEffect } from 'react';
-
-// 2. 第三方库
-import { marked } from 'marked';
-
-// 3. 本地组件/工具
-import { WorkflowProgress } from './WorkflowProgress';
-import { backendService } from '../services/backendService';
-```
-
-**组件模式：**
-```typescript
-interface Props {
-  sessionId: string;
-  onComplete?: () => void;
-}
-
-export function AnalysisResultPanel({ sessionId, onComplete }: Props) {
-  const [loading, setLoading] = useState(false);
-  // ...
-}
-```
-
----
-
-## 错误处理
-
-**Python：**
-```python
-# 使用带上下文的具体异常
-try:
-    config = RequirementsAIConfig.get_default_config()
-    if not config:
-        raise ValueError("未找到 AI 配置")
-except Exception as e:
-    logger.error(f"初始化失败: {e}")
-    raise
-```
-
-**禁止事项：**
-- 静默吞掉错误
-- 使用裸 `except:` 子句
-- 无理由使用 `# type: ignore` 或 `as Any`
-
----
-
-## 测试规范
-
-**文件命名：** `test_*.py` / `*.test.ts`
-
-**Pytest fixtures 模式：**
-```python
-@pytest.fixture(scope='function')
-def app():
-    """为测试创建应用。"""
-    _app = create_app()
-    _app.config['TESTING'] = True
-    with _app.app_context():
-        db.create_all()
-        yield _app
-        db.drop_all()
-```
-
-**测试标记：**
-- `@pytest.mark.unit` - 单元测试
-- `@pytest.mark.integration` - 集成测试
-- `@pytest.mark.slow` - 慢速测试
-- `@pytest.mark.asyncio` - 异步测试
-
----
-
-## 项目结构
+### 目录结构
 
 ```
 AI4SE/
@@ -422,11 +247,58 @@ AI4SE/
 └── requirements.txt
 ```
 
+### 模块化单体原则
+- 核心业务逻辑封装在 `tools/` 下的独立模块中
+- 各模块独立开发、独立测试，但共享部署
+- 通用工具类放置在 `tools/shared/` 中，避免代码复制
+
 ---
 
-## 关键模式
+## 开发规范
 
-**LangGraph 状态机：**
+### 代码风格指南
+
+**Python**
+- **导入顺序**: 标准库 -> 第三方库 -> 本地导入
+- **命名规范**:
+  - 类名：`PascalCase`
+  - 函数/方法：`snake_case`
+  - 常量：`UPPER_SNAKE_CASE`
+  - 私有方法：`_单下划线` 前缀
+- **类型提示**: 必须为函数参数和返回值添加类型提示
+
+**TypeScript/React**
+- **组件模式**:
+  ```typescript
+  interface Props {
+    sessionId: string;
+    onComplete?: () => void;
+  }
+
+  export function AnalysisResultPanel({ sessionId, onComplete }: Props) {
+    const [loading, setLoading] = useState(false);
+    // ...
+  }
+  ```
+
+### 错误处理 (Python)
+
+- **使用具体异常**: 禁止使用裸 `except:`
+- **明确的错误信息**:
+  ```python
+  try:
+      config = RequirementsAIConfig.get_default_config()
+      if not config:
+          raise ValueError("未找到 AI 配置")
+  except Exception as e:
+      logger.error(f"初始化失败: {e}")
+      raise
+  ```
+- **禁止静默失败**: 必须记录日志或重新抛出异常
+
+### 关键模式
+
+**LangGraph 状态机**
 ```python
 graph = StateGraph(LisaState)
 graph.add_node("intent_router", lambda s: intent_router_node(s, llm))
@@ -436,7 +308,7 @@ graph.add_conditional_edges("intent_router", route_by_intent)
 return graph.compile()
 ```
 
-**Flask API 响应：**
+**Flask API 响应**
 ```python
 return jsonify({
     "code": 200,
