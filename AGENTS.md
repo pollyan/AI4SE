@@ -91,46 +91,55 @@ def bad_intent_router(message: str):  # ❌ 不要这样做
 
 ## 项目测试策略
 
-本项目采用分层测试策略，确保代码质量和系统稳定性。所有 PR 必须通过 CI/CD 流水线的所有检查（包含测试、构建和 Lint）。
+本项目采用模块化测试策略，各应用模块独立维护其测试套件。所有 PR 必须通过 CI/CD 流水线的所有检查。
 
-### 测试分层 (Test Pyramid)
+### 1. 公共模块 (Common)
 
-1. **L1 单元测试 (Unit Tests)**
-   - **目标**: 验证独立的函数、类、组件或模块的行为。
-   - **后端 (Python)**:
-     - **工具**: `pytest`
-     - **覆盖范围**: 
-       - `ai-agents`: 独立的 Graph 节点、工具函数、Prompt 构建逻辑。
-       - `intent-tester`: API 端点逻辑、服务层。
-     - **路径**: 
-       - `tools/ai-agents/backend/tests/`
-       - `tools/intent-tester/tests/`
-   - **前端 (AI Agents)**:
-     - **工具**: `vitest`
-     - **覆盖范围**: React 组件渲染、Hooks 逻辑、正则表达式、数据处理工具。
-     - **路径**: `tools/ai-agents/frontend/tests/`
-   - **代理服务器 (Node.js)**:
-     - **工具**: `jest`
-     - **覆盖范围**: Intent Tester 的本地代理服务 (HTTP/WebSocket/Mock)。
-     - **路径**: `tools/intent-tester/tests/proxy/` (运行 `npm run test:proxy`)
+**Common Frontend (`tools/frontend`)**
+- **类型**: 静态检查与构建验证
+- **目标**: 确保共享 UI 组件库的代码规范和编译正确性。
+- **工具**: `ESLint`, `TypeScript Compiler (tsc)`
+- **命令**:
+  ```bash
+  cd tools/frontend
+  npm run lint   # 代码风格检查
+  npm run build  # 构建验证
+  ```
 
-2. **L2 集成测试 & 构建验证 (Integration & Build)**
-   - **目标**: 验证模块交互、构建完整性及代码规范。
-   - **后端集成**:
-     - **覆盖范围**: LangGraph 完整工作流、数据库交互、跨服务调用。
-     - **标记**: `@pytest.mark.integration`
-   - **Common Frontend (共享组件)**:
-     - **策略**: 目前通过静态代码分析 (Lint) 和 生产构建 (Build) 进行验证。
-     - **命令**: `npm run lint && npm run build`
-   - **代码质量**:
-     - **工具**: `flake8` (Python), `eslint` (TypeScript)
-     - **策略**: CI 强制检查代码风格和潜在错误。
+### 2. AI 智能体 (AI Agents)
 
-3. **L3 意图/E2E 测试 (Intent/E2E Tests)**
-   - **目标**: 从用户视角验证完整的业务流程。
-   - **工具**: `intent-tester` (集成 MidSceneJS)
-   - **覆盖范围**: 浏览器端的完整交互流程、跨系统集成。
-   - **路径**: `tools/intent-tester/tests/`
+**前端 (`tools/ai-agents/frontend`)**
+- **类型**: 单元与组件测试 (L1)
+- **目标**: 验证 React 组件渲染、Hooks 逻辑及工具函数。
+- **工具**: `Vitest`
+- **路径**: `tools/ai-agents/frontend/tests/`
+- **命令**: `cd tools/ai-agents/frontend && npm run test`
+
+**后端 (`tools/ai-agents/backend`)**
+- **类型**: 单元与集成测试 (L1/L2)
+- **目标**: 验证 LangGraph 节点逻辑、Prompt 构建、API 端点及状态管理。
+- **工具**: `pytest`
+- **路径**: `tools/ai-agents/backend/tests/`
+- **分层**:
+  - **Unit**: 独立节点与工具函数 (`@pytest.mark.unit`)
+  - **Integration**: 完整工作流与 Service 层 (`@pytest.mark.integration`)
+- **命令**: `pytest tools/ai-agents/backend/tests/`
+
+### 3. 意图测试工具 (Intent Tester)
+
+**后端 (`tools/intent-tester`)**
+- **类型**: API 与 服务层测试 (L1/L2)
+- **目标**: 验证 REST API、数据库交互及核心业务逻辑。
+- **工具**: `pytest`
+- **路径**: `tools/intent-tester/tests/` (包含 `api/`, `services/`)
+- **命令**: `pytest tools/intent-tester/tests/`
+
+**本地代理服务 (`tools/intent-tester/browser-automation`)**
+- **类型**: 代理服务测试 (Node.js)
+- **目标**: 验证 MidScene 代理服务器的 HTTP/WebSocket 通信与 Mock 功能。
+- **工具**: `Jest`
+- **路径**: `tools/intent-tester/tests/proxy/`
+- **命令**: `cd tools/intent-tester && npm run test:proxy`
 
 ### 持续集成 (CI)
 
