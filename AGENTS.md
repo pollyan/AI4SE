@@ -20,43 +20,6 @@ AI4SE 是一个 Python/TypeScript 单体仓库，包含 AI 驱动的软件工程
 ---
 
 ## 核心规则（必须遵守）
-
-### DevOps 实践
-
-- **环境一致性**: 本地环境与云端环境保持一致的部署方式
-- **云端部署**: 通过 GitHub Actions 实现，**禁止直连云端服务器部署**
-- **本地 Docker**: 使用 `scripts/deploy-dev.sh` 脚本启动和更新，**禁止直接操作 docker 命令**
-
-```bash
-# 正确方式：使用部署脚本
-./scripts/deploy-dev.sh
-
-# 错误方式：直接操作 docker（禁止）
-docker-compose up -d  # ❌ 不要这样做
-```
-
-### 智能体逻辑判断
-
-- **禁止关键词匹配**: 永远不要用关键词的方法来做智能体的逻辑判断
-- **语义理解优先**: 必须根据上下文与语义综合判断用户意图
-- **使用 LLM 路由**: 意图识别应通过 LLM 进行语义分析，而非正则或关键词
-
-```python
-# 正确方式：LLM 语义判断
-def intent_router_node(state: LisaState, llm: BaseChatModel):
-    """使用 LLM 分析用户意图，基于语义而非关键词。"""
-    prompt = build_intent_prompt(state["messages"])
-    response = llm.invoke(prompt)
-    return {"current_workflow": parse_intent(response)}
-
-# 错误方式：关键词匹配（禁止）
-def bad_intent_router(message: str):  # ❌ 不要这样做
-    if "测试" in message:
-        return "test_design"
-    if "需求" in message:
-        return "requirement"
-```
-
 ### 通用开发行为准则
 
 以下规则适用于在本仓库中操作的所有 AI 编程智能体，涵盖所有模块（backend, frontend, intent-tester 等）：
@@ -86,6 +49,18 @@ def bad_intent_router(message: str):  # ❌ 不要这样做
    - 推理过程说明
    - 计划与任务列表
    - 错误信息与建议
+
+### DevOps 实践
+
+- **环境一致性**: 本地环境与云端环境保持一致的部署方式
+- **云端部署**: 通过 GitHub Actions 实现，**禁止直连云端服务器部署**
+- **本地 Docker**: 使用 `scripts/deploy-dev.sh` 脚本启动和更新，**禁止直接操作 docker 命令**
+
+### 智能体逻辑判断
+
+- **禁止关键词匹配**: 永远不要用关键词的方法来做智能体的逻辑判断
+- **语义理解优先**: 必须根据上下文与语义综合判断用户意图
+- **使用 LLM 路由**: 意图识别应通过 LLM 进行语义分析，而非正则或关键词
 
 ---
 
