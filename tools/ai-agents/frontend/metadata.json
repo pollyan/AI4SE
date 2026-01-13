@@ -1,0 +1,5 @@
+{
+  "name": "AI4SE Intelligent Assistant",
+  "description": "A dashboard for Software Engineering tasks powered by Gemini, featuring specialized AI agents for requirements analysis and QA testing.",
+  "requestFramePermissions": []
+}
