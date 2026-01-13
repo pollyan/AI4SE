@@ -98,78 +98,38 @@ PROTOCOL_TECH_SELECTION = """
 # ═══════════════════════════════════════════════════════════════════════════════
 
 STRUCTURED_OUTPUT_PROMPT = """
-### 结构化输出协议 (Structured Output Protocol)
+### 结构化输出协议
 
-本系统采用**混合模式 (Mixed Mode)**进行响应：
-1. 先输出自然语言回复（Markdown 格式），用于与用户交互。
-2. 最后输出**全量状态快照 JSON**，用于更新系统状态。
+每次回复采用**混合模式**：
+1. 先输出自然语言回复（Markdown 格式）
+2. 最后输出 ```json 代码块（系统自动解析，用户不可见）
 
-#### 核心规则
-- **顺序强制**: 必须 **先** 输出回复内容，**最后** 输出 JSON 代码块。
-- **位置强制**: JSON 代码块必须位于回复的**最末尾**。
-- **JSON 格式**: 使用 ```json 代码块包裹。
+**JSON 字段说明**：
+- `plan`: 阶段列表，每个阶段包含 `id`（唯一标识）、`name`（显示名称）、`status`（pending/active/completed）
+- `current_stage_id`: 当前活跃阶段的 id
+- `artifacts`: 产出物列表，每个产出物包含 `stage_id`（所属阶段）、`key`（唯一键）、`name`（显示名称）、`content`（Markdown 内容，未生成时为 null）
 
-#### JSON 数据格式
-必须包含以下字段（注意：回复内容**不**包含在 JSON 中）：
+**示例**（假设在"需求澄清"阶段生成了一个澄清产出物）：
+```json
+{
+  "plan": [
+    {"id": "clarify", "name": "需求澄清", "status": "active"},
+    {"id": "strategy", "name": "策略制定", "status": "pending"}
+  ],
+  "current_stage_id": "clarify",
+  "artifacts": [
+    {"stage_id": "clarify", "key": "clarification", "name": "需求澄清记录", "content": "## 澄清要点\\n- xxx"}
+  ]
+}
+```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `plan` | array | 工作流阶段列表，每个元素包含 id、name、status |
-| `current_stage_id` | string | 当前活跃阶段的 ID |
-| `artifacts` | array | 产出物列表，包含 stage_id、key、name、content |
-
-**plan 中每个阶段的字段**:
-- `id`: 阶段唯一标识符
-- `name`: 阶段显示名称
-- `status`: 当前状态 (pending/active/completed)
-
-**artifacts 中每个产出物的字段**:
-- `stage_id`: 所属阶段 ID
-- `key`: 产出物唯一键
-- `name`: 产出物显示名称
-- `content`: 产出物内容（Markdown 格式），未生成时为 null
-
-#### One-Shot 样例
-
-**场景**: 策略制定阶段，先回复用户，然后更新状态。
-
-> 好的，基于需求分析，我将使用 FMEA 来制定测试策略。
-> 
-> 首先，让我分析主要风险点...
->
-> ```json
-> {example_json}
-> ```
-
-**注意**: JSON 代码块会被系统自动隐藏，用户只会看到前面的回复内容。
+**规则**：
+- JSON 必须位于回复**最末尾**
+- 每次回复**必须**输出完整的 JSON 结构
 """.strip()
 
 # 保留旧变量名以兼容现有代码
 PLAN_SYNC_MECHANISM_PROMPT = STRUCTURED_OUTPUT_PROMPT
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# 8. 结构化响应模板
-# ═══════════════════════════════════════════════════════════════════════════════
-
-RESPONSE_TEMPLATE = """
-## 结构化响应规则
-
-**规则**: 所有回复必须遵循以下 Markdown 结构。
-
-**模板**:
-```markdown
-[核心交互内容：分析、提问、图表等]
----
-### 共识总结
-...[截止到目前的重要产出]
-```
-
-### 注意事项
-- **不要**在回复中显示任务进展或进度列表（右侧面板会自动显示进度条）
-- 专注于核心对话内容
-- 每个阶段完成时生成产出物摘要
-""".strip()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -200,7 +160,7 @@ def build_full_prompt_with_protocols() -> str:
     """
     构建包含协议的完整 Prompt
     
-    组合基础 Prompt + 所有协议 + 响应模板。
+    组合基础 Prompt + 所有协议。
     
     Returns:
         str: 完整的 System Prompt
@@ -213,8 +173,4 @@ def build_full_prompt_with_protocols() -> str:
 {PROTOCOL_PANORAMA_FOCUS}
 
 {PROTOCOL_TECH_SELECTION}
-
----
-
-{RESPONSE_TEMPLATE}
 """.strip()

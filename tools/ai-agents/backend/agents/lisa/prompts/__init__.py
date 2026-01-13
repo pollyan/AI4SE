@@ -11,7 +11,6 @@ from .shared import (
     LISA_SKILLS,
     PROTOCOL_PANORAMA_FOCUS,
     PROTOCOL_TECH_SELECTION,
-    RESPONSE_TEMPLATE,
 )
 
 from .intent_router import INTENT_ROUTING_PROMPT
@@ -25,7 +24,6 @@ __all__ = [
     "LISA_SKILLS",
     "PROTOCOL_PANORAMA_FOCUS",
     "PROTOCOL_TECH_SELECTION",
-    "RESPONSE_TEMPLATE",
     # 意图路由
     "INTENT_ROUTING_PROMPT",
     # 意图澄清

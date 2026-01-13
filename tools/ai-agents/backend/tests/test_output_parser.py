@@ -10,7 +10,6 @@ from backend.agents.shared.output_parser import (
     create_lisa_parser,
     parse_structured_output,
     extract_json_from_response,
-    get_format_instructions,
 )
 
 
@@ -112,22 +111,6 @@ class TestParseStructuredOutput:
         result = parse_structured_output(json_str, LisaStructuredOutput)
         
         assert result is None
-
-
-class TestGetFormatInstructions:
-
-    def test_format_instructions_contains_schema(self):
-        instructions = get_format_instructions(LisaStructuredOutput)
-        
-        assert "plan" in instructions
-        assert "current_stage_id" in instructions
-        assert "artifacts" in instructions
-        # message 字段已移除
-
-    def test_format_instructions_contains_example(self):
-        instructions = get_format_instructions(LisaStructuredOutput)
-        
-        assert "pending" in instructions or "active" in instructions or "completed" in instructions
 
 
 class TestEndToEndParsing:

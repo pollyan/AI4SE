@@ -6,6 +6,18 @@ Requirement Review Workflow Prompt
 """
 
 from ..shared import build_full_prompt_with_protocols
+from ..workflow_engine import get_plan_sync_instruction
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 默认阶段定义
+# ═══════════════════════════════════════════════════════════════════════════════
+
+DEFAULT_REQUIREMENT_REVIEW_STAGES = [
+    {"id": "clarify", "name": "需求澄清"},
+    {"id": "analysis", "name": "评审分析"},
+    {"id": "risk", "name": "风险评估"},
+    {"id": "report", "name": "评审报告"},
+]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 系统 Prompt
@@ -27,31 +39,11 @@ WORKFLOW_REQUIREMENT_REVIEW_SYSTEM = """
 - **待澄清问题**: {pending_clarifications}
 - **已达成共识**: {consensus_count} 项
 
-## 动态进度计划
+## 进度计划
 
 {plan_context}
 
-### 工作计划生成 (首次响应必须)
-
-**重要**: 如果当前没有进度计划(plan_context 为空)，你必须在首次响应的**最开头**生成工作计划。
-
-**格式**: 在回复的**第一行**输出 plan 标签 (系统自动解析后移除，用户看不到):
-<plan>[{{"id": "clarify", "name": "需求澄清"}}, {{"id": "analysis", "name": "评审分析"}}, {{"id": "risk", "name": "风险评估"}}, {{"id": "report", "name": "评审报告"}}]</plan>
-
-**规则**:
-- 必须放在回复的第一行，在任何其他内容之前
-- 可以根据具体任务调整阶段名称和数量
-- 必须保持 JSON 格式
-
-### 进度更新指令 (阶段切换时使用)
-
-当你完成当前阶段并准备进入下一个阶段时，请在回复中包含以下标签：
-<update_status stage="下一阶段ID">active</update_status>
-
-例如，完成 clarify 阶段后：
-<update_status stage="analysis">active</update_status>
-
-**注意**: 这些标签将被系统自动处理，不会显示给用户。
+{plan_sync_instruction}
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -87,8 +79,7 @@ STAGE_CLARIFY_PROMPT = """
 > "在 [功能点] 中，您提到 [描述]，这里是指 [A] 还是 [B]？"
 
 **完成标志**：
-当所有核心模块的范围和基本逻辑都已澄清，且无重大理解障碍时，进入下一阶段。
-输出：<update_status stage="analysis">active</update_status>
+当所有核心模块的范围和基本逻辑都已澄清，且无重大理解障碍时，更新 JSON 中 `current_stage_id` 为 "analysis"，进入下一阶段。
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -124,8 +115,7 @@ STAGE_ANALYSIS_PROMPT = """
 > - **建议**: 增加退还优惠券的逻辑分支。"
 
 **完成标志**:
-当核心问题都已提出并记录，进入下一阶段。
-输出：<update_status stage="risk">active</update_status>
+当核心问题都已提出并记录，更新 JSON 中 `current_stage_id` 为 "risk"，进入下一阶段。
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -154,8 +144,7 @@ STAGE_RISK_PROMPT = """
 > 2. **高并发场景** (P1): 促销活动可能面临性能瓶颈。"
 
 **完成标志**:
-风险评估完成，准备生成最终报告。
-输出：<update_status stage="report">active</update_status>
+风险评估完成，更新 JSON 中 `current_stage_id` 为 "report"，准备生成最终报告。
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -205,6 +194,7 @@ def build_requirement_review_prompt(
 ) -> str:
     """构建需求评审工作流 Prompt"""
     base = build_full_prompt_with_protocols()
+    plan_sync_instruction = get_plan_sync_instruction(DEFAULT_REQUIREMENT_REVIEW_STAGES)
     
     system = WORKFLOW_REQUIREMENT_REVIEW_SYSTEM.format(
         base_prompt=base,
@@ -213,6 +203,7 @@ def build_requirement_review_prompt(
         pending_clarifications=pending_clarifications,
         consensus_count=consensus_count,
         plan_context=plan_context,
+        plan_sync_instruction=plan_sync_instruction,
     )
     
     stage_prompts = {

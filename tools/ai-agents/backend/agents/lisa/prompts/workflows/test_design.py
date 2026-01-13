@@ -11,7 +11,6 @@ from ..shared import (
     LISA_SKILLS,
     PROTOCOL_PANORAMA_FOCUS,
     PROTOCOL_TECH_SELECTION,
-    RESPONSE_TEMPLATE,
     build_full_prompt_with_protocols,
 )
 from ..artifacts import (

@@ -111,47 +111,6 @@ def parse_structured_output(
         return None
 
 
-def get_format_instructions(schema_class: Type[BaseModel]) -> str:
-    """
-    生成 LLM 输出格式指令
-
-    用于在 Prompt 中指导 LLM 输出符合 Schema 的 JSON。
-
-    Args:
-        schema_class: Pydantic 模型类
-
-    Returns:
-        格式化的指令字符串，包含 Schema 说明和示例
-    """
-    parser = PydanticOutputParser(pydantic_object=schema_class)
-    base_instructions = parser.get_format_instructions()
-
-    # 添加中文说明和示例
-    example = """
-示例输出格式：
-```json
-{
-  "plan": [
-    {"id": "clarify", "name": "需求澄清", "status": "completed"},
-    {"id": "strategy", "name": "策略制定", "status": "active"},
-    {"id": "cases", "name": "用例设计", "status": "pending"}
-  ],
-  "current_stage_id": "strategy",
-  "artifacts": [
-    {"stage_id": "clarify", "key": "requirements", "name": "需求分析文档", "content": "# 需求分析\\n..."},
-    {"stage_id": "strategy", "key": "test_strategy", "name": "测试策略", "content": null}
-  ]
-}
-```
-
-注意事项：
-- plan 中的 status 只能是 "pending"、"active" 或 "completed"
-- artifacts 中 content 为 null 表示该产出物尚未生成
-- 回复内容请放在 JSON 代码块之前，不要包含在 JSON 中
-"""
-    return f"{base_instructions}\n\n{example}"
-
-
 def split_message_and_json(response: str) -> tuple[str, Optional[str]]:
     """
     将 LLM 响应拆分为 Message 和 JSON 部分

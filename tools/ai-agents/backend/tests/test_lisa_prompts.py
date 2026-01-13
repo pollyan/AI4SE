@@ -13,7 +13,6 @@ from backend.agents.lisa.prompts import (
     LISA_SKILLS,
     PROTOCOL_PANORAMA_FOCUS,
     PROTOCOL_TECH_SELECTION,
-    RESPONSE_TEMPLATE,
 )
 from backend.agents.lisa.prompts.shared import (
     build_base_prompt,
@@ -66,12 +65,6 @@ class TestPromptComponents:
         """技术选型协议应包含执行步骤"""
         assert "技术决策" in PROTOCOL_TECH_SELECTION
         assert "交付告知" in PROTOCOL_TECH_SELECTION
-    
-    def test_response_template_has_structure(self):
-        """响应模板应包含结构定义"""
-        assert "共识总结" in RESPONSE_TEMPLATE
-        assert "核心交互内容" in RESPONSE_TEMPLATE
-        assert "不要" in RESPONSE_TEMPLATE  # 进度条指引
 
 
 class TestPromptCombination:
@@ -108,8 +101,6 @@ class TestPromptCombination:
         # 协议
         assert "全景-聚焦" in full
         assert "技术选型协议" in full
-        # 响应模板
-        assert "共识总结" in full
     
     def test_full_prompt_has_section_separators(self):
         """完整 Prompt 应有分节符"""
@@ -130,7 +121,6 @@ class TestPromptQuality:
             LISA_SKILLS,
             PROTOCOL_PANORAMA_FOCUS,
             PROTOCOL_TECH_SELECTION,
-            RESPONSE_TEMPLATE,
         ]
         
         for component in components:
@@ -145,7 +135,6 @@ class TestPromptQuality:
             LISA_SKILLS,
             PROTOCOL_PANORAMA_FOCUS,
             PROTOCOL_TECH_SELECTION,
-            RESPONSE_TEMPLATE,
         ]
         
         for component in components:
