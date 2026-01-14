@@ -60,50 +60,20 @@ WORKFLOW_TEST_DESIGN_SYSTEM = """
 
 {plan_sync_instruction}
 
-### 阶段定义与产出物 Key
+### 阶段与产出物 Key 映射
 
-#### clarify (需求澄清)
-- **目标**: 消除需求中的所有模糊点
-- **产出物 Key**: `test_design_requirements`
-- **产出物名称**: 需求分析文档
-- **完成条件**: 用户确认需求分析文档
+| 阶段 | Key | 产出物名称 |
+|------|-----|-----------|
+| clarify | `test_design_requirements` | 需求分析文档 |
+| strategy | `test_design_strategy` | 测试策略蓝图 |
+| cases | `test_design_cases` | 测试用例集 |
+| delivery | `test_design_final` | 测试设计文档 |
 
-#### strategy (策略制定)
-- **目标**: 应用 FMEA 等技术制定测试策略
-- **产出物 Key**: `test_design_strategy`
-- **产出物名称**: 测试策略蓝图
-- **完成条件**: 用户确认测试策略蓝图
+### ⚠️ 产出物管理（核心规则）
 
-#### cases (用例编写)
-- **目标**: 设计测试点和测试用例
-- **产出物 Key**: `test_design_cases`
-- **产出物名称**: 测试用例集
-- **完成条件**: 用户确认测试用例集
-
-#### delivery (文档交付)
-- **目标**: 整合形成最终测试设计文档
-- **产出物 Key**: `test_design_final`
-- **产出物名称**: 测试设计文档
-
-### 产出物管理规则
-
-**核心规则**: 所有文档内容必须存储在 JSON 输出的 `artifacts` 列表中，而不是直接在消息中输出。
-
-1. **初始化**: 进入新阶段时，在 `artifacts` 列表中创建一个新的产出物条目，内容为初始骨架或 null。
-2. **更新**: 每次获得新信息，在 `artifacts` 列表中更新对应 Key 的 `content` 字段。
-3. **展示**: 前端会自动渲染 `artifacts` 中的内容，你在 `message` 中只需引导用户查看右侧文档。
-
-**示例** (JSON artifacts 字段):
-```json
-"artifacts": [
-  {{
-    "stage_id": "clarify", 
-    "key": "test_design_requirements", 
-    "name": "需求分析文档", 
-    "content": "# 需求分析文档\\n\\n..."
-  }}
-]
-```
+1. **所有文档内容存储在 JSON `artifacts` 中**，不要在自然语言回复中输出完整文档
+2. **每次用户回复后都要更新 artifacts**，将新确认的信息累积到 content 中
+3. **content 必须是完整文档**，不是增量片段
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -121,7 +91,7 @@ STAGE_CLARIFY_PROMPT = f"""
 1. **识别议程**：基于用户提供的需求，识别出需要澄清的核心议题（通常3-5个）
 2. **呈现议程**：以清单形式呈现给用户，说明将从第一个议题开始
 3. **逐一澄清**：针对每个议题，提出1-3个具体问题，确保彻底澄清
-4. **更新文档**：在澄清完成后，更新需求分析文档的内容
+4. **实时更新产出物**：每次用户回答后，立即更新 artifacts 中的文档内容
 
 ### 产出物要求
 
@@ -131,10 +101,19 @@ STAGE_CLARIFY_PROMPT = f"""
 文档结构参考：
 {ARTIFACT_CLARIFY_REQUIREMENTS}
 
+### ⚠️ 产出物更新时机（每次回复都要检查）
+
+| 用户行为 | 你的 artifacts 更新动作 |
+|---------|------------------------|
+| 回答了澄清问题 | 将确认信息追加到"已确认信息"部分，格式：`- ✅ [要点]: [用户回答]` |
+| 确认一个议题完成 | 将该议题从"待确认"移到"已确认"，更新进度 |
+| 提供了需求文档 | 解析文档，填充"功能详细规格"和"业务流程图" |
+| 说"继续"或"下一个" | 更新当前议题状态，开始下一议题 |
+
 ### 话术模板
 
 **首次回复** (初始化产出物):
-请在 JSON `artifacts` 中初始化 `test_design_requirements`，内容使用以下骨架：
+在 JSON `artifacts` 中初始化 `test_design_requirements`，内容使用以下骨架：
 {SKELETON_CLARIFY_REQUIREMENTS}
 
 Message:
@@ -145,7 +124,9 @@ Message:
 > 
 > 我们从第一个议题开始可以吗？如果您希望优先讨论其他议题，也请直接告诉我。"
 
-**后续对话**: 持续在 JSON 中更新 `test_design_requirements` 的内容。
+**后续每次对话**: 
+1. 先在自然语言中回应用户
+2. 在 JSON artifacts 中更新 `test_design_requirements` 的 content（累积完整内容）
 
 **澄清完成**:
 > "我们已完成需求澄清阶段。请查看右侧的《需求分析文档》。

@@ -79,13 +79,17 @@ run_api_tests() {
         return 1
     fi
 
-    # 运行 AI Agents Backend 测试
-    log_info "运行 AI Agents Backend 测试..."
-    if python3 -m pytest tools/ai-agents/backend/tests/ -v --cov=tools/ai-agents/backend --cov-report=term; then
-        log_info "✅ AI Agents Backend 测试通过"
+    # 运行 AI Agents Backend 测试 (如果目录存在)
+    if [ -d "tools/ai-agents/backend/tests" ]; then
+        log_info "运行 AI Agents Backend 测试..."
+        if python3 -m pytest tools/ai-agents/backend/tests/ -v --cov=tools/ai-agents/backend --cov-report=term; then
+            log_info "✅ AI Agents Backend 测试通过"
+        else
+            log_error "❌ AI Agents Backend 测试失败"
+            return 1
+        fi
     else
-        log_error "❌ AI Agents Backend 测试失败"
-        return 1
+        log_warn "⚠️ AI Agents Backend 测试目录不存在，跳过"
     fi
 }
 

@@ -105,11 +105,26 @@ STRUCTURED_OUTPUT_PROMPT = """
 2. 最后输出 ```json 代码块（系统自动解析，用户不可见）
 
 **JSON 字段说明**：
-- `plan`: 阶段列表，每个阶段包含 `id`（唯一标识）、`name`（显示名称）、`status`（pending/active/completed）
+- `plan`: 阶段列表，每个阶段包含 `id`、`name`、`status`（pending/active/completed）
 - `current_stage_id`: 当前活跃阶段的 id
-- `artifacts`: 产出物列表，每个产出物包含 `stage_id`（所属阶段）、`key`（唯一键）、`name`（显示名称）、`content`（Markdown 内容，未生成时为 null）
+- `artifacts`: 产出物列表，每个包含 `stage_id`、`key`、`name`、`content`（Markdown 内容）
 
-**示例**（假设在"需求澄清"阶段生成了一个澄清产出物）：
+---
+
+### ⚠️ 产出物增量更新规则（极其重要）
+
+**核心原则**：artifacts 的 content 必须是**累积更新**的完整文档，不是增量片段。
+
+**何时更新 artifacts**：
+1. 用户回答了澄清问题 → 将确认的信息追加到文档的"已确认信息"部分
+2. 完成一个议题 → 更新对应议题状态为 ✅
+3. 进入新阶段 → 初始化该阶段的产出物骨架
+
+**更新示例**：
+
+假设用户说："登录后跳转到首页，无需记住我功能"
+
+你的 JSON 应该这样更新（注意 content 是累积的完整文档）：
 ```json
 {
   "plan": [
@@ -118,14 +133,27 @@ STRUCTURED_OUTPUT_PROMPT = """
   ],
   "current_stage_id": "clarify",
   "artifacts": [
-    {"stage_id": "clarify", "key": "clarification", "name": "需求澄清记录", "content": "## 澄清要点\\n- xxx"}
+    {
+      "stage_id": "clarify",
+      "key": "test_design_requirements",
+      "name": "需求分析文档",
+      "content": "# 需求分析文档\\n\\n## 1. 需求全景图\\n> *[待生成]*\\n\\n## 2. 功能详细规格\\n| ID | 功能名称 | 描述 | 优先级 |\\n|----|----------|------|--------|\\n| *待生成* | ... | ... | ... |\\n\\n## 5. 已确认信息\\n\\n### 议题1 - 功能边界与核心交互\\n- ✅ 登录后跳转：电商首页\\n- ✅ 记住我功能：不需要\\n\\n### 🔄 待确认\\n- [ ] 议题2 - 身份验证机制"
+    }
   ]
 }
 ```
 
+**禁止行为**：
+- ❌ 在自然语言回复中重复输出产出物内容（前端会自动渲染 JSON 中的 artifacts）
+- ❌ 只输出增量内容（必须输出累积后的完整文档）
+- ❌ 忘记输出 JSON（每次回复都必须包含 JSON 代码块）
+
+---
+
 **规则**：
 - JSON 必须位于回复**最末尾**
 - 每次回复**必须**输出完整的 JSON 结构
+- artifacts.content 必须是**累积更新**的完整 Markdown 文档
 """.strip()
 
 # 保留旧变量名以兼容现有代码
