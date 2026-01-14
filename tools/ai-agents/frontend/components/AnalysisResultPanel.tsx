@@ -19,6 +19,8 @@ interface AnalysisResultPanelProps {
   assistantId?: string | null;
   /** 产出物内容 (key -> content) */
   artifacts?: Record<string, string>;
+  /** 正在流式生成的 artifact key */
+  streamingArtifactKey?: string | null;
   /** 正在生成中的产出物内容 (实时流式) */
   streamingArtifactContent?: string | null;
 }
@@ -30,6 +32,7 @@ const AnalysisResultPanel: React.FC<AnalysisResultPanelProps> = ({
   progress,
   assistantId,
   artifacts = {},
+  streamingArtifactKey = null,
   streamingArtifactContent = null,
 }) => {
   // 选中查看的阶段 ID (null 表示当前活动阶段)
@@ -88,6 +91,7 @@ const AnalysisResultPanel: React.FC<AnalysisResultPanelProps> = ({
             selectedStageId={selectedStageId}
             currentStageId={currentStageId}
             artifacts={artifacts}
+            streamingArtifactKey={streamingArtifactKey}
             streamingArtifactContent={streamingArtifactContent}
             onBackToCurrentStage={handleBackToCurrentStage}
           />

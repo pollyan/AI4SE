@@ -29,6 +29,8 @@ interface ArtifactPanelProps {
     currentStageId: string | null;
     /** 产出物内容 (key -> content) */
     artifacts: Record<string, string>;
+    /** 正在流式生成的 artifact key (前端状态) */
+    streamingArtifactKey: string | null;
     /** 正在生成中的产出物内容 (实时流式) */
     streamingArtifactContent: string | null;
     /** 返回当前阶段的回调 */
@@ -40,6 +42,7 @@ export function ArtifactPanel({
     selectedStageId,
     currentStageId,
     artifacts,
+    streamingArtifactKey,
     streamingArtifactContent,
     onBackToCurrentStage,
 }: ArtifactPanelProps) {
@@ -53,15 +56,20 @@ export function ArtifactPanel({
     const templateName = template?.name || '产出物';
     const templateKey = template?.artifactKey;
 
-    // 确定产出物状态 - 仅用于获取内容
-    const isCompleted = templateKey ? (artifactProgress?.completed || []).includes(templateKey) : false;
-    const isGenerating = templateKey ? artifactProgress?.generating === templateKey : false;
+    // 确定产出物状态
+    // 使用前端的 streamingArtifactKey 作为判断 isGenerating 的关键依据
+    // isCompleted 直接检查 artifacts 字典，而不是依赖后端 state 事件的 completed 列表
+    // 当 templateKey 找不到时，使用 streamingArtifactKey 作为 fallback
+    const effectiveKey = templateKey || streamingArtifactKey;
+    const isCompleted = effectiveKey ? !!artifacts[effectiveKey] : false;
+    const isGenerating = streamingArtifactKey !== null && (templateKey === streamingArtifactKey || !templateKey);
 
     // 获取产出物内容
-    const content = isCompleted && templateKey
-        ? artifacts[templateKey]
-        : isGenerating
-            ? streamingArtifactContent
+    // 优先显示流式内容（确保流式效果不被中断），其次显示已完成内容
+    const content = isGenerating && streamingArtifactContent
+        ? streamingArtifactContent  // 正在生成中，显示流式内容
+        : isCompleted && effectiveKey
+            ? artifacts[effectiveKey]  // 已完成，显示完整内容
             : null;
 
     // 是否正在查看历史阶段

@@ -109,39 +109,33 @@ def intent_router_node(state: LisaState, llm: Any) -> LisaState:
             json_text = response_text
         
         result = json.loads(json_text)
-        intent = result.get("intent", "UNCLEAR")
+        intent = result.get("intent")
         confidence = result.get("confidence", 0.0)
+        clarification = result.get("clarification")
         
         logger.info(f"意图识别结果: {intent} (置信度: {confidence})")
         
         # 根据意图更新状态
-        # 注意: plan 不在这里硬编码，由 workflow 节点让 LLM 动态生成
         if intent == "START_TEST_DESIGN":
             return {
                 **state,
                 "current_workflow": "test_design",
-                # plan 将由 workflow_test_design 节点通过 LLM 动态生成
             }
         elif intent == "START_REQUIREMENT_REVIEW":
             return {
                 **state,
                 "current_workflow": "requirement_review",
-                # plan 将由 workflow_requirement_review 节点通过 LLM 动态生成
-            }
-        elif intent in ["CONTINUE", "SUPPLEMENT"]:
-            # 继续当前工作流，保持 plan 不变
-            return {
-                **state,
-                "current_workflow": state.get("current_workflow"),
             }
         else:
-            # UNCLEAR - 保持当前状态
-            return state
+            # 非明确意图时保持当前状态，多轮对话自然延续
+            # 如果有 clarification 字段，可由后续节点使用
+            return {
+                **state,
+                "clarification": clarification,
+            }
             
     except Exception as e:
         logger.error(f"意图路由失败: {e}")
-        # 失败时默认继续当前工作流或进入澄清
-        if state.get("current_workflow"):
-            return state
+        # 失败时保持当前状态
         return state
 

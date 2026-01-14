@@ -5,7 +5,7 @@ import AssistantCard from './components/AssistantCard';
 import AnalysisResultPanel from './components/AnalysisResultPanel';
 import { ASSISTANTS } from './constants';
 import { AssistantId, Assistant } from './types';
-import type { ProgressInfo } from './services/backendService';
+import type { ProgressInfo, ArtifactEvent } from './services/backendService';
 import { Bot } from 'lucide-react';
 import '@assistant-ui/styles/index.css';
 
@@ -15,6 +15,8 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [workflowProgress, setWorkflowProgress] = useState<ProgressInfo | null>(null);
   const [artifacts, setArtifacts] = useState<Record<string, string>>({});
+  const [streamingArtifactKey, setStreamingArtifactKey] = useState<string | null>(null);
+  const [streamingArtifactContent, setStreamingArtifactContent] = useState<string>('');
 
   const handleSelectAssistant = (id: AssistantId) => {
     if (!id) {
@@ -30,6 +32,8 @@ const App: React.FC = () => {
     setAnalysisResult('');
     setWorkflowProgress(null);
     setArtifacts({});
+    setStreamingArtifactKey(null);
+    setStreamingArtifactContent('');
   };
 
   const handleBack = () => {
@@ -38,8 +42,28 @@ const App: React.FC = () => {
 
   const handleProgressChange = (progress: ProgressInfo | null) => {
     setWorkflowProgress(progress);
+    // 合并而不是覆盖 artifacts，确保前端累积的内容不会丢失
     if (progress?.artifacts) {
-      setArtifacts(progress.artifacts);
+      setArtifacts(prev => ({ ...prev, ...progress.artifacts }));
+    }
+  };
+
+  const handleArtifactEvent = (event: ArtifactEvent) => {
+    switch (event.type) {
+      case 'artifact_start':
+        setStreamingArtifactKey(event.key);
+        setStreamingArtifactContent('');
+        break;
+      case 'artifact_chunk':
+        if (event.key === streamingArtifactKey) {
+          setStreamingArtifactContent(prev => prev + event.delta);
+        }
+        break;
+      case 'artifact_complete':
+        setArtifacts(prev => ({ ...prev, [event.key]: event.content }));
+        setStreamingArtifactKey(null);
+        setStreamingArtifactContent('');
+        break;
     }
   };
 
@@ -142,6 +166,7 @@ const App: React.FC = () => {
               assistant={selectedAssistant}
               onBack={handleBack}
               onProgressChange={handleProgressChange}
+              onArtifactEvent={handleArtifactEvent}
             />
           ) : (
             <AssistantSelectionPanel />
@@ -167,6 +192,8 @@ const App: React.FC = () => {
             progress={workflowProgress}
             assistantId={selectedAssistantId}
             artifacts={artifacts}
+            streamingArtifactKey={streamingArtifactKey}
+            streamingArtifactContent={streamingArtifactKey ? streamingArtifactContent : null}
           />
         </div>
       </div>
