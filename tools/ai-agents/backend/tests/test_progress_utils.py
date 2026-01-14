@@ -32,7 +32,20 @@ class TestCleanResponseText:
         result = clean_response_text(text)
         assert result == "这是一段普通文本"
     
-    def test_clean_preserves_content(self):
+    def test_clean_preserves_mermaid_blocks(self):
+        text = '''```json
+{"plan": []}
+```
+Here is a diagram:
+```mermaid
+graph TD;
+    A-->B;
+```
+Description.'''
+        result = clean_response_text(text)
+        assert "```mermaid" in result
+        assert "graph TD;" in result
+        assert "```json" not in result
         text = '''```json
 {"plan": [], "current_stage_id": "test", "artifacts": [], "message": "内容"}
 ```

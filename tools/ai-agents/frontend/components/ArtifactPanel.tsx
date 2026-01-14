@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import ReactMarkdown from 'react-markdown';
+import { Streamdown } from 'streamdown';
 import { FileText, Clock, CheckCircle, ChevronLeft } from 'lucide-react';
 
 export interface ArtifactTemplateItem {
@@ -107,7 +107,7 @@ export function ArtifactPanel({
             <div className="flex-1 overflow-y-auto p-4">
                 {content ? (
                     <div className="prose prose-sm dark:prose-invert max-w-none">
-                        <ReactMarkdown>{content}</ReactMarkdown>
+                        <Streamdown>{content}</Streamdown>
                     </div>
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full text-gray-400">
