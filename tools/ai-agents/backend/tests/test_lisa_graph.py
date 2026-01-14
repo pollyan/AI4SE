@@ -185,7 +185,7 @@ class TestWorkflowTestDesignNode:
     
     def test_get_artifacts_summary_empty(self):
         """空产出物摘要"""
-        from backend.agents.lisa.nodes.workflow_test_design import get_artifacts_summary
+        from backend.agents.shared.artifact_summary import get_artifacts_summary
         
         result = get_artifacts_summary({})
         

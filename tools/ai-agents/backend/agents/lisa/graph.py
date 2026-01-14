@@ -11,7 +11,7 @@ from typing import Dict, Literal
 from langgraph.graph import StateGraph, START, END
 
 from .state import LisaState, get_initial_state
-from .nodes import intent_router_node, workflow_test_design_node, clarify_intent_node
+from .nodes import intent_router_node, workflow_execution_node, clarify_intent_node
 from ..llm import create_llm_from_config
 from ..shared.checkpointer import get_checkpointer
 from ..shared.retry_policy import get_llm_retry_policy
@@ -76,8 +76,8 @@ def create_lisa_graph(model_config: Dict[str, str]):
     
     graph.add_node("intent_router", lambda state: intent_router_node(state, llm), retry_policy=llm_retry)
     graph.add_node("clarify_intent", lambda state: clarify_intent_node(state, llm), retry_policy=llm_retry)
-    graph.add_node("workflow_test_design", lambda state: workflow_test_design_node(state, llm), retry_policy=llm_retry)
-    graph.add_node("workflow_requirement_review", lambda state: workflow_test_design_node(state, llm), retry_policy=llm_retry)
+    graph.add_node("workflow_test_design", lambda state: workflow_execution_node(state, llm), retry_policy=llm_retry)
+    graph.add_node("workflow_requirement_review", lambda state: workflow_execution_node(state, llm), retry_policy=llm_retry)
     
     # 添加边 - 简化结构，避免循环
     graph.add_edge(START, "intent_router")

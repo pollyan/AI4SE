@@ -22,14 +22,19 @@ async def test_state_event_emitted_at_stream_end_only():
     
     target_node = "workflow_test_design"
     
-    plan_json = json.dumps([
-        {"id": "clarify", "name": "需求澄清", "status": "pending"},
-        {"id": "strategy", "name": "测试策略", "status": "pending"},
-        {"id": "cases", "name": "用例设计", "status": "pending"},
-        {"id": "delivery", "name": "文档交付", "status": "pending"},
-    ], ensure_ascii=False)
-    
-    response_with_plan = f'<plan>{plan_json}</plan>\n\nHello'
+    response_with_plan = '''```json
+{
+  "plan": [
+    {"id": "clarify", "name": "需求澄清", "status": "pending"},
+    {"id": "strategy", "name": "测试策略", "status": "pending"},
+    {"id": "cases", "name": "用例设计", "status": "pending"},
+    {"id": "delivery", "name": "文档交付", "status": "pending"}
+  ],
+  "current_stage_id": "clarify",
+  "artifacts": [],
+  "message": "Hello"
+}
+```'''
     
     async def mock_astream(*args, **kwargs):
         yield ("messages", (AIMessage(content=response_with_plan), {"langgraph_node": target_node}))
@@ -61,14 +66,19 @@ async def test_state_event_contains_correct_stages():
 
     target_node = "workflow_test_design"
     
-    plan_json = json.dumps([
-        {"id": "clarify", "name": "需求澄清", "status": "completed"},
-        {"id": "strategy", "name": "测试策略", "status": "active"},
-        {"id": "cases", "name": "用例设计", "status": "pending"},
-        {"id": "delivery", "name": "文档交付", "status": "pending"},
-    ], ensure_ascii=False)
-    
-    response_with_plan = f'<plan>{plan_json}</plan>\n\nOK'
+    response_with_plan = '''```json
+{
+  "plan": [
+    {"id": "clarify", "name": "需求澄清", "status": "completed"},
+    {"id": "strategy", "name": "测试策略", "status": "active"},
+    {"id": "cases", "name": "用例设计", "status": "pending"},
+    {"id": "delivery", "name": "文档交付", "status": "pending"}
+  ],
+  "current_stage_id": "strategy",
+  "artifacts": [],
+  "message": "OK"
+}
+```'''
     
     async def mock_astream(*args, **kwargs):
         yield ("messages", (AIMessage(content=response_with_plan), {"langgraph_node": target_node}))

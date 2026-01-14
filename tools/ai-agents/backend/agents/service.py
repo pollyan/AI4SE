@@ -77,7 +77,7 @@ class LangchainAssistantService:
             # Alex 现在也使用 LangGraph 实现
             from .alex import create_alex_graph
             self.agent = create_alex_graph(model_config)
-        elif self.assistant_type in ("lisa", "song"):
+        elif self.assistant_type == "lisa":
             # Lisa 使用 LangGraph 实现
             from .lisa import create_lisa_graph
             self.agent = create_lisa_graph(model_config)
@@ -324,8 +324,6 @@ class LangchainAssistantService:
         json_parsed = False
 
         from .shared.progress_utils import (
-            parse_plan, 
-            parse_all_artifact_templates,
             clean_response_text,
             get_current_stage_id,
             parse_structured_json,
@@ -400,42 +398,6 @@ class LangchainAssistantService:
                                         yield {"type": "state", "progress": progress_info}
                                         logger.info("JSON 结构化输出解析成功")
 
-                            if not plan_parsed and not json_parsed:
-                                has_plan_start = re.search(r'<plan\b', full_response, re.IGNORECASE)
-                                has_plan_end = re.search(r'</\s*plan\s*>', full_response, re.IGNORECASE)
-                                
-                                if has_plan_start and has_plan_end:
-                                    parsed_plan = parse_plan(full_response)
-                                    if parsed_plan:
-                                        current_state["plan"] = parsed_plan
-                                        current_state["current_stage_id"] = get_current_stage_id(parsed_plan)
-                                        plan_parsed = True
-                                        from .shared.progress import get_progress_info
-                                        progress_info = get_progress_info(current_state)
-                                        yield {"type": "state", "progress": progress_info}
-    
-                            if "artifact_template" in full_response:
-                                current_templates = parse_all_artifact_templates(full_response)
-                                has_new_template = False
-                                
-                                if "artifact_templates" not in current_state:
-                                    current_state["artifact_templates"] = []
-                                
-                                existing_keys = {t.get("artifact_key") for t in current_state["artifact_templates"]}
-                                
-                                for tmpl in current_templates:
-                                    key = tmpl.get("artifact_key")
-                                    if key and key not in processed_templates:
-                                        if key not in existing_keys:
-                                            current_state["artifact_templates"].append(tmpl)
-                                            has_new_template = True
-                                        processed_templates.add(key)
-                                
-                                if has_new_template:
-                                    from .shared.progress import get_progress_info
-                                    progress_info = get_progress_info(current_state)
-                                    yield {"type": "state", "progress": progress_info}
-    
                             if "<artifact" in full_response.lower() and "</artifact>" in full_response.lower():
                                 current_artifacts = parse_all_artifacts(full_response)
                                 has_new_artifact = False
@@ -469,7 +431,7 @@ class LangchainAssistantService:
         final_message, final_json = split_message_and_json(full_response)
         cleaned_response = clean_response_text(final_message)
 
-        if self.assistant_type in ("lisa", "song", "alex", "chen") and full_response:
+        if self.assistant_type in ("lisa", "alex") and full_response:
             
             if not json_parsed and not plan_parsed:
                 structured_data = None
@@ -506,26 +468,13 @@ class LangchainAssistantService:
                             current_state["artifacts"].update(artifacts_dict)
                         
                         json_parsed = True
-                
-                if not json_parsed:
-                    parsed_plan = parse_plan(full_response)
-                    if parsed_plan:
-                        current_state["plan"] = parsed_plan
-                        current_state["current_stage_id"] = get_current_stage_id(parsed_plan)
-                    
-                    artifacts = parse_all_artifacts(full_response)
-                    if artifacts:
-                        if "artifacts" not in current_state:
-                            current_state["artifacts"] = {}
-                        for artifact in artifacts:
-                            current_state["artifacts"][artifact["key"]] = artifact["content"]
             
             from .shared.progress import get_progress_info
             progress_info = get_progress_info(current_state)
             if progress_info:
                 yield {"type": "state", "progress": progress_info}
         
-        if self.assistant_type in ("lisa", "song", "alex", "chen"):
+        if self.assistant_type in ("lisa", "alex"):
             from .shared.progress import get_progress_info
             progress = get_progress_info(current_state)
             if progress:

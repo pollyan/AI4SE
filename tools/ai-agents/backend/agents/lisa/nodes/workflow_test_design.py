@@ -11,6 +11,7 @@ from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 
 from ..state import LisaState, ArtifactKeys
 from ..prompts.workflows import build_workflow_prompt
+from backend.agents.shared.artifact_summary import get_artifacts_summary
 
 logger = logging.getLogger(__name__)
 
@@ -18,33 +19,6 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════════════
 # 辅助函数
 # ═══════════════════════════════════════════════════════════════════════════════
-
-def get_artifacts_summary(artifacts: dict) -> str:
-    """生成产出物摘要"""
-    if not artifacts:
-        return "(无)"
-    
-    summaries = []
-    key_names = {
-        # 测试设计
-        ArtifactKeys.TEST_DESIGN_REQUIREMENTS: "需求分析文档",
-        ArtifactKeys.TEST_DESIGN_STRATEGY: "测试策略蓝图",
-        ArtifactKeys.TEST_DESIGN_CASES: "测试用例集",
-        ArtifactKeys.TEST_DESIGN_FINAL: "最终测试设计文档",
-        
-        # 需求评审
-        ArtifactKeys.REQ_REVIEW_RECORD: "需求评审记录",
-        ArtifactKeys.REQ_REVIEW_RISK: "风险评估报告",
-        ArtifactKeys.REQ_REVIEW_REPORT: "敏捷需求评审报告",
-    }
-    
-    for key, value in artifacts.items():
-        name = key_names.get(key, key)
-        length = len(value) if value else 0
-        summaries.append(f"- {name}: {length} 字符")
-    
-    return "\n".join(summaries) if summaries else "(无)"
-
 
 def determine_stage(state: LisaState, workflow_type: str) -> str:
     """
@@ -123,7 +97,7 @@ def extract_artifact_from_response(response: str, stage: str, workflow_type: str
 # 主节点
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def workflow_test_design_node(state: LisaState, llm: Any) -> LisaState:
+def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
     """
     通用工作流执行节点 (原名 workflow_test_design_node)
     

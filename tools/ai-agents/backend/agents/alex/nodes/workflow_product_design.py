@@ -16,6 +16,7 @@ from backend.agents.shared.progress_utils import (
     extract_plan_from_structured,
     extract_artifacts_from_structured,
 )
+from backend.agents.shared.artifact_summary import get_artifacts_summary
 
 logger = logging.getLogger(__name__)
 
@@ -23,27 +24,6 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════════════
 # 辅助函数
 # ═══════════════════════════════════════════════════════════════════════════════
-
-def get_artifacts_summary(artifacts: dict) -> str:
-    """生成产出物摘要"""
-    if not artifacts:
-        return "(无)"
-    
-    summaries = []
-    key_names = {
-        ArtifactKeys.PRODUCT_ELEVATOR: "电梯演讲 (价值定位)",
-        ArtifactKeys.PRODUCT_PERSONA: "用户画像分析",
-        ArtifactKeys.PRODUCT_JOURNEY: "用户旅程地图",
-        ArtifactKeys.PRODUCT_BRD: "业务需求文档 (BRD)",
-    }
-    
-    for key, value in artifacts.items():
-        name = key_names.get(key, key)
-        length = len(value) if value else 0
-        summaries.append(f"- {name}: {length} 字符")
-    
-    return "\n".join(summaries) if summaries else "(无)"
-
 
 def determine_stage(state: AlexState) -> str:
     """
