@@ -1,16 +1,16 @@
 """
 Intent Router Node - 意图路由节点
 
-使用 LLM 进行语义意图识别，将用户请求路由到对应工作流。
+使用 LLM with_structured_output 进行语义意图识别，将用户请求路由到对应工作流。
 """
 
-import json
 import logging
 from typing import Any
 
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from ..state import LisaState
+from ..schemas import IntentResult
 from ..prompts import INTENT_ROUTING_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -44,27 +44,13 @@ def summarize_artifacts(artifacts: dict) -> str:
 
 
 def intent_router_node(state: LisaState, llm: Any) -> LisaState:
-    """
-    意图路由节点
-    
-    使用 LLM 分析用户意图，更新 state 中的工作流控制字段。
-    
-    Args:
-        state: 当前状态
-        llm: LLM 实例
-        
-    Returns:
-        LisaState: 更新后的状态
-    """
     logger.info("执行意图路由...")
     
-    # 获取用户最新消息
     messages = state.get("messages", [])
     if not messages:
         logger.warning("无用户消息，跳过路由")
         return state
     
-    # 获取最新的用户消息
     last_user_message = None
     for msg in reversed(messages):
         if isinstance(msg, HumanMessage):
@@ -75,67 +61,46 @@ def intent_router_node(state: LisaState, llm: Any) -> LisaState:
         logger.warning("未找到用户消息，跳过路由")
         return state
     
-    # 构建上下文
     recent_messages = format_messages_for_context(messages)
     artifacts_summary = summarize_artifacts(state.get("artifacts", {}))
     
-    # 构建系统 Prompt
     system_prompt = INTENT_ROUTING_PROMPT.format(
-        current_workflow=state.get("current_workflow", "未开始"),
-        workflow_stage=state.get("workflow_stage", "无"),
+        current_workflow=state.get("current_workflow") or "未开始",
+        workflow_stage=state.get("workflow_stage") or "无",
         artifacts_summary=artifacts_summary,
         recent_messages=recent_messages,
     )
     
-    # 调用 LLM - 使用 SystemMessage + HumanMessage 格式确保兼容性
     try:
-        response = llm.model.invoke([
+        structured_llm = llm.model.with_structured_output(
+            IntentResult,
+            method="function_calling"
+        )
+        
+        result: IntentResult = structured_llm.invoke([
             SystemMessage(content=system_prompt),
-            HumanMessage(content=f"请分析上述对话中用户的意图，用户的最新消息是：\n\n{last_user_message}")
+            HumanMessage(content=f"请分析用户意图：{last_user_message}")
         ])
-        response_text = response.content
         
-        # 解析 JSON
-        # 尝试提取 JSON 块
-        if "```json" in response_text:
-            json_start = response_text.find("```json") + 7
-            json_end = response_text.find("```", json_start)
-            json_text = response_text[json_start:json_end].strip()
-        elif "{" in response_text:
-            json_start = response_text.find("{")
-            json_end = response_text.rfind("}") + 1
-            json_text = response_text[json_start:json_end]
-        else:
-            json_text = response_text
+        logger.info(f"意图识别结果: {result.intent} (置信度: {result.confidence})")
         
-        result = json.loads(json_text)
-        intent = result.get("intent")
-        confidence = result.get("confidence", 0.0)
-        clarification = result.get("clarification")
-        
-        logger.info(f"意图识别结果: {intent} (置信度: {confidence})")
-        
-        # 根据意图更新状态
-        if intent == "START_TEST_DESIGN":
+        if result.intent == "START_TEST_DESIGN":
             return {
                 **state,
                 "current_workflow": "test_design",
             }
-        elif intent == "START_REQUIREMENT_REVIEW":
+        elif result.intent == "START_REQUIREMENT_REVIEW":
             return {
                 **state,
                 "current_workflow": "requirement_review",
             }
         else:
-            # 非明确意图时保持当前状态，多轮对话自然延续
-            # 如果有 clarification 字段，可由后续节点使用
             return {
                 **state,
-                "clarification": clarification,
+                "clarification": result.clarification,
             }
             
     except Exception as e:
         logger.error(f"意图路由失败: {e}")
-        # 失败时保持当前状态
         return state
 

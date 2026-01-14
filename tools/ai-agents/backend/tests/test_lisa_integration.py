@@ -5,63 +5,54 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from backend.agents.lisa.graph import create_lisa_graph
 from backend.agents.lisa.state import get_initial_state, ArtifactKeys
+from backend.agents.lisa.schemas import IntentResult
 
-class MockLLMResponse:
-    """Helper to simulate LLM responses based on input patterns"""
-    
-    def __init__(self):
-        self.responses = []
-        
-    def add_response(self, trigger_content: str, response_content: str):
-        self.responses.append((trigger_content, response_content))
-        
-    def invoke(self, messages):
-        """Mock invoke method"""
-        last_msg = messages[-1]
-        content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-        
-        # Check input against triggers
-        for trigger, response in self.responses:
-            if trigger in content:
-                # Return AIMessage
-                return AIMessage(content=response)
-        
-        # Default response if no match
-        return AIMessage(content='{"intent": "UNCLEAR", "confidence": 0.5}')
 
 @pytest.mark.asyncio
 async def test_lisa_full_workflow_integration():
-    """
-    Integration test for Lisa's multi-turn workflow.
-    Simulates:
-    1. User asks vague question -> Router -> Clarify
-    2. User answers -> Router -> Test Design (Clarify Stage) -> Artifact Generated
-    """
-    
-    # 1. Setup Mock LLM
     mock_llm = MagicMock()
     
-    # Define Scenario Responses
+    call_count = {"intent_router": 0}
+    
+    def side_effect_with_structured_output(schema, method=None):
+        structured_mock = MagicMock()
+        
+        def structured_invoke(messages, **kwargs):
+            call_count["intent_router"] += 1
+            
+            user_content = ""
+            for m in reversed(messages):
+                if isinstance(m, HumanMessage):
+                    user_content = m.content
+                    break
+            
+            if call_count["intent_router"] == 1:
+                return IntentResult(
+                    intent=None,
+                    confidence=0.5,
+                    entities=["登录功能"],
+                    reason="意图不明确",
+                    clarification="请问您是想进行新功能测试还是回归测试？"
+                )
+            else:
+                return IntentResult(
+                    intent="START_TEST_DESIGN",
+                    confidence=0.95,
+                    entities=["登录功能"],
+                    reason="明确要求进行新功能测试"
+                )
+        
+        structured_mock.invoke = structured_invoke
+        return structured_mock
+    
     def side_effect_invoke(messages, **kwargs):
-        # Extract last user message content for simple routing
-        # Note: messages might include SystemMessage, so we look for HumanMessage or last message
         user_content = ""
         for m in reversed(messages):
             if isinstance(m, HumanMessage):
                 user_content = m.content
                 break
         
-        # Determine intent routing responses (Router Node)
-        if "请分析上述对话中用户的意图" in str(messages[-1].content): # Router prompt signature
-            if "登录功能" in user_content and "新功能" not in user_content:
-                # Turn 1: Vague request
-                return AIMessage(content='{"intent": "UNCLEAR"}')
-            elif "新功能" in user_content:
-                # Turn 2: Specific request
-                return AIMessage(content='{"intent": "START_TEST_DESIGN"}')
-                
-        # Determine Test Design Logic (Design Node)
-        if "测试设计工作流" in str(messages[0].content): # Design prompt signature
+        if "测试设计工作流" in str(messages[0].content):
              return AIMessage(content="""
 好的，我已更新需求文档。
 ```markdown
@@ -71,10 +62,10 @@ async def test_lisa_full_workflow_integration():
 ```
 """)
              
-        # Default fallback
         return AIMessage(content="I don't understand.")
 
     mock_llm.model.invoke.side_effect = side_effect_invoke
+    mock_llm.model.with_structured_output.side_effect = side_effect_with_structured_output
 
     # 2. Patch create_llm to return our mock
     with patch('backend.agents.lisa.graph.create_llm_from_config', return_value=mock_llm):
