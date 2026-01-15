@@ -191,8 +191,10 @@ class LangchainAssistantService:
         
         try:
             # 添加 30 秒超时控制
+            # 需要提供 thread_id 配置，因为 LangGraph 使用了 Checkpointer
+            test_config = {"configurable": {"thread_id": "test-connection"}}
             result = await asyncio.wait_for(
-                self.agent.ainvoke({"messages": input_messages}),
+                self.agent.ainvoke({"messages": input_messages}, config=test_config),
                 timeout=30.0
             )
             

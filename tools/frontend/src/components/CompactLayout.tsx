@@ -1,5 +1,5 @@
 /**
- * CompactLayout - 紧凑型布局组件
+ * CompactLayout - 紧凑型布局组件 (Ported to tools/frontend)
  * 无页脚，精简导航栏
  */
 import React, { useState } from 'react';
@@ -11,6 +11,8 @@ interface CompactLayoutProps {
 
 const CompactLayout: React.FC<CompactLayoutProps> = ({ children }) => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    // Dark mode toggle could be implemented here or via context. 
+    // For now assuming system preference or class strategy.
 
     return (
         <div className="flex flex-col h-screen overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-300">
@@ -112,7 +114,7 @@ const CompactLayout: React.FC<CompactLayoutProps> = ({ children }) => {
             )}
 
             {/* 主内容区 - 占满剩余空间 */}
-            <main className="flex-1 overflow-hidden">
+            <main className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-950/50">
                 {children}
             </main>
         </div>

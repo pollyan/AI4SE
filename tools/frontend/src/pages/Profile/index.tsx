@@ -1,130 +1,94 @@
 import React from 'react';
-import Layout from '../../components/Layout';
-import './profile.css';
+import CompactLayout from '../../components/CompactLayout';
+import { Mail, Phone, ExternalLink, User, BookOpen } from 'lucide-react';
 
 const Profile: React.FC = () => {
     return (
-        <Layout>
-            <div className="profile-container">
-                {/* 个人信息头部 */}
-                <div className="profile-header">
-                    <h1 className="profile-name">安辉</h1>
-                    <p className="profile-title">AI 产品经理 | AI 解决方案专家 | 资深技术咨询</p>
+        <CompactLayout>
+            <div className="max-w-5xl mx-auto px-4 py-12">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
 
-                    <div className="profile-contact">
-                        <div className="contact-item">
-                            <span className="contact-label">电话：</span>
-                            <span>18910027087</span>
+                    {/* Header / Intro Card - Spans full width on mobile, 8 cols on desktop */}
+                    <div className="md:col-span-8 bg-white dark:bg-slate-800 rounded-3xl p-8 border border-slate-100 dark:border-slate-700/50 shadow-sm flex flex-col md:flex-row gap-8 items-start">
+                        <div className="shrink-0">
+                            <div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center overflow-hidden border-4 border-white dark:border-slate-800 shadow-sm">
+                                <User size={40} className="text-slate-400 dark:text-slate-500" />
+                                {/* <img src="/static/avatar.jpg" alt="安辉" className="w-full h-full object-cover" /> */}
+                            </div>
                         </div>
-                        <div className="contact-item">
-                            <span className="contact-label">邮箱：</span>
-                            <span>pollyan@163.com</span>
+                        <div className="flex-1">
+                            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">安辉</h1>
+                            <p className="text-blue-600 dark:text-blue-400 font-medium mb-4">AI 产品经理 | AI 解决方案专家</p>
+                            <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-sm md:text-base">
+                                拥有 19 年软件研发经验，近 14 年任职于全球顶尖咨询公司 ThoughtWorks。
+                                近年深耕 AI4SE 领域，致力于将 LLM、Agent 等前沿技术转化为企业级生产力工具。
+                            </p>
                         </div>
                     </div>
 
-                    {/* QR Code Section */}
-                    <div className="qr-section">
-                        <div className="qr-card">
-                            <div className="qr-image-wrapper">
-                                <img src="/static/wechat-qr.jpg" alt="个人微信" title="扫码添加个人微信" />
+                    {/* Contact Info Card - 4 cols */}
+                    <div className="md:col-span-4 bg-white dark:bg-slate-800 rounded-3xl p-8 border border-slate-100 dark:border-slate-700/50 shadow-sm flex flex-col justify-center gap-4">
+                        <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
+                            <div className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-900/50 flex items-center justify-center text-slate-500">
+                                <Phone size={18} />
+                            </div>
+                            <span className="font-medium">18910027087</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
+                            <div className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-900/50 flex items-center justify-center text-slate-500">
+                                <Mail size={18} />
+                            </div>
+                            <span className="font-medium">pollyan@163.com</span>
+                        </div>
+                    </div>
+
+                    {/* Original Industry Insights - 8 cols */}
+                    <div className="md:col-span-8 bg-white dark:bg-slate-800 rounded-3xl p-8 border border-slate-100 dark:border-slate-700/50 shadow-sm">
+                        <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white mb-6">
+                            <BookOpen className="text-blue-500" size={20} />
+                            原创行业洞见
+                        </h2>
+                        <div className="space-y-4">
+                            {[
+                                { title: "元提示词驱动：领域专家级 AI Agent 的构建框架", url: "https://mp.weixin.qq.com/s/rGOmGJF3ptFPw15h0nUI2g" },
+                                { title: "从氛围编程到规约驱动：AI 时代的工程纪律回归", url: "https://mp.weixin.qq.com/s/CBUn4MV7zz61fuMRStIw-g" },
+                                { title: "ThoughtWorks洞见《AI 自动化测试新范式：意图驱动》", url: "https://mp.weixin.qq.com/s/fRoYm3R58VNBNKzQ5go2Uw" },
+                                { title: "Thoughtworks 洞见：敏捷转型中的敏态与稳态", url: "https://zhuanlan.zhihu.com/p/389339077" }
+                            ].map((article, idx) => (
+                                <a key={idx} href={article.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-900/30 hover:bg-slate-50 dark:hover:bg-slate-700/50 border border-transparent hover:border-slate-200 dark:hover:border-slate-600 transition-all group">
+                                    <span className="text-slate-700 dark:text-slate-200 font-medium group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
+                                        {article.title}
+                                    </span>
+                                    <ExternalLink size={16} className="text-slate-400 group-hover:text-blue-500 shrink-0 ml-4" />
+                                </a>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* QR Codes - 4 cols (Nested Stack) */}
+                    <div className="md:col-span-4 flex flex-col gap-6">
+                        {/* Personal WeChat */}
+                        <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-100 dark:border-slate-700/50 shadow-sm flex items-center gap-4">
+                            <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-xl overflow-hidden shrink-0">
+                                <img src="/static/wechat-qr.jpg" alt="个人微信" className="w-full h-full object-cover" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-slate-900 dark:text-white text-sm mb-1">个人微信</h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">扫码加我好友</p>
                             </div>
                         </div>
 
-                        <div className="qr-card">
-                            <div className="qr-image-wrapper">
-                                <img src="/static/wechat_oa_qr.png" alt="公众号" title="扫码关注公众号: IT老兵-大头" />
+                        {/* Official Account */}
+                        <div className="flex-1 bg-gradient-to-br from-slate-900 to-slate-800 dark:from-indigo-900 dark:to-slate-900 rounded-3xl p-6 text-white shadow-lg flex flex-col items-center text-center justify-center">
+                            <div className="w-48 h-48 bg-white p-2 rounded-2xl">
+                                <img src="/static/wechat_oa_qr.png" alt="公众号" className="w-full h-full object-contain" />
                             </div>
                         </div>
                     </div>
 
-                    <div style={{ marginTop: '24px', fontSize: '14px', color: '#666666', lineHeight: 1.6 }}>
-                        <strong style={{ color: '#333333' }}>核心优势：</strong>19 年研发与管理经验 | 14 年 ThoughtWorks 咨询背景 | 精通 AI4SE | 具备由 0 到 1
-                        的产品规划与百人团队交付能力
-                    </div>
-                </div>
-
-                {/* 个人简介 */}
-                <div className="profile-highlight">
-                    <h2 className="profile-section-title">个人简介</h2>
-                    <p className="intro-text">
-                        <span className="intro-highlight">具备"工程思维"的实战型 AI 产品专家</span>。
-                        拥有 19 年软件研发经验，近 14 年任职于全球顶尖咨询公司 <strong>ThoughtWorks</strong>。近年来深耕 <strong>AI4SE（AI 赋能软件工程）</strong>
-                        领域，致力于将 LLM、Agent 等前沿技术转化为企业级生产力工具。
-                    </p>
-                    <ul className="achievement-list">
-                        <li className="achievement-item">
-                            <strong>AI 落地能力：</strong>不仅理解 AI 理论，更具备动手构建 AI Agent、编写复杂 Prompt、开发 AI
-                            辅助工具（Vibe Coding）的实战能力。
-                        </li>
-                        <li className="achievement-item">
-                            <strong>产品与商业化：</strong>具备成熟的产品经理方法论（用户画像、MVP、Roadmap），曾主导联想百人规模全球交付项目的产品全生命周期管理。
-                        </li>
-                        <li className="achievement-item">
-                            <strong>咨询与赋能：</strong>擅长通过 Design Thinking
-                            和敏捷方法论，帮助企业（如银行、大疆）重构研发价值流，具备极强的用户需求洞察与业务分析（BA）能力。
-                        </li>
-                    </ul>
-                </div>
-
-
-
-                {/* 重点 AI 与技术成果 */}
-                <div className="achievements-section">
-                    <h2 className="profile-section-title">重点 AI 与技术成果（个人与社区）</h2>
-
-                    <div className="achievement-category">
-                        <div className="category-title">原创行业洞见发表</div>
-                        <ul className="achievement-list">
-                            <li className="achievement-item">
-                                <a href="https://mp.weixin.qq.com/s/rGOmGJF3ptFPw15h0nUI2g" target="_blank" rel="noopener noreferrer" className="achievement-link">
-                                    元提示词驱动：领域专家级 AI Agent 的构建框架
-                                </a>
-                            </li>
-                            <li className="achievement-item">
-                                <a href="https://mp.weixin.qq.com/s/CBUn4MV7zz61fuMRStIw-g" target="_blank" rel="noopener noreferrer" className="achievement-link">
-                                    从氛围编程到规约驱动：AI 时代的工程纪律回归
-                                </a>
-                            </li>
-                            <li className="achievement-item">
-                                <a href="https://mp.weixin.qq.com/s/fRoYm3R58VNBNKzQ5go2Uw" target="_blank" rel="noopener noreferrer" className="achievement-link">
-                                    ThoughtWorks洞见《AI 自动化测试新范式："意图驱动"》
-                                </a>
-                            </li>
-                            <li className="achievement-item">
-                                <a href="https://zhuanlan.zhihu.com/p/389339077" target="_blank" rel="noopener noreferrer" className="achievement-link">
-                                    ThoughtWorks洞见《敏捷转型中的敏态与稳态》
-                                </a>
-                            </li>
-                            <li className="achievement-item">
-                                <a href="https://mp.weixin.qq.com/s/6qtjW_DL7eSXu-4Kc4z29A" target="_blank" rel="noopener noreferrer" className="achievement-link">
-                                    ThoughtWorks洞见《测试分层策略实践模型》
-                                </a>
-                            </li>
-                        </ul>
-                    </div>
-
-                    <div className="achievement-category">
-                        <div className="category-title">独立开发 AI 工具</div>
-                        <ul className="achievement-list">
-                            <li className="achievement-item">
-                                构建{' '}
-                                <a href="https://intent-test-framework.vercel.app/requirements-analyzer" target="_blank" rel="noopener noreferrer" className="achievement-link">
-                                    产品经理与测试专家智能体
-                                </a>
-                                ，基于 LangGraph 探索产品经理与测试专家智能体开发。
-                            </li>
-                            <li className="achievement-item">
-                                构建{' '}
-                                <a href="https://intent-test-framework.vercel.app/testcases" target="_blank" rel="noopener noreferrer" className="achievement-link">
-                                    Intent Test Framework
-                                </a>
-                                ，探索基于"意图驱动"的 AI 测试生成框架。
-                            </li>
-                        </ul>
-                    </div>
                 </div>
             </div>
-        </Layout>
+        </CompactLayout>
     );
 };
 
