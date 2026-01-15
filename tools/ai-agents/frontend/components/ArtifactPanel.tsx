@@ -8,7 +8,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from './chat/MarkdownText';
-import { FileText, Clock, CheckCircle, ChevronLeft } from 'lucide-react';
+import { FileText, Clock, CheckCircle, ChevronLeft, ChevronRight, List } from 'lucide-react';
 
 export interface ArtifactTemplateItem {
     stageId: string;
@@ -111,6 +111,9 @@ export function ArtifactPanel({
         }
     }, [subNavItems]);
 
+    // TOC 侧边栏折叠状态
+    const [isTocCollapsed, setIsTocCollapsed] = React.useState(false);
+
     return (
         <div className="flex flex-col h-full">
             {/* 头部 - 保持不变 */}
@@ -148,26 +151,42 @@ export function ArtifactPanel({
 
             {/* 内容区域容器 - 支持侧边栏布局 */}
             <div className="flex-1 flex overflow-hidden">
-                {/* 二级导航侧边栏 - 保持不变 */}
+                {/* 二级导航侧边栏 - 可折叠 */}
                 {subNavItems && subNavItems.length > 0 && (
-                    <div className="w-48 border-r border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 overflow-y-auto shrink-0">
-                        <div className="p-2 space-y-1">
-                            {subNavItems.map(item => (
-                                <button
-                                    key={item.id}
-                                    onClick={() => onSubNavClick?.(item.id)}
-                                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between ${item.status === 'active'
-                                        ? 'bg-white dark:bg-gray-700 text-primary font-medium shadow-sm'
-                                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                        }`}
-                                >
-                                    <span className="truncate">{item.title}</span>
-                                    {item.status === 'warning' && (
-                                        <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
-                                    )}
-                                </button>
-                            ))}
-                        </div>
+                    <div className={`border-r border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 shrink-0 transition-all duration-200 flex flex-col ${isTocCollapsed ? 'w-8' : 'w-32'}`}>
+                        {/* 折叠/展开按钮 */}
+                        <button
+                            onClick={() => setIsTocCollapsed(!isTocCollapsed)}
+                            className="flex items-center justify-center py-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors border-b border-gray-200 dark:border-gray-700"
+                            title={isTocCollapsed ? '展开目录' : '收起目录'}
+                        >
+                            {isTocCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+                        </button>
+
+                        {/* 目录内容 */}
+                        {!isTocCollapsed ? (
+                            <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
+                                {subNavItems.map(item => (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => onSubNavClick?.(item.id)}
+                                        className={`w-full text-left px-2 py-1.5 rounded text-[11px] leading-tight transition-colors flex items-center justify-between ${item.status === 'active'
+                                            ? 'bg-white dark:bg-gray-700 text-primary font-medium shadow-sm'
+                                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                            }`}
+                                    >
+                                        <span className="truncate">{item.title}</span>
+                                        {item.status === 'warning' && (
+                                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0 ml-1" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex-1 flex items-center justify-center">
+                                <List size={14} className="text-gray-400" />
+                            </div>
+                        )}
                     </div>
                 )}
 
