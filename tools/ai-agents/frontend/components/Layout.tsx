@@ -48,7 +48,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </button>
                 <div className="absolute top-full left-0 bg-white border border-gray-200 rounded shadow-lg min-w-[160px] py-2 opacity-0 invisible translate-y-[-10px] group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-50">
                   <a href="/ai-agents/" className="block px-4 py-2 text-sm text-gray-800 bg-gray-100 font-medium">智能助手</a>
-                  <a href="/ai-agents/compact" className="block px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800">紧凑模式</a>
                   <a href="/ai-agents/config" className="block px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800">配置管理</a>
                 </div>
               </div>
@@ -80,7 +79,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <div className="py-2">
                 <div className="text-sm text-gray-800 font-medium mb-1">AI智能体们</div>
                 <a href="/ai-agents/" className="block py-1.5 pl-4 text-sm text-gray-800 font-medium">智能助手</a>
-                <a href="/ai-agents/compact" className="block py-1.5 pl-4 text-sm text-gray-600 hover:text-gray-800">紧凑模式</a>
                 <a href="/ai-agents/config" className="block py-1.5 pl-4 text-sm text-gray-600 hover:text-gray-800">配置管理</a>
               </div>
               <a href="/profile" className="block py-2 text-sm text-gray-600 hover:text-gray-800">个人简介</a>

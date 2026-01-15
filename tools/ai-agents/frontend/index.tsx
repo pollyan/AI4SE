@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
 import ConfigPage from './ConfigPage';
 import CompactApp from './CompactApp';
 
@@ -13,13 +12,8 @@ const getPage = () => {
     return <ConfigPage />;
   }
 
-  // Check if we're on the compact page
-  if (path.includes('/compact') || path.endsWith('/compact')) {
-    return <CompactApp />;
-  }
-
-  // Default to the main assistant app
-  return <App />;
+  // 默认使用紧凑型页面
+  return <CompactApp />;
 };
 
 const rootElement = document.getElementById('root');
