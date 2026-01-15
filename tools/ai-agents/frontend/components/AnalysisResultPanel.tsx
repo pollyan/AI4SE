@@ -68,7 +68,6 @@ const AnalysisResultPanel: React.FC<AnalysisResultPanelProps> = ({
         <WorkflowProgress
           stages={progress.stages}
           currentStageIndex={progress.currentStageIndex}
-          currentTask={progress.currentTask}
           selectedStageId={selectedStageId}
           onStageClick={handleStageClick}
         />

@@ -5,7 +5,9 @@
  */
 
 import React from 'react';
-import { Streamdown } from 'streamdown';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { CodeBlock } from './chat/MarkdownText';
 import { FileText, Clock, CheckCircle, ChevronLeft } from 'lucide-react';
 
 export interface ArtifactTemplateItem {
@@ -18,6 +20,12 @@ export interface ArtifactProgress {
     template: ArtifactTemplateItem[];
     completed: string[];          // 已完成的 artifact keys
     generating: string | null;    // 正在生成的 artifact key
+}
+
+export interface SubNavItem {
+    id: string;
+    title: string;
+    status: 'pending' | 'completed' | 'warning' | 'active';
 }
 
 interface ArtifactPanelProps {
@@ -35,7 +43,36 @@ interface ArtifactPanelProps {
     streamingArtifactContent: string | null;
     /** 返回当前阶段的回调 */
     onBackToCurrentStage: () => void;
+    /** 二级导航项 (可选) */
+    subNavItems?: SubNavItem[];
+    /** 二级导航点击回调 */
+    onSubNavClick?: (id: string) => void;
 }
+
+// 简单的 slugify 函数，支持中文
+const slugify = (text: string) => {
+    return text
+        .toString()
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w\u4e00-\u9fa5\-.+]/g, '');
+};
+
+// 自定义标题组件，自动生成 ID
+const HeadingRenderer = ({ level, children, ...props }: any) => {
+    // 获取纯文本内容
+    const getText = (node: any): string => {
+        if (typeof node === 'string') return node;
+        if (Array.isArray(node)) return node.map(getText).join('');
+        if (node?.props?.children) return getText(node.props.children);
+        return '';
+    };
+
+    const text = getText(children);
+    const id = slugify(text);
+    return React.createElement(`h${level}`, { id, ...props }, children);
+};
 
 export function ArtifactPanel({
     artifactProgress,
@@ -45,40 +82,39 @@ export function ArtifactPanel({
     streamingArtifactKey,
     streamingArtifactContent,
     onBackToCurrentStage,
+    subNavItems,
+    onSubNavClick
 }: ArtifactPanelProps) {
-    // 确定要显示哪个阶段的产出物
+    // ... existing logic ...
     const displayStageId = selectedStageId || currentStageId;
-
-    // 找到该阶段对应的模板
     const template = artifactProgress?.template.find(t => t.stageId === displayStageId);
-
-    // 即使没有匹配的模板，也显示占位符框架
     const templateName = template?.name || '产出物';
     const templateKey = template?.artifactKey;
-
-    // 确定产出物状态
-    // 使用前端的 streamingArtifactKey 作为判断 isGenerating 的关键依据
-    // isCompleted 直接检查 artifacts 字典，而不是依赖后端 state 事件的 completed 列表
-    // 当 templateKey 找不到时，使用 streamingArtifactKey 作为 fallback
     const effectiveKey = templateKey || streamingArtifactKey;
     const isCompleted = effectiveKey ? !!artifacts[effectiveKey] : false;
     const isGenerating = streamingArtifactKey !== null && (templateKey === streamingArtifactKey || !templateKey);
-
-    // 获取产出物内容
-    // 优先显示流式内容（确保流式效果不被中断），其次显示已完成内容
     const content = isGenerating && streamingArtifactContent
-        ? streamingArtifactContent  // 正在生成中，显示流式内容
+        ? streamingArtifactContent
         : isCompleted && effectiveKey
-            ? artifacts[effectiveKey]  // 已完成，显示完整内容
+            ? artifacts[effectiveKey]
             : null;
-
-    // 是否正在查看历史阶段
     const isViewingHistory = selectedStageId !== null && selectedStageId !== currentStageId;
+
+    // 处理自动滚动
+    React.useEffect(() => {
+        const activeItem = subNavItems?.find(item => item.status === 'active');
+        if (activeItem) {
+            const element = document.getElementById(activeItem.id);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+    }, [subNavItems]);
 
     return (
         <div className="flex flex-col h-full">
-            {/* 头部 */}
-            <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+            {/* 头部 - 保持不变 */}
+            <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shrink-0">
                 <div className="flex items-center gap-2">
                     <FileText className="text-primary" size={18} />
                     <span className="font-medium text-gray-800 dark:text-gray-200">
@@ -99,7 +135,6 @@ export function ArtifactPanel({
                     )}
                 </div>
 
-                {/* 返回按钮 */}
                 {isViewingHistory && (
                     <button
                         onClick={onBackToCurrentStage}
@@ -111,18 +146,56 @@ export function ArtifactPanel({
                 )}
             </div>
 
-            {/* 内容区域 */}
-            <div className="flex-1 overflow-y-auto p-4">
-                {content ? (
-                    <div className="prose prose-sm dark:prose-invert max-w-none">
-                        <Streamdown>{content}</Streamdown>
-                    </div>
-                ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                        <Clock size={48} className="mb-4 opacity-50" />
-                        <p>完成当前阶段对话后，将在此生成产出物</p>
+            {/* 内容区域容器 - 支持侧边栏布局 */}
+            <div className="flex-1 flex overflow-hidden">
+                {/* 二级导航侧边栏 - 保持不变 */}
+                {subNavItems && subNavItems.length > 0 && (
+                    <div className="w-48 border-r border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 overflow-y-auto shrink-0">
+                        <div className="p-2 space-y-1">
+                            {subNavItems.map(item => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => onSubNavClick?.(item.id)}
+                                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between ${item.status === 'active'
+                                        ? 'bg-white dark:bg-gray-700 text-primary font-medium shadow-sm'
+                                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                        }`}
+                                >
+                                    <span className="truncate">{item.title}</span>
+                                    {item.status === 'warning' && (
+                                        <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                                    )}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 )}
+
+                {/* 主内容 */}
+                <div className="flex-1 overflow-y-auto p-4 bg-white dark:bg-gray-900 scroll-smooth">
+                    {content ? (
+                        <div className="prose prose-sm dark:prose-invert max-w-none break-words">
+                            <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                    code: CodeBlock,
+                                    pre: React.Fragment,
+                                    h1: (props) => <HeadingRenderer level={1} {...props} />,
+                                    h2: (props) => <HeadingRenderer level={2} {...props} />,
+                                    h3: (props) => <HeadingRenderer level={3} {...props} />,
+                                    h4: (props) => <HeadingRenderer level={4} {...props} />,
+                                }}
+                            >
+                                {content}
+                            </ReactMarkdown>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                            <Clock size={48} className="mb-4 opacity-50" />
+                            <p>完成当前阶段对话后，将在此生成产出物</p>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

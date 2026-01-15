@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import ConfigPage from './ConfigPage';
+import CompactApp from './CompactApp';
 
 // Simple path-based routing
 const getPage = () => {
@@ -10,6 +11,11 @@ const getPage = () => {
   // Check if we're on the config page
   if (path.includes('/config') || path.endsWith('/config')) {
     return <ConfigPage />;
+  }
+
+  // Check if we're on the compact page
+  if (path.includes('/compact') || path.endsWith('/compact')) {
+    return <CompactApp />;
   }
 
   // Default to the main assistant app

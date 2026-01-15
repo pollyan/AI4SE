@@ -5,7 +5,7 @@ import AssistantCard from './components/AssistantCard';
 import AnalysisResultPanel from './components/AnalysisResultPanel';
 import { ASSISTANTS } from './constants';
 import { AssistantId, Assistant } from './types';
-import type { ProgressInfo, ArtifactEvent } from './services/backendService';
+import type { ProgressInfo } from './services/backendService';
 import { Bot } from 'lucide-react';
 import '@assistant-ui/styles/index.css';
 
@@ -48,24 +48,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleArtifactEvent = (event: ArtifactEvent) => {
-    switch (event.type) {
-      case 'artifact_start':
-        setStreamingArtifactKey(event.key);
-        setStreamingArtifactContent('');
-        break;
-      case 'artifact_chunk':
-        if (event.key === streamingArtifactKey) {
-          setStreamingArtifactContent(prev => prev + event.delta);
-        }
-        break;
-      case 'artifact_complete':
-        setArtifacts(prev => ({ ...prev, [event.key]: event.content }));
-        setStreamingArtifactKey(null);
-        setStreamingArtifactContent('');
-        break;
-    }
-  };
+  // ArtifactEvent 已通过 onProgressChange 传递，无需单独处理
 
   const selectedAssistant = ASSISTANTS.find(a => a.id === selectedAssistantId);
 
@@ -166,7 +149,6 @@ const App: React.FC = () => {
               assistant={selectedAssistant}
               onBack={handleBack}
               onProgressChange={handleProgressChange}
-              onArtifactEvent={handleArtifactEvent}
             />
           ) : (
             <AssistantSelectionPanel />

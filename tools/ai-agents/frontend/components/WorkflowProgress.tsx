@@ -1,23 +1,21 @@
-/**
- * WorkflowProgress - 工作流进度组件
- * 
- * 紧凑的单行设计，展示阶段进度和当前子任务
- * 支持点击已完成阶段查看历史产出物
- */
-
 import React from 'react';
-import { Check, Circle, Loader2 } from 'lucide-react';
+import { Check, Circle, Loader2, ChevronRight } from 'lucide-react';
 
 export interface Stage {
     id: string;
     name: string;
     status: 'pending' | 'active' | 'completed';
+    subTasks?: {
+        id: string;
+        name: string;
+        status: 'pending' | 'active' | 'completed' | 'warning';
+    }[];
 }
 
 export interface WorkflowProgressProps {
     stages: Stage[];
+    /** 当前活动的主阶段索引 */
     currentStageIndex: number;
-    currentTask: string | null;
     /** 当选中的阶段 ID (用于高亮显示) */
     selectedStageId?: string | null;
     /** 阶段点击回调 (只有已完成阶段可点击) */
@@ -27,7 +25,6 @@ export interface WorkflowProgressProps {
 export function WorkflowProgress({
     stages,
     currentStageIndex,
-    currentTask,
     selectedStageId,
     onStageClick
 }: WorkflowProgressProps) {
@@ -35,79 +32,44 @@ export function WorkflowProgress({
         return null;
     }
 
+    const currentStage = stages[currentStageIndex];
+    // 如果选中了其他阶段，优先显示选中阶段的子任务（如果有），否则显示当前活动阶段的子任务
+    const displaySubTasksStage = selectedStageId
+        ? stages.find(s => s.id === selectedStageId)
+        : currentStage;
+
+    const subTasks = displaySubTasksStage?.subTasks || [];
+
     const handleStageClick = (stage: Stage) => {
-        // 只有已完成阶段可以点击
-        if (stage.status === 'completed' && onStageClick) {
+        // 只有已完成或正在进行的阶段可以点击（查看详情）
+        if ((stage.status === 'completed' || stage.status === 'active') && onStageClick) {
             onStageClick(stage.id);
         }
     };
 
     return (
-        <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 text-sm overflow-x-auto">
-            {/* 阶段指示器 */}
-            <div className="flex items-center gap-1 shrink-0">
+        <div className="flex flex-col border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+            {/* 一级进度条 (Main Stages) */}
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200/50 dark:border-gray-700/50 overflow-x-auto text-sm">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider shrink-0 mr-2">阶段</span>
                 {stages.map((stage, index) => {
-                    const isClickable = stage.status === 'completed';
-                    const isSelected = selectedStageId === stage.id;
+                    const isClickable = stage.status === 'completed' || stage.status === 'active';
+                    const isSelected = selectedStageId === stage.id || (!selectedStageId && index === currentStageIndex);
 
                     return (
                         <React.Fragment key={stage.id}>
-                            {/* 连接线（非首个） */}
                             {index > 0 && (
-                                <div
-                                    className={`w-4 h-0.5 ${stage.status === 'completed' || stages[index - 1].status === 'completed'
-                                        ? 'bg-green-500'
-                                        : 'bg-gray-300 dark:bg-gray-600'
-                                        }`}
-                                />
+                                <ChevronRight size={14} className="text-gray-300 dark:text-gray-600 shrink-0" />
                             )}
 
-                            {/* 阶段项 */}
                             <div
-                                className={`flex items-center gap-1 ${isClickable
-                                        ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded px-1 -mx-1 transition-colors'
-                                        : ''
-                                    } ${isSelected
-                                        ? 'bg-green-100 dark:bg-green-900/30 rounded px-1 -mx-1'
-                                        : ''
-                                    }`}
-                                data-status={stage.status}
+                                className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors whitespace-nowrap ${isClickable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700' : 'opacity-60 cursor-default'
+                                    } ${isSelected ? 'bg-white dark:bg-gray-700 shadow-sm font-medium text-primary' : ''}`}
                                 onClick={() => handleStageClick(stage)}
-                                role={isClickable ? 'button' : undefined}
-                                tabIndex={isClickable ? 0 : undefined}
                             >
-                                {/* 状态图标 */}
-                                {stage.status === 'completed' && (
-                                    <Check
-                                        size={14}
-                                        className="text-green-500 shrink-0"
-                                        data-testid={`status-completed-${stage.id}`}
-                                    />
-                                )}
-                                {stage.status === 'active' && (
-                                    <Loader2
-                                        size={14}
-                                        className="text-primary animate-spin shrink-0"
-                                        data-testid={`status-active-${stage.id}`}
-                                    />
-                                )}
-                                {stage.status === 'pending' && (
-                                    <Circle
-                                        size={14}
-                                        className="text-gray-400 shrink-0"
-                                        data-testid={`status-pending-${stage.id}`}
-                                    />
-                                )}
-
-                                {/* 阶段名称 */}
-                                <span
-                                    className={`whitespace-nowrap ${stage.status === 'active'
-                                        ? 'text-primary font-medium'
-                                        : stage.status === 'completed'
-                                            ? 'text-green-600 dark:text-green-400'
-                                            : 'text-gray-400'
-                                        } ${isSelected ? 'font-semibold' : ''}`}
-                                >
+                                {stage.status === 'completed' && <Check size={14} className="text-green-500" />}
+                                {stage.status === 'active' && <Loader2 size={14} className="text-primary animate-spin" />}
+                                <span className={stage.status === 'completed' ? 'text-gray-700 dark:text-gray-300' : ''}>
                                     {stage.name}
                                 </span>
                             </div>
@@ -116,14 +78,32 @@ export function WorkflowProgress({
                 })}
             </div>
 
-            {/* 分隔符 + 子任务 */}
-            {currentTask && (
-                <>
-                    <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 shrink-0" />
-                    <span className="text-gray-500 dark:text-gray-400 truncate">
-                        {currentTask}
-                    </span>
-                </>
+            {/* 二级进度条 (Sub Tasks) */}
+            {subTasks.length > 0 && (
+                <div className="flex items-center gap-3 px-4 py-1.5 overflow-x-auto text-xs bg-white dark:bg-gray-900/30">
+                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider shrink-0 mr-1">任务</span>
+                    {subTasks.map((task, index) => (
+                        <React.Fragment key={task.id}>
+                            {index > 0 && <div className="w-px h-3 bg-gray-300 dark:bg-gray-700 shrink-0" />}
+
+                            <div className="flex items-center gap-1.5 whitespace-nowrap py-0.5">
+                                {task.status === 'completed' && <Check size={12} className="text-green-500" />}
+                                {task.status === 'active' && <Loader2 size={12} className="text-primary animate-spin" />}
+                                {task.status === 'warning' && <Circle size={8} className="text-orange-500 fill-orange-500" />}
+                                {task.status === 'pending' && <Circle size={8} className="text-gray-300 dark:text-gray-600" />}
+
+                                <span className={`
+                                    ${task.status === 'active' ? 'text-primary font-medium' : ''}
+                                    ${task.status === 'completed' ? 'text-gray-500' : ''}
+                                    ${task.status === 'warning' ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}
+                                    ${task.status === 'pending' ? 'text-gray-400' : ''}
+                                `}>
+                                    {task.name}
+                                </span>
+                            </div>
+                        </React.Fragment>
+                    ))}
+                </div>
             )}
         </div>
     );

@@ -61,8 +61,10 @@ def create_app():
     # React SPA 路由 - 所有非 API 路由都返回 index.html
     @app.route('/')
     @app.route('/ai-agents/')
+    @app.route('/ai-agents/compact')
     @app.route('/ai-agents/config')
     @app.route('/config')
+    @app.route('/compact')
     def serve_react():
         """服务 React 单页应用"""
         index_path = os.path.join(REACT_BUILD_DIR, 'index.html')

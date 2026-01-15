@@ -22,7 +22,6 @@ describe('WorkflowProgress', () => {
             <WorkflowProgress
                 stages={mockStages}
                 currentStageIndex={1}
-                currentTask="正在分析..."
             />
         );
 
@@ -32,30 +31,17 @@ describe('WorkflowProgress', () => {
         expect(screen.getByText('文档交付')).toBeInTheDocument();
     });
 
-    it('should show current task text', () => {
-        render(
-            <WorkflowProgress
-                stages={mockStages}
-                currentStageIndex={1}
-                currentTask="正在制定策略..."
-            />
-        );
-
-        expect(screen.getByText('正在制定策略...')).toBeInTheDocument();
-    });
-
     it('should highlight active stage', () => {
         const { container } = render(
             <WorkflowProgress
                 stages={mockStages}
                 currentStageIndex={1}
-                currentTask={null}
             />
         );
 
-        // 活跃阶段应有特殊样式
-        const activeIndicator = container.querySelector('[data-status="active"]');
-        expect(activeIndicator).toBeInTheDocument();
+        // 活跃阶段应有旋转的加载图标 (Loader2)
+        const spinningIcon = container.querySelector('.animate-spin');
+        expect(spinningIcon).toBeInTheDocument();
     });
 
     it('should show completed stages with checkmark', () => {
@@ -63,12 +49,12 @@ describe('WorkflowProgress', () => {
             <WorkflowProgress
                 stages={mockStages}
                 currentStageIndex={1}
-                currentTask={null}
             />
         );
 
-        const completedIndicator = container.querySelector('[data-status="completed"]');
-        expect(completedIndicator).toBeInTheDocument();
+        // 已完成阶段应有绿色勾选图标 (Check) - lucide-react 渲染为 svg
+        const checkIcon = container.querySelector('.text-green-500');
+        expect(checkIcon).toBeInTheDocument();
     });
 
     it('should return null when stages is empty', () => {
@@ -76,7 +62,6 @@ describe('WorkflowProgress', () => {
             <WorkflowProgress
                 stages={[]}
                 currentStageIndex={0}
-                currentTask={null}
             />
         );
 
@@ -88,7 +73,6 @@ describe('WorkflowProgress', () => {
             <WorkflowProgress
                 stages={mockStages}
                 currentStageIndex={0}
-                currentTask={null}
             />
         );
 
