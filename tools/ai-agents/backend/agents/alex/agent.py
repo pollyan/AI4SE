@@ -6,7 +6,7 @@ Alex ADK Agent 实现
 """
 
 import logging
-from typing import AsyncIterator, Dict, Any, Union
+from typing import AsyncIterator, Dict, Any, Union, Optional
 
 from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
@@ -237,7 +237,7 @@ class AlexAdkRunner:
                 chunks.append(chunk)
         return "".join(chunks)
     
-    def get_progress_info(self, session_id: str) -> Dict[str, Any] | None:
+    def get_progress_info(self, session_id: str) -> Optional[Dict[str, Any]]:
         """
         获取当前进度信息
         
