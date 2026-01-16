@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Literal, Optional
 
 
@@ -22,3 +22,11 @@ class IntentResult(BaseModel):
         default=None,
         description="当 confidence < 0.9 时的确认问题"
     )
+    
+    @field_validator('intent', mode='before')
+    @classmethod
+    def empty_string_to_none(cls, v):
+        """将空字符串转换为 None，兼容 LLM 结构化输出"""
+        if v == '':
+            return None
+        return v

@@ -26,11 +26,8 @@ def get_plan_sync_instruction(default_stages: List[Dict]) -> str:
     
     return f"""{STRUCTURED_OUTPUT_PROMPT}
 
-**阶段初始化示例**:
+### 阶段初始化示例
 ```json
 {example_json}
 ```
-
-**重要提醒**：
-- 上面示例中 `artifacts` 为空是因为刚开始，后续每次回复都要填充 artifacts 的 content
-- 用户每回答一个问题，你就要更新 artifacts 中对应产出物的 content（累积完整内容）"""
+> 示例中 artifacts 为空仅因初始化，后续每次回复必须填充 content"""

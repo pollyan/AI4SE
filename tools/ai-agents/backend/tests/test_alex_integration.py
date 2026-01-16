@@ -1,254 +1,357 @@
 """
-Alex Integration Tests
+Alex ADK Agent Integration Tests
 
-集成测试：验证Alex智能体的完整工作流。
+集成测试：验证 Alex ADK 智能体的完整工作流，包括 Tool Calling 和状态管理。
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from unittest.mock import MagicMock, patch, AsyncMock
 
-from backend.agents.alex.graph import create_alex_graph
-from backend.agents.alex.state import get_initial_state, ArtifactKeys
+from backend.agents.alex.agent import create_alex_agent, AlexAdkRunner, create_alex_graph
+from backend.agents.alex.prompts import LISA_V5_2_INSTRUCTION, TOOL_USAGE_PROMPT
+from backend.agents.alex.tools import ALEX_TOOLS, set_plan, update_stage, save_artifact
+from backend.agents.alex.state_manager import AlexStateManager, AlexSessionState
+
+
+class TestAlexTools:
+
+    def test_tools_list_contains_three_tools(self):
+        assert len(ALEX_TOOLS) == 3
+        assert set_plan in ALEX_TOOLS
+        assert update_stage in ALEX_TOOLS
+        assert save_artifact in ALEX_TOOLS
+
+    def test_set_plan_returns_confirmation(self):
+        stages = [
+            {"id": "clarify", "name": "需求澄清"},
+            {"id": "strategy", "name": "策略制定"}
+        ]
+        result = set_plan(stages)
+        assert "2 个阶段" in result
+
+    def test_update_stage_returns_confirmation(self):
+        result = update_stage("clarify", "completed")
+        assert "clarify" in result
+        assert "completed" in result
+
+    def test_save_artifact_returns_confirmation(self):
+        result = save_artifact("req_doc", "# Document Content")
+        assert "req_doc" in result
+        assert "字符" in result
+
+
+class TestAlexStateManager:
+
+    def test_get_state_creates_new_state(self):
+        manager = AlexStateManager()
+        state = manager.get_state("session-1")
+        
+        assert isinstance(state, AlexSessionState)
+        assert state.plan == []
+        assert state.current_stage_id == ""
+        assert state.artifacts == {}
+
+    def test_handle_set_plan_creates_plan(self):
+        manager = AlexStateManager()
+        stages = [
+            {"id": "clarify", "name": "需求澄清", "artifact_key": "req_doc", "artifact_name": "需求分析文档"},
+            {"id": "strategy", "name": "策略制定"}
+        ]
+        
+        manager.handle_set_plan("session-1", stages)
+        state = manager.get_state("session-1")
+        
+        assert len(state.plan) == 2
+        assert state.plan[0]["status"] == "active"
+        assert state.plan[1]["status"] == "pending"
+        assert state.current_stage_id == "clarify"
+        assert len(state.artifact_templates) == 1
+
+    def test_handle_update_stage_completes_and_activates_next(self):
+        manager = AlexStateManager()
+        stages = [
+            {"id": "clarify", "name": "需求澄清"},
+            {"id": "strategy", "name": "策略制定"}
+        ]
+        manager.handle_set_plan("session-1", stages)
+        
+        manager.handle_update_stage("session-1", "clarify", "completed")
+        state = manager.get_state("session-1")
+        
+        assert state.plan[0]["status"] == "completed"
+        assert state.plan[1]["status"] == "active"
+        assert state.current_stage_id == "strategy"
+
+    def test_handle_save_artifact_stores_content(self):
+        manager = AlexStateManager()
+        manager.handle_set_plan("session-1", [{"id": "clarify", "name": "需求澄清", "artifact_key": "req_doc", "artifact_name": "文档"}])
+        
+        manager.handle_save_artifact("session-1", "req_doc", "# 完整内容")
+        state = manager.get_state("session-1")
+        
+        assert "req_doc" in state.artifacts
+        assert state.artifacts["req_doc"] == "# 完整内容"
+
+    def test_get_progress_info_returns_correct_format(self):
+        manager = AlexStateManager()
+        stages = [
+            {"id": "clarify", "name": "需求澄清", "artifact_key": "req_doc", "artifact_name": "需求分析文档"},
+            {"id": "strategy", "name": "策略制定", "artifact_key": "strategy_doc", "artifact_name": "测试策略蓝图"}
+        ]
+        manager.handle_set_plan("session-1", stages)
+        manager.handle_save_artifact("session-1", "req_doc", "# 内容")
+        
+        progress = manager.get_progress_info("session-1")
+        
+        assert progress is not None
+        assert len(progress["stages"]) == 2
+        assert progress["currentStageIndex"] == 0
+        assert "正在需求澄清..." in progress["currentTask"]
+        assert "req_doc" in progress["artifactProgress"]["completed"]
+        assert progress["artifacts"]["req_doc"] == "# 内容"
+
+    def test_get_progress_info_returns_none_without_plan(self):
+        manager = AlexStateManager()
+        progress = manager.get_progress_info("session-1")
+        
+        assert progress is None
+
+
+class TestAlexAgentCreation:
+
+    def test_create_alex_agent_includes_tools(self):
+        config = {
+            "model_name": "deepseek-chat",
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key": "test-key"
+        }
+        
+        with patch('backend.agents.alex.agent.LlmAgent') as mock_agent_class:
+            mock_agent = MagicMock()
+            mock_agent_class.return_value = mock_agent
+            
+            create_alex_agent(config)
+            
+            call_kwargs = mock_agent_class.call_args[1]
+            assert call_kwargs["name"] == "alex"
+            assert call_kwargs["tools"] == ALEX_TOOLS
+            assert TOOL_USAGE_PROMPT in call_kwargs["instruction"]
+
+    def test_create_alex_agent_uses_config_values(self):
+        config = {
+            "model_name": "custom-model",
+            "base_url": "https://custom.api.com/v1",
+            "api_key": "custom-key"
+        }
+        
+        with patch('backend.agents.alex.agent.LiteLlm') as mock_litellm, \
+             patch('backend.agents.alex.agent.LlmAgent'):
+            
+            create_alex_agent(config)
+            
+            mock_litellm.assert_called_once()
+            call_kwargs = mock_litellm.call_args[1]
+            assert call_kwargs["model"] == "openai/custom-model"
+            assert call_kwargs["api_base"] == "https://custom.api.com/v1"
+            assert call_kwargs["api_key"] == "custom-key"
+
+
+class TestAlexAdkRunner:
+
+    def test_create_alex_graph_returns_runner(self):
+        config = {
+            "model_name": "deepseek-chat",
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key": "test-key"
+        }
+        
+        with patch('backend.agents.alex.agent.LlmAgent'), \
+             patch('backend.agents.alex.agent.Runner'), \
+             patch('backend.agents.alex.agent.InMemorySessionService'):
+            
+            result = create_alex_graph(config)
+            
+            assert isinstance(result, AlexAdkRunner)
+            assert isinstance(result.state_manager, AlexStateManager)
+
+    @pytest.mark.asyncio
+    async def test_runner_creates_session_on_first_message(self):
+        config = {
+            "model_name": "deepseek-chat",
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key": "test-key"
+        }
+        
+        with patch('backend.agents.alex.agent.LlmAgent'), \
+             patch('backend.agents.alex.agent.Runner') as mock_runner_class, \
+             patch('backend.agents.alex.agent.InMemorySessionService') as mock_session_class:
+            
+            mock_session_service = MagicMock()
+            mock_session_service.get_session = AsyncMock(return_value=None)
+            mock_session_service.create_session = AsyncMock()
+            mock_session_class.return_value = mock_session_service
+            
+            async def mock_run_async(*args, **kwargs):
+                return
+                yield
+            
+            mock_runner = MagicMock()
+            mock_runner.run_async = mock_run_async
+            mock_runner_class.return_value = mock_runner
+            
+            runner = AlexAdkRunner(config)
+            
+            chunks = []
+            async for chunk in runner.stream_message("session-1", "Hello"):
+                chunks.append(chunk)
+            
+            mock_session_service.create_session.assert_called_once()
 
 
 @pytest.mark.asyncio
-class TestAlexFullWorkflow:
-    """测试Alex完整工作流"""
+class TestAlexStreamMessage:
 
-    @patch('backend.agents.alex.graph.create_llm_from_config')
-    async def test_product_design_workflow_from_start(self, mock_create_llm):
-        """
-        Integration test for Alex's product design workflow.
+    async def test_stream_message_yields_text_parts(self):
+        config = {
+            "model_name": "deepseek-chat",
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key": "test-key"
+        }
+        
+        with patch('backend.agents.alex.agent.LlmAgent'), \
+             patch('backend.agents.alex.agent.Runner') as mock_runner_class, \
+             patch('backend.agents.alex.agent.InMemorySessionService') as mock_session_class:
+            
+            mock_session_service = MagicMock()
+            mock_session_service.get_session = AsyncMock(return_value=MagicMock())
+            mock_session_class.return_value = mock_session_service
+            
+            mock_event = MagicMock()
+            mock_part = MagicMock()
+            mock_part.text = "Hello, I'm Alex"
+            mock_part.function_call = None
+            mock_event.content = MagicMock()
+            mock_event.content.parts = [mock_part]
+            
+            async def mock_run_async(*args, **kwargs):
+                yield mock_event
+            
+            mock_runner = MagicMock()
+            mock_runner.run_async = mock_run_async
+            mock_runner_class.return_value = mock_runner
+            
+            runner = AlexAdkRunner(config)
+            runner._initialized_sessions.add("session-1")
+            
+            chunks = []
+            async for chunk in runner.stream_message("session-1", "Hello"):
+                chunks.append(chunk)
+            
+            assert len(chunks) == 1
+            assert chunks[0] == "Hello, I'm Alex"
 
-        Simulates:
-        1. User starts conversation
-        2. Alex generates elevator pitch artifact
-        3. Workflow progresses through stages
-        """
+    async def test_stream_message_handles_tool_calls(self):
+        config = {
+            "model_name": "deepseek-chat",
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key": "test-key"
+        }
+        
+        with patch('backend.agents.alex.agent.LlmAgent'), \
+             patch('backend.agents.alex.agent.Runner') as mock_runner_class, \
+             patch('backend.agents.alex.agent.InMemorySessionService') as mock_session_class:
+            
+            mock_session_service = MagicMock()
+            mock_session_service.get_session = AsyncMock(return_value=MagicMock())
+            mock_session_class.return_value = mock_session_service
+            
+            mock_function_call = MagicMock()
+            mock_function_call.name = "set_plan"
+            mock_function_call.args = {
+                "stages": [
+                    {"id": "clarify", "name": "需求澄清", "artifact_key": "req_doc", "artifact_name": "需求分析文档"}
+                ]
+            }
+            
+            mock_event = MagicMock()
+            mock_part = MagicMock()
+            mock_part.text = None
+            mock_part.function_call = mock_function_call
+            mock_event.content = MagicMock()
+            mock_event.content.parts = [mock_part]
+            
+            async def mock_run_async(*args, **kwargs):
+                yield mock_event
+            
+            mock_runner = MagicMock()
+            mock_runner.run_async = mock_run_async
+            mock_runner_class.return_value = mock_runner
+            
+            runner = AlexAdkRunner(config)
+            runner._initialized_sessions.add("session-1")
+            
+            chunks = []
+            async for chunk in runner.stream_message("session-1", "Hello"):
+                chunks.append(chunk)
+            
+            state_events = [c for c in chunks if isinstance(c, dict) and c.get("type") == "state"]
+            assert len(state_events) == 1
+            assert "progress" in state_events[0]
+            assert state_events[0]["progress"]["stages"][0]["id"] == "clarify"
 
-        # 1. Setup Mock LLM
-        mock_llm = MagicMock()
-
-        # Define scenario responses
-        def side_effect_invoke(messages, **kwargs):
-            # Extract system prompt for context
-            system_content = ""
-            for msg in messages:
-                if hasattr(msg, 'content') and isinstance(msg.content, str):
-                    system_content += msg.content
-
-            # Check current stage from prompt - check both system and all messages
-            if "elevator" in system_content:
-                # Generate elevator pitch artifact
-                return AIMessage(content='''好的，让我为您创建电梯演讲。
-
-```json
-{
-  "plan": [
-    {"id": "elevator", "name": "电梯演讲", "status": "active"},
-    {"id": "persona", "name": "用户画像", "status": "pending"}
-  ],
-  "current_stage_id": "elevator",
-  "artifacts": [
-    {
-      "stage_id": "elevator",
-      "key": "product_elevator",
-      "name": "电梯演讲",
-      "content": "# 电梯演讲\\n\\n**产品**: AI智能测试平台\\n\\n**价值主张**: 帮助企业在10分钟内建立完整的测试体系\\n\\n**目标市场**: 中小型软件企业"
-    }
-  ]
-}
-```''')
-            elif "persona" in system_content:
-                return AIMessage(content="生成用户画像中...")
-            else:
-                return AIMessage(content="继续处理")
-
-        mock_llm.model.invoke.side_effect = side_effect_invoke
-
-        # 2. Patch create_llm
-        with patch('backend.agents.alex.graph.create_llm_from_config', return_value=mock_llm):
-
-            # 3. Initialize Graph
-            config = {"model_name": "mock-gpt", "base_url": "", "api_key": ""}
-            graph = create_alex_graph(config)
-
-            # 4. Start conversation
-            state = get_initial_state()
-            state["messages"] = [HumanMessage(content="帮我设计一个AI测试平台")]
-            state["plan"] = [
-                {"id": "elevator", "name": "电梯演讲", "status": "pending"},
-                {"id": "persona", "name": "用户画像", "status": "pending"},
-            ]
-            state["current_stage_id"] = "elevator"
-
-            invoke_config = {"configurable": {"thread_id": "test-integration-001"}}
-            result = await graph.ainvoke(state, config=invoke_config)
-
-            # Assertions
-            assert len(result["messages"]) >= 2  # User message + AI response
-            last_message = result["messages"][-1]
-            assert isinstance(last_message, AIMessage)
-
-            # Should have generated artifact
-            assert ArtifactKeys.PRODUCT_ELEVATOR in result["artifacts"]
-            elevator_content = result["artifacts"][ArtifactKeys.PRODUCT_ELEVATOR]
-            assert "电梯演讲" in elevator_content
-            assert "AI智能测试平台" in elevator_content
-
-    @patch('backend.agents.alex.graph.create_llm_from_config')
-    async def test_multi_stage_progression(self, mock_create_llm):
-        """测试多阶段推进"""
-        mock_llm = MagicMock()
-
-        # Mock responses for different stages
-        call_count = {"count": 0}
-
-        def side_effect_invoke(messages, **kwargs):
-            call_count["count"] += 1
-            if call_count["count"] == 1:
-                # First call: elevator stage
-                return AIMessage(content='''```json
-{
-  "plan": [
-    {"id": "elevator", "name": "电梯演讲", "status": "active"},
-    {"id": "persona", "name": "用户画像", "status": "pending"}
-  ],
-  "current_stage_id": "elevator",
-  "artifacts": [
-    {"stage_id": "elevator", "key": "product_elevator", "name": "电梯演讲", "content": "# 电梯演讲\\n测试平台"}
-  ]
-}
-```''')
-            elif call_count["count"] == 2:
-                # Second call: persona stage
-                return AIMessage(content='''```json
-{
-  "plan": [
-    {"id": "elevator", "name": "电梯演讲", "status": "completed"},
-    {"id": "persona", "name": "用户画像", "status": "active"}
-  ],
-  "current_stage_id": "persona",
-  "artifacts": [
-    {"stage_id": "persona", "key": "product_persona", "name": "用户画像", "content": "# 用户画像\\n开发者"}
-  ]
-}
-```''')
-            else:
-                return AIMessage(content="完成")
-
-        mock_llm.model.invoke.side_effect = side_effect_invoke
-
-        with patch('backend.agents.alex.graph.create_llm_from_config', return_value=mock_llm):
-            config = {"model_name": "mock", "base_url": "", "api_key": ""}
-            graph = create_alex_graph(config)
-
-            # First turn: elevator stage
-            state = get_initial_state()
-            state["messages"] = [HumanMessage(content="开始产品设计")]
-            state["plan"] = [
-                {"id": "elevator", "name": "电梯演讲", "status": "pending"},
-                {"id": "persona", "name": "用户画像", "status": "pending"},
-            ]
-            state["current_stage_id"] = "elevator"
-
-            invoke_config = {"configurable": {"thread_id": "test-multi-stage-001"}}
-            result1 = await graph.ainvoke(state, config=invoke_config)
-
-            # Should have elevator artifact
-            assert ArtifactKeys.PRODUCT_ELEVATOR in result1["artifacts"]
-
-            # Second turn: persona stage
-            state2 = result1
-            state2["messages"].append(HumanMessage(content="继续"))
-            state2["current_stage_id"] = "persona"
-
-            result2 = await graph.ainvoke(state2, config=invoke_config)
-
-            # Should have both artifacts
-            assert ArtifactKeys.PRODUCT_ELEVATOR in result2["artifacts"]
-            assert ArtifactKeys.PRODUCT_PERSONA in result2["artifacts"]
+    async def test_invoke_returns_full_response(self):
+        config = {
+            "model_name": "deepseek-chat",
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key": "test-key"
+        }
+        
+        with patch('backend.agents.alex.agent.LlmAgent'), \
+             patch('backend.agents.alex.agent.Runner') as mock_runner_class, \
+             patch('backend.agents.alex.agent.InMemorySessionService') as mock_session_class:
+            
+            mock_session_service = MagicMock()
+            mock_session_service.get_session = AsyncMock(return_value=MagicMock())
+            mock_session_class.return_value = mock_session_service
+            
+            mock_event1 = MagicMock()
+            mock_part1 = MagicMock()
+            mock_part1.text = "Hello, "
+            mock_part1.function_call = None
+            mock_event1.content = MagicMock()
+            mock_event1.content.parts = [mock_part1]
+            
+            mock_event2 = MagicMock()
+            mock_part2 = MagicMock()
+            mock_part2.text = "I'm Alex"
+            mock_part2.function_call = None
+            mock_event2.content = MagicMock()
+            mock_event2.content.parts = [mock_part2]
+            
+            async def mock_run_async(*args, **kwargs):
+                yield mock_event1
+                yield mock_event2
+            
+            mock_runner = MagicMock()
+            mock_runner.run_async = mock_run_async
+            mock_runner_class.return_value = mock_runner
+            
+            runner = AlexAdkRunner(config)
+            runner._initialized_sessions.add("session-1")
+            
+            result = await runner.invoke("session-1", "Hello")
+            
+            assert result == "Hello, I'm Alex"
 
 
-@pytest.mark.asyncio
-class TestAlexErrorHandling:
-    """测试Alex错误处理"""
+class TestPromptsModule:
 
-    @patch('backend.agents.alex.graph.create_llm_from_config')
-    async def test_handles_llm_failure(self, mock_create_llm):
-        """应能处理LLM调用失败"""
-        mock_llm = MagicMock()
-        mock_llm.model.invoke.side_effect = Exception("LLM服务不可用")
+    def test_instruction_is_non_empty_string(self):
+        assert isinstance(LISA_V5_2_INSTRUCTION, str)
+        assert len(LISA_V5_2_INSTRUCTION) > 1000
 
-        with patch('backend.agents.alex.graph.create_llm_from_config', return_value=mock_llm):
-            config = {"model_name": "mock", "base_url": "", "api_key": ""}
-            graph = create_alex_graph(config)
-
-            state = get_initial_state()
-            state["messages"] = [HumanMessage(content="测试消息")]
-
-            invoke_config = {"configurable": {"thread_id": "test-error-001"}}
-            result = await graph.ainvoke(state, config=invoke_config)
-
-            assert len(result["messages"]) >= 2
-            last_message = result["messages"][-1]
-            assert isinstance(last_message, AIMessage)
-            assert "抱歉" in last_message.content or "问题" in last_message.content
-
-
-@pytest.mark.asyncio
-class TestAlexStateManagement:
-    """测试Alex状态管理"""
-
-    @patch('backend.agents.alex.graph.create_llm_from_config')
-    async def test_preserves_across_turns(self, mock_create_llm):
-        """状态应在多轮对话中保持"""
-        mock_llm = MagicMock()
-
-        mock_response = AIMessage(content='''```markdown
-# 内容
-产出物
-```''')
-        mock_llm.model.invoke.return_value = mock_response
-
-        with patch('backend.agents.alex.graph.create_llm_from_config', return_value=mock_llm):
-            config = {"model_name": "mock", "base_url": "", "api_key": ""}
-            graph = create_alex_graph(config)
-
-            # First turn
-            state = get_initial_state()
-            state["messages"] = [HumanMessage(content="开始")]
-            state["plan"] = [{"id": "elevator", "name": "电梯演讲", "status": "pending"}]
-            state["current_stage_id"] = "elevator"
-
-            invoke_config = {"configurable": {"thread_id": "test-state-001"}}
-            result1 = await graph.ainvoke(state, config=invoke_config)
-
-            # Second turn: state should be preserved
-            state2 = result1
-            state2["messages"].append(HumanMessage(content="继续"))
-
-            result2 = await graph.ainvoke(state2, config=invoke_config)
-
-            # Artifacts from first turn should still be there
-            assert ArtifactKeys.PRODUCT_ELEVATOR in result2["artifacts"]
-
-    @patch('backend.agents.alex.graph.create_llm_from_config')
-    async def test_workflow_type_persistence(self, mock_create_llm):
-        """工作流类型应保持不变"""
-        mock_llm = MagicMock()
-        mock_llm.model.invoke.return_value = AIMessage(content="回复")
-
-        with patch('backend.agents.alex.graph.create_llm_from_config', return_value=mock_llm):
-            config = {"model_name": "mock", "base_url": "", "api_key": ""}
-            graph = create_alex_graph(config)
-
-            state = get_initial_state()
-            state["messages"] = [HumanMessage(content="测试")]
-
-            invoke_config = {"configurable": {"thread_id": "test-workflow-001"}}
-            result = await graph.ainvoke(state, config=invoke_config)
-
-            # Should set and maintain workflow type
-            assert result["current_workflow"] == "product_design"
+    def test_tool_usage_prompt_exists(self):
+        assert isinstance(TOOL_USAGE_PROMPT, str)
+        assert "set_plan" in TOOL_USAGE_PROMPT
+        assert "update_stage" in TOOL_USAGE_PROMPT
+        assert "save_artifact" in TOOL_USAGE_PROMPT

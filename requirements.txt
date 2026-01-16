@@ -38,3 +38,7 @@ langchain-core>=1.0.0
 langchain-openai>=1.0.0
 langgraph>=1.0.0
 openai>=1.12.0
+
+# Google ADK (Agent Development Kit)
+google-adk>=0.5.0
+litellm>=1.40.0

@@ -54,8 +54,6 @@ WORKFLOW_TEST_DESIGN_SYSTEM = """
 ### 进度计划
 {plan_context}
 
-{plan_sync_instruction}
-
 ### 阶段与产出物 Key 映射
 
 | 阶段 | Key | 产出物名称 |
@@ -64,12 +62,6 @@ WORKFLOW_TEST_DESIGN_SYSTEM = """
 | strategy | `test_design_strategy` | 测试策略蓝图 |
 | cases | `test_design_cases` | 测试用例集 |
 | delivery | `test_design_final` | 测试设计文档 |
-
-### ⚠️ 产出物管理（核心规则）
-
-1. **所有文档内容存储在 JSON `artifacts` 中**，不要在自然语言回复中输出完整文档
-2. **每次用户回复后都要更新 artifacts**，将新确认的信息累积到 content 中
-3. **content 必须是完整文档**，不是增量片段
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -83,17 +75,15 @@ STAGE_CLARIFY_PROMPT = f"""
 通过"全景-聚焦"交互协议，消除用户需求中的所有模糊点。
 
 ### 执行步骤
-
 参考"全景-聚焦"交互协议中的步骤
 
-### 产出物
+### 产出物要求
 
 **Key**: `test_design_requirements`
 **Name**: 需求分析文档
 
 文档结构参考：
 {ARTIFACT_CLARIFY_REQUIREMENTS}
-
 
 """
 
@@ -204,7 +194,6 @@ def build_test_design_prompt(
         pending_clarifications=pending_clarifications,
         consensus_count=consensus_count,
         plan_context=plan_context,
-        plan_sync_instruction=plan_sync_instruction,
     )
     
     # 添加阶段特定 Prompt
@@ -217,4 +206,5 @@ def build_test_design_prompt(
     
     stage_prompt = stage_prompts.get(stage, STAGE_CLARIFY_PROMPT)
     
-    return f"{system}\n\n---\n\n{stage_prompt}"
+    # 结构化输出协议放在最末尾，LLM 对末尾指令记忆更强
+    return f"{system}\n\n---\n\n{stage_prompt}\n\n---\n\n{plan_sync_instruction}"

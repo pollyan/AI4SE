@@ -4,13 +4,18 @@ LangChain Assistant Service
 提供统一的服务接口。
 使用 LangChain V1 的 create_agent 实现。
 Lisa 智能体使用 LangGraph StateGraph 实现。
+Alex 智能体使用 Google ADK 实现。
 """
 
 import logging
 import json
 import re
-from typing import AsyncIterator, Optional, Dict, List, Any, Union
+from typing import AsyncIterator, Optional, Dict, List, Any, Union, TYPE_CHECKING
 from langchain_core.messages import HumanMessage, AIMessage
+
+if TYPE_CHECKING:
+    from langgraph.graph.state import CompiledStateGraph
+    from .alex.agent import AlexAdkRunner
 
 logger = logging.getLogger(__name__)
 
@@ -128,20 +133,17 @@ class LangchainAssistantService:
         logger.info(f"非流式处理消息 - 会话: {session_id}, 消息长度: {len(user_message)}")
 
         try:
-            # 构建消息
-            messages = self._build_messages(session_id, user_message)
+            if self.assistant_type == "alex":
+                ai_response = await self.agent.invoke(session_id, user_message)
+            else:
+                messages = self._build_messages(session_id, user_message)
+                result = await self.agent.ainvoke({"messages": messages})
+                ai_response = ""
+                if result and "messages" in result:
+                    last_message = result["messages"][-1]
+                    if hasattr(last_message, "content"):
+                        ai_response = last_message.content
             
-            # 调用 Agent (非流式)
-            result = await self.agent.ainvoke({"messages": messages})
-            
-            # 提取 AI 响应
-            ai_response = ""
-            if result and "messages" in result:
-                last_message = result["messages"][-1]
-                if hasattr(last_message, "content"):
-                    ai_response = last_message.content
-            
-            # 保存到会话历史
             self._add_to_history(session_id, "user", user_message)
             self._add_to_history(session_id, "assistant", ai_response)
 
@@ -179,10 +181,6 @@ class LangchainAssistantService:
             
         user_msg = messages[-1]['content']
         
-        # 构建消息
-        input_messages = [HumanMessage(content=user_msg)]
-        
-        # 记录测试开始（脱敏配置信息）
         config_info = {
             "model": self.config.get("model_name", "N/A") if self.config else "使用默认配置",
             "base_url": self.config.get("base_url", "N/A")[:50] + "..." if self.config else "N/A"
@@ -190,62 +188,57 @@ class LangchainAssistantService:
         logger.info(f"开始测试连接 - 配置: {config_info}")
         
         try:
-            # 添加 30 秒超时控制
-            # 需要提供 thread_id 配置，因为 LangGraph 使用了 Checkpointer
-            test_config = {"configurable": {"thread_id": "test-connection"}}
-            result = await asyncio.wait_for(
-                self.agent.ainvoke({"messages": input_messages}, config=test_config),
-                timeout=30.0
-            )
+            if self.assistant_type == "alex":
+                content = await asyncio.wait_for(
+                    self.agent.invoke("test-connection", user_msg),
+                    timeout=30.0
+                )
+            else:
+                input_messages = [HumanMessage(content=user_msg)]
+                test_config = {"configurable": {"thread_id": "test-connection"}}
+                result = await asyncio.wait_for(
+                    self.agent.ainvoke({"messages": input_messages}, config=test_config),
+                    timeout=30.0
+                )
+                content = ""
+                if result and "messages" in result:
+                    last_message = result["messages"][-1]
+                    if hasattr(last_message, "content"):
+                        content = last_message.content
             
-            # 提取响应
-            if result and "messages" in result:
-                last_message = result["messages"][-1]
-                if hasattr(last_message, "content"):
-                    content = last_message.content
-                    
-                    # 验证响应非空
-                    if not content or len(content.strip()) == 0:
-                        raise Exception("LLM 返回了空响应")
-                    
-                    # 验证响应不是常见的错误信息
-                    content_lower = content.lower()
-                    error_indicators = [
-                        "error", "错误", "failed", "失败",
-                        "invalid", "无效", "unauthorized", "未授权",
-                        "forbidden", "禁止", "not found", "找不到",
-                        "timeout", "超时", "quota", "配额",
-                        "rate limit", "限流", "insufficient", "余额不足"
-                    ]
-                    
-                    if any(indicator in content_lower for indicator in error_indicators):
-                        logger.warning(f"疑似错误响应: {content[:200]}")
-                        raise Exception(f"LLM 返回了错误响应: {content[:200]}")
-                    
-                    # 验证响应长度合理（至少应该有几个字符）
-                    if len(content.strip()) < 2:
-                        raise Exception(f"LLM 响应过短，疑似无效: '{content}'")
-                    
-                    logger.info(f"测试连接成功 - 响应长度: {len(content)} 字符")
-                    return content
+            if not content or len(content.strip()) == 0:
+                raise Exception("LLM 返回了空响应")
             
-            # 如果没有有效响应，抛出异常
-            raise Exception("LLM 未返回有效的消息格式")
+            content_lower = content.lower()
+            error_indicators = [
+                "error", "错误", "failed", "失败",
+                "invalid", "无效", "unauthorized", "未授权",
+                "forbidden", "禁止", "not found", "找不到",
+                "timeout", "超时", "quota", "配额",
+                "rate limit", "限流", "insufficient", "余额不足"
+            ]
+            
+            if any(indicator in content_lower for indicator in error_indicators):
+                logger.warning(f"疑似错误响应: {content[:200]}")
+                raise Exception(f"LLM 返回了错误响应: {content[:200]}")
+            
+            if len(content.strip()) < 2:
+                raise Exception(f"LLM 响应过短，疑似无效: '{content}'")
+            
+            logger.info(f"测试连接成功 - 响应长度: {len(content)} 字符")
+            return content
             
         except asyncio.TimeoutError:
             logger.error(f"测试连接超时（30秒）- 配置: {config_info}")
             raise Exception("连接超时：AI 服务在 30 秒内未响应，请检查网络连接和 Base URL 配置")
         except Exception as e:
-            # 记录详细错误信息并向上抛出
             error_type = type(e).__name__
             error_msg = str(e)
             logger.error(f"测试连接失败 [{error_type}]: {error_msg} - 配置: {config_info}")
             
-            # 如果是我们自己抛出的异常，直接向上传递
             if "LLM" in error_msg or "连接超时" in error_msg:
                 raise
             
-            # 对于其他异常，提供更友好的错误信息
             if "api" in error_msg.lower() and "key" in error_msg.lower():
                 raise Exception(f"API 密钥验证失败: {error_msg}")
             elif "connection" in error_msg.lower() or "网络" in error_msg:
@@ -284,10 +277,14 @@ class LangchainAssistantService:
         logger.info(f"流式处理消息 - 会话: {session_id}, 消息长度: {len(user_message)}")
         
         try:
-            # 所有智能体现在都使用 LangGraph 状态管理
-            # 统一使用 _stream_graph_message
-            async for chunk in self._stream_graph_message(session_id, user_message):
-                yield chunk
+            if self.assistant_type == "alex":
+                # Alex 使用 ADK Agent
+                async for chunk in self.agent.stream_message(session_id, user_message):
+                    yield chunk
+            else:
+                # Lisa 继续使用 LangGraph 状态管理
+                async for chunk in self._stream_graph_message(session_id, user_message):
+                    yield chunk
                     
         except Exception as e:
             logger.error(f"流式处理消息失败: {str(e)}")
