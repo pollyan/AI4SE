@@ -339,12 +339,49 @@ class LangchainAssistantService:
         async for chunk in self.agent.astream(
             {"messages": [HumanMessage(content=user_message)]},
             config=config,
-            stream_mode=["messages", "updates"]
+            stream_mode=["messages", "updates", "custom"]  # 添加 custom 模式接收 StreamWriter 数据
         ):
             if isinstance(chunk, tuple) and len(chunk) == 2:
                 mode, payload = chunk
                 
-                if mode == "updates":
+                # ════════════════════════════════════════════════════════════
+                # 处理 custom 模式 (来自 get_stream_writer)
+                # ════════════════════════════════════════════════════════════
+                if mode == "custom":
+                    if isinstance(payload, dict):
+                        data_type = payload.get("type")
+                        
+                        if data_type == "progress":
+                            # 直接使用 StreamWriter 发送的进度数据
+                            progress_data = payload.get("progress", {})
+                            current_state["plan"] = progress_data.get("stages", [])
+                            current_state["currentStageIndex"] = progress_data.get("currentStageIndex", 0)
+                            current_state["currentTask"] = progress_data.get("currentTask", "")
+                            
+                            from .shared.progress import get_progress_info
+                            progress_info = get_progress_info(current_state)
+                            if progress_info:
+                                yield {"type": "state", "progress": progress_info}
+                            logger.info(f"StreamWriter 进度: stage={progress_data.get('currentStageIndex')}")
+                        
+                        elif data_type == "artifact":
+                            # 处理 StreamWriter 发送的产出物数据
+                            artifact_data = payload.get("artifact", {})
+                            artifact_key = artifact_data.get("key")
+                            artifact_content = artifact_data.get("content")
+                            
+                            if artifact_key and artifact_content:
+                                if "artifacts" not in current_state:
+                                    current_state["artifacts"] = {}
+                                current_state["artifacts"][artifact_key] = artifact_content
+                                
+                                from .shared.progress import get_progress_info
+                                progress_info = get_progress_info(current_state)
+                                if progress_info:
+                                    yield {"type": "state", "progress": progress_info}
+                                logger.info(f"StreamWriter 产出物: {artifact_key}")
+                
+                elif mode == "updates":
                     for node_name, update_content in payload.items():
                         if isinstance(update_content, dict):
                             current_state.update(update_content)

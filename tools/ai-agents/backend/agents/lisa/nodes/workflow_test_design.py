@@ -5,9 +5,10 @@ Workflow Test Design Node - 测试设计工作流节点
 """
 
 import logging
-from typing import Any
+from typing import Any, List, Dict
 
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
+from langgraph.config import get_stream_writer
 
 from ..state import LisaState, ArtifactKeys
 from ..prompts.workflows import build_workflow_prompt
@@ -17,8 +18,53 @@ logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# 默认计划定义
+# ═══════════════════════════════════════════════════════════════════════════════
+
+DEFAULT_TEST_DESIGN_PLAN: List[Dict[str, str]] = [
+    {"id": "clarify", "name": "需求澄清", "status": "pending"},
+    {"id": "strategy", "name": "策略制定", "status": "pending"},
+    {"id": "cases", "name": "用例设计", "status": "pending"},
+    {"id": "delivery", "name": "文档交付", "status": "pending"},
+]
+
+DEFAULT_REQUIREMENT_REVIEW_PLAN: List[Dict[str, str]] = [
+    {"id": "clarify", "name": "需求澄清", "status": "pending"},
+    {"id": "analysis", "name": "需求分析", "status": "pending"},
+    {"id": "risk", "name": "风险评估", "status": "pending"},
+    {"id": "report", "name": "评审报告", "status": "pending"},
+]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # 辅助函数
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def get_default_plan(workflow_type: str) -> List[Dict[str, str]]:
+    """获取工作流的默认计划"""
+    if workflow_type == "requirement_review":
+        return [dict(s) for s in DEFAULT_REQUIREMENT_REVIEW_PLAN]
+    return [dict(s) for s in DEFAULT_TEST_DESIGN_PLAN]
+
+
+def get_stage_index(plan: List[Dict], stage_id: str) -> int:
+    """获取阶段在计划中的索引"""
+    for i, stage in enumerate(plan):
+        if stage.get("id") == stage_id:
+            return i
+    return 0
+
+
+def update_plan_status(plan: List[Dict], current_stage_id: str) -> None:
+    """更新计划中各阶段的状态"""
+    current_idx = get_stage_index(plan, current_stage_id)
+    for i, stage in enumerate(plan):
+        if i < current_idx:
+            stage["status"] = "completed"
+        elif i == current_idx:
+            stage["status"] = "active"
+        else:
+            stage["status"] = "pending"
 
 def determine_stage(state: LisaState, workflow_type: str) -> str:
     """
@@ -99,10 +145,14 @@ def extract_artifact_from_response(response: str, stage: str, workflow_type: str
 
 def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
     """
-    通用工作流执行节点 (原名 workflow_test_design_node)
+    通用工作流执行节点
     
     能够处理 test_design 和 requirement_review 两种工作流。
+    使用 get_stream_writer() 实时推送进度和产出物更新。
     """
+    # 获取 StreamWriter 用于实时推送进度
+    writer = get_stream_writer()
+    
     # 获取当前工作流类型，默认为 test_design
     workflow_type = state.get("current_workflow") or "test_design"
     logger.info(f"执行工作流: {workflow_type}")
@@ -113,6 +163,23 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
         current_stage = determine_stage(state, workflow_type)
     
     logger.info(f"当前阶段: {current_stage}")
+    
+    # 获取或初始化计划
+    plan = state.get("plan") or get_default_plan(workflow_type)
+    update_plan_status(plan, current_stage)
+    
+    # ════════════════════════════════════════════════════════════
+    # 📍 推送进度更新
+    # ════════════════════════════════════════════════════════════
+    writer({
+        "type": "progress",
+        "progress": {
+            "stages": plan,
+            "currentStageIndex": get_stage_index(plan, current_stage),
+            "currentTask": f"正在处理 {current_stage} 阶段..."
+        }
+    })
+    logger.info(f"StreamWriter 推送进度: stage={current_stage}")
     
     # 构建上下文
     artifacts = state.get("artifacts", {})
@@ -161,8 +228,20 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
         if artifact_key and artifact_content:
             new_artifacts[artifact_key] = artifact_content
             logger.info(f"提取产出物: {artifact_key} ({len(artifact_content)} 字符)")
+            
+            # ════════════════════════════════════════════════════════════
+            # 📍 推送产出物更新
+            # ════════════════════════════════════════════════════════════
+            writer({
+                "type": "artifact",
+                "artifact": {
+                    "key": artifact_key,
+                    "content": artifact_content
+                }
+            })
+            logger.info(f"StreamWriter 推送产出物: {artifact_key}")
         
-        # 返回更新后的状态
+        # 返回更新后的状态 (包含 plan)
         return {
             **state,
             "messages": new_messages,
