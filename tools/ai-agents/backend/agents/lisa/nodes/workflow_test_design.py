@@ -13,6 +13,13 @@ from langgraph.config import get_stream_writer
 from ..state import LisaState, ArtifactKeys
 from ..prompts.workflows import build_workflow_prompt
 from backend.agents.shared.artifact_summary import get_artifacts_summary
+from ..prompts.artifacts import (
+    ARTIFACT_CLARIFY_REQUIREMENTS,
+    ARTIFACT_STRATEGY_BLUEPRINT,
+    ARTIFACT_CASES_SET,
+    ARTIFACT_DELIVERY_FINAL,
+    ARTIFACT_REQ_REVIEW_RECORD
+)
 
 logger = logging.getLogger(__name__)
 
@@ -104,28 +111,38 @@ def determine_stage(state: LisaState, workflow_type: str) -> str:
             return "clarify"
 
 
-def extract_artifact_from_response(response: str, stage: str, workflow_type: str) -> tuple[str, str]:
-    """
-    从 LLM 响应中提取产出物
-    """
-    # 阶段对应的产出物 Key 映射
+def get_artifact_template(key: str) -> str:
+    """根据 Artifact Key 获取对应的 Markdown 模板"""
+    if key == ArtifactKeys.TEST_DESIGN_REQUIREMENTS: return ARTIFACT_CLARIFY_REQUIREMENTS
+    if key == ArtifactKeys.TEST_DESIGN_STRATEGY: return ARTIFACT_STRATEGY_BLUEPRINT
+    if key == ArtifactKeys.TEST_DESIGN_CASES: return ARTIFACT_CASES_SET
+    if key == ArtifactKeys.TEST_DESIGN_FINAL: return ARTIFACT_DELIVERY_FINAL
+    if key == ArtifactKeys.REQ_REVIEW_RECORD: return ARTIFACT_REQ_REVIEW_RECORD
+    return ""
+
+def get_artifact_key_for_stage(stage: str, workflow_type: str) -> str | None:
+    """获取阶段对应的产出物 Key"""
     if workflow_type == "requirement_review":
         stage_to_artifact = {
-            "clarify": None, # 澄清阶段通常无正式产出物，或者更新需求文档（暂不支持回写）
+            "clarify": ArtifactKeys.REQ_REVIEW_RECORD,
             "analysis": ArtifactKeys.REQ_REVIEW_RECORD,
             "risk": ArtifactKeys.REQ_REVIEW_RISK,
             "report": ArtifactKeys.REQ_REVIEW_REPORT,
         }
     else:
-        # test_design
         stage_to_artifact = {
             "clarify": ArtifactKeys.TEST_DESIGN_REQUIREMENTS,
             "strategy": ArtifactKeys.TEST_DESIGN_STRATEGY,
             "cases": ArtifactKeys.TEST_DESIGN_CASES,
             "delivery": ArtifactKeys.TEST_DESIGN_FINAL,
         }
-    
-    artifact_key = stage_to_artifact.get(stage)
+    return stage_to_artifact.get(stage)
+
+def extract_artifact_from_response(response: str, stage: str, workflow_type: str) -> tuple[str, str]:
+    """
+    从 LLM 响应中提取产出物
+    """
+    artifact_key = get_artifact_key_for_stage(stage, workflow_type)
     if not artifact_key:
         return None, None
     
@@ -181,6 +198,33 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
     })
     logger.info(f"StreamWriter 推送进度: stage={current_stage}")
     
+    # ════════════════════════════════════════════════════════════
+    # 📍 自动初始化产出物模板
+    # ════════════════════════════════════════════════════════════
+    target_artifact_key = get_artifact_key_for_stage(current_stage, workflow_type)
+    
+    if target_artifact_key:
+        current_artifacts = state.get("artifacts", {})
+        if target_artifact_key not in current_artifacts:
+            # 1. 获取模板
+            template = get_artifact_template(target_artifact_key)
+            if template:
+                # 2. 推送初始化事件 (作为 Progress 事件)
+                # 构造临时 artifacts 字典用于前端展示
+                display_artifacts = current_artifacts.copy()
+                display_artifacts[target_artifact_key] = template
+                
+                writer({
+                    "type": "progress",
+                    "progress": {
+                        "stages": plan,
+                        "currentStageIndex": get_stage_index(plan, current_stage),
+                        "currentTask": f"正在处理 {current_stage} 阶段...",
+                        "artifacts": display_artifacts
+                    }
+                })
+                logger.info(f"StreamWriter 初始化模板: {target_artifact_key}")
+    
     # 构建上下文
     artifacts = state.get("artifacts", {})
     artifacts_summary = get_artifacts_summary(artifacts)
@@ -233,10 +277,12 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
             # 📍 推送产出物更新
             # ════════════════════════════════════════════════════════════
             writer({
-                "type": "artifact",
-                "artifact": {
-                    "key": artifact_key,
-                    "content": artifact_content
+                "type": "progress",
+                "progress": {
+                    "stages": plan,
+                    "currentStageIndex": get_stage_index(plan, current_stage),
+                    "currentTask": f"正在处理 {current_stage} 阶段...",
+                    "artifacts": new_artifacts
                 }
             })
             logger.info(f"StreamWriter 推送产出物: {artifact_key}")

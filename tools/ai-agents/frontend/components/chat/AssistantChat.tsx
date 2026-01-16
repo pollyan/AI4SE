@@ -300,7 +300,8 @@ function useChatState(assistantId: AssistantId, onProgressChange?: (progress: Pr
                     filename: a.filename,
                     size: a.size,
                     content: `File: ${a.filename}`, // 简化处理
-                    type: 'text/plain'
+                    type: 'text/plain',
+                    file: new File([], a.filename)
                 })))
                 : userText;
 
@@ -527,7 +528,7 @@ function CustomAssistantMessage({ assistant }: { assistant: Assistant }) {
             </div>
             <div className="flex flex-col max-w-[85%] items-start">
                 <div className="px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-200 dark:border-gray-700">
-                    <MessagePrimitive.Content components={{ Text: MarkdownText }} />
+                    <MessagePrimitive.Content components={{ Text: MarkdownText as any }} />
                     {isInProgress && hasNoContent && <TypingIndicator />}
                 </div>
 
