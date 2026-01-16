@@ -14,7 +14,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-from .prompts import LISA_V5_2_INSTRUCTION, TOOL_USAGE_PROMPT
+from .prompts import LISA_V5_2_INSTRUCTION
 from .tools import ALEX_TOOLS
 from .state_manager import AlexStateManager
 
@@ -44,7 +44,7 @@ def create_alex_agent(model_config: Dict[str, str]) -> LlmAgent:
     )
 
     # 组合完整的 instruction
-    full_instruction = LISA_V5_2_INSTRUCTION + "\n\n" + TOOL_USAGE_PROMPT
+    full_instruction = LISA_V5_2_INSTRUCTION
 
     agent = LlmAgent(
         name="alex",
