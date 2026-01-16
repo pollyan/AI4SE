@@ -147,14 +147,45 @@ def extract_artifact_from_response(response: str, stage: str, workflow_type: str
         return None, None
     
     # 简单的产出物提取逻辑：查找 Markdown 代码块
-    if "```markdown" in response:
-        start = response.find("```markdown") + 11
-        end = response.find("```", start)
-        if end > start:
-            return artifact_key, response[start:end].strip()
+    # 增强逻辑：支持带有或不带 markdown 标识的代码块
+    import re
     
+    # 匹配最后一个 markdown 代码块
+    # pattern: ```(markdown)? ...content... ```
+    # 使用 DOTALL 匹配跨行
+    matches = list(re.finditer(r'```(?:markdown)?\s*\n(.*?)```', response, re.DOTALL))
+    
+    if matches:
+        # 取最后一个代码块
+        last_match = matches[-1]
+        content = last_match.group(1).strip()
+        
+        # 简单验证内容是否像产出物 (以 # 开头)
+        if content.startswith("#"):
+            return artifact_key, content
+            
     return None, None
 
+
+def strip_artifact_block(response: str) -> str:
+    """
+    移除响应中的产出物代码块（用于显示）
+    """
+    import re
+    # 移除最后一个 md 代码块，如果它看起来像产出物
+    matches = list(re.finditer(r'```(?:markdown)?\s*\n(.*?)```', response, re.DOTALL))
+    
+    if matches:
+        last_match = matches[-1]
+        content = last_match.group(1).strip()
+        
+        # 如果是产出物 (以 # 开头)，则移除整个块
+        if content.startswith("#"):
+            start, end = last_match.span()
+            # 移除该块以及块之前的空白字符
+            return (response[:start] + response[end:]).strip()
+            
+    return response
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 主节点
@@ -260,18 +291,26 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
     try:
         response = llm.model.invoke(messages)
         response_content = response.content
-        ai_message = AIMessage(content=response_content)
         
-        # 更新消息历史
-        new_messages = list(state.get("messages", []))
-        new_messages.append(ai_message)
-        
+        # DEBUG LOGGING
+        logger.info(f"LLM Response Content Length: {len(response_content)}")
+        if len(response_content) > 500:
+            logger.info(f"LLM Response tail (500 chars): {response_content[-500:]}")
+        else:
+            logger.info(f"LLM Response full: {response_content}")
+            
         # 尝试提取产出物
         new_artifacts = dict(artifacts)
         artifact_key, artifact_content = extract_artifact_from_response(response_content, current_stage, workflow_type)
+        
+        logger.info(f"Extraction Result - Key: {artifact_key}, Content Found: {bool(artifact_content)}")
+        
+        # 决定显示给用户的内容 (移除产出物代码块)
+        display_content = response_content
         if artifact_key and artifact_content:
             new_artifacts[artifact_key] = artifact_content
             logger.info(f"提取产出物: {artifact_key} ({len(artifact_content)} 字符)")
+            display_content = strip_artifact_block(response_content)
             
             # ════════════════════════════════════════════════════════════
             # 📍 推送产出物更新
@@ -286,6 +325,12 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
                 }
             })
             logger.info(f"StreamWriter 推送产出物: {artifact_key}")
+            
+        ai_message = AIMessage(content=display_content)
+        
+        # 更新消息历史
+        new_messages = list(state.get("messages", []))
+        new_messages.append(ai_message)
         
         # 返回更新后的状态 (包含 plan)
         return {
