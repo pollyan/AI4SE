@@ -37,7 +37,7 @@ class StageDefinition(BaseModel):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def set_plan(stages: List[dict]) -> str:
-    """设置工作流计划及各阶段产出物模板。在确定用户意图后调用。
+    """设置工作流计划及各阶段产出物模板。在确定用户意图后立即调用。
     
     Args:
         stages: 阶段列表，每个阶段包含:
@@ -46,12 +46,18 @@ def set_plan(stages: List[dict]) -> str:
             - artifact_key: 该阶段产出物的键 (可选)
             - artifact_name: 该阶段产出物的名称 (可选)
             
-    示例:
+    示例 (测试用例设计工作流):
         set_plan([
-            {"id": "clarify", "name": "需求澄清", "artifact_key": "req_doc", "artifact_name": "需求分析文档"},
-            {"id": "strategy", "name": "策略制定", "artifact_key": "strategy_doc", "artifact_name": "测试策略蓝图"},
-            {"id": "cases", "name": "用例设计", "artifact_key": "test_cases", "artifact_name": "测试用例集"},
-            {"id": "delivery", "name": "文档交付", "artifact_key": "final_doc", "artifact_name": "最终交付文档"}
+            {"id": "clarify", "name": "需求澄清", "artifact_key": "test_design_requirements", "artifact_name": "需求分析文档"},
+            {"id": "strategy", "name": "策略制定", "artifact_key": "test_design_strategy", "artifact_name": "测试策略蓝图"},
+            {"id": "cases", "name": "用例设计", "artifact_key": "test_design_cases", "artifact_name": "测试用例集"},
+            {"id": "delivery", "name": "文档交付", "artifact_key": "test_design_final", "artifact_name": "测试设计文档"}
+        ])
+    
+    示例 (需求评审工作流):
+        set_plan([
+            {"id": "understand", "name": "业务对齐"},
+            {"id": "review", "name": "深度评审", "artifact_key": "requirement_review_report", "artifact_name": "需求评审报告"}
         ])
     
     Returns:
@@ -63,15 +69,19 @@ def set_plan(stages: List[dict]) -> str:
 
 
 def update_stage(stage_id: str, status: str) -> str:
-    """更新阶段状态。开始新阶段时设为 'active'，阶段完成时设为 'completed'。
+    """更新阶段状态。用户确认阶段产出物后，调用此工具将阶段设为 'completed'。
+    
+    重要说明:
+    - 第一个阶段在 set_plan 时自动设为 'active'，无需手动调用
+    - 调用 'completed' 后，系统会自动将下一个阶段设为 'active'
+    - 因此通常只需要调用 update_stage(stage_id, 'completed')
     
     Args:
         stage_id: 要更新的阶段 ID
-        status: 新状态，必须是 'active' 或 'completed'
+        status: 新状态，通常为 'completed'
         
     示例:
         update_stage("clarify", "completed")  # 需求澄清阶段完成
-        update_stage("strategy", "active")    # 开始策略制定阶段
     
     Returns:
         确认消息
@@ -80,7 +90,12 @@ def update_stage(stage_id: str, status: str) -> str:
 
 
 def save_artifact(key: str, content: str) -> str:
-    """保存产出物文档。在生成完整的文档内容后调用。
+    """保存产出物文档。在用户确认产出物内容后调用。
+    
+    重要规则:
+    - content 必须是完整的 Markdown 文档，不是摘要
+    - 包含所有与用户达成共识的内容
+    - 文档结构清晰，便于后续阅读
     
     Args:
         key: 产出物唯一键，必须与 set_plan 中定义的 artifact_key 匹配
@@ -88,7 +103,7 @@ def save_artifact(key: str, content: str) -> str:
         
     示例:
         save_artifact(
-            key="req_doc",
+            key="test_design_requirements",
             content="# 需求分析文档\\n\\n## 1. 功能概述\\n..."
         )
     
