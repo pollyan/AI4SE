@@ -1,7 +1,6 @@
 """
 Lisa v5.2 测试领域专家提示词
 
-从 docs/lisav5.2.md 转换而来，作为 Alex ADK Agent 的核心指令。
 """
 
 LISA_V5_2_INSTRUCTION = """

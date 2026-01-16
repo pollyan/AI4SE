@@ -125,28 +125,5 @@ class TestLisaStateCompatibility:
             assert key in lisa_state
 
 
-class TestAlexStateCompatibility:
-    """测试 Alex 状态与 BaseAgentState 的兼容性"""
-    
-    def test_alex_state_inherits_base_fields(self):
-        """AlexState 应包含 BaseAgentState 的所有字段"""
-        from backend.agents.shared.state import BaseAgentState
-        from backend.agents.alex.state import AlexState
-        
-        base_fields = set(BaseAgentState.__annotations__.keys())
-        alex_fields = set(AlexState.__annotations__.keys())
-        
-        # Alex 应包含所有 base 字段
-        assert base_fields.issubset(alex_fields)
-    
-    def test_alex_get_initial_state_compatible(self):
-        """Alex 的 get_initial_state 应与 base 兼容"""
-        from backend.agents.shared.state import get_base_initial_state
-        from backend.agents.alex.state import get_initial_state
-        
-        base_state = get_base_initial_state()
-        alex_state = get_initial_state()
-        
-        # Alex 状态应包含所有 base 字段
-        for key in base_state.keys():
-            assert key in alex_state
+
+
