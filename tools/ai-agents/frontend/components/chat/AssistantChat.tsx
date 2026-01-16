@@ -11,6 +11,7 @@ import {
     MessagePrimitive,
     useMessage,
     ActionBarPrimitive,
+    useComposerRuntime,
 } from '@assistant-ui/react';
 import type {
     ExternalStoreAdapter,
@@ -434,32 +435,86 @@ export function AssistantChat({ assistant, onBack, onProgressChange }: Assistant
                     </ThreadPrimitive.Viewport>
 
                     {/* Composer */}
-                    <div className="p-4 border-t border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/30 shrink-0">
-                        {/* 附件列表 */}
-                        <AttachmentList
-                            attachments={pendingAttachments}
-                            onRemove={removeAttachment}
-                        />
-
-                        <ComposerPrimitive.Root className="relative flex items-center gap-2">
-                            <ComposerPrimitive.Input
-                                autoFocus
-                                placeholder="请输入..."
-                                className="flex-grow pl-4 pr-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-sm shadow-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
-                            />
-                            {/* 附件按钮 - 在输入框和发送按钮之间 */}
-                            <AttachmentButton
-                                onFilesSelected={handleFilesSelected}
-                                disabled={isRunning}
-                            />
-                            <ComposerPrimitive.Send className="p-3 rounded-full shadow-sm transition-colors flex items-center justify-center bg-primary hover:bg-indigo-600 text-white cursor-pointer disabled:bg-gray-200 disabled:dark:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed">
-                                <Send size={20} />
-                            </ComposerPrimitive.Send>
-                        </ComposerPrimitive.Root>
-                    </div>
+                    <CustomComposer
+                        pendingAttachments={pendingAttachments}
+                        removeAttachment={removeAttachment}
+                        handleFilesSelected={handleFilesSelected}
+                        isRunning={isRunning}
+                    />
                 </ThreadPrimitive.Root>
             </div>
         </AssistantRuntimeProvider>
+    );
+}
+
+// 为 window 对象添加 assistantComposer 类型声明
+declare global {
+    interface Window {
+        assistantComposer?: {
+            setText: (text: string) => void;
+            send: () => void;
+            getText: () => string;
+        };
+    }
+}
+
+// 自定义 Composer 组件 - 暴露编程式 API 供浏览器自动化使用
+interface CustomComposerProps {
+    pendingAttachments: PendingAttachment[];
+    removeAttachment: (id: string) => void;
+    handleFilesSelected: (files: File[]) => Promise<void>;
+    isRunning: boolean;
+}
+
+function CustomComposer({ pendingAttachments, removeAttachment, handleFilesSelected, isRunning }: CustomComposerProps) {
+    const composerRuntime = useComposerRuntime();
+
+    // 将 composer 方法暴露到 window 对象供浏览器自动化使用
+    useEffect(() => {
+        window.assistantComposer = {
+            setText: (text: string) => {
+                composerRuntime.setText(text);
+            },
+            send: () => {
+                composerRuntime.send();
+            },
+            getText: () => {
+                return composerRuntime.getState().text;
+            },
+        };
+
+        return () => {
+            delete window.assistantComposer;
+        };
+    }, [composerRuntime]);
+
+    return (
+        <div className="p-4 border-t border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/30 shrink-0">
+            {/* 附件列表 */}
+            <AttachmentList
+                attachments={pendingAttachments}
+                onRemove={removeAttachment}
+            />
+
+            <ComposerPrimitive.Root className="relative flex items-center gap-2">
+                <ComposerPrimitive.Input
+                    autoFocus
+                    placeholder="请输入..."
+                    className="flex-grow pl-4 pr-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-sm shadow-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                {/* 附件按钮 - 在输入框和发送按钮之间 */}
+                <AttachmentButton
+                    onFilesSelected={handleFilesSelected}
+                    disabled={isRunning}
+                />
+                <ComposerPrimitive.Send
+                    id="send-button"
+                    aria-label="发送消息"
+                    className="p-3 rounded-full shadow-sm transition-colors flex items-center justify-center bg-primary hover:bg-indigo-600 text-white cursor-pointer disabled:bg-gray-200 disabled:dark:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed">
+                    <Send size={20} />
+                </ComposerPrimitive.Send>
+            </ComposerPrimitive.Root>
+        </div>
     );
 }
 
