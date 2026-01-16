@@ -7,13 +7,20 @@ Alex 智能体状态管理器
 状态结构:
 - plan: 阶段计划列表
 - current_stage_id: 当前活跃阶段
-- artifact_templates: 产出物模板列表
+- current_task: 当前细粒度任务
 - artifacts: 已生成的产出物内容
 """
 
 import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
+
+from .templates import (
+    get_template,
+    get_template_by_stage,
+    render_template_skeleton,
+    update_section_content,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,19 +29,19 @@ logger = logging.getLogger(__name__)
 class AlexSessionState:
     """单个会话的状态"""
     
-    # 阶段计划: [{"id": "clarify", "name": "需求澄清", "status": "active"}]
-    plan: List[Dict[str, str]] = field(default_factory=list)
+    # 阶段计划: [{"id": "clarify", "name": "需求澄清", "status": "active", "artifact_key": "...", "artifact_name": "..."}]
+    plan: List[Dict[str, Any]] = field(default_factory=list)
     
     # 当前活跃阶段 ID
     current_stage_id: str = ""
     
+    # 上一次的阶段 ID (用于检测阶段切换)
+    _last_stage_id: str = ""
+    
     # 当前细粒度任务描述 (如 "正在分析需求...", "正在生成用例...")
     current_task: str = ""
     
-    # 产出物模板: [{"stage_id": "clarify", "artifact_key": "req_doc", "name": "需求分析文档"}]
-    artifact_templates: List[Dict[str, str]] = field(default_factory=list)
-    
-    # 产出物内容: {"req_doc": "# 需求分析文档\n..."}
+    # 产出物内容: {"test_design_requirements": "# 需求分析文档\n..."}
     artifacts: Dict[str, str] = field(default_factory=dict)
 
 
@@ -61,148 +68,156 @@ class AlexStateManager:
     # Tool 处理函数
     # ═══════════════════════════════════════════════════════════════════════════
     
-    def handle_set_plan(self, session_id: str, stages: List[Dict[str, Any]]) -> None:
+    def handle_update_progress(self, session_id: str, stages: List[Any], 
+                                current_stage_id: str, current_task: str) -> None:
         """
-        处理 set_plan Tool 调用
+        处理 update_progress Tool 调用
         
-        设置工作流计划和产出物模板，第一个阶段自动设为 active。
-        
-        Args:
-            session_id: 会话 ID
-            stages: 阶段列表，每个阶段包含 id, name, artifact_key?, artifact_name?
+        全量更新工作流状态。当阶段切换时，自动初始化新阶段的产出物模板。
         """
+        import json
         state = self.get_state(session_id)
         
-        # 重置状态
-        state.plan = []
-        state.artifact_templates = []
-        state.plan = []
-        state.artifact_templates = []
-        state.current_stage_id = ""
-        state.current_task = ""
+        # 预处理: 如果 stages 是 JSON 字符串，尝试解析
+        if isinstance(stages, str):
+            try:
+                parsed = json.loads(stages)
+                if isinstance(parsed, list):
+                    stages = parsed
+                else:
+                    logger.warning(f"stages 解析后不是列表: {type(parsed)}")
+            except json.JSONDecodeError:
+                logger.warning(f"stages 字符串无法解析为 JSON: {stages[:100]}...")
         
-        if not stages:
-            logger.warning(f"set_plan 收到空的 stages 列表: {session_id}")
+        # 验证并清洗 stages 数据
+        valid_stages = []
+        if isinstance(stages, list):
+            for i, stage in enumerate(stages):
+                if isinstance(stage, dict):
+                    s_id = stage.get("id") or stage.get("stage_id")
+                    s_name = stage.get("name") or stage.get("stage_name") or s_id
+                    s_status = stage.get("status")
+                    
+                    if s_id:
+                        valid_stages.append({
+                            "id": str(s_id),
+                            "name": str(s_name),
+                            "status": str(s_status) if s_status else ("active" if i == 0 else "pending"),
+                            "artifact_key": stage.get("artifact_key"),
+                            "artifact_name": stage.get("artifact_name")
+                        })
+                    else:
+                        logger.warning(f"Stage 缺少 id 字段: {stage}")
+                        
+                elif isinstance(stage, str) and stage.strip():
+                    valid_stages.append({
+                        "id": stage.strip(),
+                        "name": stage.strip(),
+                        "status": "active" if i == 0 else "pending"
+                    })
+                else:
+                    logger.warning(f"忽略无效的 stage 数据类型: {type(stage)}")
+        else:
+            logger.warning(f"stages 参数格式错误 (期望 List, 实际 {type(stages)})")
+        
+        # 兜底策略
+        if not valid_stages and state.plan:
+            logger.warning("本次 update_progress 未解析出有效 stages，保留原有 plan，仅更新 task")
+            state.current_stage_id = current_stage_id or state.current_stage_id
+            state.current_task = current_task or state.current_task
             return
+
+        # 更新状态
+        if valid_stages:
+            state.plan = valid_stages
+            
+        old_stage_id = state._last_stage_id
+        state.current_stage_id = current_stage_id
+        state.current_task = current_task
         
-        for i, stage in enumerate(stages):
-            stage_id = stage.get("id", "")
-            stage_name = stage.get("name", "")
-            
-            if not stage_id or not stage_name:
-                logger.warning(f"跳过无效阶段: {stage}")
-                continue
-            
-            # 添加阶段（第一个为 active，其余为 pending）
-            status = "active" if i == 0 else "pending"
-            state.plan.append({
-                "id": stage_id,
-                "name": stage_name,
-                "status": status
-            })
-            
-            # 添加产出物模板（如果有）
-            artifact_key = stage.get("artifact_key")
-            artifact_name = stage.get("artifact_name")
-            if artifact_key:
-                state.artifact_templates.append({
-                    "stage_id": stage_id,
-                    "artifact_key": artifact_key,
-                    "name": artifact_name or artifact_key
-                })
-        
-        # 设置当前阶段
-        if state.plan:
-            state.current_stage_id = state.plan[0]["id"]
+        # ─────────────────────────────────────────────────────────────────────────
+        # 阶段切换检测：自动初始化产出物模板
+        # ─────────────────────────────────────────────────────────────────────────
+        if current_stage_id and current_stage_id != old_stage_id:
+            self._initialize_stage_artifact(session_id, current_stage_id, state)
+            state._last_stage_id = current_stage_id
         
         logger.info(
-            f"set_plan 完成: {session_id}, "
-            f"{len(state.plan)} 个阶段, "
-            f"{len(state.artifact_templates)} 个产出物模板"
+            f"update_progress 完成: {session_id}, "
+            f"阶段数={len(state.plan)}, 当前阶段={state.current_stage_id}, 任务={state.current_task}"
         )
-    
-    def handle_update_stage(self, session_id: str, stage_id: str, status: str) -> None:
+
+    def _initialize_stage_artifact(self, session_id: str, stage_id: str, state: AlexSessionState) -> None:
         """
-        处理 update_stage Tool 调用
-        
-        更新阶段状态。如果设为 completed，自动激活下一个阶段。
-        
-        Args:
-            session_id: 会话 ID
-            stage_id: 阶段 ID
-            status: 新状态 ('active' 或 'completed')
+        当进入新阶段时，自动初始化该阶段的产出物为模板骨架
         """
-        state = self.get_state(session_id)
-        
-        if not state.plan:
-            logger.warning(f"update_stage 失败，plan 为空: {session_id}")
-            return
-        
-        # 查找阶段并更新
-        stage_index = -1
-        for i, stage in enumerate(state.plan):
+        # 从 plan 中找到该阶段的 artifact_key
+        artifact_key = None
+        for stage in state.plan:
             if stage["id"] == stage_id:
-                stage["status"] = status
-                stage_index = i
-                
-                if status == "active":
-                    state.current_stage_id = stage_id
+                artifact_key = stage.get("artifact_key")
                 break
         
-        if stage_index == -1:
-            logger.warning(f"update_stage 失败，未找到阶段: {stage_id}")
+        if not artifact_key:
+            # 尝试通过 stage_id 从模板定义中获取
+            template_info = get_template_by_stage(stage_id)
+            if template_info:
+                artifact_key = template_info.get("artifact_key")
+        
+        if not artifact_key:
+            logger.debug(f"阶段 {stage_id} 没有关联的产出物模板")
             return
         
-        # 如果设为 completed，自动激活下一个阶段
-        if status == "completed" and stage_index + 1 < len(state.plan):
-            next_stage = state.plan[stage_index + 1]
-            next_stage["status"] = "active"
-            state.current_stage_id = next_stage["id"]
-            logger.debug(f"自动激活下一阶段: {next_stage['id']}")
+        # 如果该产出物已经存在内容，不覆盖
+        if artifact_key in state.artifacts and state.artifacts[artifact_key]:
+            logger.debug(f"产出物 {artifact_key} 已存在内容，跳过初始化")
+            return
         
-        logger.info(f"update_stage 完成: {session_id}, {stage_id} -> {status}")
-    
-    def handle_save_artifact(self, session_id: str, key: str, content: str) -> None:
+        # 渲染模板骨架
+        skeleton = render_template_skeleton(artifact_key)
+        if skeleton:
+            state.artifacts[artifact_key] = skeleton
+            logger.info(f"自动初始化产出物模板: {artifact_key} (阶段: {stage_id})")
+        else:
+            logger.warning(f"未找到产出物模板定义: {artifact_key}")
+
+    def handle_update_artifact(self, session_id: str, artifact_key: str, 
+                                section_id: str, content: str) -> None:
         """
-        处理 save_artifact Tool 调用
+        处理 update_artifact Tool 调用
         
-        保存产出物内容。
+        按章节更新产出物内容（全量替换指定章节）。
         
         Args:
             session_id: 会话 ID
-            key: 产出物键（需与 artifact_templates 中的 artifact_key 匹配）
-            content: 产出物内容（Markdown 格式）
+            artifact_key: 产出物唯一标识
+            section_id: 要更新的章节 ID
+            content: 该章节的完整内容
         """
         state = self.get_state(session_id)
         
-        if not key:
-            logger.warning(f"save_artifact 失败，key 为空: {session_id}")
-            return
+        # 如果产出物不存在，先初始化模板
+        if artifact_key not in state.artifacts:
+            skeleton = render_template_skeleton(artifact_key)
+            if skeleton:
+                state.artifacts[artifact_key] = skeleton
+            else:
+                # 没有模板定义，直接存储内容
+                state.artifacts[artifact_key] = content
+                logger.info(f"update_artifact 完成 (无模板): {artifact_key}")
+                return
         
-        state.artifacts[key] = content or ""
-        
-        logger.info(
-            f"save_artifact 完成: {session_id}, "
-            f"key={key}, 内容长度={len(content or '')} 字符"
+        # 更新指定章节
+        current_content = state.artifacts[artifact_key]
+        updated_content = update_section_content(
+            current_content, artifact_key, section_id, content
         )
-    
-    def handle_update_task(self, session_id: str, task_name: str) -> None:
-        """
-        处理 update_task Tool 调用
         
-        更新当前细粒度任务描述。
-        
-        Args:
-            session_id: 会话 ID
-            task_name: 任务名称
-        """
-        state = self.get_state(session_id)
-        
-        if not task_name:
-            return
-            
-        state.current_task = task_name
-        logger.info(f"update_task 完成: {session_id}, task='{task_name}'")
+        if updated_content:
+            state.artifacts[artifact_key] = updated_content
+            logger.info(f"update_artifact 完成: {artifact_key}.{section_id}")
+        else:
+            logger.warning(f"章节更新失败: {artifact_key}.{section_id}")
     
     # ═══════════════════════════════════════════════════════════════════════════
     # 生成前端 ProgressInfo
@@ -211,23 +226,6 @@ class AlexStateManager:
     def get_progress_info(self, session_id: str) -> Optional[Dict[str, Any]]:
         """
         生成前端 ProgressInfo 格式
-        
-        Args:
-            session_id: 会话 ID
-            
-        Returns:
-            ProgressInfo 字典，如果 plan 为空则返回 None
-            格式: {
-                "stages": [{id, name, status}],
-                "currentStageIndex": int,
-                "currentTask": str,
-                "artifactProgress": {
-                    "template": [{stageId, artifactKey, name}],
-                    "completed": [artifact_key],
-                    "generating": artifact_key | null
-                },
-                "artifacts": {key: content}
-            }
         """
         state = self.get_state(session_id)
         
@@ -241,40 +239,39 @@ class AlexStateManager:
                 current_index = i
                 break
         
-        # 构建 currentTask
-        current_task = "处理中..."
-        if state.current_task:
-            # 优先使用细粒度任务描述
-            current_task = state.current_task
-        elif 0 <= current_index < len(state.plan):
-            # 回退到默认的阶段描述
-            stage_name = state.plan[current_index]["name"]
-            current_task = f"正在{stage_name}..."
-        
-        # 构建 artifactProgress
-        completed_keys = list(state.artifacts.keys())
-        
-        # 正在生成的产出物 = 当前阶段的模板中未完成的
+        # 从 plan 中提取产出物模板信息
+        artifact_templates = []
         generating_key = None
-        for tmpl in state.artifact_templates:
-            if tmpl["stage_id"] == state.current_stage_id:
-                if tmpl["artifact_key"] not in state.artifacts:
-                    generating_key = tmpl["artifact_key"]
-                    break
+        
+        for stage in state.plan:
+            if stage.get("artifact_key"):
+                tmpl = {
+                    "stageId": stage["id"],
+                    "artifactKey": stage["artifact_key"],
+                    "name": stage.get("artifact_name") or stage["artifact_key"]
+                }
+                artifact_templates.append(tmpl)
+                
+                # 判断是否正在生成
+                if stage["id"] == state.current_stage_id:
+                    artifact_key = stage["artifact_key"]
+                    # 检查是否还有 placeholder 内容 (表示未完成)
+                    if artifact_key in state.artifacts:
+                        content = state.artifacts[artifact_key]
+                        if "*待" in content or "*暂无*" in content:
+                            generating_key = artifact_key
+
+        completed_keys = [
+            k for k, v in state.artifacts.items() 
+            if v and "*待" not in v and "*暂无*" not in v
+        ]
         
         return {
             "stages": state.plan,
             "currentStageIndex": current_index,
-            "currentTask": current_task,
+            "currentTask": state.current_task or "处理中...",
             "artifactProgress": {
-                "template": [
-                    {
-                        "stageId": t["stage_id"],
-                        "artifactKey": t["artifact_key"],
-                        "name": t["name"]
-                    }
-                    for t in state.artifact_templates
-                ],
+                "template": artifact_templates,
                 "completed": completed_keys,
                 "generating": generating_key
             },

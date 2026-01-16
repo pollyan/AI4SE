@@ -6,7 +6,10 @@ Alex ADK Agent 实现
 """
 
 import logging
+import os
 from typing import AsyncIterator, Dict, Any, Union, Optional
+
+from langsmith import traceable
 
 from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
@@ -123,21 +126,22 @@ class AlexAdkRunner:
             是否需要发送 state 事件
         """
         try:
-            if tool_name == "set_plan":
-                stages = tool_args.get("stages", [])
-                self.state_manager.handle_set_plan(session_id, stages)
+            if tool_name == "update_progress":
+                self.state_manager.handle_update_progress(
+                    session_id,
+                    stages=tool_args.get("stages", []),
+                    current_stage_id=tool_args.get("current_stage_id", ""),
+                    current_task=tool_args.get("current_task", "")
+                )
                 return True
                 
-            elif tool_name == "update_stage":
-                stage_id = tool_args.get("stage_id", "")
-                status = tool_args.get("status", "")
-                self.state_manager.handle_update_stage(session_id, stage_id, status)
-                return True
-                
-            elif tool_name == "save_artifact":
-                key = tool_args.get("key", "")
-                content = tool_args.get("content", "")
-                self.state_manager.handle_save_artifact(session_id, key, content)
+            elif tool_name == "update_artifact":
+                self.state_manager.handle_update_artifact(
+                    session_id,
+                    artifact_key=tool_args.get("artifact_key", ""),
+                    section_id=tool_args.get("section_id", ""),
+                    content=tool_args.get("content", "")
+                )
                 return True
                 
             else:
@@ -148,6 +152,7 @@ class AlexAdkRunner:
             logger.error(f"处理 Tool 调用失败: {tool_name}, 错误: {e}")
             return False
 
+    @traceable(name="alex_stream_message", run_type="chain")
     async def stream_message(
         self,
         session_id: str,
@@ -158,6 +163,7 @@ class AlexAdkRunner:
         流式处理消息
         
         处理文本输出和 Tool 调用事件，在 Tool 调用后发送 state 事件。
+        流结束后强制推送最终状态。
         
         Args:
             session_id: 会话 ID
@@ -177,6 +183,20 @@ class AlexAdkRunner:
 
         logger.info(f"Alex ADK 流式处理 - 会话: {session_id}, 消息长度: {len(user_message)}")
 
+        # 记录上一次发送的状态，用于去重
+        last_sent_progress = None
+        
+        # 辅助函数：发送状态并更新记录
+        def _should_send(new_progress: Dict) -> bool:
+            nonlocal last_sent_progress
+            import json
+            # 简单比较：转换为 JSON 字符串比较 (确保顺序一致性可能需要 sort_keys=True，但 dict 比较通常足够)
+            # 这里直接比较 dict 对象
+            if new_progress != last_sent_progress:
+                last_sent_progress = new_progress
+                return True
+            return False
+
         try:
             async for event in self.runner.run_async(
                 user_id=user_id,
@@ -184,6 +204,10 @@ class AlexAdkRunner:
                 new_message=user_content,
             ):
                 if event.content and event.content.parts:
+                    
+                    # 标志：当前 Event 中是否有状态更新
+                    state_updated_in_event = False
+                    
                     for part in event.content.parts:
                         # 处理 Tool 调用
                         if hasattr(part, "function_call") and part.function_call:
@@ -192,26 +216,39 @@ class AlexAdkRunner:
                             
                             logger.debug(f"检测到 Tool 调用: {tool_name}, 参数: {tool_args}")
                             
-                            # 更新状态
-                            should_send_state = self._handle_tool_call(
+                            # 更新状态 (不立即发送，而是标记)
+                            updated = self._handle_tool_call(
                                 session_id, tool_name, tool_args
                             )
-                            
-                            # 发送 state 事件
-                            if should_send_state:
-                                progress = self.state_manager.get_progress_info(session_id)
-                                if progress:
-                                    yield {"type": "state", "progress": progress}
-                                    logger.debug(f"发送 state 事件: 阶段索引 {progress['currentStageIndex']}")
+                            if updated:
+                                state_updated_in_event = True
                         
-                        # 处理文本输出
+                        # 处理文本输出 (实时发送)
                         if hasattr(part, "text") and part.text:
                             yield part.text
+                    
+                    # 历史遗留注释：原本在此处会根据 state_updated_in_event 发送状态
+                    # 现在改为：仅记录 updated 状态，不发送中间状态，改为在流结束后统一发送 (finally 块)
+                    if state_updated_in_event:
+                        logger.debug("检测到状态更新 (已抑制中间推送，等待流结束)")
 
         except Exception as e:
             logger.error(f"Alex ADK 流式处理失败: {e}")
             yield f"\n\n错误: {str(e)}"
+            
+        finally:
+            # 流式处理结束（或异常退出）后，强制发送一次最终状态 (仅在有变更时)
+            try:
+                final_progress = self.state_manager.get_progress_info(session_id)
+                if final_progress and _should_send(final_progress):
+                    yield {"type": "state", "progress": final_progress}
+                    logger.debug(f"发送最终 state 事件 (去重后发送): 阶段索引 {final_progress['currentStageIndex']}")
+                else:
+                    logger.debug("最终状态与最后一次发送一致，跳过冗余推送")
+            except Exception as e:
+                logger.error(f"发送最终 state 事件失败: {e}")
 
+    @traceable(name="alex_invoke", run_type="chain")
     async def invoke(
         self,
         session_id: str,

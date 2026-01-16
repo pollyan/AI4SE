@@ -17,6 +17,7 @@ flask[async]>=2.0.0
 flask-socketio>=5.0.0
 flask-cors>=4.0.0
 python-socketio>=5.0.0
+python-multipart>=0.0.5
 
 # 数据库支持
 flask-sqlalchemy>=3.0.0

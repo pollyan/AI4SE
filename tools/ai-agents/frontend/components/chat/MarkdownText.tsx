@@ -40,11 +40,12 @@ export const CodeBlock = ({ node, inline, className, children, ...props }: any) 
 
 // 创建基础 MarkdownText 组件
 
-const MarkdownTextImpl = () => {
+const MarkdownTextImpl = (props: ComponentPropsWithoutRef<typeof MarkdownTextPrimitive>) => {
     return (
         <MarkdownTextPrimitive
+            {...props}
             remarkPlugins={[remarkGfm]}
-            className="prose prose-sm prose-neutral dark:prose-invert max-w-none break-words prose-p:leading-relaxed prose-pre:p-0"
+            className="prose prose-sm prose-slate dark:prose-invert max-w-none break-words prose-p:leading-relaxed prose-pre:p-0 prose-blockquote:text-gray-700 dark:prose-blockquote:text-gray-300 prose-strong:text-inherit"
             components={{
                 code: CodeBlock,
                 // 将 pre 映射为 Fragment，移除默认 DOM 结构，由 CodeBlock 全权接管

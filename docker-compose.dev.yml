@@ -86,6 +86,7 @@ services:
 
     ports:
       - "5002:5002"
+      - "8080:8080"
     volumes:
       - ./logs:/app/logs
       - ./tools/ai-agents:/app/tools/ai-agents
