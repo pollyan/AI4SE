@@ -28,6 +28,9 @@ class AlexSessionState:
     # 当前活跃阶段 ID
     current_stage_id: str = ""
     
+    # 当前细粒度任务描述 (如 "正在分析需求...", "正在生成用例...")
+    current_task: str = ""
+    
     # 产出物模板: [{"stage_id": "clarify", "artifact_key": "req_doc", "name": "需求分析文档"}]
     artifact_templates: List[Dict[str, str]] = field(default_factory=list)
     
@@ -73,7 +76,10 @@ class AlexStateManager:
         # 重置状态
         state.plan = []
         state.artifact_templates = []
+        state.plan = []
+        state.artifact_templates = []
         state.current_stage_id = ""
+        state.current_task = ""
         
         if not stages:
             logger.warning(f"set_plan 收到空的 stages 列表: {session_id}")
@@ -180,6 +186,24 @@ class AlexStateManager:
             f"key={key}, 内容长度={len(content or '')} 字符"
         )
     
+    def handle_update_task(self, session_id: str, task_name: str) -> None:
+        """
+        处理 update_task Tool 调用
+        
+        更新当前细粒度任务描述。
+        
+        Args:
+            session_id: 会话 ID
+            task_name: 任务名称
+        """
+        state = self.get_state(session_id)
+        
+        if not task_name:
+            return
+            
+        state.current_task = task_name
+        logger.info(f"update_task 完成: {session_id}, task='{task_name}'")
+    
     # ═══════════════════════════════════════════════════════════════════════════
     # 生成前端 ProgressInfo
     # ═══════════════════════════════════════════════════════════════════════════
@@ -219,7 +243,11 @@ class AlexStateManager:
         
         # 构建 currentTask
         current_task = "处理中..."
-        if 0 <= current_index < len(state.plan):
+        if state.current_task:
+            # 优先使用细粒度任务描述
+            current_task = state.current_task
+        elif 0 <= current_index < len(state.plan):
+            # 回退到默认的阶段描述
             stage_name = state.plan[current_index]["name"]
             current_task = f"正在{stage_name}..."
         

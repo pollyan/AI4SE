@@ -1,6 +1,6 @@
 
 import pytest
-from backend.agents.alex.tools import set_plan, update_stage, save_artifact
+from backend.agents.alex.tools import set_plan, update_stage, update_task, save_artifact
 
 def test_set_plan():
     stages = [
@@ -18,6 +18,10 @@ def test_set_plan_empty():
 def test_update_stage():
     result = update_stage("s1", "completed")
     assert "阶段 's1' 状态已更新为 'completed'" in result
+
+def test_update_task():
+    result = update_task("正在进行测试...")
+    assert "当前任务已更新为: '正在进行测试...'" in result
 
 def test_save_artifact():
     result = save_artifact("a1", "# Content")

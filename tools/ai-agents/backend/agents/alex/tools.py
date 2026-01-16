@@ -7,6 +7,9 @@ LLM 在合适的时机调用这些 Tools，后端捕获事件并更新状态。
 Tools:
 - set_plan: 设置工作流计划及产出物模板
 - update_stage: 更新阶段状态
+- set_plan: 设置工作流计划及产出物模板
+- update_stage: 更新阶段状态
+- update_task: 更新当前细粒度任务
 - save_artifact: 保存产出物内容
 """
 
@@ -68,6 +71,24 @@ def set_plan(stages: List[dict]) -> str:
     return f"已设置 {stage_count} 个阶段的工作流计划，包含 {artifact_count} 个产出物模板"
 
 
+
+def update_task(task_name: str) -> str:
+    """更新当前正在进行的细粒度任务描述。
+    可以在对话过程中随时调用，向用户展示具体的进度，如"正在分析需求..."，"正在生成测试用例..."等。
+    
+    Args:
+        task_name: 任务名称，如 "正在绘制思维导图"
+        
+    示例:
+        update_task("正在分析需求文档...")
+        update_task("正在生成边界值测试用例...")
+    
+    Returns:
+        确认消息
+    """
+    return f"当前任务已更新为: '{task_name}'"
+
+
 def update_stage(stage_id: str, status: str) -> str:
     """更新阶段状态。用户确认阶段产出物后，调用此工具将阶段设为 'completed'。
     
@@ -121,5 +142,6 @@ def save_artifact(key: str, content: str) -> str:
 ALEX_TOOLS = [
     set_plan,
     update_stage,
+    update_task,
     save_artifact,
 ]
