@@ -30,3 +30,40 @@ class IntentResult(BaseModel):
         if v == '':
             return None
         return v
+
+
+class ArtifactType(str):
+    """Artifact Key Constants for validation"""
+    TEST_DESIGN_REQUIREMENTS = "test_design_requirements"
+    TEST_DESIGN_STRATEGY = "test_design_strategy"
+    TEST_DESIGN_CASES = "test_design_cases"
+    TEST_DESIGN_FINAL = "test_design_final"
+    REQ_REVIEW_RECORD = "req_review_record"
+    REQ_REVIEW_RISK = "req_review_risk"
+    REQ_REVIEW_REPORT = "req_review_report"
+
+
+class UpdateArtifact(BaseModel):
+    """
+    更新工作流产出物。
+    
+    当需要保存或更新文档内容时调用此工具。
+    严禁在普通对话中直接输出 Markdown 代码块，必须通过此工具提交。
+    """
+    
+    key: Literal[
+        "test_design_requirements",
+        "test_design_strategy",
+        "test_design_cases",
+        "test_design_final",
+        "req_review_record",
+        "req_review_risk",
+        "req_review_report"
+    ] = Field(description="产出物的唯一标识符 (ID)")
+    
+    markdown_body: str = Field(description="完整的文档内容 (Markdown 格式)")
+    
+    metadata: Optional[dict] = Field(
+        default=None, 
+        description="可选的元数据，如 risk_level, status 等"
+    )

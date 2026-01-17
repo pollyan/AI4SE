@@ -53,19 +53,43 @@ async def test_lisa_full_workflow_integration():
                 break
         
         if "测试设计工作流" in str(messages[0].content):
-             return AIMessage(content="""
-好的，我已更新需求文档。
-```markdown
-# 需求分析文档
-## 功能概述
-用户登录功能...
-```
-""")
+             # 模拟 LLM 调用 UpdateArtifact 工具
+             return AIMessage(
+                 content="好的，我已更新需求文档。",
+                 tool_calls=[{
+                     "name": "UpdateArtifact",
+                     "args": {
+                         "key": ArtifactKeys.TEST_DESIGN_REQUIREMENTS,
+                         "markdown_body": "# 需求分析文档\n## 功能概述\n用户登录功能..."
+                     },
+                     "id": "call_mock_123"
+                 }]
+             )
              
         return AIMessage(content="I don't understand.")
 
     mock_llm.model.invoke.side_effect = side_effect_invoke
     mock_llm.model.with_structured_output.side_effect = side_effect_with_structured_output
+    
+    # [Fix for Tool Calling Migration]
+    # Configure bind_tools to return a mock that behaves like the original LLM
+    mock_bound_llm = MagicMock()
+    mock_bound_llm.invoke.side_effect = side_effect_invoke
+    
+    def side_effect_stream(messages, **kwargs):
+        """Mock stream by yielding the result of invoke as a single chunk"""
+        from langchain_core.messages import AIMessageChunk
+        response = side_effect_invoke(messages, **kwargs)
+        
+        # Convert response to AIMessageChunk
+        chunk = AIMessageChunk(
+            content=response.content,
+            tool_calls=response.tool_calls
+        )
+        yield chunk
+        
+    mock_bound_llm.stream.side_effect = side_effect_stream
+    mock_llm.model.bind_tools.return_value = mock_bound_llm
 
     # 2. Patch create_llm to return our mock
     with patch('backend.agents.lisa.graph.create_llm_from_config', return_value=mock_llm):

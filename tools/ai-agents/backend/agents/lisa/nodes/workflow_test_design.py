@@ -5,12 +5,14 @@ Workflow Test Design Node - 测试设计工作流节点
 """
 
 import logging
+import re
 from typing import Any, List, Dict
 
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langgraph.config import get_stream_writer
 
 from ..state import LisaState, ArtifactKeys
+from ..schemas import UpdateArtifact
 from ..prompts.workflows import build_workflow_prompt
 from backend.agents.shared.artifact_summary import get_artifacts_summary
 from ..prompts.artifacts import (
@@ -92,9 +94,6 @@ def determine_stage(state: LisaState, workflow_type: str) -> str:
         elif ArtifactKeys.REQ_REVIEW_RECORD in artifacts:
             return "risk"
         else:
-            # 默认 starting point
-            # 注意: 如果有 plan，通常 current_stage_id 会被设置，
-            # 这个函数作为 fallback
             return "clarify"
             
     else:  # 默认为 test_design
@@ -138,93 +137,6 @@ def get_artifact_key_for_stage(stage: str, workflow_type: str) -> str | None:
         }
     return stage_to_artifact.get(stage)
 
-def extract_artifact_from_response(response: str, stage: str, workflow_type: str) -> tuple[str, str]:
-    """
-    从 LLM 响应中提取产出物
-    """
-    artifact_key = get_artifact_key_for_stage(stage, workflow_type)
-    if not artifact_key:
-        return None, None
-    
-    # 简单的产出物提取逻辑：查找 Markdown 代码块
-    # 增强产出物提取逻辑
-    import re
-    
-    # 策略 1: 查找 markdown 代码块 (最优先)
-    # pattern: ```(markdown)? ...content... ```
-    matches = list(re.finditer(r'```(?:markdown)?\s*\n(.*?)```', response, re.DOTALL))
-    
-    if matches:
-        # 遍历所有代码块，寻找最像产出物的一个
-        # 优先特征：内容包含 "产出物" 或 "Artifact" 或 "Key"
-        target_match = None
-        for match in reversed(matches):
-            content = match.group(1).strip()
-            if content.startswith("#") and ("产出物" in content or "Artifact" in content or "Key" in content):
-                target_match = match
-                break
-        
-        # 如果没找到特定特征的，还是取最后一个
-        if not target_match:
-            target_match = matches[-1]
-            
-        content = target_match.group(1).strip()
-        
-        if content.startswith("#"):
-            return artifact_key, content
-            
-    # 策略 2: 降级策略 - 直接查找以 # 开头的产出物标题 (如果 LLM 忘记打标签)
-    # 假设产出物都在回答的最后部分
-    # 我们查找最后一个 "# " 及其后的所有内容
-    
-    # 定义可能的标题特征，例如 "# 需求评审记录" 或 "# 测试策略蓝图"
-    # 或者简单地查找最后一个一级标题 (支持 # 到 ######)
-    header_matches = list(re.finditer(r'(^|\n)#{1,6}\s+(.*?)\n', response))
-    if header_matches:
-        last_header = header_matches[-1]
-        start_index = last_header.start()
-        # 如果是换行符开头，+1
-        if response[start_index] == '\n':
-            start_index += 1
-            
-        params_content = response[start_index:].strip()
-        
-        # 简单校验长度，避免提取到无关的小标题
-        if len(params_content) > 50: 
-            return artifact_key, params_content
-
-    return None, None
-
-
-def strip_artifact_block(response: str) -> str:
-    """
-    移除响应中的产出物代码块（用于显示）
-    """
-    import re
-    
-    # 策略 1: 移除 Markdown 块
-    matches = list(re.finditer(r'```(?:markdown)?\s*\n(.*?)```', response, re.DOTALL))
-    if matches:
-        last_match = matches[-1]
-        content = last_match.group(1).strip()
-        if content.startswith("#"):
-            start, end = last_match.span()
-            return (response[:start] + response[end:]).strip()
-            
-    # 策略 2: 移除降级策略找到的内容
-    header_matches = list(re.finditer(r'(^|\n)#{1,6}\s+(.*?)\n', response))
-    if header_matches:
-        last_header = header_matches[-1]
-        start_index = last_header.start()
-        if response[start_index] == '\n':
-            start_index += 1
-            
-        # 确认这段内容看起来像产出物 (长度检查)
-        candidate = response[start_index:].strip()
-        if len(candidate) > 50:
-            return response[:start_index].strip()
-            
-    return response
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 主节点
@@ -326,58 +238,144 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
     for msg in state.get("messages", []):
         messages.append(msg)
     
-    # 调用 LLM
+    # 绑定工具
+    llm_with_tools = llm.model.bind_tools([UpdateArtifact])
+    
+    # 最终汇总的消息内容
+    final_content = ""
+    
+    # 累计的 Tool Args 字符串 (用于流式解析)
+    accumulated_tool_args = {} # {tool_call_index: "args_string"}
+    
+    # 调用 LLM (改为 Stream 模式)
     try:
-        response = llm.model.invoke(messages)
-        response_content = response.content
+        # 使用同步流 (因为 Graph 节点目前是同步的)
+        stream = llm_with_tools.stream(messages)
         
-        # DEBUG LOGGING - 使用 warning 级别确保可见
+        # 收集 chunks 用于最终状态合成
+        collected_chunks = []
+        
+        for chunk in stream:
+            collected_chunks.append(chunk)
+            
+            # 1. 累加文本内容 (普通对话)
+            if chunk.content:
+                final_content += str(chunk.content)
+            
+            # 2. 处理 Tool Call Chunks (流式更新产出物)
+            if chunk.tool_call_chunks:
+                for tool_chunk in chunk.tool_call_chunks:
+                    idx = tool_chunk["index"]
+                    if idx not in accumulated_tool_args:
+                        accumulated_tool_args[idx] = ""
+                    
+                    # 累加参数字符串
+                    if tool_chunk.get("args"):
+                        accumulated_tool_args[idx] += tool_chunk["args"]
+                        
+                        # 尝试从累加的字符串中提取 markdown_body
+                        # 这是一个 "Best Effort" 的流式提取，不必等待 JSON 闭合
+                        current_args_str = accumulated_tool_args[idx]
+                        
+                        # 查找 "markdown_body": " 之后的内容
+                        # 提取 key (如果已出现)
+                        key_match = re.search(r'"key":\s*"([^"]+)"', current_args_str)
+                        current_key = key_match.group(1) if key_match else None
+                        
+                        # 提取 body (处理转义引号)
+                        body_start_pattern = r'"markdown_body":\s*"'
+                        body_match = re.search(body_start_pattern, current_args_str)
+                        
+                        if current_key and body_match:
+                            start_pos = body_match.end()
+                            raw_body = current_args_str[start_pos:]
+                            
+                            # 截断末尾可能的未闭合引号 (简单启发式)
+                            if raw_body.endswith('"') and len(raw_body) > 1 and raw_body[-2] != '\\':
+                                raw_body = raw_body[:-1]
+                            
+                            # 简易 Unescape (仅处理最常见的)
+                            clean_body = raw_body.replace('\\n', '\n').replace('\\"', '"').replace('\\\\', '\\')
+                            
+                            # 构造临时 artifacts 用于推送
+                            stream_artifacts = dict(artifacts)
+                            stream_artifacts[current_key] = clean_body
+                            
+                            writer({
+                                "type": "progress",
+                                "progress": {
+                                    "stages": plan,
+                                    "currentStageIndex": get_stage_index(plan, current_stage),
+                                    "currentTask": f"正在生成文档...",
+                                    "artifacts": stream_artifacts
+                                }
+                            })
+
+        # 合并 chunks 构造最终响应
+        if collected_chunks:
+            # sum() 默认 start=0，会导致 0 + Chunk 报错
+            # 我们需要手动累加或指定 start
+            response = collected_chunks[0]
+            for next_chunk in collected_chunks[1:]:
+                response = response + next_chunk
+        else:
+            response = AIMessage(content="")
+
+        response_content = str(response.content)
+        
+        # DEBUG LOGGING
         logger.warning(f"LLM Response Content Length: {len(response_content)}")
         if len(response_content) > 500:
             logger.warning(f"LLM Response tail (500 chars): {response_content[-500:]}")
         else:
             logger.warning(f"LLM Response full: {response_content}")
             
-        # 尝试提取产出物
         new_artifacts = dict(artifacts)
-        artifact_key, artifact_content = extract_artifact_from_response(response_content, current_stage, workflow_type)
+        artifact_updated = False
         
-        logger.warning(f"Extraction Result - Key: {artifact_key}, Content Found: {bool(artifact_content)}")
+        # 优先检查 Tool Calls
+        if response.tool_calls:
+            logger.info(f"检测到 Tool Calls: {len(response.tool_calls)}")
+            for tool_call in response.tool_calls:
+                if tool_call["name"] == "UpdateArtifact":
+                    args = tool_call["args"]
+                    key = args.get("key")
+                    content = args.get("markdown_body")
+                    
+                    if key and content:
+                        new_artifacts[key] = content
+                        artifact_updated = True
+                        logger.info(f"ToolCall 更新产出物: {key}")
+                        
+                        # 推送最终更新 (虽然流式已经推过了，但这里确保一致性)
+                        writer({
+                            "type": "progress",
+                            "progress": {
+                                "stages": plan,
+                                "currentStageIndex": get_stage_index(plan, current_stage),
+                                "currentTask": f"正在处理 {current_stage} 阶段...",
+                                "artifacts": new_artifacts
+                            }
+                        })
         
-        # 决定显示给用户的内容 (移除产出物代码块)
-        display_content = response_content
-        if artifact_key and artifact_content:
-            new_artifacts[artifact_key] = artifact_content
-            logger.info(f"提取产出物: {artifact_key} ({len(artifact_content)} 字符)")
-            display_content = strip_artifact_block(response_content)
-            
-            # ════════════════════════════════════════════════════════════
-            # 📍 推送产出物更新
-            # ════════════════════════════════════════════════════════════
-            writer({
-                "type": "progress",
-                "progress": {
-                    "stages": plan,
-                    "currentStageIndex": get_stage_index(plan, current_stage),
-                    "currentTask": f"正在处理 {current_stage} 阶段...",
-                    "artifacts": new_artifacts
-                }
-            })
-            logger.info(f"StreamWriter 推送产出物: {artifact_key}")
-            
-        ai_message = AIMessage(content=display_content)
+        # 如果没有 Tool Call，且内容非空，则作为普通对话处理
+        # 移除了 Regex Fallback，强制要求模型使用工具生成文档
+        if not artifact_updated:
+             logger.info("未检测到 ToolCall，作为普通回复处理")
+
+        ai_message = AIMessage(content=response_content)
         
         # 更新消息历史
         new_messages = list(state.get("messages", []))
         new_messages.append(ai_message)
         
-        # 返回更新后的状态 (包含 plan)
+        # 返回更新后的状态
         return {
             **state,
             "messages": new_messages,
             "artifacts": new_artifacts,
             "workflow_stage": current_stage,
-            "current_workflow": workflow_type, # 保持当前 workflow type
+            "current_workflow": workflow_type,
         }
         
     except Exception as e:
@@ -390,4 +388,3 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
             **state,
             "messages": new_messages,
         }
-
