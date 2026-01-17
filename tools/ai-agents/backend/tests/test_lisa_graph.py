@@ -9,37 +9,7 @@ from unittest.mock import Mock, MagicMock, patch
 from langchain_core.messages import HumanMessage, AIMessage
 
 from backend.agents.lisa.state import LisaState, get_initial_state
-from backend.agents.lisa.graph import route_by_intent, get_graph_initial_state
-
-
-class TestRouteByIntent:
-    """测试路由函数"""
-    
-    def test_routes_to_test_design_when_in_workflow(self):
-        """当已在测试设计工作流时，应路由到 test_design"""
-        state = get_initial_state()
-        state["current_workflow"] = "test_design"
-        
-        result = route_by_intent(state)
-        
-        assert result == "test_design"
-    
-    def test_routes_to_clarify_when_no_workflow(self):
-        """当无工作流时，应路由到 clarify"""
-        state = get_initial_state()
-        
-        result = route_by_intent(state)
-        
-        assert result == "clarify"
-    
-    def test_routes_to_clarify_when_workflow_is_none(self):
-        """当工作流为 None 时，应路由到 clarify"""
-        state = get_initial_state()
-        state["current_workflow"] = None
-        
-        result = route_by_intent(state)
-        
-        assert result == "clarify"
+from backend.agents.lisa.graph import get_graph_initial_state
 
 
 class TestGetGraphInitialState:

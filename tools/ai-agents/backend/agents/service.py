@@ -397,11 +397,16 @@ class LangchainAssistantService:
                         if hasattr(message, 'content') and message.content:
                             content = message.content
                             
-                            if content.startswith(full_response):
-                                 full_response = content
+                            # 修复内容累积逻辑：避免重复
+                            # 场景 1: 新内容完全包含旧内容 (完整替换)
+                            if full_response in content:
+                                full_response = content
+                            # 场景 2: 旧内容完全包含新内容 (已有，忽略)
+                            elif content in full_response:
+                                pass  # 不追加，避免重复
+                            # 场景 3: 真正的增量追加 (LLM token 流)
                             else:
-                                 if not full_response.endswith(content):
-                                     full_response += content
+                                full_response += content
     
                             if not json_parsed and not plan_parsed:
                                 if '```json' in full_response and '```' in full_response[full_response.find('```json')+7:]:

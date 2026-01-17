@@ -164,6 +164,10 @@ def clean_response_text(text: str) -> str:
     """
     result = JSON_BLOCK_PATTERN.sub('', text)
     
+    # [NEW] 移除产出物 Markdown 块
+    ARTIFACT_BLOCK_PATTERN = re.compile(r'```(?:markdown)?\s*\n#.*?(?:\n[\s\S]*?)?```', re.IGNORECASE | re.DOTALL)
+    result = ARTIFACT_BLOCK_PATTERN.sub('', result)
+    
     # 清理可能残留的多余空行
     result = re.sub(r'\n{3,}', '\n\n', result)
     
@@ -186,20 +190,42 @@ def clean_response_streaming(text: str) -> str:
     # 1. 先用常规逻辑移除完整的 JSON 代码块
     cleaned = JSON_BLOCK_PATTERN.sub('', text)
     
+    # [NEW] 移除产出物 Markdown 块 (```markdown ... ```)
+    # 匹配完整的产出物块
+    ARTIFACT_BLOCK_PATTERN = re.compile(r'```(?:markdown)?\s*\n#.*?(?:\n[\s\S]*?)?```', re.IGNORECASE | re.DOTALL)
+    cleaned = ARTIFACT_BLOCK_PATTERN.sub('', cleaned)
+    
     # 2. 检查是否有 JSON 代码块片段 (混合模式)
     # 查找最后一个 ``` 的位置
     last_code_block = cleaned.rfind('```')
     if last_code_block != -1:
         suffix = cleaned[last_code_block:]
-        # Case A: 正在输入 ```json (例如 "`", "``", "```j", "```json")
-        json_marker = "```json"
-        if json_marker.startswith(suffix.lower()):
-            # 截断正在传输的代码块标记
-            return cleaned[:last_code_block]
         
-        # Case B: 已经开始了 ```json ...
-        if suffix.lower().startswith(json_marker):
+        # Case A: 正在输入 ```json 或 ```markdown
+        markers = ["```json", "```markdown"]
+        for marker in markers:
+             if marker.startswith(suffix.lower()):
+                # 截断正在传输的代码块标记
+                return cleaned[:last_code_block]
+        
+        # Case B: 已经开始了 ```json ... 或 ```markdown ...
+        if suffix.lower().startswith("```json"):
             return cleaned[:last_code_block]
+            
+        # Case C: 已经开始了 ```markdown ...
+        # 特别注意：我们只移除是以 `#` 开头的产出物 (避免误删用户请求的代码示例)
+        if suffix.lower().startswith("```markdown"):
+            # 检查内容是否包含以 # 开头的行 (产出物标题)
+            # 如果仅仅是 ```markdown\n 还没有内容，也先截断，等待后续确认
+            lines_after = suffix.split('\n')
+            if len(lines_after) > 1:
+                first_line_content = lines_after[1].strip()
+                if first_line_content.startswith('#') or len(lines_after) <= 2:
+                     # 是产出物（或者刚开始无法判断），截断
+                     return cleaned[:last_code_block]
+            else:
+                 # 刚输入 ```markdown，先截断
+                 return cleaned[:last_code_block]
     
     # 3. 检查末尾是否有部分 ` 字符
     # 这处理 `, ``, ``` 正在传输的情况
@@ -212,8 +238,9 @@ def clean_response_streaming(text: str) -> str:
         backtick_count = len(cleaned) - i
         if 1 <= backtick_count <= 3:
             return cleaned[:i]
-
-    return cleaned
+            
+    # [NEW] 最终清理：如果文本以换行符结尾，且看起来刚刚删除了产出物，清理多余的尾部换行
+    return cleaned.rstrip()
 
 
 def get_current_stage_id(plan: List[Dict]) -> Optional[str]:

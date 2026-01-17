@@ -147,23 +147,52 @@ def extract_artifact_from_response(response: str, stage: str, workflow_type: str
         return None, None
     
     # 简单的产出物提取逻辑：查找 Markdown 代码块
-    # 增强逻辑：支持带有或不带 markdown 标识的代码块
+    # 增强产出物提取逻辑
     import re
     
-    # 匹配最后一个 markdown 代码块
+    # 策略 1: 查找 markdown 代码块 (最优先)
     # pattern: ```(markdown)? ...content... ```
-    # 使用 DOTALL 匹配跨行
     matches = list(re.finditer(r'```(?:markdown)?\s*\n(.*?)```', response, re.DOTALL))
     
     if matches:
-        # 取最后一个代码块
-        last_match = matches[-1]
-        content = last_match.group(1).strip()
+        # 遍历所有代码块，寻找最像产出物的一个
+        # 优先特征：内容包含 "产出物" 或 "Artifact" 或 "Key"
+        target_match = None
+        for match in reversed(matches):
+            content = match.group(1).strip()
+            if content.startswith("#") and ("产出物" in content or "Artifact" in content or "Key" in content):
+                target_match = match
+                break
         
-        # 简单验证内容是否像产出物 (以 # 开头)
+        # 如果没找到特定特征的，还是取最后一个
+        if not target_match:
+            target_match = matches[-1]
+            
+        content = target_match.group(1).strip()
+        
         if content.startswith("#"):
             return artifact_key, content
             
+    # 策略 2: 降级策略 - 直接查找以 # 开头的产出物标题 (如果 LLM 忘记打标签)
+    # 假设产出物都在回答的最后部分
+    # 我们查找最后一个 "# " 及其后的所有内容
+    
+    # 定义可能的标题特征，例如 "# 需求评审记录" 或 "# 测试策略蓝图"
+    # 或者简单地查找最后一个一级标题 (支持 # 到 ######)
+    header_matches = list(re.finditer(r'(^|\n)#{1,6}\s+(.*?)\n', response))
+    if header_matches:
+        last_header = header_matches[-1]
+        start_index = last_header.start()
+        # 如果是换行符开头，+1
+        if response[start_index] == '\n':
+            start_index += 1
+            
+        params_content = response[start_index:].strip()
+        
+        # 简单校验长度，避免提取到无关的小标题
+        if len(params_content) > 50: 
+            return artifact_key, params_content
+
     return None, None
 
 
@@ -172,18 +201,28 @@ def strip_artifact_block(response: str) -> str:
     移除响应中的产出物代码块（用于显示）
     """
     import re
-    # 移除最后一个 md 代码块，如果它看起来像产出物
-    matches = list(re.finditer(r'```(?:markdown)?\s*\n(.*?)```', response, re.DOTALL))
     
+    # 策略 1: 移除 Markdown 块
+    matches = list(re.finditer(r'```(?:markdown)?\s*\n(.*?)```', response, re.DOTALL))
     if matches:
         last_match = matches[-1]
         content = last_match.group(1).strip()
-        
-        # 如果是产出物 (以 # 开头)，则移除整个块
         if content.startswith("#"):
             start, end = last_match.span()
-            # 移除该块以及块之前的空白字符
             return (response[:start] + response[end:]).strip()
+            
+    # 策略 2: 移除降级策略找到的内容
+    header_matches = list(re.finditer(r'(^|\n)#{1,6}\s+(.*?)\n', response))
+    if header_matches:
+        last_header = header_matches[-1]
+        start_index = last_header.start()
+        if response[start_index] == '\n':
+            start_index += 1
+            
+        # 确认这段内容看起来像产出物 (长度检查)
+        candidate = response[start_index:].strip()
+        if len(candidate) > 50:
+            return response[:start_index].strip()
             
     return response
 
@@ -292,18 +331,18 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
         response = llm.model.invoke(messages)
         response_content = response.content
         
-        # DEBUG LOGGING
-        logger.info(f"LLM Response Content Length: {len(response_content)}")
+        # DEBUG LOGGING - 使用 warning 级别确保可见
+        logger.warning(f"LLM Response Content Length: {len(response_content)}")
         if len(response_content) > 500:
-            logger.info(f"LLM Response tail (500 chars): {response_content[-500:]}")
+            logger.warning(f"LLM Response tail (500 chars): {response_content[-500:]}")
         else:
-            logger.info(f"LLM Response full: {response_content}")
+            logger.warning(f"LLM Response full: {response_content}")
             
         # 尝试提取产出物
         new_artifacts = dict(artifacts)
         artifact_key, artifact_content = extract_artifact_from_response(response_content, current_stage, workflow_type)
         
-        logger.info(f"Extraction Result - Key: {artifact_key}, Content Found: {bool(artifact_content)}")
+        logger.warning(f"Extraction Result - Key: {artifact_key}, Content Found: {bool(artifact_content)}")
         
         # 决定显示给用户的内容 (移除产出物代码块)
         display_content = response_content
