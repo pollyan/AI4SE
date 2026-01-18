@@ -63,6 +63,8 @@ def create_app():
     @app.route('/ai-agents/')
     @app.route('/ai-agents/config')
     @app.route('/config')
+    @app.route('/ai-agents/debug')
+    @app.route('/debug')
     def serve_react():
         """服务 React 单页应用"""
         index_path = os.path.join(REACT_BUILD_DIR, 'index.html')

@@ -820,6 +820,9 @@ def stream_messages_v2(session_id):
         db.session.add(ai_message)
         db.session.commit()
         
+        # 预先获取 ID，避免在 generator 中访问 detached 对象
+        ai_message_id = ai_message.id
+        
         def generate():
             import asyncio
             from ..agents.shared.data_stream_adapter import adapt_langgraph_stream
@@ -829,7 +832,7 @@ def stream_messages_v2(session_id):
             
             try:
                 # 运行适配器
-                async_gen = adapt_langgraph_stream(ai_service, session_id, content, db_message_id=ai_message.id)
+                async_gen = adapt_langgraph_stream(ai_service, session_id, content, db_message_id=ai_message_id)
                 
                 while True:
                     try:
@@ -1020,7 +1023,6 @@ def update_session_status(session_id):
 
 
 
-
 @requirements_bp.route("/assistants", methods=["GET"])
 @log_api_call
 def get_assistants():
@@ -1097,6 +1099,4 @@ def get_alex_bundle():
     """获取完整的Alex需求分析师Bundle内容 - 向后兼容端点"""
     # 直接调用新的助手bundle端点
     return get_assistant_bundle('alex')
-
-
 

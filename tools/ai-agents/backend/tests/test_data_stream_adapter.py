@@ -27,33 +27,28 @@ async def test_adapt_langgraph_stream():
     async for event in adapt_langgraph_stream(service, "sess_1", "hi"):
         events.append(event)
     
-    # Verify events
-    # 1. Start event (mapped to data event '8' with messageId)
-    # Output: 8:[{"messageId": "..."}]\n
-    assert events[0].startswith("8:")
-    assert "messageId" in events[0]
+    # Verify
+    # 3. 验证事件序列
+    # 3. Data event (from progress dict)
+    assert events[3].startswith("data: ")
+    data_event = json.loads(events[3][6:].strip())
+    assert data_event["type"] == "data"
+    assert data_event["value"]["stage"] == 1
+
+    # 4. Text event "!" (V2 uses text-delta)
+    assert events[4].startswith("data: ")
+    text_event = json.loads(events[4][6:].strip())
+    assert text_event["type"] == "text-delta"
+    assert text_event["delta"] == "!"
+    assert "id" in text_event
     
-    # 2. Text events
-    # Output: 0:"Hello"\n
-    assert events[1] == '0:"Hello"\n'
+    # 5. Text end event
+    assert events[5].startswith("data: ")
+    text_end_event = json.loads(events[5][6:].strip())
+    assert text_end_event["type"] == "text-end"
     
-    # Output: 0:" world"\n
-    assert events[2] == '0:" world"\n'
-    
-    # 3. Data event (Progress)
-    # Output: 8:[{"stage": 1}]\n
-    # Note: data_stream.stream_data wraps value in list if not already
-    assert events[3].startswith("8:")
-    json_str = events[3][2:].strip()
-    data = json.loads(json_str)
-    assert isinstance(data, list)
-    assert data[0]["stage"] == 1
-    
-    # 4. Text event
-    assert events[4] == '0:"!"\n'
-    
-    # 5. Finish event
-    assert events[5].startswith("d:")
-    
-    # 6. Done event (empty string in new protocol)
-    assert events[6] == ""
+    # 6. Finish event
+    assert events[6].startswith("data: ")
+    finish_event = json.loads(events[6][6:].strip())
+    assert finish_event["type"] == "finish"
+    assert finish_event["finishReason"] == "stop"

@@ -1,56 +1,34 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { AssistantChat } from '../components/chat/AssistantChat';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { Assistant } from '../types';
-import * as AssistantUI from '@assistant-ui/react';
 
 // Mock dependencies
 vi.mock('../services/backendService', () => ({
     createSession: vi.fn().mockResolvedValue({ sessionId: 'sess_123' })
 }));
 
-// Mock useChatRuntime
-vi.mock('../hooks/useChatRuntime', () => ({
-    useChatRuntime: vi.fn().mockReturnValue({
-        // Minimal mock of runtime object
-        thread: {
-            messages: [],
-            append: vi.fn(),
-        }
-    })
+// Mock useVercelChat
+const mockSendMessage = vi.fn();
+const mockStop = vi.fn();
+
+vi.mock('../hooks/useVercelChat', () => ({
+    useVercelChat: vi.fn(() => ({
+        messages: [],
+        status: 'ready',
+        sendMessage: mockSendMessage,
+        stop: mockStop,
+        error: undefined
+    }))
 }));
 
-// Mock assistant-ui hooks to simulate error state
-// We need to spy on useAssistantRuntime or mock the module
-vi.mock('@assistant-ui/react', async (importOriginal) => {
-    const actual = await importOriginal();
-    return {
-        ...actual,
-        useAssistantRuntime: vi.fn(),
-        // Mock Provider to avoid internal errors from incomplete runtime mock
-        AssistantRuntimeProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-        // Mock other primitives to avoid errors
-        ThreadPrimitive: {
-            Root: ({ children }: any) => <div>{children}</div>,
-            Viewport: ({ children }: any) => <div>{children}</div>,
-            Messages: () => <div>Messages</div>,
-        },
-        ComposerPrimitive: {
-            Root: ({ children }: any) => <div>{children}</div>,
-            Input: () => <input />,
-        },
-        ActionBarPrimitive: {
-            Root: ({ children }: any) => <div>{children}</div>,
-            Copy: ({ children }: any) => <div>{children}</div>,
-            Reload: ({ children }: any) => <div>{children}</div>,
-        },
-        useComposerRuntime: () => ({
-            getState: () => ({ text: "" }),
-            setText: vi.fn(),
-        }),
-        useMessage: () => ({ status: { type: 'running' } }), 
-    };
-});
+// Mock MarkdownText to avoid complex rendering
+vi.mock('../components/chat/MarkdownText', () => ({
+    MarkdownText: ({ content }: { content: string }) => <div data-testid="markdown-text">{content}</div>
+}));
+
+// Mock scrollIntoView
+Element.prototype.scrollIntoView = vi.fn();
 
 const mockAssistant: Assistant = {
     id: 'alex',
@@ -61,41 +39,16 @@ const mockAssistant: Assistant = {
     bundle: 'bundle'
 };
 
-describe('AssistantChat Error Handling', () => {
+describe('AssistantChat Component', () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });
 
-    it('displays error message when runtime has error', async () => {
-        // Setup mock to return error state
-        const mockRuntime = {
-            thread: {
-                messages: [],
-                append: vi.fn(),
-            }
-        };
-        
-        // Mock useChatRuntime to return our runtime
-        const { useChatRuntime } = await import('../hooks/useChatRuntime');
-        vi.mocked(useChatRuntime).mockReturnValue(mockRuntime as any);
-
-        // Mock useAssistantRuntime to return error
-        // Note: AssistantChat renders Provider with this runtime.
-        // Components INSIDE AssistantChat call useAssistantRuntime.
-        // We are mocking useAssistantRuntime to simulate what happens when 
-        // the runtime passed to Provider has an error (or the hook reads it).
-        vi.mocked(AssistantUI.useAssistantRuntime).mockReturnValue({
-            thread: {
-                messages: [],
-                append: vi.fn(),
-                error: new Error("Network connection failed") // Simulate error
-            }
-        } as any);
-
+    it('renders welcome message when session starts', async () => {
         render(
-            <AssistantChat 
-                assistant={mockAssistant} 
-                onBack={vi.fn()} 
+            <AssistantChat
+                assistant={mockAssistant}
+                onBack={vi.fn()}
             />
         );
 
@@ -104,8 +57,94 @@ describe('AssistantChat Error Handling', () => {
             expect(screen.queryByText('正在创建会话...')).not.toBeInTheDocument();
         });
 
-        // Expect error UI
-        expect(await screen.findByText(/Network connection failed/i)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /重试/i })).toBeInTheDocument();
+        // Expect welcome message
+        expect(screen.getByText(`你好，我是 ${mockAssistant.name}`)).toBeInTheDocument();
+        expect(screen.getByText(/我可以协助你/)).toBeInTheDocument();
+    });
+
+    it('displays error message when useVercelChat returns error', async () => {
+        // Setup mock to return error state
+        const { useVercelChat } = await import('../hooks/useVercelChat');
+        vi.mocked(useVercelChat).mockReturnValue({
+            messages: [],
+            status: 'error',
+            sendMessage: mockSendMessage,
+            stop: mockStop,
+            error: new Error("Twilio API Error")
+        });
+
+        render(
+            <AssistantChat
+                assistant={mockAssistant}
+                onBack={vi.fn()}
+            />
+        );
+
+        await waitFor(() => {
+            expect(screen.queryByText('正在创建会话...')).not.toBeInTheDocument();
+        });
+
+        // 查找错误提示 (新组件直接显示错误文本)
+        expect(screen.getByText(/出错了: Twilio API Error/i)).toBeInTheDocument();
+    });
+
+    it('renders messages correctly', async () => {
+        // Mock messages
+        const { useVercelChat } = await import('../hooks/useVercelChat');
+        vi.mocked(useVercelChat).mockReturnValue({
+            messages: [
+                { id: '1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] },
+                { id: '2', role: 'assistant', parts: [{ type: 'text', text: 'Hi there' }] }
+            ],
+            status: 'ready',
+            sendMessage: mockSendMessage,
+            stop: mockStop,
+            error: undefined
+        });
+
+        render(
+            <AssistantChat
+                assistant={mockAssistant}
+                onBack={vi.fn()}
+            />
+        );
+
+        await waitFor(() => {
+            expect(screen.queryByText('正在创建会话...')).not.toBeInTheDocument();
+        });
+
+        expect(screen.getByText('Hello')).toBeInTheDocument();
+        expect(screen.getByText('Hi there')).toBeInTheDocument();
+    });
+
+    it('handles message submission', async () => {
+        // Setup default mock
+        const { useVercelChat } = await import('../hooks/useVercelChat');
+        vi.mocked(useVercelChat).mockReturnValue({
+            messages: [],
+            status: 'ready',
+            sendMessage: mockSendMessage,
+            stop: mockStop,
+            error: undefined
+        });
+
+        render(
+            <AssistantChat
+                assistant={mockAssistant}
+                onBack={vi.fn()}
+            />
+        );
+
+        await waitFor(() => {
+            expect(screen.queryByText('正在创建会话...')).not.toBeInTheDocument();
+        });
+
+        const input = screen.getByPlaceholderText('输入消息...');
+        fireEvent.change(input, { target: { value: 'New message' } });
+
+        const sendButton = screen.getByTitle('发送');
+        fireEvent.click(sendButton);
+
+        expect(mockSendMessage).toHaveBeenCalledWith({ text: 'New message' });
     });
 });

@@ -7,7 +7,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { CodeBlock } from './chat/MarkdownText';
+import { CodeOverride as CodeBlock } from './chat/MarkdownText';
 import { FileText, Clock, CheckCircle, ChevronLeft, ChevronRight, List } from 'lucide-react';
 
 export interface ArtifactTemplateItem {

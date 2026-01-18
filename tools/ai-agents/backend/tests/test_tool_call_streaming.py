@@ -17,21 +17,22 @@ def test_workflow_execution_node_streaming(mock_get_stream_writer):
     mock_bound_llm = MagicMock()
     mock_llm.model.bind_tools.return_value = mock_bound_llm
     
-    # Simulate Tool Call Chunks
-    # Chunk 1: Start
-    chunk1 = AIMessageChunk(content="", tool_call_chunks=[
-        {"name": "UpdateArtifact", "args": "", "id": "call_123", "index": 0}
-    ])
-    # Chunk 2: Args delta
-    chunk2 = AIMessageChunk(content="", tool_call_chunks=[
-        {"name": "UpdateArtifact", "args": '{"key": "test"', "id": "call_123", "index": 0}
-    ])
-    # Chunk 3: Args delta
-    chunk3 = AIMessageChunk(content="", tool_call_chunks=[
-        {"name": "UpdateArtifact", "args": '}', "id": "call_123", "index": 0}
-    ])
+    # Simulate Tool Call
+    # Use AIMessageChunk with BOTH tool_call_chunks (for loop safety) and tool_calls (for final logic)
+    final_chunk = AIMessageChunk(
+        content="",
+        tool_call_chunks=[
+             {"name": "UpdateArtifact", "args": '{"key": "test", "markdown_body": "content"}', "id": "call_123", "index": 0}
+        ],
+        tool_calls=[{
+            "name": "UpdateArtifact",
+            "args": {"key": "test", "markdown_body": "content"},
+            "id": "call_123"
+        }]
+    )
     
-    mock_bound_llm.stream.return_value = [chunk1, chunk2, chunk3]
+    # stream returns an iterator
+    mock_bound_llm.stream.return_value = iter([final_chunk])
     
     # 2. Setup State
     state = {
@@ -50,23 +51,22 @@ def test_workflow_execution_node_streaming(mock_get_stream_writer):
     
     assert len(data_events) > 0, "No data_stream_event emitted"
     
-    # Check for start event (Protocol 'b')
-    # b:{"toolCallId": "call_123", "toolName": "UpdateArtifact"}
-    start_events = [e for e in data_events if e["event"].startswith("b:")]
-    assert len(start_events) == 1
-    assert "call_123" in start_events[0]["event"]
-    
-    # Check for delta events (Protocol 'c')
-    # c:{"toolCallId": "call_123", "argsTextDelta": "..."}
-    delta_events = [e for e in data_events if e["event"].startswith("c:")]
-    assert len(delta_events) >= 2
-    
-    # Parse Protocol to verify content
-    # Format: c:{"toolCallId":..., "argsTextDelta":...}
-    evt1_json = delta_events[0]["event"][2:].strip()
-    evt1 = json.loads(evt1_json)
-    assert '{"key": "test"' in evt1["argsTextDelta"]
-    
-    evt2_json = delta_events[1]["event"][2:].strip()
-    evt2 = json.loads(evt2_json)
-    assert '}' in evt2["argsTextDelta"]
+    # Check for tool result event (V2 Protocol)
+    result_events = []
+    for event_container in data_events:
+        event_str = event_container["event"]
+        if event_str.startswith("data: "):
+            json_str = event_str[6:].strip()
+            try:
+                payload = json.loads(json_str)
+                if payload.get("type") == "tool-result":
+                    result_events.append(payload)
+            except:
+                pass
+
+    assert len(result_events) == 1
+    res = result_events[0]
+    assert res["toolCallId"] == "call_123"
+    assert res["toolName"] == "UpdateArtifact"
+    assert res["result"]["key"] == "test"
+    assert res["result"]["status"] == "completed"

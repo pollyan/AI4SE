@@ -2,8 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import ConfigPage from './ConfigPage';
 import CompactApp from './CompactApp';
+import { DebugChat } from './components/debug/DebugChat';
 
-import "@assistant-ui/styles/index.css";
+// import "@assistant-ui/styles/index.css"; // Removed
 
 // Simple path-based routing
 const getPage = () => {
@@ -12,6 +13,11 @@ const getPage = () => {
   // Check if we're on the config page
   if (path.includes('/config') || path.endsWith('/config')) {
     return <ConfigPage />;
+  }
+
+  // Debug page
+  if (path.includes('/debug') || path.endsWith('/debug')) {
+    return <DebugChat />;
   }
 
   // 默认使用紧凑型页面

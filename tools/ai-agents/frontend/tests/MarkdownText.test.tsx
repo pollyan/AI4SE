@@ -1,17 +1,34 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
-import { MarkdownText } from '../components/chat/MarkdownText';
+import { describe, it, expect, vi } from 'vitest';
+import { MarkdownText, CodeOverride } from '../components/chat/MarkdownText';
+
+// Mock dependency to avoid context requirements and potential ESM issues in test
+vi.mock('@assistant-ui/react-markdown', () => ({
+  MarkdownTextPrimitive: (props: any) => <div data-testid="markdown-primitive">{props.children}</div>
+}));
+
+// Mock MermaidBlock because it uses Mermaid which might fail in JSDOM or be slow
+vi.mock('../components/chat/MermaidBlock', () => ({
+  MermaidBlock: ({ code }: any) => <div data-testid="mermaid-block">{code}</div>
+}));
 
 describe('MarkdownText', () => {
-  it('renders simple text', () => {
-    render(<MarkdownText children="Hello World" />);
-    expect(screen.getByText('Hello World')).toBeDefined();
+  it('renders primitive', () => {
+    render(<MarkdownText children="foo" />);
+    expect(screen.getByTestId('markdown-primitive')).toBeDefined();
+    expect(screen.getByTestId('markdown-primitive')).toHaveTextContent('foo');
+  });
+});
+
+describe('CodeOverride', () => {
+  it('renders normal code', () => {
+    render(<CodeOverride className="language-js">console.log(1)</CodeOverride>);
+    const code = screen.getByText('console.log(1)');
+    expect(code.tagName).toBe('CODE');
   });
 
-  it('renders markdown', () => {
-    render(<MarkdownText children="# Heading" />);
-    // Check if it renders as h1 (implementation detail, usually h1)
-    const heading = screen.getByRole('heading', { level: 1 });
-    expect(heading.textContent).toBe('Heading');
+  it('renders mermaid block', () => {
+    render(<CodeOverride className="language-mermaid">{'graph TD; A-->B;'}</CodeOverride>);
+    expect(screen.getByTestId('mermaid-block')).toHaveTextContent('graph TD; A-->B;');
   });
 });

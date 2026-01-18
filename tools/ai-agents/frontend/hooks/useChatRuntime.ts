@@ -1,23 +1,30 @@
 import { useMemo } from 'react';
 import { useChatRuntime as useAISdkChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 import { AssistantId } from "../types";
+import { ProgressInfo } from "../services/backendService";
+import { createAttachmentAdapter } from '../adapters/attachmentAdapter';
 
 const API_BASE = '/ai-agents/api/requirements';
 
-export function useChatRuntime(sessionId: string, assistantType: AssistantId, onProgressChange?: (progress: any) => void) {
+export function useChatRuntime(sessionId: string, assistantType: AssistantId, onProgressChange?: (progress: ProgressInfo) => void) {
   const api = `${API_BASE}/sessions/${sessionId}/messages/v2/stream`;
   
   const transport = useMemo(() => new AssistantChatTransport({
-    api,
     url: api,
-    baseUrl: api,
     headers: {
       'X-Assistant-Type': assistantType,
     },
   }), [api, assistantType]);
 
+  // const attachmentAdapter = useMemo(() => createAttachmentAdapter(), []);
+
   return useAISdkChatRuntime({
     transport,
+    /*
+    adapters: {
+        attachments: attachmentAdapter,
+    },
+    */
     onDataStream: ({ type, data }) => {
         if (type === "data" && onProgressChange) {
             // Data Stream Protocol sends {"type": "data", "value": ...}
@@ -28,6 +35,7 @@ export function useChatRuntime(sessionId: string, assistantType: AssistantId, on
     // Performance optimization: throttle UI updates
     experimental_throttle: 50, // 50ms throttling
     onFinish: async (message) => {
+        console.log('DEBUG: onFinish message:', message);
         // Sync message state to backend (Sync on Finish)
         try {
             await fetch(`${API_BASE}/sessions/${sessionId}/sync`, {

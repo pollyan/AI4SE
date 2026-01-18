@@ -23,8 +23,7 @@ from ..prompts.artifacts import (
     ARTIFACT_REQ_REVIEW_RECORD
 )
 from backend.agents.shared.data_stream import (
-    stream_tool_call_streaming_start,
-    stream_tool_call_delta,
+    stream_tool_call,
     stream_tool_result
 )
 
@@ -285,18 +284,8 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
                             tc_id = tool_chunk.get("id") or f"call_{idx}"
                             tool_call_ids[idx] = tc_id
                             
-                            writer({
-                                "type": "data_stream_event",
-                                "event": stream_tool_call_streaming_start(tc_id, "UpdateArtifact")
-                            })
-                        
-                        # 2. Handle Delta Event
-                        args_delta = tool_chunk.get("args")
-                        if args_delta:
-                            writer({
-                                "type": "data_stream_event",
-                                "event": stream_tool_call_delta(tool_call_ids[idx], args_delta)
-                            })
+                        # 2. Delta Event (Skipped for V2 simplified stream)
+                        # pass
 
                     # ════════════════════════════════════════════════════════
                     # Legacy Partial JSON Parsing (Backward Compat)
@@ -388,7 +377,7 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
                             "progress": {
                                 "stages": plan,
                                 "currentStageIndex": get_stage_index(plan, current_stage),
-                                "currentTask": f"正在处理 {current_stage} 阶段...",
+                                    "currentTask": f"正在处理 {current_stage} 阶段...",
                                 "artifacts": new_artifacts
                             }
                         })

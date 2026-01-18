@@ -1,109 +1,110 @@
 """
-Data Stream Protocol Formatting Tool
-
-Implements Vercel AI SDK Data Stream Protocol (v1).
-Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
+Vercel AI SDK Data Stream Protocol Utility (V2 - w/ text-delta)
+https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol#v2
 """
-import json
-from typing import Any, Dict, Optional
-from dataclasses import dataclass
 
-@dataclass
+import json
+from typing import Any, Dict
+
 class DataStreamHeaders:
-    """Required Response Headers"""
-    CONTENT_TYPE = "text/event-stream"
-    CACHE_CONTROL = "no-cache"
-    CONNECTION = "keep-alive"
-    PROTOCOL_VERSION = "x-vercel-ai-ui-message-stream"
-    NGINX_BUFFERING = "x-accel-buffering"
+    """Standard headers for Vercel AI SDK Data Stream Protocol"""
     
-    @classmethod
-    def as_dict(cls) -> Dict[str, str]:
+    @staticmethod
+    def as_dict() -> Dict[str, str]:
         return {
-            "Content-Type": cls.CONTENT_TYPE,
-            "Cache-Control": cls.CACHE_CONTROL,
-            "Connection": cls.CONNECTION,
-            cls.PROTOCOL_VERSION: "v1",
-            cls.NGINX_BUFFERING: "no",
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache, no-transform",
+            "X-Content-Type-Options": "nosniff",
+            "Connection": "keep-alive",
+            "X-Vercel-AI-Data-Stream": "v1",
         }
 
-def format_part(code: str, value: Any) -> str:
-    """Format a part of the stream using the protocol: code:json_string\n"""
-    # If value is a string and the code expects a string (like '0' text), ensure it's JSON encoded
-    # The protocol says: 0:"Hello" -> part code '0', value "Hello" (JSON string)
-    return f"{code}:{json.dumps(value, ensure_ascii=False)}\n"
 
-def stream_start(message_id: str) -> str:
-    # 'start' is not a standard part of the protocol, sending empty text to establish stream
-    # or we can send a custom data event if needed.
-    # For now, sending a custom data part with messageId to keep backward compat logic if possible
-    # But strictly, we should just start streaming text/tools.
-    # Using '8' (data) for messageId info
-    return format_part("8", [{"messageId": message_id}])
+def format_event(event_data: Dict[str, Any]) -> str:
+    """Formats a single SSE event for Data Stream Protocol V2"""
+    # V2 format: data: {"type": "...", ...}\n\n
+    return f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
 
-def stream_text_delta(text: str) -> str:
-    """0: Text part"""
-    return format_part("0", text)
+# ----------------------------------------------------------------------
+# Data Stream Protocol Events (Adapted for Client Expectations)
+# ----------------------------------------------------------------------
 
-def stream_tool_call(tool_call_id: str, tool_name: str, args: Dict) -> str:
-    """9: Tool call part"""
-    return format_part("9", {
-        "toolCallId": tool_call_id,
-        "toolName": tool_name,
-        "args": args
+def stream_start(id=None):
+    """
+    Generate stream start event.
+    Expected: { "type": "text-start", "id": "..." }
+    """
+    return format_event({
+        "type": "text-start",
+        "id": id or "msg_default"
     })
 
-def stream_tool_result(tool_call_id: str, tool_name: str, result: Any) -> str:
-    """a: Tool result part"""
-    return format_part("a", {
+def stream_text_delta(delta, id=None):
+    """
+    Generate text delta event.
+    Expected: { "type": "text-delta", "id": "...", "delta": "..." }
+    """
+    return format_event({
+        "type": "text-delta",
+        "id": id or "msg_default",
+        "delta": delta
+    })
+
+def stream_text_end(id=None):
+    """
+    Generate text end event.
+    Expected: { "type": "text-end", "id": "..." }
+    """
+    return format_event({
+        "type": "text-end",
+        "id": id or "msg_default"
+    })
+
+def stream_tool_call(tool_call, id=None):
+    """
+    Generate tool call event.
+    """
+    return format_event({
+        "type": "tool_call",
+        "tool_call": tool_call
+    })
+
+def stream_tool_result(tool_call_id, tool_name, result):
+    """
+    Generate tool result event (V2).
+    Expected: { "type": "tool-result", "toolCallId": "...", "toolName": "...", "result": ... }
+    """
+    return format_event({
+        "type": "tool-result",
         "toolCallId": tool_call_id,
         "toolName": tool_name,
         "result": result
     })
 
-def stream_finish(reason: str = "stop", usage: Optional[Dict] = None) -> str:
-    """d: Finish message part"""
-    payload = {"finishReason": reason}
+def stream_error(error):
+    """Generate error event."""
+    return format_event({
+        "type": "error",
+        "error": error
+    })
+
+def stream_data(data):
+    """Generate generic data event."""
+    return format_event({
+        "type": "data",
+        "value": data
+    })
+
+def stream_finish(finish_reason, usage=None):
+    """Generate finish event."""
+    payload = {
+        "type": "finish",
+        "finishReason": finish_reason
+    }
     if usage:
         payload["usage"] = usage
-    return format_part("d", payload)
-
-def stream_error(message: str) -> str:
-    """e: Error part"""
-    return format_part("e", {"error": message})
-
-def stream_data(value: Any) -> str:
-    """8: Data part (custom data)"""
-    # Protocol expects a JSON list for data part usually, to append to data array?
-    # SDK Docs: 8:[{"key":"value"}]
-    # We'll ensure it's a list if it's not? Or just send as is if the SDK handles object.
-    # Docs say: "8: JSON-stringified array of data values"
-    if not isinstance(value, list):
-        value = [value]
-    return format_part("8", value)
+    return format_event(payload)
 
 def stream_done() -> str:
-    """No specific 'done' code in v1 protocol, usually stream just ends.
-    But we can send an empty data part or just nothing."""
+    """End of stream marker"""
     return ""
-
-def stream_tool_call_streaming_start(tool_call_id: str, tool_name: str) -> str:
-    """b: Tool call streaming start (not fully standardized in basic docs, using hypothetical 'b')
-    Actually Vercel SDK v6 uses 'b' for 'tool_call_delta' which includes all info?
-    Let's stick to non-streaming tool calls (9) for now unless we need streaming.
-    If we need strictly, 'b' is often {toolCallId, toolName} or delta.
-    Ref: https://github.com/vercel/ai/pull/3063
-    """
-    # This might need adjustment if we implement streaming tools
-    # For now, we'll keep it but warn it might not be standard
-    return format_part("b", {
-        "toolCallId": tool_call_id,
-        "toolName": tool_name
-    })
-
-def stream_tool_call_delta(tool_call_id: str, args_delta: str) -> str:
-    """c: Tool call delta (hypothetical/beta)"""
-    return format_part("c", {
-        "toolCallId": tool_call_id,
-        "argsTextDelta": args_delta
-    })

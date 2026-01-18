@@ -64,11 +64,23 @@ Base URL: `/ai-agents/api`
 }
 ```
 
-#### 发送消息 (流式)
-`POST /requirements/sessions/<session_id>/messages/stream`
+#### 发送消息 (流式 V2 - Data Stream Protocol)
+`POST /requirements/sessions/<session_id>/messages/v2/stream`
+
+**Request:**
+```json
+{
+  "content": "用户消息"
+}
+```
 
 **Response:**
-Server-Sent Events (SSE) 流，实时返回 AI 生成的 token。
+Standard Data Stream Protocol (SSE JSON).
+Events: `start`, `text-delta`, `tool-call`, `data`, `finish`.
+
+#### 发送消息 (流式 V1 - Deprecated)
+`POST /requirements/sessions/<session_id>/messages/stream`
+(Legacy custom SSE format)
 
 ### AI 配置管理
 

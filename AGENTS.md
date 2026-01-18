@@ -14,7 +14,7 @@ AI4SE 是一个 Python/TypeScript 单体仓库，包含 AI 驱动的软件工程
 | 组件 | 后端 | 前端 | 端口 |
 |------|------|------|------|
 | intent-tester | Flask + SQLAlchemy | React | 5001 |
-| ai-agents | Flask + LangGraph | React + assistant-ui | 5002 |
+| ai-agents | Flask + LangGraph | React + assistant-ui (AI SDK Data Stream) | 5002 |
 | nginx 网关 | - | - | 80/443 |
 
 ---

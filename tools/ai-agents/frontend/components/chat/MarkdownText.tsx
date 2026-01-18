@@ -1,80 +1,41 @@
 /**
- * MarkdownText 组件 - 使用 Assistant-ui 的 Markdown 渲染
- * 支持 Mermaid 图表渲染
+ * MarkdownText 组件 - 使用 react-markdown
+ * 支持 Mermaid 图表渲染和 GFM
  */
 import React, { memo } from 'react';
-import { Streamdown } from 'streamdown';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { MermaidBlock } from './MermaidBlock';
-import { cn } from '../../lib/utils';
 
-// 自定义 CodeBlock 组件
-export const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
-    // 1. 如果是行内代码
-    if (inline) {
-        return <code className={cn("aui-md-inline-code", className)} {...props}>{children}</code>;
-    }
-
-    // 2. 提取语言
+// 自定义 Code 组件处理 Mermaid
+export const CodeOverride = ({ className, children, ...props }: any) => {
     const match = /language-(\w+)/.exec(className || '');
     const language = match ? match[1] : '';
 
-    // 3. 如果是 Mermaid，渲染图表 (不包裹 pre)
     if (language === 'mermaid') {
-        const code = typeof children === 'string'
-            ? children
-            : Array.isArray(children)
-                ? children.join('')
-                : String(children || '');
-        return <MermaidBlock code={code.replace(/\n$/, '')} />;
+        const code = String(children).replace(/\n$/, '');
+        return <MermaidBlock code={code} />;
     }
 
-    // 4. 普通代码块，使用 assistant-ui 标准样式
-    return (
-        <pre className={cn("aui-md-pre", className)} {...props}>
-            <code className={className}>
-                {children}
-            </code>
-        </pre>
-    );
+    return <code className={`${className} bg-gray-100 dark:bg-gray-700 rounded px-1 py-0.5`} {...props}>{children}</code>;
 };
 
-const MarkdownTextImpl = ({ children, content, ...props }: any) => {
-    const textContent = (children || content || '') as string;
+const MarkdownTextImpl = ({ content }: { content: string }) => {
     return (
-        <Streamdown
-            {...props}
-            className="aui-md"
-            parseIncompleteMarkdown={true}
-            components={{
-                h1: ({ className, ...props }: any) => <h1 className={cn("aui-md-h1", className)} {...props} />,
-                h2: ({ className, ...props }: any) => <h2 className={cn("aui-md-h2", className)} {...props} />,
-                h3: ({ className, ...props }: any) => <h3 className={cn("aui-md-h3", className)} {...props} />,
-                h4: ({ className, ...props }: any) => <h4 className={cn("aui-md-h4", className)} {...props} />,
-                h5: ({ className, ...props }: any) => <h5 className={cn("aui-md-h5", className)} {...props} />,
-                h6: ({ className, ...props }: any) => <h6 className={cn("aui-md-h6", className)} {...props} />,
-                p: ({ className, ...props }: any) => <p className={cn("aui-md-p", className)} {...props} />,
-                a: ({ className, ...props }: any) => <a className={cn("aui-md-a", className)} {...props} target="_blank" rel="noopener noreferrer" />,
-                blockquote: ({ className, ...props }: any) => <blockquote className={cn("aui-md-blockquote", className)} {...props} />,
-                ul: ({ className, ...props }: any) => <ul className={cn("aui-md-ul", className)} {...props} />,
-                ol: ({ className, ...props }: any) => <ol className={cn("aui-md-ol", className)} {...props} />,
-                li: ({ className, ...props }: any) => <li className={cn("aui-md-li", className)} {...props} />,
-                hr: ({ className, ...props }: any) => <hr className={cn("aui-md-hr", className)} {...props} />,
-                table: ({ className, ...props }: any) => (
-                    <div className="overflow-x-auto my-4">
-                        <table className={cn("aui-md-table", className)} {...props} />
-                    </div>
-                ),
-                th: ({ className, ...props }: any) => <th className={cn("aui-md-th", className)} {...props} />,
-                td: ({ className, ...props }: any) => <td className={cn("aui-md-td", className)} {...props} />,
-                tr: ({ className, ...props }: any) => <tr className={cn("aui-md-tr", className)} {...props} />,
-                
-                // Code handling
-                code: CodeBlock,
-                pre: React.Fragment,
-            }}
-        >
-            {textContent}
-        </Streamdown>
+        <div className="prose prose-sm dark:prose-invert max-w-none break-words">
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                    code: CodeOverride,
+                    // 链接在新窗口打开
+                    a: ({ node, ...props }) => <a target="_blank" rel="noopener noreferrer" {...props} />,
+                    // 保持段落间距适中
+                    p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
+                }}
+            >
+                {content}
+            </ReactMarkdown>
+        </div>
     );
 };
 
