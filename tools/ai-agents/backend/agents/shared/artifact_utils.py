@@ -1,68 +1,15 @@
 """
 产出物解析工具模块
 
-提供 artifact 标签解析、Markdown 代码块提取等功能。
-Lisa 和 Alex 智能体共用此模块。
+提供 Markdown 代码块提取等功能。
+(Artifact XML 标签解析功能已移除)
 """
 
 import re
 import logging
-from typing import Optional, Dict, List
+from typing import Optional
 
 logger = logging.getLogger(__name__)
-
-
-# Artifact 标签正则表达式
-# 匹配: <artifact key="xxx">内容</artifact> 或 <artifact key='xxx'>内容</artifact>
-ARTIFACT_PATTERN = re.compile(
-    r'<artifact\s+key=["\']([^"\']+)["\']\s*>(.*?)</artifact>',
-    re.IGNORECASE | re.DOTALL
-)
-
-
-def parse_artifact(text: str) -> Optional[Dict[str, str]]:
-    """
-    解析响应文本中的第一个 artifact 标签
-    
-    Args:
-        text: LLM 响应文本
-        
-    Returns:
-        {"key": "artifact_key", "content": "内容"} 或 None
-        
-    Example:
-        >>> parse_artifact('<artifact key="requirements">需求文档</artifact>')
-        {"key": "requirements", "content": "需求文档"}
-    """
-    match = ARTIFACT_PATTERN.search(text)
-    if match:
-        key = match.group(1)
-        content = match.group(2).strip()
-        logger.info(f"解析到产出物: key={key}, length={len(content)}")
-        return {"key": key, "content": content}
-    return None
-
-
-def parse_all_artifacts(text: str) -> List[Dict[str, str]]:
-    """
-    解析响应文本中的所有 artifact 标签
-    
-    Args:
-        text: LLM 响应文本
-        
-    Returns:
-        [{"key": "...", "content": "..."}, ...] 列表
-    """
-    results = []
-    for match in ARTIFACT_PATTERN.finditer(text):
-        key = match.group(1)
-        content = match.group(2).strip()
-        results.append({"key": key, "content": content})
-    
-    if results:
-        logger.info(f"解析到 {len(results)} 个产出物")
-    
-    return results
 
 
 def extract_markdown_block(text: str) -> Optional[str]:

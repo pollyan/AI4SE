@@ -22,6 +22,11 @@ from ..prompts.artifacts import (
     ARTIFACT_DELIVERY_FINAL,
     ARTIFACT_REQ_REVIEW_RECORD
 )
+from backend.agents.shared.data_stream import (
+    stream_tool_call_streaming_start,
+    stream_tool_call_delta,
+    stream_tool_result
+)
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +252,9 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
     # 累计的 Tool Args 字符串 (用于流式解析)
     accumulated_tool_args = {} # {tool_call_index: "args_string"}
     
+    # [NEW] 记录已见过的 Tool Call Index -> ID 映射 (用于 Data Stream Protocol)
+    tool_call_ids = {} # {index: tool_call_id}
+    
     # 调用 LLM (改为 Stream 模式)
     try:
         # 使用同步流 (因为 Graph 节点目前是同步的)
@@ -266,6 +274,33 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
             if chunk.tool_call_chunks:
                 for tool_chunk in chunk.tool_call_chunks:
                     idx = tool_chunk["index"]
+                    
+                    # ════════════════════════════════════════════════════════
+                    # Data Stream Protocol 支持 (Phase 2)
+                    # ════════════════════════════════════════════════════════
+                    if tool_chunk.get("name") == "UpdateArtifact":
+                        # 1. Handle Start Event
+                        if idx not in tool_call_ids:
+                            # 尝试获取 ID，若无则生成临时 ID (通常首个 chunk 有 ID)
+                            tc_id = tool_chunk.get("id") or f"call_{idx}"
+                            tool_call_ids[idx] = tc_id
+                            
+                            writer({
+                                "type": "data_stream_event",
+                                "event": stream_tool_call_streaming_start(tc_id, "UpdateArtifact")
+                            })
+                        
+                        # 2. Handle Delta Event
+                        args_delta = tool_chunk.get("args")
+                        if args_delta:
+                            writer({
+                                "type": "data_stream_event",
+                                "event": stream_tool_call_delta(tool_call_ids[idx], args_delta)
+                            })
+
+                    # ════════════════════════════════════════════════════════
+                    # Legacy Partial JSON Parsing (Backward Compat)
+                    # ════════════════════════════════════════════════════════
                     if idx not in accumulated_tool_args:
                         accumulated_tool_args[idx] = ""
                     
@@ -356,6 +391,16 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
                                 "currentTask": f"正在处理 {current_stage} 阶段...",
                                 "artifacts": new_artifacts
                             }
+                        })
+                        
+                        # [NEW] 推送 Tool Result 事件 (Data Stream Protocol)
+                        writer({
+                            "type": "data_stream_event",
+                            "event": stream_tool_result(
+                                tool_call_id=tool_call["id"],
+                                tool_name="UpdateArtifact",
+                                result={"key": key, "status": "completed"}
+                            )
                         })
         
         # 如果没有 Tool Call，且内容非空，则作为普通对话处理

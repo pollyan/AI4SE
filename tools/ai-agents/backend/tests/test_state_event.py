@@ -8,7 +8,7 @@
 import json
 import pytest
 from unittest.mock import MagicMock, AsyncMock
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, AIMessageChunk
 from backend.agents.service import LangchainAssistantService
 
 
@@ -37,7 +37,7 @@ async def test_state_event_emitted_at_stream_end_only():
 ```'''
     
     async def mock_astream(*args, **kwargs):
-        yield ("messages", (AIMessage(content=response_with_plan), {"langgraph_node": target_node}))
+        yield ("messages", (AIMessageChunk(content=response_with_plan), {"langgraph_node": target_node}))
     
     service.agent.astream = mock_astream
     
@@ -81,7 +81,7 @@ async def test_state_event_contains_correct_stages():
 ```'''
     
     async def mock_astream(*args, **kwargs):
-        yield ("messages", (AIMessage(content=response_with_plan), {"langgraph_node": target_node}))
+        yield ("messages", (AIMessageChunk(content=response_with_plan), {"langgraph_node": target_node}))
     
     service.agent.astream = mock_astream
     

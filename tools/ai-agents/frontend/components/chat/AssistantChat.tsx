@@ -1,31 +1,30 @@
 /**
  * AssistantChat 组件 - 使用 Assistant-ui 构建的对话界面
- * 集成现有后端 SSE API
+ * 集成 Vercel AI SDK Data Stream Protocol (V2)
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     AssistantRuntimeProvider,
-    useExternalStoreRuntime,
     ThreadPrimitive,
     ComposerPrimitive,
     MessagePrimitive,
     useMessage,
     ActionBarPrimitive,
     useComposerRuntime,
-} from '@assistant-ui/react';
-import type {
-    ExternalStoreAdapter,
-    ThreadMessage,
-    AppendMessage,
+    useAssistantRuntime,
 } from '@assistant-ui/react';
 import { Bot, Send, User, ChevronLeft, Copy, Check, RefreshCw } from 'lucide-react';
 import { MarkdownText } from './MarkdownText';
 import { AttachmentList } from './AttachmentList';
 import { AttachmentButton } from './AttachmentButton';
 import { MessageAttachments } from './MessageAttachments';
-import { createSession, sendMessageStream, ProgressInfo } from '../../services/backendService';
+import { createSession, ProgressInfo } from '../../services/backendService';
 import { Assistant, AssistantId, PendingAttachment, MessageAttachment } from '../../types';
 import { processFile, buildMessageWithAttachments } from '../../utils/attachmentUtils';
+import { useChatRuntime } from '../../hooks/useChatRuntime';
+import { UpdateArtifactToolUI } from '../tools/UpdateArtifactToolUI';
+import { ConfirmationToolUI } from '../tools/ConfirmationToolUI';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 
 interface AssistantChatProps {
     assistant: Assistant;
@@ -33,363 +32,54 @@ interface AssistantChatProps {
     onProgressChange?: (progress: ProgressInfo | null) => void;
 }
 
-// 将后端消息格式转换为 Assistant-ui 格式
-interface BackendMessage {
-    id: string;  // 新增：消息 ID
-    role: 'user' | 'model';
-    text: string;
-    timestamp: number;
-    isThinking?: boolean;
-    attachments?: MessageAttachment[];  // 新增
+// 错误提示组件
+function RuntimeErrorDisplay() {
+    const runtime = useAssistantRuntime();
+    // 使用 any 绕过类型检查，以访问可能存在的 error 和 reload
+    // Vercel AI SDK 的 error 对象会被适配器传递
+    const error = (runtime.thread as any).error;
+    
+    if (!error) return null;
+    
+    return (
+        <div className="absolute top-16 left-0 w-full bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 p-2 text-center text-sm text-red-600 dark:text-red-400 flex items-center justify-center gap-2 z-10 transition-all animate-in slide-in-from-top-2">
+            <span>出错了: {error.message || "未知错误"}</span>
+            <button 
+                onClick={() => (runtime.thread as any).reload?.()} 
+                className="px-3 py-0.5 bg-white dark:bg-red-950 rounded border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900 transition-colors shadow-sm font-medium"
+            >
+                重试
+            </button>
+        </div>
+    );
 }
 
-function convertToThreadMessage(msg: BackendMessage, index: number) {
-    const baseMessage = {
-        id: msg.id,  // 使用 BackendMessage 的原始 ID
-        createdAt: new Date(msg.timestamp),
-        metadata: { custom: {} },
-    };
+// 内部会话组件 (确保 sessionId 存在时渲染)
+const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: AssistantChatProps & { sessionId: string }) => {
+    // 使用 V2 Runtime
+    const runtime = useChatRuntime(sessionId, assistant.id, onProgressChange);
+    const welcomeSentRef = useRef(false);
 
-    if (msg.role === 'user') {
-        return {
-            ...baseMessage,
-            role: 'user' as const,
-            content: [{ type: 'text' as const, text: msg.text }],
-            attachments: [],
-            metadata: {
-                custom: {
-                    attachments: msg.attachments,  // 传递附件元数据
-                },
-            },
-        };
-    } else {
-        return {
-            ...baseMessage,
-            role: 'assistant' as const,
-            content: [{ type: 'text' as const, text: msg.text }],
-            status: msg.isThinking
-                ? { type: 'running' as const }
-                : { type: 'complete' as const, reason: 'stop' as const },
-        };
-    }
-}
-
-// 内部聊天状态管理
-function useChatState(assistantId: AssistantId, onProgressChange?: (progress: ProgressInfo | null) => void) {
-    const [messages, setMessages] = useState<BackendMessage[]>([]);
-    const [isRunning, setIsRunning] = useState(false);
-    const sessionIdRef = useRef<string | null>(null);
-    const [isInitialized, setIsInitialized] = useState(false);
-
-    // 新增：附件状态
-    const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
-
-    // 新增：处理文件选择
-    const handleFilesSelected = async (files: File[]) => {
-        const processedFiles = await Promise.all(
-            files.map(file => processFile(file))
-        );
-        setPendingAttachments(prev => [...prev, ...processedFiles]);
-    };
-
-    // 新增：删除附件
-    const removeAttachment = (id: string) => {
-        setPendingAttachments(prev => prev.filter(a => a.id !== id));
-    };
-
-    // 初始化会话
+    // 发送欢迎消息 (仅一次)
     useEffect(() => {
-        let cancelled = false;
+        if (welcomeSentRef.current) return;
+        welcomeSentRef.current = true;
 
-        async function initSession() {
-            try {
-                const session = await createSession('AI4SE Project', assistantId);
-                if (cancelled) return;
-
-                sessionIdRef.current = session.sessionId;
-
-                // 发送隐藏的欢迎请求获取AI欢迎消息
-                const welcomeMsgTimestamp = Date.now();
-                setMessages([{
-                    id: `msg-welcome-${welcomeMsgTimestamp}`,
-                    role: 'model',
-                    text: '',
-                    timestamp: welcomeMsgTimestamp,
-                    isThinking: true,
-                }]);
-                setIsRunning(true);
-
-                await sendMessageStream(
-                    session.sessionId,
-                    '请显示欢迎语',
-                    (fullText) => {
-                        setMessages([{
-                            id: `msg-welcome-${welcomeMsgTimestamp}`,
-                            role: 'model',
-                            text: fullText,
-                            timestamp: welcomeMsgTimestamp,
-                            isThinking: false,
-                        }]);
-                    }
-                );
-
-                setIsRunning(false);
-                setIsInitialized(true);
-            } catch (error) {
-                console.error('Failed to initialize session:', error);
-                const errorTimestamp = Date.now();
-                setMessages([{
-                    id: `msg-error-${errorTimestamp}`,
-                    role: 'model',
-                    text: '抱歉，无法连接到后端服务。请确保服务已启动。',
-                    timestamp: errorTimestamp,
-                    isThinking: false,
-                }]);
-                setIsRunning(false);
-                setIsInitialized(true);
-            }
-        }
-
-        initSession();
-        return () => { cancelled = true; };
-    }, [assistantId]);
-
-    // 发送消息处理
-    const onNew = async (message: AppendMessage) => {
-        if (!sessionIdRef.current) return;
-
-        const userText = typeof message.content === 'string'
-            ? message.content
-            : message.content
-                .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
-                .map(part => part.text)
-                .join('');
-
-        // 检查消息内容或有效附件
-        const hasContent = userText.trim().length > 0;
-        const hasValidAttachments = pendingAttachments.some(
-            a => a.content && !a.error
-        );
-
-        if (!hasContent && !hasValidAttachments) {
-            setPendingAttachments([]);
-            return;
-        }
-
-        // 构建包含文件内容的完整消息
-        const fullMessageText = buildMessageWithAttachments(userText, pendingAttachments);
-
-        // 提取附件元数据用于显示
-        const attachmentMetadata: MessageAttachment[] = pendingAttachments
-            .filter(a => a.content && !a.error)
-            .map(a => ({
-                filename: a.filename,
-                size: a.size,
-            }));
-
-        // 添加用户消息（包含附件元数据）
-        const userMsgTimestamp = Date.now();
-        const userMsg: BackendMessage = {
-            id: `msg-user-${userMsgTimestamp}`,
-            role: 'user',
-            text: userText,  // 原始用户文本
-            timestamp: userMsgTimestamp,
-            attachments: attachmentMetadata,  // 附件元数据
+        const welcomeRequest = {
+            role: "user" as const,
+            content: [{ type: "text" as const, text: "请显示欢迎语" }],
+            metadata: { custom: { type: 'welcome_trigger' } }
         };
-        setMessages(prev => [...prev, userMsg]);
-        setIsRunning(true);
 
-        // 清空待发送附件
-        setPendingAttachments([]);
+        // 延迟一点发送，确保连接建立
+        const timer = setTimeout(() => {
+            // 检查是否已有消息 (避免 HMR 或重渲染导致重复)
+            // 暂时无法直接同步访问 runtime.messages 状态，直接发送
+            runtime.thread.append(welcomeRequest);
+        }, 100);
 
-        // 添加 AI 占位消息
-        const botMsgTimestamp = Date.now();
-        setMessages(prev => [...prev, {
-            id: `msg-bot-${botMsgTimestamp}`,
-            role: 'model',
-            text: '',
-            timestamp: botMsgTimestamp,
-            isThinking: true,
-        }]);
-
-        try {
-            await sendMessageStream(
-                sessionIdRef.current,
-                fullMessageText,  // 发送包含文件内容的完整消息
-                (fullText) => {
-                    // XML artifact: 匹配闭合和未闭合(流式)两种情况
-                    const xmlArtifactRegex = /<artifact\s+key="[^"]*"\s*>[\s\S]*?(<\/artifact>|$)/g;
-                    const mdArtifactRegex = /:::artifact\s*([\s\S]*?)(\s*:::|$)/g;
-                    let displayMessage = fullText
-                        .replace(xmlArtifactRegex, '\n*(已更新右侧分析成果)*\n')
-                        .replace(mdArtifactRegex, '\n*(已更新右侧分析成果)*\n');
-
-                    setMessages(prev => {
-                        const newMessages = [...prev];
-                        const lastIdx = newMessages.length - 1;
-                        if (newMessages[lastIdx]?.role === 'model' && newMessages[lastIdx]?.timestamp === botMsgTimestamp) {
-                            newMessages[lastIdx] = {
-                                ...newMessages[lastIdx],
-                                text: displayMessage,
-                                isThinking: false,
-                            };
-                        }
-                        return newMessages;
-                    });
-                },
-                onProgressChange  // 传递进度回调
-            );
-        } catch (error) {
-            console.error('Message send failed:', error);
-            setMessages(prev => {
-                const newMessages = [...prev];
-                const lastIdx = newMessages.length - 1;
-                if (newMessages[lastIdx]?.role === 'model') {
-                    newMessages[lastIdx] = {
-                        ...newMessages[lastIdx],
-                        text: '抱歉，由于网络或服务原因，我无法完成回复。请稍后再试。',
-                        isThinking: false,
-                    };
-                }
-                return newMessages;
-            });
-        } finally {
-            setIsRunning(false);
-        }
-    };
-
-    return {
-        messages,
-        isRunning,
-        onNew,
-        onReload: async (parentId: string | null) => {
-            console.log('[Reload] parentId:', parentId);
-            console.log('[Reload] messages:', messages);
-
-            // parentId 是要重试的消息的父消息 ID（用户消息）
-            if (!parentId) {
-                console.log('[Reload] No parentId, aborting');
-                return;
-            }
-
-            // 找到父消息（用户消息）的索引
-            const parentIndex = messages.findIndex(m => m.id === parentId);
-            console.log('[Reload] parentIndex:', parentIndex);
-
-            if (parentIndex === -1) {
-                console.log('[Reload] Parent message not found, aborting');
-                return;
-            }
-
-            const userMsg = messages[parentIndex];
-            if (!userMsg || userMsg.role !== 'user') {
-                console.log('[Reload] Parent is not a user message, aborting');
-                return;
-            }
-
-            // 保留用户消息，只删除 AI 回复及其后的所有消息
-            setMessages(prev => prev.slice(0, parentIndex + 1));
-
-            // 使用用户消息重新生成 AI 回复
-            const userText = userMsg.text;
-            const attachments = userMsg.attachments || [];
-
-            // 构建包含文件内容的完整消息
-            const fullMessageText = attachments.length > 0
-                ? buildMessageWithAttachments(userText, attachments.map(a => ({
-                    id: `att-${Date.now()}`,
-                    filename: a.filename,
-                    size: a.size,
-                    content: `File: ${a.filename}`, // 简化处理
-                    type: 'text/plain',
-                    file: new File([], a.filename)
-                })))
-                : userText;
-
-            // 添加新的 AI 占位消息
-            const botMsgTimestamp = Date.now();
-            setMessages(prev => [...prev, {
-                id: `msg-reload-${botMsgTimestamp}`,
-                role: 'model',
-                text: '',
-                timestamp: botMsgTimestamp,
-                isThinking: true,
-            }]);
-
-            setIsRunning(true);
-
-            try {
-                await sendMessageStream(
-                    sessionIdRef.current!,
-                    fullMessageText,
-                    (fullText) => {
-                        const xmlArtifactRegex = /<artifact\s+key="[^"]*"\s*>[\s\S]*?<\/artifact>/g;
-                        const mdArtifactRegex = /:::artifact\s*([\s\S]*?)(\s*:::|$)/g;
-                        let displayMessage = fullText
-                            .replace(xmlArtifactRegex, '\n*(已更新右侧分析成果)*\n')
-                            .replace(mdArtifactRegex, '\n*(已更新右侧分析成果)*\n');
-
-                        setMessages(prev => {
-                            const newMessages = [...prev];
-                            const lastIdx = newMessages.length - 1;
-                            if (newMessages[lastIdx]?.role === 'model' && newMessages[lastIdx]?.timestamp === botMsgTimestamp) {
-                                newMessages[lastIdx] = {
-                                    ...newMessages[lastIdx],
-                                    text: displayMessage,
-                                    isThinking: false,
-                                };
-                            }
-                            return newMessages;
-                        });
-                    }
-                );
-            } catch (error) {
-                console.error('Message reload failed:', error);
-                setMessages(prev => {
-                    const newMessages = [...prev];
-                    const lastIdx = newMessages.length - 1;
-                    if (newMessages[lastIdx]?.role === 'model') {
-                        newMessages[lastIdx] = {
-                            ...newMessages[lastIdx],
-                            text: '抱歉，重试失败。请稍后再试。',
-                            isThinking: false,
-                        };
-                    }
-                    return newMessages;
-                });
-            } finally {
-                setIsRunning(false);
-            }
-        },
-        isInitialized,
-        pendingAttachments,
-        handleFilesSelected,
-        removeAttachment,
-    };
-}
-
-// 主组件
-export function AssistantChat({ assistant, onBack, onProgressChange }: AssistantChatProps) {
-    const {
-        messages,
-        isRunning,
-        onNew,
-        onReload,
-        isInitialized,
-        pendingAttachments,
-        handleFilesSelected,
-        removeAttachment
-    } = useChatState(assistant.id, onProgressChange);
-
-    // 创建 External Store 适配器
-    const adapter: ExternalStoreAdapter = {
-        isRunning,
-        messages: messages.map(convertToThreadMessage) as unknown as readonly ThreadMessage[],
-        onNew,
-        onReload,
-    };
-
-    const runtime = useExternalStoreRuntime(adapter);
+        return () => clearTimeout(timer);
+    }, [sessionId]); // 仅在 sessionId 变化时执行
 
     return (
         <AssistantRuntimeProvider runtime={runtime}>
@@ -423,6 +113,8 @@ export function AssistantChat({ assistant, onBack, onProgressChange }: Assistant
                     </button>
                 </div>
 
+                <RuntimeErrorDisplay />
+
                 {/* Chat Thread */}
                 <ThreadPrimitive.Root className="flex-grow overflow-hidden flex flex-col bg-white dark:bg-gray-900">
                     <ThreadPrimitive.Viewport className="flex-grow overflow-y-auto p-4 space-y-6 scroll-smooth">
@@ -435,15 +127,66 @@ export function AssistantChat({ assistant, onBack, onProgressChange }: Assistant
                     </ThreadPrimitive.Viewport>
 
                     {/* Composer */}
-                    <CustomComposer
-                        pendingAttachments={pendingAttachments}
-                        removeAttachment={removeAttachment}
-                        handleFilesSelected={handleFilesSelected}
-                        isRunning={isRunning}
-                    />
+                    <CustomComposer />
                 </ThreadPrimitive.Root>
             </div>
         </AssistantRuntimeProvider>
+    );
+};
+
+// 主组件：处理 Session 创建
+export function AssistantChat(props: AssistantChatProps) {
+    const [sessionId, setSessionId] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let active = true;
+
+        async function init() {
+            try {
+                const session = await createSession('AI4SE Project', props.assistant.id);
+                if (active) {
+                    setSessionId(session.sessionId);
+                }
+            } catch (err) {
+                if (active) {
+                    console.error("Failed to create session:", err);
+                    setError(String(err));
+                }
+            }
+        }
+
+        // 重置状态
+        setSessionId(null);
+        setError(null);
+        init();
+
+        return () => { active = false; };
+    }, [props.assistant.id]);
+
+    if (error) {
+        return (
+            <div className="h-full flex items-center justify-center text-red-500">
+                初始化失败: {error}
+            </div>
+        );
+    }
+
+    if (!sessionId) {
+        return (
+            <div className="h-full flex items-center justify-center text-gray-500">
+                <div className="flex flex-col items-center gap-2">
+                    <span className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                    <span>正在创建会话...</span>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <ErrorBoundary>
+            <ChatSession {...props} sessionId={sessionId} />
+        </ErrorBoundary>
     );
 }
 
@@ -458,16 +201,68 @@ declare global {
     }
 }
 
-// 自定义 Composer 组件 - 暴露编程式 API 供浏览器自动化使用
-interface CustomComposerProps {
-    pendingAttachments: PendingAttachment[];
-    removeAttachment: (id: string) => void;
-    handleFilesSelected: (files: File[]) => Promise<void>;
-    isRunning: boolean;
-}
-
-function CustomComposer({ pendingAttachments, removeAttachment, handleFilesSelected, isRunning }: CustomComposerProps) {
+// 自定义 Composer 组件 - 暴露编程式 API 供浏览器自动化使用 + 处理附件
+function CustomComposer() {
     const composerRuntime = useComposerRuntime();
+    const assistantRuntime = useAssistantRuntime();
+
+    // 附件状态管理
+    const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+    const [isUploading, setIsUploading] = useState(false);
+
+    // 新增：处理文件选择
+    const handleFilesSelected = async (files: File[]) => {
+        setIsUploading(true);
+        try {
+            const processedFiles = await Promise.all(
+                files.map(file => processFile(file))
+            );
+            setPendingAttachments(prev => [...prev, ...processedFiles]);
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    // 新增：删除附件
+    const removeAttachment = (id: string) => {
+        setPendingAttachments(prev => prev.filter(a => a.id !== id));
+    };
+
+    // 处理发送
+    const handleSend = () => {
+        const text = composerRuntime.getState().text.trim();
+
+        const hasContent = text.length > 0;
+        const hasValidAttachments = pendingAttachments.some(a => a.content && !a.error);
+
+        if (!hasContent && !hasValidAttachments) return;
+
+        // 构建包含文件内容的完整消息
+        const fullMessageText = buildMessageWithAttachments(text, pendingAttachments);
+
+        // 构造附件元数据
+        const attachmentMetadata: MessageAttachment[] = pendingAttachments
+            .filter(a => a.content && !a.error)
+            .map(a => ({
+                filename: a.filename,
+                size: a.size,
+            }));
+
+        // 调用 runtime append 发送消息
+        assistantRuntime.thread.append({
+            role: "user",
+            content: [{ type: "text", text: fullMessageText }],
+            metadata: {
+                custom: {
+                    attachments: attachmentMetadata
+                }
+            }
+        });
+
+        // 清空状态
+        composerRuntime.setText("");
+        setPendingAttachments([]);
+    };
 
     // 将 composer 方法暴露到 window 对象供浏览器自动化使用
     useEffect(() => {
@@ -476,7 +271,10 @@ function CustomComposer({ pendingAttachments, removeAttachment, handleFilesSelec
                 composerRuntime.setText(text);
             },
             send: () => {
-                composerRuntime.send();
+                // 自动化调用 send 时也走 handleSend 逻辑
+                // 但 handleSend 依赖闭包中的 pendingAttachments
+                // 这里直接调用 handleSend 即可
+                handleSend();
             },
             getText: () => {
                 return composerRuntime.getState().text;
@@ -486,7 +284,7 @@ function CustomComposer({ pendingAttachments, removeAttachment, handleFilesSelec
         return () => {
             delete window.assistantComposer;
         };
-    }, [composerRuntime]);
+    }, [composerRuntime, assistantRuntime, pendingAttachments]); // 依赖 pendingAttachments 确保 send 获取最新状态
 
     return (
         <div className="p-4 border-t border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/30 shrink-0">
@@ -501,18 +299,29 @@ function CustomComposer({ pendingAttachments, removeAttachment, handleFilesSelec
                     autoFocus
                     placeholder="请输入..."
                     className="flex-grow pl-4 pr-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-sm shadow-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSend();
+                        }
+                    }}
                 />
                 {/* 附件按钮 - 在输入框和发送按钮之间 */}
                 <AttachmentButton
                     onFilesSelected={handleFilesSelected}
-                    disabled={isRunning}
+                    disabled={isUploading}
                 />
-                <ComposerPrimitive.Send
+
+                {/* 自定义发送按钮 (替换 ComposerPrimitive.Send) */}
+                <button
                     id="send-button"
                     aria-label="发送消息"
-                    className="p-3 rounded-full shadow-sm transition-colors flex items-center justify-center bg-primary hover:bg-indigo-600 text-white cursor-pointer disabled:bg-gray-200 disabled:dark:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed">
+                    onClick={handleSend}
+                    disabled={isUploading || (!composerRuntime.getState().text.trim() && pendingAttachments.length === 0)}
+                    className="p-3 rounded-full shadow-sm transition-colors flex items-center justify-center bg-primary hover:bg-indigo-600 text-white cursor-pointer disabled:bg-gray-200 disabled:dark:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+                >
                     <Send size={20} />
-                </ComposerPrimitive.Send>
+                </button>
             </ComposerPrimitive.Root>
         </div>
     );
@@ -521,6 +330,12 @@ function CustomComposer({ pendingAttachments, removeAttachment, handleFilesSelec
 // 自定义用户消息组件
 function CustomUserMessage() {
     const message = useMessage();
+
+    // 如果是欢迎触发消息，不显示
+    // 兼容 metadata 检查和内容检查 (因为 Vercel SDK 可能丢弃 metadata)
+    if (message.metadata?.custom?.type === 'welcome_trigger' || (message.content[0]?.type === 'text' && message.content[0]?.text === '请显示欢迎语')) {
+        return null;
+    }
 
     // 从消息元数据中提取附件
     const attachments = message.metadata?.custom?.attachments as MessageAttachment[] | undefined;
@@ -583,7 +398,17 @@ function CustomAssistantMessage({ assistant }: { assistant: Assistant }) {
             </div>
             <div className="flex flex-col max-w-[85%] items-start">
                 <div className="px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-200 dark:border-gray-700">
-                    <MessagePrimitive.Content components={{ Text: MarkdownText as any }} />
+                    <MessagePrimitive.Content
+                        components={{
+                            Text: MarkdownText as any,
+                            tools: {
+                                by_name: {
+                                    UpdateArtifact: UpdateArtifactToolUI,
+                                    ask_confirmation: ConfirmationToolUI
+                                }
+                            }
+                        }}
+                    />
                     {isInProgress && hasNoContent && <TypingIndicator />}
                 </div>
 

@@ -11,7 +11,7 @@ import logging
 import json
 import re
 from typing import AsyncIterator, Optional, Dict, List, Any, Union, TYPE_CHECKING
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
 
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
@@ -317,7 +317,15 @@ class LangchainAssistantService:
             "model"
         }
         
-        from .shared.progress_utils import clean_response_streaming
+        # 仅对这些节点启用 AIMessage 过滤（因为它们使用流式输出）
+        streaming_nodes = {
+            "workflow_test_design",
+            "workflow_requirement_review",
+            "workflow_product_design",
+            "model"
+        }
+        
+        # from .shared.progress_utils import clean_response_streaming  # Removed
         processed_templates = set()
         plan_parsed = False
         json_parsed = False
@@ -329,7 +337,7 @@ class LangchainAssistantService:
             extract_plan_from_structured,
             extract_artifacts_from_structured,
         )
-        from .shared.artifact_utils import parse_all_artifacts
+        # from .shared.artifact_utils import parse_all_artifacts (Removed)
         from .shared.output_parser import split_message_and_json
         
         yielded_len = 0
@@ -394,19 +402,20 @@ class LangchainAssistantService:
                     node_name = metadata.get("langgraph_node", "")
                     
                     if node_name in user_facing_nodes:
+                        # 只处理 AIMessageChunk（流式 token），忽略完整的 AIMessage（节点返回）
+                        # 避免 LangGraph stream_mode="messages" 同时捕获流式和最终消息导致重复
+                        # 注意：仅对流式节点应用此逻辑；静态节点（如 clarify_intent）没有 chunks，必须保留 AIMessage
+                        if node_name in streaming_nodes:
+                            if isinstance(message, AIMessage) and not isinstance(message, AIMessageChunk):
+                                continue
+                        
                         if hasattr(message, 'content') and message.content:
                             content = message.content
                             
-                            # 修复内容累积逻辑：避免重复
-                            # 场景 1: 新内容完全包含旧内容 (完整替换)
-                            if full_response in content:
-                                full_response = content
-                            # 场景 2: 旧内容完全包含新内容 (已有，忽略)
-                            elif content in full_response:
-                                pass  # 不追加，避免重复
-                            # 场景 3: 真正的增量追加 (LLM token 流)
-                            else:
-                                full_response += content
+                            # 直接追加内容，不做去重
+                            # 之前的去重逻辑会导致 Markdown 格式（如 **）和重复词被吞噬
+                            # 我们已经通过 AIMessageChunk 类型过滤解决了 LangGraph 重复推送的问题
+                            full_response += content
     
                             if not json_parsed and not plan_parsed:
                                 if '```json' in full_response and '```' in full_response[full_response.find('```json')+7:]:
@@ -436,32 +445,15 @@ class LangchainAssistantService:
                                         
                                         from .shared.progress import get_progress_info
                                         progress_info = get_progress_info(current_state)
-                                        yield {"type": "state", "progress": progress_info}
-                                        logger.info("JSON 结构化输出解析成功")
-
-                            if "<artifact" in full_response.lower() and "</artifact>" in full_response.lower():
-                                current_artifacts = parse_all_artifacts(full_response)
-                                has_new_artifact = False
-                                
-                                if "artifacts" not in current_state:
-                                    current_state["artifacts"] = {}
-                                
-                                for artifact in current_artifacts:
-                                    key = artifact.get("key")
-                                    content_val = artifact.get("content")
-                                    if key and content_val:
-                                        existing = current_state["artifacts"].get(key)
-                                        if existing != content_val:
-                                            current_state["artifacts"][key] = content_val
-                                            has_new_artifact = True
-                                            logger.info(f"流式解析到产出物: {key} ({len(content_val)} 字符)")
-                                
-                                if has_new_artifact:
-                                    from .shared.progress import get_progress_info
-                                    progress_info = get_progress_info(current_state)
                                     yield {"type": "state", "progress": progress_info}
-    
-                        temp_cleaned = clean_response_streaming(full_response)
+                                    logger.info("JSON 结构化输出解析成功")
+
+                        # [REMOVED] Legacy XML Artifact Parsing
+                        # if "<artifact" in full_response.lower() and "</artifact>" in full_response.lower():
+                        #     ... (removed) ...
+
+                        # temp_cleaned = clean_response_streaming(full_response)
+                        temp_cleaned = full_response
                         message_part, _ = split_message_and_json(temp_cleaned)
                         
                         if len(message_part) > yielded_len:

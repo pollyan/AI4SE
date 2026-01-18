@@ -2,16 +2,16 @@
  * MarkdownText 组件 - 使用 Assistant-ui 的 Markdown 渲染
  * 支持 Mermaid 图表渲染
  */
-import React, { memo, type ComponentPropsWithoutRef } from 'react';
-import { MarkdownTextPrimitive } from '@assistant-ui/react-markdown';
-import remarkGfm from 'remark-gfm';
+import React, { memo } from 'react';
+import { Streamdown } from 'streamdown';
 import { MermaidBlock } from './MermaidBlock';
+import { cn } from '../../lib/utils';
 
-// 移除 PreBlock，直接由 CodeBlock 接管渲染逻辑
+// 自定义 CodeBlock 组件
 export const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
-    // 1. 如果是行内代码，直接渲染 code
+    // 1. 如果是行内代码
     if (inline) {
-        return <code className={className} {...props}>{children}</code>;
+        return <code className={cn("aui-md-inline-code", className)} {...props}>{children}</code>;
     }
 
     // 2. 提取语言
@@ -28,30 +28,53 @@ export const CodeBlock = ({ node, inline, className, children, ...props }: any) 
         return <MermaidBlock code={code.replace(/\n$/, '')} />;
     }
 
-    // 4. 普通代码块，手动包裹 pre 以恢复 prose 样式
+    // 4. 普通代码块，使用 assistant-ui 标准样式
     return (
-        <pre className={`block p-4 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm font-mono overflow-x-auto my-4`}>
-            <code className={className} {...props}>
+        <pre className={cn("aui-md-pre", className)} {...props}>
+            <code className={className}>
                 {children}
             </code>
         </pre>
     );
 };
 
-// 创建基础 MarkdownText 组件
-
-const MarkdownTextImpl = (props: ComponentPropsWithoutRef<typeof MarkdownTextPrimitive>) => {
+const MarkdownTextImpl = ({ children, content, ...props }: any) => {
+    const textContent = (children || content || '') as string;
     return (
-        <MarkdownTextPrimitive
+        <Streamdown
             {...props}
-            remarkPlugins={[remarkGfm]}
-            className="prose prose-sm prose-slate dark:prose-invert max-w-none break-words prose-p:leading-relaxed prose-pre:p-0 prose-blockquote:text-gray-700 dark:prose-blockquote:text-gray-300 prose-strong:text-inherit"
+            className="aui-md"
+            parseIncompleteMarkdown={true}
             components={{
+                h1: ({ className, ...props }: any) => <h1 className={cn("aui-md-h1", className)} {...props} />,
+                h2: ({ className, ...props }: any) => <h2 className={cn("aui-md-h2", className)} {...props} />,
+                h3: ({ className, ...props }: any) => <h3 className={cn("aui-md-h3", className)} {...props} />,
+                h4: ({ className, ...props }: any) => <h4 className={cn("aui-md-h4", className)} {...props} />,
+                h5: ({ className, ...props }: any) => <h5 className={cn("aui-md-h5", className)} {...props} />,
+                h6: ({ className, ...props }: any) => <h6 className={cn("aui-md-h6", className)} {...props} />,
+                p: ({ className, ...props }: any) => <p className={cn("aui-md-p", className)} {...props} />,
+                a: ({ className, ...props }: any) => <a className={cn("aui-md-a", className)} {...props} target="_blank" rel="noopener noreferrer" />,
+                blockquote: ({ className, ...props }: any) => <blockquote className={cn("aui-md-blockquote", className)} {...props} />,
+                ul: ({ className, ...props }: any) => <ul className={cn("aui-md-ul", className)} {...props} />,
+                ol: ({ className, ...props }: any) => <ol className={cn("aui-md-ol", className)} {...props} />,
+                li: ({ className, ...props }: any) => <li className={cn("aui-md-li", className)} {...props} />,
+                hr: ({ className, ...props }: any) => <hr className={cn("aui-md-hr", className)} {...props} />,
+                table: ({ className, ...props }: any) => (
+                    <div className="overflow-x-auto my-4">
+                        <table className={cn("aui-md-table", className)} {...props} />
+                    </div>
+                ),
+                th: ({ className, ...props }: any) => <th className={cn("aui-md-th", className)} {...props} />,
+                td: ({ className, ...props }: any) => <td className={cn("aui-md-td", className)} {...props} />,
+                tr: ({ className, ...props }: any) => <tr className={cn("aui-md-tr", className)} {...props} />,
+                
+                // Code handling
                 code: CodeBlock,
-                // 将 pre 映射为 Fragment，移除默认 DOM 结构，由 CodeBlock 全权接管
                 pre: React.Fragment,
             }}
-        />
+        >
+            {textContent}
+        </Streamdown>
     );
 };
 

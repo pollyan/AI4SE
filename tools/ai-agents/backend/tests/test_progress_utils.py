@@ -82,29 +82,6 @@ class TestGetCurrentStageId:
         assert result is None
 
 
-class TestCleanResponseStreaming:
-    
-    def test_clean_complete_json_block(self):
-        text = '''开始```json
-{"plan": [], "current_stage_id": "a", "artifacts": [], "message": "x"}
-```结束'''
-        result = clean_response_streaming(text)
-        assert result == "开始结束"
-        
-    def test_truncate_partial_json_start(self):
-        text = "前面内容```jso"
-        result = clean_response_streaming(text)
-        assert result == "前面内容"
-        
-    def test_truncate_known_json_start(self):
-        text = "text ```json"
-        assert clean_response_streaming(text) == "text "
-
-    def test_no_truncate_other_code_blocks(self):
-        text = "text ```python"
-        assert clean_response_streaming(text) == "text ```python"
-
-
 class TestParseStructuredJson:
 
     def test_parse_valid_json_block(self):

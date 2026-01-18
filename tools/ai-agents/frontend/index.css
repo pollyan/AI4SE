@@ -1,0 +1,17 @@
+/* Global Styles */
+
+/* Fix for Markdown rendering: Preserve line breaks in paragraphs */
+/* This handles cases where LLM output is dense (single newline instead of double) */
+/* .aui-md-p removed as Streamdown handles it */
+
+
+/* Ensure lists have proper spacing */
+.aui-md-ol, .aui-md-ul {
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    padding-left: 1.5em;
+}
+
+.aui-md-li {
+    margin-bottom: 0.25em;
+}

@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom/client';
 import ConfigPage from './ConfigPage';
 import CompactApp from './CompactApp';
 
+import "@assistant-ui/styles/index.css";
+
 // Simple path-based routing
 const getPage = () => {
   const path = window.location.pathname;

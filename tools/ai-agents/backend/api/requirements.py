@@ -9,7 +9,7 @@ import os
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from flask import Blueprint, request, jsonify, Response, Response, stream_with_context
+from flask import Blueprint, request, jsonify, Response, stream_with_context
 
 # SocketIO support removed for cleanup
 from .base import (
@@ -617,10 +617,13 @@ def send_message(session_id):
 @requirements_bp.route("/sessions/<session_id>/messages/stream", methods=["POST"])
 def stream_messages(session_id):
     """
-    流式发送消息给AI助手 (SSE)
-    使用同步生成器包装异步流，以兼容 WSGI
+    [Deprecated] V1 流式发送消息给AI助手 (SSE)
+    请使用 V2 端点: /sessions/<session_id>/messages/v2/stream
     """
     try:
+        # Warn about deprecation
+        logger.warning(f"Deprecated V1 stream endpoint called for session {session_id}")
+        
         data = request.get_json()
         if not data or not data.get("content"):
             return standard_error_response("消息内容不能为空", 400)
@@ -734,6 +737,240 @@ def stream_messages(session_id):
     except Exception as e:
         logger.error(f"Stream route error: {e}")
         return standard_error_response(f"流式请求失败: {str(e)}", 500)
+
+
+@requirements_bp.route("/sessions/<session_id>/messages/v2/stream", methods=["POST"])
+def stream_messages_v2(session_id):
+    """
+    V2 流式消息端点 - 使用 Data Stream Protocol
+    
+    响应头:
+        x-vercel-ai-ui-message-stream: v1
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return standard_error_response("消息内容不能为空", 400)
+            
+        # 兼容 Vercel AI SDK 格式 (messages 数组)
+        messages = data.get("messages", [])
+        if messages and isinstance(messages, list):
+            # 获取最后一条消息
+            last_message = messages[-1]
+            if isinstance(last_message, dict):
+                content = last_message.get("content", "")
+                
+                # 尝试从 parts 获取 (AI SDK V2 format)
+                if not content and "parts" in last_message:
+                    content = last_message.get("parts")
+
+                # 如果是多模态内容（数组/parts），提取文本
+                if isinstance(content, list):
+                     text_parts = [p.get("text", "") for p in content if p.get("type") == "text"]
+                     content = "\n".join(text_parts)
+            else:
+                content = str(last_message)
+        else:
+            content = data.get("content", "")
+            
+        # 如果依然为空，记录警告
+        if not content:
+            logger.warning(f"接收到空消息内容。Data: {data}")
+        
+        # 获取会话
+        session = RequirementsSession.query.filter_by(id=session_id).first()
+        if not session:
+            return standard_error_response("会话不存在", 404)
+        
+        # 从 user_context 获取 assistant_type
+        user_context = json.loads(session.user_context or "{}")
+        assistant_type = user_context.get("assistant_type", "alex")
+        
+        # 获取 AI 服务
+        try:
+            ai_service = get_ai_service(assistant_type, session_id)
+            if not ai_service:
+                return standard_error_response(f"无法初始化 {session.assistant_type} 助手", 500)
+        except Exception as e:
+            return standard_error_response(f"AI服务初始化错误: {str(e)}", 500)
+            
+        # 注意：这里我们简化逻辑，暂时不保存用户消息和 AI 消息到数据库，
+        # 或者沿用 V1 的保存逻辑。为了保持一致性，应该保存。
+        # 但为了聚焦协议适配，我们先复用 V1 的部分逻辑（或者假设它已经被保存？）
+        # Plan Phase 1 重点是协议。
+        # 让我们把保存逻辑加进去，确保它是完整的。
+        
+        session.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        # 保存用户消息
+        user_message = RequirementsMessage(
+            session_id=session.id,
+            content=content,
+            message_type="user"
+        )
+        db.session.add(user_message)
+        
+        # 创建 AI 消息占位
+        ai_message = RequirementsMessage(
+            session_id=session.id,
+            content="",
+            message_type="ai"
+        )
+        db.session.add(ai_message)
+        db.session.commit()
+        
+        def generate():
+            import asyncio
+            from ..agents.shared.data_stream_adapter import adapt_langgraph_stream
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                # 运行适配器
+                async_gen = adapt_langgraph_stream(ai_service, session_id, content, db_message_id=ai_message.id)
+                
+                while True:
+                    try:
+                        item = loop.run_until_complete(async_gen.__anext__())
+                        yield item
+                    except StopAsyncIteration:
+                        break
+                        
+            except Exception as e:
+                logger.error(f"V2 Streaming error: {e}")
+                from ..agents.shared.data_stream import stream_error
+                
+                # Sanitize error message for frontend
+                error_msg = str(e)
+                if "api_key" in error_msg.lower():
+                    safe_msg = "Configuration Error: API Key issue"
+                elif "connection" in error_msg.lower() or "timeout" in error_msg.lower():
+                    safe_msg = "Network Error: AI service unreachable"
+                else:
+                    # In development, might want to see more, but for safety:
+                    safe_msg = "An unexpected error occurred during processing."
+                    
+                yield stream_error(safe_msg)
+            finally:
+                loop.close()
+    
+        from ..agents.shared.data_stream import DataStreamHeaders
+        headers = DataStreamHeaders.as_dict()
+        return Response(stream_with_context(generate()), mimetype='text/event-stream', headers=headers)
+
+    except Exception as e:
+        logger.error(f"V2 Stream route error: {e}")
+        return standard_error_response(f"流式请求失败: {str(e)}", 500)
+
+
+@requirements_bp.route("/sessions/<session_id>/sync", methods=["POST"])
+@require_json
+@log_api_call
+def sync_session_messages(session_id):
+    """Synchronize full message history from frontend (Sync on Finish)"""
+    try:
+        session = RequirementsSession.query.get(session_id)
+        if not session:
+            raise NotFoundError("会话不存在")
+            
+        data = request.get_json()
+        messages = data.get("messages", [])
+        
+        if not messages:
+            return standard_success_response(message="无需同步")
+            
+        # We only care about the *last* message which is the AI response being completed
+        last_msg = messages[-1]
+        
+        # Verify it's an assistant message
+        if last_msg.get("role") != "assistant":
+             return standard_success_response(message="忽略非助手消息")
+             
+        message_id = last_msg.get("id")
+        # message_id should be our DB ID (as string)
+        
+        if not message_id or not message_id.isdigit():
+            # If it's a random ID (e.g. from a fresh session on client not yet synced?), 
+            # we might need to create it. But in our flow, we created it in stream start.
+            logger.warning(f"Sync received non-integer ID: {message_id}")
+            return standard_error_response("无效的消息ID", 400)
+            
+        db_id = int(message_id)
+        ai_message = RequirementsMessage.query.get(db_id)
+        
+        if not ai_message:
+            raise NotFoundError(f"消息ID {db_id} 不存在")
+            
+        if ai_message.session_id != session_id:
+             raise ValidationError("消息不属于该会话")
+             
+        # Update content and metadata
+        # Store the FULL Vercel message object (parts, toolInvocations) in metadata
+        # to support re-hydration on frontend refresh
+        
+        # Extract text content for compatibility
+        content = last_msg.get("content", "")
+        
+        # Update metadata
+        current_meta = json.loads(ai_message.message_metadata) if ai_message.message_metadata else {}
+        current_meta["vercel_message"] = last_msg # Save full state!
+        
+        ai_message.content = content
+        ai_message.message_metadata = json.dumps(current_meta)
+        
+        # Phase 2: Process tool invocations and create Tool Messages for LangChain
+        tool_invocations = last_msg.get("toolInvocations", [])
+        if tool_invocations:
+            # Fetch existing tool messages for this session to prevent duplicates
+            # Optimization: limit to recent messages or use a better query if metadata was indexed
+            existing_msgs = RequirementsMessage.query.filter_by(
+                session_id=session_id, 
+                message_type='tool'
+            ).all()
+            
+            existing_tool_ids = set()
+            for msg in existing_msgs:
+                try:
+                    meta = json.loads(msg.message_metadata or "{}")
+                    if "tool_call_id" in meta:
+                        existing_tool_ids.add(meta["tool_call_id"])
+                except:
+                    pass
+            
+            for tool_inv in tool_invocations:
+                if tool_inv.get("state") == "result":
+                    tool_call_id = tool_inv.get("toolCallId")
+                    if tool_call_id and tool_call_id not in existing_tool_ids:
+                        # Create new Tool Message
+                        tool_result = tool_inv.get("result")
+                        # Ensure result is string
+                        if not isinstance(tool_result, str):
+                            tool_result = json.dumps(tool_result, ensure_ascii=False)
+                            
+                        tool_msg = RequirementsMessage(
+                            session_id=session_id,
+                            message_type='tool',
+                            content=tool_result,
+                            message_metadata=json.dumps({
+                                "tool_call_id": tool_call_id,
+                                "tool_name": tool_inv.get("toolName"),
+                                "source": "sync_on_finish"
+                            })
+                        )
+                        db.session.add(tool_msg)
+        
+        db.session.commit()
+        
+        return standard_success_response(message="同步成功")
+
+    except (ValidationError, NotFoundError) as e:
+        return standard_error_response(e.message, e.code if hasattr(e, 'code') else 400)
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Sync error: {e}")
+        return standard_error_response(f"同步失败: {str(e)}", 500)
 
 
 @requirements_bp.route("/sessions/<session_id>/status", methods=["PUT"])
