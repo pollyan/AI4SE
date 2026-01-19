@@ -61,6 +61,7 @@ class BaseAgentState(TypedDict):
     
     # 交互追踪
     pending_clarifications: List[str]
+    clarification: Optional[str]  # 当前意图澄清消息 (动态)
     consensus_items: List[Any]
 
 
@@ -83,6 +84,7 @@ def get_base_initial_state() -> Dict[str, Any]:
         "artifacts": {},
         "artifact_templates": [],
         "pending_clarifications": [],
+        "clarification": None,
         "consensus_items": [],
     }
 
@@ -108,5 +110,6 @@ def clear_workflow_state(state: Dict[str, Any]) -> Dict[str, Any]:
         "artifacts": {},
         "artifact_templates": [],
         "pending_clarifications": [],
+        "clarification": None,
         "consensus_items": [],
     }

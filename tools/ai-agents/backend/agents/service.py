@@ -336,8 +336,13 @@ class LangchainAssistantService:
                             # 直接使用 StreamWriter 发送的进度数据
                             progress_data = payload.get("progress", {})
                             current_state["plan"] = progress_data.get("stages", [])
-                            current_state["currentStageIndex"] = progress_data.get("currentStageIndex", 0)
+                            idx = progress_data.get("currentStageIndex", 0)
+                            current_state["currentStageIndex"] = idx
                             current_state["currentTask"] = progress_data.get("currentTask", "")
+                            
+                            # Ensure current_stage_id is set for get_progress_info
+                            if current_state["plan"] and 0 <= idx < len(current_state["plan"]):
+                                current_state["current_stage_id"] = current_state["plan"][idx].get("id")
                             
                             # 提取并保存产出物模板元数据
                             if "artifact_templates" in progress_data:
@@ -371,6 +376,14 @@ class LangchainAssistantService:
                                 if progress_info:
                                     yield {"type": "state", "progress": progress_info}
                                 logger.info(f"StreamWriter 产出物: {artifact_key}")
+                        
+                        elif data_type == "data_stream_event":
+                            # 透传数据流事件 (如 progress data 等)
+                            yield payload.get("event")
+                        
+                        elif data_type == "text_delta_chunk":
+                            # 接收原始 delta，直接 yield 字符串，由 adapter 包装 ID
+                            yield payload.get("delta")
                 
                 elif mode == "updates":
                     for node_name, update_content in payload.items():

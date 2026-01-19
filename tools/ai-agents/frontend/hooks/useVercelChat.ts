@@ -26,6 +26,7 @@ export interface UseVercelChatReturn {
         id: string;
         role: 'user' | 'assistant';
         parts: Array<{ type: string; text?: string;[key: string]: any }>;
+        experimental_attachments?: any[];
     }>;
     /** 当前状态 */
     status: 'ready' | 'streaming' | 'error';
@@ -107,6 +108,7 @@ export function useVercelChat({
             id: msg.id,
             role: msg.role as 'user' | 'assistant',
             parts: msg.parts || [{ type: 'text', text: typeof (msg as any).content === 'string' ? (msg as any).content : '' }],
+            experimental_attachments: (msg as any).experimental_attachments,
         }));
     }, [rawMessages]);
 

@@ -67,3 +67,21 @@ class UpdateArtifact(BaseModel):
         default=None, 
         description="可选的元数据，如 risk_level, status 等"
     )
+
+
+class WorkflowResponse(BaseModel):
+    """
+    工作流复合响应结构。
+    允许模型在单次输出中同时包含思考过程（对话）、进度状态和文档更新（行动）。
+    """
+    thought: str = Field(description="思考过程、对用户的回复或澄清问题")
+    
+    progress_step: Optional[str] = Field(
+        default=None,
+        description="当前的具体步骤名称，例如：'正在分析需求', '生成测试用例'。用于更新前端进度条。"
+    )
+    
+    update_artifact: Optional[UpdateArtifact] = Field(
+        default=None, 
+        description="需要更新的文档内容。仅在明确需要生成或修改文档时使用。"
+    )

@@ -66,6 +66,7 @@ class LisaState(TypedDict):
     # 交互追踪
     # ═══════════════════════════════════════════════════════════
     pending_clarifications: list[str] # 待澄清问题列表
+    clarification: Optional[str]      # 当前意图澄清消息 (动态)
     consensus_items: list[dict]        # [{"question": "...", "answer": "..."}]
 
 

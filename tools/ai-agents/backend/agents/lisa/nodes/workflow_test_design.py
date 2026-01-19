@@ -6,13 +6,13 @@ Workflow Test Design Node - 测试设计工作流节点
 
 import logging
 import re
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Optional, cast
 
-from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage, BaseMessage
 from langgraph.config import get_stream_writer
 
 from ..state import LisaState, ArtifactKeys
-from ..schemas import UpdateArtifact
+from ..schemas import UpdateArtifact, WorkflowResponse
 from ..prompts.workflows import build_workflow_prompt
 from backend.agents.shared.artifact_summary import get_artifacts_summary
 from ..prompts.artifacts import (
@@ -23,9 +23,10 @@ from ..prompts.artifacts import (
     ARTIFACT_REQ_REVIEW_RECORD
 )
 from backend.agents.shared.data_stream import (
-    stream_tool_call,
-    stream_tool_result
+    stream_text_delta,
+    stream_data
 )
+from ..stream_utils import process_workflow_stream
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +145,7 @@ def get_artifact_template(key: str) -> str:
     if key == ArtifactKeys.REQ_REVIEW_RECORD: return ARTIFACT_REQ_REVIEW_RECORD
     return ""
 
-def get_artifact_key_for_stage(stage: str, workflow_type: str) -> str | None:
+def get_artifact_key_for_stage(stage: str, workflow_type: str) -> Optional[str]:
     """获取阶段对应的产出物 Key"""
     if workflow_type == "requirement_review":
         stage_to_artifact = {
@@ -261,166 +262,54 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
     )
     
     # 构建消息列表
-    messages = [SystemMessage(content=system_prompt)]
+    messages: List[BaseMessage] = [SystemMessage(content=system_prompt)]
+    # 这里需要确保 messages 里的对象类型正确，LangChain 可能会把 dict 混进来
+    # 如果是 dict，需要转换 (StateGraph 应该已经处理了，但为了安全)
     for msg in state.get("messages", []):
         messages.append(msg)
     
-    # 绑定工具
-    llm_with_tools = llm.model.bind_tools([UpdateArtifact])
+    # ════════════════════════════════════════════════════════════
+    # 使用 Structured Output + Streaming (Phase 1 核心升级)
+    # ════════════════════════════════════════════════════════════
+    structured_llm = llm.model.with_structured_output(
+        WorkflowResponse,
+        method="function_calling"
+    )
     
-    # 最终汇总的消息内容
-    final_content = ""
+    # 最终汇总
+    final_thought = ""
     
-    # 累计的 Tool Args 字符串 (用于流式解析)
-    accumulated_tool_args = {} # {tool_call_index: "args_string"}
+    new_artifacts = dict(artifacts)
     
-    # [NEW] 记录已见过的 Tool Call Index -> ID 映射 (用于 Data Stream Protocol)
-    tool_call_ids = {} # {index: tool_call_id}
+    logger.info("开始 Structured Output 流式调用...")
     
-    # 调用 LLM (改为 Stream 模式)
     try:
-        # 使用同步流 (因为 Graph 节点目前是同步的)
-        stream = llm_with_tools.stream(messages)
+        # 使用工具函数处理流
+        final_response = process_workflow_stream(
+            stream_iterator=structured_llm.stream(messages),
+            writer=writer,
+            plan=plan,
+            current_stage=current_stage,
+            base_artifacts=artifacts
+        )
         
-        # 收集 chunks 用于最终状态合成
-        collected_chunks = []
-        
-        for chunk in stream:
-            collected_chunks.append(chunk)
-            
-            # 1. 累加文本内容 (普通对话)
-            if chunk.content:
-                final_content += str(chunk.content)
-            
-            # 2. 处理 Tool Call Chunks (流式更新产出物)
-            if chunk.tool_call_chunks:
-                for tool_chunk in chunk.tool_call_chunks:
-                    idx = tool_chunk["index"]
-                    
-                    # ════════════════════════════════════════════════════════
-                    # Data Stream Protocol 支持 (Phase 2)
-                    # ════════════════════════════════════════════════════════
-                    if tool_chunk.get("name") == "UpdateArtifact":
-                        # 1. Handle Start Event
-                        if idx not in tool_call_ids:
-                            # 尝试获取 ID，若无则生成临时 ID (通常首个 chunk 有 ID)
-                            tc_id = tool_chunk.get("id") or f"call_{idx}"
-                            tool_call_ids[idx] = tc_id
-                            
-                        # 2. Delta Event (Skipped for V2 simplified stream)
-                        # pass
+        final_thought = final_response.thought
+        final_update_artifact = final_response.update_artifact
 
-                    # ════════════════════════════════════════════════════════
-                    # Legacy Partial JSON Parsing (Backward Compat)
-                    # ════════════════════════════════════════════════════════
-                    if idx not in accumulated_tool_args:
-                        accumulated_tool_args[idx] = ""
-                    
-                    # 累加参数字符串
-                    if tool_chunk.get("args"):
-                        accumulated_tool_args[idx] += tool_chunk["args"]
-                        
-                        # 尝试从累加的字符串中提取 markdown_body
-                        # 这是一个 "Best Effort" 的流式提取，不必等待 JSON 闭合
-                        current_args_str = accumulated_tool_args[idx]
-                        
-                        # 查找 "markdown_body": " 之后的内容
-                        # 提取 key (如果已出现)
-                        key_match = re.search(r'"key":\s*"([^"]+)"', current_args_str)
-                        current_key = key_match.group(1) if key_match else None
-                        
-                        # 提取 body (处理转义引号)
-                        body_start_pattern = r'"markdown_body":\s*"'
-                        body_match = re.search(body_start_pattern, current_args_str)
-                        
-                        if current_key and body_match:
-                            start_pos = body_match.end()
-                            raw_body = current_args_str[start_pos:]
-                            
-                            # 截断末尾可能的未闭合引号 (简单启发式)
-                            if raw_body.endswith('"') and len(raw_body) > 1 and raw_body[-2] != '\\':
-                                raw_body = raw_body[:-1]
-                            
-                            # 简易 Unescape (仅处理最常见的)
-                            clean_body = raw_body.replace('\\n', '\n').replace('\\"', '"').replace('\\\\', '\\')
-                            
-                            # 构造临时 artifacts 用于推送
-                            stream_artifacts = dict(artifacts)
-                            stream_artifacts[current_key] = clean_body
-                            
-                            writer({
-                                "type": "progress",
-                                "progress": {
-                                    "stages": plan,
-                                    "currentStageIndex": get_stage_index(plan, current_stage),
-                                    "currentTask": f"正在生成文档...",
-                                    "artifacts": stream_artifacts
-                                }
-                            })
-
-        # 合并 chunks 构造最终响应
-        if collected_chunks:
-            # sum() 默认 start=0，会导致 0 + Chunk 报错
-            # 我们需要手动累加或指定 start
-            response = collected_chunks[0]
-            for next_chunk in collected_chunks[1:]:
-                response = response + next_chunk
-        else:
-            response = AIMessage(content="")
-
-        response_content = str(response.content)
+        # 循环结束，处理最终状态
+        logger.info(f"流式调用结束. Thought: {len(final_thought)} chars")
         
-        # DEBUG LOGGING
-        logger.warning(f"LLM Response Content Length: {len(response_content)}")
-        if len(response_content) > 500:
-            logger.warning(f"LLM Response tail (500 chars): {response_content[-500:]}")
-        else:
-            logger.warning(f"LLM Response full: {response_content}")
-            
-        new_artifacts = dict(artifacts)
-        artifact_updated = False
-        
-        # 优先检查 Tool Calls
-        if response.tool_calls:
-            logger.info(f"检测到 Tool Calls: {len(response.tool_calls)}")
-            for tool_call in response.tool_calls:
-                if tool_call["name"] == "UpdateArtifact":
-                    args = tool_call["args"]
-                    key = args.get("key")
-                    content = args.get("markdown_body")
-                    
-                    if key and content:
-                        new_artifacts[key] = content
-                        artifact_updated = True
-                        logger.info(f"ToolCall 更新产出物: {key}")
-                        
-                        # 推送最终更新 (虽然流式已经推过了，但这里确保一致性)
-                        writer({
-                            "type": "progress",
-                            "progress": {
-                                "stages": plan,
-                                "currentStageIndex": get_stage_index(plan, current_stage),
-                                    "currentTask": f"正在处理 {current_stage} 阶段...",
-                                "artifacts": new_artifacts
-                            }
-                        })
-                        
-                        # [NEW] 推送 Tool Result 事件 (Data Stream Protocol)
-                        writer({
-                            "type": "data_stream_event",
-                            "event": stream_tool_result(
-                                tool_call_id=tool_call["id"],
-                                tool_name="UpdateArtifact",
-                                result={"key": key, "status": "completed"}
-                            )
-                        })
-        
-        # 如果没有 Tool Call，且内容非空，则作为普通对话处理
-        # 移除了 Regex Fallback，强制要求模型使用工具生成文档
-        if not artifact_updated:
-             logger.info("未检测到 ToolCall，作为普通回复处理")
+        if final_update_artifact:
+            key = final_update_artifact.key
+            content = final_update_artifact.markdown_body
+            if key and content:
+                new_artifacts[key] = content
+                logger.info(f"Structured Output 更新产出物: {key}")
+                
+                # process_workflow_stream 已经处理了实时推送，此处不再重复推送以免覆盖 currentTask
+                pass
 
-        ai_message = AIMessage(content=response_content)
+        ai_message = AIMessage(content=final_thought)
         
         # 更新消息历史
         new_messages = list(state.get("messages", []))

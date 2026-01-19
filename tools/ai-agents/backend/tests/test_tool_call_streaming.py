@@ -1,8 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from langchain_core.messages import AIMessageChunk
 from backend.agents.lisa.nodes.workflow_test_design import workflow_execution_node
-import json
+from backend.agents.lisa.schemas import WorkflowResponse, UpdateArtifact
 
 @pytest.fixture
 def mock_get_stream_writer():
@@ -12,61 +11,48 @@ def mock_get_stream_writer():
         yield writer
 
 def test_workflow_execution_node_streaming(mock_get_stream_writer):
-    # 1. Setup Mock LLM Stream
+    # 1. Setup Mock LLM
     mock_llm = MagicMock()
-    mock_bound_llm = MagicMock()
-    mock_llm.model.bind_tools.return_value = mock_bound_llm
+    mock_model = MagicMock()
+    mock_llm.model = mock_model
     
-    # Simulate Tool Call
-    # Use AIMessageChunk with BOTH tool_call_chunks (for loop safety) and tool_calls (for final logic)
-    final_chunk = AIMessageChunk(
-        content="",
-        tool_call_chunks=[
-             {"name": "UpdateArtifact", "args": '{"key": "test", "markdown_body": "content"}', "id": "call_123", "index": 0}
-        ],
-        tool_calls=[{
-            "name": "UpdateArtifact",
-            "args": {"key": "test", "markdown_body": "content"},
-            "id": "call_123"
-        }]
+    mock_structured_llm = MagicMock()
+    mock_model.with_structured_output.return_value = mock_structured_llm
+    
+    # 2. Simulate WorkflowResponse Stream
+    # Chunk 1: Thought
+    chunk1 = WorkflowResponse(thought="Thinking...", progress_step=None, update_artifact=None)
+    # Chunk 2: Artifact Update
+    chunk2 = WorkflowResponse(
+        thought="Thinking...", 
+        progress_step="Designing...", 
+        update_artifact=UpdateArtifact(key="test_design_requirements", markdown_body="## Content")
     )
     
-    # stream returns an iterator
-    mock_bound_llm.stream.return_value = iter([final_chunk])
+    mock_structured_llm.stream.return_value = iter([chunk1, chunk2])
     
-    # 2. Setup State
+    # 3. Setup State
     state = {
         "messages": [],
         "artifacts": {},
         "current_workflow": "test_design"
     }
     
-    # 3. Run Node
+    # 4. Run Node
     workflow_execution_node(state, mock_llm)
     
-    # 4. Verify Writer Calls
-    # Filter calls to find data_stream_event
+    # 5. Verify calls
     calls = mock_get_stream_writer.call_args_list
-    data_events = [c[0][0] for c in calls if c[0][0].get("type") == "data_stream_event"]
     
-    assert len(data_events) > 0, "No data_stream_event emitted"
+    # Verify text_delta_chunk (from thought)
+    text_deltas = [c[0][0] for c in calls if c[0][0].get("type") == "text_delta_chunk"]
+    assert len(text_deltas) > 0
+    assert text_deltas[0]["delta"] == "Thinking..."
     
-    # Check for tool result event (V2 Protocol)
-    result_events = []
-    for event_container in data_events:
-        event_str = event_container["event"]
-        if event_str.startswith("data: "):
-            json_str = event_str[6:].strip()
-            try:
-                payload = json.loads(json_str)
-                if payload.get("type") == "tool-result":
-                    result_events.append(payload)
-            except:
-                pass
-
-    assert len(result_events) == 1
-    res = result_events[0]
-    assert res["toolCallId"] == "call_123"
-    assert res["toolName"] == "UpdateArtifact"
-    assert res["result"]["key"] == "test"
-    assert res["result"]["status"] == "completed"
+    # Verify progress (from artifact update)
+    progress_events = [c[0][0] for c in calls if c[0][0].get("type") == "progress"]
+    assert len(progress_events) > 0
+    
+    last_progress = progress_events[-1]["progress"]
+    assert last_progress["currentTask"] == "Designing..."
+    assert last_progress["artifacts"]["test_design_requirements"] == "## Content"

@@ -30,7 +30,11 @@ def clarify_intent_node(state: LisaState, llm: Any) -> LisaState:
     """
     logger.info("执行意图澄清...")
     
-    clarify_message = AIMessage(content=CLARIFY_INTENT_MESSAGE)
+    # 优先使用动态识别到的澄清问题
+    dynamic_question = state.get("clarification")
+    content = dynamic_question if dynamic_question else CLARIFY_INTENT_MESSAGE
+    
+    clarify_message = AIMessage(content=content)
     
     # 添加澄清消息到历史
     new_messages = list(state.get("messages", []))

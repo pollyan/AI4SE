@@ -15,7 +15,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-async def adapt_langgraph_stream(service, session_id: str, message: str, db_message_id: str | None = None):
+from typing import Optional
+
+async def adapt_langgraph_stream(service, session_id: str, message: str, db_message_id: Optional[str] = None):
     """适配 LangGraph 流式输出到 Data Stream Protocol (text-delta variant)"""
     
     # Client expects discriminated union: for text, it's text-start, text-delta...

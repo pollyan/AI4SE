@@ -21,6 +21,7 @@ interface ChatMessage {
     id: string;
     role: 'user' | 'assistant';
     parts: Array<{ type: string; text?: string;[key: string]: any }>;
+    experimental_attachments?: any[];
 }
 
 const LISA_SUGGESTIONS = [
@@ -65,11 +66,27 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
 
     // 处理文件选择
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            setFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+        console.log('handleFileSelect triggered');
+        if (e.target.files && e.target.files.length > 0) {
+            const newFiles = Array.from(e.target.files);
+            console.log('Adding files:', newFiles);
+            setFiles(prev => {
+                const updated = [...prev, ...newFiles];
+                console.log('Updated files state:', updated);
+                return updated;
+            });
+        } else {
+            console.log('No files selected');
         }
+
         // Reset input so same file can be selected again
-        if (fileInputRef.current) fileInputRef.current.value = '';
+        // Use timeout to ensure event processing is done
+        setTimeout(() => {
+            if (fileInputRef.current) {
+                console.log('Resetting file input value');
+                fileInputRef.current.value = '';
+            }
+        }, 100);
     };
 
     // 移除文件
@@ -150,24 +167,12 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
                                     <MarkdownText key={i} content={part.text} />
                                 );
                             }
-
-                            // 渲染图像或文件附件 (Standard Vercel AI SDK parts)
-                            // SDK might normalize experimental_attachments into 'image' parts or keep them separate?
-                            // Actually, internal message state usually keeps experimental_attachments on the message object,
-                            // OR parts might contain them if normalized.
-                            // For now let's check message.experimental_attachments (if exposed by useChat hook message type)
-                            // But our ChatMessage type above defined parts. 
-                            // Let's use `experimental_attachments` if available on the raw message object, 
-                            // OR check if parts have file/image type.
-
                             return null;
                         })}
 
-                        {/* 渲染附件 (Separate from parts usually in current SDK version) */}
-                        {/* @ts-ignore - experimental_attachments might not be in our strict type definition yet */}
+                        {/* 渲染附件 */}
                         {message.experimental_attachments && message.experimental_attachments.length > 0 && (
                             <div className="flex flex-wrap gap-2 mt-2">
-                                {/* @ts-ignore */}
                                 {message.experimental_attachments.map((att, idx) => (
                                     <div key={idx} className="flex items-center gap-2 bg-white/20 dark:bg-black/10 px-2 py-1 rounded text-xs border border-white/10">
                                         <Paperclip size={12} />
@@ -177,7 +182,7 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
                             </div>
                         )}
 
-                        {/* 思考中状态 (在气泡内部) */}
+                        {/* 思考中状态 */}
                         {isThinking && (
                             <div className="flex items-center gap-2 text-gray-500 my-1 animate-in fade-in zoom-in duration-300">
                                 <div className="flex space-x-1">
@@ -225,7 +230,7 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
                 </button>
             </div>
 
-            {/* Error Display */}
+            {/* ERROR DISPLAY */}
             {error && (
                 <div className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
                     出错了: {error.message}
@@ -276,13 +281,33 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
                 )}
 
                 {/* Messages */}
-                {messages.map((msg, idx) => renderMessage(msg, idx))}
+                {messages.map((msg, idx) => {
+                    // Debug logging for message structure
+                    if (idx === messages.length - 1) {
+                        console.log('Rendering last message:', {
+                            id: msg.id,
+                            role: msg.role,
+                            parts: msg.parts,
+                            experimental_attachments: (msg as any).experimental_attachments,
+                            fullMsg: msg
+                        });
+                    }
+                    return renderMessage(msg, idx);
+                })}
             </div>
 
-            {/* Composer - 仅在非初始状态或 Alex 助手时显示 (Lisa 初始状态只允许点击选项) */}
+            {/* Composer */}
             {!(messages.length === 0 && assistant.id !== 'alex') && (
-                <div className="border-t border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50">
-                    {/* 附件预览区域 */}
+                <div className="border-t border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50 relative">
+                    <input
+                        type="file"
+                        multiple
+                        ref={fileInputRef}
+                        className="hidden"
+                        onChange={handleFileSelect}
+                        accept="*/*"
+                    />
+
                     {files.length > 0 && (
                         <div className="px-4 pt-3 flex gap-2 overflow-x-auto">
                             {files.map((file, index) => (
@@ -304,24 +329,6 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
                         className="p-4"
                     >
                         <div className="flex items-center gap-2">
-                            {/* 附件按钮 */}
-                            <button
-                                type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={status === 'streaming'}
-                                className="p-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors disabled:opacity-50"
-                                title="添加附件"
-                            >
-                                <Paperclip size={20} />
-                            </button>
-                            <input
-                                type="file"
-                                multiple
-                                ref={fileInputRef}
-                                className="hidden"
-                                onChange={handleFileSelect}
-                            />
-
                             <input
                                 type="text"
                                 value={input}
@@ -330,6 +337,19 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
                                 disabled={status === 'streaming'}
                                 className="flex-grow px-4 py-3 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
                             />
+
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    fileInputRef.current?.click();
+                                }}
+                                disabled={status === 'streaming'}
+                                className="p-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors disabled:opacity-50"
+                                title="添加附件"
+                            >
+                                <Paperclip size={20} />
+                            </button>
+
                             {status === 'streaming' ? (
                                 <button
                                     type="button"
@@ -357,14 +377,13 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
     );
 };
 
-// 主组件：处理 Session 创建
+// 主组件
 export function AssistantChat(props: AssistantChatProps) {
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         let active = true;
-
         async function init() {
             try {
                 const session = await createSession('AI4SE Project', props.assistant.id);
@@ -378,21 +397,14 @@ export function AssistantChat(props: AssistantChatProps) {
                 }
             }
         }
-
-        // 重置状态
         setSessionId(null);
         setError(null);
         init();
-
         return () => { active = false; };
     }, [props.assistant.id]);
 
     if (error) {
-        return (
-            <div className="h-full flex items-center justify-center text-red-500">
-                初始化失败: {error}
-            </div>
-        );
+        return <div className="h-full flex items-center justify-center text-red-500">初始化失败: {error}</div>;
     }
 
     if (!sessionId) {

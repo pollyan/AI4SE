@@ -8,7 +8,7 @@ Lisa 和 Alex 智能体共用此模块。
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Union
 
 
 class WorkflowSubTask(BaseModel):
@@ -83,7 +83,7 @@ class AlexStructuredOutput(BaseModel):
     # message 字段已移除，回复内容直接作为 LLM 响应的前半部分
 
 
-def to_progress_info(output: LisaStructuredOutput | AlexStructuredOutput) -> dict:
+def to_progress_info(output: Union[LisaStructuredOutput, AlexStructuredOutput]) -> dict:
     """
     将结构化输出转换为前端 ProgressInfo 格式
 
