@@ -2,9 +2,9 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { MarkdownText, CodeOverride } from '../components/chat/MarkdownText';
 
-// Mock dependency to avoid context requirements and potential ESM issues in test
-vi.mock('@assistant-ui/react-markdown', () => ({
-  MarkdownTextPrimitive: (props: any) => <div data-testid="markdown-primitive">{props.children}</div>
+// Mocks
+vi.mock('react-markdown', () => ({
+  default: ({ children }: any) => <div data-testid="markdown-primitive">{children}</div>
 }));
 
 // Mock MermaidBlock because it uses Mermaid which might fail in JSDOM or be slow
@@ -14,7 +14,7 @@ vi.mock('../components/chat/MermaidBlock', () => ({
 
 describe('MarkdownText', () => {
   it('renders primitive', () => {
-    render(<MarkdownText children="foo" />);
+    render(<MarkdownText content="foo" />);
     expect(screen.getByTestId('markdown-primitive')).toBeDefined();
     expect(screen.getByTestId('markdown-primitive')).toHaveTextContent('foo');
   });

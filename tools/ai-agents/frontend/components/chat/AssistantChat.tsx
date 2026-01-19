@@ -23,6 +23,15 @@ interface ChatMessage {
     parts: Array<{ type: string; text?: string;[key: string]: any }>;
 }
 
+const LISA_SUGGESTIONS = [
+    { id: 'A', label: '需求评审', description: '扫描需求文档，识别逻辑漏洞与风险', action: '需求评审' },
+    { id: 'B', label: '测试设计', description: '为新功能制定策略 (RBT) 并输出用例', action: '测试设计' },
+    { id: 'C', label: '生产缺陷分析', description: '分析线上缺陷、性能瓶颈', action: '生产缺陷分析' },
+    { id: 'D', label: '专项测试策略', description: '制定非功能、自动化等专项策略', action: '专项测试策略规划' },
+    { id: 'E', label: '现状评估', description: '评估当前团队与流程质量', action: '产品测试现状评估' },
+    { id: 'F', label: '通用咨询', description: '探讨任何测试与质量相关的话题', action: '通用测试咨询' },
+];
+
 // Helper: Read file content
 const readFileAsText = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -66,6 +75,11 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
     // 移除文件
     const removeFile = (index: number) => {
         setFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // 处理建议点击
+    const handleSuggestionClick = (action: string) => {
+        sendMessage({ text: action });
     };
 
     // 发送消息处理
@@ -200,19 +214,39 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
             >
                 {/* Empty State */}
                 {messages.length === 0 && (
-                    <div className="flex flex-col items-center justify-center mt-20 gap-4 text-center px-4 animate-in fade-in zoom-in duration-500">
-                        <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl mb-2 shadow-lg ${assistant.id === 'alex' ? 'bg-primary' : 'bg-secondary'}`}>
-                            {assistant.initial}
+                    <div className="flex flex-col items-center justify-center mt-10 gap-6 text-center px-4 animate-in fade-in zoom-in duration-500 w-full max-w-4xl mx-auto">
+                        <div className="flex flex-col items-center gap-2">
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl shadow-lg ${assistant.id === 'alex' ? 'bg-primary' : 'bg-secondary'}`}>
+                                {assistant.initial}
+                            </div>
+                            <h3 className="text-xl font-semibold text-gray-800 dark:text-white">
+                                你好，我是 {assistant.name}
+                            </h3>
+                            <p className="text-gray-500 dark:text-gray-400 max-w-md leading-relaxed">
+                                我是你的{assistant.role}。
+                                {assistant.id === 'alex' && '我可以协助你进行需求分析、梳理业务逻辑并生成 PRD 文档。请告诉我你的想法！'}
+                            </p>
                         </div>
-                        <h3 className="text-xl font-semibold text-gray-800 dark:text-white">
-                            你好，我是 {assistant.name}
-                        </h3>
-                        <p className="text-gray-500 dark:text-gray-400 max-w-md leading-relaxed">
-                            我是你的{assistant.role}。<br />
-                            {assistant.id === 'alex'
-                                ? '我可以协助你进行需求分析、梳理业务逻辑并生成 PRD 文档。请告诉我你的想法！'
-                                : '我可以协助你制定测试策略、设计测试用例并评审需求文档。请告诉我你的需求！'}
-                        </p>
+
+                        {assistant.id !== 'alex' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 w-full">
+                                {LISA_SUGGESTIONS.map((suggestion) => (
+                                    <button
+                                        key={suggestion.id}
+                                        onClick={() => handleSuggestionClick(suggestion.action)}
+                                        className="flex flex-col items-start p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-secondary hover:shadow-md transition-all text-left group"
+                                    >
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-lg font-bold text-secondary opacity-80 group-hover:opacity-100">{suggestion.id}.</span>
+                                            <span className="font-semibold text-gray-800 dark:text-gray-200 group-hover:text-secondary transition-colors">{suggestion.label}</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 leading-normal">
+                                            {suggestion.description}
+                                        </p>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 

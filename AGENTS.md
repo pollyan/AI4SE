@@ -43,7 +43,7 @@ AI4SE 是一个 Python/TypeScript 单体仓库，包含 AI 驱动的软件工程
 
 - **环境一致性**: 本地环境与云端环境保持一致的部署方式
 - **云端部署**: 通过 GitHub Actions 实现，**禁止直连云端服务器部署**
-- **本地 Docker**: 使用 `scripts/dev/deploy-dev.sh` 脚本启动和更新，**禁止直接操作 docker 命令**
+- **本地 Docker**: 使用 `scripts/dev/deploy-dev.sh` 脚本启动和更新，**禁止直接操作 docker 命令**。**请注意：我们的测试环境始终在本地 Docker 中运行，你需要确保通过 deploy-dev.sh 部署代码后进行验证，而不是假设本地源码修改即生效。**
 
 ### 智能体逻辑判断
 
