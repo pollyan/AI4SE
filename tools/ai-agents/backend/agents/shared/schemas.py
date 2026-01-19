@@ -11,12 +11,26 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
 
 
+class WorkflowSubTask(BaseModel):
+    """阶段内的细分任务"""
+    id: str = Field(description="任务唯一标识")
+    name: str = Field(description="任务显示名称")
+    status: Literal["pending", "active", "completed", "warning"] = Field(
+        default="pending",
+        description="任务状态"
+    )
+
+
 class WorkflowStage(BaseModel):
     """工作流阶段"""
     id: str = Field(description="阶段唯一标识，如 'clarify', 'strategy', 'cases'")
     name: str = Field(description="阶段显示名称，如 '需求澄清', '策略制定'")
     status: Literal["pending", "active", "completed"] = Field(
         description="阶段状态: pending=待开始, active=进行中, completed=已完成"
+    )
+    sub_tasks: List[WorkflowSubTask] = Field(
+        default_factory=list,
+        description="阶段下的细分任务列表"
     )
 
 
@@ -107,8 +121,16 @@ def to_progress_info(output: LisaStructuredOutput | AlexStructuredOutput) -> dic
     if 0 <= current_index < len(output.plan):
         current_task = f"正在{output.plan[current_index].name}..."
 
+    # 处理 stages 转换，将 sub_tasks 重命名为 subTasks 以匹配前端组件
+    stages_data = []
+    for s in output.plan:
+        stage_dict = s.model_dump()
+        if "sub_tasks" in stage_dict:
+            stage_dict["subTasks"] = stage_dict.pop("sub_tasks")
+        stages_data.append(stage_dict)
+
     return {
-        "stages": [s.model_dump() for s in output.plan],
+        "stages": stages_data,
         "currentStageIndex": current_index,
         "currentTask": current_task,
         "artifactProgress": artifact_progress,
