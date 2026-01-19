@@ -26,8 +26,9 @@ export function useChatRuntime(sessionId: string, assistantType: AssistantId, on
     },
     */
     onDataStream: ({ type, data }) => {
-        if (type === "data" && onProgressChange) {
+        if ((type === "data" || type === "data-progress") && onProgressChange) {
             // Data Stream Protocol sends {"type": "data", "value": ...}
+            // or {"type": "data-progress", "data": ...}
             // data here is the value
             onProgressChange(data);
         }

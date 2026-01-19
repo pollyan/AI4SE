@@ -32,8 +32,8 @@ async def test_adapt_langgraph_stream():
     # 3. Data event (from progress dict)
     assert events[3].startswith("data: ")
     data_event = json.loads(events[3][6:].strip())
-    assert data_event["type"] == "data"
-    assert data_event["value"]["stage"] == 1
+    assert data_event["type"] == "data-progress"
+    assert data_event["data"]["stage"] == 1
 
     # 4. Text event "!" (V2 uses text-delta)
     assert events[4].startswith("data: ")

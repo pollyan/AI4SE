@@ -72,10 +72,18 @@ export function useVercelChat({
         // 处理自定义数据事件（进度更新）
         onData: (dataPart) => {
             if (onProgressChange && dataPart) {
-                // Data Stream Protocol: data 事件的值可能是数组或对象
+                // Data Stream Protocol: data events might be array or object
                 const dataValue = Array.isArray(dataPart) ? dataPart[0] : dataPart;
+
                 if (dataValue && typeof dataValue === 'object') {
-                    onProgressChange(dataValue as ProgressInfo);
+                    // Fix: Extract inner data from data-progress event
+                    // Event format: { type: "data-progress", data: { stages: [...] } }
+                    if ('data' in dataValue && (dataValue as any).type === 'data-progress') {
+                        onProgressChange((dataValue as any).data as ProgressInfo);
+                    } else {
+                        // Fallback for direct objects
+                        onProgressChange(dataValue as ProgressInfo);
+                    }
                 }
             }
         },
@@ -98,7 +106,7 @@ export function useVercelChat({
         return rawMessages.map((msg) => ({
             id: msg.id,
             role: msg.role as 'user' | 'assistant',
-            parts: msg.parts || [{ type: 'text', text: typeof msg.content === 'string' ? msg.content : '' }],
+            parts: msg.parts || [{ type: 'text', text: typeof (msg as any).content === 'string' ? (msg as any).content : '' }],
         }));
     }, [rawMessages]);
 

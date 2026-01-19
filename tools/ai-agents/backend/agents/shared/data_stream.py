@@ -88,11 +88,33 @@ def stream_error(error):
         "error": error
     })
 
-def stream_data(data):
-    """Generate generic data event."""
+def stream_data(data, data_type="data"):
+    """
+    Generate custom data event.
+    Expected: { "type": "data-<suffix>", "data": ... }
+    """
+    # Ensure type has data- prefix if not already present (or just append)
+    # Standard pattern: data-progress, data-weather, etc.
+    # If caller passes just 'progress', we make it 'data-progress'
+    
+    suffix = data_type
+    if not suffix.startswith("data-") and suffix != "data":
+        # If suffix is just "progress", make it "data-progress"
+        # If suffix is "data", we might need a default suffix like "data-value" 
+        # but to keep backward compat or standard, let's allow "data-data" or just "data-custom"
+        pass
+
+    # AI SDK V2 requires 'data-' prefix for custom data types
+    full_type = f"data-{suffix}" if not suffix.startswith("data-") else suffix
+    
+    # If generic 'data' is passed, we might want 'data-json' or similar to be safe,
+    # but let's stick to the requester's plan of "data-progress" mainly.
+    # For generic calls, we default to 'data-data' or similar? 
+    # Actually, let's just prepend data- if missing.
+    
     return format_event({
-        "type": "data",
-        "value": data
+        "type": full_type,
+        "data": data
     })
 
 def stream_finish(finish_reason, usage=None):

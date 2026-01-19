@@ -18,7 +18,7 @@ class TestSessionAPI:
                 '/api/requirements/sessions',
                 data=json.dumps({
                     "project_name": "测试项目",
-                    "assistant_type": "alex"
+                    "assistant_type": "lisa"
                 }),
                 content_type='application/json'
             )
@@ -36,7 +36,7 @@ class TestSessionAPI:
             response = api_client.post(
                 '/api/requirements/sessions',
                 data=json.dumps({
-                    "assistant_type": "alex"
+                    "assistant_type": "lisa"
                 }),
                 content_type='application/json'
             )
@@ -63,7 +63,7 @@ class TestSessionAPI:
                 '/api/requirements/sessions',
                 data=json.dumps({
                     "project_name": "测试项目",
-                    "assistant_type": "alex"
+                    "assistant_type": "lisa"
                 }),
                 content_type='application/json'
             )
@@ -94,7 +94,7 @@ class TestMessageAPI:
                 '/api/requirements/sessions',
                 data=json.dumps({
                     "project_name": "测试项目",
-                    "assistant_type": "alex"
+                    "assistant_type": "lisa"
                 }),
                 content_type='application/json'
             )
@@ -139,7 +139,7 @@ class TestSessionStatusAPI:
                 '/api/requirements/sessions',
                 data=json.dumps({
                     "project_name": "测试项目",
-                    "assistant_type": "alex"
+                    "assistant_type": "lisa"
                 }),
                 content_type='application/json'
             )
@@ -167,7 +167,7 @@ class TestSessionStatusAPI:
                 '/api/requirements/sessions',
                 data=json.dumps({
                     "project_name": "测试项目",
-                    "assistant_type": "alex"
+                    "assistant_type": "lisa"
                 }),
                 content_type='application/json'
             )
@@ -205,7 +205,7 @@ class TestSendMessageAPI:
                 '/api/requirements/sessions',
                 data=json.dumps({
                     "project_name": "测试项目",
-                    "assistant_type": "alex"
+                    "assistant_type": "lisa"
                 }),
                 content_type='application/json'
             )
@@ -227,7 +227,7 @@ class TestSendMessageAPI:
                 '/api/requirements/sessions',
                 data=json.dumps({
                     "project_name": "测试项目",
-                    "assistant_type": "alex"
+                    "assistant_type": "lisa"
                 }),
                 content_type='application/json'
             )
@@ -235,7 +235,7 @@ class TestSendMessageAPI:
             
             # Mock AI 服务
             mock_ai_result = {
-                'ai_response': '您好！我是 Alex，您的需求分析师。',
+                'ai_response': '您好！我是 Lisa，您的需求分析师。',
                 'stage': 'initial'
             }
             
@@ -270,7 +270,7 @@ class TestSendMessageAPI:
                 '/api/requirements/sessions',
                 data=json.dumps({
                     "project_name": "测试项目",
-                    "assistant_type": "alex"
+                    "assistant_type": "lisa"
                 }),
                 content_type='application/json'
             )
@@ -288,22 +288,7 @@ class TestSendMessageAPI:
 class TestAssistantBundleAPI:
     """助手 Bundle API 测试"""
     
-    def test_get_alex_bundle(self, api_client, app):
-        """测试获取 Alex 助手 Bundle"""
-        with app.app_context():
-            response = api_client.get('/api/requirements/assistants/alex/bundle')
-            
-            # 可能成功或找不到文件
-            assert response.status_code in [200, 404]
-            
-            if response.status_code == 200:
-                data = response.get_json()
-                assert 'data' in data
-                assert 'bundle_content' in data['data']
-                assert 'assistant_info' in data['data']
-                
-                # 验证 bundle 内容不为空
-                assert len(data['data']['bundle_content']) > 0
+
     
     def test_get_lisa_bundle(self, api_client, app):
         """测试获取 Lisa 助手 Bundle"""
@@ -324,13 +309,7 @@ class TestAssistantBundleAPI:
             response = api_client.get('/api/requirements/assistants/invalid_type/bundle')
             assert response.status_code == 400
     
-    def test_get_alex_bundle_backward_compat(self, api_client, app):
-        """测试向后兼容的 Alex Bundle 端点"""
-        with app.app_context():
-            response = api_client.get('/api/requirements/alex-bundle')
-            
-            # 可能成功或找不到文件
-            assert response.status_code in [200, 404]
+
 
 
 class TestStreamMessagesAPI:
@@ -354,7 +333,7 @@ class TestStreamMessagesAPI:
                 '/api/requirements/sessions',
                 data=json.dumps({
                     "project_name": "测试项目",
-                    "assistant_type": "alex"
+                    "assistant_type": "lisa"
                 }),
                 content_type='application/json'
             )
@@ -376,7 +355,7 @@ class TestStreamMessagesAPI:
                 '/api/requirements/sessions',
                 data=json.dumps({
                     "project_name": "流式测试项目",
-                    "assistant_type": "alex"
+                    "assistant_type": "lisa"
                 }),
                 content_type='application/json'
             )

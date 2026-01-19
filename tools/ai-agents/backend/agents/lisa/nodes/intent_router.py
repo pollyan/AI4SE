@@ -148,6 +148,7 @@ def intent_router_node(state: LisaState, llm: Any) -> RouterCommand:
             if decision.metadata and decision.metadata.get("clarification"):
                 update["clarification"] = decision.metadata["clarification"]
             
+            
             # 粘性逻辑：如果已经在工作流中，且意图不明，默认继续工作流
             # 防止用户回复简单的确认词（如"好的"）导致会话重置
             current_workflow = state.get("current_workflow")

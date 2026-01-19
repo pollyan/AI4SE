@@ -15,7 +15,6 @@ from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
 
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
-    from .alex.agent import AlexAdkRunner
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +26,6 @@ class LangchainAssistantService:
     """
     
     SUPPORTED_ASSISTANTS = {
-        "alex": {
-            "name": "Alex",
-            "title": "需求分析专家",
-            "bundle_file": "alex_v1_bundle.txt",
-            "description": "专业的软件需求分析师，擅长澄清需求、识别模糊点并生成详细的需求文档。"
-        },
         "lisa": {
             "name": "Lisa",
             "title": "测试专家 (v5.0)",
@@ -46,7 +39,7 @@ class LangchainAssistantService:
         初始化 LangChain 服务
         
         Args:
-            assistant_type: 智能体类型 ('alex' 或 'lisa')
+            assistant_type: 智能体类型 ('lisa')
             config: 可选的配置字典 (用于测试连接或覆盖默认配置)
         """
         self.assistant_type = assistant_type
@@ -77,12 +70,7 @@ class LangchainAssistantService:
             model_config = config.get_config_for_ai_service()
         
         # 创建对应的 Agent
-        # 创建对应的 Agent
-        if self.assistant_type == "alex":
-            # Alex 现在也使用 LangGraph 实现
-            from .alex import create_alex_graph
-            self.agent = create_alex_graph(model_config)
-        elif self.assistant_type == "lisa":
+        if self.assistant_type == "lisa":
             # Lisa 使用 LangGraph 实现
             from .lisa import create_lisa_graph
             self.agent = create_lisa_graph(model_config)
@@ -133,16 +121,13 @@ class LangchainAssistantService:
         logger.info(f"非流式处理消息 - 会话: {session_id}, 消息长度: {len(user_message)}")
 
         try:
-            if self.assistant_type == "alex":
-                ai_response = await self.agent.invoke(session_id, user_message)
-            else:
-                messages = self._build_messages(session_id, user_message)
-                result = await self.agent.ainvoke({"messages": messages})
-                ai_response = ""
-                if result and "messages" in result:
-                    last_message = result["messages"][-1]
-                    if hasattr(last_message, "content"):
-                        ai_response = last_message.content
+            messages = self._build_messages(session_id, user_message)
+            result = await self.agent.ainvoke({"messages": messages})
+            ai_response = ""
+            if result and "messages" in result:
+                last_message = result["messages"][-1]
+                if hasattr(last_message, "content"):
+                    ai_response = last_message.content
             
             self._add_to_history(session_id, "user", user_message)
             self._add_to_history(session_id, "assistant", ai_response)
@@ -188,23 +173,17 @@ class LangchainAssistantService:
         logger.info(f"开始测试连接 - 配置: {config_info}")
         
         try:
-            if self.assistant_type == "alex":
-                content = await asyncio.wait_for(
-                    self.agent.invoke("test-connection", user_msg),
-                    timeout=30.0
-                )
-            else:
-                input_messages = [HumanMessage(content=user_msg)]
-                test_config = {"configurable": {"thread_id": "test-connection"}}
-                result = await asyncio.wait_for(
-                    self.agent.ainvoke({"messages": input_messages}, config=test_config),
-                    timeout=30.0
-                )
-                content = ""
-                if result and "messages" in result:
-                    last_message = result["messages"][-1]
-                    if hasattr(last_message, "content"):
-                        content = last_message.content
+            input_messages = [HumanMessage(content=user_msg)]
+            test_config = {"configurable": {"thread_id": "test-connection"}}
+            result = await asyncio.wait_for(
+                self.agent.ainvoke({"messages": input_messages}, config=test_config),
+                timeout=30.0
+            )
+            content = ""
+            if result and "messages" in result:
+                last_message = result["messages"][-1]
+                if hasattr(last_message, "content"):
+                    content = last_message.content
             
             if not content or len(content.strip()) == 0:
                 raise Exception("LLM 返回了空响应")
@@ -277,14 +256,9 @@ class LangchainAssistantService:
         logger.info(f"流式处理消息 - 会话: {session_id}, 消息长度: {len(user_message)}")
         
         try:
-            if self.assistant_type == "alex":
-                # Alex 使用 ADK Agent
-                async for chunk in self.agent.stream_message(session_id, user_message):
-                    yield chunk
-            else:
-                # Lisa 继续使用 LangGraph 状态管理
-                async for chunk in self._stream_graph_message(session_id, user_message):
-                    yield chunk
+            # Lisa 继续使用 LangGraph 状态管理
+            async for chunk in self._stream_graph_message(session_id, user_message):
+                yield chunk
                     
         except Exception as e:
             logger.error(f"流式处理消息失败: {str(e)}")
@@ -304,7 +278,6 @@ class LangchainAssistantService:
         
         config = {"configurable": {"thread_id": session_id}}
         
-        workflow_info = "N/A"
         logger.info(f"Graph 流式处理 - 智能体: {self.assistant_type}, 会话: {session_id}")
         
         full_response = ""
@@ -464,7 +437,7 @@ class LangchainAssistantService:
         final_message, final_json = split_message_and_json(full_response)
         cleaned_response = clean_response_text(final_message)
 
-        if self.assistant_type in ("lisa", "alex") and full_response:
+        if self.assistant_type == "lisa" and full_response:
             
             if not json_parsed and not plan_parsed:
                 structured_data = None
@@ -507,7 +480,7 @@ class LangchainAssistantService:
             if progress_info:
                 yield {"type": "state", "progress": progress_info}
         
-        if self.assistant_type in ("lisa", "alex"):
+        if self.assistant_type == "lisa":
             from .shared.progress import get_progress_info
             progress = get_progress_info(current_state)
             if progress:
@@ -520,42 +493,3 @@ class LangchainAssistantService:
         self._add_to_history(session_id, "assistant", cleaned_response)
         
         logger.info(f"Graph 流式消息处理完成，总计: {len(cleaned_response)} 字符")
-        
-    
-    async def _stream_legacy_message(
-        self,
-        session_id: str,
-        user_message: str
-    ) -> AsyncIterator[str]:
-        """
-        传统智能体流式处理（Alex 等）
-        """
-        # 构建消息
-        messages = self._build_messages(session_id, user_message)
-        
-        logger.info(f"开始流式运行 LangChain agent...")
-        full_response = ""
-        
-        # 真流式！使用 stream_mode="messages" 获取增量输出
-        async for chunk in self.agent.astream(
-            {"messages": messages},
-            stream_mode="messages"
-        ):
-            # chunk 格式: (message, metadata) 元组
-            if isinstance(chunk, tuple) and len(chunk) >= 1:
-                message = chunk[0]
-                if hasattr(message, 'content') and message.content:
-                    content = message.content
-                    # 直接输出增量内容
-                    yield content
-                    full_response += content
-            elif hasattr(chunk, 'content') and chunk.content:
-                # 备用格式处理
-                yield chunk.content
-                full_response += chunk.content
-        
-        # 保存完整响应到会话历史
-        self._add_to_history(session_id, "user", user_message)
-        self._add_to_history(session_id, "assistant", full_response)
-        
-        logger.info(f"流式消息处理完成，总计: {len(full_response)} 字符")
