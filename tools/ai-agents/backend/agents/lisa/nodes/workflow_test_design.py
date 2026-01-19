@@ -48,6 +48,27 @@ DEFAULT_REQUIREMENT_REVIEW_PLAN: List[Dict[str, str]] = [
     {"id": "report", "name": "评审报告", "status": "pending"},
 ]
 
+# 产出物模板元数据
+ARTIFACT_TEMPLATES_TEST_DESIGN = [
+    {"stage_id": "clarify", "artifact_key": "test_design_requirements", "name": "需求澄清报告"},
+    {"stage_id": "strategy", "artifact_key": "test_design_strategy", "name": "测试策略蓝图"},
+    {"stage_id": "cases", "artifact_key": "test_design_cases", "name": "测试用例集"},
+    {"stage_id": "delivery", "artifact_key": "test_design_final", "name": "交付文档"},
+]
+
+ARTIFACT_TEMPLATES_REQUIREMENT_REVIEW = [
+    {"stage_id": "clarify", "artifact_key": "req_review_record", "name": "需求评审记录"},
+    {"stage_id": "analysis", "artifact_key": "req_review_record", "name": "需求评审记录"},
+    {"stage_id": "risk", "artifact_key": "req_review_risk", "name": "风险评估报告"},
+    {"stage_id": "report", "artifact_key": "req_review_report", "name": "评审报告"},
+]
+
+def get_artifact_templates(workflow_type: str) -> List[Dict[str, str]]:
+    """获取工作流对应的产出物模板元数据"""
+    if workflow_type == "requirement_review":
+        return ARTIFACT_TEMPLATES_REQUIREMENT_REVIEW
+    return ARTIFACT_TEMPLATES_TEST_DESIGN
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 辅助函数
@@ -179,7 +200,8 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
         "progress": {
             "stages": plan,
             "currentStageIndex": get_stage_index(plan, current_stage),
-            "currentTask": f"正在处理 {current_stage} 阶段..."
+            "currentTask": f"正在处理 {current_stage} 阶段...",
+            "artifact_templates": get_artifact_templates(workflow_type)
         }
     })
     logger.info(f"StreamWriter 推送进度: stage={current_stage}")
@@ -206,6 +228,7 @@ def workflow_execution_node(state: LisaState, llm: Any) -> LisaState:
                         "stages": plan,
                         "currentStageIndex": get_stage_index(plan, current_stage),
                         "currentTask": f"正在处理 {current_stage} 阶段...",
+                        "artifact_templates": get_artifact_templates(workflow_type),
                         "artifacts": display_artifacts
                     }
                 })

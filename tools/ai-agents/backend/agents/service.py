@@ -339,6 +339,16 @@ class LangchainAssistantService:
                             current_state["currentStageIndex"] = progress_data.get("currentStageIndex", 0)
                             current_state["currentTask"] = progress_data.get("currentTask", "")
                             
+                            # 提取并保存产出物模板元数据
+                            if "artifact_templates" in progress_data:
+                                current_state["artifact_templates"] = progress_data["artifact_templates"]
+                            
+                            # 提取并保存产出物内容 (模板初始化或增量更新)
+                            if "artifacts" in progress_data:
+                                if "artifacts" not in current_state:
+                                    current_state["artifacts"] = {}
+                                current_state["artifacts"].update(progress_data["artifacts"])
+                            
                             from .shared.progress import get_progress_info
                             progress_info = get_progress_info(current_state)
                             if progress_info:

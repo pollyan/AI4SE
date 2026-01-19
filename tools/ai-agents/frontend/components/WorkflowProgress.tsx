@@ -53,7 +53,7 @@ export function WorkflowProgress({
             <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200/50 dark:border-gray-700/50 overflow-x-auto text-sm">
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider shrink-0 mr-2">阶段</span>
                 {stages.map((stage, index) => {
-                    const isClickable = stage.status === 'completed' || stage.status === 'active';
+                    const isClickable = true; // 所有阶段均可点击查看预期产出物
                     const isSelected = selectedStageId === stage.id || (!selectedStageId && index === currentStageIndex);
 
                     return (
