@@ -279,78 +279,80 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
                 {messages.map((msg, idx) => renderMessage(msg, idx))}
             </div>
 
-            {/* Composer */}
-            <div className="border-t border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50">
-                {/* 附件预览区域 */}
-                {files.length > 0 && (
-                    <div className="px-4 pt-3 flex gap-2 overflow-x-auto">
-                        {files.map((file, index) => (
-                            <div key={index} className="flex items-center gap-2 bg-white dark:bg-gray-700 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-sm shadow-sm">
-                                <span className="truncate max-w-[150px] text-gray-700 dark:text-gray-200">{file.name}</span>
-                                <button
-                                    onClick={() => removeFile(index)}
-                                    className="text-gray-400 hover:text-red-500"
-                                >
-                                    <X size={14} />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
+            {/* Composer - 仅在非初始状态或 Alex 助手时显示 (Lisa 初始状态只允许点击选项) */}
+            {!(messages.length === 0 && assistant.id !== 'alex') && (
+                <div className="border-t border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50">
+                    {/* 附件预览区域 */}
+                    {files.length > 0 && (
+                        <div className="px-4 pt-3 flex gap-2 overflow-x-auto">
+                            {files.map((file, index) => (
+                                <div key={index} className="flex items-center gap-2 bg-white dark:bg-gray-700 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-sm shadow-sm">
+                                    <span className="truncate max-w-[150px] text-gray-700 dark:text-gray-200">{file.name}</span>
+                                    <button
+                                        onClick={() => removeFile(index)}
+                                        className="text-gray-400 hover:text-red-500"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
 
-                <form
-                    onSubmit={handleSubmit}
-                    className="p-4"
-                >
-                    <div className="flex items-center gap-2">
-                        {/* 附件按钮 */}
-                        <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={status === 'streaming'}
-                            className="p-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors disabled:opacity-50"
-                            title="添加附件"
-                        >
-                            <Paperclip size={20} />
-                        </button>
-                        <input
-                            type="file"
-                            multiple
-                            ref={fileInputRef}
-                            className="hidden"
-                            onChange={handleFileSelect}
-                        />
-
-                        <input
-                            type="text"
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            placeholder="输入消息..."
-                            disabled={status === 'streaming'}
-                            className="flex-grow px-4 py-3 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
-                        />
-                        {status === 'streaming' ? (
+                    <form
+                        onSubmit={handleSubmit}
+                        className="p-4"
+                    >
+                        <div className="flex items-center gap-2">
+                            {/* 附件按钮 */}
                             <button
                                 type="button"
-                                onClick={stop}
-                                className="p-3 rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors"
-                                title="停止生成"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={status === 'streaming'}
+                                className="p-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors disabled:opacity-50"
+                                title="添加附件"
                             >
-                                <Square size={20} />
+                                <Paperclip size={20} />
                             </button>
-                        ) : (
-                            <button
-                                type="submit"
-                                disabled={!input.trim() && files.length === 0}
-                                className="p-3 rounded-full bg-primary hover:bg-primary/90 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="发送"
-                            >
-                                <Send size={20} />
-                            </button>
-                        )}
-                    </div>
-                </form>
-            </div>
+                            <input
+                                type="file"
+                                multiple
+                                ref={fileInputRef}
+                                className="hidden"
+                                onChange={handleFileSelect}
+                            />
+
+                            <input
+                                type="text"
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                placeholder="输入消息..."
+                                disabled={status === 'streaming'}
+                                className="flex-grow px-4 py-3 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+                            />
+                            {status === 'streaming' ? (
+                                <button
+                                    type="button"
+                                    onClick={stop}
+                                    className="p-3 rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors"
+                                    title="停止生成"
+                                >
+                                    <Square size={20} />
+                                </button>
+                            ) : (
+                                <button
+                                    type="submit"
+                                    disabled={!input.trim() && files.length === 0}
+                                    className="p-3 rounded-full bg-primary hover:bg-primary/90 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="发送"
+                                >
+                                    <Send size={20} />
+                                </button>
+                            )}
+                        </div>
+                    </form>
+                </div>
+            )}
         </div>
     );
 };
