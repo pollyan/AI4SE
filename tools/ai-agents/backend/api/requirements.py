@@ -794,21 +794,93 @@ def stream_messages_v2(session_id):
         except Exception as e:
             return standard_error_response(f"AI服务初始化错误: {str(e)}", 500)
             
-        # 注意：这里我们简化逻辑，暂时不保存用户消息和 AI 消息到数据库，
-        # 或者沿用 V1 的保存逻辑。为了保持一致性，应该保存。
-        # 但为了聚焦协议适配，我们先复用 V1 的部分逻辑（或者假设它已经被保存？）
-        # Plan Phase 1 重点是协议。
-        # 让我们把保存逻辑加进去，确保它是完整的。
-        
+        # 处理 experimental_attachments (Vercel AI SDK Standard)
+        attached_files = []
+        if messages and isinstance(messages, list):
+            last_message = messages[-1]
+            if isinstance(last_message, dict):
+                attachments = last_message.get("experimental_attachments", [])
+                if attachments:
+                    import base64
+                    for att in attachments:
+                        # att: { name, contentType, url }
+                        # url might be data:application/octet-stream;base64,....
+                        if att.get("url", "").startswith("data:"):
+                            try:
+                                header, encoded = att["url"].split(",", 1)
+                                # Decode base64
+                                content_bytes = base64.b64decode(encoded)
+                                # Try to decode text
+                                try:
+                                    decoded_text = content_bytes.decode('utf-8')
+                                except UnicodeDecodeError:
+                                    # Fallback for non-utf8 text? Or skip binary?
+                                    # For now, we only support text agents, so maybe skip or try others
+                                    decoded_text = content_bytes.decode('gbk', errors='ignore')
+
+                                attached_files.append({
+                                    "filename": att.get("name", "unknown.txt"),
+                                    "content": decoded_text,
+                                    "size": len(content_bytes),
+                                    "encoding": "utf-8"
+                                })
+                            except Exception as e:
+                                logger.error(f"Failed to process attachment {att.get('name')}: {e}")
+
+        # 如果有附件，整合到 content 中传给 AI
+        if attached_files:
+            content = build_message_with_files(content, attached_files)
+
         session.updated_at = datetime.utcnow()
         db.session.commit()
         
         # 保存用户消息
         user_message = RequirementsMessage(
             session_id=session.id,
-            content=content,
+            content=content, # 保存完整内容（含文件）还是原始内容？
+                             # 为了保持 history 上下文给 LLM，通常保存处理后的 Prompt 内容比较安全，
+                             # 或者保存原始 content 并依赖 attached_files 字段重组。
+                             # 这里为了简单和 agent 读取方便，我们保存 augmented content，
+                             # 或者保存原始 content + attached_files。
+                             # 考虑到 `build_message_with_files` 是用来构建 Prompt 的，
+                             # 最好还是存原始 content，但是 message_history loading 的时候需要重新组装吗？
+                             # 之前的实现 (send_message) 是：
+                             #   content = data.get("content")
+                             #   full_content = build_message_with_files() [用于传给 AI]
+                             #   user_message.content = content [原始]
+                             #   user_message.attached_files = ...
+                             # 所以我们也保持一致：
+            
+            # Wait, `content` variable above has been updated by build_message_with_files if attached_files exist.
+            # Let's verify standard `build_message_with_files` behavior.
+            # It returns "=== ... \n content".
+            # So `content` is now the full prompt.
+            # If we want to save purely what user typed, we should have kept a reference.
+            # But in V2 stream, we reconstruct context from DB messages usually? 
+            # Or does LangGraph manage history?
+            # Lisa/Alex usually read history from DB or passing `messages`.
+            
+            # Implementation Decision: Save the FULL content (Prompt) to `content` column?
+            # Or save original?
+            # If `content` column is what's shown to user, we shouldn't save the big prompt there.
+            # BUT, the Frontend V2 displays what it sent locally (optimistic).
+            # The Backend DB is for history and context.
+            # The Agent reads `content` from DB messages usually.
+            # So saving the augmented content is safer for the Agent to "see" the file in history.
+            
+            # HOWEVER, `RequirementsMessage.to_dict()` is sent back to frontend in some APIs.
+            # If we change `content` to include file dump, frontend might show it duplicate?
+            # Frontend uses `messages` from AI SDK mostly.
+            
+            # Let's save the augmented content for now, as that ensures the agent sees it.
+            # And also save `attached_files`.
+            
             message_type="user"
         )
+        
+        if attached_files:
+             user_message.attached_files = json.dumps(attached_files)
+             
         db.session.add(user_message)
         
         # 创建 AI 消息占位
