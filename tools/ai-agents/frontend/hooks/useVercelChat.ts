@@ -30,7 +30,7 @@ export interface UseVercelChatReturn {
     /** 当前状态 */
     status: 'ready' | 'streaming' | 'error';
     /** 发送消息 */
-    sendMessage: (options: { text: string }) => void;
+    sendMessage: (options: { text: string; attachments?: any[] }) => void;
     /** 停止生成 */
     stop: () => void;
     /** 错误信息 */
@@ -119,8 +119,11 @@ export function useVercelChat({
 
     // 封装发送消息方法
     const sendMessage = useCallback(
-        ({ text }: { text: string }) => {
-            sdkSendMessage({ text });
+        ({ text, attachments }: { text: string; attachments?: any[] }) => {
+            sdkSendMessage({
+                content: text,
+                experimental_attachments: attachments
+            });
         },
         [sdkSendMessage]
     );

@@ -32,13 +32,13 @@ const LISA_SUGGESTIONS = [
     { id: 'F', label: '通用咨询', description: '探讨任何测试与质量相关的话题', action: '通用测试咨询' },
 ];
 
-// Helper: Read file content
-const readFileAsText = (file: File): Promise<string> => {
+// Helper: Read file content as Data URL
+const readFileAsDataURL = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
         reader.onerror = reject;
-        reader.readAsText(file);
+        reader.readAsDataURL(file);
     });
 };
 
@@ -87,27 +87,29 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
         e.preventDefault();
         if ((!input.trim() && files.length === 0) || status === 'streaming') return;
 
-        let messageText = input.trim();
+        let attachments: any[] = [];
 
         // 处理附件
         if (files.length > 0) {
             try {
-                const fileContents = await Promise.all(
+                // Convert files to Data URLs for Vercel AI SDK experimental_attachments
+                attachments = await Promise.all(
                     files.map(async (file) => {
-                        const content = await readFileAsText(file);
-                        return `\n\n[File: ${file.name}]\n\`\`\`\n${content}\n\`\`\``;
+                        const url = await readFileAsDataURL(file);
+                        return {
+                            name: file.name,
+                            contentType: file.type,
+                            url: url
+                        };
                     })
                 );
-                messageText += fileContents.join('');
             } catch (err) {
-                console.error("Failed to read files:", err);
-                // 可以选择显示错误或继续发送文本
+                console.error("Failed to process files:", err);
+                return;
             }
         }
 
-        if (!messageText) return;
-
-        sendMessage({ text: messageText });
+        sendMessage({ text: input.trim(), attachments: attachments.length > 0 ? attachments : undefined });
         setInput('');
         setFiles([]);
     };
@@ -148,9 +150,32 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
                                     <MarkdownText key={i} content={part.text} />
                                 );
                             }
-                            // 可以在这里添加其他 part 类型的处理
+
+                            // 渲染图像或文件附件 (Standard Vercel AI SDK parts)
+                            // SDK might normalize experimental_attachments into 'image' parts or keep them separate?
+                            // Actually, internal message state usually keeps experimental_attachments on the message object,
+                            // OR parts might contain them if normalized.
+                            // For now let's check message.experimental_attachments (if exposed by useChat hook message type)
+                            // But our ChatMessage type above defined parts. 
+                            // Let's use `experimental_attachments` if available on the raw message object, 
+                            // OR check if parts have file/image type.
+
                             return null;
                         })}
+
+                        {/* 渲染附件 (Separate from parts usually in current SDK version) */}
+                        {/* @ts-ignore - experimental_attachments might not be in our strict type definition yet */}
+                        {message.experimental_attachments && message.experimental_attachments.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                                {/* @ts-ignore */}
+                                {message.experimental_attachments.map((att, idx) => (
+                                    <div key={idx} className="flex items-center gap-2 bg-white/20 dark:bg-black/10 px-2 py-1 rounded text-xs border border-white/10">
+                                        <Paperclip size={12} />
+                                        <span className="truncate max-w-[150px]">{att.name}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
 
                         {/* 思考中状态 (在气泡内部) */}
                         {isThinking && (
