@@ -66,12 +66,22 @@ def get_progress_info(state: Dict[str, Any]) -> Optional[dict]:
         else:
             status = "pending"
         
-        stages.append({
+        stage_data = {
             "id": stage_id,
             "name": step.get("name"),
             "status": status,
             "description": step.get("description", "")
-        })
+        }
+
+        # [新增] 透传子任务 (sub_tasks -> subTasks)
+        sub_tasks = step.get("sub_tasks")
+        if sub_tasks:
+            # 如果 sub_tasks 是对象列表 (来自 dict 或 Pydantic dump)
+            if isinstance(sub_tasks, list):
+                # 简单透传，假设已经是 dict 列表
+                stage_data["subTasks"] = sub_tasks
+            
+        stages.append(stage_data)
     
     # 获取当前子任务描述
     current_task_name = "处理中..."

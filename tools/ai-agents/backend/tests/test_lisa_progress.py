@@ -119,3 +119,28 @@ class TestGetProgressInfo:
         # 未找到匹配时 index 保持 0
         assert result["currentStageIndex"] == 0
 
+    def test_transfers_and_renames_subtasks(self):
+        """验证 sub_tasks 被正确透传并重命名为 subTasks"""
+        state = {
+            "plan": [
+                {
+                    "id": "clarify", 
+                    "name": "需求澄清",
+                    "sub_tasks": [
+                        {"id": "t1", "name": "Task 1", "status": "completed"}
+                    ]
+                }
+            ],
+            "current_stage_id": "clarify"
+        }
+        
+        result = get_progress_info(state)
+        
+        stage = result["stages"][0]
+        assert "subTasks" in stage
+        assert len(stage["subTasks"]) == 1
+        assert stage["subTasks"][0]["id"] == "t1"
+        assert stage["subTasks"][0]["status"] == "completed"
+        # 确认旧字段被移除 (可选，取决于实现)
+        assert "sub_tasks" not in stage
+

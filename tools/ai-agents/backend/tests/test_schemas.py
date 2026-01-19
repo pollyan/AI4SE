@@ -7,6 +7,7 @@ TDD Red Phase: 验证 Pydantic Schema 和 to_progress_info 转换逻辑
 import pytest
 from backend.agents.shared.schemas import (
     WorkflowStage,
+    WorkflowSubTask,
     Artifact,
     LisaStructuredOutput,
     AlexStructuredOutput,
@@ -33,6 +34,61 @@ class TestWorkflowStage:
     def test_invalid_status_raises_error(self):
         with pytest.raises(ValueError):
             WorkflowStage(id="test", name="测试", status="invalid_status")
+
+    def test_stage_with_subtasks(self):
+        """测试 WorkflowStage 可以包含 sub_tasks 字段"""
+        subtasks = [
+            WorkflowSubTask(id="t1", name="理解需求", status="completed"),
+            WorkflowSubTask(id="t2", name="识别要点", status="active"),
+            WorkflowSubTask(id="t3", name="总结澄清", status="pending"),
+        ]
+        stage = WorkflowStage(
+            id="clarify",
+            name="需求澄清",
+            status="active",
+            sub_tasks=subtasks
+        )
+        assert len(stage.sub_tasks) == 3
+        assert stage.sub_tasks[0].id == "t1"
+        assert stage.sub_tasks[0].status == "completed"
+        assert stage.sub_tasks[1].status == "active"
+        assert stage.sub_tasks[2].status == "pending"
+
+    def test_stage_subtasks_default_empty(self):
+        """测试 WorkflowStage 的 sub_tasks 默认为空列表"""
+        stage = WorkflowStage(id="clarify", name="需求澄清", status="active")
+        assert stage.sub_tasks == []
+
+
+class TestWorkflowSubTask:
+    """测试 WorkflowSubTask 模型"""
+
+    def test_valid_subtask_pending(self):
+        task = WorkflowSubTask(id="t1", name="理解需求", status="pending")
+        assert task.id == "t1"
+        assert task.name == "理解需求"
+        assert task.status == "pending"
+
+    def test_valid_subtask_active(self):
+        task = WorkflowSubTask(id="t2", name="识别要点", status="active")
+        assert task.status == "active"
+
+    def test_valid_subtask_completed(self):
+        task = WorkflowSubTask(id="t3", name="总结澄清", status="completed")
+        assert task.status == "completed"
+
+    def test_valid_subtask_warning(self):
+        task = WorkflowSubTask(id="t4", name="风险项", status="warning")
+        assert task.status == "warning"
+
+    def test_subtask_status_default_pending(self):
+        """测试 WorkflowSubTask 的 status 默认为 pending"""
+        task = WorkflowSubTask(id="t1", name="理解需求")
+        assert task.status == "pending"
+
+    def test_invalid_subtask_status_raises_error(self):
+        with pytest.raises(ValueError):
+            WorkflowSubTask(id="t1", name="测试", status="invalid_status")
 
 
 class TestArtifact:
@@ -239,3 +295,33 @@ class TestToProgressInfo:
         assert progress["artifactProgress"]["template"] == []
         assert progress["artifactProgress"]["completed"] == []
         assert progress["artifactProgress"]["generating"] is None
+
+    def test_progress_info_converts_subtasks_to_camelcase(self):
+        """测试 to_progress_info 将 sub_tasks 转换为 subTasks 以匹配前端组件"""
+        subtasks = [
+            WorkflowSubTask(id="t1", name="子任务1", status="active")
+        ]
+        output = LisaStructuredOutput(
+            plan=[
+                WorkflowStage(
+                    id="clarify", 
+                    name="需求澄清", 
+                    status="active",
+                    sub_tasks=subtasks
+                ),
+            ],
+            current_stage_id="clarify",
+            artifacts=[]
+        )
+        progress = to_progress_info(output)
+        
+        stage = progress["stages"][0]
+        # 验证前端需要的 camelCase 字段存在
+        assert "subTasks" in stage
+        assert len(stage["subTasks"]) == 1
+        assert stage["subTasks"][0]["id"] == "t1"
+        
+        # 验证旧的 snake_case 字段是否还在（可选，如果删除了也行，关键是有 camelCase）
+        # 这里假设为了整洁，我们不保留旧字段
+        # assert "sub_tasks" not in stage
+
