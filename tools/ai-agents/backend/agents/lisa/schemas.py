@@ -69,10 +69,10 @@ class UpdateArtifact(BaseModel):
     )
 
 
-class WorkflowResponse(BaseModel):
+class ReasoningResponse(BaseModel):
     """
-    工作流复合响应结构。
-    允许模型在单次输出中同时包含思考过程（对话）、进度状态和文档更新（行动）。
+    ReasoningNode 的结构化输出。
+    包含对话思考和进度，不包含产出物内容（通过工具调用处理）。
     """
     thought: str = Field(description="思考过程、对用户的回复或澄清问题")
     
@@ -81,19 +81,20 @@ class WorkflowResponse(BaseModel):
         description="当前的具体步骤名称，例如：'正在分析需求', '生成测试用例'。用于更新前端进度条。"
     )
     
-    update_artifact: Optional[UpdateArtifact] = Field(
-        default=None, 
-        description="需要更新的文档内容。仅在明确需要生成或修改文档时使用。"
+    should_update_artifact: bool = Field(
+        default=False, 
+        description="是否需要更新产出物。仅当完成了实质性分析且有新内容需要写入文档时返回 True"
     )
 
-    @field_validator('update_artifact', mode='before')
-    @classmethod
-    def parse_json_string(cls, v):
-        """处理 LLM 可能返回的 JSON 字符串格式"""
-        if isinstance(v, str) and v.strip().startswith('{'):
-            import json
-            try:
-                return json.loads(v)
-            except json.JSONDecodeError:
-                return v
-        return v
+
+class WorkflowResponse(BaseModel):
+    """
+    [Legacy] 工作流响应结构。
+    保留以兼容现有代码，未来将由 ReasoningResponse 替代。
+    """
+    thought: str = Field(description="思考过程、对用户的回复或澄清问题")
+    
+    progress_step: Optional[str] = Field(
+        default=None,
+        description="当前的具体步骤名称，例如：'正在分析需求', '生成测试用例'。用于更新前端进度条。"
+    )

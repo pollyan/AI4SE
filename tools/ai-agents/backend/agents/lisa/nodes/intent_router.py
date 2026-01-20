@@ -126,22 +126,21 @@ def intent_router_node(state: LisaState, llm: Any) -> RouterCommand:
         log_routing_decision(decision, logger)
         
         # 意图映射到 Command
+        # 意图映射到 Command
         if decision.intent == "START_TEST_DESIGN":
             return Command(
                 update={"current_workflow": "test_design"},
-                goto="workflow_test_design"
+                goto="reasoning_node"
             )
         elif decision.intent == "START_REQUIREMENT_REVIEW":
             return Command(
                 update={"current_workflow": "requirement_review"},
-                goto="workflow_requirement_review"
+                goto="reasoning_node"
             )
         elif decision.intent == "CONTINUE_WORKFLOW":
             current_workflow = state.get("current_workflow")
-            if current_workflow == "test_design":
-                return Command(update={}, goto="workflow_test_design")
-            elif current_workflow == "requirement_review":
-                return Command(update={}, goto="workflow_requirement_review")
+            if current_workflow in ["test_design", "requirement_review"]:
+                 return Command(update={}, goto="reasoning_node")
             return Command(update={}, goto="clarify_intent")
         else:
             update = {}
@@ -152,12 +151,11 @@ def intent_router_node(state: LisaState, llm: Any) -> RouterCommand:
             # 粘性逻辑：如果已经在工作流中，且意图不明，默认继续工作流
             # 防止用户回复简单的确认词（如"好的"）导致会话重置
             current_workflow = state.get("current_workflow")
-            if current_workflow == "test_design":
-                logger.info("意图不明，但处于 test_design 工作流中 -> 继续工作流 (粘性)")
-                return Command(update=update, goto="workflow_test_design")
-            elif current_workflow == "requirement_review":
-                logger.info("意图不明，但处于 requirement_review 工作流中 -> 继续工作流 (粘性)")
-                return Command(update=update, goto="workflow_requirement_review")
+            if current_workflow in ["test_design", "requirement_review"]:
+                logger.info("意图不明，但处于工作流中 -> 继续工作流 (粘性)")
+                return Command(update=update, goto="reasoning_node")
+                
+            return Command(update=update, goto="clarify_intent")
                 
             return Command(update=update, goto="clarify_intent")
             

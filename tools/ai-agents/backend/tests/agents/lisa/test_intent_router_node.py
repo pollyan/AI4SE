@@ -48,4 +48,4 @@ def test_intent_router_sticky_workflow_on_unknown_intent():
         
         # 4. Assert
         # 我们期望它保持粘性，继续工作流
-        assert command.goto == "workflow_test_design", f"应保持在工作流中，实际跳转到: {command.goto}"
+        assert command.goto == "reasoning_node", f"应保持在工作流中，实际跳转到: {command.goto}"

@@ -11,7 +11,12 @@ from typing import Dict
 from langgraph.graph import StateGraph, START, END
 
 from .state import LisaState, get_initial_state
-from .nodes import intent_router_node, workflow_execution_node, clarify_intent_node
+from .nodes import (
+    intent_router_node,
+    clarify_intent_node,
+    reasoning_node,
+    artifact_node
+)
 from ..llm import create_llm_from_config
 from ..shared.checkpointer import get_checkpointer
 from ..shared.retry_policy import get_llm_retry_policy
@@ -48,13 +53,20 @@ def create_lisa_graph(model_config: Dict[str, str]):
     
     graph.add_node("intent_router", lambda state: intent_router_node(state, llm), retry_policy=llm_retry)
     graph.add_node("clarify_intent", lambda state: clarify_intent_node(state, llm), retry_policy=llm_retry)
-    graph.add_node("workflow_test_design", lambda state: workflow_execution_node(state, llm), retry_policy=llm_retry)
-    graph.add_node("workflow_requirement_review", lambda state: workflow_execution_node(state, llm), retry_policy=llm_retry)
+    
+    # 双节点架构
+    graph.add_node("reasoning_node", lambda state: reasoning_node(state, llm), retry_policy=llm_retry)
+    graph.add_node("artifact_node", lambda state: artifact_node(state, llm), retry_policy=llm_retry)
     
     graph.add_edge(START, "intent_router")
     graph.add_edge("clarify_intent", END)
-    graph.add_edge("workflow_test_design", END)
-    graph.add_edge("workflow_requirement_review", END)
+    
+    # 路由由 reasoning_node 的 Command 控制，artifact_node 执行完后结束
+    graph.add_edge("artifact_node", END)
+    # 显式添加 reasoning_node -> END (虽然 Command goto="artifact_node" 会覆盖，但作为静态图结构定义通常需要)
+    # 但 LangGraph 的 Command 不强求预定义边，只要节点存在即可。
+    # 为了可视化清晰，我们可以加边，或者保持 Command 动态路由。
+    # 保持简单，不加显式边到 artifact_node，依靠 Command。
     
     compiled = graph.compile(checkpointer=get_checkpointer())
     

@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Callable, Iterator, Optional
 from backend.agents.shared.data_stream import stream_text_delta
-from .schemas import WorkflowResponse, UpdateArtifact
+from .schemas import WorkflowResponse, UpdateArtifact, ReasoningResponse
 
 def get_stage_index(plan: List[Dict], stage_id: str) -> int:
     """获取阶段在计划中的索引 (Internal Helper)"""
@@ -17,6 +17,7 @@ def process_workflow_stream(
     base_artifacts: Dict[str, str]
 ) -> WorkflowResponse:
     """
+    [Deprecated] This function is no longer used by the dual-node architecture.
     处理 WorkflowResponse 流，负责 Diff 计算和事件推送。
     """
     final_thought = ""
@@ -99,4 +100,70 @@ def process_workflow_stream(
         thought=final_thought,
         progress_step=final_progress_step,
         update_artifact=final_update_artifact
+    )
+
+
+def process_reasoning_stream(
+    stream_iterator,
+    writer,
+    plan: list,
+    current_stage: str,
+    base_artifacts: dict = None
+) -> ReasoningResponse:
+    """
+    处理 ReasoningNode 的流式响应。
+    只处理 thought 和 progress_step，不处理 artifact 更新。
+    """
+    current_artifacts = dict(base_artifacts or {})
+    stage_index = next((i for i, s in enumerate(plan) if s["id"] == current_stage), 0)
+    
+    final_thought = ""
+    final_progress_step = None
+    final_should_update_artifact = False
+    
+    # 状态追踪
+    last_thought_len = 0
+    last_sent_progress_step = None
+    
+    for chunk in stream_iterator:
+        # 1. 处理 thought 增量
+        if chunk.thought:
+            current_thought = chunk.thought
+            if len(current_thought) > last_thought_len:
+                delta = current_thought[last_thought_len:]
+                writer({
+                    "type": "text_delta_chunk",
+                    "delta": delta
+                })
+                last_thought_len = len(current_thought)
+            final_thought = current_thought
+            
+        # 2. 处理 progress_step 更新
+        if chunk.progress_step:
+            current_step = chunk.progress_step
+            if current_step and current_step != last_sent_progress_step:
+                writer({
+                    "type": "progress",
+                    "progress": {
+                        "stages": plan,
+                        "currentStageIndex": stage_index,
+                        "currentTask": current_step,
+                        "artifacts": current_artifacts
+                    }
+                })
+                last_sent_progress_step = current_step
+            final_progress_step = current_step
+            
+        # 3. 处理 should_update_artifact
+        if hasattr(chunk, 'should_update_artifact'):
+            # 注意: LangChain stream 可能会返回 partial chunks. 
+            # bool 类型通常在最后确定，或者我们会收到 True.
+            # 这里我们只记录最新值
+            if chunk.should_update_artifact is not None:
+                final_should_update_artifact = chunk.should_update_artifact
+
+    return ReasoningResponse(
+        thought=final_thought,
+        progress_step=final_progress_step,
+        should_update_artifact=final_should_update_artifact
     )
