@@ -117,6 +117,10 @@ def process_reasoning_stream(
     current_artifacts = dict(base_artifacts or {})
     stage_index = next((i for i, s in enumerate(plan) if s["id"] == current_stage), 0)
     
+    # Extract artifact_templates ONCE at the start, before the loop
+    # This prevents the template from being lost after the first pop in the loop
+    saved_templates = current_artifacts.pop("artifact_templates", [])
+    
     final_thought = ""
     final_progress_step = None
     final_should_update_artifact = False
@@ -141,8 +145,8 @@ def process_reasoning_stream(
         # 2. 处理 progress_step 更新
         if chunk.progress_step:
             current_step = chunk.progress_step
-            # Extract templates from artifacts dict if present (passed via base_artifacts hack)
-            templates = current_artifacts.pop("artifact_templates", [])
+            # Use saved_templates which was extracted once before the loop
+            # current_artifacts no longer contains artifact_templates (it was popped)
             
             writer({
                 "type": "progress",
@@ -150,13 +154,10 @@ def process_reasoning_stream(
                     "stages": plan,
                     "currentStageIndex": stage_index,
                     "currentTask": current_step,
-                    "artifact_templates": templates,
+                    "artifact_templates": saved_templates,
                     "artifacts": current_artifacts
                 }
             })
-            # Restore for next iteration state?
-            if templates:
-                current_artifacts["artifact_templates"] = templates
             last_sent_progress_step = current_step
             final_progress_step = current_step
             
