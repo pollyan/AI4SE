@@ -2,11 +2,12 @@
 Lisa State - LangGraph 状态定义
 
 定义 Lisa 智能体的核心状态结构，用于在图节点间传递和更新状态。
+继承自 BaseAgentState 共享基础字段。
 """
 
-from typing import TypedDict, Optional, Literal, Annotated
-from langgraph.graph import add_messages
-from langchain_core.messages import BaseMessage
+from typing import Literal
+
+from ..shared.state import BaseAgentState
 
 
 # 工作流阶段定义
@@ -16,58 +17,25 @@ WorkflowStage = Literal["clarify", "strategy", "cases", "delivery"]
 WorkflowType = Literal["test_design"]
 
 
-class LisaState(TypedDict):
+class LisaState(BaseAgentState):
     """
     Lisa 智能体核心状态
     
-    用于在 LangGraph 图节点间传递状态，包含：
-    - 消息历史
-    - 工作流控制
-    - 产出物存储
-    - 交互追踪
+    继承自 BaseAgentState，包含所有智能体共用字段：
+    - messages: 消息历史 (LangGraph Reducer)
+    - current_workflow: 当前工作流
+    - workflow_stage: 工作流阶段
+    - plan: 动态进度计划
+    - current_stage_id: 当前阶段 ID
+    - artifacts: 产出物存储 (Markdown)
+    - artifact_templates: 产出物模板列表
+    - pending_clarifications: 待澄清问题
+    - clarification: 当前意图澄清消息
+    - consensus_items: 已达成共识项
+    
+    Lisa 特有字段可在此扩展。
     """
-    
-    # ═══════════════════════════════════════════════════════════
-    # 消息历史 (LangGraph Reducer - 自动合并消息)
-    # ═══════════════════════════════════════════════════════════
-    messages: Annotated[list[BaseMessage], add_messages]
-    
-    # ═══════════════════════════════════════════════════════════
-    # 工作流控制
-    # ═══════════════════════════════════════════════════════════
-    current_workflow: Optional[WorkflowType]
-    workflow_stage: Optional[WorkflowStage]
-    
-    # ═══════════════════════════════════════════════════════════
-    # 动态进度计划
-    # ═══════════════════════════════════════════════════════════
-    # 列表中的每个 item 结构:
-    # {
-    #     "id": "stage_id",
-    #     "name": "阶段名称",
-    #     "status": "pending" | "active" | "completed",
-    #     "description": "阶段描述 (可选)"
-    # }
-    plan: list[dict]
-    current_stage_id: Optional[str]
-    artifact_templates: list[dict]  # 产出物模板列表
-    
-    # ═══════════════════════════════════════════════════════════
-    # 产出物存储 (Markdown 格式，支持 Mermaid)
-    # ═══════════════════════════════════════════════════════════
-    # 命名规范:
-    #   - test_design_requirements: 需求分析文档
-    #   - test_design_strategy: 测试策略蓝图
-    #   - test_design_cases: 测试用例集
-    #   - test_design_final: 最终测试设计文档
-    artifacts: dict[str, str]
-    
-    # ═══════════════════════════════════════════════════════════
-    # 交互追踪
-    # ═══════════════════════════════════════════════════════════
-    pending_clarifications: list[str] # 待澄清问题列表
-    clarification: Optional[str]      # 当前意图澄清消息 (动态)
-    consensus_items: list[dict]        # [{"question": "...", "answer": "..."}]
+    pass  # 目前所有字段均继承自 BaseAgentState
 
 
 def get_initial_state() -> LisaState:

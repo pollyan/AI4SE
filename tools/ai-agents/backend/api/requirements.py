@@ -9,7 +9,10 @@ import os
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
 from flask import Blueprint, request, jsonify, Response, stream_with_context
+from werkzeug.datastructures import FileStorage
 
 # SocketIO support removed for cleanup
 from .base import (
@@ -45,7 +48,7 @@ except ImportError:
 _session_state_cache = {}  # {session_id: {'is_activated': bool, 'last_access': datetime}}
 _CACHE_TTL_HOURS = 24
 
-def _cleanup_expired_sessions():
+def _cleanup_expired_sessions() -> None:
     """清理过期的会话状态"""
     now = datetime.now()
     expired_sessions = [
@@ -61,7 +64,7 @@ def _get_session_activated(session_id: str) -> bool:
     _cleanup_expired_sessions()  # 顺便清理过期数据
     return _session_state_cache.get(session_id, {}).get('is_activated', False)
 
-def _set_session_activated(session_id: str, is_activated: bool = True):
+def _set_session_activated(session_id: str, is_activated: bool = True) -> None:
     """设置会话的激活状态"""
     _session_state_cache[session_id] = {
         'is_activated': is_activated,
@@ -69,7 +72,7 @@ def _set_session_activated(session_id: str, is_activated: bool = True):
     }
 
 
-def _clear_session_state(session_id: str):
+def _clear_session_state(session_id: str) -> None:
     """清除会话状态（用户退出时调用）"""
     if session_id in _session_state_cache:
         del _session_state_cache[session_id]
@@ -81,7 +84,7 @@ logger = logging.getLogger(__name__)
 # ✨ AI服务实例缓存（按session_id缓存）
 _ai_service_cache = {}  # {session_id: {'service': instance, 'last_access': datetime}}
 
-def get_ai_service(assistant_type='lisa', session_id=None):
+def get_ai_service(assistant_type: str = 'lisa', session_id: Optional[str] = None) -> Optional[LangchainAssistantService]:
     """获取AI服务实例，支持会话级缓存"""
     
     # 清理过期缓存
@@ -143,7 +146,7 @@ requirements_bp = Blueprint("requirements", __name__, url_prefix="/ai-agents/api
 active_sessions = {}
 
 
-def process_uploaded_files(files):
+def process_uploaded_files(files: List[FileStorage]) -> List[Dict[str, Any]]:
     """处理上传的文件，提取内容"""
     attached_files = []
     
@@ -179,7 +182,7 @@ def process_uploaded_files(files):
     return attached_files
 
 
-def build_message_with_files(message_content, attached_files):
+def build_message_with_files(message_content: str, attached_files: List[Dict[str, Any]]) -> str:
     """构建包含文件内容的完整消息"""
     if not attached_files:
         return message_content
@@ -204,7 +207,7 @@ def build_message_with_files(message_content, attached_files):
 @requirements_bp.route("/sessions", methods=["POST"])
 @require_json
 @log_api_call
-def create_session():
+def create_session() -> Response:
     """创建新的智能助手会话"""
     try:
         data = request.get_json()
@@ -260,7 +263,7 @@ def create_session():
 
 @requirements_bp.route("/sessions/<session_id>", methods=["GET"])
 @log_api_call
-def get_session(session_id):
+def get_session(session_id: str) -> Response:
     """获取会话详情"""
     try:
         session = RequirementsSession.query.get(session_id)
@@ -287,7 +290,7 @@ def get_session(session_id):
 
 @requirements_bp.route("/sessions/<session_id>/messages", methods=["GET"])
 @log_api_call
-def get_messages(session_id):
+def get_messages(session_id: str) -> Response:
     """获取会话消息列表"""
     try:
         # 验证会话是否存在
@@ -325,7 +328,7 @@ def get_messages(session_id):
 
 @requirements_bp.route("/sessions/<session_id>/messages", methods=["POST"])
 @log_api_call
-def send_message(session_id):
+def send_message(session_id: str) -> Response:
     """发送消息到会话（HTTP轮询模式，支持文件上传）"""
     try:
         # 验证会话是否存在
@@ -615,7 +618,7 @@ def send_message(session_id):
 
 
 @requirements_bp.route("/sessions/<session_id>/messages/stream", methods=["POST"])
-def stream_messages(session_id):
+def stream_messages(session_id: str) -> Response:
     """
     [Deprecated] V1 流式发送消息给AI助手 (SSE)
     请使用 V2 端点: /sessions/<session_id>/messages/v2/stream
@@ -740,7 +743,7 @@ def stream_messages(session_id):
 
 
 @requirements_bp.route("/sessions/<session_id>/messages/v2/stream", methods=["POST"])
-def stream_messages_v2(session_id):
+def stream_messages_v2(session_id: str) -> Response:
     """
     V2 流式消息端点 - 使用 Data Stream Protocol
     
@@ -943,7 +946,7 @@ def stream_messages_v2(session_id):
 @requirements_bp.route("/sessions/<session_id>/sync", methods=["POST"])
 @require_json
 @log_api_call
-def sync_session_messages(session_id):
+def sync_session_messages(session_id: str) -> Response:
     """Synchronize full message history from frontend (Sync on Finish)"""
     try:
         session = RequirementsSession.query.get(session_id)
@@ -1052,7 +1055,7 @@ def sync_session_messages(session_id):
 @requirements_bp.route("/sessions/<session_id>/status", methods=["PUT"])
 @require_json
 @log_api_call
-def update_session_status(session_id):
+def update_session_status(session_id: str) -> Response:
     """更新会话状态"""
     try:
         session = RequirementsSession.query.get(session_id)
@@ -1098,7 +1101,7 @@ def update_session_status(session_id):
 
 @requirements_bp.route("/assistants", methods=["GET"])
 @log_api_call
-def get_assistants():
+def get_assistants() -> Union[Response, Dict[str, Any]]:
     """获取支持的助手列表"""
     try:
         assistants = []
@@ -1122,7 +1125,7 @@ def get_assistants():
 
 @requirements_bp.route("/assistants/<assistant_type>/bundle", methods=["GET"])
 @log_api_call
-def get_assistant_bundle(assistant_type):
+def get_assistant_bundle(assistant_type: str) -> Union[Response, Dict[str, Any]]:
     """获取指定助手的完整bundle内容"""
     try:
         if assistant_type not in LangchainAssistantService.SUPPORTED_ASSISTANTS:

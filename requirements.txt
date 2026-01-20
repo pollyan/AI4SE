@@ -33,10 +33,10 @@ faker>=18.0.0
 
 
 # LangChain V1 (Stable)
-langchain>=1.0.0
-langchain-core>=1.0.0
-langchain-openai>=1.0.0
-langgraph>=1.0.0
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+langgraph>=0.2.0
 openai>=1.12.0
 
 # Google ADK (Agent Development Kit)

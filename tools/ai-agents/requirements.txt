@@ -1,37 +1,25 @@
-# Playwright
-playwright==1.56.0
-
 # 测试框架
 pytest>=8.4.0,<9.0.0
-pytest-playwright==0.7.1
 pytest-asyncio==1.2.0
 pytest-cov>=3.0.0
 pytest-mock>=3.10.0
 
 # 环境配置
 python-dotenv==1.2.1
-requests==2.32.5
+pydantic
 
 # Web框架
 flask[async]>=2.0.0
-flask-socketio>=5.0.0
 flask-cors>=4.0.0
-python-socketio>=5.0.0
 python-multipart>=0.0.5
 
 # 数据库支持
 flask-sqlalchemy>=3.0.0
 psycopg2-binary>=2.9.0
 
-# Supabase客户端
-supabase>=1.0.0
-
 # 开发工具
 black>=22.0.0
 flake8>=4.0.0
-factory-boy>=3.2.0
-faker>=18.0.0
-
 
 # LangChain V1 (Stable)
 langchain>=0.3.0
@@ -41,5 +29,3 @@ langgraph>=0.2.0
 semantic-router>=0.0.61
 openai>=1.12.0
 langsmith>=0.4.0,<0.5.0
-google-adk>=0.5.0
-litellm>=1.40.0

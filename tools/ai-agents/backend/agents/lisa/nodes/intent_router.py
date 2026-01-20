@@ -12,6 +12,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.types import Command
 
 from ..state import LisaState
+from ...shared.artifact_summary import get_artifacts_summary
 from ..schemas import IntentResult
 from ..prompts import INTENT_ROUTING_PROMPT
 from ..routing.hybrid_router import HybridRouter, RoutingDecision
@@ -31,19 +32,6 @@ def format_messages_for_context(messages: list, max_messages: int = 10) -> str:
         formatted.append(f"[{role}]: {content}")
     
     return "\n".join(formatted) if formatted else "(无历史消息)"
-
-
-def summarize_artifacts(artifacts: dict) -> str:
-    """生成产出物摘要"""
-    if not artifacts:
-        return "(无产出物)"
-    
-    summaries = []
-    for key, value in artifacts.items():
-        length = len(value) if value else 0
-        summaries.append(f"- {key}: {length} 字符")
-    
-    return "\n".join(summaries)
 
 
 @lru_cache(maxsize=1)
@@ -66,7 +54,7 @@ def fallback_intent_routing(state: LisaState, llm: Any) -> IntentResult:
         return IntentResult(intent=None, confidence=0.0, reason="无用户消息")
         
     recent_messages = format_messages_for_context(messages)
-    artifacts_summary = summarize_artifacts(state.get("artifacts", {}))
+    artifacts_summary = get_artifacts_summary(state.get("artifacts", {}))
     
     system_prompt = INTENT_ROUTING_PROMPT.format(
         current_workflow=state.get("current_workflow") or "未开始",
