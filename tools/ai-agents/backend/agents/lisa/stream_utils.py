@@ -148,13 +148,33 @@ def process_reasoning_stream(
             # Use saved_templates which was extracted once before the loop
             # current_artifacts no longer contains artifact_templates (it was popped)
             
+            # Construct standardized artifactProgress payload
+            # This matches the structure in backend/agents/shared/progress.py:get_progress_info
+            
+            # 1. Convert templates to frontend metadata format (exclude 'outline')
+            template_list = []
+            for tmpl in saved_templates:
+                template_list.append({
+                    "stageId": tmpl.get("stage") or tmpl.get("stage_id"),
+                    "artifactKey": tmpl.get("key") or tmpl.get("artifact_key"),
+                    "name": tmpl.get("name"),
+                })
+                
+            # 2. Identify completed artifacts
+            completed_keys = list(current_artifacts.keys())
+            
             writer({
                 "type": "progress",
                 "progress": {
                     "stages": plan,
                     "currentStageIndex": stage_index,
                     "currentTask": current_step,
-                    "artifact_templates": saved_templates,
+                    # Replace raw artifact_templates with structured artifactProgress
+                    "artifactProgress": {
+                        "template": template_list,
+                        "completed": completed_keys,
+                        "generating": None # Reasoning phase doesn't generate artifacts
+                    },
                     "artifacts": current_artifacts
                 }
             })

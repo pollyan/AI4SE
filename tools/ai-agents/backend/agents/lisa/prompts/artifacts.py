@@ -221,3 +221,19 @@ pie title 测试用例分布
 - [ ] 开发负责人确认
 - [ ] 测试负责人确认
 """
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. 通用提示词 (General Prompts)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+ARTIFACT_UPDATE_PROMPT = """
+Internal System Instruction:
+You are in the Artifact Update Phase.
+
+**CRITICAL**: You MUST call the `update_artifact` tool with EXACTLY this key:
+- key: "{artifact_key}"
+
+Generate the full markdown content for stage '{current_stage}' based on the conversation context.
+Do NOT use any other key. Using a different key will cause the update to fail.
+"""

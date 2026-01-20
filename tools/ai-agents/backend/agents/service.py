@@ -345,6 +345,7 @@ class LangchainAssistantService:
                                 if "artifacts" not in current_state:
                                     current_state["artifacts"] = {}
                                 current_state["artifacts"].update(progress_data["artifacts"])
+                                logger.info(f"Service: Updated current_state['artifacts']. Keys: {list(current_state['artifacts'].keys())}")
                             
                             from .shared.progress import get_progress_info
                             progress_info = get_progress_info(current_state)

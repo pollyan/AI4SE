@@ -7,6 +7,8 @@ from langgraph.config import get_stream_writer
 
 from ..state import LisaState
 from ..tools import update_artifact
+from ..prompts.artifacts import ARTIFACT_UPDATE_PROMPT
+from ...shared.progress import get_progress_info
 
 logger = logging.getLogger(__name__)
 
@@ -64,14 +66,15 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
             tool_choice={"type": "function", "function": {"name": "update_artifact"}}
         )
 
+        # 获取当前阶段对应的 artifact key
+        current_template = next((t for t in templates if t.get("stage") == current_stage), None)
+        artifact_key = current_template["key"] if current_template else f"{current_stage}_output"
+
         # 构建 Prompt
-        artifact_prompt_text = f"""
-        Internal System Instruction:
-        You are in the Artifact Update Phase.
-        You MUST call the `update_artifact` tool to save the latest content for stage '{current_stage}'.
-        
-        Use the context from previous messages to generate the full markdown content.
-        """
+        artifact_prompt_text = ARTIFACT_UPDATE_PROMPT.format(
+            current_stage=current_stage,
+            artifact_key=artifact_key
+        )
         
         # 使用 state 中的 messages + 指令
         messages = state["messages"] + [SystemMessage(content=artifact_prompt_text)]
@@ -114,18 +117,23 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
             })
             
             # 推送进度更新 (前端根据此更新右侧面板)
-            # 计算 stage_index
-            stage_index = next((i for i, s in enumerate(plan) if s["id"] == current_stage), 0)
+            # 使用 get_progress_info 确保格式统一 (包含 artifactProgress)
+            temp_state = {
+                **state,
+                "artifacts": new_artifacts
+            }
+            progress_info = get_progress_info(temp_state)
             
-            writer({
-                "type": "progress",
-                "progress": {
-                    "stages": plan,
-                    "currentStageIndex": stage_index,
-                    "currentTask": f"已更新产出物: {key}",
-                    "artifact_templates": state.get("artifact_templates", []), # CRITICAL FIX: Must include templates
-                    "artifacts": new_artifacts
-                }
-            })
+            if progress_info:
+                # DEBUG: Log progress info details
+                logger.info(f"ArtifactNode: Generated progress info. Completed keys: {progress_info.get('artifactProgress', {}).get('completed')}")
+                # 覆盖当前任务描述，显示具体更新动作
+                progress_info["currentTask"] = f"已更新产出物: {key}"
+                
+                writer({
+                    "type": "progress",
+                    "progress": progress_info
+                })
+                logger.info("ArtifactNode: Sent progress event via writer")
             
     return {**state, "artifacts": new_artifacts}
