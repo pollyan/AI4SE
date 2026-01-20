@@ -345,7 +345,7 @@ def test_config(config_id):
         import asyncio
         
         config_data = config.get_config_for_ai_service()
-        temp_ai_service = LangchainAssistantService(assistant_type="alex", config=config_data)
+        temp_ai_service = LangchainAssistantService(assistant_type="lisa", config=config_data)
         
         start_time = time.time()
         messages = [{"role": "user", "content": "你好"}]
@@ -430,7 +430,7 @@ def test_new_config():
             "model_name": model_name.strip(),
         }
         
-        temp_ai_service = LangchainAssistantService(assistant_type="alex", config=config_data)
+        temp_ai_service = LangchainAssistantService(assistant_type="lisa", config=config_data)
         
         start_time = time.time()
         messages = [{"role": "user", "content": "你好"}]

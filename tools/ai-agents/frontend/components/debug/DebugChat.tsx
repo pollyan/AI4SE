@@ -23,7 +23,7 @@ export function DebugChat() {
             const sessionRes = await fetch('/ai-agents/api/requirements/sessions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ project_name: 'Debug Project', assistant_type: 'alex' })
+                body: JSON.stringify({ project_name: 'Debug Project', assistant_type: 'lisa' })
             });
             const sessionData = await sessionRes.json();
             

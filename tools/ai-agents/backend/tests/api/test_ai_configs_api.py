@@ -8,6 +8,8 @@ import pytest
 import json
 
 
+from unittest.mock import patch, MagicMock
+
 class TestAIConfigsAPI:
     """AI 配置 API 测试套件"""
     
@@ -315,23 +317,18 @@ class TestAIConfigTestConnection:
             assert response.status_code == 404
     
     def test_test_config_success_mocked(self, api_client, app, create_ai_config):
-        """测试配置连接测试（使用测试API Key会失败，这是预期行为）"""
+        """测试配置连接测试（模拟失败情况）"""
         with app.app_context():
-            # 创建测试配置（使用测试 API Key）
             config = create_ai_config(name="连接测试配置")
             
-            response = api_client.post(f'/api/ai-configs/{config.id}/test')
-            
-            # 由于使用的是测试 API Key，应该返回错误
-            # 可能的错误码：
-            # - 401: API Key 验证失败
-            # - 400: 配置错误
-            # - 503: 网络连接失败
-            # - 500: 其他错误
-            assert response.status_code in [400, 401, 503, 500]
-            
-            data = response.get_json()
-            # 应该返回错误信息
-            assert 'message' in data
-            # 错误信息应该是描述性的，不应该是空的
-            assert len(data['message']) > 0
+            # Mock LangchainAssistantService.test_connection to raise an exception
+            with patch('backend.agents.LangchainAssistantService.test_connection') as mock_test:
+                mock_test.side_effect = Exception("Incorrect API key provided")
+                
+                response = api_client.post(f'/api/ai-configs/{config.id}/test')
+                
+                assert response.status_code in [400, 401, 503, 500]
+                
+                data = response.get_json()
+                assert 'message' in data
+                assert "API 密钥" in data['message'] or "Key" in data['message']

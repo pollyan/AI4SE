@@ -86,7 +86,7 @@ const ModulesSection: React.FC = () => {
                                         </div>
                                         <h3 className="text-2xl font-bold text-slate-900 dark:text-white">AI 智能助手</h3>
                                     </div>
-                                    <p className="text-purple-600 dark:text-purple-400 font-medium">专业的需求分析师 Alex & 测试分析师 Song</p>
+                                    <p className="text-purple-600 dark:text-purple-400 font-medium">专业的测试专家 Lisa</p>
                                 </div>
                                 <span className="px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs font-semibold rounded-full border border-green-200 dark:border-green-800 shrink-0">
                                     配置难度：简单
@@ -94,7 +94,7 @@ const ModulesSection: React.FC = () => {
                             </div>
 
                             <p className="text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
-                                选择专业的 AI 助手开始对话。Alex 专注需求分析，通过提问引导您澄清业务需求；Song 专注测试分析，协助您设计测试策略和用例。
+                                与专业的 AI 助手对话。Lisa 专注测试分析，通过多轮对话协助您设计测试策略、评审需求并生成测试用例。
                             </p>
 
                             <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-700/50">

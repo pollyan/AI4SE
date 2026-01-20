@@ -69,11 +69,13 @@ class RequirementsSession(db.Model):
         """获取助手类型"""
         try:
             if not self.user_context:
-                return "alex"
+                return "lisa"
             ctx = json.loads(self.user_context)
-            return ctx.get("assistant_type", "alex")
-        except:
-            return "alex"
+            return ctx.get("assistant_type", "lisa")
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to parse user_context: {e}")
+            return "lisa"
 
     @classmethod
     def from_dict(cls, data):

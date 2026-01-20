@@ -13,6 +13,7 @@ import { AssistantChat } from './components/chat';
 import type { ProgressInfo } from './services/backendService';
 
 // 从 Markdown 内容中解析 TOC（标题列表）
+// 从 Markdown 内容中解析 TOC（标题列表）
 function parseTocFromMarkdown(content: string): SubNavItem[] {
     if (!content) return [];
 
@@ -24,6 +25,17 @@ function parseTocFromMarkdown(content: string): SubNavItem[] {
     while ((match = headingRegex.exec(content)) !== null) {
         const level = match[1].length;
         const title = match[2].trim();
+
+        // 过滤逻辑：只保留一级编号（如 "1. "），排除二级编号（如 "1.1 "）
+        // 匹配模式：数字 + 点 + 空格 (e.g., "1. ")
+        // 排除模式：数字 + 点 + 数字 (e.g., "1.1")
+        const isTopLevel = /^\d+\.\s/.test(title);
+        const isSecondary = /^\d+\.\d+/.test(title);
+
+        if (!isTopLevel && isSecondary) {
+            continue;
+        }
+
         // 生成 slug ID (与 ArtifactPanel 中的 slugify 逻辑保持一致)
         const id = title
             .toString()
@@ -206,7 +218,7 @@ const CompactApp: React.FC = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">选择一位 AI 助手开始对话</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md">
-                {ASSISTANTS.map((assistant) => (
+                {ASSISTANTS.filter(a => a.id !== 'alex').map((assistant) => (
                     <button
                         key={assistant.id}
                         onClick={() => handleSelectAssistant(assistant.id)}
@@ -214,8 +226,7 @@ const CompactApp: React.FC = () => {
                     >
                         <div className="flex items-center gap-3">
                             <div
-                                className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${assistant.id === 'alex' ? 'bg-primary' : 'bg-secondary'
-                                    }`}
+                                className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold bg-secondary"
                             >
                                 {assistant.initial}
                             </div>

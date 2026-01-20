@@ -188,7 +188,7 @@ def create_ai_config(app):
 def sample_session_data():
     """提供示例会话创建数据"""
     return {
-        "assistant_type": "alex",
+        "assistant_type": "lisa",
         "project_name": "测试项目"
     }
 
@@ -206,4 +206,4 @@ def mock_ai_service():
 @pytest.fixture
 def assistant_types():
     """支持的助手类型"""
-    return ["alex", "lisa"]
+    return ["lisa"]

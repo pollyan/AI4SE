@@ -81,7 +81,7 @@ logger = logging.getLogger(__name__)
 # ✨ AI服务实例缓存（按session_id缓存）
 _ai_service_cache = {}  # {session_id: {'service': instance, 'last_access': datetime}}
 
-def get_ai_service(assistant_type='alex', session_id=None):
+def get_ai_service(assistant_type='lisa', session_id=None):
     """获取AI服务实例，支持会话级缓存"""
     
     # 清理过期缓存
@@ -215,7 +215,7 @@ def create_session():
             raise ValidationError("项目名称不能为空")
         
         # 获取助手类型参数
-        assistant_type = data.get("assistant_type", "alex")
+        assistant_type = data.get("assistant_type", "lisa")
         
         # 验证助手类型（支持 lisa 别名）
         # 验证助手类型（支持 lisa 别名）
@@ -359,7 +359,7 @@ def send_message(session_id):
             
         # 获取会话中的助手类型
         user_context = json.loads(session.user_context or "{}")
-        assistant_type = user_context.get("assistant_type", "alex")
+        assistant_type = user_context.get("assistant_type", "lisa")
         
         # 检查是否是激活消息（仅依靠内容特征，不依赖长度）
         # 1. Bundle + 激活指令组合
@@ -640,7 +640,7 @@ def stream_messages(session_id):
         
         # 从 user_context 获取 assistant_type
         user_context = json.loads(session.user_context or "{}")
-        assistant_type = user_context.get("assistant_type", "alex")
+        assistant_type = user_context.get("assistant_type", "lisa")
         
         # 获取 AI 服务
         try:
@@ -784,7 +784,7 @@ def stream_messages_v2(session_id):
         
         # 从 user_context 获取 assistant_type
         user_context = json.loads(session.user_context or "{}")
-        assistant_type = user_context.get("assistant_type", "alex")
+        assistant_type = user_context.get("assistant_type", "lisa")
         
         # 获取 AI 服务
         try:
@@ -1011,8 +1011,9 @@ def sync_session_messages(session_id):
                     meta = json.loads(msg.message_metadata or "{}")
                     if "tool_call_id" in meta:
                         existing_tool_ids.add(meta["tool_call_id"])
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Failed to parse message metadata: {e}")
+                    continue
             
             for tool_inv in tool_invocations:
                 if tool_inv.get("state") == "result":
@@ -1133,9 +1134,7 @@ def get_assistant_bundle(assistant_type):
         # 动态解析 bundle 路径 (相对于 backend/agents/...)
         base_agents_path = Path(__file__).resolve().parents[1] / "agents"
         
-        if assistant_type == "alex":
-            bundle_path = base_agents_path / "alex" / "alex_v1_bundle.txt"
-        elif assistant_type == "lisa":
+        if assistant_type == "lisa":
              bundle_path = base_agents_path / "lisa" / "lisa_v5_bundle.txt"
         else:
              # Fallback to old behavior if needed or error
@@ -1164,11 +1163,4 @@ def get_assistant_bundle(assistant_type):
     except Exception as e:
         return standard_error_response(f"获取助手bundle失败: {str(e)}", 500)
 
-
-@requirements_bp.route("/alex-bundle", methods=["GET"])
-@log_api_call
-def get_alex_bundle():
-    """获取完整的Alex需求分析师Bundle内容 - 向后兼容端点"""
-    # 直接调用新的助手bundle端点
-    return get_assistant_bundle('alex')
 
