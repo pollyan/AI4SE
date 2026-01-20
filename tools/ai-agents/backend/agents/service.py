@@ -4,7 +4,6 @@ LangChain Assistant Service
 提供统一的服务接口。
 使用 LangChain V1 的 create_agent 实现。
 Lisa 智能体使用 LangGraph StateGraph 实现。
-Alex 智能体使用 Google ADK 实现。
 """
 
 import logging
@@ -261,7 +260,8 @@ class LangchainAssistantService:
                 yield chunk
                     
         except Exception as e:
-            logger.error(f"流式处理消息失败: {str(e)}")
+            import traceback
+            logger.error(f"流式处理消息失败: {str(e)}\n{traceback.format_exc()}")
             yield f"\n\n错误: {str(e)}"
     
     async def _stream_graph_message(
@@ -299,19 +299,11 @@ class LangchainAssistantService:
         }
         
         # from .shared.progress_utils import clean_response_streaming  # Removed
-        processed_templates = set()
-        plan_parsed = False
-        json_parsed = False
 
         from .shared.progress_utils import (
             clean_response_text,
             get_current_stage_id,
-            parse_structured_json,
-            extract_plan_from_structured,
-            extract_artifacts_from_structured,
         )
-        # from .shared.artifact_utils import parse_all_artifacts (Removed)
-        from .shared.output_parser import split_message_and_json
         
         yielded_len = 0
         
@@ -412,96 +404,22 @@ class LangchainAssistantService:
                             # 之前的去重逻辑会导致 Markdown 格式（如 **）和重复词被吞噬
                             # 我们已经通过 AIMessageChunk 类型过滤解决了 LangGraph 重复推送的问题
                             full_response += content
-    
-                            if not json_parsed and not plan_parsed:
-                                if '```json' in full_response and '```' in full_response[full_response.find('```json')+7:]:
-                                    structured_data, _ = parse_structured_json(full_response)
-                                    if structured_data:
-                                        parsed_plan = extract_plan_from_structured(structured_data)
-                                        if parsed_plan:
-                                            current_state["plan"] = parsed_plan
-                                            stage_id = structured_data.get("current_stage_id") or get_current_stage_id(parsed_plan) or ""
-                                            current_state["current_stage_id"] = stage_id
-                                            plan_parsed = True
-                                            json_parsed = True
-                                        
-                                        templates, artifacts_dict = extract_artifacts_from_structured(structured_data)
-                                        if templates:
-                                            if "artifact_templates" not in current_state:
-                                                current_state["artifact_templates"] = []
-                                            existing_keys = {t.get("artifact_key") for t in current_state["artifact_templates"]}
-                                            for tmpl in templates:
-                                                if tmpl.get("artifact_key") not in existing_keys:
-                                                    current_state["artifact_templates"].append(tmpl)
-                                        
-                                        if artifacts_dict:
-                                            if "artifacts" not in current_state:
-                                                current_state["artifacts"] = {}
-                                            current_state["artifacts"].update(artifacts_dict)
-                                        
-                                        from .shared.progress import get_progress_info
-                                        progress_info = get_progress_info(current_state)
-                                    yield {"type": "state", "progress": progress_info}
-                                    logger.info("JSON 结构化输出解析成功")
 
-                        # [REMOVED] Legacy XML Artifact Parsing
-                        # if "<artifact" in full_response.lower() and "</artifact>" in full_response.lower():
-                        #     ... (removed) ...
-
-                        # temp_cleaned = clean_response_streaming(full_response)
-                        temp_cleaned = full_response
-                        message_part, _ = split_message_and_json(temp_cleaned)
-                        
-                        if len(message_part) > yielded_len:
-                            delta = message_part[yielded_len:]
-                            yielded_len += len(delta)
-                            yield delta
+                            cleaned_current = clean_response_text(full_response)
+                            if len(cleaned_current) > yielded_len:
+                                delta = cleaned_current[yielded_len:]
+                                yielded_len = len(cleaned_current)
+                                yield delta
             
-        final_message, final_json = split_message_and_json(full_response)
+        final_message = full_response
         cleaned_response = clean_response_text(final_message)
-
-        if self.assistant_type == "lisa" and full_response:
+        
+        # [Cleanup] Removed legacy JSON parsing logic here
             
-            if not json_parsed and not plan_parsed:
-                structured_data = None
-                parsed_plan = None
-                
-                if final_json:
-                    from .shared.output_parser import parse_structured_output
-                    from .shared.schemas import LisaStructuredOutput
-                    
-                    structured_obj = parse_structured_output(final_json, LisaStructuredOutput)
-                    
-                    if structured_obj:
-                        structured_data = structured_obj.model_dump()
-                        
-                        parsed_plan = extract_plan_from_structured(structured_data)
-                        if parsed_plan:
-                            current_state["plan"] = parsed_plan
-                            stage_id = structured_data.get("current_stage_id") or get_current_stage_id(parsed_plan) or ""
-                            current_state["current_stage_id"] = stage_id
-                        
-                        templates, artifacts_dict = extract_artifacts_from_structured(structured_data)
-                        
-                        if templates:
-                            if "artifact_templates" not in current_state:
-                                current_state["artifact_templates"] = []
-                            existing_keys = {t.get("artifact_key") for t in current_state["artifact_templates"]}
-                            for tmpl in templates:
-                                if tmpl.get("artifact_key") not in existing_keys:
-                                    current_state["artifact_templates"].append(tmpl)
-                        
-                        if artifacts_dict:
-                            if "artifacts" not in current_state:
-                                current_state["artifacts"] = {}
-                            current_state["artifacts"].update(artifacts_dict)
-                        
-                        json_parsed = True
-            
-            from .shared.progress import get_progress_info
-            progress_info = get_progress_info(current_state)
-            if progress_info:
-                yield {"type": "state", "progress": progress_info}
+        from .shared.progress import get_progress_info
+        progress_info = get_progress_info(current_state)
+        if progress_info:
+            yield {"type": "state", "progress": progress_info}
         
         if self.assistant_type == "lisa":
             from .shared.progress import get_progress_info

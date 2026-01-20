@@ -9,7 +9,6 @@ from .shared import (
     LISA_STYLE,
     LISA_PRINCIPLES,
     LISA_SKILLS,
-    PROTOCOL_PANORAMA_FOCUS,
     PROTOCOL_TECH_SELECTION,
 )
 
@@ -22,7 +21,6 @@ __all__ = [
     "LISA_STYLE",
     "LISA_PRINCIPLES",
     "LISA_SKILLS",
-    "PROTOCOL_PANORAMA_FOCUS",
     "PROTOCOL_TECH_SELECTION",
     # 意图路由
     "INTENT_ROUTING_PROMPT",

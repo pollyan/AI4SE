@@ -6,7 +6,6 @@ Requirement Review Workflow Prompt
 """
 
 from ..shared import build_full_prompt_with_protocols
-from ..workflow_engine import get_plan_sync_instruction
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 默认阶段定义
@@ -43,14 +42,15 @@ WORKFLOW_REQUIREMENT_REVIEW_SYSTEM = """
 
 {plan_context}
 
-{plan_sync_instruction}
 
 ## 响应协议 (Structured Response Protocol)
-你必须严格遵守 `WorkflowResponse` 的结构进行输出：
+你必须严格遵守 `WorkflowResponse` 工具的结构进行输出：
 
 1. **thought** (必填): 你的思考过程或回复用户的自然语言内容。
 2. **progress_step** (必填): 当前正在进行的具体步骤名称（如"正在分析需求文档", "生成评审报告中..."），用于前端即时显示进度。
 3. **update_artifact** (可选): 当且仅当需要生成或修改产出物时使用。**严禁**在 `thought` 中直接输出 Markdown 文档，必须放入此字段。
+
+请直接调用工具返回结果，**不要**输出 Markdown 代码块 (```json ... ```)。
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -65,28 +65,32 @@ STAGE_CLARIFY_PROMPT = """
 
 ### 执行步骤
 
-1. **协议执行**: 严格执行 "全景-聚焦" 协议。
-2. **议程识别**: 识别需要评审的核心模块或业务流程。
-3. **模糊点澄清**: 针对理解不清的地方提问。
+1. **范围确认**: 
+    - 识别需要评审的核心模块或业务流程。
+    - 明确本次评审的边界（Scope & Out of Scope）。
 
-### 关键检查点
-- 用户是否提供了足够的需求文档？如果太简略，请要求补充。
-- 确认评审的边界：包含哪些功能，不包含哪些。
+2. **模糊点澄清**: 
+    - 识别所有针对需求文档理解不清的疑问。
+    - **严禁**在对话内容（thought/text）中罗列问题详情。
+    - **必须**将所有问题完整写入 `update_artifact` 的产出物中（使用 "待确认问题" 章节）。
+    - 对话回复仅需简单总结："已完成需求初步分析，共识别出 X 个待确认问题，请查阅右侧文档。"
+
+3. **文档更新**:
+    - 将初步的需求分析结论同步到产出物中（如果适用）。
 
 ### 话术模板
 
-**首次回复**：
-> "好的，我收到了您的需求文档。为了确保评审质量，我识别出以下几个关键的评审模块：
-> 1. [模块A]
-> 2. [模块B]
+**首次回复**:
+> "好的，我已阅读需求文档。
 > 
-> 我们先从 [模块A] 开始可以吗？"
+> **评审范围确认**:
+> 基于文档，我理解核心业务流程包括 [A] -> [B] -> [C]。请确认这是否覆盖了您期望评审的全部内容？
+> 
+> **初步疑问**:
+> 我已将 [X] 个关于业务逻辑的疑问整理在右侧文档中，请查阅。"
 
-**澄清问题**：
-> "在 [功能点] 中，您提到 [描述]，这里是指 [A] 还是 [B]？"
-
-**完成标志**：
-当所有核心模块的范围和基本逻辑都已澄清，且无重大理解障碍时，更新 JSON 中 `current_stage_id` 为 "analysis"，进入下一阶段。
+**完成标志**:
+当核心模块的范围和基本逻辑都已澄清，且无重大理解障碍时，更新 JSON 中 `current_stage_id` 为 "analysis"，进入下一阶段。
 
 """
 
@@ -205,7 +209,6 @@ def build_requirement_review_prompt(
 ) -> str:
     """构建需求评审工作流 Prompt"""
     base = build_full_prompt_with_protocols()
-    plan_sync_instruction = get_plan_sync_instruction(DEFAULT_REQUIREMENT_REVIEW_STAGES)
     
     system = WORKFLOW_REQUIREMENT_REVIEW_SYSTEM.format(
         base_prompt=base,
@@ -214,7 +217,6 @@ def build_requirement_review_prompt(
         pending_clarifications=pending_clarifications,
         consensus_count=consensus_count,
         plan_context=plan_context,
-        plan_sync_instruction=plan_sync_instruction,
     )
     
     stage_prompts = {

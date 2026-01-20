@@ -89,52 +89,6 @@ async def test_stream_lisa_message_duplicate_chunks():
     assert collected_output == ["A", "B", "B", "C"]
 
 
-@pytest.mark.asyncio
-async def test_stream_lisa_message_parses_progress_json():
-    """
-    Test parsing JSON structured output.
-    """
-    service = LangchainAssistantService("lisa")
-    service.agent = MagicMock()
-    
-    target_node = "workflow_test_design"
-    
-    json_block = '''```json
-{
-  "plan": [
-    {"id": "clarify", "name": "需求澄清", "status": "completed"},
-    {"id": "strategy", "name": "策略制定", "status": "active"}
-  ],
-  "current_stage_id": "strategy",
-  "artifacts": [],
-  "message": "接下来我们进入策略制定阶段。"
-}
-```'''
-    
-    mock_events = [
-        ("messages", (AIMessageChunk(content=json_block), {"langgraph_node": target_node})),
-    ]
-    
-    async def mock_astream(*args, **kwargs):
-        for event in mock_events:
-            yield event
-    service.agent.astream = mock_astream
-    
-    state_events = []
-    async for chunk in service._stream_graph_message("test_session", "确认需求"):
-        if isinstance(chunk, dict) and chunk.get("type") == "state":
-            state_events.append(chunk)
-    
-    assert len(state_events) >= 1, "应至少有一个 state 事件"
-    
-    final_state_event = state_events[-1]
-    progress = final_state_event.get("progress", {})
-    stages = progress.get("stages", [])
-    
-    assert len(stages) == 2, f"应有 2 个阶段，实际: {len(stages)}"
-    assert stages[1]["id"] == "strategy"
-    assert stages[1]["status"] == "active"
-    assert progress.get("currentStageIndex") == 1
 
 
 @pytest.mark.asyncio
@@ -174,60 +128,6 @@ async def test_stream_lisa_message_cleans_json_from_stored_message():
     assert "结束" in final_text
 
 
-@pytest.mark.asyncio
-async def test_stream_lisa_message_emits_updated_progress_state():
-    """
-    Test that state event reflects new progress.
-    """
-    service = LangchainAssistantService("lisa")
-    service.agent = MagicMock()
-
-    from backend.agents.lisa.state import get_initial_state
-    initial_state = get_initial_state()
-    initial_state["current_workflow"] = "test_design"
-    
-    initial_state["plan"] = [
-        {"id": "clarify", "name": "需求澄清", "status": "active"},
-        {"id": "strategy", "name": "测试策略", "status": "pending"},
-    ]
-    initial_state["current_stage_id"] = "clarify"
-    
-    service._lisa_session_states = {"test_session": initial_state}
-    
-    target_node = "workflow_test_design"
-    
-    new_plan = '''```json
-{
-  "plan": [
-    {"id": "clarify", "name": "需求澄清", "status": "completed"},
-    {"id": "strategy", "name": "测试策略", "status": "active"}
-  ],
-  "current_stage_id": "strategy",
-  "artifacts": [],
-  "message": "完成"
-}
-```'''
-    
-    mock_events = [
-        ("messages", (AIMessageChunk(content=new_plan), {"langgraph_node": target_node})),
-    ]
-    
-    async def mock_astream(*args, **kwargs):
-        for event in mock_events:
-            yield event
-    service.agent.astream = mock_astream
-    
-    state_events = []
-    async for chunk in service._stream_graph_message("test_session", "test"):
-        if isinstance(chunk, dict) and chunk.get("type") == "state":
-            state_events.append(chunk)
-    
-    assert len(state_events) >= 1
-    
-    final_state_event = state_events[-1]
-    progress = final_state_event.get("progress", {})
-    
-    assert progress.get("currentStageIndex") == 1
 
 
 @pytest.mark.asyncio

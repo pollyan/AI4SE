@@ -85,3 +85,15 @@ class WorkflowResponse(BaseModel):
         default=None, 
         description="需要更新的文档内容。仅在明确需要生成或修改文档时使用。"
     )
+
+    @field_validator('update_artifact', mode='before')
+    @classmethod
+    def parse_json_string(cls, v):
+        """处理 LLM 可能返回的 JSON 字符串格式"""
+        if isinstance(v, str) and v.strip().startswith('{'):
+            import json
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return v
+        return v
