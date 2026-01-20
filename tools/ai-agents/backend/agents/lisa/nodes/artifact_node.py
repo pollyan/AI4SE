@@ -27,40 +27,64 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
     
     writer = get_stream_writer()
     
-    # 1. 绑定工具并强制调用
-    llm_with_tools = llm.model.bind_tools(
-        [update_artifact],
-        tool_choice={"type": "function", "function": {"name": "update_artifact.name"}} # .name might not work if tool not compiled? checking...
-        # Safer to use literal name
-    )
-    # Re-bind with literal name to be safe
-    llm_with_tools = llm.model.bind_tools(
-        [update_artifact],
-        tool_choice={"type": "function", "function": {"name": "update_artifact"}}
-    )
+    # [新增] 初始化模版注入逻辑 (Deterministic Initialization)
+    # 如果是初始化阶段，直接构造工具调用而不经过 LLM，确保 100% 成功率
+    templates = state.get("artifact_templates", [])
+    current_template = next((t for t in templates if t.get("stage") == current_stage), None)
+    
+    mock_tool_calls_for_init = []
+    
+    if current_template:
+        key = current_template["key"]
+        if key not in artifacts:
+            outline = current_template.get("outline", "")
+            logger.info(f"ArtifactNode: DETECTED MISSING ARTIFACT {key}. Using deterministic initialization.")
+            
+            # 手动构造一个"虚拟"的 tool calls 列表
+            mock_tool_calls_for_init = [{
+                "name": "update_artifact",
+                "args": {
+                    "key": key,
+                    "markdown_body": outline
+                },
+                "id": f"call_init_{current_stage}"
+            }]
 
-    # 2. 构建 Artifact 专用 Prompt
-    # 简单起见，提示模型使用工具更新当前阶段的产出物
-    artifact_prompt = f"""
-    Internal System Instruction:
-    You are in the Artifact Update Phase.
-    You MUST call the `update_artifact` tool to save the latest content for stage '{current_stage}'.
+    # 3. 执行逻辑分叉
+    tool_calls = []
     
-    Use the context from previous messages to generate the full markdown content.
-    """
-    
-    # 使用 state 中的 messages + 指令
-    messages = state["messages"] + [SystemMessage(content=artifact_prompt)]
-    
-    # 3. 调用 LLM
-    try:
-        response = llm_with_tools.invoke(messages)
-    except Exception as e:
-        logger.error(f"Artifact LLM call failed: {e}", exc_info=True)
-        return state
+    if mock_tool_calls_for_init:
+        # A. 确定性初始化路径
+        tool_calls = mock_tool_calls_for_init
+    else:
+        # B. 正常的 LLM 生成路径
+        # 绑定工具并强制调用
+        llm_with_tools = llm.model.bind_tools(
+            [update_artifact],
+            tool_choice={"type": "function", "function": {"name": "update_artifact"}}
+        )
+
+        # 构建 Prompt
+        artifact_prompt_text = f"""
+        Internal System Instruction:
+        You are in the Artifact Update Phase.
+        You MUST call the `update_artifact` tool to save the latest content for stage '{current_stage}'.
+        
+        Use the context from previous messages to generate the full markdown content.
+        """
+        
+        # 使用 state 中的 messages + 指令
+        messages = state["messages"] + [SystemMessage(content=artifact_prompt_text)]
+        
+        try:
+            response = llm_with_tools.invoke(messages)
+            tool_calls = response.tool_calls
+        except Exception as e:
+            logger.error(f"Artifact LLM call failed: {e}", exc_info=True)
+            return state
 
     # 4. 处理工具调用
-    tool_calls = response.tool_calls
+    # tool_calls 已经在上面被正确赋值了 (无论来自 mock 还是 response)
     if not tool_calls:
         logger.warning("ArtifactNode: No tool calls generated!")
         return state
@@ -99,6 +123,7 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
                     "stages": plan,
                     "currentStageIndex": stage_index,
                     "currentTask": f"已更新产出物: {key}",
+                    "artifact_templates": state.get("artifact_templates", []), # CRITICAL FIX: Must include templates
                     "artifacts": new_artifacts
                 }
             })

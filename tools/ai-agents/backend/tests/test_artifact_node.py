@@ -71,3 +71,45 @@ def test_artifact_node_updates_state(mock_tool, mock_writer_getter, mock_llm, mo
     bound_llm.invoke.assert_called_once()
     prompt_msg = bound_llm.invoke.call_args[0][0][0] # SystemMessage
     assert "test_design" in prompt_msg.content or "artifact" in prompt_msg.content.lower()
+
+@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+def test_artifact_node_deterministic_init(mock_writer_getter, mock_llm):
+    """Test that ArtifactNode uses deterministic initialization (bypassing LLM) when artifact is missing"""
+    original_llm, bound_llm = mock_llm
+    mock_writer = MagicMock()
+    mock_writer_getter.return_value = mock_writer
+    
+    # State with templates but empty artifacts
+    state = {
+        "messages": [],
+        "artifacts": {},
+        "current_stage_id": "clarify",
+        "plan": [{"id": "clarify", "name": "Clarify"}],
+        "artifact_templates": [
+            {"key": "test_key", "stage": "clarify", "outline": "# My Template"}
+        ]
+    }
+    
+    # Execute node
+    new_state = artifact_node(state, original_llm)
+    
+    # Verify LLM was NOT called
+    bound_llm.invoke.assert_not_called()
+    
+    # Verify deterministic state update
+    assert "test_key" in new_state["artifacts"]
+    assert new_state["artifacts"]["test_key"] == "# My Template"
+    
+    # Verify tool-call event was emitted
+    tool_call_event = next((c.args[0] for c in mock_writer.call_args_list if c.args[0]["type"] == "tool-call"), None)
+    assert tool_call_event is not None
+    assert tool_call_event["toolName"] == "update_artifact"
+    assert tool_call_event["args"]["key"] == "test_key"
+    
+    # Verify progress event includes artifact_templates
+    progress_event = next((c.args[0] for c in mock_writer.call_args_list if c.args[0]["type"] == "progress"), None)
+    assert progress_event is not None
+    assert "artifact_templates" in progress_event["progress"]
+    assert len(progress_event["progress"]["artifact_templates"]) == 1
+    assert progress_event["progress"]["artifact_templates"][0]["key"] == "test_key"
+

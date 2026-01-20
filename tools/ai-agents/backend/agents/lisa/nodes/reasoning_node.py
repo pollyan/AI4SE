@@ -18,16 +18,16 @@ logger = logging.getLogger(__name__)
 
 # 定义产出物模板映射
 TEST_DESIGN_TEMPLATES = [
-    {"key": ArtifactKeys.TEST_DESIGN_REQUIREMENTS, "name": "需求分析文档", "outline": ARTIFACT_CLARIFY_REQUIREMENTS},
-    {"key": ArtifactKeys.TEST_DESIGN_STRATEGY, "name": "测试策略蓝图", "outline": ARTIFACT_STRATEGY_BLUEPRINT},
-    {"key": ArtifactKeys.TEST_DESIGN_CASES, "name": "测试用例集", "outline": ARTIFACT_CASES_SET},
-    {"key": ArtifactKeys.TEST_DESIGN_FINAL, "name": "测试设计文档", "outline": ARTIFACT_DELIVERY_FINAL},
+    {"key": ArtifactKeys.TEST_DESIGN_REQUIREMENTS, "name": "需求分析文档", "stage": "clarify", "outline": ARTIFACT_CLARIFY_REQUIREMENTS},
+    {"key": ArtifactKeys.TEST_DESIGN_STRATEGY, "name": "测试策略蓝图", "stage": "strategy", "outline": ARTIFACT_STRATEGY_BLUEPRINT},
+    {"key": ArtifactKeys.TEST_DESIGN_CASES, "name": "测试用例集", "stage": "cases", "outline": ARTIFACT_CASES_SET},
+    {"key": ArtifactKeys.TEST_DESIGN_FINAL, "name": "测试设计文档", "stage": "delivery", "outline": ARTIFACT_DELIVERY_FINAL},
 ]
 
 REQ_REVIEW_TEMPLATES = [
-    {"key": ArtifactKeys.REQ_REVIEW_RECORD, "name": "需求评审记录", "outline": ARTIFACT_REQ_REVIEW_RECORD},
-    {"key": "req_review_risk", "name": "风险评估与测试重点", "outline": ARTIFACT_STRATEGY_BLUEPRINT}, # Reuse blueprint style for risk
-    {"key": ArtifactKeys.REQ_REVIEW_REPORT, "name": "敏捷需求评审报告", "outline": ARTIFACT_REQ_REVIEW_RECORD}, # Reuse record style for report
+    {"key": ArtifactKeys.REQ_REVIEW_RECORD, "name": "需求评审记录", "stage": "clarify", "outline": ARTIFACT_REQ_REVIEW_RECORD},
+    {"key": "req_review_risk", "name": "风险评估与测试重点", "stage": "risk", "outline": ARTIFACT_STRATEGY_BLUEPRINT}, # Reuse blueprint style for risk
+    {"key": ArtifactKeys.REQ_REVIEW_REPORT, "name": "敏捷需求评审报告", "stage": "report", "outline": ARTIFACT_REQ_REVIEW_RECORD}, # Reuse record style for report
 ]
 
 def ensure_workflow_initialized(state: LisaState) -> Dict[str, Any]:
@@ -119,7 +119,14 @@ def reasoning_node(state: LisaState, llm: Any) -> Command[Literal["artifact_node
             writer=writer,
             plan=plan,
             current_stage=current_stage,
-            base_artifacts=artifacts
+            # 将 templates 混入 base_artifacts 传递给 stream_utils (临时方案，避免修改函数签名)
+            # 或者修改 stream_utils 接收更多参数。这里选择利用已有的 base_artifacts 参数
+            # 但 base_artifacts 本意是 dict[str, str]。
+            # 更稳妥的方式是修改 stream_utils.py 的签名，或者确认 base_artifacts 是否能携带额外信息。
+            # 查看 stream_utils.py:117 current_artifacts = dict(base_artifacts or {})
+            # 所以如果在 base_artifacts 中放入 'artifact_templates' key，它会被复制到 current_artifacts
+            # 并在 progress event 中发送。
+            base_artifacts={**artifacts, "artifact_templates": state.get("artifact_templates", [])}
         )
     except Exception as e:
         logger.error(f"Reasoning stream failed: {e}", exc_info=True)
@@ -137,8 +144,24 @@ def reasoning_node(state: LisaState, llm: Any) -> Command[Literal["artifact_node
     if init_updates:
         state_updates.update(init_updates)
     
-    # 5. 路由决策
-    if final_response.should_update_artifact:
+    # 5. 路由决策 (含自动初始化 Artifact 检测)
+    should_update = final_response.should_update_artifact
+    
+    # 检查当前阶段是否缺少产出物
+    templates = state.get("artifact_templates", [])
+    if not templates and init_updates: # 如果刚刚初始化，使用新模板
+        templates = init_updates.get("artifact_templates", [])
+        
+    current_template = next((t for t in templates if t.get("stage") == current_stage), None)
+    
+    if current_template:
+        key = current_template["key"]
+        # 如果当前 key 对应的产出物为空，强制触发更新以生成初始模板
+        if key not in artifacts:
+            logger.info(f"Artifact {key} missing for stage {current_stage}. Forcing routing to ArtifactNode for initialization.")
+            should_update = True
+    
+    if should_update:
         logger.info("ReasoningNode decided to UPDATE ARTIFACT. Routing to artifact_node.")
         return Command(
             update=state_updates, # 包含初始化状态

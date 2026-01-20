@@ -90,6 +90,20 @@
 - **规则**: 如果一个 Prompt 辅助函数（如 `get_plan_sync_instruction`）的逻辑已废弃，不要保留它“以防万一”。
 - **风险**: 保留废弃的 Prompt 逻辑会导致 LLM 接收矛盾的指令（如同时要求 Tool Call 和 JSON 文本）。
 - **行动**: 删除函数定义、文件 (`workflow_engine.py`) 以及所有 Prompt 模板中的引用。
+---
+
+### Lisa Agent 产出物架构 (Artifact Architecture)
+
+**背景**: Lisa Agent 使用双节点 LangGraph 架构 (`ReasoningNode` + `ArtifactNode`)。
+
+**硬性规则**: **产出物更新必须通过 `update_artifact` 工具调用完成。**
+- **禁止**: 不要在 `ReasoningNode` 或其他节点中直接操作 `state["artifacts"]` 来填充内容。
+- **原因**: 工具调用会生成前端可追踪的 `tool-call` 事件，用于未来的 Diff 展示和版本历史。
+- **正确流程**:
+  1. `ReasoningNode` 决定 `should_update_artifact=True`
+  2. 路由到 `ArtifactNode`
+  3. `ArtifactNode` 调用 `update_artifact` 工具
+  4. 前端通过 `tool-call` 事件接收更新
 
 ---
 

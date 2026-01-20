@@ -141,17 +141,23 @@ def process_reasoning_stream(
         # 2. 处理 progress_step 更新
         if chunk.progress_step:
             current_step = chunk.progress_step
-            if current_step and current_step != last_sent_progress_step:
-                writer({
-                    "type": "progress",
-                    "progress": {
-                        "stages": plan,
-                        "currentStageIndex": stage_index,
-                        "currentTask": current_step,
-                        "artifacts": current_artifacts
-                    }
-                })
-                last_sent_progress_step = current_step
+            # Extract templates from artifacts dict if present (passed via base_artifacts hack)
+            templates = current_artifacts.pop("artifact_templates", [])
+            
+            writer({
+                "type": "progress",
+                "progress": {
+                    "stages": plan,
+                    "currentStageIndex": stage_index,
+                    "currentTask": current_step,
+                    "artifact_templates": templates,
+                    "artifacts": current_artifacts
+                }
+            })
+            # Restore for next iteration state?
+            if templates:
+                current_artifacts["artifact_templates"] = templates
+            last_sent_progress_step = current_step
             final_progress_step = current_step
             
         # 3. 处理 should_update_artifact

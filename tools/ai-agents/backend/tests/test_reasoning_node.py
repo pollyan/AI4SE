@@ -17,7 +17,7 @@ def mock_llm():
 def mock_state():
     return {
         "messages": [],
-        "artifacts": {},
+        "artifacts": {"test_design_requirements": "existing content"},
         "current_stage_id": "clarify",
         "plan": [{"id": "clarify", "name": "Clarify"}]
     }
@@ -59,3 +59,30 @@ def test_reasoning_node_routing_end(mock_prompt, mock_process, mock_writer, mock
     
     assert isinstance(command, Command)
     assert command.goto == "__end__"
+
+@patch("backend.agents.lisa.nodes.reasoning_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.reasoning_node.process_reasoning_stream")
+@patch("backend.agents.lisa.nodes.reasoning_node.build_test_design_prompt")
+def test_reasoning_node_initializaton_force_routing(mock_prompt, mock_process, mock_writer, mock_llm):
+    """Test that ReasoningNode forces routing to ArtifactNode when initializing empty artifact"""
+    
+    # Empty state triggering initialization
+    state = {
+        "messages": [],
+        "artifacts": {}, # Empty artifacts
+        # plan and templates missing, ensuring ensure_workflow_initialized runs
+    }
+    
+    # Mock LLM saying NO update needed (we expect the logic to override this)
+    mock_process.return_value = ReasoningResponse(
+        thought="Welcome.",
+        should_update_artifact=False
+    )
+    
+    command = reasoning_node(state, mock_llm)
+    
+    assert isinstance(command, Command)
+    assert command.goto == "artifact_node"
+    # State should have been updated with initialization data
+    assert "plan" in command.update
+    assert "artifact_templates" in command.update

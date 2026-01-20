@@ -97,8 +97,8 @@ def get_progress_info(state: Dict[str, Any]) -> Optional[dict]:
     template_list = []
     for tmpl in artifact_templates:
         template_list.append({
-            "stageId": tmpl.get("stage_id"),
-            "artifactKey": tmpl.get("artifact_key"),
+            "stageId": tmpl.get("stage") or tmpl.get("stage_id"),
+            "artifactKey": tmpl.get("key") or tmpl.get("artifact_key"),
             "name": tmpl.get("name"),
         })
     
@@ -110,8 +110,8 @@ def get_progress_info(state: Dict[str, Any]) -> Optional[dict]:
     generating_key = None
     if current_stage_id:
         for tmpl in artifact_templates:
-            if tmpl.get("stage_id") == current_stage_id:
-                artifact_key = tmpl.get("artifact_key")
+            if (tmpl.get("stage") or tmpl.get("stage_id")) == current_stage_id:
+                artifact_key = tmpl.get("key") or tmpl.get("artifact_key")
                 if artifact_key and artifact_key not in artifacts:
                     generating_key = artifact_key
                 break
