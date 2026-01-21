@@ -69,11 +69,13 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
         # 获取当前阶段对应的 artifact key
         current_template = next((t for t in templates if t.get("stage") == current_stage), None)
         artifact_key = current_template["key"] if current_template else f"{current_stage}_output"
+        template_outline = current_template.get("outline", "") if current_template else ""
 
         # 构建 Prompt
         artifact_prompt_text = ARTIFACT_UPDATE_PROMPT.format(
             current_stage=current_stage,
-            artifact_key=artifact_key
+            artifact_key=artifact_key,
+            template_outline=template_outline
         )
         
         # 使用 state 中的 messages + 指令

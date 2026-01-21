@@ -28,7 +28,14 @@ ARTIFACT_CLARIFY_REQUIREMENTS = """
 - **安全**: [加密/认证等]
 - **兼容性**: [浏览器/设备等]
 
-## 5. 已确认信息
+## 5. 待澄清问题
+> 需求中模糊、矛盾或缺失的信息，需与用户确认
+
+| ID | 问题描述 | 状态 | 结论 |
+|----|----------|------|------|
+| Q1 | [问题描述] | 待确认 | - |
+
+## 6. 已确认信息
 > 根据用户澄清逐步填充，格式：
 > - ✅ 议题 X - 问题名：确认的答案
 
@@ -228,12 +235,20 @@ pie title 测试用例分布
 # ═══════════════════════════════════════════════════════════════════════════════
 
 ARTIFACT_UPDATE_PROMPT = """
-Internal System Instruction:
-You are in the Artifact Update Phase.
+系统内部指令：
+你正处于产出物更新阶段 (Artifact Update Phase)。
 
-**CRITICAL**: You MUST call the `update_artifact` tool with EXACTLY this key:
-- key: "{artifact_key}"
+**严重警告 (CRITICAL RULES)**：
+1. 你必须调用 `update_artifact` 工具，且 key 必须严格使用："{artifact_key}"。
+2. 你必须生成**严格遵守**下方模板结构的完整 Markdown 内容。
+3. **禁止**增加、删除或重命名任何章节标题。只能在现有章节内填充内容。
+4. 信息不足的章节请使用 "[待补充]" 占位。
+5. 必须保留 Mermaid 图表的占位符，即使是空的。
 
-Generate the full markdown content for stage '{current_stage}' based on the conversation context.
-Do NOT use any other key. Using a different key will cause the update to fail.
+**强制模板结构 (REQUIRED TEMPLATE STRUCTURE)**：
+```
+{template_outline}
+```
+
+请基于对话上下文，填充上述模板，生成阶段 '{current_stage}' 的完整文档。
 """

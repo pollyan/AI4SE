@@ -76,6 +76,37 @@ def test_artifact_node_updates_state(mock_tool, mock_writer_getter, mock_llm, mo
     assert "test_design" in prompt_msg.content or "artifact" in prompt_msg.content.lower() or "current_stage" in prompt_msg.content
 
 @patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+def test_artifact_node_injects_template_outline(mock_writer_getter, mock_llm):
+    """Verify that artifact node injects template outline into the prompt"""
+    original_llm, bound_llm = mock_llm
+    mock_writer = MagicMock()
+    mock_writer_getter.return_value = mock_writer
+    
+    # State with templates
+    template_outline = "# My Strict Template Structure"
+    state = {
+        "messages": [],
+        "artifacts": {"test_key": "some content"}, # Artifact exists matching template key, so it goes to LLM update path
+        "current_stage_id": "clarify",
+        "plan": [{"id": "clarify", "name": "Clarify"}],
+        "artifact_templates": [
+            {"key": "test_key", "stage": "clarify", "outline": template_outline}
+        ]
+    }
+    
+    # Mock response
+    bound_llm.invoke.return_value = AIMessage(content="thought", tool_calls=[])
+    
+    # Execute node
+    artifact_node(state, original_llm)
+    
+    # Verify prompt contains template outline
+    bound_llm.invoke.assert_called_once()
+    system_msg = bound_llm.invoke.call_args[0][0][0]
+    assert template_outline in system_msg.content
+
+
+@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
 def test_artifact_node_deterministic_init(mock_writer_getter, mock_llm):
     """Test that ArtifactNode uses deterministic initialization (bypassing LLM) when artifact is missing"""
     original_llm, bound_llm = mock_llm
