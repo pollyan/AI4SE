@@ -1,6 +1,6 @@
 ---
 description: localtest
-# model: "opencode/glm-4.7-free"
+model: "google/antigravity-gemini-3-pro-high"
 ---
 
-执行本地所有测试
+1. 执行本地所有测试

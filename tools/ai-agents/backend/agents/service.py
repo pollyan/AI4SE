@@ -179,7 +179,7 @@ class LangchainAssistantService:
                 timeout=30.0
             )
             content = ""
-            if result and "messages" in result:
+            if result and "messages" in result and result["messages"]:
                 last_message = result["messages"][-1]
                 if hasattr(last_message, "content"):
                     content = last_message.content

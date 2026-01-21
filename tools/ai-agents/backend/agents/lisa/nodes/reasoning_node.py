@@ -33,11 +33,11 @@ REQ_REVIEW_TEMPLATES = [
 def ensure_workflow_initialized(state: LisaState) -> Dict[str, Any]:
     """确保工作流状态已初始化 (Plan & Templates)"""
     updates = {}
-    workflow_type = state.get("workflow_type", "test_design")
+    current_workflow = state.get("current_workflow", "test_design")
     
     # 1. 初始化 Plan
     if not state.get("plan"):
-        if workflow_type == "requirement_review":
+        if current_workflow == "requirement_review":
             updates["plan"] = DEFAULT_REQUIREMENT_REVIEW_STAGES
             updates["current_stage_id"] = "clarify"
         else: # default to test_design
@@ -46,7 +46,7 @@ def ensure_workflow_initialized(state: LisaState) -> Dict[str, Any]:
             
     # 2. 初始化 Artifact Templates
     if not state.get("artifact_templates"):
-        if workflow_type == "requirement_review":
+        if current_workflow == "requirement_review":
             updates["artifact_templates"] = REQ_REVIEW_TEMPLATES
         else:
             updates["artifact_templates"] = TEST_DESIGN_TEMPLATES
@@ -67,7 +67,7 @@ def reasoning_node(state: LisaState, llm: Any) -> Command[Literal["artifact_node
     
     # 获取最新状态
     current_stage = state.get("current_stage_id", "clarify")
-    workflow_type = state.get("workflow_type", "test_design")
+    current_workflow = state.get("current_workflow", "test_design")
     messages = state["messages"]
     artifacts = state.get("artifacts", {})
     plan = state.get("plan", [])
@@ -88,7 +88,7 @@ def reasoning_node(state: LisaState, llm: Any) -> Command[Literal["artifact_node
         })
     
     # 1. 构建 Prompt
-    if workflow_type == "requirement_review":
+    if current_workflow == "requirement_review":
         system_prompt = build_requirement_review_prompt(
             stage=current_stage,
             artifacts_summary=str(list(artifacts.keys())),
@@ -149,7 +149,7 @@ def reasoning_node(state: LisaState, llm: Any) -> Command[Literal["artifact_node
         next_stage = final_response.request_transition_to
         logger.info(f"ReasoningNode: Transition requested from {current_stage} to {next_stage}")
         state_updates["current_stage_id"] = next_stage
-        state_updates["workflow_type"] = workflow_type # Maintain workflow type
+        state_updates["current_workflow"] = current_workflow  # Maintain workflow type
     
     # 5. 路由决策 (含自动初始化 Artifact 检测)
     should_update = final_response.should_update_artifact

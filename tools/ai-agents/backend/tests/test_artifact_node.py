@@ -1,7 +1,9 @@
 import pytest
+from typing import cast, Dict, Any
 from unittest.mock import MagicMock, patch
 from langchain_core.messages import AIMessage
 from backend.agents.lisa.nodes.artifact_node import artifact_node
+from backend.agents.lisa.state import LisaState
 
 @pytest.fixture
 def mock_llm():
@@ -12,12 +14,12 @@ def mock_llm():
     return llm, bound_llm
 
 @pytest.fixture
-def mock_state():
+def mock_state() -> Dict[str, Any]:
     return {
         "messages": [],
         "artifacts": {},
         "current_stage_id": "clarify",
-        "workflow_type": "test_design"
+        "current_workflow": "test_design"
     }
 
 @patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
@@ -43,7 +45,7 @@ def test_artifact_node_updates_state(mock_tool, mock_writer_getter, mock_llm, mo
     bound_llm.invoke.return_value = mock_response
     
     # Execute node
-    new_state = artifact_node(mock_state, original_llm)
+    new_state = artifact_node(cast(LisaState, mock_state), original_llm)
     
     # Verify state update
     assert "test_design_requirements" in new_state["artifacts"]
@@ -98,7 +100,7 @@ def test_artifact_node_injects_template_outline(mock_writer_getter, mock_llm):
     bound_llm.invoke.return_value = AIMessage(content="thought", tool_calls=[])
     
     # Execute node
-    artifact_node(state, original_llm)
+    artifact_node(cast(LisaState, state), original_llm)
     
     # Verify prompt contains template outline
     bound_llm.invoke.assert_called_once()
@@ -125,7 +127,7 @@ def test_artifact_node_deterministic_init(mock_writer_getter, mock_llm):
     }
     
     # Execute node
-    new_state = artifact_node(state, original_llm)
+    new_state = artifact_node(cast(LisaState, state), original_llm)
     
     # Verify LLM was NOT called
     bound_llm.invoke.assert_not_called()
@@ -144,4 +146,64 @@ def test_artifact_node_deterministic_init(mock_writer_getter, mock_llm):
     templates = progress_event["progress"]["artifactProgress"]["template"]
     assert len(templates) == 1
     assert templates[0]["artifactKey"] == "test_key"
+
+@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+def test_artifact_node_llm_exception(mock_writer_getter, mock_llm, mock_state):
+    original_llm, bound_llm = mock_llm
+    
+    bound_llm.invoke.side_effect = Exception("LLM failure")
+    
+    new_state = artifact_node(cast(LisaState, mock_state), original_llm)
+    
+    assert new_state == mock_state
+
+@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+def test_artifact_node_multiple_updates(mock_writer_getter, mock_llm, mock_state):
+    original_llm, bound_llm = mock_llm
+    mock_writer = MagicMock()
+    mock_writer_getter.return_value = mock_writer
+    
+    mock_response = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": "update_artifact",
+                "args": {"key": "key1", "markdown_body": "Content 1"},
+                "id": "call_1"
+            },
+            {
+                "name": "update_artifact",
+                "args": {"key": "key2", "markdown_body": "Content 2"},
+                "id": "call_2"
+            }
+        ]
+    )
+    bound_llm.invoke.return_value = mock_response
+    
+    new_state = artifact_node(cast(LisaState, mock_state), original_llm)
+    
+    assert "key1" in new_state["artifacts"]
+    assert new_state["artifacts"]["key1"] == "Content 1"
+    assert "key2" in new_state["artifacts"]
+    assert new_state["artifacts"]["key2"] == "Content 2"
+    
+    assert mock_writer.call_count >= 2
+
+@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+def test_artifact_node_invalid_tool_name(mock_writer_getter, mock_llm, mock_state):
+    original_llm, bound_llm = mock_llm
+    
+    mock_response = AIMessage(
+        content="",
+        tool_calls=[{
+            "name": "wrong_tool",
+            "args": {"key": "key1", "markdown_body": "Content 1"},
+            "id": "call_1"
+        }]
+    )
+    bound_llm.invoke.return_value = mock_response
+    
+    new_state = artifact_node(cast(LisaState, mock_state), original_llm)
+    
+    assert "key1" not in new_state["artifacts"]
 
