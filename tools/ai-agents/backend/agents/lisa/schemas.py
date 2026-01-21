@@ -85,6 +85,11 @@ class ReasoningResponse(BaseModel):
         default=False, 
         description="是否需要更新产出物。仅当完成了实质性分析且有新内容需要写入文档时返回 True"
     )
+    
+    request_transition_to: Optional[Literal["strategy", "cases", "delivery"]] = Field(
+        default=None,
+        description="仅当用户明确同意进入下一阶段，或满足清晰的退出条件时，设置此字段。严禁在 DoR 不满足时设置。"
+    )
 
 
 class WorkflowResponse(BaseModel):

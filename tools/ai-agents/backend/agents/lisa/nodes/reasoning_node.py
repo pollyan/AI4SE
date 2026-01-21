@@ -143,6 +143,13 @@ def reasoning_node(state: LisaState, llm: Any) -> Command[Literal["artifact_node
     state_updates = {"messages": new_messages}
     if init_updates:
         state_updates.update(init_updates)
+        
+    # 处理阶段流转请求
+    if final_response.request_transition_to:
+        next_stage = final_response.request_transition_to
+        logger.info(f"ReasoningNode: Transition requested from {current_stage} to {next_stage}")
+        state_updates["current_stage_id"] = next_stage
+        state_updates["workflow_type"] = workflow_type # Maintain workflow type
     
     # 5. 路由决策 (含自动初始化 Artifact 检测)
     should_update = final_response.should_update_artifact
