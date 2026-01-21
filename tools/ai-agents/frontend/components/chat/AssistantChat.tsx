@@ -47,6 +47,7 @@ const readFileAsDataURL = (file: File): Promise<string> => {
 const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: AssistantChatProps & { sessionId: string }) => {
     const [input, setInput] = useState('');
     const [files, setFiles] = useState<File[]>([]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const viewportRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -56,6 +57,13 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
         assistantType: assistant.id,
         onProgressChange: onProgressChange || undefined,
     });
+
+    // 监听状态变化以重置提交状态
+    useEffect(() => {
+        if (status === 'ready' || status === 'error') {
+            setIsSubmitting(false);
+        }
+    }, [status]);
 
     // 自动滚动到底部
     useEffect(() => {
@@ -102,8 +110,9 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
     // 发送消息处理
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if ((!input.trim() && files.length === 0) || status === 'streaming') return;
+        if ((!input.trim() && files.length === 0) || status === 'streaming' || isSubmitting) return;
 
+        setIsSubmitting(true);
         let attachments: any[] = [];
 
         // 处理附件
@@ -334,7 +343,7 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 placeholder="输入消息..."
-                                disabled={status === 'streaming'}
+                                disabled={status === 'streaming' || isSubmitting}
                                 className="flex-grow px-4 py-3 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
                             />
 
@@ -343,7 +352,7 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
                                 onClick={() => {
                                     fileInputRef.current?.click();
                                 }}
-                                disabled={status === 'streaming'}
+                                disabled={status === 'streaming' || isSubmitting}
                                 className="p-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors disabled:opacity-50"
                                 title="添加附件"
                             >
@@ -362,7 +371,7 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
                             ) : (
                                 <button
                                     type="submit"
-                                    disabled={!input.trim() && files.length === 0}
+                                    disabled={(!input.trim() && files.length === 0) || isSubmitting}
                                     className="p-3 rounded-full bg-primary hover:bg-primary/90 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     title="发送"
                                 >
