@@ -1,120 +1,273 @@
-# AI4SE 项目上下文记忆 (ACE)
+# CLAUDE.md
 
-## 项目背景
+本文件为 Claude Code (claude.ai/code) 在此代码仓库中工作时提供指导。
 
-### 领域知识
+## 语言要求
 
-- **项目核心**: 用于 AI 驱动的软件工程工具的 Python/TypeScript 单体仓库 (Monorepo)。
-- **关键组件**:
-    - **intent-tester**: 集成 MidSceneJS 的意图测试框架 (端口 5001)。
-    - **ai-agents**: 基于 LangGraph 的 AI 助手 (Alex, Lisa)，使用 Vercel AI SDK (端口 5002)。
-    - **frontend**: 基于 React + Vite + Tailwind 的共享前端。
-- **环境**: 开发环境运行在 **本地 Docker 容器** 中。
-- **用户画像**: 使用 AI 助手进行需求分析和测试生成的开发人员及 QA 工程师。
+**重要**: 在与用户交流时,请始终使用**中文**回复。代码、命令、技术术语可以保持英文,但所有解释、说明和对话必须用中文。
 
-### 架构决策
+## 项目概述
 
-- **模块化单体**: 核心业务逻辑位于 `tools/` 模块中；共享代码位于 `tools/shared`。
-- **后端技术栈**: Flask + SQLAlchemy + LangGraph。
-- **前端技术栈**: React + Vite + Vercel AI SDK (已从 `@assistant-ui/react` 迁移)。
-- **数据流**: 使用 Vercel AI SDK Data Stream Protocol (Server-Sent Events) 实现实时 Agent 响应。
+**AI4SE** 是一个模块化单体仓库(Monorepo),用于构建 AI 驱动的软件工程工具,使用 Python/TypeScript 开发。项目在**本地 Docker 容器**中运行,用于开发和测试。
 
----
+### 核心组件
+
+- **ai-agents** (端口 5002): 基于 Flask + LangGraph + Vercel AI SDK 构建的 AI 助手 (Lisa)
+- **intent-tester** (端口 5001): 使用 MidSceneJS + Playwright 的自然语言测试自动化工具
+- **frontend**: 基于 React + Vite + Tailwind 的共享主页和门户
+
+## 必备命令
+
+### 开发与部署
+
+**关键**: 源代码修改不会自动反映到运行中的应用程序。必须部署到 Docker:
+
+```bash
+# 部署所有服务到本地 Docker (增量模式)
+./scripts/dev/deploy-dev.sh
+
+# 完全重建 (清除缓存)
+./scripts/dev/deploy-dev.sh full
+
+# 跳过前端构建 (仅后端)
+./scripts/dev/deploy-dev.sh --skip-frontend
+
+# 查看日志
+docker-compose -f docker-compose.dev.yml logs -f
+
+# 停止服务
+docker-compose -f docker-compose.dev.yml down
+```
+
+### 测试
+
+```bash
+# 运行所有测试 (与 CI 流程一致)
+./scripts/test/test-local.sh
+
+# 运行特定测试套件
+./scripts/test/test-local.sh api      # Python 后端测试
+./scripts/test/test-local.sh proxy    # MidScene 代理测试
+./scripts/test/test-local.sh lint     # 代码质量检查
+
+# 直接运行 Python 测试
+pytest tools/intent-tester/tests/ -v
+pytest tools/ai-agents/backend/tests/ -v
+
+# 运行单个测试文件
+pytest tools/ai-agents/backend/tests/test_specific.py -v
+
+# 前端测试
+cd tools/ai-agents/frontend && npm run test        # 使用 Vitest 运行
+cd tools/ai-agents/frontend && npm run test -- --run  # CI 模式 (不监听)
+
+# 代理测试
+cd tools/intent-tester && npm run test:proxy
+```
+
+### 构建前端组件
+
+```bash
+# AI Agents 前端
+cd tools/ai-agents/frontend
+npm install
+npm run build    # 构建到 dist/
+npm run dev      # 开发模式 (不用于 Docker 测试)
+
+# 公共前端 (主页/个人中心)
+cd tools/frontend
+npm install
+npm run build    # TypeScript 编译 + Vite 构建
+npm run lint     # ESLint 检查
+
+# Intent Tester 代理
+cd tools/intent-tester
+npm install
+npm start        # 本地启动 MidScene 服务器
+```
+
+### Python 环境
+
+```bash
+# 创建虚拟环境
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 设置 PYTHONPATH 用于本地测试
+export PYTHONPATH=$PWD:$PWD/tools/intent-tester:$PWD/tools/ai-agents:$PYTHONPATH
+```
+
+## 架构深入解析
+
+### Docker 优先的开发模式
+
+**关键规则**: 开发环境在 Docker 容器中运行。永远不要假设本地文件修改会立即生效。
+
+- **集成测试**: 测试前必须使用 `./scripts/dev/deploy-dev.sh` 部署
+- **本地开发服务器**: 在宿主机上运行 `npm run dev` 或 `flask run` 仅用于隔离开发
+- **构建产物**: 前端构建在部署期间被复制到 Docker 镜像中
+
+### LangGraph Agent 架构
+
+**Lisa Agent** 使用双节点架构,基于工具的产出物更新:
+
+```
+START → intent_router → reasoning_node → artifact_node → END
+                     ↓
+                  clarify_intent → END
+```
+
+**产出物更新流程** (强制要求):
+1. `reasoning_node` 设置 `should_update_artifact=True`
+2. 通过 Command 路由到 `artifact_node`
+3. `artifact_node` 调用 `update_artifact` 工具
+4. 前端接收 `tool-call` 事件进行追踪
+
+**禁止**直接在节点中修改 `state["artifacts"]` - 必须使用工具以确保前端可观测性。
+
+### 数据流与流式传输
+
+- **后端**: Flask + LangGraph 通过服务器发送事件 (SSE) 流式传输响应
+- **前端**: Vercel AI SDK (`useChat` hook) 消费流
+- **协议**: Vercel AI SDK Data Stream Protocol
+- **迁移说明**: 之前使用 `@assistant-ui/react`,现已迁移到 Vercel AI SDK
+
+### 共享代码模式
+
+- **位置**: `tools/shared/` 包含跨工具的实用程序
+- **数据库**: `tools/shared/database/` 中的共享 SQLAlchemy 连接池
+- **配置**: `tools/shared/config/` 中的统一配置管理
 
 ## 代码质量标准
 
-### 死代码清理 (Dead Code)
+### 死代码清理
 
-**背景**: 当重构或替换库时（例如从 `@assistant-ui/react` 迁移）。
+重构或替换库时:
+- **验证零引用**: `grep -r "ComponentName" tools/`
+- **立即删除**: 删除未使用的文件,不要注释掉
+- **清理测试**: 删除相关测试文件以防止 CI 失败
 
-**模式**: 激进地删除不再使用的组件及其测试。
-- **规则**: 如果组件不再被导入，立即删除，**不要注释掉**。
-- **验证**: 在删除前运行 `grep_search` 确认零引用。
-- **示例**:
-  ```bash
-  # 删除前检查
-  grep -r "CustomAssistantMessage" tools/ai-agents/frontend
-  # 如果结果为 0，删除组件和测试
-  rm CustomAssistantMessage.tsx CustomAssistantMessage.test.tsx
-  ```
+### 特性废弃协议
 
-### 遗留特性清理 (Feature Deprecation)
-
-**背景**: 完全移除废弃的智能体或主要特性（如 "Alex" 智能体）。
-
-**模式**: 深度清理所有相关层级，不仅仅是入口点。
-- **Schema**: 删除 Pydantic 模型 (`AlexStructuredOutput`)。
-- **Docstrings**: 更新服务级文档字符串 (`service.py`) 以反映当前支持的特性，移除过时提及。
-- **Tests**: 删除针对已移除特性的特定测试文件，防止 CI 失败。
-- **验证**: 必须搜索（grep）特性名称的所有变体，确保无残留引用。
+移除特性时(例如整个 agent):
+1. 删除 Pydantic schemas/models
+2. 更新服务级 docstrings 以移除提及
+3. 删除特性专属的测试文件
+4. 搜索特性名称的所有变体: `grep -ri "feature_name" tools/`
 
 ### 单一事实来源 (SSOT)
 
-**背景**: 配置 Assistant 能力（例如欢迎建议），这些配置同时存在于后端 Prompt 和前端 UI 中。
+**反模式**: 在前端常量中复制后端 prompt 逻辑
 
-**反模式**: 在前端硬编码重复后端的逻辑配置。
-- **风险**: 前端 `LISA_SUGGESTIONS` 与后端 Prompt 选项不一致。
-- **缓解措施**: MVP 阶段记录此重复。生产阶段应通过 API 暴露配置。
+风险示例: 前端 `LISA_SUGGESTIONS` 硬编码以匹配后端 prompt 选项
+- **当前**: 在 MVP 阶段记录这种重复
+- **未来**: 通过 API 端点暴露配置
 
----
+### Prompt 维护
 
-## 开发指南
+当工作流机制改变时(例如 JSON-in-Markdown → Tool Calls):
+- **立即移除过时的 prompt 辅助函数**: 不要"以防万一"保留
+- **风险**: 废弃的 prompts 会产生矛盾的 LLM 指令
+- **行动**: 删除函数定义、文件和所有模板引用
 
-### 本地 Docker 环境
+## 测试指南
 
-**背景**: 在本地运行和测试应用程序。
+### Python 测试
 
-**硬性规则**: **永远不要假设本地源码修改会立即生效。**
-- **事实**: 测试环境运行在 Docker 容器内部。
-- **行动**: 必须运行 `./scripts/dev/deploy-dev.sh <component>` 将更改应用到容器中。
-- **禁止**: 不要尝试在宿主机直接运行 `npm run dev` 或 `flask run` 进行集成测试。
+- **框架**: pytest 带异步支持 (`--asyncio-mode=auto`)
+- **覆盖率**: 使用 `--cov=tools/component/backend` 生成覆盖率报告
+- **标记**: `@pytest.mark.unit`, `@pytest.mark.api`, `@pytest.mark.integration`
 
-### 测试修复
+### 前端测试
 
-**背景**: 依赖变更后修复前端测试。
-
-**模式**: 更新 Mock 以匹配新的库 API。
-- **示例**: 当用 `react-markdown` 替换 `@assistant-ui/react-markdown` 时：
+- **框架**: Vitest (AI Agents), ESLint + 构建验证 (公共前端)
+- **Mock**: 当库 API 改变时更新 mocks
   ```typescript
-  # 在测试设置中更新 Mock
+  // 示例: 迁移后 mock react-markdown
   vi.mock('react-markdown', () => ({
-    default: ({ content }: any) => <div data-testid="markdown-primitive">{content}</div>
+    default: ({ children }: any) => <div data-testid="markdown">{children}</div>
   }));
   ```
 
-### Prompt 维护 (Prompt Maintenance)
+### MidScene 代理测试
 
-**背景**: 随着工作流机制变更（如从 JSON-in-Markdown 转为 Tool Calls），旧的 Prompt 辅助函数会过时。
+- **框架**: Jest
+- **运行**: 在 `tools/intent-tester/` 中执行 `npm run test:proxy`
+- **CI 模式**: `npm run test:proxy:ci` 包含覆盖率
 
-**模式**: 立即移除不再使用的 Prompt 构建函数。
-- **规则**: 如果一个 Prompt 辅助函数（如 `get_plan_sync_instruction`）的逻辑已废弃，不要保留它“以防万一”。
-- **风险**: 保留废弃的 Prompt 逻辑会导致 LLM 接收矛盾的指令（如同时要求 Tool Call 和 JSON 文本）。
-- **行动**: 删除函数定义、文件 (`workflow_engine.py`) 以及所有 Prompt 模板中的引用。
----
+## 环境配置
 
-### Lisa Agent 产出物架构 (Artifact Architecture)
+必需的 `.env` 变量:
 
-**背景**: Lisa Agent 使用双节点 LangGraph 架构 (`ReasoningNode` + `ArtifactNode`)。
+```bash
+# 数据库
+DB_USER=ai4se_user
+DB_PASSWORD=your_password
 
-**硬性规则**: **产出物更新必须通过 `update_artifact` 工具调用完成。**
-- **禁止**: 不要在 `ReasoningNode` 或其他节点中直接操作 `state["artifacts"]` 来填充内容。
-- **原因**: 工具调用会生成前端可追踪的 `tool-call` 事件，用于未来的 Diff 展示和版本历史。
-- **正确流程**:
-  1. `ReasoningNode` 决定 `should_update_artifact=True`
-  2. 路由到 `ArtifactNode`
-  3. `ArtifactNode` 调用 `update_artifact` 工具
-  4. 前端通过 `tool-call` 事件接收更新
+# 应用
+SECRET_KEY=your-secret-key
 
----
+# OpenAI (AI agents 必需)
+OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.openai.com/v1
 
-## 验证检查清单
+# LangSmith (可选)
+LANGCHAIN_TRACING_V2=false
+LANGCHAIN_API_KEY=
+LANGCHAIN_PROJECT=ai4se
+```
 
-### 预计算参考
-- [ ] **环境检查**: 我是否在本地 Docker 中运行？如果是，我部署了吗？
-- [ ] **库检查**: 我是否验证了导入的库在 `package.json` 中实际存在？
-- [ ] **SSOT 检查**: 我是否在前端和后端之间重复了逻辑（如 Prompt 或配置）？
+## 核心目录结构
 
-### 实施后
-- [ ] **死代码**: 我是否删除了不再使用的文件？
-- [ ] **全部清理**: 如果移除了特性，是否更新了所有相关的 Docstrings 和 Schemas？
-- [ ] **测试对齐**: 我是否更新了测试以反映 API 变更（例如 Prop 名称）？
+```
+AI4SE/
+├── tools/
+│   ├── ai-agents/
+│   │   ├── backend/
+│   │   │   ├── agents/lisa/      # LangGraph 节点、状态、工具
+│   │   │   │   ├── graph.py      # StateGraph 定义
+│   │   │   │   ├── nodes.py      # 图节点
+│   │   │   │   └── tools.py      # update_artifact 工具
+│   │   │   ├── api/              # Flask 路由
+│   │   │   └── models/           # SQLAlchemy 模型
+│   │   └── frontend/             # React + Vercel AI SDK
+│   ├── intent-tester/
+│   │   ├── backend/              # Flask API
+│   │   ├── browser-automation/   # MidSceneJS 服务器
+│   │   └── tests/                # Python + Jest 测试
+│   ├── frontend/                 # 公共主页/个人中心
+│   └── shared/                   # 跨工具实用程序
+├── scripts/
+│   ├── dev/deploy-dev.sh         # 本地部署
+│   └── test/test-local.sh        # 测试运行器
+├── docker-compose.dev.yml
+├── pytest.ini
+└── requirements.txt
+```
+
+## 开发前检查清单
+
+修改前:
+- [ ] 我是在 Docker 中运行吗? 如果是,我部署了吗 (`./scripts/dev/deploy-dev.sh`)?
+- [ ] 导入的库是否真的存在于 `package.json`/`requirements.txt` 中?
+- [ ] 我是否在前端和后端之间重复了逻辑 (违反 SSOT)?
+
+实施后:
+- [ ] 我删除了未使用的文件 (死代码) 吗?
+- [ ] 如果移除了特性,我更新了所有相关的 docstrings 和 schemas 吗?
+- [ ] 我更新了测试以匹配 API 变更 (props, imports, mocks) 吗?
+- [ ] 我验证了测试通过 (`./scripts/test/test-local.sh`) 吗?
+
+## 部署规则
+
+**本地开发**:
+- 所有集成测试使用 `./scripts/dev/deploy-dev.sh`
+- 修改需要重新构建才能在容器中生效
+
+**生产环境**:
+- **绝不**直接部署到云服务器
+- 推送到 `master` 分支 → GitHub Actions 运行 CI → 测试通过后自动部署
+- 所有修改必须在推送前通过 `./scripts/test/test-local.sh`

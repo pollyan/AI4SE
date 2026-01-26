@@ -9,7 +9,9 @@ from .data_stream import (
     stream_tool_call,
     stream_finish,
     stream_done,
-    stream_error
+    stream_error,
+    stream_tool_input_available,
+    stream_tool_output_available
 )
 import uuid
 import logging
@@ -46,11 +48,20 @@ async def adapt_langgraph_stream(service, session_id: str, message: str, db_mess
                     yield chunk.get("event")
 
                 elif chunk_type == "tool-call":
-                    # 工具调用 (type: "tool-call", toolCallId: "...", toolName: "...", args: {...})
-                    yield stream_tool_call(
-                        tool_call_id=chunk.get("toolCallId"),
+                    # 工具调用 (type: "tool-call" -> tool-input-available + tool-output-available)
+                    tool_id = chunk.get("toolCallId")
+                    # 1. Input Available
+                    yield stream_tool_input_available(
+                        tool_call_id=tool_id,
                         tool_name=chunk.get("toolName"),
                         args=chunk.get("args")
+                    )
+                    
+                    # 2. Output Available (ArtifactNode 已经执行完毕)
+                    result = chunk.get("result", "Tool executed successfully")
+                    yield stream_tool_output_available(
+                        tool_call_id=tool_id,
+                        output=result
                     )
                     
         # 2. Send Text Stream End

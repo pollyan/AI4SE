@@ -101,39 +101,40 @@ class TestDataStreamV2Protocol:
         assert "e:" in json_part or "error" in json_part.lower()
 
     def test_tool_call_event_format(self):
-        """V2 工具调用事件格式验证"""
-        from backend.agents.shared.data_stream import stream_tool_call
+        """V2 工具调用事件格式验证 (tool-input-available)"""
+        from backend.agents.shared.data_stream import stream_tool_input_available
         
-        tool_payload = {
-            "toolCallId": "call_123",
-            "toolName": "update_progress",
-            "args": {"stage": "analysis"}
-        }
-        
-        result = stream_tool_call(tool_payload)
-        
-        assert result.startswith("data: ")
-        json_part = result[6:-2]
-        
-        # 应该包含工具信息
-        assert "call_123" in json_part or "toolCallId" in json_part
-        assert "tool_call" in json_part
-
-    def test_tool_result_event_format(self):
-        """V2 工具结果事件格式验证"""
-        from backend.agents.shared.data_stream import stream_tool_result
-        
-        result = stream_tool_result(
+        result = stream_tool_input_available(
             tool_call_id="call_123",
             tool_name="update_progress",
-            result={"success": True}
+            args={"stage": "analysis"}
         )
         
         assert result.startswith("data: ")
         json_part = result[6:-2]
+        data = json.loads(json_part)
         
-        assert "call_123" in json_part or "toolCallId" in json_part
-        assert "tool-result" in json_part
+        assert data["type"] == "tool-input-available"
+        assert data["toolCallId"] == "call_123"
+        assert data["toolName"] == "update_progress"
+        assert data["input"] == {"stage": "analysis"}
+
+    def test_tool_result_event_format(self):
+        """V2 工具结果事件格式验证 (tool-output-available)"""
+        from backend.agents.shared.data_stream import stream_tool_output_available
+        
+        result = stream_tool_output_available(
+            tool_call_id="call_123",
+            output={"success": True}
+        )
+        
+        assert result.startswith("data: ")
+        json_part = result[6:-2]
+        data = json.loads(json_part)
+        
+        assert data["type"] == "tool-output-available"
+        assert data["toolCallId"] == "call_123"
+        assert data["output"] == {"success": True}
 
 
 class TestDataStreamAdapter:

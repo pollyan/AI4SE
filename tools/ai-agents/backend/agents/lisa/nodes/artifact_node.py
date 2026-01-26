@@ -145,6 +145,7 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
                     "toolCallId": tool_call.get("id", "call_unknown"),
                     "toolName": tool_name,
                     "args": {"key": key},
+                    "result": f"Artifact '{key}' updated successfully.",
                 }
             )
 

@@ -1,6 +1,6 @@
 ---
 description: localtest
-model: "google/antigravity-gemini-3-pro-high"
+model: "google/antigravity-gemini-3-pro"
 ---
 
 1. 执行本地所有测试

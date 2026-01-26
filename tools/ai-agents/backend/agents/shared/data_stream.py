@@ -60,8 +60,32 @@ def stream_text_end(id=None):
         "id": id or "msg_default"
     })
 
+def stream_tool_input_available(tool_call_id, tool_name, args):
+    """
+    Generate tool input available event.
+    Expected: { "type": "tool-input-available", "toolCallId": "...", "toolName": "...", "input": ... }
+    """
+    return format_event({
+        "type": "tool-input-available",
+        "toolCallId": tool_call_id,
+        "toolName": tool_name,
+        "input": args
+    })
+
+def stream_tool_output_available(tool_call_id, output):
+    """
+    Generate tool output available event.
+    Expected: { "type": "tool-output-available", "toolCallId": "...", "output": ... }
+    """
+    return format_event({
+        "type": "tool-output-available",
+        "toolCallId": tool_call_id,
+        "output": output
+    })
+
 def stream_tool_call(tool_call_id, tool_name, args):
     """
+    DEPRECATED: Use stream_tool_input_available instead.
     Generate tool call event.
     Expected: { "type": "tool-call", "toolCallId": "...", "toolName": "...", "args": ... }
     """
@@ -74,6 +98,7 @@ def stream_tool_call(tool_call_id, tool_name, args):
 
 def stream_tool_result(tool_call_id, tool_name, result):
     """
+    DEPRECATED: Use stream_tool_output_available instead.
     Generate tool result event (V2).
     Expected: { "type": "tool-result", "toolCallId": "...", "toolName": "...", "result": ... }
     """
