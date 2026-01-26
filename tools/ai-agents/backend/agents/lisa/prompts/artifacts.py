@@ -3,6 +3,71 @@ Lisa 工作流产出物模板定义
 
 包含各阶段产出物的详细结构、格式要求和可视化示例。
 """
+from ..artifact_models import RequirementDoc, DesignDoc, CaseDoc
+
+
+def get_artifact_json_schemas() -> dict:
+    """
+    动态获取 Artifact JSON Schemas（从 Pydantic 模型生成）
+
+    确保 Prompt 中的 Schema 与实际模型定义保持同步（SSOT 原则）
+
+    Returns:
+        dict: 包含各阶段 Schema 的字典
+    """
+    return {
+        "requirement": RequirementDoc.model_json_schema(),
+        "design": DesignDoc.model_json_schema(),
+        "cases": CaseDoc.model_json_schema()
+    }
+
+
+def format_schema_for_prompt(schema: dict) -> str:
+    """
+    将 Pydantic JSON Schema 格式化为 Prompt 友好的示例
+
+    Args:
+        schema: Pydantic model_json_schema() 的输出
+
+    Returns:
+        str: 格式化的 JSON 示例字符串
+    """
+    import json
+
+    def build_example_from_schema(schema_obj: dict) -> dict:
+        """递归构建示例数据"""
+        properties = schema_obj.get("properties", {})
+        required = schema_obj.get("required", [])
+        example = {}
+
+        for prop_name, prop_schema in properties.items():
+            prop_type = prop_schema.get("type")
+            description = prop_schema.get("description", "")
+
+            if prop_type == "string":
+                example[prop_name] = description or "字符串值"
+            elif prop_type == "integer":
+                example[prop_name] = 1
+            elif prop_type == "number":
+                example[prop_name] = 1.0
+            elif prop_type == "boolean":
+                example[prop_name] = True
+            elif prop_type == "array":
+                items_schema = prop_schema.get("items", {})
+                if items_schema.get("type") == "object":
+                    example[prop_name] = [build_example_from_schema(items_schema)]
+                else:
+                    example[prop_name] = ["示例项"]
+            elif prop_type == "object":
+                example[prop_name] = build_example_from_schema(prop_schema)
+            else:
+                # 处理 $ref 或复杂类型
+                example[prop_name] = {}
+
+        return example
+
+    example = build_example_from_schema(schema)
+    return json.dumps(example, ensure_ascii=False, indent=2)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 1. 需求澄清阶段 (Clarify) - 需求分析文档
@@ -234,21 +299,82 @@ pie title 测试用例分布
 # 5. 通用提示词 (General Prompts)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def build_artifact_update_prompt(artifact_key: str, current_stage: str, template_outline: str) -> str:
+    """
+    构建产出物更新 Prompt（动态注入 Schema）
+
+    Args:
+        artifact_key: 产出物唯一标识
+        current_stage: 当前阶段名称
+        template_outline: 模板大纲
+
+    Returns:
+        str: 完整的 Prompt 文本
+    """
+    # 阶段到 artifact_type 的映射
+    stage_to_type = {
+        "clarify": "requirement",
+        "strategy": "design",
+        "cases": "cases",
+        "delivery": "delivery"
+    }
+
+    artifact_type = stage_to_type.get(current_stage, "requirement")
+    schemas = get_artifact_json_schemas()
+
+    # 为当前阶段生成示例
+    current_schema = schemas.get(artifact_type)
+    schema_example = format_schema_for_prompt(current_schema) if current_schema else "{}"
+
+    return f"""
+系统内部指令：
+你正处于产出物更新阶段 (Artifact Update Phase)。
+
+**严重警告 (CRITICAL RULES)**：
+1. 你必须调用 `UpdateStructuredArtifact` 工具。
+2. `key` 必须严格使用："{artifact_key}"。
+3. `artifact_type` 必须使用："{artifact_type}"。
+4. `content` 字段必须是符合对应类型的 JSON 对象，而不是 Markdown 字符串。
+
+**当前阶段的 JSON Schema 示例**:
+
+```json
+{schema_example}
+```
+
+**参考模板结构 (REFERENCE TEMPLATE)**：
+虽然你需要输出 JSON，但内容逻辑应参考以下 Markdown 结构：
+```
+{template_outline}
+```
+
+请将上述 Markdown 结构中的信息，严格映射到 `UpdateStructuredArtifact` 工具的 `content` JSON 字段中。
+**严禁臆造 Schema 中不存在的字段（如 'summary', 'sections' 等）。**
+**所有字段名称必须与上方 JSON Schema 示例完全一致。**
+"""
+
+
+# 保留旧版 Prompt 作为后备（用于模板字符串替换的场景）
 ARTIFACT_UPDATE_PROMPT = """
 系统内部指令：
 你正处于产出物更新阶段 (Artifact Update Phase)。
 
 **严重警告 (CRITICAL RULES)**：
-1. 你必须调用 `update_artifact` 工具，且 key 必须严格使用："{artifact_key}"。
-2. 你必须生成**严格遵守**下方模板结构的完整 Markdown 内容。
-3. **禁止**增加、删除或重命名任何章节标题。只能在现有章节内填充内容。
-4. 信息不足的章节请使用 "[待补充]" 占位。
-5. 必须保留 Mermaid 图表的占位符，即使是空的。
+1. 你必须调用 `UpdateStructuredArtifact` 工具。
+2. `key` 必须严格使用："{artifact_key}"。
+3. `artifact_type` 必须根据当前阶段选择：
+   - clarify -> "requirement"
+   - strategy -> "design"
+   - cases -> "cases"
+   - delivery -> "delivery"
+4. `content` 字段必须是符合对应类型的 JSON 对象，而不是 Markdown 字符串。
 
-**强制模板结构 (REQUIRED TEMPLATE STRUCTURE)**：
+**参考模板结构 (REFERENCE TEMPLATE)**：
 ```
 {template_outline}
 ```
 
-请基于对话上下文，填充上述模板，生成阶段 '{current_stage}' 的完整文档。
+请将上述 Markdown 结构中的信息，严格映射到 `UpdateStructuredArtifact` 工具的 `content` JSON 字段中。
+**严禁臆造 Schema 中不存在的字段。所有字段必须符合 Pydantic 模型定义。**
+**提示：查看 artifact_models.py 中的 RequirementDoc, DesignDoc, CaseDoc 定义获取准确的字段列表。**
 """

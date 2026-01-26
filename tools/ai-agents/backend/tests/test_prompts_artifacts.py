@@ -17,7 +17,7 @@ def test_artifact_update_prompt_is_chinese_and_strict():
     assert "系统内部指令" in ARTIFACT_UPDATE_PROMPT
     assert "严禁" in ARTIFACT_UPDATE_PROMPT or "严重警告" in ARTIFACT_UPDATE_PROMPT
     assert "{template_outline}" in ARTIFACT_UPDATE_PROMPT
-    assert "update_artifact" in ARTIFACT_UPDATE_PROMPT
+    assert "UpdateStructuredArtifact" in ARTIFACT_UPDATE_PROMPT
     assert "{artifact_key}" in ARTIFACT_UPDATE_PROMPT
 
 def test_clarify_requirements_template_has_other_required_sections():

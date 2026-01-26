@@ -47,8 +47,8 @@ class BaseAgentState(TypedDict):
     plan: List[Dict]
     current_stage_id: Optional[str]
     
-    # 产出物存储 (Markdown 格式，支持 Mermaid)
-    artifacts: Dict[str, str]
+    # 产出物存储 (Markdown 格式或结构化对象)
+    artifacts: Dict[str, Any]
     
     # 产出物模板列表
     # 列表中的每个 item 结构:

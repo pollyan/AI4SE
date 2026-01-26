@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 from langchain_core.messages import AIMessage
 from backend.agents.lisa.nodes.artifact_node import artifact_node
 from backend.agents.lisa.state import LisaState
+from backend.agents.lisa.artifact_models import RequirementDoc, DesignDoc, DesignNode
 
 @pytest.fixture
 def mock_llm():
@@ -206,4 +207,76 @@ def test_artifact_node_invalid_tool_name(mock_writer_getter, mock_llm, mock_stat
     new_state = artifact_node(cast(LisaState, mock_state), original_llm)
     
     assert "key1" not in new_state["artifacts"]
+
+
+@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+def test_artifact_node_structured_output(mock_writer_getter, mock_llm, mock_state):
+    """Test that artifact node can handle structured artifact output (Pydantic models)"""
+    original_llm, bound_llm = mock_llm
+    mock_writer = MagicMock()
+    mock_writer_getter.return_value = mock_writer
+    
+    requirement_doc = RequirementDoc(
+        scope=["登录页面", "POST /api/login"],
+        flow_mermaid="graph LR; A-->B",
+        rules=[],
+        assumptions=[]
+    )
+    
+    mock_response = AIMessage(
+        content="",
+        tool_calls=[{
+            "name": "update_structured_artifact",
+            "args": {
+                "key": "test_design_requirements",
+                "artifact_type": "requirement",
+                "content": requirement_doc.model_dump()
+            },
+            "id": "call_structured_1"
+        }]
+    )
+    bound_llm.invoke.return_value = mock_response
+    
+    new_state = artifact_node(cast(LisaState, mock_state), original_llm)
+    
+    assert "test_design_requirements" in new_state["artifacts"]
+    artifact = new_state["artifacts"]["test_design_requirements"]
+    assert isinstance(artifact, dict)
+    assert artifact.get("scope") == ["登录页面", "POST /api/login"]
+    assert artifact.get("flow_mermaid") == "graph LR; A-->B"
+
+@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+def test_artifact_node_structured_output_pascal_case(mock_writer_getter, mock_llm, mock_state):
+    """Test that artifact node can handle PascalCase tool name (UpdateStructuredArtifact)"""
+    original_llm, bound_llm = mock_llm
+    mock_writer = MagicMock()
+    mock_writer_getter.return_value = mock_writer
+    
+    requirement_doc = RequirementDoc(
+        scope=["Test Scope"],
+        flow_mermaid="graph LR; A-->B",
+        rules=[],
+        assumptions=[]
+    )
+    
+    mock_response = AIMessage(
+        content="",
+        tool_calls=[{
+            "name": "UpdateStructuredArtifact",
+            "args": {
+                "key": "test_design_requirements",
+                "artifact_type": "requirement",
+                "content": requirement_doc.model_dump()
+            },
+            "id": "call_structured_pascal"
+        }]
+    )
+    bound_llm.invoke.return_value = mock_response
+    
+    new_state = artifact_node(cast(LisaState, mock_state), original_llm)
+    
+    assert "test_design_requirements" in new_state["artifacts"]
+    artifact = new_state["artifacts"]["test_design_requirements"]
+    assert artifact.get("scope") == ["Test Scope"]
+
 

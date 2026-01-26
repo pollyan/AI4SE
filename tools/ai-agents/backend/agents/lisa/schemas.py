@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import Literal, Optional
+from typing import Literal, Optional, Union, Any
+
+from .artifact_models import RequirementDoc, DesignDoc, CaseDoc
 
 
 class IntentResult(BaseModel):
@@ -102,4 +104,26 @@ class WorkflowResponse(BaseModel):
     progress_step: Optional[str] = Field(
         default=None,
         description="当前的具体步骤名称，例如：'正在分析需求', '生成测试用例'。用于更新前端进度条。"
+    )
+
+
+class UpdateStructuredArtifact(BaseModel):
+    """更新结构化工作流产出物 (Pydantic 模型格式)"""
+    
+    key: Literal[
+        "test_design_requirements",
+        "test_design_strategy",
+        "test_design_cases",
+        "test_design_final",
+        "req_review_record",
+        "req_review_risk",
+        "req_review_report"
+    ] = Field(description="产出物的唯一标识符")
+    
+    artifact_type: Literal["requirement", "design", "cases"] = Field(
+        description="产出物类型：requirement=需求文档, design=设计文档, cases=用例文档"
+    )
+    
+    content: dict = Field(
+        description="结构化内容 (JSON 对象)，必须符合对应 artifact_type 的 Schema"
     )
