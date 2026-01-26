@@ -377,6 +377,10 @@ class LangchainAssistantService:
                         elif data_type == "text_delta_chunk":
                             # 接收原始 delta，直接 yield 字符串，由 adapter 包装 ID
                             yield payload.get("delta")
+
+                        elif data_type == "tool-call":
+                            # 透传工具调用事件
+                            yield payload
                 
                 elif mode == "updates":
                     for node_name, update_content in payload.items():

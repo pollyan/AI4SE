@@ -6,6 +6,7 @@ from .data_stream import (
     stream_text_delta,
     stream_text_end,
     stream_data,
+    stream_tool_call,
     stream_finish,
     stream_done,
     stream_error
@@ -43,6 +44,14 @@ async def adapt_langgraph_stream(service, session_id: str, message: str, db_mess
                 elif chunk_type == "data_stream_event":
                     # 透传预格式化的事件
                     yield chunk.get("event")
+
+                elif chunk_type == "tool-call":
+                    # 工具调用 (type: "tool-call", toolCallId: "...", toolName: "...", args: {...})
+                    yield stream_tool_call(
+                        tool_call_id=chunk.get("toolCallId"),
+                        tool_name=chunk.get("toolName"),
+                        args=chunk.get("args")
+                    )
                     
         # 2. Send Text Stream End
         yield stream_text_end(stream_id)

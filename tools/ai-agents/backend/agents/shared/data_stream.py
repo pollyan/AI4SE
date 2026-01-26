@@ -60,13 +60,16 @@ def stream_text_end(id=None):
         "id": id or "msg_default"
     })
 
-def stream_tool_call(tool_call, id=None):
+def stream_tool_call(tool_call_id, tool_name, args):
     """
     Generate tool call event.
+    Expected: { "type": "tool-call", "toolCallId": "...", "toolName": "...", "args": ... }
     """
     return format_event({
-        "type": "tool_call",
-        "tool_call": tool_call
+        "type": "tool-call",
+        "toolCallId": tool_call_id,
+        "toolName": tool_name,
+        "args": args
     })
 
 def stream_tool_result(tool_call_id, tool_name, result):
