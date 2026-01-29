@@ -70,7 +70,9 @@ def reasoning_node(state: LisaState, llm: Any) -> Command[Literal["artifact_node
     current_workflow = state.get("current_workflow", "test_design")
     messages = state["messages"]
     artifacts = state.get("artifacts", {})
-    plan = state.get("plan", [])
+    
+    # 确保使用最新的 plan (包含初始化更新)
+    plan = init_updates.get("plan") if init_updates and "plan" in init_updates else state.get("plan", [])
     
     writer = get_stream_writer()
     
@@ -82,7 +84,7 @@ def reasoning_node(state: LisaState, llm: Any) -> Command[Literal["artifact_node
                 "stages": plan,
                 "currentStageIndex": 0, # Default to 0 for init
                 "currentTask": "正在初始化工作流...",
-                "artifact_templates": state.get("artifact_templates", []),
+                "artifact_templates": init_updates.get("artifact_templates") or state.get("artifact_templates", []),
                 "artifacts": artifacts
             }
         })
@@ -114,6 +116,9 @@ def reasoning_node(state: LisaState, llm: Any) -> Command[Literal["artifact_node
     
     # 3. 流式处理
     try:
+        # 确保使用最新的 artifact_templates (包含初始化更新)
+        current_templates = init_updates.get("artifact_templates") if init_updates else state.get("artifact_templates", [])
+
         final_response = process_reasoning_stream(
             stream_iterator=structured_llm.stream(messages_with_prompt),
             writer=writer,
@@ -126,7 +131,7 @@ def reasoning_node(state: LisaState, llm: Any) -> Command[Literal["artifact_node
             # 查看 stream_utils.py:117 current_artifacts = dict(base_artifacts or {})
             # 所以如果在 base_artifacts 中放入 'artifact_templates' key，它会被复制到 current_artifacts
             # 并在 progress event 中发送。
-            base_artifacts={**artifacts, "artifact_templates": state.get("artifact_templates", [])}
+            base_artifacts={**artifacts, "artifact_templates": current_templates}
         )
     except Exception as e:
         logger.error(f"Reasoning stream failed: {e}", exc_info=True)

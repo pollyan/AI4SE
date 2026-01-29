@@ -8,7 +8,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeOverride as CodeBlock } from './chat/MarkdownText';
-import { FileText, Clock, CheckCircle, ChevronLeft, ChevronRight, List } from 'lucide-react';
+import { FileText, Clock, CheckCircle, ChevronLeft, ChevronRight, List, Loader2 } from 'lucide-react';
 
 export interface ArtifactTemplateItem {
     stageId: string;
@@ -91,13 +91,10 @@ export function ArtifactPanel({
     const templateName = template?.name || '产出物';
     const templateKey = template?.artifactKey;
     const effectiveKey = templateKey || streamingArtifactKey;
-    const isCompleted = effectiveKey ? !!artifacts[effectiveKey] : false;
     const isGenerating = streamingArtifactKey !== null && (templateKey === streamingArtifactKey || !templateKey);
-    const content = isGenerating && streamingArtifactContent
-        ? streamingArtifactContent
-        : isCompleted && effectiveKey
-            ? artifacts[effectiveKey]
-            : null;
+    const content = effectiveKey && artifacts[effectiveKey]
+        ? artifacts[effectiveKey]
+        : null;
     const isViewingHistory = selectedStageId !== null && selectedStageId !== currentStageId;
 
     // 处理自动滚动
@@ -125,7 +122,12 @@ export function ArtifactPanel({
                     </span>
 
                     {/* 状态标签 */}
-                    {content ? (
+                    {isGenerating ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded-full">
+                            <Loader2 size={12} className="animate-spin" />
+                            生成中...
+                        </span>
+                    ) : content ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full">
                             <CheckCircle size={12} />
                             已生成
