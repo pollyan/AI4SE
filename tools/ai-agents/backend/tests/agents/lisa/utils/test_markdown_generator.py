@@ -15,14 +15,15 @@ def test_convert_requirement_doc():
     
     md = convert_to_markdown(content, "requirement")
     
-    assert "## 项目范围 (Scope)" in md
+    assert "## 1. 需求全景图" in md
     assert "- 模块A" in md
-    assert "## 业务流程 (Flow)" in md
+    assert "## 3. 业务流程图" in md
     assert "```mermaid" in md
     assert "graph TD" in md
-    assert "## 业务规则 (Rules)" in md
-    assert "## 非功能需求 (NFR)" in md
-    assert "### 性能" in md
+    assert "## 2. 功能详细规格" in md
+    assert "## 4. 非功能需求 (NFR)" in md
+    assert "### 性能" not in md # 之前是 ###, 现在是 - **性能**: ...
+    assert "**性能**" in md
     assert "很快" in md
 
 def test_convert_fallback():
