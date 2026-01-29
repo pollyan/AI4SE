@@ -241,9 +241,12 @@ def test_artifact_node_structured_output(mock_writer_getter, mock_llm, mock_stat
     
     assert "test_design_requirements" in new_state["artifacts"]
     artifact = new_state["artifacts"]["test_design_requirements"]
-    assert isinstance(artifact, dict)
-    assert artifact.get("scope") == ["登录页面", "POST /api/login"]
-    assert artifact.get("flow_mermaid") == "graph LR; A-->B"
+    
+    # Updated: Now we expect Markdown string, not dict
+    assert isinstance(artifact, str)
+    assert "登录页面" in artifact
+    assert "POST /api/login" in artifact
+    assert "graph LR; A-->B" in artifact
 
 @patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
 def test_artifact_node_structured_output_pascal_case(mock_writer_getter, mock_llm, mock_state):
@@ -277,6 +280,9 @@ def test_artifact_node_structured_output_pascal_case(mock_writer_getter, mock_ll
     
     assert "test_design_requirements" in new_state["artifacts"]
     artifact = new_state["artifacts"]["test_design_requirements"]
-    assert artifact.get("scope") == ["Test Scope"]
+    
+    # Updated: Now we expect Markdown string
+    assert isinstance(artifact, str)
+    assert "Test Scope" in artifact
 
 
