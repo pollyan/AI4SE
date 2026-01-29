@@ -168,6 +168,14 @@ const CompactApp: React.FC = () => {
     // 处理进度变化回调
     const handleProgressChange = useCallback((progress: ProgressInfo | null) => {
         setWorkflowProgress(progress);
+        
+        // 同步正在生成的 key，确保 isGenerating 状态正确
+        if (progress?.artifactProgress?.generating) {
+            setStreamingArtifactKey(progress.artifactProgress.generating);
+        } else {
+            setStreamingArtifactKey(null);
+        }
+
         // 合并 artifacts
         if (progress?.artifacts) {
             setArtifacts(prev => ({ ...prev, ...progress.artifacts }));
