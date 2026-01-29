@@ -50,6 +50,9 @@ class RequirementDoc(BaseModel):
     """Phase 1 产出物：需求分析文档"""
 
     scope: List[str] = Field(description="被测对象范围列表")
+    scope_mermaid: Optional[str] = Field(
+        default=None, description="需求全景图 Mermaid Mindmap 代码"
+    )
     flow_mermaid: str = Field(description="业务流程 Mermaid 代码")
     rules: List[RuleItem] = Field(default_factory=list, description="核心规则列表")
     assumptions: List[AssumptionItem] = Field(

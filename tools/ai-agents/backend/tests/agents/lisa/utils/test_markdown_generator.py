@@ -33,6 +33,31 @@ def test_convert_requirement_doc():
     assert "**性能**" in md
     assert "很快" in md
 
+def test_convert_requirement_doc_with_scope_mermaid():
+    content = {
+        "scope": ["Old List"],
+        "scope_mermaid": "mindmap\n  root((New Mindmap))",
+        "rules": [],
+        "assumptions": []
+    }
+    
+    md = convert_to_markdown(content, "requirement")
+    
+    assert "New Mindmap" in md
+    assert "Old List" not in md # Should not use list if mermaid is present? Wait, logic says list is not added if mermaid field exists?
+    # Logic check:
+    # if content.get("scope_mermaid"):
+    #    ... append mermaid ...
+    # elif "scope" in content:
+    #    ...
+    # So yes, it's exclusive. If scope_mermaid exists, scope list logic is skipped.
+    
+    # Wait, my logic was:
+    # if content.get("scope_mermaid"): ...
+    # elif "scope" in content: ...
+    
+    # So if scope_mermaid is present, scope list is ignored. Correct.
+
 def test_convert_fallback():
     content = {"key": "value"}
     md = convert_to_markdown(content, "unknown")

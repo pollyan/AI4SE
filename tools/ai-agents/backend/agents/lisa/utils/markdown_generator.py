@@ -31,9 +31,16 @@ def convert_requirement_doc(content: Dict[str, Any]) -> str:
     
     # 1. 需求全景图 (Scope -> Mindmap)
     md.append("## 1. 需求全景图")
-    if "scope" in content:
+    
+    # 优先使用 LLM 生成的 Mermaid 代码
+    if content.get("scope_mermaid"):
+        md.append("```mermaid")
+        md.append(content["scope_mermaid"])
+        md.append("```")
+    elif "scope" in content:
         scope = content["scope"]
         if isinstance(scope, list) and scope:
+            # Fallback: 自动转换列表为 Mindmap
             md.append("```mermaid")
             md.append(generate_mindmap(scope))
             md.append("```")
