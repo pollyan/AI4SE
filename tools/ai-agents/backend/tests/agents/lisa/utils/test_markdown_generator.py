@@ -16,7 +16,14 @@ def test_convert_requirement_doc():
     md = convert_to_markdown(content, "requirement")
     
     assert "## 1. 需求全景图" in md
+    assert "```mermaid" in md
+    assert "mindmap" in md
+    assert "root((需求全景))" in md
+    assert "模块A" in md
+    assert "模块B" in md
+    assert "详细范围列表" in md
     assert "- 模块A" in md
+    
     assert "## 3. 业务流程图" in md
     assert "```mermaid" in md
     assert "graph TD" in md

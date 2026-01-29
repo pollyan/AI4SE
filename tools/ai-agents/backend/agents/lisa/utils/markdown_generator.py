@@ -3,6 +3,25 @@ from typing import Dict, Any, List, Union
 def convert_list_to_markdown(items: List[Any]) -> str:
     return "\n".join([f"- {item}" for item in items]) if items else "(无)"
 
+def sanitize_mermaid_node(text: str) -> str:
+    """清理 Mermaid 节点文本，避免语法错误"""
+    # 替换可能破坏语法的符号为全角符号
+    text = text.replace("(", "（").replace(")", "）")
+    text = text.replace("[", "【").replace("]", "】")
+    # 去除换行符
+    text = text.replace("\n", " ").strip()
+    return text
+
+def generate_mindmap(items: List[str], root_name: str = "需求全景") -> str:
+    """生成 Mermaid Mindmap 代码块"""
+    lines = ["mindmap"]
+    lines.append(f"  root(({root_name}))")
+    for item in items:
+        # 处理每个条目
+        sanitized = sanitize_mermaid_node(str(item))
+        lines.append(f"    {sanitized}")
+    return "\n".join(lines)
+
 def convert_requirement_doc(content: Dict[str, Any]) -> str:
     """
     将 RequirementDoc 结构转换为符合 ARTIFACT_CLARIFY_REQUIREMENTS 模板的 Markdown
@@ -10,12 +29,16 @@ def convert_requirement_doc(content: Dict[str, Any]) -> str:
     """
     md = ["# 需求分析文档\n"]
     
-    # 1. 需求全景图 (Scope)
+    # 1. 需求全景图 (Scope -> Mindmap)
     md.append("## 1. 需求全景图")
     if "scope" in content:
         scope = content["scope"]
-        md.append("> 核心需求与范围：")
-        if isinstance(scope, list):
+        if isinstance(scope, list) and scope:
+            md.append("```mermaid")
+            md.append(generate_mindmap(scope))
+            md.append("```")
+            # 保留文字列表作为补充（可选，为了信息完整性）
+            md.append("\n> **详细范围列表**：")
             md.append(convert_list_to_markdown(scope))
         elif isinstance(scope, str):
             md.append(scope)
