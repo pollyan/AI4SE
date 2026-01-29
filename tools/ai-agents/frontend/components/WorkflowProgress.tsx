@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Circle, Loader2, ChevronRight } from 'lucide-react';
+import { Check, Circle, ChevronRight } from 'lucide-react';
 
 export interface Stage {
     id: string;
@@ -68,7 +68,6 @@ export function WorkflowProgress({
                                 onClick={() => handleStageClick(stage)}
                             >
                                 {stage.status === 'completed' && <Check size={14} className="text-green-500" />}
-                                {stage.status === 'active' && <Loader2 size={14} className="text-primary animate-spin" />}
                                 <span className={stage.status === 'completed' ? 'text-gray-700 dark:text-gray-300' : ''}>
                                     {stage.name}
                                 </span>
@@ -88,7 +87,6 @@ export function WorkflowProgress({
 
                             <div className="flex items-center gap-1.5 whitespace-nowrap py-0.5">
                                 {task.status === 'completed' && <Check size={12} className="text-green-500" />}
-                                {task.status === 'active' && <Loader2 size={12} className="text-primary animate-spin" />}
                                 {task.status === 'warning' && <Circle size={8} className="text-orange-500 fill-orange-500" />}
                                 {task.status === 'pending' && <Circle size={8} className="text-gray-300 dark:text-gray-600" />}
 
