@@ -9,6 +9,7 @@ from ..state import LisaState
 from ..tools import update_artifact
 from ..schemas import UpdateStructuredArtifact
 from ..prompts.artifacts import build_artifact_update_prompt
+from ..utils.markdown_generator import convert_to_markdown
 from ...shared.progress import get_progress_info
 
 logger = logging.getLogger(__name__)
@@ -128,10 +129,15 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
 
         elif normalized_tool_name == "updatestructuredartifact":
             content = args.get("content")
+            artifact_type = args.get("artifact_type", "requirement")
+            
             if key and content:
-                new_artifacts[key] = content
+                # 将结构化数据转换为 Markdown 字符串
+                # 前端组件期望 artifacts 的值为 Markdown 字符串，否则会直接渲染 JSON
+                markdown_content = convert_to_markdown(content, artifact_type)
+                new_artifacts[key] = markdown_content
                 logger.info(
-                    f"ArtifactNode: Updated artifact {key} (structured)"
+                    f"ArtifactNode: Updated artifact {key} (structured -> markdown)"
                 )
 
         else:
