@@ -34,8 +34,13 @@ def convert_requirement_doc(content: Dict[str, Any]) -> str:
     
     # 优先使用 LLM 生成的 Mermaid 代码
     if content.get("scope_mermaid"):
+        mermaid_code = content["scope_mermaid"]
+        if not isinstance(mermaid_code, str):
+            # 防御性处理：如果 LLM 返回了 dict，尝试转为字符串
+            mermaid_code = str(mermaid_code)
+            
         md.append("```mermaid")
-        md.append(content["scope_mermaid"])
+        md.append(mermaid_code)
         md.append("```")
     elif "scope" in content:
         scope = content["scope"]
@@ -73,8 +78,13 @@ def convert_requirement_doc(content: Dict[str, Any]) -> str:
     # 3. 业务流程图
     md.append("## 3. 业务流程图")
     if content.get("flow_mermaid"):
+        mermaid_code = content["flow_mermaid"]
+        if not isinstance(mermaid_code, str):
+            # 防御性处理：如果 LLM 返回了 dict，尝试转为字符串
+            mermaid_code = str(mermaid_code)
+            
         md.append("```mermaid")
-        md.append(content["flow_mermaid"])
+        md.append(mermaid_code)
         md.append("```")
     md.append("")
 
