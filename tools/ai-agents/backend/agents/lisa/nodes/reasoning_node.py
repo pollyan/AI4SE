@@ -1,7 +1,8 @@
 import logging
 from typing import Literal, Any, Dict, List
 from langgraph.types import Command
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
+from ..intent_parser import parse_user_intent, ClarifyContext
 
 from ..state import LisaState, ArtifactKeys
 from ..schemas import ReasoningResponse
@@ -15,6 +16,55 @@ from ..prompts.artifacts import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Clarify 阶段问题提取正则
+import re
+
+def extract_blocking_questions(artifacts: Dict[str, Any]) -> List[str]:
+    """从产出物中提取🔴阻塞性问题
+    
+    解析 Markdown 文档中 '🔴 阻塞性问题' 部分下的问题列表
+    """
+    questions = []
+    
+    for key, content in artifacts.items():
+        if not isinstance(content, str):
+            continue
+            
+        # 查找 🔴 阻塞性问题部分
+        # 模式: ### 🔴 阻塞性问题 ... 直到下一个 ### 或文档结束
+        pattern = r'###\s*🔴\s*阻塞性问题[^\n]*\n(.*?)(?=###|\Z)'
+        matches = re.findall(pattern, content, re.DOTALL)
+        
+        for match in matches:
+            # 提取列表项 (1. xxx 或 - xxx)
+            items = re.findall(r'^\s*(?:\d+\.\s*|\-\s*)(.+)$', match, re.MULTILINE)
+            questions.extend(items)
+    
+    return questions
+
+
+def extract_optional_questions(artifacts: Dict[str, Any]) -> List[str]:
+    """从产出物中提取🟡建议澄清问题
+    
+    解析 Markdown 文档中 '🟡 建议澄清' 部分下的问题列表
+    """
+    questions = []
+    
+    for key, content in artifacts.items():
+        if not isinstance(content, str):
+            continue
+            
+        # 查找 🟡 建议澄清部分
+        pattern = r'###\s*🟡\s*建议澄清[^\n]*\n(.*?)(?=###|\Z)'
+        matches = re.findall(pattern, content, re.DOTALL)
+        
+        for match in matches:
+            # 提取列表项
+            items = re.findall(r'^\s*(?:\d+\.\s*|\-\s*)(.+)$', match, re.MULTILINE)
+            questions.extend(items)
+    
+    return questions
 
 # 定义产出物模板映射
 TEST_DESIGN_TEMPLATES = [
@@ -70,6 +120,38 @@ def reasoning_node(state: LisaState, llm: Any) -> Command[Literal["artifact_node
     current_workflow = state.get("current_workflow", "test_design")
     messages = state["messages"]
     artifacts = state.get("artifacts", {})
+    
+    # === Clarify 阶段意图解析 ===
+    if current_stage == "clarify" and messages:
+        last_message = messages[-1]
+        if isinstance(last_message, HumanMessage):
+            blocking_qs = extract_blocking_questions(artifacts)
+            optional_qs = extract_optional_questions(artifacts)
+            
+            context = ClarifyContext(
+                blocking_questions=blocking_qs,
+                optional_questions=optional_qs
+            )
+            
+            user_intent = parse_user_intent(
+                user_message=str(last_message.content),
+                context=context,
+                llm=llm
+            )
+            
+            if user_intent.intent == "confirm_proceed" and blocking_qs:
+                warning_msg = (
+                    f"⚠️ 检测到您希望继续，但仍有 {len(blocking_qs)} 个阻塞性问题未解决：\n\n"
+                    + "\n".join(f"- {q}" for q in blocking_qs[:3])
+                    + ("\n..." if len(blocking_qs) > 3 else "")
+                    + "\n\n请先回答这些问题，或明确表示接受风险继续。"
+                )
+                logger.info(f"Clarify stage: confirm_proceed with {len(blocking_qs)} blockers, returning warning")
+                writer = get_stream_writer()
+                return Command(
+                    update={"messages": [AIMessage(content=warning_msg)]},
+                    goto="__end__"
+                )
     
     # 确保使用最新的 plan (包含初始化更新)
     plan = init_updates.get("plan") if init_updates and "plan" in init_updates else state.get("plan", [])

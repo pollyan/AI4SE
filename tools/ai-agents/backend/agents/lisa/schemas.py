@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import Literal, Optional, Union, Any
+from typing import Literal, Optional, Union, Any, List
 
 from .artifact_models import RequirementDoc, DesignDoc, CaseDoc
 
@@ -104,6 +104,32 @@ class WorkflowResponse(BaseModel):
     progress_step: Optional[str] = Field(
         default=None,
         description="当前的具体步骤名称，例如：'正在分析需求', '生成测试用例'。用于更新前端进度条。"
+    )
+
+
+class UserIntentInClarify(BaseModel):
+    """clarify 阶段用户意图解析结果"""
+    
+    intent: Literal[
+        "provide_material",
+        "answer_question",
+        "confirm_proceed",
+        "need_more_clarify",
+        "accept_risk",
+        "change_scope",
+        "off_topic"
+    ] = Field(description="用户当前回复的核心意图")
+    
+    confidence: float = Field(ge=0.0, le=1.0, description="意图识别置信度")
+    
+    answered_question_ids: List[str] = Field(
+        default_factory=list,
+        description="回答了哪些问题的 ID"
+    )
+    
+    extracted_info: Optional[str] = Field(
+        default=None,
+        description="提取的关键信息摘要"
     )
 
 
