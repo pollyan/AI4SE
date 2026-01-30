@@ -27,10 +27,10 @@ interface ChatMessage {
 const LISA_SUGGESTIONS = [
     { id: 'A', label: '需求评审', description: '扫描需求文档，识别逻辑漏洞与风险', action: '需求评审' },
     { id: 'B', label: '测试设计', description: '为新功能制定策略 (RBT) 并输出用例', action: '测试设计' },
-    { id: 'C', label: '生产缺陷分析', description: '分析线上缺陷、性能瓶颈', action: '生产缺陷分析' },
-    { id: 'D', label: '专项测试策略', description: '制定非功能、自动化等专项策略', action: '专项测试策略规划' },
-    { id: 'E', label: '现状评估', description: '评估当前团队与流程质量', action: '产品测试现状评估' },
-    { id: 'F', label: '通用咨询', description: '探讨任何测试与质量相关的话题', action: '通用测试咨询' },
+    // { id: 'C', label: '生产缺陷分析', description: '分析线上缺陷、性能瓶颈', action: '生产缺陷分析' },
+    // { id: 'D', label: '专项测试策略', description: '制定非功能、自动化等专项策略', action: '专项测试策略规划' },
+    // { id: 'E', label: '现状评估', description: '评估当前团队与流程质量', action: '产品测试现状评估' },
+    // { id: 'F', label: '通用咨询', description: '探讨任何测试与质量相关的话题', action: '通用测试咨询' },
 ];
 
 // Helper: Read file content as Data URL
