@@ -905,9 +905,22 @@ def stream_messages_v2(session_id: str) -> Response:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             
+            # 用于捕获最终状态的闭包变量
+            final_progress = {}
+            
+            def on_state_update(progress):
+                nonlocal final_progress
+                final_progress = progress
+            
             try:
                 # 运行适配器
-                async_gen = adapt_langgraph_stream(ai_service, session_id, content, db_message_id=ai_message_id)
+                async_gen = adapt_langgraph_stream(
+                    ai_service, 
+                    session_id, 
+                    content, 
+                    db_message_id=ai_message_id,
+                    on_state_update=on_state_update
+                )
                 
                 while True:
                     try:
@@ -932,6 +945,30 @@ def stream_messages_v2(session_id: str) -> Response:
                     
                 yield stream_error(safe_msg)
             finally:
+                # ✨ 关键修复：流结束后持久化 artifacts 到数据库
+                if final_progress and "artifacts" in final_progress:
+                    try:
+                        # 重新查询会话以确保附加到当前会话上下文
+                        session_to_update = RequirementsSession.query.get(session_id)
+                        if session_to_update:
+                            current_ai_context = json.loads(session_to_update.ai_context or "{}")
+                            
+                            # 更新 artifacts
+                            if "artifacts" not in current_ai_context:
+                                current_ai_context["artifacts"] = {}
+                            
+                            # 增量更新
+                            current_ai_context["artifacts"].update(final_progress["artifacts"])
+                            
+                            # 保存
+                            session_to_update.ai_context = json.dumps(current_ai_context)
+                            session_to_update.updated_at = datetime.utcnow()
+                            db.session.commit()
+                            logger.info(f"成功持久化会话 {session_id} 的 artifacts")
+                    except Exception as persist_error:
+                        logger.error(f"持久化会话状态失败: {persist_error}")
+                        db.session.rollback()
+                
                 loop.close()
     
         from ..agents.shared.data_stream import DataStreamHeaders

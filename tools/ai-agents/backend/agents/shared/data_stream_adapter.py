@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 from typing import Optional
 
-async def adapt_langgraph_stream(service, session_id: str, message: str, db_message_id: Optional[str] = None):
+async def adapt_langgraph_stream(service, session_id: str, message: str, db_message_id: Optional[str] = None, on_state_update=None):
     """适配 LangGraph 流式输出到 Data Stream Protocol (text-delta variant)"""
     
     # Client expects discriminated union: for text, it's text-start, text-delta...
@@ -41,7 +41,10 @@ async def adapt_langgraph_stream(service, session_id: str, message: str, db_mess
                 if chunk_type == "state":
                     # 进度更新 -> 作为 data 事件发送
                     # value IS the progress object
-                    yield stream_data(chunk.get("progress", {}), "progress")
+                    progress = chunk.get("progress", {})
+                    if on_state_update:
+                        on_state_update(progress)
+                    yield stream_data(progress, "progress")
                 
                 elif chunk_type == "data_stream_event":
                     # 透传预格式化的事件
