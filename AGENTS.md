@@ -218,6 +218,150 @@ PROMPT = '''
 
 ---
 
+## 测试策略
+
+### 测试金字塔
+
+```
+        ┌─────────────┐
+        │    E2E      │  ← 少量，验证关键用户流程 (Chrome DevTools MCP)
+        │  (手动/MCP) │
+        ├─────────────┤
+        │ Integration │  ← 中等，验证模块协作 (mock 外部服务)
+        ├─────────────┤
+        │     API     │  ← 较多，验证端点契约 (Flask test_client)
+        ├─────────────┤
+        │    Unit     │  ← 最多，验证纯逻辑 (无 I/O)
+        └─────────────┘
+```
+
+### 测试类型与边界定义
+
+| 类型 | 框架 | 测什么 | 不测什么 | Mock 范围 |
+|------|------|--------|----------|-----------|
+| **后端单元** | pytest | 纯函数、Pydantic 模型、工具类 | 数据库、网络、LLM | 无外部依赖 |
+| **后端 API** | pytest + Flask test_client | HTTP 端点、请求/响应格式、状态码 | 业务逻辑细节 | LLM 服务、外部 API |
+| **后端集成** | pytest | 多模块协作、状态流转、工作流 | UI 渲染 | LLM、外部服务 |
+| **前端组件** | Vitest + React Testing Library | 组件渲染、用户交互、Hooks | 后端通信 | 无 (隔离组件) |
+| **前端集成** | Vitest + MSW | 组件间协作、数据流、SSE 流 | 真实后端 | 后端 API (MSW) |
+| **代理测试** | Jest | MidScene Server API、WebSocket | 真实浏览器 | Playwright 调用 |
+
+### Mock 策略
+
+| 被 Mock 对象 | Mock 方式 | 使用场景 |
+|-------------|-----------|----------|
+| **LLM 服务** | `unittest.mock.patch` + `FakeLLM` | 所有非 `slow` 标记的测试 |
+| **数据库** | SQLite `:memory:` (conftest.py) | 所有需要持久化的测试 |
+| **外部 API** | `responses` 库 / `httpx.MockTransport` | API 测试 |
+| **前端后端** | MSW (Mock Service Worker) | 前端集成测试 |
+| **LangGraph 节点** | 直接调用节点函数，mock 依赖 | 节点单元测试 |
+
+#### LLM Mock 模式
+
+```python
+# conftest.py 或测试文件中
+@pytest.fixture
+def mock_llm():
+    """提供可控的 LLM mock"""
+    from langchain_core.language_models.fake import FakeListChatModel
+    return FakeListChatModel(responses=["模拟回复1", "模拟回复2"])
+
+@pytest.fixture
+def mock_ai_service():
+    """Mock 完整的 AI 服务"""
+    mock_service = MagicMock()
+    mock_service.stream_message = AsyncMock(return_value=iter(["Hello", " World"]))
+    return mock_service
+```
+
+### LangGraph Agent 测试模式
+
+#### 节点测试 (推荐)
+
+```python
+def test_reasoning_node_extracts_intent():
+    """直接测试单个节点，不运行完整图"""
+    state = LisaState(
+        messages=[HumanMessage(content="帮我设计登录测试")],
+        artifacts=[]
+    )
+    # 直接调用节点函数
+    with patch('backend.agents.llm.get_llm', return_value=mock_llm):
+        result = reasoning_node(state)
+    
+    assert result["current_intent"] == "test_design"
+```
+
+#### 工作流测试
+
+```python
+def test_workflow_routes_to_correct_node():
+    """测试路由逻辑，mock 所有 LLM 调用"""
+    graph = build_lisa_graph()
+    
+    with patch.multiple('backend.agents.lisa.nodes',
+                        reasoning_node=MagicMock(return_value={...}),
+                        clarify_node=MagicMock(return_value={...})):
+        result = graph.invoke(initial_state)
+    
+    # 验证路由决策
+    assert result["next_node"] == "clarify"
+```
+
+### 测试文件组织
+
+```
+tools/ai-agents/backend/tests/
+├── conftest.py              # 共享 fixtures: app, client, db_session, mock_ai_service
+├── test_artifact_models.py  # [unit] Pydantic 模型
+├── test_json_patch.py       # [unit] JSON Patch 逻辑
+├── test_intent_parser.py    # [unit] 意图解析
+├── test_api_v2_stream.py    # [api] SSE 流端点
+├── test_sync_endpoint.py    # [api] 同步端点
+├── test_workflow_integration.py  # [integration] 完整工作流
+└── test_clarify_integration.py   # [integration] 澄清节点集成
+
+tools/ai-agents/frontend/tests/
+├── mocks/
+│   └── server.ts            # MSW 服务器配置
+├── utils/
+│   └── stream-mock.ts       # SSE 流模拟工具
+├── integration/
+│   └── ChatFlow.test.tsx    # [integration] 聊天流程
+├── ArtifactPanel.test.tsx   # [component] Artifact 面板
+├── MarkdownText.test.tsx    # [component] Markdown 渲染
+└── useVercelChat.test.tsx   # [hook] 自定义 Hook
+
+tools/intent-tester/tests/
+├── conftest.py              # 共享 fixtures
+├── test_data_manager.py     # [unit] 数据管理
+└── proxy/
+    ├── midscene-server-api.test.js   # [api] MidScene API
+    └── midscene-integration.test.js  # [integration] MidScene 集成
+```
+
+### 测试命名规范
+
+| 类型 | 命名模式 | 示例 |
+|------|----------|------|
+| Python 测试文件 | `test_<模块名>.py` | `test_artifact_models.py` |
+| Python 测试函数 | `test_<行为>_<条件>` | `test_create_session_returns_201` |
+| TypeScript 测试文件 | `<组件名>.test.tsx` | `ArtifactPanel.test.tsx` |
+| TypeScript 测试用例 | `it('<动作> when <条件>')` | `it('renders error when fetch fails')` |
+
+### 何时写哪种测试
+
+| 场景 | 推荐测试类型 | 理由 |
+|------|-------------|------|
+| 新增 Pydantic 模型 | `unit` | 验证字段约束，快速反馈 |
+| 新增 API 端点 | `api` | 验证契约，mock 下游服务 |
+| 新增 LangGraph 节点 | `unit` + `integration` | 单独测节点逻辑 + 测路由集成 |
+| 新增 React 组件 | component test | 验证渲染和交互 |
+| 修复线上 Bug | 先写复现测试 (任意层级) | 防止回归 |
+| 重构已有代码 | 确保已有测试通过 | 不新增测试，除非发现覆盖盲区 |
+
+---
+
 ## 测试标记 (pytest)
 
 使用标记运行特定类别的测试:
