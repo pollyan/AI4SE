@@ -40,6 +40,7 @@ class AssumptionItem(BaseModel):
 
     id: str = Field(description="问题唯一标识，如 Q1, Q2")
     question: str = Field(description="问题描述")
+    priority: Priority = Field(default="P1", description="优先级：P0(阻塞), P1(重要), P2(可选)")
     status: AssumptionStatus = Field(
         description="状态：pending/assumed/confirmed"
     )

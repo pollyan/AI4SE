@@ -3,6 +3,7 @@ from typing import Literal, Any, Dict, List
 from langgraph.types import Command
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from ..intent_parser import parse_user_intent, ClarifyContext
+from ...shared.artifact_summary import get_artifacts_summary
 
 from ..state import LisaState, ArtifactKeys
 from ..schemas import ReasoningResponse
@@ -21,9 +22,10 @@ logger = logging.getLogger(__name__)
 import re
 
 def extract_blocking_questions(artifacts: Dict[str, Any]) -> List[str]:
-    """从产出物中提取🔴阻塞性问题
+    """从产出物中提取 [P0] 阻塞性问题
     
-    解析 Markdown 文档中 '🔴 阻塞性问题' 部分下的问题列表
+    解析 Markdown 文档中 '[P0] 阻塞性问题' 部分下的问题列表
+    支持新旧两种格式: [P0] 和 🔴
     """
     questions = []
     
@@ -31,9 +33,8 @@ def extract_blocking_questions(artifacts: Dict[str, Any]) -> List[str]:
         if not isinstance(content, str):
             continue
             
-        # 查找 🔴 阻塞性问题部分
-        # 模式: ### 🔴 阻塞性问题 ... 直到下一个 ### 或文档结束
-        pattern = r'###\s*🔴\s*阻塞性问题[^\n]*\n(.*?)(?=###|\Z)'
+        # 支持两种格式: [P0] 和 🔴
+        pattern = r'###\s*(?:\[P0\]|🔴)\s*阻塞性问题[^\n]*\n(.*?)(?=###|\Z)'
         matches = re.findall(pattern, content, re.DOTALL)
         
         for match in matches:
@@ -45,9 +46,10 @@ def extract_blocking_questions(artifacts: Dict[str, Any]) -> List[str]:
 
 
 def extract_optional_questions(artifacts: Dict[str, Any]) -> List[str]:
-    """从产出物中提取🟡建议澄清问题
+    """从产出物中提取 [P1] 建议澄清问题
     
-    解析 Markdown 文档中 '🟡 建议澄清' 部分下的问题列表
+    解析 Markdown 文档中 '[P1] 建议澄清' 部分下的问题列表
+    支持新旧两种格式: [P1] 和 🟡
     """
     questions = []
     
@@ -55,8 +57,8 @@ def extract_optional_questions(artifacts: Dict[str, Any]) -> List[str]:
         if not isinstance(content, str):
             continue
             
-        # 查找 🟡 建议澄清部分
-        pattern = r'###\s*🟡\s*建议澄清[^\n]*\n(.*?)(?=###|\Z)'
+        # 支持两种格式: [P1] 和 🟡
+        pattern = r'###\s*(?:\[P1\]|🟡)\s*建议澄清[^\n]*\n(.*?)(?=###|\Z)'
         matches = re.findall(pattern, content, re.DOTALL)
         
         for match in matches:
@@ -172,17 +174,18 @@ def reasoning_node(state: LisaState, llm: Any) -> Command[Literal["artifact_node
         })
     
     # 1. 构建 Prompt
+    artifacts_summary = get_artifacts_summary(artifacts)
     if current_workflow == "requirement_review":
         system_prompt = build_requirement_review_prompt(
             stage=current_stage,
-            artifacts_summary=str(list(artifacts.keys())),
+            artifacts_summary=artifacts_summary,
             pending_clarifications="", 
             consensus_count=0
         )
     else:
         system_prompt = build_test_design_prompt(
             stage=current_stage,
-            artifacts_summary=str(list(artifacts.keys())),
+            artifacts_summary=artifacts_summary,
             pending_clarifications="",
             consensus_count=0,
             plan_context=str([p["name"] for p in plan])
@@ -245,14 +248,17 @@ def reasoning_node(state: LisaState, llm: Any) -> Command[Literal["artifact_node
     templates = state.get("artifact_templates", [])
     if not templates and init_updates: # 如果刚刚初始化，使用新模板
         templates = init_updates.get("artifact_templates", [])
-        
-    current_template = next((t for t in templates if t.get("stage") == current_stage), None)
     
-    if current_template:
-        key = current_template["key"]
-        # 如果当前 key 对应的产出物为空，强制触发更新以生成初始模板
-        if key not in artifacts:
-            logger.info(f"Artifact {key} missing for stage {current_stage}. Forcing routing to ArtifactNode for initialization.")
+    # 确定要检查的阶段：如果有流转请求，检查目标阶段；否则检查当前阶段
+    stage_to_check = final_response.request_transition_to if final_response.request_transition_to else current_stage
+    
+    target_template = next((t for t in templates if t.get("stage") == stage_to_check), None)
+    
+    if target_template:
+        key = target_template["key"]
+        # 如果目标阶段的产出物不存在，强制触发更新
+        if key not in artifacts or not artifacts[key]:
+            logger.info(f"Artifact {key} missing for stage {stage_to_check}. Forcing routing to ArtifactNode for initialization.")
             should_update = True
     
     if should_update:

@@ -7,7 +7,7 @@ const QuickLinksSection: React.FC = () => {
             icon: <Download size={24} />,
             title: "本地代理下载",
             desc: "配置本地测试环境",
-            href: "/intent-tester/download/local-proxy",
+            href: "/intent-tester/local-proxy",
             buttonText: "下载代理包",
             color: "blue"
         },

@@ -7,10 +7,13 @@ from backend.agents.lisa.prompts.artifacts import (
 from backend.agents.lisa.schemas import ArtifactType
 
 def test_clarify_requirements_template_has_pending_clarifications_section():
-    """Verify that the clarify requirements template includes the 'Pending Clarifications' section."""
+    """Verify that the clarify requirements template includes the 'Pending Clarifications' section.
+    
+    Note: Per Artifact Format Separation Principle (AGENTS.md), actual table format is controlled
+    by markdown_generator.py, not the template. Template only provides conceptual guidance.
+    """
     assert "## 5. 待澄清问题" in ARTIFACT_CLARIFY_REQUIREMENTS
-    assert "| ID | 问题描述 | 状态 | 结论 |" in ARTIFACT_CLARIFY_REQUIREMENTS
-    assert "| Q1 | [问题描述] | 待确认 | - |" in ARTIFACT_CLARIFY_REQUIREMENTS
+    assert "P0/P1/P2" in ARTIFACT_CLARIFY_REQUIREMENTS
 
 def test_artifact_update_prompt_is_chinese_and_strict():
     """Verify that the artifact update prompt is in Chinese and enforces strict structure."""

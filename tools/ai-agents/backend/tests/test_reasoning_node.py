@@ -143,3 +143,46 @@ def test_reasoning_node_req_review_workflow(mock_req_prompt, mock_process, mock_
     
     mock_req_prompt.assert_called_once()
 
+
+@patch("backend.agents.lisa.nodes.reasoning_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.reasoning_node.process_reasoning_stream")
+@patch("backend.agents.lisa.nodes.reasoning_node.build_test_design_prompt")
+def test_stage_transition_triggers_artifact_for_missing_output(mock_prompt, mock_process, mock_writer, mock_llm):
+    """
+    测试：当用户请求流转到新阶段时，如果新阶段缺少产出物，
+    应该强制路由到 artifact_node 来生成初始产出物。
+    
+    这是修复 GitHub Issue 的关键测试：
+    用户说"进入strategy"时，应该自动生成 strategy 阶段的产出物。
+    """
+    state = {
+        "messages": [],
+        "artifacts": {"test_design_requirements": "existing content"},  # clarify 阶段的产出物已存在
+        "current_stage_id": "clarify",
+        "current_workflow": "test_design",
+        "plan": [
+            {"id": "clarify", "name": "Clarify"},
+            {"id": "strategy", "name": "Strategy"}
+        ],
+        "artifact_templates": [
+            {"stage": "clarify", "key": "test_design_requirements", "outline": "Requirements outline"},
+            {"stage": "strategy", "key": "test_strategy", "outline": "Strategy outline"}
+        ]
+    }
+    
+    # 模拟 LLM 响应：请求流转到 strategy 阶段，但不需要更新产出物
+    mock_process.return_value = ReasoningResponse(
+        thought="Moving to strategy stage",
+        request_transition_to="strategy",
+        should_update_artifact=False  # LLM 认为不需要更新
+    )
+    
+    command = reasoning_node(cast(LisaState, state), mock_llm)
+    
+    # 验证：
+    # 1. 阶段应该被更新为 strategy
+    assert command.update["current_stage_id"] == "strategy"
+    # 2. 应该强制路由到 artifact_node（因为 strategy 阶段的产出物 test_strategy 不存在）
+    assert command.goto == "artifact_node", \
+        f"Expected routing to artifact_node for missing 'test_strategy' artifact, but got {command.goto}"
+

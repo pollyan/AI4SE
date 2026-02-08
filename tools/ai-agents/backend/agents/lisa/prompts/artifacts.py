@@ -34,39 +34,67 @@ def format_schema_for_prompt(schema: dict) -> str:
     """
     import json
 
-    def build_example_from_schema(schema_obj: dict) -> dict:
+    def resolve_ref(ref: str, root_schema: dict) -> dict:
+        """解析 $ref 引用，从 $defs 中获取定义"""
+        if ref.startswith("#/$defs/"):
+            def_name = ref.split("/")[-1]
+            return root_schema.get("$defs", {}).get(def_name, {})
+        return {}
+
+    def build_example_from_schema(schema_obj: dict, root_schema: dict = None) -> any:
         """递归构建示例数据"""
-        properties = schema_obj.get("properties", {})
-        required = schema_obj.get("required", [])
-        example = {}
+        if root_schema is None:
+            root_schema = schema_obj
 
-        for prop_name, prop_schema in properties.items():
-            prop_type = prop_schema.get("type")
-            description = prop_schema.get("description", "")
+        # 处理 $ref 引用
+        if "$ref" in schema_obj:
+            ref_schema = resolve_ref(schema_obj["$ref"], root_schema)
+            return build_example_from_schema(ref_schema, root_schema)
 
-            if prop_type == "string":
-                example[prop_name] = description or "字符串值"
-            elif prop_type == "integer":
-                example[prop_name] = 1
-            elif prop_type == "number":
-                example[prop_name] = 1.0
-            elif prop_type == "boolean":
-                example[prop_name] = True
-            elif prop_type == "array":
-                items_schema = prop_schema.get("items", {})
-                if items_schema.get("type") == "object":
-                    example[prop_name] = [build_example_from_schema(items_schema)]
-                else:
-                    example[prop_name] = ["示例项"]
-            elif prop_type == "object":
-                example[prop_name] = build_example_from_schema(prop_schema)
+        # 处理 anyOf（选择第一个非 null 的类型）
+        if "anyOf" in schema_obj:
+            for sub_schema in schema_obj["anyOf"]:
+                if sub_schema.get("type") != "null":
+                    return build_example_from_schema(sub_schema, root_schema)
+            return None
+
+        prop_type = schema_obj.get("type")
+        description = schema_obj.get("description", "")
+        
+        # 处理 enum 类型（如 Literal）
+        enum_values = schema_obj.get("enum", [])
+        if enum_values:
+            return enum_values[0]
+        elif prop_type == "string":
+            return description or "字符串值"
+        elif prop_type == "integer":
+            return 1
+        elif prop_type == "number":
+            return 1.0
+        elif prop_type == "boolean":
+            return True
+        elif prop_type == "array":
+            items_schema = schema_obj.get("items", {})
+            if items_schema.get("type") == "object" or "$ref" in items_schema:
+                return [build_example_from_schema(items_schema, root_schema)]
             else:
-                # 处理 $ref 或复杂类型
-                example[prop_name] = {}
+                return ["示例项"]
+        elif prop_type == "object":
+            properties = schema_obj.get("properties", {})
+            example = {}
+            for prop_name, prop_schema in properties.items():
+                example[prop_name] = build_example_from_schema(prop_schema, root_schema)
+            return example
+        else:
+            # 默认返回空对象
+            return {}
 
-        return example
+    # 构建主示例
+    properties = schema.get("properties", {})
+    example = {}
+    for prop_name, prop_schema in properties.items():
+        example[prop_name] = build_example_from_schema(prop_schema, schema)
 
-    example = build_example_from_schema(schema)
     return json.dumps(example, ensure_ascii=False, indent=2)
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -94,32 +122,10 @@ ARTIFACT_CLARIFY_REQUIREMENTS = """
 - **兼容性**: [浏览器/设备等]
 
 ## 5. 待澄清问题
-> 需求中模糊、矛盾或缺失的信息，需与用户确认
-
-### 🔴 阻塞性问题 (必须解决)
-> 影响测试范围、核心流程的必须解决问题
-
-| ID | 问题描述 | 状态 | 结论 |
-|----|----------|------|------|
-| Q1 | [问题描述] | 待确认 | - |
-
-### 🟡 建议澄清 (推荐解决)
-> 影响细节覆盖，但可带风险继续
-
-| ID | 问题描述 | 状态 | 结论 |
-|----|----------|------|------|
-| Q2 | [问题描述] | 待确认 | - |
-
-### ⚪ 可选细化 (后续补充)
-> 可延后明确的问题
-
-| ID | 问题描述 | 状态 | 结论 |
-|----|----------|------|------|
-| Q3 | [问题描述] | 待确认 | - |
+> 需求中模糊、矛盾或缺失的信息，需与用户确认。问题按优先级（P0/P1/P2）分组显示。
 
 ## 6. 已确认信息
-> 根据用户澄清逐步填充，格式：
-> - ✅ 议题 X - 问题名：确认的答案
+> 根据用户澄清逐步填充
 
 ---
 > 可根据实际情况添加其他章节：如数据模型、接口规范、状态机等
