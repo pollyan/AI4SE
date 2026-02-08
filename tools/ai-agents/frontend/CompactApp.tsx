@@ -26,13 +26,12 @@ function parseTocFromMarkdown(content: string): SubNavItem[] {
         const level = match[1].length;
         const title = match[2].trim();
 
-        // 过滤逻辑：只保留一级编号（如 "1. "），排除二级编号（如 "1.1 "）
+        // 过滤逻辑：严控只保留带一级标号的标题（如 "1. "）
+        // 用户要求：导航栏只有带标号的一级标题，排除 "[P0]..." 或 "待澄清..." 等非标号标题
         // 匹配模式：数字 + 点 + 空格 (e.g., "1. ")
-        // 排除模式：数字 + 点 + 数字 (e.g., "1.1")
-        const isTopLevel = /^\d+\.\s/.test(title);
-        const isSecondary = /^\d+\.\d+/.test(title);
+        const isTopLevelNumbered = /^\d+\.\s/.test(title);
 
-        if (!isTopLevel && isSecondary) {
+        if (!isTopLevelNumbered) {
             continue;
         }
 
