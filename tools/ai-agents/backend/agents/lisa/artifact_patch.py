@@ -1,15 +1,89 @@
 import re
 from typing import Dict, Any, List, Union
 from copy import deepcopy
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-def apply_patch(doc: Dict[str, Any], patches: List[Dict]) -> Dict[str, Any]:
+def merge_artifacts(original: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Merge a patch into an original artifact using ID-based matching for lists.
+
+    Args:
+        original: The original artifact dictionary.
+        patch: The patch dictionary containing updates.
+
+    Returns:
+        A new dictionary with the merged result.
+    """
+    if not isinstance(patch, dict):
+        logger.warning(f"Invalid patch format: expected dict, got {type(patch)}")
+        return deepcopy(original)
+
+    result = deepcopy(original)
+
+    for key, value in patch.items():
+        if key not in result:
+            result[key] = value
+            continue
+
+        original_value = result[key]
+
+        if isinstance(original_value, dict) and isinstance(value, dict):
+            result[key] = merge_artifacts(original_value, value)
+
+        elif isinstance(original_value, list) and isinstance(value, list):
+            result[key] = _merge_lists(original_value, value)
+
+        else:
+            result[key] = value
+
+    return result
+
+
+def _merge_lists(original_list: List, patch_list: List) -> List:
+    if not patch_list:
+        return original_list
+
+    is_identifiable = (
+        len(original_list) > 0
+        and isinstance(original_list[0], dict)
+        and "id" in original_list[0]
+    ) or (
+        len(patch_list) > 0
+        and isinstance(patch_list[0], dict)
+        and "id" in patch_list[0]
+    )
+
+    if not is_identifiable:
+        return patch_list
+
+    merged = list(original_list)
+    id_map = {item["id"]: i for i, item in enumerate(merged)}
+
+    for item in patch_list:
+        if not isinstance(item, dict) or "id" not in item:
+            continue
+
+        item_id = item["id"]
+        if item_id in id_map:
+            idx = id_map[item_id]
+            merged[idx] = merge_artifacts(merged[idx], item)
+        else:
+            merged.append(item)
+            id_map[item_id] = len(merged) - 1
+
+    return merged
+
+
+def apply_patch(doc: Dict[str, Any], patches: List[Any]) -> Dict[str, Any]:
     """
     应用 Patch 操作到文档 (Generic JSON Patch like)
 
     Args:
         doc: 原始文档 (dict)
-        patches: Patch 操作列表 (list of dicts with op, path, value)
+        patches: Patch 操作列表 (list of dicts or objects with op, path, value)
 
     Returns:
         更新后的文档（深拷贝，不修改原文档）
@@ -17,7 +91,6 @@ def apply_patch(doc: Dict[str, Any], patches: List[Dict]) -> Dict[str, Any]:
     result = deepcopy(doc)
 
     for patch in patches:
-        # Support generic dict or Pydantic object
         if hasattr(patch, "op"):
             op = patch.op
             path = patch.path
@@ -36,9 +109,6 @@ def apply_patch(doc: Dict[str, Any], patches: List[Dict]) -> Dict[str, Any]:
             if isinstance(arr, list):
                 arr.append(value)
         elif op == "remove_item":
-            # Basic implementation for remove
-            # Expect path to point to the list, value to be the index or item ID?
-            # For simplicity, let's assume we don't need complex remove yet
             pass
 
     return result

@@ -1,6 +1,7 @@
 import logging
-from typing import Any, cast
+from typing import Any, cast, Dict
 
+from pydantic import BaseModel
 from langchain_core.messages import SystemMessage
 
 from langgraph.config import get_stream_writer
@@ -10,6 +11,7 @@ from ..tools import update_artifact
 from ..schemas import UpdateStructuredArtifact
 from ..prompts.artifacts import build_artifact_update_prompt
 from ..utils.markdown_generator import convert_to_markdown
+from ..artifact_patch import merge_artifacts
 from ...shared.progress import get_progress_info
 
 logger = logging.getLogger(__name__)
@@ -59,7 +61,7 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
             ]
 
     # 3. 执行逻辑分叉
-    tool_calls = []
+    tool_calls: list[dict[str, Any]] = []
 
     if mock_tool_calls_for_init:
         # A. 确定性初始化路径
@@ -78,9 +80,7 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
             (t for t in templates if t.get("stage") == current_stage), None
         )
         artifact_key = (
-            current_template["key"]
-            if current_template
-            else f"{current_stage}_output"
+            current_template["key"] if current_template else f"{current_stage}_output"
         )
         template_outline = (
             current_template.get("outline", "") if current_template else ""
@@ -94,9 +94,7 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
         )
 
         # 使用 state 中的 messages + 指令
-        messages = state["messages"] + [
-            SystemMessage(content=artifact_prompt_text)
-        ]
+        messages = state["messages"] + [SystemMessage(content=artifact_prompt_text)]
 
         try:
             response = llm_with_tools.invoke(messages)
@@ -128,17 +126,19 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
                 logger.info(f"ArtifactNode: Updated artifact {key} (markdown)")
 
         elif normalized_tool_name == "updatestructuredartifact":
-            content = args.get("content")
-            artifact_type = args.get("artifact_type", "requirement")
-            
-            if key and content:
-                # 将结构化数据转换为 Markdown 字符串
-                # 前端组件期望 artifacts 的值为 Markdown 字符串，否则会直接渲染 JSON
-                markdown_content = convert_to_markdown(content, artifact_type)
-                new_artifacts[key] = markdown_content
-                logger.info(
-                    f"ArtifactNode: Updated artifact {key} (structured -> markdown)"
-                )
+            patch = cast(Dict[str, Any], args.get("content"))
+
+            if key and patch:
+                original = new_artifacts.get(key, {})
+
+                if isinstance(original, BaseModel):
+                    original = original.model_dump()
+                elif isinstance(original, str):
+                    original = {}
+
+                merged = merge_artifacts(cast(Dict[str, Any], original), patch)
+                new_artifacts[key] = merged
+                logger.info(f"ArtifactNode: Updated artifact {key} (structured patch)")
 
         else:
             logger.warning(f"ArtifactNode: Unknown tool name: {tool_name}")
@@ -159,9 +159,7 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
             progress_info = get_progress_info(temp_state)
 
             if progress_info:
-                completed = progress_info.get("artifactProgress", {}).get(
-                    "completed"
-                )
+                completed = progress_info.get("artifactProgress", {}).get("completed")
                 logger.info(
                     "ArtifactNode: Generated progress info. Completed keys: "
                     f"{completed}"
