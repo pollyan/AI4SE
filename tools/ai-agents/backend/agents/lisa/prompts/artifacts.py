@@ -3,6 +3,7 @@ Lisa 工作流产出物模板定义
 
 包含各阶段产出物的详细结构、格式要求和可视化示例。
 """
+
 from ..artifact_models import RequirementDoc, DesignDoc, CaseDoc
 
 
@@ -18,7 +19,7 @@ def get_artifact_json_schemas() -> dict:
     return {
         "requirement": RequirementDoc.model_json_schema(),
         "design": DesignDoc.model_json_schema(),
-        "cases": CaseDoc.model_json_schema()
+        "cases": CaseDoc.model_json_schema(),
     }
 
 
@@ -60,7 +61,7 @@ def format_schema_for_prompt(schema: dict) -> str:
 
         prop_type = schema_obj.get("type")
         description = schema_obj.get("description", "")
-        
+
         # 处理 enum 类型（如 Literal）
         enum_values = schema_obj.get("enum", [])
         if enum_values:
@@ -96,6 +97,7 @@ def format_schema_for_prompt(schema: dict) -> str:
         example[prop_name] = build_example_from_schema(prop_schema, schema)
 
     return json.dumps(example, ensure_ascii=False, indent=2)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 1. 需求澄清阶段 (Clarify) - 需求分析文档
@@ -322,7 +324,13 @@ pie title 测试用例分布
 # 5. 通用提示词 (General Prompts)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def build_artifact_update_prompt(artifact_key: str, current_stage: str, template_outline: str) -> str:
+
+def build_artifact_update_prompt(
+    artifact_key: str,
+    current_stage: str,
+    template_outline: str,
+    existing_artifact: dict | None = None,
+) -> str:
     """
     构建产出物更新 Prompt（动态注入 Schema）
 
@@ -330,6 +338,7 @@ def build_artifact_update_prompt(artifact_key: str, current_stage: str, template
         artifact_key: 产出物唯一标识
         current_stage: 当前阶段名称
         template_outline: 模板大纲
+        existing_artifact: 现有的工件数据（可选，用于增量更新上下文）
 
     Returns:
         str: 完整的 Prompt 文本
@@ -339,7 +348,7 @@ def build_artifact_update_prompt(artifact_key: str, current_stage: str, template
         "clarify": "requirement",
         "strategy": "design",
         "cases": "cases",
-        "delivery": "delivery"
+        "delivery": "delivery",
     }
 
     artifact_type = stage_to_type.get(current_stage, "requirement")
@@ -347,7 +356,27 @@ def build_artifact_update_prompt(artifact_key: str, current_stage: str, template
 
     # 为当前阶段生成示例
     current_schema = schemas.get(artifact_type)
-    schema_example = format_schema_for_prompt(current_schema) if current_schema else "{}"
+    schema_example = (
+        format_schema_for_prompt(current_schema) if current_schema else "{}"
+    )
+
+    # 增量更新上下文
+    incremental_context = ""
+    if existing_artifact:
+        import json
+
+        existing_json = json.dumps(existing_artifact, ensure_ascii=False, indent=2)
+        incremental_context = f"""
+**INCREMENTAL UPDATE MODE ACTIVE**:
+Current State:
+```json
+{existing_json}
+```
+**INSTRUCTIONS**:
+- Only output changed items or new additions.
+- Use ID to match existing items (e.g. assumptions, rules).
+- Do not output unchanged items if possible (to save tokens), unless necessary for context.
+"""
 
     return f"""
 系统内部指令：
@@ -358,6 +387,8 @@ def build_artifact_update_prompt(artifact_key: str, current_stage: str, template
 2. `key` 必须严格使用："{artifact_key}"。
 3. `artifact_type` 必须使用："{artifact_type}"。
 4. `content` 字段必须是符合对应类型的 JSON 对象，而不是 Markdown 字符串。
+
+{incremental_context}
 
 **当前阶段的 JSON Schema 示例**:
 
