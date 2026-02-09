@@ -1,30 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
-
-// Interfaces matching backend models
-export interface RuleItem {
-  id: string;
-  desc: string;
-  source: 'user' | 'default';
-}
-
-export interface AssumptionItem {
-  id: string;
-  question: string;
-  priority: 'P0' | 'P1' | 'P2' | 'P3';
-  status: 'pending' | 'assumed' | 'confirmed';
-  note?: string | null;
-}
-
-export interface RequirementDoc {
-  scope: string[];
-  scope_mermaid?: string | null;
-  flow_mermaid: string;
-  rules: RuleItem[];
-  assumptions: AssumptionItem[];
-  nfr_markdown?: string | null;
-}
+import { RequirementDoc } from '../../types/artifact';
 
 // Initialize mermaid
 mermaid.initialize({

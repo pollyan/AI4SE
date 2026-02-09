@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react';
 import { StructuredRequirementView } from '../StructuredRequirementView';
 import fixture from '../__fixtures__/requirement.json';
-import { RequirementDoc } from '../StructuredRequirementView';
+import { RequirementDoc } from '../../../types/artifact';
 
 // Mock mermaid
 vi.mock('mermaid', () => ({

@@ -20,15 +20,17 @@ export interface AssumptionItem {
   id: string;
   question: string;
   status: AssumptionStatus;
-  note?: string;
+  priority?: Priority;
+  note?: string | null;
 }
 
 export interface RequirementDoc {
   scope: string[];
+  scope_mermaid?: string | null;
   flow_mermaid: string;
   rules: RuleItem[];
   assumptions: AssumptionItem[];
-  nfr_markdown?: string;
+  nfr_markdown?: string | null;
 }
 
 export interface DesignNode {
