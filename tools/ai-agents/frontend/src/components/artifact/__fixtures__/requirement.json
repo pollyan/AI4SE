@@ -1,0 +1,37 @@
+{
+  "scope": [
+    "User Login",
+    "Password Reset"
+  ],
+  "scope_mermaid": "mindmap\n  root((Login System))\n    User Login\n    Password Reset",
+  "flow_mermaid": "graph TD;\n  A[Start] --> B{Valid?};\n  B -- Yes --> C[Login];\n  B -- No --> D[Error];",
+  "rules": [
+    {
+      "id": "R1",
+      "desc": "Password must be at least 8 chars",
+      "source": "default"
+    },
+    {
+      "id": "R2",
+      "desc": "Account locks after 5 attempts",
+      "source": "user"
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "Q1",
+      "question": "Do we support 2FA?",
+      "priority": "P1",
+      "status": "pending",
+      "note": null
+    },
+    {
+      "id": "Q2",
+      "question": "Session timeout duration?",
+      "priority": "P2",
+      "status": "confirmed",
+      "note": "30 minutes"
+    }
+  ],
+  "nfr_markdown": "- **Performance**: < 500ms response\n- **Security**: HTTPS only"
+}

@@ -1,6 +1,8 @@
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { AgentArtifact, isRequirementDoc, isDesignDoc, isCaseDoc } from '../../types/artifact';
-import { RequirementView } from './RequirementView';
+import { StructuredRequirementView } from './StructuredRequirementView';
 import { DesignView } from './DesignView';
 import { CaseView } from './CaseView';
 
@@ -11,8 +13,18 @@ interface ArtifactRendererProps {
 export const ArtifactRenderer: React.FC<ArtifactRendererProps> = ({ artifact }) => {
   const { content } = artifact;
 
+  // Handle string content (Legacy Markdown)
+  if (typeof content === 'string') {
+    return (
+      <div className="prose prose-sm max-w-none p-4 bg-white rounded-lg border">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      </div>
+    );
+  }
+
+  // Handle structured content
   if (isRequirementDoc(content)) {
-    return <RequirementView content={content} />;
+    return <StructuredRequirementView artifact={content} />;
   }
 
   if (isDesignDoc(content)) {
