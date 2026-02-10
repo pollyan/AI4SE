@@ -60,9 +60,11 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
                 }
             ]
             
-            # [Fix Bug 3] 同时初始化结构化数据
-            state["structured_artifacts"] = state.get("structured_artifacts", {})
-            state["structured_artifacts"][key] = create_empty_requirement_doc().model_dump()
+            # [Fix Bug 3] 同时初始化结构化数据 - REMOVED
+            # User Feedback: We want to show the Markdown template initially, 
+            # so we DO NOT initialize structured data here.
+            # state["structured_artifacts"] = state.get("structured_artifacts", {})
+            # state["structured_artifacts"][key] = create_empty_requirement_doc().model_dump()
 
     # 3. 执行逻辑分叉
     tool_calls: list[dict[str, Any]] = []

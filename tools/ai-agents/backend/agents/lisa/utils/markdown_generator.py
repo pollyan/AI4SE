@@ -67,7 +67,7 @@ def convert_requirement_doc(content: Dict[str, Any]) -> str:
             md.append(convert_list_to_markdown(out_of_scope))
     else:
         md.append(
-            "> **说明**：在此描述本次测试覆盖的功能模块、接口范围及 explicitly out-of-scope 的内容。"
+            "> **说明**：在此描述本次测试覆盖的功能模块、接口范围及明确排除在外的（Out-of-Scope）内容。"
         )
     md.append("")
 
@@ -187,7 +187,7 @@ def convert_requirement_doc(content: Dict[str, Any]) -> str:
         render_priority_section(p2_items, "### [P2] 可选细化 (后续补充)")
     else:
         md.append(
-            "> **说明**：在此记录需求分析过程中发现的疑问、假设及跟进状态（Pending/Confirmed）。"
+            "> **说明**：在此记录需求分析过程中发现的疑问、假设及跟进状态（待确认/已确认）。"
         )
     md.append("")
 

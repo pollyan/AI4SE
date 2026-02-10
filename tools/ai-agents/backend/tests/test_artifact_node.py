@@ -349,10 +349,12 @@ def test_incremental_update_bugs_reproduction(mock_writer_getter, mock_llm):
     # CURRENT BEHAVIOR: structured_artifacts is empty or missing key
     assert "test_req" in state_after_init["artifacts"], "Markdown artifact missing after init"
     
-    # This assertion is expected to FAIL until Bug 3 is fixed:
+    # Verify Bug 3 Fix (Reverted): structured_artifacts should NOT be populated
+    # We want to show the Markdown template initially, so we strictly ensure structured data is empty
+    assert "test_req" in state_after_init["artifacts"], "Markdown artifact missing after init"
+    
     if "structured_artifacts" in state_after_init:
-         assert "test_req" in state_after_init["structured_artifacts"], "Bug 3: structured_artifacts missing after init"
-         assert isinstance(state_after_init["structured_artifacts"]["test_req"], dict), "Bug 3: structured_artifacts not dict"
+         assert "test_req" not in state_after_init["structured_artifacts"], "structured_artifacts should NOT be initialized (to show template)"
 
 
     # --- Execute 2: First LLM Update ---
