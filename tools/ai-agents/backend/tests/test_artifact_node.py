@@ -314,3 +314,119 @@ def test_artifact_node_structured_output_pascal_case(
     # Artifact node converts structured data to Markdown string for frontend rendering
     assert isinstance(artifact, str)
     assert "Test Scope" in artifact
+
+
+@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+def test_incremental_update_bugs_reproduction(mock_writer_getter, mock_llm):
+    """
+    Reproduction test for 3 related bugs in artifact incremental update:
+    Bug 3: Deterministic init doesn't write structured data
+    Bug 2: Update merges always start from empty (data loss)
+    Bug 1: Prompt builder doesn't receive existing artifact context
+    """
+    original_llm, bound_llm = mock_llm
+    mock_writer = MagicMock()
+    mock_writer_getter.return_value = mock_writer
+
+    # --- Step 1: Initialize State ---
+    state = {
+        "messages": [],
+        "artifacts": {},
+        # Start without structured_artifacts (simulating current state or empty state)
+        "structured_artifacts": {}, 
+        "current_stage_id": "clarify",
+        "plan": [{"id": "clarify", "name": "Clarify", "status": "active"}],
+        "artifact_templates": [
+            {"key": "test_req", "stage": "clarify", "outline": "# Template"}
+        ],
+    }
+    
+    # --- Execute 1: Deterministic Initialization ---
+    # Should run deterministic path because "test_req" is missing in artifacts
+    state_after_init = artifact_node(cast(LisaState, state), original_llm)
+    
+    # Verify Bug 3: structured_artifacts should be populated
+    # CURRENT BEHAVIOR: structured_artifacts is empty or missing key
+    assert "test_req" in state_after_init["artifacts"], "Markdown artifact missing after init"
+    
+    # This assertion is expected to FAIL until Bug 3 is fixed:
+    if "structured_artifacts" in state_after_init:
+         assert "test_req" in state_after_init["structured_artifacts"], "Bug 3: structured_artifacts missing after init"
+         assert isinstance(state_after_init["structured_artifacts"]["test_req"], dict), "Bug 3: structured_artifacts not dict"
+
+
+    # --- Execute 2: First LLM Update ---
+    # Setup LLM response 1 (Adding Feature 1)
+    llm_response_1 = AIMessage(
+        content="thinking...",
+        tool_calls=[
+            {
+                "name": "UpdateStructuredArtifact",
+                "args": {
+                    "key": "test_req",
+                    "artifact_type": "requirement",
+                    "content": {
+                        "scope": ["Scope A"],
+                        "features": [{"id": "F1", "name": "Feature 1", "priority": "P1"}]
+                    }
+                },
+                "id": "call_1"
+            }
+        ]
+    )
+    bound_llm.invoke.return_value = llm_response_1
+    
+    state_after_update_1 = artifact_node(cast(LisaState, state_after_init), original_llm)
+    
+    # Verify Bug 2: structured_artifacts should be populated with merged data
+    assert "test_req" in state_after_update_1["artifacts"]
+    assert "Feature 1" in state_after_update_1["artifacts"]["test_req"]
+    
+    # This assertion is expected to FAIL until Bug 2 is fixed:
+    if "structured_artifacts" in state_after_update_1:
+        assert "test_req" in state_after_update_1["structured_artifacts"], "Bug 2: structured_artifacts missing after update 1"
+        assert state_after_update_1["structured_artifacts"]["test_req"].get("features")[0]["id"] == "F1"
+
+
+    # --- Execute 3: Second LLM Update ---
+    # Setup LLM response 2 (Adding Feature 2)
+    # Important: LLM only sends delta for F2, it assumes F1 exists
+    llm_response_2 = AIMessage(
+        content="thinking...",
+        tool_calls=[
+            {
+                "name": "UpdateStructuredArtifact",
+                "args": {
+                    "key": "test_req",
+                    "artifact_type": "requirement",
+                    "content": {
+                        "features": [{"id": "F2", "name": "Feature 2", "priority": "P2"}]
+                    }
+                },
+                "id": "call_2"
+            }
+        ]
+    )
+    bound_llm.invoke.return_value = llm_response_2
+
+    state_after_update_2 = artifact_node(cast(LisaState, state_after_update_1), original_llm)
+
+    # Verify Bug 1: Check if prompt contained existing artifact context
+    # Get the system message from the LAST call to invoke
+    call_args = bound_llm.invoke.call_args
+    # call_args[0] is args tuple, args[0] is messages list
+    messages = call_args[0][0] 
+    system_msg_content = messages[-1].content
+    
+    # This assertion is expected to FAIL until Bug 1 is fixed:
+    assert "INCREMENTAL UPDATE MODE ACTIVE" in system_msg_content, "Bug 1: Incremental context missing in prompt"
+    assert "Feature 1" in system_msg_content, "Bug 1: Existing content missing in prompt"
+
+    # Verify Bug 2 again: Data Loss check
+    # The final artifact should contain BOTH F1 and F2
+    final_structured = state_after_update_2.get("structured_artifacts", {}).get("test_req", {})
+    features = final_structured.get("features", [])
+    feature_ids = [f.get("id") for f in features]
+    
+    assert "F1" in feature_ids, "Bug 2: Feature 1 lost during update (Data Loss)"
+    assert "F2" in feature_ids, "Feature 2 missing"

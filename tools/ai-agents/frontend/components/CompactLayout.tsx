@@ -10,6 +10,7 @@ interface CompactLayoutProps {
 }
 
 const CompactLayout: React.FC<CompactLayoutProps> = ({ children }) => {
+    console.log('[CompactLayout] Rendering children:', children);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     return (

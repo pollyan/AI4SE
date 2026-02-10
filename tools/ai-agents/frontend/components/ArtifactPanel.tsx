@@ -9,6 +9,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeOverride as CodeBlock } from './chat/MarkdownText';
 import { FileText, Clock, CheckCircle, ChevronLeft, ChevronRight, List, Loader2 } from 'lucide-react';
+import { StructuredRequirementView } from '../src/components/artifact/StructuredRequirementView';
+import { isRequirementDoc, RequirementDoc } from '../src/types/artifact';
 
 export interface ArtifactTemplateItem {
     stageId: string;
@@ -37,6 +39,8 @@ interface ArtifactPanelProps {
     currentStageId: string | null;
     /** 产出物内容 (key -> content) */
     artifacts: Record<string, string>;
+    /** 结构化产出物内容 (key -> object) */
+    structuredArtifacts?: Record<string, any>;
     /** 正在流式生成的 artifact key (前端状态) */
     streamingArtifactKey: string | null;
     /** 正在生成中的产出物内容 (实时流式) */
@@ -79,13 +83,13 @@ export function ArtifactPanel({
     selectedStageId,
     currentStageId,
     artifacts,
+    structuredArtifacts,
     streamingArtifactKey,
     streamingArtifactContent,
     onBackToCurrentStage,
     subNavItems,
     onSubNavClick
 }: ArtifactPanelProps) {
-    // ... existing logic ...
     const displayStageId = selectedStageId || currentStageId;
     const template = artifactProgress?.template.find(t => t.stageId === displayStageId);
     const templateName = template?.name || '产出物';
@@ -95,25 +99,19 @@ export function ArtifactPanel({
     const content = effectiveKey && artifacts[effectiveKey]
         ? artifacts[effectiveKey]
         : null;
+
+    // Structured content check
+    const structuredContent = effectiveKey && structuredArtifacts && structuredArtifacts[effectiveKey];
+
     const isViewingHistory = selectedStageId !== null && selectedStageId !== currentStageId;
 
-    // 处理自动滚动
-    React.useEffect(() => {
-        const activeItem = subNavItems?.find(item => item.status === 'active');
-        if (activeItem) {
-            const element = document.getElementById(activeItem.id);
-            if (element) {
-                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        }
-    }, [subNavItems]);
-
-    // TOC 侧边栏折叠状态
     const [isTocCollapsed, setIsTocCollapsed] = React.useState(false);
+
+    // ... existing status logic ...
 
     return (
         <div className="flex flex-col h-full">
-            {/* 头部 - 保持不变 */}
+            {/* Header ... */}
             <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shrink-0">
                 <div className="flex items-center gap-2">
                     <FileText className="text-primary" size={18} />
@@ -127,7 +125,7 @@ export function ArtifactPanel({
                             <Loader2 size={12} className="animate-spin" />
                             生成中...
                         </span>
-                    ) : content ? (
+                    ) : content || structuredContent ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full">
                             <CheckCircle size={12} />
                             已生成
@@ -151,12 +149,12 @@ export function ArtifactPanel({
                 )}
             </div>
 
-            {/* 内容区域容器 - 支持侧边栏布局 */}
+            {/* Content Area */}
             <div className="flex-1 flex overflow-hidden">
-                {/* 二级导航侧边栏 - 可折叠 */}
+                {/* Secondary Nav ... */}
                 {subNavItems && subNavItems.length > 0 && (
                     <div className={`border-r border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 shrink-0 transition-all duration-200 flex flex-col ${isTocCollapsed ? 'w-8' : 'w-32'}`}>
-                        {/* 折叠/展开按钮 */}
+                        {/* Collapse Button */}
                         <button
                             onClick={() => setIsTocCollapsed(!isTocCollapsed)}
                             className="flex items-center justify-center py-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors border-b border-gray-200 dark:border-gray-700"
@@ -165,7 +163,7 @@ export function ArtifactPanel({
                             {isTocCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
                         </button>
 
-                        {/* 目录内容 */}
+                        {/* Nav Items */}
                         {!isTocCollapsed ? (
                             <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
                                 {subNavItems.map(item => (
@@ -192,9 +190,11 @@ export function ArtifactPanel({
                     </div>
                 )}
 
-                {/* 主内容 */}
+                {/* Main Content */}
                 <div className="flex-1 overflow-y-auto p-4 bg-white dark:bg-gray-900 scroll-smooth">
-                    {content ? (
+                    {structuredContent && isRequirementDoc(structuredContent) ? (
+                        <StructuredRequirementView artifact={structuredContent} />
+                    ) : content ? (
                         <div className="prose prose-sm dark:prose-invert max-w-none break-words">
                             <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}

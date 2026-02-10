@@ -78,6 +78,7 @@ export interface ProgressInfo {
     currentTask: string | null;
     artifactProgress?: ArtifactProgress | null;
     artifacts?: Record<string, string>;
+    structured_artifacts?: Record<string, any>;
 }
 
 /**

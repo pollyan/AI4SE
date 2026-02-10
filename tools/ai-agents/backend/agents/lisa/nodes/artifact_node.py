@@ -10,7 +10,7 @@ from ..state import LisaState
 from ..tools import update_artifact
 from ..schemas import UpdateStructuredArtifact
 from ..prompts.artifacts import build_artifact_update_prompt
-from ..utils.markdown_generator import convert_to_markdown
+from ..utils.markdown_generator import convert_to_markdown, create_empty_requirement_doc
 from ..artifact_patch import merge_artifacts
 from ...shared.progress import get_progress_info
 
@@ -59,6 +59,10 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
                     "id": f"call_init_{current_stage}",
                 }
             ]
+            
+            # [Fix Bug 3] 同时初始化结构化数据
+            state["structured_artifacts"] = state.get("structured_artifacts", {})
+            state["structured_artifacts"][key] = create_empty_requirement_doc().model_dump()
 
     # 3. 执行逻辑分叉
     tool_calls: list[dict[str, Any]] = []
@@ -87,10 +91,15 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
         )
 
         # 构建 Prompt（使用动态 Schema 生成）
+        # [Fix Bug 1] 传递 existing_artifact
+        structured_artifacts = state.get("structured_artifacts", {})
+        existing_structured = structured_artifacts.get(artifact_key)
+        
         artifact_prompt_text = build_artifact_update_prompt(
             artifact_key=artifact_key,
             current_stage=current_stage,
             template_outline=template_outline,
+            existing_artifact=existing_structured,
         )
 
         # 使用 state 中的 messages + 指令
@@ -130,19 +139,26 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
             artifact_type = args.get("artifact_type", "requirement")
 
             if key and patch:
-                original = new_artifacts.get(key, {})
+                # [Fix Bug 2] 从 structured_artifacts 获取原始数据
+                new_structured_artifacts = dict(state.get("structured_artifacts", {}))
+                original = new_structured_artifacts.get(key, {})
 
                 if isinstance(original, BaseModel):
                     original = original.model_dump()
                 elif isinstance(original, str):
+                    # 如果意外遇到 markdown 字符串，初始化为空字典
                     original = {}
 
                 merged = merge_artifacts(cast(Dict[str, Any], original), patch)
 
                 # Convert structured object back to Markdown string for frontend rendering
-                # The frontend expects a string to render in ReactMarkdown
                 markdown_content = convert_to_markdown(merged, artifact_type)
                 new_artifacts[key] = markdown_content
+                
+                # 更新结构化数据
+                new_structured_artifacts[key] = merged
+                # 将 new_structured_artifacts 存回 state (注意：这里只是局部变量，需要 return 时返回)
+                state["structured_artifacts"] = new_structured_artifacts
 
                 logger.info(
                     f"ArtifactNode: Updated artifact {key} (structured patch converted to markdown)"
@@ -177,4 +193,8 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
                 writer({"type": "progress", "progress": progress_info})
                 logger.info("ArtifactNode: Sent progress event via writer")
 
-    return {**state, "artifacts": new_artifacts}
+    return {
+        **state, 
+        "artifacts": new_artifacts,
+        "structured_artifacts": state.get("structured_artifacts", {})
+    }

@@ -49,6 +49,7 @@ class BaseAgentState(TypedDict):
     
     # 产出物存储 (Markdown 格式或结构化对象)
     artifacts: Dict[str, Any]
+    structured_artifacts: Dict[str, Any]
     
     # 产出物模板列表
     # 列表中的每个 item 结构:
@@ -82,6 +83,7 @@ def get_base_initial_state() -> Dict[str, Any]:
         "plan": [],
         "current_stage_id": None,
         "artifacts": {},
+        "structured_artifacts": {},
         "artifact_templates": [],
         "pending_clarifications": [],
         "clarification": None,
@@ -108,6 +110,7 @@ def clear_workflow_state(state: Dict[str, Any]) -> Dict[str, Any]:
         "plan": [],
         "current_stage_id": None,
         "artifacts": {},
+        "structured_artifacts": {},
         "artifact_templates": [],
         "pending_clarifications": [],
         "clarification": None,

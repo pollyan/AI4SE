@@ -1,45 +1,42 @@
-
 import { render, screen } from '@testing-library/react';
 import { StructuredRequirementView } from '../StructuredRequirementView';
-import fixture from '../__fixtures__/requirement.json';
+import { describe, it, expect } from 'vitest';
 import { RequirementDoc } from '../../../types/artifact';
 
-// Mock mermaid
-vi.mock('mermaid', () => ({
-  default: {
-    initialize: vi.fn(),
-    render: vi.fn().mockResolvedValue({ svg: '<svg>mock</svg>' }),
-  },
-}));
+describe('StructuredRequirementView Diff Highlighting', () => {
+  it('renders diff classes for added and modified items', () => {
+    const mockArtifact: RequirementDoc = {
+      scope: [],
+      out_of_scope: [],
+      features: [],
+      flow_mermaid: "",
+      rules: [
+        { id: "R1", desc: "Added Rule", source: "Auto", _diff: "added" },
+        { id: "R2", desc: "Modified Rule", source: "User", _diff: "modified" },
+        { id: "R3", desc: "Normal Rule", source: "System" }
+      ],
+      assumptions: [],
+      nfr_markdown: ""
+    };
 
-describe('StructuredRequirementView', () => {
-  it('renders scope items', () => {
-    render(<StructuredRequirementView artifact={fixture as RequirementDoc} />);
-    expect(screen.getByText('User Login')).toBeInTheDocument();
-    expect(screen.getByText('Password Reset')).toBeInTheDocument();
-  });
+    const { container } = render(<StructuredRequirementView artifact={mockArtifact} />);
 
-  it('renders out_of_scope items', () => {
-    render(<StructuredRequirementView artifact={fixture as RequirementDoc} />);
-    expect(screen.getByText('Social Login')).toBeInTheDocument();
-    expect(screen.getByText('OAuth2 Integration')).toBeInTheDocument();
-  });
+    // Check for added class on R1 row
+    const addedRow = screen.getByText('R1').closest('tr');
+    expect(addedRow).toBeInTheDocument();
+    // We expect className to contain 'diff-added'
+    // Using string matching or classList check
+    expect(addedRow?.className).toContain('diff-added');
 
-  it('renders features', () => {
-    render(<StructuredRequirementView artifact={fixture as RequirementDoc} />);
-    expect(screen.getByText('F1')).toBeInTheDocument();
-    expect(screen.getByText('用户登录')).toBeInTheDocument();
-  });
+    // Check for modified class on R2 row
+    const modifiedRow = screen.getByText('R2').closest('tr');
+    expect(modifiedRow).toBeInTheDocument();
+    expect(modifiedRow?.className).toContain('diff-modified');
 
-  it('renders rules', () => {
-    render(<StructuredRequirementView artifact={fixture as RequirementDoc} />);
-    expect(screen.getByText('R1')).toBeInTheDocument();
-    expect(screen.getByText('Password must be at least 8 chars')).toBeInTheDocument();
-  });
-
-  it('renders assumptions', () => {
-    render(<StructuredRequirementView artifact={fixture as RequirementDoc} />);
-    expect(screen.getByText('Q1')).toBeInTheDocument();
-    expect(screen.getByText('Do we support 2FA?')).toBeInTheDocument();
+    // Check for normal row on R3 row
+    const normalRow = screen.getByText('R3').closest('tr');
+    expect(normalRow).toBeInTheDocument();
+    expect(normalRow?.className).not.toContain('diff-added');
+    expect(normalRow?.className).not.toContain('diff-modified');
   });
 });

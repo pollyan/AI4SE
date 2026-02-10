@@ -13,7 +13,6 @@ import { AssistantChat } from './components/chat';
 import type { ProgressInfo } from './services/backendService';
 
 // 从 Markdown 内容中解析 TOC（标题列表）
-// 从 Markdown 内容中解析 TOC（标题列表）
 function parseTocFromMarkdown(content: string): SubNavItem[] {
     if (!content) return [];
 
@@ -95,14 +94,51 @@ const CompactApp: React.FC = () => {
     // 真实状态管理
     const [workflowProgress, setWorkflowProgress] = useState<ProgressInfo | null>(null);
     const [artifacts, setArtifacts] = useState<Record<string, string>>({});
+    const [structuredArtifacts, setStructuredArtifacts] = useState<Record<string, any>>({});
     const [streamingArtifactKey, setStreamingArtifactKey] = useState<string | null>(null);
     const [streamingArtifactContent, setStreamingArtifactContent] = useState<string>('');
+    const [selectedStageId, setSelectedStageId] = useState<string | null>(null); // Added missing state
+    const [currentTocItem, setCurrentTocItem] = useState<string>(''); // Added missing state
 
-    // 进度条选中阶段
-    const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
-    // TOC 当前选中项
-    const [currentTocItem, setCurrentTocItem] = useState<string | null>(null);
+    // 选中助手详情
+    const selectedAssistant = useMemo(() =>
+        ASSISTANTS.find(a => a.id === selectedAssistantId),
+        [selectedAssistantId]
+    );
 
+    // 转换 stages
+    const stages = useMemo(() => convertToStages(workflowProgress), [workflowProgress]);
+
+    // 计算当前 stage index
+    const currentStageIndex = useMemo(() => {
+        if (!stages.length) return 0;
+        const activeIndex = stages.findIndex(s => s.status === 'active');
+        return activeIndex === -1 ? stages.length - 1 : activeIndex;
+    }, [stages]);
+
+    // 计算当前 stage ID
+    const currentStageId = useMemo(() => {
+        const activeStage = stages.find(s => s.status === 'active');
+        return activeStage?.id;
+    }, [stages]);
+
+    // 计算 artifactProgress
+    const artifactProgress = useMemo(() => {
+        return workflowProgress?.artifactProgress;
+    }, [workflowProgress]);
+
+    // 计算 TOC
+    const tocItems = useMemo(() => {
+        // 优先显示选中的 stage 的 artifact
+        // 这里简化逻辑：如果有 streaming，解析 streaming；否则解析 active artifact
+        // 实际逻辑可能需要根据 activeTab 或 selectedStage 来决定显示哪个 content
+        // 暂且只对 'implementation_plan' 或当前 streaming 的 artifact 生成 TOC
+        const content = streamingArtifactContent || Object.values(artifacts).join('\n');
+        return parseTocFromMarkdown(content);
+    }, [streamingArtifactContent, artifacts]);
+
+
+    // 监听窗口大小
     useEffect(() => {
         const handleResize = () => {
             setIsDesktop(window.innerWidth >= 1024);
@@ -111,50 +147,12 @@ const CompactApp: React.FC = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    const handleMouseDown = (e: React.MouseEvent) => {
-        e.preventDefault();
-        setIsDragging(true);
-    };
-
-    const handleMouseMove = useCallback(
-        (e: MouseEvent) => {
-            if (!isDragging || !containerRef.current) return;
-            const containerRect = containerRef.current.getBoundingClientRect();
-            const newLeftWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
-            if (newLeftWidth >= 20 && newLeftWidth <= 80) {
-                setLeftWidth(newLeftWidth);
-            }
-        },
-        [isDragging]
-    );
-
-    const handleMouseUp = useCallback(() => {
-        setIsDragging(false);
-    }, []);
-
-    useEffect(() => {
-        if (isDragging) {
-            window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', handleMouseUp);
-            document.body.style.cursor = 'col-resize';
-            document.body.style.userSelect = 'none';
-        } else {
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
-            document.body.style.cursor = 'default';
-            document.body.style.userSelect = 'auto';
-        }
-        return () => {
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
-        };
-    }, [isDragging, handleMouseMove, handleMouseUp]);
-
     const handleSelectAssistant = (id: AssistantId) => {
         setSelectedAssistantId(id);
         // 重置状态
         setWorkflowProgress(null);
         setArtifacts({});
+        setStructuredArtifacts({});
         setStreamingArtifactKey(null);
         setStreamingArtifactContent('');
         setSelectedStageId(null);
@@ -167,7 +165,7 @@ const CompactApp: React.FC = () => {
     // 处理进度变化回调
     const handleProgressChange = useCallback((progress: ProgressInfo | null) => {
         setWorkflowProgress(progress);
-        
+
         // 同步正在生成的 key，确保 isGenerating 状态正确
         if (progress?.artifactProgress?.generating) {
             setStreamingArtifactKey(progress.artifactProgress.generating);
@@ -179,6 +177,12 @@ const CompactApp: React.FC = () => {
         if (progress?.artifacts) {
             setArtifacts(prev => ({ ...prev, ...progress.artifacts }));
         }
+
+        // 合并 structured_artifacts
+        if (progress?.structured_artifacts) {
+            setStructuredArtifacts(prev => ({ ...prev, ...progress.structured_artifacts }));
+        }
+
         // 自动选中当前活动阶段
         if (progress?.stages) {
             const activeStage = progress.stages.find(s => s.status === 'active');
@@ -188,67 +192,69 @@ const CompactApp: React.FC = () => {
         }
     }, [selectedStageId]);
 
-    const selectedAssistant = ASSISTANTS.find((a) => a.id === selectedAssistantId);
+    // 拖动逻辑
+    const handleMouseDown = (e: React.MouseEvent) => {
+        e.preventDefault();
+        setIsDragging(true);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    };
 
-    // 转换进度数据
-    const stages = useMemo(() => convertToStages(workflowProgress), [workflowProgress]);
-    const currentStageIndex = workflowProgress?.currentStageIndex ?? 0;
-    const currentStageId = stages[currentStageIndex]?.id || null;
+    useEffect(() => {
+        if (!isDragging) return;
 
-    // 获取当前显示的产出物内容
-    const displayStageId = selectedStageId || currentStageId;
-    const artifactProgress = workflowProgress?.artifactProgress || null;
-    const template = artifactProgress?.template.find(t => t.stageId === displayStageId);
-    const effectiveKey = template?.artifactKey || streamingArtifactKey;
-    const currentContent = streamingArtifactKey && streamingArtifactContent
-        ? streamingArtifactContent
-        : effectiveKey
-            ? artifacts[effectiveKey] || ''
-            : '';
+        const handleMouseMove = (e: MouseEvent) => {
+            if (containerRef.current) {
+                const containerRect = containerRef.current.getBoundingClientRect();
+                const newLeftWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+                // 限制范围 20% - 80%
+                if (newLeftWidth >= 20 && newLeftWidth <= 80) {
+                    setLeftWidth(newLeftWidth);
+                }
+            }
+        };
 
-    // 动态生成 TOC
-    const tocItems = useMemo(() => {
-        const items = parseTocFromMarkdown(currentContent);
-        // 如果有当前选中项，更新其状态
-        return items.map(item => ({
-            ...item,
-            status: (item.id === currentTocItem ? 'active' : 'pending') as SubNavItem['status']
-        }));
-    }, [currentContent, currentTocItem]);
+        const handleMouseUp = () => {
+            setIsDragging(false);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging]);
 
     // 助手选择面板
-    const AssistantSelectionPanel = () => (
-        <div className="h-full flex flex-col items-center justify-center p-4 sm:p-6">
-            <div className="text-center mb-6">
-                <Bot className="w-12 h-12 text-primary mx-auto mb-3" />
-                <h2 className="text-lg font-semibold text-gray-800 dark:text-white">选择智能助手</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">选择一位 AI 助手开始对话</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md">
-                {ASSISTANTS.filter(a => a.id !== 'alex').map((assistant) => (
-                    <button
-                        key={assistant.id}
-                        onClick={() => handleSelectAssistant(assistant.id)}
-                        className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-primary hover:shadow-md transition-all cursor-pointer text-left group"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div
-                                className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold bg-secondary"
-                            >
-                                {assistant.initial}
+    const AssistantSelectionPanel = () => {
+        return (
+            <div className="h-full flex flex-col items-center justify-center p-4 sm:p-6">
+                <div className="max-w-4xl w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                    {ASSISTANTS.map(assistant => (
+                        <button
+                            key={assistant.id}
+                            onClick={() => handleSelectAssistant(assistant.id)}
+                            className="flex flex-col items-center p-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-primary hover:shadow-md transition-all group text-center"
+                        >
+                            <div className={`p-4 rounded-full ${assistant.colorClass} mb-4 group-hover:scale-110 transition-transform`}>
+                                <Bot size={32} />
                             </div>
-                            <div>
-                                <div className="font-medium text-gray-800 dark:text-white group-hover:text-primary transition-colors">
-                                    {assistant.name}
-                                </div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400">{assistant.role}</div>
-                            </div>
-                        </div>
-                    </button>
-                ))}
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">
+                                {assistant.name}
+                            </h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {assistant.description}
+                            </p>
+                        </button>
+                    ))}
+                </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     // Result Panel
     const ResultPanelWrapper = () => (
@@ -272,6 +278,7 @@ const CompactApp: React.FC = () => {
                     selectedStageId={selectedStageId}
                     currentStageId={currentStageId}
                     artifacts={artifacts}
+                    structuredArtifacts={structuredArtifacts}
                     streamingArtifactKey={streamingArtifactKey}
                     streamingArtifactContent={streamingArtifactContent || null}
                     onBackToCurrentStage={() => setSelectedStageId(null)}

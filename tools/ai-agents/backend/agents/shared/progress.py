@@ -128,4 +128,5 @@ def get_progress_info(state: Dict[str, Any]) -> Optional[dict]:
         "currentTask": current_task_name,
         "artifactProgress": artifact_progress,
         "artifacts": artifacts,
+        "structured_artifacts": state.get("structured_artifacts", {}),
     }

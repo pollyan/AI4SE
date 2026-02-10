@@ -8,12 +8,24 @@ export type ArtifactPhase = 'requirement' | 'design' | 'cases' | 'delivery';
 export type Priority = 'P0' | 'P1' | 'P2' | 'P3';
 export type NodeType = 'group' | 'point';
 export type AssumptionStatus = 'pending' | 'assumed' | 'confirmed';
-export type RuleSource = 'user' | 'default';
+export type RuleSource = string;
+
+export interface DesignNode {
+  id: string;
+  label: string;
+  type: NodeType;
+  method?: string;
+  priority?: Priority;
+  is_new?: boolean;
+  children?: DesignNode[];
+  _diff?: 'added' | 'modified';
+}
 
 export interface RuleItem {
   id: string;
   desc: string;
   source: RuleSource;
+  _diff?: 'added' | 'modified';
 }
 
 export interface AssumptionItem {
@@ -22,6 +34,7 @@ export interface AssumptionItem {
   status: AssumptionStatus;
   priority?: Priority;
   note?: string | null;
+  _diff?: 'added' | 'modified';
 }
 
 export interface FeatureItem {
@@ -30,6 +43,7 @@ export interface FeatureItem {
   desc: string;
   acceptance: string[];
   priority: Priority;
+  _diff?: 'added' | 'modified';
 }
 
 export interface RequirementDoc {
@@ -41,16 +55,6 @@ export interface RequirementDoc {
   rules: RuleItem[];
   assumptions: AssumptionItem[];
   nfr_markdown?: string | null;
-}
-
-export interface DesignNode {
-  id: string;
-  label: string;
-  type: NodeType;
-  method?: string;
-  priority?: Priority;
-  is_new?: boolean;
-  children?: DesignNode[];
 }
 
 export interface DesignDoc {
@@ -70,6 +74,7 @@ export interface CaseItem {
   steps: CaseStep[];
   tags: string[];
   script?: string;
+  _diff?: 'added' | 'modified';
 }
 
 export interface CaseDoc {

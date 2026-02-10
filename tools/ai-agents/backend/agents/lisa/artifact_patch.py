@@ -42,6 +42,13 @@ def merge_artifacts(original: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str
     return result
 
 
+def _has_content_changed(old: dict, new: dict) -> bool:
+    """忽略 _diff 字段本身，比较实际内容是否变化"""
+    old_clean = {k: v for k, v in old.items() if k != "_diff"}
+    new_clean = {k: v for k, v in new.items() if k != "_diff"}
+    return old_clean != new_clean
+
+
 def _merge_lists(original_list: List, patch_list: List) -> List:
     if not patch_list:
         return original_list
@@ -60,6 +67,13 @@ def _merge_lists(original_list: List, patch_list: List) -> List:
         return patch_list
 
     merged = list(original_list)
+    
+    # [Mod] Clear old _diff tags before processing new patch
+    # This ensures that "added"/"modified" states are transient for one turn
+    for item in merged:
+        if isinstance(item, dict):
+            item.pop("_diff", None)
+
     id_map = {item["id"]: i for i, item in enumerate(merged)}
 
     for item in patch_list:
@@ -69,9 +83,21 @@ def _merge_lists(original_list: List, patch_list: List) -> List:
         item_id = item["id"]
         if item_id in id_map:
             idx = id_map[item_id]
-            merged[idx] = merge_artifacts(merged[idx], item)
+            old_item = merged[idx]
+            new_item = merge_artifacts(old_item, item)
+            
+            # [Mod] Check for modification
+            if _has_content_changed(old_item, new_item):
+                new_item["_diff"] = "modified"
+            
+            merged[idx] = new_item
         else:
-            merged.append(item)
+            # [Mod] Mark as added
+            # Create a copy to avoid mutating the patch_list item accidentally 
+            # (though in this context it might be fine, safety first)
+            new_item = item.copy()
+            new_item["_diff"] = "added"
+            merged.append(new_item)
             id_map[item_id] = len(merged) - 1
 
     return merged

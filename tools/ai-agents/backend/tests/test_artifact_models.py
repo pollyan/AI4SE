@@ -264,3 +264,30 @@ class TestRequirementDocNewFields:
         )
         assert doc.out_of_scope == []
         assert doc.features == []
+
+
+class TestModelExtraFields:
+    """测试模型对额外字段的支持（如 _diff）"""
+
+    def test_rule_item_accepts_diff(self):
+        """RuleItem 接受 _diff 字段"""
+        # 注意：Pydantic 默认会忽略 extra fields 除非配置了 extra='allow'
+        # 如果未配置，_diff 可能会被忽略或报错（取决于配置）
+        item = RuleItem(
+            id="R1",
+            desc="desc",
+            source="user",
+            _diff="added"
+        )
+        # 验证 _diff 被保留（需要修改模型配置后才能通过）
+        data = item.model_dump()
+        assert "_diff" in data
+        assert data["_diff"] == "added"
+
+    def test_rule_source_is_str(self):
+        """RuleSource 应该是任意字符串"""
+        # 当前模型定义是 Literal["user", "default"]，传入非枚举值会报错
+        # 修改后应支持任意字符串
+        item = RuleItem(id="R1", desc="d", source="自定义来源")
+        assert item.source == "自定义来源"
+

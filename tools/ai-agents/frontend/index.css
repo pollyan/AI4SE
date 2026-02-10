@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 /* Global Styles */
 
 /* Fix for Markdown rendering: Preserve line breaks in paragraphs */
@@ -6,7 +8,8 @@
 
 
 /* Ensure lists have proper spacing */
-.aui-md-ol, .aui-md-ul {
+.aui-md-ol,
+.aui-md-ul {
     margin-top: 0.5em;
     margin-bottom: 0.5em;
     padding-left: 1.5em;
@@ -14,4 +17,26 @@
 
 .aui-md-li {
     margin-bottom: 0.25em;
+}
+
+/* Diff Highlighting */
+.diff-added {
+    @apply bg-green-50 border-l-4 border-green-500 transition-colors duration-500;
+    animation: highlight-fade 2s ease-out;
+}
+
+.diff-modified {
+    @apply bg-yellow-50 border-l-4 border-yellow-500 transition-colors duration-500;
+    animation: highlight-fade 2s ease-out;
+}
+
+@keyframes highlight-fade {
+    0% {
+        transform: scale(1.01);
+        background-color: rgba(34, 197, 94, 0.2);
+    }
+
+    100% {
+        transform: scale(1);
+    }
 }

@@ -8,7 +8,7 @@ Lisa Agent Artifact 数据模型
 """
 
 from typing import List, Optional, Literal, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -19,7 +19,7 @@ ArtifactPhase = Literal["requirement", "design", "cases", "delivery"]
 Priority = Literal["P0", "P1", "P2", "P3"]
 NodeType = Literal["group", "point"]
 AssumptionStatus = Literal["pending", "assumed", "confirmed"]
-RuleSource = Literal["user", "default"]
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -28,28 +28,25 @@ RuleSource = Literal["user", "default"]
 
 
 class RuleItem(BaseModel):
-    """业务规则项"""
-
-    id: str = Field(description="规则唯一标识，如 R1, R2")
+    model_config = ConfigDict(extra="allow")
+    id: str = Field(description="规则ID (R-xxx)")
     desc: str = Field(description="规则描述")
-    source: RuleSource = Field(description="来源：user=用户提供, default=系统默认")
+    source: str = Field(description="来源")
 
 
 class FeatureItem(BaseModel):
-    """功能项"""
-
-    id: str = Field(description="功能唯一标识，如 F1, F2")
+    model_config = ConfigDict(extra="allow")
+    id: str = Field(description="功能ID (F-xxx)")
     name: str = Field(description="功能名称")
     desc: str = Field(description="功能描述")
-    acceptance: List[str] = Field(description="验收标准列表")
-    priority: Priority = Field(description="优先级：P0/P1/P2/P3")
+    acceptance: List[str] = Field(description="验收标准")
+    priority: Priority = Field(description="优先级")
 
 
 class AssumptionItem(BaseModel):
-    """待确认/假设项"""
-
-    id: str = Field(description="问题唯一标识，如 Q1, Q2")
-    question: str = Field(description="问题描述")
+    model_config = ConfigDict(extra="allow")
+    id: str = Field(description="假设ID (Q-xxx)")
+    question: str = Field(description="待确认问题/假设")
     priority: Priority = Field(
         default="P1", description="优先级：P0(阻塞), P1(重要), P2(可选)"
     )
@@ -74,12 +71,7 @@ class RequirementDoc(BaseModel):
         default_factory=list, description="待确认/假设列表"
     )
     nfr_markdown: Optional[str] = Field(default=None, description="非功能需求 Markdown")
-    flow_mermaid: str = Field(description="业务流程 Mermaid 代码")
-    rules: List[RuleItem] = Field(default_factory=list, description="核心规则列表")
-    assumptions: List[AssumptionItem] = Field(
-        default_factory=list, description="待确认/假设列表"
-    )
-    nfr_markdown: Optional[str] = Field(default=None, description="非功能需求 Markdown")
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -38,7 +38,8 @@ class LisaState(BaseAgentState):
     """
 
     # 覆盖 artifacts 类型，使其支持结构化对象
-    artifacts: Dict[str, Union[RequirementDoc, DesignDoc, CaseDoc, DeliveryDoc, Any]]
+    artifacts: Dict[str, str]
+    structured_artifacts: Dict[str, Union[RequirementDoc, DesignDoc, CaseDoc, DeliveryDoc, Any]]
 
 
 def get_initial_state() -> LisaState:
