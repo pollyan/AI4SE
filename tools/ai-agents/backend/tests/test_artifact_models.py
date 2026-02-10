@@ -1,4 +1,5 @@
 """测试 Artifact 数据模型的序列化和验证"""
+
 import pytest
 from backend.agents.lisa.artifact_models import (
     ArtifactPhase,
@@ -11,6 +12,7 @@ from backend.agents.lisa.artifact_models import (
     CaseItem,
     CaseDoc,
     AgentArtifact,
+    FeatureItem,
 )
 
 
@@ -22,11 +24,11 @@ class TestRequirementDoc:
         doc = RequirementDoc(
             scope=["登录页面", "POST /api/login"],
             flow_mermaid="graph LR; A-->B",
-            rules=[
-                RuleItem(id="R1", desc="密码不能为空", source="user")
-            ],
+            rules=[RuleItem(id="R1", desc="密码不能为空", source="user")],
             assumptions=[
-                AssumptionItem(id="Q1", question="是否支持第三方登录?", status="pending")
+                AssumptionItem(
+                    id="Q1", question="是否支持第三方登录?", status="pending"
+                )
             ],
         )
         assert doc.scope == ["登录页面", "POST /api/login"]
@@ -181,3 +183,84 @@ class TestAgentArtifact:
         cases = CaseDoc(cases=[])
         artifact = AgentArtifact(phase="cases", version="1.0", content=cases)
         assert artifact.phase == "cases"
+
+
+class TestFeatureItem:
+    """功能项模型测试"""
+
+    def test_feature_item_basic_creation(self):
+        """测试基本创建"""
+        item = FeatureItem(
+            id="F1",
+            name="用户登录",
+            desc="用户使用账号密码登录系统",
+            acceptance=["能正常登录", "错误时显示提示"],
+            priority="P0",
+        )
+        assert item.id == "F1"
+        assert item.name == "用户登录"
+        assert len(item.acceptance) == 2
+        assert item.priority == "P0"
+
+    def test_feature_item_acceptance_is_list(self):
+        """验收标准必须是列表"""
+        item = FeatureItem(
+            id="F1",
+            name="功能",
+            desc="描述",
+            acceptance=["标准1", "标准2", "标准3"],
+            priority="P1",
+        )
+        assert isinstance(item.acceptance, list)
+        assert len(item.acceptance) == 3
+
+
+class TestRequirementDocNewFields:
+    """RequirementDoc 新字段测试"""
+
+    def test_out_of_scope_field(self):
+        """测试 out_of_scope 字段"""
+        doc = RequirementDoc(
+            scope=["登录功能"],
+            out_of_scope=["注册功能", "找回密码"],
+            flow_mermaid="graph TD; A-->B",
+        )
+        assert len(doc.out_of_scope) == 2
+        assert "注册功能" in doc.out_of_scope
+
+    def test_out_of_scope_default_empty(self):
+        """out_of_scope 默认为空列表"""
+        doc = RequirementDoc(
+            scope=["登录"],
+            flow_mermaid="graph TD; A-->B",
+        )
+        assert doc.out_of_scope == []
+
+    def test_features_field(self):
+        """测试 features 字段"""
+        doc = RequirementDoc(
+            scope=["登录"],
+            flow_mermaid="graph TD; A-->B",
+            features=[
+                FeatureItem(
+                    id="F1",
+                    name="登录",
+                    desc="描述",
+                    acceptance=["标准1"],
+                    priority="P0",
+                )
+            ],
+        )
+        assert len(doc.features) == 1
+        assert doc.features[0].name == "登录"
+
+    def test_backward_compatibility(self):
+        """向后兼容：不提供新字段也能创建"""
+        doc = RequirementDoc(
+            scope=["测试"],
+            flow_mermaid="graph TD; A-->B",
+            rules=[],
+            assumptions=[],
+        )
+        assert doc.out_of_scope == []
+        assert doc.features == []
