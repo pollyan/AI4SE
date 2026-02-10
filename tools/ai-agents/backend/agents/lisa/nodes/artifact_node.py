@@ -127,6 +127,7 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
 
         elif normalized_tool_name == "updatestructuredartifact":
             patch = cast(Dict[str, Any], args.get("content"))
+            artifact_type = args.get("artifact_type", "requirement")
 
             if key and patch:
                 original = new_artifacts.get(key, {})
@@ -137,8 +138,15 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
                     original = {}
 
                 merged = merge_artifacts(cast(Dict[str, Any], original), patch)
-                new_artifacts[key] = merged
-                logger.info(f"ArtifactNode: Updated artifact {key} (structured patch)")
+
+                # Convert structured object back to Markdown string for frontend rendering
+                # The frontend expects a string to render in ReactMarkdown
+                markdown_content = convert_to_markdown(merged, artifact_type)
+                new_artifacts[key] = markdown_content
+
+                logger.info(
+                    f"ArtifactNode: Updated artifact {key} (structured patch converted to markdown)"
+                )
 
         else:
             logger.warning(f"ArtifactNode: Unknown tool name: {tool_name}")

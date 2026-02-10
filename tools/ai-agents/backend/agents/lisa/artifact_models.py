@@ -35,15 +35,25 @@ class RuleItem(BaseModel):
     source: RuleSource = Field(description="来源：user=用户提供, default=系统默认")
 
 
+class FeatureItem(BaseModel):
+    """功能项"""
+
+    id: str = Field(description="功能唯一标识，如 F1, F2")
+    name: str = Field(description="功能名称")
+    desc: str = Field(description="功能描述")
+    acceptance: List[str] = Field(description="验收标准列表")
+    priority: Priority = Field(description="优先级：P0/P1/P2/P3")
+
+
 class AssumptionItem(BaseModel):
     """待确认/假设项"""
 
     id: str = Field(description="问题唯一标识，如 Q1, Q2")
     question: str = Field(description="问题描述")
-    priority: Priority = Field(default="P1", description="优先级：P0(阻塞), P1(重要), P2(可选)")
-    status: AssumptionStatus = Field(
-        description="状态：pending/assumed/confirmed"
+    priority: Priority = Field(
+        default="P1", description="优先级：P0(阻塞), P1(重要), P2(可选)"
     )
+    status: AssumptionStatus = Field(description="状态：pending/assumed/confirmed")
     note: Optional[str] = Field(default=None, description="备注或假设值")
 
 
@@ -51,17 +61,25 @@ class RequirementDoc(BaseModel):
     """Phase 1 产出物：需求分析文档"""
 
     scope: List[str] = Field(description="被测对象范围列表")
+    out_of_scope: List[str] = Field(default_factory=list, description="范围外内容列表")
     scope_mermaid: Optional[str] = Field(
         default=None, description="需求全景图 Mermaid Mindmap 代码"
+    )
+    features: List[FeatureItem] = Field(
+        default_factory=list, description="功能详细规格列表"
     )
     flow_mermaid: str = Field(description="业务流程 Mermaid 代码")
     rules: List[RuleItem] = Field(default_factory=list, description="核心规则列表")
     assumptions: List[AssumptionItem] = Field(
         default_factory=list, description="待确认/假设列表"
     )
-    nfr_markdown: Optional[str] = Field(
-        default=None, description="非功能需求 Markdown"
+    nfr_markdown: Optional[str] = Field(default=None, description="非功能需求 Markdown")
+    flow_mermaid: str = Field(description="业务流程 Mermaid 代码")
+    rules: List[RuleItem] = Field(default_factory=list, description="核心规则列表")
+    assumptions: List[AssumptionItem] = Field(
+        default_factory=list, description="待确认/假设列表"
     )
+    nfr_markdown: Optional[str] = Field(default=None, description="非功能需求 Markdown")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

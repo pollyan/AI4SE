@@ -18,7 +18,7 @@ from ..prompts.workflows.requirement_review import (
     DEFAULT_REQUIREMENT_REVIEW_STAGES,
 )
 from ..prompts.artifacts import (
-    ARTIFACT_CLARIFY_REQUIREMENTS,
+    generate_requirement_template,
     ARTIFACT_STRATEGY_BLUEPRINT,
     ARTIFACT_CASES_SET,
     ARTIFACT_DELIVERY_FINAL,
@@ -87,7 +87,7 @@ TEST_DESIGN_TEMPLATES = [
         "key": ArtifactKeys.TEST_DESIGN_REQUIREMENTS,
         "name": "需求分析文档",
         "stage": "clarify",
-        "outline": ARTIFACT_CLARIFY_REQUIREMENTS,
+        "outline": generate_requirement_template(),
     },
     {
         "key": ArtifactKeys.TEST_DESIGN_STRATEGY,
@@ -321,59 +321,12 @@ def reasoning_node(
         state_updates["current_stage_id"] = next_stage
         state_updates["current_workflow"] = current_workflow  # Maintain workflow type
 
-    # 5. 路由决策 (含自动初始化 Artifact 检测)
-    should_update = final_response.should_update_artifact
+    # 5. 路由决策 (强制路由到 ArtifactNode)
+    # 用户要求：90% 以上的情况都需要更新生成产出物，所以固定每次对话结束的时候都生成产出物
+    # 在生成的逻辑里再看具体要更新什么 (ArtifactNode 内部逻辑)
 
-    # 强制更新逻辑：如果意图是提供材料或回答问题，且置信度高
-    if user_intent_result and current_stage == "clarify":
-        is_material_intent = user_intent_result.intent in [
-            "provide_material",
-            "answer_question",
-        ]
-        if is_material_intent and user_intent_result.confidence > 0.7:
-            if not should_update:
-                logger.info(
-                    f"ReasoningNode: Intent '{user_intent_result.intent}' detected (conf={user_intent_result.confidence}). "
-                    "Forcing should_update=True despite LLM decision."
-                )
-                should_update = True
-
-    # 检查当前阶段是否缺少产出物
-    templates = state.get("artifact_templates", [])
-    if not templates and init_updates:  # 如果刚刚初始化，使用新模板
-        templates = init_updates.get("artifact_templates", [])
-
-    # 确定要检查的阶段：如果有流转请求，检查目标阶段；否则检查当前阶段
-    stage_to_check = (
-        final_response.request_transition_to
-        if final_response.request_transition_to
-        else current_stage
-    )
-
-    target_template = next(
-        (t for t in templates if t.get("stage") == stage_to_check), None
-    )
-
-    if target_template:
-        key = target_template["key"]
-        # 如果目标阶段的产出物不存在，强制触发更新
-        if key not in artifacts or not artifacts[key]:
-            logger.info(
-                f"Artifact {key} missing for stage {stage_to_check}. Forcing routing to ArtifactNode for initialization."
-            )
-            should_update = True
-
-    if should_update:
-        logger.info(
-            "ReasoningNode decided to UPDATE ARTIFACT. Routing to artifact_node."
-        )
-        return Command(
-            update=state_updates,  # 包含初始化状态
-            goto="artifact_node",
-        )
-
-    logger.info("ReasoningNode completed. Ending flow.")
+    logger.info("ReasoningNode completed. Always routing to artifact_node.")
     return Command(
         update=state_updates,  # 包含初始化状态
-        goto="__end__",
+        goto="artifact_node",
     )

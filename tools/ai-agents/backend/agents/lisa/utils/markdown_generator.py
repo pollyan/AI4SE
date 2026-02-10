@@ -1,99 +1,133 @@
 from typing import Dict, Any, List, Union
 
+from ..artifact_models import RequirementDoc
+
 
 def convert_list_to_markdown(items: List[Any]) -> str:
     return "\n".join([f"- {item}" for item in items]) if items else "(无)"
 
 
 def sanitize_mermaid_node(text: str) -> str:
-    """清理 Mermaid 节点文本，避免语法错误"""
-    # 替换可能破坏语法的符号为全角符号
     text = text.replace("(", "（").replace(")", "）")
     text = text.replace("[", "【").replace("]", "】")
-    # 去除换行符
     text = text.replace("\n", " ").strip()
     return text
 
 
 def generate_mindmap(items: List[str], root_name: str = "需求全景") -> str:
-    """生成 Mermaid Mindmap 代码块"""
     lines = ["mindmap"]
     lines.append(f"  root(({root_name}))")
     for item in items:
-        # 处理每个条目
         sanitized = sanitize_mermaid_node(str(item))
         lines.append(f"    {sanitized}")
     return "\n".join(lines)
 
 
+def create_empty_requirement_doc() -> RequirementDoc:
+    return RequirementDoc(
+        scope=[],
+        out_of_scope=[],
+        scope_mermaid=None,
+        features=[],
+        flow_mermaid="",
+        rules=[],
+        assumptions=[],
+        nfr_markdown=None,
+    )
+
+
 def convert_requirement_doc(content: Dict[str, Any]) -> str:
-    """
-    将 RequirementDoc 结构转换为符合 ARTIFACT_CLARIFY_REQUIREMENTS 模板的 Markdown
-    兼容 strict schema (objects) 和 simplified schema (strings)
-    """
     md = ["# 需求分析文档\n"]
 
-    # 1. 需求全景图 (Scope -> Mindmap)
-    md.append("## 1. 需求全景图")
+    # Section 1: 测试范围
+    md.append("## 1. 测试范围")
+    scope = content.get("scope", [])
+    out_of_scope = content.get("out_of_scope", [])
 
-    # 优先使用 LLM 生成的 Mermaid 代码
-    if content.get("scope_mermaid"):
-        mermaid_code = content["scope_mermaid"]
-        if not isinstance(mermaid_code, str):
-            # 防御性处理：如果 LLM 返回了 dict，尝试转为字符串
-            mermaid_code = str(mermaid_code)
+    scope_mermaid = content.get("scope_mermaid")
+    if scope_mermaid and not isinstance(scope_mermaid, str):
+        scope_mermaid = str(scope_mermaid)
 
-        md.append("```mermaid")
-        md.append(mermaid_code)
-        md.append("```")
-    elif "scope" in content:
-        scope = content["scope"]
-        if isinstance(scope, list) and scope:
-            # Fallback: 自动转换列表为 Mindmap
+    if out_of_scope or scope or scope_mermaid:
+        md.append("### 范围内")
+        if scope_mermaid:
+            md.append("```mermaid")
+            md.append(scope_mermaid)
+            md.append("```")
+        elif scope:
             md.append("```mermaid")
             md.append(generate_mindmap(scope))
             md.append("```")
-            # 保留文字列表作为补充（可选，为了信息完整性）
-            md.append("\n> **详细范围列表**：")
             md.append(convert_list_to_markdown(scope))
-        elif isinstance(scope, str):
-            md.append(scope)
+        else:
+            md.append("(无)")
+
+        if out_of_scope:
+            md.append("\n### 范围外")
+            md.append(convert_list_to_markdown(out_of_scope))
+    else:
+        md.append(
+            "> **说明**：在此描述本次测试覆盖的功能模块、接口范围及 explicitly out-of-scope 的内容。"
+        )
     md.append("")
 
-    # 2. 功能详细规格 (Rules / Scope Detail)
+    # Section 2: 功能详细规格
     md.append("## 2. 功能详细规格")
-    if "rules" in content:
-        rules = content["rules"]
-        if isinstance(rules, list) and rules:
-            if isinstance(rules[0], dict):
-                # Schema: RuleItem(id, desc, source)
-                md.append("| ID | 规则描述 | 来源 |")
-                md.append("|---|---|---|")
-                for r in rules:
-                    rid = r.get("id", "-")
-                    desc = r.get("desc", "")
-                    source = r.get("source", "")
-                    md.append(f"| {rid} | {desc} | {source} |")
-            else:
-                # Fallback: list of strings
-                md.append(convert_list_to_markdown(rules))
+    features = content.get("features", [])
+    if features:
+        md.append("| ID | 名称 | 描述 | 验收标准 | 优先级 |")
+        md.append("|---|---|---|---|---|")
+        for f in features:
+            fid = f.get("id", "-")
+            name = f.get("name", "")
+            desc = f.get("desc", "")
+            acceptance = f.get("acceptance", [])
+            acc_str = "; ".join(acceptance) if acceptance else "-"
+            priority = f.get("priority", "P1")
+            md.append(f"| {fid} | {name} | {desc} | {acc_str} | {priority} |")
+    else:
+        md.append(
+            "> **说明**：在此详细列出功能点、验收标准（Acceptance Criteria）及优先级（P0-P2）。"
+        )
     md.append("")
 
-    # 3. 业务流程图
-    md.append("## 3. 业务流程图")
+    # Section 3: 核心业务规则
+    md.append("## 3. 核心业务规则")
+    rules = content.get("rules", [])
+    if rules:
+        if isinstance(rules[0], dict):
+            md.append("| ID | 规则描述 | 来源 |")
+            md.append("|---|---|---|")
+            for r in rules:
+                rid = r.get("id", "-")
+                desc = r.get("desc", "")
+                source = r.get("source", "")
+                md.append(f"| {rid} | {desc} | {source} |")
+        else:
+            md.append(convert_list_to_markdown(rules))
+    else:
+        md.append(
+            "> **说明**：在此记录关键业务逻辑、状态机流转规则、权限校验等核心规则。"
+        )
+    md.append("")
+
+    # Section 4: 业务流程图
+    md.append("## 4. 业务流程图")
     if content.get("flow_mermaid"):
         mermaid_code = content["flow_mermaid"]
         if not isinstance(mermaid_code, str):
-            # 防御性处理：如果 LLM 返回了 dict，尝试转为字符串
             mermaid_code = str(mermaid_code)
-
         md.append("```mermaid")
         md.append(mermaid_code)
         md.append("```")
+    else:
+        md.append(
+            "> **说明**：在此补充核心业务流程图（Mermaid）或时序图，展示数据流转路径。"
+        )
     md.append("")
 
-    # 4. 非功能需求 (NFR)
-    md.append("## 4. 非功能需求 (NFR)")
+    # Section 5: 非功能需求
+    md.append("## 5. 非功能需求")
     nfr = content.get("nfr_markdown")
     if nfr:
         if isinstance(nfr, str):
@@ -101,9 +135,13 @@ def convert_requirement_doc(content: Dict[str, Any]) -> str:
         elif isinstance(nfr, dict):
             for k, v in nfr.items():
                 md.append(f"- **{k}**: {v}")
+    else:
+        md.append(
+            "> **说明**：在此记录性能（QPS/RT）、安全（鉴权/加密）、兼容性等非功能需求。"
+        )
     md.append("")
 
-    # 5 & 6. 待澄清问题 & 已确认信息 (Assumptions)
+    # Split assumptions into pending and confirmed
     assumptions = content.get("assumptions", [])
     pending = []
     confirmed = []
@@ -111,13 +149,11 @@ def convert_requirement_doc(content: Dict[str, Any]) -> str:
     if isinstance(assumptions, list) and assumptions:
         for a in assumptions:
             if isinstance(a, dict):
-                # Schema: AssumptionItem(id, question, status, note)
                 if a.get("status") == "confirmed":
                     confirmed.append(a)
                 else:
                     pending.append(a)
             else:
-                # Fallback: Treat non-dict items (strings) as pending questions
                 pending.append(
                     {
                         "id": "-",
@@ -127,9 +163,9 @@ def convert_requirement_doc(content: Dict[str, Any]) -> str:
                     }
                 )
 
-    md.append("## 5. 待澄清问题")
+    # Section 6: 待澄清问题
+    md.append("## 6. 待澄清问题")
     if pending:
-        # 按优先级分组
         p0_items = [p for p in pending if p.get("priority") == "P0"]
         p1_items = [p for p in pending if p.get("priority", "P1") == "P1"]
         p2_items = [p for p in pending if p.get("priority") == "P2"]
@@ -150,16 +186,20 @@ def convert_requirement_doc(content: Dict[str, Any]) -> str:
         render_priority_section(p1_items, "### [P1] 建议澄清 (推荐解决)")
         render_priority_section(p2_items, "### [P2] 可选细化 (后续补充)")
     else:
-        md.append("(无)")
+        md.append(
+            "> **说明**：在此记录需求分析过程中发现的疑问、假设及跟进状态（Pending/Confirmed）。"
+        )
     md.append("")
 
-    md.append("## 6. 已确认信息")
+    # Section 7: 已确认信息
+    md.append("## 7. 已确认信息")
     if confirmed:
         for c in confirmed:
             note = c.get("note", "")
             md.append(f"- ✅ {c.get('question')}：{note}")
     else:
-        md.append("(无)")
+        md.append("> **说明**：在此记录已与产品/开发确认的关键信息或决策结论。")
+    md.append("")
 
     return "\n".join(md)
 

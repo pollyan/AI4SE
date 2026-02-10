@@ -5,22 +5,20 @@ Lisa 工作流产出物模板定义
 """
 
 from ..artifact_models import RequirementDoc, DesignDoc, CaseDoc
+from ..utils.markdown_generator import create_empty_requirement_doc, convert_to_markdown
 
 
 def get_artifact_json_schemas() -> dict:
-    """
-    动态获取 Artifact JSON Schemas（从 Pydantic 模型生成）
-
-    确保 Prompt 中的 Schema 与实际模型定义保持同步（SSOT 原则）
-
-    Returns:
-        dict: 包含各阶段 Schema 的字典
-    """
     return {
         "requirement": RequirementDoc.model_json_schema(),
         "design": DesignDoc.model_json_schema(),
         "cases": CaseDoc.model_json_schema(),
     }
+
+
+def generate_requirement_template() -> str:
+    example_doc = create_empty_requirement_doc()
+    return convert_to_markdown(example_doc.model_dump(), "requirement")
 
 
 def format_schema_for_prompt(schema: dict) -> str:

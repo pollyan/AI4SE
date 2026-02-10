@@ -14,7 +14,7 @@ from ..shared import (
     build_full_prompt_with_protocols,
 )
 from ..artifacts import (
-    ARTIFACT_CLARIFY_REQUIREMENTS,
+    generate_requirement_template,
     ARTIFACT_STRATEGY_BLUEPRINT,
     ARTIFACT_CASES_SET,
     ARTIFACT_DELIVERY_FINAL,
@@ -232,7 +232,7 @@ clarify 阶段 DoR = 以下 3 项全部满足：
 **Name**: 需求分析文档
 
 文档结构参考：
-{ARTIFACT_CLARIFY_REQUIREMENTS}
+{generate_requirement_template()}
 
 """
 
