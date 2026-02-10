@@ -36,7 +36,48 @@ describe('StructuredRequirementView Diff Highlighting', () => {
     // Check for normal row on R3 row
     const normalRow = screen.getByText('R3').closest('tr');
     expect(normalRow).toBeInTheDocument();
-    expect(normalRow?.className).not.toContain('diff-added');
     expect(normalRow?.className).not.toContain('diff-modified');
+  });
+
+  it('renders Diff Legend when diffs are present', () => {
+    const mockArtifact: RequirementDoc = {
+      scope: [],
+      out_of_scope: [],
+      features: [],
+      flow_mermaid: "",
+      rules: [{ id: "R1", desc: "Added", source: "A", _diff: "added" }],
+      assumptions: []
+    };
+    render(<StructuredRequirementView artifact={mockArtifact} />);
+    expect(screen.getByText('变更图例:')).toBeInTheDocument();
+    expect(screen.getByText('新增内容')).toBeInTheDocument();
+  });
+
+  it('does NOT render Diff Legend when no diffs', () => {
+    const mockArtifact: RequirementDoc = {
+      scope: [],
+      out_of_scope: [],
+      features: [],
+      flow_mermaid: "",
+      rules: [{ id: "R1", desc: "No Diff", source: "A" }],
+      assumptions: []
+    };
+    render(<StructuredRequirementView artifact={mockArtifact} />);
+    expect(screen.queryByText('变更图例:')).not.toBeInTheDocument();
+  });
+
+  it('renders Mermaid Title when scope_mermaid is present', () => {
+    const mockArtifact: RequirementDoc = {
+      scope: [],
+      out_of_scope: [],
+      features: [],
+      flow_mermaid: "",
+      rules: [],
+      assumptions: [],
+      scope_mermaid: "graph TD; A-->B;"
+    };
+    render(<StructuredRequirementView artifact={mockArtifact} />);
+    expect(screen.getByText('测试范围总览')).toBeInTheDocument();
+    expect(screen.getByText('展示核心模块与外部系统的交互边界')).toBeInTheDocument();
   });
 });

@@ -284,7 +284,13 @@ const CompactApp: React.FC = () => {
                     onBackToCurrentStage={() => setSelectedStageId(null)}
                     // 动态 TOC 侧边栏
                     subNavItems={tocItems.length > 0 ? tocItems : undefined}
-                    onSubNavClick={(id) => setCurrentTocItem(id)}
+                    onSubNavClick={(id) => {
+                        setCurrentTocItem(id);
+                        const element = document.getElementById(id);
+                        if (element) {
+                            element.scrollIntoView({ behavior: 'smooth' });
+                        }
+                    }}
                 />
             </div>
         </div>

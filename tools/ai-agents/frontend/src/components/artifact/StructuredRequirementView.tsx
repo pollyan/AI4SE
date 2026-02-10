@@ -42,33 +42,57 @@ const getDiffClass = (item: { _diff?: 'added' | 'modified' }) => {
   return '';
 };
 
+const DiffLegend = () => (
+  <div className="flex items-center gap-4 text-xs bg-gray-50 p-2 rounded border border-gray-100 mb-4">
+    <span className="font-medium text-gray-500">变更图例:</span>
+    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span>新增内容</span>
+    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-500"></span>修改内容</span>
+  </div>
+);
+
+const hasDiff = (artifact: RequirementDoc) => {
+  if (artifact.features?.some(f => f._diff)) return true;
+  if (artifact.rules?.some(r => r._diff)) return true;
+  if (artifact.assumptions?.some(a => a._diff)) return true;
+  return false;
+};
+
 export const StructuredRequirementView = ({ artifact }: { artifact: RequirementDoc }) => {
+  const showLegend = hasDiff(artifact);
+
   return (
     <div className="structured-requirement-view space-y-6 p-4">
+      {showLegend && <DiffLegend />}
       {/* Section 1: 测试范围 */}
       <section>
         <h3 className="text-lg font-bold mb-2">测试范围</h3>
-        <div className="mb-3">
-          <h4 className="text-sm font-semibold text-green-700 mb-1">范围内</h4>
-          <ul className="list-disc pl-5">
-            {artifact.scope.map((item, idx) => (
-              <li key={idx}>{item}</li>
-            ))}
-          </ul>
-        </div>
-        {artifact.out_of_scope && artifact.out_of_scope.length > 0 && (
-          <div className="mb-3">
-            <h4 className="text-sm font-semibold text-red-700 mb-1">范围外</h4>
-            <ul className="list-disc pl-5 text-gray-600">
-              {artifact.out_of_scope.map((item, idx) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+          <div>
+            <h4 className="text-sm font-semibold text-green-700 mb-1">范围内</h4>
+            <ul className="list-disc pl-5">
+              {artifact.scope.map((item, idx) => (
                 <li key={idx}>{item}</li>
               ))}
             </ul>
           </div>
-        )}
+          {artifact.out_of_scope && artifact.out_of_scope.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-red-700 mb-1">范围外</h4>
+              <ul className="list-disc pl-5 text-gray-600">
+                {artifact.out_of_scope.map((item, idx) => (
+                  <li key={idx}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
         {artifact.scope_mermaid && (
-          <div className="mt-4 border p-2 rounded bg-white overflow-x-auto">
-            <MermaidChart code={artifact.scope_mermaid} />
+          <div className="mt-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-1">测试范围总览</h4>
+            <p className="text-xs text-gray-500 mb-2">展示核心模块与外部系统的交互边界</p>
+            <div className="border p-2 rounded bg-white overflow-x-auto">
+              <MermaidChart code={artifact.scope_mermaid} />
+            </div>
           </div>
         )}
       </section>
@@ -77,7 +101,7 @@ export const StructuredRequirementView = ({ artifact }: { artifact: RequirementD
       {artifact.features && artifact.features.length > 0 && (
         <section>
           <h3 className="text-lg font-bold mb-2">功能详细规格</h3>
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {artifact.features.map(feature => (
               <div key={feature.id} className={`border rounded p-3 bg-gray-50 ${getDiffClass(feature)}`}>
                 <div className="flex items-center gap-2 mb-2">
