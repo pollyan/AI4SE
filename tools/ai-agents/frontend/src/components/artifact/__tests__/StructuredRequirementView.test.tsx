@@ -19,6 +19,18 @@ describe('StructuredRequirementView', () => {
     expect(screen.getByText('Password Reset')).toBeInTheDocument();
   });
 
+  it('renders out_of_scope items', () => {
+    render(<StructuredRequirementView artifact={fixture as RequirementDoc} />);
+    expect(screen.getByText('Social Login')).toBeInTheDocument();
+    expect(screen.getByText('OAuth2 Integration')).toBeInTheDocument();
+  });
+
+  it('renders features', () => {
+    render(<StructuredRequirementView artifact={fixture as RequirementDoc} />);
+    expect(screen.getByText('F1')).toBeInTheDocument();
+    expect(screen.getByText('用户登录')).toBeInTheDocument();
+  });
+
   it('renders rules', () => {
     render(<StructuredRequirementView artifact={fixture as RequirementDoc} />);
     expect(screen.getByText('R1')).toBeInTheDocument();

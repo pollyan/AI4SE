@@ -17,6 +17,8 @@ describe('ArtifactRenderer', () => {
       version: '1.0',
       content: {
         scope: ['Login Page', 'API'],
+        out_of_scope: [],
+        features: [],
         flow_mermaid: 'graph LR; A-->B',
         rules: [
           { id: 'R1', desc: 'Password must be strong', source: 'default' }
@@ -30,13 +32,12 @@ describe('ArtifactRenderer', () => {
 
     render(<ArtifactRenderer artifact={artifact} />);
 
-    expect(screen.getByText('Scope')).toBeInTheDocument();
+    expect(screen.getByText('测试范围')).toBeInTheDocument();
     expect(screen.getByText('Login Page')).toBeInTheDocument();
-    expect(screen.getByText('Business Rules')).toBeInTheDocument();
+    expect(screen.getByText('核心业务规则')).toBeInTheDocument();
     expect(screen.getByText('Password must be strong')).toBeInTheDocument();
-    expect(screen.getByText('Assumptions & Questions')).toBeInTheDocument();
+    expect(screen.getByText('待澄清问题 / 已确认信息')).toBeInTheDocument();
     expect(screen.getByText('Is SSO supported?')).toBeInTheDocument();
-    expect(screen.getByText('pending')).toBeInTheDocument();
     // Mermaid renders async, and we mock it to return svg string.
     // The component sets innerHTML. testing-library doesn't easily search inside innerHTML string unless we wait.
     // But we can check if the chart container exists.

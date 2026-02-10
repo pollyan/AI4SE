@@ -1,4 +1,6 @@
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { RequirementDoc } from '../../types/artifact';
 
 interface RequirementViewProps {
@@ -95,7 +97,7 @@ export const RequirementView: React.FC<RequirementViewProps> = ({ content }) => 
         <section>
           <h3 className="text-base font-semibold text-gray-900 mb-2">Non-Functional Requirements</h3>
           <div className="prose prose-sm max-w-none text-gray-600 bg-gray-50 p-4 rounded-lg">
-            {content.nfr_markdown}
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content.nfr_markdown}</ReactMarkdown>
           </div>
         </section>
       )}

@@ -3,7 +3,20 @@
     "User Login",
     "Password Reset"
   ],
+  "out_of_scope": [
+    "Social Login",
+    "OAuth2 Integration"
+  ],
   "scope_mermaid": "mindmap\n  root((Login System))\n    User Login\n    Password Reset",
+  "features": [
+    {
+      "id": "F1",
+      "name": "用户登录",
+      "desc": "支持用户名密码登录",
+      "acceptance": ["输入正确凭证后跳转首页", "输入错误凭证显示错误提示"],
+      "priority": "P0"
+    }
+  ],
   "flow_mermaid": "graph TD;\n  A[Start] --> B{Valid?};\n  B -- Yes --> C[Login];\n  B -- No --> D[Error];",
   "rules": [
     {

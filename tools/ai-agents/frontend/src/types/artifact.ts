@@ -24,9 +24,19 @@ export interface AssumptionItem {
   note?: string | null;
 }
 
+export interface FeatureItem {
+  id: string;
+  name: string;
+  desc: string;
+  acceptance: string[];
+  priority: Priority;
+}
+
 export interface RequirementDoc {
   scope: string[];
+  out_of_scope: string[];
   scope_mermaid?: string | null;
+  features: FeatureItem[];
   flow_mermaid: string;
   rules: RuleItem[];
   assumptions: AssumptionItem[];

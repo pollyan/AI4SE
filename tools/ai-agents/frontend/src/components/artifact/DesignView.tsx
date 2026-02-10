@@ -1,4 +1,6 @@
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { DesignDoc, DesignNode } from '../../types/artifact';
 
 interface DesignViewProps {
@@ -64,7 +66,7 @@ export const DesignView: React.FC<DesignViewProps> = ({ content }) => {
       <section>
         <h3 className="text-base font-semibold text-gray-900 mb-2">Test Strategy</h3>
         <div className="prose prose-sm max-w-none text-gray-600 bg-gray-50 p-4 rounded-lg">
-          {content.strategy_markdown}
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content.strategy_markdown}</ReactMarkdown>
         </div>
       </section>
 
