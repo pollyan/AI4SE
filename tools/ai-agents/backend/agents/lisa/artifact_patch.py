@@ -5,6 +5,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from typing import TypedDict, Optional
+
+class PatchOperation(TypedDict):
+    op: str
+    path: str
+    value: Optional[Any]
+    from_path: Optional[str]  # For move/copy operations if needed
+
 
 def merge_artifacts(original: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]:
     """
