@@ -30,6 +30,10 @@ def merge_artifacts(original: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str
         return deepcopy(original)
 
     result = deepcopy(original)
+    
+    # [Fix] Globally clear transient _diff/_prev tags from the base copy
+    # This ensures that any section NOT touched by the patch will be clean
+    _remove_transient_tags(result)
 
     for key, value in patch.items():
         if key not in result:
@@ -52,8 +56,8 @@ def merge_artifacts(original: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str
 
 def _has_content_changed(old: dict, new: dict) -> bool:
     """忽略 _diff 字段本身，比较实际内容是否变化"""
-    old_clean = {k: v for k, v in old.items() if k != "_diff"}
-    new_clean = {k: v for k, v in new.items() if k != "_diff"}
+    old_clean = {k: v for k, v in old.items() if k not in ("_diff", "_prev")}
+    new_clean = {k: v for k, v in new.items() if k not in ("_diff", "_prev")}
     return old_clean != new_clean
 
 
@@ -81,6 +85,7 @@ def _merge_lists(original_list: List, patch_list: List) -> List:
     for item in merged:
         if isinstance(item, dict):
             item.pop("_diff", None)
+            item.pop("_prev", None)
 
     id_map = {item["id"]: i for i, item in enumerate(merged)}
 
@@ -97,6 +102,26 @@ def _merge_lists(original_list: List, patch_list: List) -> List:
             # [Mod] Check for modification
             if _has_content_changed(old_item, new_item):
                 new_item["_diff"] = "modified"
+                
+                # Calculate _prev
+                # Since new_item is fully merged, we can compare its fields with old_item partial match
+                # WE need to compare keys present in new_item
+                # Ignore metadata fields
+                prev = {}
+                old_clean = {k: v for k, v in old_item.items() if k not in ("_diff", "_prev", "id")}
+                
+                for key, new_val in new_item.items():
+                    if key in ("_diff", "_prev", "id"):
+                        continue
+                        
+                    # Only if key existed in old item
+                    if key in old_clean:
+                        old_val = old_clean[key]
+                        if old_val != new_val:
+                             prev[key] = old_val
+                
+                if prev:
+                    new_item["_prev"] = prev
             
             merged[idx] = new_item
         else:
@@ -146,7 +171,19 @@ def apply_patch(doc: Dict[str, Any], patches: List[Any]) -> Dict[str, Any]:
             pass
 
     return result
+    return result
 
+
+def _remove_transient_tags(item: Any) -> None:
+    """Recursively remove _diff and _prev tags from a dictionary or list"""
+    if isinstance(item, dict):
+        item.pop("_diff", None)
+        item.pop("_prev", None)
+        for value in item.values():
+            _remove_transient_tags(value)
+    elif isinstance(item, list):
+        for element in item:
+            _remove_transient_tags(element)
 
 def _parse_path(path: str) -> List[str]:
     """解析路径为段列表，如 'assumptions[0].status' -> ['assumptions', '0', 'status']"""

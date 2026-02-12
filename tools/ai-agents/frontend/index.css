@@ -37,6 +37,14 @@
     }
 
     100% {
-        transform: scale(1);
     }
+}
+
+/* Inline Diff Styles */
+.diff-inserted {
+    @apply bg-green-200 text-green-800 no-underline px-0.5 rounded-sm;
+}
+
+.diff-deleted {
+    @apply bg-red-100 text-red-800 line-through decoration-red-500 px-0.5 rounded-sm;
 }

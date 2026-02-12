@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentence-level Diff Demo</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; line-height: 1.6; max-width: 800px; margin: 0 auto; }
+        .diff-container { border: 1px solid #ccc; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        .diff-deleted { background-color: #fee2e2; color: #991b1b; text-decoration: line-through; text-decoration-color: #ef4444; padding: 0 2px; border-radius: 2px; }
+        .diff-inserted { background-color: #dcfce7; color: #166534; text-decoration: none; padding: 0 2px; border-radius: 2px; }
+        h3 { margin-top: 0; color: #333; }
+        p { margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Sentence-level Diff Visualization Demo</h1>
+    <p>Simulating the "Visual Bloat" effect of sentence-level diffs on long sentences.</p>
+
+    <div class="diff-container">
+        <h3>Scenario 1: Short Sentence Change (Ideal Case)</h3>
+        <p>
+            <span>这是未修改的前文。</span>
+            <span class="diff-deleted">我喜欢猫。</span>
+            <span class="diff-inserted">我喜欢狗。</span>
+            <span>这是未修改的后文。</span>
+        </p>
+    </div>
+
+    <div class="diff-container">
+        <h3>Scenario 2: Long Sentence with Minor Change (The Bloat Risk)</h3>
+        <p><strong>Original:</strong> "用户必须通过安全认证登录系统，并且在登录后需要每隔30分钟重新验证一次身份，以确保持续的安全性。"</p>
+        <p><strong>Change:</strong> "30分钟" -> "60分钟"</p>
+        <hr>
+        <p><strong>Diff Result:</strong></p>
+        <p>
+            <span class="diff-deleted">用户必须通过安全认证登录系统，并且在登录后需要每隔30分钟重新验证一次身份，以确保持续的安全性。</span>
+            <span class="diff-inserted">用户必须通过安全认证登录系统，并且在登录后需要每隔60分钟重新验证一次身份，以确保持续的安全性。</span>
+        </p>
+    </div>
+
+    <div class="diff-container">
+        <h3>Scenario 3: Mixed English/Chinese Punctuation</h3>
+        <p>
+            <span>System check complete. </span>
+            <span class="diff-deleted">Error found in module A!</span>
+            <span class="diff-inserted">Error found in module B!</span>
+            <span>请检查日志。</span>
+        </p>
+    </div>
+
+</body>
+</html>

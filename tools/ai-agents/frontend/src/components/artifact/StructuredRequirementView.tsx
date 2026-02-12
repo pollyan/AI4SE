@@ -4,6 +4,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import mermaid from 'mermaid';
 import { RequirementDoc } from '../../types/artifact';
+import { DiffField } from '../common/DiffField';
+
 
 // Initialize mermaid
 mermaid.initialize({
@@ -35,8 +37,9 @@ const MermaidChart = ({ code }: { code: string }) => {
 };
 
 // Helper for diff highlighting
-const getDiffClass = (item: { _diff?: 'added' | 'modified' }) => {
-  if (('is_new' in item) && (item as any).is_new) return 'diff-added'; // Backward compatibility
+const getDiffClass = (item?: { _diff?: 'added' | 'modified', is_new?: boolean }) => {
+  if (!item) return '';
+  if (item.is_new) return 'diff-added'; // Backward compatibility
   if (item._diff === 'added') return 'diff-added';
   if (item._diff === 'modified') return 'diff-modified';
   return '';
@@ -51,9 +54,9 @@ const DiffLegend = () => (
 );
 
 const hasDiff = (artifact: RequirementDoc) => {
-  if (artifact.features?.some(f => f._diff)) return true;
-  if (artifact.rules?.some(r => r._diff)) return true;
-  if (artifact.assumptions?.some(a => a._diff)) return true;
+  if (artifact.features && Array.isArray(artifact.features) && artifact.features.some((f: any) => f._diff)) return true;
+  if (artifact.rules && Array.isArray(artifact.rules) && artifact.rules.some((r: any) => r._diff)) return true;
+  if (artifact.assumptions && Array.isArray(artifact.assumptions) && artifact.assumptions.some((a: any) => a._diff)) return true;
   return false;
 };
 
@@ -70,12 +73,12 @@ export const StructuredRequirementView = ({ artifact }: { artifact: RequirementD
           <div>
             <h4 className="text-sm font-semibold text-green-700 mb-1">范围内</h4>
             <ul className="list-disc pl-5">
-              {artifact.scope.map((item, idx) => (
+              {artifact.scope && Array.isArray(artifact.scope) && artifact.scope.map((item, idx) => (
                 <li key={idx}>{item}</li>
               ))}
             </ul>
           </div>
-          {artifact.out_of_scope && artifact.out_of_scope.length > 0 && (
+          {artifact.out_of_scope && Array.isArray(artifact.out_of_scope) && artifact.out_of_scope.length > 0 && (
             <div>
               <h4 className="text-sm font-semibold text-red-700 mb-1">范围外</h4>
               <ul className="list-disc pl-5 text-gray-600">
@@ -106,12 +109,12 @@ export const StructuredRequirementView = ({ artifact }: { artifact: RequirementD
               <div key={feature.id} className={`border rounded p-3 bg-gray-50 ${getDiffClass(feature)}`}>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="font-mono text-sm bg-blue-100 px-2 py-0.5 rounded">{feature.id}</span>
-                  <span className="font-semibold">{feature.name}</span>
+                  <span className="font-semibold"><DiffField value={feature.name} oldValue={feature._prev?.name} /></span>
                   <span className={`text-xs px-2 py-0.5 rounded ${feature.priority === 'P0' ? 'bg-red-100 text-red-800' : feature.priority === 'P1' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100'}`}>
                     {feature.priority}
                   </span>
                 </div>
-                <p className="text-sm text-gray-700 mb-2">{feature.desc}</p>
+                <p className="text-sm text-gray-700 mb-2"><DiffField value={feature.desc} oldValue={feature._prev?.desc} /></p>
                 {feature.acceptance && feature.acceptance.length > 0 && (
                   <div>
                     <span className="text-xs font-semibold text-gray-500">验收标准:</span>
@@ -141,10 +144,12 @@ export const StructuredRequirementView = ({ artifact }: { artifact: RequirementD
               </tr>
             </thead>
             <tbody>
-              {artifact.rules.map(rule => (
+              {artifact.rules && Array.isArray(artifact.rules) && artifact.rules.map(rule => (
                 <tr key={rule.id} className={getDiffClass(rule)}>
                   <td className="border p-2 font-mono whitespace-nowrap">{rule.id}</td>
-                  <td className="border p-2">{rule.desc}</td>
+                  <td className="border p-2">
+                    <DiffField value={rule.desc} oldValue={rule._prev?.desc} />
+                  </td>
                   <td className="border p-2 text-gray-500 whitespace-nowrap">{rule.source}</td>
                 </tr>
               ))}
@@ -188,10 +193,10 @@ export const StructuredRequirementView = ({ artifact }: { artifact: RequirementD
               </tr>
             </thead>
             <tbody>
-              {artifact.assumptions.map(item => (
+              {artifact.assumptions && Array.isArray(artifact.assumptions) && artifact.assumptions.map(item => (
                 <tr key={item.id} className={`${item.status === 'confirmed' ? 'bg-green-50' : ''} ${getDiffClass(item)}`}>
                   <td className="border p-2 font-mono whitespace-nowrap">{item.id}</td>
-                  <td className="border p-2">{item.question}</td>
+                  <td className="border p-2"><DiffField value={item.question} oldValue={item._prev?.question} /></td>
                   <td className="border p-2 whitespace-nowrap">
                     <span className={`px-2 py-1 rounded text-xs ${item.priority === 'P0' ? 'bg-red-100 text-red-800' : 'bg-gray-100'}`}>
                       {item.priority}
@@ -200,7 +205,7 @@ export const StructuredRequirementView = ({ artifact }: { artifact: RequirementD
                   <td className="border p-2 whitespace-nowrap">
                     {item.status === 'confirmed' ? '✅ 已确认' : item.status === 'assumed' ? '⚠️ 假设' : '⏳ 待确认'}
                   </td>
-                  <td className="border p-2 text-gray-500">{item.note}</td>
+                  <td className="border p-2 text-gray-500"><DiffField value={item.note || ''} oldValue={item._prev?.note} /></td>
                 </tr>
               ))}
             </tbody>

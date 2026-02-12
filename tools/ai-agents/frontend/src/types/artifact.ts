@@ -10,7 +10,13 @@ export type NodeType = 'group' | 'point';
 export type AssumptionStatus = 'pending' | 'assumed' | 'confirmed';
 export type RuleSource = string;
 
-export interface DesignNode {
+export interface Diffable {
+  _diff?: 'added' | 'modified';
+  [key: string]: any;
+}
+
+export interface DesignNode extends Diffable {
+
   id: string;
   label: string;
   type: NodeType;
@@ -19,31 +25,35 @@ export interface DesignNode {
   is_new?: boolean;
   children?: DesignNode[];
   _diff?: 'added' | 'modified';
+  _prev?: Partial<DesignNode>;
 }
 
-export interface RuleItem {
+export interface RuleItem extends Diffable {
   id: string;
   desc: string;
   source: RuleSource;
   _diff?: 'added' | 'modified';
+  _prev?: Partial<RuleItem>;
 }
 
-export interface AssumptionItem {
+export interface AssumptionItem extends Diffable {
   id: string;
   question: string;
   status: AssumptionStatus;
   priority?: Priority;
   note?: string | null;
   _diff?: 'added' | 'modified';
+  _prev?: Partial<AssumptionItem>;
 }
 
-export interface FeatureItem {
+export interface FeatureItem extends Diffable {
   id: string;
   name: string;
   desc: string;
   acceptance: string[];
   priority: Priority;
   _diff?: 'added' | 'modified';
+  _prev?: Partial<FeatureItem>;
 }
 
 export interface RequirementDoc {
@@ -75,6 +85,7 @@ export interface CaseItem {
   tags: string[];
   script?: string;
   _diff?: 'added' | 'modified';
+  _prev?: Partial<CaseItem>;
 }
 
 export interface CaseDoc {

@@ -16,6 +16,7 @@
     "@assistant-ui/react-markdown": "^0.11.9",
     "@tailwindcss/typography": "^0.5.19",
     "ai": "^6.0.39",
+    "diff": "^8.0.3",
     "lucide-react": "^0.562.0",
     "mermaid": "^11.12.2",
     "react": "^19.2.3",
@@ -24,9 +25,11 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
     "@testing-library/user-event": "^14.6.1",
+    "@types/diff": "^7.0.2",
     "@types/node": "^22.19.3",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.23",
@@ -36,7 +39,6 @@
     "tailwindcss": "^4.1.18",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "@tailwindcss/postcss": "^4.0.0",
     "vitest": "^4.0.16"
   }
 }
