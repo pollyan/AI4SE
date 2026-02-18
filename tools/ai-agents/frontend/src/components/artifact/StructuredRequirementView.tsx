@@ -63,12 +63,59 @@ const hasDiff = (artifact: RequirementDoc) => {
 export const StructuredRequirementView = ({ artifact }: { artifact: RequirementDoc }) => {
   const showLegend = hasDiff(artifact);
 
+  // Helper to find the first scrollable parent
+  const getScrollParent = (node: HTMLElement | null): HTMLElement | null => {
+    if (!node) return null;
+    if (node.scrollHeight > node.clientHeight) {
+      const overflowY = window.getComputedStyle(node).overflowY;
+      if (overflowY === 'auto' || overflowY === 'scroll') {
+        return node;
+      }
+    }
+    return getScrollParent(node.parentElement);
+  };
+
+  // Handle hash navigation
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      if (hash) {
+        const id = hash.substring(1);
+        // Add a small delay to ensure DOM is ready
+        setTimeout(() => {
+          const element = document.getElementById(id);
+          if (element) {
+            const scrollParent = getScrollParent(element);
+            if (scrollParent) {
+              // Calculate relative position and scroll the container
+              const top = element.offsetTop - scrollParent.offsetTop;
+              scrollParent.scrollTo({
+                top: top - 20, // Add some padding
+                behavior: 'smooth'
+              });
+            } else {
+              // Fallback to window scroll if no scroll parent found
+              element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }
+        }, 100);
+      }
+    };
+
+    // Initial check
+    handleHashChange();
+
+    // Listen for hash changes
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
   return (
     <div className="structured-requirement-view space-y-6 p-4">
       {showLegend && <DiffLegend />}
       {/* Section 1: 测试范围 */}
       <section>
-        <h3 className="text-lg font-bold mb-2">测试范围</h3>
+        <h3 id="scope" className="text-lg font-bold mb-2">测试范围</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
           <div>
             <h4 className="text-sm font-semibold text-green-700 mb-1">范围内</h4>
@@ -103,7 +150,7 @@ export const StructuredRequirementView = ({ artifact }: { artifact: RequirementD
       {/* Section 2: 功能详细规格 */}
       {artifact.features && artifact.features.length > 0 && (
         <section>
-          <h3 className="text-lg font-bold mb-2">功能详细规格</h3>
+          <h3 id="features" className="text-lg font-bold mb-2">功能详细规格</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {artifact.features.map(feature => (
               <div key={feature.id} className={`border rounded p-3 bg-gray-50 ${getDiffClass(feature)}`}>
@@ -133,7 +180,7 @@ export const StructuredRequirementView = ({ artifact }: { artifact: RequirementD
 
       {/* Section 3: 核心业务规则 */}
       <section>
-        <h3 className="text-lg font-bold mb-2">核心业务规则</h3>
+        <h3 id="rules" className="text-lg font-bold mb-2">核心业务规则</h3>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse border text-sm">
             <thead>
@@ -161,7 +208,7 @@ export const StructuredRequirementView = ({ artifact }: { artifact: RequirementD
       {/* Section 4: 业务流程图 */}
       {artifact.flow_mermaid && (
         <section>
-          <h3 className="text-lg font-bold mb-2">业务流程图</h3>
+          <h3 id="flow" className="text-lg font-bold mb-2">业务流程图</h3>
           <div className="border p-2 rounded bg-white overflow-x-auto">
             <MermaidChart code={artifact.flow_mermaid} />
           </div>
@@ -171,7 +218,7 @@ export const StructuredRequirementView = ({ artifact }: { artifact: RequirementD
       {/* Section 5: 非功能需求 */}
       {artifact.nfr_markdown && (
         <section>
-          <h3 className="text-lg font-bold mb-2">非功能需求</h3>
+          <h3 id="nfr" className="text-lg font-bold mb-2">非功能需求</h3>
           <div className="prose prose-sm max-w-none bg-gray-50 p-3 rounded">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{artifact.nfr_markdown}</ReactMarkdown>
           </div>
@@ -180,7 +227,7 @@ export const StructuredRequirementView = ({ artifact }: { artifact: RequirementD
 
       {/* Section 6 & 7: 待澄清问题 & 已确认信息 */}
       <section>
-        <h3 className="text-lg font-bold mb-2">待澄清问题 / 已确认信息</h3>
+        <h3 id="questions" className="text-lg font-bold mb-2">待澄清问题 / 已确认信息</h3>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse border text-sm">
             <thead>

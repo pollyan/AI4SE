@@ -41,6 +41,9 @@ class LisaState(BaseAgentState):
     artifacts: Dict[str, str]
     structured_artifacts: Dict[str, Union[RequirementDoc, DesignDoc, CaseDoc, DeliveryDoc, Any]]
 
+    # [新增] 产出物更新提示 (Context-Aware Sync)
+    latest_artifact_hint: Union[str, None]
+
 
 def get_initial_state() -> LisaState:
     """

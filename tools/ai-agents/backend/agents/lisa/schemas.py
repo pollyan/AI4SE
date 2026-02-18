@@ -88,6 +88,11 @@ class ReasoningResponse(BaseModel):
         description="仅当用户明确同意进入下一阶段，或满足清晰的退出条件时，设置此字段。严禁在 DoR 不满足时设置。",
     )
 
+    artifact_update_hint: Optional[str] = Field(
+        default=None,
+        description="给产出物更新智能体（Artifact Agent）的直接指令。必须包含本轮对话中确认的关键结论、新发现的风险或需要变更的文档章节。这将作为'全量推理结论交接'。"
+    )
+
 
 class WorkflowResponse(BaseModel):
     """

@@ -96,12 +96,18 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
         # [Fix Bug 1] 传递 existing_artifact
         structured_artifacts = state.get("structured_artifacts", {})
         existing_structured = structured_artifacts.get(artifact_key)
-        
+
+        # [新增] 获取 Reasoning Hint (Context-Aware Sync)
+        latest_hint = cast(str | None, state.get("latest_artifact_hint"))
+        if latest_hint:
+            logger.info(f"ArtifactNode: Using reasoning hint: {latest_hint[:50]}...")
+
         artifact_prompt_text = build_artifact_update_prompt(
             artifact_key=artifact_key,
             current_stage=current_stage,
             template_outline=template_outline,
             existing_artifact=existing_structured,
+            reasoning_hint=latest_hint,
         )
 
         # 使用 state 中的 messages + 指令

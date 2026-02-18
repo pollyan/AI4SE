@@ -6,6 +6,7 @@ Lisa 工作流产出物模板定义
 
 from ..artifact_models import RequirementDoc, DesignDoc, CaseDoc
 from ..utils.markdown_generator import create_empty_requirement_doc, convert_to_markdown
+from typing import Optional
 
 
 def get_artifact_json_schemas() -> dict:
@@ -327,7 +328,8 @@ def build_artifact_update_prompt(
     artifact_key: str,
     current_stage: str,
     template_outline: str,
-    existing_artifact: dict | None = None,
+    existing_artifact: Optional[dict] = None,
+    reasoning_hint: Optional[str] = None,
 ) -> str:
     """
     构建产出物更新 Prompt（动态注入 Schema）
@@ -337,6 +339,7 @@ def build_artifact_update_prompt(
         current_stage: 当前阶段名称
         template_outline: 模板大纲
         existing_artifact: 现有的工件数据（可选，用于增量更新上下文）
+        reasoning_hint: 来自 ReasoningNode 的上下文感知更新提示 (Optional)
 
     Returns:
         str: 完整的 Prompt 文本
@@ -376,6 +379,16 @@ Current State:
 - Do not output unchanged items if possible (to save tokens), unless necessary for context.
 """
 
+    # [新增] 注入 Reasoning Hint
+    reasoning_context = ""
+    if reasoning_hint:
+        reasoning_context = f"""
+**来自推理智能体的重要上下文 (CONTEXT FROM REASONING AGENT)**:
+{reasoning_hint}
+
+请务必根据上述上下文更新文档，尤其是其中提到的风险和决策。
+"""
+
     return f"""
 系统内部指令：
 你正处于产出物更新阶段 (Artifact Update Phase)。
@@ -385,6 +398,8 @@ Current State:
 2. `key` 必须严格使用："{artifact_key}"。
 3. `artifact_type` 必须使用："{artifact_type}"。
 4. `content` 字段必须是符合对应类型的 JSON 对象，而不是 Markdown 字符串。
+
+{reasoning_context}
 
 {incremental_context}
 

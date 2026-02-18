@@ -312,6 +312,15 @@ def reasoning_node(
     if init_updates:
         state_updates.update(init_updates)
 
+    # [新增] 提取并传递 artifact_update_hint (Context-Aware Sync)
+    if hasattr(final_response, "artifact_update_hint") and final_response.artifact_update_hint:
+        hint = final_response.artifact_update_hint
+        state_updates["latest_artifact_hint"] = hint
+        logger.info(f"ReasoningNode: Passing artifact hint to next node: {hint[:50]}...")
+    else:
+        # 如果没有 hint，显式清空，防止污染下一轮（虽然后续节点会覆盖，但清空更安全）
+        state_updates["latest_artifact_hint"] = None
+
     # 处理阶段流转请求
     if final_response.request_transition_to:
         next_stage = final_response.request_transition_to

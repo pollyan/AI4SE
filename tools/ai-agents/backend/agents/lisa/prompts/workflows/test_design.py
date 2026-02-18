@@ -93,6 +93,16 @@ WORKFLOW_TEST_DESIGN_SYSTEM = """
     - **即时同步**: 不要等待"完美"或"最终"版本。我们希望用户能实时看到产出物的演进过程（未来将用于展示 Diff）。
     - 仅在纯闲聊（如问候）时才设为 `False`。
 
+4. **artifact_update_hint** (optional string):
+    - **全量推理结论交接 (Full Reasoning Handoff)**:
+    - 当 `should_update_artifact=True` 时，**必须**填写此字段。
+    - 这是一个给"产出物更新智能体"的直接指令。
+    - **必须包含**:
+      a. 用户确认的关键决策 (Decisions)
+      b. 你在思考过程中发现的新风险或洞察 (New Insights & Risks)
+      c. 具体的行动项 (Action Items: Add/Modify/Delete)
+    - **示例**: "用户确认库存并发使用数据库乐观锁。**风险提示**: 高并发下失败率上升。**行动项**: 更新需求规则章节，明确乐观锁机制，并补充失败重试逻辑。"
+
 **注意**: 你不需要在本次响应中输出文档的具体内容，只需做出"是否需要更新"的决策。
 **注意**: 如果本次不需要更新文档，请显式返回 `should_update_artifact=False`。
 
