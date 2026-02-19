@@ -20,6 +20,13 @@ AI_AGENTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 if AI_AGENTS_DIR not in sys.path:
     sys.path.insert(0, AI_AGENTS_DIR)
 
+# Ensure we can import from tools (for shared package)
+TOOLS_DIR = os.path.abspath(os.path.join(AI_AGENTS_DIR, '..'))
+if TOOLS_DIR not in sys.path:
+    sys.path.insert(0, TOOLS_DIR)
+
+from shared.tests.api_client import APIClient
+
 from backend.app import create_app
 
 
@@ -59,34 +66,7 @@ def client(app):
 @pytest.fixture(scope='function')
 def api_client(client):
     """带有 JSON Content-Type 的 API 客户端"""
-    class APIClient:
-        def __init__(self, client):
-            self.client = client
-            self.prefix = '/ai-agents'
-            
-        def _get_path(self, path):
-            # Prepend prefix if not present and matches API or health routes
-            if path.startswith('/api') or path.startswith('/health'):
-                return f"{self.prefix}{path}"
-            return path
-            
-        def get(self, path, *args, **kwargs):
-            return self.client.get(self._get_path(path), *args, **kwargs)
-            
-        def post(self, path, *args, **kwargs):
-            if 'json' in kwargs:
-                kwargs['content_type'] = 'application/json'
-            return self.client.post(self._get_path(path), *args, **kwargs)
-            
-        def put(self, path, *args, **kwargs):
-            if 'json' in kwargs:
-                kwargs['content_type'] = 'application/json'
-            return self.client.put(self._get_path(path), *args, **kwargs)
-            
-        def delete(self, path, *args, **kwargs):
-            return self.client.delete(self._get_path(path), *args, **kwargs)
-            
-    return APIClient(client)
+    return APIClient(client, prefix='/ai-agents')
 
 
 @pytest.fixture
@@ -207,3 +187,26 @@ def mock_ai_service():
 def assistant_types():
     """支持的助手类型"""
     return ["lisa"]
+
+
+def pytest_collection_modifyitems(items):
+    """根据文件路径和名称自动添加标记"""
+    for item in items:
+        path = str(item.fspath)
+        name = item.name
+
+        # Agent Smoke 测试（真实 LLM，仅本地运行）
+        if "agent_smoke" in path:
+            item.add_marker(pytest.mark.slow)
+        # API 测试
+        elif "/api/" in path:
+            item.add_marker(pytest.mark.api)
+        # 集成测试
+        elif "integration" in name or "integration" in path:
+            item.add_marker(pytest.mark.integration)
+        # E2E 测试
+        elif "e2e" in name or "e2e" in path:
+            item.add_marker(pytest.mark.e2e)
+        # 默认为单元测试
+        else:
+            item.add_marker(pytest.mark.unit)

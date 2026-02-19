@@ -79,7 +79,7 @@ jobs:
       run: |
         echo "::group::Running AI Agents Backend Tests"
         export PYTHONPATH=$PYTHONPATH:$(pwd):$(pwd)/tools/ai-agents
-        python -m pytest tools/ai-agents/backend/tests/ -v --cov=tools/ai-agents/backend --cov-report=term
+        python -m pytest tools/ai-agents/backend/tests/ -v -m "not slow" --cov=tools/ai-agents/backend --cov-report=term
         echo "::endgroup::"
   
   # ====================================
