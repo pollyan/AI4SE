@@ -61,7 +61,7 @@ describe('ArtifactPanel', () => {
       expect(screen.queryByText('新版本正在生成...')).not.toBeInTheDocument();
     });
 
-    it('无旧内容时生成中显示占位符', () => {
+    it('无旧内容时生成中显示骨架屏', () => {
       render(
         <ArtifactPanel
           {...defaultProps}
@@ -69,7 +69,8 @@ describe('ArtifactPanel', () => {
           streamingArtifactContent="# 首次生成..."
         />
       );
-      expect(screen.getByText('完成当前阶段对话后，将在此生成产出物')).toBeInTheDocument();
+      // 现在应该显示骨架屏的提示文案
+      expect(screen.getByText(/AI 正在根据对话内容生成需求文档/)).toBeInTheDocument();
     });
   });
 });

@@ -1,33 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="17" failures="0" errors="0" time="0.368">
-  <testsuite name="MidScene代理服务器 - HTTP API测试" errors="0" failures="0" skipped="0" timestamp="2026-02-19T14:57:21" time="0.264" tests="3">
-    <testcase classname="MidScene代理服务器 - HTTP API测试 › 健康检查端点" name="GET /health - 应该返回服务器健康状态" time="0.019">
+<testsuites name="jest tests" tests="17" failures="0" errors="0" time="0.301">
+  <testsuite name="MidScene微服务集成测试" errors="0" failures="0" skipped="0" timestamp="2026-02-19T15:07:10" time="0.138" tests="14">
+    <testcase classname="MidScene微服务集成测试 › 服务器启动和健康检查" name="应该能够启动MidScene服务器" time="0.017">
     </testcase>
-    <testcase classname="MidScene代理服务器 - HTTP API测试 › 服务器状态端点" name="GET /api/status - 应该返回服务器状态信息" time="0.006">
-    </testcase>
-    <testcase classname="MidScene代理服务器 - HTTP API测试 › 错误处理" name="访问不存在的端点应该返回404" time="0.006">
-    </testcase>
-  </testsuite>
-  <testsuite name="MidScene微服务集成测试" errors="0" failures="0" skipped="0" timestamp="2026-02-19T14:57:21" time="0.075" tests="14">
-    <testcase classname="MidScene微服务集成测试 › 服务器启动和健康检查" name="应该能够启动MidScene服务器" time="0.002">
-    </testcase>
-    <testcase classname="MidScene微服务集成测试 › 服务器启动和健康检查" name="应该返回服务器配置信息" time="0.002">
+    <testcase classname="MidScene微服务集成测试 › 服务器启动和健康检查" name="应该返回服务器配置信息" time="0.004">
     </testcase>
     <testcase classname="MidScene微服务集成测试 › AI操作API测试" name="应该接收执行请求" time="0.002">
     </testcase>
-    <testcase classname="MidScene微服务集成测试 › AI操作API测试" name="应该验证执行请求数据格式" time="0.001">
+    <testcase classname="MidScene微服务集成测试 › AI操作API测试" name="应该验证执行请求数据格式" time="0.002">
     </testcase>
-    <testcase classname="MidScene微服务集成测试 › AI操作API测试" name="应该支持不同的浏览器模式" time="0.01">
+    <testcase classname="MidScene微服务集成测试 › AI操作API测试" name="应该支持不同的浏览器模式" time="0.005">
     </testcase>
-    <testcase classname="MidScene微服务集成测试 › 步骤执行测试" name="应该支持所有AI操作类型" time="0.01">
+    <testcase classname="MidScene微服务集成测试 › 步骤执行测试" name="应该支持所有AI操作类型" time="0.008">
     </testcase>
-    <testcase classname="MidScene微服务集成测试 › 步骤执行测试" name="应该处理复杂的测试场景" time="0.009">
+    <testcase classname="MidScene微服务集成测试 › 步骤执行测试" name="应该处理复杂的测试场景" time="0.001">
     </testcase>
-    <testcase classname="MidScene微服务集成测试 › 错误处理和恢复" name="应该处理无效的URL" time="0.001">
+    <testcase classname="MidScene微服务集成测试 › 错误处理和恢复" name="应该处理无效的URL" time="0.003">
     </testcase>
-    <testcase classname="MidScene微服务集成测试 › 错误处理和恢复" name="应该处理元素不存在的情况" time="0.002">
+    <testcase classname="MidScene微服务集成测试 › 错误处理和恢复" name="应该处理元素不存在的情况" time="0.001">
     </testcase>
-    <testcase classname="MidScene微服务集成测试 › 错误处理和恢复" name="应该处理网络超时" time="0.003">
+    <testcase classname="MidScene微服务集成测试 › 错误处理和恢复" name="应该处理网络超时" time="0.002">
     </testcase>
     <testcase classname="MidScene微服务集成测试 › 性能和并发测试" name="应该处理并发执行请求" time="0.002">
     </testcase>
@@ -36,6 +28,14 @@
     <testcase classname="MidScene微服务集成测试 › 回调和通知测试" name="应该支持自定义回调URL" time="0.001">
     </testcase>
     <testcase classname="MidScene微服务集成测试 › 回调和通知测试" name="应该处理无效的回调URL" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="MidScene代理服务器 - HTTP API测试" errors="0" failures="0" skipped="0" timestamp="2026-02-19T15:07:10" time="0.142" tests="3">
+    <testcase classname="MidScene代理服务器 - HTTP API测试 › 健康检查端点" name="GET /health - 应该返回服务器健康状态" time="0.006">
+    </testcase>
+    <testcase classname="MidScene代理服务器 - HTTP API测试 › 服务器状态端点" name="GET /api/status - 应该返回服务器状态信息" time="0.003">
+    </testcase>
+    <testcase classname="MidScene代理服务器 - HTTP API测试 › 错误处理" name="访问不存在的端点应该返回404" time="0.006">
     </testcase>
   </testsuite>
 </testsuites>

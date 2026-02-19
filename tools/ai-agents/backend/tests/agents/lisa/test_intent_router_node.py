@@ -127,6 +127,7 @@ def test_intent_router_exception_handling(mock_llm, mock_router):
     
     mock_router.route.side_effect = Exception("Router crash")
     
-    command = intent_router_node(cast(LisaState, state), mock_llm)
-    
-    assert command.goto == "clarify_intent"
+    # 修改：期望抛出异常，而不是回退到 clarify_intent
+    # 这是因为我们在 intent_router.py 中移除了静默 catch-all 逻辑
+    with pytest.raises(Exception, match="Router crash"):
+        intent_router_node(cast(LisaState, state), mock_llm)
