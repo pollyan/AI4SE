@@ -11,6 +11,7 @@ import os
 import logging
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,14 @@ class JudgeResult(BaseModel):
     reason: str = Field(description="简要评估理由（中文）")
 
 
-JUDGE_PROMPT = """你是一个严格的测试评估专家。请判断 AI 智能体的输出是否满足预期。
+JUDGE_SYSTEM = (
+    "你是一个严格的测试评估专家，负责评估 AI 智能体的输出质量。\n"
+    "请根据用户输入、预期行为和实际输出来判断测试是否通过。\n"
+    "你必须只返回一个 JSON 对象，包含 passed (bool) 和 reason (string) 两个字段。\n"
+    "禁止输出 Markdown 代码块、引言或任何额外文字。"
+)
+
+JUDGE_USER = """请判断以下 AI 智能体的输出是否满足预期。
 
 ## 用户输入
 {user_input}
@@ -58,8 +66,7 @@ def judge_output(
     """
     api_key = os.getenv("OPENAI_API_KEY")
     base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-    # 可以通过环境变量选择更轻量的 Judge 模型以节省成本
-    model = os.getenv("SMOKE_TEST_JUDGE_MODEL", "qwen-plus")
+    model = os.getenv("SMOKE_TEST_JUDGE_MODEL", "deepseek-v3.2")
 
     llm = ChatOpenAI(
         model=model,
@@ -69,12 +76,13 @@ def judge_output(
     )
     structured_llm = llm.with_structured_output(JudgeResult)
 
-    result = structured_llm.invoke(
-        JUDGE_PROMPT.format(
+    result = structured_llm.invoke([
+        SystemMessage(content=JUDGE_SYSTEM),
+        HumanMessage(content=JUDGE_USER.format(
             user_input=user_input,
             expected_behavior=expected_behavior,
             actual_output=actual_output
-        )
-    )
+        ))
+    ])
     logger.info(f"Judge 结果: passed={result.passed}, reason={result.reason}")
     return result

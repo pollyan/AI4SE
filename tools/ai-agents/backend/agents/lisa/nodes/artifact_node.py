@@ -110,7 +110,7 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
         # 同时绑定旧版(Markdown)和新版(Structured)工具，让 LLM 根据 Prompt 决定
         llm_with_tools = llm.model.bind_tools(
             [update_artifact, UpdateStructuredArtifact],
-            tool_choice="auto",  # 允许 LLM 自动选择合适的工具
+            tool_choice="required",  # 强制调用工具：每轮对话都必须更新产出物
         )
 
         # 获取当前阶段对应的 artifact key
