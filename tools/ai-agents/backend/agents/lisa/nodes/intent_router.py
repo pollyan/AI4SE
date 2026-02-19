@@ -149,5 +149,5 @@ def intent_router_node(state: LisaState, llm: Any) -> RouterCommand:
             
     except Exception as e:
         logger.error(f"意图路由失败: {e}", exc_info=True)
-        return Command(update={}, goto="clarify_intent")
+        raise  # 直接抛出，不做静默降级，让前端显示真实错误
 

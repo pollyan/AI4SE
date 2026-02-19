@@ -69,17 +69,28 @@ def process_reasoning_stream(
             # 2. Identify completed artifacts
             completed_keys = list(current_artifacts.keys())
             
+            # Determine the generating key for this stage
+            # Set generating_key whenever the current stage has a template,
+            # regardless of whether the artifact already exists (it may be an update).
+            # The key will be cleared by the frontend when the stream ends (done event).
+            generating_key = None
+            for tmpl in saved_templates:
+                tmpl_stage = tmpl.get("stage") or tmpl.get("stage_id")
+                tmpl_key = tmpl.get("key") or tmpl.get("artifact_key")
+                if tmpl_stage == current_stage and tmpl_key:
+                    generating_key = tmpl_key
+                    break
+
             writer({
                 "type": "progress",
                 "progress": {
                     "stages": plan,
                     "currentStageIndex": stage_index,
                     "currentTask": current_step,
-                    # Replace raw artifact_templates with structured artifactProgress
                     "artifactProgress": {
                         "template": template_list,
                         "completed": completed_keys,
-                        "generating": None # Reasoning phase doesn't generate artifacts
+                        "generating": generating_key
                     },
                     "artifacts": current_artifacts
                 }

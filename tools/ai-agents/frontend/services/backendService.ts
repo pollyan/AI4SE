@@ -89,7 +89,8 @@ export async function sendMessageStream(
     sessionId: string,
     message: string,
     onChunk: (fullText: string) => void,
-    onStateChange?: (progress: ProgressInfo) => void
+    onStateChange?: (progress: ProgressInfo) => void,
+    onStreamEnd?: () => void
 ): Promise<string> {
     const response = await fetch(`${API_BASE}/sessions/${sessionId}/messages/stream`, {
         method: 'POST',
@@ -160,7 +161,8 @@ export async function sendMessageStream(
                             // Handle state events for workflow progress
                             onStateChange(data.progress);
                         } else if (data.type === 'done') {
-                            // Stream completed
+                            // Stream completed - notify caller to clear generating state
+                            onStreamEnd?.();
                             const finalCleaned = cleanText(fullText);
                             return finalCleaned;
                         } else if (data.type === 'error') {

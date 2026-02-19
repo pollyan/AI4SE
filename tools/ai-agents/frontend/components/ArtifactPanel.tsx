@@ -9,6 +9,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeOverride as CodeBlock } from './chat/MarkdownText';
 import { FileText, Clock, CheckCircle, ChevronLeft, ChevronRight, List, Loader2 } from 'lucide-react';
+import { ArtifactSkeleton } from './ArtifactSkeleton';
+import { ArtifactLoadingOverlay } from './ArtifactLoadingOverlay';
 import { StructuredRequirementView } from '../src/components/artifact/StructuredRequirementView';
 import { isRequirementDoc, RequirementDoc } from '../src/types/artifact';
 
@@ -94,14 +96,34 @@ export function ArtifactPanel({
     const template = artifactProgress?.template.find(t => t.stageId === displayStageId);
     const templateName = template?.name || '产出物';
     const templateKey = template?.artifactKey;
+
+    // effectiveKey：优先用当前 stage 的 templateKey 获取内容
     const effectiveKey = templateKey || streamingArtifactKey;
-    const isGenerating = streamingArtifactKey !== null && (templateKey === streamingArtifactKey || !templateKey);
-    const content = effectiveKey && artifacts[effectiveKey]
-        ? artifacts[effectiveKey]
+
+    // isGenerating：只要有 streamingArtifactKey 就认为正在生成
+    // 不限制必须与当前 displayStageId 的 templateKey 匹配（解决 stage 切换时 loading 消失的 bug）
+    const isGenerating = streamingArtifactKey !== null;
+
+    // [DEBUG] Log ArtifactPanel state
+    console.log('[ArtifactPanel] Render state:', {
+        displayStageId,
+        templateName,
+        templateKey,
+        streamingArtifactKey,
+        effectiveKey,
+        isGenerating,
+        hasContent: !!(effectiveKey && artifacts[effectiveKey])
+    });
+
+    // content：优先用 templateKey，其次用 streamingArtifactKey（更新场景下找旧内容显示 overlay）
+    const contentKey = templateKey || streamingArtifactKey;
+    const content = contentKey && artifacts[contentKey]
+        ? artifacts[contentKey]
         : null;
 
     // Structured content check
-    const structuredContent = effectiveKey && structuredArtifacts && structuredArtifacts[effectiveKey];
+    const structuredContent = contentKey && structuredArtifacts && structuredArtifacts[contentKey];
+
 
     const isViewingHistory = selectedStageId !== null && selectedStageId !== currentStageId;
 
@@ -191,25 +213,40 @@ export function ArtifactPanel({
                 )}
 
                 {/* Main Content */}
-                <div className="flex-1 overflow-y-auto p-4 bg-white dark:bg-gray-900 scroll-smooth">
-                    {structuredContent && isRequirementDoc(structuredContent) ? (
-                        <StructuredRequirementView artifact={structuredContent} />
-                    ) : content ? (
-                        <div className="prose prose-sm dark:prose-invert max-w-none break-words">
-                            <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                components={{
-                                    code: CodeBlock,
-                                    pre: React.Fragment,
-                                    h1: (props) => <HeadingRenderer level={1} {...props} />,
-                                    h2: (props) => <HeadingRenderer level={2} {...props} />,
-                                    h3: (props) => <HeadingRenderer level={3} {...props} />,
-                                    h4: (props) => <HeadingRenderer level={4} {...props} />,
-                                }}
-                            >
-                                {content}
-                            </ReactMarkdown>
-                        </div>
+                <div className="flex-1 overflow-y-auto p-4 bg-white dark:bg-gray-900 scroll-smooth relative">
+                    {isGenerating && !content && !structuredContent ? (
+                        /* 方案 A：首次生成 — 骨架屏 */
+                        <ArtifactSkeleton artifactName={templateName} />
+                    ) : (content || structuredContent) ? (
+                        /* 有内容：正常渲染 + 可能叠加覆盖层 */
+                        <>
+                            {/* 方案 C：更新中 — 覆盖层 */}
+                            {isGenerating && (
+                                <ArtifactLoadingOverlay
+                                    isLoading={isGenerating}
+                                    artifactName={templateName}
+                                />
+                            )}
+                            {structuredContent && isRequirementDoc(structuredContent) ? (
+                                <StructuredRequirementView artifact={structuredContent} />
+                            ) : content ? (
+                                <div className="prose prose-sm dark:prose-invert max-w-none break-words">
+                                    <ReactMarkdown
+                                        remarkPlugins={[remarkGfm]}
+                                        components={{
+                                            code: CodeBlock,
+                                            pre: React.Fragment,
+                                            h1: (props) => <HeadingRenderer level={1} {...props} />,
+                                            h2: (props) => <HeadingRenderer level={2} {...props} />,
+                                            h3: (props) => <HeadingRenderer level={3} {...props} />,
+                                            h4: (props) => <HeadingRenderer level={4} {...props} />,
+                                        }}
+                                    >
+                                        {content}
+                                    </ReactMarkdown>
+                                </div>
+                            ) : null}
+                        </>
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full text-gray-400">
                             <Clock size={48} className="mb-4 opacity-50" />

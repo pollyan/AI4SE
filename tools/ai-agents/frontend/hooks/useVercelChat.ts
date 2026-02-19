@@ -18,6 +18,8 @@ export interface UseVercelChatOptions {
     assistantType: string;
     /** 进度变化回调 */
     onProgressChange?: (progress: ProgressInfo) => void;
+    /** 流结束回调（用于清空 generating 状态） */
+    onStreamEnd?: () => void;
 }
 
 export interface UseVercelChatReturn {
@@ -47,6 +49,7 @@ export function useVercelChat({
     sessionId,
     assistantType,
     onProgressChange,
+    onStreamEnd,
 }: UseVercelChatOptions): UseVercelChatReturn {
 
     const api = `${API_BASE}/sessions/${sessionId}/messages/v2/stream`;
@@ -90,6 +93,8 @@ export function useVercelChat({
         },
         // 完成后同步消息到后端
         onFinish: async (message) => {
+            // 通知调用方流已结束（清空 generating 状态）
+            onStreamEnd?.();
             try {
                 await fetch(`${API_BASE}/sessions/${sessionId}/sync`, {
                     method: 'POST',

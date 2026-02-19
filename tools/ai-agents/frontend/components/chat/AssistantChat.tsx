@@ -14,6 +14,7 @@ interface AssistantChatProps {
     assistant: Assistant;
     onBack: () => void;
     onProgressChange?: (progress: ProgressInfo | null) => void;
+    onStreamEnd?: () => void;
 }
 
 // 消息类型
@@ -44,7 +45,7 @@ const readFileAsDataURL = (file: File): Promise<string> => {
 };
 
 // 内部会话组件 (确保 sessionId 存在时渲染)
-const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: AssistantChatProps & { sessionId: string }) => {
+const ChatSession = ({ assistant, sessionId, onBack, onProgressChange, onStreamEnd }: AssistantChatProps & { sessionId: string }) => {
     const [input, setInput] = useState('');
     const [files, setFiles] = useState<File[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,6 +57,7 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange }: Assista
         sessionId,
         assistantType: assistant.id,
         onProgressChange: onProgressChange || undefined,
+        onStreamEnd: onStreamEnd || undefined,
     });
 
     // 监听状态变化以重置提交状态

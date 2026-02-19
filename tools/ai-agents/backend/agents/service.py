@@ -353,11 +353,19 @@ class LangchainAssistantService:
                                 current_state["structured_artifacts"].update(progress_data["structured_artifacts"])
                                 logger.info(f"Service: Updated current_state['structured_artifacts']. Keys: {list(current_state['structured_artifacts'].keys())}")
                             
-                            from .shared.progress import get_progress_info
-                            progress_info = get_progress_info(current_state)
-                            if progress_info:
-                                yield {"type": "state", "progress": progress_info}
-                            logger.info(f"StreamWriter 进度: stage={progress_data.get('currentStageIndex')}")
+                            # 如果 progress_data 已包含 artifactProgress（来自 artifact_node/stream_utils 的
+                            # 已格式化进度），直接透传，不重新计算（重新计算会丢失 generating 字段）
+                            if "artifactProgress" in progress_data:
+                                # 直接透传 writer 已格式化好的进度数据
+                                yield {"type": "state", "progress": progress_data}
+                                logger.info(f"StreamWriter 进度(透传): generating={progress_data['artifactProgress'].get('generating')}")
+                            else:
+                                # 没有 artifactProgress 时，走常规计算路径
+                                from .shared.progress import get_progress_info
+                                progress_info = get_progress_info(current_state)
+                                if progress_info:
+                                    yield {"type": "state", "progress": progress_info}
+                                logger.info(f"StreamWriter 进度(计算): stage={progress_data.get('currentStageIndex')}")
                         
                         elif data_type == "artifact":
                             # 处理 StreamWriter 发送的产出物数据

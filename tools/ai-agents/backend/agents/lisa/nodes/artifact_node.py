@@ -71,9 +71,41 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
 
     if mock_tool_calls_for_init:
         # A. 确定性初始化路径
+        # [新增] 初始化路径也发送 generating 事件，让前端显示骨架屏
+        init_key = current_template.get("key") if current_template else None
+        if init_key:
+            pre_state = {**state, "artifacts": artifacts}
+            pre_progress = get_progress_info(pre_state)
+            if pre_progress:
+                pre_progress["currentTask"] = f"正在初始化{current_template.get('name', '产出物')}..."
+                if pre_progress.get("artifactProgress"):
+                    pre_progress["artifactProgress"]["generating"] = init_key
+                    logger.info(f"[ArtifactNode] Init path: Setting generating to {init_key}")
+                
+                logger.info(f"[ArtifactNode] Sending pre-init progress: {pre_progress}")
+                writer({"type": "progress", "progress": pre_progress})
+                logger.info("ArtifactNode: Sent pre-init generating progress event")
         tool_calls = mock_tool_calls_for_init
+
     else:
         # B. 正常的 LLM 生成路径
+
+        # [新增] 在 LLM 调用前发送"生成中"状态事件，让前端立刻显示 loading
+        generating_key = None
+        if current_template:
+            generating_key = current_template.get("key")
+
+        if generating_key:
+            pre_state = {**state, "artifacts": artifacts}
+            pre_progress = get_progress_info(pre_state)
+            if pre_progress:
+                pre_progress["currentTask"] = f"正在生成{current_template.get('name', '产出物')}..."
+                # 确保 generating 字段被正确设置
+                if pre_progress.get("artifactProgress"):
+                    pre_progress["artifactProgress"]["generating"] = generating_key
+                writer({"type": "progress", "progress": pre_progress})
+                logger.info("ArtifactNode: Sent pre-generation progress event")
+
         # 绑定工具并强制调用
         # 同时绑定旧版(Markdown)和新版(Structured)工具，让 LLM 根据 Prompt 决定
         llm_with_tools = llm.model.bind_tools(

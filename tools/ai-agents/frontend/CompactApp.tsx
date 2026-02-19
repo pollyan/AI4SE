@@ -164,13 +164,18 @@ const CompactApp: React.FC = () => {
 
     // 处理进度变化回调
     const handleProgressChange = useCallback((progress: ProgressInfo | null) => {
+        // [DEBUG] Log progress event
+        if (progress?.artifactProgress?.generating) {
+            console.log('[CompactApp] Received generating event:', progress.artifactProgress.generating);
+        }
+
         setWorkflowProgress(progress);
 
-        // 同步正在生成的 key，确保 isGenerating 状态正确
+        // 只在 generating 有具体值时更新 streamingArtifactKey
+        // 不在这里清空，清空操作由 handleStreamEnd 负责（流真正结束时）
         if (progress?.artifactProgress?.generating) {
+            console.log('[CompactApp] Setting streamingArtifactKey to:', progress.artifactProgress.generating);
             setStreamingArtifactKey(progress.artifactProgress.generating);
-        } else {
-            setStreamingArtifactKey(null);
         }
 
         // 合并 artifacts
@@ -191,6 +196,11 @@ const CompactApp: React.FC = () => {
             }
         }
     }, [selectedStageId]);
+
+    // 流结束时清空 generating 状态
+    const handleStreamEnd = useCallback(() => {
+        setStreamingArtifactKey(null);
+    }, []);
 
     // 拖动逻辑
     const handleMouseDown = (e: React.MouseEvent) => {
@@ -312,6 +322,7 @@ const CompactApp: React.FC = () => {
                                 assistant={selectedAssistant}
                                 onBack={handleBack}
                                 onProgressChange={handleProgressChange}
+                                onStreamEnd={handleStreamEnd}
                             />
                         </div>
 
@@ -361,6 +372,7 @@ const CompactApp: React.FC = () => {
                                     assistant={selectedAssistant}
                                     onBack={handleBack}
                                     onProgressChange={handleProgressChange}
+                                    onStreamEnd={handleStreamEnd}
                                 />
                             ) : (
                                 <ResultPanelWrapper />

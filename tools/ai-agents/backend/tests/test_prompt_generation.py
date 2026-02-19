@@ -1,9 +1,4 @@
 import pytest
-import sys
-import os
-
-# Ensure backend can be imported
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from backend.agents.lisa.prompts.artifacts import build_artifact_update_prompt
 from backend.agents.lisa.schemas import ReasoningResponse
