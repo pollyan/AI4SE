@@ -8,52 +8,12 @@ import { Bot, MessageSquare, FileText } from 'lucide-react';
 import { ASSISTANTS } from './constants';
 import { AssistantId } from './types';
 import { default as ArtifactPanel, SubNavItem } from './components/ArtifactPanel';
+import { parseTocFromMarkdown, getActiveArtifactContent } from './src/utils/tocUtils';
 import WorkflowProgress, { Stage } from './components/WorkflowProgress';
 import { AssistantChat } from './components/chat';
 import type { ProgressInfo } from './services/backendService';
 
-// 从 Markdown 内容中解析 TOC（标题列表）
-function parseTocFromMarkdown(content: string): SubNavItem[] {
-    if (!content) return [];
 
-    // 匹配 Markdown 标题 (## 或 ###)
-    const headingRegex = /^(#{1,4})\s+(.+)$/gm;
-    const items: SubNavItem[] = [];
-    let match;
-
-    while ((match = headingRegex.exec(content)) !== null) {
-        const level = match[1].length;
-        const title = match[2].trim();
-
-        // 过滤逻辑：严控只保留带一级标号的标题（如 "1. "）
-        // 用户要求：导航栏只有带标号的一级标题，排除 "[P0]..." 或 "待澄清..." 等非标号标题
-        // 匹配模式：数字 + 点 + 空格 (e.g., "1. ")
-        const isTopLevelNumbered = /^\d+\.\s/.test(title);
-
-        if (!isTopLevelNumbered) {
-            continue;
-        }
-
-        // 生成 slug ID (与 ArtifactPanel 中的 slugify 逻辑保持一致)
-        const id = title
-            .toString()
-            .toLowerCase()
-            .trim()
-            .replace(/\s+/g, '-')
-            .replace(/[^\w\u4e00-\u9fa5\-.+]/g, '');
-
-        // 只取 h2 和 h3 作为 TOC 项
-        if (level >= 2 && level <= 3) {
-            items.push({
-                id,
-                title: title,
-                status: 'pending' // 默认状态，后续可根据滚动位置动态更新
-            });
-        }
-    }
-
-    return items;
-}
 
 // 将后端 ProgressInfo.stages 转换为 WorkflowProgress 组件期望的 Stage 格式
 function convertToStages(progress: ProgressInfo | null): Stage[] {
@@ -127,15 +87,18 @@ const CompactApp: React.FC = () => {
         return workflowProgress?.artifactProgress;
     }, [workflowProgress]);
 
-    // 计算 TOC
+    // 计算 TOC — 与 ArtifactPanel 逻辑一致，只取当前阶段的 artifact 内容
     const tocItems = useMemo(() => {
-        // 优先显示选中的 stage 的 artifact
-        // 这里简化逻辑：如果有 streaming，解析 streaming；否则解析 active artifact
-        // 实际逻辑可能需要根据 activeTab 或 selectedStage 来决定显示哪个 content
-        // 暂且只对 'implementation_plan' 或当前 streaming 的 artifact 生成 TOC
-        const content = streamingArtifactContent || Object.values(artifacts).join('\n');
+        const content = getActiveArtifactContent({
+            artifacts,
+            artifactProgress: workflowProgress?.artifactProgress ?? null,
+            selectedStageId,
+            currentStageId,
+            streamingArtifactContent,
+            streamingArtifactKey,
+        });
         return parseTocFromMarkdown(content);
-    }, [streamingArtifactContent, artifacts]);
+    }, [artifacts, workflowProgress, selectedStageId, currentStageId, streamingArtifactContent, streamingArtifactKey]);
 
 
     // 监听窗口大小
