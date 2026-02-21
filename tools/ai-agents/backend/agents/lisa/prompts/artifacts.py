@@ -403,7 +403,17 @@ Current State:
 **来自推理智能体的重要上下文 (CONTEXT FROM REASONING AGENT)**:
 {reasoning_hint}
 
-请务必根据上述上下文更新文档，尤其是其中提到的风险和决策。
+请务必根据上述上下文更新文档，尤其是其中提到的风险、决策和**状态变更**。
+如果上下文中包含"状态变更"指令（如 "Q-001 → confirmed"），你**必须**在 `assumptions` 列表中找到对应 ID 的条目，
+将其 `status` 更新为 `confirmed`，并在 `note` 字段中填写确认结论。
+"""
+    else:
+        # 兜底规则：即使没有 hint，也提醒 LLM 关注对话中的状态变更
+        reasoning_context = """
+**通用规则 (FALLBACK RULE)**:
+如果对话历史中用户已经明确回答或确认了 `assumptions` 列表中的某个待确认问题（status 为 "pending"），
+你**必须**将对应条目的 `status` 更新为 `confirmed`，并在 `note` 字段中记录用户的确认结论。
+不要遗漏任何已在对话中被回答的问题。
 """
 
     return f"""
