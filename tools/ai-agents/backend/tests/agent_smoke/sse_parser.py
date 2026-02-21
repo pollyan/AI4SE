@@ -13,7 +13,7 @@ from typing import List
 @dataclass
 class SSEEvent:
     """一个 SSE 事件"""
-    event_type: str       # "text-start", "text-delta", "tool-input-available" 等
+    event_type: str  # "text-start", "text-delta" 等
     data: dict            # 解析后的 JSON 数据
     raw: str              # 原始 data: 行
 
@@ -61,7 +61,8 @@ def send_and_collect(client, session_id: str, message: str) -> List[SSEEvent]:
     封装了 HTTP 请求 + SSE 解析，让多轮测试代码简洁。
     """
     response = client.post(
-        f"/ai-agents/api/requirements/sessions/{session_id}/messages/v2/stream",
+        f"/ai-agents/api/requirements/sessions/{session_id}"
+        "/messages/v2/stream",
         json={"messages": [{"role": "user", "content": message}]},
         content_type="application/json"
     )
@@ -85,7 +86,8 @@ def extract_tool_trajectory(events: List[SSEEvent]) -> List[ToolCall]:
     """
     从事件流中提取有序的工具调用轨迹。
 
-    注意: SSE 中 tool-input-available 的 input 格式是 {"key": "test_design_requirements"}，
+    注意: SSE 中 tool-input-available 的 input 格式是
+    {"key": "test_design_requirements"}，
     不包含 artifact_type。artifact_key 直接从 input.key 获取。
     """
     return [
