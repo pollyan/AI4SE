@@ -1,7 +1,7 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { AssistantChat } from '../../components/chat/AssistantChat';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { Assistant } from '../../types';
+import { Assistant, AssistantId } from '../../types';
 import { createMockStream, Protocol } from '../utils/stream-mock';
 import { server } from '../mocks/server';
 import { http, HttpResponse } from 'msw';
@@ -12,24 +12,36 @@ vi.mock('../../services/backendService', () => ({
 }));
 
 const mockAssistant: Assistant = {
-    id: 'alex',
+    id: AssistantId.Alex,
     name: 'Alex',
     role: 'Analyst',
     initial: 'A',
     description: 'Test',
-    bundle: 'bundle'
+    colorClass: 'text-blue-600',
+    bgColorClass: 'bg-blue-100',
+    borderColorClass: 'border-blue-200',
+    textColorClass: 'text-blue-800',
+    systemInstruction: 'You are a helpful assistant.',
+    welcomeMessage: 'Hello!',
 };
 
-describe.skip('ChatFlow Integration Tests', () => {
+describe('ChatFlow Integration Tests', () => {
+    beforeEach(() => {
+        server.use(
+            http.post('*/sync', () => {
+                return HttpResponse.json({ success: true });
+            })
+        );
+    });
     // 1. Basic Messaging
     it('T1.1: Renders text stream correctly', async () => {
         // Setup MSW handler
         server.use(
             http.post('*/messages/v2/stream', () => {
                 const stream = createMockStream([
-                    Protocol.data([{messageId: "msg_1"}]),
-                    Protocol.text("Hello"),
-                    Protocol.text(" World"),
+                    Protocol.start("msg_1"),
+                    Protocol.text("Hello", "msg_1"),
+                    Protocol.text(" World", "msg_1"),
                     Protocol.finish()
                 ]);
                 return new HttpResponse(stream, {
@@ -42,10 +54,10 @@ describe.skip('ChatFlow Integration Tests', () => {
 
         // Wait for session init
         await waitFor(() => expect(screen.queryByText('正在创建会话...')).not.toBeInTheDocument());
-        
+
         // Find input
-        const input = await screen.findByPlaceholderText(/请输入/i);
-        const sendBtn = screen.getByRole('button', { name: /发送消息/i });
+        const input = await screen.findByPlaceholderText(/输入消息/i);
+        const sendBtn = screen.getByRole('button', { name: /发送/i });
 
         // Type and send
         fireEvent.change(input, { target: { value: 'Hi' } });
@@ -65,12 +77,12 @@ describe.skip('ChatFlow Integration Tests', () => {
             http.post('*/messages/v2/stream', async ({ request }) => {
                 callCount++;
                 const body = await request.json() as any;
-                
+
                 if (callCount === 1) {
                     // First call: Return confirmation tool
                     const stream = createMockStream([
-                        Protocol.data([{messageId: "msg_2"}]),
-                        Protocol.text("I need confirmation."),
+                        Protocol.start("msg_2"),
+                        Protocol.text("I need confirmation.", "msg_2"),
                         Protocol.toolCall("call_1", "ask_confirmation", { message: "Proceed?" }),
                     ]);
                     return new HttpResponse(stream, {
@@ -93,9 +105,9 @@ describe.skip('ChatFlow Integration Tests', () => {
         await waitFor(() => expect(screen.queryByText('正在创建会话...')).not.toBeInTheDocument());
 
         // Send message
-        const input = await screen.findByPlaceholderText(/请输入/i);
+        const input = await screen.findByPlaceholderText(/输入消息/i);
         fireEvent.change(input, { target: { value: 'Do it' } });
-        fireEvent.click(screen.getByRole('button', { name: /发送消息/i }));
+        fireEvent.click(screen.getByRole('button', { name: /发送/i }));
 
         // Wait for Tool UI
         await waitFor(() => {
@@ -108,7 +120,7 @@ describe.skip('ChatFlow Integration Tests', () => {
 
         // Verify final text
         await waitFor(() => {
-            expect(screen.getByText("Action confirmed.")).toBeInTheDocument();
+            expect(screen.getByText("已确认")).toBeInTheDocument();
         });
     });
 
@@ -118,8 +130,8 @@ describe.skip('ChatFlow Integration Tests', () => {
         server.use(
             http.post('*/messages/v2/stream', () => {
                 const stream = createMockStream([
-                    Protocol.data([{messageId: "msg_3"}]),
-                    Protocol.text("Done."),
+                    Protocol.start("msg_3"),
+                    Protocol.text("Done.", "msg_3"),
                     Protocol.finish()
                 ]);
                 return new HttpResponse(stream, {
@@ -136,8 +148,8 @@ describe.skip('ChatFlow Integration Tests', () => {
         await waitFor(() => expect(screen.queryByText('正在创建会话...')).not.toBeInTheDocument());
 
         // Send
-        fireEvent.change(await screen.findByPlaceholderText(/请输入/i), { target: { value: 'Hi' } });
-        fireEvent.click(screen.getByRole('button', { name: /发送消息/i }));
+        fireEvent.change(await screen.findByPlaceholderText(/输入消息/i), { target: { value: 'Hi' } });
+        fireEvent.click(screen.getByRole('button', { name: /发送/i }));
 
         // Wait for finish
         await waitFor(() => {
@@ -164,8 +176,8 @@ describe.skip('ChatFlow Integration Tests', () => {
         await waitFor(() => expect(screen.queryByText('正在创建会话...')).not.toBeInTheDocument());
 
         // Send
-        fireEvent.change(await screen.findByPlaceholderText(/请输入/i), { target: { value: 'Hi' } });
-        fireEvent.click(screen.getByRole('button', { name: /发送消息/i }));
+        fireEvent.change(await screen.findByPlaceholderText(/输入消息/i), { target: { value: 'Hi' } });
+        fireEvent.click(screen.getByRole('button', { name: /发送/i }));
 
         // Expect Error UI
         // Note: MSW HttpResponse.error() simulates network error

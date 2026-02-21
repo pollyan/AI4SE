@@ -13,7 +13,7 @@ import { vi } from 'vitest';
  */
 export function createMockStream(parts: string[], delay = 10): ReadableStream {
     const encoder = new TextEncoder();
-    
+
     return new ReadableStream({
         async start(controller) {
             for (const part of parts) {
@@ -21,7 +21,7 @@ export function createMockStream(parts: string[], delay = 10): ReadableStream {
                 if (delay > 0) {
                     await new Promise(resolve => setTimeout(resolve, delay));
                 }
-                controller.enqueue(encoder.encode(part + '\n'));
+                controller.enqueue(encoder.encode(part));
             }
             controller.close();
         }
@@ -36,7 +36,7 @@ export function mockFetchStream(parts: string[]) {
     const mockResponse = new Response(stream, {
         headers: { 'Content-Type': 'text/event-stream' }
     });
-    
+
     global.fetch = vi.fn().mockResolvedValue(mockResponse);
 }
 
@@ -51,10 +51,38 @@ export function mockFetchError(message: string) {
  * Protocol Builders
  */
 export const Protocol = {
-    text: (t: string) => `0:${JSON.stringify(t)}`,
-    data: (d: any[]) => `8:${JSON.stringify(d)}`,
-    toolCall: (id: string, name: string, args: any) => `9:${JSON.stringify({toolCallId: id, toolName: name, args})}`,
-    toolResult: (id: string, name: string, result: any) => `a:${JSON.stringify({toolCallId: id, toolName: name, result})}`,
-    finish: (reason = "stop", usage = {promptTokens: 10, completionTokens: 10}) => `d:${JSON.stringify({finishReason: reason, usage})}`,
-    error: (msg: string) => `e:${JSON.stringify({error: msg})}`
+    // V2: data: {"type": "text-start", ...}
+    start: (id = "msg_" + Math.random()) => `data: ${JSON.stringify({ type: "text-start", id: id })}\n\n`,
+
+    // V2: data: {"type": "text-delta", "delta": "t", "id": "..."}
+    text: (t: string, id: string = "msg_default") => `data: ${JSON.stringify({ type: "text-delta", delta: t, id: id })}\n\n`,
+
+    // V2: data: {"type": "data", "data": [...]}
+    data: (d: any[]) => `data: ${JSON.stringify({ type: "data", data: d })}\n\n`,
+
+    // V2: data: {"type": "tool-input-available", ...}
+    toolCall: (id: string, name: string, args: any) => `data: ${JSON.stringify({
+        type: "tool-input-available",
+        toolCallId: id,
+        toolName: name,
+        input: args
+    })}\n\n`,
+
+    // V2: data: {"type": "tool-output-available", ...}
+    toolResult: (id: string, name: string, result: any) => `data: ${JSON.stringify({
+        type: "tool-output-available",
+        toolCallId: id,
+        toolName: name,
+        output: result
+    })}\n\n`,
+
+    // V2: data: {"type": "finish", ...}
+    finish: (reason = "stop", usage = { promptTokens: 10, completionTokens: 10 }) => `data: ${JSON.stringify({
+        type: "finish",
+        finishReason: reason,
+        usage
+    })}\n\n`,
+
+    // V2: data: {"type": "error", ...}
+    error: (msg: string) => `data: ${JSON.stringify({ type: "error", error: msg })}\n\n`
 };

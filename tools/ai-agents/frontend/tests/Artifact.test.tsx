@@ -5,7 +5,7 @@ import { server } from './mocks/server';
 import { AssistantChat } from '../components/chat/AssistantChat';
 import * as React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { Assistant } from '../types';
+import { Assistant, AssistantId } from '../types';
 
 // Mock scrollIntoView
 Element.prototype.scrollIntoView = vi.fn();
@@ -13,55 +13,56 @@ Element.prototype.scrollIntoView = vi.fn();
 const API_BASE = '/ai-agents/api/requirements';
 
 const assistant: Assistant = {
-    id: 'alex',
+    id: AssistantId.Alex,
     name: 'Alex',
     role: '需求分析专家',
     initial: 'A',
-    description: '测试助手'
+    description: '测试助手',
+    colorClass: 'text-blue-600',
+    bgColorClass: 'bg-blue-100',
+    borderColorClass: 'border-blue-200',
+    textColorClass: 'text-blue-800',
+    systemInstruction: 'You are a helpful assistant.',
+    welcomeMessage: 'Hello!'
 };
 
-const mockStreamResponseV2 = (content: string, toolCall?: { id: string, args: string }) => {
-    return http.post(`${API_BASE}/sessions/:sessionId/messages/v2/stream`, async () => {
+const createStreamResolver = (content: string, toolCall?: { id: string, args: string }) => {
+    return () => {
         const encoder = new TextEncoder();
         const messageId = `msg_${Date.now()}_${Math.random()}`;
         const stream = new ReadableStream({
             start(controller) {
                 // 1. Start
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "start", messageId })}\n\n`));
-                
-                // 2. Text
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text-start", id: messageId })}\n\n`));
+
+                // 2. Text (Use 'delta' instead of 'text')
                 if (content) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text-delta", text: content })}\n\n`));
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text-delta", delta: content, id: messageId })}\n\n`));
                 }
-                
-                // 3. Tool Call
+
+                // 3. Tool Call (Use 'tool-input-available')
                 if (toolCall) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-                        type: "tool-call", 
-                        toolCallId: toolCall.id, 
-                        toolName: "UpdateArtifact", 
-                        input: JSON.parse(toolCall.args) 
-                    })}\n\n`));
-                    // Tool Result (simulated immediate success)
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-                        type: "tool-result", 
-                        toolCallId: toolCall.id, 
-                        toolName: "UpdateArtifact", 
-                        result: { status: "success" } 
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                        type: "tool-input-available",
+                        toolCallId: toolCall.id,
+                        toolName: "UpdateArtifact",
+                        input: JSON.parse(toolCall.args)
                     })}\n\n`));
                 }
-                
+
                 // 4. Finish
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "finish", finishReason: "stop" })}\n\n`));
-                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                 controller.close();
             }
         });
-        return new HttpResponse(stream, { headers: { 'Content-Type': 'text/event-stream' } });
-    });
+
+        return new HttpResponse(stream, {
+            headers: { 'Content-Type': 'text/event-stream' }
+        });
+    };
 };
 
-describe.skip('AssistantChat Artifact Handling', () => {
+describe('AssistantChat Artifact Handling', () => {
     afterEach(() => {
         server.resetHandlers();
     });
@@ -77,29 +78,30 @@ describe.skip('AssistantChat Artifact Handling', () => {
                     data: { id: 'test-session', project_name: 'test', session_status: 'created', current_stage: 'initial' }
                 });
             }),
-            mockStreamResponseV2('Ready'),
+            http.post(`${API_BASE}/sessions/:sessionId/sync`, () => {
+                return HttpResponse.json({ success: true });
+            }),
+            http.post(`${API_BASE}/sessions/:sessionId/messages/v2/stream`, createStreamResolver('Ready')),
             // Fallback for default API path if configuration fails
-            http.post('/api/chat', async () => {
-                 return mockStreamResponseV2('Ready')();
-            })
+            http.post('/api/chat', createStreamResolver('Ready'))
         );
 
         render(<AssistantChat assistant={assistant} onBack={onBack} />);
 
         // Wait for welcome message
         await waitFor(() => {
-            expect(screen.queryByPlaceholderText('请输入...')).toBeInTheDocument();
+            expect(screen.queryByPlaceholderText('输入消息...')).toBeInTheDocument();
         }, { timeout: 8000 });
 
         // Change response for the next message
         const toolArgs = JSON.stringify({ key: 'test', markdown_body: 'SECRET_DATA' });
-        const nextResponse = mockStreamResponseV2('Analysis result:', { id: 'call_1', args: toolArgs });
+        const nextResolver = createStreamResolver('Analysis result:', { id: 'call_1', args: toolArgs });
         server.use(
-            nextResponse,
-            http.post('/api/chat', async () => nextResponse())
+            http.post(`${API_BASE}/sessions/:sessionId/messages/v2/stream`, nextResolver),
+            http.post('/api/chat', nextResolver)
         );
 
-        const input = screen.getByPlaceholderText('请输入...');
+        const input = screen.getByPlaceholderText('输入消息...');
         await user.type(input, 'test');
         await user.keyboard('{Enter}');
 
@@ -108,7 +110,8 @@ describe.skip('AssistantChat Artifact Handling', () => {
             const fullContent = document.body.textContent || '';
             expect(fullContent).toContain('Analysis result:');
             // Check for Tool UI
-            expect(fullContent).toContain('✅ 已更新右侧产出物面板');
+            // Check for Tool UI (Loading State)
+            expect(fullContent).toContain('↻ 正在更新产出物...');
 
             // Ensure SECRET_DATA is NOT leaked in main chat
             // (It's in args, but UpdateArtifactView doesn't render it)

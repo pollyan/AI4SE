@@ -11,12 +11,38 @@ logger = logging.getLogger(__name__)
 
 # 导入统一错误处理工具
 from backend.utils.error_handler import (
+    api_error_handler,
+    db_transaction_handler,
+    validate_json_data,
+    format_success_response,
     ValidationError,
     NotFoundError,
     DatabaseError,
 )
 
 # 导入数据模型
+from backend.models import db, TestCase, ExecutionHistory, StepExecution
+
+__all__ = [
+    "api_error_handler",
+    "db_transaction_handler",
+    "validate_json_data",
+    "format_success_response",
+    "ValidationError",
+    "NotFoundError",
+    "DatabaseError",
+    "get_pagination_params",
+    "format_paginated_response",
+    "standard_error_response",
+    "standard_success_response",
+    "require_json",
+    "log_api_call",
+    "register_blueprints",
+    "db",
+    "TestCase",
+    "ExecutionHistory",
+    "StepExecution"
+]
 
 
 def get_pagination_params():

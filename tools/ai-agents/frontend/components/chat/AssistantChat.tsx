@@ -9,6 +9,7 @@ import { Assistant } from '../../types';
 import { useVercelChat } from '../../hooks/useVercelChat';
 import { ErrorBoundary } from '../common/ErrorBoundary';
 import { MarkdownText } from './MarkdownText';
+import { ToolInvocation } from './ToolInvocation';
 
 interface AssistantChatProps {
     assistant: Assistant;
@@ -53,7 +54,7 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange, onStreamE
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // 使用新的 useVercelChat hook
-    const { messages, status, sendMessage, stop, error } = useVercelChat({
+    const { messages, status, sendMessage, stop, error, addToolResult, reload } = useVercelChat({
         sessionId,
         assistantType: assistant.id,
         onProgressChange: onProgressChange || undefined,
@@ -178,6 +179,30 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange, onStreamE
                                     <MarkdownText key={i} content={part.text} />
                                 );
                             }
+                            if (part.type === 'tool-invocation') {
+                                return (
+                                    <ToolInvocation
+                                        key={i}
+                                        toolInvocation={part as any}
+                                        addToolResult={addToolResult}
+                                    />
+                                );
+                            }
+                            // Fallback for dynamic tool types (e.g., tool-ask_confirmation)
+                            if ((part as any).toolCallId) {
+                                return (
+                                    <ToolInvocation
+                                        key={i}
+                                        toolInvocation={{
+                                            ...part,
+                                            toolName: part.type.replace('tool-', ''), // Attempt to extract name if missing
+                                            state: (part as any).state || 'call',
+                                            args: (part as any).args || (part as any).input,
+                                        } as any}
+                                        addToolResult={addToolResult}
+                                    />
+                                );
+                            }
                             return null;
                         })}
 
@@ -243,8 +268,14 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange, onStreamE
 
             {/* ERROR DISPLAY */}
             {error && (
-                <div className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
-                    出错了: {error.message}
+                <div className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm flex items-center justify-between">
+                    <span>出错了: {error.message}</span>
+                    <button
+                        onClick={() => reload()}
+                        className="px-3 py-1 bg-white border border-red-200 rounded hover:bg-red-50 text-xs"
+                    >
+                        重试
+                    </button>
                 </div>
             )}
 

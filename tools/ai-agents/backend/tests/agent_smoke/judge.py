@@ -9,6 +9,7 @@
 
 import os
 import logging
+from typing import cast
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -64,19 +65,19 @@ def judge_output(
     Returns:
         JudgeResult: 包含 passed（bool）和 reason（str）。
     """
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY", "")
     base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
     model = os.getenv("SMOKE_TEST_JUDGE_MODEL", "deepseek-v3.2")
 
     llm = ChatOpenAI(
         model=model,
         base_url=base_url,
-        api_key=api_key,
+        api_key=api_key,  # type: ignore[arg-type]
         temperature=0
     )
     structured_llm = llm.with_structured_output(JudgeResult)
 
-    result = structured_llm.invoke([
+    raw_result = structured_llm.invoke([
         SystemMessage(content=JUDGE_SYSTEM),
         HumanMessage(content=JUDGE_USER.format(
             user_input=user_input,
@@ -84,5 +85,6 @@ def judge_output(
             actual_output=actual_output
         ))
     ])
+    result = cast(JudgeResult, raw_result)
     logger.info(f"Judge 结果: passed={result.passed}, reason={result.reason}")
     return result

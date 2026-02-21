@@ -1,4 +1,5 @@
 import pytest
+from typing import Any, Dict, cast
 from unittest.mock import MagicMock, patch
 from langchain_core.messages import AIMessage
 from backend.agents.lisa.state import LisaState
@@ -42,6 +43,7 @@ def test_e2e_incremental_update_flow(mock_llm, mock_stream_writer):
         pending_clarifications=[],
         clarification=None,
         consensus_items=[],
+        latest_artifact_hint=None,
     )
 
     # 2. Simulate Interaction 1: Create initial artifact (Q1, Q2)
@@ -134,7 +136,10 @@ def test_e2e_incremental_update_flow(mock_llm, mock_stream_writer):
     state_after_2 = artifact_node(state_after_1, mock_llm)
 
     # Verify State 2
-    structured_2 = state_after_2.get("structured_artifacts", {}).get("requirement")
+    structured_2 = cast(
+        Dict[str, Any],
+        state_after_2.get("structured_artifacts", {}).get("requirement")
+    )
     assumptions = structured_2["assumptions"]
 
     assert len(assumptions) == 3  # Q1, Q2, Q3

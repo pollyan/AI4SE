@@ -38,6 +38,10 @@ export interface UseVercelChatReturn {
     stop: () => void;
     /** 错误信息 */
     error?: Error;
+    /** 添加工具结果 */
+    addToolResult: (options: { toolCallId: string; toolName: string; result: any }) => void;
+    /** 重试最后一条消息 */
+    reload: () => void;
 }
 
 /**
@@ -71,6 +75,9 @@ export function useVercelChat({
         error,
         sendMessage: sdkSendMessage,
         stop,
+        addToolResult,
+        // @ts-ignore
+        reload,
     } = useChat({
         transport,
         // 处理自定义数据事件（进度更新）
@@ -128,7 +135,10 @@ export function useVercelChat({
     const sendMessage = useCallback(
         ({ text, attachments }: { text: string; attachments?: any[] }) => {
             sdkSendMessage({
+                // @ts-ignore
                 content: text,
+                role: 'user',
+                // @ts-ignore - compatible with Vercel AI SDK 3.3+
                 experimental_attachments: attachments
             });
         },
@@ -140,6 +150,8 @@ export function useVercelChat({
         status,
         sendMessage,
         stop,
+        addToolResult: ({ toolCallId, toolName, result }) => addToolResult({ toolCallId, tool: toolName, output: result }),
         error: error || undefined,
+        reload,
     };
 }
