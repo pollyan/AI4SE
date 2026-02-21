@@ -5,10 +5,11 @@
 # 模拟 GitHub Actions 的测试流程
 # ========================================
 # 用法:
-#   ./scripts/test/test-local.sh          # 运行所有测试
-#   ./scripts/test/test-local.sh api      # 仅运行 API 测试
+#   ./scripts/test/test-local.sh          # 运行所有测试 (不含 smoke)
+#   ./scripts/test/test-local.sh api      # 仅运行 API 测试 (不含 smoke)
 #   ./scripts/test/test-local.sh proxy    # 仅运行代理测试
 #   ./scripts/test/test-local.sh lint     # 仅运行代码检查
+#   ./scripts/test/test-local.sh smoke    # 仅运行耗时的大模型冒烟测试
 # ========================================
 
 set -e
@@ -81,8 +82,8 @@ run_api_tests() {
 
     # 运行 AI Agents Backend 测试 (如果目录存在)
     if [ -d "tools/ai-agents/backend/tests" ]; then
-        log_info "运行 AI Agents Backend 测试..."
-        if python3 -m pytest tools/ai-agents/backend/tests/ -v --cov=tools/ai-agents/backend --cov-report=term; then
+        log_info "运行 AI Agents Backend 测试 (排除慢速冒烟测试)..."
+        if python3 -m pytest tools/ai-agents/backend/tests/ -v -m "not slow" --cov=tools/ai-agents/backend --cov-report=term; then
             log_info "✅ AI Agents Backend 测试通过"
         else
             log_error "❌ AI Agents Backend 测试失败"
@@ -90,6 +91,42 @@ run_api_tests() {
         fi
     else
         log_warn "⚠️ AI Agents Backend 测试目录不存在，跳过"
+    fi
+}
+
+# ==========================================
+# Agent Smoke 测试 (Python)
+# ==========================================
+run_smoke_tests() {
+    log_section "🔥 Agent Smoke Tests (Requires LLM API Key)"
+    
+    # 检查 Python 环境
+    if ! command -v python3 &> /dev/null; then
+        log_error "Python3 未安装"
+        return 1
+    fi
+    
+    # 检查 .env 或者 OPENAI_API_KEY
+    if [ -z "$OPENAI_API_KEY" ] && [ ! -f "$PROJECT_ROOT/.env" ]; then
+        log_error "未找到 OPENAI_API_KEY 或 .env 文件，无法运行冒烟测试。"
+        return 1
+    fi
+
+    # 设置 PYTHONPATH
+    export PYTHONPATH=$PROJECT_ROOT:$PROJECT_ROOT/tools/ai-agents:$PYTHONPATH
+    
+    # 运行测试
+    if [ -d "tools/ai-agents/backend/tests" ]; then
+        log_info "运行 AI Agents Smoke 测试..."
+        if python3 -m pytest tools/ai-agents/backend/tests/ -v -s -m "slow"; then
+            log_info "✅ AI Agents Smoke 测试通过"
+        else
+            log_error "❌ AI Agents Smoke 测试失败"
+            return 1
+        fi
+    else
+        log_error "⚠️ AI Agents Backend 测试目录不存在"
+        return 1
     fi
 }
 
@@ -259,6 +296,9 @@ case "$TEST_TYPE" in
     lint)
         run_lint || FAILED=1
         ;;
+    smoke)
+        run_smoke_tests || FAILED=1
+        ;;
     all)
         run_api_tests || FAILED=1
         run_lint || true  # lint 失败不中断
@@ -268,7 +308,7 @@ case "$TEST_TYPE" in
         ;;
     *)
         log_error "未知测试类型: $TEST_TYPE"
-        echo "用法: $0 [all|api|proxy|lint]"
+        echo "用法: $0 [all|api|proxy|lint|smoke]"
         exit 1
         ;;
 esac
