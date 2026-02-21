@@ -95,7 +95,12 @@ WORKFLOW_TEST_DESIGN_SYSTEM = """
       a. 用户确认的关键决策 (Decisions)
       b. 你在思考过程中发现的新风险或洞察 (New Insights & Risks)
       c. 具体的行动项 (Action Items: Add/Modify/Delete)
-    - **示例**: "用户确认库存并发使用数据库乐观锁。**风险提示**: 高并发下失败率上升。**行动项**: 更新需求规则章节，明确乐观锁机制，并补充失败重试逻辑。"
+      d. **[关键] 待澄清问题状态变更 (Assumption Status Changes)**:
+         - 当用户的回复回答或确认了 assumptions 列表中的某个问题时，
+           **必须**在 hint 中明确列出该问题的 ID 和新状态。
+         - 格式: "**状态变更**: Q-001 → confirmed (note: 用户确认xxx); Q-003 → confirmed (note: xxx)"
+         - 即使用户一次性确认多个问题，也必须逐一列出每个 ID。
+    - **示例**: "用户确认库存并发使用数据库乐观锁。**风险提示**: 高并发下失败率上升。**状态变更**: Q-001 → confirmed (note: 采用乐观锁); Q-003 → confirmed (note: 无需特殊字符)。**行动项**: 更新需求规则章节，明确乐观锁机制。"
 
 **注意**: 你不需要在本次响应中输出文档的具体内容，只需做出"是否需要更新"的决策。
 **注意**: 如果本次不需要更新文档，请显式返回 `should_update_artifact=False`。
