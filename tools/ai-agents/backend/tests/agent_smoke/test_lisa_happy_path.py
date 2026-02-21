@@ -18,8 +18,9 @@ from .sse_parser import (
     extract_full_text,
     extract_tool_trajectory,
     assert_stream_integrity,
+    read_structured_artifact,
 )
-from .judge import judge_output
+from .judge import judge_output, judge_artifact_slice
 
 
 def _print_round(round_num: str, user_msg: str, events) -> None:
@@ -160,6 +161,36 @@ class TestLisaTestDesignHappyPath:
             f"R2 确认回复不合理: {r2_verdict.reason}"
         )
 
+        # ═══ R2 产出物语义验证: Assumptions 状态同步 ═══
+        r2_artifact = read_structured_artifact(
+            lisa_graph, lisa_session, "test_design_requirements"
+        )
+        assumptions = r2_artifact.get("assumptions", [])
+        import json
+        assumptions_json = json.dumps(
+            assumptions, ensure_ascii=False, indent=2
+        )
+
+        r2_artifact_verdict = judge_artifact_slice(
+            conversation_context=(
+                "用户在 R2 中回答了所有待确认问题：\n"
+                f"{CONFIRM_REQUIREMENTS}"
+            ),
+            expected_behavior=(
+                "所有 assumptions 条目的 status 都应该从 'pending' "
+                "变为 'confirmed' 或 'assumed'。\n"
+                "每个 assumption 的 note 字段应包含"
+                "用户确认的结论摘要。\n"
+                "不应有任何条目的 status 仍为 'pending'。"
+            ),
+            artifact_slice=assumptions_json,
+        )
+        assert r2_artifact_verdict.passed, (
+            f"R2 产出物 assumptions 状态未同步: "
+            f"{r2_artifact_verdict.reason}\n"
+            f"实际 assumptions: {assumptions_json[:500]}"
+        )
+
         # ════════════════════════════════
         # R3: 进入策略阶段并生成策略
         # ════════════════════════════════
@@ -222,6 +253,42 @@ class TestLisaTestDesignHappyPath:
         assert r4_reply_verdict.passed, (
             f"R4 对话回复不合理: "
             f"{r4_reply_verdict.reason}"
+        )
+
+        # ═══ R4 产出物语义验证: 测试用例内容 ═══
+        r4_artifact = read_structured_artifact(
+            lisa_graph, lisa_session, "test_design_cases"
+        )
+        cases = r4_artifact.get("cases", [])
+        # 只取前 3 个用例做语义验证，控制 Token 开销
+        cases_slice = cases[:3] if len(cases) > 3 else cases
+        import json
+        cases_json = json.dumps(
+            cases_slice, ensure_ascii=False, indent=2
+        )
+
+        r4_artifact_verdict = judge_artifact_slice(
+            conversation_context=(
+                "此测试针对 POST /api/login 接口，"
+                "参数为手机号(11位)和密码(6-20位含字母数字)。\n"
+                "业务规则：密码连续错误5次锁定30分钟，锁定期间返回锁定提示。\n"
+                "用户已确认：密码不需要特殊字符，手机号仅限中国大陆格式。"
+            ),
+            expected_behavior=(
+                "测试用例应覆盖登录功能的核心场景，包括但不限于：\n"
+                "1. 正常登录成功\n"
+                "2. 密码格式校验（如纯数字、纯字母等非法密码）\n"
+                "3. 手机号格式校验\n"
+                "4. 密码连续错误锁定机制\n"
+                "每个用例应有明确的步骤(steps)和预期结果(expect)。\n"
+                "用例内容必须与登录功能相关，不能出现注册、找回密码等范围外的用例。"
+            ),
+            artifact_slice=cases_json,
+        )
+        assert r4_artifact_verdict.passed, (
+            f"R4 产出物 cases 内容不合理: "
+            f"{r4_artifact_verdict.reason}\n"
+            f"实际用例切片: {cases_json[:500]}"
         )
 
         # ════════════════════════════════
