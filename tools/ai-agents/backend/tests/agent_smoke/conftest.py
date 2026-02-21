@@ -94,3 +94,17 @@ def lisa_session(client, real_ai_config):
         f"创建 Lisa 会话失败: HTTP {response.status_code}\n响应: {data}"
     )
     return data["data"]["id"]
+
+@pytest.fixture
+def lisa_graph(real_ai_config):
+    """
+    暴露 Lisa 的 LangGraph 实例，用于测试中读取 State 快照。
+    
+    使用方式: state = lisa_graph.get_state({"configurable": {"thread_id": session_id}})
+    """
+    import asyncio
+    from backend.agents.service import LangchainAssistantService
+    
+    service = LangchainAssistantService("lisa")
+    asyncio.get_event_loop().run_until_complete(service.initialize())
+    return service.agent

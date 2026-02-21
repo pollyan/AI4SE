@@ -165,3 +165,25 @@ def extract_artifact_bodies(
             if body:
                 bodies.append(body)
     return bodies
+
+def read_structured_artifact(
+    graph, session_id: str, artifact_key: str
+) -> dict:
+    """
+    从 LangGraph State 快照中读取指定的结构化产出物。
+    
+    Args:
+        graph: LangGraph CompiledGraph 实例
+        session_id: 会话 ID (thread_id)
+        artifact_key: 产出物 key，如 "test_design_requirements"
+    
+    Returns:
+        dict: 结构化产出物 JSON 对象，未找到返回空字典
+    """
+    config = {"configurable": {"thread_id": session_id}}
+    state = graph.get_state(config)
+    structured = state.values.get("structured_artifacts", {})
+    artifact = structured.get(artifact_key, {})
+    if hasattr(artifact, "model_dump"):
+        return artifact.model_dump()
+    return artifact if isinstance(artifact, dict) else {}
