@@ -29,6 +29,8 @@ def process_reasoning_stream(
     final_thought = ""
     final_progress_step = None
     final_should_update_artifact = False
+    final_request_transition_to = None
+    final_artifact_update_hint = None
     
     # 状态追踪
     last_thought_len = 0
@@ -105,8 +107,19 @@ def process_reasoning_stream(
             if chunk.should_update_artifact is not None:
                 final_should_update_artifact = chunk.should_update_artifact
 
+        # 4. 处理 request_transition_to
+        if hasattr(chunk, 'request_transition_to') and chunk.request_transition_to:
+            final_request_transition_to = chunk.request_transition_to
+
+        # 5. 处理 artifact_update_hint
+        if hasattr(chunk, 'artifact_update_hint') and chunk.artifact_update_hint:
+            final_artifact_update_hint = chunk.artifact_update_hint
+
     return ReasoningResponse(
         thought=final_thought,
         progress_step=final_progress_step,
-        should_update_artifact=final_should_update_artifact
+        should_update_artifact=final_should_update_artifact,
+        request_transition_to=final_request_transition_to,
+        artifact_update_hint=final_artifact_update_hint
     )
+

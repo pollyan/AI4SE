@@ -16,10 +16,25 @@ import pytest
 from .sse_parser import (
     send_and_collect,
     extract_full_text,
-    extract_tool_input_args,
+    extract_tool_trajectory,
     assert_stream_integrity,
 )
 from .judge import judge_output
+
+
+def _print_round(round_num: str, user_msg: str, events) -> None:
+    """每轮对话完成后实时打印摘要，方便当场观察。"""
+    trajectory = extract_tool_trajectory(events)
+    text = extract_full_text(events)
+
+    sep = "=" * 60
+    print(f"\n{sep}")
+    print(f"[{round_num}] 用户: {user_msg[:80]}..." if len(user_msg) > 80  # noqa: E501
+          else f"[{round_num}] 用户: {user_msg}")
+    print(f"[{round_num}] 工具调用: "
+          f"{[(t.tool_name, t.artifact_key) for t in trajectory]}")
+    print(f"[{round_num}] 智能体回复前 300 字: {text[:300]}")
+    print(sep)
 
 
 # ═══════════════════════════════════════
@@ -48,14 +63,16 @@ REQUIREMENT_INPUT = (
 # R2: 兜底确认（处理 LLM 可能的追问不确定性）
 CONFIRM_REQUIREMENTS = (
     "以上分析都没问题。"
-    "所有未解答的问题都按系统默认行为处理即可，"
-    "我没有更多补充。请进入下一阶段。"
+    "针对你提的问题，统一回复：手机号格式仅限中国大陆11位纯数字；密码不必须包含特殊字符；"
+    "锁定机制是连续 5 次累计失败则锁定，成功登录清零；仅需返回 user_id 和 token；同一账号的锁定不限设备和IP。"
+    "其他没有提到的情况都属于约定俗成的基本逻辑，所有你提出的异常情况和问题都无需验证和考虑了，"
+    "也没有其他的需求或关联系统了，我们就按最简版测试，不再补充任何细节。所有阻塞问题确认完毕。"
 )
 
 # R3-R5: 阶段推进指令
-CONFIRM_STRATEGY = "策略没问题，请开始编写测试用例。"
-CONFIRM_CASES = "用例没问题，请输出最终交付文档。"
-CONFIRM_DELIVERY = "文档确认，交付完成。"
+GENERATE_STRATEGY = "需求已全部明确，没有任何阻塞问题了。请你流转到策略阶段，根据现在的进展分析输出测试策略蓝图。"
+GENERATE_CASES = "策略没问题，请根据该策略开始编写并输出测试用例。"
+GENERATE_DELIVERY = "用例没问题，请根据之前的分析整合输出最终交付文档。"
 
 
 @pytest.mark.slow
@@ -84,34 +101,22 @@ class TestLisaTestDesignHappyPath:
         events_r1 = send_and_collect(
             client, lisa_session, REQUIREMENT_INPUT
         )
+        _print_round("R1", REQUIREMENT_INPUT, events_r1)
         assert_stream_integrity(events_r1)
 
-        # 核心断言: 产出物内容相关性
-        inputs_r1 = extract_tool_input_args(events_r1)
-        assert len(inputs_r1) >= 1, (
+        # 核心断言: 工具调用被正确触发
+        trajectory_r1 = extract_tool_trajectory(events_r1)
+        assert len(trajectory_r1) >= 1, (
             "R1 未触发工具调用，"
-            "智能体可能没有生成需求分析文档。\n"
+            "智能体可能没有分析需求。\n"
             f"事件类型: "
             f"{[e.event_type for e in events_r1]}"
         )
-        body_r1 = inputs_r1[0].get("markdown_body", "")
-        r1_artifact_verdict = judge_output(
-            user_input=REQUIREMENT_INPUT,
-            expected_behavior=(
-                "产出物应是一份登录功能的需求分析文档，"
-                "包含以下要素中的至少 3 项：\n"
-                "- 被测对象（POST /api/login）\n"
-                "- 参数校验规则"
-                "（手机号格式、密码规则）\n"
-                "- 正常流程描述\n"
-                "- 异常规则（锁定机制）\n"
-                "- 测试范围边界"
-            ),
-            actual_output=body_r1[:1000]
-        )
-        assert r1_artifact_verdict.passed, (
-            f"R1 需求分析文档内容不合理: "
-            f"{r1_artifact_verdict.reason}"
+        assert trajectory_r1[0].artifact_key == (
+            "test_design_requirements"
+        ), (
+            f"R1 工具调用的 key 错误: "
+            f"{trajectory_r1[0].artifact_key}"
         )
 
         # 核心断言: 对话回复相关性
@@ -136,17 +141,18 @@ class TestLisaTestDesignHappyPath:
         events_r2 = send_and_collect(
             client, lisa_session, CONFIRM_REQUIREMENTS
         )
+        _print_round("R2", CONFIRM_REQUIREMENTS, events_r2)
         text_r2 = extract_full_text(events_r2)
         assert len(text_r2) > 10, (
             f"R2 回复过短: {repr(text_r2[:100])}"
         )
+        # 核心断言: 对话回复相关性
         r2_verdict = judge_output(
             user_input=CONFIRM_REQUIREMENTS,
             expected_behavior=(
-                "智能体应确认需求分析完成，"
-                "做握手确认或总结共识，"
-                "并引导用户进入下一阶段（策略制定）。"
-                "不应该重复分析需求"
+                "智能体应当确认所有用户提供的P0需求问题细节，"
+                "并提出可以流转到下一个阶段（策略制定）。"
+                "不再有未解决的问题，不应该继续追问任何需求细节。"
             ),
             actual_output=text_r2[:500]
         )
@@ -155,46 +161,29 @@ class TestLisaTestDesignHappyPath:
         )
 
         # ════════════════════════════════
-        # R3: 进入策略阶段
+        # R3: 进入策略阶段并生成策略
         # ════════════════════════════════
         events_r3 = send_and_collect(
-            client, lisa_session, CONFIRM_STRATEGY
+            client, lisa_session, GENERATE_STRATEGY
         )
+        _print_round("R3", GENERATE_STRATEGY, events_r3)
         assert_stream_integrity(events_r3)
 
-        # 核心断言: 策略产出物
-        inputs_r3 = extract_tool_input_args(events_r3)
-        if len(inputs_r3) >= 1:
-            body_r3 = inputs_r3[0].get(
-                "markdown_body", ""
-            )
-            if body_r3:
-                r3_artifact_verdict = judge_output(
-                    user_input=(
-                        "请为登录功能制定测试策略"
-                    ),
-                    expected_behavior=(
-                        "产出物应是一份测试策略蓝图，"
-                        "讨论登录功能的测试方法、"
-                        "优先级、风险分析或"
-                        "测试分层策略。"
-                        "不应重复需求分析内容"
-                    ),
-                    actual_output=body_r3[:1000]
-                )
-                assert r3_artifact_verdict.passed, (
-                    f"R3 策略文档不合理: "
-                    f"{r3_artifact_verdict.reason}"
-                )
+        # 严格断言: 策略阶段工具调用被触发
+        trajectory_r3 = extract_tool_trajectory(events_r3)
+        assert len(trajectory_r3) >= 1, "R3 缺少工具调用"
+        assert trajectory_r3[0].artifact_key == (
+            "test_design_strategy"
+        ), f"R3 artifact_key 错误: {trajectory_r3[0].artifact_key}"
 
         # 核心断言: 对话回复
         text_r3 = extract_full_text(events_r3)
         r3_reply_verdict = judge_output(
-            user_input=CONFIRM_STRATEGY,
+            user_input=GENERATE_STRATEGY,
             expected_behavior=(
-                "智能体应在讨论登录功能的测试策略，"
-                "或引导用户确认策略方向。"
-                "不应重新分析需求或做自我介绍"
+                "智能体应根据要求生成测试策略蓝图，"
+                "并表达该策略包含的主要方向或维度，询问用户是否可进入用例编写阶段。"
+                "不得重新提出新的澄清问题。"
             ),
             actual_output=text_r3[:500]
         )
@@ -204,45 +193,29 @@ class TestLisaTestDesignHappyPath:
         )
 
         # ════════════════════════════════
-        # R4: 进入用例阶段
+        # R4: 进入用例阶段并生成用例
         # ════════════════════════════════
         events_r4 = send_and_collect(
-            client, lisa_session, CONFIRM_CASES
+            client, lisa_session, GENERATE_CASES
         )
+        _print_round("R4", GENERATE_CASES, events_r4)
         assert_stream_integrity(events_r4)
 
-        # 核心断言: 用例产出物
-        inputs_r4 = extract_tool_input_args(events_r4)
-        if len(inputs_r4) >= 1:
-            body_r4 = inputs_r4[0].get(
-                "markdown_body", ""
-            )
-            if body_r4:
-                r4_artifact_verdict = judge_output(
-                    user_input=(
-                        "请为登录功能编写测试用例"
-                    ),
-                    expected_behavior=(
-                        "产出物应是一份测试用例集，"
-                        "包含具体的测试场景、"
-                        "测试步骤和预期结果。"
-                        "应覆盖正常登录和异常场景"
-                        "（如密码错误、账户锁定等）"
-                    ),
-                    actual_output=body_r4[:1000]
-                )
-                assert r4_artifact_verdict.passed, (
-                    f"R4 用例文档不合理: "
-                    f"{r4_artifact_verdict.reason}"
-                )
+        # 严格断言: 用例阶段工具调用被触发
+        trajectory_r4 = extract_tool_trajectory(events_r4)
+        assert len(trajectory_r4) >= 1, "R4 缺少工具调用"
+        assert trajectory_r4[0].artifact_key == (
+            "test_design_cases"
+        ), f"R4 artifact_key 错误: {trajectory_r4[0].artifact_key}"
 
         # 核心断言: 对话回复
         text_r4 = extract_full_text(events_r4)
         r4_reply_verdict = judge_output(
-            user_input=CONFIRM_CASES,
+            user_input=GENERATE_CASES,
             expected_behavior=(
-                "智能体应在讨论具体的测试用例，"
-                "或引导用户审阅和确认用例内容"
+                "智能体应确认收到开始编写用例的指令，"
+                "并基于测试策略产出具体的测试用例。"
+                "同时询问用户是否可以输出最终的交付文档。"
             ),
             actual_output=text_r4[:500]
         )
@@ -255,32 +228,16 @@ class TestLisaTestDesignHappyPath:
         # R5: 交付阶段
         # ════════════════════════════════
         events_r5 = send_and_collect(
-            client, lisa_session, CONFIRM_DELIVERY
+            client, lisa_session, GENERATE_DELIVERY
         )
+        _print_round("R5", GENERATE_DELIVERY, events_r5)
 
-        # 核心断言: 交付产出物
-        inputs_r5 = extract_tool_input_args(events_r5)
-        if len(inputs_r5) >= 1:
-            body_r5 = inputs_r5[0].get(
-                "markdown_body", ""
-            )
-            if body_r5:
-                r5_artifact_verdict = judge_output(
-                    user_input=(
-                        "请输出最终的测试设计文档"
-                    ),
-                    expected_behavior=(
-                        "产出物应是一份最终的"
-                        "测试设计交付文档，"
-                        "整合了前面的需求分析、"
-                        "测试策略和测试用例"
-                    ),
-                    actual_output=body_r5[:1000]
-                )
-                assert r5_artifact_verdict.passed, (
-                    f"R5 交付文档不合理: "
-                    f"{r5_artifact_verdict.reason}"
-                )
+        # 严格断言: 交付阶段工具调用被触发
+        trajectory_r5 = extract_tool_trajectory(events_r5)
+        assert len(trajectory_r5) >= 1, "R5 缺少工具调用"
+        assert trajectory_r5[-1].artifact_key == (
+            "test_design_final"
+        ), f"R5 artifact_key 错误: {trajectory_r5[-1].artifact_key}"
 
         # 核心断言: 对话回复
         text_r5 = extract_full_text(events_r5)
@@ -288,11 +245,10 @@ class TestLisaTestDesignHappyPath:
             f"R5 回复过短: {repr(text_r5[:100])}"
         )
         r5_reply_verdict = judge_output(
-            user_input=CONFIRM_DELIVERY,
+            user_input=GENERATE_DELIVERY,
             expected_behavior=(
-                "智能体应在做最终交付总结，"
-                "告知用户测试设计已完成，"
-                "或提供后续建议"
+                "智能体应当确认最终交付任务，"
+                "并表明已完成文档整合交付，测试设计流程顺利结束。"
             ),
             actual_output=text_r5[:500]
         )

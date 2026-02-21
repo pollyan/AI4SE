@@ -68,10 +68,10 @@ export function CustomComposer() {
                     disabled={isUploading}
                 />
 
-                <ComposerPrimitive.Send>
-                    <div className="p-3 rounded-full shadow-sm transition-colors flex items-center justify-center bg-primary hover:bg-indigo-600 text-white cursor-pointer disabled:bg-gray-200 disabled:dark:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed">
+                <ComposerPrimitive.Send asChild>
+                    <button className="p-3 rounded-full shadow-sm transition-colors flex items-center justify-center bg-primary hover:bg-primary/90 text-white cursor-pointer disabled:bg-gray-200 disabled:dark:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed">
                         <Send size={20} />
-                    </div>
+                    </button>
                 </ComposerPrimitive.Send>
             </ComposerPrimitive.Root>
         </div>

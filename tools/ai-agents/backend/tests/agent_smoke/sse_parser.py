@@ -25,14 +25,30 @@ class ToolCall:
     artifact_key: str     # "test_design_requirements" 等
 
 
-def parse_sse_response(response) -> List[SSEEvent]:
+def send_and_collect(
+    client, session_id: str, message: str, print_stream: bool = True
+) -> List[SSEEvent]:
     """
-    从 Flask test_client 的 Response 中解析所有 SSE 事件。
+    发送一条消息并流式收集所有 SSE 事件，同时实时打屏文本。
+    """
+    response = client.post(
+        f"/ai-agents/api/requirements/sessions/{session_id}"
+        "/messages/v2/stream",
+        json={"messages": [{"role": "user", "content": message}]},
+        content_type="application/json"
+    )
+    assert response.status_code == 200, (
+        f"请求失败: HTTP {response.status_code}\n"
+        f"响应: {response.get_data(as_text=True)[:500]}"
+    )
 
-    SSE 格式: data: {"type": "...", ...}\\n\\n
-    """
     events = []
+    # 如果不开启 stream=True，Flask 的 test_client 也可以获取数据体
     raw_data = response.get_data(as_text=True)
+
+    if print_stream:
+        # 为了明显的轮次分隔
+        print(f"\n[Agent output chunked...] ", end="", flush=True)
 
     for line in raw_data.split("\n"):
         line = line.strip()
@@ -47,30 +63,24 @@ def parse_sse_response(response) -> List[SSEEvent]:
             data = json.loads(json_str)
             event_type = data.get("type", "unknown")
             events.append(SSEEvent(event_type=event_type, data=data, raw=line))
+
+            # 实时打印流式输出的文本和工具调用信息
+            if print_stream:
+                if event_type == "text-delta":
+                    delta = data.get("delta", "")
+                    if delta:
+                        print(delta, end="", flush=True)
+                elif event_type == "tool-input-available":
+                    tool = data.get("toolName", "unknown")
+                    key = data.get("input", {}).get("key", "unknown")
+                    print(f"\n[Triggered Tool: {tool}({key})]", end="", flush=True)
         except json.JSONDecodeError:
-            # 忽略非 JSON 行（如空行或 done 标记）
             continue
 
+    if print_stream:
+        print()  # 打印完一个完成的流后换行
+
     return events
-
-
-def send_and_collect(client, session_id: str, message: str) -> List[SSEEvent]:
-    """
-    发送一条消息并收集所有 SSE 事件。
-
-    封装了 HTTP 请求 + SSE 解析，让多轮测试代码简洁。
-    """
-    response = client.post(
-        f"/ai-agents/api/requirements/sessions/{session_id}"
-        "/messages/v2/stream",
-        json={"messages": [{"role": "user", "content": message}]},
-        content_type="application/json"
-    )
-    assert response.status_code == 200, (
-        f"请求失败: HTTP {response.status_code}\n"
-        f"响应: {response.get_data(as_text=True)[:500]}"
-    )
-    return parse_sse_response(response)
 
 
 def extract_full_text(events: List[SSEEvent]) -> str:
@@ -127,10 +137,31 @@ def extract_tool_input_args(
     从事件流中提取所有工具调用的 input 参数。
 
     返回 tool-input-available 事件中的 input 字段列表。
-    可用于 Schema 校验和 markdown_body 内容提取。
+    仅包含工具调用的参数决策（如 key），不含文档内容。
     """
     return [
         e.data.get("input", {})
         for e in events
         if e.event_type == "tool-input-available"
     ]
+
+
+def extract_artifact_bodies(
+    events: List[SSEEvent],
+) -> List[str]:
+    """
+    从事件流中提取所有产出物的 markdown_body 内容。
+
+    产出物的实际文档内容在 tool-output-available 事件的
+    output.markdown_body 字段中，而非 tool-input-available。
+    """
+    bodies = []
+    for e in events:
+        if e.event_type != "tool-output-available":
+            continue
+        output = e.data.get("output", {})
+        if isinstance(output, dict):
+            body = output.get("markdown_body", "")
+            if body:
+                bodies.append(body)
+    return bodies

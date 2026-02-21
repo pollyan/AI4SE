@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 # 加载项目根目录的 .env
 # （向上回溯 5 层: agent_smoke -> tests -> backend -> ai-agents -> tools -> 项目根）
 PROJECT_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../../../../../..")
+    os.path.join(os.path.dirname(__file__), "../../../../../")
 )
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 

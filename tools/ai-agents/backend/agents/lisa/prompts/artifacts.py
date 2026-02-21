@@ -41,21 +41,34 @@ def format_schema_for_prompt(schema: dict) -> str:
             return root_schema.get("$defs", {}).get(def_name, {})
         return {}
 
-    def build_example_from_schema(schema_obj: dict, root_schema: dict = None) -> any:
+    def build_example_from_schema(schema_obj: dict, root_schema: dict = None, visited: set = None) -> any:
         """递归构建示例数据"""
         if root_schema is None:
             root_schema = schema_obj
+        if visited is None:
+            visited = set()
+
+        schema_id = id(schema_obj)
+        if schema_id in visited:
+            return {}  # 避免循环引用
+        
+        visited.add(schema_id)
 
         # 处理 $ref 引用
         if "$ref" in schema_obj:
             ref_schema = resolve_ref(schema_obj["$ref"], root_schema)
-            return build_example_from_schema(ref_schema, root_schema)
+            result = build_example_from_schema(ref_schema, root_schema, visited)
+            visited.remove(schema_id)
+            return result
 
         # 处理 anyOf（选择第一个非 null 的类型）
         if "anyOf" in schema_obj:
             for sub_schema in schema_obj["anyOf"]:
                 if sub_schema.get("type") != "null":
-                    return build_example_from_schema(sub_schema, root_schema)
+                    result = build_example_from_schema(sub_schema, root_schema, visited)
+                    visited.remove(schema_id)
+                    return result
+            visited.remove(schema_id)
             return None
 
         prop_type = schema_obj.get("type")
@@ -64,36 +77,40 @@ def format_schema_for_prompt(schema: dict) -> str:
         # 处理 enum 类型（如 Literal）
         enum_values = schema_obj.get("enum", [])
         if enum_values:
-            return enum_values[0]
+            result = enum_values[0]
         elif prop_type == "string":
-            return description or "字符串值"
+            result = description or "字符串值"
         elif prop_type == "integer":
-            return 1
+            result = 1
         elif prop_type == "number":
-            return 1.0
+            result = 1.0
         elif prop_type == "boolean":
-            return True
+            result = True
         elif prop_type == "array":
             items_schema = schema_obj.get("items", {})
             if items_schema.get("type") == "object" or "$ref" in items_schema:
-                return [build_example_from_schema(items_schema, root_schema)]
+                result = [build_example_from_schema(items_schema, root_schema, visited)]
             else:
-                return ["示例项"]
+                result = ["示例项"]
         elif prop_type == "object":
             properties = schema_obj.get("properties", {})
             example = {}
             for prop_name, prop_schema in properties.items():
-                example[prop_name] = build_example_from_schema(prop_schema, root_schema)
-            return example
+                example[prop_name] = build_example_from_schema(prop_schema, root_schema, visited)
+            result = example
         else:
             # 默认返回空对象
-            return {}
+            result = {}
+            
+        visited.remove(schema_id)
+        return result
 
     # 构建主示例
     properties = schema.get("properties", {})
     example = {}
+    visited_set = set()
     for prop_name, prop_schema in properties.items():
-        example[prop_name] = build_example_from_schema(prop_schema, schema)
+        example[prop_name] = build_example_from_schema(prop_schema, schema, visited_set)
 
     return json.dumps(example, ensure_ascii=False, indent=2)
 

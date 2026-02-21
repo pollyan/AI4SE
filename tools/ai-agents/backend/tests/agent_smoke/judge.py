@@ -75,9 +75,7 @@ def judge_output(
         api_key=api_key,  # type: ignore[arg-type]
         temperature=0
     )
-    structured_llm = llm.with_structured_output(JudgeResult)
-
-    raw_result = structured_llm.invoke([
+    response = llm.invoke([
         SystemMessage(content=JUDGE_SYSTEM),
         HumanMessage(content=JUDGE_USER.format(
             user_input=user_input,
@@ -85,6 +83,19 @@ def judge_output(
             actual_output=actual_output
         ))
     ])
-    result = cast(JudgeResult, raw_result)
-    logger.info(f"Judge 结果: passed={result.passed}, reason={result.reason}")
-    return result
+    
+    import json
+    try:
+        content = str(response.content).strip()
+        if content.startswith("```json"):
+            content = content[7:-3].strip()
+        elif content.startswith("```"):
+            content = content[3:-3].strip()
+            
+        data = json.loads(content)
+        result = JudgeResult(**data)
+        logger.info(f"Judge 结果: passed={result.passed}, reason={result.reason}")
+        return result
+    except Exception as e:
+        logger.error(f"解析 Judge JSON 失败: {e}\nRaw={response.content}")
+        return JudgeResult(passed=False, reason=f"Judge failed to parse JSON: {e}")
