@@ -118,3 +118,19 @@ def assert_stream_integrity(events: List[SSEEvent]) -> None:
     assert "text-delta" in types, f"缺少 text-delta 事件。实际事件类型: {types}"
     assert "text-end" in types, f"缺少 text-end 事件。实际事件类型: {types}"
     assert "finish" in types, f"缺少 finish 事件。实际事件类型: {types}"
+
+
+def extract_tool_input_args(
+    events: List[SSEEvent],
+) -> List[dict]:
+    """
+    从事件流中提取所有工具调用的 input 参数。
+
+    返回 tool-input-available 事件中的 input 字段列表。
+    可用于 Schema 校验和 markdown_body 内容提取。
+    """
+    return [
+        e.data.get("input", {})
+        for e in events
+        if e.event_type == "tool-input-available"
+    ]
