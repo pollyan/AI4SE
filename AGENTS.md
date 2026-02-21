@@ -215,6 +215,24 @@ START → intent_router → reasoning_node → artifact_node → END
 
 > **禁止** 直接在节点中修改 `state["artifacts"]` - 必须使用工具以确保前端可观测性。
 
+### 节点间上下文传递 (Inter-Node Context Passing)
+
+**核心原则**: 推理节点负责"理解和决策"，执行节点负责"执行"——通过 State 传递结构化操作指引。
+
+| 原则 | 说明 |
+|------|------|
+| **先推理再结构化** | ReasoningNode 深度分析对话上下文后，在 `artifact_update_hint` 中生成精确的操作级指引，ArtifactNode 只需执行 |
+| **操作级 Hint > 通用规则** | hint 中应包含具体的 ID、状态变更、字段值，而非模糊的"请更新文档" |
+| **兜底防御** | ArtifactNode 的 Prompt 中保留通用兜底规则，确保即使 hint 缺失也有最低保障 |
+| **Token 效率** | 由上游精简上下文，下游不重复推理全部对话历史 |
+
+**`artifact_update_hint` 格式规范**:
+```
+"用户确认了xxx。**风险提示**: yyy。**状态变更**: Q-001 → confirmed (note: 结论); Q-003 → confirmed (note: 结论)。**行动项**: 更新zzz章节。"
+```
+
+> **依据**: LangGraph 官方推荐通过 State 键在节点间传递私有上下文（Private State 模式）；业界共识"先推理再结构化"（Separate Reasoning and Structuring）是多步 Agent 工作流最佳实践。
+
 ### 数据流与流式传输
 
 - **后端**: Flask + LangGraph 通过服务器发送事件 (SSE) 流式传输响应
