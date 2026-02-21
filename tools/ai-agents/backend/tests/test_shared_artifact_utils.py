@@ -4,7 +4,6 @@
 测试 shared/artifact_utils.py 中的产出物解析函数。
 """
 
-import pytest
 
 class TestExtractMarkdownBlock:
     """测试 extract_markdown_block 函数（向后兼容）"""

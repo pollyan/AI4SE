@@ -1,6 +1,6 @@
 import pytest
-from unittest.mock import MagicMock, ANY
-from langchain_core.messages import SystemMessage, HumanMessage
+from unittest.mock import MagicMock
+from langchain_core.messages import HumanMessage
 from backend.agents.lisa.nodes.reasoning_node import reasoning_node
 from backend.agents.lisa.state import LisaState
 

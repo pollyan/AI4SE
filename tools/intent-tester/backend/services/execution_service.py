@@ -9,7 +9,7 @@ import threading
 import time
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict
 
 from backend.extensions import socketio
 from backend.models import db, TestCase, ExecutionHistory, StepExecution

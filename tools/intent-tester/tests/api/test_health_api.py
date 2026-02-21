@@ -3,7 +3,6 @@
 测试系统状态、错误监控、性能指标等接口
 """
 
-import pytest
 import time
 
 class TestHealthCheckAPI:

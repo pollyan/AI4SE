@@ -5,7 +5,6 @@
 (Artifact XML 标签解析功能已移除)
 """
 
-import re
 import logging
 from typing import Optional
 

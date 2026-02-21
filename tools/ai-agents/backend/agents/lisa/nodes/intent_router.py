@@ -8,14 +8,14 @@ import logging
 from typing import Any, Literal
 from functools import lru_cache
 
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.types import Command
 
 from ..state import LisaState
 from ...shared.artifact_summary import get_artifacts_summary
 from ..schemas import IntentResult
 from ..prompts import INTENT_ROUTING_PROMPT
-from ..routing.hybrid_router import HybridRouter, RoutingDecision
+from ..routing.hybrid_router import HybridRouter
 from ..routing.observability import log_routing_decision
 
 logger = logging.getLogger(__name__)

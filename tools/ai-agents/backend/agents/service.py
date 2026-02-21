@@ -7,13 +7,11 @@ Lisa 智能体使用 LangGraph StateGraph 实现。
 """
 
 import logging
-import json
-import re
-from typing import AsyncIterator, Optional, Dict, List, Any, Union, TYPE_CHECKING
+from typing import AsyncIterator, Optional, Dict, List, Union, TYPE_CHECKING
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
 
 if TYPE_CHECKING:
-    from langgraph.graph.state import CompiledStateGraph
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -302,7 +300,6 @@ class LangchainAssistantService:
 
         from .shared.progress_utils import (
             clean_response_text,
-            get_current_stage_id,
         )
         
         yielded_len = 0

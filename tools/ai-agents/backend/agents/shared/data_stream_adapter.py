@@ -6,7 +6,6 @@ from .data_stream import (
     stream_text_delta,
     stream_text_end,
     stream_data,
-    stream_tool_call,
     stream_finish,
     stream_done,
     stream_error,

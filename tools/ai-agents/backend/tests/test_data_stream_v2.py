@@ -144,22 +144,18 @@ class TestDataStreamAdapter:
     async def test_adapter_yields_start_event(self):
         """适配器应该首先产生 start 事件"""
         # 需要 mock service
-        pass
 
     @pytest.mark.asyncio
     async def test_adapter_converts_text_chunks(self):
         """适配器应该将文本 chunk 转换为 text 事件"""
-        pass
 
     @pytest.mark.asyncio
     async def test_adapter_converts_state_to_data(self):
         """适配器应该将 state 事件转换为 data 事件"""
-        pass
 
     @pytest.mark.asyncio
     async def test_adapter_yields_finish_at_end(self):
         """适配器应该在最后产生 finish 事件"""
-        pass
 
 
 class TestDataStreamHeaders:
@@ -191,7 +187,6 @@ class TestV2ProtocolMigration:
         # from backend.agents.shared.data_stream_v2 import stream_text
         # result = stream_text("Hello")
         # assert json.loads(result[6:-2]) == expected_v2_format
-        pass
 
     def test_v2_data_progress_format(self):
         """验证 V2 进度数据格式"""
@@ -203,4 +198,3 @@ class TestV2ProtocolMigration:
         }
         
         # TODO: 实现后验证
-        pass

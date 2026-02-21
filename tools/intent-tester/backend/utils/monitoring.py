@@ -8,11 +8,10 @@ import threading
 import logging
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any
 from dataclasses import dataclass
-from flask import request, has_request_context
+from flask import request
 import psutil
-import json
 
 logger = logging.getLogger(__name__)
 

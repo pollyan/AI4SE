@@ -1,7 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from langchain_core.messages import HumanMessage, AIMessage
-from langgraph.types import Command
 from backend.agents.lisa.nodes.intent_router import intent_router_node
 from backend.agents.lisa.routing.hybrid_router import RoutingDecision
 from backend.agents.lisa.state import LisaState

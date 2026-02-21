@@ -9,7 +9,7 @@ import logging
 import traceback
 import time
 import uuid
-from typing import Dict, Any, Tuple, Optional, Union
+from typing import Dict, Any, Tuple, Optional
 from datetime import datetime
 
 # 获取增强的日志器

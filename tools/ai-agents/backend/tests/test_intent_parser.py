@@ -1,6 +1,5 @@
 """意图解析器测试"""
-import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 from backend.agents.lisa.intent_parser import parse_user_intent, ClarifyContext
 from backend.agents.lisa.schemas import UserIntentInClarify
 

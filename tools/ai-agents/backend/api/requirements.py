@@ -7,11 +7,11 @@ import uuid
 import json
 import os
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from flask import Blueprint, request, jsonify, Response, stream_with_context
+from flask import Blueprint, request, Response, stream_with_context
 from werkzeug.datastructures import FileStorage
 
 # SocketIO support removed for cleanup

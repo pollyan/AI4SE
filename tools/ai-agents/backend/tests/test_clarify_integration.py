@@ -1,7 +1,6 @@
 """clarify 阶段集成测试"""
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from langchain_core.messages import HumanMessage, AIMessage
+from unittest.mock import Mock, patch
+from langchain_core.messages import HumanMessage
 
 
 class TestClarifyIntentIntegration:

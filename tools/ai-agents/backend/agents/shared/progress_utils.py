@@ -11,9 +11,8 @@ LLM 在回复末尾输出 JSON 代码块 (```json ... ```)
 """
 
 import re
-import json
 import logging
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict
 
 logger = logging.getLogger(__name__)
 

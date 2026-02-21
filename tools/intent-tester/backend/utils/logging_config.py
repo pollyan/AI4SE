@@ -8,7 +8,6 @@ import logging
 import logging.handlers
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 
 class ColoredFormatter(logging.Formatter):

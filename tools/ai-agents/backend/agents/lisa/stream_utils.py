@@ -1,6 +1,5 @@
-from typing import List, Dict, Any, Callable, Iterator, Optional
-from backend.agents.shared.data_stream import stream_text_delta
-from .schemas import UpdateArtifact, ReasoningResponse
+from typing import List, Dict, Any, Optional
+from .schemas import ReasoningResponse
 
 def get_stage_index(plan: List[Dict], stage_id: str) -> int:
     """获取阶段在计划中的索引 (Internal Helper)"""

@@ -42,7 +42,7 @@ def create_testcase():
 @views_bp.route('/intent-tester/testcases/<int:testcase_id>')
 @views_bp.route('/intent-tester/testcases/<int:testcase_id>/edit')
 def edit_testcase(testcase_id):
-    from .models import TestCase, db
+    from .models import TestCase
     import json
     testcase = TestCase.query.get_or_404(testcase_id)
     try:

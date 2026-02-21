@@ -1,5 +1,4 @@
 """测试 clarify 阶段 Prompt 内容完整性"""
-import pytest
 from backend.agents.lisa.prompts.workflows.test_design import STAGE_CLARIFY_PROMPT
 
 

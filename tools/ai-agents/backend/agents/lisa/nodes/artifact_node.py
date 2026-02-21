@@ -10,7 +10,7 @@ from ..state import LisaState
 from ..tools import update_artifact
 from ..schemas import UpdateStructuredArtifact
 from ..prompts.artifacts import build_artifact_update_prompt
-from ..utils.markdown_generator import convert_to_markdown, create_empty_requirement_doc
+from ..utils.markdown_generator import convert_to_markdown
 from ..artifact_patch import merge_artifacts
 from ...shared.progress import get_progress_info
 

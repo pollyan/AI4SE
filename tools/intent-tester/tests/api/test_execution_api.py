@@ -2,9 +2,7 @@
 测试执行历史管理API测试
 """
 
-import pytest
-import json
-from datetime import datetime, timedelta
+from datetime import datetime
 
 
 class TestCreateExecutionAPI:

@@ -1,5 +1,3 @@
-import pytest
-from langchain_core.tools import tool
 from backend.agents.lisa.tools import ask_confirmation
 
 def test_ask_confirmation_tool_schema():

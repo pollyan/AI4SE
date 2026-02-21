@@ -6,8 +6,7 @@ VariableResolverService - 变量解析服务核心实现
 
 import json
 import logging
-import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 from threading import Lock
 from collections import OrderedDict

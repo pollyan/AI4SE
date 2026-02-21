@@ -3,8 +3,6 @@ MidScene微服务集成API测试
 测试与MidScene AI服务的集成接口
 """
 
-import pytest
-import json
 
 
 class TestMidSceneExecutionAPI:

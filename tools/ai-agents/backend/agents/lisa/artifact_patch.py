@@ -1,5 +1,5 @@
 import re
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, List
 from copy import deepcopy
 import logging
 

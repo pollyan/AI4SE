@@ -2,8 +2,7 @@
 测试路由模块的错误处理
 """
 import pytest
-from unittest.mock import Mock, patch
-from backend.agents.lisa.routing.exceptions import RoutingError, SemanticRouterError, LLMRouterError
+from backend.agents.lisa.routing.exceptions import RoutingError, SemanticRouterError
 
 class TestRouterExceptions:
     """测试路由异常类"""

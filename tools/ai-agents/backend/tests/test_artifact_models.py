@@ -1,8 +1,6 @@
 """测试 Artifact 数据模型的序列化和验证"""
 
-import pytest
 from backend.agents.lisa.artifact_models import (
-    ArtifactPhase,
     RuleItem,
     AssumptionItem,
     RequirementDoc,

@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import MagicMock
 from backend.agents.lisa.stream_utils import process_reasoning_stream
 from backend.agents.lisa.schemas import ReasoningResponse

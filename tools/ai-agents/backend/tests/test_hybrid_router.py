@@ -1,7 +1,6 @@
 """混合路由器测试 - TDD"""
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from dataclasses import dataclass
 
 

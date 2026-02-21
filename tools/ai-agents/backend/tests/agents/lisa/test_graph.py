@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from langgraph.checkpoint.memory import MemorySaver
 from backend.agents.lisa.graph import create_lisa_graph, get_graph_initial_state
 

@@ -1,7 +1,6 @@
-import pytest
 from datetime import datetime, timedelta
 from backend.services.query_optimizer import QueryOptimizer
-from backend.models import TestCase, ExecutionHistory
+from backend.models import ExecutionHistory
 
 class TestQueryOptimizer:
     """Test cases for QueryOptimizer service"""

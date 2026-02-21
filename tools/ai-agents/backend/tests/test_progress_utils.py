@@ -6,7 +6,6 @@
 - JSON 结构化输出解析（新格式）
 """
 
-import pytest
 from backend.agents.shared.progress_utils import (
     clean_response_text,
     get_current_stage_id,

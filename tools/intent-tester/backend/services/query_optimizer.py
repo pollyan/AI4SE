@@ -3,9 +3,9 @@
 提供优化的查询方法，减少N+1查询问题，提升性能
 """
 
-from sqlalchemy import func, and_, or_, desc, case
+from sqlalchemy import func, or_, desc, case
 from sqlalchemy.orm import joinedload, selectinload
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 
 try:

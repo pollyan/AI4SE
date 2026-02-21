@@ -3,7 +3,6 @@ API错误场景综合测试
 覆盖各种边界情况、异常处理和错误恢复场景
 """
 
-import pytest
 import json
 from unittest.mock import patch
 

@@ -1,4 +1,3 @@
-import pytest
 from backend.agents.lisa.utils.markdown_generator import convert_to_markdown
 
 def test_convert_requirement_doc_scope_mermaid_is_dict():

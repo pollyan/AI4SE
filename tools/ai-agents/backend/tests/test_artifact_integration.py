@@ -3,7 +3,6 @@ from unittest.mock import MagicMock, patch
 from langchain_core.messages import AIMessage
 from backend.agents.lisa.state import LisaState
 from backend.agents.lisa.nodes.artifact_node import artifact_node
-from backend.agents.lisa.artifact_models import RequirementDoc
 
 
 @pytest.fixture
@@ -22,9 +21,7 @@ def mock_stream_writer():
         yield writer
 
 
-@pytest.mark.skip(
-    reason="Artifact node now stores markdown string, not dict. Test needs redesign."
-)
+@pytest.mark.integration
 def test_e2e_incremental_update_flow(mock_llm, mock_stream_writer):
     # 1. Initialize State
     state = LisaState(
@@ -34,8 +31,11 @@ def test_e2e_incremental_update_flow(mock_llm, mock_stream_writer):
         plan=[],
         current_stage_id="clarify",
         artifacts={
-            "requirement": {}
-        },  # Pre-populate to bypass deterministic initialization
+            "requirement": ""  # Should be string in new design
+        },
+        structured_artifacts={
+            "requirement": {}  # Storage for structured data
+        },
         artifact_templates=[
             {"stage": "clarify", "key": "requirement", "outline": "template"}
         ],
@@ -81,19 +81,23 @@ def test_e2e_incremental_update_flow(mock_llm, mock_stream_writer):
     # Run Node
     state_after_1 = artifact_node(state, mock_llm)
 
-    # Verify State 1
-    req_1 = state_after_1["artifacts"]["requirement"]
-    # It might be dict or model depending on implementation details of merge
-    # Our merge_artifacts returns dict.
-    # State definition says Union[RequirementDoc, ...].
-    # But artifact_node currently stores result of merge_artifacts (dict).
-    # Ideally we should cast it back to Model if we want strict typing,
-    # but for now dict is what is stored.
+    # Verify State 1: Check STRUCTURED data
+    # state['artifacts'] now holds markdown string
+    # state['structured_artifacts'] holds the dict
+    structured_1 = state_after_1.get("structured_artifacts", {}).get("requirement")
+    markdown_1 = state_after_1.get("artifacts", {}).get("requirement")
 
-    assert isinstance(req_1, dict)
-    assert len(req_1["assumptions"]) == 2
-    assert req_1["assumptions"][0]["id"] == "Q1"
-    assert req_1["assumptions"][0]["status"] == "pending"
+    assert structured_1 is not None, "Structured artifact not found"
+    assert isinstance(structured_1, dict)
+    
+    # Verify content conversion
+    assert len(structured_1["assumptions"]) == 2
+    assert structured_1["assumptions"][0]["id"] == "Q1"
+    assert structured_1["assumptions"][0]["status"] == "pending"
+
+    # Verify Markdown generation happened
+    assert isinstance(markdown_1, str)
+    assert "2FA?" in markdown_1  # Basic check that content is reflected
 
     # 3. Simulate Interaction 2: Incremental Update (Update Q1, Add Q3)
     # Only sending changed/new items
@@ -130,8 +134,8 @@ def test_e2e_incremental_update_flow(mock_llm, mock_stream_writer):
     state_after_2 = artifact_node(state_after_1, mock_llm)
 
     # Verify State 2
-    req_2 = state_after_2["artifacts"]["requirement"]
-    assumptions = req_2["assumptions"]
+    structured_2 = state_after_2.get("structured_artifacts", {}).get("requirement")
+    assumptions = structured_2["assumptions"]
 
     assert len(assumptions) == 3  # Q1, Q2, Q3
 

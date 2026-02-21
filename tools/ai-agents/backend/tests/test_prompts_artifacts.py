@@ -1,4 +1,3 @@
-import pytest
 from backend.agents.lisa.prompts.artifacts import (
     generate_requirement_template,
     get_artifact_json_schemas,

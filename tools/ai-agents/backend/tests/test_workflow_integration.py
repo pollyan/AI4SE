@@ -1,4 +1,3 @@
-import pytest
 from backend.agents.lisa.artifact_models import (
     RequirementDoc,
     DesignDoc,

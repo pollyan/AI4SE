@@ -3,7 +3,6 @@
 包含执行任务管理、变量管理和执行历史查询
 """
 
-import json
 import uuid
 from datetime import datetime
 from flask import request, jsonify
@@ -13,17 +12,10 @@ from flask import Blueprint
 executions_bp = Blueprint('executions', __name__)
 # from . import api_bp # Refactored to use own blueprint
 from .base import (
-    api_error_handler,
-    db_transaction_handler,
-    validate_json_data,
     format_success_response,
-    ValidationError,
-    NotFoundError,
     get_pagination_params,
-    format_paginated_response,
     standard_error_response,
     standard_success_response,
-    require_json,
     log_api_call,
 )
 
@@ -31,13 +23,6 @@ from .base import (
 from backend.models import db, TestCase, ExecutionHistory, StepExecution
 
 # 导入通用代码模式
-from backend.utils.common_patterns import (
-    safe_api_operation,
-    validate_resource_exists,
-    database_transaction,
-    require_json_data,
-    APIResponseHelper,
-)
 
 # 变量管理服务已简化 - 核心变量功能在其他服务中实现
 
@@ -353,7 +338,6 @@ def _trigger_test_execution(execution_id: str, testcase: TestCase, data: dict):
     # 2. 调用MidSceneJS执行引擎
     # 3. 更新执行状态
     # 4. 记录步骤执行结果
-    pass
 
 
 def _stop_test_execution(execution_id: str):
@@ -363,4 +347,3 @@ def _stop_test_execution(execution_id: str):
     # 1. 向执行引擎发送停止信号
     # 2. 清理执行资源
     # 3. 更新执行状态
-    pass

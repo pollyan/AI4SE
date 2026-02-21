@@ -1,4 +1,3 @@
-import pytest
 from backend.agents.shared.progress import get_progress_info
 
 def test_get_progress_info_returns_structured_artifacts():

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 from langchain_core.messages import AIMessage
 from backend.agents.lisa.nodes.artifact_node import artifact_node
 from backend.agents.lisa.state import LisaState
-from backend.agents.lisa.artifact_models import RequirementDoc, DesignDoc, DesignNode
+from backend.agents.lisa.artifact_models import RequirementDoc
 
 
 @pytest.fixture

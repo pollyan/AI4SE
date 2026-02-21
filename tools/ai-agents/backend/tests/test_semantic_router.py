@@ -5,8 +5,7 @@
 由于语义路由依赖外部 Embedding API，测试使用 Mock 来隔离外部依赖。
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from dataclasses import dataclass
 
 

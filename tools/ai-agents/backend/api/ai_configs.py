@@ -4,9 +4,8 @@ AI 配置管理 API 端点
 支持 AI 配置的 CRUD 操作、默认配置管理和连接测试。
 """
 
-import json
 from datetime import datetime
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request
 from .base import (
     standard_success_response,
     standard_error_response,

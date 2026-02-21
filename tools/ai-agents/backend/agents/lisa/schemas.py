@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import Literal, Optional, Union, Any, List
+from typing import Literal, Optional, List
 
-from .artifact_models import RequirementDoc, DesignDoc, CaseDoc
 
 
 class IntentResult(BaseModel):

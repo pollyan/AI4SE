@@ -2,7 +2,6 @@ import pytest
 from typing import cast, Dict, Any
 from unittest.mock import MagicMock, patch
 from langgraph.types import Command
-from langchain_core.messages import AIMessage
 from backend.agents.lisa.nodes.reasoning_node import reasoning_node
 from backend.agents.lisa.schemas import ReasoningResponse
 from backend.agents.lisa.state import LisaState

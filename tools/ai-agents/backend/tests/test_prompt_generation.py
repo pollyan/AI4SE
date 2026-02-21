@@ -1,4 +1,3 @@
-import pytest
 
 from backend.agents.lisa.prompts.artifacts import build_artifact_update_prompt
 from backend.agents.lisa.schemas import ReasoningResponse

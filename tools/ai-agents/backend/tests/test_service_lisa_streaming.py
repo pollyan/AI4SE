@@ -1,6 +1,5 @@
 
 import pytest
-import json
 from unittest.mock import MagicMock
 from langchain_core.messages import AIMessage, AIMessageChunk
 from backend.agents.service import LangchainAssistantService

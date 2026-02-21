@@ -1,4 +1,3 @@
-from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO
 
 # db is defined in models, but often extensions are together.

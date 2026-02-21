@@ -4,11 +4,10 @@ AI 配置 API 测试
 测试 /api/ai-configs 端点的 CRUD 操作
 """
 
-import pytest
 import json
 
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 class TestAIConfigsAPI:
     """AI 配置 API 测试套件"""

@@ -1,4 +1,3 @@
-import pytest
 from backend.agents.lisa.utils.markdown_generator import convert_to_markdown
 
 
@@ -168,7 +167,6 @@ class TestCreateEmptyRequirementDoc:
         doc = create_empty_requirement_doc()
         result = convert_to_markdown(doc.model_dump(), "requirement")
         assert "## 1. 测试范围" in result
-import pytest
 from backend.agents.lisa.utils.markdown_generator import (
     convert_to_markdown,
     create_empty_requirement_doc,

@@ -8,7 +8,7 @@ Lisa 和 Alex 智能体共用此模块。
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal, Union
+from typing import List, Optional, Literal
 
 
 class WorkflowSubTask(BaseModel):

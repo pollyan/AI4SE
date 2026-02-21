@@ -4,8 +4,7 @@
 测试 shared/state.py 中的 BaseAgentState 和相关工具函数。
 """
 
-import pytest
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage
 
 
 class TestBaseAgentState:

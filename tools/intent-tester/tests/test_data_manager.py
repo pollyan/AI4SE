@@ -7,7 +7,7 @@ import json
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
-from backend.models import db, TestCase, ExecutionHistory, StepExecution
+from backend.models import TestCase, ExecutionHistory, StepExecution
 
 
 class TestCaseProxy:

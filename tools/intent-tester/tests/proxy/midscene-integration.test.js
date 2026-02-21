@@ -21,6 +21,26 @@ describe('MidScene微服务集成测试', () => {
         process.env.NODE_ENV = 'test';
 
         serverUrl = `http://localhost:${process.env.PORT}`;
+        
+        // 尝试启动本地服务器
+        try {
+            // tools/intent-tester directory
+            const intentTesterDir = path.resolve(__dirname, '../..');
+            console.log('Starting MidScene server from:', intentTesterDir);
+            
+            // Run python -m backend.app
+            serverProcess = spawn('python3', ['-m', 'backend.app'], {
+                cwd: intentTesterDir,
+                env: process.env,
+                stdio: 'ignore' 
+            });
+
+            // Wait for server to start
+            await new Promise(resolve => setTimeout(resolve, 3000));
+        } catch (error) {
+            console.error('Failed to start test server:', error);
+            throw error;
+        }
     });
 
     afterAll(async () => {

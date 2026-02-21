@@ -1,6 +1,6 @@
 import pytest
 import json
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 from backend.agents.shared.data_stream_adapter import adapt_langgraph_stream
 
 @pytest.mark.asyncio

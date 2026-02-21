@@ -5,7 +5,6 @@
 
 import json
 from datetime import datetime
-from typing import Dict, Any, Tuple, List, Optional
 from flask import request, jsonify, Response
 
 from flask import Blueprint
@@ -16,16 +15,9 @@ testcases_bp = Blueprint('testcases', __name__)
 # api_bp removed
 
 from .base import (
-    api_error_handler,
-    db_transaction_handler,
-    validate_json_data,
     format_success_response,
-    ValidationError,
-    NotFoundError,
     get_pagination_params,
-    format_paginated_response,
     standard_error_response,
-    standard_success_response,
     require_json,
     log_api_call,
     db,
@@ -38,11 +30,9 @@ from backend.utils.common_patterns import (
     validate_resource_exists,
     database_transaction,
     require_json_data,
-    get_crud_helper,
 )
 
 # 导入查询优化器
-from backend.services.query_optimizer import QueryOptimizer
 
 # 定义有效的动作类型
 VALID_ACTIONS = {

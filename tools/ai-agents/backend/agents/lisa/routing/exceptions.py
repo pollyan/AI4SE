@@ -1,6 +1,5 @@
 class RoutingError(Exception):
     """Base exception for routing errors."""
-    pass
 
 class SemanticRouterError(RoutingError):
     """Raised when semantic routing fails."""

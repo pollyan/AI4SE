@@ -11,17 +11,12 @@ logger = logging.getLogger(__name__)
 
 # 导入统一错误处理工具
 from backend.utils.error_handler import (
-    api_error_handler,
-    db_transaction_handler,
-    validate_json_data,
-    format_success_response,
     ValidationError,
     NotFoundError,
     DatabaseError,
 )
 
 # 导入数据模型
-from backend.models import db, TestCase, ExecutionHistory, StepExecution
 
 
 def get_pagination_params():

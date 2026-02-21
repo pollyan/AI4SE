@@ -1,7 +1,7 @@
 import time
 import functools
 import logging
-from typing import Callable, Any, Generator
+from typing import Callable, Generator
 from contextlib import contextmanager
 from .hybrid_router import RoutingDecision
 from .exceptions import RoutingError

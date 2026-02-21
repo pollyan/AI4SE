@@ -3,7 +3,6 @@ import pytest
 import sys
 import os
 import json
-from unittest.mock import MagicMock
 
 # Ensure we can import from tools/intent-tester/tests (for test_data_manager)
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -13,6 +12,15 @@ sys.path.insert(0, TESTS_DIR)
 INTENT_TESTER_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if INTENT_TESTER_DIR not in sys.path:
     sys.path.insert(0, INTENT_TESTER_DIR)
+
+# Ensure we can import from tools (for shared package)
+TOOLS_DIR = os.path.abspath(os.path.join(INTENT_TESTER_DIR, '..'))
+if TOOLS_DIR not in sys.path:
+    sys.path.insert(0, TOOLS_DIR)
+
+from shared.tests.api_client import APIClient
+
+
 
 from backend.app import create_app
 # from shared.database import db as _db # shared db mismatches with web_gui.models.db used in app
@@ -47,34 +55,7 @@ def client(app):
 @pytest.fixture(scope='function')
 def api_client(client):
     """A test client specifically for API requests (adds content-type header)."""
-    class APIClient:
-        def __init__(self, client):
-            self.client = client
-            self.prefix = '/intent-tester'
-            
-        def _get_path(self, path):
-            # Prepend prefix if not present and matches API or health routes
-            if path.startswith('/api') or path.startswith('/health'):
-                return f"{self.prefix}{path}"
-            return path
-
-        def get(self, path, *args, **kwargs):
-            return self.client.get(self._get_path(path), *args, **kwargs)
-            
-        def post(self, path, *args, **kwargs):
-            if 'json' in kwargs:
-                kwargs['content_type'] = 'application/json'
-            return self.client.post(self._get_path(path), *args, **kwargs)
-            
-        def put(self, path, *args, **kwargs):
-            if 'json' in kwargs:
-                kwargs['content_type'] = 'application/json'
-            return self.client.put(self._get_path(path), *args, **kwargs)
-            
-        def delete(self, path, *args, **kwargs):
-            return self.client.delete(self._get_path(path), *args, **kwargs)
-            
-    return APIClient(client)
+    return APIClient(client, prefix='/intent-tester')
 
 
 @pytest.fixture
@@ -588,4 +569,23 @@ def browser_types():
 def execution_modes():
     """提供所有支持的执行模式列表"""
     return ["headless", "browser"]
+
+
+def pytest_collection_modifyitems(items):
+    """根据文件路径自动添加标记"""
+    for item in items:
+        path = str(item.fspath)
+        
+        # API 测试
+        if "/api/" in path:
+            item.add_marker(pytest.mark.api)
+        # 服务层单元测试
+        elif "/services/" in path:
+            item.add_marker(pytest.mark.unit)
+        # 代理相关测试（如果有Python部分）
+        elif "/proxy/" in path:
+            item.add_marker(pytest.mark.integration)
+        # 默认为单元测试（包括根目录下的测试）
+        else:
+            item.add_marker(pytest.mark.unit)
 

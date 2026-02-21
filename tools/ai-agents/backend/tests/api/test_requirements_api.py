@@ -4,7 +4,6 @@ Requirements API 测试
 测试 /api/requirements 端点的会话和消息管理功能
 """
 
-import pytest
 import json
 
 

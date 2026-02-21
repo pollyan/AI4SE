@@ -2,8 +2,6 @@
 测试用例步骤管理API测试
 """
 
-import pytest
-import json
 
 
 class TestGetStepsAPI:

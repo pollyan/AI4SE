@@ -11,12 +11,11 @@ from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 
 from .variable_resolver_service import VariableManager, get_variable_manager
-from backend.models import db, ExecutionHistory, StepExecution
+from backend.models import db, StepExecution
 from midscene_framework import (
     MidSceneDataExtractor,
     DataExtractionMethod,
     ExtractionRequest,
-    ExtractionResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -460,7 +459,6 @@ class AIStepExecutor:
     ) -> Dict[str, Any]:
         """基础变量解析，简单的字符串替换"""
         import re
-        import json
 
         def resolve_value(value):
             if isinstance(value, str):
@@ -493,7 +491,6 @@ class AIStepExecutor:
 
     async def _mock_evaluate_javascript(self, script: str) -> Any:
         """Mock JavaScript执行"""
-        import json
         import random
 
         # 根据JavaScript脚本内容返回不同的模拟结果

@@ -1,4 +1,3 @@
-import pytest
 from backend.agents.lisa.artifact_patch import merge_artifacts
 
 

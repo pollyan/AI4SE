@@ -1,9 +1,7 @@
 """
 测试路由模块的可观测性功能
 """
-import logging
-import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from backend.agents.lisa.routing.observability import measure_latency, log_routing_decision
 from backend.agents.lisa.routing.hybrid_router import RoutingDecision
 

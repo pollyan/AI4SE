@@ -5,12 +5,6 @@
 """
 
 from ..shared import (
-    LISA_IDENTITY,
-    LISA_STYLE,
-    LISA_PRINCIPLES,
-    LISA_SKILLS,
-    LISA_SKILLS,
-    PROTOCOL_TECH_SELECTION,
     build_full_prompt_with_protocols,
 )
 from ..artifacts import (

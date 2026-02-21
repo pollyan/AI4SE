@@ -2,7 +2,6 @@ import pytest
 import json
 from unittest.mock import MagicMock, patch
 from backend.api.requirements import sync_session_messages
-from backend.models import RequirementsMessage, RequirementsSession
 
 # We need to mock the flask app context and db
 @pytest.fixture

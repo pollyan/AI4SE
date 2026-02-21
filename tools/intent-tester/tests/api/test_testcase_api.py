@@ -2,8 +2,6 @@
 测试用例CRUD API测试
 """
 
-import pytest
-import json
 
 
 class TestTestCaseListAPI:

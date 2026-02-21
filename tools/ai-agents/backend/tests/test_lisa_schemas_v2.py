@@ -1,5 +1,3 @@
-import pytest
-from pydantic import ValidationError
 from backend.agents.lisa.schemas import ReasoningResponse, WorkflowResponse, UpdateArtifact
 
 def test_reasoning_response_structure():

@@ -4,7 +4,6 @@
 测试 shared/checkpointer.py 中的单例模式和 reset 功能。
 """
 
-import pytest
 
 
 class TestGetCheckpointer:

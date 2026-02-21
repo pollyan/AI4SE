@@ -6,8 +6,8 @@ SSE 事件流解析工具
 """
 
 import json
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import dataclass
+from typing import List
 
 
 @dataclass
