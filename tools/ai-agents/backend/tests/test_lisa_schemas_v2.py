@@ -1,8 +1,7 @@
-from backend.agents.lisa.schemas import ReasoningResponse, WorkflowResponse, UpdateArtifact
+from backend.agents.lisa.schemas import ReasoningResponse, WorkflowResponse, UpdateStructuredArtifact
 
 def test_reasoning_response_structure():
     """Test the structure of the new ReasoningResponse"""
-    # Valid data
     data = {
         "thought": "Analysis completed.",
         "progress_step": "Analyzing requirements",
@@ -23,30 +22,27 @@ def test_reasoning_response_defaults():
     assert resp.progress_step is None
     assert resp.should_update_artifact is False
 
-def test_workflow_response_legacy_update():
-    """
-    Test that WorkflowResponse no longer has update_artifact 
-    or behaves as expected if we keep it for backward compatibility 
-    but we plan to remove update_artifact from it.
-    """
-    # If we removed update_artifact, passing it should either be ignored or cause error 
-    # if using extra='forbid'. Let's assume standard Pydantic behavior (ignore extra).
-    # But strictly, the class shouldn't have the field.
-    
+def test_workflow_response_legacy():
+    """Test that WorkflowResponse still works as legacy schema"""
     data = {
         "thought": "Thinking..."
     }
     resp = WorkflowResponse(**data)
+    assert resp.thought == "Thinking..."
+    # WorkflowResponse should not have update_artifact field
     assert not hasattr(resp, "update_artifact")
 
-def test_update_artifact_schema_check():
+def test_update_structured_artifact_schema():
     """
-    UpdateArtifact schema is still needed for the tool definition type hinting,
-    even if not nested in WorkflowResponse.
+    UpdateStructuredArtifact is the ONLY artifact update schema.
+    Verify its structure.
     """
     data = {
         "key": "test_design_requirements",
-        "markdown_body": "# Content"
+        "artifact_type": "requirement",
+        "content": {"scope": ["Login"]}
     }
-    artifact = UpdateArtifact(**data)
+    artifact = UpdateStructuredArtifact(**data)
     assert artifact.key == "test_design_requirements"
+    assert artifact.artifact_type == "requirement"
+    assert artifact.content == {"scope": ["Login"]}

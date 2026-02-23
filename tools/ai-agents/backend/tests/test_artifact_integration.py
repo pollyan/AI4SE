@@ -81,7 +81,7 @@ def test_e2e_incremental_update_flow(mock_llm, mock_stream_writer):
     mock_llm.invoke.return_value = msg_1
 
     # Run Node
-    state_after_1 = artifact_node(state, mock_llm)
+    state_after_1 = cast(Dict[str, Any], {**state, **artifact_node(state, mock_llm)})
 
     # Verify State 1: Check STRUCTURED data
     # state['artifacts'] now holds markdown string
@@ -133,7 +133,7 @@ def test_e2e_incremental_update_flow(mock_llm, mock_stream_writer):
     mock_llm.invoke.return_value = msg_2
 
     # Run Node again with updated state
-    state_after_2 = artifact_node(state_after_1, mock_llm)
+    state_after_2 = cast(Dict[str, Any], {**state_after_1, **artifact_node(cast(LisaState, state_after_1), mock_llm)})
 
     # Verify State 2
     structured_2 = cast(

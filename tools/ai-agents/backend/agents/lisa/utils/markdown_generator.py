@@ -204,16 +204,102 @@ def convert_requirement_doc(content: Dict[str, Any]) -> str:
     return "\n".join(md)
 
 
+def _render_test_points_tree(node: Dict[str, Any], level: int = 0) -> List[str]:
+    """递归渲染 DesignNode 树为 Markdown 缩进列表"""
+    lines = []
+    indent = "  " * level
+    priority = node.get("priority", "")
+    method = node.get("method", "")
+    label = node.get("label", "")
+    
+    badge = f" `{priority}`" if priority else ""
+    method_tag = f" ({method})" if method else ""
+    
+    lines.append(f"{indent}- **{label}**{badge}{method_tag}")
+    
+    children = node.get("children") or []
+    for child in children:
+        lines.extend(_render_test_points_tree(child, level + 1))
+    
+    return lines
+
+
+def convert_design_doc(content: Dict[str, Any]) -> str:
+    """Phase 2 产出物：测试策略与设计"""
+    md = ["# 测试策略蓝图\n"]
+    
+    # Section 1: 策略 Markdown（直接嵌入）
+    strategy_md = content.get("strategy_markdown", "")
+    if strategy_md:
+        md.append(strategy_md)
+    else:
+        md.append("> **说明**：策略文档待生成。")
+    md.append("")
+    
+    # Section 2: 测试点拓扑
+    md.append("## 测试点拓扑\n")
+    test_points = content.get("test_points")
+    if test_points and isinstance(test_points, dict):
+        md.extend(_render_test_points_tree(test_points))
+    else:
+        md.append("> **说明**：测试点结构待生成。")
+    md.append("")
+    
+    return "\n".join(md)
+
+
+def convert_cases_doc(content: Dict[str, Any]) -> str:
+    """Phase 3 产出物：测试用例集"""
+    md = ["# 测试用例集\n"]
+    
+    cases = content.get("cases", [])
+    if cases:
+        md.append("| ID | 标题 | 前置条件 | 标签 |")
+        md.append("|---|---|---|---|")
+        for c in cases:
+            cid = c.get("id", "-")
+            title = c.get("title", "")
+            pre = c.get("precondition", "-") or "-"
+            tags = ", ".join(c.get("tags", []))
+            md.append(f"| {cid} | {title} | {pre} | {tags} |")
+        md.append("")
+        
+        for c in cases:
+            md.append(f"### {c.get('id', '-')}: {c.get('title', '')}")
+            if c.get("precondition"):
+                md.append(f"- **前置条件**: {c['precondition']}")
+            steps = c.get("steps", [])
+            if steps:
+                md.append("- **执行步骤**:")
+                for i, s in enumerate(steps, 1):
+                    md.append(f"  {i}. {s.get('action', '')} → 预期: {s.get('expect', '')}")
+            md.append("")
+    else:
+        md.append("> **说明**：测试用例待生成。")
+    
+    stats = content.get("stats")
+    if stats:
+        md.append("## 统计")
+        for k, v in stats.items():
+            md.append(f"- **{k}**: {v}")
+        md.append("")
+    
+    return "\n".join(md)
+
+
 def convert_to_markdown(content: Dict[str, Any], artifact_type: str) -> str:
     """通用转换入口"""
     if artifact_type == "requirement":
         return convert_requirement_doc(content)
+    if artifact_type == "design":
+        return convert_design_doc(content)
+    if artifact_type == "cases":
+        return convert_cases_doc(content)
 
-    # Fallback for other types (Design, Cases) - simple dump for now
-    # Improvement: Implement specific converters for them later
-    md = [f"# {artifact_type.title()} Document\n"]
-    for k, v in content.items():
-        md.append(f"## {k}")
-        md.append(str(v))
-        md.append("")
-    return "\n".join(md)
+    # Fallback: 不做静默降级，明确报错
+    raise ValueError(
+        f"convert_to_markdown: unsupported artifact_type '{artifact_type}'. "
+        f"Supported types: requirement, design, cases."
+    )
+
+

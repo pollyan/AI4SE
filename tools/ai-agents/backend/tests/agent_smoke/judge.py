@@ -22,6 +22,12 @@ class JudgeResult(BaseModel):
     passed: bool = Field(description="是否通过")
     reason: str = Field(description="简要评估理由（中文）")
 
+    def __repr__(self) -> str:
+        return f"JudgeResult(passed={self.passed}, reason='{self.reason}')"
+
+    def __str__(self) -> str:
+        return self.__repr__()
+
 
 JUDGE_SYSTEM = (
     "你是一个严格的测试评估专家，负责评估 AI 智能体的输出质量。\n"
@@ -66,7 +72,7 @@ def judge_output(
         JudgeResult: 包含 passed（bool）和 reason（str）。
     """
     api_key = os.getenv("OPENAI_API_KEY", "")
-    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    base_url = os.getenv("OPENAI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
     model = os.getenv("SMOKE_TEST_JUDGE_MODEL", "deepseek-v3.2")
 
     llm = ChatOpenAI(
@@ -145,7 +151,7 @@ def judge_artifact_slice(
         JudgeResult: 包含 passed（bool）和 reason（str）。
     """
     api_key = os.getenv("OPENAI_API_KEY", "")
-    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    base_url = os.getenv("OPENAI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
     model = os.getenv("SMOKE_TEST_JUDGE_MODEL", "deepseek-v3.2")
 
     llm = ChatOpenAI(

@@ -55,6 +55,9 @@ def real_ai_config(create_ai_config):
     必须配置 OPENAI_API_KEY，否则测试 FAIL（不是 skip）。
     结合 create_ai_config fixture 写入 SQLite in-memory 数据库。
     """
+    from dotenv import load_dotenv
+    load_dotenv()
+
     api_key = os.getenv("OPENAI_API_KEY")
     assert api_key, (
         "OPENAI_API_KEY 未设置！Agent Smoke Test 需要真实的 LLM API Key。\n"
@@ -62,9 +65,9 @@ def real_ai_config(create_ai_config):
         f"（当前搜索路径: {PROJECT_ROOT}/.env）"
     )
 
-    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-    # 默认用 qwen-plus，可通过环境变量覆盖为更轻量的模型
-    model_name = os.getenv("SMOKE_TEST_MODEL", "qwen-plus")
+    base_url = os.getenv("OPENAI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+    # 默认用 deepseek-v3.2，确保使用可用的带余额模型
+    model_name = os.getenv("SMOKE_TEST_MODEL", "deepseek-v3.2")
 
     return create_ai_config(
         config_name="smoke_test_config",
@@ -96,7 +99,7 @@ def lisa_session(client, real_ai_config):
     return data["data"]["id"]
 
 @pytest.fixture
-def lisa_graph(real_ai_config):
+def lisa_graph(app, real_ai_config):
     """
     暴露 Lisa 的 LangGraph 实例，用于测试中读取 State 快照。
     
@@ -105,20 +108,9 @@ def lisa_graph(real_ai_config):
     import asyncio
     from backend.agents.service import LangchainAssistantService
     
-    service = LangchainAssistantService("lisa")
-    asyncio.get_event_loop().run_until_complete(service.initialize())
-    return service.agent
-
-@pytest.fixture
-def lisa_graph(real_ai_config):
-    """
-    暴露 Lisa 的 LangGraph 实例，用于测试中读取 State 快照。
-    
-    使用方式: state = lisa_graph.get_state({"configurable": {"thread_id": session_id}})
-    """
-    import asyncio
-    from backend.agents.service import LangchainAssistantService
-    
-    service = LangchainAssistantService("lisa")
-    asyncio.get_event_loop().run_until_complete(service.initialize())
-    return service.agent
+    with app.app_context():
+        service = LangchainAssistantService("lisa")
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(service.initialize())
+        return service.agent

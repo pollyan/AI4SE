@@ -393,6 +393,7 @@ Current State:
 **INSTRUCTIONS**:
 - Only output changed items or new additions.
 - Use ID to match existing items (e.g. assumptions, rules).
+- **CRITICAL**: To update an existing item in a list (like changing a "pending" assumption to "confirmed"), you MUST include that item in your JSON output with its `id` and the updated fields (`status`, `note`). If you omit the list or the item, it will NOT be updated!
 - Do not output unchanged items if possible (to save tokens), unless necessary for context.
 """
 

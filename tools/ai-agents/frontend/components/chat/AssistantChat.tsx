@@ -2,11 +2,12 @@
  * AssistantChat 组件 - 使用原生 Vercel AI SDK 构建的对话界面
  * 使用 AI SDK 5.0 的 useChat hook，不再依赖 @assistant-ui/react
  */
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ChevronLeft, Send, Square, Paperclip, X } from 'lucide-react';
 import { createSession, ProgressInfo } from '../../services/backendService';
 import { Assistant } from '../../types';
 import { useVercelChat } from '../../hooks/useVercelChat';
+import { useAutomationBridge } from '../../hooks/useAutomationBridge';
 import { ErrorBoundary } from '../common/ErrorBoundary';
 import { MarkdownText } from './MarkdownText';
 import { ToolInvocation } from './ToolInvocation';
@@ -59,6 +60,22 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange, onStreamE
         assistantType: assistant.id,
         onProgressChange: onProgressChange || undefined,
         onStreamEnd: onStreamEnd || undefined,
+    });
+
+    // 暴露自动化接口，让浏览器自动化工具可以直接操作 React state
+    const automationSend = useCallback(() => {
+        if (input.trim()) {
+            sendMessage({ text: input.trim() });
+            setInput('');
+        }
+    }, [input, sendMessage]);
+
+    useAutomationBridge({
+        api: {
+            setText: (text: string) => setInput(text),
+            send: automationSend,
+            getText: () => input,
+        },
     });
 
     // 监听状态变化以重置提交状态
@@ -376,7 +393,7 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange, onStreamE
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 placeholder="输入消息..."
-                                disabled={status === 'streaming' || isSubmitting}
+                                disabled={status === 'streaming'}
                                 className="flex-grow px-4 py-3 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
                             />
 
@@ -385,7 +402,7 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange, onStreamE
                                 onClick={() => {
                                     fileInputRef.current?.click();
                                 }}
-                                disabled={status === 'streaming' || isSubmitting}
+                                disabled={status === 'streaming'}
                                 className="p-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors disabled:opacity-50"
                                 title="添加附件"
                             >
@@ -404,7 +421,7 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange, onStreamE
                             ) : (
                                 <button
                                     type="submit"
-                                    disabled={(!input.trim() && files.length === 0) || isSubmitting}
+                                    disabled={!input.trim() && files.length === 0}
                                     className="p-3 rounded-full bg-primary hover:bg-primary/90 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     title="发送"
                                 >

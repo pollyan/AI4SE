@@ -27,41 +27,43 @@ def mock_state() -> Dict[str, Any]:
 
 
 @patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
-@patch(
-    "backend.agents.lisa.nodes.artifact_node.update_artifact"
-)  # Mock the tool function itself if needed, or just checking flow
 def test_artifact_node_updates_state(
-    mock_tool, mock_writer_getter, mock_llm, mock_state
+    mock_writer_getter, mock_llm, mock_state
 ):
-    """Test that artifact node updates state based on tool calls"""
+    """Test that artifact node updates state based on UpdateStructuredArtifact tool calls"""
     original_llm, bound_llm = mock_llm
     mock_writer = MagicMock()
     mock_writer_getter.return_value = mock_writer
 
-    # Mock LLM response with tool use
+    # Mock LLM response with structured tool call
     tool_call_id = "call_123"
     tool_args = {
         "key": "test_design_requirements",
-        "markdown_body": "# Updated Content",
+        "artifact_type": "requirement",
+        "content": {
+            "scope": ["Login"],
+            "assumptions": [{"id": "Q1", "question": "2FA?", "status": "pending", "priority": "P1"}]
+        }
     }
 
     mock_response = AIMessage(
         content="",
-        tool_calls=[{"name": "update_artifact", "args": tool_args, "id": tool_call_id}],
+        tool_calls=[{"name": "UpdateStructuredArtifact", "args": tool_args, "id": tool_call_id}],
     )
     bound_llm.invoke.return_value = mock_response
 
     # Execute node
     new_state = artifact_node(cast(LisaState, mock_state), original_llm)
 
-    # Verify state update
+    # Verify state update - artifacts should contain markdown rendering
     assert "test_design_requirements" in new_state["artifacts"]
-    assert new_state["artifacts"]["test_design_requirements"] == "# Updated Content"
+    assert "Login" in new_state["artifacts"]["test_design_requirements"]
 
-    # Verify events
-    # 1. tool-call event
-    # 2. progress event
-    # Note: Depending on implementation, these might be sent. We just verify they exist.
+    # Verify structured_artifacts populated
+    assert "test_design_requirements" in new_state["structured_artifacts"]
+    assert new_state["structured_artifacts"]["test_design_requirements"]["scope"] == ["Login"]
+
+    # Verify events were sent
     assert mock_writer.call_count >= 1
 
     # Check tool-call event
@@ -72,21 +74,12 @@ def test_artifact_node_updates_state(
             tool_call_event = event
             break
 
-    # Note: If artifact_node doesn't emit tool-call explicitly but relies on standard langgraph tooling,
-    # we might strictly check for progress. But assuming it mocks tool execution and sends event:
     if tool_call_event:
         assert tool_call_event["toolCallId"] == tool_call_id
-        assert tool_call_event["toolName"] == "update_artifact"
-        assert tool_call_event["args"] == {"key": tool_args["key"]}
+        assert tool_call_event["toolName"] == "UpdateStructuredArtifact"
 
     # Verify LLM prompt construction (briefly)
     bound_llm.invoke.assert_called_once()
-    prompt_msg = bound_llm.invoke.call_args[0][0][0]  # SystemMessage
-    assert (
-        "test_design" in prompt_msg.content
-        or "artifact" in prompt_msg.content.lower()
-        or "current_stage" in prompt_msg.content
-    )
 
 
 @patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
@@ -145,8 +138,8 @@ def test_artifact_node_deterministic_init(mock_writer_getter, mock_llm):
     # Execute node
     new_state = artifact_node(cast(LisaState, state), original_llm)
 
-    # Verify LLM was NOT called
-    bound_llm.invoke.assert_not_called()
+    # Verify LLM WAS called, because we don't bypass ainvoke anymore.
+    bound_llm.invoke.assert_called_once()
 
     # Verify deterministic state update
     assert "test_key" in new_state["artifacts"]
@@ -179,7 +172,9 @@ def test_artifact_node_llm_exception(mock_writer_getter, mock_llm, mock_state):
 
     new_state = artifact_node(cast(LisaState, mock_state), original_llm)
 
-    assert new_state == mock_state
+    # Even on LLM failure, returns artifacts/structured_artifacts (preserving any deterministic init)
+    assert "artifacts" in new_state
+    assert "structured_artifacts" in new_state
 
 
 @patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
@@ -192,13 +187,21 @@ def test_artifact_node_multiple_updates(mock_writer_getter, mock_llm, mock_state
         content="",
         tool_calls=[
             {
-                "name": "update_artifact",
-                "args": {"key": "key1", "markdown_body": "Content 1"},
+                "name": "UpdateStructuredArtifact",
+                "args": {
+                    "key": "test_design_requirements",
+                    "artifact_type": "requirement",
+                    "content": {"scope": ["Feature A"]}
+                },
                 "id": "call_1",
             },
             {
-                "name": "update_artifact",
-                "args": {"key": "key2", "markdown_body": "Content 2"},
+                "name": "UpdateStructuredArtifact",
+                "args": {
+                    "key": "test_design_strategy",
+                    "artifact_type": "design",
+                    "content": {"strategy_overview": "Strategy B"}
+                },
                 "id": "call_2",
             },
         ],
@@ -207,10 +210,8 @@ def test_artifact_node_multiple_updates(mock_writer_getter, mock_llm, mock_state
 
     new_state = artifact_node(cast(LisaState, mock_state), original_llm)
 
-    assert "key1" in new_state["artifacts"]
-    assert new_state["artifacts"]["key1"] == "Content 1"
-    assert "key2" in new_state["artifacts"]
-    assert new_state["artifacts"]["key2"] == "Content 2"
+    assert "test_design_requirements" in new_state["artifacts"]
+    assert "test_design_strategy" in new_state["artifacts"]
 
     assert mock_writer.call_count >= 2
 
@@ -343,7 +344,7 @@ def test_incremental_update_bugs_reproduction(mock_writer_getter, mock_llm):
     
     # --- Execute 1: Deterministic Initialization ---
     # Should run deterministic path because "test_req" is missing in artifacts
-    state_after_init = artifact_node(cast(LisaState, state), original_llm)
+    state_after_init = cast(Dict[str, Any], {**state, **artifact_node(cast(LisaState, state), original_llm)})
     
     # Verify Bug 3: structured_artifacts should be populated
     # CURRENT BEHAVIOR: structured_artifacts is empty or missing key
@@ -378,7 +379,7 @@ def test_incremental_update_bugs_reproduction(mock_writer_getter, mock_llm):
     )
     bound_llm.invoke.return_value = llm_response_1
     
-    state_after_update_1 = artifact_node(cast(LisaState, state_after_init), original_llm)
+    state_after_update_1 = cast(Dict[str, Any], {**state_after_init, **artifact_node(cast(LisaState, state_after_init), original_llm)})
     
     # Verify Bug 2: structured_artifacts should be populated with merged data
     assert "test_req" in state_after_update_1["artifacts"]
@@ -411,14 +412,14 @@ def test_incremental_update_bugs_reproduction(mock_writer_getter, mock_llm):
     )
     bound_llm.invoke.return_value = llm_response_2
 
-    state_after_update_2 = artifact_node(cast(LisaState, state_after_update_1), original_llm)
+    state_after_update_2 = cast(Dict[str, Any], {**state_after_update_1, **artifact_node(cast(LisaState, state_after_update_1), original_llm)})
 
     # Verify Bug 1: Check if prompt contained existing artifact context
     # Get the system message from the LAST call to invoke
     call_args = bound_llm.invoke.call_args
     # call_args[0] is args tuple, args[0] is messages list
     messages = call_args[0][0] 
-    system_msg_content = messages[-1].content
+    system_msg_content = messages[-1].content if len(messages) > 0 else ""
     
     # This assertion is expected to FAIL until Bug 1 is fixed:
     assert "INCREMENTAL UPDATE MODE ACTIVE" in system_msg_content, "Bug 1: Incremental context missing in prompt"

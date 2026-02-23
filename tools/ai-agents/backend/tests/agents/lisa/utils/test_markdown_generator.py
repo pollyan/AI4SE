@@ -39,11 +39,74 @@ class TestConvertRequirementDocBasic:
         md = convert_to_markdown(content, "requirement")
         assert "New Mindmap" in md
 
-    def test_convert_fallback(self):
-        content = {"key": "value"}
-        md = convert_to_markdown(content, "unknown")
-        assert "## key" in md
-        assert "value" in md
+    def test_convert_unsupported_type_raises_error(self):
+        """确定性优先: 不支持的类型直接报错，不做静默降级"""
+        import pytest
+        with pytest.raises(ValueError, match="unsupported artifact_type"):
+            convert_to_markdown({"key": "value"}, "unknown")
+
+
+class TestConvertDesignDoc:
+    """测试策略文档（design）的 Markdown 转换"""
+
+    def test_renders_strategy_markdown(self):
+        content = {
+            "strategy_markdown": "## 1. 风险分析\n\n| 风险项 | 影响 |\n|---|---|\n| R1 | 高 |",
+            "test_points": {"id": "ROOT", "label": "根节点", "type": "group"},
+        }
+        md = convert_to_markdown(content, "design")
+        assert "# 测试策略蓝图" in md
+        assert "## 1. 风险分析" in md
+        assert "风险项" in md
+
+    def test_renders_test_points_tree(self):
+        content = {
+            "strategy_markdown": "策略文档内容",
+            "test_points": {
+                "id": "GRP-001",
+                "label": "带验证码用户登录",
+                "type": "group",
+                "priority": "P0",
+                "method": "混合策略",
+                "children": [
+                    {
+                        "id": "TP-001",
+                        "label": "核心登录功能验证",
+                        "type": "group",
+                        "priority": "P0",
+                        "method": "功能测试",
+                        "children": [
+                            {
+                                "id": "TP-001-01",
+                                "label": "正向登录流程",
+                                "type": "point",
+                                "priority": "P0",
+                                "method": "黑盒测试",
+                            }
+                        ],
+                    }
+                ],
+            },
+        }
+        md = convert_to_markdown(content, "design")
+        assert "## 测试点拓扑" in md
+        assert "带验证码用户登录" in md
+        assert "核心登录功能验证" in md
+        assert "正向登录流程" in md
+        # 验证层级缩进
+        lines = md.split("\n")
+        tp_lines = [l for l in lines if "正向登录流程" in l]
+        assert len(tp_lines) == 1
+        assert tp_lines[0].startswith("    ")  # level 2 = 4 spaces indent
+
+    def test_empty_design_doc(self):
+        content = {
+            "strategy_markdown": "",
+            "test_points": None,
+        }
+        md = convert_to_markdown(content, "design")
+        assert "策略文档待生成" in md
+        assert "测试点结构待生成" in md
 
 
 class TestConvertRequirementDoc7Sections:

@@ -1,6 +1,5 @@
 import React from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { MarkdownText } from '../../../components/chat/MarkdownText';
 import { DesignDoc, DesignNode } from '../../types/artifact';
 
 interface DesignViewProps {
@@ -64,14 +63,14 @@ export const DesignView: React.FC<DesignViewProps> = ({ content }) => {
   return (
     <div className="space-y-6 text-sm text-gray-800">
       <section>
-        <h3 className="text-base font-semibold text-gray-900 mb-2">Test Strategy</h3>
-        <div className="prose prose-sm max-w-none text-gray-600 bg-gray-50 p-4 rounded-lg">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content.strategy_markdown}</ReactMarkdown>
+        <h3 className="text-base font-semibold text-gray-900 mb-2">测试策略蓝图</h3>
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <MarkdownText content={content.strategy_markdown} />
         </div>
       </section>
 
       <section>
-        <h3 className="text-base font-semibold text-gray-900 mb-2">Test Point Topology</h3>
+        <h3 className="text-base font-semibold text-gray-900 mb-2">测试点拓扑</h3>
         <div className="bg-white border rounded-lg p-4">
           <TestPointNode node={content.test_points} />
         </div>
@@ -79,3 +78,4 @@ export const DesignView: React.FC<DesignViewProps> = ({ content }) => {
     </div>
   );
 };
+

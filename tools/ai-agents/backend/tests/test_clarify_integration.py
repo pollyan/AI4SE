@@ -104,38 +104,95 @@ class TestClarifyIntentIntegration:
             reasoning_node(state, mock_llm)
             mock_parse.assert_not_called()
 
+    @patch('backend.agents.lisa.nodes.reasoning_node.parse_user_intent')
+    @patch('backend.agents.lisa.nodes.reasoning_node.extract_blocking_questions')
+    @patch('backend.agents.lisa.nodes.reasoning_node.get_stream_writer')
+    @patch('backend.agents.lisa.nodes.reasoning_node.process_reasoning_stream')
+    def test_llm_transition_blocked_by_p0(
+        self, mock_stream, mock_writer, mock_extract, mock_parse
+    ):
+        """如果 LLM 自行决定进入下一阶段，但系统检测到存在 P0 问题，必须强行拦截不让跳出 clarify"""
+        from backend.agents.lisa.schemas import UserIntentInClarify, ReasoningResponse
+        from backend.agents.lisa.nodes.reasoning_node import reasoning_node
+        
+        mock_writer.return_value = Mock()
+        # 假设用户只提供材料，未明确提出结束或 proceed
+        mock_parse.return_value = UserIntentInClarify(
+            intent="provide_material",
+            confidence=0.8
+        )
+        
+        # 尽管只提供了材料，但系统侦测到依然存在残留 P0！
+        mock_extract.return_value = ["残留未解决的致命问题"]
+        
+        # 但是 LLM "走神了"，自己试图跳出
+        mock_stream.return_value = ReasoningResponse(
+            thought="材料收到了，我要开始策略制定了！",
+            should_update_artifact=True,
+            request_transition_to="strategy"  # 危险操作
+        )
+        
+        mock_llm = Mock()
+        state = {
+            "messages": [HumanMessage(content="这是给你的材料")],
+            "current_stage_id": "clarify",
+            "current_workflow": "test_design",
+            "plan": [{"id": "clarify", "name": "需求澄清"}],
+            "artifacts": {},
+            "artifact_templates": [],
+        }
+        
+        result = reasoning_node(state, mock_llm)
+        
+        # 验证结果被绝对防线强压下来
+        assert result.goto == "artifact_node"
+        
+        # 拦截状态后当前阶段没有发生跃迁，所以不在 update_state 里，或者只检查 warning
+        # 必须带上告警
+        assert "warning" in result.update
+        assert "拦截" in result.update["warning"]
+
 
 class TestExtractBlockingQuestions:
     """测试从产出物中提取阻塞性问题"""
     
-    def test_extract_from_markdown_with_blocking_questions(self):
-        """测试从包含阻塞性问题的 Markdown 中提取"""
+    def test_extract_from_structured_artifacts_with_blocking_questions(self):
+        """测试从结构化产出物中提取阻塞性问题"""
         from backend.agents.lisa.nodes.reasoning_node import extract_blocking_questions
         
-        artifacts = {
-            "test_design_requirements": """
-# 需求分析文档
-
-## 待澄清问题
-
-### 🔴 阻塞性问题 (必须解决)
-1. [Q1] 用户登录失败后的重试机制是什么？
-2. [Q2] 订单金额的有效范围是多少？
-
-### 🟡 建议澄清
-3. [Q3] 是否需要考虑国际化场景？
-"""
+        # 遵循“确定性优先”原则，使用结构化数据
+        structured_artifacts = {
+            "test_design_requirements": {
+                "assumptions": [
+                    {
+                        "priority": "P0",
+                        "status": "pending",
+                        "question": "用户登录失败后的重试机制是什么？",
+                    },
+                    {
+                        "priority": "P0",
+                        "status": "待确认",
+                        "question": "订单金额的有效范围是多少？",
+                    },
+                    {
+                        "priority": "P1",
+                        "status": "pending",
+                        "question": "是否需要考虑国际化场景？",
+                    }
+                ]
+            }
         }
         
-        result = extract_blocking_questions(artifacts)
+        result = extract_blocking_questions({}, structured_artifacts)
         
         assert len(result) == 2
-        assert "登录" in result[0] or "重试" in result[0]
+        assert result[0] == "用户登录失败后的重试机制是什么？"
+        assert result[1] == "订单金额的有效范围是多少？"
 
     def test_extract_from_empty_artifacts(self):
         """测试空产出物返回空列表"""
         from backend.agents.lisa.nodes.reasoning_node import extract_blocking_questions
         
-        result = extract_blocking_questions({})
+        result = extract_blocking_questions({}, {})
         
         assert result == []

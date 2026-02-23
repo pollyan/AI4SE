@@ -64,9 +64,9 @@ describe('ArtifactRenderer', () => {
 
     render(<ArtifactRenderer artifact={artifact} />);
 
-    expect(screen.getByText('Test Strategy')).toBeInTheDocument();
+    expect(screen.getByText('测试策略蓝图')).toBeInTheDocument();
     expect(screen.getByText('Test Strategy Content')).toBeInTheDocument();
-    expect(screen.getByText('Test Point Topology')).toBeInTheDocument();
+    expect(screen.getByText('测试点拓扑')).toBeInTheDocument();
     expect(screen.getByText('Root Node')).toBeInTheDocument();
     expect(screen.getByText('Child Point')).toBeInTheDocument();
     expect(screen.getByText('P0')).toBeInTheDocument();

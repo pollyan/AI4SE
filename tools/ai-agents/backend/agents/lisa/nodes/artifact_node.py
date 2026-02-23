@@ -7,7 +7,6 @@ from langchain_core.messages import SystemMessage
 from langgraph.config import get_stream_writer
 
 from ..state import LisaState
-from ..tools import update_artifact
 from ..schemas import UpdateStructuredArtifact
 from ..prompts.artifacts import build_artifact_update_prompt
 from ..utils.markdown_generator import convert_to_markdown
@@ -22,7 +21,7 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
     产出物更新节点 (Artifact Node)
 
     负责：
-    1. 强制调用 update_artifact 工具
+    1. 强制调用 UpdateStructuredArtifact 工具
     2. 执行工具调用并更新 State 中的 artifacts
     3. 推送 tool-call 和 progress 事件
     """
@@ -30,6 +29,8 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
 
     current_stage = cast(str, state.get("current_stage_id", "clarify"))
     artifacts = state.get("artifacts", {})
+    new_artifacts = dict(artifacts)
+    new_structured_artifacts = dict(state.get("structured_artifacts", {}))
 
     writer = get_stream_writer()
 
@@ -40,7 +41,7 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
         (t for t in templates if t.get("stage") == current_stage), None
     )
 
-    mock_tool_calls_for_init = []
+    mock_tool_calls_for_init: list[dict[str, Any]] = []
 
     if current_template:
         key = current_template["key"]
@@ -51,10 +52,10 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
                 "Using deterministic initialization."
             )
 
-            # 手动构造一个"虚拟"的 tool calls 列表
+            # 手动构造一个"虚拟"的初始化列表（内部逻辑，不是工具调用）
             mock_tool_calls_for_init = [
                 {
-                    "name": "update_artifact",
+                    "name": "_deterministic_init",
                     "args": {"key": key, "markdown_body": outline},
                     "id": f"call_init_{current_stage}",
                 }
@@ -66,12 +67,8 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
             # state["structured_artifacts"] = state.get("structured_artifacts", {})
             # state["structured_artifacts"][key] = create_empty_requirement_doc().model_dump()
 
-    # 3. 执行逻辑分叉
-    tool_calls: list[dict[str, Any]] = []
-
+    # 3. 如果是初始化且需要发送前置进度事件，先发送
     if mock_tool_calls_for_init:
-        # A. 确定性初始化路径
-        # [新增] 初始化路径也发送 generating 事件，让前端显示骨架屏
         init_key = current_template.get("key") if current_template else None
         if init_key:
             pre_state = {**state, "artifacts": artifacts}
@@ -85,109 +82,120 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
                 logger.info(f"[ArtifactNode] Sending pre-init progress: {pre_progress}")
                 writer({"type": "progress", "progress": pre_progress})
                 logger.info("ArtifactNode: Sent pre-init generating progress event")
-        tool_calls = mock_tool_calls_for_init
+        
+        # 将骨架写入 artifacts，以此完成 INIT
+        for init_call in mock_tool_calls_for_init:
+            init_args = init_call["args"]
+            init_k = init_args["key"]
+            init_body = init_args["markdown_body"]
+            if init_k and init_body:
+                new_artifacts[init_k] = init_body
+                writer({
+                    "type": "tool-call",
+                    "toolCallId": init_call["id"],
+                    "toolName": "_deterministic_init",
+                    "args": {"key": init_k, "markdown_body": init_body},
+                    "result": "Initialized empty template."
+                })
 
-    else:
-        # B. 正常的 LLM 生成路径
+    # 现在执行真正的 LLM 更新逻辑
+    # [新增] 在 LLM 调用前发送"生成中"状态事件，让前端立刻显示 loading
+    generating_key = None
+    if current_template:
+        generating_key = current_template.get("key")
 
-        # [新增] 在 LLM 调用前发送"生成中"状态事件，让前端立刻显示 loading
-        generating_key = None
-        if current_template:
-            generating_key = current_template.get("key")
+    if generating_key:
+        pre_state = {**state, "artifacts": new_artifacts} # Use new_artifacts here to reflect any mock updates
+        pre_progress = get_progress_info(pre_state)
+        if pre_progress:
+            pre_progress["currentTask"] = f"正在生成{current_template.get('name', '产出物')}..."
+            # 确保 generating 字段被正确设置
+            if pre_progress.get("artifactProgress"):
+                pre_progress["artifactProgress"]["generating"] = generating_key
+            writer({"type": "progress", "progress": pre_progress})
+            logger.info("ArtifactNode: Sent pre-generation progress event")
 
-        if generating_key:
-            pre_state = {**state, "artifacts": artifacts}
-            pre_progress = get_progress_info(pre_state)
-            if pre_progress:
-                pre_progress["currentTask"] = f"正在生成{current_template.get('name', '产出物')}..."
-                # 确保 generating 字段被正确设置
-                if pre_progress.get("artifactProgress"):
-                    pre_progress["artifactProgress"]["generating"] = generating_key
-                writer({"type": "progress", "progress": pre_progress})
-                logger.info("ArtifactNode: Sent pre-generation progress event")
+    # 绑定工具并强制调用
+    # 只绑定新版(Structured)工具，强制 LLM 输出结构化数据，避免回退到不可靠的纯 Markdown 工具
+    llm_with_tools = llm.model.bind_tools(
+        [UpdateStructuredArtifact],
+        tool_choice="required",  # 强制调用工具：每轮对话都必须更新产出物
+    )
 
-        # 绑定工具并强制调用
-        # 同时绑定旧版(Markdown)和新版(Structured)工具，让 LLM 根据 Prompt 决定
-        llm_with_tools = llm.model.bind_tools(
-            [update_artifact, UpdateStructuredArtifact],
-            tool_choice="required",  # 强制调用工具：每轮对话都必须更新产出物
-        )
+    # 获取当前阶段对应的 artifact key
+    current_template = next(
+        (t for t in templates if t.get("stage") == current_stage), None
+    )
+    artifact_key = (
+        current_template["key"] if current_template else f"{current_stage}_output"
+    )
+    template_outline = (
+        current_template.get("outline", "") if current_template else ""
+    )
 
-        # 获取当前阶段对应的 artifact key
-        current_template = next(
-            (t for t in templates if t.get("stage") == current_stage), None
-        )
-        artifact_key = (
-            current_template["key"] if current_template else f"{current_stage}_output"
-        )
-        template_outline = (
-            current_template.get("outline", "") if current_template else ""
-        )
+    # 构建 Prompt（使用动态 Schema 生成）
+    # [Fix Bug 1] 传递 existing_artifact
+    structured_artifacts = state.get("structured_artifacts", {})
+    existing_structured = structured_artifacts.get(artifact_key)
 
-        # 构建 Prompt（使用动态 Schema 生成）
-        # [Fix Bug 1] 传递 existing_artifact
-        structured_artifacts = state.get("structured_artifacts", {})
-        existing_structured = structured_artifacts.get(artifact_key)
+    # 获取 Reasoning Hint (Context-Aware Sync)
+    latest_hint = cast(str | None, state.get("latest_artifact_hint"))
+    if latest_hint:
+        logger.info(f"ArtifactNode: Using reasoning hint: {latest_hint[:50]}...")
 
-        # [新增] 获取 Reasoning Hint (Context-Aware Sync)
-        latest_hint = cast(str | None, state.get("latest_artifact_hint"))
-        if latest_hint:
-            logger.info(f"ArtifactNode: Using reasoning hint: {latest_hint[:50]}...")
+    artifact_prompt_text = build_artifact_update_prompt(
+        artifact_key=artifact_key,
+        current_stage=current_stage,
+        template_outline=template_outline,
+        existing_artifact=existing_structured,
+        reasoning_hint=latest_hint,
+    )
 
-        artifact_prompt_text = build_artifact_update_prompt(
-            artifact_key=artifact_key,
-            current_stage=current_stage,
-            template_outline=template_outline,
-            existing_artifact=existing_structured,
-            reasoning_hint=latest_hint,
-        )
+    # 使用 state 中的 messages + 指令
+    messages = state["messages"] + [SystemMessage(content=artifact_prompt_text)]
 
-        # 使用 state 中的 messages + 指令
-        messages = state["messages"] + [SystemMessage(content=artifact_prompt_text)]
-
-        try:
-            response = llm_with_tools.invoke(messages)
-            tool_calls = response.tool_calls
-        except Exception as e:
-            logger.error(f"Artifact LLM call failed: {e}", exc_info=True)
-            return state
+    tool_calls: list[dict[str, Any]] = []
+    try:
+        response = llm_with_tools.invoke(messages)
+        tool_calls = response.tool_calls
+    except Exception as e:
+        logger.error(f"Artifact LLM call failed: {e}", exc_info=True)
+        # 即使 LLM 失败，也要保留确定性初始化写入的数据
+        return {
+            "artifacts": new_artifacts,
+            "structured_artifacts": new_structured_artifacts
+        }
 
     # 4. 处理工具调用
-    # tool_calls 已经在上面被正确赋值了 (无论来自 mock 还是 response)
     if not tool_calls:
         logger.warning("ArtifactNode: No tool calls generated!")
-        return state
-
-    new_artifacts = dict(artifacts)
+        # 即使 LLM 没有生成工具调用，也要保留确定性初始化写入的骨架数据
+        return {
+            "artifacts": new_artifacts,
+            "structured_artifacts": new_structured_artifacts
+        }
 
     for tool_call in tool_calls:
         tool_name = tool_call["name"]
         args = tool_call["args"]
         key = args.get("key")
 
-        # 标准化工具名称比较（忽略大小写和下划线）
+        # 标准化工具名称比较（只支持 UpdateStructuredArtifact）
         normalized_tool_name = tool_name.lower().replace("_", "")
 
-        if normalized_tool_name == "updateartifact":
-            content = args.get("markdown_body")
-            if key and content:
-                new_artifacts[key] = content
-                logger.info(f"ArtifactNode: Updated artifact {key} (markdown)")
-
-        elif normalized_tool_name == "updatestructuredartifact":
+        if normalized_tool_name == "updatestructuredartifact":
             patch = cast(Dict[str, Any], args.get("content"))
             artifact_type = args.get("artifact_type", "requirement")
 
             if key and patch:
-                # [Fix Bug 2] 从 structured_artifacts 获取原始数据
-                new_structured_artifacts = dict(state.get("structured_artifacts", {}))
                 original = new_structured_artifacts.get(key, {})
-
-                if isinstance(original, BaseModel):
+                if hasattr(original, "model_dump"):
                     original = original.model_dump()
                 elif isinstance(original, str):
-                    # 如果意外遇到 markdown 字符串，初始化为空字典
                     original = {}
+
+                if key == "test_design_cases":
+                    logger.warning(f"DEBUG: R4 JSON ARGS: {args}")
 
                 merged = merge_artifacts(cast(Dict[str, Any], original), patch)
 
@@ -197,8 +205,6 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
                 
                 # 更新结构化数据
                 new_structured_artifacts[key] = merged
-                # 将 new_structured_artifacts 存回 state (注意：这里只是局部变量，需要 return 时返回)
-                state["structured_artifacts"] = new_structured_artifacts
 
                 logger.info(
                     f"ArtifactNode: Updated artifact {key} (structured patch converted to markdown)"
@@ -219,7 +225,7 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
                 }
             )
 
-            temp_state = {**state, "artifacts": new_artifacts}
+            temp_state = {**state, "artifacts": new_artifacts, "structured_artifacts": new_structured_artifacts}
             progress_info = get_progress_info(temp_state)
 
             if progress_info:
@@ -234,7 +240,6 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
                 logger.info("ArtifactNode: Sent progress event via writer")
 
     return {
-        **state, 
         "artifacts": new_artifacts,
-        "structured_artifacts": state.get("structured_artifacts", {})
+        "structured_artifacts": new_structured_artifacts
     }

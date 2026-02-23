@@ -107,9 +107,9 @@ def sample_ai_config():
     return {
         "name": "测试配置",
         "config_name": "测试配置",
-        "base_url": "https://api.openai.com/v1",
-        "api_key": "test-api-key-12345",
-        "model_name": "gpt-4o-mini",
+        "base_url": os.getenv("OPENAI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+        "api_key": os.getenv("OPENAI_API_KEY", "test-api-key-12345"),
+        "model_name": os.getenv("MODEL_NAME", "deepseek-v3.2"),
         "is_default": False,
         "is_active": True
     }
@@ -126,9 +126,9 @@ def create_ai_config(app):
             
             defaults = {
                 "config_name": "测试配置",
-                "base_url": "https://api.openai.com/v1",
-                "api_key": "test-api-key",
-                "model_name": "gpt-4o-mini",
+                "base_url": os.getenv("OPENAI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+                "api_key": os.getenv("OPENAI_API_KEY", "test-api-key"),
+                "model_name": os.getenv("MODEL_NAME", "deepseek-v3.2"),
                 "is_default": False,
                 "is_active": True
             }

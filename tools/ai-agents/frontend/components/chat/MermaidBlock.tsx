@@ -27,7 +27,7 @@ const isCodeLikelyComplete = (code: string): boolean => {
     // 检查是否以常见的 Mermaid 图表类型开头
     const validStarts = ['graph', 'flowchart', 'sequenceDiagram', 'classDiagram',
         'stateDiagram', 'erDiagram', 'journey', 'gantt', 'pie',
-        'gitGraph', 'mindmap', 'timeline', 'quadrantChart'];
+        'gitGraph', 'mindmap', 'timeline', 'quadrantChart', 'block-beta'];
     const hasValidStart = validStarts.some(start =>
         trimmed.toLowerCase().startsWith(start.toLowerCase())
     );

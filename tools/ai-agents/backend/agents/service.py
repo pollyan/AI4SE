@@ -305,6 +305,13 @@ class LangchainAssistantService:
         yielded_len = 0
         
         current_state = {}
+        # Fetch initial state to preserve metadata like artifact_templates
+        try:
+            state_snapshot = await self.agent.aget_state(config)
+            if state_snapshot and hasattr(state_snapshot, 'values'):
+                current_state = dict(state_snapshot.values)
+        except Exception as e:
+            logger.warning(f"Failed to fetch initial state for stream: {e}")
         
         async for chunk in self.agent.astream(
             {"messages": [HumanMessage(content=user_message)]},

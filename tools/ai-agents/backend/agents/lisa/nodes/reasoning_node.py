@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, Any, Dict, List
+from typing import Literal, Any, Dict, List, Optional
 from langgraph.types import Command
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from ..intent_parser import parse_user_intent, ClarifyContext
@@ -33,51 +33,41 @@ logger = logging.getLogger(__name__)
 import re
 
 
-def extract_blocking_questions(artifacts: Dict[str, Any]) -> List[str]:
+def extract_blocking_questions(artifacts: Dict[str, Any], structured_artifacts: Optional[Dict[str, Any]] = None) -> List[str]:
     """从产出物中提取 [P0] 阻塞性问题
 
-    解析 Markdown 文档中 '[P0] 阻塞性问题' 部分下的问题列表
-    支持新旧两种格式: [P0] 和 🔴
+    解析结构化产出物。不再保留不稳定、向后兼容的 Markdown 正则回退解析逻辑。
     """
     questions = []
-
-    for key, content in artifacts.items():
-        if not isinstance(content, str):
-            continue
-
-        # 支持两种格式: [P0] 和 🔴
-        pattern = r"###\s*(?:\[P0\]|🔴)\s*阻塞性问题[^\n]*\n(.*?)(?=###|\Z)"
-        matches = re.findall(pattern, content, re.DOTALL)
-
-        for match in matches:
-            # 提取列表项 (1. xxx 或 - xxx)
-            items = re.findall(r"^\s*(?:\d+\.\s*|\-\s*)(.+)$", match, re.MULTILINE)
-            questions.extend(items)
-
+    
+    if structured_artifacts:
+        for key, content in structured_artifacts.items():
+            if hasattr(content, "model_dump"):
+                content = content.model_dump()
+            if isinstance(content, dict) and "assumptions" in content:
+                for a in content["assumptions"]:
+                    if isinstance(a, dict) and a.get("priority") == "P0" and a.get("status") in ("pending", "待确认"):
+                        questions.append(a.get("question", ""))
+                        
     return questions
 
 
-def extract_optional_questions(artifacts: Dict[str, Any]) -> List[str]:
-    """从产出物中提取 [P1] 建议澄清问题
+def extract_optional_questions(artifacts: Dict[str, Any], structured_artifacts: Optional[Dict[str, Any]] = None) -> List[str]:
+    """从产出物中提取 [P1/P2] 建议澄清问题
 
-    解析 Markdown 文档中 '[P1] 建议澄清' 部分下的问题列表
-    支持新旧两种格式: [P1] 和 🟡
+    解析结构化产出物。不再保留不稳定、向后兼容的 Markdown 正则回退解析逻辑。
     """
     questions = []
-
-    for key, content in artifacts.items():
-        if not isinstance(content, str):
-            continue
-
-        # 支持两种格式: [P1] 和 🟡
-        pattern = r"###\s*(?:\[P1\]|🟡)\s*建议澄清[^\n]*\n(.*?)(?=###|\Z)"
-        matches = re.findall(pattern, content, re.DOTALL)
-
-        for match in matches:
-            # 提取列表项
-            items = re.findall(r"^\s*(?:\d+\.\s*|\-\s*)(.+)$", match, re.MULTILINE)
-            questions.extend(items)
-
+    
+    if structured_artifacts:
+        for key, content in structured_artifacts.items():
+            if hasattr(content, "model_dump"):
+                content = content.model_dump()
+            if isinstance(content, dict) and "assumptions" in content:
+                for a in content["assumptions"]:
+                    if isinstance(a, dict) and a.get("priority") in ("P1", "P2") and a.get("status") in ("pending", "待确认"):
+                        questions.append(a.get("question", ""))
+                        
     return questions
 
 
@@ -180,8 +170,9 @@ def reasoning_node(
     if current_stage == "clarify" and messages:
         last_message = messages[-1]
         if isinstance(last_message, HumanMessage):
-            blocking_qs = extract_blocking_questions(artifacts)
-            optional_qs = extract_optional_questions(artifacts)
+            structured_artifacts = state.get("structured_artifacts")
+            blocking_qs = extract_blocking_questions(artifacts, structured_artifacts)
+            optional_qs = extract_optional_questions(artifacts, structured_artifacts)
 
             context = ClarifyContext(
                 blocking_questions=blocking_qs, optional_questions=optional_qs
@@ -324,11 +315,30 @@ def reasoning_node(
     # 处理阶段流转请求
     if final_response.request_transition_to:
         next_stage = final_response.request_transition_to
-        logger.info(
-            f"ReasoningNode: Transition requested from {current_stage} to {next_stage}"
-        )
-        state_updates["current_stage_id"] = next_stage
-        state_updates["current_workflow"] = current_workflow  # Maintain workflow type
+        
+        # 绝对防线：结构化拦截
+        # 如果当前是 clarify 阶段，并且试图跳往其他阶段，必须严格检查是否有残留的 [P0] 问题
+        if current_stage == "clarify" and next_stage != "clarify":
+            structured_artifacts = state.get("structured_artifacts")
+            remaining_blockers = extract_blocking_questions(artifacts, structured_artifacts)
+            if remaining_blockers:
+                logger.warning(
+                    f"ReasoningNode: Blocked unauthorized transition to {next_stage} due to {len(remaining_blockers)} P0 questions."
+                )
+                state_updates["warning"] = "系统拦截：仍有关键问题未确认，无法进入下一阶段。"
+                next_stage = current_stage # 强制重置为空/当前阶段
+            else:
+                logger.info(
+                    f"ReasoningNode: Transition requested from {current_stage} to {next_stage}"
+                )
+                state_updates["current_stage_id"] = next_stage
+                state_updates["current_workflow"] = current_workflow  # Maintain workflow type
+        else:
+            logger.info(
+                f"ReasoningNode: Transition requested from {current_stage} to {next_stage}"
+            )
+            state_updates["current_stage_id"] = next_stage
+            state_updates["current_workflow"] = current_workflow  # Maintain workflow type
 
     # 5. 路由决策 (强制路由到 ArtifactNode)
     # 用户要求：90% 以上的情况都需要更新生成产出物，所以固定每次对话结束的时候都生成产出物
