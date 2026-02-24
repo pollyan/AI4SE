@@ -24,6 +24,7 @@ class TestClarifyIntentIntegration:
         mock_extract.return_value = ["Q1: 登录重试机制?"]
         
         mock_llm = Mock()
+        mock_llm.model.invoke.return_value.content = '{"thought":"MOCK","should_update_artifact":false,"request_transition_to":null}'
         state = {
             "messages": [HumanMessage(content="好的，继续")],
             "current_stage_id": "clarify",
@@ -62,6 +63,7 @@ class TestClarifyIntentIntegration:
         )
         
         mock_llm = Mock()
+        mock_llm.model.invoke.return_value.content = '{"thought":"MOCK","should_update_artifact":false,"request_transition_to":null}'
         state = {
             "messages": [HumanMessage(content="好的，继续")],
             "current_stage_id": "clarify",
@@ -91,6 +93,7 @@ class TestClarifyIntentIntegration:
         )
         
         mock_llm = Mock()
+        mock_llm.model.invoke.return_value.content = '{"thought":"MOCK","should_update_artifact":false,"request_transition_to":null}'
         state = {
             "messages": [HumanMessage(content="好的，继续")],
             "current_stage_id": "strategy",
@@ -133,6 +136,7 @@ class TestClarifyIntentIntegration:
         )
         
         mock_llm = Mock()
+        mock_llm.model.invoke.return_value.content = '{"thought":"MOCK","should_update_artifact":false,"request_transition_to":null}'
         state = {
             "messages": [HumanMessage(content="这是给你的材料")],
             "current_stage_id": "clarify",

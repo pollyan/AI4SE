@@ -117,13 +117,6 @@ def artifact_node(state: LisaState, config: RunnableConfig, llm: Any) -> LisaSta
             writer({"type": "progress", "progress": pre_progress})
             logger.info("ArtifactNode: Sent pre-generation progress event")
 
-    # 绑定工具并强制调用
-    # 只绑定新版(Structured)工具，强制 LLM 输出结构化数据，避免回退到不可靠的纯 Markdown 工具
-    llm_with_tools = llm.model.bind_tools(
-        [UpdateStructuredArtifact],
-        tool_choice="required",  # 强制调用工具：每轮对话都必须更新产出物
-    )
-
     # 获取当前阶段对应的 artifact key
     current_template = next(
         (t for t in templates if t.get("stage") == current_stage), None
@@ -153,13 +146,31 @@ def artifact_node(state: LisaState, config: RunnableConfig, llm: Any) -> LisaSta
         reasoning_hint=latest_hint,
     )
 
+    import json
+    from backend.agents.shared.utils import extract_json_from_markdown
+    
+    # 添加强制 JSON 约束
+    artifact_prompt_text += "\n\n[CRITICAL INSTRUCTION]\n"
+    artifact_prompt_text += "你必须并且只能返回一个完全符合 `UpdateStructuredArtifact` Schema 描述的 JSON 对象字符串。不要添加 Markdown 代码块标记（如 ```json），绝不能输出无关的解释或回复。\n"
+    artifact_prompt_text += UpdateStructuredArtifact.schema_json()
+
     # 使用 state 中的 messages + 指令
     messages = state["messages"] + [SystemMessage(content=artifact_prompt_text)]
 
     tool_calls: list[dict[str, Any]] = []
     try:
-        response = llm_with_tools.invoke(messages)
-        tool_calls = response.tool_calls
+        raw_msg = llm.model.invoke(messages)
+        text_content = raw_msg.content.strip()
+
+        data = extract_json_from_markdown(text_content)
+        # 手动构造对应的工具调用块（适配下方处理逻辑）
+        tool_calls = [
+            {
+                "name": "UpdateStructuredArtifact",
+                "args": data,
+                "id": f"call_gen_{current_stage}",
+            }
+        ]
     except Exception as e:
         logger.error(f"Artifact LLM call failed: {e}", exc_info=True)
         # 即使 LLM 失败，也要保留确定性初始化写入的数据

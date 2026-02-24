@@ -10,7 +10,9 @@ from backend.agents.lisa.state import LisaState
 @pytest.fixture
 def mock_llm():
     llm = MagicMock()
-    # Mock with_structured_output
+    # Mock fallback string response for extract_json_from_markdown
+    llm.model.invoke.return_value.content = '{"thought": "mocked", "should_update_artifact": false}'
+    # Provide backward compatibility for older tests
     structured_llm = MagicMock()
     llm.model.with_structured_output.return_value = structured_llm
     return llm

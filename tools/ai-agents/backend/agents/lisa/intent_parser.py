@@ -46,16 +46,19 @@ def parse_user_intent(
         optional_questions=context.optional_questions,
         user_message=user_message
     )
+    import json
+    from backend.agents.shared.utils import extract_json_from_markdown
+    
+    prompt += "\n\n[CRITICAL INSTRUCTION]\n"
+    prompt += "你必须并且只能返回一个完全符合 `UserIntentInClarify` Schema 描述的 JSON 对象字符串。不要添加 Markdown 代码块标记（如 ```json），绝不能输出无关的解释或回复。\n"
+    prompt += UserIntentInClarify.schema_json()
     
     try:
-        structured_llm = llm.model.with_structured_output(
-            UserIntentInClarify,
-            method="function_calling"
-        )
-        result = structured_llm.invoke([SystemMessage(content=prompt)])
-        
-        if isinstance(result, dict):
-            result = UserIntentInClarify(**result)
+        raw_msg = llm.model.invoke([SystemMessage(content=prompt)])
+        text_content = raw_msg.content.strip()
+
+        data = extract_json_from_markdown(text_content)
+        result = UserIntentInClarify(**data)
         
         logger.info(f"意图解析: intent={result.intent}, confidence={result.confidence}")
         return result

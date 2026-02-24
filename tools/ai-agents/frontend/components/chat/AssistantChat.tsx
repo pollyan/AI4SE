@@ -53,6 +53,7 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange, onStreamE
     const [isSubmitting, setIsSubmitting] = useState(false);
     const viewportRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const chatInputRef = useRef<HTMLInputElement>(null);
 
     // 使用新的 useVercelChat hook
     const { messages, status, sendMessage, stop, error, addToolResult, reload } = useVercelChat({
@@ -84,6 +85,47 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange, onStreamE
             setIsSubmitting(false);
         }
     }, [status]);
+
+    // 监听原生 DOM input 事件，同步外部注入的值到 React state
+    // 解决自动化工具通过 element.value = '...' 或中文输入法注入文本后
+    // React onChange 不触发导致发送按钮 disabled 的问题
+    useEffect(() => {
+        const el = chatInputRef.current;
+        if (!el) return;
+
+        // 方案：拦截 value setter, 当外部代码直接设置 el.value 时,
+        // 自动派发原生 input 事件使 React 的 onChange 被触发
+        const nativeDescriptor = Object.getOwnPropertyDescriptor(
+            HTMLInputElement.prototype, 'value'
+        );
+        if (!nativeDescriptor || !nativeDescriptor.set) return;
+
+        const originalSetter = nativeDescriptor.set;
+
+        Object.defineProperty(el, 'value', {
+            set(newValue: string) {
+                originalSetter.call(this, newValue);
+                // 派发原生 input 事件，React 会通过合成事件系统捕获
+                this.dispatchEvent(new Event('input', { bubbles: true }));
+            },
+            get() {
+                return nativeDescriptor.get?.call(this) ?? '';
+            },
+            configurable: true,
+        });
+
+        // 同时监听标准 input 事件（覆盖输入法 compositionend 等场景）
+        const handleNativeInput = () => {
+            setInput(el.value);
+        };
+        el.addEventListener('input', handleNativeInput);
+
+        return () => {
+            // 恢复原始 setter
+            Object.defineProperty(el, 'value', nativeDescriptor);
+            el.removeEventListener('input', handleNativeInput);
+        };
+    }, []);
 
     // 自动滚动到底部
     useEffect(() => {
@@ -390,6 +432,7 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange, onStreamE
                         <div className="flex items-center gap-2">
                             <input
                                 type="text"
+                                ref={chatInputRef}
                                 data-testid="chat-input"
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}

@@ -10,14 +10,9 @@ class TestParseUserIntent:
     def test_parse_returns_user_intent_schema(self):
         """解析结果应返回 UserIntentInClarify 类型"""
         mock_llm = Mock()
-        mock_structured = Mock()
-        mock_structured.invoke.return_value = UserIntentInClarify(
-            intent="confirm_proceed",
-            confidence=0.9,
-            answered_question_ids=[],
-            extracted_info=None
-        )
-        mock_llm.model.with_structured_output.return_value = mock_structured
+        mock_msg = Mock()
+        mock_msg.content = '{"intent": "confirm_proceed", "confidence": 0.9, "answered_question_ids": [], "extracted_info": null}'
+        mock_llm.model.invoke.return_value = mock_msg
         
         context = ClarifyContext(
             blocking_questions=["Q1: 登录重试机制?"],
@@ -32,7 +27,7 @@ class TestParseUserIntent:
     def test_fallback_on_error(self):
         """解析失败时返回降级意图"""
         mock_llm = Mock()
-        mock_llm.model.with_structured_output.return_value.invoke.side_effect = Exception("LLM Error")
+        mock_llm.model.invoke.side_effect = Exception("LLM Error")
         
         context = ClarifyContext(blocking_questions=[], optional_questions=[])
         result = parse_user_intent("测试消息", context, mock_llm)
@@ -43,12 +38,9 @@ class TestParseUserIntent:
     def test_context_passed_to_llm(self):
         """上下文应传递给 LLM"""
         mock_llm = Mock()
-        mock_structured = Mock()
-        mock_structured.invoke.return_value = UserIntentInClarify(
-            intent="answer_question",
-            confidence=0.85,
-        )
-        mock_llm.model.with_structured_output.return_value = mock_structured
+        mock_msg = Mock()
+        mock_msg.content = '{"intent": "answer_question", "confidence": 0.85}'
+        mock_llm.model.invoke.return_value = mock_msg
         
         context = ClarifyContext(
             blocking_questions=["Q1: 阻塞问题"],
@@ -57,8 +49,8 @@ class TestParseUserIntent:
         
         parse_user_intent("重试机制是3次", context, mock_llm)
         
-        mock_structured.invoke.assert_called_once()
-        call_args = mock_structured.invoke.call_args[0][0]
+        mock_llm.model.invoke.assert_called_once()
+        call_args = mock_llm.model.invoke.call_args[0][0]
         assert len(call_args) == 1
 
 

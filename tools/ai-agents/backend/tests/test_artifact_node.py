@@ -1,3 +1,4 @@
+import json
 import pytest
 from typing import cast, Dict, Any
 from unittest.mock import MagicMock, patch
@@ -36,7 +37,7 @@ def test_artifact_node_updates_state(
     mock_writer_getter.return_value = mock_writer
 
     # Mock LLM response with structured tool call
-    tool_call_id = "call_123"
+    tool_call_id = "call_gen_clarify"
     tool_args = {
         "key": "test_design_requirements",
         "artifact_type": "requirement",
@@ -46,11 +47,8 @@ def test_artifact_node_updates_state(
         }
     }
 
-    mock_response = AIMessage(
-        content="",
-        tool_calls=[{"name": "UpdateStructuredArtifact", "args": tool_args, "id": tool_call_id}],
-    )
-    bound_llm.invoke.return_value = mock_response
+    mock_response = AIMessage(content=json.dumps(tool_args))
+    original_llm.model.invoke.return_value = mock_response
 
     # Execute node
     new_state = artifact_node(cast(LisaState, mock_state), None, original_llm)
@@ -79,7 +77,7 @@ def test_artifact_node_updates_state(
         assert tool_call_event["toolName"] == "UpdateStructuredArtifact"
 
     # Verify LLM prompt construction (briefly)
-    bound_llm.invoke.assert_called_once()
+    original_llm.model.invoke.assert_called_once()
 
 
 @patch("backend.agents.lisa.nodes.artifact_node.get_robust_stream_writer")
@@ -104,14 +102,14 @@ def test_artifact_node_injects_template_outline(mock_writer_getter, mock_llm):
     }
 
     # Mock response
-    bound_llm.invoke.return_value = AIMessage(content="thought", tool_calls=[])
+    original_llm.model.invoke.return_value = AIMessage(content="{\"key\":\"test\",\"artifact_type\":\"requirement\",\"content\":{}}")
 
     # Execute node
     artifact_node(cast(LisaState, state), None, original_llm)
 
     # Verify prompt contains template outline
-    bound_llm.invoke.assert_called_once()
-    system_msg = bound_llm.invoke.call_args[0][0][0]
+    original_llm.model.invoke.assert_called_once()
+    system_msg = original_llm.model.invoke.call_args[0][0][0]
     assert template_outline in system_msg.content
 
 
@@ -139,7 +137,7 @@ def test_artifact_node_deterministic_init(mock_writer_getter, mock_llm):
     new_state = artifact_node(cast(LisaState, state), None, original_llm)
 
     # Verify LLM WAS called, because we don't bypass ainvoke anymore.
-    bound_llm.invoke.assert_called_once()
+    original_llm.model.invoke.assert_called_once()
 
     # Verify deterministic state update
     assert "test_key" in new_state["artifacts"]
@@ -168,7 +166,7 @@ def test_artifact_node_deterministic_init(mock_writer_getter, mock_llm):
 def test_artifact_node_llm_exception(mock_writer_getter, mock_llm, mock_state):
     original_llm, bound_llm = mock_llm
 
-    bound_llm.invoke.side_effect = Exception("LLM failure")
+    original_llm.model.invoke.side_effect = Exception("LLM failure")
 
     new_state = artifact_node(cast(LisaState, mock_state), None, original_llm)
 
@@ -178,6 +176,7 @@ def test_artifact_node_llm_exception(mock_writer_getter, mock_llm, mock_state):
 
 
 @patch("backend.agents.lisa.nodes.artifact_node.get_robust_stream_writer")
+@pytest.mark.skip(reason="New architecture returns single aggregated JSON object rather than multiple parallel tool calls via native LLM stream")
 def test_artifact_node_multiple_updates(mock_writer_getter, mock_llm, mock_state):
     original_llm, bound_llm = mock_llm
     mock_writer = MagicMock()
@@ -206,7 +205,7 @@ def test_artifact_node_multiple_updates(mock_writer_getter, mock_llm, mock_state
             },
         ],
     )
-    bound_llm.invoke.return_value = mock_response
+    original_llm.model.invoke.return_value = mock_response
 
     new_state = artifact_node(cast(LisaState, mock_state), None, original_llm)
 
@@ -230,7 +229,7 @@ def test_artifact_node_invalid_tool_name(mock_writer_getter, mock_llm, mock_stat
             }
         ],
     )
-    bound_llm.invoke.return_value = mock_response
+    original_llm.model.invoke.return_value = mock_response
 
     new_state = artifact_node(cast(LisaState, mock_state), None, original_llm)
 
@@ -251,21 +250,14 @@ def test_artifact_node_structured_output(mock_writer_getter, mock_llm, mock_stat
         assumptions=[],
     )
 
-    mock_response = AIMessage(
-        content="",
-        tool_calls=[
-            {
-                "name": "update_structured_artifact",
-                "args": {
-                    "key": "test_design_requirements",
-                    "artifact_type": "requirement",
-                    "content": requirement_doc.model_dump(),
-                },
-                "id": "call_structured_1",
-            }
-        ],
-    )
-    bound_llm.invoke.return_value = mock_response
+    import json
+    tool_args = {
+        "key": "test_design_requirements",
+        "artifact_type": "requirement",
+        "content": requirement_doc.model_dump(),
+    }
+    mock_response = AIMessage(content=json.dumps(tool_args))
+    original_llm.model.invoke.return_value = mock_response
 
     new_state = artifact_node(cast(LisaState, mock_state), None, original_llm)
 
@@ -291,21 +283,14 @@ def test_artifact_node_structured_output_pascal_case(
         scope=["Test Scope"], flow_mermaid="graph LR; A-->B", rules=[], assumptions=[]
     )
 
-    mock_response = AIMessage(
-        content="",
-        tool_calls=[
-            {
-                "name": "UpdateStructuredArtifact",
-                "args": {
-                    "key": "test_design_requirements",
-                    "artifact_type": "requirement",
-                    "content": requirement_doc.model_dump(),
-                },
-                "id": "call_structured_pascal",
-            }
-        ],
-    )
-    bound_llm.invoke.return_value = mock_response
+    import json
+    tool_args = {
+        "key": "test_design_requirements",
+        "artifact_type": "requirement",
+        "content": requirement_doc.model_dump(),
+    }
+    mock_response = AIMessage(content=json.dumps(tool_args))
+    original_llm.model.invoke.return_value = mock_response
 
     new_state = artifact_node(cast(LisaState, mock_state), None, original_llm)
 
@@ -360,24 +345,17 @@ def test_incremental_update_bugs_reproduction(mock_writer_getter, mock_llm):
 
     # --- Execute 2: First LLM Update ---
     # Setup LLM response 1 (Adding Feature 1)
-    llm_response_1 = AIMessage(
-        content="thinking...",
-        tool_calls=[
-            {
-                "name": "UpdateStructuredArtifact",
-                "args": {
-                    "key": "test_req",
-                    "artifact_type": "requirement",
-                    "content": {
-                        "scope": ["Scope A"],
-                        "features": [{"id": "F1", "name": "Feature 1", "priority": "P1"}]
-                    }
-                },
-                "id": "call_1"
-            }
-        ]
-    )
-    bound_llm.invoke.return_value = llm_response_1
+    import json
+    tool_args_1 = {
+        "key": "test_req",
+        "artifact_type": "requirement",
+        "content": {
+            "scope": ["Scope A"],
+            "features": [{"id": "F1", "name": "Feature 1", "priority": "P1"}]
+        }
+    }
+    llm_response_1 = AIMessage(content=json.dumps(tool_args_1))
+    original_llm.model.invoke.return_value = llm_response_1
     
     state_after_update_1 = cast(Dict[str, Any], {**state_after_init, **artifact_node(cast(LisaState, state_after_init), None, original_llm)})
     
@@ -394,29 +372,22 @@ def test_incremental_update_bugs_reproduction(mock_writer_getter, mock_llm):
     # --- Execute 3: Second LLM Update ---
     # Setup LLM response 2 (Adding Feature 2)
     # Important: LLM only sends delta for F2, it assumes F1 exists
-    llm_response_2 = AIMessage(
-        content="thinking...",
-        tool_calls=[
-            {
-                "name": "UpdateStructuredArtifact",
-                "args": {
-                    "key": "test_req",
-                    "artifact_type": "requirement",
-                    "content": {
-                        "features": [{"id": "F2", "name": "Feature 2", "priority": "P2"}]
-                    }
-                },
-                "id": "call_2"
-            }
-        ]
-    )
-    bound_llm.invoke.return_value = llm_response_2
+    import json
+    tool_args_2 = {
+        "key": "test_req",
+        "artifact_type": "requirement",
+        "content": {
+            "features": [{"id": "F2", "name": "Feature 2", "priority": "P2"}]
+        }
+    }
+    llm_response_2 = AIMessage(content=json.dumps(tool_args_2))
+    original_llm.model.invoke.return_value = llm_response_2
 
     state_after_update_2 = cast(Dict[str, Any], {**state_after_update_1, **artifact_node(cast(LisaState, state_after_update_1), None, original_llm)})
 
     # Verify Bug 1: Check if prompt contained existing artifact context
     # Get the system message from the LAST call to invoke
-    call_args = bound_llm.invoke.call_args
+    call_args = original_llm.model.invoke.call_args
     # call_args[0] is args tuple, args[0] is messages list
     messages = call_args[0][0] 
     system_msg_content = messages[-1].content if len(messages) > 0 else ""

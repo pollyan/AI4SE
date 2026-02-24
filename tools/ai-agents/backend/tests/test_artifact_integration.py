@@ -63,22 +63,15 @@ def test_e2e_incremental_update_flow(mock_llm, mock_stream_writer):
         ],
     }
 
-    msg_1 = AIMessage(
-        content="",
-        tool_calls=[
-            {
-                "name": "UpdateStructuredArtifact",
-                "args": {
-                    "key": "requirement",
-                    "artifact_type": "requirement",
-                    "content": initial_content,
-                },
-                "id": "call_1",
-            }
-        ],
-    )
+    import json
+    msg_1_args = {
+        "key": "requirement",
+        "artifact_type": "requirement",
+        "content": initial_content,
+    }
+    msg_1 = AIMessage(content=json.dumps(msg_1_args))
 
-    mock_llm.invoke.return_value = msg_1
+    mock_llm.model.invoke.return_value = msg_1
 
     # Run Node
     state_after_1 = cast(Dict[str, Any], {**state, **artifact_node(state, None, mock_llm)})
@@ -115,22 +108,15 @@ def test_e2e_incremental_update_flow(mock_llm, mock_stream_writer):
         ]
     }
 
-    msg_2 = AIMessage(
-        content="",
-        tool_calls=[
-            {
-                "name": "UpdateStructuredArtifact",
-                "args": {
-                    "key": "requirement",
-                    "artifact_type": "requirement",
-                    "content": patch_content,
-                },
-                "id": "call_2",
-            }
-        ],
-    )
+    import json
+    msg_2_args = {
+        "key": "requirement",
+        "artifact_type": "requirement",
+        "content": patch_content,
+    }
+    msg_2 = AIMessage(content=json.dumps(msg_2_args))
 
-    mock_llm.invoke.return_value = msg_2
+    mock_llm.model.invoke.return_value = msg_2
 
     # Run Node again with updated state
     state_after_2 = cast(Dict[str, Any], {**state_after_1, **artifact_node(cast(LisaState, state_after_1), None, mock_llm)})

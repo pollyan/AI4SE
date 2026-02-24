@@ -258,38 +258,49 @@ def reasoning_node(
             + intent_context
         )
 
+    import json
+    from backend.agents.shared.utils import extract_json_from_markdown
+
+    # 1. 构建 Prompt，追加 JSON 要求，绕过 with_structured_output 带来的 DashScope 流解析崩溃
+    system_prompt += "\n\n[CRITICAL INSTRUCTION]\n"
+    system_prompt += "你必须并且只能返回一个完全符合 `ReasoningResponse` Schema 描述的 JSON 对象字符串。不要添加 Markdown 代码块标记（如 ```json），绝不能输出无关的解释或回复。\n"
+    system_prompt += ReasoningResponse.schema_json()
+    
     messages_with_prompt = [SystemMessage(content=system_prompt)] + messages
 
-    # 2. Structured Output 配置
-    structured_llm = llm.model.with_structured_output(
-        ReasoningResponse, method="function_calling"
-    )
-
-    # 3. 流式处理
+    # 3. 处理
     try:
-        # 确保使用最新的 artifact_templates (包含初始化更新)
+        # 确保使用最新的 artifact_templates
         current_templates = (
             init_updates.get("artifact_templates")
             if init_updates and "artifact_templates" in init_updates
             else state.get("artifact_templates", [])
         )
 
+        # 发起纯文本 Invoke 调用（不会触发 tool_calls stream 解析异常）
+        raw_msg = llm.model.invoke(messages_with_prompt)
+        text_content = raw_msg.content.strip()
+
+        data = extract_json_from_markdown(text_content)
+        parsed_resp = ReasoningResponse(**data)
+        
+        # 构建一个存根对象，以模拟 stream 调用的 chunk 以复用 process_reasoning_stream 逻辑
+        class MockChunk:
+            thought = parsed_resp.thought
+            progress_step = parsed_resp.progress_step
+            should_update_artifact = parsed_resp.should_update_artifact
+            request_transition_to = parsed_resp.request_transition_to
+            artifact_update_hint = parsed_resp.artifact_update_hint
+            
         final_response = process_reasoning_stream(
-            stream_iterator=structured_llm.stream(messages_with_prompt),
+            stream_iterator=[MockChunk()],
             writer=writer,
             plan=plan,
             current_stage=current_stage,
-            # 将 templates 混入 base_artifacts 传递给 stream_utils (临时方案，避免修改函数签名)
-            # 或者修改 stream_utils 接收更多参数。这里选择利用已有的 base_artifacts 参数
-            # 但 base_artifacts 本意是 dict[str, str]。
-            # 更稳妥的方式是修改 stream_utils.py 的签名，或者确认 base_artifacts 是否能携带额外信息。
-            # 查看 stream_utils.py:117 current_artifacts = dict(base_artifacts or {})
-            # 所以如果在 base_artifacts 中放入 'artifact_templates' key，它会被复制到 current_artifacts
-            # 并在 progress event 中发送。
             base_artifacts={**artifacts, "artifact_templates": current_templates},
         )
     except Exception as e:
-        logger.error(f"Reasoning stream failed: {e}", exc_info=True)
+        logger.error(f"Reasoning node failed: {e}", exc_info=True)
         return Command(
             update={"messages": [AIMessage(content="系统处理异常，请稍后重试。")]},
             goto="__end__",

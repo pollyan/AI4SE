@@ -26,14 +26,8 @@ async def test_reasoning_node_initialization_sends_templates():
     
     # 2. Mock LLM and Stream Writer
     mock_llm = MagicMock()
-    # 模拟 LLM 流式输出 (只输出 thought，不输出 updates)
-    # stream_utils 需要 chunk 对象有 thought, progress_step 等属性
-    mock_chunk = MagicMock()
-    mock_chunk.thought = "Thinking..."
-    mock_chunk.progress_step = "初始化中..."
-    mock_chunk.should_update_artifact = False
-    
-    mock_llm.model.with_structured_output.return_value.stream.return_value = [mock_chunk]
+    # 模拟 LLM 文本响应
+    mock_llm.model.invoke.return_value.content = '{"thought": "Thinking...", "progress_step": "初始化中...", "should_update_artifact": false, "intent": "provide_material", "confidence": 0.9}'
     
     # Mock get_robust_stream_writer
     mock_writer = MagicMock()

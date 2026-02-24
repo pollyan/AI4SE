@@ -147,4 +147,43 @@ describe('AssistantChat Component', () => {
 
         expect(mockSendMessage).toHaveBeenCalledWith({ text: 'New message' });
     });
+
+    it('enables send button when input has text', async () => {
+        // Setup default mock
+        const { useVercelChat } = await import('../hooks/useVercelChat');
+        vi.mocked(useVercelChat).mockReturnValue({
+            messages: [],
+            status: 'ready',
+            sendMessage: mockSendMessage,
+            stop: mockStop,
+            error: undefined
+        });
+
+        render(
+            <AssistantChat
+                assistant={mockAssistant}
+                onBack={vi.fn()}
+            />
+        );
+
+        await waitFor(() => {
+            expect(screen.queryByText('正在创建会话...')).not.toBeInTheDocument();
+        });
+
+        const input = screen.getByPlaceholderText('输入消息...');
+        const sendButton = screen.getByTitle('发送') as HTMLButtonElement;
+
+        // 最初没有输入，按钮应当被禁用
+        expect(sendButton.disabled).toBe(true);
+
+        // 模拟输入一些字符，特别是为了测试打字时 input state 的更新
+        fireEvent.change(input, { target: { value: '你好' } });
+
+        // 检查按钮是否已被启用
+        expect(sendButton.disabled).toBe(false);
+
+        // 清空内容，按钮应当重新被禁用
+        fireEvent.change(input, { target: { value: '' } });
+        expect(sendButton.disabled).toBe(true);
+    });
 });
