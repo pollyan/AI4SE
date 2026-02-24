@@ -27,7 +27,7 @@ def mock_state() -> Dict[str, Any]:
     }
 
 
-@patch("backend.agents.lisa.nodes.reasoning_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.reasoning_node.get_robust_stream_writer")
 @patch("backend.agents.lisa.nodes.reasoning_node.process_reasoning_stream")
 @patch("backend.agents.lisa.nodes.reasoning_node.build_test_design_prompt")
 def test_reasoning_node_always_routes_to_artifact(
@@ -42,7 +42,7 @@ def test_reasoning_node_always_routes_to_artifact(
         should_update_artifact=True,
     )
 
-    command = reasoning_node(cast(LisaState, mock_state), mock_llm)
+    command = reasoning_node(cast(LisaState, mock_state), None, mock_llm)
     assert command.goto == "artifact_node"
 
     # Case 2: LLM says NO update needed (should still route to artifact_node per new logic)
@@ -50,11 +50,11 @@ def test_reasoning_node_always_routes_to_artifact(
         thought="No update needed.", should_update_artifact=False
     )
 
-    command = reasoning_node(cast(LisaState, mock_state), mock_llm)
+    command = reasoning_node(cast(LisaState, mock_state), None, mock_llm)
     assert command.goto == "artifact_node"
 
 
-@patch("backend.agents.lisa.nodes.reasoning_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.reasoning_node.get_robust_stream_writer")
 @patch("backend.agents.lisa.nodes.reasoning_node.process_reasoning_stream")
 @patch("backend.agents.lisa.nodes.reasoning_node.build_test_design_prompt")
 def test_reasoning_node_initializaton_force_routing(
@@ -74,7 +74,7 @@ def test_reasoning_node_initializaton_force_routing(
         thought="Welcome.", should_update_artifact=False
     )
 
-    command = reasoning_node(cast(LisaState, state), mock_llm)
+    command = reasoning_node(cast(LisaState, state), None, mock_llm)
 
     assert isinstance(command, Command)
     assert command.goto == "artifact_node"
@@ -84,7 +84,7 @@ def test_reasoning_node_initializaton_force_routing(
     assert "artifact_templates" in command.update
 
 
-@patch("backend.agents.lisa.nodes.reasoning_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.reasoning_node.get_robust_stream_writer")
 @patch("backend.agents.lisa.nodes.reasoning_node.process_reasoning_stream")
 @patch("backend.agents.lisa.nodes.reasoning_node.build_test_design_prompt")
 def test_reasoning_node_stream_exception(
@@ -92,7 +92,7 @@ def test_reasoning_node_stream_exception(
 ):
     mock_process.side_effect = Exception("Stream error")
 
-    command = reasoning_node(cast(LisaState, mock_state), mock_llm)
+    command = reasoning_node(cast(LisaState, mock_state), None, mock_llm)
 
     assert isinstance(command, Command)
     assert command.goto == "__end__"
@@ -101,7 +101,7 @@ def test_reasoning_node_stream_exception(
     assert "异常" in command.update["messages"][-1].content
 
 
-@patch("backend.agents.lisa.nodes.reasoning_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.reasoning_node.get_robust_stream_writer")
 @patch("backend.agents.lisa.nodes.reasoning_node.process_reasoning_stream")
 @patch("backend.agents.lisa.nodes.reasoning_node.build_test_design_prompt")
 def test_reasoning_node_stage_transition(
@@ -113,14 +113,14 @@ def test_reasoning_node_stage_transition(
         should_update_artifact=False,
     )
 
-    command = reasoning_node(cast(LisaState, mock_state), mock_llm)
+    command = reasoning_node(cast(LisaState, mock_state), None, mock_llm)
 
     assert command.update is not None
     assert command.update["current_stage_id"] == "strategy"
     assert command.update.get("current_workflow") == "test_design"
 
 
-@patch("backend.agents.lisa.nodes.reasoning_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.reasoning_node.get_robust_stream_writer")
 @patch("backend.agents.lisa.nodes.reasoning_node.process_reasoning_stream")
 @patch("backend.agents.lisa.nodes.reasoning_node.build_requirement_review_prompt")
 def test_reasoning_node_req_review_workflow(
@@ -138,12 +138,12 @@ def test_reasoning_node_req_review_workflow(
         thought="Reviewing...", should_update_artifact=False
     )
 
-    reasoning_node(cast(LisaState, state), mock_llm)
+    reasoning_node(cast(LisaState, state), None, mock_llm)
 
     mock_req_prompt.assert_called_once()
 
 
-@patch("backend.agents.lisa.nodes.reasoning_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.reasoning_node.get_robust_stream_writer")
 @patch("backend.agents.lisa.nodes.reasoning_node.process_reasoning_stream")
 @patch("backend.agents.lisa.nodes.reasoning_node.build_test_design_prompt")
 def test_stage_transition_triggers_artifact_for_missing_output(
@@ -188,7 +188,7 @@ def test_stage_transition_triggers_artifact_for_missing_output(
         should_update_artifact=False,  # LLM 认为不需要更新
     )
 
-    command = reasoning_node(cast(LisaState, state), mock_llm)
+    command = reasoning_node(cast(LisaState, state), None, mock_llm)
 
     # 验证：
     # 1. 阶段应该被更新为 strategy

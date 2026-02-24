@@ -35,19 +35,19 @@ async def test_reasoning_node_initialization_sends_templates():
     
     mock_llm.model.with_structured_output.return_value.stream.return_value = [mock_chunk]
     
-    # Mock get_stream_writer
+    # Mock get_robust_stream_writer
     mock_writer = MagicMock()
     
-    # Patch get_stream_writer to capture output
+    # Patch get_robust_stream_writer to capture output
     # 直接 patch 目标模块的全局命名空间
     import sys
     target_module = sys.modules["backend.agents.lisa.nodes.reasoning_node"]
     
     with pytest.MonkeyPatch().context() as m:
-        m.setattr(target_module, "get_stream_writer", lambda: mock_writer)
+        m.setattr(target_module, "get_robust_stream_writer", lambda *args, **kwargs: mock_writer)
         
         # 3. 执行 ReasoningNode
-        reasoning_node(state, mock_llm)
+        reasoning_node(state, None, mock_llm)
         
         # 4. 验证 Writer 调用
         # 我们期望至少有一次调用包含 'progress' 且 'artifactProgress.template' 不为空

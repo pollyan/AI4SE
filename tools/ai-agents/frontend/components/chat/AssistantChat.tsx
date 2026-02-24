@@ -390,6 +390,7 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange, onStreamE
                         <div className="flex items-center gap-2">
                             <input
                                 type="text"
+                                data-testid="chat-input"
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 placeholder="输入消息..."
@@ -412,6 +413,7 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange, onStreamE
                             {status === 'streaming' ? (
                                 <button
                                     type="button"
+                                    data-testid="stop-button"
                                     onClick={stop}
                                     className="p-3 rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors"
                                     title="停止生成"
@@ -421,6 +423,7 @@ const ChatSession = ({ assistant, sessionId, onBack, onProgressChange, onStreamE
                             ) : (
                                 <button
                                     type="submit"
+                                    data-testid="send-button"
                                     disabled={!input.trim() && files.length === 0}
                                     className="p-3 rounded-full bg-primary hover:bg-primary/90 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     title="发送"

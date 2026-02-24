@@ -56,7 +56,7 @@ def llm_intent_routing(state: LisaState, llm: Any) -> IntentResult:
     
     structured_llm = llm.model.with_structured_output(
         IntentResult,
-        method="function_calling"
+        method="json_schema"
     )
     
     result: IntentResult = structured_llm.invoke([

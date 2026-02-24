@@ -8,7 +8,7 @@ class TestClarifyIntentIntegration:
 
     @patch('backend.agents.lisa.nodes.reasoning_node.parse_user_intent')
     @patch('backend.agents.lisa.nodes.reasoning_node.extract_blocking_questions')
-    @patch('backend.agents.lisa.nodes.reasoning_node.get_stream_writer')
+    @patch('backend.agents.lisa.nodes.reasoning_node.get_robust_stream_writer')
     def test_confirm_proceed_with_blockers_returns_warning(
         self, mock_writer, mock_extract, mock_parse
     ):
@@ -33,14 +33,14 @@ class TestClarifyIntentIntegration:
             "artifact_templates": [],
         }
         
-        result = reasoning_node(state, mock_llm)
+        result = reasoning_node(state, None, mock_llm)
         
         assert result.goto == "__end__"
         assert "阻塞性问题" in result.update["messages"][0].content
 
     @patch('backend.agents.lisa.nodes.reasoning_node.parse_user_intent')
     @patch('backend.agents.lisa.nodes.reasoning_node.extract_blocking_questions')
-    @patch('backend.agents.lisa.nodes.reasoning_node.get_stream_writer')
+    @patch('backend.agents.lisa.nodes.reasoning_node.get_robust_stream_writer')
     @patch('backend.agents.lisa.nodes.reasoning_node.process_reasoning_stream')
     def test_confirm_proceed_no_blockers_continues_reasoning(
         self, mock_stream, mock_writer, mock_extract, mock_parse
@@ -71,11 +71,11 @@ class TestClarifyIntentIntegration:
             "artifact_templates": [],
         }
         
-        result = reasoning_node(state, mock_llm)
+        result = reasoning_node(state, None, mock_llm)
         
         assert mock_stream.called
 
-    @patch('backend.agents.lisa.nodes.reasoning_node.get_stream_writer')
+    @patch('backend.agents.lisa.nodes.reasoning_node.get_robust_stream_writer')
     @patch('backend.agents.lisa.nodes.reasoning_node.process_reasoning_stream')
     def test_non_clarify_stage_skips_intent_parsing(
         self, mock_stream, mock_writer
@@ -101,12 +101,12 @@ class TestClarifyIntentIntegration:
         }
         
         with patch('backend.agents.lisa.nodes.reasoning_node.parse_user_intent') as mock_parse:
-            reasoning_node(state, mock_llm)
+            reasoning_node(state, None, mock_llm)
             mock_parse.assert_not_called()
 
     @patch('backend.agents.lisa.nodes.reasoning_node.parse_user_intent')
     @patch('backend.agents.lisa.nodes.reasoning_node.extract_blocking_questions')
-    @patch('backend.agents.lisa.nodes.reasoning_node.get_stream_writer')
+    @patch('backend.agents.lisa.nodes.reasoning_node.get_robust_stream_writer')
     @patch('backend.agents.lisa.nodes.reasoning_node.process_reasoning_stream')
     def test_llm_transition_blocked_by_p0(
         self, mock_stream, mock_writer, mock_extract, mock_parse
@@ -142,7 +142,7 @@ class TestClarifyIntentIntegration:
             "artifact_templates": [],
         }
         
-        result = reasoning_node(state, mock_llm)
+        result = reasoning_node(state, None, mock_llm)
         
         # 验证结果被绝对防线强压下来
         assert result.goto == "artifact_node"

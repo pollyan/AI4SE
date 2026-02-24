@@ -26,7 +26,7 @@ def mock_state() -> Dict[str, Any]:
     }
 
 
-@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.artifact_node.get_robust_stream_writer")
 def test_artifact_node_updates_state(
     mock_writer_getter, mock_llm, mock_state
 ):
@@ -53,7 +53,7 @@ def test_artifact_node_updates_state(
     bound_llm.invoke.return_value = mock_response
 
     # Execute node
-    new_state = artifact_node(cast(LisaState, mock_state), original_llm)
+    new_state = artifact_node(cast(LisaState, mock_state), None, original_llm)
 
     # Verify state update - artifacts should contain markdown rendering
     assert "test_design_requirements" in new_state["artifacts"]
@@ -82,7 +82,7 @@ def test_artifact_node_updates_state(
     bound_llm.invoke.assert_called_once()
 
 
-@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.artifact_node.get_robust_stream_writer")
 def test_artifact_node_injects_template_outline(mock_writer_getter, mock_llm):
     """Verify that artifact node injects template outline into the prompt"""
     original_llm, bound_llm = mock_llm
@@ -107,7 +107,7 @@ def test_artifact_node_injects_template_outline(mock_writer_getter, mock_llm):
     bound_llm.invoke.return_value = AIMessage(content="thought", tool_calls=[])
 
     # Execute node
-    artifact_node(cast(LisaState, state), original_llm)
+    artifact_node(cast(LisaState, state), None, original_llm)
 
     # Verify prompt contains template outline
     bound_llm.invoke.assert_called_once()
@@ -115,7 +115,7 @@ def test_artifact_node_injects_template_outline(mock_writer_getter, mock_llm):
     assert template_outline in system_msg.content
 
 
-@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.artifact_node.get_robust_stream_writer")
 def test_artifact_node_deterministic_init(mock_writer_getter, mock_llm):
     """Test that ArtifactNode uses deterministic initialization (bypassing LLM) when artifact is missing"""
     original_llm, bound_llm = mock_llm
@@ -136,7 +136,7 @@ def test_artifact_node_deterministic_init(mock_writer_getter, mock_llm):
     }
 
     # Execute node
-    new_state = artifact_node(cast(LisaState, state), original_llm)
+    new_state = artifact_node(cast(LisaState, state), None, original_llm)
 
     # Verify LLM WAS called, because we don't bypass ainvoke anymore.
     bound_llm.invoke.assert_called_once()
@@ -164,20 +164,20 @@ def test_artifact_node_deterministic_init(mock_writer_getter, mock_llm):
     assert templates[0]["artifactKey"] == "test_key"
 
 
-@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.artifact_node.get_robust_stream_writer")
 def test_artifact_node_llm_exception(mock_writer_getter, mock_llm, mock_state):
     original_llm, bound_llm = mock_llm
 
     bound_llm.invoke.side_effect = Exception("LLM failure")
 
-    new_state = artifact_node(cast(LisaState, mock_state), original_llm)
+    new_state = artifact_node(cast(LisaState, mock_state), None, original_llm)
 
     # Even on LLM failure, returns artifacts/structured_artifacts (preserving any deterministic init)
     assert "artifacts" in new_state
     assert "structured_artifacts" in new_state
 
 
-@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.artifact_node.get_robust_stream_writer")
 def test_artifact_node_multiple_updates(mock_writer_getter, mock_llm, mock_state):
     original_llm, bound_llm = mock_llm
     mock_writer = MagicMock()
@@ -208,7 +208,7 @@ def test_artifact_node_multiple_updates(mock_writer_getter, mock_llm, mock_state
     )
     bound_llm.invoke.return_value = mock_response
 
-    new_state = artifact_node(cast(LisaState, mock_state), original_llm)
+    new_state = artifact_node(cast(LisaState, mock_state), None, original_llm)
 
     assert "test_design_requirements" in new_state["artifacts"]
     assert "test_design_strategy" in new_state["artifacts"]
@@ -216,7 +216,7 @@ def test_artifact_node_multiple_updates(mock_writer_getter, mock_llm, mock_state
     assert mock_writer.call_count >= 2
 
 
-@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.artifact_node.get_robust_stream_writer")
 def test_artifact_node_invalid_tool_name(mock_writer_getter, mock_llm, mock_state):
     original_llm, bound_llm = mock_llm
 
@@ -232,12 +232,12 @@ def test_artifact_node_invalid_tool_name(mock_writer_getter, mock_llm, mock_stat
     )
     bound_llm.invoke.return_value = mock_response
 
-    new_state = artifact_node(cast(LisaState, mock_state), original_llm)
+    new_state = artifact_node(cast(LisaState, mock_state), None, original_llm)
 
     assert "key1" not in new_state["artifacts"]
 
 
-@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.artifact_node.get_robust_stream_writer")
 def test_artifact_node_structured_output(mock_writer_getter, mock_llm, mock_state):
     """Test that artifact node can handle structured artifact output (Pydantic models)"""
     original_llm, bound_llm = mock_llm
@@ -267,7 +267,7 @@ def test_artifact_node_structured_output(mock_writer_getter, mock_llm, mock_stat
     )
     bound_llm.invoke.return_value = mock_response
 
-    new_state = artifact_node(cast(LisaState, mock_state), original_llm)
+    new_state = artifact_node(cast(LisaState, mock_state), None, original_llm)
 
     assert "test_design_requirements" in new_state["artifacts"]
     artifact = new_state["artifacts"]["test_design_requirements"]
@@ -278,7 +278,7 @@ def test_artifact_node_structured_output(mock_writer_getter, mock_llm, mock_stat
     assert "## 1. 测试范围" in artifact
 
 
-@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.artifact_node.get_robust_stream_writer")
 def test_artifact_node_structured_output_pascal_case(
     mock_writer_getter, mock_llm, mock_state
 ):
@@ -307,7 +307,7 @@ def test_artifact_node_structured_output_pascal_case(
     )
     bound_llm.invoke.return_value = mock_response
 
-    new_state = artifact_node(cast(LisaState, mock_state), original_llm)
+    new_state = artifact_node(cast(LisaState, mock_state), None, original_llm)
 
     assert "test_design_requirements" in new_state["artifacts"]
     artifact = new_state["artifacts"]["test_design_requirements"]
@@ -317,7 +317,7 @@ def test_artifact_node_structured_output_pascal_case(
     assert "Test Scope" in artifact
 
 
-@patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer")
+@patch("backend.agents.lisa.nodes.artifact_node.get_robust_stream_writer")
 def test_incremental_update_bugs_reproduction(mock_writer_getter, mock_llm):
     """
     Reproduction test for 3 related bugs in artifact incremental update:
@@ -344,7 +344,7 @@ def test_incremental_update_bugs_reproduction(mock_writer_getter, mock_llm):
     
     # --- Execute 1: Deterministic Initialization ---
     # Should run deterministic path because "test_req" is missing in artifacts
-    state_after_init = cast(Dict[str, Any], {**state, **artifact_node(cast(LisaState, state), original_llm)})
+    state_after_init = cast(Dict[str, Any], {**state, **artifact_node(cast(LisaState, state), None, original_llm)})
     
     # Verify Bug 3: structured_artifacts should be populated
     # CURRENT BEHAVIOR: structured_artifacts is empty or missing key
@@ -379,7 +379,7 @@ def test_incremental_update_bugs_reproduction(mock_writer_getter, mock_llm):
     )
     bound_llm.invoke.return_value = llm_response_1
     
-    state_after_update_1 = cast(Dict[str, Any], {**state_after_init, **artifact_node(cast(LisaState, state_after_init), original_llm)})
+    state_after_update_1 = cast(Dict[str, Any], {**state_after_init, **artifact_node(cast(LisaState, state_after_init), None, original_llm)})
     
     # Verify Bug 2: structured_artifacts should be populated with merged data
     assert "test_req" in state_after_update_1["artifacts"]
@@ -412,7 +412,7 @@ def test_incremental_update_bugs_reproduction(mock_writer_getter, mock_llm):
     )
     bound_llm.invoke.return_value = llm_response_2
 
-    state_after_update_2 = cast(Dict[str, Any], {**state_after_update_1, **artifact_node(cast(LisaState, state_after_update_1), original_llm)})
+    state_after_update_2 = cast(Dict[str, Any], {**state_after_update_1, **artifact_node(cast(LisaState, state_after_update_1), None, original_llm)})
 
     # Verify Bug 1: Check if prompt contained existing artifact context
     # Get the system message from the LAST call to invoke

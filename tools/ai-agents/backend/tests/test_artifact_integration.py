@@ -16,7 +16,7 @@ def mock_llm():
 
 @pytest.fixture
 def mock_stream_writer():
-    with patch("backend.agents.lisa.nodes.artifact_node.get_stream_writer") as mock:
+    with patch("backend.agents.lisa.nodes.artifact_node.get_robust_stream_writer") as mock:
         writer = MagicMock()
         mock.return_value = writer
         yield writer
@@ -81,7 +81,7 @@ def test_e2e_incremental_update_flow(mock_llm, mock_stream_writer):
     mock_llm.invoke.return_value = msg_1
 
     # Run Node
-    state_after_1 = cast(Dict[str, Any], {**state, **artifact_node(state, mock_llm)})
+    state_after_1 = cast(Dict[str, Any], {**state, **artifact_node(state, None, mock_llm)})
 
     # Verify State 1: Check STRUCTURED data
     # state['artifacts'] now holds markdown string
@@ -133,7 +133,7 @@ def test_e2e_incremental_update_flow(mock_llm, mock_stream_writer):
     mock_llm.invoke.return_value = msg_2
 
     # Run Node again with updated state
-    state_after_2 = cast(Dict[str, Any], {**state_after_1, **artifact_node(cast(LisaState, state_after_1), mock_llm)})
+    state_after_2 = cast(Dict[str, Any], {**state_after_1, **artifact_node(cast(LisaState, state_after_1), None, mock_llm)})
 
     # Verify State 2
     structured_2 = cast(
