@@ -7,7 +7,8 @@ from ...shared.artifact_summary import get_artifacts_summary
 
 from ..state import LisaState, ArtifactKeys
 from ..schemas import ReasoningResponse
-from langgraph.config import get_stream_writer
+from langchain_core.runnables import RunnableConfig
+from ..utils.stream_writer import get_robust_stream_writer
 from ..stream_utils import process_reasoning_stream
 from ..prompts.workflows.test_design import (
     build_test_design_prompt,
@@ -146,7 +147,7 @@ def ensure_workflow_initialized(state: LisaState) -> Dict[str, Any]:
 
 
 def reasoning_node(
-    state: LisaState, llm: Any
+    state: LisaState, config: RunnableConfig, llm: Any
 ) -> Command[Literal["artifact_node", "__end__"]]:
     """
     对话 + 进度节点 (Reasoning Node)
@@ -192,7 +193,7 @@ def reasoning_node(
                 logger.info(
                     f"Clarify stage: confirm_proceed with {len(blocking_qs)} blockers, returning warning"
                 )
-                writer = get_stream_writer()
+                writer = get_robust_stream_writer(config)
                 return Command(
                     update={"messages": [AIMessage(content=warning_msg)]},
                     goto="__end__",
@@ -205,7 +206,7 @@ def reasoning_node(
         else state.get("plan", [])
     )
 
-    writer = get_stream_writer()
+    writer = get_robust_stream_writer(config)
 
     # 立即发送初始化进度 (修复 UI 空白问题)
     if init_updates and writer:

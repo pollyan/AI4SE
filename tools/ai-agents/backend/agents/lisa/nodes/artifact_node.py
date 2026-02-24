@@ -1,10 +1,12 @@
 import logging
-from typing import Any, cast, Dict
+from typing import Any, cast, Dict, Optional
 
 from pydantic import BaseModel
 from langchain_core.messages import SystemMessage
 
-from langgraph.config import get_stream_writer
+from langchain_core.runnables import RunnableConfig
+
+from ..utils.stream_writer import get_robust_stream_writer
 
 from ..state import LisaState
 from ..schemas import UpdateStructuredArtifact
@@ -16,7 +18,7 @@ from ...shared.progress import get_progress_info
 logger = logging.getLogger(__name__)
 
 
-def artifact_node(state: LisaState, llm: Any) -> LisaState:
+def artifact_node(state: LisaState, config: RunnableConfig, llm: Any) -> LisaState:
     """
     产出物更新节点 (Artifact Node)
 
@@ -32,7 +34,7 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
     new_artifacts = dict(artifacts)
     new_structured_artifacts = dict(state.get("structured_artifacts", {}))
 
-    writer = get_stream_writer()
+    writer = get_robust_stream_writer(config)
 
     # [新增] 初始化模版注入逻辑 (Deterministic Initialization)
     # 如果是初始化阶段，直接构造工具调用而不经过 LLM，确保 100% 成功率
@@ -139,7 +141,7 @@ def artifact_node(state: LisaState, llm: Any) -> LisaState:
     existing_structured = structured_artifacts.get(artifact_key)
 
     # 获取 Reasoning Hint (Context-Aware Sync)
-    latest_hint = cast(str | None, state.get("latest_artifact_hint"))
+    latest_hint = cast(Optional[str], state.get("latest_artifact_hint"))
     if latest_hint:
         logger.info(f"ArtifactNode: Using reasoning hint: {latest_hint[:50]}...")
 

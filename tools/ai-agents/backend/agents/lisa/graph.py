@@ -11,12 +11,10 @@ from typing import Dict
 from langgraph.graph import StateGraph, START, END
 
 from .state import LisaState, get_initial_state
-from .nodes import (
-    intent_router_node,
-    clarify_intent_node,
-    reasoning_node,
-    artifact_node
-)
+from .nodes.intent_router import intent_router_node
+from .nodes.clarify_intent import clarify_intent_node
+from .nodes.reasoning_node import reasoning_node
+from .nodes.artifact_node import artifact_node
 from ..llm import create_llm_from_config
 from ..shared.checkpointer import get_checkpointer
 from ..shared.retry_policy import get_llm_retry_policy
@@ -49,14 +47,16 @@ def create_lisa_graph(model_config: Dict[str, str]):
     
     graph = StateGraph(LisaState)
     
+    from functools import partial
+    
     llm_retry = get_llm_retry_policy()
     
-    graph.add_node("intent_router", lambda state: intent_router_node(state, llm), retry_policy=llm_retry)
-    graph.add_node("clarify_intent", lambda state: clarify_intent_node(state, llm), retry_policy=llm_retry)
+    graph.add_node("intent_router", partial(intent_router_node, llm=llm), retry_policy=llm_retry)
+    graph.add_node("clarify_intent", partial(clarify_intent_node, llm=llm), retry_policy=llm_retry)
     
     # 双节点架构
-    graph.add_node("reasoning_node", lambda state: reasoning_node(state, llm), retry_policy=llm_retry)
-    graph.add_node("artifact_node", lambda state: artifact_node(state, llm), retry_policy=llm_retry)
+    graph.add_node("reasoning_node", partial(reasoning_node, llm=llm), retry_policy=llm_retry)
+    graph.add_node("artifact_node", partial(artifact_node, llm=llm), retry_policy=llm_retry)
     
     graph.add_edge(START, "intent_router")
     graph.add_edge("clarify_intent", END)

@@ -6,7 +6,6 @@ Intent Router Node - 意图路由节点
 
 import logging
 from typing import Any, Literal
-from functools import lru_cache
 
 from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.types import Command
@@ -15,8 +14,6 @@ from ..state import LisaState
 from ...shared.artifact_summary import get_artifacts_summary
 from ..schemas import IntentResult
 from ..prompts import INTENT_ROUTING_PROMPT
-from ..routing.hybrid_router import HybridRouter
-from ..routing.observability import log_routing_decision
 
 logger = logging.getLogger(__name__)
 
@@ -34,14 +31,8 @@ def format_messages_for_context(messages: list, max_messages: int = 10) -> str:
     return "\n".join(formatted) if formatted else "(无历史消息)"
 
 
-@lru_cache(maxsize=1)
-def get_hybrid_router() -> HybridRouter:
-    """获取混合路由器单例（缓存）"""
-    return HybridRouter()
-
-
-def fallback_intent_routing(state: LisaState, llm: Any) -> IntentResult:
-    """LLM 降级路由逻辑 - 当语义路由不确定时调用"""
+def llm_intent_routing(state: LisaState, llm: Any) -> IntentResult:
+    """LLM 意图路由 - 使用数据库配置的 LLM 进行语义意图识别"""
     messages = state.get("messages", [])
     
     last_user_message = None
@@ -97,44 +88,31 @@ def intent_router_node(state: LisaState, llm: Any) -> RouterCommand:
         logger.warning("未找到用户消息，跳过路由")
         return Command(update={}, goto="clarify_intent")
     
-    # 使用 HybridRouter
-    router = get_hybrid_router()
-    
-    # 定义 LLM 回调 (闭包捕获 state 和 llm)
-    def llm_fallback_fn(input_text: str, context: dict) -> IntentResult:
-        return fallback_intent_routing(state, llm)
-    
     try:
-        decision = router.route(
-            user_input=last_user_message,
-            llm_router_fn=llm_fallback_fn
-        )
+        result = llm_intent_routing(state, llm)
         
-        # 记录可观测性日志
-        log_routing_decision(decision, logger)
+        logger.info(f"意图路由结果: intent={result.intent}, confidence={result.confidence}, reason={result.reason}")
         
         # 意图映射到 Command
-        # 意图映射到 Command
-        if decision.intent == "START_TEST_DESIGN":
+        if result.intent == "START_TEST_DESIGN":
             return Command(
                 update={"current_workflow": "test_design"},
                 goto="reasoning_node"
             )
-        elif decision.intent == "START_REQUIREMENT_REVIEW":
+        elif result.intent == "START_REQUIREMENT_REVIEW":
             return Command(
                 update={"current_workflow": "requirement_review"},
                 goto="reasoning_node"
             )
-        elif decision.intent == "CONTINUE_WORKFLOW":
+        elif result.intent == "CONTINUE_WORKFLOW":
             current_workflow = state.get("current_workflow")
             if current_workflow in ["test_design", "requirement_review"]:
                  return Command(update={}, goto="reasoning_node")
             return Command(update={}, goto="clarify_intent")
         else:
             update = {}
-            if decision.metadata and decision.metadata.get("clarification"):
-                update["clarification"] = decision.metadata["clarification"]
-            
+            if result.clarification:
+                update["clarification"] = result.clarification
             
             # 粘性逻辑：如果已经在工作流中，且意图不明，默认继续工作流
             # 防止用户回复简单的确认词（如"好的"）导致会话重置
@@ -145,9 +123,6 @@ def intent_router_node(state: LisaState, llm: Any) -> RouterCommand:
                 
             return Command(update=update, goto="clarify_intent")
                 
-            return Command(update=update, goto="clarify_intent")
-            
     except Exception as e:
         logger.error(f"意图路由失败: {e}", exc_info=True)
         raise  # 直接抛出，不做静默降级，让前端显示真实错误
-
