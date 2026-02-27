@@ -1,18 +1,26 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useStore, Attachment, WORKFLOWS } from '../store';
-import { generateResponseStream } from '../llm';
+import React, { useRef, useEffect } from 'react';
+import { useStore } from '../store';
 import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { clsx } from 'clsx';
+import { useChatService } from '../services/chatService';
 
 export const ChatPane: React.FC = () => {
-  const { chatHistory, addMessage, updateLastMessage, removeLastMessage, isGenerating, setIsGenerating } = useStore();
-  const [input, setInput] = useState('');
-  const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
+  const { chatHistory, isGenerating } = useStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const {
+    input,
+    setInput,
+    pendingAttachments,
+    handleSend,
+    handleRetry,
+    handleStop,
+    handleFileChange,
+    removeAttachment
+  } = useChatService();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -22,161 +30,11 @@ export const ChatPane: React.FC = () => {
     scrollToBottom();
   }, [chatHistory, isGenerating, pendingAttachments]);
 
-  const handleStop = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    Array.from(files).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64String = (event.target?.result as string).split(',')[1];
-        setPendingAttachments(prev => [
-          ...prev,
-          {
-            name: file.name,
-            data: base64String,
-            mimeType: file.type || 'text/plain'
-          }
-        ]);
-      };
-      reader.readAsDataURL(file);
-    });
-
-    // Reset input
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFileChange(e.target.files);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
-
-  const removeAttachment = (index: number) => {
-    setPendingAttachments(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleSend = async () => {
-    if ((!input.trim() && pendingAttachments.length === 0) || isGenerating) return;
-
-    const userMsg = input.trim();
-    const currentAttachments = [...pendingAttachments];
-
-    setInput('');
-    setPendingAttachments([]);
-
-    addMessage({
-      id: Date.now().toString(),
-      role: 'user',
-      content: userMsg,
-      timestamp: Date.now(),
-      attachments: currentAttachments.length > 0 ? currentAttachments : undefined,
-    });
-
-    setIsGenerating(true);
-
-    const initialArtifact = useStore.getState().artifactContent;
-    const initialStage = useStore.getState().stageIndex;
-
-    abortControllerRef.current = new AbortController();
-
-    try {
-      const stream = generateResponseStream(userMsg, currentAttachments, abortControllerRef.current.signal);
-
-      let isFirstChunk = true;
-      let hasTransitioned = false;
-
-      for await (const { chatResponse, newArtifact, action, hasArtifactUpdate } of stream) {
-        if (isFirstChunk) {
-          addMessage({
-            id: (Date.now() + 1).toString(),
-            role: 'assistant',
-            content: chatResponse,
-            timestamp: Date.now(),
-          });
-          isFirstChunk = false;
-        } else {
-          updateLastMessage(chatResponse);
-        }
-
-        if (action === 'NEXT_STAGE' && !hasTransitioned) {
-          const state = useStore.getState();
-          const wf = WORKFLOWS[state.workflow];
-          if (state.stageIndex < wf.stages.length - 1) {
-            state.transitionToNextStage(initialStage, initialArtifact);
-            hasTransitioned = true;
-          }
-        }
-
-        if (hasArtifactUpdate) {
-          useStore.getState().setArtifactContent(newArtifact);
-        }
-      }
-    } catch (error: any) {
-      if (error.message === 'Aborted by user') {
-        updateLastMessage(useStore.getState().chatHistory[useStore.getState().chatHistory.length - 1]?.content + '\n\n*(已停止生成)*');
-      } else {
-        addMessage({
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: `**Error:** ${error.message || 'Something went wrong.'}`,
-          timestamp: Date.now(),
-        });
-      }
-    } finally {
-      abortControllerRef.current = null;
-      setIsGenerating(false);
-      const finalArtifact = useStore.getState().artifactContent;
-      if (finalArtifact && finalArtifact !== '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。') {
-        const history = useStore.getState().artifactHistory;
-        if (history.length === 0 || history[history.length - 1].content !== finalArtifact) {
-          useStore.getState().addArtifactVersion({
-            id: Date.now().toString(),
-            timestamp: Date.now(),
-            content: finalArtifact
-          });
-        }
-      }
-    }
-  };
-
-  const handleRetry = () => {
-    if (isGenerating || chatHistory.length === 0) return;
-
-    const history = useStore.getState().chatHistory;
-    let lastUserMsgIndex = -1;
-    for (let i = history.length - 1; i >= 0; i--) {
-      if (history[i].role === 'user') {
-        lastUserMsgIndex = i;
-        break;
-      }
-    }
-
-    if (lastUserMsgIndex === -1) return;
-
-    const lastUserMsg = history[lastUserMsgIndex];
-
-    // Remove all messages after the last user message
-    const msgsToRemove = history.length - 1 - lastUserMsgIndex;
-    for (let i = 0; i < msgsToRemove; i++) {
-      removeLastMessage();
-    }
-
-    // Remove the user message itself so we can re-send it
-    removeLastMessage();
-
-    // Re-send
-    setInput(lastUserMsg.content);
-    setPendingAttachments(lastUserMsg.attachments || []);
-
-    // Use setTimeout to allow state to update before sending
-    setTimeout(() => {
-      const sendButton = document.getElementById('send-button');
-      if (sendButton) sendButton.click();
-    }, 100);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -321,7 +179,7 @@ export const ChatPane: React.FC = () => {
             <input
               type="file"
               ref={fileInputRef}
-              onChange={handleFileChange}
+              onChange={onFileChange}
               className="hidden"
               multiple
               accept=".txt,.md,.pdf,.csv,.json,image/*"
