@@ -69,6 +69,21 @@ services:
     networks:
       - ai4se-network
 
+  # 新 Agent（Lisa 纯前端版）
+  new-agents:
+    build:
+      context: .
+      dockerfile: tools/new-agents/docker/Dockerfile
+    container_name: ai4se-new-agents-prod
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    networks:
+      - ai4se-network
+
   # Nginx 反向代理（统一入口）
   nginx:
     image: nginx:alpine
@@ -83,6 +98,7 @@ services:
       - ./tools/frontend/dist:/app/tools/frontend/dist:ro
     depends_on:
       - intent-tester
+      - new-agents
     deploy:
       resources:
         limits:
