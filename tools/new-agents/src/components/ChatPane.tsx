@@ -210,71 +210,78 @@ export const ChatPane: React.FC = () => {
           </div>
         )}
 
-        {chatHistory.map((msg) => (
-          <div key={msg.id} className={clsx("flex items-start gap-4 animate-fade-in-up", msg.role === 'user' ? "flex-row-reverse" : "")}>
-            <div className={clsx(
-              "flex items-center justify-center w-8 h-8 rounded-lg shrink-0 mt-1 shadow-sm",
-              msg.role === 'user'
-                ? "bg-slate-800 border border-slate-700 text-slate-300"
-                : "bg-blue-500/10 border border-blue-500/20 text-blue-500 shadow-[0_0_15px_-3px_rgba(59,130,246,0.3)]"
-            )}>
-              {msg.role === 'user' ? <User className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
-            </div>
+        {chatHistory.map((msg) => {
+          // Hide the empty assistant bubble that gets created initially before text arrives
+          if (isGenerating && msg.role === 'assistant' && !msg.content && msg.id === chatHistory[chatHistory.length - 1]?.id) {
+            return null;
+          }
 
-            <div className={clsx("flex flex-col gap-1 max-w-[90%]", msg.role === 'user' ? "items-end" : "items-start")}>
-              <span className="text-slate-500 text-[10px] font-mono px-1">
-                {msg.role === 'user' ? 'You' : 'Lisa AI'} • {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
+          return (
+            <div key={msg.id} className={clsx("flex items-start gap-4 animate-fade-in-up", msg.role === 'user' ? "flex-row-reverse" : "")}>
               <div className={clsx(
-                "rounded-2xl p-4 text-sm leading-relaxed shadow-sm",
+                "flex items-center justify-center w-8 h-8 rounded-lg shrink-0 mt-1 shadow-sm",
                 msg.role === 'user'
-                  ? "rounded-tr-none bg-blue-600 text-white shadow-blue-500/10"
-                  : "rounded-tl-none bg-[#151e32] text-gray-200 border border-[#1e293b]"
+                  ? "bg-slate-800 border border-slate-700 text-slate-300"
+                  : "bg-blue-500/10 border border-blue-500/20 text-blue-500 shadow-[0_0_15px_-3px_rgba(59,130,246,0.3)]"
               )}>
-                {msg.attachments && msg.attachments.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {msg.attachments.map((att, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5 bg-black/20 px-2 py-1 rounded text-xs border border-white/10">
-                        <FileText className="w-3 h-3" />
-                        <span className="truncate max-w-[150px]">{att.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {msg.content && (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
-                      strong: ({ node, ...props }) => <strong className={msg.role === 'user' ? "text-white font-bold" : "text-blue-400 font-bold"} {...props} />,
-                      code: ({ node, ...props }) => <code className="bg-black/30 px-1 py-0.5 rounded font-mono text-xs mx-1" {...props} />,
-                      table: ({ node, ...props }: any) => <div className="overflow-x-auto my-3"><table className="w-full border-collapse text-sm" {...props} /></div>,
-                      th: ({ node, ...props }: any) => <th className="bg-slate-800/50 text-slate-200 font-semibold text-left p-2 border border-slate-700" {...props} />,
-                      td: ({ node, ...props }: any) => <td className="p-2 border border-slate-700/50 text-slate-300" {...props} />,
-                      tr: ({ node, ...props }: any) => <tr className="hover:bg-white/5 transition-colors" {...props} />,
-                    }}
-                  >
-                    {msg.content}
-                  </ReactMarkdown>
-                )}
-                {msg.role === 'assistant' && !isGenerating && msg.id === chatHistory[chatHistory.length - 1]?.id && (
-                  <div className="mt-3 pt-3 border-t border-white/10 flex justify-end">
-                    <button
-                      onClick={handleRetry}
-                      className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-blue-400 transition-colors"
-                      title="重新生成"
+                {msg.role === 'user' ? <User className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
+              </div>
+
+              <div className={clsx("flex flex-col gap-1 max-w-[90%]", msg.role === 'user' ? "items-end" : "items-start")}>
+                <span className="text-slate-500 text-[10px] font-mono px-1">
+                  {msg.role === 'user' ? 'You' : 'Lisa AI'} • {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <div className={clsx(
+                  "rounded-2xl p-4 text-sm leading-relaxed shadow-sm",
+                  msg.role === 'user'
+                    ? "rounded-tr-none bg-blue-600 text-white shadow-blue-500/10"
+                    : "rounded-tl-none bg-[#151e32] text-gray-200 border border-[#1e293b]"
+                )}>
+                  {msg.attachments && msg.attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {msg.attachments.map((att, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5 bg-black/20 px-2 py-1 rounded text-xs border border-white/10">
+                          <FileText className="w-3 h-3" />
+                          <span className="truncate max-w-[150px]">{att.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {msg.content && (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
+                        strong: ({ node, ...props }) => <strong className={msg.role === 'user' ? "text-white font-bold" : "text-blue-400 font-bold"} {...props} />,
+                        code: ({ node, ...props }) => <code className="bg-black/30 px-1 py-0.5 rounded font-mono text-xs mx-1" {...props} />,
+                        table: ({ node, ...props }: any) => <div className="overflow-x-auto my-3"><table className="w-full border-collapse text-sm" {...props} /></div>,
+                        th: ({ node, ...props }: any) => <th className="bg-slate-800/50 text-slate-200 font-semibold text-left p-2 border border-slate-700" {...props} />,
+                        td: ({ node, ...props }: any) => <td className="p-2 border border-slate-700/50 text-slate-300" {...props} />,
+                        tr: ({ node, ...props }: any) => <tr className="hover:bg-white/5 transition-colors" {...props} />,
+                      }}
                     >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>重试</span>
-                    </button>
-                  </div>
-                )}
+                      {msg.content}
+                    </ReactMarkdown>
+                  )}
+                  {msg.role === 'assistant' && !isGenerating && msg.id === chatHistory[chatHistory.length - 1]?.id && (
+                    <div className="mt-3 pt-3 border-t border-white/10 flex justify-end">
+                      <button
+                        onClick={handleRetry}
+                        className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-blue-400 transition-colors"
+                        title="重新生成"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>重试</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
-        {isGenerating && chatHistory[chatHistory.length - 1]?.role !== 'assistant' && (
+        {isGenerating && (chatHistory.length === 0 || chatHistory[chatHistory.length - 1]?.role !== 'assistant' || !chatHistory[chatHistory.length - 1]?.content) && (
           <div className="flex items-start gap-4 animate-fade-in-up">
             <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-500 shrink-0 mt-1">
               <Bot className="w-5 h-5 animate-pulse" />
