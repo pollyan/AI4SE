@@ -25,10 +25,10 @@ on:
 
 jobs:
   # ====================================
-  # 阶段 1a: Intent Tester API 测试
+  # 阶段 1a: Backend API 测试 (Intent Tester & New Agents)
   # ====================================
-  intent-tester-test:
-    name: Intent Tester API Tests
+  backend-api-test:
+    name: Backend API Tests
     runs-on: ubuntu-latest
     
     steps:
@@ -44,6 +44,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install -r tools/new-agents/backend/requirements.txt
         pip install pytest pytest-cov
     
     - name: 🧪 Run Intent Tester tests
@@ -51,6 +52,13 @@ jobs:
         echo "::group::Running Intent Tester API Tests"
         export PYTHONPATH=$PYTHONPATH:$(pwd):$(pwd)/tools/intent-tester
         python -m pytest tools/intent-tester/tests/ -v --cov=tools/intent-tester/backend --cov-report=term
+        echo "::endgroup::"
+        
+    - name: 🧪 Run New Agents Backend tests
+      run: |
+        echo "::group::Running New Agents Backend Tests"
+        cd tools/new-agents/backend
+        python -m pytest tests/test_api.py -v -c pytest.ini
         echo "::endgroup::"
   
   # ====================================
@@ -142,7 +150,7 @@ jobs:
   # ====================================
   deploy-to-production:
     name: Build and Deploy to Tencent Cloud
-    needs: [intent-tester-test, common-frontend-test, proxy-test]  # 必须等待所有测试完成且成功
+    needs: [backend-api-test, common-frontend-test, proxy-test]  # 必须等待所有测试完成且成功
     runs-on: ubuntu-latest
     environment:
       name: production
