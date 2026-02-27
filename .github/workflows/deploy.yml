@@ -54,58 +54,6 @@ jobs:
         echo "::endgroup::"
   
   # ====================================
-  # 阶段 1b: AI Agents API 测试
-  # ====================================
-  ai-agents-test:
-    name: AI Agents API Tests
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-    
-    - name: 🐍 Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-    
-    - name: 📦 Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-cov
-    
-    - name: 🧪 Run AI Agents Backend Tests
-      run: |
-        echo "::group::Running AI Agents Backend Tests"
-        export PYTHONPATH=$PYTHONPATH:$(pwd):$(pwd)/tools/ai-agents
-        python -m pytest tools/ai-agents/backend/tests/ -v -m "not slow" --cov=tools/ai-agents/backend --cov-report=term
-        echo "::endgroup::"
-  
-  # ====================================
-  # 阶段 1b-2: AI Agents Frontend 测试
-  # ====================================
-  ai-agents-frontend-test:
-    name: AI Agents Frontend Tests
-    runs-on: ubuntu-latest
-    steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-
-    - name: 🟢 Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-
-    - name: 📦 Install and Test
-      run: |
-        echo "::group::Running AI Agents Frontend Tests"
-        cd tools/ai-agents/frontend
-        npm ci
-        npm run test -- --run
-        echo "::endgroup::"
-
-  # ====================================
   # 阶段 1b-3: Common Frontend 测试
   # ====================================
   common-frontend-test:
@@ -150,7 +98,7 @@ jobs:
       run: |
         echo "::group::Code Quality Analysis"
         pip install flake8
-        flake8 tools/intent-tester/backend tools/ai-agents/backend --count --select=E9,F63,F7,F82 --show-source --statistics || true
+        flake8 tools/intent-tester/backend --count --select=E9,F63,F7,F82 --show-source --statistics || true
         echo "::endgroup::"
 
   # ====================================
@@ -194,7 +142,7 @@ jobs:
   # ====================================
   deploy-to-production:
     name: Build and Deploy to Tencent Cloud
-    needs: [intent-tester-test, ai-agents-test, ai-agents-frontend-test, common-frontend-test, proxy-test]  # 必须等待所有测试完成且成功
+    needs: [intent-tester-test, common-frontend-test, proxy-test]  # 必须等待所有测试完成且成功
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -216,15 +164,6 @@ jobs:
         node scripts/ci/build-proxy-package.js
         echo "✅ 代理包构建完成"
         ls -lh dist/intent-test-proxy.zip
-    
-    - name: ⚛️ Build React frontend (AI Agents)
-      run: |
-        echo "构建 AI Agents React 前端..."
-        cd tools/ai-agents/frontend
-        npm ci
-        npm run build
-        echo "✅ AI Agents React 前端构建完成"
-        ls -lh dist/
     
     - name: ⚛️ Build React frontend (Common - Homepage/Profile)
       run: |
