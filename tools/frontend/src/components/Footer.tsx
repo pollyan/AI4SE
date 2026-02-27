@@ -26,7 +26,7 @@ const Footer: React.FC = () => {
                     <ul className="footer-links">
                         <li><Link to="/">首页</Link></li>
                         <li><a href="/intent-tester/testcases">意图测试工具</a></li>
-                        <li><a href="/ai-agents/">AI智能助手</a></li>
+                        <li><a href="/new-agents/">AI智能助手</a></li>
                         <li><Link to="/profile">个人简介</Link></li>
                         <li>
                             <a href="https://github.com/pollyan/intent-test-framework" target="_blank" rel="noopener noreferrer">

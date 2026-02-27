@@ -45,13 +45,13 @@ const CompactLayout: React.FC<CompactLayoutProps> = ({ children }) => {
                                 </button>
                                 <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl min-w-[160px] p-2 opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-50">
                                     <a
-                                        href="/ai-agents/"
+                                        href="/new-agents/"
                                         className="block px-3 py-2 text-sm text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                                     >
                                         智能对话
                                     </a>
                                     <a
-                                        href="/ai-agents/config"
+                                        href="/new-agents/"
                                         className="block px-3 py-2 text-sm text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                                     >
                                         配置管理
@@ -96,10 +96,10 @@ const CompactLayout: React.FC<CompactLayoutProps> = ({ children }) => {
                         </a>
                         <div className="py-2">
                             <div className="px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">AI智能体</div>
-                            <a href="/ai-agents/" className="block py-2 px-3 text-base text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 pl-6">
+                            <a href="/new-agents/" className="block py-2 px-3 text-base text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 pl-6">
                                 智能对话
                             </a>
-                            <a href="/ai-agents/config" className="block py-2 px-3 text-base text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 pl-6">
+                            <a href="/new-agents/" className="block py-2 px-3 text-base text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 pl-6">
                                 配置管理
                             </a>
                         </div>

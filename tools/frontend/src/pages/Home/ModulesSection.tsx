@@ -125,10 +125,10 @@ const ModulesSection: React.FC = () => {
                             <div className="flex-1"></div>
 
                             <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-slate-100 dark:border-slate-700">
-                                <a href="/ai-agents/" className="flex-1 inline-flex justify-center items-center px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-medium hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shadow-lg shadow-slate-200/50 dark:shadow-none cursor-pointer">
+                                <a href="/new-agents/" className="flex-1 inline-flex justify-center items-center px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-medium hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shadow-lg shadow-slate-200/50 dark:shadow-none cursor-pointer">
                                     开始对话
                                 </a>
-                                <a href="/ai-agents/config" className="flex-1 inline-flex justify-center items-center px-6 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors cursor-pointer">
+                                <a href="/new-agents/" className="flex-1 inline-flex justify-center items-center px-6 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors cursor-pointer">
                                     配置管理
                                 </a>
                             </div>

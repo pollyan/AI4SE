@@ -27,7 +27,7 @@ const HeroSection: React.FC = () => {
 
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                         <a
-                            href="/ai-agents/"
+                            href="/new-agents/"
                             className="w-full sm:w-auto px-8 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-semibold hover:bg-slate-800 dark:hover:bg-slate-100 transition-all transform hover:scale-105 shadow-lg shadow-slate-200/50 dark:shadow-none flex items-center justify-center gap-2"
                         >
                             <Bot size={20} />

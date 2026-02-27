@@ -24,8 +24,8 @@ const Navbar: React.FC = () => {
     ];
 
     const aiAgentsItems: NavDropdownItem[] = [
-        { label: '智能助手', href: '/ai-agents/' },
-        { label: '配置管理', href: '/ai-agents/config' },
+        { label: '智能助手', href: '/new-agents/' },
+        { label: '配置管理', href: '/new-agents/' },
     ];
 
     return (
