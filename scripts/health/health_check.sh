@@ -76,7 +76,7 @@ echo ""
 check_containers() {
     log_section "1. Docker 容器状态检查"
     
-    local containers=("ai4se-db" "ai4se-intent-tester" "ai4se-agents" "ai4se-gateway")
+    local containers=("ai4se-db" "ai4se-intent-tester" "ai4se-gateway")
     local all_running=true
     
     for container in "${containers[@]}"; do
@@ -171,8 +171,6 @@ check_pages() {
         "/intent-tester/testcases|测试用例列表"
         "/intent-tester/execution|执行控制台"
         "/intent-tester/local-proxy|本地代理页"
-        "/ai-agents/|AI 智能体首页"
-        "/ai-agents/config|AI 配置页面"
     )
     
     local all_ok=true
@@ -228,9 +226,7 @@ check_apis() {
     local apis=(
         "/health|GET|Nginx 网关健康检查"
         "/intent-tester/health|GET|Intent Tester 健康检查"
-        "/ai-agents/health|GET|AI Agents 健康检查"
         "/intent-tester/api/testcases|GET|测试用例 API"
-        "/ai-agents/api/ai-configs|GET|AI 配置列表 API"
     )
     
     local all_ok=true

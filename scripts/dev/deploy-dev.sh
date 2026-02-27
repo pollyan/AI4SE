@@ -62,7 +62,7 @@ if [ "$SKIP_FRONTEND" = false ]; then
     echo "🏗️  正在准备项目构建..."
     
     # 定义所有包含 package.json 的项目路径
-    JS_PROJECTS=("tools/frontend" "tools/ai-agents/frontend" "tools/intent-tester")
+    JS_PROJECTS=("tools/frontend" "tools/intent-tester")
     
     for PROJECT_PATH in "${JS_PROJECTS[@]}"; do
         if [ -d "$PROJECT_PATH" ] && [ -f "$PROJECT_PATH/package.json" ]; then
@@ -143,7 +143,6 @@ if [ -f "$PROJECT_ROOT/scripts/health/health_check.sh" ]; then
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "📍 访问入口:"
         echo "   🏠 主页: http://localhost"
-        echo "   🤖 AI 智能体: http://localhost/ai-agents"
         echo "   🧪 意图测试: http://localhost/intent-tester"
         echo "   🆕 新 Agent: http://localhost/new-agents"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -168,7 +167,6 @@ else
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "📍 访问入口:"
     echo "   🏠 主页: http://localhost"
-    echo "   🤖 AI 智能体: http://localhost/ai-agents"
     echo "   🧪 意图测试: http://localhost/intent-tester"
     echo "   🆕 新 Agent: http://localhost/new-agents"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
