@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useStore, WORKFLOWS } from '../store';
-import { Settings, Share, Bot, Plus, AlertTriangle } from 'lucide-react';
+import { Settings, Share, Bot, Plus, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 
 export const Header: React.FC = () => {
   const { workflow, stageIndex, setStageIndex, setSettingsOpen, clearHistory } = useStore();
   const stages = WORKFLOWS[workflow].stages;
   const [showConfirm, setShowConfirm] = useState(false);
+  const navigate = useNavigate();
 
   const handleNewChat = () => {
     setShowConfirm(true);
@@ -21,11 +23,18 @@ export const Header: React.FC = () => {
     <>
       <header className="flex items-center justify-between border-b border-[#1e293b] bg-[#0B1120]/80 backdrop-blur-md px-6 py-3 shrink-0 z-30">
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate('/workflows/lisa')}
+            className="group flex items-center justify-center p-2 rounded-lg hover:bg-[#1e293b] text-slate-400 hover:text-white transition-all mr-2"
+          >
+            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+          </button>
+
           <div className="w-8 h-8 flex items-center justify-center rounded bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/20">
             <Bot className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-white text-lg font-bold leading-tight tracking-tight">
+            <h2 className="text-white text-lg font-bold leading-tight tracking-tight cursor-default">
               Lisa <span className="text-slate-400 font-medium text-sm ml-1">AI 智能测试专家</span>
             </h2>
           </div>
@@ -36,7 +45,7 @@ export const Header: React.FC = () => {
             {stages.map((stage, idx) => {
               const isActive = idx === stageIndex;
               return (
-                <div 
+                <div
                   key={stage.id}
                   onClick={() => setStageIndex(idx)}
                   className={clsx(
@@ -58,7 +67,7 @@ export const Header: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={handleNewChat}
             className="flex items-center justify-center gap-2 rounded-lg h-9 px-4 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-all shadow-md shadow-blue-500/20"
           >
@@ -69,7 +78,7 @@ export const Header: React.FC = () => {
             <Share className="w-4 h-4" />
             <span className="truncate hidden lg:inline">导出报告</span>
           </button>
-          <button 
+          <button
             onClick={() => setSettingsOpen(true)}
             className="flex items-center justify-center rounded-lg w-9 h-9 hover:bg-[#151e32] text-slate-400 hover:text-white transition-colors"
           >
@@ -92,13 +101,13 @@ export const Header: React.FC = () => {
               确定要开启新会话吗？这将清空当前的对话历史和产出物文档，且无法恢复。
             </p>
             <div className="flex justify-end gap-3">
-              <button 
+              <button
                 onClick={() => setShowConfirm(false)}
                 className="rounded-lg px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/5 transition-colors"
               >
                 取消
               </button>
-              <button 
+              <button
                 onClick={confirmNewChat}
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-500 transition-colors shadow-md shadow-red-500/20"
               >
