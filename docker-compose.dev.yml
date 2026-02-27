@@ -102,6 +102,16 @@ services:
     networks:
       - ai4se-network
 
+  # 新 Agent（Lisa 纯前端版）
+  new-agents:
+    build:
+      context: .
+      dockerfile: tools/new-agents/docker/Dockerfile
+    container_name: ai4se-new-agents
+    restart: unless-stopped
+    networks:
+      - ai4se-network
+
   # Nginx 反向代理（统一入口）
   nginx:
     image: nginx:alpine
@@ -117,6 +127,7 @@ services:
     depends_on:
       - intent-tester
       - ai-agents
+      - new-agents
     networks:
       - ai4se-network
 
