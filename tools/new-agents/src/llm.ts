@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { parseLlmStreamChunk } from './utils/llmParser';
 import { useStore, WORKFLOWS, WorkflowType, Attachment } from './store';
 
 const getSystemPrompt = (workflow: WorkflowType, stageIndex: number, currentArtifact: string) => {
@@ -177,35 +178,7 @@ export const generateResponseStream = async function* (userMessage: string, atta
   for await (const chunkText of chunkGenerator) {
     fullText += chunkText;
 
-    let chatResponse = '';
-    let newArtifact = artifactContent;
-    let action = '';
-    let hasArtifactUpdate = false;
-
-    // Parse CHAT
-    const chatMatch = fullText.match(/<CHAT>([\s\S]*?)(?:<\/CHAT>|$)/i);
-    if (chatMatch) {
-      chatResponse = chatMatch[1].trim();
-    } else {
-      // If no <CHAT> tag yet, just show the raw text
-      chatResponse = fullText.replace(/<CHAT>/i, '').trim();
-    }
-
-    // Parse ARTIFACT
-    const artifactMatch = fullText.match(/<ARTIFACT>([\s\S]*?)(?:<\/ARTIFACT>|$)/i);
-    if (artifactMatch) {
-      const extractedArtifact = artifactMatch[1].trim();
-      if (extractedArtifact && !extractedArtifact.includes('NO_UPDATE')) {
-        newArtifact = extractedArtifact;
-        hasArtifactUpdate = true;
-      }
-    }
-
-    // Parse ACTION
-    const actionMatch = fullText.match(/<ACTION>([\s\S]*?)(?:<\/ACTION>|$)/i);
-    if (actionMatch) {
-      action = actionMatch[1].trim();
-    }
+    const { chatResponse, newArtifact, action, hasArtifactUpdate } = parseLlmStreamChunk(fullText, artifactContent);
 
     yield { chatResponse, newArtifact, action, hasArtifactUpdate };
   }
