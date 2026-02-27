@@ -11,8 +11,10 @@ app.config.from_object(Config)
 CORS(app)
 
 # Initialize real DB when running normally or via Docker
-with app.app_context():
-    init_db()
+# Exclude executing this upon import if we are in testing setup
+if not os.environ.get('FLASK_TESTING'):
+    with app.app_context():
+        init_db()
 
 @app.route('/api/health', methods=['GET'])
 def health():

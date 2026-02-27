@@ -6,6 +6,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # We expect an ImportError initially since `app` does not exist
+os.environ['FLASK_TESTING'] = '1'
 try:
     from app import app, init_db, get_session
     from models import LlmConfig
