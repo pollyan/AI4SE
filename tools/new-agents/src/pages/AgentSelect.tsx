@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bot, Code2, Sparkles, Navigation, ArrowRight, ShieldCheck, Zap } from 'lucide-react';
+import { Bot, Code2, Sparkles, Navigation, ArrowRight, ShieldCheck, Zap, ArrowLeft } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export function AgentSelect() {
@@ -12,6 +12,16 @@ export function AgentSelect() {
             {/* Background decorations */}
             <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none" />
             <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none" />
+
+            {/* Nav */}
+            <div className="absolute top-6 left-6 z-20">
+                <a
+                    href="/"
+                    className="group px-4 py-2 bg-slate-800/50 hover:bg-slate-700/80 backdrop-blur-sm rounded-xl transition-colors flex items-center gap-2 border border-slate-700/50 hover:border-blue-500/30 text-slate-300 hover:text-white"
+                >
+                    <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> 返回平台首页
+                </a>
+            </div>
 
             <div className="w-full max-w-4xl z-10">
                 <div className="text-center mb-16">
