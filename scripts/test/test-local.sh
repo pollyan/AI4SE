@@ -64,7 +64,7 @@ run_api_tests() {
     
     # 安装依赖
     log_info "安装 Python 依赖..."
-    pip3 install -q pytest pytest-cov 2>/dev/null || pip install -q pytest pytest-cov
+    pip3 install -q -r requirements.txt pytest pytest-cov 2>/dev/null || pip install -q -r requirements.txt pytest pytest-cov
     
     # 设置 PYTHONPATH
     export PYTHONPATH=$PROJECT_ROOT:$PROJECT_ROOT/tools/intent-tester:$PYTHONPATH
@@ -149,6 +149,51 @@ run_proxy_tests() {
 }
 
 # ==========================================
+# New Agents Frontend Tests (Vitest)
+# ==========================================
+run_new_agents_frontend_tests() {
+    log_section "🤖 New Agents Frontend Tests"
+    cd "$PROJECT_ROOT/tools/new-agents"
+    
+    log_info "安装 New Agents 依赖..."
+    npm ci --silent 2>/dev/null || npm install --silent
+
+    log_info "运行 New Agents Frontend 测试..."
+    if npm run test; then
+        log_info "✅ New Agents Frontend 测试通过"
+    else
+        log_error "❌ New Agents Frontend 测试失败"
+        cd "$PROJECT_ROOT"
+        return 1
+    fi
+    cd "$PROJECT_ROOT"
+}
+
+# ==========================================
+# New Agents Backend Tests (Python)
+# ==========================================
+run_new_agents_backend_tests() {
+    log_section "🐍 New Agents Backend Tests"
+    cd "$PROJECT_ROOT/tools/new-agents/backend"
+    
+    # 尝试激活虚拟环境 (如果有)
+    [ -f "venv/bin/activate" ] && source venv/bin/activate
+    
+    log_info "安装 Backend 依赖..."
+    pip3 install -q -r requirements.txt pytest 2>/dev/null || pip install -q -r requirements.txt pytest
+
+    log_info "运行 New Agents Backend 测试..."
+    if python3 -m pytest tests/test_api.py -v; then
+        log_info "✅ New Agents Backend 测试通过"
+    else
+        log_error "❌ New Agents Backend 测试失败"
+        cd "$PROJECT_ROOT"
+        return 1
+    fi
+    cd "$PROJECT_ROOT"
+}
+
+# ==========================================
 # Common Frontend 测试 (React - Homepage/Profile)
 # ==========================================
 run_common_frontend_tests() {
@@ -218,6 +263,8 @@ case "$TEST_TYPE" in
         run_lint || true  # lint 失败不中断
         run_proxy_tests || FAILED=1
         run_common_frontend_tests || FAILED=1
+        run_new_agents_frontend_tests || FAILED=1
+        run_new_agents_backend_tests || FAILED=1
         ;;
     *)
         log_error "未知测试类型: $TEST_TYPE"

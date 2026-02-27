@@ -27,10 +27,12 @@
 
 | 任务 | 命令 |
 |------|---------|
-| **安装依赖** | `pip install -r requirements.txt` |
+| **安装依赖 (根)** | `pip install -r requirements.txt` |
+| **安装依赖 (new-agents)** | `pip install -r tools/new-agents/backend/requirements.txt` |
 | **测试所有** | `pytest` |
-| **测试单个文件** | `pytest tools/ai-agents/backend/tests/test_agent.py` |
-| **测试单个函数** | `pytest tools/ai-agents/backend/tests/test_agent.py::test_workflow` |
+| **测试 Intent Tester** | `pytest tools/intent-tester/tests/` |
+| **测试 New Agents Backend** | `cd tools/new-agents/backend && pytest tests/test_api.py -c pytest.ini` |
+| **测试单个函数** | `pytest tools/intent-tester/tests/test_api.py::test_function` |
 | **按关键字测试** | `pytest -k "workflow_node"` |
 | **按标记测试** | `pytest -m unit` (标记: `unit`, `api`, `integration`, `e2e`, `slow`) |
 | **Lint (关键)** | `flake8 --select=E9,F63,F7,F82 .` |
@@ -40,19 +42,16 @@
 ### TypeScript/React (前端)
 
 | 任务 | 命令 | 目录 |
-|------|---------|-----------|
-| **安装** | `npm install` | `tools/frontend` 或 `tools/ai-agents/frontend` |
+|------|---------|-----------| 
+| **安装** | `npm install` | `tools/frontend` 或 `tools/new-agents` |
 | **开发服务器** | `npm run dev` | 任意前端目录 |
 | **构建** | `npm run build` | 任意前端目录 |
-| **测试所有** | `npm run test` | `tools/ai-agents/frontend` |
-| **测试单个文件** | `npx vitest run src/components/Panel.test.tsx` | `tools/ai-agents/frontend` |
-| **测试过滤器** | `npx vitest -t "renders correctly"` | `tools/ai-agents/frontend` |
 | **Lint** | `npm run lint` | 任意前端目录 |
 
 ### Node.js (MidScene 代理)
 
 | 任务 | 命令 | 目录 |
-|------|---------|-----------|
+|------|---------|-----------| 
 | **安装** | `npm install` | `tools/intent-tester` |
 | **启动代理** | `npm start` | `tools/intent-tester` |
 | **测试代理** | `npm run test:proxy` | `tools/intent-tester` |
@@ -118,7 +117,7 @@
 
 ## 代码风格与模式
 
-### Python (`ai-agents`, `intent-tester`, `shared`)
+### Python (`intent-tester`, `new-agents/backend`, `shared`)
 
 | 方面 | 规则 |
 |--------|------|
@@ -130,16 +129,18 @@
 | **提示词** | 存储在 `prompts/` 目录中。逻辑文件中没有硬编码的提示词。 |
 | **模式** | 使用带有 `Field` 验证器的 Pydantic `BaseModel` 用于结构化数据。 |
 
-### TypeScript/React (`frontend`, `ai-agents/frontend`)
+### TypeScript/React (`frontend`, `new-agents`)
 
 | 方面 | 规则 |
 |--------|------|
-| **风格** | ESLint + TypeScript 严格模式 |
+| **风格** | TypeScript 严格模式 |
 | **组件** | 仅使用 Hooks 的函数式组件 |
 | **文件命名** | `PascalCase.tsx` (组件), `camelCase.ts` (工具) |
-| **状态** | React Context / React Query > 全局 Store |
-| **测试** | Vitest + React Testing Library |
-| **样式** | Tailwind CSS 工具类 |
+| **状态** | Zustand (new-agents) / React Context > 全局 Store |
+| **路由** | React Router v7 |
+| **样式** | Tailwind CSS v4 |
+| **动画** | Motion (Framer Motion) |
+| **图标** | Lucide React |
 
 ### Node.js (`intent-tester/browser-automation`)
 
@@ -158,23 +159,26 @@ AI4SE/
 ├── scripts/
 │   ├── dev/deploy-dev.sh      # 本地 Docker 部署
 │   ├── test/test-local.sh     # 类 CI 测试运行器
+│   ├── health/                # 健康检查脚本
 │   └── ci/                    # CI/CD 脚本
 ├── tools/
-│   ├── ai-agents/             # [端口: 5002] Flask + LangGraph
-│   │   ├── backend/
-│   │   │   ├── agents/        # Alex, Lisa (LangGraph 状态机)
-│   │   │   │   ├── lisa/      # 测试专家 Agent
-│   │   │   │   │   ├── graph.py      # StateGraph 定义
-│   │   │   │   │   ├── nodes.py      # 图节点
-│   │   │   │   │   └── tools.py      # update_artifact 工具
-│   │   │   │   └── shared/    # 共享状态, 检查点, 工具
-│   │   │   ├── api/           # REST API 端点
-│   │   │   ├── models/        # SQLAlchemy 模型
-│   │   │   └── tests/         # Pytest 测试
-│   │   └── frontend/          # React UI (Vercel AI SDK)
+│   ├── new-agents/            # 新 Agent (Lisa 纯前端版 + 后端代理)
+│   │   ├── src/               # React 前端 (Vite + React + Zustand)
+│   │   │   ├── components/    # UI 组件 (ChatPane, ArtifactPane, Header 等)
+│   │   │   ├── pages/         # 路由页面 (AgentSelect, WorkflowSelect, Workspace)
+│   │   │   ├── llm.ts         # LLM 双模式调用 (直连/代理)
+│   │   │   └── store.ts       # Zustand 状态管理
+│   │   ├── backend/           # [端口: 5002] Flask LLM 代理
+│   │   │   ├── app.py         # Flask 应用 (SSE 流式代理)
+│   │   │   ├── models.py      # SQLAlchemy 模型 (LlmConfig)
+│   │   │   ├── config.py      # 配置
+│   │   │   ├── tests/         # Pytest 测试
+│   │   │   └── docker/        # Dockerfile
+│   │   └── docker/            # 前端 Dockerfile
 │   ├── intent-tester/         # [端口: 5001] Flask + MidScene
-│   │   ├── backend/           # Flask API
+│   │   ├── backend/           # Flask API (api/, models/, services/, utils/)
 │   │   ├── browser-automation/# Node.js MidScene 代理
+│   │   ├── frontend/          # Jinja2 模板 + 静态资源
 │   │   └── tests/             # Python + Jest 测试
 │   ├── frontend/              # [端口: 80] 统一门户 (Vite + React)
 │   └── shared/                # 通用 Python 工具 (配置, 数据库)
@@ -195,79 +199,50 @@ AI4SE/
 - **数据库**: `tools/shared/database/` 中的共享 SQLAlchemy 连接池
 - **配置**: `tools/shared/config/` 中的统一配置管理
 
-### AI Agents 架构
+### Docker 服务拓扑
 
-- **Lisa**: 测试专家 (测试设计, 需求评审工作流)
-- **Alex**: 需求分析师
+| 服务 | 容器名 | 端口 | 技术栈 | 说明 |
+|------|--------|------|--------|------|
+| **postgres** | ai4se-db | 5432 | PostgreSQL 15 | 共享数据库 |
+| **intent-tester** | ai4se-intent-tester | 5001 | Flask + MidScene | 意图测试工具 |
+| **new-agents** | ai4se-new-agents | - | Vite + React (静态) | 新 Agent 前端 |
+| **new-agents-backend** | ai4se-new-agents-backend | 5002 | Flask + OpenAI | LLM 代理后端 |
+| **nginx** | ai4se-gateway | 80/443 | Nginx | 统一入口反向代理 |
 
-**Lisa Agent 双节点架构**:
+### Nginx 路由规则
 
-```
-START → intent_router → reasoning_node → artifact_node → END
-                     ↓
-                  clarify_intent → END
-```
+| 路径 | 上游 | 说明 |
+|------|------|------|
+| `/` | 静态文件 | 统一门户 React App |
+| `/intent-tester/` | intent-tester:5001 | 意图测试工具 |
+| `/new-agents/api/` | new-agents-backend:5002 | 新 Agent 后端 API (含 SSE) |
+| `/new-agents/` | new-agents:80 | 新 Agent 前端 |
+| `/health` | 直接返回 200 | 健康检查端点 |
 
-**产出物更新流程** (强制要求):
-1. `reasoning_node` 设置 `should_update_artifact=True`
-2. 通过 Command 路由到 `artifact_node`
-3. `artifact_node` 调用 `update_artifact` 工具
-4. 前端接收 `tool-call` 事件进行追踪
+### New Agents 架构
 
-> **禁止** 直接在节点中修改 `state["artifacts"]` - 必须使用工具以确保前端可观测性。
+**前端 (纯 SPA)**:
+- 基于 React + Vite 构建，Zustand 管理状态
+- Lisa Agent: 测试专家 (测试设计, 需求评审工作流)
+- 支持 **双模式 LLM 调用**:
+  - **直连模式**: 用户自行配置 API Key，前端直接调用 LLM API
+  - **代理模式**: 使用系统默认配置，通过后端代理转发 (API Key 不暴露给前端)
 
-### 节点间上下文传递 (Inter-Node Context Passing)
-
-**核心原则**: 推理节点负责"理解和决策"，执行节点负责"执行"——通过 State 传递结构化操作指引。
-
-| 原则 | 说明 |
-|------|------|
-| **先推理再结构化** | ReasoningNode 深度分析对话上下文后，在 `artifact_update_hint` 中生成精确的操作级指引，ArtifactNode 只需执行 |
-| **操作级 Hint > 通用规则** | hint 中应包含具体的 ID、状态变更、字段值，而非模糊的"请更新文档" |
-| **兜底防御** | ArtifactNode 的 Prompt 中保留通用兜底规则，确保即使 hint 缺失也有最低保障 |
-| **Token 效率** | 由上游精简上下文，下游不重复推理全部对话历史 |
-
-**`artifact_update_hint` 格式规范**:
-```
-"用户确认了xxx。**风险提示**: yyy。**状态变更**: Q-001 → confirmed (note: 结论); Q-003 → confirmed (note: 结论)。**行动项**: 更新zzz章节。"
-```
-
-> **依据**: LangGraph 官方推荐通过 State 键在节点间传递私有上下文（Private State 模式）；业界共识"先推理再结构化"（Separate Reasoning and Structuring）是多步 Agent 工作流最佳实践。
-
-### 数据流与流式传输
-
-- **后端**: Flask + LangGraph 通过服务器发送事件 (SSE) 流式传输响应
-- **前端**: Vercel AI SDK (`useChat` hook) 消费流
-- **协议**: Vercel AI SDK Data Stream Protocol
+**后端代理 (LLM Proxy)**:
+- Flask 应用，端口 5002
+- 从 PostgreSQL `llm_config` 表读取 API Key（手动插入，不通过 API 暴露）
+- 提供 SSE 流式转发 `/api/chat/stream`
+- 提供配置查询 `/api/config` (不返回 API Key)
 
 ### MidScene 代理
 
 本地 Node.js 服务器，通过 Playwright 驱动 Chrome 进行 AI 驱动的浏览器测试
 
----
+### 数据流
 
-## AI Agents 架构策略
-
-### Artifact (产出物) 格式分离原则
-
-**核心原则**: Artifact 的格式约束应在 **数据模型 + 渲染逻辑** 中定义，而非在提示词中硬编码。
-
-| 层级 | 职责 | 文件位置 |
-|------|------|----------|
-| **数据模型** | 定义字段、类型、枚举值 | `artifact_models.py` |
-| **渲染逻辑** | 将结构化数据转为 Markdown | `utils/markdown_generator.py` |
-| **提示词** | 告诉 LLM **做什么**，而非**格式细节** | `prompts/*.py` |
-
-**为什么这样设计**:
-1. **SSOT (Single Source of Truth)**: 格式定义只在一处，避免提示词与代码脱节
-2. **可维护性**: 修改格式只需改模型/渲染器，无需更新多处提示词
-3. **一致性**: LLM 通过工具 Schema 约束输出，比自然语言描述更可靠
-
-**提示词中应该写什么**:
-- ✅ 业务逻辑（如"为每个问题设置优先级 P0/P1/P2"）
-- ✅ 行为指导（如"分析完成后告知用户问题数量"）
-- ❌ Markdown 表格结构示例
-- ❌ 详细的格式模板
+- **intent-tester**: Flask + LangGraph/LangChain → SSE → 前端
+- **new-agents 前端**: React + Zustand → OpenAI SDK / 后端代理 SSE → UI 渲染
+- **new-agents 后端**: Flask → OpenAI API → SSE 流式响应
 
 ---
 
@@ -295,8 +270,6 @@ START → intent_router → reasoning_node → artifact_node → END
 | **后端单元** | pytest | 纯函数、Pydantic 模型、工具类 | 无外部依赖 |
 | **后端 API** | pytest + Flask test_client | HTTP 端点、请求/响应格式、状态码 | LLM 服务、外部 API |
 | **后端集成** | pytest | 多模块协作、状态流转、工作流 | LLM、外部服务 |
-| **前端组件** | Vitest + React Testing Library | 组件渲染、用户交互、Hooks | 无 (隔离组件) |
-| **前端集成** | Vitest + MSW | 组件间协作、数据流、SSE 流 | 后端 API (MSW) |
 | **代理测试** | Jest | MidScene Server API、WebSocket | Playwright 调用 |
 
 ### Mock 策略
@@ -304,37 +277,29 @@ START → intent_router → reasoning_node → artifact_node → END
 | 被 Mock 对象 | Mock 方式 | 使用场景 |
 |-------------|-----------|----------|
 | **LLM 服务** | `unittest.mock.patch` + `FakeLLM` | 所有非 `slow` 标记的测试 |
-| **数据库** | SQLite `:memory:` (conftest.py) | 所有需要持久化的测试 |
+| **数据库** | SQLite `:memory:` (conftest.py / test fixtures) | 所有需要持久化的测试 |
 | **外部 API** | `responses` 库 / `httpx.MockTransport` | API 测试 |
-| **前端后端** | MSW (Mock Service Worker) | 前端集成测试 |
-| **LangGraph 节点** | 直接调用节点函数，mock 依赖 | 节点单元测试 |
+| **OpenAI Client** | `unittest.mock.patch('openai.OpenAI')` | new-agents-backend 测试 |
 
 ### 测试文件组织
 
 ```
-tools/ai-agents/backend/tests/
-├── conftest.py              # 共享 fixtures
-├── test_artifact_models.py  # [unit]
-├── test_api_v2_stream.py    # [api]
-└── test_workflow_integration.py  # [integration]
-
-tools/ai-agents/frontend/tests/
-├── mocks/server.ts          # MSW 服务器配置
-├── integration/             # [integration]
-└── *.test.tsx               # [component]
-
 tools/intent-tester/tests/
 ├── conftest.py              # 共享 fixtures
-└── proxy/                   # MidScene API 测试
+├── proxy/                   # MidScene API 测试 (Jest)
+└── test_*.py                # Python 测试
+
+tools/new-agents/backend/tests/
+└── test_api.py              # API 端点测试 (Flask test_client + SQLite)
 ```
 
 ### 测试命名规范
 
 | 类型 | 命名模式 | 示例 |
 |------|----------|------|
-| Python 测试文件 | `test_<模块名>.py` | `test_artifact_models.py` |
-| Python 测试函数 | `test_<行为>_<条件>` | `test_create_session_returns_201` |
-| TypeScript 测试文件 | `<组件名>.test.tsx` | `ArtifactPanel.test.tsx` |
+| Python 测试文件 | `test_<模块名>.py` | `test_api.py` |
+| Python 测试函数 | `test_<行为>_<条件>` | `test_chat_stream_returns_sse` |
+| TypeScript 测试文件 | `<组件名>.test.tsx` | `ArtifactPane.test.tsx` |
 | TypeScript 测试用例 | `it('<动作> when <条件>')` | `it('renders error when fetch fails')` |
 
 ### 何时写哪种测试
@@ -343,7 +308,6 @@ tools/intent-tester/tests/
 |------|-------------|------|
 | 新增 Pydantic 模型 | `unit` | 验证字段约束，快速反馈 |
 | 新增 API 端点 | `api` | 验证契约，mock 下游服务 |
-| 新增 LangGraph 节点 | `unit` + `integration` | 单独测节点逻辑 + 测路由集成 |
 | 新增 React 组件 | component test | 验证渲染和交互 |
 | 修复线上 Bug | 先写复现测试 | 防止回归 |
 | 重构已有代码 | 确保已有测试通过 | 不新增测试，除非发现覆盖盲区 |
@@ -401,15 +365,13 @@ DB_PASSWORD=your_password
 # 应用
 SECRET_KEY=your-secret-key
 
-# OpenAI (AI agents 必需)
-OPENAI_API_KEY=sk-...
-OPENAI_BASE_URL=https://api.openai.com/v1
-
-# LangSmith (可选)
+# LangSmith (可选, 用于 intent-tester 追踪)
 LANGCHAIN_TRACING_V2=false
 LANGCHAIN_API_KEY=
-LANGCHAIN_PROJECT=ai4se
+LANGCHAIN_PROJECT=intent-test-framework
 ```
+
+> **注意**: New Agents 后端的 LLM API Key 保存在 PostgreSQL 的 `llm_config` 表中，通过手动 SQL 插入，不通过环境变量或 API 管理。
 
 ---
 
@@ -424,6 +386,13 @@ LANGCHAIN_PROJECT=ai4se
 - 推送到 `master` 分支 → GitHub Actions 运行 CI → 测试通过后自动部署
 - 所有修改必须在推送前通过 `./scripts/test/test-local.sh`
 
+**CI/CD 管道** (GitHub Actions):
+1. **backend-api-test**: Intent Tester + New Agents Backend 测试
+2. **common-frontend-test**: 统一门户前端 Lint + Build
+3. **code-quality**: Flake8 代码质量检查
+4. **proxy-test**: MidScene 代理 Jest 测试
+5. **deploy-to-production**: 构建 + Rsync + SSH 部署到腾讯云
+
 ---
 
 ## 禁止模式
@@ -435,6 +404,7 @@ LANGCHAIN_PROJECT=ai4se
 | **测试** | 删除失败的测试以"通过", 跳过 TDD |
 | **提交** | 未经明确用户请求即提交 |
 | **Docker** | 直接运行 `docker` 命令 (使用脚本) |
+| **密钥安全** | 在代码中硬编码 API Key 或密码 |
 
 ---
 
