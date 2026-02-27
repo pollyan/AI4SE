@@ -115,6 +115,9 @@ interface AppState {
   setSettingsOpen: (isOpen: boolean) => void;
   setIsGenerating: (isGenerating: boolean) => void;
   clearHistory: () => void;
+  isUserConfigured: boolean;
+  setIsUserConfigured: (val: boolean) => void;
+  resetToSystemConfig: () => void;
 }
 
 export const useStore = create<AppState>()(
@@ -133,8 +136,11 @@ export const useStore = create<AppState>()(
       },
       isSettingsOpen: false,
       isGenerating: false,
+      isUserConfigured: false,
 
-      setApiKey: (key) => set({ apiKey: key }),
+      setApiKey: (key) => set({ apiKey: key, isUserConfigured: !!key }),
+      setIsUserConfigured: (val) => set({ isUserConfigured: val }),
+      resetToSystemConfig: () => set({ apiKey: '', baseUrl: '', model: '', isUserConfigured: false }),
       setBaseUrl: (url) => set({ baseUrl: url }),
       setModel: (model) => set({ model }),
       setWorkflow: (workflow) => set({
@@ -222,6 +228,7 @@ export const useStore = create<AppState>()(
         artifactContent: state.artifactContent,
         artifactHistory: state.artifactHistory,
         stageArtifacts: state.stageArtifacts,
+        isUserConfigured: state.isUserConfigured,
       }),
     }
   )

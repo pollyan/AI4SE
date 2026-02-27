@@ -14,7 +14,9 @@ export const SettingsModal: React.FC = () => {
     setBaseUrl,
     workflow,
     setWorkflow,
-    clearHistory
+    clearHistory,
+    isUserConfigured,
+    resetToSystemConfig
   } = useStore();
 
   if (!isSettingsOpen) return null;
@@ -42,7 +44,26 @@ export const SettingsModal: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           <section>
-            <h3 className="mb-4 text-sm font-bold text-slate-200 uppercase tracking-wider">模型配置</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">模型配置</h3>
+              {isUserConfigured && (
+                <button
+                  onClick={resetToSystemConfig}
+                  className="text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  恢复系统默认配置
+                </button>
+              )}
+            </div>
+
+            {!isUserConfigured && (
+              <div className="rounded-lg border border-blue-900/30 bg-blue-900/10 p-3 mb-4">
+                <p className="text-xs text-blue-300">
+                  💡 系统已内置默认模型，无需配置即可直接体验。
+                  如需使用自己的 API Key (或更改配置)，请在下方填写以覆盖默认设置。
+                </p>
+              </div>
+            )}
             <div className="space-y-4">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-slate-300">API Key</label>
@@ -52,7 +73,7 @@ export const SettingsModal: React.FC = () => {
                     type="password"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="AI Studio 会自动注入，也可在此覆盖"
+                    placeholder="不填则使用系统默认内置 API Key"
                     className="w-full rounded-lg border border-slate-700 bg-[#101922] py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>

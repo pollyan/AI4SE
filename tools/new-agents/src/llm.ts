@@ -82,20 +82,53 @@ const buildContentWithAttachments = (text: string, attachments?: Attachment[]): 
   return `${attachTxt}\n\n${text}`;
 };
 
+async function* generateResponseStreamViaProxy(
+  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+  modelOverride?: string,
+  signal?: AbortSignal
+) {
+  const response = await fetch('/new-agents/api/chat/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, model: modelOverride, temperature: 0.7 }),
+    signal
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || '后端代理请求失败');
+  }
+
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const payload = line.slice(6).trim();
+      if (payload === '[DONE]') return;
+      try {
+        const { content, error } = JSON.parse(payload);
+        if (error) throw new Error(error);
+        if (content) yield content;
+      } catch (e) {
+        // Only throw actual parsing error if it looks like a valid structure.
+      }
+    }
+  }
+}
 
 export const generateResponseStream = async function* (userMessage: string, attachments?: Attachment[], signal?: AbortSignal) {
   const state = useStore.getState();
-  const { apiKey, baseUrl, model, workflow, stageIndex, artifactContent, chatHistory } = state;
-
-  if (!apiKey) {
-    throw new Error('API Key is not configured. Please check settings.');
-  }
-
-  const client = new OpenAI({
-    apiKey,
-    baseURL: baseUrl || undefined,
-    dangerouslyAllowBrowser: true
-  });
+  const { isUserConfigured, apiKey, baseUrl, model, workflow, stageIndex, artifactContent, chatHistory } = state;
 
   const systemInstruction = getSystemPrompt(workflow, stageIndex, artifactContent);
 
@@ -111,20 +144,37 @@ export const generateResponseStream = async function* (userMessage: string, atta
     }
   ];
 
-  const responseStream = await client.chat.completions.create({
-    model,
-    messages,
-    temperature: 0.7,
-    stream: true,
-  });
+  const chunkGenerator = (async function* () {
+    if (isUserConfigured && apiKey) {
+      // 走现有的前端直连逻辑
+      const client = new OpenAI({
+        apiKey,
+        baseURL: baseUrl || undefined,
+        dangerouslyAllowBrowser: true
+      });
+      const responseStream = await client.chat.completions.create({
+        model,
+        messages,
+        temperature: 0.7,
+        stream: true,
+      });
+
+      for await (const chunk of responseStream) {
+        if (signal?.aborted) throw new Error('Aborted by user');
+        const chunkText = chunk.choices[0]?.delta?.content || '';
+        if (chunkText) yield chunkText;
+      }
+    } else {
+      // 后端代理直连
+      for await (const chunkText of generateResponseStreamViaProxy(messages, model, signal)) {
+        if (signal?.aborted) throw new Error('Aborted by user');
+        yield chunkText;
+      }
+    }
+  })();
 
   let fullText = '';
-  for await (const chunk of responseStream) {
-    if (signal?.aborted) {
-      throw new Error('Aborted by user');
-    }
-
-    const chunkText = chunk.choices[0]?.delta?.content || '';
+  for await (const chunkText of chunkGenerator) {
     fullText += chunkText;
 
     let chatResponse = '';

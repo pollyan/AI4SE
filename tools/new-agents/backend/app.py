@@ -10,6 +10,10 @@ app = Flask(__name__)
 app.config.from_object(Config)
 CORS(app)
 
+# Initialize real DB when running normally or via Docker
+with app.app_context():
+    init_db()
+
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({"status": "ok", "service": "new-agents-backend"})
@@ -94,7 +98,4 @@ def chat_stream():
     )
 
 if __name__ == '__main__':
-    # Initialize real DB when running normally natively or via Docker
-    with app.app_context():
-        init_db()
     app.run(host='0.0.0.0', port=5002, debug=True)
