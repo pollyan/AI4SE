@@ -67,7 +67,7 @@ run_api_tests() {
     pip3 install -q pytest pytest-cov 2>/dev/null || pip install -q pytest pytest-cov
     
     # 设置 PYTHONPATH
-    export PYTHONPATH=$PROJECT_ROOT:$PROJECT_ROOT/tools/intent-tester:$PROJECT_ROOT/tools/ai-agents:$PYTHONPATH
+    export PYTHONPATH=$PROJECT_ROOT:$PROJECT_ROOT/tools/intent-tester:$PYTHONPATH
     
     # 运行测试
     log_info "运行 API 测试..."
@@ -77,55 +77,6 @@ run_api_tests() {
         log_info "✅ Intent Tester 测试通过"
     else
         log_error "❌ Intent Tester 测试失败"
-        return 1
-    fi
-
-    # 运行 AI Agents Backend 测试 (如果目录存在)
-    if [ -d "tools/ai-agents/backend/tests" ]; then
-        log_info "运行 AI Agents Backend 测试 (排除慢速冒烟测试)..."
-        if python3 -m pytest tools/ai-agents/backend/tests/ -v -m "not slow" --cov=tools/ai-agents/backend --cov-report=term; then
-            log_info "✅ AI Agents Backend 测试通过"
-        else
-            log_error "❌ AI Agents Backend 测试失败"
-            return 1
-        fi
-    else
-        log_warn "⚠️ AI Agents Backend 测试目录不存在，跳过"
-    fi
-}
-
-# ==========================================
-# Agent Smoke 测试 (Python)
-# ==========================================
-run_smoke_tests() {
-    log_section "🔥 Agent Smoke Tests (Requires LLM API Key)"
-    
-    # 检查 Python 环境
-    if ! command -v python3 &> /dev/null; then
-        log_error "Python3 未安装"
-        return 1
-    fi
-    
-    # 检查 .env 或者 OPENAI_API_KEY
-    if [ -z "$OPENAI_API_KEY" ] && [ ! -f "$PROJECT_ROOT/.env" ]; then
-        log_error "未找到 OPENAI_API_KEY 或 .env 文件，无法运行冒烟测试。"
-        return 1
-    fi
-
-    # 设置 PYTHONPATH
-    export PYTHONPATH=$PROJECT_ROOT:$PROJECT_ROOT/tools/ai-agents:$PYTHONPATH
-    
-    # 运行测试
-    if [ -d "tools/ai-agents/backend/tests" ]; then
-        log_info "运行 AI Agents Smoke 测试..."
-        if python3 -m pytest tools/ai-agents/backend/tests/ -v -s -m "slow"; then
-            log_info "✅ AI Agents Smoke 测试通过"
-        else
-            log_error "❌ AI Agents Smoke 测试失败"
-            return 1
-        fi
-    else
-        log_error "⚠️ AI Agents Backend 测试目录不存在"
         return 1
     fi
 }
@@ -145,7 +96,7 @@ run_lint() {
     # 检查严重错误 (和 GitHub Actions 一致)
     LINT_RESULT=0
     
-    if python3 -m flake8 tools/intent-tester/backend tools/ai-agents/backend --count --select=E9,F63,F7,F82 --show-source --statistics; then
+    if python3 -m flake8 tools/intent-tester/backend --count --select=E9,F63,F7,F82 --show-source --statistics; then
         log_info "✅ 代码质量检查通过 (无严重错误)"
     else
         log_warn "⚠️ 代码质量检查发现问题"
@@ -194,43 +145,6 @@ run_proxy_tests() {
     fi
     
     cd "$PROJECT_ROOT"
-    cd "$PROJECT_ROOT"
-}
-
-# ==========================================
-# Frontend 测试 (React)
-# ==========================================
-run_frontend_tests() {
-    log_section "⚛️ Frontend Tests"
-
-    # 检查 Node.js 环境
-    if ! command -v node &> /dev/null; then
-        log_error "Node.js 未安装"
-        return 1
-    fi
-
-    log_info "Node.js 版本: $(node --version)"
-
-    # 切换到 frontend 目录
-    cd "$PROJECT_ROOT/tools/ai-agents/frontend"
-
-    # 安装依赖 (如果需要)
-    log_info "检查依赖..."
-    if [ ! -d "node_modules" ]; then
-        log_info "安装 Frontend依赖..."
-        npm ci --silent 2>/dev/null || npm install --silent
-    fi
-
-    # 运行测试
-    log_info "运行 Frontend 测试..."
-    if npm run test -- --run; then
-        log_info "✅ Frontend 测试通过"
-    else
-        log_error "❌ Frontend 测试失败"
-        cd "$PROJECT_ROOT"
-        return 1
-    fi
-
     cd "$PROJECT_ROOT"
 }
 
@@ -303,7 +217,6 @@ case "$TEST_TYPE" in
         run_api_tests || FAILED=1
         run_lint || true  # lint 失败不中断
         run_proxy_tests || FAILED=1
-        run_frontend_tests || FAILED=1
         run_common_frontend_tests || FAILED=1
         ;;
     *)
