@@ -84,3 +84,71 @@ def test_chat_stream_empty_body(client):
     response2 = client.post('/api/chat/stream', json={"model": "gpt-4"})
     assert response2.status_code == 400
     assert response2.json == {"error": "messages 不能为空"}
+
+from unittest.mock import patch, MagicMock
+
+def test_chat_stream_missing_config(client):
+    """Test streaming when no default configuration exists."""
+    response = client.post('/api/chat/stream', json={"messages": [{"role": "user", "content": "hi"}]})
+    assert response.status_code == 503
+    assert "系统未配置" in response.json["error"]
+
+@patch('app.OpenAI')
+def test_chat_stream_success(mock_openai, client):
+    """Test successful SSE stream."""
+    from app import get_session
+    from models import LlmConfig
+    
+    with app.app_context():
+        session = get_session()
+        config = session.query(LlmConfig).filter_by(config_key='default').first()
+        if not config:
+            config = LlmConfig(config_key='default', api_key='sk-123', base_url='http://t', model='gpt-4')
+            session.add(config)
+            session.commit()
+
+    # Mock the return values for stream
+    mock_client = MagicMock()
+    mock_openai.return_value = mock_client
+    
+    class MockDelta:
+        def __init__(self, content): self.content = content
+    class MockChoice:
+        def __init__(self, delta): self.delta = delta
+    class MockChunk:
+        def __init__(self, content): self.choices = [MockChoice(MockDelta(content))] if content else []
+
+    mock_client.chat.completions.create.return_value = [
+        MockChunk("Hello"),
+        MockChunk(" World")
+    ]
+
+    response = client.post('/api/chat/stream', json={"messages": [{"role": "user", "content": "hi"}]})
+    assert response.status_code == 200
+    assert response.mimetype == 'text/event-stream'
+    
+    # Process the stream generator
+    data = response.get_data(as_text=True)
+    assert 'data: {"content": "Hello"}' in data
+    assert 'data: {"content": " World"}' in data
+    assert 'data: [DONE]' in data
+
+@patch('app.OpenAI')
+def test_chat_stream_openai_error(mock_openai, client):
+    """Test handling of OpenAI exception during stream creation."""
+    from app import get_session
+    from models import LlmConfig
+    
+    with app.app_context():
+        session = get_session()
+        if not session.query(LlmConfig).filter_by(config_key='default').first():
+            session.add(LlmConfig(config_key='default', api_key='sk', base_url='x', model='y'))
+            session.commit()
+
+    mock_openai.side_effect = Exception("OpenAI API unreachable")
+    
+    response = client.post('/api/chat/stream', json={"messages": [{"role": "user", "content": "hi"}]})
+    assert response.status_code == 200 # It returns 200 and streams the error
+    
+    data = response.get_data(as_text=True)
+    assert 'data: {"error": "OpenAI API unreachable"}' in data
