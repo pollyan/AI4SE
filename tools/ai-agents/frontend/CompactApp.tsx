@@ -109,8 +109,13 @@ const CompactApp: React.FC = () => {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
-
     const handleSelectAssistant = (id: AssistantId) => {
+        // Lisa 跳转到新的独立 Agent 页面
+        if (id === AssistantId.Lisa) {
+            window.location.href = '/new-agents/';
+            return;
+        }
+
         setSelectedAssistantId(id);
         // 重置状态
         setWorkflowProgress(null);
