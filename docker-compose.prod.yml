@@ -69,42 +69,6 @@ services:
     networks:
       - ai4se-network
 
-  # AI 智能体应用
-  ai-agents:
-    build:
-      context: .
-      dockerfile: tools/ai-agents/docker/Dockerfile
-    container_name: ai4se-agents-prod
-    restart: unless-stopped
-    environment:
-      - DATABASE_URL=postgresql://${DB_USER:-ai4se_user}:${DB_PASSWORD:-change_me_in_production}@postgres:5432/ai4se
-      - SECRET_KEY=${SECRET_KEY:-change_me_in_production}
-      - FLASK_ENV=production
-      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
-      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
-      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-ai-agents}
-
-    ports:
-      - "5002:5002"
-    volumes:
-      - ./logs:/app/logs
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: [ "CMD", "python", "-c", "import requests; requests.get('http://localhost:5002/health')" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          cpus: '1.5'
-          memory: 1.5G
-    networks:
-      - ai4se-network
-
   # Nginx 反向代理（统一入口）
   nginx:
     image: nginx:alpine
@@ -119,7 +83,6 @@ services:
       - ./tools/frontend/dist:/app/tools/frontend/dist:ro
     depends_on:
       - intent-tester
-      - ai-agents
     deploy:
       resources:
         limits:
