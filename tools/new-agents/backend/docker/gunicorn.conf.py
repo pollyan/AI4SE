@@ -1,0 +1,9 @@
+bind = "0.0.0.0:5002"
+workers = 2
+timeout = 300
+keepalive = 5
+worker_class = "gthread"
+threads = 4
+accesslog = "-"
+errorlog = "-"
+loglevel = "info"

@@ -76,6 +76,23 @@ services:
     networks:
       - ai4se-network
 
+  # 新 Agent 后端代理（LLM Proxy）
+  new-agents-backend:
+    build:
+      context: .
+      dockerfile: tools/new-agents/backend/docker/Dockerfile
+    container_name: ai4se-new-agents-backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-ai4se_user}:${DB_PASSWORD:-change_me_in_production}@postgres:5432/ai4se
+    ports:
+      - "5002:5002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ai4se-network
+
   # Nginx 反向代理（统一入口）
   nginx:
     image: nginx:alpine
@@ -91,6 +108,7 @@ services:
     depends_on:
       - intent-tester
       - new-agents
+      - new-agents-backend
     networks:
       - ai4se-network
 
