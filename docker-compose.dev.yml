@@ -66,13 +66,14 @@ services:
     networks:
       - ai4se-network
 
-  # 新 Agent（Lisa 纯前端版）
+  # 新 Agent（Lisa 纯前端静态服务直接挂载，秒级启动取代容器内构建）
   new-agents:
-    build:
-      context: .
-      dockerfile: tools/new-agents/docker/Dockerfile
+    image: nginx:alpine
     container_name: ai4se-new-agents
     restart: unless-stopped
+    volumes:
+      - ./tools/new-agents/dist:/usr/share/nginx/html/new-agents
+      - ./tools/new-agents/docker/nginx.conf:/etc/nginx/conf.d/default.conf
     networks:
       - ai4se-network
 
