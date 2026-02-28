@@ -51,13 +51,17 @@ async function* generateResponseStreamViaProxy(
       if (!line.startsWith('data: ')) continue;
       const payload = line.slice(6).trim();
       if (payload === '[DONE]') return;
+
+      let parsed;
       try {
-        const { content, error } = JSON.parse(payload);
-        if (error) throw new Error(error);
-        if (content) yield content;
+        parsed = JSON.parse(payload);
       } catch (e) {
-        // Only throw actual parsing error if it looks like a valid structure.
+        // Only ignore JSON parsing error (incomplete chunk).
+        continue;
       }
+
+      if (parsed.error) throw new Error(parsed.error);
+      if (parsed.content) yield parsed.content;
     }
   }
 }
