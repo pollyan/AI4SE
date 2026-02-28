@@ -63,11 +63,11 @@ export function useChatService() {
         const initialStage = useStore.getState().stageIndex;
 
         abortControllerRef.current = new AbortController();
+        let isFirstChunk = true;
 
         try {
             const stream = generateResponseStream(userMsg, currentAttachments, abortControllerRef.current.signal);
 
-            let isFirstChunk = true;
             let hasTransitioned = false;
 
             for await (const { chatResponse, newArtifact, action, hasArtifactUpdate } of stream) {
@@ -97,16 +97,32 @@ export function useChatService() {
                 }
             }
         } catch (error: any) {
+            const history = useStore.getState().chatHistory;
+            const lastMsgRole = history.length > 0 ? history[history.length - 1].role : null;
+            const isMidstream = lastMsgRole === 'assistant' && !isFirstChunk;
+
             if (error.message === 'Aborted by user') {
-                const lastMsg = useStore.getState().chatHistory[useStore.getState().chatHistory.length - 1];
-                updateLastMessage((lastMsg?.content || '') + '\n\n*(已停止生成)*');
+                if (isMidstream) {
+                    updateLastMessage((history[history.length - 1]?.content || '') + '\n\n*(已停止生成)*');
+                }
             } else {
-                addMessage({
-                    id: (Date.now() + 1).toString(),
-                    role: 'assistant',
-                    content: `**Error:** ${error.message || 'Something went wrong.'}`,
-                    timestamp: Date.now(),
-                });
+                let errorContent = `**Error:** ${error.message || 'Something went wrong.'}`;
+
+                // Add friendly explanation for 429 Quota Exceeded errors
+                if (error.message && (error.message.includes('429') || error.message.toLowerCase().includes('quota'))) {
+                    errorContent = `⚠️ **免费额度已用尽**\n\n抱歉，系统内置的公共大模型 API 免费调用额度（Google Gemini Free Tier）已经耗尽。\n\n**解决方案：**\n您可以点击左侧菜单栏底部的 **"设置" (Settings)** 按钮，配置您专属的 API Key（支持 OpenAI、DeepSeek 或 Gemini 等兼容格式）。\n\n*🛡️ **安全提示**：系统绝对不会上传或存储您的 API Key。您的 Key 仅安全地保存在您当前浏览器的本地缓存 (Local Storage) 中供发起请求使用，请放心配置。*\n\n---\n*原始错误附录：*\n\`\`\`text\n${error.message}\n\`\`\``;
+                }
+
+                if (isMidstream) {
+                    updateLastMessage((history[history.length - 1]?.content || '') + '\n\n' + errorContent);
+                } else {
+                    addMessage({
+                        id: (Date.now() + 1).toString(),
+                        role: 'assistant',
+                        content: errorContent,
+                        timestamp: Date.now(),
+                    });
+                }
             }
         } finally {
             abortControllerRef.current = null;
