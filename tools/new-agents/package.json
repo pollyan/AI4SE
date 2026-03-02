@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:smoke": "vitest run src/__tests__/smoke --testTimeout=60000"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

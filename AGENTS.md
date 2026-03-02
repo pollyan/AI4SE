@@ -371,7 +371,10 @@ LANGCHAIN_API_KEY=
 LANGCHAIN_PROJECT=intent-test-framework
 ```
 
-> **注意**: New Agents 后端的 LLM API Key 保存在 PostgreSQL 的 `llm_config` 表中，通过手动 SQL 插入，不通过环境变量或 API 管理。
+**🚨重要架构规则：智能体 LLM 配置来源于数据库**
+
+> **注意**: New Agents 后端的 LLM API Key（包括 `base_url`, `model` 等模型通道配置）**必须保存在 PostgreSQL 的 `llm_config` 表中**，代理服务通过查询该表来发起 LLM 请求，**绝对不通过 `.env` 环境变量或代码硬编码来读取**。
+> **目的**：为确保多租户隔离、动态配置切换以及避免应用环境中明文泄露高权限密钥，配置必须持久化在数据库层。若需更改系统默认调用的模型配置，请直接使用 SQL 工具修改 `llm_config` 表的对应记录。
 
 ---
 

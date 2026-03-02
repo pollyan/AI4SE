@@ -105,8 +105,8 @@ export const generateResponseStream = async function* (userMessage: string, atta
         if (chunkText) yield chunkText;
       }
     } else {
-      // 后端代理直连
-      for await (const chunkText of generateResponseStreamViaProxy(messages, model, signal)) {
+      // 后端代理直连（使用后端的默认模型配置，不进行覆盖）
+      for await (const chunkText of generateResponseStreamViaProxy(messages, undefined, signal)) {
         if (signal?.aborted) throw new Error('Aborted by user');
         yield chunkText;
       }
