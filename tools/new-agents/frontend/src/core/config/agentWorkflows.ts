@@ -15,9 +15,18 @@ const AGENT_WORKFLOWS: AgentWorkflowConfig[] = [
         agentId: 'lisa',
         status: 'online',
         name: '测试策略与用例设计',
-        description: '提供产品需求或代码变更集，一站式完成智能化的需求评审，并为你自动设计详尽的测试策略与自动化测试用例。',
+        description: '提供产品需求或代码变更集，为你自动设计详尽的测试策略与测试用例。',
         icon: 'TestTube2',
         link: '/workspace/lisa/test-design'
+    },
+    {
+        id: 'req-review',
+        agentId: 'lisa',
+        status: 'online',
+        name: '需求评审',
+        description: '从测试人员视角深度评审需求文档，自动扫描可测试性、完整性、边界定义等维度，输出结构化的评审问题清单。',
+        icon: 'FileCode2',
+        link: '/workspace/lisa/req-review'
     },
     {
         id: 'log-diagnostics',

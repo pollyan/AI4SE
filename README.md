@@ -1,14 +1,14 @@
 <div align="center">
-  <h1>🤖 AI4SE</h1>
-  <p><strong>AI for Software Engineering</strong></p>
-  <p>AI 驱动的软件工程工具平台</p>
+  <h1>🤖 AI4SE (AI for Software Engineering)</h1>
+  <p><strong>智能驱动、测试先行的模块化软件工程研发与协作平台</strong></p>
 
   <p>
+    <a href="#项目概述">项目概述</a> •
+    <a href="#核心模块与智能体">核心模块与智能体</a> •
+    <a href="#系统架构">系统架构</a> •
     <a href="#快速开始">快速开始</a> •
-    <a href="#核心功能">核心功能</a> •
-    <a href="#架构设计">架构设计</a> •
-    <a href="#开发指南">开发指南</a> •
-    <a href="#api-文档">API 文档</a>
+    <a href="#开发与部署规范">开发与部署规范</a> •
+    <a href="#扩展文档">扩展文档</a>
   </p>
 </div>
 
@@ -16,413 +16,134 @@
 
 ## 📖 项目概述
 
-AI4SE（AI for Software Engineering）是一个模块化的 AI 辅助软件工程平台，旨在通过 AI 智能体和自动化工具提升开发效率。
+**AI4SE** 是一个实验性与工程化并重的融合型平台，旨在探索如何利用大语言模型（LLM）与自动化代理重塑软件工程的工作流。项目秉承 **Harness Engineering（约束工程）** 原则：通过约束和规范确保 AI 生成的代码与逻辑具有强一致性、高可测性以及良好的可观测性。
 
-### 核心能力
+本项目提供了一套完整的“需求分析 -> 测试设计 -> 自动执行”流水线，以意图驱动的自动化测试和多个专业化 AI 智能体协同为核心能力，配合统一的开发门户管理所有进程。
 
-| 功能 | 描述 |
-|------|------|
-| **🧠 AI 需求分析** | 与 AI 智能体 (Alex) 协作，快速梳理需求并生成 PRD |
-| **🧪 AI 测试设计** | 与测试专家 (Lisa) 协作，进行测试策略设计和需求评审 |
-| **🎯 意图驱动测试** | 使用自然语言描述测试用例，由 AI (MidScene) 自动执行浏览器操作 |
-| **🏠 统一开发门户** | 全新的 React 门户，集成所有工具入口 |
+---
 
-### 架构类型
+## 🧩 核心模块与智能体
 
-**Modular Monorepo** (模块化单体) - 所有工具代码在同一个仓库中，但保持独立部署和运行的能力。
+### 🤖 AI 智能体体系 (new-agents)
+系统基于 LangGraph 和 LangChain 构建了多个具备专有职责的智能体，覆盖软件研发的不同阶段：
+- **Alex (业务需求分析师)**: 协助用户快速梳理业务需求，进行需求拆解并自动生成标准化 PRD（产品需求文档）。
+- **Lisa (测试工程专家)**: 深入执行测试策略设计、需求可测性评审与工作流支持，并支持输出具备高测试密度的检查与断言矩阵。
+
+### 🧪 意图测试引擎 (intent-tester)
+打破传统的强代码依赖自动化测试模式：
+- **自然语言驱动**: 允许开发者或测试人员使用纯自然语言（意图）描述测试用例和步骤。
+- **MidScene 代理服务器**: 结合 `MidSceneJS` 与 `Playwright`，在本地接收云端指令理解并自动驱动浏览器完成测试步骤。
+- **实时同步**: WebSocket 全双工通信，可实时反馈运行节点、抓取 DOM 结构及执行截图。
+
+### 🏠 统一开发门户 (frontend)
+一个基于 React + Vite + Tailwind CSS 的现代化统一入口（SPA），囊括首页介绍、工具导航入口、智能体交互和个人工作流中心。
+
+---
+
+## 🏗️ 系统架构
+
+本项目采用 **Modular Monorepo（模块化单体）** 架构模式。所有核心业务逻辑封装于独立模块中（如 `intent-tester` 等），既实现了代码共享，又保留了未来平滑拆分为微服务的可能。
+
+### 整体拓扑
+
+```mermaid
+graph TD
+    User([开发者/用户]) --> Gateway[Nginx API Gateway]
+    
+    subgraph 核心服务群
+        Gateway --> FE[统一门户 / React SPA]
+        Gateway --> IT_Web[意图测试后端 / Flask + Socket.io]
+        Gateway --> NA_Api[AI Agent API / Flask]
+        Gateway --> NA_FE[AI Agent 前端]
+        
+        NA_Api <--> DB[(PostgreSQL)]
+        IT_Web <--> DB
+    end
+    
+    subgraph 本地测试流
+        IT_Web <==>|WebSocket 指令与回传| P_Agent[本地 MidScene 代理 Server]
+        P_Agent --> Browser[本地 Playwright 浏览器]
+    end
+```
+
+### 目录结构概览
+
+```text
+AI4SE/
+├── scripts/               # 运维与自动化环境脚本（重点：部署与测试脚本）
+├── tools/                 # 各独立模块
+│   ├── new-agents/        # AI 智能体服务 (前后端分离架构)
+│   ├── intent-tester/     # 意图测试工具 (Flask + 模板网页 + Node代理)
+│   ├── frontend/          # 统一门户前端界面
+│   └── shared/            # 跨模块共享工具（数据库配置、基础工具类等）
+├── nginx/                 # Nginx 反向代理配置
+├── AGENTS.md              # 智能体扩展与开发协议说明
+└── docker-compose.*.yml   # Docker 环境编排
+```
 
 ---
 
 ## 🚀 快速开始
 
-### 环境要求
+### 运行环境配置
+- [Docker & Docker Compose](https://www.docker.com/) (基础设施必需)
+- Node.js 20+ (本地开发必需)
+- Python 3.11+ (本地开发必需)
 
-- **Docker** & **Docker Compose** (必需)
-- **Node.js 20+** (本地开发需要)
-- **Python 3.11+** (本地开发需要)
-
-### 一键启动 (推荐)
+### 初始化与一键唤起
 
 ```bash
-# 克隆项目
-git clone https://github.com/your-org/AI4SE.git
-cd AI4SE
+# 1. 检出并进入项目主目录
+git clone https://github.com/pollyan/intent-test-framework.git
+cd intent-test-framework
 
-# 复制环境变量文件
+# 2. 准备配置及凭据
 cp .env.example .env
-# 编辑 .env 文件，填入必要的配置（OPENAI_API_KEY 等）
+# 编辑 .env 文件填入必需参数 (如 OPENAI_API_KEY)
 
-# 启动本地开发环境
+# 3. 本地全量部署与启动
+# 请务必使用提供的脚本进行 Docker 容器构建和部署
 ./scripts/dev/deploy-dev.sh
 ```
 
-### 访问地址
+### 核心服务访问矩阵
 
-启动成功后，通过以下地址访问：
+启动完毕后，项目核心服务默认通过宿主机映射：
+- **统一开发门户首页**: [http://localhost](http://localhost)
+- **AI 智能体 (Alex/Lisa)**: [http://localhost/new-agents](http://localhost/new-agents)
+- **意图驱动测试引擎**: [http://localhost/intent-tester](http://localhost/intent-tester)
 
-| 服务 | 地址 | 说明 |
-|------|------|------|
-| 🏠 主页 | http://localhost | 统一门户首页 |
-| 🤖 AI 智能体 | http://localhost/new-agents | Lisa 对话界面 |
-| 🧪 意图测试 | http://localhost/intent-tester | 测试用例管理与执行 |
-
-### 本地 MidScene 代理 (用于自动化测试)
-
-```bash
-cd tools/intent-tester
-npm install
-npm start
-# 代理运行在 http://localhost:3001
-```
+*(注：自动化测试执行依赖本地挂载的 MidScene Proxy，在 `tools/intent-tester/browser-automation/` 下独立存在，默认在 `3001` 端口通讯)*
 
 ---
 
-## 🏗️ 架构设计
+## 👨‍💻 开发与部署规范
 
-### 系统架构图
+为了维护模块化单体的清晰度与系统的灵健硕性，请严格遵守以下开发契约：
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      用户浏览器                              │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 Nginx 网关 (80/443)                          │
-│    /              → React SPA (统一门户)                     │
-│    /intent-tester → :5001 (意图测试服务)                     │
-│    /new-agents/api→ :5002 (新 Agent 后端 API)                │
-│    /new-agents/   → new-agents:80 (新 Agent 前端)            │
-└─────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┴───────────────┐
-              ▼                               ▼
-┌─────────────────────────┐     ┌─────────────────────────┐
-│   intent-tester:5001    │     │ new-agents-backend:5002 │
-│   Flask + SQLAlchemy    │     │   Flask + OpenAI Proxy  │
-│   + SocketIO            │     │   + SSE Streaming       │
-└─────────────────────────┘     └─────────────────────────┘
-              │                               │
-              └───────────────┬───────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   PostgreSQL 数据库                          │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### MidScene 本地代理架构
-
-```
-┌──────────────────┐          ┌──────────────────┐
-│   云端 Web 系统   │  ◄────►  │  本地 MidScene   │
-│  (intent-tester) │  WebSocket│     Server       │
-└──────────────────┘          └────────┬─────────┘
-                                       │ Playwright
-                                       ▼
-                              ┌──────────────────┐
-                              │   本地浏览器      │
-                              └──────────────────┘
-```
-
-### 目录结构
-
-```
-AI4SE/
-├── scripts/
-│   ├── dev/deploy-dev.sh      # 本地 Docker 部署脚本
-│   ├── ci/                    # CI/CD 脚本
-│   ├── health/                # 健康检查脚本
-│   └── test/test-local.sh     # 本地测试脚本
-├── tools/
-│   ├── new-agents/            # [Backend+Frontend] 新 Agent 架构
-│   │   ├── backend/           # Flask [5002] LLM 代理，数据库读取 API Key
-│   │   │   ├── app.py         # Flask 主程序 (SSE API)
-│   │   │   ├── models.py      # LLM 配置模型
-│   │   │   └── api/           # REST API
-│   │   ├── src/               # React 前端 (Zustand 状态管理)
-│   │   └── docker/            # Dockerfile
-│   ├── intent-tester/         # [Web + Proxy] 意图测试工具
-│   │   ├── backend/           # Flask 后端 + API
-│   │   ├── frontend/          # Jinja2 模板 + 静态资源
-│   │   ├── browser-automation/# MidScene Server (Node.js)
-│   │   └── tests/             # 测试套件
-│   ├── frontend/              # [Web] 统一门户前端 (React)
-│   │   ├── src/               # 组件与页面
-│   │   └── dist/              # 构建产物
-│   └── shared/                # [Lib] 共享工具库
-│       ├── config/            # 统一配置管理
-│       └── database/          # 数据库连接池
-├── nginx/nginx.conf           # Nginx 配置
-├── docker-compose.dev.yml     # 开发环境编排
-├── docker-compose.prod.yml    # 生产环境编排
-├── requirements.txt           # Python 依赖
-└── .github/workflows/         # GitHub Actions
-```
+1. **环境与部署的一致性约束**
+   - 所有的启动、更新和构建（本地与开发环境）**必须**使用 `scripts/dev/deploy-dev.sh` 脚本驱动，严禁通过原生命令直接野蛮更新 docker-compose。
+   - 所有云端环境发布**禁止直连服务器修改部署**，严格通过配置好的 GitHub Actions DevOps 流程触发自动部署流。
+2. **SOLID 与 DRY 代码要求**
+   - 通用的工具和类库应抽离到 `tools/shared/`，严禁在独立模块中重复造轮子。
+   - 保证配置与代码分离，任何鉴权和动态路由不得硬编码，走环境变量和统一直出。
+3. **AI 智能逻辑开发底线**
+   - **禁止关键词硬生生匹配**：永远不要使用关键词过滤去模拟智能体的决策逻辑，必须根据上下文和语义构建合适的 Prompt，综合代理判断。
+   - **原子化变更与测试同行**：遵循 TDD 并保持小步提交。代码变更后请第一时间利用自动化意图测试环境进行回归验收验证。
 
 ---
 
-## ✨ 核心功能
+## 📚 扩展文档与接口
 
-### 1. AI 智能体 (AI Agents)
+项目中散落的技术细节和内部契约已被提炼到如下文档集中：
 
-基于 **LangGraph** 构建的智能对话系统，支持多轮对话和流式响应。
-
-#### Lisa - 测试专家
-- 基于新的 SPA 前端架构，双模式调用 (直连 LLM / 代理模式)
-- 测试策略设计与规划
-- 需求评审与工作流支持
-
-### 2. 意图测试工具 (Intent Tester)
-
-使用自然语言描述测试意图，AI 自动理解并执行浏览器操作。
-
-**核心组件：**
-- **Web 管理界面**: 测试用例 CRUD、执行历史查看
-- **本地代理服务器**: 基于 MidSceneJS + Playwright
-- **实时通信**: WebSocket 实时状态同步
-
-**工作流程：**
-1. 在 Web 界面创建测试用例（自然语言描述）
-2. 服务器通过 WebSocket 发送指令到本地代理
-3. 本地代理使用 AI 理解意图并控制浏览器
-4. 执行结果实时回传到服务器
-
-### 3. 统一门户 (Common Frontend)
-
-基于 **React + Vite + Tailwind CSS** 的现代化前端应用。
-
-**页面结构：**
-- 首页 (Hero, Features, UseCases)
-- 用户个人中心
-- 工具导航入口
-
----
-
-## 🛠️ 技术栈
-
-### 后端
-
-| 技术 | 版本 | 用途 |
-|------|------|------|
-| Python | 3.11+ | 主语言 |
-| Flask | 2.0+ | Web 框架 |
-| LangGraph | 1.0+ | AI 智能体图结构 |
-| LangChain | 1.0+ | LLM 集成 |
-| SQLAlchemy | 3.0+ | ORM |
-| PostgreSQL | 15 | 数据库 |
-| Flask-SocketIO | 5.0+ | WebSocket 支持 |
-
-### 前端
-
-| 技术 | 版本 | 用途 |
-|------|------|------|
-| React | 19.x | UI 框架 |
-| Vite | 7.x | 构建工具 |
-| Tailwind CSS | 3.4+ | 样式框架 |
-| assistant-ui | 0.11+ | AI 对话组件 |
-| Lucide React | 0.56+ | 图标库 |
-
-### 代理服务 (MidScene Server)
-
-| 技术 | 版本 | 用途 |
-|------|------|------|
-| Node.js | 20+ | 运行时 |
-| Playwright | 1.57 | 浏览器自动化 |
-| MidSceneJS | 0.30+ | AI 驱动的测试 |
-| Express | 4.21+ | HTTP 服务 |
-| Socket.IO | 4.7+ | 实时通信 |
-
-### DevOps
-
-| 技术 | 用途 |
-|------|------|
-| Docker Compose | 容器编排 |
-| Nginx | 反向代理 |
-| GitHub Actions | CI/CD |
-| Pytest | Python 测试 |
-| Vitest | 前端测试 |
-| Jest | Node.js 测试 |
-
----
-
-## 📚 API 文档
-
-### AI 智能体 API
-
-**Base URL:** `/new-agents/api`
-
-| 端点 | 方法 | 描述 |
-|------|------|------|
-| `/chat/stream` | POST | 代理调用 LLM 流式输出 |
-| `/config` | GET | 获取基本配置（不暴露 API Key） |
-
-### 意图测试 API
-
-**Base URL:** `/intent-tester/api`
-
-| 端点 | 方法 | 描述 |
-|------|------|------|
-| `/testcases` | GET | 获取用例列表 |
-| `/testcases` | POST | 创建测试用例 |
-| `/testcases/<id>` | PUT | 更新测试用例 |
-| `/executions/<id>/start` | POST | 启动执行 |
-| `/health` | GET | 健康检查 |
-
-详细 API 文档请参阅 [docs/api-contracts.md](docs/api-contracts.md)。
-
----
-
-## 👨‍💻 开发指南
-
-### 本地开发
-
-#### Python 后端
-
-```bash
-# 创建虚拟环境
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# 或 venv\Scripts\activate  # Windows
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 启动 New Agents Backend 服务
-cd tools/new-agents/backend
-flask run -p 5002
-
-# 启动 Intent Tester 服务
-cd tools/intent-tester
-flask run -p 5001
-```
-
-#### React 前端
-
-```bash
-# 统一门户
-cd tools/frontend
-npm install
-npm run dev  # 开发模式
-npm run build  # 生产构建
-
-# New Agents 前端
-cd tools/new-agents
-npm install
-npm run dev
-```
-
-### 测试
-
-```bash
-# 运行全量本地测试 (与 CI 一致)
-./scripts/test/test-local.sh
-
-# Python 测试
-cd tools/new-agents/backend && pytest tests/test_api.py -v
-cd tools/intent-tester && pytest tests/ -v
-
-# 前端测试
-cd tools/new-agents && npm run test
-
-# 代理服务测试
-cd tools/intent-tester && npm run test:proxy
-```
-
-### 代码规范
-
-- **Python**: 遵循 PEP 8，使用 Black 格式化，Flake8 检查
-- **TypeScript/React**: ESLint + Prettier
-- **提交信息**: 遵循 Conventional Commits
-
----
-
-## 🔧 环境变量
-
-创建 `.env` 文件：
-
-```bash
-# 数据库配置
-DB_USER=ai4se_user
-DB_PASSWORD=your_password
-
-# 应用密钥
-SECRET_KEY=your-secret-key
-
-# OpenAI API (AI 智能体必需)
-OPENAI_API_KEY=sk-...
-OPENAI_BASE_URL=https://api.openai.com/v1
-
-# LangSmith 追踪 (可选)
-LANGCHAIN_TRACING_V2=false
-LANGCHAIN_API_KEY=
-LANGCHAIN_PROJECT=ai4se
-```
-
----
-
-## 🚢 部署
-
-### 本地 Docker 部署
-
-```bash
-# 增量部署 (推荐)
-./scripts/dev/deploy-dev.sh
-
-# 全量重建
-./scripts/dev/deploy-dev.sh full
-
-# 跳过前端构建
-./scripts/dev/deploy-dev.sh --skip-frontend
-```
-
-### 生产部署
-
-生产环境通过 GitHub Actions 自动部署：
-
-1. 推送代码到 `master` 分支
-2. CI 自动运行测试
-3. 测试通过后自动部署到云服务器
-
-**禁止直连云端服务器进行部署操作。**
-
----
-
-## 📁 文档索引
-
-| 文档 | 描述 |
-|------|------|
-| [docs/index.md](docs/index.md) | 文档入口 |
-| [docs/source-tree-analysis.md](docs/source-tree-analysis.md) | 源码结构分析 |
-| [docs/api-contracts.md](docs/api-contracts.md) | API 接口契约 |
-| [docs/data-models.md](docs/data-models.md) | 数据模型定义 |
-| [docs/component-inventory.md](docs/component-inventory.md) | 前端组件清单 |
-| [AGENTS.md](AGENTS.md) | AI 编程智能体指南 |
-
----
-
-## 🤝 贡献指南
-
-1. Fork 本仓库
-2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'feat: add amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 创建 Pull Request
-
-### 开发规范
-
-- 遵循 **TDD 开发模式** (红-绿-重构)
-- 所有 PR 必须通过 CI 检查
-- 临时文件完成后必须清理
-- 中文交流，保持文档同步更新
-
----
-
-## 📄 许可证
-
-MIT License - 详见 [LICENSE](LICENSE) 文件。
+- **智能体生态**: [AGENTS.md](./AGENTS.md) 
+- **API 约定契约**: [docs/api-contracts.md](./docs/api-contracts.md) 
+- **源代码结构分析**: [docs/source-tree-analysis.md](./docs/source-tree-analysis.md)
+- **数据模型规约**: [docs/data-models.md](./docs/data-models.md)
 
 ---
 
 <div align="center">
-  <p>Made with ❤️ by the AI4SE Team</p>
+  <p>🛠️ Powered by AI & Developed with TDD loop. 🛠️</p>
 </div>

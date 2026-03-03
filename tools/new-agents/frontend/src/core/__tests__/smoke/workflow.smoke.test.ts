@@ -17,12 +17,12 @@ interface HistoryMessage {
 class AgentConversationRunner {
     private history: HistoryMessage[] = [];
     private currentStageIndex: number;
-    private workflowKey: 'TEST_DESIGN';
+    private workflowKey: keyof typeof WORKFLOWS; // Using keyof typeof WORKFLOWS
     private currentArtifact: string;
 
-    constructor(initialStage: number = 0, initialArtifact: string = '') {
+    constructor(workflowKey: keyof typeof WORKFLOWS, initialStage: number = 0, initialArtifact: string = '') {
         this.currentStageIndex = initialStage;
-        this.workflowKey = 'TEST_DESIGN';
+        this.workflowKey = workflowKey;
         this.currentArtifact =
             initialArtifact ||
             '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。';
@@ -181,5 +181,61 @@ ${FORMAT_CRITERIA}
         expect(judgeFinal.pass).toBe(true);
 
         console.log('🎉 E2E 全流程测试通过！');
+    });
+
+    it('从深度评审到评审报告的完整需求评审工作流（REQ_REVIEW）', async () => {
+        const runner = new AgentConversationRunner('REQ_REVIEW', 0);
+        const reqStages = WORKFLOWS.REQ_REVIEW.stages;
+
+        // ============================================================
+        // Round 1：提供需求说明 → 输出第一阶段（REVIEW）评审报告
+        // ============================================================
+        console.log('--- REQ_REVIEW Round 1：发起需求文档评审 ---');
+        const reply1 = await runner.sendMessage(
+            '这是一份简单的需求文档：\n\n# 登录功能需求\n用户可以输入用户名和密码登录。如果密码错误提示“密码错误”。',
+        );
+
+        const judge1 = await evaluateWithLLM(reply1, `
+${FORMAT_CRITERIA}
+- <ARTIFACT> 中的内容不能为 NO_UPDATE，必须是一份按各个维度分段的 Markdown 评审问题清单。
+- 由于只是初次接收需求，不能包含 <ACTION>NEXT_STAGE</ACTION>，用户还没确认流转。
+        `);
+        console.log('REQ_REVIEW Round 1 Judge:', judge1.pass ? '✅ PASS' : '❌ FAIL', '-', judge1.reason);
+        expect(judge1.pass).toBe(true);
+
+        // ============================================================
+        // Round 2：明确跳到下一阶段（REPORT 评审报告阶段）
+        // ============================================================
+        console.log(`--- REQ_REVIEW Round 2：确认进入「${reqStages[1].name}」阶段 ---`);
+        const reply2 = await runner.sendMessage(
+            '问题很犀利，请基于这些直接生成完整的评审报告并进入下一阶段。',
+        );
+
+        const judge2 = await evaluateWithLLM(reply2, `
+${FORMAT_CRITERIA}
+- 必须包含 <ACTION>NEXT_STAGE</ACTION> 标签。
+- <ARTIFACT> 中必须生成「${reqStages[1].name}」的文档内容（一定要包含图表和通过/不通过判定等）。
+        `);
+        console.log('REQ_REVIEW Round 2 Judge:', judge2.pass ? '✅ PASS' : '❌ FAIL', '-', judge2.reason);
+        if (!judge2.pass) {
+            console.error(`[REQ_REVIEW Round 2 实际输出]\n`, reply2.substring(0, 500), '...');
+        }
+        expect(judge2.pass).toBe(true);
+
+        // ============================================================
+        // 最终轮：验证在末尾阶段停止流转
+        // ============================================================
+        console.log('--- REQ_REVIEW Round 3：最终确认 ---');
+        const replyFinal = await runner.sendMessage(
+            '好的，这份需求评审报告看着没问题了。',
+        );
+
+        const judgeFinal = await evaluateWithLLM(replyFinal, `
+${FORMAT_CRITERIA}
+- 绝对不能再输出 <ACTION>NEXT_STAGE</ACTION>，因为这已经是最后一个阶段。
+- <CHAT> 中应有确认且体贴的回复。
+        `);
+        console.log('REQ_REVIEW Final Round Judge:', judgeFinal.pass ? '✅ PASS' : '❌ FAIL', '-', judgeFinal.reason);
+        expect(judgeFinal.pass).toBe(true);
     });
 });
