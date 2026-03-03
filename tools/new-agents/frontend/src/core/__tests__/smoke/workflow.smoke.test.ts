@@ -94,7 +94,7 @@ const stages = WORKFLOWS.TEST_DESIGN.stages;
 // ---------------------------------------------------------------------------
 // 测试套件 — 10 分钟超时（6~7 轮真实 LLM 调用 + 6~7 轮 Judge 调用）
 // ---------------------------------------------------------------------------
-describe('Lisa Agent Workflow - E2E Full Lifecycle (Real LLM)', { timeout: 600_000 }, () => {
+describe('Lisa Agent Workflow - E2E Full Lifecycle (Real LLM)', { timeout: 1200_000 }, () => {
 
     it('从需求澄清到文档交付的完整工作流', async () => {
         const runner = new AgentConversationRunner(0);

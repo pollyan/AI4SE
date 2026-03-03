@@ -11,13 +11,13 @@ describe('Agent Configuration', () => {
         expect(lisa?.name).toBe('Lisa');
         expect(lisa?.role).toBe('测试专家');
         expect(lisa?.status).toBe('online');
-        expect(lisa?.features).toContain('自动化端到端测试设计');
+        expect(lisa?.features).toContain('测试策略自动推导与设计');
 
         const alex = agents.find(a => a.id === 'alex');
         expect(alex).toBeDefined();
         expect(alex?.name).toBe('Alex');
         expect(alex?.status).toBe('coming_soon');
-        expect(alex?.features).toContain('UI 视觉稿精准切图与识别');
+        expect(alex?.features).toContain('功能逻辑树构建');
     });
 
     it('should retrieve a specific agent by ID', () => {

@@ -8,7 +8,7 @@ describe('Workflow Configuration', () => {
 
         const testDesign = workflows.find(w => w.id === 'test-design');
         expect(testDesign).toBeDefined();
-        expect(testDesign?.name).toBe('自动化测试设计');
+        expect(testDesign?.name).toBe('测试策略与用例设计');
         expect(testDesign?.status).toBe('online');
 
         const devWorkflow = workflows.find(w => w.status === 'dev');
