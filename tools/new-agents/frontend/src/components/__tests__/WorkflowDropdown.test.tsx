@@ -1,7 +1,19 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { WorkflowDropdown } from '../WorkflowDropdown';
 import { useStore, WORKFLOWS, WorkflowType } from '../../store';
+
+/** 在路由上下文中渲染 WorkflowDropdown */
+const renderWithRouter = (initialPath = '/workspace/lisa/test-design') => {
+    return render(
+        <MemoryRouter initialEntries={[initialPath]}>
+            <Routes>
+                <Route path="/workspace/:agentId/:workflowId" element={<WorkflowDropdown />} />
+            </Routes>
+        </MemoryRouter>
+    );
+};
 
 describe('WorkflowDropdown Component', () => {
     beforeEach(() => {
@@ -11,7 +23,7 @@ describe('WorkflowDropdown Component', () => {
     });
 
     it('renders the correct initial workflow name', () => {
-        render(<WorkflowDropdown />);
+        renderWithRouter();
 
         const currentWorkflowName = WORKFLOWS['TEST_DESIGN'].name;
         // There are multiple instances of the text (one in the button, one in the dropdown list)
@@ -19,7 +31,7 @@ describe('WorkflowDropdown Component', () => {
     });
 
     it('opens the dropdown when clicked', () => {
-        render(<WorkflowDropdown />);
+        renderWithRouter();
 
         const toggleButton = screen.getAllByText(WORKFLOWS['TEST_DESIGN'].name)[0].closest('button');
         expect(toggleButton).toBeDefined();
@@ -31,7 +43,7 @@ describe('WorkflowDropdown Component', () => {
     });
 
     it('shows a confirmation dialog when a different workflow is selected', () => {
-        render(<WorkflowDropdown />);
+        renderWithRouter();
 
         // Click to open
         const toggleButton = screen.getAllByText(WORKFLOWS['TEST_DESIGN'].name)[0].closest('button');
@@ -48,7 +60,7 @@ describe('WorkflowDropdown Component', () => {
     });
 
     it('does not show a confirmation dialog when the current workflow is selected', () => {
-        render(<WorkflowDropdown />);
+        renderWithRouter();
 
         // Click to open
         const toggleButton = screen.getAllByText(WORKFLOWS['TEST_DESIGN'].name)[0].closest('button');
@@ -63,7 +75,7 @@ describe('WorkflowDropdown Component', () => {
     });
 
     it('changes the workflow in the store when confirmed', () => {
-        render(<WorkflowDropdown />);
+        renderWithRouter();
 
         // Click to open
         const toggleButton = screen.getAllByText(WORKFLOWS['TEST_DESIGN'].name)[0].closest('button');
@@ -85,7 +97,7 @@ describe('WorkflowDropdown Component', () => {
     });
 
     it('cancels the workflow switch when cancel is clicked', () => {
-        render(<WorkflowDropdown />);
+        renderWithRouter();
 
         // Click to open
         const toggleButton = screen.getAllByText(WORKFLOWS['TEST_DESIGN'].name)[0].closest('button');

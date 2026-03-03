@@ -63,10 +63,13 @@ class AgentConversationRunner {
             this.rebuildSystemPrompt();
         }
 
-        // 如果发生了阶段跳转，推进 stageIndex
+        // 如果发生了阶段跳转，推进 stageIndex（不超出最大阶段数）
         if (reply.includes('<ACTION>NEXT_STAGE</ACTION>')) {
-            this.currentStageIndex += 1;
-            this.rebuildSystemPrompt();
+            const maxStage = WORKFLOWS[this.workflowKey].stages.length - 1;
+            if (this.currentStageIndex < maxStage) {
+                this.currentStageIndex += 1;
+                this.rebuildSystemPrompt();
+            }
         }
 
         return reply;
@@ -97,7 +100,7 @@ const stages = WORKFLOWS.TEST_DESIGN.stages;
 describe('Lisa Agent Workflow - E2E Full Lifecycle (Real LLM)', { timeout: 1200_000 }, () => {
 
     it('从需求澄清到文档交付的完整工作流', async () => {
-        const runner = new AgentConversationRunner(0);
+        const runner = new AgentConversationRunner('TEST_DESIGN');
 
         // ============================================================
         // Round 1：模糊需求 → 初版文档 + P0 追问

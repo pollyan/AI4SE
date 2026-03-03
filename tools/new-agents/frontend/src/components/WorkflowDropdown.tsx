@@ -1,13 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore, WORKFLOWS, WorkflowType } from '../store';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronDown, Check, AlertTriangle, Workflow } from 'lucide-react';
 import { clsx } from 'clsx';
+
+/** WorkflowType → URL slug 的映射 */
+const WORKFLOW_SLUG_MAP: Record<WorkflowType, string> = {
+    TEST_DESIGN: 'test-design',
+    REQ_REVIEW: 'req-review',
+};
 
 export const WorkflowDropdown: React.FC = () => {
     const { workflow, setWorkflow } = useStore();
     const [isOpen, setIsOpen] = useState(false);
     const [showConfirm, setShowConfirm] = useState<WorkflowType | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const navigate = useNavigate();
+    const { agentId } = useParams();
 
     const currentWorkflow = WORKFLOWS[workflow];
 
@@ -43,6 +52,9 @@ export const WorkflowDropdown: React.FC = () => {
             setWorkflow(showConfirm);
             setIsOpen(false);
             setShowConfirm(null);
+            // 同步导航到新工作流的 URL，确保 URL 与 store 状态一致
+            const slug = WORKFLOW_SLUG_MAP[showConfirm];
+            navigate(`/workspace/${agentId}/${slug}`, { replace: true });
         }
     };
 
@@ -71,7 +83,7 @@ export const WorkflowDropdown: React.FC = () => {
 
             {/* Dropdown Menu */}
             <div className={clsx(
-                "absolute left-0 top-full mt-2 w-72 bg-[#161923] border border-slate-700/80 rounded-xl shadow-2xl overflow-hidden pointer-events-none transform transition-all duration-200 z-50",
+                "absolute left-0 top-full mt-2 w-72 bg-[#161923] border border-slate-700/80 rounded-xl shadow-2xl overflow-hidden transform transition-all duration-200 z-50",
                 isOpen ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-2 pointer-events-none"
             )}>
                 <div className="p-3 border-b border-slate-700/60 bg-slate-800/30">
