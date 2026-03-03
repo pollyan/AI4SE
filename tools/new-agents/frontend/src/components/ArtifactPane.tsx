@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { preprocessMarkdown } from '../utils/markdownUtils';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { useStore, ArtifactVersion } from '../store';
 import { Mermaid } from './Mermaid';
+import { preprocessMarkdown } from '../core/utils/markdownUtils';
 import { Download, Code, Eye, History, X } from 'lucide-react';
 
 export const ArtifactPane: React.FC = () => {

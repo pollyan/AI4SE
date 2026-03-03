@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { WORKFLOWS } from './workflows';
-import { ChatState as AppState, ArtifactVersion, Message, WorkflowType } from './types';
+import { WORKFLOWS } from './core/workflows';
+import { ChatState as AppState, ArtifactVersion, Message, WorkflowType } from './core/types';
 
 // Re-export for compatibility
-export * from './types';
-export * from './workflows';
+export * from './core/types';
+export * from './core/workflows';
 
 export const useStore = create<AppState>()(
   persist(

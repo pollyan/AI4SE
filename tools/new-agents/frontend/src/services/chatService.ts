@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { useStore, Attachment, WORKFLOWS } from '../store';
-import { generateResponseStream } from '../llm';
+import { generateResponseStream } from '../core/llm';
 
 export function useChatService() {
     const [input, setInput] = useState('');

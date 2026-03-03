@@ -1,4 +1,4 @@
-import { WORKFLOWS, WorkflowType } from '../store';
+import { WORKFLOWS, WorkflowType } from '../../store';
 
 /**
  * 构建 Lisa 智能体的 System Prompt。

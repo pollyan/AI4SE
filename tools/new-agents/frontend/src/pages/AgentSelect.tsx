@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bot, Code2, Sparkles, Navigation, ArrowRight, ShieldCheck, Zap, ArrowLeft, LucideIcon } from 'lucide-react';
-import { getAgents } from '../config/agents';
+import { Bot, Code2, Sparkles, Navigation, ArrowRight, ShieldCheck, Zap, ArrowLeft, LucideIcon, ChevronRight } from 'lucide-react';
+import { getAgents } from '../core/config/agents';
 import { clsx } from 'clsx';
 
 export function AgentSelect() {
@@ -53,7 +53,7 @@ export function AgentSelect() {
                         return (
                             <div
                                 key={agent.id}
-                                onClick={() => isOnline ? navigate(`/workflows/${agent.id}`) : undefined}
+                                onClick={() => isOnline ? navigate(`/ workflows / ${agent.id} `) : undefined}
                                 className={clsx(
                                     "group relative rounded-2xl border p-8 overflow-hidden transition-all duration-300",
                                     isOnline

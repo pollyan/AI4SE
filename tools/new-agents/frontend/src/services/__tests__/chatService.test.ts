@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useChatService } from '../chatService';
 import { useStore } from '../../store';
-import { generateResponseStream } from '../../llm';
+import { generateResponseStream } from '../../core/llm';
 
 // Mock the LLM service to avoid making real API calls during tests
-vi.mock('../../llm', () => ({
+vi.mock('../../core/llm', () => ({
     generateResponseStream: vi.fn()
 }));
 

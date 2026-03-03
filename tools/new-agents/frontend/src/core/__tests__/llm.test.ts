@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
-import { useStore } from '../store';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { useStore } from '../../store';
 
 // ------------------------------------------------------------------
 // Mock 外部依赖

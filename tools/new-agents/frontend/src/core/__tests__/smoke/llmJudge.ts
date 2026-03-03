@@ -1,14 +1,15 @@
 import OpenAI from 'openai';
-import path from 'path';
 import dotenv from 'dotenv';
+import path from 'path';
 import { fileURLToPath } from 'url';
 
 // 解决 dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 基于执行环境（tools/new-agents）读取最外层的 .env
-dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
+// 加载项目根目录的 .env
+// 此时 process.cwd() 通常是 tools/new-agents/frontend
+dotenv.config({ path: path.resolve(process.cwd(), '../../../.env') });
 
 export const smokeClient = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,

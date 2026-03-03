@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { parseLlmStreamChunk } from './utils/llmParser';
 import { getSystemPrompt } from './prompts/systemPrompt';
-import { useStore, WORKFLOWS, WorkflowType, Attachment } from './store';
+import { useStore, WORKFLOWS, WorkflowType, Attachment } from '../store';
 
 /** 将 base64 编码的文本安全解码为 UTF-8 字符串 */
 const decodeBase64Text = (base64: string): string => {

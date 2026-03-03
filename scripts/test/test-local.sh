@@ -153,7 +153,7 @@ run_proxy_tests() {
 # ==========================================
 run_new_agents_frontend_tests() {
     log_section "🤖 New Agents Frontend Tests"
-    cd "$PROJECT_ROOT/tools/new-agents"
+    cd "$PROJECT_ROOT/tools/new-agents/frontend"
     
     log_info "安装 New Agents 依赖..."
     npm ci --silent 2>/dev/null || npm install --silent

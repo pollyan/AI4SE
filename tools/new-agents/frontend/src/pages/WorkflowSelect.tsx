@@ -1,9 +1,10 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FileCode2, TestTube2, ActivitySquare, ArrowLeft, ArrowRight, Bot, Code2, LucideIcon } from 'lucide-react';
+import { ArrowLeft, GitMerge, ChevronRight, FileCode2, TestTube2, ActivitySquare, ArrowRight, Bot, Code2, LucideIcon } from 'lucide-react';
 import { clsx } from 'clsx';
-import { getAgentWorkflows } from '../config/agentWorkflows';
-import { getAgentById } from '../config/agents';
+import { useStore, WorkflowType } from '../store';
+import { getAgentWorkflows } from '../core/config/agentWorkflows';
+import { getAgentById } from '../core/config/agents';
 
 export function WorkflowSelect() {
     const navigate = useNavigate();

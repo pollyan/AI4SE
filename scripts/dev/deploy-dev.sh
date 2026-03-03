@@ -62,7 +62,7 @@ if [ "$SKIP_FRONTEND" = false ]; then
     echo "🏗️  正在准备项目构建..."
     
     # 定义所有包含 package.json 的项目路径
-    JS_PROJECTS=("tools/frontend" "tools/intent-tester" "tools/new-agents")
+    JS_PROJECTS=("tools/frontend" "tools/intent-tester" "tools/new-agents/frontend")
     
     for PROJECT_PATH in "${JS_PROJECTS[@]}"; do
         if [ -d "$PROJECT_PATH" ] && [ -f "$PROJECT_PATH/package.json" ]; then
