@@ -63,7 +63,7 @@ cp .env.example .env
 | 服务 | 地址 | 说明 |
 |------|------|------|
 | 🏠 主页 | http://localhost | 统一门户首页 |
-| 🤖 AI 智能体 | http://localhost/ai-agents | Lisa & Alex 对话界面 |
+| 🤖 AI 智能体 | http://localhost/new-agents | Lisa 对话界面 |
 | 🧪 意图测试 | http://localhost/intent-tester | 测试用例管理与执行 |
 
 ### 本地 MidScene 代理 (用于自动化测试)
@@ -91,14 +91,15 @@ npm start
 │                 Nginx 网关 (80/443)                          │
 │    /              → React SPA (统一门户)                     │
 │    /intent-tester → :5001 (意图测试服务)                     │
-│    /ai-agents     → :5002 (AI 智能体服务)                    │
+│    /new-agents/api→ :5002 (新 Agent 后端 API)                │
+│    /new-agents/   → new-agents:80 (新 Agent 前端)            │
 └─────────────────────────────────────────────────────────────┘
                               │
               ┌───────────────┴───────────────┐
               ▼                               ▼
 ┌─────────────────────────┐     ┌─────────────────────────┐
-│   intent-tester:5001    │     │    ai-agents:5002       │
-│   Flask + SQLAlchemy    │     │   Flask + LangGraph     │
+│   intent-tester:5001    │     │ new-agents-backend:5002 │
+│   Flask + SQLAlchemy    │     │   Flask + OpenAI Proxy  │
 │   + SocketIO            │     │   + SSE Streaming       │
 └─────────────────────────┘     └─────────────────────────┘
               │                               │
@@ -133,15 +134,12 @@ AI4SE/
 │   ├── health/                # 健康检查脚本
 │   └── test/test-local.sh     # 本地测试脚本
 ├── tools/
-│   ├── ai-agents/             # [Backend] AI 智能体服务
-│   │   ├── backend/           # Flask 应用 + LangGraph
-│   │   │   ├── agents/        # 智能体核心逻辑
-│   │   │   │   ├── alex/      # Alex (需求分析师)
-│   │   │   │   ├── lisa/      # Lisa (测试专家)
-│   │   │   │   └── shared/    # 共享状态、工具
-│   │   │   ├── api/           # REST API
-│   │   │   └── models/        # 数据模型
-│   │   ├── frontend/          # React 前端 (assistant-ui)
+│   ├── new-agents/            # [Backend+Frontend] 新 Agent 架构
+│   │   ├── backend/           # Flask [5002] LLM 代理，数据库读取 API Key
+│   │   │   ├── app.py         # Flask 主程序 (SSE API)
+│   │   │   ├── models.py      # LLM 配置模型
+│   │   │   └── api/           # REST API
+│   │   ├── src/               # React 前端 (Zustand 状态管理)
 │   │   └── docker/            # Dockerfile
 │   ├── intent-tester/         # [Web + Proxy] 意图测试工具
 │   │   ├── backend/           # Flask 后端 + API
@@ -169,21 +167,10 @@ AI4SE/
 
 基于 **LangGraph** 构建的智能对话系统，支持多轮对话和流式响应。
 
-#### Alex - 需求分析师
-- 协助快速梳理产品需求
-- 生成结构化的 PRD 文档
-- 支持需求澄清和细化
-
 #### Lisa - 测试专家
+- 基于新的 SPA 前端架构，双模式调用 (直连 LLM / 代理模式)
 - 测试策略设计与规划
-- 需求评审与风险识别
-- 测试用例设计建议
-
-**技术特点：**
-- LangGraph StateGraph 状态机
-- 意图路由 + 工作流节点
-- SSE 流式响应
-- 会话持久化 (Checkpointer)
+- 需求评审与工作流支持
 
 ### 2. 意图测试工具 (Intent Tester)
 
@@ -262,14 +249,12 @@ AI4SE/
 
 ### AI 智能体 API
 
-**Base URL:** `/ai-agents/api`
+**Base URL:** `/new-agents/api`
 
 | 端点 | 方法 | 描述 |
 |------|------|------|
-| `/requirements/sessions` | POST | 创建新会话 |
-| `/requirements/sessions/<id>/messages/stream` | POST | 发送消息 (SSE 流式) |
-| `/requirements/configs` | PUT | 更新 AI 配置 |
-| `/health` | GET | 健康检查 |
+| `/chat/stream` | POST | 代理调用 LLM 流式输出 |
+| `/config` | GET | 获取基本配置（不暴露 API Key） |
 
 ### 意图测试 API
 
@@ -302,13 +287,13 @@ source venv/bin/activate  # Linux/Mac
 # 安装依赖
 pip install -r requirements.txt
 
-# 启动 AI Agents 服务
-cd tools/ai-agents
-python -m backend.app
+# 启动 New Agents Backend 服务
+cd tools/new-agents/backend
+flask run -p 5002
 
 # 启动 Intent Tester 服务
 cd tools/intent-tester
-python -m backend.app
+flask run -p 5001
 ```
 
 #### React 前端
@@ -320,8 +305,8 @@ npm install
 npm run dev  # 开发模式
 npm run build  # 生产构建
 
-# AI Agents 前端
-cd tools/ai-agents/frontend
+# New Agents 前端
+cd tools/new-agents
 npm install
 npm run dev
 ```
@@ -333,11 +318,11 @@ npm run dev
 ./scripts/test/test-local.sh
 
 # Python 测试
-pytest tools/ai-agents/backend/tests/ -v
-pytest tools/intent-tester/tests/ -v
+cd tools/new-agents/backend && pytest tests/test_api.py -v
+cd tools/intent-tester && pytest tests/ -v
 
 # 前端测试
-cd tools/ai-agents/frontend && npm run test
+cd tools/new-agents && npm run test
 
 # 代理服务测试
 cd tools/intent-tester && npm run test:proxy

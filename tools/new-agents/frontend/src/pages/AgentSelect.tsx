@@ -53,7 +53,7 @@ export function AgentSelect() {
                         return (
                             <div
                                 key={agent.id}
-                                onClick={() => isOnline ? navigate(`/ workflows / ${agent.id} `) : undefined}
+                                onClick={() => isOnline ? navigate(`/workflows/${agent.id}`) : undefined}
                                 className={clsx(
                                     "group relative rounded-2xl border p-8 overflow-hidden transition-all duration-300",
                                     isOnline

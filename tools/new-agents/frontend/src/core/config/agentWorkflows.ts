@@ -14,8 +14,8 @@ const AGENT_WORKFLOWS: AgentWorkflowConfig[] = [
         id: 'test-design',
         agentId: 'lisa',
         status: 'online',
-        name: '自动化测试设计',
-        description: '输入产品需求，从需求解析到测试步骤生成、UI节点识别，一站式设计意图测试用例。',
+        name: '测试策略与用例设计',
+        description: '提供产品需求或代码变更集，一站式完成智能化的需求评审，并为你自动设计详尽的测试策略与自动化测试用例。',
         icon: 'TestTube2',
         link: '/workspace/lisa/test-design'
     },

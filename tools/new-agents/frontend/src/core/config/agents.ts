@@ -13,23 +13,23 @@ const AGENTS: AgentConfig[] = [
         status: 'online',
         name: 'Lisa',
         role: '测试专家',
-        description: '专注于意图测试设计、用例自动生成和自动化测试脚本编写的智能体。',
+        description: '专注于做需求评审，并为新需求、新功能设计测试策略与用例的智能体。',
         features: [
-            '自动化端到端测试设计',
-            'UI / API 自动化用例生成',
-            '意图驱动执行支持'
+            '智能化跟进需求评审',
+            '测试策略自动推导与设计',
+            '意图级前端测试用例生成'
         ]
     },
     {
         id: 'alex',
         status: 'coming_soon',
         name: 'Alex',
-        role: '前端框架专家',
-        description: '擅长解析 UI 设计稿，自动化编写 React/Vue 组件与框架层代码，提升产研效能。',
+        role: '业务需求分析师',
+        description: '擅长分析业务场景与用户故事，自动化拆解产品逻辑，生成清晰规范的需求文档（PRD）。',
         features: [
-            'UI 视觉稿精准切图与识别',
-            '页面骨架与交互逻辑生成',
-            '样式系统无缝接入 (Tailwind)'
+            '业务需求深度解析',
+            '功能逻辑树构建',
+            '敏捷开发故事拆分'
         ]
     }
 ];

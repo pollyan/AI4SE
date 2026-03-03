@@ -5,11 +5,11 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # 复制依赖清单并安装
-COPY tools/new-agents/package.json tools/new-agents/package-lock.json ./
+COPY tools/new-agents/frontend/package.json tools/new-agents/frontend/package-lock.json ./
 RUN npm ci
 
 # 复制源码并构建
-COPY tools/new-agents/ ./
+COPY tools/new-agents/frontend/ ./
 RUN npm run build
 
 # === 阶段二：运行 ===
