@@ -1,5 +1,5 @@
 import React from 'react';
-import { useStore, WORKFLOWS, WorkflowType } from '../store';
+import { useStore } from '../store';
 import { Settings, X, Key, Save, Trash2, Globe } from 'lucide-react';
 
 export const SettingsModal: React.FC = () => {
@@ -12,8 +12,7 @@ export const SettingsModal: React.FC = () => {
     setModel,
     baseUrl,
     setBaseUrl,
-    workflow,
-    setWorkflow,
+
     clearHistory,
     isUserConfigured,
     resetToSystemConfig
@@ -31,7 +30,7 @@ export const SettingsModal: React.FC = () => {
             </div>
             <div>
               <h2 className="text-xl font-bold leading-tight text-white">设置</h2>
-              <p className="text-xs font-medium text-slate-400">管理 API Key 与工作流</p>
+              <p className="text-xs font-medium text-slate-400">管理 API Key 与模型配置</p>
             </div>
           </div>
           <button
@@ -104,22 +103,6 @@ export const SettingsModal: React.FC = () => {
             </div>
           </section>
 
-          <section>
-            <h3 className="mb-4 text-sm font-bold text-slate-200 uppercase tracking-wider">工作流配置</h3>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">当前工作流</label>
-              <select
-                value={workflow}
-                onChange={(e) => setWorkflow(e.target.value as WorkflowType)}
-                className="w-full rounded-lg border border-slate-700 bg-[#101922] py-2.5 px-3 text-sm text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                {Object.values(WORKFLOWS).map(wf => (
-                  <option key={wf.id} value={wf.id}>{wf.name}</option>
-                ))}
-              </select>
-              <p className="mt-2 text-xs text-yellow-500">注意：切换工作流将清空当前对话历史和产出物。</p>
-            </div>
-          </section>
 
           <section>
             <div className="rounded-lg border border-red-900/30 bg-red-900/10 p-4 flex items-center justify-between">

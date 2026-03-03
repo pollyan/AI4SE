@@ -3,6 +3,7 @@ import { useStore, WORKFLOWS } from '../store';
 import { Settings, Share, Bot, Plus, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
+import { WorkflowDropdown } from './WorkflowDropdown';
 
 export const Header: React.FC = () => {
   const { workflow, stageIndex, setStageIndex, setSettingsOpen, clearHistory } = useStore();
@@ -30,14 +31,10 @@ export const Header: React.FC = () => {
             <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
           </button>
 
-          <div className="w-8 h-8 flex items-center justify-center rounded bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/20">
+          <div className="w-9 h-9 flex items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 to-indigo-600/10 text-indigo-400 border border-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.1)]">
             <Bot className="w-5 h-5" />
           </div>
-          <div>
-            <h2 className="text-white text-lg font-bold leading-tight tracking-tight cursor-default">
-              Lisa <span className="text-slate-400 font-medium text-sm ml-1">AI 智能测试专家</span>
-            </h2>
-          </div>
+          <WorkflowDropdown />
         </div>
 
         <div className="hidden md:flex flex-1 max-w-2xl mx-8">
