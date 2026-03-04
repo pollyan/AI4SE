@@ -19,11 +19,11 @@ describe('Zustand Store', () => {
     });
 
     it('should transition to next stage and preserve artifacts', () => {
-        useStore.getState().transitionToNextStage(0, 'Stage 0 Data');
+        useStore.getState().transitionToNextStage('CLARIFY', 'Stage 0 Data');
         const state = useStore.getState();
 
         expect(state.stageIndex).toBe(1);
-        expect(state.stageArtifacts[0]).toBe('Stage 0 Data');
+        expect(state.stageArtifacts['CLARIFY']).toBe('Stage 0 Data');
     });
 
     it('should switch workflows and clear state', () => {

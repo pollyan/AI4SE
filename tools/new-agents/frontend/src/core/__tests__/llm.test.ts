@@ -95,7 +95,7 @@ function resetStore(overrides: Record<string, any> = {}) {
         chatHistory: [],
         artifactContent: '# Initial',
         artifactHistory: [],
-        stageArtifacts: { 0: '# Initial' },
+        stageArtifacts: { 'CLARIFY': '# Initial' },
         isSettingsOpen: false,
         isGenerating: false,
         ...overrides,

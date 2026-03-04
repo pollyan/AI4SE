@@ -19,7 +19,7 @@ export const useStore = create<AppState>()(
       artifactContent: '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。',
       artifactHistory: [],
       stageArtifacts: {
-        0: '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。'
+        [WORKFLOWS['TEST_DESIGN'].stages[0].id]: '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。'
       },
       isSettingsOpen: false,
       isGenerating: false,
@@ -37,27 +37,30 @@ export const useStore = create<AppState>()(
         artifactHistory: [],
         artifactContent: '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。',
         stageArtifacts: {
-          0: '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。'
+          [WORKFLOWS[workflow].stages[0].id]: '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。'
         }
       }),
       setStageIndex: (index) => set((state) => {
         const newStageArtifacts = { ...state.stageArtifacts };
-        newStageArtifacts[state.stageIndex] = state.artifactContent;
+        const currentStageId = WORKFLOWS[state.workflow].stages[state.stageIndex].id;
+        newStageArtifacts[currentStageId] = state.artifactContent;
 
+        const targetStageId = WORKFLOWS[state.workflow].stages[index].id;
         return {
           stageIndex: index,
           stageArtifacts: newStageArtifacts,
-          artifactContent: newStageArtifacts[index] || `# ${WORKFLOWS[state.workflow].stages[index].name}\n\n暂无产出物。`
+          artifactContent: newStageArtifacts[targetStageId] || `# ${WORKFLOWS[state.workflow].stages[index].name}\n\n暂无产出物。`
         };
       }),
-      transitionToNextStage: (initialStage, initialArtifact) => set((state) => {
+      transitionToNextStage: (initialStageId, initialArtifact) => set((state) => {
         const newStageArtifacts = { ...state.stageArtifacts };
         // Restore the old stage's artifact
-        newStageArtifacts[initialStage] = initialArtifact;
+        newStageArtifacts[initialStageId] = initialArtifact;
 
         const nextStage = state.stageIndex + 1;
         // The current artifactContent is the new stage's artifact
-        newStageArtifacts[nextStage] = state.artifactContent;
+        const nextStageId = WORKFLOWS[state.workflow].stages[nextStage].id;
+        newStageArtifacts[nextStageId] = state.artifactContent;
 
         return {
           stageIndex: nextStage,
@@ -82,26 +85,27 @@ export const useStore = create<AppState>()(
       }),
       setArtifactContent: (artifactContent) => set((state) => {
         const newStageArtifacts = { ...state.stageArtifacts };
-        newStageArtifacts[state.stageIndex] = artifactContent;
+        const currentStageId = WORKFLOWS[state.workflow].stages[state.stageIndex].id;
+        newStageArtifacts[currentStageId] = artifactContent;
         return { artifactContent, stageArtifacts: newStageArtifacts };
       }),
-      setStageArtifact: (index, content) => set((state) => {
+      setStageArtifact: (stageId, content) => set((state) => {
         const newStageArtifacts = { ...state.stageArtifacts };
-        newStageArtifacts[index] = content;
+        newStageArtifacts[stageId] = content;
         return { stageArtifacts: newStageArtifacts };
       }),
       addArtifactVersion: (version) => set((state) => ({ artifactHistory: [...state.artifactHistory, version] })),
       setSettingsOpen: (isSettingsOpen) => set({ isSettingsOpen }),
       setIsGenerating: (isGenerating) => set({ isGenerating }),
-      clearHistory: () => set({
+      clearHistory: () => set((state) => ({
         chatHistory: [],
         artifactHistory: [],
         artifactContent: '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。',
         stageArtifacts: {
-          0: '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。'
+          [WORKFLOWS[state.workflow].stages[0].id]: '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。'
         },
         stageIndex: 0
-      }),
+      })),
     }),
     {
       name: 'lisa-storage',

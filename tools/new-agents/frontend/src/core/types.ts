@@ -49,7 +49,7 @@ export interface ChatState {
     chatHistory: Message[];
     artifactContent: string;
     artifactHistory: ArtifactVersion[];
-    stageArtifacts: { [stageIndex: number]: string };
+    stageArtifacts: Record<string, string>;
     isSettingsOpen: boolean;
     isGenerating: boolean;
 
@@ -60,7 +60,7 @@ export interface ChatState {
     setIsUserConfigured: (isConfigured: boolean) => void;
     setWorkflow: (workflow: WorkflowType) => void;
     setStageIndex: (index: number) => void;
-    transitionToNextStage: (currentIndex: number, currentArtifact: string) => void;
+    transitionToNextStage: (initialStageId: string, initialArtifact: string) => void;
     addMessage: (msg: Message) => void;
     updateLastMessage: (content: string) => void;
     removeLastMessage: () => void;
@@ -69,6 +69,6 @@ export interface ChatState {
     setSettingsOpen: (isOpen: boolean) => void;
     setIsGenerating: (isGenerating: boolean) => void;
     clearHistory: () => void;
-    setStageArtifact: (index: number, content: string) => void;
+    setStageArtifact: (stageId: string, content: string) => void;
     resetToSystemConfig: () => void;
 }

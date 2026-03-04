@@ -62,9 +62,6 @@ export function useChatService() {
 
         setIsGenerating(true);
 
-        const initialArtifact = useStore.getState().artifactContent;
-        const initialStage = useStore.getState().stageIndex;
-
         abortControllerRef.current = new AbortController();
         let isFirstChunk = true;
 
@@ -90,13 +87,18 @@ export function useChatService() {
                     const state = useStore.getState();
                     const wf = WORKFLOWS[state.workflow];
                     if (state.stageIndex < wf.stages.length - 1) {
-                        state.transitionToNextStage(initialStage, initialArtifact);
+                        state.setStageIndex(state.stageIndex + 1);
                         hasTransitioned = true;
                     }
                 }
 
+                // 统一依赖当前 Store 最新的 stageIndex 进行产出物的读写，
+                // 如果已经过了 NEXT_STAGE，它会天生写向新阶段；如果是在那之前的 update，就会自然写向旧阶段
                 if (hasArtifactUpdate) {
-                    useStore.getState().setArtifactContent(newArtifact);
+                    const currentState = useStore.getState();
+                    const currentActiveStageId = WORKFLOWS[currentState.workflow].stages[currentState.stageIndex].id;
+                    currentState.setStageArtifact(currentActiveStageId, newArtifact);
+                    currentState.setArtifactContent(newArtifact);
                 }
             }
         } catch (error: any) {
