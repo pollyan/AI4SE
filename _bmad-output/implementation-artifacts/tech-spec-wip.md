@@ -2,8 +2,8 @@
 title: 'Mermaid 图表渲染健壮性增强'
 slug: 'mermaid-rendering-robustness'
 created: '2026-03-04T16:16:00+08:00'
-status: 'in-progress'
-stepsCompleted: [1]
+status: 'completed'
+stepsCompleted: [1, 2, 3, 4]
 tech_stack:
   - React
   - TypeScript
@@ -96,44 +96,44 @@ test_patterns:
 
 ### Tasks
 
-- [ ] **Task 1**: 创建 `mermaidSanitizer.ts` — 实现 `sanitizeMermaidCode()` 和 `aggressiveSanitize()` 函数
+- [x] **Task 1**: 创建 `mermaidSanitizer.ts` — 实现 `sanitizeMermaidCode()` 和 `aggressiveSanitize()` 函数
   - 移除 HTML 标签（`<br/>` → 换行）
   - 自动引号包裹含特殊字符的节点标签
   - 移除不可见字符（NBSP、零宽空格）
   - 统一换行符
   - 激进清洗：移除所有非标准字符、简化复杂节点文本
 
-- [ ] **Task 2**: 创建 `mermaidSanitizer.test.ts` — 清洗函数的单元测试
+- [x] **Task 2**: 创建 `mermaidSanitizer.test.ts` — 清洗函数的单元测试
   - 测试 HTML 标签移除
   - 测试特殊字符自动引号包裹
   - 测试不可见字符清理
   - 测试已正确的代码不被误改
   - 测试激进清洗模式
 
-- [ ] **Task 3**: 改造 `Mermaid.tsx` — 集成清洗 + 预校验 + 重试 + 降级
+- [x] **Task 3**: 改造 `Mermaid.tsx` — 集成清洗 + 预校验 + 重试 + 降级
   - 引入 `sanitizeMermaidCode` 和 `aggressiveSanitize`
   - 渲染前调用清洗函数
   - 使用 `mermaid.parse()` 预校验
   - 实现两级重试机制
   - 改进错误降级 UI（折叠代码 + Live Editor 链接）
 
-- [ ] **Task 4**: 修改 `systemPrompt.ts` — 追加 Mermaid 语法约束
+- [x] **Task 4**: 修改 `systemPrompt.ts` — 追加 Mermaid 语法约束
   - 在 System Prompt 末尾追加 Mermaid 语法规则段落
   - 规则内容：特殊字符引号包裹、禁止 HTML 标签、缩进规范、引号闭合、节点 ID 规范
 
-- [ ] **Task 5**: 运行测试并验证
+- [x] **Task 5**: 运行测试并验证
   - `npx vitest run` 全部通过
   - `npm run build` 编译无错误
   - 浏览器验证渲染效果
 
 ### Acceptance Criteria
 
-- [ ] **AC1**: Given LLM 生成的 Mermaid 代码包含 `<br/>` 标签, When 传入 `Mermaid` 组件, Then 能自动清洗并正确渲染（不显示错误）
-- [ ] **AC2**: Given Mermaid 代码包含未引号包裹的特殊字符节点文本, When 传入 `Mermaid` 组件, Then `sanitizeMermaidCode` 自动包裹引号后正确渲染
-- [ ] **AC3**: Given 经两级清洗后仍无法修复的语法错误, When 渲染失败, Then 显示折叠的原始代码 + "在 Mermaid Live Editor 中打开" 链接（非当前红色报错）
-- [ ] **AC4**: Given System Prompt 包含 Mermaid 语法约束, When LLM 生成 Mermaid 代码, Then 语法错误率显著降低
-- [ ] **AC5**: Given 流式传输期间的不完整代码, When `isGenerating=true`, Then 仍显示 loading 动画（不受清洗逻辑影响）
-- [ ] **AC6**: 所有现有测试（`npx vitest run`）通过，`npm run build` 编译无错误
+- [x] **AC1**: Given LLM 生成的 Mermaid 代码包含 `<br/>` 标签, When 传入 `Mermaid` 组件, Then 能自动清洗并正确渲染（不显示错误）
+- [x] **AC2**: Given Mermaid 代码包含未引号包裹的特殊字符节点文本, When 传入 `Mermaid` 组件, Then `sanitizeMermaidCode` 自动包裹引号后正确渲染
+- [x] **AC3**: Given 经两级清洗后仍无法修复的语法错误, When 渲染失败, Then 显示折叠的原始代码 + "在 Mermaid Live Editor 中打开" 链接（非当前红色报错）
+- [x] **AC4**: Given System Prompt 包含 Mermaid 语法约束, When LLM 生成 Mermaid 代码, Then 语法错误率显著降低
+- [x] **AC5**: Given 流式传输期间的不完整代码, When `isGenerating=true`, Then 仍显示 loading 动画（不受清洗逻辑影响）
+- [x] **AC6**: 所有现有测试（`npx vitest run`）通过，`npm run build` 编译无错误
 
 ## Additional Context
 

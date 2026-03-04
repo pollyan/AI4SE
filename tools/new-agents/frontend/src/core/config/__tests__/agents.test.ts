@@ -11,7 +11,7 @@ describe('Agent Configuration', () => {
         expect(lisa?.name).toBe('Lisa');
         expect(lisa?.role).toBe('测试专家');
         expect(lisa?.status).toBe('online');
-        expect(lisa?.features).toContain('测试策略自动推导与设计');
+        expect(lisa?.features).toContain('测试策略推导与用例设计');
 
         const alex = agents.find(a => a.id === 'alex');
         expect(alex).toBeDefined();

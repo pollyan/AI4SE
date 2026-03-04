@@ -60,17 +60,17 @@ export const TIMELINE_PROMPT = `阅读用户提供的故障信息，通过渐进
 
 \`\`\`mermaid
 timeline
-    title [故障名称] 事件时间线
+    title 故障名称 事件时间线
     section 故障发生
-        HH:MM : [事件描述]
+        时间点 : 事件描述
     section 发现与响应
-        HH:MM : [事件描述]
-        HH:MM : [事件描述]
+        时间点 : 事件描述
+        时间点 : 事件描述
     section 处理与恢复
-        HH:MM : [事件描述]
-        HH:MM : [事件描述]
+        时间点 : 事件描述
+        时间点 : 事件描述
     section 恢复确认
-        HH:MM : [事件描述]
+        时间点 : 事件描述
 \`\`\`
 
 ## 3. 事实摘要
