@@ -3,7 +3,7 @@ title: 'Lisa 线上故障复盘工作流 (INCIDENT_REVIEW)'
 slug: 'lisa-incident-review-workflow'
 created: '2026-03-04T14:08:00+08:00'
 status: 'Implementation Complete'
-stepsCompleted: [1, 2, 3, 4]
+stepsCompleted: [1, 2, 3, 4, 5, 6]
 tech_stack:
   - React
   - TypeScript
