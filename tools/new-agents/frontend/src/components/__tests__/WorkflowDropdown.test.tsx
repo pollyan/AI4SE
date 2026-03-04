@@ -117,4 +117,26 @@ describe('WorkflowDropdown Component', () => {
         // Confirmation dialog should disappear
         expect(screen.queryByText('确定切换')).toBeNull();
     });
+
+    it('changes the workflow to incident-review in the store when confirmed', () => {
+        renderWithRouter();
+
+        // Click to open
+        const toggleButton = screen.getAllByText(WORKFLOWS['TEST_DESIGN'].name)[0].closest('button');
+        fireEvent.click(toggleButton!);
+
+        // Click the INCIDENT_REVIEW workflow
+        const otherWorkflowOption = screen.getAllByText(WORKFLOWS['INCIDENT_REVIEW'].name)[0].closest('button');
+        fireEvent.click(otherWorkflowOption!);
+
+        // Click confirm
+        const confirmButton = screen.getByText('确定切换');
+        fireEvent.click(confirmButton);
+
+        // The store workflow should be updated
+        expect(useStore.getState().workflow).toBe('INCIDENT_REVIEW');
+
+        // Confirmation dialog should disappear
+        expect(screen.queryByText('确定切换')).toBeNull();
+    });
 });

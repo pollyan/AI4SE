@@ -8,6 +8,7 @@ import { clsx } from 'clsx';
 const WORKFLOW_SLUG_MAP: Record<WorkflowType, string> = {
     TEST_DESIGN: 'test-design',
     REQ_REVIEW: 'req-review',
+    INCIDENT_REVIEW: 'incident-review',
 };
 
 export const WorkflowDropdown: React.FC = () => {
@@ -129,9 +130,9 @@ export const WorkflowDropdown: React.FC = () => {
                                         "text-[11px] mt-0.5 leading-snug",
                                         isSelected ? "text-indigo-300/70" : "text-slate-500 group-hover:text-slate-400"
                                     )}>
-                                        {wf.id === 'TEST_DESIGN'
-                                            ? '对传入需求进行逻辑拆解与边界梳理'
-                                            : '分析需求完整性并评估测试风险'}
+                                        {wf.id === 'TEST_DESIGN' && '对传入需求进行逻辑拆解与边界梳理'}
+                                        {wf.id === 'REQ_REVIEW' && '分析需求完整性并评估测试风险'}
+                                        {wf.id === 'INCIDENT_REVIEW' && '系统化复盘故障根因并生成改进计划'}
                                     </div>
                                 </div>
                             </button>

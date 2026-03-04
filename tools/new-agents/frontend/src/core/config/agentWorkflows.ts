@@ -29,6 +29,15 @@ const AGENT_WORKFLOWS: AgentWorkflowConfig[] = [
         link: '/workspace/lisa/req-review'
     },
     {
+        id: 'incident-review',
+        agentId: 'lisa',
+        status: 'online',
+        name: '线上故障复盘',
+        description: '引导你用结构化方法完成线上故障复盘，自动生成包含时间线、根因分析（5-Why + 鱼骨图）和改进措施的专业复盘报告。',
+        icon: 'ShieldAlert',
+        link: '/workspace/lisa/incident-review'
+    },
+    {
         id: 'log-diagnostics',
         agentId: 'lisa',
         status: 'dev',

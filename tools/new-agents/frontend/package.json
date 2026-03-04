@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --exclude \"src/core/__tests__/smoke/**\"",
     "test:smoke": "vitest run src/core/__tests__/smoke --testTimeout=60000"
   },
   "dependencies": {

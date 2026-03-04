@@ -9,6 +9,7 @@ import { useStore, WorkflowType } from '../store';
 const WORKFLOW_ID_MAP: Record<string, WorkflowType> = {
     'test-design': 'TEST_DESIGN',
     'req-review': 'REQ_REVIEW',
+    'incident-review': 'INCIDENT_REVIEW',
 };
 
 export function Workspace() {

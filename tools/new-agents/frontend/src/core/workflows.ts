@@ -1,5 +1,7 @@
 import { WorkflowDef, WorkflowType } from './types';
-
+import { IMPROVEMENT_PROMPT } from './prompts/incident_review/improvement';
+import { ROOT_CAUSE_PROMPT } from './prompts/incident_review/root_cause';
+import { TIMELINE_PROMPT } from './prompts/incident_review/timeline';
 // 用于在模板字符串中安全引用 Markdown 代码块分隔符 (```)
 const FENCE = '```';
 export const WORKFLOWS: Record<WorkflowType, WorkflowDef> = {
@@ -205,7 +207,16 @@ ${FENCE}
 - [ ] 高风险项 (RPN≥15) 均有对应缓解策略和用例覆盖
 - [ ] 产品/开发/测试三方确认签字`
             }
-        ]
+        ],
+        onboarding: {
+            welcomeMessage: '你好！我是 Lisa 测试专家。我会用 **FMEA 风险分析**、**测试金字塔**等专业方法，引导你从需求澄清到用例编写，完成一份高质量的测试设计文档。',
+            starterPrompts: [
+                '帮我设计一份登录功能的测试用例',
+                '这是我们的需求文档，请帮我分析测试点',
+                '我们要上线一个支付功能，需要完整的测试策略'
+            ],
+            inputPlaceholder: '描述你想测试的功能，或粘贴需求文档...'
+        }
     },
     REQ_REVIEW: {
         id: 'REQ_REVIEW',
@@ -327,6 +338,45 @@ ${FENCE}
 - [ ] 所有 P1 问题已安排明确的跟进负责人
 - [ ] 评审结论已同步至相关干系人`
             }
-        ]
+        ],
+        onboarding: {
+            welcomeMessage: '你好！我会从**可测试性、完整性、边界定义**等 7 个专业维度，帮你深度审查需求文档，输出结构化的评审问题清单。',
+            starterPrompts: [
+                '请帮我评审这份需求文档的可测试性',
+                '这个需求描述比较模糊，帮我找出所有不明确的地方',
+                '我们下周要做需求评审会，帮我提前扫描一下这份 PRD'
+            ],
+            inputPlaceholder: '粘贴需求文档内容，或描述需要评审的需求...'
+        }
+    },
+    INCIDENT_REVIEW: {
+        id: 'INCIDENT_REVIEW',
+        name: '故障复盘',
+        stages: [
+            {
+                id: 'TIMELINE',
+                name: '事件还原',
+                description: TIMELINE_PROMPT
+            },
+            {
+                id: 'ROOT_CAUSE',
+                name: '根因分析',
+                description: ROOT_CAUSE_PROMPT
+            },
+            {
+                id: 'IMPROVEMENT',
+                name: '改进报告',
+                description: IMPROVEMENT_PROMPT
+            }
+        ],
+        onboarding: {
+            welcomeMessage: '你好！我会用**敏捷教练式的结构化方法**，引导你完成故障复盘。我们会依次完成事件时间线还原、5-Why 根因分析和改进计划制定。',
+            starterPrompts: [
+                '昨天线上出了一个支付失败的故障，帮我做复盘',
+                '我们有一个 P1 级别的生产事故需要复盘分析',
+                '系统在高峰期出现了服务降级，需要做根因分析'
+            ],
+            inputPlaceholder: '描述一下这次故障的基本情况...'
+        }
     }
 };

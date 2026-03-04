@@ -40,13 +40,16 @@ export function useChatService() {
         setPendingAttachments(prev => prev.filter((_, i) => i !== index));
     }, []);
 
-    const handleSend = useCallback(async () => {
-        if ((!input.trim() && pendingAttachments.length === 0) || isGenerating) return;
+    const handleSend = useCallback(async (overrideInput?: string) => {
+        const textToSend = overrideInput !== undefined ? overrideInput : input.trim();
+        if ((!textToSend && pendingAttachments.length === 0) || isGenerating) return;
 
-        const userMsg = input.trim();
+        const userMsg = textToSend;
         const currentAttachments = [...pendingAttachments];
 
-        setInput('');
+        if (overrideInput === undefined) {
+            setInput('');
+        }
         setPendingAttachments([]);
 
         addMessage({

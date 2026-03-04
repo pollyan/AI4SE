@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { useStore } from '../store';
+import { useStore, WORKFLOWS } from '../store';
 import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -7,7 +7,8 @@ import { clsx } from 'clsx';
 import { useChatService } from '../services/chatService';
 
 export const ChatPane: React.FC = () => {
-  const { chatHistory, isGenerating } = useStore();
+  const { chatHistory, isGenerating, workflow } = useStore();
+  const onboardingConfig = WORKFLOWS[workflow].onboarding;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -59,12 +60,41 @@ export const ChatPane: React.FC = () => {
 
       <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
         {chatHistory.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-4">
-            <Bot className="w-12 h-12 opacity-50" />
-            <p className="text-sm text-center max-w-xs">
-              你好，我是 Lisa。<br />
-              请在下方输入您的需求，或上传已有的需求文档，我们将开始测试设计工作流。
-            </p>
+          <div className="flex flex-col h-full items-center justify-center space-y-8 animate-fade-in-up pb-10">
+            <div className="text-center space-y-4 max-w-xl px-4 flex flex-col items-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-blue-500/10 border border-blue-500/20 text-blue-500 shadow-[0_0_30px_-5px_rgba(59,130,246,0.3)] mb-2 mt-4">
+                <Bot className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl font-bold text-white tracking-wide">
+                {WORKFLOWS[workflow].name}
+              </h2>
+              <div className="text-sm text-slate-300 leading-relaxed bg-[#151e32] p-5 rounded-2xl border border-[#1e293b] shadow-sm text-left w-full mt-2">
+                <ReactMarkdown
+                  components={{
+                    p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
+                    strong: ({ node, ...props }) => <strong className="text-blue-400 font-bold" {...props} />,
+                  }}
+                >
+                  {onboardingConfig.welcomeMessage}
+                </ReactMarkdown>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 w-full max-w-xl px-4">
+              <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold px-2 mb-1">你可以试试这样问：</p>
+              <div className="grid grid-cols-1 gap-2.5">
+                {onboardingConfig.starterPrompts.map((prompt, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSend(prompt)}
+                    className="text-left text-sm text-slate-300 bg-[#0f1623] hover:bg-[#1e293b] border border-[#1e293b] hover:border-blue-500/30 p-3.5 rounded-xl transition-all shadow-sm hover:shadow-md group flex items-start gap-3"
+                  >
+                    <span className="mt-0.5 text-blue-500/50 group-hover:text-blue-400 transition-colors">✦</span>
+                    <span className="leading-snug">{prompt}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -193,7 +223,7 @@ export const ChatPane: React.FC = () => {
             </button>
             <textarea
               className="w-full bg-transparent border-0 text-gray-200 placeholder-slate-500 focus:ring-0 resize-none py-2.5 max-h-32 text-sm leading-relaxed"
-              placeholder="回复 Lisa..."
+              placeholder={onboardingConfig.inputPlaceholder}
               rows={1}
               value={input}
               onChange={(e) => {
@@ -214,7 +244,7 @@ export const ChatPane: React.FC = () => {
             ) : (
               <button
                 id="send-button"
-                onClick={handleSend}
+                onClick={() => handleSend()}
                 disabled={!input.trim() && pendingAttachments.length === 0}
                 className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 disabled:cursor-not-allowed text-white p-2 rounded-lg transition-colors shadow-lg shadow-blue-500/20 self-end mb-0.5"
                 title="发送"

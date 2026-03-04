@@ -18,7 +18,7 @@ export type Message = {
     attachments?: Attachment[];
 };
 
-export type WorkflowType = 'TEST_DESIGN' | 'REQ_REVIEW';
+export type WorkflowType = 'TEST_DESIGN' | 'REQ_REVIEW' | 'INCIDENT_REVIEW';
 
 export interface WorkflowStage {
     id: string;
@@ -26,10 +26,17 @@ export interface WorkflowStage {
     description: string;
 }
 
+export interface OnboardingConfig {
+    welcomeMessage: string;
+    starterPrompts: string[];
+    inputPlaceholder: string;
+}
+
 export interface WorkflowDef {
     id: WorkflowType;
     name: string;
     stages: WorkflowStage[];
+    onboarding: OnboardingConfig;
 }
 
 export interface ChatState {
