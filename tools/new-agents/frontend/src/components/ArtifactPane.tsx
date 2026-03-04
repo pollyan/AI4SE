@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -39,6 +39,33 @@ export const ArtifactPane: React.FC = () => {
 
   const displayContent = preprocessMarkdown(artifactContent);
 
+  const handleMermaidRetry = useCallback(async (brokenCode: string, errorMessage: string, blockIndex: number) => {
+    // dynamically import to avoid cyclic or immediate heavy deps
+    const { retryMermaidGeneration } = await import('../services/mermaidRetryService');
+    const newCode = await retryMermaidGeneration(brokenCode, errorMessage, blockIndex);
+    if (!newCode) return false;
+
+    // Use regex to locate nth mermaid block
+    const content = useStore.getState().artifactContent;
+    const regex = /```mermaid.*?\n([\s\S]*?)```/g;
+    const matches = Array.from(content.matchAll(regex));
+
+    if (matches[blockIndex]) {
+      const match = matches[blockIndex];
+      const start = match.index!;
+      const length = match[0].length;
+
+      const newBlock = `\`\`\`mermaid\n${newCode}\n\`\`\``;
+      const updatedContent = content.substring(0, start) + newBlock + content.substring(start + length);
+
+      useStore.getState().setArtifactContent(updatedContent);
+      return true;
+    }
+    return false;
+  }, []);
+
+  let mermaidBlockCounter = 0;
+
   const markdownComponents = {
     h1: ({ node, ...props }: any) => <h1 className="text-3xl font-bold text-white mb-6 pb-2 border-b border-[#1e293b]" {...props} />,
     h2: ({ node, ...props }: any) => <h2 className="text-2xl font-bold text-white mt-8 mb-4 before:content-['#'] before:text-blue-500 before:opacity-50 before:mr-2" {...props} />,
@@ -59,7 +86,12 @@ export const ArtifactPane: React.FC = () => {
       const language = match ? match[1] : '';
 
       if (!inline && language === 'mermaid') {
-        return <Mermaid chart={String(children).replace(/\n$/, '')} />;
+        const currentIndex = mermaidBlockCounter++;
+        return <Mermaid
+          chart={String(children).replace(/\n$/, '')}
+          blockIndex={currentIndex}
+          onRetry={handleMermaidRetry}
+        />;
       }
 
       return !inline ? (
