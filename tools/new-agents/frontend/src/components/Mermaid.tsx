@@ -59,6 +59,20 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
           return;
         }
 
+        // 第一级兜底：parse 返回 false 不一定是语法错误
+        // timeline / mindmap 等懒加载图表类型在某些调用时序下 parse 会误返 false
+        // 直接尝试 render，成功则正常显示，失败才走降级
+        try {
+          const { svg: generatedSvg } = await mermaid.render(id, sanitized);
+          if (isMounted) {
+            setSvgHtml(generatedSvg);
+            setRenderState('success');
+          }
+          return;
+        } catch (renderErr: any) {
+          // render 也失败，说明真的有语法问题，继续走激进降级
+        }
+
         // 第二级：激进清洗（LLM 严重幻觉时）
         const aggressive = aggressiveSanitize(sanitized);
         const aggressiveParseResult = await mermaid.parse(aggressive, { suppressErrors: true });

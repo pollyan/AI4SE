@@ -29,6 +29,12 @@ export function sanitizeMermaidCode(code: string): string {
     // 5. Normalize Windows line endings
     sanitized = sanitized.replace(/\r\n/g, '\n');
 
+    // 6. Fix Mermaid timeline specific issues
+    // Timeline period cannot contain colon. If LLM generated time like "14:30 : event", we must replace the period's colon.
+    if (sanitized.trim().startsWith('timeline')) {
+        sanitized = sanitized.replace(/(\d{1,2}):(\d{2})(?=\s*:)/g, '$1点$2分');
+    }
+
     return sanitized.trim();
 }
 

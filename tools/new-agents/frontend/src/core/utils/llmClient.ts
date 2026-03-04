@@ -78,10 +78,10 @@ export async function collectLlmResponse(
 ): Promise<string> {
     const state = useStore.getState();
     const { isUserConfigured, apiKey, baseUrl, model } = state;
-    let currentModel = modelOverride || model;
 
     if (isUserConfigured && apiKey) {
-        // 前端直连
+        // 前端直连：用 modelOverride 或 store 里用户配置的 model
+        const currentModel = modelOverride || model;
         try {
             const client = new OpenAI({
                 apiKey,
@@ -110,7 +110,8 @@ export async function collectLlmResponse(
             return '';
         }
     } else {
-        // 后端代理
-        return collectResponseViaProxy(messages, currentModel, signal);
+        // 后端代理：只传显式的 modelOverride，不把 store 里的用户 model 带进去
+        // 后端应使用自己配置的默认模型，否则阿里云等 provider 会因未知 model 名报 403
+        return collectResponseViaProxy(messages, modelOverride, signal);
     }
 }
