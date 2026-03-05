@@ -112,6 +112,10 @@ export const useStore = create<AppState>()(
         }
         return { chatHistory: newHistory };
       }),
+      updateMessage: (id, content) => set((state) => {
+        const newHistory = state.chatHistory.map(m => m.id === id ? { ...m, content } : m);
+        return { chatHistory: newHistory };
+      }),
       removeLastMessage: () => set((state) => {
         const newHistory = [...state.chatHistory];
         if (newHistory.length > 0) {

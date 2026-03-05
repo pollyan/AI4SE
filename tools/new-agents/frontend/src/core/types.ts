@@ -79,6 +79,7 @@ export interface ChatState {
     transitionToNextStage: (initialStageId: string, initialArtifact: string) => void;
     addMessage: (msg: Message) => void;
     updateLastMessage: (content: string) => void;
+    updateMessage: (id: string, content: string) => void;
     removeLastMessage: () => void;
     setArtifactContent: (content: string) => void;
     addArtifactVersion: (version: ArtifactVersion) => void;

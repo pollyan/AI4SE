@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import { useStore, WORKFLOWS } from '../store';
 import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -6,6 +6,8 @@ import remarkGfm from 'remark-gfm';
 import { clsx } from 'clsx';
 import { useChatService } from '../services/chatService';
 import { getAgentById } from '../core/config/agents';
+import { preprocessMarkdown } from '../core/utils/markdownUtils';
+import { Mermaid } from './Mermaid';
 
 export const ChatPane: React.FC = () => {
   const { chatHistory, isGenerating, workflow } = useStore();
@@ -14,6 +16,8 @@ export const ChatPane: React.FC = () => {
   const agentConfig = getAgentById(agentId);
   const displayTitle = agentConfig?.displayTitle || agentId;
   const agentName = agentConfig?.name || 'AI';
+
+  const updateMessage = useStore((state) => state.updateMessage);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -28,6 +32,35 @@ export const ChatPane: React.FC = () => {
     handleFileChange,
     removeAttachment
   } = useChatService();
+
+  const handleChatMermaidRetry = useCallback(async (msgId: string, brokenCode: string, errorMessage: string, blockIndex: number) => {
+    // dynamically import to avoid cyclic or immediate heavy deps
+    const { retryMermaidGeneration } = await import('../services/mermaidRetryService');
+    const newCode = await retryMermaidGeneration(brokenCode, errorMessage, blockIndex);
+    if (!newCode) return false;
+
+    // Use regex to locate nth mermaid block
+    const history = useStore.getState().chatHistory;
+    const msg = history.find(m => m.id === msgId);
+    if (!msg || !msg.content) return false;
+
+    const content = msg.content;
+    const regex = /```mermaid.*?\n([\s\S]*?)```/g;
+    const matches = Array.from(content.matchAll(regex));
+
+    if (matches[blockIndex]) {
+      const match = matches[blockIndex];
+      const start = match.index!;
+      const length = match[0].length;
+
+      const newBlock = `\`\`\`mermaid\n${newCode}\n\`\`\``;
+      const updatedContent = content.substring(0, start) + newBlock + content.substring(start + length);
+
+      useStore.getState().updateMessage(msgId, updatedContent);
+      return true;
+    }
+    return false;
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -81,7 +114,7 @@ export const ChatPane: React.FC = () => {
                     strong: ({ node, ...props }) => <strong className="text-blue-400 font-bold" {...props} />,
                   }}
                 >
-                  {onboardingConfig.welcomeMessage}
+                  {preprocessMarkdown(onboardingConfig.welcomeMessage)}
                 </ReactMarkdown>
               </div>
             </div>
@@ -109,6 +142,7 @@ export const ChatPane: React.FC = () => {
           if (isGenerating && msg.role === 'assistant' && !msg.content?.trim() && msg.id === chatHistory[chatHistory.length - 1]?.id) {
             return null;
           }
+          let mermaidBlockCounter = 0;
 
           return (
             <div key={msg.id} className={clsx("flex items-start gap-4 animate-fade-in-up", msg.role === 'user' ? "flex-row-reverse" : "")}>
@@ -147,14 +181,38 @@ export const ChatPane: React.FC = () => {
                       components={{
                         p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
                         strong: ({ node, ...props }) => <strong className={msg.role === 'user' ? "text-white font-bold" : "text-blue-400 font-bold"} {...props} />,
-                        code: ({ node, ...props }) => <code className="bg-black/30 px-1 py-0.5 rounded font-mono text-xs mx-1" {...props} />,
+                        code({ node, inline, className, children, ...props }: any) {
+                          const match = /language-(\w+)/.exec(className || '');
+                          const language = match ? match[1] : '';
+
+                          if (!inline && language === 'mermaid') {
+                            const currentIndex = mermaidBlockCounter++;
+                            return <Mermaid
+                              chart={String(children).replace(/\n$/, '')}
+                              blockIndex={currentIndex}
+                              onRetry={(brokenCode, errorMessage, blockIndex) => handleChatMermaidRetry(msg.id, brokenCode, errorMessage, blockIndex)}
+                            />;
+                          }
+
+                          return !inline ? (
+                            <pre className="p-3 bg-[#0a0f18] rounded-lg text-xs font-mono overflow-x-auto my-2 border border-[#1e293b]">
+                              <code className={className} {...props}>
+                                {children}
+                              </code>
+                            </pre>
+                          ) : (
+                            <code className="bg-black/30 px-1 py-0.5 rounded font-mono text-xs mx-1" {...props}>
+                              {children}
+                            </code>
+                          );
+                        },
                         table: ({ node, ...props }: any) => <div className="overflow-x-auto my-3"><table className="w-full border-collapse text-sm" {...props} /></div>,
                         th: ({ node, ...props }: any) => <th className="bg-slate-800/50 text-slate-200 font-semibold text-left p-2 border border-slate-700" {...props} />,
                         td: ({ node, ...props }: any) => <td className="p-2 border border-slate-700/50 text-slate-300" {...props} />,
                         tr: ({ node, ...props }: any) => <tr className="hover:bg-white/5 transition-colors" {...props} />,
                       }}
                     >
-                      {msg.content}
+                      {preprocessMarkdown(msg.content)}
                     </ReactMarkdown>
                   )}
                   {msg.role === 'assistant' && !isGenerating && msg.id === chatHistory[chatHistory.length - 1]?.id && (

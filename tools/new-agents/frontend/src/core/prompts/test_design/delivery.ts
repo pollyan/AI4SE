@@ -2,7 +2,7 @@ export const DELIVERY_PROMPT = `整合需求澄清、策略制定、用例编写
 【重要警告】：必须包含前面所有阶段的完整内容，绝不能省略或用"参见上文"替代。所有 Mermaid 图表（风险矩阵、测试金字塔、用例饼图）都必须保留。
 `;
 
-export const DELIVERY_TEMPLATE = `# 测试设计文档 (Final)
+export const DELIVERY_TEMPLATE = `# 测试设计文档
 
 ## 文档信息
 - **项目名称**: [名称]
