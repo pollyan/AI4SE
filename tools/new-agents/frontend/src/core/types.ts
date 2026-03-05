@@ -18,13 +18,14 @@ export type Message = {
     attachments?: Attachment[];
 };
 
-export type WorkflowType = 'TEST_DESIGN' | 'REQ_REVIEW' | 'INCIDENT_REVIEW' | 'IDEA_BRAINSTORM';
+export type WorkflowType = 'TEST_DESIGN' | 'REQ_REVIEW' | 'INCIDENT_REVIEW' | 'IDEA_BRAINSTORM' | 'VALUE_DISCOVERY';
 
 export const WORKFLOW_SLUGS: Record<WorkflowType, string> = {
     TEST_DESIGN: 'test-design',
     REQ_REVIEW: 'req-review',
     INCIDENT_REVIEW: 'incident-review',
     IDEA_BRAINSTORM: 'idea-brainstorm',
+    VALUE_DISCOVERY: 'value-discovery',
 };
 
 export const SLUG_TO_WORKFLOW: Record<string, WorkflowType> = Object.fromEntries(

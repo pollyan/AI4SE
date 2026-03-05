@@ -49,7 +49,7 @@ describe('Workflow Configuration', () => {
 
     it('should return workflows for Alex', () => {
         const workflows = getAgentWorkflows('alex');
-        expect(workflows.length).toBeGreaterThanOrEqual(1);
+        expect(workflows.length).toBeGreaterThanOrEqual(2);
 
         const ideaBrainstorm = workflows.find(w => w.id === 'idea-brainstorm');
         expect(ideaBrainstorm).toBeDefined();
@@ -64,6 +64,31 @@ describe('Workflow Configuration', () => {
         expect(wf.stages).toHaveLength(4);
         expect(wf.stages[0].id).toBe('DEFINE');
         expect(wf.stages[3].id).toBe('CONCEPT');
+    });
+
+    it('should have VALUE_DISCOVERY workflow defined with correct agentId and stages', () => {
+        const wf = WORKFLOWS.VALUE_DISCOVERY;
+        expect(wf).toBeDefined();
+        expect(wf.name).toBe('价值发现');
+        expect(wf.agentId).toBe('alex');
+        expect(wf.stages).toHaveLength(4);
+        expect(wf.stages[0].id).toBe('ELEVATOR');
+        expect(wf.stages[3].id).toBe('BLUEPRINT');
+        expect(wf.stages[0].description.length).toBeGreaterThan(100);
+        expect(wf.stages[1].description.length).toBeGreaterThan(100);
+        expect(wf.stages[2].description.length).toBeGreaterThan(100);
+        expect(wf.stages[3].description.length).toBeGreaterThan(100);
+    });
+
+    it('should have value-discovery workflow in Alex agent workflows as online and without prd-creation', () => {
+        const workflows = getAgentWorkflows('alex');
+
+        const valueDiscovery = workflows.find(w => w.id === 'value-discovery');
+        expect(valueDiscovery).toBeDefined();
+        expect(valueDiscovery?.status).toBe('online');
+
+        const prdCreation = workflows.find(w => w.id === 'prd-creation');
+        expect(prdCreation).toBeUndefined();
     });
 
     it('every workflow definition should configure an agentId', () => {

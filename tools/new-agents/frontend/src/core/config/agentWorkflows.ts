@@ -65,13 +65,13 @@ const AGENT_WORKFLOWS: AgentWorkflowConfig[] = [
         link: '/workspace/alex/idea-brainstorm'
     },
     {
-        id: 'prd-creation',
+        id: 'value-discovery',
         agentId: 'alex',
-        status: 'plan',
-        name: 'PRD 生成',
-        description: '从目标与边界到功能规划，输出研发可执行的标准化产品需求文档（PRD）。',
-        icon: 'FileText',
-        statusLabel: 'Plan'
+        status: 'online',
+        name: '价值发现',
+        description: '系统化梳理产品方向的价值定位、目标用户和核心场景，输出结构化需求蓝图。',
+        icon: 'Compass',
+        link: '/workspace/alex/value-discovery'
     },
     {
         id: 'story-breakdown',

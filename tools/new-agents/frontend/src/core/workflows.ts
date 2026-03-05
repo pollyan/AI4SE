@@ -12,6 +12,10 @@ import { CASES_PROMPT, CASES_TEMPLATE } from './prompts/test_design/cases';
 import { DELIVERY_PROMPT, DELIVERY_TEMPLATE } from './prompts/test_design/delivery';
 import { REVIEW_PROMPT, REVIEW_TEMPLATE } from './prompts/req_review/review';
 import { REPORT_PROMPT, REPORT_TEMPLATE } from './prompts/req_review/report';
+import { ELEVATOR_PROMPT, ELEVATOR_TEMPLATE } from './prompts/value_discovery/elevator';
+import { PERSONA_PROMPT, PERSONA_TEMPLATE } from './prompts/value_discovery/persona';
+import { JOURNEY_PROMPT, JOURNEY_TEMPLATE } from './prompts/value_discovery/journey';
+import { BLUEPRINT_PROMPT, BLUEPRINT_TEMPLATE } from './prompts/value_discovery/blueprint';
 
 import { FENCE } from './utils/constants';
 export const WORKFLOWS: Record<WorkflowType, WorkflowDef> = {
@@ -159,6 +163,47 @@ export const WORKFLOWS: Record<WorkflowType, WorkflowDef> = {
                 '我觉得现在的记账软件都太复杂了'
             ],
             inputPlaceholder: '描述你想做的产品或解决的问题...'
+        }
+    },
+    VALUE_DISCOVERY: {
+        id: 'VALUE_DISCOVERY',
+        agentId: 'alex',
+        name: '价值发现',
+        description: '帮助用户将已有的产品方向系统化梳理，通过价值定位、用户画像、旅程分析，输出结构化需求蓝图。',
+        stages: [
+            {
+                id: 'ELEVATOR',
+                name: '价值定位',
+                description: ELEVATOR_PROMPT,
+                template: ELEVATOR_TEMPLATE
+            },
+            {
+                id: 'PERSONA',
+                name: '用户画像',
+                description: PERSONA_PROMPT,
+                template: PERSONA_TEMPLATE
+            },
+            {
+                id: 'JOURNEY',
+                name: '用户旅程',
+                description: JOURNEY_PROMPT,
+                template: JOURNEY_TEMPLATE
+            },
+            {
+                id: 'BLUEPRINT',
+                name: '需求蓝图',
+                description: BLUEPRINT_PROMPT,
+                template: BLUEPRINT_TEMPLATE
+            }
+        ],
+        onboarding: {
+            welcomeMessage: '你好！我是 Alex，产品价值发现顾问。告诉我你想做的产品方向，我会用系统化的方法帮你梳理清楚它的场景、用户和核心价值。',
+            starterPrompts: [
+                '我们团队想做一个面向中小企业的智能客户管理系统，初步方向已确定，但还没想清楚核心场景',
+                '我们计划用 AI 帮测试工程师自动生成测试用例，想验证一下这个方向的价值',
+                '我有个想法：做一款帮产品经理自动整理用户反馈的工具，想系统梳理一下'
+            ],
+            inputPlaceholder: '描述你已有的产品方向或想法...'
         }
     }
 };

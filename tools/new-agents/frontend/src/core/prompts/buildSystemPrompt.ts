@@ -34,7 +34,7 @@ export const buildSystemPrompt = (config: {
             }
         });
         if (agentId === 'alex') {
-            previousArtifactsContext += `\n要求：基于上述前置阶段的分析成果，自动整合生成本阶段的产品概念简报。\n`;
+            previousArtifactsContext += `\n要求：基于上述前置阶段的分析成果，自动整合并生成本阶段的产出物。\n`;
         }
     }
 
