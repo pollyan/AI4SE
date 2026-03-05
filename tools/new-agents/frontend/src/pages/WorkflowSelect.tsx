@@ -1,10 +1,24 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, GitMerge, ChevronRight, FileCode2, TestTube2, ActivitySquare, ArrowRight, Bot, Code2, LucideIcon, Lightbulb, FileText, ListChecks, BarChart2, Compass } from 'lucide-react';
+import { ArrowLeft, GitMerge, ChevronRight, FileCode2, TestTube2, ActivitySquare, ArrowRight, Bot, Code2, LucideIcon, Lightbulb, FileText, ListChecks, BarChart2, Compass, ShieldAlert } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useStore, WorkflowType } from '../store';
 import { getAgentWorkflows } from '../core/config/agentWorkflows';
 import { getAgentById } from '../core/config/agents';
+
+const ICONS: Record<string, LucideIcon> = {
+    Bot: Bot,
+    Code2: Code2,
+    TestTube2: TestTube2,
+    ActivitySquare: ActivitySquare,
+    FileCode2: FileCode2,
+    Lightbulb: Lightbulb,
+    FileText: FileText,
+    ListChecks: ListChecks,
+    BarChart2: BarChart2,
+    Compass: Compass,
+    ShieldAlert: ShieldAlert
+};
 
 export function WorkflowSelect() {
     const navigate = useNavigate();
@@ -27,19 +41,6 @@ export function WorkflowSelect() {
             </div>
         );
     }
-
-    const ICONS: Record<string, LucideIcon> = {
-        Bot: Bot,
-        Code2: Code2,
-        TestTube2: TestTube2,
-        ActivitySquare: ActivitySquare,
-        FileCode2: FileCode2,
-        Lightbulb: Lightbulb,
-        FileText: FileText,
-        ListChecks: ListChecks,
-        BarChart2: BarChart2,
-        Compass: Compass
-    };
 
     const AgentIcon = ICONS[agent.icon || 'Bot'] || Bot;
 
