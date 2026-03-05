@@ -6,7 +6,7 @@ WORKDIR /app
 
 # 复制依赖清单并安装
 COPY tools/new-agents/frontend/package.json tools/new-agents/frontend/package-lock.json ./
-RUN npm ci
+RUN npm config set registry https://registry.npmmirror.com/ && npm ci
 
 # 复制源码并构建
 COPY tools/new-agents/frontend/ ./
