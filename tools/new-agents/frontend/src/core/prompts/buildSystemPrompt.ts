@@ -33,9 +33,8 @@ export const buildSystemPrompt = (config: {
                 previousArtifactsContext += `\n--- 阶段 [${stageId}] 核心成果 ---\n${truncated}\n`;
             }
         });
-        if (agentId === 'alex') {
-            previousArtifactsContext += `\n要求：基于上述前置阶段的分析成果，自动整合并生成本阶段的产出物。\n`;
-        }
+        // 改为通用规则：只要配置了提取前序阶段，最后一步都自动要求整合，移除对具体 agentId 的硬编码依赖
+        previousArtifactsContext += `\n要求：基于上述前置阶段的分析成果，自动整合并生成本阶段的产出物。\n`;
     }
 
     return `${persona}

@@ -47,10 +47,15 @@ describe('Workflow Configuration', () => {
         expect(wf.stages[1].description.length).toBeGreaterThan(100);
     });
 
-    it('should return workflows for Alex', () => {
+    it('should return at least two core workflows for Alex', () => {
         const workflows = getAgentWorkflows('alex');
-        expect(workflows.length).toBeGreaterThanOrEqual(2);
+        const ids = workflows.map(w => w.id);
+        expect(ids).toContain('idea-brainstorm');
+        expect(ids).toContain('value-discovery');
+    });
 
+    it('should configure IDEA_BRAINSTORM as online for Alex', () => {
+        const workflows = getAgentWorkflows('alex');
         const ideaBrainstorm = workflows.find(w => w.id === 'idea-brainstorm');
         expect(ideaBrainstorm).toBeDefined();
         expect(ideaBrainstorm?.status).toBe('online');
