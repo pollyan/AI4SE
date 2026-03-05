@@ -39,20 +39,25 @@ For each task:
 - Review patterns from project-context or observed code
 - Understand dependencies
 
-### 2. Implement
+### 2. RED - Write Failing Test (TDD Step 1)
 
-- Write code following existing patterns
-- Handle errors appropriately
-- Follow conventions observed in codebase
-- Add appropriate comments where non-obvious
+- **Stop! Do not write implementation code yet.**
+- Based on the task's AC, write a minimal, failing test first.
+- Run the test and explicitly verify it fails for the correct reason (not syntax error, but missing feature).
 
-### 3. Test
+### 3. GREEN - Implement Code (TDD Step 2)
 
-- Write tests if appropriate for the change
-- Run existing tests to catch regressions
-- Verify the specific AC for this task
+- Write the *simplest* code required to make the test pass.
+- Handle errors appropriately and follow existing conventions.
+- Run the test again to verify it passes (green).
 
-### 4. Mark Complete
+### 4. REFACTOR - Clean Up (TDD Step 3)
+
+- Clean up the code. Remove duplication, improve names, extract helpers.
+- Run tests again to ensure nothing broke. 
+- Run existing tests to catch regressions.
+
+### 5. Mark Complete
 
 - Check off task: `- [x] Task N`
 - Continue to next task immediately
