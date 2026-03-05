@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, GitMerge, ChevronRight, FileCode2, TestTube2, ActivitySquare, ArrowRight, Bot, Code2, LucideIcon } from 'lucide-react';
+import { ArrowLeft, GitMerge, ChevronRight, FileCode2, TestTube2, ActivitySquare, ArrowRight, Bot, Code2, LucideIcon, Lightbulb, FileText, ListChecks, BarChart2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useStore, WorkflowType } from '../store';
 import { getAgentWorkflows } from '../core/config/agentWorkflows';
@@ -33,7 +33,11 @@ export function WorkflowSelect() {
         Code2: Code2,
         TestTube2: TestTube2,
         ActivitySquare: ActivitySquare,
-        FileCode2: FileCode2
+        FileCode2: FileCode2,
+        Lightbulb: Lightbulb,
+        FileText: FileText,
+        ListChecks: ListChecks,
+        BarChart2: BarChart2
     };
 
     const AgentIcon = ICONS[agent.icon || 'Bot'] || Bot;

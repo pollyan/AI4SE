@@ -63,6 +63,33 @@ const AGENT_WORKFLOWS: AgentWorkflowConfig[] = [
         description: '引导你完成创意探索和产品概念沉淀，生成清晰可沟通的产品概念简报（One-Pager）。',
         icon: 'Lightbulb',
         link: '/workspace/alex/idea-brainstorm'
+    },
+    {
+        id: 'prd-creation',
+        agentId: 'alex',
+        status: 'plan',
+        name: 'PRD 生成',
+        description: '从目标与边界到功能规划，输出研发可执行的标准化产品需求文档（PRD）。',
+        icon: 'FileText',
+        statusLabel: 'Plan'
+    },
+    {
+        id: 'story-breakdown',
+        agentId: 'alex',
+        status: 'plan',
+        name: '用户故事拆解',
+        description: '将完整需求拆解为 Sprint 可交付的用户故事，包含验收标准（AC）。',
+        icon: 'ListChecks',
+        statusLabel: 'Plan'
+    },
+    {
+        id: 'competitive-analysis',
+        agentId: 'alex',
+        status: 'plan',
+        name: '竞品分析',
+        description: '收集市场与竞品信息，通过多维对比和属性打分自动生成差异化策略洞察报告。',
+        icon: 'BarChart2',
+        statusLabel: 'Plan'
     }
 ];
 
