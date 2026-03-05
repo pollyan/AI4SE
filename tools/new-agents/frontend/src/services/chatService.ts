@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { useStore, Attachment, WORKFLOWS } from '../store';
+import { useStore, Attachment, WORKFLOWS, getWelcomeMessage } from '../store';
 import { generateResponseStream } from '../core/llm';
 
 export function useChatService() {
@@ -132,9 +132,10 @@ export function useChatService() {
         } finally {
             abortControllerRef.current = null;
             setIsGenerating(false);
-            const finalArtifact = useStore.getState().artifactContent;
-            if (finalArtifact && finalArtifact !== '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。') {
-                const history = useStore.getState().artifactHistory;
+            const state = useStore.getState();
+            const finalArtifact = state.artifactContent;
+            if (finalArtifact && !finalArtifact.startsWith('# 欢迎使用')) {
+                const history = state.artifactHistory;
                 if (history.length === 0 || history[history.length - 1].content !== finalArtifact) {
                     useStore.getState().addArtifactVersion({
                         id: Date.now().toString(),

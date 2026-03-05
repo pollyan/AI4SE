@@ -47,7 +47,7 @@ export function AgentSelect() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {agents.map((agent) => {
-                        const IconComponent = ICONS[agent.id === 'lisa' ? 'Bot' : 'Code2'];
+                        const IconComponent = ICONS[agent.icon || 'Bot'];
                         const isOnline = agent.status === 'online';
 
                         return (

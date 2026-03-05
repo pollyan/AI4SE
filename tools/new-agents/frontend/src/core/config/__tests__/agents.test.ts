@@ -16,7 +16,7 @@ describe('Agent Configuration', () => {
         const alex = agents.find(a => a.id === 'alex');
         expect(alex).toBeDefined();
         expect(alex?.name).toBe('Alex');
-        expect(alex?.status).toBe('coming_soon');
+        expect(alex?.status).toBe('online');
         expect(alex?.features).toContain('功能逻辑树构建');
     });
 

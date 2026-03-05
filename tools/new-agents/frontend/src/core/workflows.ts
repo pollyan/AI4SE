@@ -1,211 +1,49 @@
 import { WorkflowDef, WorkflowType } from './types';
-import { IMPROVEMENT_PROMPT } from './prompts/incident_review/improvement';
-import { ROOT_CAUSE_PROMPT } from './prompts/incident_review/root_cause';
-import { TIMELINE_PROMPT } from './prompts/incident_review/timeline';
-// 用于在模板字符串中安全引用 Markdown 代码块分隔符 (```)
-const FENCE = '```';
+import { IMPROVEMENT_PROMPT, IMPROVEMENT_TEMPLATE } from './prompts/incident_review/improvement';
+import { ROOT_CAUSE_PROMPT, ROOT_CAUSE_TEMPLATE } from './prompts/incident_review/root_cause';
+import { TIMELINE_PROMPT, TIMELINE_TEMPLATE } from './prompts/incident_review/timeline';
+import { DEFINE_PROMPT, DEFINE_TEMPLATE } from './prompts/idea_brainstorm/define';
+import { DIVERGE_PROMPT, DIVERGE_TEMPLATE } from './prompts/idea_brainstorm/diverge';
+import { CONVERGE_PROMPT, CONVERGE_TEMPLATE } from './prompts/idea_brainstorm/converge';
+import { CONCEPT_PROMPT, CONCEPT_TEMPLATE } from './prompts/idea_brainstorm/concept';
+import { CLARIFY_PROMPT, CLARIFY_TEMPLATE } from './prompts/test_design/clarify';
+import { STRATEGY_PROMPT, STRATEGY_TEMPLATE } from './prompts/test_design/strategy';
+import { CASES_PROMPT, CASES_TEMPLATE } from './prompts/test_design/cases';
+import { DELIVERY_PROMPT, DELIVERY_TEMPLATE } from './prompts/test_design/delivery';
+import { REVIEW_PROMPT, REVIEW_TEMPLATE } from './prompts/req_review/review';
+import { REPORT_PROMPT, REPORT_TEMPLATE } from './prompts/req_review/report';
+
+import { FENCE } from './utils/constants';
 export const WORKFLOWS: Record<WorkflowType, WorkflowDef> = {
     TEST_DESIGN: {
         id: 'TEST_DESIGN',
+        agentId: 'lisa',
         name: '测试设计',
+        description: '对传入需求进行逻辑拆解与边界梳理',
         stages: [
             {
                 id: 'CLARIFY',
                 name: '需求澄清',
-                description: `阅读用户需求，识别核心测试对象，并在右侧生成《需求分析文档》。
-【重要警告】：产出物中绝对不要包含“下一步计划”或类似章节。在左侧对话中，强制要求用户解答待确认项后才能进入下一阶段。
-右侧产出物必须严格按照以下模板结构生成：
-
-# 需求分析文档
-
-## 1. 被测系统与边界 (System Under Test & Boundaries)
-这是整个测试工作的基础。如果不清楚测什么、不测什么，测试就永远没有尽头。
-### 1.1 核心业务目标 (Business Value)
-内容：用一句话概括这个需求为了解决什么业务问题。测试不仅要验证“跑得通”，更要验证“达到了业务目的”。
-### 1.2 测试范围 (In-Scope)
-内容：明确列出本次需要测试的页面、API 接口、业务逻辑分支。必须具体到模块名称。
-### 1.3 不测范围 (Out-of-Scope)
-内容：明确声明本次绝对不去测的内容（例如：历史老系统的兼容性、第三方支付渠道底层的稳定性、本次未改动的关联模块）。这是测试人员最重要的免责声明和防甩锅利器。
-
-## 2. 系统交互与核心链路 (System Interactions & Core Flows)
-梳理被测对象在这套浩瀚的系统架构里，处于什么位置，和谁打交道。
-### 2.1 核心主流程 (Happy Paths)
-内容：正常情况下，用户或数据从 A 端走到 B 端的正确路径描述。强制配合 Mermaid 流程图或时序图形式呈现。
-### 2.2 外部依赖与契约 (External Dependencies)
-内容：列出该功能依赖的所有上下游模块、第三方接口。标注这些接口目前是“已就绪”、“开发中”还是“需要 Mock (挡板)”。
-
-## 3. 待澄清与阻断性问题 (Blocking Clarifications)
-这是澄清阶段最核心的产出，倒逼产品经理和架构师填坑。
-### 3.1 P0 级业务逻辑漏洞 (P0 Logical Gaps)
-内容：业务规则中的矛盾点、缺失的异常分支处理（例如：“逆向流程”：退款、超时、并发超卖、断网重连时的处理机制是什么？）。
-### 3.2 P1/P2 级规则细节 (P1/P2 Rule Details)
-内容：具体的边界值定义、字段校验规则、默认值设定等。
-状态追踪：该列表必须带有状态标记（待确认 / 已确认并给出结论）。
-
-## 4. 隐式需求与非功能性考量 (Non-Functional Requirements)
-优秀的测试专家不能只盯着功能，往往是这类需求会导致严重的线上事故。
-### 4.1 性能与并发要求 (Performance & Concurrency)
-内容：预期的 QPS/TPS 是多少？响应时间 SLA 要求？是否有高并发秒杀场景？
-### 4.2 安全与合规要求 (Security & Compliance)
-内容：是否有敏感数据需要脱敏传输和存储？是否有越权访问风险？是否符合隐私法规？
-### 4.3 兼容性要求 (Compatibility)
-内容：明确支持的端、需要覆盖的浏览器版本范围、iOS/Android 最低支持版本号。`
+                description: CLARIFY_PROMPT,
+                template: CLARIFY_TEMPLATE
             },
             {
                 id: 'STRATEGY',
                 name: '策略制定',
-                description: `基于需求澄清阶段的结论，制定测试策略蓝图并在右侧生成《测试策略蓝图》。
-【重要警告】：产出物中绝对不要包含"下一步计划"或类似章节。
-右侧产出物必须严格按照以下模板结构生成（将 [] 占位符替换为实际内容）：
-
-# 测试策略蓝图
-
-> [策略概述：1-3句话总结核心策略思路]
-
-## 1. 质量目标
-- 🎯 [质量目标1]
-- 🎯 [质量目标2]
-
-## 2. 风险分析 (FMEA)
-
-### 2.1 风险矩阵
-${FENCE}mermaid
-quadrantChart
-    title 风险优先级矩阵
-    x-axis "低可能性" --> "高可能性"
-    y-axis "低严重度" --> "高严重度"
-    quadrant-1 "紧急处理"
-    quadrant-2 "重点关注"
-    quadrant-3 "观察监控"
-    quadrant-4 "常规覆盖"
-    "[风险名称1]": [可能性0-1, 严重度0-1]
-    "[风险名称2]": [可能性0-1, 严重度0-1]
-${FENCE}
-
-### 2.2 风险明细
-| ID | 风险名称 | 失效模式 | 影响 | 严重度(1-5) | 可能性(1-5) | RPN | 缓解策略 |
-|---|---|---|---|---|---|---|---|
-| R-001 | [名称] | [模式] | [影响] | [S] | [L] | [S×L] | [策略] |
-
-> RPN = 严重度 × 可能性，RPN ≥ 15 为高风险，需优先覆盖。
-
-## 3. 测试技术选型
-| ID | 针对目标 | 技术类别 | 选用技术 | 选择理由 |
-|---|---|---|---|---|
-| TS-001 | [目标] | 分析框架/设计技术/探索方法 | [技术] | [理由] |
-
-## 4. 测试分层策略
-
-### 4.1 测试金字塔
-${FENCE}mermaid
-block-beta
-    columns 1
-    block:e2e["🔺 E2E (占比%)\\n端到端验证"]:1
-    block:integ["🔶 集成 (占比%)\\n接口与数据流验证"]:1
-    block:unit["🟦 单元 (占比%)\\n核心逻辑与边界值"]:1
-${FENCE}
-
-### 4.2 分层明细
-| 层级 | 占比 | 覆盖范围 | 推荐工具 |
-|---|---|---|---|
-| 单元测试 | [%] | [范围] | [工具] |
-| 集成测试 | [%] | [范围] | [工具] |
-| E2E 测试 | [%] | [范围] | [工具] |
-
-## 5. 测试点拓扑
-| ID | 测试点 | 优先级 | 关联风险 | 测试技术 | 测试层级 | 预估用例数 |
-|---|---|---|---|---|---|---|
-| TP-001 | [测试点名称] | P0/P1/P2 | R-xxx | TS-xxx [技术名称] | 单元/集成/E2E | [N] |
-
-> **覆盖统计**：共 [N] 个测试点，P0: [n1] 个 | P1: [n2] 个 | P2: [n3] 个，预估总用例 [M] 条`
+                description: STRATEGY_PROMPT,
+                template: STRATEGY_TEMPLATE
             },
             {
                 id: 'CASES',
                 name: '用例编写',
-                description: `根据测试策略蓝图中的测试点和优先级，编写具体的测试用例。右侧更新为《测试用例集》。
-【重要警告】：
-- 产出物中绝对不要包含"下一步计划"或类似章节。
-- 用例必须按测试维度分段（如：正向功能、异常与边界、安全机制、性能与并发等），不要把所有用例堆在一个大表里。
-- 每条用例直接在表格行中写清前置条件、操作步骤和预期结果，不要再单独列出"用例详情"章节。
-右侧产出物必须严格按照以下模板结构生成（将 [] 占位符替换为实际内容）：
-
-# 测试用例集
-
-## 1. 用例统计
-${FENCE}mermaid
-pie title 测试用例优先级分布
-    "P0 (核心)" : [数量]
-    "P1 (重要)" : [数量]
-    "P2 (一般)" : [数量]
-${FENCE}
-
-**统计摘要**：共 [N] 条用例，P0: [n1] 条 | P1: [n2] 条 | P2: [n3] 条
-
-## 2. 用例清单
-
-按测试维度分段编写，每段一个子标题 + 一个完整表格。
-
-### 2.1 [维度名称，如：正向功能验证]
-
-| ID | 用例标题 | 优先级 | 关联风险 | 前置条件 | 操作步骤 | 预期结果 |
-|---|---|---|---|---|---|---|
-| TC-001 | [标题] | P0 | R-xxx | [前置条件，多个用分号隔开] | 1. [步骤1] 2. [步骤2] | [预期结果] |
-| TC-002 | [标题] | P0 | - | [前置条件] | 1. [步骤1] 2. [步骤2] | [预期结果] |
-
-### 2.2 [维度名称，如：异常与边界值]
-
-| ID | 用例标题 | 优先级 | 关联风险 | 前置条件 | 操作步骤 | 预期结果 |
-|---|---|---|---|---|---|---|
-| TC-0xx | [标题] | P1 | R-xxx | [前置条件] | 1. [步骤1] 2. [步骤2] | [预期结果] |
-
-(按实际需要继续添加更多维度分段，如：安全机制、性能与并发等)
-
-## 3. 测试点覆盖追溯
-回顾策略阶段定义的所有测试点，确认用例覆盖情况：
-
-| 测试点 | 优先级 | 关联风险 | 覆盖用例 | 覆盖状态 |
-|---|---|---|---|---|
-| [测试点名称] | P0/P1/P2 | R-xxx | TC-001, TC-002 | ✅ 已覆盖 / ⚠️ 部分覆盖 / ❌ 未覆盖 |
-
-> **覆盖率**：P0 测试点覆盖率 [x]%，P1 测试点覆盖率 [y]%，总覆盖率 [z]%`
+                description: CASES_PROMPT,
+                template: CASES_TEMPLATE
             },
             {
                 id: 'DELIVERY',
                 name: '文档交付',
-                description: `整合需求澄清、策略制定、用例编写三个阶段的所有产出物，形成完整的《测试设计交付文档》。
-【重要警告】：必须包含前面所有阶段的完整内容，绝不能省略或用"参见上文"替代。所有 Mermaid 图表（风险矩阵、测试金字塔、用例饼图）都必须保留。
-右侧产出物必须严格按照以下模板结构生成：
-
-# 测试设计文档 (Final)
-
-## 文档信息
-- **项目名称**: [名称]
-- **版本**: v1.0
-- **生成时间**: [当前日期]
-- **总用例数**: [N] 条 | **高风险项**: [M] 个
-
----
-
-## 第一部分：需求分析
-[此处完整引用需求澄清阶段的产出物内容，包含被测系统边界、核心链路、待澄清问题等]
-
----
-
-## 第二部分：测试策略
-[此处完整引用策略制定阶段的产出物内容，包含风险矩阵 quadrantChart、风险明细表、测试金字塔 block-beta]
-
----
-
-## 第三部分：测试用例
-[此处完整引用用例编写阶段的产出物内容，包含用例统计饼图、用例索引表和用例详情]
-
----
-
-## 附录：验收标准
-- [ ] 所有 P0 用例 100% 执行通过
-- [ ] 所有 P1 用例 95% 以上通过
-- [ ] 高风险项 (RPN≥15) 均有对应缓解策略和用例覆盖
-- [ ] 产品/开发/测试三方确认签字`
+                description: DELIVERY_PROMPT,
+                template: DELIVERY_TEMPLATE
             }
         ],
         onboarding: {
@@ -220,123 +58,21 @@ ${FENCE}
     },
     REQ_REVIEW: {
         id: 'REQ_REVIEW',
+        agentId: 'lisa',
         name: '需求评审',
+        description: '分析需求完整性并评估测试风险',
         stages: [
             {
                 id: 'REVIEW',
                 name: '深度评审',
-                description: `阅读用户提供的需求文档，从测试人员视角按以下维度进行全面扫描，在右侧生成《需求评审问题清单》。
-
-评审维度（按需选择，没有发现问题的维度可省略）：
-1. **可测试性**：验收标准是否明确？能否据此编写测试用例和断言？
-2. **功能完整性**：正向流程、逆向流程、异常流程是否都已覆盖？有无遗漏的用户角色或业务场景？
-3. **边界与规则定义**：字段校验规则、数值上下限、超时阈值、分页大小等是否有明确定义？
-4. **异常场景与闭环**：失败回滚、补偿机制、断网重连、超时重试、并发冲突等异常路径是否已定义处理策略？
-5. **非功能性需求**：性能指标（QPS/响应时间）、安全要求（鉴权/脱敏）、兼容性范围是否明确？
-6. **依赖与环境**：上下游接口就绪状态、第三方依赖、测试环境与 Mock 方案是否已规划？
-7. **需求一致性**：文档内部是否存在自相矛盾？与已有系统或关联需求是否冲突？
-
-【重要警告】：
-- 你的目标是整理总结出所有疑点和问题，直接输出清单以便后期交由**产品经理（PM）**统一确认。绝对不要在输出中以对话口吻向当前对话的用户（可能是我）提问或要求明确。保持客观、专业的第三方评审报告口吻。
-- 产出物中绝对不要包含"下一步计划"或类似章节。
-- 每个问题必须包含：问题描述、优先级（P0/P1/P2）、所属需求章节、改进建议。
-- P0 = 阻塞性问题（必须在开发前回答，否则无法测试或存在重大风险）。
-- P1 = 重要问题（建议在开发前明确，否则可能导致返工）。
-- P2 = 优化建议（可排入后续迭代）。
-- 问题必须按评审维度分段组织，每段一个子标题加一个完整表格，不要把所有问题堆在一个大表里。
-
-右侧产出物必须严格按照以下模板结构生成（将 [] 占位符替换为实际内容）：
-
-# 需求评审问题清单
-
-## 评审概要
-- **被评审需求**: [需求名称/文档标题]
-- **评审时间**: [当前日期]
-- **需求概述**: [用 2-3 句话概括需求的核心内容和业务目标]
-
-## 问题统计
-| 优先级 | 数量 | 说明 |
-|--------|------|------|
-| 🔴 P0 (阻塞) | [N] | 必须在开发前解答，否则无法测试 |
-| 🟡 P1 (重要) | [N] | 建议在开发前明确，否则可能返工 |
-| 🔵 P2 (建议) | [N] | 优化性建议，可排入后续迭代 |
-
-## 1. [评审维度名称，如：可测试性问题]
-
-| ID | 问题描述 | 优先级 | 所属需求章节 | 建议 |
-|----|---------|--------|------------|------|
-| Q-001 | [具体描述] | P0/P1/P2 | [章节名] | [改进建议] |
-
-## 2. [评审维度名称，如：功能完整性问题]
-
-| ID | 问题描述 | 优先级 | 所属需求章节 | 建议 |
-|----|---------|--------|------------|------|
-| Q-0xx | [具体描述] | P0/P1/P2 | [章节名] | [改进建议] |
-
-(按实际发现的问题维度继续添加更多分段)
-
-> **汇总**：共发现 [N] 个问题，P0: [n1] 个 | P1: [n2] 个 | P2: [n3] 个`
+                description: REVIEW_PROMPT,
+                template: REVIEW_TEMPLATE
             },
             {
                 id: 'REPORT',
                 name: '评审报告',
-                description: `整合深度评审阶段的所有发现和讨论结论，生成正式的《需求评审报告》。必须包含明确的评审结论和完整的问题清单。
-【重要警告】：
-- 必须包含深度评审阶段发现的所有问题，绝不能省略或用"参见上文"替代。
-- 评审结论必须基于 P0/P1 问题的数量和严重程度做出客观判定。
-- Mermaid 饼图必须保留。
-
-右侧产出物必须严格按照以下模板结构生成（将 [] 占位符替换为实际内容）：
-
-# 需求评审报告
-
-## 评审结论
-
-**评审结果**：✅ 通过 / ⚠️ 有条件通过 / ❌ 不通过
-
-> [1-2 句话总结结论理由]
-
-### 判定标准
-- ✅ **通过**：无 P0 问题，且 P1 问题均已有明确处理方案
-- ⚠️ **有条件通过**：无 P0 问题，但存在未解决的 P1 问题，需在开发阶段同步明确
-- ❌ **不通过**：存在 P0 阻塞性问题，必须修订需求后重新评审
-
-## 评审信息
-- **被评审需求**: [名称]
-- **评审时间**: [日期]
-
-## 问题统计
-
-${FENCE}mermaid
-pie title 评审问题优先级分布
-    "P0 (阻塞)" : [数量]
-    "P1 (重要)" : [数量]
-    "P2 (建议)" : [数量]
-${FENCE}
-
-**统计摘要**：共 [N] 个问题，P0: [n1] 个 | P1: [n2] 个 | P2: [n3] 个
-
-## 待确认问题清单
-
-### P0 阻塞性问题
-| ID | 问题描述 | 所属需求章节 | 建议 |
-|----|---------|------------|------|
-| Q-001 | [描述] | [章节] | [建议] |
-
-### P1 重要问题
-| ID | 问题描述 | 所属需求章节 | 建议 |
-|----|---------|------------|------|
-| Q-0xx | [描述] | [章节] | [建议] |
-
-### P2 优化建议
-| ID | 问题描述 | 所属需求章节 | 建议 |
-|----|---------|------------|------|
-| Q-0xx | [描述] | [章节] | [建议] |
-
-## 评审意见签署
-- [ ] 产品经理已确认所有 P0 问题的处理方案
-- [ ] 所有 P1 问题已安排明确的跟进负责人
-- [ ] 评审结论已同步至相关干系人`
+                description: REPORT_PROMPT,
+                template: REPORT_TEMPLATE
             }
         ],
         onboarding: {
@@ -351,22 +87,27 @@ ${FENCE}
     },
     INCIDENT_REVIEW: {
         id: 'INCIDENT_REVIEW',
+        agentId: 'lisa',
         name: '故障复盘',
+        description: '系统化复盘故障根因并生成改进计划',
         stages: [
             {
                 id: 'TIMELINE',
                 name: '事件还原',
-                description: TIMELINE_PROMPT
+                description: TIMELINE_PROMPT,
+                template: TIMELINE_TEMPLATE
             },
             {
                 id: 'ROOT_CAUSE',
                 name: '根因分析',
-                description: ROOT_CAUSE_PROMPT
+                description: ROOT_CAUSE_PROMPT,
+                template: ROOT_CAUSE_TEMPLATE
             },
             {
                 id: 'IMPROVEMENT',
                 name: '改进报告',
-                description: IMPROVEMENT_PROMPT
+                description: IMPROVEMENT_PROMPT,
+                template: IMPROVEMENT_TEMPLATE
             }
         ],
         onboarding: {
@@ -377,6 +118,47 @@ ${FENCE}
                 '系统在高峰期出现了服务降级，需要做根因分析'
             ],
             inputPlaceholder: '描述一下这次故障的基本情况...'
+        }
+    },
+    IDEA_BRAINSTORM: {
+        id: 'IDEA_BRAINSTORM',
+        agentId: 'alex',
+        name: '创意头脑风暴',
+        description: '针对模糊痛点或概念，探索发散各种创意可能并收敛为具体的产品概念。',
+        stages: [
+            {
+                id: 'DEFINE',
+                name: '问题域分析',
+                description: DEFINE_PROMPT,
+                template: DEFINE_TEMPLATE
+            },
+            {
+                id: 'DIVERGE',
+                name: '创意发散',
+                description: DIVERGE_PROMPT,
+                template: DIVERGE_TEMPLATE
+            },
+            {
+                id: 'CONVERGE',
+                name: '收敛聚焦',
+                description: CONVERGE_PROMPT,
+                template: CONVERGE_TEMPLATE
+            },
+            {
+                id: 'CONCEPT',
+                name: '概念输出',
+                description: CONCEPT_PROMPT,
+                template: CONCEPT_TEMPLATE
+            }
+        ],
+        onboarding: {
+            welcomeMessage: '你好！我是 Alex，你的产品创新顾问。告诉我你的初步想法，我们一起把它变成可实现的产品概念！',
+            starterPrompts: [
+                '我有个做宠物社区的想法',
+                '我想帮独立开发者解决变现难题',
+                '我觉得现在的记账软件都太复杂了'
+            ],
+            inputPlaceholder: '描述你想做的产品或解决的问题...'
         }
     }
 };

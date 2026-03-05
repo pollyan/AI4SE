@@ -36,7 +36,7 @@ export function WorkflowSelect() {
         FileCode2: FileCode2
     };
 
-    const AgentIcon = ICONS[agent.id === 'lisa' ? 'Bot' : 'Code2'] || Bot;
+    const AgentIcon = ICONS[agent.icon || 'Bot'] || Bot;
 
     return (
         <div className="min-h-screen bg-[#0B1120] text-slate-200 font-sans selection:bg-blue-500/30 selection:text-white relative overflow-hidden flex flex-col items-center pt-24 pb-12 px-6">

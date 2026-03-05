@@ -1,15 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useStore, WORKFLOWS, WorkflowType } from '../store';
+import { useStore, WORKFLOWS, WorkflowType, WORKFLOW_SLUGS } from '../store';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronDown, Check, AlertTriangle, Workflow } from 'lucide-react';
 import { clsx } from 'clsx';
-
-/** WorkflowType → URL slug 的映射 */
-const WORKFLOW_SLUG_MAP: Record<WorkflowType, string> = {
-    TEST_DESIGN: 'test-design',
-    REQ_REVIEW: 'req-review',
-    INCIDENT_REVIEW: 'incident-review',
-};
+import { getAgentById } from '../core/config/agents';
 
 export const WorkflowDropdown: React.FC = () => {
     const { workflow, setWorkflow } = useStore();
@@ -54,10 +48,13 @@ export const WorkflowDropdown: React.FC = () => {
             setIsOpen(false);
             setShowConfirm(null);
             // 同步导航到新工作流的 URL，确保 URL 与 store 状态一致
-            const slug = WORKFLOW_SLUG_MAP[showConfirm];
+            const slug = WORKFLOW_SLUGS[showConfirm];
             navigate(`/workspace/${agentId}/${slug}`, { replace: true });
         }
     };
+
+    const agentConfig = agentId ? getAgentById(agentId) : undefined;
+    const displayTitle = agentConfig?.displayTitle || (agentId === 'alex' ? 'Alex 创新顾问' : 'Lisa AI 专家');
 
     return (
         <div className="relative" ref={dropdownRef}>
@@ -68,7 +65,9 @@ export const WorkflowDropdown: React.FC = () => {
                     isOpen ? "bg-slate-800/60" : "hover:bg-slate-800/40"
                 )}
             >
-                <span className="text-[11px] font-medium text-slate-500 uppercase tracking-widest leading-none">Lisa AI 专家</span>
+                <span className="text-[11px] font-medium text-slate-500 uppercase tracking-widest leading-none">
+                    {displayTitle}
+                </span>
                 <div className="flex items-center gap-1.5 mt-1">
                     <span className="text-[15px] font-semibold text-slate-100 group-hover:text-indigo-300 transition-colors">
                         {currentWorkflow?.name || '选择工作流'}
@@ -89,11 +88,11 @@ export const WorkflowDropdown: React.FC = () => {
             )}>
                 <div className="p-3 border-b border-slate-700/60 bg-slate-800/30">
                     <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">切换工作流</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">选择不同的测试专家流水线</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">选择不同的执行流水线</p>
                 </div>
 
                 <div className="p-1.5 space-y-0.5">
-                    {Object.values(WORKFLOWS).map((wf) => {
+                    {Object.values(WORKFLOWS).filter(wf => wf.agentId === agentId).map((wf) => {
                         const isSelected = wf.id === workflow;
                         return (
                             <button
@@ -127,12 +126,10 @@ export const WorkflowDropdown: React.FC = () => {
                                         {isSelected && <Check className="w-3.5 h-3.5 text-indigo-400" />}
                                     </div>
                                     <div className={clsx(
-                                        "text-[11px] mt-0.5 leading-snug",
+                                        "text-[11px] mt-0.5 leading-snug truncate w-48",
                                         isSelected ? "text-indigo-300/70" : "text-slate-500 group-hover:text-slate-400"
                                     )}>
-                                        {wf.id === 'TEST_DESIGN' && '对传入需求进行逻辑拆解与边界梳理'}
-                                        {wf.id === 'REQ_REVIEW' && '分析需求完整性并评估测试风险'}
-                                        {wf.id === 'INCIDENT_REVIEW' && '系统化复盘故障根因并生成改进计划'}
+                                        {wf.description}
                                     </div>
                                 </div>
                             </button>

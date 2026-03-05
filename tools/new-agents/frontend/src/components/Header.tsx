@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore, WORKFLOWS } from '../store';
 import { Settings, Share, Bot, Plus, AlertTriangle, ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { WorkflowDropdown } from './WorkflowDropdown';
 
@@ -10,6 +10,7 @@ export const Header: React.FC = () => {
   const stages = WORKFLOWS[workflow].stages;
   const [showConfirm, setShowConfirm] = useState(false);
   const navigate = useNavigate();
+  const { agentId } = useParams<{ agentId: string }>();
 
   const handleNewChat = () => {
     setShowConfirm(true);
@@ -20,12 +21,14 @@ export const Header: React.FC = () => {
     setShowConfirm(false);
   };
 
+  const agentIdForUrl = agentId || WORKFLOWS[workflow].agentId;
+
   return (
     <>
       <header className="flex items-center justify-between border-b border-[#1e293b] bg-[#0B1120]/80 backdrop-blur-md px-6 py-3 shrink-0 z-30">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/workflows/lisa')}
+            onClick={() => navigate(`/workflows/${agentIdForUrl}`)}
             className="group flex items-center justify-center p-2 rounded-lg hover:bg-[#1e293b] text-slate-400 hover:text-white transition-all mr-2"
           >
             <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
@@ -81,7 +84,7 @@ export const Header: React.FC = () => {
           >
             <Settings className="w-5 h-5" />
           </button>
-          <div className="bg-center bg-no-repeat bg-cover rounded-full w-9 h-9 ml-2 ring-2 ring-[#151e32]" style={{ backgroundImage: 'url("https://picsum.photos/seed/lisa/100/100")' }}></div>
+          <div className="bg-center bg-no-repeat bg-cover rounded-full w-9 h-9 ml-2 ring-2 ring-[#151e32]" style={{ backgroundImage: `url("https://picsum.photos/seed/${agentIdForUrl}/100/100")` }}></div>
         </div>
       </header>
 

@@ -17,7 +17,7 @@ describe('Mermaid Syntax Validation for INCIDENT_REVIEW Workflow', () => {
     };
 
     it('should successfully parse the timeline mermaid syntax from timeline prompt', async () => {
-        const promptText = WORKFLOWS.INCIDENT_REVIEW.stages.find(s => s.id === 'TIMELINE')?.description || '';
+        const promptText = WORKFLOWS.INCIDENT_REVIEW.stages.find(s => s.id === 'TIMELINE')?.template || '';
         const match = promptText.match(/```mermaid\n([\s\S]*?)```/);
         expect(match).toBeTruthy();
 
@@ -32,7 +32,7 @@ describe('Mermaid Syntax Validation for INCIDENT_REVIEW Workflow', () => {
     });
 
     it('should successfully parse the mindmap mermaid syntax from root_cause prompt', async () => {
-        const promptText = WORKFLOWS.INCIDENT_REVIEW.stages.find(s => s.id === 'ROOT_CAUSE')?.description || '';
+        const promptText = WORKFLOWS.INCIDENT_REVIEW.stages.find(s => s.id === 'ROOT_CAUSE')?.template || '';
         const match = promptText.match(/```mermaid\n([\s\S]*?)```/);
         expect(match).toBeTruthy();
 
@@ -44,7 +44,7 @@ describe('Mermaid Syntax Validation for INCIDENT_REVIEW Workflow', () => {
     });
 
     it('should successfully parse the pie mermaid syntax from improvement prompt', async () => {
-        const promptText = WORKFLOWS.INCIDENT_REVIEW.stages.find(s => s.id === 'IMPROVEMENT')?.description || '';
+        const promptText = WORKFLOWS.INCIDENT_REVIEW.stages.find(s => s.id === 'IMPROVEMENT')?.template || '';
         const match = promptText.match(/```mermaid\n([\s\S]*?)```/);
         expect(match).toBeTruthy();
 

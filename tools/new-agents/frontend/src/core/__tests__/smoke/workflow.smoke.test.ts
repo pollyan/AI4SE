@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { smokeClient, modelName, evaluateWithLLM } from './llmJudge';
-import { getSystemPrompt } from '../../prompts/systemPrompt';
+import { buildSystemPrompt } from '../../prompts/buildSystemPrompt';
 import { WORKFLOWS } from '../../workflows';
 
 // ---------------------------------------------------------------------------
@@ -31,11 +31,12 @@ class AgentConversationRunner {
 
     /** 重建 / 更新 System Prompt（始终位于 history[0]） */
     private rebuildSystemPrompt() {
-        const prompt = getSystemPrompt(
-            this.workflowKey,
-            this.currentStageIndex,
-            this.currentArtifact,
-        );
+        const prompt = buildSystemPrompt({
+            agentId: WORKFLOWS[this.workflowKey].agentId,
+            workflow: this.workflowKey,
+            stageIndex: this.currentStageIndex,
+            currentArtifact: this.currentArtifact
+        });
         if (this.history.length === 0) {
             this.history.push({ role: 'system', content: prompt });
         } else {

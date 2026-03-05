@@ -2,10 +2,46 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { WORKFLOWS } from './core/workflows';
 import { ChatState as AppState, ArtifactVersion, Message, WorkflowType } from './core/types';
+import { getAgentById } from './core/config/agents';
 
 // Re-export for compatibility
 export * from './core/types';
 export * from './core/workflows';
+
+export const getWelcomeMessage = (workflow: WorkflowType): string => {
+  const wf = WORKFLOWS[workflow];
+  if (!wf) return '# 欢迎使用\n\n请在左侧输入您的需求。';
+
+  if (wf.welcomeMessage) {
+    return wf.welcomeMessage;
+  }
+
+  const agentId = wf.agentId;
+  const workflowName = wf.name;
+  const agentConfig = getAgentById(agentId);
+  const displayTitle = agentConfig?.displayTitle || agentId;
+
+  if (agentConfig?.welcomeTemplate) {
+    return agentConfig.welcomeTemplate.replace('{agentName}', displayTitle).replace('{workflowName}', workflowName);
+  }
+
+  // Fallback
+  return `# 欢迎使用 ${displayTitle}\n\n我们将通过【${workflowName}】流程，共同为您生成相关的产出物文档。`;
+};
+
+const OLD_KEY = 'lisa-storage';
+const NEW_KEY = 'agent-workspace-storage';
+if (typeof window !== 'undefined') {
+  try {
+    const oldData = localStorage.getItem(OLD_KEY);
+    if (oldData && !localStorage.getItem(NEW_KEY)) {
+      localStorage.setItem(NEW_KEY, oldData);
+      localStorage.removeItem(OLD_KEY);
+    }
+  } catch (e) {
+    console.error('Storage migration failed:', e);
+  }
+}
 
 export const useStore = create<AppState>()(
   persist(
@@ -16,10 +52,10 @@ export const useStore = create<AppState>()(
       workflow: 'TEST_DESIGN',
       stageIndex: 0,
       chatHistory: [],
-      artifactContent: '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。',
+      artifactContent: getWelcomeMessage('TEST_DESIGN'),
       artifactHistory: [],
       stageArtifacts: {
-        [WORKFLOWS['TEST_DESIGN'].stages[0].id]: '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。'
+        [WORKFLOWS['TEST_DESIGN'].stages[0].id]: getWelcomeMessage('TEST_DESIGN')
       },
       isSettingsOpen: false,
       isGenerating: false,
@@ -35,9 +71,9 @@ export const useStore = create<AppState>()(
         stageIndex: 0,
         chatHistory: [],
         artifactHistory: [],
-        artifactContent: '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。',
+        artifactContent: getWelcomeMessage(workflow),
         stageArtifacts: {
-          [WORKFLOWS[workflow].stages[0].id]: '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。'
+          [WORKFLOWS[workflow].stages[0].id]: getWelcomeMessage(workflow)
         }
       }),
       setStageIndex: (index) => set((state) => {
@@ -100,15 +136,15 @@ export const useStore = create<AppState>()(
       clearHistory: () => set((state) => ({
         chatHistory: [],
         artifactHistory: [],
-        artifactContent: '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。',
+        artifactContent: getWelcomeMessage(state.workflow),
         stageArtifacts: {
-          [WORKFLOWS[state.workflow].stages[0].id]: '# 欢迎使用 Lisa 测试专家\n\n请在左侧输入您的需求，我将为您生成测试文档。'
+          [WORKFLOWS[state.workflow].stages[0].id]: getWelcomeMessage(state.workflow)
         },
         stageIndex: 0
       })),
     }),
     {
-      name: 'lisa-storage',
+      name: NEW_KEY,
       partialize: (state) => ({
         apiKey: state.apiKey,
         baseUrl: state.baseUrl,

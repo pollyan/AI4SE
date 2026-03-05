@@ -18,12 +18,24 @@ export type Message = {
     attachments?: Attachment[];
 };
 
-export type WorkflowType = 'TEST_DESIGN' | 'REQ_REVIEW' | 'INCIDENT_REVIEW';
+export type WorkflowType = 'TEST_DESIGN' | 'REQ_REVIEW' | 'INCIDENT_REVIEW' | 'IDEA_BRAINSTORM';
+
+export const WORKFLOW_SLUGS: Record<WorkflowType, string> = {
+    TEST_DESIGN: 'test-design',
+    REQ_REVIEW: 'req-review',
+    INCIDENT_REVIEW: 'incident-review',
+    IDEA_BRAINSTORM: 'idea-brainstorm',
+};
+
+export const SLUG_TO_WORKFLOW: Record<string, WorkflowType> = Object.fromEntries(
+    Object.entries(WORKFLOW_SLUGS).map(([k, v]) => [v, k as WorkflowType])
+) as Record<string, WorkflowType>;
 
 export interface WorkflowStage {
     id: string;
     name: string;
     description: string;
+    template?: string;
 }
 
 export interface OnboardingConfig {
@@ -34,6 +46,9 @@ export interface OnboardingConfig {
 
 export interface WorkflowDef {
     id: WorkflowType;
+    agentId: string;
+    welcomeMessage?: string;
+    description: string;
     name: string;
     stages: WorkflowStage[];
     onboarding: OnboardingConfig;

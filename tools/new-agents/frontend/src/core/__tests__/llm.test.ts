@@ -17,9 +17,9 @@ vi.mock('openai', () => {
 });
 
 // 2. Mock systemPrompt
-vi.mock('../prompts/systemPrompt', () => ({
-    getSystemPrompt: vi.fn(
-        (_wf: string, _stage: number, _art: string) => 'mocked-system-prompt'
+vi.mock('../prompts/buildSystemPrompt', () => ({
+    buildSystemPrompt: vi.fn(
+        () => 'mocked-system-prompt'
     ),
 }));
 

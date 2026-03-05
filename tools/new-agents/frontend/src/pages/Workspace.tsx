@@ -4,13 +4,7 @@ import { Header } from '../components/Header';
 import { ChatPane } from '../components/ChatPane';
 import { ArtifactPane } from '../components/ArtifactPane';
 import { SettingsModal } from '../components/SettingsModal';
-import { useStore, WorkflowType } from '../store';
-
-const WORKFLOW_ID_MAP: Record<string, WorkflowType> = {
-    'test-design': 'TEST_DESIGN',
-    'req-review': 'REQ_REVIEW',
-    'incident-review': 'INCIDENT_REVIEW',
-};
+import { useStore, SLUG_TO_WORKFLOW } from '../store';
 
 export function Workspace() {
     const { workflowId } = useParams();
@@ -18,7 +12,7 @@ export function Workspace() {
 
     useEffect(() => {
         if (workflowId) {
-            const targetWorkflow = WORKFLOW_ID_MAP[workflowId];
+            const targetWorkflow = SLUG_TO_WORKFLOW[workflowId];
             if (targetWorkflow && targetWorkflow !== workflow) {
                 setWorkflow(targetWorkflow);
             }

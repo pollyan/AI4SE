@@ -54,6 +54,15 @@ const AGENT_WORKFLOWS: AgentWorkflowConfig[] = [
         description: '结合上下文语境与页面 DOM 结构，自动预测并生成可执行的 AI 意图校验断言语句。',
         icon: 'FileCode2',
         statusLabel: 'Plan'
+    },
+    {
+        id: 'idea-brainstorm',
+        agentId: 'alex',
+        status: 'online',
+        name: '创意头脑风暴',
+        description: '引导你完成创意探索和产品概念沉淀，生成清晰可沟通的产品概念简报（One-Pager）。',
+        icon: 'Lightbulb',
+        link: '/workspace/alex/idea-brainstorm'
     }
 ];
 

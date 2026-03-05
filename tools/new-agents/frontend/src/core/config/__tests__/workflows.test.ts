@@ -47,10 +47,34 @@ describe('Workflow Configuration', () => {
         expect(wf.stages[1].description.length).toBeGreaterThan(100);
     });
 
-    it('should return empty array for unsupported agents', () => {
+    it('should return workflows for Alex', () => {
         const workflows = getAgentWorkflows('alex');
-        expect(workflows).toEqual([]);
+        expect(workflows.length).toBeGreaterThanOrEqual(1);
 
+        const ideaBrainstorm = workflows.find(w => w.id === 'idea-brainstorm');
+        expect(ideaBrainstorm).toBeDefined();
+        expect(ideaBrainstorm?.status).toBe('online');
+    });
+
+    it('should have IDEA_BRAINSTORM workflow defined with correct agentId and stages', () => {
+        const wf = WORKFLOWS.IDEA_BRAINSTORM;
+        expect(wf).toBeDefined();
+        expect(wf.name).toBe('创意头脑风暴');
+        expect(wf.agentId).toBe('alex');
+        expect(wf.stages).toHaveLength(4);
+        expect(wf.stages[0].id).toBe('DEFINE');
+        expect(wf.stages[3].id).toBe('CONCEPT');
+    });
+
+    it('every workflow definition should configure an agentId', () => {
+        for (const key of Object.keys(WORKFLOWS)) {
+            const wf = WORKFLOWS[key as keyof typeof WORKFLOWS];
+            expect(wf.agentId).toBeDefined();
+            expect(typeof wf.agentId).toBe('string');
+        }
+    });
+
+    it('should return empty array for unsupported agents', () => {
         const unknown = getAgentWorkflows('unknown');
         expect(unknown).toEqual([]);
     });

@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { parseLlmStreamChunk } from './utils/llmParser';
-import { getSystemPrompt } from './prompts/systemPrompt';
+import { buildSystemPrompt } from './prompts/buildSystemPrompt';
 import { useStore, WORKFLOWS, WorkflowType, Attachment } from '../store';
 
 /** 将 base64 编码的文本安全解码为 UTF-8 字符串 */
@@ -68,9 +68,16 @@ async function* generateResponseStreamViaProxy(
 
 export const generateResponseStream = async function* (userMessage: string, attachments?: Attachment[], signal?: AbortSignal) {
   const state = useStore.getState();
-  const { isUserConfigured, apiKey, baseUrl, model, workflow, stageIndex, artifactContent, chatHistory } = state;
+  const { isUserConfigured, apiKey, baseUrl, model, workflow, stageIndex, artifactContent, chatHistory, stageArtifacts } = state;
 
-  const systemInstruction = getSystemPrompt(workflow, stageIndex, artifactContent);
+  const agentId = WORKFLOWS[workflow].agentId;
+  const systemInstruction = buildSystemPrompt({
+    agentId,
+    workflow,
+    stageIndex,
+    currentArtifact: artifactContent,
+    stageArtifacts
+  });
 
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemInstruction },

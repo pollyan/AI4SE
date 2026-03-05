@@ -5,10 +5,16 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { clsx } from 'clsx';
 import { useChatService } from '../services/chatService';
+import { getAgentById } from '../core/config/agents';
 
 export const ChatPane: React.FC = () => {
   const { chatHistory, isGenerating, workflow } = useStore();
   const onboardingConfig = WORKFLOWS[workflow].onboarding;
+  const agentId = WORKFLOWS[workflow].agentId;
+  const agentConfig = getAgentById(agentId);
+  const displayTitle = agentConfig?.displayTitle || agentId;
+  const agentName = agentConfig?.name || 'AI';
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -55,7 +61,7 @@ export const ChatPane: React.FC = () => {
           </h3>
           <span className="text-[10px] uppercase tracking-wider text-cyan-400 font-mono border border-cyan-400/20 bg-cyan-400/10 px-2 py-0.5 rounded-full">Active</span>
         </div>
-        <p className="text-slate-400 text-xs truncate">Lisa 测试专家正在为您服务</p>
+        <p className="text-slate-400 text-xs truncate">{displayTitle} 正在为您服务</p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
@@ -100,7 +106,7 @@ export const ChatPane: React.FC = () => {
 
         {chatHistory.map((msg) => {
           // Hide the empty assistant bubble that gets created initially before text arrives
-          if (isGenerating && msg.role === 'assistant' && !msg.content && msg.id === chatHistory[chatHistory.length - 1]?.id) {
+          if (isGenerating && msg.role === 'assistant' && !msg.content?.trim() && msg.id === chatHistory[chatHistory.length - 1]?.id) {
             return null;
           }
 
@@ -117,7 +123,7 @@ export const ChatPane: React.FC = () => {
 
               <div className={clsx("flex flex-col gap-1 max-w-[90%]", msg.role === 'user' ? "items-end" : "items-start")}>
                 <span className="text-slate-500 text-[10px] font-mono px-1">
-                  {msg.role === 'user' ? 'You' : 'Lisa AI'} • {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {msg.role === 'user' ? 'You' : agentName} • {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
                 <div className={clsx(
                   "rounded-2xl p-4 text-sm leading-relaxed shadow-sm",
@@ -169,13 +175,13 @@ export const ChatPane: React.FC = () => {
           );
         })}
 
-        {isGenerating && (chatHistory.length === 0 || chatHistory[chatHistory.length - 1]?.role !== 'assistant' || !chatHistory[chatHistory.length - 1]?.content) && (
+        {isGenerating && (chatHistory.length === 0 || chatHistory[chatHistory.length - 1]?.role !== 'assistant' || !chatHistory[chatHistory.length - 1]?.content?.trim()) && (
           <div className="flex items-start gap-4 animate-fade-in-up">
             <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-500 shrink-0 mt-1">
               <Bot className="w-5 h-5 animate-pulse" />
             </div>
             <div className="flex flex-col gap-1 items-start">
-              <span className="text-slate-500 text-[10px] font-mono ml-1">Lisa AI • 思考中...</span>
+              <span className="text-slate-500 text-[10px] font-mono ml-1">{agentName} • 思考中...</span>
               <div className="rounded-2xl rounded-tl-none bg-[#151e32] p-4 border border-[#1e293b] flex gap-1">
                 <span className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }}></span>
                 <span className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '150ms' }}></span>
@@ -254,7 +260,7 @@ export const ChatPane: React.FC = () => {
             )}
           </div>
         </div>
-        <p className="text-center text-[10px] text-slate-500 mt-3 font-mono">Lisa AI Generated Context • v1.0.4</p>
+        <p className="text-center text-[10px] text-slate-500 mt-3 font-mono">{agentName} Generated Context • v1.0.4</p>
       </div>
     </section>
   );

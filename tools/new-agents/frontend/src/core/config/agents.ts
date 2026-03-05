@@ -5,6 +5,9 @@ export interface AgentConfig {
     role: string;
     description: string;
     features: string[];
+    displayTitle: string;
+    welcomeTemplate?: string;
+    icon?: string;
 }
 
 const AGENTS: AgentConfig[] = [
@@ -18,11 +21,14 @@ const AGENTS: AgentConfig[] = [
             '智能化跟进需求评审',
             '测试策略推导与用例设计',
             '结构化线上故障复盘分析'
-        ]
+        ],
+        displayTitle: 'Lisa AI 专家',
+        welcomeTemplate: '# 欢迎使用 {agentName}\n\n请在左侧输入您的需求，我将通过【{workflowName}】流程，为您生成相关的产出物文档。',
+        icon: 'Bot'
     },
     {
         id: 'alex',
-        status: 'coming_soon',
+        status: 'online',
         name: 'Alex',
         role: '业务需求分析师',
         description: '擅长分析业务场景与用户故事，自动化拆解产品逻辑，生成清晰规范的需求文档（PRD）。',
@@ -30,7 +36,10 @@ const AGENTS: AgentConfig[] = [
             '业务需求深度解析',
             '功能逻辑树构建',
             '敏捷开发故事拆分'
-        ]
+        ],
+        displayTitle: 'Alex 创新顾问',
+        welcomeTemplate: '# 欢迎使用 {agentName}\n\n请在左侧告诉我你的初步想法，我们将通过【{workflowName}】流程，一起把它变成可实现的产品概念！',
+        icon: 'Code2'
     }
 ];
 

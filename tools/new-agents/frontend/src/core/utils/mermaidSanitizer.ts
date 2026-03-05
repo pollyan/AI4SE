@@ -35,6 +35,13 @@ export function sanitizeMermaidCode(code: string): string {
         sanitized = sanitized.replace(/(\d{1,2}):(\d{2})(?=\s*:)/g, '$1点$2分');
     }
 
+    // 7. Fix quadrantChart string labels
+    if (sanitized.trim().startsWith('quadrantChart')) {
+        // Enforce quotes around point labels if they are missing
+        // 创意A: [0.8, 0.9] -> "创意A": [0.8, 0.9]
+        sanitized = sanitized.replace(/^([ \t]*)([^"\n:-]+):\s*(\[.*\])$/gm, '$1"$2": $3');
+    }
+
     return sanitized.trim();
 }
 
