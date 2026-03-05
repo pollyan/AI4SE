@@ -12,21 +12,6 @@ export interface AgentConfig {
 
 const AGENTS: AgentConfig[] = [
     {
-        id: 'lisa',
-        status: 'online',
-        name: 'Lisa',
-        role: '测试专家',
-        description: '专注于深度需求评审、测试策略与用例辅助设计，并提供结构化线上故障复盘引导的智能体。',
-        features: [
-            '智能化跟进需求评审',
-            '测试策略推导与用例设计',
-            '结构化线上故障复盘分析'
-        ],
-        displayTitle: 'Lisa AI 专家',
-        welcomeTemplate: '# 欢迎使用 {agentName}\n\n请在左侧输入您的需求，我将通过【{workflowName}】流程，为您生成相关的产出物文档。',
-        icon: 'Bot'
-    },
-    {
         id: 'alex',
         status: 'online',
         name: 'Alex',
@@ -40,6 +25,21 @@ const AGENTS: AgentConfig[] = [
         displayTitle: 'Alex 创新顾问',
         welcomeTemplate: '# 欢迎使用 {agentName}\n\n请在左侧告诉我你的初步想法，我们将通过【{workflowName}】流程，一起把它变成可实现的产品概念！',
         icon: 'Code2'
+    },
+    {
+        id: 'lisa',
+        status: 'online',
+        name: 'Lisa',
+        role: '测试专家',
+        description: '专注于深度需求评审、测试策略与用例辅助设计，并提供结构化线上故障复盘引导的智能体。',
+        features: [
+            '智能化跟进需求评审',
+            '测试策略推导与用例设计',
+            '结构化线上故障复盘分析'
+        ],
+        displayTitle: 'Lisa AI 专家',
+        welcomeTemplate: '# 欢迎使用 {agentName}\n\n请在左侧输入您的需求，我将通过【{workflowName}】流程，为您生成相关的产出物文档。',
+        icon: 'Bot'
     }
 ];
 
