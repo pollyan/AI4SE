@@ -330,7 +330,7 @@ AIStepExecutor
 
 #### Phase 1: 高优先级 - 前端组件测试 (F4 修复)
 
-- [ ] Task 12: 创建 ChatPane 组件测试
+- [x] Task 12: 创建 ChatPane 组件测试
   - File: `tools/new-agents/frontend/src/components/__tests__/ChatPane.test.tsx`
   - Action: 测试 ChatPane 组件的核心功能
   - Notes:
@@ -339,7 +339,7 @@ AIStepExecutor
     - 测试流式响应显示
     - Mock SSE 连接
 
-- [ ] Task 13: 创建 SettingsModal 组件测试
+- [x] Task 13: 创建 SettingsModal 组件测试
   - File: `tools/new-agents/frontend/src/components/__tests__/SettingsModal.test.tsx`
   - Action: 测试 SettingsModal 组件的核心功能
   - Notes:
@@ -349,7 +349,7 @@ AIStepExecutor
 
 #### Phase 2: 中优先级 - CI/CD 配置
 
-- [ ] Task 10: 配置覆盖率监控
+- [x] Task 10: 配置覆盖率监控
   - File: `.github/workflows/deploy.yml`
   - Action: 在 CI 中添加覆盖率阈值检查和报告上传
   - Notes:
@@ -358,7 +358,7 @@ AIStepExecutor
     - 失败时阻止部署
     - **E2E 测试跳过:** 设置环境变量 `CI=true`
 
-- [ ] Task 11: 更新 pytest 配置
+- [x] Task 11: 更新 pytest 配置
   - File: `pytest.ini`
   - Action: 添加覆盖率相关配置
   - Notes:
@@ -387,13 +387,13 @@ AIStepExecutor
 
 #### 前端组件测试验收标准 (F4 修复)
 
-- [ ] AC-13: Given ChatPane 组件已渲染, When 用户输入消息并点击发送, Then 消息被添加到消息列表
-- [ ] AC-14: Given SettingsModal 组件已打开, When 用户输入有效配置并保存, Then 配置被正确存储
+- [x] AC-13: Given ChatPane 组件已渲染, When 用户输入消息并点击发送, Then 消息被添加到消息列表
+- [x] AC-14: Given SettingsModal 组件已打开, When 用户输入有效配置并保存, Then 配置被正确存储
 
 #### CI/CD 验收标准
 
-- [ ] AC-11: Given 代码提交到主分支, When CI 运行测试, Then 生成覆盖率报告并在覆盖率低于 50% 时失败
-- [ ] AC-12: Given 所有测试通过, When 部署流程执行, Then 成功部署到生产环境
+- [x] AC-11: Given 代码提交到主分支, When CI 运行测试, Then 生成覆盖率报告并在覆盖率低于 50% 时失败
+- [x] AC-12: Given 所有测试通过, When 部署流程执行, Then 成功部署到生产环境
 
 ## Additional Context
 
