@@ -22,14 +22,8 @@ python-socketio>=5.0.0
 flask-sqlalchemy>=3.0.0
 psycopg2-binary>=2.9.0
 
-# Supabase客户端
-supabase>=1.0.0
-
 # 开发工具
 black>=22.0.0
 flake8>=4.0.0
 factory-boy>=3.2.0
 faker>=18.0.0
-
-
-openai>=1.12.0
