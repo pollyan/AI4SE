@@ -51,14 +51,20 @@ jobs:
       run: |
         echo "::group::Running Intent Tester API Tests"
         export PYTHONPATH=$PYTHONPATH:$(pwd):$(pwd)/tools/intent-tester
-        python -m pytest tools/intent-tester/tests/ -v --cov=tools/intent-tester/backend --cov-report=term
+        python -m pytest tools/intent-tester/tests/ -v --cov=tools/intent-tester/backend --cov-report=term --cov-report=xml --cov-fail-under=50
         echo "::endgroup::"
+        
+    - name: 📤 Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage.xml
         
     - name: 🧪 Run New Agents Backend tests
       run: |
         echo "::group::Running New Agents Backend Tests"
         cd tools/new-agents/backend
-        python -m pytest tests/test_api.py -v -c pytest.ini
+        python -m pytest tests/ -v -c pytest.ini
         echo "::endgroup::"
   
   # ====================================
@@ -85,6 +91,28 @@ jobs:
         npm run build
         echo "::endgroup::"
 
+  # ====================================
+  # 阶段 1b-4: New Agents Frontend 测试
+  # ====================================
+  new-agents-frontend-test:
+    name: New Agents Frontend Tests
+    runs-on: ubuntu-latest
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🟢 Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: 📦 Install and Test
+      run: |
+        echo "::group::Running New Agents Frontend Tests"
+        cd tools/new-agents/frontend
+        npm ci
+        npm run test
+        echo "::endgroup::"
 
   # ====================================
   # 阶段 1c: 代码质量检查
@@ -150,7 +178,7 @@ jobs:
   # ====================================
   deploy-to-production:
     name: Build and Deploy to Tencent Cloud
-    needs: [backend-api-test, common-frontend-test, proxy-test]  # 必须等待所有测试完成且成功
+    needs: [backend-api-test, common-frontend-test, new-agents-frontend-test, proxy-test]  # 必须等待所有测试完成且成功
     runs-on: ubuntu-latest
     environment:
       name: production

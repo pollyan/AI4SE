@@ -183,7 +183,7 @@ run_new_agents_backend_tests() {
     pip3 install -q -r requirements.txt pytest 2>/dev/null || pip install -q -r requirements.txt pytest
 
     log_info "运行 New Agents Backend 测试..."
-    if python3 -m pytest tests/test_api.py -v; then
+    if python3 -m pytest tests/ -v; then
         log_info "✅ New Agents Backend 测试通过"
     else
         log_error "❌ New Agents Backend 测试失败"
