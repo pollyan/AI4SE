@@ -39,9 +39,6 @@ services:
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key-please-change}
       - MIDSCENE_SERVER_URL=http://host.docker.internal:3001
       - FLASK_ENV=${FLASK_ENV:-production}
-      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
-      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
-      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-intent-test-framework}
 
     ports:
       - "5001:5001"

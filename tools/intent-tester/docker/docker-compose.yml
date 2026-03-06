@@ -37,10 +37,6 @@ services:
       # MidScene Server在本地手动启动，通过host.docker.internal访问
       - MIDSCENE_SERVER_URL=http://host.docker.internal:3001
       - FLASK_ENV=${FLASK_ENV:-production}
-      # LangSmith 追踪配置
-      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-true}
-      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
-      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-intent-test-framework}
     ports:
       - "5001:5001"
     volumes:

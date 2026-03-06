@@ -1,0 +1,152 @@
+{
+  "repository_type": "monorepo",
+  "project_name": "AI4SE",
+  "scan_date": "2026-03-06",
+  "scan_level": "deep",
+  "parts": [
+    {
+      "part_id": "frontend",
+      "display_name": "统一门户前端",
+      "project_type_id": "web",
+      "root_path": "tools/frontend/",
+      "tech_stack": {
+        "framework": "React 19",
+        "build_tool": "Vite 7",
+        "language": "TypeScript 5.9",
+        "css": "Tailwind CSS 3",
+        "routing": "React Router 7"
+      },
+      "entry_point": "src/main.tsx",
+      "port": null,
+      "served_via": "Nginx static files at /"
+    },
+    {
+      "part_id": "intent-tester",
+      "display_name": "意图测试工具",
+      "project_type_id": "web",
+      "root_path": "tools/intent-tester/",
+      "tech_stack": {
+        "backend_framework": "Flask 2.0+",
+        "realtime": "Flask-SocketIO 5",
+        "orm": "Flask-SQLAlchemy",
+        "browser_automation": "Playwright 1.56 + MidSceneJS 0.30",
+        "node_runtime": "Express + Socket.IO",
+        "frontend": "Jinja2 + Vanilla JS",
+        "language": "Python 3.11 + Node.js 20"
+      },
+      "entry_point": "backend/app.py",
+      "port": 5001,
+      "served_via": "Nginx proxy at /intent-tester/"
+    },
+    {
+      "part_id": "new-agents-frontend",
+      "display_name": "AI 智能体前端 SPA",
+      "project_type_id": "web",
+      "root_path": "tools/new-agents/frontend/",
+      "tech_stack": {
+        "framework": "React 19",
+        "build_tool": "Vite 6",
+        "language": "TypeScript 5.8",
+        "css": "Tailwind CSS 4",
+        "state_management": "Zustand 5",
+        "llm_client": "OpenAI SDK 6",
+        "markdown": "react-markdown + mermaid 11",
+        "animation": "Motion (Framer Motion) 12",
+        "testing": "Vitest"
+      },
+      "entry_point": "src/main.tsx",
+      "port": null,
+      "served_via": "Nginx proxy at /new-agents/"
+    },
+    {
+      "part_id": "new-agents-backend",
+      "display_name": "LLM 代理后端",
+      "project_type_id": "backend",
+      "root_path": "tools/new-agents/backend/",
+      "tech_stack": {
+        "framework": "Flask 3.0",
+        "orm": "SQLAlchemy 2.0",
+        "llm_client": "OpenAI SDK 1.58",
+        "wsgi": "Gunicorn 22",
+        "language": "Python 3.11"
+      },
+      "entry_point": "app.py",
+      "port": 5002,
+      "served_via": "Nginx proxy at /new-agents/api/"
+    },
+    {
+      "part_id": "shared",
+      "display_name": "共享 Python 工具库",
+      "project_type_id": "library",
+      "root_path": "tools/shared/",
+      "tech_stack": {
+        "framework": "Flask-SQLAlchemy",
+        "config": "python-dotenv",
+        "language": "Python"
+      },
+      "entry_point": "__init__.py",
+      "port": null,
+      "served_via": "Imported by intent-tester"
+    }
+  ],
+  "integration_points": [
+    {
+      "from": "nginx",
+      "to": "frontend",
+      "type": "static_files",
+      "path": "/"
+    },
+    {
+      "from": "nginx",
+      "to": "intent-tester",
+      "type": "reverse_proxy",
+      "path": "/intent-tester/"
+    },
+    {
+      "from": "nginx",
+      "to": "new-agents-frontend",
+      "type": "reverse_proxy",
+      "path": "/new-agents/"
+    },
+    {
+      "from": "nginx",
+      "to": "new-agents-backend",
+      "type": "reverse_proxy",
+      "path": "/new-agents/api/",
+      "note": "path rewrite to /api/"
+    },
+    {
+      "from": "intent-tester",
+      "to": "postgres",
+      "type": "database",
+      "protocol": "TCP/SQL"
+    },
+    {
+      "from": "new-agents-backend",
+      "to": "postgres",
+      "type": "database",
+      "protocol": "TCP/SQL"
+    },
+    {
+      "from": "intent-tester",
+      "to": "midscene-server",
+      "type": "http_api",
+      "protocol": "REST",
+      "note": "host.docker.internal:3001"
+    },
+    {
+      "from": "new-agents-frontend",
+      "to": "new-agents-backend",
+      "type": "sse",
+      "path": "/new-agents/api/chat/stream"
+    }
+  ],
+  "infrastructure": {
+    "database": "PostgreSQL 15",
+    "gateway": "Nginx Alpine",
+    "container_orchestration": "Docker Compose",
+    "ci_cd": "GitHub Actions",
+    "deployment_target": "Tencent Cloud",
+    "docker_network": "ai4se-network"
+  }
+}

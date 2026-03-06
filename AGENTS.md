@@ -24,10 +24,22 @@
 
 > **注意：不要靠猜测工作！遇到以下场景，请立即查阅（调用工具读取）对应的深层知识库文档。**
 
-- **修改项目结构 / 添加新模块 / 需要理解系统服务与通信方式** → 必须阅读 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+### 项目全景（首次接触项目或需要全局视野时优先阅读）
+
+- **首次了解项目 / 需要全局视野 / 定位某部分的文档** → 必须阅读 [docs/index.md](docs/index.md)（项目文档主索引，链接到所有子文档）
+
+### 按场景查阅
+
+- **修改项目结构 / 添加新模块 / 需要理解系统服务与通信方式** → 必须阅读 [docs/architecture.md](docs/architecture.md)（服务拓扑、各部分架构、数据流）
+- **需要了解服务间如何通信 / 集成点 / 共享资源** → 必须阅读 [docs/integration-architecture.md](docs/integration-architecture.md)
+- **需要了解 API 端点、请求/响应格式** → 必须阅读 [docs/api-contracts.md](docs/api-contracts.md)
+- **需要了解数据库表结构、模型关系** → 必须阅读 [docs/data-models.md](docs/data-models.md)
 - **编写测试 / 修改现有测试 / 需要了解 Mock 规则与测试边界** → 必须阅读 [docs/TESTING.md](docs/TESTING.md)
 - **编写具体代码 (Python/React/Node) / 需要了解命名规范与风格约束** → 必须阅读 [docs/CODING_STANDARDS.md](docs/CODING_STANDARDS.md)
 - **做架构设计决策 / 处理 Artifact 输出 / 需要理解项目核心设计哲学** → 必须阅读 [docs/DESIGN_PRINCIPLES.md](docs/DESIGN_PRINCIPLES.md)
+- **需要了解 React 组件、JS 模块、提示词结构** → 必须阅读 [docs/component-inventory.md](docs/component-inventory.md)
+- **需要了解开发环境搭建、测试命令、构建流程** → 必须阅读 [docs/development-guide.md](docs/development-guide.md)
+- **需要了解部署流程、CI/CD、Docker 配置** → 必须阅读 [docs/deployment-guide.md](docs/deployment-guide.md)
 - **查看当前实施进度与技术债 (Tech Debt) 设计** → 必须查看 [docs/plans/](docs/plans/) 目录
 
 ---
