@@ -1,7 +1,4 @@
 """共享数据库配置模块"""
-from flask_sqlalchemy import SQLAlchemy
-
-db = SQLAlchemy()
 
 def get_database_config():
     """获取数据库配置"""
