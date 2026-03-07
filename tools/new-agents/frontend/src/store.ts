@@ -150,7 +150,6 @@ export const useStore = create<AppState>()(
     {
       name: NEW_KEY,
       partialize: (state) => ({
-        apiKey: state.apiKey,
         baseUrl: state.baseUrl,
         model: state.model,
         workflow: state.workflow,
