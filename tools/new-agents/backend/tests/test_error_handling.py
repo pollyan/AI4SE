@@ -6,7 +6,7 @@ Error Handling Tests - 错误处理边界测试
 import pytest
 import os
 import sys
-import json
+import tempfile
 import time
 from unittest.mock import patch, MagicMock
 from openai import APIError, APIConnectionError, RateLimitError, APITimeoutError
@@ -16,40 +16,40 @@ import httpx
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 os.environ['FLASK_TESTING'] = '1'
-try:
-    from app import app, init_db, get_session
-    from models import LlmConfig
-except ImportError:
-    app = None
+
+from app import create_app
+from models import db, LlmConfig
 
 
 @pytest.fixture
-def client():
-    if app is None:
-        pytest.fail("Cannot import app from app.py, implementation missing.")
-
-    import tempfile
-
+def app():
+    """Create application with test configuration."""
     db_fd, db_path = tempfile.mkstemp()
-    app.config['DATABASE_URL'] = f'sqlite:///{db_path}'
+
+    app = create_app({
+        'TESTING': True,
+        'SQLALCHEMY_DATABASE_URI': f'sqlite:///{db_path}',
+        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+    })
 
     with app.app_context():
-        from models import Base, get_engine
-        engine = get_engine()
-        Base.metadata.create_all(engine)
-
-    with app.test_client() as client:
-        yield client
+        db.create_all()
+        yield app
 
     os.close(db_fd)
     os.unlink(db_path)
 
 
 @pytest.fixture
-def setup_default_config(client):
+def client(app):
+    """Create test client."""
+    return app.test_client()
+
+
+@pytest.fixture
+def setup_default_config(app):
     """设置默认配置"""
     with app.app_context():
-        session = get_session()
         config = LlmConfig(
             config_key='default',
             api_key='test-api-key',
@@ -57,8 +57,8 @@ def setup_default_config(client):
             model='gpt-4',
             description='Test config'
         )
-        session.add(config)
-        session.commit()
+        db.session.add(config)
+        db.session.commit()
 
 
 def _make_api_connection_error(message: str) -> APIConnectionError:
@@ -238,10 +238,9 @@ class TestConfigMissingScenarios:
         assert response.status_code == 503
         assert "系统未配置" in response.json["error"]
 
-    def test_inactive_config(self, client):
+    def test_inactive_config(self, client, app):
         """测试已停用的配置"""
         with app.app_context():
-            session = get_session()
             config = LlmConfig(
                 config_key='default',
                 api_key='test-api-key',
@@ -249,8 +248,8 @@ class TestConfigMissingScenarios:
                 model='gpt-4',
                 is_active=False  # 设置为非活动状态
             )
-            session.add(config)
-            session.commit()
+            db.session.add(config)
+            db.session.commit()
 
         messages = [{"role": "user", "content": "Hello"}]
         response = client.post('/api/chat/stream', json={"messages": messages})
@@ -259,18 +258,17 @@ class TestConfigMissingScenarios:
         assert "系统未配置" in response.json["error"]
 
     @patch('app.OpenAI')
-    def test_empty_api_key(self, mock_openai, client):
+    def test_empty_api_key(self, mock_openai, client, app):
         """测试空 API Key"""
         with app.app_context():
-            session = get_session()
             config = LlmConfig(
                 config_key='default',
                 api_key='',  # 空 API Key
                 base_url='https://api.test.com',
                 model='gpt-4'
             )
-            session.add(config)
-            session.commit()
+            db.session.add(config)
+            db.session.commit()
 
         # OpenAI 客户端可能会因为空 key 而失败
         mock_openai.side_effect = Exception("Invalid API key")
@@ -283,18 +281,17 @@ class TestConfigMissingScenarios:
         assert 'data: {"error":' in data
 
     @patch('app.OpenAI')
-    def test_invalid_base_url(self, mock_openai, client):
+    def test_invalid_base_url(self, mock_openai, client, app):
         """测试无效的 base URL"""
         with app.app_context():
-            session = get_session()
             config = LlmConfig(
                 config_key='default',
                 api_key='test-key',
                 base_url='not-a-valid-url',
                 model='gpt-4'
             )
-            session.add(config)
-            session.commit()
+            db.session.add(config)
+            db.session.commit()
 
         mock_openai.side_effect = _make_api_connection_error("Invalid base URL")
 

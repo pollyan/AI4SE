@@ -6,47 +6,47 @@ Chat History Tests - 对话历史管理测试
 import pytest
 import os
 import sys
-import json
+import tempfile
 from unittest.mock import patch, MagicMock
 
 # Add parent directory to path to easily import our app modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 os.environ['FLASK_TESTING'] = '1'
-try:
-    from app import app, init_db, get_session
-    from models import LlmConfig
-except ImportError:
-    app = None
+
+from app import create_app
+from models import db, LlmConfig
 
 
 @pytest.fixture
-def client():
-    if app is None:
-        pytest.fail("Cannot import app from app.py, implementation missing.")
-
-    import tempfile
-
+def app():
+    """Create application with test configuration."""
     db_fd, db_path = tempfile.mkstemp()
-    app.config['DATABASE_URL'] = f'sqlite:///{db_path}'
+
+    app = create_app({
+        'TESTING': True,
+        'SQLALCHEMY_DATABASE_URI': f'sqlite:///{db_path}',
+        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+    })
 
     with app.app_context():
-        from models import Base, get_engine
-        engine = get_engine()
-        Base.metadata.create_all(engine)
-
-    with app.test_client() as client:
-        yield client
+        db.create_all()
+        yield app
 
     os.close(db_fd)
     os.unlink(db_path)
 
 
 @pytest.fixture
-def setup_default_config(client):
+def client(app):
+    """Create test client."""
+    return app.test_client()
+
+
+@pytest.fixture
+def setup_default_config(app):
     """设置默认配置"""
     with app.app_context():
-        session = get_session()
         config = LlmConfig(
             config_key='default',
             api_key='test-api-key',
@@ -54,8 +54,8 @@ def setup_default_config(client):
             model='gpt-4',
             description='Test config'
         )
-        session.add(config)
-        session.commit()
+        db.session.add(config)
+        db.session.commit()
 
 
 class TestMultiTurnChatHistory:

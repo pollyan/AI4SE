@@ -13,4 +13,4 @@ COPY tools/new-agents/backend/ .
 
 EXPOSE 5002
 
-CMD ["gunicorn", "-c", "docker/gunicorn.conf.py", "app:app"]
+CMD ["gunicorn", "-c", "docker/gunicorn.conf.py", "app:create_app()"]
