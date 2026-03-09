@@ -1,6 +1,6 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useStore, WORKFLOWS } from '../store';
-import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw } from 'lucide-react';
+import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw, Copy, Check } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { clsx } from 'clsx';
@@ -21,6 +21,18 @@ export const ChatPane: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const handleCopy = async (content: string, msgId: string) => {
+    await navigator.clipboard.writeText(content);
+    setCopiedId(msgId);
+    setToast('已复制到剪贴板');
+    setTimeout(() => {
+      setCopiedId(null);
+      setToast(null);
+    }, 2000);
+  };
 
   const {
     input,
@@ -215,8 +227,19 @@ export const ChatPane: React.FC = () => {
                       {preprocessMarkdown(msg.content)}
                     </ReactMarkdown>
                   )}
-                  {msg.role === 'assistant' && !isGenerating && msg.id === chatHistory[chatHistory.length - 1]?.id && (
-                    <div className="mt-3 pt-3 border-t border-white/10 flex justify-end">
+                  <div className="mt-3 pt-3 border-t border-white/10 flex justify-end gap-3">
+                    <button
+                      onClick={() => handleCopy(msg.content || '', msg.id)}
+                      className={clsx(
+                        "flex items-center gap-1.5 text-xs transition-colors",
+                        copiedId === msg.id ? "text-green-400" : "text-slate-400 hover:text-blue-400"
+                      )}
+                      title="复制内容"
+                    >
+                      {copiedId === msg.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedId === msg.id ? '已复制' : '复制'}</span>
+                    </button>
+                    {msg.role === 'assistant' && !isGenerating && msg.id === chatHistory[chatHistory.length - 1]?.id && (
                       <button
                         onClick={handleRetry}
                         className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-blue-400 transition-colors"
@@ -225,8 +248,8 @@ export const ChatPane: React.FC = () => {
                         <RefreshCw className="w-3.5 h-3.5" />
                         <span>重试</span>
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -320,6 +343,11 @@ export const ChatPane: React.FC = () => {
         </div>
         <p className="text-center text-[10px] text-slate-500 mt-3 font-mono">{agentName} Generated Context • v1.0.4</p>
       </div>
+      {toast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg z-50">
+          {toast}
+        </div>
+      )}
     </section>
   );
 };
