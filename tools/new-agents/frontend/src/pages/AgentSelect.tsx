@@ -38,11 +38,20 @@ export function AgentSelect() {
                         AI4SE 智能引擎
                     </div>
                     <h1 className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight mb-4">
-                        选择智能研发专家
+                        选择你的 AI 助手
                     </h1>
-                    <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-                        为您配置专属领域大模型智能体，无缝融入各项研发与协作流程。
+                    <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-8">
+                        告诉我你想做什么，AI 会引导你完成剩下的工作
                     </p>
+
+                    <div className="flex flex-wrap justify-center gap-4">
+                        <div className="px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm text-blue-300">
+                            💡 想梳理产品思路？找 <strong>Alex</strong>
+                        </div>
+                        <div className="px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-lg text-sm text-purple-300">
+                            🧪 想设计测试用例？找 <strong>Lisa</strong>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

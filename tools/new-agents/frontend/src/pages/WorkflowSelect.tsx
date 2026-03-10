@@ -66,10 +66,10 @@ export function WorkflowSelect() {
                         <AgentIcon className="w-8 h-8 text-white" />
                     </div>
                     <h1 className="text-4xl font-extrabold text-white tracking-tight mb-4">
-                        部署 {agent.name} 工作流
+                        {agent.name} 的工作流
                     </h1>
                     <p className="text-lg text-slate-400 max-w-xl mx-auto">
-                        选择相应的端到端研发测试能力矩阵，开启智能化意图测试之旅。
+                        选择一个工作流开始，AI 会引导你完成整个流程
                     </p>
                 </div>
 
@@ -119,12 +119,12 @@ export function WorkflowSelect() {
                                     "flex items-center text-sm font-medium mt-auto",
                                     isOnline
                                         ? "text-blue-400 group-hover:text-blue-300"
-                                        : "text-slate-600 cursor-not-allowed"
+                                        : "text-slate-500 cursor-not-allowed"
                                 )}>
                                     {isOnline ? (
-                                        <>立即采用该工作流 <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" /></>
+                                        <>立即开始 <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" /></>
                                     ) : (
-                                        workflow.status === 'dev' ? '功能孵化中' : '下一期规划'
+                                        <>即将推出</>
                                     )}
                                 </div>
                             </div>

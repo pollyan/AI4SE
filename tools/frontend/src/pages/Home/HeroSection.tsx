@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, Bot, Sparkles, Terminal } from 'lucide-react';
+import { ArrowRight, Bot, Sparkles, Terminal, ArrowDown } from 'lucide-react';
 
 const HeroSection: React.FC = () => {
     return (
@@ -40,6 +40,26 @@ const HeroSection: React.FC = () => {
                             <Terminal size={20} />
                             意图测试工具
                         </a>
+                    </div>
+
+                    {/* 快速选择指南 */}
+                    <div className="mt-12 inline-flex flex-wrap justify-center gap-6 text-sm">
+                        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                            <span>有想法？找 <strong className="text-blue-500">Alex</strong></span>
+                        </div>
+                        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                            <span>要测试？找 <strong className="text-purple-500">Lisa</strong></span>
+                        </div>
+                        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                            <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                            <span>自动化？用 <strong className="text-green-500">意图测试</strong></span>
+                        </div>
+                    </div>
+
+                    <div className="mt-4">
+                        <ArrowDown className="w-5 h-5 text-slate-400 mx-auto animate-bounce" />
                     </div>
                 </div>
 
