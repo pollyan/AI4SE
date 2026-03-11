@@ -86,9 +86,11 @@ export const ArtifactPane: React.FC = () => {
       const language = match ? match[1] : '';
 
       if (!inline && language === 'mermaid') {
+        let chartContent = String(children).replace(/\n$/, '');
+        chartContent = chartContent.replace(/\$\{FENCE\}/g, '```');
         const currentIndex = mermaidBlockCounter++;
         return <Mermaid
-          chart={String(children).replace(/\n$/, '')}
+          chart={chartContent}
           blockIndex={currentIndex}
           onRetry={handleMermaidRetry}
         />;

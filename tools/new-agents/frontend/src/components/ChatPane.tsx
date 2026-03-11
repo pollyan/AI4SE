@@ -10,7 +10,11 @@ import { preprocessMarkdown } from '../core/utils/markdownUtils';
 import { Mermaid } from './Mermaid';
 
 export const ChatPane: React.FC = () => {
-  const { chatHistory, isGenerating, workflow } = useStore();
+  // 使用选择器订阅特定状态，减少不必要的重渲染 (rerender-defer-reads)
+  const chatHistory = useStore((state) => state.chatHistory);
+  const isGenerating = useStore((state) => state.isGenerating);
+  const workflow = useStore((state) => state.workflow);
+  
   const onboardingConfig = WORKFLOWS[workflow].onboarding;
   const agentId = WORKFLOWS[workflow].agentId;
   const agentConfig = getAgentById(agentId);
@@ -198,9 +202,11 @@ export const ChatPane: React.FC = () => {
                           const language = match ? match[1] : '';
 
                           if (!inline && language === 'mermaid') {
+                            let chartContent = String(children).replace(/\n$/, '');
+                            chartContent = chartContent.replace(/\$\{FENCE\}/g, '```');
                             const currentIndex = mermaidBlockCounter++;
                             return <Mermaid
-                              chart={String(children).replace(/\n$/, '')}
+                              chart={chartContent}
                               blockIndex={currentIndex}
                               onRetry={(brokenCode, errorMessage, blockIndex) => handleChatMermaidRetry(msg.id, brokenCode, errorMessage, blockIndex)}
                             />;

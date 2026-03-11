@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
-import { useStore } from '../store';
 import { sanitizeMermaidCode, aggressiveSanitize } from '../core/utils/mermaidSanitizer';
 
 mermaid.initialize({
@@ -33,7 +32,6 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
   const [svgHtml, setSvgHtml] = useState<string>('');
   const [errorInfo, setErrorInfo] = useState<{ code: string; message: string }>({ code: '', message: '' });
   const retriedCodes = useRef<Set<string>>(new Set());
-  const isGenerating = useStore((state) => state.isGenerating);
 
   useEffect(() => {
     let isMounted = true;
@@ -92,27 +90,20 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
       } catch (error: any) {
         if (!isMounted) return;
 
-        // During streaming, the chart might be incomplete, causing a parsing error.
-        // We catch it silently and show a loading state if still generating.
-        if (isGenerating) {
-          setRenderState('loading');
-        } else {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          const codeHash = simpleHash(chart);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const codeHash = simpleHash(chart);
 
-          if (!retriedCodes.current.has(codeHash) && onRetry) {
-            retriedCodes.current.add(codeHash);
-            setRenderState('loading');
-            const ok = await onRetry(chart, errorMessage, blockIndex ?? 0);
-            if (isMounted && !ok) {
-              setErrorInfo({ code: chart, message: errorMessage });
-              setRenderState('error');
-            }
-            // if ok === true, the parent updates the `chart` prop, triggering this useEffect again
-          } else {
+        if (!retriedCodes.current.has(codeHash) && onRetry) {
+          retriedCodes.current.add(codeHash);
+          setRenderState('loading');
+          const ok = await onRetry(chart, errorMessage, blockIndex ?? 0);
+          if (isMounted && !ok) {
             setErrorInfo({ code: chart, message: errorMessage });
             setRenderState('error');
           }
+        } else {
+          setErrorInfo({ code: chart, message: errorMessage });
+          setRenderState('error');
         }
       }
     };
@@ -122,7 +113,7 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
     return () => {
       isMounted = false;
     };
-  }, [chart, isGenerating, onRetry, blockIndex]);
+  }, [chart, onRetry, blockIndex]);
 
   const handleManualRetry = async () => {
     if (!onRetry) return;
