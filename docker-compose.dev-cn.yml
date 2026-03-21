@@ -1,21 +1,11 @@
 version: '3.8'
 
-# 统一的 Docker Compose 配置 (Merged from docker-compose.new.yml)
-# 包含：Nginx 网关、意图测试工具、AI 智能体、PostgreSQL
-
-x-proxy: &proxy
-  http_proxy: "http://192.168.5.2:7897"
-  https_proxy: "http://192.168.5.2:7897"
-  no_proxy: "localhost,127.0.0.1"
-
 services:
-  # PostgreSQL 数据库（共享）
   postgres:
     image: postgres:15-alpine
     container_name: ai4se-db
     restart: unless-stopped
     environment:
-      <<: *proxy
       POSTGRES_DB: ai4se
       POSTGRES_USER: ${DB_USER:-ai4se_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_in_production}
@@ -32,12 +22,10 @@ services:
     networks:
       - ai4se-network
 
-  # 意图测试工具应用
   intent-tester:
     build:
       context: .
       dockerfile: tools/intent-tester/docker/Dockerfile
-
     container_name: ai4se-intent-tester
     restart: unless-stopped
     environment:
@@ -45,13 +33,11 @@ services:
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key-please-change}
       - MIDSCENE_SERVER_URL=http://host.docker.internal:3001
       - FLASK_ENV=${FLASK_ENV:-production}
-
     ports:
       - "5001:5001"
     volumes:
       - ./tools/intent-tester/frontend/static/screenshots:/app/frontend/static/screenshots
       - ./logs:/app/logs
-      # Mount source code for simpler debugging if needed, but build is preferred
       - ./tools/intent-tester:/app/tools/intent-tester
       - ./tools/shared:/app/tools/shared
       - ./assistant-bundles:/app/assistant-bundles
@@ -69,20 +55,16 @@ services:
     networks:
       - ai4se-network
 
-  # 新 Agent（Lisa 纯前端静态服务直接挂载，秒级启动取代容器内构建）
   new-agents:
     image: nginx:alpine
     container_name: ai4se-new-agents
     restart: unless-stopped
-    environment:
-      <<: *proxy
     volumes:
       - ./tools/new-agents/frontend/dist:/usr/share/nginx/html/new-agents
       - ./tools/new-agents/docker/nginx.conf:/etc/nginx/conf.d/default.conf
     networks:
       - ai4se-network
 
-  # 新 Agent 后端代理（LLM Proxy）
   new-agents-backend:
     build:
       context: .
@@ -99,13 +81,10 @@ services:
     networks:
       - ai4se-network
 
-  # Nginx 反向代理（统一入口）
   nginx:
     image: nginx:alpine
     container_name: ai4se-gateway
     restart: unless-stopped
-    environment:
-      <<: *proxy
     ports:
       - "80:80"
       - "443:443"

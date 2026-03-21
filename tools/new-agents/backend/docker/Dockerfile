@@ -7,7 +7,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /var/lib/apt/lists/*
 
 COPY tools/new-agents/backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
+    pip install --no-cache-dir -r requirements.txt
 
 COPY tools/new-agents/backend/ .
 
