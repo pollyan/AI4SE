@@ -27,15 +27,13 @@ export function Workspace() {
             <main className="flex flex-1 overflow-hidden relative mb-14 md:mb-0">
                 <section className={clsx(
                     "flex flex-col w-full lg:w-[40%] bg-[#0B1120] border-r border-[#1e293b] relative shadow-[10px_0_30px_-10px_rgba(0,0,0,0.5)] z-20 h-full",
-                    mobileTab !== 'chat' && "md:hidden",
-                    "hidden md:flex"
+                    mobileTab === 'chat' ? "flex md:hidden" : "hidden md:flex"
                 )}>
                     <ChatPane />
                 </section>
                 <section className={clsx(
-                    "flex flex-col w-full lg:w-[60%] bg-[#0B0F17] text-gray-300 relative shadow-2xl overflow-hidden bg-grid-pattern h-full",
-                    mobileTab !== 'artifact' && "md:hidden",
-                    "hidden md:flex"
+                    "flex flex-col w-full lg:w-[60%] bg-[#0F17] text-gray-300 relative shadow-2xl overflow-hidden bg-grid-pattern h-full",
+                    mobileTab === 'artifact' ? "flex md:hidden" : "hidden md:flex"
                 )}>
                     <ArtifactPane />
                 </section>
