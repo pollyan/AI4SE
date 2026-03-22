@@ -66,6 +66,20 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
+        {/* 手机端阶段选择器 */}
+        <div className="flex md:hidden flex-1 mx-4">
+          <select
+            value={stageIndex}
+            onChange={(e) => setStageIndex(Number(e.target.value))}
+            className="flex-1 h-10 px-3 rounded-lg bg-[#0f1623] border border-[#1e293b] text-white text-sm appearance-none cursor-pointer"
+            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239ca3af' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}
+          >
+            {stages.map((stage, idx) => (
+              <option key={stage.id} value={idx}>{stage.name}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="flex items-center gap-3">
           <button
             onClick={handleNewChat}

@@ -101,7 +101,7 @@ export const ChatPane: React.FC = () => {
   };
 
   return (
-    <section className="flex flex-col w-full lg:w-[40%] min-w-[360px] bg-[#0B1120] border-r border-[#1e293b] relative shadow-[10px_0_30px_-10px_rgba(0,0,0,0.5)] z-20 h-full">
+    <section className="flex flex-col w-full lg:w-[40%] bg-[#0B1120] border-r border-[#1e293b] relative shadow-[10px_0_30px_-10px_rgba(0,0,0,0.5)] z-20 h-full">
       <div className="px-5 py-4 border-b border-[#1e293b] bg-[#0B1120]/95 backdrop-blur sticky top-0 z-10">
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-white text-base font-bold flex items-center gap-2">
