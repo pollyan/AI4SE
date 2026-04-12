@@ -5,11 +5,12 @@ import rehypeRaw from 'rehype-raw';
 import { useStore, ArtifactVersion } from '../store';
 import { Mermaid } from './Mermaid';
 import { preprocessMarkdown } from '../core/utils/markdownUtils';
-import { Download, Code, Eye, History, X } from 'lucide-react';
+import { Download, Code, Eye, History, X, AlertTriangle } from 'lucide-react';
 
 export const ArtifactPane: React.FC = () => {
   const artifactContent = useStore((state) => state.artifactContent);
   const artifactHistory = useStore((state) => state.artifactHistory);
+  const artifactTruncated = useStore((state) => state.artifactTruncated);
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
   const [showHistory, setShowHistory] = useState(false);
   const [selectedVersion, setSelectedVersion] = useState<ArtifactVersion | null>(null);
@@ -166,6 +167,13 @@ export const ArtifactPane: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-8 md:px-16 relative z-0 custom-scrollbar">
+        {/* P0-9: Truncation warning banner */}
+        {artifactTruncated && (
+          <div className="max-w-4xl mx-auto mb-4 flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>产出物内容可能因流式响应中断而不完整，请检查文档完整性。</span>
+          </div>
+        )}
         <div className="max-w-4xl mx-auto pb-20">
           {viewMode === 'preview' ? (
             <ReactMarkdown

@@ -21,7 +21,10 @@ def create_app(test_config=None):
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
 
-    CORS(app)
+    # P0-1: CORS restricted to allowed origins only
+    cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:5173,http://localhost:18679')
+    allowed_origins = [origin.strip() for origin in cors_origins.split(',') if origin.strip()]
+    CORS(app, origins=allowed_origins)
 
     if test_config is None:
         app.config.from_object(Config)
@@ -51,10 +54,18 @@ def init_routes(app):
 
     @app.before_request
     def before_request():
-        """记录请求开始时间"""
+        """记录请求开始时间 + P0-2: API Key 认证"""
         g.request_id = str(uuid.uuid4())[:8]
         g.start_time = time.time()
         app.logger.info(f"[{g.request_id}] {request.method} {request.path} - Started")
+
+        # P0-2: API Key authentication for sensitive endpoints
+        proxy_api_key = os.environ.get('PROXY_API_KEY')
+        if proxy_api_key and request.path == '/api/chat/stream' and request.method == 'POST':
+            client_key = request.headers.get('X-API-Key', '')
+            if client_key != proxy_api_key:
+                app.logger.warning(f"[{g.request_id}] Unauthorized API access attempt to {request.path}")
+                return jsonify({"error": "未授权访问，请提供有效的 API Key"}), 401
 
     @app.after_request
     def after_request(response):

@@ -60,6 +60,10 @@ export const useStore = create<AppState>()(
       isSettingsOpen: false,
       isGenerating: false,
       isUserConfigured: false,
+      // P0-4: Stage transition confirmation gate
+      pendingStageTransition: false,
+      // P0-9: Artifact truncation flag
+      artifactTruncated: false,
 
       setApiKey: (key) => set({ apiKey: key, isUserConfigured: !!key }),
       setIsUserConfigured: (val) => set({ isUserConfigured: val }),
@@ -144,8 +148,39 @@ export const useStore = create<AppState>()(
         stageArtifacts: {
           [WORKFLOWS[state.workflow].stages[0].id]: getWelcomeMessage(state.workflow)
         },
-        stageIndex: 0
+        stageIndex: 0,
+        // P0-4: Reset transition state on clear
+        pendingStageTransition: false,
+        // P0-9: Reset truncation flag on clear
+        artifactTruncated: false,
       })),
+      // P0-4: Stage transition confirmation actions
+      setPendingStageTransition: (pending) => set({ pendingStageTransition: pending }),
+      confirmStageTransition: () => set((state) => {
+        if (!state.pendingStageTransition) return {};
+        const wf = WORKFLOWS[state.workflow];
+        if (state.stageIndex >= wf.stages.length - 1) {
+          return { pendingStageTransition: false };
+        }
+        // P0-5: Properly save current stage artifact and transition
+        const newStageArtifacts = { ...state.stageArtifacts };
+        const currentStageId = wf.stages[state.stageIndex].id;
+        // Save the current artifactContent as the current stage's artifact
+        newStageArtifacts[currentStageId] = state.artifactContent;
+
+        const nextIndex = state.stageIndex + 1;
+        const nextStageId = wf.stages[nextIndex].id;
+        return {
+          pendingStageTransition: false,
+          stageIndex: nextIndex,
+          stageArtifacts: newStageArtifacts,
+          // artifactContent stays the same — LLM already generated the next stage's artifact
+          // But if there's a saved artifact for the next stage, restore it
+          artifactContent: newStageArtifacts[nextStageId] || state.artifactContent,
+        };
+      }),
+      // P0-9: Artifact truncation action
+      setArtifactTruncated: (truncated) => set({ artifactTruncated: truncated }),
     }),
     {
       name: NEW_KEY,

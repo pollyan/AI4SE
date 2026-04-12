@@ -23,14 +23,18 @@ export const buildSystemPrompt = (config: {
 
     const persona = PERSONAS[agentId] || PERSONAS['lisa'];
 
-    // 处理上下文注入（如从历史阶段提取特征的情况）
+    // P0-8: 处理上下文注入 — 提升截断阈值到 5000，并添加明确的截断标记
     let previousArtifactsContext = '';
     if (stageArtifacts && Object.keys(stageArtifacts).length > 0 && isLastStage) {
+        const TRUNCATION_THRESHOLD = 5000;
         previousArtifactsContext = '\n【前序阶段有效结论摘要】：\n';
         Object.entries(stageArtifacts).forEach(([stageId, artifactContent]) => {
             if (stageId !== currentStage.id && artifactContent) {
-                const truncated = artifactContent.length > 1500 ? artifactContent.substring(0, 1500) + '... (内容被截断)' : artifactContent;
-                previousArtifactsContext += `\n--- 阶段 [${stageId}] 核心成果 ---\n${truncated}\n`;
+                const isTruncated = artifactContent.length > TRUNCATION_THRESHOLD;
+                const truncated = isTruncated
+                    ? artifactContent.substring(0, TRUNCATION_THRESHOLD) + `\n\n⚠️ [内容因长度限制被截断，原文共 ${artifactContent.length} 字符，仅展示前 ${TRUNCATION_THRESHOLD} 字符。请基于已展示的部分内容进行推理，如果关键信息可能缺失，请在产出物中标注。]`
+                    : artifactContent;
+                previousArtifactsContext += `\n--- 阶段 [${stageId}] 核心成果 ${isTruncated ? '(已截断)' : ''} ---\n${truncated}\n`;
             }
         });
         // 改为通用规则：只要配置了提取前序阶段，最后一步都自动要求整合，移除对具体 agentId 的硬编码依赖

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useStore, WORKFLOWS } from '../store';
-import { Settings, Share, Bot, Plus, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Settings, Share, Bot, Plus, AlertTriangle, ArrowLeft, ChevronRight } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { WorkflowDropdown } from './WorkflowDropdown';
 
 export const Header: React.FC = () => {
-  const { workflow, stageIndex, setStageIndex, setSettingsOpen, clearHistory } = useStore();
+  const { workflow, stageIndex, setStageIndex, setSettingsOpen, clearHistory, pendingStageTransition, confirmStageTransition } = useStore();
   const stages = WORKFLOWS[workflow].stages;
   const [showConfirm, setShowConfirm] = useState(false);
   const navigate = useNavigate();
@@ -87,6 +87,33 @@ export const Header: React.FC = () => {
           <div className="bg-center bg-no-repeat bg-cover rounded-full w-9 h-9 ml-2 ring-2 ring-[#151e32]" style={{ backgroundImage: `url("https://picsum.photos/seed/${agentIdForUrl}/100/100")` }}></div>
         </div>
       </header>
+
+      {/* P0-4: Stage transition confirmation banner */}
+      {pendingStageTransition && (() => {
+        const nextStage = stages[stageIndex + 1];
+        return (
+          <div className="flex items-center justify-between px-6 py-2.5 bg-emerald-500/10 border-b border-emerald-500/20 shrink-0 z-20">
+            <div className="flex items-center gap-2 text-sm text-emerald-300">
+              <ChevronRight className="w-4 h-4 text-emerald-400" />
+              <span>AI 建议进入下一阶段：{nextStage?.name || '下一阶段'}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => useStore.getState().setPendingStageTransition(false)}
+                className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-400 hover:bg-white/5 transition-colors"
+              >
+                暂不切换
+              </button>
+              <button
+                onClick={confirmStageTransition}
+                className="rounded-lg px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 transition-colors shadow-md shadow-emerald-500/20"
+              >
+                确认进入 {nextStage?.name || '下一阶段'}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">

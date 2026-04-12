@@ -60,9 +60,10 @@ async function collectResponseViaProxy(
                 }
             }
         }
-    } catch (e) {
-        console.error("[llmClient] Proxy stream collection failed:", e);
-        return '';
+    } catch (e: any) {
+        // P0-6: Re-throw instead of silently returning empty string
+        if (e.message === 'Aborted by user') throw e;
+        throw new Error(`代理请求流式响应失败: ${e.message || String(e)}`);
     }
 
     return fullResponse;
@@ -105,9 +106,10 @@ export async function collectLlmResponse(
                 }
             }
             return fullText;
-        } catch (e) {
-            console.error("[llmClient] OpenAI stream collection failed:", e);
-            return '';
+        } catch (e: any) {
+            // P0-6: Re-throw instead of silently returning empty string
+            if (e.message === 'Aborted by user') throw e;
+            throw new Error(`LLM 请求失败: ${e.message || String(e)}`);
         }
     } else {
         // 后端代理：只传显式的 modelOverride，不把 store 里的用户 model 带进去

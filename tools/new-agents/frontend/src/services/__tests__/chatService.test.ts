@@ -76,7 +76,7 @@ describe('useChatService', () => {
         expect(state.artifactContent).toBe('new artifact content');
     });
 
-    it('should transition to next stage upon NEXT_STAGE action', async () => {
+    it('should set pendingStageTransition upon NEXT_STAGE action (not auto-transition)', async () => {
         vi.mocked(generateResponseStream).mockImplementation(async function* () {
             yield { chatResponse: 'Moving to next stage', newArtifact: 'new stage artifact', action: 'NEXT_STAGE', hasArtifactUpdate: true };
         });
@@ -91,22 +91,31 @@ describe('useChatService', () => {
             await result.current.handleSend();
         });
 
+        // P0-4: NEXT_STAGE no longer auto-transitions; sets pending flag instead
         const state = useStore.getState();
-        // Since stageIndex is 0 originally, it should increment to 1 for test-design workflow
-        expect(state.stageIndex).toBe(1);
-        // 新阶段的产出物应该是 LLM 输出的新内容，而不是旧阶段的内容
-        expect(state.artifactContent).toBe('new stage artifact');
-        expect(state.stageArtifacts['STRATEGY']).toBe('new stage artifact');
-        // 旧阶段的产出物应该被正确保存为切换前的值
-        expect(state.stageArtifacts['CLARIFY']).toBe('initial artifact');
+        expect(state.pendingStageTransition).toBe(true);
+        expect(state.stageIndex).toBe(0);
+
+        // Simulate user confirming the transition via Header button
+        act(() => {
+            useStore.getState().confirmStageTransition();
+        });
+
+        const confirmedState = useStore.getState();
+        expect(confirmedState.stageIndex).toBe(1);
+        expect(confirmedState.pendingStageTransition).toBe(false);
+        // P0-4: artifactContent carries the LLM output (the new stage's artifact)
+        expect(confirmedState.artifactContent).toBe('new stage artifact');
+        // P0-4: Since stageIndex stayed 0 during streaming, all artifact writes went to CLARIFY.
+        // confirmStageTransition saves artifactContent to CLARIFY before advancing.
+        expect(confirmedState.stageArtifacts['CLARIFY']).toBe('new stage artifact');
     });
 
-    it('should correctly save both stage artifacts when artifact is updated before NEXT_STAGE in same stream', async () => {
-        // 模拟场景：LLM 先生成需求分析文档（更新产出物），然后在后续 chunk 中同时输出 NEXT_STAGE 和新阶段内容
+    it('should correctly save artifacts when artifact updates and NEXT_STAGE arrive in same stream', async () => {
+        // P0-4: Since stageIndex no longer auto-advances, ALL artifact writes during the stream
+        // go to the current stage (CLARIFY). The last write wins.
         vi.mocked(generateResponseStream).mockImplementation(async function* () {
-            // 第一个 chunk：仅更新当前阶段的产出物
             yield { chatResponse: '正在分析需求...', newArtifact: '# 需求分析文档\n内容', action: '', hasArtifactUpdate: true };
-            // 第二个 chunk：触发阶段切换并输出新阶段的产出物
             yield { chatResponse: '好的，进入策略制定阶段', newArtifact: '# 测试策略蓝图\n策略内容', action: 'NEXT_STAGE', hasArtifactUpdate: true };
         });
 
@@ -120,12 +129,22 @@ describe('useChatService', () => {
             await result.current.handleSend();
         });
 
+        // P0-4: NEXT_STAGE sets pending flag, does not auto-transition
         const state = useStore.getState();
-        expect(state.stageIndex).toBe(1);
-        // 新阶段（策略制定）应该显示策略蓝图
-        expect(state.artifactContent).toBe('# 测试策略蓝图\n策略内容');
-        expect(state.stageArtifacts['STRATEGY']).toBe('# 测试策略蓝图\n策略内容');
-        // 旧阶段（需求澄清）应该保存的是需求分析文档，而不是初始内容
-        expect(state.stageArtifacts['CLARIFY']).toBe('# 需求分析文档\n内容');
+        expect(state.pendingStageTransition).toBe(true);
+        expect(state.stageIndex).toBe(0);
+
+        // Simulate user confirming the transition
+        act(() => {
+            useStore.getState().confirmStageTransition();
+        });
+
+        const confirmedState = useStore.getState();
+        expect(confirmedState.stageIndex).toBe(1);
+        expect(confirmedState.pendingStageTransition).toBe(false);
+        // artifactContent is the last LLM output (new stage's artifact)
+        expect(confirmedState.artifactContent).toBe('# 测试策略蓝图\n策略内容');
+        // CLARIFY gets the final artifactContent at confirm time (last write wins)
+        expect(confirmedState.stageArtifacts['CLARIFY']).toBe('# 测试策略蓝图\n策略内容');
     });
 });

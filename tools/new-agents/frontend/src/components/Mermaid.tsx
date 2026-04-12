@@ -5,7 +5,7 @@ import { sanitizeMermaidCode, aggressiveSanitize } from '../core/utils/mermaidSa
 mermaid.initialize({
   startOnLoad: false,
   theme: 'dark',
-  securityLevel: 'loose',
+  securityLevel: 'strict',
   fontFamily: 'JetBrains Mono, monospace',
   // @ts-ignore - suppressErrorRendering exists but might not be in types
   suppressErrorRendering: true,

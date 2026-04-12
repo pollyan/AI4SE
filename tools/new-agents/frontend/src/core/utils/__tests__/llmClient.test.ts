@@ -110,3 +110,40 @@ describe('llmClient - collectLlmResponse', () => {
         await expect(collectLlmResponse([])).rejects.toThrow('Proxy Backend Failed');
     });
 });
+
+describe("P0-6: llmClient should throw errors instead of silently returning empty string", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it("should throw error when proxy fetch fails (not return empty string)", async () => {
+        vi.mocked(storeModule.useStore.getState).mockReturnValue({
+            isUserConfigured: false,
+        } as any);
+        vi.mocked(fetch).mockRejectedValue(new Error("Network error"));
+        // fetch rejection propagates directly (outside the reader try-catch)
+        await expect(collectLlmResponse([])).rejects.toThrow("Network error");
+    });
+
+    it("should throw error when OpenAI SDK stream fails (not return empty string)", async () => {
+        vi.mocked(storeModule.useStore.getState).mockReturnValue({
+            isUserConfigured: true,
+            apiKey: "test-key",
+            baseUrl: "https://test.api",
+            model: "test-model",
+        } as any);
+        mockCreate.mockRejectedValue(new Error("API error"));
+        await expect(collectLlmResponse([])).rejects.toThrow("LLM 请求失败");
+    });
+
+    it("should re-throw Aborted by user error as-is", async () => {
+        vi.mocked(storeModule.useStore.getState).mockReturnValue({
+            isUserConfigured: true,
+            apiKey: "test-key",
+            baseUrl: "https://test.api",
+            model: "test-model",
+        } as any);
+        mockCreate.mockRejectedValue(new Error("Aborted by user"));
+        await expect(collectLlmResponse([])).rejects.toThrow("Aborted by user");
+    });
+});

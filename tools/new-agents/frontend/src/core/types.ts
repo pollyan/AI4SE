@@ -70,6 +70,10 @@ export interface ChatState {
     stageArtifacts: Record<string, string>;
     isSettingsOpen: boolean;
     isGenerating: boolean;
+    // P0-4: Stage transition confirmation gate
+    pendingStageTransition: boolean;
+    // P0-9: Artifact truncation flag
+    artifactTruncated: boolean;
 
     // Actions
     setApiKey: (key: string) => void;
@@ -90,4 +94,9 @@ export interface ChatState {
     clearHistory: () => void;
     setStageArtifact: (stageId: string, content: string) => void;
     resetToSystemConfig: () => void;
+    // P0-4: Stage transition actions
+    setPendingStageTransition: (pending: boolean) => void;
+    confirmStageTransition: () => void;
+    // P0-9: Artifact truncation action
+    setArtifactTruncated: (truncated: boolean) => void;
 }

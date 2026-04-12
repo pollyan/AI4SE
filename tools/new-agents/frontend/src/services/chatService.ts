@@ -70,7 +70,11 @@ export function useChatService() {
 
             let hasTransitioned = false;
 
-            for await (const { chatResponse, newArtifact, action, hasArtifactUpdate } of stream) {
+            for await (const chunk of stream) {
+                const { chatResponse, newArtifact, action, hasArtifactUpdate } = chunk;
+                // P0-9: Handle artifact truncation flag
+                const artifactTruncated = (chunk as any).artifactTruncated === true;
+
                 if (isFirstChunk) {
                     addMessage({
                         id: (Date.now() + 1).toString(),
@@ -83,11 +87,18 @@ export function useChatService() {
                     updateLastMessage(chatResponse);
                 }
 
+                // P0-9: Mark artifact as truncated if detected
+                if (artifactTruncated) {
+                    useStore.getState().setArtifactTruncated(true);
+                }
+
+                // P0-4: Instead of auto-transitioning, set pendingStageTransition
+                // User must confirm via Header button before actual transition
                 if (action === 'NEXT_STAGE' && !hasTransitioned) {
                     const state = useStore.getState();
                     const wf = WORKFLOWS[state.workflow];
                     if (state.stageIndex < wf.stages.length - 1) {
-                        state.setStageIndex(state.stageIndex + 1);
+                        state.setPendingStageTransition(true);
                         hasTransitioned = true;
                     }
                 }
@@ -99,6 +110,8 @@ export function useChatService() {
                     const currentActiveStageId = WORKFLOWS[currentState.workflow].stages[currentState.stageIndex].id;
                     currentState.setStageArtifact(currentActiveStageId, newArtifact);
                     currentState.setArtifactContent(newArtifact);
+                    // P0-9: Reset truncation flag when we get a proper artifact update
+                    currentState.setArtifactTruncated(false);
                 }
             }
         } catch (error: any) {

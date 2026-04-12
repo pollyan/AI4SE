@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { parseLlmStreamChunk } from './utils/llmParser';
+import { parseLlmStreamChunk, detectArtifactTruncation } from './utils/llmParser';
 import { buildSystemPrompt } from './prompts/buildSystemPrompt';
 import { useStore, WORKFLOWS, WorkflowType, Attachment } from '../store';
 
@@ -127,5 +127,16 @@ export const generateResponseStream = async function* (userMessage: string, atta
     const { chatResponse, newArtifact, action, hasArtifactUpdate } = parseLlmStreamChunk(fullText, artifactContent);
 
     yield { chatResponse, newArtifact, action, hasArtifactUpdate };
+  }
+
+  // P0-9: After stream ends, detect if ARTIFACT tag was truncated
+  if (detectArtifactTruncation(fullText)) {
+    yield {
+      chatResponse: fullText.replace(/<\/?(?:CHAT|ARTIFACT|ACTION)>/gi, '').trim(),
+      newArtifact: artifactContent,
+      action: '',
+      hasArtifactUpdate: false,
+      artifactTruncated: true,
+    };
   }
 };

@@ -33,3 +33,14 @@ export function parseLlmStreamChunk(fullText: string, currentArtifact: string) {
 
     return { chatResponse, newArtifact, action, hasArtifactUpdate };
 }
+
+/**
+ * P0-9: Detect if the ARTIFACT tag was never closed (stream truncated).
+ * Call this after the stream ends to check for truncation.
+ */
+export function detectArtifactTruncation(fullText: string): boolean {
+    const hasArtifactOpen = /<ARTIFACT>/i.test(fullText);
+    const hasArtifactClose = /<\/ARTIFACT>/i.test(fullText);
+    // Truncated if we opened ARTIFACT but never closed it
+    return hasArtifactOpen && !hasArtifactClose;
+}
