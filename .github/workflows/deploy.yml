@@ -257,11 +257,22 @@ jobs:
         ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "sudo rm -rf /opt/intent-test-framework-upload-tmp && sudo mkdir -p /opt/intent-test-framework-upload-tmp && sudo chown -R \$USER:\$USER /opt/intent-test-framework-upload-tmp"
         echo "✅ 上传目录已准备完成"
         
-        # 使用 rsync 传输文件
-        rsync -avz --progress \
+        # 使用 rsync 传输文件 (含重试逻辑以防网络抖动中断)
+        MAX_RETRIES=5
+        RETRY_COUNT=0
+        until rsync -avz --progress \
           -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
           deploy-package/ \
           ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/intent-test-framework-upload-tmp/
+        do
+          RETRY_COUNT=$((RETRY_COUNT+1))
+          if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+            echo "❌ Rsync 重试次数已达上限，传输彻底失败！"
+            exit 1
+          fi
+          echo "⚠️ Rsync 遇错中断 (可能是网络抖动)。将在 3 秒后执行第 $RETRY_COUNT/$MAX_RETRIES 次重试..."
+          sleep 3
+        done
         
         echo "✅ 文件传输完成"
         
