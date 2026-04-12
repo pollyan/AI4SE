@@ -14,7 +14,7 @@ RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debia
 # 复制 requirements.txt 并安装 Python 依赖
 COPY tools/intent-tester/requirements.txt .
 RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com -r requirements.txt
 
 # 复制共享模块
 COPY tools/shared ./tools/shared

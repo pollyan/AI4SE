@@ -559,6 +559,24 @@ class TestResponseFormatAnomalies:
         assert 'data: {"content":' in data
 
 
+class TestHandleException:
+    """测试全局异常处理器"""
+
+    def test_non_http_exception_returns_500_with_request_id(self, client, app):
+        """handle_exception 非 HTTP 异常返回 500 + request_id"""
+        with app.app_context():
+            # Trigger a non-HTTP exception via a route that will fail
+            @app.route('/api/test-exception')
+            def raise_error():
+                raise RuntimeError("something broke")
+
+            resp = client.get('/api/test-exception')
+            assert resp.status_code == 500
+            data = resp.get_json()
+            assert 'request_id' in data
+            assert data['error'] == '服务器内部错误'
+
+
 class TestEdgeCases:
     """测试边界情况"""
 
