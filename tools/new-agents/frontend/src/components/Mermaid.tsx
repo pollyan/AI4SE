@@ -11,15 +11,6 @@ mermaid.initialize({
   suppressErrorRendering: true,
 });
 
-const simpleHash = (str: string) => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i);
-    hash |= 0;
-  }
-  return hash.toString();
-};
-
 export interface MermaidProps {
   chart: string;
   blockIndex?: number;
@@ -31,7 +22,6 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
   const [renderState, setRenderState] = useState<'success' | 'loading' | 'error'>('loading');
   const [svgHtml, setSvgHtml] = useState<string>('');
   const [errorInfo, setErrorInfo] = useState<{ code: string; message: string }>({ code: '', message: '' });
-  const retriedCodes = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let isMounted = true;
@@ -91,20 +81,8 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
         if (!isMounted) return;
 
         const errorMessage = error instanceof Error ? error.message : String(error);
-        const codeHash = simpleHash(chart);
-
-        if (!retriedCodes.current.has(codeHash) && onRetry) {
-          retriedCodes.current.add(codeHash);
-          setRenderState('loading');
-          const ok = await onRetry(chart, errorMessage, blockIndex ?? 0);
-          if (isMounted && !ok) {
-            setErrorInfo({ code: chart, message: errorMessage });
-            setRenderState('error');
-          }
-        } else {
-          setErrorInfo({ code: chart, message: errorMessage });
-          setRenderState('error');
-        }
+        setErrorInfo({ code: chart, message: errorMessage });
+        setRenderState('error');
       }
     };
 
@@ -121,7 +99,13 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
     const ok = await onRetry(errorInfo.code, errorInfo.message, blockIndex ?? 0);
     if (!ok) {
       setRenderState('error');
+      return;
     }
+
+    // The parent will re-render this component if the artifact/message code was
+    // actually replaced. If it was not, return to the degraded state instead of
+    // leaving the chart in an endless loading state.
+    setRenderState('error');
   };
 
   if (renderState === 'loading') {
@@ -146,7 +130,7 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
             <div className="text-red-400 text-sm font-medium flex items-center gap-2">
               <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
               <div>
-                <div>图表语法受损，已启动格式降级</div>
+                <div>图表语法受损，可手动修复</div>
                 {errorInfo.message && <div className="text-xs text-red-400/70 mt-0.5 truncate max-w-[400px]" title={errorInfo.message}>{errorInfo.message}</div>}
               </div>
             </div>

@@ -55,7 +55,7 @@ describe('Mermaid Component', () => {
         });
     });
 
-    it('triggers automatic retry once when code fails and onRetry is provided (AC1)', async () => {
+    it('does not auto retry when code fails and onRetry is provided', async () => {
         vi.mocked(storeModule.useStore).mockImplementation(((s: any) => s({ isGenerating: false })) as any); // isGenerating = false
         vi.mocked(mermaid.parse).mockRejectedValue(new Error('Syntax Error'));
 
@@ -65,36 +65,31 @@ describe('Mermaid Component', () => {
         render(<Mermaid chart={brokenCode} onRetry={mockOnRetry} blockIndex={0} />);
 
         await waitFor(() => {
-            expect(mockOnRetry).toHaveBeenCalledTimes(1);
-            expect(mockOnRetry).toHaveBeenCalledWith(brokenCode, 'Syntax Error', 0);
-            // Component should be in loading state
-            expect(screen.getByText('正在绘制流程图...')).toBeDefined();
+            expect(screen.getByText('重新生成图表')).toBeDefined();
         });
+        expect(mockOnRetry).not.toHaveBeenCalled();
     });
 
-    it('does not trigger automatic retry again for the same broken code hash (AC2 / F1)', async () => {
+    it('keeps the same broken code in error state on rerender without retrying', async () => {
         vi.mocked(storeModule.useStore).mockImplementation(((s: any) => s({ isGenerating: false })) as any);
         vi.mocked(mermaid.parse).mockRejectedValue(new Error('Syntax Error'));
 
-        const mockOnRetry = vi.fn().mockResolvedValue(false); // simulate retry failure
+        const mockOnRetry = vi.fn().mockResolvedValue(false);
         const brokenCode = 'graph TD\nbroken-same';
 
         const { rerender } = render(<Mermaid chart={brokenCode} onRetry={mockOnRetry} blockIndex={0} />);
 
-        // First Mount: Should trigger onRetry once and fallback to error state since it returned false
         await waitFor(() => {
-            expect(mockOnRetry).toHaveBeenCalledTimes(1);
             expect(screen.getByText('重新生成图表')).toBeDefined();
         });
+        expect(mockOnRetry).not.toHaveBeenCalled();
 
-        // Rerender with the SAME exact code (simulate what happens if the returned code from LLM is exactly the same or we just rerender)
         rerender(<Mermaid chart={brokenCode} onRetry={mockOnRetry} blockIndex={0} />);
 
-        // Should NOT trigger onRetry again automatically
         await waitFor(() => {
-            expect(mockOnRetry).toHaveBeenCalledTimes(1); // Still 1
-            expect(screen.getByText('重新生成图表')).toBeDefined(); // Remains in error state
+            expect(screen.getByText('重新生成图表')).toBeDefined();
         });
+        expect(mockOnRetry).not.toHaveBeenCalled();
     });
 
     it('shows error state when onRetry returns false (AC5 / F5)', async () => {
@@ -107,9 +102,9 @@ describe('Mermaid Component', () => {
         render(<Mermaid chart={brokenCode} onRetry={mockOnRetry} blockIndex={0} />);
 
         await waitFor(() => {
-            expect(mockOnRetry).toHaveBeenCalledTimes(1);
             expect(screen.getByText('重新生成图表')).toBeDefined();
         });
+        expect(mockOnRetry).not.toHaveBeenCalled();
     });
 
     it('allows manual retry by clicking the button in degraded UI (AC3 / AC4)', async () => {
@@ -131,9 +126,9 @@ describe('Mermaid Component', () => {
         // Click the manual retry button
         fireEvent.click(retryBtn!);
 
-        // Should call onRetry again
         await waitFor(() => {
-            expect(mockOnRetry).toHaveBeenCalledTimes(2); // Auto (1) + Manual (1)
+            expect(mockOnRetry).toHaveBeenCalledTimes(1);
+            expect(mockOnRetry).toHaveBeenCalledWith(brokenCode, 'Syntax Error', 0);
         });
     });
 });

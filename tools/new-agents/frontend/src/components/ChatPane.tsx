@@ -70,6 +70,8 @@ export const ChatPane: React.FC = () => {
       const length = match[0].length;
 
       const newBlock = `\`\`\`mermaid\n${newCode}\n\`\`\``;
+      if (newBlock === match[0]) return false;
+
       const updatedContent = content.substring(0, start) + newBlock + content.substring(start + length);
 
       useStore.getState().updateMessage(msgId, updatedContent);
