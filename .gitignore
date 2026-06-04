@@ -238,6 +238,30 @@ integration_example.py
 
 # Archive files
 *.zip.backup
+
+# Local AI/tool generated artifacts
+graphify-out/
+deploy-package/
+.ai/
+.infcode/
+.claude/worktrees/
+.agent/rules/
+.agent/workflows/graphify.md
+docs/a.json
+mermaid-test-*.png
+
+# OpenCode GSD local workflow bundle
+.opencode/agents/gsd-*.md
+.opencode/command/gsd-*.md
+.opencode/get-shit-done/
+.opencode/gsd-file-manifest.json
+.opencode/hooks/
+.opencode/opencode.json
+.opencode/package-lock.json
+.opencode/settings.json
+
+# TypeScript incremental build metadata
+*.tsbuildinfo
 *.tar.backup
 
 # 注意：保留开发工具目录
