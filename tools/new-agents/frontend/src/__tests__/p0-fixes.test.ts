@@ -8,33 +8,45 @@ describe('P0-4: Stage transition confirmation gate', () => {
         useStore.getState().clearHistory();
     });
 
-    it('should set pendingStageTransition=true without auto-transitioning', () => {
+    it('should set explicit pendingStageTransition without auto-transitioning', () => {
         const state = useStore.getState();
-        expect(state.pendingStageTransition).toBe(false);
+        expect(state.pendingStageTransition).toBeNull();
         expect(state.stageIndex).toBe(0);
 
-        state.setPendingStageTransition(true);
+        state.setPendingStageTransition({ fromStageIndex: 0, toStageIndex: 1 });
 
         const updated = useStore.getState();
-        expect(updated.pendingStageTransition).toBe(true);
+        expect(updated.pendingStageTransition).toEqual({ fromStageIndex: 0, toStageIndex: 1 });
         // Stage should NOT have advanced
         expect(updated.stageIndex).toBe(0);
     });
 
     it('should advance stage on confirmStageTransition after pending is set', () => {
         useStore.getState().setArtifactContent('current artifact data');
-        useStore.getState().setPendingStageTransition(true);
+        useStore.getState().setPendingStageTransition({ fromStageIndex: 0, toStageIndex: 1 });
 
         useStore.getState().confirmStageTransition();
 
         const state = useStore.getState();
         expect(state.stageIndex).toBe(1);
-        expect(state.pendingStageTransition).toBe(false);
+        expect(state.pendingStageTransition).toBeNull();
+        expect(state.artifactContent).toContain('策略制定');
+    });
+
+    it('should confirm to the stored target stage even if target is not the next current index', () => {
+        useStore.getState().setPendingStageTransition({ fromStageIndex: 0, toStageIndex: 2 });
+
+        useStore.getState().confirmStageTransition();
+
+        const state = useStore.getState();
+        expect(state.stageIndex).toBe(2);
+        expect(state.artifactContent).toContain('用例编写');
+        expect(state.pendingStageTransition).toBeNull();
     });
 
     it('should be a no-op when confirmStageTransition is called without pending flag', () => {
         expect(useStore.getState().stageIndex).toBe(0);
-        expect(useStore.getState().pendingStageTransition).toBe(false);
+        expect(useStore.getState().pendingStageTransition).toBeNull();
 
         useStore.getState().confirmStageTransition();
 
@@ -47,21 +59,30 @@ describe('P0-4: Stage transition confirmation gate', () => {
         const lastStageIndex = wf.stages.length - 1;
 
         useStore.getState().setStageIndex(lastStageIndex);
-        useStore.getState().setPendingStageTransition(true);
+        useStore.getState().setPendingStageTransition({ fromStageIndex: lastStageIndex, toStageIndex: lastStageIndex + 1 });
         useStore.getState().confirmStageTransition();
 
         const state = useStore.getState();
         expect(state.stageIndex).toBe(lastStageIndex);
-        expect(state.pendingStageTransition).toBe(false);
+        expect(state.pendingStageTransition).toBeNull();
     });
 
     it('should reset pendingStageTransition on clearHistory', () => {
-        useStore.getState().setPendingStageTransition(true);
-        expect(useStore.getState().pendingStageTransition).toBe(true);
+        useStore.getState().setPendingStageTransition({ fromStageIndex: 0, toStageIndex: 1 });
+        expect(useStore.getState().pendingStageTransition).toEqual({ fromStageIndex: 0, toStageIndex: 1 });
 
         useStore.getState().clearHistory();
 
-        expect(useStore.getState().pendingStageTransition).toBe(false);
+        expect(useStore.getState().pendingStageTransition).toBeNull();
+        expect(useStore.getState().stageIndex).toBe(0);
+    });
+
+    it('should clear pendingStageTransition without changing stage', () => {
+        useStore.getState().setPendingStageTransition({ fromStageIndex: 0, toStageIndex: 1 });
+
+        useStore.getState().clearPendingStageTransition();
+
+        expect(useStore.getState().pendingStageTransition).toBeNull();
         expect(useStore.getState().stageIndex).toBe(0);
     });
 
@@ -70,7 +91,7 @@ describe('P0-4: Stage transition confirmation gate', () => {
         useStore.getState().setArtifactContent('stage-0-content');
 
         // Trigger pending
-        useStore.getState().setPendingStageTransition(true);
+        useStore.getState().setPendingStageTransition({ fromStageIndex: 0, toStageIndex: 1 });
 
         // Confirm transition
         useStore.getState().confirmStageTransition();

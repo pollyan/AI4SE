@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useStore, WORKFLOWS } from '../store';
-import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw, Copy, Check } from 'lucide-react';
+import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw, Copy, Check, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { clsx } from 'clsx';
@@ -14,12 +14,19 @@ export const ChatPane: React.FC = () => {
   const chatHistory = useStore((state) => state.chatHistory);
   const isGenerating = useStore((state) => state.isGenerating);
   const workflow = useStore((state) => state.workflow);
+  const pendingStageTransition = useStore((state) => state.pendingStageTransition);
+  const confirmStageTransition = useStore((state) => state.confirmStageTransition);
+  const clearPendingStageTransition = useStore((state) => state.clearPendingStageTransition);
   
   const onboardingConfig = WORKFLOWS[workflow].onboarding;
+  const workflowStages = WORKFLOWS[workflow].stages;
   const agentId = WORKFLOWS[workflow].agentId;
   const agentConfig = getAgentById(agentId);
   const displayTitle = agentConfig?.displayTitle || agentId;
   const agentName = agentConfig?.name || 'AI';
+  const pendingNextStage = pendingStageTransition
+    ? workflowStages[pendingStageTransition.toStageIndex]
+    : null;
 
   const updateMessage = useStore((state) => state.updateMessage);
 
@@ -100,6 +107,12 @@ export const ChatPane: React.FC = () => {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const handleConfirmStageTransition = () => {
+    if (!pendingNextStage) return;
+    confirmStageTransition();
+    handleSend('请继续生成当前阶段产出物');
   };
 
   return (
@@ -263,6 +276,39 @@ export const ChatPane: React.FC = () => {
             </div>
           );
         })}
+
+        {pendingStageTransition && pendingNextStage && !isGenerating && (
+          <div className="flex items-start gap-4 animate-fade-in-up">
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 mt-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+              <ChevronRight className="w-5 h-5" />
+            </div>
+            <div className="flex flex-col gap-2 max-w-[90%] items-start">
+              <span className="text-slate-500 text-[10px] font-mono px-1">{agentName} • 等待确认</span>
+              <div className="rounded-2xl rounded-tl-none bg-emerald-500/10 text-emerald-100 border border-emerald-500/20 p-4 shadow-sm">
+                <div className="text-sm font-medium">
+                  AI 建议进入下一阶段：{pendingNextStage.name}
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-emerald-200/70">
+                  确认后我会进入该阶段，并继续生成对应的右侧产出物。
+                </p>
+                <div className="mt-4 flex flex-wrap justify-end gap-2">
+                  <button
+                    onClick={clearPendingStageTransition}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5 transition-colors"
+                  >
+                    暂不进入
+                  </button>
+                  <button
+                    onClick={handleConfirmStageTransition}
+                    className="rounded-lg px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 transition-colors shadow-md shadow-emerald-500/20"
+                  >
+                    确认进入 {pendingNextStage.name}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {isGenerating && (chatHistory.length === 0 || chatHistory[chatHistory.length - 1]?.role !== 'assistant' || !chatHistory[chatHistory.length - 1]?.content?.trim()) && (
           <div className="flex items-start gap-4 animate-fade-in-up">

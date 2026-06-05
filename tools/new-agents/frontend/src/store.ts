@@ -61,7 +61,7 @@ export const useStore = create<AppState>()(
       isGenerating: false,
       isUserConfigured: false,
       // P0-4: Stage transition confirmation gate
-      pendingStageTransition: false,
+      pendingStageTransition: null,
       // P0-9: Artifact truncation flag
       artifactTruncated: false,
 
@@ -78,7 +78,8 @@ export const useStore = create<AppState>()(
         artifactContent: getWelcomeMessage(workflow),
         stageArtifacts: {
           [WORKFLOWS[workflow].stages[0].id]: getWelcomeMessage(workflow)
-        }
+        },
+        pendingStageTransition: null,
       }),
       setStageIndex: (index) => set((state) => {
         const newStageArtifacts = { ...state.stageArtifacts };
@@ -150,33 +151,35 @@ export const useStore = create<AppState>()(
         },
         stageIndex: 0,
         // P0-4: Reset transition state on clear
-        pendingStageTransition: false,
+        pendingStageTransition: null,
         // P0-9: Reset truncation flag on clear
         artifactTruncated: false,
       })),
       // P0-4: Stage transition confirmation actions
       setPendingStageTransition: (pending) => set({ pendingStageTransition: pending }),
+      clearPendingStageTransition: () => set({ pendingStageTransition: null }),
       confirmStageTransition: () => set((state) => {
         if (!state.pendingStageTransition) return {};
         const wf = WORKFLOWS[state.workflow];
-        if (state.stageIndex >= wf.stages.length - 1) {
-          return { pendingStageTransition: false };
+        const fromIndex = state.pendingStageTransition.fromStageIndex;
+        const nextIndex = state.pendingStageTransition.toStageIndex;
+        if (nextIndex < 0 || nextIndex >= wf.stages.length) {
+          return { pendingStageTransition: null };
         }
         // P0-5: Properly save current stage artifact and transition
         const newStageArtifacts = { ...state.stageArtifacts };
-        const currentStageId = wf.stages[state.stageIndex].id;
-        // Save the current artifactContent as the current stage's artifact
-        newStageArtifacts[currentStageId] = state.artifactContent;
+        const fromStage = wf.stages[fromIndex];
+        if (fromStage && state.stageIndex === fromIndex) {
+          newStageArtifacts[fromStage.id] = state.artifactContent;
+        }
 
-        const nextIndex = state.stageIndex + 1;
-        const nextStageId = wf.stages[nextIndex].id;
+        const nextStage = wf.stages[nextIndex];
+        const nextStageId = nextStage.id;
         return {
-          pendingStageTransition: false,
+          pendingStageTransition: null,
           stageIndex: nextIndex,
           stageArtifacts: newStageArtifacts,
-          // artifactContent stays the same — LLM already generated the next stage's artifact
-          // But if there's a saved artifact for the next stage, restore it
-          artifactContent: newStageArtifacts[nextStageId] || state.artifactContent,
+          artifactContent: newStageArtifacts[nextStageId] || `# ${nextStage.name}\n\n暂无产出物。`,
         };
       }),
       // P0-9: Artifact truncation action

@@ -10,6 +10,11 @@ export type ArtifactVersion = {
     content: string;
 };
 
+export type PendingStageTransition = {
+    fromStageIndex: number;
+    toStageIndex: number;
+};
+
 export type Message = {
     id: string;
     role: 'user' | 'assistant';
@@ -71,7 +76,7 @@ export interface ChatState {
     isSettingsOpen: boolean;
     isGenerating: boolean;
     // P0-4: Stage transition confirmation gate
-    pendingStageTransition: boolean;
+    pendingStageTransition: PendingStageTransition | null;
     // P0-9: Artifact truncation flag
     artifactTruncated: boolean;
 
@@ -95,7 +100,8 @@ export interface ChatState {
     setStageArtifact: (stageId: string, content: string) => void;
     resetToSystemConfig: () => void;
     // P0-4: Stage transition actions
-    setPendingStageTransition: (pending: boolean) => void;
+    setPendingStageTransition: (pending: PendingStageTransition | null) => void;
+    clearPendingStageTransition: () => void;
     confirmStageTransition: () => void;
     // P0-9: Artifact truncation action
     setArtifactTruncated: (truncated: boolean) => void;

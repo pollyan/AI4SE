@@ -40,7 +40,9 @@ describe('ChatPane Component', () => {
         useStore.setState({ 
             chatHistory: [],
             isGenerating: false,
-            workflow: 'TEST_DESIGN' as WorkflowType
+            workflow: 'TEST_DESIGN' as WorkflowType,
+            stageIndex: 0,
+            pendingStageTransition: null
         });
         vi.clearAllMocks();
     });
@@ -173,5 +175,64 @@ describe('ChatPane Component', () => {
         render(<ChatPane />);
         
         expect(screen.getByText(/思考中\.\.\./)).toBeDefined();
+    });
+
+    it('renders stage transition confirmation card in the chat pane', () => {
+        useStore.setState({
+            pendingStageTransition: { fromStageIndex: 0, toStageIndex: 1 },
+            chatHistory: [
+                { id: '1', role: 'user', content: '确认', timestamp: Date.now() },
+                { id: '2', role: 'assistant', content: '当前阶段产出物已更新。', timestamp: Date.now() + 1000 }
+            ]
+        });
+
+        render(<ChatPane />);
+
+        expect(screen.getByText(/AI 建议进入下一阶段：策略制定/)).toBeDefined();
+        expect(screen.getByText('暂不进入')).toBeDefined();
+        expect(screen.getByText('确认进入 策略制定')).toBeDefined();
+    });
+
+    it('clears pending transition when user declines in chat pane', () => {
+        useStore.setState({
+            pendingStageTransition: { fromStageIndex: 0, toStageIndex: 1 },
+            chatHistory: [
+                { id: '1', role: 'assistant', content: '当前阶段产出物已更新。', timestamp: Date.now() }
+            ]
+        });
+
+        render(<ChatPane />);
+        fireEvent.click(screen.getByText('暂不进入'));
+
+        expect(useStore.getState().pendingStageTransition).toBeNull();
+        expect(useStore.getState().stageIndex).toBe(0);
+    });
+
+    it('confirms pending transition and triggers next-stage generation from chat pane', () => {
+        const mockHandleSend = vi.fn();
+        (useChatService as any).mockReturnValue({
+            input: '',
+            setInput: vi.fn(),
+            pendingAttachments: [],
+            handleSend: mockHandleSend,
+            handleRetry: vi.fn(),
+            handleStop: vi.fn(),
+            handleFileChange: vi.fn(),
+            removeAttachment: vi.fn()
+        });
+
+        useStore.setState({
+            pendingStageTransition: { fromStageIndex: 0, toStageIndex: 1 },
+            chatHistory: [
+                { id: '1', role: 'assistant', content: '当前阶段产出物已更新。', timestamp: Date.now() }
+            ]
+        });
+
+        render(<ChatPane />);
+        fireEvent.click(screen.getByText('确认进入 策略制定'));
+
+        expect(useStore.getState().stageIndex).toBe(1);
+        expect(useStore.getState().pendingStageTransition).toBeNull();
+        expect(mockHandleSend).toHaveBeenCalledWith('请继续生成当前阶段产出物');
     });
 });

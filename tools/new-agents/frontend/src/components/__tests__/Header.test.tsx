@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { Header } from '../Header';
 import { useStore } from '../../store';
 import { BrowserRouter } from 'react-router-dom';
@@ -36,7 +36,7 @@ describe('Header Component', () => {
         useStore.setState({
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
-            pendingStageTransition: false,
+            pendingStageTransition: null,
             chatHistory: [],
         });
     });
@@ -57,25 +57,15 @@ describe('Header Component', () => {
         expect(screen.getByText('Settings')).toBeTruthy();
     });
 
-    it('shows stage transition confirmation banner when pendingStageTransition is true', () => {
-        useStore.setState({ pendingStageTransition: true, stageIndex: 0 });
-        renderHeader();
-        expect(screen.getByText(/AI 建议进入下一阶段/)).toBeTruthy();
-    });
-
-    it('hides stage transition banner when pendingStageTransition is false', () => {
-        useStore.setState({ pendingStageTransition: false });
+    it('does not render stage transition confirmation in the header when pendingStageTransition exists', () => {
+        useStore.setState({ pendingStageTransition: { fromStageIndex: 0, toStageIndex: 1 }, stageIndex: 0 });
         renderHeader();
         expect(screen.queryByText(/AI 建议进入下一阶段/)).toBeNull();
     });
 
-    it('confirm button click triggers confirmStageTransition', () => {
-        useStore.setState({ pendingStageTransition: true, stageIndex: 0 });
+    it('hides stage transition banner when pendingStageTransition is false', () => {
+        useStore.setState({ pendingStageTransition: null });
         renderHeader();
-        const btn = screen.getByText(/确认进入/);
-        fireEvent.click(btn);
-        // After confirm, pendingStageTransition should be false
-        expect(useStore.getState().pendingStageTransition).toBe(false);
-        expect(useStore.getState().stageIndex).toBe(1);
+        expect(screen.queryByText(/AI 建议进入下一阶段/)).toBeNull();
     });
 });

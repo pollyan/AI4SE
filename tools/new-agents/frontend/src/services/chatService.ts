@@ -92,19 +92,23 @@ export function useChatService() {
                     useStore.getState().setArtifactTruncated(true);
                 }
 
-                // P0-4: Instead of auto-transitioning, set pendingStageTransition
-                // User must confirm via Header button before actual transition
+                // Stage transition is a user-gated chat event. Stop this stream
+                // before any unconfirmed next-stage artifact can be written.
                 if (action === 'NEXT_STAGE' && !hasTransitioned) {
                     const state = useStore.getState();
                     const wf = WORKFLOWS[state.workflow];
                     if (state.stageIndex < wf.stages.length - 1) {
-                        state.setPendingStageTransition(true);
+                        state.setPendingStageTransition({
+                            fromStageIndex: state.stageIndex,
+                            toStageIndex: state.stageIndex + 1,
+                        });
                         hasTransitioned = true;
+                        abortControllerRef.current?.abort();
+                        break;
                     }
                 }
 
-                // 统一依赖当前 Store 最新的 stageIndex 进行产出物的读写，
-                // 如果已经过了 NEXT_STAGE，它会天生写向新阶段；如果是在那之前的 update，就会自然写向旧阶段
+                // 统一依赖当前 Store 最新的 stageIndex 进行产出物的读写。
                 if (hasArtifactUpdate) {
                     const currentState = useStore.getState();
                     const currentActiveStageId = WORKFLOWS[currentState.workflow].stages[currentState.stageIndex].id;
