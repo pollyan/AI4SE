@@ -22,6 +22,9 @@ export const buildSystemPrompt = (config: {
     const cleanArtifact = removeMarkTags(currentArtifact);
     const isLastStage = stageIndex === wf.stages.length - 1;
     const nextStage = !isLastStage ? wf.stages[stageIndex + 1] : null;
+    const stageActionInstruction = nextStage
+        ? `如果用户明确确认进入下一阶段，结构化输出的 stage_action 必须是 {"type":"request_next_stage","target_stage_id":"${nextStage.id}"}。target_stage_id 只能填写内部阶段 ID "${nextStage.id}"，不要填写阶段中文名称“${nextStage.name}”。`
+        : '当前已经是最后阶段，结构化输出的 stage_action 必须为 null。';
 
     const persona = PERSONAS[agentId] || PERSONAS['lisa'];
 
@@ -79,6 +82,7 @@ ${previousArtifactsContext}
 【阶段推进规则】：
 1. **阶段完成确认**：当你认为当前阶段的所有目标已经完全达成时，向用户总结当前阶段的最终产出物，并明确询问用户："当前阶段产出物已更新，是否确认无误并进入下一阶段${nextStage ? `（${nextStage.name}）` : ''}？"。
 2. **触发阶段切换**：只有当用户在对话中明确回复同意或确认进入下一阶段后，才表达阶段可以推进。系统会通过结构化事件决定是否切换阶段，你不需要输出任何协议标签。
+   - ${stageActionInstruction}
 3. **生成新阶段产出物**：进入下一阶段后，围绕新阶段目标继续生成对应阶段的完整 Markdown 产出物${nextStage ? `（目标：${nextStage.description}）。` : ''}。
 4. **产出物更新原则**：如果本轮需要更新右侧产出物，必须提供完整、全部的 Markdown 文档内容（包含未修改的部分），绝对不能只输出修改片段，也不能用“...保持不变”省略已有内容。
 

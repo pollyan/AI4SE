@@ -400,6 +400,10 @@ def build_artifact_contract_prompt(
         h1_keyword_requirements = (
             f"真实 H1 标题必须包含以下关键词：{keywords}。\n"
         )
+    stage_action_contract = build_stage_action_contract_prompt(
+        workflow_id=workflow_id,
+        current_stage_id=current_stage_id,
+    )
     return (
         "\n\n【结构化产出物契约】\n"
         "chat 只允许返回给用户看的简短中文说明，禁止包含 Markdown 标题、"
@@ -408,12 +412,38 @@ def build_artifact_contract_prompt(
         "本阶段必须更新右侧产出物：artifact_update.type 必须为 replace。\n"
         "artifact_update.markdown 必须是完整 Markdown 文档，不能只返回片段，"
         "不能用省略号表示未修改内容。\n"
+        "即使用户只回复“继续”“没问题”“确认”等短确认，也必须保留所有必填标题，"
+        "并把已确认信息写回当前阶段完整文档；不能只在 chat 中说明已生成或已确认。\n"
         f"{h1_keyword_requirements}"
         "以下以 # 开头的条目必须作为真实 Markdown 标题行出现，"
         "不能只放在正文描述或代码块中；非 # 开头条目必须出现在正文中：\n"
         f"{headings}\n"
+        f"{stage_action_contract}"
         "如果用户需求信息不足，也要先生成需求分析/待澄清问题文档，"
         "把阻断问题写入对应章节，不能只在 chat 中提问。\n"
+    )
+
+
+def build_stage_action_contract_prompt(
+    *,
+    workflow_id: str,
+    current_stage_id: str,
+) -> str:
+    stages = WORKFLOW_STAGES.get(workflow_id)
+    if not stages or current_stage_id not in stages:
+        return ""
+
+    current_index = stages.index(current_stage_id)
+    if current_index == len(stages) - 1:
+        return "当前阶段是最后阶段，stage_action 必须为 null。\n"
+
+    expected_target = stages[current_index + 1]
+    return (
+        "只有用户明确确认进入下一阶段时，stage_action 才能请求阶段推进；"
+        '此时唯一合法值是 {"type": "request_next_stage", '
+        f'"target_stage_id": "{expected_target}"}}。'
+        f'target_stage_id 必须填写内部阶段 ID "{expected_target}"，'
+        "不要填写阶段中文名称。\n"
     )
 
 

@@ -41,9 +41,11 @@ describe('ArtifactPane Component', () => {
         vi.restoreAllMocks();
         useStore.setState({
             workflow: 'TEST_DESIGN',
+            stageIndex: 0,
             artifactContent: '',
             artifactHistory: [],
             artifactTruncated: false,
+            isGenerating: false,
         });
     });
 
@@ -59,6 +61,19 @@ describe('ArtifactPane Component', () => {
         // ReactMarkdown renders the heading and paragraph
         expect(container.textContent).toContain('Hello World');
         expect(container.textContent).toContain('bold');
+    });
+
+    it('shows a friendly animated artifact generation state while generating', () => {
+        useStore.setState({
+            artifactContent: '# 需求分析文档\n\n初始内容',
+            isGenerating: true,
+        });
+
+        render(<ArtifactPane />);
+
+        expect(screen.getByText('正在构建产出物')).toBeTruthy();
+        expect(screen.getByText('正在构建右侧产出物')).toBeTruthy();
+        expect(screen.getByTestId('artifact-generation-animation')).toBeTruthy();
     });
 
     it('renders mermaid diagrams', () => {

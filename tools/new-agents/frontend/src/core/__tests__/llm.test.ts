@@ -248,14 +248,12 @@ describe('llm.ts', () => {
                 stageId: 'CLARIFY',
             });
 
-            expect(results).toEqual([
-                {
-                    chatResponse: '已更新需求分析文档。',
-                    newArtifact: '# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能',
-                    action: '',
-                    hasArtifactUpdate: true,
-                },
-            ]);
+            expect(results.at(-1)).toEqual({
+                chatResponse: '已更新需求分析文档。',
+                newArtifact: '# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能',
+                action: '',
+                hasArtifactUpdate: true,
+            });
         });
 
         it('结构化 Agent Runtime warnings 包含 artifact_truncated 时应标记产出物截断', async () => {
@@ -279,18 +277,16 @@ describe('llm.ts', () => {
                 generateResponseStream('生成长文档')
             );
 
-            expect(results).toEqual([
-                {
-                    chatResponse: '产出物内容可能不完整，请检查。',
-                    newArtifact: '# 价值定位分析\n\n## 产品核心定位\n内容',
-                    action: '',
-                    hasArtifactUpdate: true,
-                    artifactTruncated: true,
-                },
-            ]);
+            expect(results.at(-1)).toEqual({
+                chatResponse: '产出物内容可能不完整，请检查。',
+                newArtifact: '# 价值定位分析\n\n## 产品核心定位\n内容',
+                action: '',
+                hasArtifactUpdate: true,
+                artifactTruncated: true,
+            });
         });
 
-        it('长 agent_turn 回复应渐进拆分为多个累计聊天 chunk，并在最终 chunk 更新产出物', async () => {
+        it('长 agent_turn 回复应渐进拆分为多个累计聊天 chunk，并同步揭示产出物', async () => {
             resetStore({
                 workflow: 'TEST_DESIGN',
                 stageIndex: 0,
@@ -326,9 +322,67 @@ describe('llm.ts', () => {
             expect(results.length).toBeGreaterThan(1);
             expect(results.at(0)).toMatchObject({
                 chatResponse: '需求太模糊了，没法直接出测试用例。',
-                newArtifact: '# 需求分析文档\n\n初始内容',
-                hasArtifactUpdate: false,
+                newArtifact: '# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能',
+                hasArtifactUpdate: true,
             });
+            expect(results.at(-1)).toEqual({
+                chatResponse: fullChat,
+                newArtifact: nextArtifact,
+                action: '',
+                hasArtifactUpdate: true,
+            });
+        });
+
+        it('中文单段 agent_turn 回复也应渐进拆分并同步揭示右侧产出物', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: '# 需求分析文档\n\n初始内容',
+                stageArtifacts: { CLARIFY: '# 需求分析文档\n\n初始内容' },
+            });
+            const fullChat = '我会先梳理登录链路。然后补充边界条件。最后生成风险清单。';
+            const nextArtifact = [
+                '# 需求分析文档',
+                '',
+                '## 1. 被测系统与边界',
+                '登录链路覆盖账号密码、验证码和锁定策略。',
+                '',
+                '## 2. 系统交互与核心链路',
+                '用户提交凭证后进入鉴权、风控和会话创建。',
+                '',
+                '## 3. 待澄清与阻断性问题',
+                '需要确认验证码触发条件。',
+                '',
+                '## 4. 隐式需求与非功能性考量',
+                '需要覆盖安全、可用性和审计要求。',
+            ].join('\n');
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentTurnEvent({
+                        chat: fullChat,
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: nextArtifact,
+                        },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('帮我设计登录功能测试用例')
+            );
+
+            expect(results.length).toBeGreaterThan(1);
+            expect(results.at(0)).toMatchObject({
+                chatResponse: '我会先梳理登录链路。',
+                hasArtifactUpdate: true,
+            });
+            expect(results.at(0)?.newArtifact).toContain('# 需求分析文档');
+            expect(results.at(0)?.newArtifact.length).toBeLessThan(nextArtifact.length);
             expect(results.at(-1)).toEqual({
                 chatResponse: fullChat,
                 newArtifact: nextArtifact,
@@ -440,7 +494,7 @@ describe('llm.ts', () => {
                 workflowId: 'TEST_DESIGN',
                 stageId: 'STRATEGY',
             });
-            expect(results[0]).toMatchObject({
+            expect(results.at(-1)).toMatchObject({
                 chatResponse: '已更新测试策略蓝图。',
                 newArtifact: '# 测试策略蓝图\n\n## 1. 质量目标\n稳定可靠',
                 hasArtifactUpdate: true,
@@ -477,7 +531,7 @@ describe('llm.ts', () => {
                 workflowId: 'REQ_REVIEW',
                 stageId: 'REVIEW',
             });
-            expect(results[0]).toMatchObject({
+            expect(results.at(-1)).toMatchObject({
                 chatResponse: '已更新需求评审问题清单。',
                 newArtifact: '# 需求评审问题清单\n\n## 评审概要\n登录需求评审\n\n## 问题统计\n暂无阻塞项',
                 hasArtifactUpdate: true,
@@ -514,7 +568,7 @@ describe('llm.ts', () => {
                 workflowId: 'INCIDENT_REVIEW',
                 stageId: 'TIMELINE',
             });
-            expect(results[0]).toMatchObject({
+            expect(results.at(-1)).toMatchObject({
                 chatResponse: '已更新事件还原。',
                 newArtifact: '# 故障复盘报告\n\n## 1. 事件概要\n支付失败\n\n## 2. 事件时间线\n待补充',
                 hasArtifactUpdate: true,
@@ -551,7 +605,7 @@ describe('llm.ts', () => {
                 workflowId: 'IDEA_BRAINSTORM',
                 stageId: 'DEFINE',
             });
-            expect(results[0]).toMatchObject({
+            expect(results.at(-1)).toMatchObject({
                 chatResponse: '已更新问题域分析。',
                 newArtifact: '# 问题域分析\n\n## 问题假设陈述\n独立开发者变现困难\n\n## 目标用户画像\n独立开发者',
                 hasArtifactUpdate: true,
@@ -588,7 +642,7 @@ describe('llm.ts', () => {
                 workflowId: 'VALUE_DISCOVERY',
                 stageId: 'ELEVATOR',
             });
-            expect(results[0]).toMatchObject({
+            expect(results.at(-1)).toMatchObject({
                 chatResponse: '已更新价值定位。',
                 newArtifact: '# 价值定位分析\n\n## 产品核心定位\n开发者变现工具\n\n## 目标用户概览\n独立开发者',
                 hasArtifactUpdate: true,

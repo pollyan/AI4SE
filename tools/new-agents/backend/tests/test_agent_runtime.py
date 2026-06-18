@@ -4,9 +4,11 @@ from agent_contracts import AgentTurnOutput, ContractValidationError
 from agent_runtime import (
     AgentRuntimeModelError,
     AgentRuntimeSchemaError,
+    AgentTurnValidationDeps,
     PydanticAgentRuntime,
     build_agent_retries,
     build_model_settings,
+    register_contract_output_validator,
 )
 
 
@@ -34,9 +36,11 @@ class FakeAgent:
     def __init__(self, output):
         self.output = output
         self.prompts = []
+        self.deps = []
 
-    def run_sync(self, prompt):
+    def run_sync(self, prompt, *, deps=None):
         self.prompts.append(prompt)
+        self.deps.append(deps)
         return FakeRunResult(self.output)
 
 
@@ -44,7 +48,7 @@ class FailingAgent:
     def __init__(self, error):
         self.error = error
 
-    def run_sync(self, prompt):
+    def run_sync(self, prompt, *, deps=None):
         raise self.error
 
 
@@ -75,6 +79,44 @@ def test_runtime_validates_pydantic_ai_output_before_returning_it():
     assert output.stage_action is not None
     assert output.stage_action.target_stage_id == "STRATEGY"
     assert agent.prompts == ["用户需求: 登录功能"]
+    assert agent.deps == [
+        AgentTurnValidationDeps(
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    ]
+
+
+def test_contract_output_validator_requests_model_retry_for_invalid_artifact():
+    class ValidatorRecordingAgent:
+        validator = None
+
+        def output_validator(self, func):
+            self.validator = func
+            return func
+
+    agent = ValidatorRecordingAgent()
+    register_contract_output_validator(agent)
+    invalid_output = AgentTurnOutput.model_validate({
+        "chat": "已更新右侧需求分析文档。",
+        "artifact_update": {
+            "type": "replace",
+            "markdown": "# 需求分析文档\n\n## 1. 被测系统与边界\n内容",
+        },
+        "stage_action": None,
+        "warnings": [],
+    })
+
+    class FakeContext:
+        deps = AgentTurnValidationDeps(
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+
+    with pytest.raises(Exception, match="missing required artifact headings") as exc:
+        agent.validator(FakeContext(), invalid_output)
+
+    assert exc.value.__class__.__name__ == "ModelRetry"
 
 
 def test_runtime_rejects_structured_output_that_violates_workflow_rules():

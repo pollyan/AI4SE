@@ -88,6 +88,32 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('阶段完成确认');
     });
 
+    it('instructs the model to use the internal next stage id for structured stage actions', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            currentArtifact: '# 需求分析文档\n已有内容',
+        });
+
+        expect(prompt).toContain('target_stage_id');
+        expect(prompt).toContain('STRATEGY');
+        expect(prompt).toContain('策略制定');
+        expect(prompt).toContain('不要填写阶段中文名称');
+    });
+
+    it('allows the test design clarify stage to assume a scenario when the user asks for one', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            currentArtifact: '# 需求分析文档\n已有内容',
+        });
+
+        expect(prompt).toContain('用户要求你代为设定场景');
+        expect(prompt).toContain('直接设定一个合理、可测试、可推进的默认场景');
+    });
+
     it('injects previous stage artifacts when generating a later non-final stage', () => {
         const prompt = buildSystemPrompt({
             agentId: 'lisa',

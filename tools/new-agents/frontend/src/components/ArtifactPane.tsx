@@ -14,6 +14,7 @@ export const ArtifactPane: React.FC = () => {
   const artifactContent = useStore((state) => state.artifactContent);
   const artifactHistory = useStore((state) => state.artifactHistory);
   const artifactTruncated = useStore((state) => state.artifactTruncated);
+  const isGenerating = useStore((state) => state.isGenerating);
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
   const [showHistory, setShowHistory] = useState(false);
   const [selectedVersion, setSelectedVersion] = useState<ArtifactVersion | null>(null);
@@ -153,9 +154,15 @@ export const ArtifactPane: React.FC = () => {
             <h2 className="text-gray-200 font-semibold text-sm tracking-tight">当前产出物.md</h2>
             <span className="text-[10px] text-slate-500">实时渲染</span>
           </div>
-          <span className="ml-2 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-medium border border-emerald-500/20 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            实时同步
+          <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-medium border flex items-center gap-1 ${
+            isGenerating
+              ? 'bg-sky-500/10 text-sky-300 border-sky-500/20'
+              : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+              isGenerating ? 'bg-sky-300' : 'bg-emerald-500'
+            }`}></span>
+            {isGenerating ? '正在构建产出物' : '实时同步'}
           </span>
         </div>
         <div className="flex items-center gap-1 bg-[#0f172a] p-1 rounded-lg border border-[#1e293b]">
@@ -181,6 +188,29 @@ export const ArtifactPane: React.FC = () => {
           <div className="max-w-4xl mx-auto mb-4 flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>产出物内容可能因流式响应中断而不完整，请检查文档完整性。</span>
+          </div>
+        )}
+        {isGenerating && (
+          <div className="max-w-4xl mx-auto mb-4 overflow-hidden rounded-lg border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sky-100 shadow-[0_0_24px_rgba(14,165,233,0.08)]">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <div className="text-sm font-medium">正在构建右侧产出物</div>
+                <div className="mt-1 text-xs text-sky-200/70">模型正在整理结构、章节和图表内容</div>
+              </div>
+              <div
+                className="flex h-8 shrink-0 items-end gap-1.5"
+                data-testid="artifact-generation-animation"
+                aria-hidden="true"
+              >
+                <span className="block h-3 w-1.5 rounded-full bg-sky-300/70 animate-pulse"></span>
+                <span className="block h-5 w-1.5 rounded-full bg-cyan-200/80 animate-pulse [animation-delay:120ms]"></span>
+                <span className="block h-7 w-1.5 rounded-full bg-blue-200/80 animate-pulse [animation-delay:240ms]"></span>
+                <span className="block h-4 w-1.5 rounded-full bg-sky-300/70 animate-pulse [animation-delay:360ms]"></span>
+              </div>
+            </div>
+            <div className="mt-3 h-1 overflow-hidden rounded-full bg-sky-950/80">
+              <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-sky-400 via-cyan-200 to-blue-300 animate-pulse"></div>
+            </div>
           </div>
         )}
         <div className="max-w-4xl mx-auto pb-20">

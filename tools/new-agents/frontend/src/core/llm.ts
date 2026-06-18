@@ -390,10 +390,10 @@ const splitChatForStreaming = (chat: string): string[] => {
     .filter(Boolean);
   const units = paragraphs.length > 1
     ? paragraphs
-    : trimmed
-      .split(/(?<=[。！？；.!?])\s+/)
-      .map(part => part.trim())
-      .filter(Boolean);
+    : (
+      trimmed.match(/[^。！？；.!?]+[。！？；.!?]+|[^。！？；.!?]+$/g)
+      || [trimmed]
+    ).map(part => part.trim()).filter(Boolean);
 
   if (units.length <= 1) return [chat];
   if (units.length <= MAX_SYNTHETIC_STREAM_STEPS) return units;
@@ -404,6 +404,31 @@ const splitChatForStreaming = (chat: string): string[] => {
     grouped.push(units.slice(index, index + groupSize).join('\n\n'));
   }
   return grouped;
+};
+
+const splitArtifactForStreaming = (
+  artifact: string,
+  targetSteps: number
+): string[] => {
+  const trimmed = artifact.trim();
+  if (!trimmed) return [artifact];
+
+  const blocks = trimmed
+    .split(/\n{2,}/)
+    .map(block => block.trim())
+    .filter(Boolean);
+  const units = blocks.length > 1 ? blocks : [artifact];
+  const maxSteps = Math.max(1, Math.min(MAX_SYNTHETIC_STREAM_STEPS, targetSteps));
+  if (units.length <= 1 || maxSteps <= 1) return [artifact];
+
+  const groupSize = Math.ceil(units.length / maxSteps);
+  const frames: string[] = [];
+  for (let index = 0; index < units.length; index += groupSize) {
+    frames.push(units.slice(0, index + groupSize).join('\n\n'));
+  }
+
+  frames[frames.length - 1] = artifact;
+  return frames;
 };
 
 const waitForSyntheticStreamFrame = async (): Promise<void> => {
@@ -477,18 +502,31 @@ const mapAgentTurnToStreamChunks = async function* (
   }
 
   const chatUnits = splitChatForStreaming(output.chat);
+  const artifactUnits = hasArtifactUpdate
+    ? splitArtifactForStreaming(
+      newArtifact,
+      chatUnits.length
+    )
+    : [];
+  const frameCount = Math.max(chatUnits.length, artifactUnits.length, 1);
   let accumulatedChat = '';
-  for (let index = 0; index < chatUnits.length; index += 1) {
-    const isFinalChunk = index === chatUnits.length - 1;
-    accumulatedChat = accumulatedChat
-      ? `${accumulatedChat}\n\n${chatUnits[index]}`
-      : chatUnits[index];
+  for (let index = 0; index < frameCount; index += 1) {
+    const isFinalChunk = index === frameCount - 1;
+    const chatUnit = chatUnits[Math.min(index, chatUnits.length - 1)];
+    if (index < chatUnits.length) {
+      accumulatedChat = accumulatedChat
+        ? `${accumulatedChat}\n\n${chatUnit}`
+        : chatUnit;
+    }
+    const artifactFrame = hasArtifactUpdate
+      ? artifactUnits[Math.min(index, artifactUnits.length - 1)]
+      : currentArtifact;
 
     yield {
       chatResponse: isFinalChunk ? output.chat : accumulatedChat,
-      newArtifact: isFinalChunk ? newArtifact : currentArtifact,
+      newArtifact: isFinalChunk ? newArtifact : artifactFrame,
       action: isFinalChunk && output.stage_action ? 'NEXT_STAGE' : '',
-      hasArtifactUpdate: isFinalChunk && hasArtifactUpdate,
+      hasArtifactUpdate,
       ...(artifactTruncated ? { artifactTruncated: true } : {}),
     };
 

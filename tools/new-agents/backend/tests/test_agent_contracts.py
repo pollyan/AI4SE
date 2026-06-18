@@ -62,6 +62,26 @@ def test_agent_turn_output_accepts_json_string_encoded_artifact_update():
     )
 
 
+def test_artifact_contract_prompt_includes_exact_next_stage_action_target():
+    prompt = build_artifact_contract_prompt(
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert '"target_stage_id": "STRATEGY"' in prompt
+    assert "不要填写阶段中文名称" in prompt
+
+
+def test_artifact_contract_prompt_requires_full_artifact_after_short_confirmations():
+    prompt = build_artifact_contract_prompt(
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert "即使用户只回复“继续”“没问题”“确认”" in prompt
+    assert "也必须保留所有必填标题" in prompt
+
+
 def test_agent_turn_output_rejects_unknown_top_level_fields():
     with pytest.raises(ValueError, match="unexpected_top_level"):
         AgentTurnOutput.model_validate(

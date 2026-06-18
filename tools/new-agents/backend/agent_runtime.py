@@ -1,6 +1,11 @@
+from dataclasses import dataclass
 from typing import Any
 
-from agent_contracts import AgentTurnOutput, validate_agent_turn
+from agent_contracts import (
+    AgentTurnOutput,
+    ContractValidationError,
+    validate_agent_turn,
+)
 
 try:
     from pydantic_ai.exceptions import (
@@ -37,6 +42,29 @@ class AgentRuntimeModelError(RuntimeError):
     """Raised when the underlying model provider reports an error."""
 
 
+@dataclass(frozen=True)
+class AgentTurnValidationDeps:
+    workflow_id: str
+    current_stage_id: str
+
+
+def register_contract_output_validator(agent: Any) -> None:
+    from pydantic_ai.exceptions import ModelRetry
+
+    @agent.output_validator
+    def validate_contract(ctx: Any, output: AgentTurnOutput) -> AgentTurnOutput:
+        try:
+            return validate_agent_turn(
+                output,
+                workflow_id=ctx.deps.workflow_id,
+                current_stage_id=ctx.deps.current_stage_id,
+            )
+        except ContractValidationError as exc:
+            raise ModelRetry(
+                f"结构化输出不符合业务契约，请重新生成完整合法输出：{exc}"
+            ) from exc
+
+
 class PydanticAgentRuntime:
     def __init__(self, agent: Any):
         self.agent = agent
@@ -49,7 +77,13 @@ class PydanticAgentRuntime:
         current_stage_id: str,
     ) -> AgentTurnOutput:
         try:
-            result = self.agent.run_sync(prompt)
+            result = self.agent.run_sync(
+                prompt,
+                deps=AgentTurnValidationDeps(
+                    workflow_id=workflow_id,
+                    current_stage_id=current_stage_id,
+                ),
+            )
         except PYDANTIC_AI_SCHEMA_ERRORS as exc:
             raise AgentRuntimeSchemaError(str(exc)) from exc
         except PYDANTIC_AI_MODEL_ERRORS as exc:
@@ -107,8 +141,10 @@ def build_pydantic_agent_runtime(
     )
     agent = Agent(
         model,
+        deps_type=AgentTurnValidationDeps,
         output_type=AgentTurnOutput,
         system_prompt=system_prompt,
         retries=build_agent_retries(model_name),
     )
+    register_contract_output_validator(agent)
     return PydanticAgentRuntime(agent)
