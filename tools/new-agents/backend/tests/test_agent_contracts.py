@@ -19,6 +19,16 @@ def _complete_markdown(required_headings: list[str]) -> str:
     )
 
 
+def _complete_marked_heading_markdown(required_headings: list[str]) -> str:
+    marked_headings = [
+        heading.replace(" ", " <mark>", 1) + "</mark>"
+        if heading.startswith("#")
+        else heading
+        for heading in required_headings
+    ]
+    return _complete_markdown(marked_headings)
+
+
 def test_agent_turn_output_accepts_structured_artifact_update():
     output = AgentTurnOutput.model_validate(
         {
@@ -437,6 +447,28 @@ def test_validate_agent_turn_accepts_complete_required_artifact_template(
         output,
         workflow_id=workflow_id,
         current_stage_id=stage_id,
+    ) is output
+
+
+def test_validate_agent_turn_accepts_required_headings_wrapped_in_mark_tags():
+    output = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新右侧问题域分析，请查看并确认。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": _complete_marked_heading_markdown(
+                    REQUIRED_ARTIFACT_HEADINGS[("IDEA_BRAINSTORM", "DEFINE")]
+                ),
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+
+    assert validate_agent_turn(
+        output,
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="DEFINE",
     ) is output
 
 

@@ -182,6 +182,7 @@ LEGACY_PROTOCOL_TAG_PATTERN = re.compile(
     r"<\s*/?\s*(?:CHART|ARTIFACT|CHAT)\b[^>]*>",
     re.IGNORECASE,
 )
+MARK_TAG_PATTERN = re.compile(r"<\s*/?\s*mark\s*>", re.IGNORECASE)
 
 
 class ContractValidationError(ValueError):
@@ -301,7 +302,7 @@ def validate_artifact_template(
         )
 
     markdown = output.artifact_update.markdown or ""
-    markdown_outside_code = strip_fenced_code_blocks(markdown)
+    markdown_outside_code = strip_mark_tags(strip_fenced_code_blocks(markdown))
     markdown_headings = extract_markdown_heading_lines(markdown)
     missing_headings = [
         heading
@@ -348,9 +349,13 @@ def strip_fenced_code_blocks(markdown: str) -> str:
     return "\n".join(lines)
 
 
+def strip_mark_tags(markdown: str) -> str:
+    return MARK_TAG_PATTERN.sub("", markdown)
+
+
 def extract_markdown_heading_lines(markdown: str) -> set[str]:
     return {
-        line.strip()
+        strip_mark_tags(line.strip())
         for line in strip_fenced_code_blocks(markdown).splitlines()
         if re.match(r"^#{1,6}\s+\S", line.strip())
     }
