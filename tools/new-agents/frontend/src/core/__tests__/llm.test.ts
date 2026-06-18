@@ -832,6 +832,25 @@ describe('llm.ts', () => {
             ).rejects.toThrow('结构化智能体 SSE 事件格式错误');
         });
 
+        it('SSE agent_turn output chat 包含旧标签协议时应抛出明确协议错误', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentTurnEvent({
+                        chat: '<CHART>我已经在右侧生成了《需求分析文档》框架。</CHART>',
+                        artifact_update: { type: 'none' },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 事件格式错误');
+        });
+
         it('SSE agent_turn output 缺少 artifact_update 时应抛出明确协议错误', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,

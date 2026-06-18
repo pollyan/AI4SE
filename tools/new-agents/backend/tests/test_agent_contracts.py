@@ -164,6 +164,27 @@ def test_agent_turn_output_rejects_artifact_markdown_in_chat_when_updating():
         )
 
 
+@pytest.mark.parametrize(
+    "chat",
+    [
+        "<CHART>我已经在右侧生成了《需求分析文档》框架。</CHART>",
+        "说明\n<chart>旧标签协议不应进入聊天。</chart>",
+        "<ARTIFACT>产出物正文</ARTIFACT>",
+        "<CHAT>旧聊天标签正文</CHAT>",
+    ],
+)
+def test_agent_turn_output_rejects_legacy_protocol_tags_in_chat(chat):
+    with pytest.raises(ValueError, match="legacy protocol tags"):
+        AgentTurnOutput.model_validate(
+            {
+                "chat": chat,
+                "artifact_update": {"type": "none"},
+                "stage_action": None,
+                "warnings": [],
+            }
+        )
+
+
 def test_agent_turn_output_allows_short_chat_when_updating_artifact():
     output = AgentTurnOutput.model_validate(
         {

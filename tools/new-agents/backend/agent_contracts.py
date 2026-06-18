@@ -178,6 +178,11 @@ REQUIRED_ARTIFACT_H1_KEYWORDS: dict[tuple[str, str], list[str]] = {
     ("VALUE_DISCOVERY", "BLUEPRINT"): ["需求蓝图"],
 }
 
+LEGACY_PROTOCOL_TAG_PATTERN = re.compile(
+    r"<\s*/?\s*(?:CHART|ARTIFACT|CHAT)\b[^>]*>",
+    re.IGNORECASE,
+)
+
 
 class ContractValidationError(ValueError):
     """Raised when a structured agent output violates workflow rules."""
@@ -226,6 +231,11 @@ class AgentTurnOutput(BaseModel):
     def validate_chat_not_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("chat cannot be blank")
+        if LEGACY_PROTOCOL_TAG_PATTERN.search(value):
+            raise ValueError(
+                "chat must not contain legacy protocol tags; use structured "
+                "artifact_update instead"
+            )
         return value
 
     @field_validator("artifact_update", mode="before")
@@ -393,7 +403,8 @@ def build_artifact_contract_prompt(
     return (
         "\n\n【结构化产出物契约】\n"
         "chat 只允许返回给用户看的简短中文说明，禁止包含 Markdown 标题、"
-        "表格、代码块、Mermaid 图或完整文档正文。\n"
+        "表格、代码块、Mermaid 图、完整文档正文或 <CHART>/<ARTIFACT>/"
+        "<CHAT> 旧标签协议。\n"
         "本阶段必须更新右侧产出物：artifact_update.type 必须为 replace。\n"
         "artifact_update.markdown 必须是完整 Markdown 文档，不能只返回片段，"
         "不能用省略号表示未修改内容。\n"

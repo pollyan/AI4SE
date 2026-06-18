@@ -46,6 +46,8 @@ const STRUCTURED_RUNTIME_WORKFLOWS: readonly WorkflowType[] = [
   'VALUE_DISCOVERY',
 ];
 
+const LEGACY_PROTOCOL_TAG_PATTERN = /<\s*\/?\s*(?:CHART|ARTIFACT|CHAT)\b[^>]*>/i;
+
 /** 将 base64 编码的文本安全解码为 UTF-8 字符串 */
 const decodeBase64Text = (base64: string): string | null => {
   try {
@@ -285,6 +287,9 @@ const parseAgentRuntimeEvent = (payload: string): AgentRuntimeEvent | null => {
     }
     const output = event.output as Partial<AgentTurnOutput>;
     if (typeof output.chat !== 'string' || !output.chat.trim()) {
+      throw new Error('结构化智能体 SSE 事件格式错误');
+    }
+    if (LEGACY_PROTOCOL_TAG_PATTERN.test(output.chat)) {
       throw new Error('结构化智能体 SSE 事件格式错误');
     }
     if (

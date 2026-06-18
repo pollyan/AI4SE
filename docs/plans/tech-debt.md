@@ -33,6 +33,28 @@
 - 验证: `cd tools/new-agents/frontend && npm test -- src/core/__tests__/llmSystemPromptIntegration.test.ts`，1 passed。
 - 2026-06-18: 本地 `.venv` 已安装根 `requirements.txt` 与 Playwright Chromium，浏览器级 New Agents E2E gate 已形成可执行路径。确定性命令 `NEW_AGENTS_E2E_LLM_JUDGE=0 .venv/bin/python -m pytest -o addopts='' tests/e2e/new_agents_browser -m e2e -q` 通过，2 passed / 2 skipped；可选 LLM judge 仍必须显式提供稳定外部模型环境。
 
+### P0: 旧标签协议泄漏到左侧聊天
+
+**现象**: 结构化 Agent Runtime 返回的 `chat` 字段如果包含 `<CHART>...</CHART>`、`<ARTIFACT>...</ARTIFACT>` 或 `<CHAT>...</CHAT>` 这类旧标签协议，前端会把它当作普通助手消息渲染在左侧聊天区。用户可见表现是左侧对话出现本应属于协议/产出物通道的标记和内容，例如 `<CHART>我已经在右侧生成了《需求分析文档》框架。</CHART>`。
+
+**影响**: 左侧 chat 与右侧 artifact 的职责边界被破坏。用户会看到内部协议标记或产出物通道内容，误以为助手回复和右侧文档重复或串位。
+
+**已确认根因**:
+
+- 后端 `AgentTurnOutput.chat` 原先只拦截 Markdown 标题、表格、代码块和 Mermaid 片段，没有把 `<CHART>/<ARTIFACT>/<CHAT>` 旧标签协议列为非法输出。
+- 前端 typed SSE 解析只校验 `chat` 是否为非空字符串，没有在协议边界拒绝旧标签污染。
+
+**修复记录**:
+
+- 2026-06-18: 后端契约新增旧标签协议校验，`chat` 字段一旦包含 `<CHART>`、`<ARTIFACT>` 或 `<CHAT>` 标签直接抛出契约错误，不剥离、不静默降级。
+- 2026-06-18: 前端 typed SSE 解析同步拒绝旧标签协议，防止异常 payload 绕过后端后被渲染到左侧聊天。
+- 2026-06-18: 结构化产出物契约 prompt 明确禁止 chat 包含 `<CHART>/<ARTIFACT>/<CHAT>` 旧标签协议。
+- RED 验证: `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_contracts.py -q`，修复前 4 个旧标签用例失败。
+- RED 验证: `cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.test.ts -t "旧标签协议"`，修复前失败，`<CHART>...` 被作为 `chatResponse` 返回。
+- 验证: `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_contracts.py -q`，62 passed。
+- 验证: `cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.test.ts -t "旧标签协议"`，1 passed。
+- 验证: `./scripts/test/test-local.sh new-agents`，前端 26 files / 293 tests passed，后端 175 passed / 1 deselected。
+
 ### P1: 后续阶段产物会被误注入较早阶段 Prompt 上下文
 
 **现象**: 当 `stageArtifacts` 中已经存在后续阶段产物时，用户回到较早阶段继续生成或从持久化状态恢复后，`buildSystemPrompt()` 会把后续阶段 artifact 也写入“前序阶段有效结论摘要”。
