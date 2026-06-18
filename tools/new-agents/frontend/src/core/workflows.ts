@@ -22,8 +22,14 @@ export const WORKFLOWS: Record<WorkflowType, WorkflowDef> = {
     TEST_DESIGN: {
         id: 'TEST_DESIGN',
         agentId: 'lisa',
+        slug: 'test-design',
         name: '测试设计',
         description: '对传入需求进行逻辑拆解与边界梳理',
+        listing: {
+            name: '测试策略与用例设计',
+            description: '提供产品需求或代码变更集，为你自动设计详尽的测试策略与测试用例。',
+            icon: 'TestTube2'
+        },
         stages: [
             {
                 id: 'CLARIFY',
@@ -63,8 +69,14 @@ export const WORKFLOWS: Record<WorkflowType, WorkflowDef> = {
     REQ_REVIEW: {
         id: 'REQ_REVIEW',
         agentId: 'lisa',
+        slug: 'req-review',
         name: '需求评审',
         description: '分析需求完整性并评估测试风险',
+        listing: {
+            name: '需求评审',
+            description: '从测试人员视角深度评审需求文档，自动扫描可测试性、完整性、边界定义等维度，输出结构化的评审问题清单。',
+            icon: 'FileCode2'
+        },
         stages: [
             {
                 id: 'REVIEW',
@@ -92,8 +104,14 @@ export const WORKFLOWS: Record<WorkflowType, WorkflowDef> = {
     INCIDENT_REVIEW: {
         id: 'INCIDENT_REVIEW',
         agentId: 'lisa',
+        slug: 'incident-review',
         name: '故障复盘',
         description: '系统化复盘故障根因并生成改进计划',
+        listing: {
+            name: '线上故障复盘',
+            description: '引导你用结构化方法完成线上故障复盘，自动生成包含时间线、根因分析（5-Why + 鱼骨图）和改进措施的专业复盘报告。',
+            icon: 'ShieldAlert'
+        },
         stages: [
             {
                 id: 'TIMELINE',
@@ -127,8 +145,14 @@ export const WORKFLOWS: Record<WorkflowType, WorkflowDef> = {
     IDEA_BRAINSTORM: {
         id: 'IDEA_BRAINSTORM',
         agentId: 'alex',
+        slug: 'idea-brainstorm',
         name: '创意头脑风暴',
         description: '针对模糊痛点或概念，探索发散各种创意可能并收敛为具体的产品概念。',
+        listing: {
+            name: '创意头脑风暴',
+            description: '引导你完成创意探索和产品概念沉淀，生成清晰可沟通的产品概念简报（One-Pager）。',
+            icon: 'Lightbulb'
+        },
         stages: [
             {
                 id: 'DEFINE',
@@ -168,8 +192,14 @@ export const WORKFLOWS: Record<WorkflowType, WorkflowDef> = {
     VALUE_DISCOVERY: {
         id: 'VALUE_DISCOVERY',
         agentId: 'alex',
+        slug: 'value-discovery',
         name: '价值发现',
         description: '帮助用户将已有的产品方向系统化梳理，通过价值定位、用户画像、旅程分析，输出结构化需求蓝图。',
+        listing: {
+            name: '价值发现',
+            description: '系统化梳理产品方向的价值定位、目标用户和核心场景，输出结构化需求蓝图。',
+            icon: 'Compass'
+        },
         stages: [
             {
                 id: 'ELEVATOR',
@@ -207,3 +237,11 @@ export const WORKFLOWS: Record<WorkflowType, WorkflowDef> = {
         }
     }
 };
+
+export const WORKFLOW_SLUGS: Record<WorkflowType, string> = Object.fromEntries(
+    Object.entries(WORKFLOWS).map(([workflowId, workflow]) => [workflowId, workflow.slug])
+) as Record<WorkflowType, string>;
+
+export const SLUG_TO_WORKFLOW: Record<string, WorkflowType> = Object.fromEntries(
+    Object.entries(WORKFLOWS).map(([workflowId, workflow]) => [workflow.slug, workflowId])
+) as Record<string, WorkflowType>;

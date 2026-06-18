@@ -47,14 +47,6 @@ type AttachmentListState =
 const MAX_SYNTHETIC_STREAM_STEPS = 12;
 const SYNTHETIC_STREAM_DELAY_MS = 20;
 
-const STRUCTURED_RUNTIME_WORKFLOWS: readonly WorkflowType[] = [
-  'TEST_DESIGN',
-  'REQ_REVIEW',
-  'INCIDENT_REVIEW',
-  'IDEA_BRAINSTORM',
-  'VALUE_DISCOVERY',
-];
-
 const LEGACY_PROTOCOL_TAG_PATTERN = /<\s*\/?\s*(?:CHART|ARTIFACT|CHAT)\b[^>]*>/i;
 
 /** 将 base64 编码的文本安全解码为 UTF-8 字符串 */
@@ -247,10 +239,6 @@ const getStructuredRuntimeStageId = (
   workflow: WorkflowType,
   stageIndex: number
 ): string => {
-  if (!STRUCTURED_RUNTIME_WORKFLOWS.includes(workflow)) {
-    throw new Error(`当前工作流未接入结构化 Agent Runtime: ${workflow}`);
-  }
-
   const stage = WORKFLOWS[workflow].stages[stageIndex];
   if (!stage) {
     throw new Error(`当前工作流阶段不存在: ${workflow}/${stageIndex}`);

@@ -1,3 +1,5 @@
+import { WORKFLOWS } from '../workflows';
+
 export interface AgentWorkflowConfig {
     id: string;
     agentId: string;
@@ -9,34 +11,17 @@ export interface AgentWorkflowConfig {
     statusLabel?: string;
 }
 
-const AGENT_WORKFLOWS: AgentWorkflowConfig[] = [
-    {
-        id: 'test-design',
-        agentId: 'lisa',
-        status: 'online',
-        name: '测试策略与用例设计',
-        description: '提供产品需求或代码变更集，为你自动设计详尽的测试策略与测试用例。',
-        icon: 'TestTube2',
-        link: '/workspace/lisa/test-design'
-    },
-    {
-        id: 'req-review',
-        agentId: 'lisa',
-        status: 'online',
-        name: '需求评审',
-        description: '从测试人员视角深度评审需求文档，自动扫描可测试性、完整性、边界定义等维度，输出结构化的评审问题清单。',
-        icon: 'FileCode2',
-        link: '/workspace/lisa/req-review'
-    },
-    {
-        id: 'incident-review',
-        agentId: 'lisa',
-        status: 'online',
-        name: '线上故障复盘',
-        description: '引导你用结构化方法完成线上故障复盘，自动生成包含时间线、根因分析（5-Why + 鱼骨图）和改进措施的专业复盘报告。',
-        icon: 'ShieldAlert',
-        link: '/workspace/lisa/incident-review'
-    },
+const ONLINE_AGENT_WORKFLOWS: AgentWorkflowConfig[] = Object.values(WORKFLOWS).map((workflow) => ({
+    id: workflow.slug,
+    agentId: workflow.agentId,
+    status: 'online',
+    name: workflow.listing.name,
+    description: workflow.listing.description,
+    icon: workflow.listing.icon,
+    link: `/workspace/${workflow.agentId}/${workflow.slug}`,
+}));
+
+const NON_RUNTIME_AGENT_WORKFLOWS: AgentWorkflowConfig[] = [
     {
         id: 'log-diagnostics',
         agentId: 'lisa',
@@ -56,24 +41,6 @@ const AGENT_WORKFLOWS: AgentWorkflowConfig[] = [
         statusLabel: 'Plan'
     },
     {
-        id: 'idea-brainstorm',
-        agentId: 'alex',
-        status: 'online',
-        name: '创意头脑风暴',
-        description: '引导你完成创意探索和产品概念沉淀，生成清晰可沟通的产品概念简报（One-Pager）。',
-        icon: 'Lightbulb',
-        link: '/workspace/alex/idea-brainstorm'
-    },
-    {
-        id: 'value-discovery',
-        agentId: 'alex',
-        status: 'online',
-        name: '价值发现',
-        description: '系统化梳理产品方向的价值定位、目标用户和核心场景，输出结构化需求蓝图。',
-        icon: 'Compass',
-        link: '/workspace/alex/value-discovery'
-    },
-    {
         id: 'story-breakdown',
         agentId: 'alex',
         status: 'plan',
@@ -91,6 +58,11 @@ const AGENT_WORKFLOWS: AgentWorkflowConfig[] = [
         icon: 'BarChart2',
         statusLabel: 'Plan'
     }
+];
+
+const AGENT_WORKFLOWS: AgentWorkflowConfig[] = [
+    ...ONLINE_AGENT_WORKFLOWS,
+    ...NON_RUNTIME_AGENT_WORKFLOWS,
 ];
 
 export const getAgentWorkflows = (agentId: string): AgentWorkflowConfig[] => {

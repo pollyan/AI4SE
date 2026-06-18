@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getAgentWorkflows } from '../agentWorkflows';
-import { WORKFLOWS } from '../../workflows';
+import { WORKFLOWS, WORKFLOW_SLUGS, SLUG_TO_WORKFLOW } from '../../workflows';
+import type { WorkflowType } from '../../types';
 
 describe('Workflow Configuration', () => {
     it('should return a list of workflows for Lisa', () => {
@@ -104,9 +105,41 @@ describe('Workflow Configuration', () => {
         }
     });
 
+    it('should derive reversible workflow slug mappings from workflow definitions', () => {
+        for (const workflowId of Object.keys(WORKFLOWS) as WorkflowType[]) {
+            const wf = WORKFLOWS[workflowId];
+
+            expect(wf.slug).toBeTruthy();
+            expect(WORKFLOW_SLUGS[workflowId]).toBe(wf.slug);
+            expect(SLUG_TO_WORKFLOW[wf.slug]).toBe(workflowId);
+        }
+    });
+
+    it('should derive every online agent workflow card from runtime workflow definitions', () => {
+        const allCards = [
+            ...getAgentWorkflows('lisa'),
+            ...getAgentWorkflows('alex'),
+        ];
+        const onlineCards = allCards.filter(wf => wf.status === 'online');
+
+        expect(onlineCards).toHaveLength(Object.keys(WORKFLOWS).length);
+
+        for (const workflowId of Object.keys(WORKFLOWS) as WorkflowType[]) {
+            const wf = WORKFLOWS[workflowId];
+            const card = onlineCards.find(candidate => candidate.id === wf.slug);
+
+            expect(card).toBeDefined();
+            expect(card?.agentId).toBe(wf.agentId);
+            expect(card?.status).toBe('online');
+            expect(card?.name).toBe(wf.listing.name);
+            expect(card?.description).toBe(wf.listing.description);
+            expect(card?.icon).toBe(wf.listing.icon);
+            expect(card?.link).toBe(`/workspace/${wf.agentId}/${wf.slug}`);
+        }
+    });
+
     it('should return empty array for unsupported agents', () => {
         const unknown = getAgentWorkflows('unknown');
         expect(unknown).toEqual([]);
     });
 });
-

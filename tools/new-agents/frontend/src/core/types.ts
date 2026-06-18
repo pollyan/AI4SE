@@ -30,19 +30,6 @@ export type Message = {
 // 已实现的工作流类型（仅包含 online 状态）
 export type WorkflowType = 'TEST_DESIGN' | 'REQ_REVIEW' | 'INCIDENT_REVIEW' | 'IDEA_BRAINSTORM' | 'VALUE_DISCOVERY';
 
-// 工作流 ID 到 Slug 的映射（大写 -> 小写连字符）
-export const WORKFLOW_SLUGS: Record<WorkflowType, string> = {
-    TEST_DESIGN: 'test-design',
-    REQ_REVIEW: 'req-review',
-    INCIDENT_REVIEW: 'incident-review',
-    IDEA_BRAINSTORM: 'idea-brainstorm',
-    VALUE_DISCOVERY: 'value-discovery',
-} as const;
-
-// Slug 到工作流 ID 的反向映射（按需生成，避免手动维护）
-export const SLUG_TO_WORKFLOW: Record<string, WorkflowType> = 
-    Object.fromEntries(Object.entries(WORKFLOW_SLUGS).map(([k, v]) => [v, k])) as Record<string, WorkflowType>;
-
 export interface WorkflowStage {
     id: string;
     name: string;
@@ -56,12 +43,20 @@ export interface OnboardingConfig {
     inputPlaceholder: string;
 }
 
+export interface WorkflowListingConfig {
+    name: string;
+    description: string;
+    icon: string;
+}
+
 export interface WorkflowDef {
     id: WorkflowType;
     agentId: string;
+    slug: string;
     welcomeMessage?: string;
     description: string;
     name: string;
+    listing: WorkflowListingConfig;
     stages: WorkflowStage[];
     onboarding: OnboardingConfig;
 }
