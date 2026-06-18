@@ -114,6 +114,10 @@ function createAgentTurnEvent(output: AgentTestOutput): string {
     return `data: ${JSON.stringify({ type: 'agent_turn', output })}`;
 }
 
+function createAgentDeltaEvent(output: Partial<AgentTestOutput>): string {
+    return `data: ${JSON.stringify({ type: 'agent_delta', output })}`;
+}
+
 function createDefaultAgentTurnStream(chat = 'ok'): ReadableStream<Uint8Array> {
     return createSSEStream([
         createAgentTurnEvent({
@@ -386,6 +390,88 @@ describe('llm.ts', () => {
             expect(results.at(-1)).toEqual({
                 chatResponse: fullChat,
                 newArtifact: nextArtifact,
+                action: '',
+                hasArtifactUpdate: true,
+            });
+        });
+
+        it('应解析 run_started 和 agent_delta 以便首帧快速返回并实时更新草稿', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: '# 需求分析文档\n\n初始内容',
+                stageArtifacts: { CLARIFY: '# 需求分析文档\n\n初始内容' },
+            });
+            const draftArtifact = '# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能';
+            const finalArtifact = [
+                '# 需求分析文档',
+                '',
+                '## 1. 被测系统与边界',
+                '登录功能',
+                '',
+                '## 2. 系统交互与核心链路',
+                '待补充',
+                '',
+                '## 3. 待澄清与阻断性问题',
+                '需要确认验证码策略',
+                '',
+                '## 4. 隐式需求与非功能性考量',
+                '覆盖安全和审计要求',
+            ].join('\n');
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"run_started"}',
+                    createAgentDeltaEvent({
+                        chat: '正在梳理需求。',
+                    }),
+                    createAgentDeltaEvent({
+                        chat: '正在梳理需求。\n\n已生成初稿。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: draftArtifact,
+                        },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    createAgentTurnEvent({
+                        chat: '正在梳理需求。\n\n已生成初稿。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: finalArtifact,
+                        },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('帮我设计登录功能测试用例')
+            );
+
+            expect(results[0]).toEqual({
+                chatResponse: '正在生成...',
+                newArtifact: '# 需求分析文档\n\n初始内容',
+                action: '',
+                hasArtifactUpdate: false,
+            });
+            expect(results[1]).toEqual({
+                chatResponse: '正在梳理需求。',
+                newArtifact: '# 需求分析文档\n\n初始内容',
+                action: '',
+                hasArtifactUpdate: false,
+            });
+            expect(results[2]).toEqual({
+                chatResponse: '正在梳理需求。\n\n已生成初稿。',
+                newArtifact: draftArtifact,
+                action: '',
+                hasArtifactUpdate: true,
+            });
+            expect(results.at(-1)).toEqual({
+                chatResponse: '正在梳理需求。\n\n已生成初稿。',
+                newArtifact: finalArtifact,
                 action: '',
                 hasArtifactUpdate: true,
             });

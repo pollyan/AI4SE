@@ -103,6 +103,61 @@ describe('useChatService', () => {
         expect(state.artifactContent).toBe('new artifact content');
     });
 
+    it('should update assistant message and artifact as soon as the first stream chunk arrives', async () => {
+        let releaseSecondChunk: () => void = () => undefined;
+        const waitForSecondChunk = new Promise<void>((resolve) => {
+            releaseSecondChunk = resolve;
+        });
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            yield {
+                chatResponse: '正在生成第一帧',
+                newArtifact: '# Draft artifact',
+                action: '',
+                hasArtifactUpdate: true,
+            };
+            await waitForSecondChunk;
+            yield {
+                chatResponse: '最终回复',
+                newArtifact: '# Final artifact',
+                action: '',
+                hasArtifactUpdate: true,
+            };
+        });
+
+        const { result } = renderHook(() => useChatService());
+
+        act(() => {
+            result.current.setInput('simulate streaming request');
+        });
+
+        let sendPromise: Promise<void> | undefined;
+        act(() => {
+            sendPromise = result.current.handleSend();
+        });
+
+        await waitFor(() => {
+            const state = useStore.getState();
+            expect(state.chatHistory[1]).toEqual(
+                expect.objectContaining({
+                    role: 'assistant',
+                    content: '正在生成第一帧',
+                })
+            );
+            expect(state.artifactContent).toBe('# Draft artifact');
+            expect(state.isGenerating).toBe(true);
+        });
+
+        await act(async () => {
+            releaseSecondChunk();
+            await sendPromise;
+        });
+
+        const finalState = useStore.getState();
+        expect(finalState.chatHistory[1].content).toBe('最终回复');
+        expect(finalState.artifactContent).toBe('# Final artifact');
+        expect(finalState.isGenerating).toBe(false);
+    });
+
     it('should clear draft input when sending an override starter prompt', async () => {
         vi.mocked(generateResponseStream).mockImplementation(async function* () {
             yield {

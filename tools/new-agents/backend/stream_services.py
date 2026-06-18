@@ -4,6 +4,7 @@ from openai import APIError, AuthenticationError, RateLimitError
 from pydantic import ValidationError
 
 from agent_contracts import (
+    AgentTurnOutput,
     ContractValidationError,
     build_artifact_contract_prompt,
 )
@@ -19,7 +20,14 @@ from request_schemas import (
     RequestValidationError,
     parse_agent_run_stream_request,
 )
-from sse_schemas import AgentTurnEvent, ErrorEvent, SseEvent
+from sse_schemas import (
+    AgentTurnDeltaEvent,
+    AgentTurnDeltaOutput,
+    AgentTurnEvent,
+    ErrorEvent,
+    RunStartedEvent,
+    SseEvent,
+)
 
 
 SCHEMA_RETRY_EXHAUSTED_MESSAGE = (
@@ -60,12 +68,24 @@ def stream_agent_run_events(
             model_name=model_name,
             system_prompt=build_runtime_system_prompt(agent_request),
         )
-        output = runtime.run_turn(
+        yield RunStartedEvent()
+        final_output = None
+        for output in runtime.stream_turn(
             agent_request.prompt,
             workflow_id=agent_request.workflow_id,
             current_stage_id=agent_request.stage_id,
-        )
-        yield AgentTurnEvent(output=output)
+        ):
+            if isinstance(output, AgentTurnOutput):
+                yield AgentTurnDeltaEvent(
+                    output=AgentTurnDeltaOutput.model_validate(
+                        output.model_dump(mode="json")
+                    )
+                )
+                final_output = output
+            else:
+                yield AgentTurnDeltaEvent(output=output)
+        if final_output is not None:
+            yield AgentTurnEvent(output=final_output)
     except ContractValidationError as e:
         yield ErrorEvent(
             code="CONTRACT_VALIDATION_FAILED",

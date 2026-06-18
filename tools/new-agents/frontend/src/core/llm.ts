@@ -26,7 +26,16 @@ type AgentTurnOutput = {
   warnings?: string[];
 };
 
+type AgentTurnDeltaOutput = {
+  chat?: string | null;
+  artifact_update?: AgentArtifactUpdate | null;
+  stage_action?: AgentStageAction | null;
+  warnings?: string[];
+};
+
 type AgentRuntimeEvent =
+  | { type: 'run_started' }
+  | { type: 'agent_delta'; output: AgentTurnDeltaOutput }
   | { type: 'agent_turn'; output: AgentTurnOutput }
   | { type: 'error'; code: string; message: string };
 
@@ -273,6 +282,86 @@ const parseAgentRuntimeEvent = (payload: string): AgentRuntimeEvent | null => {
       || !event.message.trim()
     ) {
       throw new Error('结构化智能体 SSE 事件格式错误');
+    }
+    return event as AgentRuntimeEvent;
+  }
+
+  if (event.type === 'run_started') {
+    return event as AgentRuntimeEvent;
+  }
+
+  if (event.type === 'agent_delta') {
+    if (
+      !('output' in event)
+      || !event.output
+      || typeof event.output !== 'object'
+    ) {
+      throw new Error('结构化智能体 SSE 事件格式错误');
+    }
+    const output = event.output as AgentTurnDeltaOutput;
+    if (
+      output.chat !== undefined
+      && output.chat !== null
+      && (
+        typeof output.chat !== 'string'
+        || !output.chat.trim()
+        || LEGACY_PROTOCOL_TAG_PATTERN.test(output.chat)
+      )
+    ) {
+      throw new Error('结构化智能体 SSE 事件格式错误');
+    }
+    if (
+      output.artifact_update !== undefined
+      && output.artifact_update !== null
+    ) {
+      if (
+        typeof output.artifact_update !== 'object'
+        || !['replace', 'none'].includes(output.artifact_update.type)
+      ) {
+        throw new Error('结构化智能体 SSE 事件格式错误');
+      }
+      if (
+        output.artifact_update.type === 'replace'
+        && (
+          typeof output.artifact_update.markdown !== 'string'
+          || !output.artifact_update.markdown.trim()
+        )
+      ) {
+        throw new Error('结构化智能体 SSE 事件格式错误');
+      }
+      if (
+        output.artifact_update.type === 'none'
+        && output.artifact_update.markdown !== undefined
+        && output.artifact_update.markdown !== null
+        && (
+          typeof output.artifact_update.markdown !== 'string'
+          || output.artifact_update.markdown.trim()
+        )
+      ) {
+        throw new Error('结构化智能体 SSE 事件格式错误');
+      }
+    }
+    if (
+      output.warnings !== undefined
+      && (
+        !Array.isArray(output.warnings)
+        || output.warnings.some(warning => typeof warning !== 'string')
+      )
+    ) {
+      throw new Error('结构化智能体 SSE 事件格式错误');
+    }
+    if (
+      output.stage_action !== undefined
+      && output.stage_action !== null
+    ) {
+      if (
+        typeof output.stage_action !== 'object'
+        || output.stage_action.type !== 'request_next_stage'
+        || typeof output.stage_action.target_stage_id !== 'string'
+        || !output.stage_action.target_stage_id.trim()
+      ) {
+        throw new Error('结构化智能体 SSE 事件格式错误');
+      }
     }
     return event as AgentRuntimeEvent;
   }
@@ -536,6 +625,54 @@ const mapAgentTurnToStreamChunks = async function* (
   }
 };
 
+const mapAgentTurnToFinalChunk = async function* (
+  output: AgentTurnOutput,
+  currentArtifact: string,
+  expectedNextStageId: string | undefined
+): AsyncGenerator<StreamChunk, void, unknown> {
+  const hasArtifactUpdate = output.artifact_update.type === 'replace';
+  const newArtifact = hasArtifactUpdate
+    ? output.artifact_update.markdown || ''
+    : currentArtifact;
+  const artifactTruncated = hasArtifactTruncationWarning(output.warnings);
+
+  if (
+    output.stage_action
+    && output.stage_action.target_stage_id !== expectedNextStageId
+  ) {
+    throw new Error('结构化智能体 SSE 阶段动作目标错误');
+  }
+
+  if (hasArtifactUpdate) {
+    await validateMermaidBlocks(newArtifact);
+  }
+
+  yield {
+    chatResponse: output.chat,
+    newArtifact,
+    action: output.stage_action ? 'NEXT_STAGE' : '',
+    hasArtifactUpdate,
+    ...(artifactTruncated ? { artifactTruncated: true } : {}),
+  };
+};
+
+const mapAgentDeltaToStreamChunk = (
+  output: AgentTurnDeltaOutput,
+  currentArtifact: string
+): StreamChunk => {
+  const hasArtifactUpdate = output.artifact_update?.type === 'replace';
+  const artifactTruncated = hasArtifactTruncationWarning(output.warnings);
+  return {
+    chatResponse: output.chat || '正在生成...',
+    newArtifact: hasArtifactUpdate
+      ? output.artifact_update.markdown || ''
+      : currentArtifact,
+    action: '',
+    hasArtifactUpdate,
+    ...(artifactTruncated ? { artifactTruncated: true } : {}),
+  };
+};
+
 async function* generateResponseStreamViaAgentRuntime(
   prompt: string,
   systemPrompt: string,
@@ -571,6 +708,7 @@ async function* generateResponseStreamViaAgentRuntime(
   let buffer = '';
   let shouldStop = false;
   let pendingDataLines: string[] = [];
+  let receivedAgentDelta = false;
 
   const processSsePayload = async function* (
     payload: string
@@ -586,12 +724,33 @@ async function* generateResponseStreamViaAgentRuntime(
     if (event.type === 'error') {
       throw new Error(`${event.code}: ${event.message}`);
     }
+    if (event.type === 'run_started') {
+      yield {
+        chatResponse: '正在生成...',
+        newArtifact: currentArtifact,
+        action: '',
+        hasArtifactUpdate: false,
+      };
+      return;
+    }
+    if (event.type === 'agent_delta') {
+      receivedAgentDelta = true;
+      yield mapAgentDeltaToStreamChunk(event.output, currentArtifact);
+      return;
+    }
     if (event.type === 'agent_turn') {
-      for await (const chunk of mapAgentTurnToStreamChunks(
-        event.output,
-        currentArtifact,
-        expectedNextStageId
-      )) {
+      const chunkSource = receivedAgentDelta
+        ? mapAgentTurnToFinalChunk(
+          event.output,
+          currentArtifact,
+          expectedNextStageId
+        )
+        : mapAgentTurnToStreamChunks(
+          event.output,
+          currentArtifact,
+          expectedNextStageId
+        );
+      for await (const chunk of chunkSource) {
         yield chunk;
       }
     }

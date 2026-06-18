@@ -10,6 +10,7 @@ from agent_runtime import (
     build_model_settings,
     register_contract_output_validator,
 )
+from sse_schemas import AgentTurnDeltaOutput
 
 
 VALID_CLARIFY_ARTIFACT = """# 需求分析文档
@@ -32,6 +33,14 @@ class FakeRunResult:
         self.output = output
 
 
+class FakeStreamResult:
+    def __init__(self, outputs):
+        self.outputs = outputs
+
+    def stream_output(self, *, debounce_by=None):
+        yield from self.outputs
+
+
 class FakeAgent:
     def __init__(self, output):
         self.output = output
@@ -42,6 +51,17 @@ class FakeAgent:
         self.prompts.append(prompt)
         self.deps.append(deps)
         return FakeRunResult(self.output)
+
+
+class FakeStreamingAgent(FakeAgent):
+    def __init__(self, outputs):
+        super().__init__(outputs[-1])
+        self.outputs = outputs
+
+    def run_stream_sync(self, prompt, *, deps=None):
+        self.prompts.append(prompt)
+        self.deps.append(deps)
+        return FakeStreamResult(self.outputs)
 
 
 class FailingAgent:
@@ -78,6 +98,42 @@ def test_runtime_validates_pydantic_ai_output_before_returning_it():
     assert isinstance(output, AgentTurnOutput)
     assert output.stage_action is not None
     assert output.stage_action.target_stage_id == "STRATEGY"
+    assert agent.prompts == ["用户需求: 登录功能"]
+    assert agent.deps == [
+        AgentTurnValidationDeps(
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    ]
+
+
+def test_runtime_stream_turn_yields_partial_outputs_and_validates_final_output():
+    partial = {"chat": "正在梳理需求。"}
+    final = {
+        "chat": "已更新右侧需求分析文档。",
+        "artifact_update": {
+            "type": "replace",
+            "markdown": VALID_CLARIFY_ARTIFACT,
+        },
+        "stage_action": {
+            "type": "request_next_stage",
+            "target_stage_id": "STRATEGY",
+        },
+        "warnings": [],
+    }
+    agent = FakeStreamingAgent([partial, final])
+    runtime = PydanticAgentRuntime(agent)
+
+    outputs = list(runtime.stream_turn(
+        "用户需求: 登录功能",
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    ))
+
+    assert outputs[0] == AgentTurnDeltaOutput(chat="正在梳理需求。")
+    assert isinstance(outputs[1], AgentTurnOutput)
+    assert outputs[1].stage_action is not None
+    assert outputs[1].stage_action.target_stage_id == "STRATEGY"
     assert agent.prompts == ["用户需求: 登录功能"]
     assert agent.deps == [
         AgentTurnValidationDeps(

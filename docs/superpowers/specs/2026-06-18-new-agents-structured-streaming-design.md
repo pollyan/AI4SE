@@ -20,7 +20,7 @@ The backend keeps `/api/agent/runs/stream` as the single Agent Runtime endpoint.
 SSE gains two non-final event types:
 
 - `run_started`: emitted before the model call starts so the frontend can show immediate generation feedback.
-- `agent_delta`: emitted for partial structured output. It carries the current cumulative `chat`, optional cumulative artifact markdown, warnings, and stage action if available.
+- `agent_delta`: emitted for partial structured output. It carries a draft object with optional current cumulative `chat`, optional cumulative artifact markdown, warnings, and stage action if available.
 
 The existing `agent_turn` event remains the only final success event. It is emitted after the final output passes `validate_agent_turn()`. The existing `error` event remains the only failure event.
 
@@ -29,7 +29,7 @@ The existing `agent_turn` event remains the only final success event. It is emit
 1. `routes.py` continues to parse the POST body and uses `build_sse_response(...)`.
 2. `stream_services.py` builds the runtime and yields `RunStartedEvent`.
 3. `PydanticAgentRuntime.stream_turn(...)` uses PydanticAI streaming when available.
-4. Each partial structured output is converted to an `AgentTurnDeltaEvent` without business-contract enforcement.
+4. Each partial structured output is converted to an `AgentTurnDeltaEvent` without business-contract enforcement. Delta payloads may be chat-only when PydanticAI has not produced artifact fields yet.
 5. The final output is validated with `validate_agent_turn(...)` and emitted as `AgentTurnEvent`.
 6. Schema, model, contract, and request failures still map to typed `ErrorEvent`.
 

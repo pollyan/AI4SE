@@ -2,7 +2,7 @@ from typing import Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from agent_contracts import AgentTurnOutput
+from agent_contracts import AgentTurnOutput, ArtifactUpdate, StageAction
 
 
 class AgentTurnEvent(BaseModel):
@@ -10,6 +10,28 @@ class AgentTurnEvent(BaseModel):
 
     type: Literal["agent_turn"] = "agent_turn"
     output: AgentTurnOutput
+
+
+class RunStartedEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["run_started"] = "run_started"
+
+
+class AgentTurnDeltaOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    chat: str | None = None
+    artifact_update: ArtifactUpdate | None = None
+    stage_action: StageAction | None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
+class AgentTurnDeltaEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["agent_delta"] = "agent_delta"
+    output: AgentTurnDeltaOutput
 
 
 class ErrorEvent(BaseModel):
@@ -34,4 +56,9 @@ class ErrorEvent(BaseModel):
         return value
 
 
-SseEvent = Union[AgentTurnEvent, ErrorEvent]
+SseEvent = Union[
+    RunStartedEvent,
+    AgentTurnDeltaEvent,
+    AgentTurnEvent,
+    ErrorEvent,
+]

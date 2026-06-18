@@ -70,7 +70,7 @@ class FakeRuntime:
     def __init__(self):
         self.calls = []
 
-    def run_turn(self, prompt, *, workflow_id, current_stage_id):
+    def stream_turn(self, prompt, *, workflow_id, current_stage_id):
         self.calls.append(
             {
                 "prompt": prompt,
@@ -78,28 +78,36 @@ class FakeRuntime:
                 "current_stage_id": current_stage_id,
             }
         )
-        return AgentTurnOutput.model_validate(
-            {
-                "chat": "已更新右侧需求分析文档。",
-                "artifact_update": {
-                    "type": "replace",
-                    "markdown": VALID_CLARIFY_ARTIFACT,
-                },
-                "stage_action": {
-                    "type": "request_next_stage",
-                    "target_stage_id": "STRATEGY",
-                },
-                "warnings": [],
-            }
-        )
+        yield AgentTurnOutput.model_validate({
+            "chat": "正在梳理登录需求。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": VALID_CLARIFY_ARTIFACT,
+            },
+            "stage_action": None,
+            "warnings": [],
+        })
+        yield AgentTurnOutput.model_validate({
+            "chat": "已更新右侧需求分析文档。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": VALID_CLARIFY_ARTIFACT,
+            },
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "STRATEGY",
+            },
+            "warnings": [],
+        })
 
 
 class FailingRuntime:
     def __init__(self, error):
         self.error = error
 
-    def run_turn(self, prompt, *, workflow_id, current_stage_id):
+    def stream_turn(self, prompt, *, workflow_id, current_stage_id):
         raise self.error
+        yield
 
 
 def _parse_sse_event_payloads(response):
@@ -111,7 +119,7 @@ def _parse_sse_event_payloads(response):
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
-def test_agent_runs_stream_returns_typed_sse_event(
+def test_agent_runs_stream_returns_started_delta_and_final_sse_events(
     mock_build_runtime,
     client,
     default_config,
@@ -132,14 +140,16 @@ def test_agent_runs_stream_returns_typed_sse_event(
     assert response.status_code == 200
     assert response.mimetype == "text/event-stream"
 
-    data = response.get_data(as_text=True)
-    assert 'data: {"type": "agent_turn"' in data
-    assert "data: [DONE]" in data
+    payloads = _parse_sse_event_payloads(response)
+    assert [payload["type"] for payload in payloads] == [
+        "run_started",
+        "agent_delta",
+        "agent_delta",
+        "agent_turn",
+    ]
+    assert response.get_data(as_text=True).strip().endswith("data: [DONE]")
 
-    event_line = next(
-        line for line in data.splitlines() if line.startswith("data: {")
-    )
-    event = json.loads(event_line.removeprefix("data: "))
+    event = payloads[-1]
     output = event["output"]
     assert output["chat"] == "已更新右侧需求分析文档。"
     assert "# 需求分析文档" not in output["chat"]
@@ -293,6 +303,9 @@ def test_agent_runs_stream_returns_typed_error_when_model_output_exceeds_retries
     assert response.mimetype == "text/event-stream"
     assert response.get_data(as_text=True).strip().endswith("data: [DONE]")
     assert _parse_sse_event_payloads(response) == [
+        {
+            "type": "run_started",
+        },
         {
             "type": "error",
             "code": "SCHEMA_VALIDATION_FAILED",

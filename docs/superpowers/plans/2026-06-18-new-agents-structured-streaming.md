@@ -12,8 +12,8 @@
 
 ## File Structure
 
-- Modify `tools/new-agents/backend/sse_schemas.py`: add `RunStartedEvent` and `AgentTurnDeltaEvent`.
-- Modify `tools/new-agents/backend/agent_runtime.py`: add streaming runtime method and partial-output normalization.
+- Modify `tools/new-agents/backend/sse_schemas.py`: add `RunStartedEvent`, draft `AgentTurnDeltaOutput`, and `AgentTurnDeltaEvent`.
+- Modify `tools/new-agents/backend/agent_runtime.py`: add streaming runtime method and partial-output normalization that accepts chat-only draft frames.
 - Modify `tools/new-agents/backend/stream_services.py`: yield start and delta events, then final event.
 - Modify `tools/new-agents/backend/tests/test_stream_services.py`: cover event sequence and fallback/error behavior.
 - Modify `tools/new-agents/backend/tests/test_agent_endpoint.py`: cover endpoint SSE payload sequence.
@@ -74,10 +74,18 @@ class RunStartedEvent(BaseModel):
     type: Literal["run_started"] = "run_started"
 
 
+class AgentTurnDeltaOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    chat: str | None = None
+    artifact_update: ArtifactUpdate | None = None
+    stage_action: StageAction | None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
 class AgentTurnDeltaEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: Literal["agent_delta"] = "agent_delta"
-    output: AgentTurnOutput
+    output: AgentTurnDeltaOutput
 ```
 
 Update `SseEvent` to include both.
@@ -121,7 +129,7 @@ Expected: FAIL before endpoint fake/runtime path is updated.
 Add a generator method that:
 
 - Uses PydanticAI streaming APIs when available.
-- Yields validated-looking partial `AgentTurnOutput` values without business-contract enforcement.
+- Yields `AgentTurnDeltaOutput` draft values without business-contract enforcement, including chat-only frames.
 - Validates and yields the final `AgentTurnOutput` with `validate_agent_turn(...)`.
 - Falls back to `run_turn()` when the installed runtime/test double has no streaming API.
 
@@ -151,7 +159,7 @@ Add a Vitest case whose SSE body contains:
 
 ```text
 data: {"type":"run_started"}
-data: {"type":"agent_delta","output":{"chat":"正在梳理需求。","artifact_update":{"type":"none"},"stage_action":null,"warnings":[]}}
+data: {"type":"agent_delta","output":{"chat":"正在梳理需求。"}}
 data: {"type":"agent_delta","output":{"chat":"正在梳理需求。\n\n已生成初稿。","artifact_update":{"type":"replace","markdown":"# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能"},"stage_action":null,"warnings":[]}}
 data: {"type":"agent_turn","output":{"chat":"正在梳理需求。\n\n已生成初稿。","artifact_update":{"type":"replace","markdown":"# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能\n\n## 2. 系统交互与核心链路\n待补充\n\n## 3. 待澄清与阻断性问题\n需要确认验证码策略\n\n## 4. 隐式需求与非功能性考量\n覆盖安全和审计要求"},"stage_action":null,"warnings":[]}}
 data: [DONE]
@@ -175,10 +183,10 @@ Update `AgentRuntimeEvent` and `parseAgentRuntimeEvent()` to accept:
 
 ```ts
 | { type: 'run_started' }
-| { type: 'agent_delta'; output: AgentTurnOutput }
+| { type: 'agent_delta'; output: AgentTurnDeltaOutput }
 ```
 
-Delta output validation accepts empty/missing artifact updates only through the existing `none` shape; final `agent_turn` keeps strict non-empty final validation.
+Delta output validation accepts chat-only drafts and optional artifact updates; final `agent_turn` keeps strict non-empty final validation.
 
 - [ ] **Step 4: Map events to stream chunks**
 

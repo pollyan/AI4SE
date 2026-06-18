@@ -1,11 +1,15 @@
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
+
+from pydantic import ValidationError
 
 from agent_contracts import (
     AgentTurnOutput,
     ContractValidationError,
     validate_agent_turn,
 )
+from sse_schemas import AgentTurnDeltaOutput
 
 try:
     from pydantic_ai.exceptions import (
@@ -69,6 +73,22 @@ class PydanticAgentRuntime:
     def __init__(self, agent: Any):
         self.agent = agent
 
+    @staticmethod
+    def _coerce_output(output: Any) -> AgentTurnOutput:
+        if isinstance(output, AgentTurnOutput):
+            return output
+        return AgentTurnOutput.model_validate(output)
+
+    @staticmethod
+    def _coerce_delta_output(output: Any) -> AgentTurnDeltaOutput:
+        if isinstance(output, AgentTurnDeltaOutput):
+            return output
+        if isinstance(output, AgentTurnOutput):
+            return AgentTurnDeltaOutput.model_validate(
+                output.model_dump(mode="json")
+            )
+        return AgentTurnDeltaOutput.model_validate(output)
+
     def run_turn(
         self,
         prompt: str,
@@ -90,10 +110,64 @@ class PydanticAgentRuntime:
             raise AgentRuntimeModelError(str(exc)) from exc
 
         output = result.output
-        if not isinstance(output, AgentTurnOutput):
-            output = AgentTurnOutput.model_validate(output)
+        output = self._coerce_output(output)
         return validate_agent_turn(
             output,
+            workflow_id=workflow_id,
+            current_stage_id=current_stage_id,
+        )
+
+    def stream_turn(
+        self,
+        prompt: str,
+        *,
+        workflow_id: str,
+        current_stage_id: str,
+    ) -> Iterator[AgentTurnDeltaOutput | AgentTurnOutput]:
+        if not hasattr(self.agent, "run_stream_sync"):
+            yield self.run_turn(
+                prompt,
+                workflow_id=workflow_id,
+                current_stage_id=current_stage_id,
+            )
+            return
+
+        deps = AgentTurnValidationDeps(
+            workflow_id=workflow_id,
+            current_stage_id=current_stage_id,
+        )
+        final_output: AgentTurnOutput | None = None
+        try:
+            result = self.agent.run_stream_sync(prompt, deps=deps)
+            for raw_output in result.stream_output(debounce_by=None):
+                try:
+                    delta_output = self._coerce_delta_output(raw_output)
+                except (ValidationError, ValueError):
+                    continue
+                if (
+                    delta_output.chat is None
+                    and delta_output.artifact_update is None
+                    and delta_output.stage_action is None
+                    and not delta_output.warnings
+                ):
+                    continue
+                try:
+                    final_output = self._coerce_output(raw_output)
+                    yield final_output
+                except (ValidationError, ValueError):
+                    yield delta_output
+            if final_output is None and hasattr(result, "get_output"):
+                final_output = self._coerce_output(result.get_output())
+                yield final_output
+        except PYDANTIC_AI_SCHEMA_ERRORS as exc:
+            raise AgentRuntimeSchemaError(str(exc)) from exc
+        except PYDANTIC_AI_MODEL_ERRORS as exc:
+            raise AgentRuntimeModelError(str(exc)) from exc
+
+        if final_output is None:
+            raise AgentRuntimeSchemaError("PydanticAI stream produced no output")
+        validate_agent_turn(
+            final_output,
             workflow_id=workflow_id,
             current_stage_id=current_stage_id,
         )

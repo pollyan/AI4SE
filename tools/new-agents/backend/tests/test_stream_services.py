@@ -5,7 +5,13 @@ import httpx
 from agent_contracts import AgentTurnOutput, ContractValidationError
 from agent_runtime import AgentRuntimeModelError, AgentRuntimeSchemaError
 from request_schemas import AgentRunStreamRequest
-from sse_schemas import AgentTurnEvent, ErrorEvent
+from sse_schemas import (
+    AgentTurnDeltaEvent,
+    AgentTurnDeltaOutput,
+    AgentTurnEvent,
+    ErrorEvent,
+    RunStartedEvent,
+)
 from stream_services import stream_agent_run_events
 
 
@@ -25,11 +31,19 @@ VALID_CLARIFY_ARTIFACT = """# 需求分析文档
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
-def test_stream_agent_run_events_yields_typed_agent_turn_event(
+def test_stream_agent_run_events_yields_started_delta_and_final_events(
     mock_build_runtime: MagicMock,
 ) -> None:
-    runtime = MagicMock()
-    runtime.run_turn.return_value = AgentTurnOutput.model_validate({
+    partial = AgentTurnOutput.model_validate({
+        "chat": "正在梳理需求。",
+        "artifact_update": {
+            "type": "replace",
+            "markdown": VALID_CLARIFY_ARTIFACT,
+        },
+        "stage_action": None,
+        "warnings": [],
+    })
+    final = AgentTurnOutput.model_validate({
         "chat": "已更新右侧需求分析文档，请确认。",
         "artifact_update": {
             "type": "replace",
@@ -38,6 +52,8 @@ def test_stream_agent_run_events_yields_typed_agent_turn_event(
         "stage_action": None,
         "warnings": [],
     })
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter([partial, final])
     mock_build_runtime.return_value = runtime
     request = AgentRunStreamRequest.model_validate({
         "prompt": "用户需求",
@@ -53,7 +69,16 @@ def test_stream_agent_run_events_yields_typed_agent_turn_event(
         model_name="test-model",
     ))
 
-    assert events == [AgentTurnEvent(output=runtime.run_turn.return_value)]
+    assert events == [
+        RunStartedEvent(),
+        AgentTurnDeltaEvent(output=AgentTurnDeltaOutput.model_validate(
+            partial.model_dump(mode="json")
+        )),
+        AgentTurnDeltaEvent(output=AgentTurnDeltaOutput.model_validate(
+            final.model_dump(mode="json")
+        )),
+        AgentTurnEvent(output=final),
+    ]
     runtime_kwargs = mock_build_runtime.call_args.kwargs
     assert runtime_kwargs["api_key"] == "test-api-key"
     assert runtime_kwargs["base_url"] == "https://api.test.com/v1"
@@ -66,7 +91,7 @@ def test_stream_agent_run_events_yields_typed_agent_turn_event(
         runtime_kwargs["system_prompt"]
     )
     assert "## 1. 被测系统与边界" in runtime_kwargs["system_prompt"]
-    runtime.run_turn.assert_called_once_with(
+    runtime.stream_turn.assert_called_once_with(
         "用户需求",
         workflow_id="TEST_DESIGN",
         current_stage_id="CLARIFY",
@@ -74,11 +99,44 @@ def test_stream_agent_run_events_yields_typed_agent_turn_event(
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_yields_started_and_final_without_delta_for_single_output(
+    mock_build_runtime: MagicMock,
+) -> None:
+    final = AgentTurnOutput.model_validate({
+        "chat": "已更新右侧需求分析文档，请确认。",
+        "artifact_update": {
+            "type": "replace",
+            "markdown": VALID_CLARIFY_ARTIFACT,
+        },
+        "stage_action": None,
+        "warnings": [],
+    })
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter([final])
+    mock_build_runtime.return_value = runtime
+
+    events = list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+    ))
+
+    assert events == [
+        RunStartedEvent(),
+        AgentTurnDeltaEvent(output=AgentTurnDeltaOutput.model_validate(
+            final.model_dump(mode="json")
+        )),
+        AgentTurnEvent(output=final),
+    ]
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
 def test_stream_agent_run_events_maps_pydantic_ai_output_failure_to_error_event(
     mock_build_runtime: MagicMock,
 ) -> None:
     runtime = MagicMock()
-    runtime.run_turn.side_effect = AgentRuntimeSchemaError(
+    runtime.stream_turn.side_effect = AgentRuntimeSchemaError(
         "Exceeded maximum output retries (1)"
     )
     mock_build_runtime.return_value = runtime
@@ -97,6 +155,7 @@ def test_stream_agent_run_events_maps_pydantic_ai_output_failure_to_error_event(
     ))
 
     assert events == [
+        RunStartedEvent(),
         ErrorEvent(
             code="SCHEMA_VALIDATION_FAILED",
             message=(
@@ -121,7 +180,7 @@ def test_stream_agent_run_events_maps_raw_pydantic_ai_schema_error_to_error_even
         raising=False,
     )
     runtime = MagicMock()
-    runtime.run_turn.side_effect = RawSchemaError(
+    runtime.stream_turn.side_effect = RawSchemaError(
         "Exceeded maximum output retries (3)"
     )
     mock_build_runtime.return_value = runtime
@@ -134,6 +193,7 @@ def test_stream_agent_run_events_maps_raw_pydantic_ai_schema_error_to_error_even
     ))
 
     assert events == [
+        RunStartedEvent(),
         ErrorEvent(
             code="SCHEMA_VALIDATION_FAILED",
             message=(
@@ -149,7 +209,7 @@ def test_stream_agent_run_events_maps_contract_failure_to_error_event(
     mock_build_runtime: MagicMock,
 ) -> None:
     runtime = MagicMock()
-    runtime.run_turn.side_effect = ContractValidationError(
+    runtime.stream_turn.side_effect = ContractValidationError(
         "chat must not contain artifact markdown"
     )
     mock_build_runtime.return_value = runtime
@@ -168,6 +228,7 @@ def test_stream_agent_run_events_maps_contract_failure_to_error_event(
     ))
 
     assert events == [
+        RunStartedEvent(),
         ErrorEvent(
             code="CONTRACT_VALIDATION_FAILED",
             message="chat must not contain artifact markdown",
@@ -231,7 +292,7 @@ def test_stream_agent_run_events_maps_model_http_error_to_llm_error_event(
     mock_build_runtime: MagicMock,
 ) -> None:
     runtime = MagicMock()
-    runtime.run_turn.side_effect = AgentRuntimeModelError(
+    runtime.stream_turn.side_effect = AgentRuntimeModelError(
         "503: upstream unavailable"
     )
     mock_build_runtime.return_value = runtime
@@ -243,9 +304,10 @@ def test_stream_agent_run_events_maps_model_http_error_to_llm_error_event(
         model_name="test-model",
     ))
 
-    assert len(events) == 1
-    assert events[0].code == "LLM_ERROR"
-    assert "503" in events[0].message
+    assert len(events) == 2
+    assert events[0] == RunStartedEvent()
+    assert events[1].code == "LLM_ERROR"
+    assert "503" in events[1].message
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -253,7 +315,7 @@ def test_stream_agent_run_events_maps_model_api_error_to_llm_error_event(
     mock_build_runtime: MagicMock,
 ) -> None:
     runtime = MagicMock()
-    runtime.run_turn.side_effect = AgentRuntimeModelError("provider API failed")
+    runtime.stream_turn.side_effect = AgentRuntimeModelError("provider API failed")
     mock_build_runtime.return_value = runtime
 
     events = list(stream_agent_run_events(
@@ -264,6 +326,7 @@ def test_stream_agent_run_events_maps_model_api_error_to_llm_error_event(
     ))
 
     assert events == [
+        RunStartedEvent(),
         ErrorEvent(
             code="LLM_ERROR",
             message="provider API failed",
@@ -280,7 +343,7 @@ def test_stream_agent_run_events_maps_openai_auth_error_to_llm_error_event(
         401,
         request=httpx.Request("POST", "https://api.test.com/v1/chat"),
     )
-    runtime.run_turn.side_effect = AuthenticationError(
+    runtime.stream_turn.side_effect = AuthenticationError(
         "invalid api key",
         response=response,
         body={"error": "invalid api key"},
@@ -294,9 +357,10 @@ def test_stream_agent_run_events_maps_openai_auth_error_to_llm_error_event(
         model_name="test-model",
     ))
 
-    assert len(events) == 1
-    assert events[0].code == "LLM_ERROR"
-    assert "invalid api key" in events[0].message
+    assert len(events) == 2
+    assert events[0] == RunStartedEvent()
+    assert events[1].code == "LLM_ERROR"
+    assert "invalid api key" in events[1].message
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -308,7 +372,7 @@ def test_stream_agent_run_events_maps_openai_rate_limit_error_to_llm_error_event
         429,
         request=httpx.Request("POST", "https://api.test.com/v1/chat"),
     )
-    runtime.run_turn.side_effect = RateLimitError(
+    runtime.stream_turn.side_effect = RateLimitError(
         "rate limit exceeded",
         response=response,
         body={"error": "rate limit exceeded"},
@@ -322,9 +386,10 @@ def test_stream_agent_run_events_maps_openai_rate_limit_error_to_llm_error_event
         model_name="test-model",
     ))
 
-    assert len(events) == 1
-    assert events[0].code == "LLM_ERROR"
-    assert "rate limit exceeded" in events[0].message
+    assert len(events) == 2
+    assert events[0] == RunStartedEvent()
+    assert events[1].code == "LLM_ERROR"
+    assert "rate limit exceeded" in events[1].message
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -333,7 +398,7 @@ def test_stream_agent_run_events_maps_openai_api_error_to_llm_error_event(
 ) -> None:
     runtime = MagicMock()
     request = httpx.Request("POST", "https://api.test.com/v1/chat")
-    runtime.run_turn.side_effect = APIError(
+    runtime.stream_turn.side_effect = APIError(
         "connection failed",
         request=request,
         body={"error": "connection failed"},
@@ -347,6 +412,7 @@ def test_stream_agent_run_events_maps_openai_api_error_to_llm_error_event(
         model_name="test-model",
     ))
 
-    assert len(events) == 1
-    assert events[0].code == "LLM_ERROR"
-    assert "connection failed" in events[0].message
+    assert len(events) == 2
+    assert events[0] == RunStartedEvent()
+    assert events[1].code == "LLM_ERROR"
+    assert "connection failed" in events[1].message
