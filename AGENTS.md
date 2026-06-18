@@ -13,6 +13,12 @@ Main code areas:
 - `scripts/`: deployment, health, CI, and test helpers.
 - `tests/`: root-level Python test entry point.
 
+## High-Priority Architecture Principles
+
+For `tools/new-agents`, all agents must share one common runtime, transport, state, and UI infrastructure. Different agents and workflows should be expressed through configuration: `agentId`, workflow definitions, stage prompts, artifact templates, and backend contract requirements. Do not create agent-specific runtime branches, duplicate SSE/API paths, separate stores, or bespoke rendering pipelines for Lisa, Alex, or future agents unless the user explicitly approves a documented architecture change.
+
+When adding or changing a workflow, keep the configuration surfaces synchronized: frontend `WORKFLOWS` / workflow slugs / agent workflow listings, backend `WORKFLOW_STAGES` and artifact contract headings, prompt/template files, and tests that prove the workflow uses the shared `/api/agent/runs/stream` typed Agent Runtime. If behavior differs by workflow, encode the difference as data or prompt/template/contract configuration rather than branching infrastructure code.
+
 ## Build, Test, and Development Commands
 
 - `./scripts/dev/deploy-dev.sh`: deploy the local Docker development stack.

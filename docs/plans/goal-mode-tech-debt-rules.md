@@ -62,7 +62,13 @@
    - 不用兼容层保留废弃协议，除非当前工作项明确要求临时过渡。
    - 对结构化协议、API 契约、模型字段使用显式 schema 和测试约束。
 
-5. **验证**
+5. **共享 Agent 基础设施优先**
+   - `tools/new-agents` 中所有 Agent 必须复用同一套运行时、typed SSE/API、状态编排和 UI 基础设施。
+   - Lisa、Alex 和后续 Agent 的差异只能通过 `agentId`、workflow 配置、阶段 prompt、artifact template、onboarding 文案和后端 artifact 契约表达。
+   - 禁止为了单个 Agent 或单个 workflow 新增平行 runtime、独立流式端点、独立 store、专用渲染管线或旧协议兼容路径，除非用户明确批准并有文档化迁移计划。
+   - 任何 workflow 变更都必须同步检查 frontend `WORKFLOWS` / slug / agent workflow listing、backend `WORKFLOW_STAGES` / artifact contract headings、prompt/template 文件和共享运行链路测试。
+
+6. **验证**
    - 运行与本轮改动最相关的最小测试。
    - 如果触及共享行为或工作流主链路，继续运行更大范围测试。
    - 前端常用验证:
@@ -72,7 +78,7 @@
      - `cd tools/new-agents/backend && pytest`
    - 如未运行某项验证，必须说明原因。
 
-6. **更新记录**
+7. **更新记录**
    - 如果工作项完成，更新 `docs/plans/tech-debt.md` 或对应实施计划，记录完成状态和验证证据。
    - 如果只完成部分切片，记录下一步最小动作。
    - 不要未经用户明确要求 commit。
