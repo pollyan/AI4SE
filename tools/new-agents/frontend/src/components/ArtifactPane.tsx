@@ -1,26 +1,36 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { useStore, ArtifactVersion } from '../store';
-import { Mermaid } from './Mermaid';
-import { preprocessMarkdown } from '../core/utils/markdownUtils';
+import { useStore, ArtifactVersion, WORKFLOWS } from '../store';
+import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/markdownUtils';
 import { Download, Code, Eye, History, X, AlertTriangle } from 'lucide-react';
+import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
 
 export const ArtifactPane: React.FC = () => {
+  const workflow = useStore((state) => state.workflow);
+  const stageIndex = useStore((state) => state.stageIndex);
   const artifactContent = useStore((state) => state.artifactContent);
   const artifactHistory = useStore((state) => state.artifactHistory);
   const artifactTruncated = useStore((state) => state.artifactTruncated);
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
   const [showHistory, setShowHistory] = useState(false);
   const [selectedVersion, setSelectedVersion] = useState<ArtifactVersion | null>(null);
+  const currentStageId = WORKFLOWS[workflow].stages[stageIndex]?.id;
+  const currentStageArtifactHistory = useMemo(
+    () => currentStageId
+      ? artifactHistory.filter(version => version.stageId === currentStageId)
+      : [],
+    [artifactHistory, currentStageId]
+  );
 
   const handleDownload = () => {
     const blob = new Blob([artifactContent], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'lisa_artifact.md';
+    a.download = `${workflow.toLowerCase()}_artifact.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -28,13 +38,28 @@ export const ArtifactPane: React.FC = () => {
   };
 
   const openHistory = () => {
-    if (artifactHistory.length > 0) {
-      setSelectedVersion(artifactHistory[artifactHistory.length - 1]);
+    if (currentStageArtifactHistory.length > 0) {
+      setSelectedVersion(currentStageArtifactHistory[currentStageArtifactHistory.length - 1]);
     } else {
       setSelectedVersion(null);
     }
     setShowHistory(true);
   };
+
+  useEffect(() => {
+    if (!showHistory) return;
+    if (
+      selectedVersion
+      && currentStageArtifactHistory.some(version => version.id === selectedVersion.id)
+    ) {
+      return;
+    }
+    setSelectedVersion(
+      currentStageArtifactHistory.length > 0
+        ? currentStageArtifactHistory[currentStageArtifactHistory.length - 1]
+        : null
+    );
+  }, [currentStageArtifactHistory, selectedVersion, showHistory]);
 
   // Content displays using the imported preprocessMarkdown utility
 
@@ -46,60 +71,37 @@ export const ArtifactPane: React.FC = () => {
     const newCode = await retryMermaidGeneration(brokenCode, errorMessage, blockIndex);
     if (!newCode) return false;
 
-    // Use regex to locate nth mermaid block
     const content = useStore.getState().artifactContent;
-    const regex = /```mermaid.*?\n([\s\S]*?)```/g;
-    const matches = Array.from(content.matchAll(regex));
+    const updatedContent = replaceMermaidBlockAtIndex(content, blockIndex, newCode);
+    if (!updatedContent) return false;
 
-    if (matches[blockIndex]) {
-      const match = matches[blockIndex];
-      const start = match.index!;
-      const length = match[0].length;
-
-      const newBlock = `\`\`\`mermaid\n${newCode}\n\`\`\``;
-      if (newBlock === match[0]) return false;
-
-      const updatedContent = content.substring(0, start) + newBlock + content.substring(start + length);
-
-      useStore.getState().setArtifactContent(updatedContent);
-      return true;
-    }
-    return false;
+    useStore.getState().setArtifactContent(updatedContent);
+    return true;
   }, []);
 
-  let mermaidBlockCounter = 0;
-
-  const markdownComponents = {
-    h1: ({ node, ...props }: any) => <h1 className="text-3xl font-bold text-white mb-6 pb-2 border-b border-[#1e293b]" {...props} />,
-    h2: ({ node, ...props }: any) => <h2 className="text-2xl font-bold text-white mt-8 mb-4 before:content-['#'] before:text-blue-500 before:opacity-50 before:mr-2" {...props} />,
-    h3: ({ node, ...props }: any) => <h3 className="text-xl font-semibold text-slate-200 mt-6 mb-3" {...props} />,
-    p: ({ node, ...props }: any) => <p className="mb-4 leading-relaxed text-slate-400" {...props} />,
-    ul: ({ node, ...props }: any) => <ul className="list-disc pl-6 mb-4 space-y-2 text-slate-400" {...props} />,
-    ol: ({ node, ...props }: any) => <ol className="list-decimal pl-6 mb-4 space-y-2 text-slate-400" {...props} />,
-    li: ({ node, ...props }: any) => <li className="leading-relaxed" {...props} />,
-    strong: ({ node, ...props }: any) => <strong className="font-bold text-white" {...props} />,
-    blockquote: ({ node, ...props }: any) => <blockquote className="border-l-4 border-blue-500 pl-4 py-2 my-4 bg-blue-500/5 rounded-r text-slate-400 italic" {...props} />,
-    table: ({ node, ...props }: any) => <div className="overflow-x-auto mb-6"><table className="w-full border-collapse text-sm" {...props} /></div>,
-    th: ({ node, ...props }: any) => <th className="bg-[#1e293b] text-slate-200 font-semibold text-left p-3 border-b border-[#334155]" {...props} />,
-    td: ({ node, ...props }: any) => <td className="p-3 border-b border-[#1e293b] text-slate-400 group-hover:bg-white/5" {...props} />,
-    tr: ({ node, ...props }: any) => <tr className="hover:bg-white/[0.02] transition-colors group" {...props} />,
-    mark: ({ node, ...props }: any) => <mark className="bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded font-medium shadow-[0_0_8px_rgba(16,185,129,0.1)] box-decoration-clone" {...props} />,
-    code({ node, inline, className, children, ...props }: any) {
-      const match = /language-(\w+)/.exec(className || '');
-      const language = match ? match[1] : '';
-
-      if (!inline && language === 'mermaid') {
-        let chartContent = String(children).replace(/\n$/, '');
-        chartContent = chartContent.replace(/\$\{FENCE\}/g, '```');
-        const currentIndex = mermaidBlockCounter++;
-        return <Mermaid
-          chart={chartContent}
-          blockIndex={currentIndex}
-          onRetry={handleMermaidRetry}
-        />;
-      }
-
-      return !inline ? (
+  const createArtifactMarkdownComponents = (
+    onMermaidRetry?: Parameters<typeof createMarkdownCodeRenderer>[0]['onMermaidRetry']
+  ): Components => {
+    let mermaidBlockCounter = 0;
+    return {
+    h1: ({ node, ...props }) => <h1 className="text-3xl font-bold text-white mb-6 pb-2 border-b border-[#1e293b]" {...props} />,
+    h2: ({ node, ...props }) => <h2 className="text-2xl font-bold text-white mt-8 mb-4 before:content-['#'] before:text-blue-500 before:opacity-50 before:mr-2" {...props} />,
+    h3: ({ node, ...props }) => <h3 className="text-xl font-semibold text-slate-200 mt-6 mb-3" {...props} />,
+    p: ({ node, ...props }) => <p className="mb-4 leading-relaxed text-slate-400" {...props} />,
+    ul: ({ node, ...props }) => <ul className="list-disc pl-6 mb-4 space-y-2 text-slate-400" {...props} />,
+    ol: ({ node, ...props }) => <ol className="list-decimal pl-6 mb-4 space-y-2 text-slate-400" {...props} />,
+    li: ({ node, ...props }) => <li className="leading-relaxed" {...props} />,
+    strong: ({ node, ...props }) => <strong className="font-bold text-white" {...props} />,
+    blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-blue-500 pl-4 py-2 my-4 bg-blue-500/5 rounded-r text-slate-400 italic" {...props} />,
+    table: ({ node, ...props }) => <div className="overflow-x-auto mb-6"><table className="w-full border-collapse text-sm" {...props} /></div>,
+    th: ({ node, ...props }) => <th className="bg-[#1e293b] text-slate-200 font-semibold text-left p-3 border-b border-[#334155]" {...props} />,
+    td: ({ node, ...props }) => <td className="p-3 border-b border-[#1e293b] text-slate-400 group-hover:bg-white/5" {...props} />,
+    tr: ({ node, ...props }) => <tr className="hover:bg-white/[0.02] transition-colors group" {...props} />,
+    mark: ({ node, ...props }) => <mark className="bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded font-medium shadow-[0_0_8px_rgba(16,185,129,0.1)] box-decoration-clone" {...props} />,
+    code: createMarkdownCodeRenderer({
+      nextMermaidBlockIndex: () => mermaidBlockCounter++,
+      onMermaidRetry,
+      renderBlockCode: ({ language, className, children, props }) => (
         <div className="relative my-6 rounded-lg overflow-hidden border border-[#1e293b] bg-[#0f172a]">
           {language && (
             <div className="flex items-center px-4 py-2 bg-[#1e293b] text-xs text-slate-400 font-mono border-b border-[#0f172a]">
@@ -112,13 +114,18 @@ export const ArtifactPane: React.FC = () => {
             </code>
           </pre>
         </div>
-      ) : (
+      ),
+      renderInlineCode: ({ children, props }) => (
         <code className="bg-white/10 text-blue-300 px-1.5 py-0.5 rounded font-mono text-sm" {...props}>
           {children}
         </code>
-      );
-    }
+      ),
+    }),
+    };
   };
+
+  const editableMarkdownComponents = createArtifactMarkdownComponents(handleMermaidRetry);
+  const readOnlyMarkdownComponents = createArtifactMarkdownComponents();
 
   return (
     <section className="flex flex-col w-full lg:w-[60%] bg-[#0B0F17] text-gray-300 relative shadow-2xl overflow-hidden bg-grid-pattern h-full">
@@ -181,7 +188,7 @@ export const ArtifactPane: React.FC = () => {
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw]}
-              components={markdownComponents}
+              components={editableMarkdownComponents}
             >
               {displayContent}
             </ReactMarkdown>
@@ -208,10 +215,10 @@ export const ArtifactPane: React.FC = () => {
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-                {artifactHistory.length === 0 ? (
+                {currentStageArtifactHistory.length === 0 ? (
                   <div className="text-slate-500 text-sm text-center mt-10">暂无历史版本</div>
                 ) : (
-                  [...artifactHistory].reverse().map((v, i) => {
+                  [...currentStageArtifactHistory].reverse().map((v, i) => {
                     const titleMatch = v.content.match(/^#\s+(.+)$/m);
                     const title = titleMatch ? titleMatch[1].trim() : '未命名文档';
                     return (
@@ -222,7 +229,7 @@ export const ArtifactPane: React.FC = () => {
                       >
                         <div className="font-medium truncate" title={title}>{title}</div>
                         <div className="flex justify-between items-center mt-1.5">
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${selectedVersion?.id === v.id ? 'bg-blue-500/20 text-blue-300' : 'bg-white/10 text-slate-400'}`}>v{artifactHistory.length - i}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${selectedVersion?.id === v.id ? 'bg-blue-500/20 text-blue-300' : 'bg-white/10 text-slate-400'}`}>v{currentStageArtifactHistory.length - i}</span>
                           <span className="text-[10px] opacity-60 font-mono">{new Date(v.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                       </button>
@@ -246,7 +253,7 @@ export const ArtifactPane: React.FC = () => {
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       rehypePlugins={[rehypeRaw]}
-                      components={markdownComponents}
+                      components={readOnlyMarkdownComponents}
                     >
                       {preprocessMarkdown(selectedVersion.content)}
                     </ReactMarkdown>

@@ -1,18 +1,110 @@
-import { useState, useRef, useCallback } from 'react';
-import { useStore, Attachment, WORKFLOWS, getWelcomeMessage } from '../store';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { useStore, Attachment, getWelcomeMessage, WORKFLOWS } from '../store';
 import { generateResponseStream } from '../core/llm';
+import {
+    planArtifactVersionUpdate,
+    planRetryFromHistory,
+    reduceAgentStreamChunk,
+} from '../core/agentCore';
+
+const STAGE_CONTINUATION_PROMPT = '请继续生成当前阶段产出物';
+let messageIdSequence = 0;
+
+type SendOptions = {
+    appendUserMessage?: boolean;
+    useDraftAttachments?: boolean;
+};
+
+type ArtifactRollbackSnapshot = {
+    artifactContent: string;
+    artifactHistory: ReturnType<typeof useStore.getState>['artifactHistory'];
+    stageArtifacts: ReturnType<typeof useStore.getState>['stageArtifacts'];
+};
+
+function createMessageId(): string {
+    messageIdSequence += 1;
+    return `${Date.now()}-${messageIdSequence}`;
+}
+
+function getErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : 'Something went wrong.';
+}
+
+function isAbortError(error: unknown): boolean {
+    return (
+        error instanceof DOMException && error.name === 'AbortError'
+    ) || (
+        error instanceof Error && (
+            error.name === 'AbortError'
+            || error.message === 'Aborted by user'
+        )
+    );
+}
+
+function createPersistedArtifactRollbackSnapshot(
+    state: ReturnType<typeof useStore.getState>
+): ArtifactRollbackSnapshot | null {
+    if (state.artifactHistory.length < 1) return null;
+
+    const currentStage = WORKFLOWS[state.workflow].stages[state.stageIndex];
+    const currentStageId = currentStage.id;
+    const latestVersion = state.artifactHistory[state.artifactHistory.length - 1];
+    if (latestVersion.stageId !== currentStageId) return null;
+    if (latestVersion.content !== state.artifactContent) return null;
+
+    const artifactHistory = state.artifactHistory.slice(0, -1);
+    const restoredVersion = artifactHistory[artifactHistory.length - 1];
+    const currentStageBaseline = state.stageIndex === 0
+        ? getWelcomeMessage(state.workflow)
+        : currentStage.template;
+    if (!restoredVersion) {
+        return {
+            artifactContent: currentStageBaseline,
+            artifactHistory,
+            stageArtifacts: {
+                ...state.stageArtifacts,
+                [currentStageId]: currentStageBaseline,
+            },
+        };
+    }
+
+    const restoredContent = restoredVersion.stageId === currentStageId
+        ? restoredVersion.content
+        : currentStageBaseline;
+
+    return {
+        artifactContent: restoredContent,
+        artifactHistory,
+        stageArtifacts: {
+            ...state.stageArtifacts,
+            [currentStageId]: restoredContent,
+        },
+    };
+}
 
 export function useChatService() {
     const [input, setInput] = useState('');
     const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
     const abortControllerRef = useRef<AbortController | null>(null);
+    const artifactRollbackSnapshotsRef = useRef(new Map<string, ArtifactRollbackSnapshot>());
 
     const { chatHistory, addMessage, updateLastMessage, removeLastMessage, isGenerating, setIsGenerating } = useStore();
+
+    useEffect(() => {
+        return useStore.subscribe((state, previousState) => {
+            if (
+                previousState.isGenerating
+                && !state.isGenerating
+                && abortControllerRef.current
+            ) {
+                abortControllerRef.current.abort();
+            }
+        });
+    }, []);
 
     const handleStop = useCallback(() => {
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
-            abortControllerRef.current = null;
         }
     }, []);
 
@@ -28,7 +120,7 @@ export function useChatService() {
                     {
                         name: file.name,
                         data: base64String,
-                        mimeType: file.type || 'text/plain'
+                        mimeType: file.type || 'application/octet-stream'
                     }
                 ]);
             };
@@ -40,160 +132,294 @@ export function useChatService() {
         setPendingAttachments(prev => prev.filter((_, i) => i !== index));
     }, []);
 
-    const handleSend = useCallback(async (overrideInput?: string) => {
+    const handleSend = useCallback(async (overrideInput?: string, options?: SendOptions) => {
         const textToSend = overrideInput !== undefined ? overrideInput : input.trim();
-        if ((!textToSend && pendingAttachments.length === 0) || isGenerating) return;
+        if (
+            (!textToSend && pendingAttachments.length === 0)
+            || useStore.getState().isGenerating
+        ) return;
 
+        const shouldAppendUserMessage = options?.appendUserMessage !== false;
+        const shouldUseDraftAttachments = options?.useDraftAttachments !== false;
+        const assistantRetryable = shouldAppendUserMessage ? undefined : false;
         const userMsg = textToSend;
-        const currentAttachments = [...pendingAttachments];
+        const currentAttachments = shouldUseDraftAttachments
+            ? [...pendingAttachments]
+            : [];
+        const userMessageId = createMessageId();
 
-        if (overrideInput === undefined) {
+        if (overrideInput === undefined || shouldAppendUserMessage) {
             setInput('');
         }
-        setPendingAttachments([]);
+        if (shouldUseDraftAttachments) {
+            setPendingAttachments([]);
+        }
 
-        addMessage({
-            id: Date.now().toString(),
-            role: 'user',
-            content: userMsg,
-            timestamp: Date.now(),
-            attachments: currentAttachments.length > 0 ? currentAttachments : undefined,
-        });
+        if (shouldAppendUserMessage) {
+            useStore.getState().clearPendingStageTransition();
+        }
+
+        if (shouldAppendUserMessage) {
+            addMessage({
+                id: userMessageId,
+                role: 'user',
+                content: userMsg,
+                timestamp: Date.now(),
+                attachments: currentAttachments.length > 0 ? currentAttachments : undefined,
+            });
+        }
 
         setIsGenerating(true);
 
-        abortControllerRef.current = new AbortController();
+        const runAbortController = new AbortController();
+        abortControllerRef.current = runAbortController;
         let isFirstChunk = true;
+        let didUpdateArtifact = false;
+        let wasRunAborted = false;
+        let didRunFail = false;
+        let latestRunArtifactContent = '';
+        const runState = useStore.getState();
+        const runWorkflow = runState.workflow;
+        const runStageIndex = runState.stageIndex;
+        const runWorkflowDef = WORKFLOWS[runWorkflow];
+        const runStageId = runWorkflowDef.stages[runStageIndex].id;
+        const artifactRollbackSnapshot: ArtifactRollbackSnapshot = {
+            artifactContent: runState.artifactContent,
+            artifactHistory: [...runState.artifactHistory],
+            stageArtifacts: { ...runState.stageArtifacts },
+        };
+        let runAssistantMessageId: string | null = null;
+        const isRunStillActive = () => {
+            const currentState = useStore.getState();
+            return (
+                currentState.workflow === runWorkflow
+                && currentState.stageIndex === runStageIndex
+                && (
+                    !shouldAppendUserMessage
+                    || currentState.chatHistory.some(message => message.id === userMessageId)
+                )
+            );
+        };
+        const isRunHistoryStillActive = () => {
+            const currentState = useStore.getState();
+            if (currentState.workflow !== runWorkflow) return false;
+            if (!shouldAppendUserMessage) {
+                return Boolean(
+                    runAssistantMessageId
+                    && currentState.chatHistory.some(
+                        message => message.id === runAssistantMessageId
+                    )
+                );
+            }
+
+            return (
+                currentState.chatHistory.some(message => message.id === userMessageId)
+            );
+        };
 
         try {
-            const stream = generateResponseStream(userMsg, currentAttachments, abortControllerRef.current.signal);
+            const stream = generateResponseStream(userMsg, currentAttachments, runAbortController.signal);
 
             let hasTransitioned = false;
 
             for await (const chunk of stream) {
-                const { chatResponse, newArtifact, action, hasArtifactUpdate } = chunk;
-                // P0-9: Handle artifact truncation flag
-                const artifactTruncated = (chunk as any).artifactTruncated === true;
+                if (runAbortController.signal.aborted) {
+                    wasRunAborted = true;
+                    break;
+                }
+
+                if (!isRunStillActive()) {
+                    runAbortController.abort();
+                    break;
+                }
+
+                const decision = reduceAgentStreamChunk(chunk, {
+                    stageIndex: runStageIndex,
+                    stageCount: runWorkflowDef.stages.length,
+                    currentStageId: runStageId,
+                    hasTransitioned,
+                });
+                hasTransitioned = decision.hasTransitioned;
 
                 if (isFirstChunk) {
+                    const assistantMessageId = createMessageId();
+                    runAssistantMessageId = assistantMessageId;
+                    artifactRollbackSnapshotsRef.current.set(
+                        assistantMessageId,
+                        artifactRollbackSnapshot
+                    );
                     addMessage({
-                        id: (Date.now() + 1).toString(),
+                        id: assistantMessageId,
                         role: 'assistant',
-                        content: chatResponse,
+                        content: decision.assistantContent,
                         timestamp: Date.now(),
+                        retryable: assistantRetryable,
                     });
                     isFirstChunk = false;
                 } else {
-                    updateLastMessage(chatResponse);
+                    updateLastMessage(decision.assistantContent);
                 }
 
-                // P0-9: Mark artifact as truncated if detected
-                if (artifactTruncated) {
+                if (decision.artifactTruncated) {
                     useStore.getState().setArtifactTruncated(true);
                 }
 
-                // Stage transition is a user-gated chat event. Stop this stream
-                // before any unconfirmed next-stage artifact can be written.
-                if (action === 'NEXT_STAGE' && !hasTransitioned) {
-                    const state = useStore.getState();
-                    const wf = WORKFLOWS[state.workflow];
-                    if (state.stageIndex < wf.stages.length - 1) {
-                        state.setPendingStageTransition({
-                            fromStageIndex: state.stageIndex,
-                            toStageIndex: state.stageIndex + 1,
-                        });
-                        hasTransitioned = true;
-                        abortControllerRef.current?.abort();
-                        break;
-                    }
+                if (decision.pendingStageTransition) {
+                    useStore.getState().setPendingStageTransition(
+                        decision.pendingStageTransition
+                    );
                 }
 
-                // 统一依赖当前 Store 最新的 stageIndex 进行产出物的读写。
-                if (hasArtifactUpdate) {
-                    const currentState = useStore.getState();
-                    const currentActiveStageId = WORKFLOWS[currentState.workflow].stages[currentState.stageIndex].id;
-                    currentState.setStageArtifact(currentActiveStageId, newArtifact);
-                    currentState.setArtifactContent(newArtifact);
-                    // P0-9: Reset truncation flag when we get a proper artifact update
-                    currentState.setArtifactTruncated(false);
+                if (decision.artifactUpdate) {
+                    const latestState = useStore.getState();
+                    latestState.setStageArtifact(
+                        decision.artifactUpdate.stageId,
+                        decision.artifactUpdate.content
+                    );
+                    latestState.setArtifactContent(
+                        decision.artifactUpdate.content
+                    );
+                    if (!decision.artifactTruncated) {
+                        latestState.setArtifactTruncated(false);
+                    }
+                    didUpdateArtifact = true;
+                    latestRunArtifactContent = decision.artifactUpdate.content;
+                }
+
+                if (decision.shouldStopStream) {
+                    runAbortController.abort();
+                    break;
                 }
             }
-        } catch (error: any) {
+        } catch (error) {
+            const errorMessage = getErrorMessage(error);
             const history = useStore.getState().chatHistory;
             const lastMsgRole = history.length > 0 ? history[history.length - 1].role : null;
             const isMidstream = lastMsgRole === 'assistant' && !isFirstChunk;
 
-            if (error.message === 'Aborted by user') {
+            if (isAbortError(error)) {
+                wasRunAborted = true;
+                if (!isRunStillActive()) return;
+
+                if (didUpdateArtifact) {
+                    useStore.getState().setArtifactTruncated(true);
+                }
                 if (isMidstream) {
                     updateLastMessage((history[history.length - 1]?.content || '') + '\n\n*(已停止生成)*');
+                } else {
+                    addMessage({
+                        id: createMessageId(),
+                        role: 'assistant',
+                        content: '*(已停止生成)*',
+                        timestamp: Date.now(),
+                        retryable: assistantRetryable,
+                    });
                 }
             } else {
-                let errorContent = `**Error:** ${error.message || 'Something went wrong.'}`;
+                didRunFail = true;
+                if (!isRunStillActive()) return;
+
+                if (didUpdateArtifact) {
+                    useStore.getState().setArtifactTruncated(true);
+                }
+                let errorContent = `**Error:** ${errorMessage}`;
 
                 // Add friendly explanation for 429 Quota Exceeded errors
-                if (error.message && (error.message.includes('429') || error.message.toLowerCase().includes('quota'))) {
-                    errorContent = `⚠️ **免费额度已用尽**\n\n抱歉，系统内置的公共大模型 API 免费调用额度（Google Gemini Free Tier）已经耗尽。\n\n**解决方案：**\n您可以点击左侧菜单栏底部的 **"设置" (Settings)** 按钮，配置您专属的 API Key（支持 OpenAI、DeepSeek 或 Gemini 等兼容格式）。\n\n*🛡️ **安全提示**：系统绝对不会上传或存储您的 API Key。您的 Key 仅安全地保存在您当前浏览器的本地缓存 (Local Storage) 中供发起请求使用，请放心配置。*\n\n---\n*原始错误附录：*\n\`\`\`text\n${error.message}\n\`\`\``;
+                if (errorMessage.includes('429') || errorMessage.toLowerCase().includes('quota')) {
+                    errorContent = `⚠️ **模型额度或限流异常**\n\n后端默认 LLM 配置当前返回额度或限流错误。主 Agent 调用只通过后端结构化 Agent Runtime 执行，请检查后端默认 LLM 的 API Key、Base URL、模型名称和服务商额度。\n\n---\n*原始错误附录：*\n\`\`\`text\n${errorMessage}\n\`\`\``;
                 }
 
                 if (isMidstream) {
                     updateLastMessage((history[history.length - 1]?.content || '') + '\n\n' + errorContent);
                 } else {
                     addMessage({
-                        id: (Date.now() + 1).toString(),
+                        id: createMessageId(),
                         role: 'assistant',
                         content: errorContent,
                         timestamp: Date.now(),
+                        retryable: assistantRetryable,
                     });
                 }
             }
         } finally {
-            abortControllerRef.current = null;
-            setIsGenerating(false);
-            const state = useStore.getState();
-            const finalArtifact = state.artifactContent;
-            if (finalArtifact && !finalArtifact.startsWith('# 欢迎使用')) {
-                const history = state.artifactHistory;
-                if (history.length === 0 || history[history.length - 1].content !== finalArtifact) {
+            if (abortControllerRef.current === runAbortController) {
+                abortControllerRef.current = null;
+                setIsGenerating(false);
+            }
+            if (didUpdateArtifact && !wasRunAborted && !didRunFail && isRunHistoryStillActive()) {
+                const state = useStore.getState();
+                const artifactVersionPlan = planArtifactVersionUpdate(
+                    latestRunArtifactContent,
+                    state.artifactHistory
+                );
+                if (artifactVersionPlan) {
                     useStore.getState().addArtifactVersion({
-                        id: Date.now().toString(),
+                        id: createMessageId(),
                         timestamp: Date.now(),
-                        content: finalArtifact
+                        content: artifactVersionPlan.content,
+                        stageId: runStageId,
                     });
                 }
             }
         }
     }, [input, pendingAttachments, isGenerating, addMessage, updateLastMessage, setIsGenerating]);
 
+    const handleConfirmStageTransition = useCallback(async () => {
+        const state = useStore.getState();
+        if (!state.pendingStageTransition || state.isGenerating) return;
+
+        const targetStageIndex = state.pendingStageTransition.toStageIndex;
+        state.confirmStageTransition();
+        if (useStore.getState().stageIndex !== targetStageIndex) return;
+
+        await handleSend(STAGE_CONTINUATION_PROMPT, {
+            appendUserMessage: false,
+            useDraftAttachments: false,
+        });
+    }, [handleSend]);
+
     const handleRetry = useCallback(() => {
-        if (isGenerating || chatHistory.length === 0) return;
+        const currentState = useStore.getState();
+        if (currentState.isGenerating || currentState.chatHistory.length === 0) return;
 
-        const history = useStore.getState().chatHistory;
-        let lastUserMsgIndex = -1;
-        for (let i = history.length - 1; i >= 0; i--) {
-            if (history[i].role === 'user') {
-                lastUserMsgIndex = i;
-                break;
-            }
-        }
+        const history = currentState.chatHistory;
+        const retryPlan = planRetryFromHistory(history);
+        if (!retryPlan) return;
+        const removedMessages = history.slice(
+            history.length - retryPlan.messagesToRemove
+        );
+        const inMemoryRollbackSnapshot = [...removedMessages]
+            .reverse()
+            .map(message => artifactRollbackSnapshotsRef.current.get(message.id))
+            .find((snapshot): snapshot is ArtifactRollbackSnapshot => Boolean(snapshot));
+        const rollbackSnapshot = inMemoryRollbackSnapshot
+            || (
+                removedMessages.some(message => message.role === 'assistant')
+                    ? createPersistedArtifactRollbackSnapshot(currentState)
+                    : null
+            );
 
-        if (lastUserMsgIndex === -1) return;
-
-        const lastUserMsg = history[lastUserMsgIndex];
-
-        // Remove all messages after the last user message
-        const msgsToRemove = history.length - 1 - lastUserMsgIndex;
-        for (let i = 0; i < msgsToRemove; i++) {
+        for (let i = 0; i < retryPlan.messagesToRemove; i += 1) {
             useStore.getState().removeLastMessage();
         }
+        removedMessages.forEach(message => {
+            artifactRollbackSnapshotsRef.current.delete(message.id);
+        });
 
-        // Remove the user message itself so we can re-send it
-        useStore.getState().removeLastMessage();
+        if (rollbackSnapshot) {
+            useStore.setState({
+                artifactContent: rollbackSnapshot.artifactContent,
+                artifactHistory: rollbackSnapshot.artifactHistory,
+                stageArtifacts: rollbackSnapshot.stageArtifacts,
+            });
+        }
 
-        // Set input and attachments so they can be sent again
-        setInput(lastUserMsg.content);
-        setPendingAttachments(lastUserMsg.attachments || []);
+        useStore.getState().clearPendingStageTransition();
+        useStore.getState().setArtifactTruncated(false);
+        setInput(retryPlan.retryInput);
+        setPendingAttachments(retryPlan.retryAttachments);
 
-    }, [isGenerating, chatHistory]);
+    }, []);
 
     return {
         input,
@@ -201,6 +427,7 @@ export function useChatService() {
         pendingAttachments,
         setPendingAttachments,
         handleSend,
+        handleConfirmStageTransition,
         handleRetry,
         handleStop,
         handleFileChange,

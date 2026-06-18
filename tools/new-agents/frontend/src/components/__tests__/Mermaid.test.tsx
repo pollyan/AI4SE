@@ -2,13 +2,8 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Mermaid } from '../Mermaid';
-import * as storeModule from '../../store';
 import mermaid from 'mermaid';
-
-// Mock the zustand store to control state
-vi.mock('../../store', () => ({
-    useStore: vi.fn(),
-}));
+import type { ParseResult, RenderResult } from 'mermaid';
 
 // Mock mermaid rendering to prevent actual heavy DOM manipulations
 vi.mock('mermaid', () => {
@@ -22,15 +17,24 @@ vi.mock('mermaid', () => {
 });
 
 describe('Mermaid Component', () => {
+    const successfulParseResult: ParseResult = {
+        diagramType: 'graph',
+        config: {},
+    };
+    const successfulRenderResult: RenderResult = {
+        svg: '<svg id="mocked-svg"></svg>',
+        bindFunctions: undefined,
+        diagramType: 'graph',
+    };
+
     beforeEach(() => {
         vi.clearAllMocks();
         // Default mock implementation
-        vi.mocked(mermaid.parse).mockResolvedValue({} as any);
-        vi.mocked(mermaid.render).mockResolvedValue({ svg: '<svg id="mocked-svg"></svg>', bindFunctions: undefined, diagramType: 'graph' } as any);
+        vi.mocked(mermaid.parse).mockResolvedValue(successfulParseResult);
+        vi.mocked(mermaid.render).mockResolvedValue(successfulRenderResult);
     });
 
     it('renders successfully with valid chart data without triggering onRetry (AC8 - F10)', async () => {
-        vi.mocked(storeModule.useStore).mockImplementation(((s: any) => s({ isGenerating: false })) as any); // isGenerating = false
         const mockOnRetry = vi.fn().mockResolvedValue(true);
         const chartCode = 'graph TD\nA-->B';
 
@@ -44,7 +48,6 @@ describe('Mermaid Component', () => {
     });
 
     it('shows loading animation when generating and encountering parse error (AC6)', async () => {
-        vi.mocked(storeModule.useStore).mockImplementation(((s: any) => s({ isGenerating: true })) as any); // isGenerating = true
         vi.mocked(mermaid.parse).mockRejectedValue(new Error('Syntax Error'));
 
         const incompleteChartCode = 'graph TD\nA-->';
@@ -56,7 +59,6 @@ describe('Mermaid Component', () => {
     });
 
     it('does not auto retry when code fails and onRetry is provided', async () => {
-        vi.mocked(storeModule.useStore).mockImplementation(((s: any) => s({ isGenerating: false })) as any); // isGenerating = false
         vi.mocked(mermaid.parse).mockRejectedValue(new Error('Syntax Error'));
 
         const mockOnRetry = vi.fn().mockResolvedValue(true);
@@ -71,7 +73,6 @@ describe('Mermaid Component', () => {
     });
 
     it('keeps the same broken code in error state on rerender without retrying', async () => {
-        vi.mocked(storeModule.useStore).mockImplementation(((s: any) => s({ isGenerating: false })) as any);
         vi.mocked(mermaid.parse).mockRejectedValue(new Error('Syntax Error'));
 
         const mockOnRetry = vi.fn().mockResolvedValue(false);
@@ -93,7 +94,6 @@ describe('Mermaid Component', () => {
     });
 
     it('shows error state when onRetry returns false (AC5 / F5)', async () => {
-        vi.mocked(storeModule.useStore).mockImplementation(((s: any) => s({ isGenerating: false })) as any);
         vi.mocked(mermaid.parse).mockRejectedValue(new Error('Syntax Error'));
 
         const mockOnRetry = vi.fn().mockResolvedValue(false); // fail recovery
@@ -108,7 +108,6 @@ describe('Mermaid Component', () => {
     });
 
     it('allows manual retry by clicking the button in degraded UI (AC3 / AC4)', async () => {
-        vi.mocked(storeModule.useStore).mockImplementation(((s: any) => s({ isGenerating: false })) as any);
         vi.mocked(mermaid.parse).mockRejectedValue(new Error('Syntax Error'));
 
         const mockOnRetry = vi.fn().mockResolvedValue(false);
@@ -129,6 +128,30 @@ describe('Mermaid Component', () => {
         await waitFor(() => {
             expect(mockOnRetry).toHaveBeenCalledTimes(1);
             expect(mockOnRetry).toHaveBeenCalledWith(brokenCode, 'Syntax Error', 0);
+        });
+    });
+
+    it('returns to degraded UI when manual retry rejects', async () => {
+        vi.mocked(mermaid.parse).mockRejectedValue(new Error('Syntax Error'));
+
+        const mockOnRetry = vi.fn().mockRejectedValue(new Error('repair endpoint unavailable'));
+        const brokenCode = 'graph TD\nmanual-reject';
+
+        render(<Mermaid chart={brokenCode} onRetry={mockOnRetry} blockIndex={0} />);
+
+        let retryBtn: HTMLElement;
+        await waitFor(() => {
+            retryBtn = screen.getByText('重新生成图表');
+            expect(retryBtn).toBeDefined();
+        });
+
+        fireEvent.click(retryBtn!);
+
+        await waitFor(() => {
+            expect(mockOnRetry).toHaveBeenCalledTimes(1);
+            expect(screen.queryByText('正在绘制流程图...')).toBeNull();
+            expect(screen.getByText('重新生成图表')).toBeDefined();
+            expect(screen.getByText('repair endpoint unavailable')).toBeDefined();
         });
     });
 });

@@ -9,8 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "vitest run --exclude \"src/core/__tests__/smoke/**\"",
-    "test:smoke": "vitest run src/core/__tests__/smoke --testTimeout=60000"
+    "test": "vitest run"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
@@ -19,7 +18,6 @@
     "lucide-react": "^0.546.0",
     "mermaid": "^11.12.3",
     "motion": "^12.23.24",
-    "openai": "^6.25.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",

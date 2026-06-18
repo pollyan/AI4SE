@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { Header } from '../Header';
 import { useStore } from '../../store';
 import { BrowserRouter } from 'react-router-dom';
@@ -38,6 +38,7 @@ describe('Header Component', () => {
             stageIndex: 0,
             pendingStageTransition: null,
             chatHistory: [],
+            artifactContent: '',
         });
     });
 
@@ -67,5 +68,29 @@ describe('Header Component', () => {
         useStore.setState({ pendingStageTransition: null });
         renderHeader();
         expect(screen.queryByText(/AI 建议进入下一阶段/)).toBeNull();
+    });
+
+    it('downloads the current artifact from the export report button', async () => {
+        useStore.setState({ artifactContent: '# 测试报告\n\n导出内容' });
+        const createObjectURL = vi
+            .spyOn(URL, 'createObjectURL')
+            .mockReturnValue('blob:artifact');
+        const revokeObjectURL = vi
+            .spyOn(URL, 'revokeObjectURL')
+            .mockImplementation(() => undefined);
+        const click = vi
+            .spyOn(HTMLAnchorElement.prototype, 'click')
+            .mockImplementation(() => undefined);
+
+        renderHeader();
+
+        fireEvent.click(screen.getByRole('button', { name: /导出报告/ }));
+
+        expect(createObjectURL).toHaveBeenCalledTimes(1);
+        const blob = createObjectURL.mock.calls[0][0] as Blob;
+        expect(blob.type).toBe('text/markdown');
+        expect(await blob.text()).toBe('# 测试报告\n\n导出内容');
+        expect(click).toHaveBeenCalledTimes(1);
+        expect(revokeObjectURL).toHaveBeenCalledWith('blob:artifact');
     });
 });

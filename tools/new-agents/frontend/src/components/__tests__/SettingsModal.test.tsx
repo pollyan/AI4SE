@@ -8,10 +8,6 @@ describe('SettingsModal Component', () => {
         // Reset the store to default state
         useStore.setState({ 
             isSettingsOpen: true,
-            apiKey: '',
-            model: 'gemini-3-flash-preview',
-            baseUrl: '',
-            isUserConfigured: false,
             chatHistory: [] // required for clearHistory
         });
     });
@@ -19,42 +15,16 @@ describe('SettingsModal Component', () => {
     it('renders correctly when open', () => {
         render(<SettingsModal />);
         expect(screen.getByText('设置')).toBeDefined();
-        expect(screen.getByText('API Key')).toBeDefined();
-        expect(screen.getByText('Base URL')).toBeDefined();
-        expect(screen.getByText('模型名称')).toBeDefined();
+        expect(screen.getByText('LLM 由后端系统配置统一管理')).toBeDefined();
+        expect(screen.queryByText('API Key')).toBeNull();
+        expect(screen.queryByText('Base URL')).toBeNull();
+        expect(screen.queryByText('模型名称')).toBeNull();
     });
 
     it('does not render when isSettingsOpen is false', () => {
         useStore.setState({ isSettingsOpen: false });
         render(<SettingsModal />);
         expect(screen.queryByText('设置')).toBeNull();
-    });
-
-    it('updates API key when input changes', () => {
-        render(<SettingsModal />);
-        
-        const apiKeyInput = screen.getByPlaceholderText('不填则使用系统默认内置 API Key') as HTMLInputElement;
-        fireEvent.change(apiKeyInput, { target: { value: 'new-api-key' } });
-        
-        expect(useStore.getState().apiKey).toBe('new-api-key');
-    });
-
-    it('updates Base URL when input changes', () => {
-        render(<SettingsModal />);
-        
-        const baseUrlInput = screen.getByPlaceholderText('例如: https://api.deepseek.com/v1') as HTMLInputElement;
-        fireEvent.change(baseUrlInput, { target: { value: 'https://new-base.url/v1' } });
-        
-        expect(useStore.getState().baseUrl).toBe('https://new-base.url/v1');
-    });
-
-    it('updates Model Name when input changes', () => {
-        render(<SettingsModal />);
-        
-        const modelInput = screen.getByPlaceholderText('例如: gemini-3-flash-preview, deepseek-chat, gpt-4o') as HTMLInputElement;
-        fireEvent.change(modelInput, { target: { value: 'new-model' } });
-        
-        expect(useStore.getState().model).toBe('new-model');
     });
 
     it('closes modal when X button is clicked', () => {

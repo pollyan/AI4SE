@@ -1,21 +1,12 @@
 import React from 'react';
 import { useStore } from '../store';
-import { Settings, X, Key, Save, Trash2, Globe } from 'lucide-react';
+import { Settings, X, Save, Trash2 } from 'lucide-react';
 
 export const SettingsModal: React.FC = () => {
   const {
     isSettingsOpen,
     setSettingsOpen,
-    apiKey,
-    setApiKey,
-    model,
-    setModel,
-    baseUrl,
-    setBaseUrl,
-
     clearHistory,
-    isUserConfigured,
-    resetToSystemConfig
   } = useStore();
 
   if (!isSettingsOpen) return null;
@@ -30,7 +21,7 @@ export const SettingsModal: React.FC = () => {
             </div>
             <div>
               <h2 className="text-xl font-bold leading-tight text-white">设置</h2>
-              <p className="text-xs font-medium text-slate-400">管理 API Key 与模型配置</p>
+              <p className="text-xs font-medium text-slate-400">查看系统配置并管理本地数据</p>
             </div>
           </div>
           <button
@@ -45,61 +36,13 @@ export const SettingsModal: React.FC = () => {
           <section>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">模型配置</h3>
-              {isUserConfigured && (
-                <button
-                  onClick={resetToSystemConfig}
-                  className="text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors"
-                >
-                  恢复系统默认配置
-                </button>
-              )}
             </div>
 
-            {!isUserConfigured && (
-              <div className="rounded-lg border border-blue-900/30 bg-blue-900/10 p-3 mb-4">
-                <p className="text-xs text-blue-300">
-                  💡 系统已内置默认模型，无需配置即可直接体验。
-                  如需使用自己的 API Key (或更改配置)，请在下方填写以覆盖默认设置。
-                </p>
-              </div>
-            )}
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-300">API Key</label>
-                <div className="relative flex items-center">
-                  <Key className="absolute left-3 w-5 h-5 text-slate-500" />
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="不填则使用系统默认内置 API Key"
-                    className="w-full rounded-lg border border-slate-700 bg-[#101922] py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-300">Base URL</label>
-                <div className="relative flex items-center">
-                  <Globe className="absolute left-3 w-5 h-5 text-slate-500" />
-                  <input
-                    type="text"
-                    value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
-                    placeholder="例如: https://api.deepseek.com/v1"
-                    className="w-full rounded-lg border border-slate-700 bg-[#101922] py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-300">模型名称</label>
-                <input
-                  type="text"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  placeholder="例如: gemini-3-flash-preview, deepseek-chat, gpt-4o"
-                  className="w-full rounded-lg border border-slate-700 bg-[#101922] py-2.5 px-3 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
+            <div className="rounded-lg border border-blue-900/30 bg-blue-900/10 p-4">
+              <p className="text-sm font-medium text-blue-200">LLM 由后端系统配置统一管理</p>
+              <p className="mt-2 text-xs leading-relaxed text-blue-300/80">
+                主 Agent 调用只通过结构化 Agent Runtime 执行。API Key、Base URL 和模型名称需要在后端默认配置中维护，前端不再保存或直连个人 API Key。
+              </p>
             </div>
           </section>
 

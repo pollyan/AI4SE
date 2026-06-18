@@ -1,15 +1,28 @@
 import React, { useEffect, useRef, useState } from 'react';
-import mermaid from 'mermaid';
+import type { MermaidConfig } from 'mermaid';
 import { sanitizeMermaidCode, aggressiveSanitize } from '../core/utils/mermaidSanitizer';
 
-mermaid.initialize({
+const mermaidConfig: MermaidConfig = {
   startOnLoad: false,
   theme: 'dark',
   securityLevel: 'strict',
   fontFamily: 'JetBrains Mono, monospace',
-  // @ts-ignore - suppressErrorRendering exists but might not be in types
   suppressErrorRendering: true,
-});
+};
+
+type MermaidRuntime = typeof import('mermaid')['default'];
+
+let mermaidRuntimePromise: Promise<MermaidRuntime> | null = null;
+
+async function loadMermaidRuntime(): Promise<MermaidRuntime> {
+  if (!mermaidRuntimePromise) {
+    mermaidRuntimePromise = import('mermaid').then(({ default: mermaid }) => {
+      mermaid.initialize(mermaidConfig);
+      return mermaid;
+    });
+  }
+  return mermaidRuntimePromise;
+}
 
 export interface MermaidProps {
   chart: string;
@@ -31,6 +44,9 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
       if (isMounted) setRenderState('loading');
 
       try {
+        const mermaid = await loadMermaidRuntime();
+        if (!isMounted) return;
+
         const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
 
         // --- 容错渲染策略 ---
@@ -57,7 +73,7 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
             setRenderState('success');
           }
           return;
-        } catch (renderErr: any) {
+        } catch {
           // render 也失败，说明真的有语法问题，继续走激进降级
         }
 
@@ -77,7 +93,7 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
         // 全部尝试失败，抛出错误走降级
         throw new Error('Mermaid syntax validation failed after all sanitization attempts.');
 
-      } catch (error: any) {
+      } catch (error) {
         if (!isMounted) return;
 
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -96,7 +112,18 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
   const handleManualRetry = async () => {
     if (!onRetry) return;
     setRenderState('loading');
-    const ok = await onRetry(errorInfo.code, errorInfo.message, blockIndex ?? 0);
+    let ok = false;
+    try {
+      ok = await onRetry(errorInfo.code, errorInfo.message, blockIndex ?? 0);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setErrorInfo({
+        code: errorInfo.code,
+        message: errorMessage || errorInfo.message,
+      });
+      setRenderState('error');
+      return;
+    }
     if (!ok) {
       setRenderState('error');
       return;

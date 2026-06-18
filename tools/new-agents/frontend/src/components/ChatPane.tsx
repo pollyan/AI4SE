@@ -2,12 +2,35 @@ import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useStore, WORKFLOWS } from '../store';
 import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw, Copy, Check, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { clsx } from 'clsx';
 import { useChatService } from '../services/chatService';
 import { getAgentById } from '../core/config/agents';
-import { preprocessMarkdown } from '../core/utils/markdownUtils';
-import { Mermaid } from './Mermaid';
+import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/markdownUtils';
+import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
+import type { Attachment } from '../store';
+
+const asRenderableAttachments = (attachments: unknown): Attachment[] => {
+  if (!Array.isArray(attachments)) return [];
+
+  return attachments.flatMap((attachment): Attachment[] => {
+    if (
+      typeof attachment !== 'object'
+      || attachment === null
+      || typeof attachment.name !== 'string'
+      || typeof attachment.data !== 'string'
+      || typeof attachment.mimeType !== 'string'
+    ) {
+      return [];
+    }
+    return [{
+      name: attachment.name,
+      data: attachment.data,
+      mimeType: attachment.mimeType,
+    }];
+  });
+};
 
 export const ChatPane: React.FC = () => {
   // 使用选择器订阅特定状态，减少不必要的重渲染 (rerender-defer-reads)
@@ -15,7 +38,6 @@ export const ChatPane: React.FC = () => {
   const isGenerating = useStore((state) => state.isGenerating);
   const workflow = useStore((state) => state.workflow);
   const pendingStageTransition = useStore((state) => state.pendingStageTransition);
-  const confirmStageTransition = useStore((state) => state.confirmStageTransition);
   const clearPendingStageTransition = useStore((state) => state.clearPendingStageTransition);
   
   const onboardingConfig = WORKFLOWS[workflow].onboarding;
@@ -32,24 +54,43 @@ export const ChatPane: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const handleCopy = async (content: string, msgId: string) => {
-    await navigator.clipboard.writeText(content);
-    setCopiedId(msgId);
-    setToast('已复制到剪贴板');
-    setTimeout(() => {
+    if (copyFeedbackTimeoutRef.current) {
+      clearTimeout(copyFeedbackTimeoutRef.current);
+      copyFeedbackTimeoutRef.current = null;
+    }
+
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedId(msgId);
+      setToast('已复制到剪贴板');
+    } catch {
+      setCopiedId(null);
+      setToast('复制失败');
+    }
+    copyFeedbackTimeoutRef.current = setTimeout(() => {
       setCopiedId(null);
       setToast(null);
+      copyFeedbackTimeoutRef.current = null;
     }, 2000);
   };
+
+  useEffect(() => () => {
+    if (copyFeedbackTimeoutRef.current) {
+      clearTimeout(copyFeedbackTimeoutRef.current);
+    }
+  }, []);
 
   const {
     input,
     setInput,
     pendingAttachments,
     handleSend,
+    handleConfirmStageTransition,
     handleRetry,
     handleStop,
     handleFileChange,
@@ -67,24 +108,11 @@ export const ChatPane: React.FC = () => {
     const msg = history.find(m => m.id === msgId);
     if (!msg || !msg.content) return false;
 
-    const content = msg.content;
-    const regex = /```mermaid.*?\n([\s\S]*?)```/g;
-    const matches = Array.from(content.matchAll(regex));
+    const updatedContent = replaceMermaidBlockAtIndex(msg.content, blockIndex, newCode);
+    if (!updatedContent) return false;
 
-    if (matches[blockIndex]) {
-      const match = matches[blockIndex];
-      const start = match.index!;
-      const length = match[0].length;
-
-      const newBlock = `\`\`\`mermaid\n${newCode}\n\`\`\``;
-      if (newBlock === match[0]) return false;
-
-      const updatedContent = content.substring(0, start) + newBlock + content.substring(start + length);
-
-      useStore.getState().updateMessage(msgId, updatedContent);
-      return true;
-    }
-    return false;
+    useStore.getState().updateMessage(msgId, updatedContent);
+    return true;
   }, []);
 
   const scrollToBottom = () => {
@@ -109,11 +137,7 @@ export const ChatPane: React.FC = () => {
     }
   };
 
-  const handleConfirmStageTransition = () => {
-    if (!pendingNextStage) return;
-    confirmStageTransition();
-    handleSend('请继续生成当前阶段产出物');
-  };
+  const renderablePendingAttachments = asRenderableAttachments(pendingAttachments);
 
   return (
     <section className="flex flex-col w-full lg:w-[40%] min-w-[360px] bg-[#0B1120] border-r border-[#1e293b] relative shadow-[10px_0_30px_-10px_rgba(0,0,0,0.5)] z-20 h-full">
@@ -121,7 +145,7 @@ export const ChatPane: React.FC = () => {
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-white text-base font-bold flex items-center gap-2">
             <Bot className="w-5 h-5 text-blue-500" />
-            智能需求分析
+            {WORKFLOWS[workflow].name}
           </h3>
           <span className="text-[10px] uppercase tracking-wider text-cyan-400 font-mono border border-cyan-400/20 bg-cyan-400/10 px-2 py-0.5 rounded-full">Active</span>
         </div>
@@ -156,7 +180,7 @@ export const ChatPane: React.FC = () => {
                 {onboardingConfig.starterPrompts.map((prompt, idx) => (
                   <button
                     key={idx}
-                    onClick={() => handleSend(prompt)}
+                    onClick={() => handleSend(prompt, { useDraftAttachments: false })}
                     className="text-left text-sm text-slate-300 bg-[#0f1623] hover:bg-[#1e293b] border border-[#1e293b] hover:border-blue-500/30 p-3.5 rounded-xl transition-all shadow-sm hover:shadow-md group flex items-start gap-3"
                   >
                     <span className="mt-0.5 text-blue-500/50 group-hover:text-blue-400 transition-colors">✦</span>
@@ -173,7 +197,32 @@ export const ChatPane: React.FC = () => {
           if (isGenerating && msg.role === 'assistant' && !msg.content?.trim() && msg.id === chatHistory[chatHistory.length - 1]?.id) {
             return null;
           }
+          const messageAttachments = asRenderableAttachments(msg.attachments);
           let mermaidBlockCounter = 0;
+          const messageMarkdownComponents: Components = {
+            p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
+            strong: ({ node, ...props }) => <strong className={msg.role === 'user' ? "text-white font-bold" : "text-blue-400 font-bold"} {...props} />,
+            code: createMarkdownCodeRenderer({
+              nextMermaidBlockIndex: () => mermaidBlockCounter++,
+              onMermaidRetry: (brokenCode, errorMessage, blockIndex) => handleChatMermaidRetry(msg.id, brokenCode, errorMessage, blockIndex),
+              renderBlockCode: ({ className, children, props }) => (
+                <pre className="p-3 bg-[#0a0f18] rounded-lg text-xs font-mono overflow-x-auto my-2 border border-[#1e293b]">
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                </pre>
+              ),
+              renderInlineCode: ({ children, props }) => (
+                <code className="bg-black/30 px-1 py-0.5 rounded font-mono text-xs mx-1" {...props}>
+                  {children}
+                </code>
+              ),
+            }),
+            table: ({ node, ...props }) => <div className="overflow-x-auto my-3"><table className="w-full border-collapse text-sm" {...props} /></div>,
+            th: ({ node, ...props }) => <th className="bg-slate-800/50 text-slate-200 font-semibold text-left p-2 border border-slate-700" {...props} />,
+            td: ({ node, ...props }) => <td className="p-2 border border-slate-700/50 text-slate-300" {...props} />,
+            tr: ({ node, ...props }) => <tr className="hover:bg-white/5 transition-colors" {...props} />,
+          };
 
           return (
             <div key={msg.id} className={clsx("flex items-start gap-4 animate-fade-in-up", msg.role === 'user' ? "flex-row-reverse" : "")}>
@@ -196,9 +245,9 @@ export const ChatPane: React.FC = () => {
                     ? "rounded-tr-none bg-blue-600 text-white shadow-blue-500/10"
                     : "rounded-tl-none bg-[#151e32] text-gray-200 border border-[#1e293b]"
                 )}>
-                  {msg.attachments && msg.attachments.length > 0 && (
+                  {messageAttachments.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
-                      {msg.attachments.map((att, idx) => (
+                      {messageAttachments.map((att, idx) => (
                         <div key={idx} className="flex items-center gap-1.5 bg-black/20 px-2 py-1 rounded text-xs border border-white/10">
                           <FileText className="w-3 h-3" />
                           <span className="truncate max-w-[150px]">{att.name}</span>
@@ -209,41 +258,7 @@ export const ChatPane: React.FC = () => {
                   {msg.content && (
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
-                      components={{
-                        p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
-                        strong: ({ node, ...props }) => <strong className={msg.role === 'user' ? "text-white font-bold" : "text-blue-400 font-bold"} {...props} />,
-                        code({ node, inline, className, children, ...props }: any) {
-                          const match = /language-(\w+)/.exec(className || '');
-                          const language = match ? match[1] : '';
-
-                          if (!inline && language === 'mermaid') {
-                            let chartContent = String(children).replace(/\n$/, '');
-                            chartContent = chartContent.replace(/\$\{FENCE\}/g, '```');
-                            const currentIndex = mermaidBlockCounter++;
-                            return <Mermaid
-                              chart={chartContent}
-                              blockIndex={currentIndex}
-                              onRetry={(brokenCode, errorMessage, blockIndex) => handleChatMermaidRetry(msg.id, brokenCode, errorMessage, blockIndex)}
-                            />;
-                          }
-
-                          return !inline ? (
-                            <pre className="p-3 bg-[#0a0f18] rounded-lg text-xs font-mono overflow-x-auto my-2 border border-[#1e293b]">
-                              <code className={className} {...props}>
-                                {children}
-                              </code>
-                            </pre>
-                          ) : (
-                            <code className="bg-black/30 px-1 py-0.5 rounded font-mono text-xs mx-1" {...props}>
-                              {children}
-                            </code>
-                          );
-                        },
-                        table: ({ node, ...props }: any) => <div className="overflow-x-auto my-3"><table className="w-full border-collapse text-sm" {...props} /></div>,
-                        th: ({ node, ...props }: any) => <th className="bg-slate-800/50 text-slate-200 font-semibold text-left p-2 border border-slate-700" {...props} />,
-                        td: ({ node, ...props }: any) => <td className="p-2 border border-slate-700/50 text-slate-300" {...props} />,
-                        tr: ({ node, ...props }: any) => <tr className="hover:bg-white/5 transition-colors" {...props} />,
-                      }}
+                      components={messageMarkdownComponents}
                     >
                       {preprocessMarkdown(msg.content)}
                     </ReactMarkdown>
@@ -260,7 +275,7 @@ export const ChatPane: React.FC = () => {
                       {copiedId === msg.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedId === msg.id ? '已复制' : '复制'}</span>
                     </button>
-                    {msg.role === 'assistant' && !isGenerating && msg.id === chatHistory[chatHistory.length - 1]?.id && (
+                    {msg.role === 'assistant' && msg.retryable !== false && !isGenerating && msg.id === chatHistory[chatHistory.length - 1]?.id && (
                       <button
                         onClick={handleRetry}
                         className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-blue-400 transition-colors"
@@ -330,9 +345,9 @@ export const ChatPane: React.FC = () => {
 
       <div className="p-4 bg-[#0B1120] border-t border-[#1e293b] relative z-20">
         <div className="relative flex flex-col gap-2 bg-[#0f1623] rounded-xl border border-[#1e293b] focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/50 transition-all p-2 shadow-inner">
-          {pendingAttachments.length > 0 && (
+          {renderablePendingAttachments.length > 0 && (
             <div className="flex flex-wrap gap-2 px-2 pt-2">
-              {pendingAttachments.map((att, idx) => (
+              {renderablePendingAttachments.map((att, idx) => (
                 <div key={idx} className="flex items-center gap-1.5 bg-[#1e293b] px-2 py-1 rounded text-xs text-slate-300 border border-slate-700">
                   <FileText className="w-3 h-3 text-blue-400" />
                   <span className="truncate max-w-[150px]">{att.name}</span>

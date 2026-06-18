@@ -6,7 +6,14 @@ import { clsx } from 'clsx';
 import { WorkflowDropdown } from './WorkflowDropdown';
 
 export const Header: React.FC = () => {
-  const { workflow, stageIndex, setStageIndex, setSettingsOpen, clearHistory } = useStore();
+  const {
+    workflow,
+    stageIndex,
+    artifactContent,
+    setStageIndex,
+    setSettingsOpen,
+    clearHistory,
+  } = useStore();
   const stages = WORKFLOWS[workflow].stages;
   const [showConfirm, setShowConfirm] = useState(false);
   const navigate = useNavigate();
@@ -19,6 +26,18 @@ export const Header: React.FC = () => {
   const confirmNewChat = () => {
     clearHistory();
     setShowConfirm(false);
+  };
+
+  const handleExportReport = () => {
+    const blob = new Blob([artifactContent], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${workflow.toLowerCase()}_report.md`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
   };
 
   const agentIdForUrl = agentId || WORKFLOWS[workflow].agentId;
@@ -74,7 +93,10 @@ export const Header: React.FC = () => {
             <Plus className="w-4 h-4" />
             <span className="truncate hidden lg:inline">新会话</span>
           </button>
-          <button className="flex items-center justify-center gap-2 rounded-lg h-9 px-4 bg-[#151e32] border border-[#1e293b] hover:border-blue-500/50 text-slate-400 hover:text-white text-sm font-medium transition-all">
+          <button
+            onClick={handleExportReport}
+            className="flex items-center justify-center gap-2 rounded-lg h-9 px-4 bg-[#151e32] border border-[#1e293b] hover:border-blue-500/50 text-slate-400 hover:text-white text-sm font-medium transition-all"
+          >
             <Share className="w-4 h-4" />
             <span className="truncate hidden lg:inline">导出报告</span>
           </button>

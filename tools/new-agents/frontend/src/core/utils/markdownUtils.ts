@@ -30,3 +30,19 @@ export const preprocessMarkdown = (content: string) => {
         return processedLines.join('\n');
     });
 };
+
+export function replaceMermaidBlockAtIndex(
+    markdown: string,
+    blockIndex: number,
+    newCode: string
+): string | null {
+    const mermaidBlockPattern = /```mermaid(?:[ \t].*)?\n[\s\S]*?```/g;
+    const matches = Array.from(markdown.matchAll(mermaidBlockPattern));
+    const target = matches[blockIndex];
+    if (!target || target.index === undefined) return null;
+
+    const replacement = `\`\`\`mermaid\n${newCode}\n\`\`\``;
+    if (replacement === target[0]) return null;
+
+    return `${markdown.substring(0, target.index)}${replacement}${markdown.substring(target.index + target[0].length)}`;
+}

@@ -1,46 +1,65 @@
-import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { Suspense, useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../components/Header';
-import { ChatPane } from '../components/ChatPane';
-import { ArtifactPane } from '../components/ArtifactPane';
 import { SettingsModal } from '../components/SettingsModal';
-import { useStore, SLUG_TO_WORKFLOW } from '../store';
+import { useStore, SLUG_TO_WORKFLOW, WORKFLOWS } from '../store';
+
+const ChatPane = React.lazy(() =>
+    import('../components/ChatPane').then(module => ({ default: module.ChatPane }))
+);
+const ArtifactPane = React.lazy(() =>
+    import('../components/ArtifactPane').then(module => ({ default: module.ArtifactPane }))
+);
 
 export function Workspace() {
-    const { workflowId } = useParams();
-    const { workflow, setWorkflow, isUserConfigured, setSettingsOpen, chatHistory } = useStore();
+    const navigate = useNavigate();
+    const { agentId, workflowId } = useParams();
+    const { workflow, setWorkflow, chatHistory } = useStore();
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [backendAvailable, setBackendAvailable] = useState<boolean | null>(null);
 
     useEffect(() => {
         if (workflowId) {
             const targetWorkflow = SLUG_TO_WORKFLOW[workflowId];
-            if (targetWorkflow && targetWorkflow !== workflow) {
+            if (!targetWorkflow) {
+                navigate('/', { replace: true });
+                return;
+            }
+
+            const owningAgentId = WORKFLOWS[targetWorkflow].agentId;
+            if (agentId && agentId !== owningAgentId) {
+                navigate(`/workspace/${owningAgentId}/${workflowId}`, { replace: true });
+                return;
+            }
+
+            if (targetWorkflow !== workflow) {
                 setWorkflow(targetWorkflow);
             }
         }
-    }, [workflowId]);
+    }, [agentId, navigate, setWorkflow, workflow, workflowId]);
 
     // P0-10: First-time usage detection
-    // Check if backend is available and user has no API config
+    // Check if backend has the default LLM config required by Agent Runtime.
     useEffect(() => {
-        if (isUserConfigured) {
-            setShowOnboarding(false);
-            return;
-        }
+        let isCurrent = true;
+
         // If user already has chat history, don't show onboarding
         if (chatHistory.length > 0) {
             setShowOnboarding(false);
-            return;
+            return () => {
+                isCurrent = false;
+            };
         }
 
         // Check backend availability
         const checkBackend = async () => {
             try {
                 const res = await fetch('/new-agents/api/config');
+                if (!isCurrent) return;
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.hasDefault) {
+                    if (!isCurrent) return;
+                    if (data.hasDefault === true) {
                         // Backend has default config, no need for onboarding
                         setBackendAvailable(true);
                         setShowOnboarding(false);
@@ -54,6 +73,7 @@ export function Workspace() {
                     setShowOnboarding(true);
                 }
             } catch {
+                if (!isCurrent) return;
                 // Backend unreachable
                 setBackendAvailable(false);
                 setShowOnboarding(true);
@@ -61,19 +81,24 @@ export function Workspace() {
         };
 
         checkBackend();
-    }, [isUserConfigured, chatHistory.length]);
+        return () => {
+            isCurrent = false;
+        };
+    }, [chatHistory.length]);
 
     return (
         <div className="flex flex-col h-screen w-full bg-[#0B1120] text-slate-200 font-sans overflow-hidden antialiased selection:bg-blue-500/30 selection:text-white">
             <Header />
             <main className="flex flex-1 overflow-hidden relative">
-                <ChatPane />
-                <ArtifactPane />
+                <Suspense fallback={<div className="flex flex-1 bg-[#0B1120]" />}>
+                    <ChatPane />
+                    <ArtifactPane />
+                </Suspense>
             </main>
             <SettingsModal />
 
             {/* P0-10: First-time setup guide overlay */}
-            {showOnboarding && !isUserConfigured && (
+            {showOnboarding && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
                     <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-[#151f2b] shadow-2xl ring-1 ring-white/10">
                         <div className="p-8 text-center space-y-6">
@@ -84,48 +109,39 @@ export function Workspace() {
                                 </svg>
                             </div>
                             <div>
-                                <h2 className="text-2xl font-bold text-white mb-2">配置你的 AI 模型</h2>
+                                <h2 className="text-2xl font-bold text-white mb-2">后端默认 LLM 未配置</h2>
                                 <p className="text-slate-400 text-sm leading-relaxed max-w-md mx-auto">
-                                    系统后端暂未配置默认 LLM 模型。要开始使用，你需要配置自己的 API Key 才能与 AI 对话。
+                                    当前主 Agent 只能通过后端结构化 Agent Runtime 调用模型。请先在后端默认 LLM 配置中维护 API Key、Base URL 和模型名称。
                                 </p>
                             </div>
 
                             <div className="bg-[#0f1623] rounded-xl p-5 text-left space-y-3 border border-[#1e293b]">
-                                <h3 className="text-sm font-bold text-slate-200">支持的模型服务商</h3>
+                                <h3 className="text-sm font-bold text-slate-200">配置位置</h3>
                                 <ul className="text-xs text-slate-400 space-y-2">
                                     <li className="flex items-center gap-2">
                                         <span className="text-emerald-400">&#10003;</span>
-                                        Google Gemini（免费额度可用）
+                                        后端 `llm_config` 默认配置
                                     </li>
                                     <li className="flex items-center gap-2">
                                         <span className="text-emerald-400">&#10003;</span>
-                                        OpenAI / GPT 系列
+                                        `NEW_AGENTS_DEFAULT_LLM_API_KEY` 与 `NEW_AGENTS_DEFAULT_LLM_MODEL`
                                     </li>
                                     <li className="flex items-center gap-2">
                                         <span className="text-emerald-400">&#10003;</span>
-                                        DeepSeek 等兼容 OpenAI 格式的服务商
+                                        `/new-agents/api/config` 返回 `hasDefault: true`
                                     </li>
                                 </ul>
                                 <p className="text-[10px] text-slate-500 pt-2 border-t border-[#1e293b]">
-                                    &#128274; 你的 API Key 仅保存在浏览器本地 (LocalStorage)，不会上传到服务器。
+                                    前端不再保存个人 API Key，也不会绕过后端结构化输出契约。
                                 </p>
                             </div>
 
                             <div className="flex flex-col gap-3 pt-2">
                                 <button
-                                    onClick={() => {
-                                        setShowOnboarding(false);
-                                        setSettingsOpen(true);
-                                    }}
+                                    onClick={() => setShowOnboarding(false)}
                                     className="w-full rounded-xl bg-blue-600 hover:bg-blue-500 text-white py-3 text-sm font-bold transition-all shadow-lg shadow-blue-500/20"
                                 >
-                                    立即配置 API Key
-                                </button>
-                                <button
-                                    onClick={() => setShowOnboarding(false)}
-                                    className="text-xs text-slate-500 hover:text-slate-400 transition-colors"
-                                >
-                                    稍后再说
+                                    我知道了
                                 </button>
                             </div>
                         </div>

@@ -1,13 +1,20 @@
-import json
 import os
 import logging
 import time
 import uuid
-from flask import Flask, request, Response, jsonify, g
+from flask import Flask, request, jsonify, g
 from flask_cors import CORS
-from models import db, LlmConfig
+from models import db
 from config import Config
-from openai import OpenAI, APIError, AuthenticationError, RateLimitError
+from config_service import upsert_default_llm_config_from_env
+from routes import api_bp
+
+
+def init_db(app):
+    """Create database tables and seed server-managed defaults."""
+    with app.app_context():
+        db.create_all()
+        upsert_default_llm_config_from_env()
 
 
 def create_app(test_config=None):
@@ -40,8 +47,7 @@ def create_app(test_config=None):
 
     # Create tables if not in testing mode (tests handle their own setup)
     if not os.environ.get('FLASK_TESTING'):
-        with app.app_context():
-            db.create_all()
+        init_db(app)
 
     # Register routes
     init_routes(app)
@@ -61,9 +67,15 @@ def init_routes(app):
 
         # P0-2: API Key authentication for sensitive endpoints
         proxy_api_key = os.environ.get('PROXY_API_KEY')
-        if proxy_api_key and request.path == '/api/chat/stream' and request.method == 'POST':
+        protected_paths = {
+            '/api/agent/runs/stream',
+            '/api/utils/mermaid/repair',
+        }
+        if proxy_api_key and request.path in protected_paths and request.method == 'POST':
             client_key = request.headers.get('X-API-Key', '')
-            if client_key != proxy_api_key:
+            gateway_marker = request.headers.get('X-AI4SE-Gateway', '')
+            is_gateway_request = gateway_marker == 'new-agents'
+            if client_key != proxy_api_key and not is_gateway_request:
                 app.logger.warning(f"[{g.request_id}] Unauthorized API access attempt to {request.path}")
                 return jsonify({"error": "未授权访问，请提供有效的 API Key"}), 401
 
@@ -83,108 +95,7 @@ def init_routes(app):
         app.logger.exception(f"[{g.request_id}] Unhandled exception: {str(e)}")
         return jsonify({"error": "服务器内部错误", "request_id": g.request_id}), 500
 
-    @app.route('/api/health', methods=['GET'])
-    def health():
-        return jsonify({"status": "ok", "service": "new-agents-backend"})
-
-    @app.route('/api/config', methods=['GET'])
-    def get_default_config():
-        """获取系统默认模型配置（不返回 API Key）"""
-        try:
-            config = LlmConfig.query.filter_by(
-                config_key='default', is_active=True
-            ).first()
-            if not config:
-                return jsonify({"hasDefault": False}), 200
-            return jsonify({
-                "hasDefault": True,
-                "baseUrl": config.base_url,
-                "model": config.model,
-                "description": config.description
-            })
-        except Exception as e:
-            app.logger.error(f"[{g.request_id}] Error getting config: {str(e)}")
-            return jsonify({"error": "获取配置失败"}), 500
-
-    @app.route('/api/chat/stream', methods=['POST'])
-    def chat_stream():
-        """SSE 流式代理转发 LLM 请求"""
-        request_id = g.request_id
-
-        data = request.get_json()
-        if not data:
-            app.logger.warning(f"[{request_id}] Empty request body")
-            return jsonify({"error": "请求体为空"}), 400
-
-        messages = data.get('messages', [])
-        model_override = data.get('model')
-        temperature = data.get('temperature', 0.7)
-
-        if not messages:
-            app.logger.warning(f"[{request_id}] Empty messages array")
-            return jsonify({"error": "messages 不能为空"}), 400
-
-        # 记录请求参数
-        app.logger.info(f"[{request_id}] Chat request - model: {model_override or 'default'}, temp: {temperature}, messages: {len(messages)}")
-
-        config = LlmConfig.query.filter_by(
-            config_key='default', is_active=True
-        ).first()
-
-        if not config:
-            app.logger.warning(f"[{request_id}] No LLM config found")
-            return jsonify({"error": "系统未配置默认 LLM，请在设置中配置您自己的 API Key"}), 503
-
-        api_key = config.api_key
-        base_url = config.base_url
-        default_model = config.model
-
-        def generate():
-            try:
-                client = OpenAI(api_key=api_key, base_url=base_url)
-                model = model_override or default_model
-
-                app.logger.info(f"[{request_id}] Calling OpenAI - model: {model}")
-
-                stream = client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    temperature=temperature,
-                    stream=True
-                )
-
-                for chunk in stream:
-                    delta = chunk.choices[0].delta if chunk.choices else None
-                    if delta and delta.content:
-                        yield f"data: {json.dumps({'content': delta.content})}\n\n"
-
-                yield "data: [DONE]\n\n"
-                app.logger.info(f"[{request_id}] Stream completed successfully")
-
-            except AuthenticationError as e:
-                app.logger.error(f"[{request_id}] OpenAI auth error: {str(e)}")
-                yield f"data: {json.dumps({'error': f'API认证失败: {str(e)}'})}\n\n"
-
-            except RateLimitError as e:
-                app.logger.error(f"[{request_id}] OpenAI rate limit: {str(e)}")
-                yield f"data: {json.dumps({'error': f'API请求频率超限: {str(e)}'})}\n\n"
-
-            except APIError as e:
-                app.logger.error(f"[{request_id}] OpenAI API error: {str(e)}")
-                yield f"data: {json.dumps({'error': f'LLM服务错误: {str(e)}'})}\n\n"
-
-            except Exception as e:
-                app.logger.exception(f"[{request_id}] Unexpected error in stream: {str(e)}")
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
-
-        return Response(
-            generate(),
-            mimetype='text/event-stream',
-            headers={
-                'Cache-Control': 'no-cache',
-                'X-Accel-Buffering': 'no',
-            }
-        )
+    app.register_blueprint(api_bp)
 
 
 # For backward compatibility and direct execution

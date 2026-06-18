@@ -10,8 +10,7 @@ describe('Mermaid Syntax Validation for INCIDENT_REVIEW Workflow', () => {
         try {
             await mermaid.parse(code);
             return true;
-        } catch (error) {
-            console.error(error);
+        } catch {
             return false;
         }
     };

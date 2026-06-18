@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 # Set testing environment before importing
 os.environ['FLASK_TESTING'] = '1'
 
-from app import create_app
+from app import create_app, init_db
 from models import db, LlmConfig
 
 
@@ -75,76 +75,32 @@ def test_get_config_with_default(client, app):
     assert "api_key" not in data  # Key security requirement
 
 
-def test_chat_stream_empty_body(client):
-    """Test standard validation for chat streaming proxy."""
-    response = client.post('/api/chat/stream', json={})
-    assert response.status_code == 400
-    assert response.json == {"error": "请求体为空"}
+def test_init_db_creates_tables_and_seeds_default_config_from_env(monkeypatch):
+    """Application DB initialization should support production config seeding."""
+    db_fd, db_path = tempfile.mkstemp()
+    monkeypatch.setenv('NEW_AGENTS_DEFAULT_LLM_API_KEY', 'env-secret')
+    monkeypatch.setenv('NEW_AGENTS_DEFAULT_LLM_BASE_URL', 'https://llm.test/v1')
+    monkeypatch.setenv('NEW_AGENTS_DEFAULT_LLM_MODEL', 'env-model')
+    monkeypatch.setenv('NEW_AGENTS_DEFAULT_LLM_DESCRIPTION', 'Env managed')
 
-    response2 = client.post('/api/chat/stream', json={"model": "gpt-4"})
-    assert response2.status_code == 400
-    assert response2.json == {"error": "messages 不能为空"}
+    app = create_app({
+        'TESTING': True,
+        'SQLALCHEMY_DATABASE_URI': f'sqlite:///{db_path}',
+        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+    })
 
+    try:
+        init_db(app)
 
-from unittest.mock import patch, MagicMock
+        with app.app_context():
+            config = LlmConfig.query.filter_by(config_key='default').first()
 
-
-def test_chat_stream_missing_config(client):
-    """Test streaming when no default configuration exists."""
-    response = client.post('/api/chat/stream', json={"messages": [{"role": "user", "content": "hi"}]})
-    assert response.status_code == 503
-    assert "系统未配置" in response.json["error"]
-
-
-@patch('app.OpenAI')
-def test_chat_stream_success(mock_openai, client, app):
-    """Test successful SSE stream."""
-    with app.app_context():
-        config = LlmConfig.query.filter_by(config_key='default').first()
-        if not config:
-            config = LlmConfig(config_key='default', api_key='sk-123', base_url='http://t', model='gpt-4')
-            db.session.add(config)
-            db.session.commit()
-
-    # Mock the return values for stream
-    mock_client = MagicMock()
-    mock_openai.return_value = mock_client
-
-    class MockDelta:
-        def __init__(self, content): self.content = content
-    class MockChoice:
-        def __init__(self, delta): self.delta = delta
-    class MockChunk:
-        def __init__(self, content): self.choices = [MockChoice(MockDelta(content))] if content else []
-
-    mock_client.chat.completions.create.return_value = [
-        MockChunk("Hello"),
-        MockChunk(" World")
-    ]
-
-    response = client.post('/api/chat/stream', json={"messages": [{"role": "user", "content": "hi"}]})
-    assert response.status_code == 200
-    assert response.mimetype == 'text/event-stream'
-
-    # Process the stream generator
-    data = response.get_data(as_text=True)
-    assert 'data: {"content": "Hello"}' in data
-    assert 'data: {"content": " World"}' in data
-    assert 'data: [DONE]' in data
-
-
-@patch('app.OpenAI')
-def test_chat_stream_openai_error(mock_openai, client, app):
-    """Test handling of OpenAI exception during stream creation."""
-    with app.app_context():
-        if not LlmConfig.query.filter_by(config_key='default').first():
-            db.session.add(LlmConfig(config_key='default', api_key='sk', base_url='x', model='y'))
-            db.session.commit()
-
-    mock_openai.side_effect = Exception("OpenAI API unreachable")
-
-    response = client.post('/api/chat/stream', json={"messages": [{"role": "user", "content": "hi"}]})
-    assert response.status_code == 200  # It returns 200 and streams the error
-
-    data = response.get_data(as_text=True)
-    assert 'data: {"error": "OpenAI API unreachable"}' in data
+            assert config is not None
+            assert config.api_key == 'env-secret'
+            assert config.base_url == 'https://llm.test/v1'
+            assert config.model == 'env-model'
+            assert config.description == 'Env managed'
+            assert config.is_active is True
+    finally:
+        os.close(db_fd)
+        os.unlink(db_path)

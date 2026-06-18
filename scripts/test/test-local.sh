@@ -9,6 +9,8 @@
 #   ./scripts/test/test-local.sh api      # 仅运行 API 测试 (不含 smoke)
 #   ./scripts/test/test-local.sh proxy    # 仅运行代理测试
 #   ./scripts/test/test-local.sh lint     # 仅运行代码检查
+#   ./scripts/test/test-local.sh new-agents # 仅运行 New Agents 确定性测试
+#   ./scripts/test/test-local.sh e2e      # 仅运行 New Agents 浏览器 E2E
 #   ./scripts/test/test-local.sh smoke    # 仅运行耗时的大模型冒烟测试
 # ========================================
 
@@ -43,6 +45,10 @@ log_section() {
 # 切换到项目根目录
 cd "$(dirname "$0")/../.."
 PROJECT_ROOT=$(pwd)
+PROJECT_PYTHON="$PROJECT_ROOT/.venv/bin/python"
+if [ ! -x "$PROJECT_PYTHON" ]; then
+    PROJECT_PYTHON="python3"
+fi
 
 # 解析参数
 TEST_TYPE=${1:-all}
@@ -155,8 +161,12 @@ run_new_agents_frontend_tests() {
     log_section "🤖 New Agents Frontend Tests"
     cd "$PROJECT_ROOT/tools/new-agents/frontend"
     
-    log_info "安装 New Agents 依赖..."
-    npm ci --silent 2>/dev/null || npm install --silent
+    if [ ! -x "node_modules/.bin/vitest" ]; then
+        log_info "安装 New Agents 依赖..."
+        npm ci --silent 2>/dev/null || npm install --silent
+    else
+        log_info "New Agents 依赖已存在，跳过安装"
+    fi
 
     log_info "运行 New Agents Frontend 测试..."
     if npm run test; then
@@ -174,19 +184,94 @@ run_new_agents_frontend_tests() {
 # ==========================================
 run_new_agents_backend_tests() {
     log_section "🐍 New Agents Backend Tests"
-    cd "$PROJECT_ROOT/tools/new-agents/backend"
+    cd "$PROJECT_ROOT"
     
-    # 尝试激活虚拟环境 (如果有)
-    [ -f "venv/bin/activate" ] && source venv/bin/activate
-    
-    log_info "安装 Backend 依赖..."
-    pip3 install -q -r requirements.txt pytest 2>/dev/null || pip install -q -r requirements.txt pytest
+    if "$PROJECT_PYTHON" -m pytest --version >/dev/null 2>&1 && "$PROJECT_PYTHON" - <<'PY' >/dev/null 2>&1
+import flask
+import flask_sqlalchemy
+import openai
+import pydantic_ai
+PY
+    then
+        log_info "Backend 依赖已存在，跳过安装"
+    else
+        log_info "安装 Backend 依赖..."
+        "$PROJECT_PYTHON" -m pip install -q -r tools/new-agents/backend/requirements.txt
+    fi
 
     log_info "运行 New Agents Backend 测试..."
-    if python3 -m pytest tests/ -v; then
+    cd "$PROJECT_ROOT/tools/new-agents/backend"
+    if "$PROJECT_PYTHON" -m pytest -m "not slow" -q; then
         log_info "✅ New Agents Backend 测试通过"
     else
         log_error "❌ New Agents Backend 测试失败"
+        cd "$PROJECT_ROOT"
+        return 1
+    fi
+    cd "$PROJECT_ROOT"
+}
+
+# ==========================================
+# New Agents Browser E2E Tests (Playwright)
+# ==========================================
+run_new_agents_browser_e2e_tests() {
+    log_section "🌐 New Agents Browser E2E Tests"
+    cd "$PROJECT_ROOT"
+
+    if "$PROJECT_PYTHON" - <<'PY' >/dev/null 2>&1
+import playwright
+import pytest_playwright
+PY
+    then
+        log_info "Browser E2E Python 依赖已存在，跳过安装"
+    else
+        log_info "安装 Browser E2E Python 依赖..."
+        "$PROJECT_PYTHON" -m pip install -q -r requirements.txt
+    fi
+
+    log_info "确认 Playwright Chromium 可用..."
+    "$PROJECT_PYTHON" -m playwright install chromium
+
+    log_info "运行 New Agents Browser E2E 测试..."
+    if "$PROJECT_PYTHON" -m pytest -o addopts='' tests/e2e/new_agents_browser -m e2e -q; then
+        log_info "✅ New Agents Browser E2E 测试通过"
+    else
+        log_error "❌ New Agents Browser E2E 测试失败"
+        return 1
+    fi
+}
+
+# ==========================================
+# New Agents Real LLM Smoke Tests
+# ==========================================
+run_smoke_tests() {
+    log_section "🔥 New Agents Real LLM Smoke Tests"
+    cd "$PROJECT_ROOT"
+
+    if [ -z "${NEW_AGENTS_SMOKE_API_KEY:-}" ] || [ -z "${NEW_AGENTS_SMOKE_BASE_URL:-}" ] || [ -z "${NEW_AGENTS_SMOKE_MODEL:-}" ]; then
+        log_warn "缺少 NEW_AGENTS_SMOKE_API_KEY / NEW_AGENTS_SMOKE_BASE_URL / NEW_AGENTS_SMOKE_MODEL，跳过真实 LLM smoke。"
+        return 0
+    fi
+
+    if "$PROJECT_PYTHON" -m pytest --version >/dev/null 2>&1 && "$PROJECT_PYTHON" - <<'PY' >/dev/null 2>&1
+import flask
+import flask_sqlalchemy
+import openai
+import pydantic_ai
+PY
+    then
+        log_info "Backend 依赖已存在，跳过安装"
+    else
+        log_info "安装 Backend 依赖..."
+        "$PROJECT_PYTHON" -m pip install -q -r tools/new-agents/backend/requirements.txt
+    fi
+
+    log_info "运行真实 LLM smoke 测试..."
+    cd "$PROJECT_ROOT/tools/new-agents/backend"
+    if "$PROJECT_PYTHON" -m pytest tests/test_agent_real_smoke.py -q; then
+        log_info "✅ 真实 LLM smoke 测试通过"
+    else
+        log_error "❌ 真实 LLM smoke 测试失败"
         cd "$PROJECT_ROOT"
         return 1
     fi
@@ -258,6 +343,13 @@ case "$TEST_TYPE" in
     smoke)
         run_smoke_tests || FAILED=1
         ;;
+    new-agents)
+        run_new_agents_frontend_tests || FAILED=1
+        run_new_agents_backend_tests || FAILED=1
+        ;;
+    e2e)
+        run_new_agents_browser_e2e_tests || FAILED=1
+        ;;
     all)
         run_api_tests || FAILED=1
         run_lint || true  # lint 失败不中断
@@ -265,10 +357,11 @@ case "$TEST_TYPE" in
         run_common_frontend_tests || FAILED=1
         run_new_agents_frontend_tests || FAILED=1
         run_new_agents_backend_tests || FAILED=1
+        run_new_agents_browser_e2e_tests || FAILED=1
         ;;
     *)
         log_error "未知测试类型: $TEST_TYPE"
-        echo "用法: $0 [all|api|proxy|lint|smoke]"
+        echo "用法: $0 [all|api|proxy|lint|new-agents|e2e|smoke]"
         exit 1
         ;;
 esac
@@ -279,7 +372,7 @@ esac
 log_section "📊 测试结果汇总"
 
 if [ $FAILED -eq 0 ]; then
-    log_info "🎉 所有测试通过！可以安全推送到 GitHub。"
+    log_info "✅ 所选测试执行完成，未发现失败。"
     exit 0
 else
     log_error "❌ 部分测试失败，请修复后再推送。"

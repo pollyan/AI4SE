@@ -1,20 +1,27 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useStore } from '../../store';
+import { useStore, type Attachment, type ChatState } from '../../store';
+
+type TestStreamChunk = {
+    chatResponse: string;
+    newArtifact: string;
+    action: string;
+    hasArtifactUpdate: boolean;
+    artifactTruncated?: boolean;
+};
 
 // ------------------------------------------------------------------
 // Mock 外部依赖
 // ------------------------------------------------------------------
 
-// 1. Mock OpenAI SDK
-const mockCreate = vi.fn();
-let capturedOpenAIArgs: any = null;
-vi.mock('openai', () => {
-    const MockOpenAI = vi.fn().mockImplementation(function (this: any, args: any) {
-        capturedOpenAIArgs = args;
-        this.chat = { completions: { create: mockCreate } };
-    });
-    return { default: MockOpenAI };
-});
+const { mockMermaidParse } = vi.hoisted(() => ({
+    mockMermaidParse: vi.fn(),
+}));
+
+vi.mock('mermaid', () => ({
+    default: {
+        parse: mockMermaidParse,
+    },
+}));
 
 // 2. Mock systemPrompt
 vi.mock('../prompts/buildSystemPrompt', () => ({
@@ -36,9 +43,9 @@ import { generateResponseStream } from '../llm';
 
 /** 收集 async generator 的所有 yield 值 */
 async function collectStream(
-    gen: AsyncGenerator<any, void, unknown>
-): Promise<any[]> {
-    const results: any[] = [];
+    gen: AsyncGenerator<TestStreamChunk, void, unknown>
+): Promise<TestStreamChunk[]> {
+    const results: TestStreamChunk[] = [];
     for await (const val of gen) {
         results.push(val);
     }
@@ -80,22 +87,57 @@ function createChunkedSSEStream(
     });
 }
 
+function createRawSSEStream(payload: string): ReadableStream<Uint8Array> {
+    const encoder = new TextEncoder();
+    return new ReadableStream({
+        start(controller) {
+            controller.enqueue(encoder.encode(payload));
+            controller.close();
+        },
+    });
+}
+
+type AgentTestOutput = {
+    chat: string;
+    artifact_update: {
+        type: 'replace' | 'none';
+        markdown?: string;
+    };
+    stage_action: null | {
+        type: 'request_next_stage';
+        target_stage_id: string;
+    };
+    warnings: string[];
+};
+
+function createAgentTurnEvent(output: AgentTestOutput): string {
+    return `data: ${JSON.stringify({ type: 'agent_turn', output })}`;
+}
+
+function createDefaultAgentTurnStream(chat = 'ok'): ReadableStream<Uint8Array> {
+    return createSSEStream([
+        createAgentTurnEvent({
+            chat,
+            artifact_update: { type: 'none' },
+            stage_action: null,
+            warnings: [],
+        }),
+        'data: [DONE]',
+    ]);
+}
+
 // ------------------------------------------------------------------
 // 公共初始化
 // ------------------------------------------------------------------
 
-function resetStore(overrides: Record<string, any> = {}) {
+function resetStore(overrides: Partial<ChatState> = {}) {
     useStore.setState({
-        apiKey: '',
-        baseUrl: '',
-        model: 'test-model',
-        isUserConfigured: false,
-        workflow: 'TEST_DESIGN',
+        workflow: 'VALUE_DISCOVERY',
         stageIndex: 0,
         chatHistory: [],
         artifactContent: '# Initial',
         artifactHistory: [],
-        stageArtifacts: { 'CLARIFY': '# Initial' },
+        stageArtifacts: { ELEVATOR: '# Initial' },
         isSettingsOpen: false,
         isGenerating: false,
         ...overrides,
@@ -109,22 +151,18 @@ function resetStore(overrides: Record<string, any> = {}) {
 describe('llm.ts', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        capturedOpenAIArgs = null;
+        mockMermaidParse.mockResolvedValue({});
         resetStore();
     });
 
     // ================================================================
-    // A. 后端代理模式 (isUserConfigured = false)
+    // A. 后端结构化 Agent Runtime
     // ================================================================
-    describe('后端代理模式（默认模式，无用户 API Key）', () => {
-        it('应正确通过 fetch 调用后端代理并解析 SSE 流', async () => {
+    describe('后端结构化 Agent Runtime', () => {
+        it('应正确通过 fetch 调用结构化 Agent Runtime 并解析 typed SSE 流', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
-                body: createSSEStream([
-                    'data: {"content":"<CHAT>你好"}',
-                    'data: {"content":"</CHAT><ARTIFACT>NO_UPDATE</ARTIFACT>"}',
-                    'data: [DONE]',
-                ]),
+                body: createDefaultAgentTurnStream('你好'),
             });
 
             const results = await collectStream(
@@ -134,20 +172,427 @@ describe('llm.ts', () => {
             // 验证 fetch 被正确调用
             expect(mockFetch).toHaveBeenCalledTimes(1);
             const [url, options] = mockFetch.mock.calls[0];
-            expect(url).toBe('/new-agents/api/chat/stream');
+            expect(url).toBe('/new-agents/api/agent/runs/stream');
             expect(options.method).toBe('POST');
             expect(JSON.parse(options.body)).toMatchObject({
-                messages: expect.arrayContaining([
-                    { role: 'system', content: 'mocked-system-prompt' },
-                    { role: 'user', content: 'hello' },
-                ]),
-                temperature: 0.7,
+                prompt: 'hello',
+                systemPrompt: 'mocked-system-prompt',
+                workflowId: 'VALUE_DISCOVERY',
+                stageId: 'ELEVATOR',
             });
 
             // 验证解析结果
-            expect(results.length).toBeGreaterThan(0);
-            const lastResult = results[results.length - 1];
-            expect(lastResult.chatResponse).toContain('你好');
+            expect(results).toEqual([
+                {
+                    chatResponse: '你好',
+                    newArtifact: '# Initial',
+                    action: '',
+                    hasArtifactUpdate: false,
+                },
+            ]);
+        });
+
+        it('不应在 prompt 中重复注入刚发送的当前用户消息', async () => {
+            resetStore({
+                workflow: 'VALUE_DISCOVERY',
+                stageIndex: 0,
+                chatHistory: [
+                    {
+                        id: 'current-user-message',
+                        role: 'user',
+                        content: 'hello',
+                        timestamp: 1,
+                    },
+                ],
+                artifactContent: '# Initial',
+                stageArtifacts: { ELEVATOR: '# Initial' },
+            });
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createDefaultAgentTurnStream('你好'),
+            });
+
+            await collectStream(generateResponseStream('hello'));
+
+            const [, options] = mockFetch.mock.calls[0];
+            expect(JSON.parse(options.body).prompt).toBe('hello');
+        });
+
+        it('TEST_DESIGN/CLARIFY 应走结构化 Agent Runtime 并解析 typed event', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: '# 需求分析文档\n\n初始内容',
+                stageArtifacts: { CLARIFY: '# 需求分析文档\n\n初始内容' },
+            });
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"已更新需求分析文档。","artifact_update":{"type":"replace","markdown":"# 需求分析文档\\n\\n## 1. 被测系统与边界\\n登录功能"},"stage_action":null,"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('登录功能需要测试')
+            );
+
+            expect(mockFetch).toHaveBeenCalledTimes(1);
+            const [url, options] = mockFetch.mock.calls[0];
+            expect(url).toBe('/new-agents/api/agent/runs/stream');
+            expect(options.method).toBe('POST');
+            expect(JSON.parse(options.body)).toMatchObject({
+                prompt: '登录功能需要测试',
+                systemPrompt: 'mocked-system-prompt',
+                workflowId: 'TEST_DESIGN',
+                stageId: 'CLARIFY',
+            });
+
+            expect(results).toEqual([
+                {
+                    chatResponse: '已更新需求分析文档。',
+                    newArtifact: '# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能',
+                    action: '',
+                    hasArtifactUpdate: true,
+                },
+            ]);
+        });
+
+        it('结构化 Agent Runtime warnings 包含 artifact_truncated 时应标记产出物截断', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentTurnEvent({
+                        chat: '产出物内容可能不完整，请检查。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: '# 价值定位分析\n\n## 产品核心定位\n内容',
+                        },
+                        stage_action: null,
+                        warnings: ['artifact_truncated'],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('生成长文档')
+            );
+
+            expect(results).toEqual([
+                {
+                    chatResponse: '产出物内容可能不完整，请检查。',
+                    newArtifact: '# 价值定位分析\n\n## 产品核心定位\n内容',
+                    action: '',
+                    hasArtifactUpdate: true,
+                    artifactTruncated: true,
+                },
+            ]);
+        });
+
+        it('长 agent_turn 回复应渐进拆分为多个累计聊天 chunk，并在最终 chunk 更新产出物', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: '# 需求分析文档\n\n初始内容',
+                stageArtifacts: { CLARIFY: '# 需求分析文档\n\n初始内容' },
+            });
+            const fullChat = [
+                '需求太模糊了，没法直接出测试用例。',
+                '我会先把边界和阻断问题梳理出来。',
+                '请补充系统形态、登录方式、目标用户和安全要求。',
+            ].join('\n\n');
+            const nextArtifact = '# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能\n\n## 2. 系统交互与核心链路\n待澄清\n\n## 3. 待澄清与阻断性问题\n系统形态未知\n\n## 4. 隐式需求与非功能性考量\n安全要求待确认';
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentTurnEvent({
+                        chat: fullChat,
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: nextArtifact,
+                        },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('帮我设计登录功能测试用例')
+            );
+
+            expect(results.length).toBeGreaterThan(1);
+            expect(results.at(0)).toMatchObject({
+                chatResponse: '需求太模糊了，没法直接出测试用例。',
+                newArtifact: '# 需求分析文档\n\n初始内容',
+                hasArtifactUpdate: false,
+            });
+            expect(results.at(-1)).toEqual({
+                chatResponse: fullChat,
+                newArtifact: nextArtifact,
+                action: '',
+                hasArtifactUpdate: true,
+            });
+        });
+
+        it('TEST_DESIGN/CLARIFY typed artifact 包含坏 Mermaid 时应拒绝更新', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: '# 需求分析文档\n\n初始内容',
+                stageArtifacts: { CLARIFY: '# 需求分析文档\n\n初始内容' },
+            });
+            mockMermaidParse.mockRejectedValueOnce(new Error('Syntax Error'));
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"已更新需求分析文档。","artifact_update":{"type":"replace","markdown":"# 需求分析文档\\n\\n```mermaid\\nsequenceDiagram\\n    A->>\\n```"},"stage_action":null,"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('登录功能需要测试'))
+            ).rejects.toThrow('Artifact Mermaid parse failed');
+            expect(mockMermaidParse).toHaveBeenCalledWith(
+                'sequenceDiagram\n    A->>',
+                { suppressErrors: false }
+            );
+        });
+
+        it('TEST_DESIGN/CLARIFY typed artifact 不应把 mermaid-js 代码块当作 Mermaid 校验', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: '# 需求分析文档\n\n初始内容',
+                stageArtifacts: { CLARIFY: '# 需求分析文档\n\n初始内容' },
+            });
+            mockMermaidParse.mockRejectedValueOnce(new Error('should not parse mermaid-js'));
+            const artifact = [
+                '# 需求分析文档',
+                '',
+                '```mermaid-js',
+                'const chart = "not a mermaid diagram";',
+                '```',
+            ].join('\n');
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    `data: ${JSON.stringify({
+                        type: 'agent_turn',
+                        output: {
+                            chat: '已更新需求分析文档。',
+                            artifact_update: {
+                                type: 'replace',
+                                markdown: artifact,
+                            },
+                            stage_action: null,
+                            warnings: [],
+                        },
+                    })}`,
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('登录功能需要测试')
+            );
+
+            expect(mockMermaidParse).not.toHaveBeenCalled();
+            expect(results.at(-1)).toEqual({
+                chatResponse: '已更新需求分析文档。',
+                newArtifact: artifact,
+                action: '',
+                hasArtifactUpdate: true,
+            });
+        });
+
+        it('TEST_DESIGN/STRATEGY 也应走结构化 Agent Runtime', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 1,
+                artifactContent: '# 测试策略蓝图\n\n初始内容',
+                stageArtifacts: {
+                    CLARIFY: '# 需求分析文档\n\n已确认',
+                    STRATEGY: '# 测试策略蓝图\n\n初始内容',
+                },
+            });
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"已更新测试策略蓝图。","artifact_update":{"type":"replace","markdown":"# 测试策略蓝图\\n\\n## 1. 质量目标\\n稳定可靠"},"stage_action":null,"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('继续制定测试策略')
+            );
+
+            expect(mockFetch).toHaveBeenCalledTimes(1);
+            const [url, options] = mockFetch.mock.calls[0];
+            expect(url).toBe('/new-agents/api/agent/runs/stream');
+            expect(JSON.parse(options.body)).toMatchObject({
+                prompt: '继续制定测试策略',
+                systemPrompt: 'mocked-system-prompt',
+                workflowId: 'TEST_DESIGN',
+                stageId: 'STRATEGY',
+            });
+            expect(results[0]).toMatchObject({
+                chatResponse: '已更新测试策略蓝图。',
+                newArtifact: '# 测试策略蓝图\n\n## 1. 质量目标\n稳定可靠',
+                hasArtifactUpdate: true,
+            });
+        });
+
+        it('REQ_REVIEW/REVIEW 应走结构化 Agent Runtime', async () => {
+            resetStore({
+                workflow: 'REQ_REVIEW',
+                stageIndex: 0,
+                artifactContent: '# 需求评审问题清单\n\n初始内容',
+                stageArtifacts: {
+                    REVIEW: '# 需求评审问题清单\n\n初始内容',
+                },
+            });
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"已更新需求评审问题清单。","artifact_update":{"type":"replace","markdown":"# 需求评审问题清单\\n\\n## 评审概要\\n登录需求评审\\n\\n## 问题统计\\n暂无阻塞项"},"stage_action":null,"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('评审这份登录需求')
+            );
+
+            expect(mockFetch).toHaveBeenCalledTimes(1);
+            const [url, options] = mockFetch.mock.calls[0];
+            expect(url).toBe('/new-agents/api/agent/runs/stream');
+            expect(JSON.parse(options.body)).toMatchObject({
+                prompt: '评审这份登录需求',
+                systemPrompt: 'mocked-system-prompt',
+                workflowId: 'REQ_REVIEW',
+                stageId: 'REVIEW',
+            });
+            expect(results[0]).toMatchObject({
+                chatResponse: '已更新需求评审问题清单。',
+                newArtifact: '# 需求评审问题清单\n\n## 评审概要\n登录需求评审\n\n## 问题统计\n暂无阻塞项',
+                hasArtifactUpdate: true,
+            });
+        });
+
+        it('INCIDENT_REVIEW/TIMELINE 应走结构化 Agent Runtime', async () => {
+            resetStore({
+                workflow: 'INCIDENT_REVIEW',
+                stageIndex: 0,
+                artifactContent: '# 故障复盘报告\n\n初始内容',
+                stageArtifacts: {
+                    TIMELINE: '# 故障复盘报告\n\n初始内容',
+                },
+            });
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"已更新事件还原。","artifact_update":{"type":"replace","markdown":"# 故障复盘报告\\n\\n## 1. 事件概要\\n支付失败\\n\\n## 2. 事件时间线\\n待补充"},"stage_action":null,"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('昨天支付失败故障需要复盘')
+            );
+
+            expect(mockFetch).toHaveBeenCalledTimes(1);
+            const [url, options] = mockFetch.mock.calls[0];
+            expect(url).toBe('/new-agents/api/agent/runs/stream');
+            expect(JSON.parse(options.body)).toMatchObject({
+                prompt: '昨天支付失败故障需要复盘',
+                systemPrompt: 'mocked-system-prompt',
+                workflowId: 'INCIDENT_REVIEW',
+                stageId: 'TIMELINE',
+            });
+            expect(results[0]).toMatchObject({
+                chatResponse: '已更新事件还原。',
+                newArtifact: '# 故障复盘报告\n\n## 1. 事件概要\n支付失败\n\n## 2. 事件时间线\n待补充',
+                hasArtifactUpdate: true,
+            });
+        });
+
+        it('IDEA_BRAINSTORM/DEFINE 应走结构化 Agent Runtime', async () => {
+            resetStore({
+                workflow: 'IDEA_BRAINSTORM',
+                stageIndex: 0,
+                artifactContent: '# 问题域分析\n\n初始内容',
+                stageArtifacts: {
+                    DEFINE: '# 问题域分析\n\n初始内容',
+                },
+            });
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"已更新问题域分析。","artifact_update":{"type":"replace","markdown":"# 问题域分析\\n\\n## 问题假设陈述\\n独立开发者变现困难\\n\\n## 目标用户画像\\n独立开发者"},"stage_action":null,"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('我想做独立开发者变现工具')
+            );
+
+            expect(mockFetch).toHaveBeenCalledTimes(1);
+            const [url, options] = mockFetch.mock.calls[0];
+            expect(url).toBe('/new-agents/api/agent/runs/stream');
+            expect(JSON.parse(options.body)).toMatchObject({
+                prompt: '我想做独立开发者变现工具',
+                systemPrompt: 'mocked-system-prompt',
+                workflowId: 'IDEA_BRAINSTORM',
+                stageId: 'DEFINE',
+            });
+            expect(results[0]).toMatchObject({
+                chatResponse: '已更新问题域分析。',
+                newArtifact: '# 问题域分析\n\n## 问题假设陈述\n独立开发者变现困难\n\n## 目标用户画像\n独立开发者',
+                hasArtifactUpdate: true,
+            });
+        });
+
+        it('VALUE_DISCOVERY/ELEVATOR 应走结构化 Agent Runtime', async () => {
+            resetStore({
+                workflow: 'VALUE_DISCOVERY',
+                stageIndex: 0,
+                artifactContent: '# 价值定位分析\n\n初始内容',
+                stageArtifacts: {
+                    ELEVATOR: '# 价值定位分析\n\n初始内容',
+                },
+            });
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"已更新价值定位。","artifact_update":{"type":"replace","markdown":"# 价值定位分析\\n\\n## 产品核心定位\\n开发者变现工具\\n\\n## 目标用户概览\\n独立开发者"},"stage_action":null,"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('我想做一个开发者变现工具')
+            );
+
+            expect(mockFetch).toHaveBeenCalledTimes(1);
+            const [url, options] = mockFetch.mock.calls[0];
+            expect(url).toBe('/new-agents/api/agent/runs/stream');
+            expect(JSON.parse(options.body)).toMatchObject({
+                prompt: '我想做一个开发者变现工具',
+                systemPrompt: 'mocked-system-prompt',
+                workflowId: 'VALUE_DISCOVERY',
+                stageId: 'ELEVATOR',
+            });
+            expect(results[0]).toMatchObject({
+                chatResponse: '已更新价值定位。',
+                newArtifact: '# 价值定位分析\n\n## 产品核心定位\n开发者变现工具\n\n## 目标用户概览\n独立开发者',
+                hasArtifactUpdate: true,
+            });
         });
 
         it('应在后端返回非 200 状态码时抛出错误', async () => {
@@ -169,14 +614,41 @@ describe('llm.ts', () => {
 
             await expect(
                 collectStream(generateResponseStream('hi'))
-            ).rejects.toThrow('后端代理请求失败');
+            ).rejects.toThrow('结构化智能体请求失败');
+        });
+
+        it('应在后端非 200 错误字段为对象时提取 message', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: false,
+                json: async () => ({
+                    error: {
+                        code: 'DEFAULT_LLM_MISSING',
+                        message: '后端默认 LLM 未配置',
+                    },
+                }),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('后端默认 LLM 未配置');
+        });
+
+        it('应在 200 响应缺少流式 body 时抛出明确错误', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: null,
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体响应缺少流式内容');
         });
 
         it('应在 SSE 流中遇到 error 字段时抛出错误', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
                 body: createSSEStream([
-                    'data: {"error":"OpenAI API unreachable"}',
+                    'data: {"type":"error","code":"LLM_ERROR","message":"OpenAI API unreachable"}',
                 ]),
             });
 
@@ -185,13 +657,36 @@ describe('llm.ts', () => {
             ).rejects.toThrow('OpenAI API unreachable');
         });
 
+        it('应在 SSE error 抛错中保留后端错误分类 code', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"error","code":"CONTRACT_VALIDATION_FAILED","message":"missing heading"}',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('CONTRACT_VALIDATION_FAILED: missing heading');
+        });
+
         it('应在 SSE 遇到 [DONE] 标记时正常结束流', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
                 body: createSSEStream([
-                    'data: {"content":"chunk1"}',
+                    createAgentTurnEvent({
+                        chat: 'chunk1',
+                        artifact_update: { type: 'none' },
+                        stage_action: null,
+                        warnings: [],
+                    }),
                     'data: [DONE]',
-                    'data: {"content":"这段不应该被处理"}',
+                    createAgentTurnEvent({
+                        chat: '这段不应该被处理',
+                        artifact_update: { type: 'none' },
+                        stage_action: null,
+                        warnings: [],
+                    }),
                 ]),
             });
 
@@ -207,7 +702,12 @@ describe('llm.ts', () => {
                 body: createSSEStream([
                     ': this is a comment',
                     'event: ping',
-                    'data: {"content":"valid"}',
+                    createAgentTurnEvent({
+                        chat: 'valid',
+                        artifact_update: { type: 'none' },
+                        stage_action: null,
+                        warnings: [],
+                    }),
                     'data: [DONE]',
                 ]),
             });
@@ -216,19 +716,232 @@ describe('llm.ts', () => {
             expect(results.length).toBeGreaterThan(0);
         });
 
-        it('应妥善处理格式错误的 JSON 数据（静默忽略）', async () => {
+        it('应接受冒号后不带空格的 SSE data 行', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentTurnEvent({
+                        chat: '无空格 data 行',
+                        artifact_update: { type: 'none' },
+                        stage_action: null,
+                        warnings: [],
+                    }).replace('data: ', 'data:'),
+                    'data:[DONE]',
+                ]),
+            });
+
+            const results = await collectStream(generateResponseStream('hi'));
+
+            expect(results).toEqual([
+                {
+                    chatResponse: '无空格 data 行',
+                    newArtifact: '# Initial',
+                    action: '',
+                    hasArtifactUpdate: false,
+                },
+            ]);
+        });
+
+        it('SSE 数据格式错误时应直接报错，不静默跳过协议问题', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
                 body: createSSEStream([
                     'data: {broken json',
-                    'data: {"content":"ok"}',
+                    createAgentTurnEvent({
+                        chat: 'ok',
+                        artifact_update: { type: 'none' },
+                        stage_action: null,
+                        warnings: [],
+                    }),
                     'data: [DONE]',
                 ]),
             });
 
-            // 不应抛出异常，而是跳过无效 JSON 继续处理
-            const results = await collectStream(generateResponseStream('hi'));
-            expect(results.length).toBeGreaterThan(0);
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 数据格式错误');
+        });
+
+        it('SSE agent_turn 缺少 output 时应抛出明确协议错误', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn"}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 事件格式错误');
+        });
+
+        it('SSE error 事件缺少 message 时应抛出明确协议错误', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"error","code":"LLM_ERROR"}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 事件格式错误');
+        });
+
+        it('SSE error 事件缺少 code 时应抛出明确协议错误', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"error","message":"failed"}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 事件格式错误');
+        });
+
+        it('SSE agent_turn output 缺少 chat 时应抛出明确协议错误', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"artifact_update":{"type":"none"},"stage_action":null,"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 事件格式错误');
+        });
+
+        it('SSE agent_turn output chat 为空白时应抛出明确协议错误', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"   ","artifact_update":{"type":"none"},"stage_action":null,"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 事件格式错误');
+        });
+
+        it('SSE agent_turn output 缺少 artifact_update 时应抛出明确协议错误', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"ok","stage_action":null,"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 事件格式错误');
+        });
+
+        it('SSE agent_turn artifact_update 为 none 但包含 markdown 时应抛出明确协议错误', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"ok","artifact_update":{"type":"none","markdown":"# 不应出现"},"stage_action":null,"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 事件格式错误');
+        });
+
+        it('SSE agent_turn artifact_update 为 replace 但 markdown 为空时应抛出明确协议错误', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"ok","artifact_update":{"type":"replace","markdown":"   "},"stage_action":null,"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 事件格式错误');
+        });
+
+        it('SSE agent_turn stage_action 缺少 target_stage_id 时应抛出明确协议错误', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"ok","artifact_update":{"type":"none"},"stage_action":{"type":"request_next_stage"},"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 事件格式错误');
+        });
+
+        it('SSE agent_turn stage_action 类型非法时应抛出明确协议错误', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"ok","artifact_update":{"type":"none"},"stage_action":{"type":"jump","target_stage_id":"STRATEGY"},"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 事件格式错误');
+        });
+
+        it('SSE agent_turn warnings 不是字符串数组时应抛出明确协议错误', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"ok","artifact_update":{"type":"none"},"stage_action":null,"warnings":"artifact_truncated"}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 事件格式错误');
+        });
+
+        it('SSE agent_turn stage_action 目标不是下一阶段时应抛出明确协议错误', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: '# 需求分析文档\n\n初始内容',
+                stageArtifacts: { CLARIFY: '# 需求分析文档\n\n初始内容' },
+            });
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentTurnEvent({
+                        chat: 'ok',
+                        artifact_update: { type: 'none' },
+                        stage_action: {
+                            type: 'request_next_stage',
+                            target_stage_id: 'CASES',
+                        },
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 阶段动作目标错误');
         });
 
         it('应正确处理分块到达的 SSE 数据', async () => {
@@ -237,8 +950,12 @@ describe('llm.ts', () => {
                 ok: true,
                 body: createChunkedSSEStream(
                     [
-                        'data: {"content":"<CHAT>Hello</CHAT>"}',
-                        'data: {"content":"<ARTIFACT>NO_UPDATE</ARTIFACT>"}',
+                        createAgentTurnEvent({
+                            chat: 'Hello',
+                            artifact_update: { type: 'none' },
+                            stage_action: null,
+                            warnings: [],
+                        }),
                         'data: [DONE]',
                     ],
                     15 // 每 15 字节一个 chunk
@@ -248,95 +965,66 @@ describe('llm.ts', () => {
             const results = await collectStream(generateResponseStream('hi'));
             expect(results.length).toBeGreaterThan(0);
         });
-    });
 
-    // ================================================================
-    // B. 前端直连模式 (isUserConfigured = true, apiKey 存在)
-    // ================================================================
-    describe('前端直连模式（用户配置了 API Key）', () => {
-        beforeEach(() => {
-            resetStore({
-                isUserConfigured: true,
-                apiKey: 'sk-test-key-123',
-                baseUrl: 'https://api.test.com/v1',
-                model: 'gpt-4-test',
+        it('应按标准 SSE 语义聚合同一事件中的多行 data 字段', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createRawSSEStream(
+                    [
+                        'data: {"type":"agent_turn",',
+                        'data: "output":{"chat":"多行事件",',
+                        'data: "artifact_update":{"type":"none"},',
+                        'data: "stage_action":null,"warnings":[]}}',
+                        '',
+                        'data: [DONE]',
+                        '',
+                    ].join('\n')
+                ),
             });
+
+            const results = await collectStream(generateResponseStream('hi'));
+
+            expect(results).toEqual([
+                {
+                    chatResponse: '多行事件',
+                    newArtifact: '# Initial',
+                    action: '',
+                    hasArtifactUpdate: false,
+                },
+            ]);
         });
 
-        it('应使用 OpenAI SDK 创建客户端并流式获取响应', async () => {
-            // Mock OpenAI stream 返回
-            const mockStream = (async function* () {
-                yield { choices: [{ delta: { content: '<CHAT>Hi' } }] };
-                yield { choices: [{ delta: { content: '</CHAT>' } }] };
-                yield { choices: [{ delta: { content: '<ARTIFACT>NO_UPDATE</ARTIFACT>' } }] };
-            })();
-            mockCreate.mockResolvedValueOnce(mockStream);
-
-            const results = await collectStream(generateResponseStream('test'));
-
-            // 验证 OpenAI 构造参数
-            expect(capturedOpenAIArgs).toEqual({
-                apiKey: 'sk-test-key-123',
-                baseURL: 'https://api.test.com/v1',
-                dangerouslyAllowBrowser: true,
+        it('应处理流结束时没有尾随换行的最后一个 SSE 事件', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createRawSSEStream(
+                    createAgentTurnEvent({
+                        chat: '最后一条',
+                        artifact_update: { type: 'none' },
+                        stage_action: null,
+                        warnings: [],
+                    })
+                ),
             });
 
-            // 验证 create 调用参数
-            expect(mockCreate).toHaveBeenCalledWith({
-                model: 'gpt-4-test',
-                messages: expect.arrayContaining([
-                    { role: 'system', content: 'mocked-system-prompt' },
-                ]),
-                temperature: 0.7,
-                stream: true,
-            });
+            const results = await collectStream(generateResponseStream('hi'));
 
-            // 验证结果
-            expect(results.length).toBeGreaterThan(0);
-            const lastResult = results[results.length - 1];
-            expect(lastResult.chatResponse).toContain('Hi');
-            // 不应该调用 fetch（代理模式）
-            expect(mockFetch).not.toHaveBeenCalled();
-        });
-
-        it('应在 baseUrl 为空时传递 undefined 给 OpenAI', async () => {
-            resetStore({
-                isUserConfigured: true,
-                apiKey: 'sk-test',
-                baseUrl: '',
-                model: 'gpt-4',
-            });
-
-            const mockStream = (async function* () {
-                yield { choices: [{ delta: { content: 'x' } }] };
-            })();
-            mockCreate.mockResolvedValueOnce(mockStream);
-
-            await collectStream(generateResponseStream('test'));
-
-            expect(capturedOpenAIArgs).toMatchObject({ baseURL: undefined });
-        });
-
-        it('应跳过空的 delta.content', async () => {
-            const mockStream = (async function* () {
-                yield { choices: [{ delta: { content: '' } }] };
-                yield { choices: [{ delta: { content: null } }] };
-                yield { choices: [{ delta: { content: 'real' } }] };
-                yield { choices: [] }; // choices 为空数组
-            })();
-            mockCreate.mockResolvedValueOnce(mockStream);
-
-            const results = await collectStream(generateResponseStream('test'));
-            // 只有 "real" 应该产生一次 yield
-            expect(results.length).toBe(1);
+            expect(results).toEqual([
+                {
+                    chatResponse: '最后一条',
+                    newArtifact: '# Initial',
+                    action: '',
+                    hasArtifactUpdate: false,
+                },
+            ]);
         });
     });
 
     // ================================================================
-    // C. 消息构建 — 聊天历史和附件
+    // B. 消息构建 — 聊天历史和附件
     // ================================================================
     describe('消息构建', () => {
-        it('应将聊天历史正确注入到 messages 数组中', async () => {
+        it('应将聊天历史正确注入到结构化 runtime prompt 中', async () => {
             resetStore({
                 chatHistory: [
                     { id: '1', role: 'user', content: '第一条消息', timestamp: 1 },
@@ -346,17 +1034,48 @@ describe('llm.ts', () => {
 
             mockFetch.mockResolvedValueOnce({
                 ok: true,
-                body: createSSEStream(['data: {"content":"ok"}', 'data: [DONE]']),
+                body: createDefaultAgentTurnStream(),
             });
 
             await collectStream(generateResponseStream('新消息'));
 
             const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-            expect(body.messages).toHaveLength(4); // system + 2 history + 1 new
-            expect(body.messages[0].role).toBe('system');
-            expect(body.messages[1]).toEqual({ role: 'user', content: '第一条消息' });
-            expect(body.messages[2]).toEqual({ role: 'assistant', content: '回复' });
-            expect(body.messages[3]).toEqual({ role: 'user', content: '新消息' });
+            expect(body.prompt).toContain('[用户]\n第一条消息');
+            expect(body.prompt).toContain('[助手]\n回复');
+            expect(body.prompt).toContain('[用户]\n新消息');
+            expect(body).not.toHaveProperty('messages');
+        });
+
+        it('不应将错误或停止控制反馈注入到结构化 runtime prompt 中', async () => {
+            resetStore({
+                chatHistory: [
+                    { id: '1', role: 'user', content: '普通用户消息', timestamp: 1 },
+                    { id: '2', role: 'assistant', content: '普通助手回复', timestamp: 2 },
+                    { id: '3', role: 'assistant', content: '**Error:** LLM_ERROR\n请求失败', timestamp: 3 },
+                    { id: '4', role: 'assistant', content: '*(已停止生成)*', timestamp: 4 },
+                    { id: '5', role: 'assistant', content: '正在生成...\n\n**Error:** LLM_ERROR\n流式中途失败', timestamp: 5 },
+                    { id: '6', role: 'assistant', content: '正在生成...\n\n*(已停止生成)*', timestamp: 6 },
+                    { id: '7', role: 'assistant', content: '正在生成...\n\n⚠️ **模型额度或限流异常**\n请稍后重试。', timestamp: 7 },
+                ],
+            });
+
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createDefaultAgentTurnStream(),
+            });
+
+            await collectStream(generateResponseStream('继续'));
+
+            const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+            expect(body.prompt).toContain('[用户]\n普通用户消息');
+            expect(body.prompt).toContain('[助手]\n普通助手回复');
+            expect(body.prompt).toContain('[用户]\n继续');
+            expect(body.prompt).not.toContain('**Error:** LLM_ERROR');
+            expect(body.prompt).not.toContain('请求失败');
+            expect(body.prompt).not.toContain('*(已停止生成)*');
+            expect(body.prompt).not.toContain('流式中途失败');
+            expect(body.prompt).not.toContain('已停止生成');
+            expect(body.prompt).not.toContain('模型额度或限流异常');
         });
 
         it('应将附件的 base64 内容解码并拼接到消息文本前', async () => {
@@ -374,7 +1093,7 @@ describe('llm.ts', () => {
 
             mockFetch.mockResolvedValueOnce({
                 ok: true,
-                body: createSSEStream(['data: {"content":"ok"}', 'data: [DONE]']),
+                body: createDefaultAgentTurnStream(),
             });
 
             await collectStream(
@@ -382,140 +1101,262 @@ describe('llm.ts', () => {
             );
 
             const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-            const userMsg = body.messages[body.messages.length - 1];
-            expect(userMsg.content).toContain('[附件: test.txt]');
-            expect(userMsg.content).toContain(testContent);
-            expect(userMsg.content).toContain('用户消息');
+            expect(body.prompt).toContain('[附件: test.txt]');
+            expect(body.prompt).toContain(testContent);
+            expect(body.prompt).toContain('用户消息');
+        });
+
+        it('不应将图片或 PDF 附件按 UTF-8 文本解码进 prompt', async () => {
+            const attachments = [
+                {
+                    name: 'screen.png',
+                    data: btoa('\x89PNG\r\n\x1a\nbinary-image-content'),
+                    mimeType: 'image/png',
+                },
+                {
+                    name: 'report.pdf',
+                    data: btoa('%PDF-1.7 binary-pdf-content'),
+                    mimeType: 'application/pdf',
+                },
+            ];
+
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createDefaultAgentTurnStream(),
+            });
+
+            await collectStream(
+                generateResponseStream('请分析附件', attachments)
+            );
+
+            const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+            expect(body.prompt).toContain('[附件: screen.png]');
+            expect(body.prompt).toContain('类型: image/png');
+            expect(body.prompt).toContain('[附件: report.pdf]');
+            expect(body.prompt).toContain('类型: application/pdf');
+            expect(body.prompt).toContain('非文本附件未注入原始二进制内容');
+            expect(body.prompt).not.toContain('binary-image-content');
+            expect(body.prompt).not.toContain('binary-pdf-content');
+            expect(body.prompt).toContain('请分析附件');
+        });
+
+        it('附件缺少 mimeType 时应按扩展名判断文本类型', async () => {
+            const testContent = '历史附件内容';
+            const base64Content = btoa(
+                String.fromCharCode(
+                    ...new TextEncoder().encode(testContent)
+                )
+            );
+            const attachments = [
+                { name: 'legacy.md', data: base64Content } as Attachment,
+            ];
+
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createDefaultAgentTurnStream(),
+            });
+
+            await collectStream(
+                generateResponseStream('请读取历史附件', attachments)
+            );
+
+            const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+            expect(body.prompt).toContain('[附件: legacy.md]');
+            expect(body.prompt).toContain('类型: unknown');
+            expect(body.prompt).toContain(testContent);
+            expect(body.prompt).toContain('请读取历史附件');
+        });
+
+        it('文本附件 base64 损坏时不应阻断 Agent 请求', async () => {
+            const attachments = [
+                {
+                    name: 'broken.md',
+                    data: 'not-valid-base64%',
+                    mimeType: 'text/markdown',
+                },
+            ];
+
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createDefaultAgentTurnStream(),
+            });
+
+            await collectStream(
+                generateResponseStream('继续分析损坏附件', attachments)
+            );
+
+            const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+            expect(body.prompt).toContain('[附件: broken.md]');
+            expect(body.prompt).toContain('类型: text/markdown');
+            expect(body.prompt).toContain('文本附件内容无法解码');
+            expect(body.prompt).toContain('继续分析损坏附件');
+        });
+
+        it('附件缺少文件名时不应阻断 Agent 请求', async () => {
+            const attachments = [
+                {
+                    data: btoa('legacy attachment content'),
+                } as Attachment,
+            ];
+
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createDefaultAgentTurnStream(),
+            });
+
+            await collectStream(
+                generateResponseStream('继续分析缺少文件名的附件', attachments)
+            );
+
+            const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+            expect(body.prompt).toContain('[附件: 未命名附件]');
+            expect(body.prompt).toContain('类型: unknown');
+            expect(body.prompt).toContain('非文本附件未注入原始二进制内容');
+            expect(body.prompt).toContain('继续分析缺少文件名的附件');
+        });
+
+        it('文本附件缺少 data 时不应阻断 Agent 请求', async () => {
+            const attachments = [
+                {
+                    name: 'missing-data.md',
+                    mimeType: 'text/markdown',
+                } as Attachment,
+            ];
+
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createDefaultAgentTurnStream(),
+            });
+
+            await collectStream(
+                generateResponseStream('继续分析缺少内容的附件', attachments)
+            );
+
+            const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+            expect(body.prompt).toContain('[附件: missing-data.md]');
+            expect(body.prompt).toContain('类型: text/markdown');
+            expect(body.prompt).toContain('文本附件内容缺失');
+            expect(body.prompt).toContain('继续分析缺少内容的附件');
+        });
+
+        it('附件数组包含空记录时不应阻断 Agent 请求', async () => {
+            const attachments = [
+                null as unknown as Attachment,
+            ];
+
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createDefaultAgentTurnStream(),
+            });
+
+            await collectStream(
+                generateResponseStream('继续分析异常附件记录', attachments)
+            );
+
+            const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+            expect(body.prompt).toContain('[附件: 无效附件记录]');
+            expect(body.prompt).toContain('类型: unknown');
+            expect(body.prompt).toContain('附件记录无效');
+            expect(body.prompt).toContain('继续分析异常附件记录');
+        });
+
+        it('历史消息和当前消息都包含空附件记录时仍应去重当前用户消息', async () => {
+            const attachments = [
+                null as unknown as Attachment,
+            ];
+            resetStore({
+                chatHistory: [
+                    {
+                        id: 'current-user',
+                        role: 'user',
+                        content: '继续分析异常附件记录',
+                        timestamp: 1,
+                        attachments,
+                    },
+                ],
+            });
+
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createDefaultAgentTurnStream(),
+            });
+
+            await collectStream(
+                generateResponseStream('继续分析异常附件记录', attachments)
+            );
+
+            const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+            expect(body.prompt.match(/继续分析异常附件记录/g)).toHaveLength(1);
+            expect(body.prompt).toContain('[附件: 无效附件记录]');
+            expect(body.prompt).toContain('附件记录无效');
+        });
+
+        it('历史消息和当前消息都包含非数组附件容器时仍应去重当前用户消息', async () => {
+            const attachments = {
+                name: 'legacy-object-container.md',
+            } as unknown as Attachment[];
+            resetStore({
+                chatHistory: [
+                    {
+                        id: 'current-user',
+                        role: 'user',
+                        content: '继续分析异常附件列表',
+                        timestamp: 1,
+                        attachments,
+                    },
+                ],
+            });
+
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createDefaultAgentTurnStream(),
+            });
+
+            await collectStream(
+                generateResponseStream('继续分析异常附件列表', attachments)
+            );
+
+            const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+            expect(body.prompt.match(/继续分析异常附件列表/g)).toHaveLength(1);
+            expect(body.prompt).toContain('[附件: 无效附件列表]');
+            expect(body.prompt).toContain('附件列表格式无效');
         });
 
         it('无附件时应直接使用原始文本', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
-                body: createSSEStream(['data: {"content":"ok"}', 'data: [DONE]']),
+                body: createDefaultAgentTurnStream(),
             });
 
             await collectStream(generateResponseStream('纯文本'));
 
             const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-            const userMsg = body.messages[body.messages.length - 1];
-            expect(userMsg.content).toBe('纯文本');
-            expect(userMsg.content).not.toContain('[附件:');
+            expect(body.prompt).toBe('纯文本');
+            expect(body.prompt).not.toContain('[附件:');
         });
 
         it('空附件数组时应等价于无附件', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
-                body: createSSEStream(['data: {"content":"ok"}', 'data: [DONE]']),
+                body: createDefaultAgentTurnStream(),
             });
 
             await collectStream(generateResponseStream('纯文本', []));
 
             const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-            const userMsg = body.messages[body.messages.length - 1];
-            expect(userMsg.content).toBe('纯文本');
+            expect(body.prompt).toBe('纯文本');
         });
     });
 
-    // ================================================================
-    // D. 流式解析 — parseLlmStreamChunk 集成
-    // ================================================================
-    describe('流式解析集成', () => {
-        it('应逐步解析 CHAT/ARTIFACT/ACTION 标签并 yield 结构化结果', async () => {
-            mockFetch.mockResolvedValueOnce({
-                ok: true,
-                body: createSSEStream([
-                    'data: {"content":"<CHAT>你好"}',
-                    'data: {"content":"</CHAT>"}',
-                    'data: {"content":"<ACTION>NEXT_STAGE</ACTION>"}',
-                    'data: {"content":"<ARTIFACT># 新文档</ARTIFACT>"}',
-                    'data: [DONE]',
-                ]),
-            });
-
-            const results = await collectStream(generateResponseStream('hi'));
-            const lastResult = results[results.length - 1];
-
-            expect(lastResult.chatResponse).toBe('你好');
-            expect(lastResult.action).toBe('NEXT_STAGE');
-            expect(lastResult.newArtifact).toBe('# 新文档');
-            expect(lastResult.hasArtifactUpdate).toBe(true);
-        });
-
-        it('应在 ARTIFACT 为 NO_UPDATE 时保留原始 artifactContent', async () => {
-            resetStore({ artifactContent: '# 原始内容' });
-
-            mockFetch.mockResolvedValueOnce({
-                ok: true,
-                body: createSSEStream([
-                    'data: {"content":"<CHAT>ok</CHAT><ARTIFACT>NO_UPDATE</ARTIFACT>"}',
-                    'data: [DONE]',
-                ]),
-            });
-
-            const results = await collectStream(generateResponseStream('hi'));
-            const lastResult = results[results.length - 1];
-
-            expect(lastResult.newArtifact).toBe('# 原始内容');
-            expect(lastResult.hasArtifactUpdate).toBe(false);
-        });
-
-        it('fullText 应随每次 chunk 累加（渐进式解析）', async () => {
-            mockFetch.mockResolvedValueOnce({
-                ok: true,
-                body: createSSEStream([
-                    'data: {"content":"<CHA"}',
-                    'data: {"content":"T>进行中"}',
-                    'data: {"content":"</CHAT>"}',
-                    'data: {"content":"<ARTIFACT>NO_UPDATE</ARTIFACT>"}',
-                    'data: [DONE]',
-                ]),
-            });
-
-            const results = await collectStream(generateResponseStream('hi'));
-
-            // 前几个 yield 可能只有部分解析
-            expect(results.length).toBeGreaterThanOrEqual(2);
-            // 最后一个 yield 应该有完整解析
-            const lastResult = results[results.length - 1];
-            expect(lastResult.chatResponse).toContain('进行中');
-        });
-    });
-
-    // ================================================================
-    // E. 中止 (Abort) 处理
+    // C. 中止 (Abort) 处理
     // ================================================================
     describe('中止信号处理', () => {
-        it('前端直连模式：abort 应在下一个 chunk 处抛出错误', async () => {
-            resetStore({
-                isUserConfigured: true,
-                apiKey: 'sk-test',
-                model: 'gpt-4',
-            });
-
-            const controller = new AbortController();
-
-            const mockStream = (async function* () {
-                yield { choices: [{ delta: { content: 'part1' } }] };
-                // 在读取第一个 chunk 后模拟中止
-                controller.abort();
-                yield { choices: [{ delta: { content: 'part2' } }] };
-            })();
-            mockCreate.mockResolvedValueOnce(mockStream);
-
-            await expect(
-                collectStream(generateResponseStream('test', undefined, controller.signal))
-            ).rejects.toThrow('Aborted by user');
-        });
-
-        it('后端代理模式：abort 应传递给 fetch', async () => {
+        it('结构化 Agent Runtime：abort 应传递给 fetch', async () => {
             const controller = new AbortController();
 
             mockFetch.mockResolvedValueOnce({
                 ok: true,
-                body: createSSEStream([
-                    'data: {"content":"part1"}',
-                    'data: [DONE]',
-                ]),
+                body: createDefaultAgentTurnStream('part1'),
             });
 
             // 先正常完成，验证 signal 被传递
@@ -524,53 +1365,39 @@ describe('llm.ts', () => {
             );
 
             expect(mockFetch).toHaveBeenCalledWith(
-                '/new-agents/api/chat/stream',
+                '/new-agents/api/agent/runs/stream',
                 expect.objectContaining({ signal: controller.signal })
             );
         });
     });
 
     // ================================================================
-    // F. 模式选择逻辑
+    // D. 模式选择逻辑
     // ================================================================
     describe('模式自动选择', () => {
-        it('isUserConfigured=true 且 apiKey 非空时走前端直连', async () => {
-            resetStore({ isUserConfigured: true, apiKey: 'sk-key' });
-            const mockStream = (async function* () {
-                yield { choices: [{ delta: { content: 'x' } }] };
-            })();
-            mockCreate.mockResolvedValueOnce(mockStream);
+        it('始终走结构化 Agent Runtime', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createDefaultAgentTurnStream('x'),
+            });
 
             await collectStream(generateResponseStream('test'));
 
-            expect(mockCreate).toHaveBeenCalled();
+            expect(mockFetch).toHaveBeenCalled();
+            expect(mockFetch.mock.calls[0][0]).toBe('/new-agents/api/agent/runs/stream');
+        });
+
+        it('系统代理模式下阶段索引非法时应直接报错，不回退旧文本代理', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 999,
+            });
+
+            await expect(
+                collectStream(generateResponseStream('test'))
+            ).rejects.toThrow('当前工作流阶段不存在');
+
             expect(mockFetch).not.toHaveBeenCalled();
-        });
-
-        it('isUserConfigured=true 但 apiKey 为空时走代理模式', async () => {
-            resetStore({ isUserConfigured: true, apiKey: '' });
-            mockFetch.mockResolvedValueOnce({
-                ok: true,
-                body: createSSEStream(['data: {"content":"x"}', 'data: [DONE]']),
-            });
-
-            await collectStream(generateResponseStream('test'));
-
-            expect(mockFetch).toHaveBeenCalled();
-            expect(mockCreate).not.toHaveBeenCalled();
-        });
-
-        it('isUserConfigured=false 时走代理模式', async () => {
-            resetStore({ isUserConfigured: false, apiKey: 'whatever' });
-            mockFetch.mockResolvedValueOnce({
-                ok: true,
-                body: createSSEStream(['data: {"content":"x"}', 'data: [DONE]']),
-            });
-
-            await collectStream(generateResponseStream('test'));
-
-            expect(mockFetch).toHaveBeenCalled();
-            expect(mockCreate).not.toHaveBeenCalled();
         });
     });
 });

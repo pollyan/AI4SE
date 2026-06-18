@@ -8,7 +8,10 @@ export type ArtifactVersion = {
     id: string;
     timestamp: number;
     content: string;
+    stageId: string;
 };
+
+export type ArtifactVersionInput = ArtifactVersion | Omit<ArtifactVersion, 'stageId'>;
 
 export type PendingStageTransition = {
     fromStageIndex: number;
@@ -21,6 +24,7 @@ export type Message = {
     content: string;
     timestamp: number;
     attachments?: Attachment[];
+    retryable?: boolean;
 };
 
 // 已实现的工作流类型（仅包含 online 状态）
@@ -63,10 +67,6 @@ export interface WorkflowDef {
 }
 
 export interface ChatState {
-    apiKey: string;
-    baseUrl: string;
-    model: string;
-    isUserConfigured: boolean;
     workflow: WorkflowType;
     stageIndex: number;
     chatHistory: Message[];
@@ -81,10 +81,6 @@ export interface ChatState {
     artifactTruncated: boolean;
 
     // Actions
-    setApiKey: (key: string) => void;
-    setBaseUrl: (url: string) => void;
-    setModel: (model: string) => void;
-    setIsUserConfigured: (isConfigured: boolean) => void;
     setWorkflow: (workflow: WorkflowType) => void;
     setStageIndex: (index: number) => void;
     transitionToNextStage: (initialStageId: string, initialArtifact: string) => void;
@@ -93,12 +89,11 @@ export interface ChatState {
     updateMessage: (id: string, content: string) => void;
     removeLastMessage: () => void;
     setArtifactContent: (content: string) => void;
-    addArtifactVersion: (version: ArtifactVersion) => void;
+    addArtifactVersion: (version: ArtifactVersionInput) => void;
     setSettingsOpen: (isOpen: boolean) => void;
     setIsGenerating: (isGenerating: boolean) => void;
     clearHistory: () => void;
     setStageArtifact: (stageId: string, content: string) => void;
-    resetToSystemConfig: () => void;
     // P0-4: Stage transition actions
     setPendingStageTransition: (pending: PendingStageTransition | null) => void;
     clearPendingStageTransition: () => void;

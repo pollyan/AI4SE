@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useStore, WORKFLOWS } from '../store';
-import { detectArtifactTruncation, parseLlmStreamChunk } from '../core/utils/llmParser';
 import { buildSystemPrompt } from '../core/prompts/buildSystemPrompt';
 
 describe('P0-4: Stage transition confirmation gate', () => {
@@ -33,8 +32,9 @@ describe('P0-4: Stage transition confirmation gate', () => {
         expect(state.artifactContent).toContain('策略制定');
     });
 
-    it('should confirm to the stored target stage even if target is not the next current index', () => {
-        useStore.getState().setPendingStageTransition({ fromStageIndex: 0, toStageIndex: 2 });
+    it('should clear stale pending transition without rewinding the current stage', () => {
+        useStore.getState().setStageIndex(2);
+        useStore.getState().setPendingStageTransition({ fromStageIndex: 0, toStageIndex: 1 });
 
         useStore.getState().confirmStageTransition();
 
@@ -103,27 +103,7 @@ describe('P0-4: Stage transition confirmation gate', () => {
     });
 });
 
-describe('P0-9: Artifact truncation detection', () => {
-    it('should detect truncation when ARTIFACT opens but never closes', () => {
-        const text = '<CHAT>Hello</CHAT>\n<ARTIFACT>\n# Some doc\ncontent...';
-        expect(detectArtifactTruncation(text)).toBe(true);
-    });
-
-    it('should not detect truncation when ARTIFACT is properly closed', () => {
-        const text = '<CHAT>Hello</CHAT>\n<ARTIFACT>\n# Some doc\ncontent...\n</ARTIFACT>';
-        expect(detectArtifactTruncation(text)).toBe(false);
-    });
-
-    it('should not detect truncation when no ARTIFACT tag exists', () => {
-        const text = '<CHAT>Hello</CHAT>';
-        expect(detectArtifactTruncation(text)).toBe(false);
-    });
-
-    it('should detect truncation with case-insensitive tags', () => {
-        const text = '<artifact>\n# Content';
-        expect(detectArtifactTruncation(text)).toBe(true);
-    });
-
+describe('P0-9: Artifact truncation state', () => {
     it('should handle artifactTruncated state in store', () => {
         expect(useStore.getState().artifactTruncated).toBe(false);
 
@@ -190,12 +170,12 @@ describe('P0-8: buildSystemPrompt 5000-char truncation threshold', () => {
         expect(prompt).not.toContain('已截断');
     });
 
-    it('should not inject previous artifacts context when not on last stage', () => {
+    it('should not inject previous artifacts context on the first stage', () => {
         const previousStageId = WORKFLOWS['TEST_DESIGN'].stages[0].id;
         const prompt = buildSystemPrompt({
             agentId: 'lisa',
             workflow: 'TEST_DESIGN',
-            stageIndex: 0, // Not last stage
+            stageIndex: 0,
             currentArtifact: '# Doc',
             stageArtifacts: {
                 [previousStageId]: 'some content',
@@ -203,25 +183,5 @@ describe('P0-8: buildSystemPrompt 5000-char truncation threshold', () => {
         });
 
         expect(prompt).not.toContain('前序阶段有效结论摘要');
-    });
-});
-
-describe('parseLlmStreamChunk integration', () => {
-    it('should parse ARTIFACT with NO_UPDATE as no update', () => {
-        const result = parseLlmStreamChunk(
-            '<CHAT>Done</CHAT>\n<ARTIFACT>NO_UPDATE</ARTIFACT>',
-            'current artifact'
-        );
-        expect(result.hasArtifactUpdate).toBe(false);
-        expect(result.newArtifact).toBe('current artifact');
-    });
-
-    it('should detect artifact update from ARTIFACT tag', () => {
-        const result = parseLlmStreamChunk(
-            '<CHAT>Updated</CHAT>\n<ARTIFACT>\n# New Content\n</ARTIFACT>',
-            'old artifact'
-        );
-        expect(result.hasArtifactUpdate).toBe(true);
-        expect(result.newArtifact).toContain('# New Content');
     });
 });
