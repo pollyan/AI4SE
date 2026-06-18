@@ -1787,11 +1787,34 @@ describe('useChatService', () => {
         expect(state.chatHistory).toHaveLength(2);
         expect(state.chatHistory[1]).toMatchObject({
             role: 'assistant',
-            content: '**Error:** SCHEMA_VALIDATION_FAILED',
         });
+        expect(state.chatHistory[1].content).toContain('结构化输出生成失败');
         expect(state.artifactContent).toBe('initial artifact');
         expect(state.artifactHistory).toEqual([]);
         expect(state.isGenerating).toBe(false);
+    });
+
+    it('should show a friendly schema validation message instead of raw retry exhaustion', async () => {
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            throw new Error('SCHEMA_VALIDATION_FAILED: Exceeded maximum output retries (3)');
+        });
+
+        const { result } = renderHook(() => useChatService());
+
+        act(() => {
+            result.current.setInput('进入下一阶段');
+        });
+
+        await act(async () => {
+            await result.current.handleSend();
+        });
+
+        const state = useStore.getState();
+        expect(state.chatHistory[1].content).toContain('结构化输出生成失败');
+        expect(state.chatHistory[1].content).toContain('可以直接重试');
+        expect(state.chatHistory[1].content).not.toContain('Exceeded maximum output retries');
+        expect(state.artifactContent).toBe('initial artifact');
+        expect(state.artifactHistory).toEqual([]);
     });
 
     it('should append an error to the in-progress assistant message when stream fails after a chunk', async () => {

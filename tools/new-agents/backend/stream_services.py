@@ -22,12 +22,25 @@ from request_schemas import (
 from sse_schemas import AgentTurnEvent, ErrorEvent, SseEvent
 
 
+SCHEMA_RETRY_EXHAUSTED_MESSAGE = (
+    "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
+    "如果多次失败，请补充更明确的需求或阶段确认信息。"
+)
+
+
 def build_runtime_system_prompt(agent_request: AgentRunStreamRequest) -> str:
     artifact_contract = build_artifact_contract_prompt(
         workflow_id=agent_request.workflow_id,
         current_stage_id=agent_request.stage_id,
     )
     return f"{agent_request.system_prompt}{artifact_contract}"
+
+
+def format_schema_validation_error_message(error: Exception) -> str:
+    message = str(error)
+    if "Exceeded maximum output retries" in message:
+        return SCHEMA_RETRY_EXHAUSTED_MESSAGE
+    return message
 
 
 def stream_agent_run_events(
@@ -61,17 +74,17 @@ def stream_agent_run_events(
     except ValidationError as e:
         yield ErrorEvent(
             code="SCHEMA_VALIDATION_FAILED",
-            message=str(e),
+            message=format_schema_validation_error_message(e),
         )
     except AgentRuntimeSchemaError as e:
         yield ErrorEvent(
             code="SCHEMA_VALIDATION_FAILED",
-            message=str(e),
+            message=format_schema_validation_error_message(e),
         )
     except PYDANTIC_AI_SCHEMA_ERRORS as e:
         yield ErrorEvent(
             code="SCHEMA_VALIDATION_FAILED",
-            message=str(e),
+            message=format_schema_validation_error_message(e),
         )
     except RequestValidationError as e:
         yield ErrorEvent(

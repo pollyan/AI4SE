@@ -99,7 +99,10 @@ def test_stream_agent_run_events_maps_pydantic_ai_output_failure_to_error_event(
     assert events == [
         ErrorEvent(
             code="SCHEMA_VALIDATION_FAILED",
-            message="Exceeded maximum output retries (1)",
+            message=(
+                "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
+                "如果多次失败，请补充更明确的需求或阶段确认信息。"
+            ),
         )
     ]
 
@@ -133,7 +136,10 @@ def test_stream_agent_run_events_maps_raw_pydantic_ai_schema_error_to_error_even
     assert events == [
         ErrorEvent(
             code="SCHEMA_VALIDATION_FAILED",
-            message="Exceeded maximum output retries (3)",
+            message=(
+                "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
+                "如果多次失败，请补充更明确的需求或阶段确认信息。"
+            ),
         )
     ]
 

@@ -25,6 +25,9 @@ export const buildSystemPrompt = (config: {
     const stageActionInstruction = nextStage
         ? `如果用户明确确认进入下一阶段，结构化输出的 stage_action 必须是 {"type":"request_next_stage","target_stage_id":"${nextStage.id}"}。target_stage_id 只能填写内部阶段 ID "${nextStage.id}"，不要填写阶段中文名称“${nextStage.name}”。`
         : '当前已经是最后阶段，结构化输出的 stage_action 必须为 null。';
+    const nextStageGenerationInstruction = nextStage
+        ? `当用户确认进入下一阶段时，只请求阶段切换，不要在同一轮生成下一阶段产出物；artifact_update 继续返回当前阶段的完整产出物，系统切换阶段后会自动触发下一阶段生成。`
+        : '当前已经是最后阶段，不存在下一阶段产出物生成。';
 
     const persona = PERSONAS[agentId] || PERSONAS['lisa'];
 
@@ -79,11 +82,16 @@ ${previousArtifactsContext}
 【语言与排版要求】：
 - **纯中文输出**：右侧生成的产出物内容（包括标题、正文、表格内容、图表节点等）必须全部使用中文。**严禁**在中文词汇后使用括号附加英文翻译或英文缩写（例如，绝对不要出现“目标用户（Target Audience）”或“可测试性（Testability）”等形式，直接写“目标用户”、“可测试性”即可）。
 
+【左侧对话与右侧产出物协同】：
+- 左侧对话的 chat 必须是面向用户的本轮总结，说明本轮确认了什么、更新了什么、还需要用户做什么。
+- 如果本轮更新了右侧产出物，chat 必须明确提示“详细内容已在右侧产出物中更新/展示”，不要把完整文档正文复制到左侧。
+- 如果当前阶段可推进，chat 必须引导用户检查右侧产出物，并使用“确认后继续”这类表达提示用户确认后进入下一阶段。
+
 【阶段推进规则】：
 1. **阶段完成确认**：当你认为当前阶段的所有目标已经完全达成时，向用户总结当前阶段的最终产出物，并明确询问用户："当前阶段产出物已更新，是否确认无误并进入下一阶段${nextStage ? `（${nextStage.name}）` : ''}？"。
 2. **触发阶段切换**：只有当用户在对话中明确回复同意或确认进入下一阶段后，才表达阶段可以推进。系统会通过结构化事件决定是否切换阶段，你不需要输出任何协议标签。
    - ${stageActionInstruction}
-3. **生成新阶段产出物**：进入下一阶段后，围绕新阶段目标继续生成对应阶段的完整 Markdown 产出物${nextStage ? `（目标：${nextStage.description}）。` : ''}。
+3. **生成新阶段产出物**：${nextStageGenerationInstruction}
 4. **产出物更新原则**：如果本轮需要更新右侧产出物，必须提供完整、全部的 Markdown 文档内容（包含未修改的部分），绝对不能只输出修改片段，也不能用“...保持不变”省略已有内容。
 
 当前右侧产出物内容（已有内容，若需更新必须返回全量）：

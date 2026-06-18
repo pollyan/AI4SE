@@ -102,6 +102,32 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('不要填写阶段中文名称');
     });
 
+    it('requires chat to bridge the left conversation and right artifact', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            currentArtifact: '# 需求分析文档\n已有内容',
+        });
+
+        expect(prompt).toContain('左侧对话');
+        expect(prompt).toContain('本轮总结');
+        expect(prompt).toContain('右侧产出物');
+        expect(prompt).toContain('确认后继续');
+    });
+
+    it('keeps next-stage confirmation separate from next-stage artifact generation', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            currentArtifact: '# 需求分析文档\n已有内容',
+        });
+
+        expect(prompt).toContain('不要在同一轮生成下一阶段产出物');
+        expect(prompt).toContain('继续返回当前阶段的完整产出物');
+    });
+
     it('allows the test design clarify stage to assume a scenario when the user asks for one', () => {
         const prompt = buildSystemPrompt({
             agentId: 'lisa',

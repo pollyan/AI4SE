@@ -296,6 +296,9 @@ def test_agent_runs_stream_returns_typed_error_when_model_output_exceeds_retries
         {
             "type": "error",
             "code": "SCHEMA_VALIDATION_FAILED",
-            "message": "Exceeded maximum output retries (3)",
+            "message": (
+                "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
+                "如果多次失败，请补充更明确的需求或阶段确认信息。"
+            ),
         }
     ]

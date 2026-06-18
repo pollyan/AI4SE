@@ -82,6 +82,27 @@ def test_artifact_contract_prompt_requires_full_artifact_after_short_confirmatio
     assert "也必须保留所有必填标题" in prompt
 
 
+def test_artifact_contract_prompt_requires_left_right_chat_bridge():
+    prompt = build_artifact_contract_prompt(
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert "左侧对话" in prompt
+    assert "本轮总结" in prompt
+    assert "右侧产出物" in prompt
+
+
+def test_artifact_contract_prompt_keeps_stage_transition_artifact_current():
+    prompt = build_artifact_contract_prompt(
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert "不要在同一轮生成下一阶段产出物" in prompt
+    assert "继续返回当前阶段的完整产出物" in prompt
+
+
 def test_agent_turn_output_rejects_unknown_top_level_fields():
     with pytest.raises(ValueError, match="unexpected_top_level"):
         AgentTurnOutput.model_validate(

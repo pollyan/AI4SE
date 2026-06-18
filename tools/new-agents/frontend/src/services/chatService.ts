@@ -30,6 +30,25 @@ function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : 'Something went wrong.';
 }
 
+function formatAssistantErrorContent(errorMessage: string): string {
+    if (
+        errorMessage.includes('SCHEMA_VALIDATION_FAILED')
+        || errorMessage.includes('Exceeded maximum output retries')
+    ) {
+        return [
+            '⚠️ **结构化输出生成失败**',
+            '',
+            '模型本轮没有生成符合工作流契约的结果，右侧产出物已保持不变。可以直接重试；如果连续失败，请补充更明确的需求或阶段确认信息。',
+        ].join('\n');
+    }
+
+    if (errorMessage.includes('429') || errorMessage.toLowerCase().includes('quota')) {
+        return `⚠️ **模型额度或限流异常**\n\n后端默认 LLM 配置当前返回额度或限流错误。主 Agent 调用只通过后端结构化 Agent Runtime 执行，请检查后端默认 LLM 的 API Key、Base URL、模型名称和服务商额度。\n\n---\n*原始错误附录：*\n\`\`\`text\n${errorMessage}\n\`\`\``;
+    }
+
+    return `**Error:** ${errorMessage}`;
+}
+
 function isAbortError(error: unknown): boolean {
     return (
         error instanceof DOMException && error.name === 'AbortError'
@@ -322,12 +341,7 @@ export function useChatService() {
                 if (didUpdateArtifact) {
                     useStore.getState().setArtifactTruncated(true);
                 }
-                let errorContent = `**Error:** ${errorMessage}`;
-
-                // Add friendly explanation for 429 Quota Exceeded errors
-                if (errorMessage.includes('429') || errorMessage.toLowerCase().includes('quota')) {
-                    errorContent = `⚠️ **模型额度或限流异常**\n\n后端默认 LLM 配置当前返回额度或限流错误。主 Agent 调用只通过后端结构化 Agent Runtime 执行，请检查后端默认 LLM 的 API Key、Base URL、模型名称和服务商额度。\n\n---\n*原始错误附录：*\n\`\`\`text\n${errorMessage}\n\`\`\``;
-                }
+                const errorContent = formatAssistantErrorContent(errorMessage);
 
                 if (isMidstream) {
                     updateLastMessage((history[history.length - 1]?.content || '') + '\n\n' + errorContent);
