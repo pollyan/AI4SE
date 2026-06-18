@@ -36,7 +36,7 @@ DOCKER_CMD="docker-compose"  # 默认不使用 sudo
 
 case "$ENVIRONMENT" in
     local|dev|development)
-        COMPOSE_FILE="docker-compose.yml"
+        COMPOSE_FILE="docker-compose.dev.yml"
         DEPLOY_DIR="."
         BACKUP_ENABLED=false
         DOCKER_CMD="docker-compose"

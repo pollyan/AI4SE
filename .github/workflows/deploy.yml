@@ -111,6 +111,7 @@ jobs:
         echo "::group::Running New Agents Frontend Tests"
         cd tools/new-agents/frontend
         npm ci
+        npm run lint
         npm run test
         echo "::endgroup::"
 
@@ -134,7 +135,7 @@ jobs:
       run: |
         echo "::group::Code Quality Analysis"
         pip install flake8
-        flake8 tools/intent-tester/backend --count --select=E9,F63,F7,F82 --show-source --statistics || true
+        flake8 tools/intent-tester/backend --count --select=E9,F63,F7,F82 --show-source --statistics
         echo "::endgroup::"
 
   # ====================================
@@ -278,12 +279,20 @@ jobs:
     
     - name: 🚀 Deploy on Server
       uses: appleboy/ssh-action@v1.0.3
+      env:
+        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        NEW_AGENTS_DEFAULT_LLM_API_KEY: ${{ secrets.NEW_AGENTS_DEFAULT_LLM_API_KEY }}
+        NEW_AGENTS_DEFAULT_LLM_BASE_URL: ${{ secrets.NEW_AGENTS_DEFAULT_LLM_BASE_URL }}
+        NEW_AGENTS_DEFAULT_LLM_MODEL: ${{ secrets.NEW_AGENTS_DEFAULT_LLM_MODEL }}
+        NEW_AGENTS_DEFAULT_LLM_DESCRIPTION: ${{ secrets.NEW_AGENTS_DEFAULT_LLM_DESCRIPTION }}
       with:
         host: ${{ secrets.SERVER_HOST }}
         username: ${{ secrets.SERVER_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         timeout: 3600s
         command_timeout: 3600s
+        envs: DB_PASSWORD,SECRET_KEY,NEW_AGENTS_DEFAULT_LLM_API_KEY,NEW_AGENTS_DEFAULT_LLM_BASE_URL,NEW_AGENTS_DEFAULT_LLM_MODEL,NEW_AGENTS_DEFAULT_LLM_DESCRIPTION
         script: |
           set -e  # 遇到错误立即退出，防止虚假成功
           
@@ -303,18 +312,6 @@ jobs:
           # 步骤1: 配置环境变量
           # ==========================================
           echo "🔧 配置环境变量..."
-          
-          # 创建.env文件（如果不存在）
-          if [ ! -f .env ]; then
-            echo "创建新的.env文件..."
-            cat > .env << 'ENVEOF'
-          DB_USER=intent_user
-          FLASK_ENV=production
-          ENVEOF
-            echo "✅ .env文件已创建"
-          else
-            echo "✅ .env文件已存在，更新关键配置..."
-          fi
 
           require_secret() {
             key="$1"
@@ -325,34 +322,62 @@ jobs:
             fi
           }
 
-          upsert_env_var() {
+          is_managed_env_key() {
             key="$1"
-            value="$2"
-            escaped_value=$(printf '%s' "$value" | sed 's/[\/&]/\\&/g')
-            if grep -q "^${key}=" .env; then
-              sed -i "s/^${key}=.*/${key}=${escaped_value}/" .env
-            else
-              printf '%s=%s\n' "$key" "$value" >> .env
-            fi
+            case "$key" in
+              DB_PASSWORD|SECRET_KEY|NEW_AGENTS_DEFAULT_LLM_API_KEY|NEW_AGENTS_DEFAULT_LLM_BASE_URL|NEW_AGENTS_DEFAULT_LLM_MODEL|NEW_AGENTS_DEFAULT_LLM_DESCRIPTION)
+                return 0
+                ;;
+              *)
+                return 1
+                ;;
+            esac
           }
 
-          require_secret DB_PASSWORD '${{ secrets.DB_PASSWORD }}'
-          require_secret SECRET_KEY '${{ secrets.SECRET_KEY }}'
-          require_secret NEW_AGENTS_DEFAULT_LLM_API_KEY '${{ secrets.NEW_AGENTS_DEFAULT_LLM_API_KEY }}'
-          require_secret NEW_AGENTS_DEFAULT_LLM_BASE_URL '${{ secrets.NEW_AGENTS_DEFAULT_LLM_BASE_URL }}'
-          require_secret NEW_AGENTS_DEFAULT_LLM_MODEL '${{ secrets.NEW_AGENTS_DEFAULT_LLM_MODEL }}'
+          write_env_var() {
+            key="$1"
+            value="$2"
+            printf '%s=%s\n' "$key" "$value" >> .env.managed
+          }
 
-          NEW_AGENTS_DEFAULT_LLM_DESCRIPTION_VALUE='${{ secrets.NEW_AGENTS_DEFAULT_LLM_DESCRIPTION }}'
+          require_secret DB_PASSWORD "$DB_PASSWORD"
+          require_secret SECRET_KEY "$SECRET_KEY"
+          require_secret NEW_AGENTS_DEFAULT_LLM_API_KEY "$NEW_AGENTS_DEFAULT_LLM_API_KEY"
+          require_secret NEW_AGENTS_DEFAULT_LLM_BASE_URL "$NEW_AGENTS_DEFAULT_LLM_BASE_URL"
+          require_secret NEW_AGENTS_DEFAULT_LLM_MODEL "$NEW_AGENTS_DEFAULT_LLM_MODEL"
+
+          NEW_AGENTS_DEFAULT_LLM_DESCRIPTION_VALUE="$NEW_AGENTS_DEFAULT_LLM_DESCRIPTION"
           if [ -z "$NEW_AGENTS_DEFAULT_LLM_DESCRIPTION_VALUE" ]; then
             NEW_AGENTS_DEFAULT_LLM_DESCRIPTION_VALUE='GitHub Actions managed default LLM config'
           fi
 
-          upsert_env_var DB_PASSWORD '${{ secrets.DB_PASSWORD }}'
-          upsert_env_var SECRET_KEY '${{ secrets.SECRET_KEY }}'
-          upsert_env_var NEW_AGENTS_DEFAULT_LLM_API_KEY '${{ secrets.NEW_AGENTS_DEFAULT_LLM_API_KEY }}'
-          upsert_env_var NEW_AGENTS_DEFAULT_LLM_BASE_URL '${{ secrets.NEW_AGENTS_DEFAULT_LLM_BASE_URL }}'
-          upsert_env_var NEW_AGENTS_DEFAULT_LLM_MODEL '${{ secrets.NEW_AGENTS_DEFAULT_LLM_MODEL }}'
-          upsert_env_var NEW_AGENTS_DEFAULT_LLM_DESCRIPTION "$NEW_AGENTS_DEFAULT_LLM_DESCRIPTION_VALUE"
+          rm -f .env.managed
+
+          if [ -f .env ]; then
+            echo "✅ .env文件已存在，重建受管配置..."
+            while IFS= read -r line || [ -n "$line" ]; do
+              key="${line%%=*}"
+              if [ "$line" = "$key" ] || ! is_managed_env_key "$key"; then
+                printf '%s\n' "$line" >> .env.managed
+              fi
+            done < .env
+          else
+            echo "创建新的.env文件..."
+            cat > .env.managed << 'ENVEOF'
+          DB_USER=intent_user
+          FLASK_ENV=production
+          ENVEOF
+          fi
+
+          write_env_var DB_PASSWORD "$DB_PASSWORD"
+          write_env_var SECRET_KEY "$SECRET_KEY"
+          write_env_var NEW_AGENTS_DEFAULT_LLM_API_KEY "$NEW_AGENTS_DEFAULT_LLM_API_KEY"
+          write_env_var NEW_AGENTS_DEFAULT_LLM_BASE_URL "$NEW_AGENTS_DEFAULT_LLM_BASE_URL"
+          write_env_var NEW_AGENTS_DEFAULT_LLM_MODEL "$NEW_AGENTS_DEFAULT_LLM_MODEL"
+          write_env_var NEW_AGENTS_DEFAULT_LLM_DESCRIPTION "$NEW_AGENTS_DEFAULT_LLM_DESCRIPTION_VALUE"
+
+          mv .env.managed .env
+          chmod 600 .env
 
           echo "✅ .env 已同步生产必需配置和 New Agents 默认 LLM 配置"
           

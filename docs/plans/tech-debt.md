@@ -2,6 +2,26 @@
 
 > 更新日期: 2026-06-18
 
+## 2026-06-18 CI 与部署可信度加固
+
+**现象**: 代码库审查发现 CI/部署护栏存在几个可信度缺口：New Agents 前端 CI 只跑 Vitest 未跑类型检查，critical flake8 在 workflow 中被 `|| true` 吞掉，生产 `.env` 写入 secrets 依赖 `sed -i` 替换且对特殊字符较脆，`scripts/ci/deploy.sh local` 指向不存在的 `docker-compose.yml`，并且 `tools/new-agents/tsconfig.tsbuildinfo` 仍被 Git 追踪。
+
+**修复记录**:
+
+- 2026-06-18: 新增 `tests/test_ci_deploy_hardening.py`，用文本回归测试保护 CI 类型检查、critical flake8 hard gate、生产 `.env` 同步策略、本地 compose 文件和 `.tsbuildinfo` Git 索引卫生。
+- 2026-06-18: `.github/workflows/deploy.yml` 的 New Agents frontend job 增加 `npm run lint`，并移除 critical flake8 的 `|| true`。
+- 2026-06-18: 生产部署步骤改为通过 `appleboy/ssh-action` 的 `envs` 传递受管 secrets，并用 `.env.managed` 重建受管变量，保留非受管 `.env` 行，最终 `mv` 原子替换并 `chmod 600 .env`。
+- 2026-06-18: `scripts/ci/deploy.sh local/dev/development` 改用仓库实际存在的 `docker-compose.dev.yml`。
+- 2026-06-18: `tools/new-agents/tsconfig.tsbuildinfo` 已从 Git 索引移除；本地文件仍由 `.gitignore` 的 `*.tsbuildinfo` 规则忽略。
+- RED 验证: `.venv/bin/python -m pytest tests/test_ci_deploy_hardening.py -q`，修复前 5 个用例失败。
+- 验证: `.venv/bin/python -m pytest -o addopts='' tests/test_ci_deploy_hardening.py -q`，5 passed。
+- 验证: `bash -n scripts/ci/deploy.sh`，通过。
+- 验证: `cd tools/new-agents/frontend && npm run lint`，TypeScript check passed。
+- 验证: `cd tools/new-agents/frontend && npm run test`，26 files / 293 tests passed。
+- 验证: `cd tools/new-agents/backend && /Users/anhui/Documents/myProgram/AI4SE/.venv/bin/python -m pytest -m "not slow" -q`，175 passed / 1 deselected。
+- 验证: `.venv/bin/python -m flake8 tools/intent-tester/backend --count --select=E9,F63,F7,F82 --show-source --statistics`，0。
+- 备注: `docker compose -f docker-compose.dev.yml config --services` 在本机执行时未返回输出并被中断，未作为本轮完成证据。
+
 ## 2026-06-17 New Agents 当前功能性问题
 
 ### P0: 工作流无法正确流转到下一环节
