@@ -160,6 +160,13 @@ log_info "✅ 服务已启动"
 log_info "等待服务启动..."
 sleep 10
 
+if [ "$BACKUP_ENABLED" = true ]; then
+    log_info "同步 New Agents 默认 LLM 配置..."
+    $DOCKER_CMD -f "$COMPOSE_FILE" exec -T new-agents-backend \
+        python -c "from app import app, init_db; init_db(app)"
+    log_info "✅ New Agents 默认 LLM 配置已同步"
+fi
+
 # 健康检查
 log_info "执行部署后健康检查..."
 

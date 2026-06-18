@@ -162,6 +162,9 @@ git pull origin master
 | `DB_USER` | 数据库用户名 | `ai4se_user` |
 | `DB_PASSWORD` | 数据库密码 | `change_me_in_production` |
 | `SECRET_KEY` | Flask 密钥 | `random-secure-string` |
+| `NEW_AGENTS_DEFAULT_LLM_API_KEY` | New Agents 后端默认 LLM API Key | `sk-...` |
+| `NEW_AGENTS_DEFAULT_LLM_BASE_URL` | New Agents 后端默认 LLM Base URL | `https://api.deepseek.com` |
+| `NEW_AGENTS_DEFAULT_LLM_MODEL` | New Agents 后端默认模型名 | `deepseek-v4-flash` |
 
 ### 可选变量
 
@@ -169,6 +172,7 @@ git pull origin master
 |------|------|--------|
 | `FLASK_ENV` | Flask 环境 | `production` |
 | `MIDSCENE_SERVER_URL` | MidScene 服务地址 | `http://host.docker.internal:3001` |
+| `NEW_AGENTS_DEFAULT_LLM_DESCRIPTION` | New Agents 后端默认模型说明 | `GitHub Actions managed default LLM config` |
 
 ### CI/CD Secrets (GitHub)
 
@@ -179,6 +183,10 @@ git pull origin master
 | `SSH_PRIVATE_KEY` | SSH 私钥 |
 | `DB_PASSWORD` | 生产数据库密码 |
 | `SECRET_KEY` | 生产 Flask 密钥 |
+| `NEW_AGENTS_DEFAULT_LLM_API_KEY` | New Agents 后端默认 LLM API Key |
+| `NEW_AGENTS_DEFAULT_LLM_BASE_URL` | New Agents 后端默认 LLM Base URL |
+| `NEW_AGENTS_DEFAULT_LLM_MODEL` | New Agents 后端默认模型名 |
+| `NEW_AGENTS_DEFAULT_LLM_DESCRIPTION` | New Agents 后端默认模型说明，可选 |
 
 ---
 

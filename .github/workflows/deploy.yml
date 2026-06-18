@@ -312,17 +312,52 @@ jobs:
             echo "创建新的.env文件..."
             cat > .env << 'ENVEOF'
           DB_USER=intent_user
-          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-          SECRET_KEY=${{ secrets.SECRET_KEY }}
           FLASK_ENV=production
           ENVEOF
             echo "✅ .env文件已创建"
           else
             echo "✅ .env文件已存在，更新关键配置..."
-            # 更新密码和密钥（如果缺失）
-            grep -q "DB_PASSWORD=" .env || echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
-            grep -q "SECRET_KEY=" .env || echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> .env
           fi
+
+          require_secret() {
+            key="$1"
+            value="$2"
+            if [ -z "$value" ]; then
+              echo "::error::Missing required GitHub secret: $key"
+              exit 1
+            fi
+          }
+
+          upsert_env_var() {
+            key="$1"
+            value="$2"
+            escaped_value=$(printf '%s' "$value" | sed 's/[\/&]/\\&/g')
+            if grep -q "^${key}=" .env; then
+              sed -i "s/^${key}=.*/${key}=${escaped_value}/" .env
+            else
+              printf '%s=%s\n' "$key" "$value" >> .env
+            fi
+          }
+
+          require_secret DB_PASSWORD '${{ secrets.DB_PASSWORD }}'
+          require_secret SECRET_KEY '${{ secrets.SECRET_KEY }}'
+          require_secret NEW_AGENTS_DEFAULT_LLM_API_KEY '${{ secrets.NEW_AGENTS_DEFAULT_LLM_API_KEY }}'
+          require_secret NEW_AGENTS_DEFAULT_LLM_BASE_URL '${{ secrets.NEW_AGENTS_DEFAULT_LLM_BASE_URL }}'
+          require_secret NEW_AGENTS_DEFAULT_LLM_MODEL '${{ secrets.NEW_AGENTS_DEFAULT_LLM_MODEL }}'
+
+          NEW_AGENTS_DEFAULT_LLM_DESCRIPTION_VALUE='${{ secrets.NEW_AGENTS_DEFAULT_LLM_DESCRIPTION }}'
+          if [ -z "$NEW_AGENTS_DEFAULT_LLM_DESCRIPTION_VALUE" ]; then
+            NEW_AGENTS_DEFAULT_LLM_DESCRIPTION_VALUE='GitHub Actions managed default LLM config'
+          fi
+
+          upsert_env_var DB_PASSWORD '${{ secrets.DB_PASSWORD }}'
+          upsert_env_var SECRET_KEY '${{ secrets.SECRET_KEY }}'
+          upsert_env_var NEW_AGENTS_DEFAULT_LLM_API_KEY '${{ secrets.NEW_AGENTS_DEFAULT_LLM_API_KEY }}'
+          upsert_env_var NEW_AGENTS_DEFAULT_LLM_BASE_URL '${{ secrets.NEW_AGENTS_DEFAULT_LLM_BASE_URL }}'
+          upsert_env_var NEW_AGENTS_DEFAULT_LLM_MODEL '${{ secrets.NEW_AGENTS_DEFAULT_LLM_MODEL }}'
+          upsert_env_var NEW_AGENTS_DEFAULT_LLM_DESCRIPTION "$NEW_AGENTS_DEFAULT_LLM_DESCRIPTION_VALUE"
+
+          echo "✅ .env 已同步生产必需配置和 New Agents 默认 LLM 配置"
           
           # ==========================================
           # 步骤2: 检查数据库迁移需求
