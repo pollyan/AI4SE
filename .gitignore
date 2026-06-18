@@ -218,6 +218,11 @@ test_report_generation.js
 
 # Runtime directories
 midscene_run/
+
+# Local tool/runtime artifacts
+.codegraph/
+.harness-builder/
+.cursor/skills/
 tmp/
 temp/
 

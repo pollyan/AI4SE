@@ -119,7 +119,7 @@ AI4SE/                                    # 项目根目录 (Monorepo)
 │   │   │   │   │   ├── store.ts          # Zustand 全局状态（含持久化）
 │   │   │   │   │   ├── types.ts          # TypeScript 类型定义
 │   │   │   │   │   ├── workflows.ts      # 5 个工作流定义
-│   │   │   │   │   ├── llm.ts            # LLM 双模式调用
+│   │   │   │   │   ├── llm.ts            # typed Agent Runtime SSE 客户端
 │   │   │   │   │   ├── buildSystemPrompt.ts  # 系统提示词构建
 │   │   │   │   │   ├── config/
 │   │   │   │   │   │   ├── agents.ts     # 智能体配置 (Alex, Lisa)
@@ -131,18 +131,18 @@ AI4SE/                                    # 项目根目录 (Monorepo)
 │   │   │   │   │   │   ├── incident_review/  # 故障复盘 3 阶段
 │   │   │   │   │   │   ├── idea_brainstorm/  # 创意头脑风暴 4 阶段
 │   │   │   │   │   │   └── value_discovery/  # 价值发现 4 阶段
-│   │   │   │   │   └── utils/            # 工具 (llmParser, mermaidSanitizer, markdownUtils)
+│   │   │   │   │   └── utils/            # 工具 (mermaidSanitizer, markdownUtils)
 │   │   │   │   └── services/
 │   │   │   │       ├── chatService.ts    # 聊天服务 Hook
 │   │   │   │       └── mermaidRetryService.ts  # Mermaid 重试
-│   │   │   ├── package.json              # React 19 + Vite 6 + Zustand + OpenAI SDK
+│   │   │   ├── package.json              # React 19 + Vite 6 + Zustand
 │   │   │   └── dist/                     # 构建产物
 │   │   │
-│   │   ├── backend/                      # Flask LLM 代理 (端口 5002)
-│   │   │   ├── app.py                    # ⚡ Flask 应用 + SSE 流式代理
+│   │   ├── backend/                      # Flask Agent Runtime 后端 (端口 5002)
+│   │   │   ├── app.py                    # Flask 应用工厂 + Blueprint 注册
 │   │   │   ├── models.py                 # LlmConfig 模型
 │   │   │   ├── config.py                 # 配置类
-│   │   │   ├── requirements.txt          # Flask + OpenAI + SQLAlchemy
+│   │   │   ├── requirements.txt          # Flask + OpenAI SDK + PydanticAI + SQLAlchemy
 │   │   │   ├── tests/
 │   │   │   │   └── test_api.py           # API 测试
 │   │   │   └── docker/

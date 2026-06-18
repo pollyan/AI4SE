@@ -22,8 +22,8 @@
 |------|------|--------|------|------|
 | **frontend** | Web 前端 | React 19 + Vite + Tailwind | 80 (Nginx) | `/` |
 | **intent-tester** | Full-Stack | Flask + SocketIO + MidScene/Playwright | 5001 | `/intent-tester/` |
-| **new-agents-frontend** | Web 前端 | React 19 + Zustand + OpenAI SDK | 80 (Nginx) | `/new-agents/` |
-| **new-agents-backend** | 后端 API | Flask + SQLAlchemy + OpenAI + Gunicorn | 5002 | `/new-agents/api/` |
+| **new-agents-frontend** | Web 前端 | React 19 + Zustand + typed Agent Runtime SSE | 80 (Nginx) | `/new-agents/` |
+| **new-agents-backend** | 后端 API | Flask + SQLAlchemy + OpenAI SDK + PydanticAI + Gunicorn | 5002 | `/new-agents/api/` |
 | **shared** | 共享库 | Python (配置 + 数据库) | - | 内部导入 |
 
 ### 常用命令

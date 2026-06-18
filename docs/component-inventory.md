@@ -44,7 +44,7 @@
 | `ChatPane` | `components/ChatPane.tsx` | 交互 | 左侧对话面板（消息列表、输入框、附件） |
 | `ArtifactPane` | `components/ArtifactPane.tsx` | 展示 | 右侧产出物面板（Markdown 预览、版本历史） |
 | `Header` | `components/Header.tsx` | 导航 | 顶部栏（返回、工作流、阶段切换、导出） |
-| `SettingsModal` | `components/SettingsModal.tsx` | 配置 | 设置弹窗（API Key、Base URL、模型选择） |
+| `SettingsModal` | `components/SettingsModal.tsx` | 配置 | 设置弹窗（系统 LLM 配置说明、本地数据清理） |
 | `WorkflowDropdown` | `components/WorkflowDropdown.tsx` | 导航 | 工作流切换下拉（带确认弹窗） |
 | `Mermaid` | `components/Mermaid.tsx` | 渲染 | Mermaid 图表渲染（含容错与 LLM 重试） |
 
@@ -55,7 +55,7 @@
 | `store` | `core/store.ts` | Zustand 全局状态（含 localStorage 持久化） |
 | `types` | `core/types.ts` | TypeScript 类型定义 |
 | `workflows` | `core/workflows.ts` | 5 个工作流定义（阶段、prompt 模板） |
-| `llm` | `core/llm.ts` | LLM 双模式调用封装 |
+| `llm` | `core/llm.ts` | 主 Agent LLM 调用封装：统一调用后端 typed Agent Runtime |
 | `buildSystemPrompt` | `core/buildSystemPrompt.ts` | 系统提示词动态构建 |
 
 ### 服务模块
@@ -69,10 +69,8 @@
 
 | 模块 | 路径 | 说明 |
 |------|------|------|
-| `llmParser` | `core/utils/llmParser.ts` | 解析流式输出中的 `<CHAT>`, `<ARTIFACT>`, `<ACTION>` |
 | `mermaidSanitizer` | `core/utils/mermaidSanitizer.ts` | Mermaid 代码清洗 |
 | `markdownUtils` | `core/utils/markdownUtils.ts` | Markdown 预处理 |
-| `llmClient` | `core/utils/llmClient.ts` | LLM 客户端封装 |
 
 ### 配置模块
 

@@ -136,7 +136,8 @@
 |------|------|------|------|
 | GET | `/api/health` | 健康检查 | 无 |
 | GET | `/api/config` | 获取默认 LLM 配置（不含 API Key） | 无 |
-| POST | `/api/chat/stream` | SSE 流式聊天代理 | 无 |
+| POST | `/api/agent/runs/stream` | 结构化 Agent Runtime SSE | 无 |
+| POST | `/api/utils/mermaid/repair` | Mermaid 修复工具 | 无 |
 
 ### GET `/api/config` 响应
 
@@ -144,12 +145,9 @@
 // 有默认配置时:
 {
   "hasDefault": true,
-  "config": {
-    "config_key": "default",
-    "base_url": "https://api.example.com/v1",
-    "model": "gpt-4o",
-    "description": "默认配置"
-  }
+  "baseUrl": "https://api.example.com/v1",
+  "model": "gpt-4o",
+  "description": "默认配置"
 }
 
 // 无默认配置时:
@@ -158,32 +156,56 @@
 }
 ```
 
-### POST `/api/chat/stream` 请求
+### POST `/api/agent/runs/stream` 请求
 
 ```json
 {
-  "messages": [
-    {"role": "system", "content": "你是测试专家 Lisa..."},
-    {"role": "user", "content": "帮我设计一个登录功能的测试方案"}
-  ],
-  "model": "gpt-4o",
-  "temperature": 0.7
+  "prompt": "用户输入与必要上下文",
+  "systemPrompt": "当前智能体和阶段提示词",
+  "workflowId": "TEST_DESIGN",
+  "stageId": "CLARIFY"
 }
 ```
 
-### SSE 响应格式
+### Agent Runtime SSE 响应格式
 
 ```text
-data: {"choices":[{"delta":{"content":"好的"},"index":0}]}
-
-data: {"choices":[{"delta":{"content":"，让我"},"index":0}]}
+data: {"type": "agent_turn", "output": {"chat": "已更新右侧文档。", "artifact_update": {"type": "none"}, "stage_action": null, "warnings": []}}
 
 data: [DONE]
 ```
 
 错误时：
 ```text
-data: {"error": "No default LLM configuration found", "code": "NO_CONFIG"}
+data: {"type": "error", "code": "CONTRACT_VALIDATION_FAILED", "message": "Artifact 缺少必备章节"}
+```
+
+### POST `/api/utils/mermaid/repair` 请求
+
+用于 Mermaid 渲染失败后的工具型修复，不属于主 Agent 产出协议路径。
+
+```json
+{
+  "brokenCode": "graph TD\n  A-->",
+  "errorMessage": "Syntax Error",
+  "blockIndex": 0
+}
+```
+
+### Mermaid repair 响应
+
+```json
+{
+  "repairedCode": "graph TD\n  A-->B"
+}
+```
+
+错误时：
+
+```json
+{
+  "error": "brokenCode 不能为空"
+}
 ```
 
 ---

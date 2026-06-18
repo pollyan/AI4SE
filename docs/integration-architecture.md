@@ -10,7 +10,7 @@ AI4SE 各服务通过以下方式集成：
 2. **共享 PostgreSQL**: 所有服务连接同一数据库实例
 3. **共享 Python 工具**: `tools/shared/` 提供配置和数据库连接
 4. **HTTP API 调用**: Flask 后端 → MidScene Server
-5. **SSE 流式**: 前端 ↔ 后端 LLM 代理
+5. **结构化 Agent Runtime**: New Agents 前端通过 typed SSE/JSON 调用后端 Agent Runtime 与 Mermaid 工具端点
 
 ---
 
@@ -25,8 +25,8 @@ AI4SE 各服务通过以下方式集成：
 | 5 | intent-tester Flask | MidScene Server | HTTP API | REST | `:5001` → `:3001` (跨容器 host.docker.internal) |
 | 6 | intent-tester Flask | PostgreSQL | TCP | SQL | `:5001` → `:5432` |
 | 7 | new-agents-backend | PostgreSQL | TCP | SQL | `:5002` → `:5432` |
-| 8 | new-agents-frontend | new-agents-backend | SSE | HTTP | `/new-agents/api/chat/stream` (代理模式) |
-| 9 | new-agents-frontend | 外部 LLM API | HTTPS | REST | OpenAI SDK 直连 (直连模式) |
+| 8 | new-agents-frontend | new-agents-backend | SSE/JSON | HTTP | 主 Agent 对话走 `/new-agents/api/agent/runs/stream` typed runtime；Mermaid 修复走 `/new-agents/api/utils/mermaid/repair` |
+| 9 | new-agents-backend | 外部 LLM API | HTTPS | REST/SSE | PydanticAI Agent Runtime 与 Mermaid 修复服务调用 |
 | 10 | MidScene Server | 外部 LLM API | HTTPS | REST | AI 驱动的浏览器操作 |
 | 11 | intent-tester Flask | 客户端浏览器 | WebSocket | SocketIO | 执行状态实时推送 |
 | 12 | MidScene Server | intent-tester Flask | HTTP | REST | 执行开始/结果回调 |
@@ -65,32 +65,21 @@ AI4SE 各服务通过以下方式集成：
    │  ◄── SocketIO: execution-completed ─┤                             │
 ```
 
-### 3. AI 智能体对话流（代理模式）
+### 3. AI 智能体对话流（系统代理模式）
 
 ```text
 用户输入                 React SPA                  Nginx              Flask :5002          外部 LLM
    │                      │                          │                     │                   │
    ├─ 发送消息 ──────────►│                          │                     │                   │
-   │                      ├─ POST /new-agents/api/chat/stream ──────────►│                   │
-   │                      │                          ├─ 重写为 /api/chat/stream ──────────────►│
+   │                      ├─ POST /new-agents/api/agent/runs/stream ────►│                   │
+   │                      │                          ├─ 重写为 /api/agent/runs/stream ───────►│
    │                      │                          │                     ├─ 读取 llm_config   │
-   │                      │                          │                     ├─ OpenAI SDK ──────►│
-   │                      │◄─── SSE: delta chunks ────────────────────────┤◄── SSE chunks ────┤
+   │                      │                          │                     ├─ PydanticAI Runtime ─►│
+   │                      │◄─── SSE: typed agent_turn/error events ───────┤◄── 结构化输出 ────┤
    │  ◄── 流式渲染 ────────┤                          │                     │                   │
-   │                      ├─ 解析 <CHAT>, <ARTIFACT>, <ACTION> 标签         │                   │
+   │                      ├─ 校验 typed artifact / Mermaid 后更新状态        │                   │
    │                      ├─ 更新 Zustand Store                            │                   │
    │  ◄── UI 更新 ─────────┤                          │                     │                   │
-```
-
-### 4. AI 智能体对话流（直连模式）
-
-```text
-用户输入                 React SPA                  外部 LLM API
-   │                      │                            │
-   ├─ 发送消息 ──────────►│                            │
-   │                      ├─ OpenAI SDK (用户 API Key) ──►│
-   │                      │◄──── SSE: delta chunks ───────┤
-   │  ◄── 流式渲染 ────────┤                            │
 ```
 
 ---
