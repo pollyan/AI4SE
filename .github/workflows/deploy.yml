@@ -180,9 +180,6 @@ jobs:
     name: Build and Deploy to Tencent Cloud
     needs: [backend-api-test, common-frontend-test, new-agents-frontend-test, proxy-test]  # 必须等待所有测试完成且成功
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: http://www.datou212.tech
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
     
     steps:
