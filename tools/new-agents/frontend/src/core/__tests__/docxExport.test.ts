@@ -184,4 +184,85 @@ describe('docxExport', () => {
         expect(svg).not.toContain('<foreignObject');
         expect(svg).not.toContain('onload=');
     });
+
+    it('embeds supported Mermaid timelines as SVG media in DOCX packages', async () => {
+        const blob = buildDocxPackage([
+            '# 故障时间线',
+            '',
+            '```mermaid',
+            'timeline',
+            'title 登录故障复盘',
+            'section 发现',
+            '09:00 : 监控告警触发',
+            '09:05 : 值班确认影响范围',
+            'section 恢复',
+            '09:20 : 回滚配置',
+            '```',
+        ].join('\n'));
+
+        const entries = await readStoredZipEntries(blob);
+        const documentXml = entries['word/document.xml'];
+        const documentRelationshipsXml = entries['word/_rels/document.xml.rels'];
+        const svg = entries['word/media/mermaid-1.svg'];
+
+        expect(Object.keys(entries)).toEqual(expect.arrayContaining([
+            'word/_rels/document.xml.rels',
+            'word/media/mermaid-1.svg',
+        ]));
+        expect(documentRelationshipsXml).toContain('Target="media/mermaid-1.svg"');
+        expect(documentXml).toContain('<w:drawing>');
+        expect(documentXml).toContain('Mermaid 图表：timeline');
+        expect(documentXml).toContain('09:00：监控告警触发');
+        expect(documentXml).not.toContain('```mermaid');
+        expect(documentXml).not.toContain('title 登录故障复盘');
+
+        expect(svg).toContain('<svg');
+        expect(svg).toContain('登录故障复盘');
+        expect(svg).toContain('发现');
+        expect(svg).toContain('09:00');
+        expect(svg).toContain('监控告警触发');
+        expect(svg).toContain('恢复');
+        expect(svg).toContain('回滚配置');
+        expect(svg).not.toContain('<script>');
+        expect(svg).not.toContain('<foreignObject');
+        expect(svg).not.toContain('onload=');
+    });
+
+    it('embeds supported Mermaid mindmaps as SVG media in DOCX packages', async () => {
+        const blob = buildDocxPackage([
+            '# 问题树',
+            '',
+            '```mermaid',
+            'mindmap',
+            '  root((登录体验问题))',
+            '    认证链路',
+            '      第三方回调超时',
+            '    安全策略',
+            '      风控误杀 <script>alert("x")</script>',
+            '```',
+        ].join('\n'));
+
+        const entries = await readStoredZipEntries(blob);
+        const documentXml = entries['word/document.xml'];
+        const svg = entries['word/media/mermaid-1.svg'];
+
+        expect(Object.keys(entries)).toEqual(expect.arrayContaining([
+            'word/_rels/document.xml.rels',
+            'word/media/mermaid-1.svg',
+        ]));
+        expect(documentXml).toContain('<w:drawing>');
+        expect(documentXml).toContain('Mermaid 图表：mindmap');
+        expect(documentXml).not.toContain('```mermaid');
+        expect(documentXml).not.toContain('root((登录体验问题))');
+
+        expect(svg).toContain('<svg');
+        expect(svg).toContain('登录体验问题');
+        expect(svg).toContain('认证链路');
+        expect(svg).toContain('第三方回调超时');
+        expect(svg).toContain('安全策略');
+        expect(svg).toContain('风控误杀 &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
+        expect(svg).not.toContain('<script>');
+        expect(svg).not.toContain('<foreignObject');
+        expect(svg).not.toContain('onload=');
+    });
 });

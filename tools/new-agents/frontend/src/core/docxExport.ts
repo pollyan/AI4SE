@@ -110,9 +110,22 @@ type MermaidDocxEdge = {
     to: string;
 };
 
-type MermaidFlowchartProjection = {
+type MermaidDocxProjection = {
     diagramType: string;
     svg: string;
+};
+
+type MermaidTimelineEvent = {
+    section: string;
+    time: string;
+    text: string;
+};
+
+type MermaidMindmapNode = {
+    id: string;
+    label: string;
+    depth: number;
+    parentId: string | null;
 };
 
 const parseMermaidNodeToken = (token: string): MermaidDocxNode | null => {
@@ -133,7 +146,7 @@ const parseMermaidNodeToken = (token: string): MermaidDocxNode | null => {
     return null;
 };
 
-const parseMermaidFlowchartProjection = (source: string): MermaidFlowchartProjection | null => {
+const parseMermaidFlowchartProjection = (source: string): MermaidDocxProjection | null => {
     const mermaidLines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
     const firstLine = mermaidLines[0] || '';
     const diagramType = firstLine.split(/\s+/)[0] || 'diagram';
@@ -214,6 +227,184 @@ const parseMermaidFlowchartProjection = (source: string): MermaidFlowchartProjec
     };
 };
 
+const parseMermaidTimelineProjection = (source: string): MermaidDocxProjection | null => {
+    const mermaidLines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const firstLine = mermaidLines[0] || '';
+    const diagramType = firstLine.split(/\s+/)[0] || 'diagram';
+    if (!/^timeline$/i.test(diagramType)) return null;
+
+    let title = 'Timeline';
+    let currentSection = '';
+    const events: MermaidTimelineEvent[] = [];
+    mermaidLines.slice(1).forEach((line) => {
+        const titleMatch = line.match(/^title\s+(.+)$/i);
+        if (titleMatch) {
+            title = titleMatch[1].trim();
+            return;
+        }
+
+        const sectionMatch = line.match(/^section\s+(.+)$/i);
+        if (sectionMatch) {
+            currentSection = sectionMatch[1].trim();
+            return;
+        }
+
+        const eventMatch = line.match(/^(.+?)\s+:\s+(.+)$/);
+        if (!eventMatch) return;
+        events.push({
+            section: currentSection,
+            time: eventMatch[1].trim(),
+            text: eventMatch[2].trim(),
+        });
+    });
+
+    if (events.length === 0) return null;
+
+    const cardWidth = 170;
+    const cardHeight = 74;
+    const eventGap = 26;
+    const width = Math.max(720, events.length * cardWidth + (events.length - 1) * eventGap + 80);
+    const height = 250;
+    const lineY = 112;
+    const cardY = 136;
+
+    const eventSvg = events.map((event, index) => {
+        const x = 40 + index * (cardWidth + eventGap);
+        const centerX = x + cardWidth / 2;
+        return [
+            `<line x1="${centerX}" y1="${lineY}" x2="${centerX}" y2="${cardY}" stroke="#64748b" stroke-width="1.5"/>`,
+            `<circle cx="${centerX}" cy="${lineY}" r="5" fill="#2563eb"/>`,
+            event.section ? `<text x="${centerX}" y="88" text-anchor="middle" font-size="12" font-family="Arial, sans-serif" font-weight="700" fill="#1e40af">${xmlEscape(event.section)}</text>` : '',
+            `<rect x="${x}" y="${cardY}" width="${cardWidth}" height="${cardHeight}" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.4"/>`,
+            `<text x="${x + 14}" y="${cardY + 24}" font-size="13" font-family="Arial, sans-serif" font-weight="700" fill="#0f172a">${xmlEscape(event.time)}</text>`,
+            `<text x="${x + 14}" y="${cardY + 50}" font-size="12" font-family="Arial, sans-serif" fill="#334155">${xmlEscape(event.text)}</text>`,
+        ].join('');
+    }).join('');
+
+    return {
+        diagramType,
+        svg: [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
+            '<rect x="0" y="0" width="100%" height="100%" fill="#ffffff"/>',
+            `<text x="40" y="42" font-size="20" font-family="Arial, sans-serif" font-weight="700" fill="#0f172a">${xmlEscape(title)}</text>`,
+            `<line x1="40" y1="${lineY}" x2="${width - 40}" y2="${lineY}" stroke="#93c5fd" stroke-width="3"/>`,
+            eventSvg,
+            '</svg>',
+        ].join(''),
+    };
+};
+
+const unwrapMindmapLabel = (content: string): string => {
+    let label = content.trim().replace(/^root\s*/i, '').trim();
+    const wrappers: Array<[string, string]> = [
+        ['((', '))'],
+        ['[', ']'],
+        ['(', ')'],
+        ['{', '}'],
+    ];
+
+    let changed = true;
+    while (changed) {
+        changed = false;
+        wrappers.forEach(([start, end]) => {
+            if (label.startsWith(start) && label.endsWith(end) && label.length > start.length + end.length) {
+                label = label.slice(start.length, -end.length).trim();
+                changed = true;
+            }
+        });
+    }
+
+    return label;
+};
+
+const parseMermaidMindmapProjection = (source: string): MermaidDocxProjection | null => {
+    const lines = source.split(/\r?\n/);
+    const firstLine = (lines.find(line => line.trim()) || '').trim();
+    const diagramType = firstLine.split(/\s+/)[0] || 'diagram';
+    if (!/^mindmap$/i.test(diagramType)) return null;
+
+    const nodes: MermaidMindmapNode[] = [];
+    const stack: Array<{ indent: number; id: string; depth: number }> = [];
+    lines.slice(lines.indexOf(lines.find(line => line.trim()) || '') + 1).forEach((line) => {
+        if (!line.trim()) return;
+        const indent = (line.match(/^\s*/) || [''])[0].replace(/\t/g, '  ').length;
+        const label = unwrapMindmapLabel(line.trim());
+        if (!label) return;
+
+        while (stack.length > 0 && stack[stack.length - 1].indent >= indent) {
+            stack.pop();
+        }
+        const parent = stack[stack.length - 1] || null;
+        const node: MermaidMindmapNode = {
+            id: `node-${nodes.length + 1}`,
+            label,
+            depth: parent ? parent.depth + 1 : 0,
+            parentId: parent ? parent.id : null,
+        };
+        nodes.push(node);
+        stack.push({ indent, id: node.id, depth: node.depth });
+    });
+
+    if (nodes.length === 0) return null;
+
+    const nodeWidth = 176;
+    const nodeHeight = 46;
+    const horizontalGap = 70;
+    const verticalGap = 24;
+    const maxDepth = Math.max(...nodes.map(node => node.depth));
+    const width = Math.max(640, (maxDepth + 1) * nodeWidth + maxDepth * horizontalGap + 80);
+    const height = Math.max(180, nodes.length * (nodeHeight + verticalGap) + 40);
+    const positions = new Map<string, { x: number; y: number }>();
+
+    nodes.forEach((node, index) => {
+        positions.set(node.id, {
+            x: 40 + node.depth * (nodeWidth + horizontalGap),
+            y: 30 + index * (nodeHeight + verticalGap),
+        });
+    });
+
+    const linkSvg = nodes.map((node) => {
+        if (!node.parentId) return '';
+        const from = positions.get(node.parentId);
+        const to = positions.get(node.id);
+        if (!from || !to) return '';
+        const x1 = from.x + nodeWidth;
+        const y1 = from.y + nodeHeight / 2;
+        const x2 = to.x;
+        const y2 = to.y + nodeHeight / 2;
+        return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#64748b" stroke-width="1.5"/>`;
+    }).join('');
+
+    const nodeSvg = nodes.map((node) => {
+        const position = positions.get(node.id);
+        if (!position) return '';
+        const isRoot = node.parentId === null;
+        return [
+            `<rect x="${position.x}" y="${position.y}" width="${nodeWidth}" height="${nodeHeight}" rx="10" fill="${isRoot ? '#dbeafe' : '#f8fafc'}" stroke="${isRoot ? '#2563eb' : '#94a3b8'}" stroke-width="${isRoot ? '1.8' : '1.3'}"/>`,
+            `<text x="${position.x + nodeWidth / 2}" y="${position.y + 29}" text-anchor="middle" font-size="${isRoot ? '14' : '13'}" font-family="Arial, sans-serif" font-weight="${isRoot ? '700' : '500'}" fill="#0f172a">${xmlEscape(node.label)}</text>`,
+        ].join('');
+    }).join('');
+
+    return {
+        diagramType,
+        svg: [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
+            '<rect x="0" y="0" width="100%" height="100%" fill="#ffffff"/>',
+            linkSvg,
+            nodeSvg,
+            '</svg>',
+        ].join(''),
+    };
+};
+
+const parseMermaidDocxProjection = (source: string): MermaidDocxProjection | null => (
+    parseMermaidFlowchartProjection(source)
+    || parseMermaidTimelineProjection(source)
+    || parseMermaidMindmapProjection(source)
+);
+
 const projectMermaidFlowLine = (
     line: string,
     nodeLabels: Map<string, string>
@@ -231,6 +422,32 @@ const projectMermaidFlowLine = (
     const fromLabel = nodeLabels.get(fromNode.id) || fromNode.label;
     const toLabel = nodeLabels.get(toNode.id) || toNode.label;
     return `${fromLabel} -> ${toLabel}`;
+};
+
+const projectMermaidTimelineLine = (line: string): string | null => {
+    const titleMatch = line.match(/^title\s+(.+)$/i);
+    if (titleMatch) return titleMatch[1].trim();
+    const sectionMatch = line.match(/^section\s+(.+)$/i);
+    if (sectionMatch) return sectionMatch[1].trim();
+    const eventMatch = line.match(/^(.+?)\s+:\s+(.+)$/);
+    if (eventMatch) return `${eventMatch[1].trim()}：${eventMatch[2].trim()}`;
+    return stripInlineMarkdown(line);
+};
+
+const projectMermaidMindmapLine = (line: string): string | null => {
+    const label = unwrapMindmapLabel(line.trim());
+    return label ? stripInlineMarkdown(label) : null;
+};
+
+const projectMermaidSemanticLine = (
+    diagramType: string,
+    line: string,
+    nodeLabels: Map<string, string>
+): string | null => {
+    if (/^(flowchart|graph)$/i.test(diagramType)) return projectMermaidFlowLine(line, nodeLabels);
+    if (/^timeline$/i.test(diagramType)) return projectMermaidTimelineLine(line);
+    if (/^mindmap$/i.test(diagramType)) return projectMermaidMindmapLine(line);
+    return stripInlineMarkdown(line);
 };
 
 const mediaDrawing = (media: DocxMediaEntry, description: string): string => (
@@ -272,17 +489,21 @@ const projectMermaidToWordParagraphs = (source: string, context: DocxBuildContex
     const firstLine = mermaidLines[0] || 'diagram';
     const diagramType = firstLine.split(/\s+/)[0] || 'diagram';
     const nodeLabels = new Map<string, string>();
+    const semanticLines = mermaidLines
+        .slice(1)
+        .map(line => projectMermaidSemanticLine(diagramType, line, nodeLabels))
+        .filter((line): line is string => Boolean(line));
     const paragraphs = [
         paragraph(`Mermaid 图表：${diagramType}`),
-        ...mermaidLines.slice(1).map(line => paragraph(projectMermaidFlowLine(line, nodeLabels))),
+        ...semanticLines.map(line => paragraph(line)),
     ];
-    const flowchartProjection = parseMermaidFlowchartProjection(source);
-    if (!flowchartProjection) return paragraphs;
+    const projection = parseMermaidDocxProjection(source);
+    if (!projection) return paragraphs;
 
-    const media = registerMedia(context, flowchartProjection.svg);
+    const media = registerMedia(context, projection.svg);
     return [
         paragraphs[0],
-        mediaDrawing(media, `Mermaid 图表：${flowchartProjection.diagramType}`),
+        mediaDrawing(media, `Mermaid 图表：${projection.diagramType}`),
         ...paragraphs.slice(1),
     ];
 };

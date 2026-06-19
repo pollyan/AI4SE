@@ -552,3 +552,9 @@
   - 后端协作状态、run snapshot 和旧表迁移都支持 `sectionAnchor`，刷新后不会丢失重复标题锁定定位。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx src/__tests__/store.test.ts src/services/__tests__/runSnapshotService.test.ts` 与后端协作/迁移定向测试观察到预期失败；实现后运行同一前端目标测试、`.venv/bin/python -m pytest tools/new-agents/backend/tests/test_api.py::test_init_db_upgrades_existing_artifact_section_lock_table tools/new-agents/backend/tests/test_run_persistence.py::test_run_snapshot_returns_artifact_collaboration_state tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_run_artifact_collaboration_endpoint_replaces_state`、`npm run lint`、`npm run build`、`git diff --check` 通过。
   - 剩余：PDF 图片级嵌入、DOCX 更多 Mermaid 类型嵌入、移动语义自动合并、完整三方 merge 的更复杂冲突解析仍可作为后续增强切片。
+- 2026-06-20：完成第四十块 CGA「Artifact DOCX Mermaid Timeline/Mindmap SVG 嵌入」。
+  - Word/DOCX 导出现在会对 Mermaid `timeline` 和 `mindmap` 生成本地 SVG media part，并写入 `word/_rels/document.xml.rels` 与 `w:drawing` 引用，让故障复盘时间线和创意问题树在 Word 中呈现为图形。
+  - DOCX 仍保留 `Mermaid 图表：timeline` / `Mermaid 图表：mindmap` 与清洗后的标题、分段、事件、节点语义文本，保证导出物可搜索、可复制，不暴露 fenced source。
+  - SVG 继续由前端本地保守投影生成，文本经过 XML 转义，不把模型输出的任意 SVG/HTML 原样写入 DOCX；实现复用共享 DOCX 导出路径，不新增 Lisa/Alex 或 workflow 专属分支。
+  - 验证：先运行 `npm run test -- --run src/core/__tests__/docxExport.test.ts -t "embeds supported Mermaid"` 观察到新增 timeline/mindmap 用例因缺少 `word/media/mermaid-1.svg` 失败；实现后运行 `npm run test -- --run src/core/__tests__/docxExport.test.ts`、`npm run lint`、`npm run build`、`git diff --check`。
+  - 剩余：DOCX `pie` / `journey` SVG 嵌入、PDF Mermaid 图片级嵌入、移动语义自动合并、完整三方 merge 的更复杂冲突解析仍可作为后续增强切片。
