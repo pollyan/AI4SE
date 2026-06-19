@@ -1092,6 +1092,18 @@ export const ArtifactPane: React.FC = () => {
   const buildConflictModificationBlockLabel = (removedLines: string[], addedLines: string[]): string => (
     `${buildConflictMergeBlockLabel(removedLines)} → ${buildConflictMergeBlockLabel(addedLines)}`
   );
+  type AutoMergedConflictResult = {
+    content: string;
+    summary: string;
+  };
+  type ParsedMarkdownSection = {
+    heading: string;
+    lines: string[];
+  };
+  type ParsedMarkdownSections = {
+    preambleLines: string[];
+    sections: ParsedMarkdownSection[];
+  };
   const replaceFirstLineSequence = (
     sourceLines: string[],
     targetLines: string[],
@@ -1237,6 +1249,118 @@ export const ArtifactPane: React.FC = () => {
     }
     return mergedContent;
   };
+  const buildAutoMergedInsertionResult = (
+    baseContent: string,
+    serverContent: string,
+    draftContent: string
+  ): AutoMergedConflictResult | null => {
+    const content = buildAutoMergedInsertionContent(baseContent, serverContent, draftContent);
+    return content
+      ? {
+        content,
+        summary: '合并轨迹：自动合并服务端与草稿的非重叠补充',
+      }
+      : null;
+  };
+  const parseMarkdownSectionsForAutoMerge = (content: string): ParsedMarkdownSections | null => {
+    const lines = content.replace(/\r\n/g, '\n').split('\n');
+    const headingIndexes: number[] = [];
+    lines.forEach((line, index) => {
+      if (/^#{1,6}\s+\S/.test(line)) {
+        headingIndexes.push(index);
+      }
+    });
+
+    if (headingIndexes.length === 0) return null;
+
+    const headings = headingIndexes.map(index => lines[index].trim());
+    if (new Set(headings).size !== headings.length) return null;
+
+    const sections = headingIndexes.map((headingIndex, index) => {
+      const nextHeadingIndex = headingIndexes[index + 1] ?? lines.length;
+      return {
+        heading: lines[headingIndex].trim(),
+        lines: lines.slice(headingIndex, nextHeadingIndex),
+      };
+    });
+
+    return {
+      preambleLines: lines.slice(0, headingIndexes[0]),
+      sections,
+    };
+  };
+  const hasSameSectionShape = (
+    baseSections: ParsedMarkdownSections,
+    targetSections: ParsedMarkdownSections
+  ): boolean => (
+    baseSections.preambleLines.join('\n') === targetSections.preambleLines.join('\n')
+    && baseSections.sections.length === targetSections.sections.length
+    && baseSections.sections.every((section, index) => (
+      section.heading === targetSections.sections[index]?.heading
+    ))
+  );
+  const areLineGroupsEqual = (leftLines: string[], rightLines: string[]): boolean => (
+    leftLines.join('\n') === rightLines.join('\n')
+  );
+  const buildAutoMergedSectionRewriteResult = (
+    baseContent: string,
+    serverContent: string,
+    draftContent: string
+  ): AutoMergedConflictResult | null => {
+    const baseSections = parseMarkdownSectionsForAutoMerge(baseContent);
+    const serverSections = parseMarkdownSectionsForAutoMerge(serverContent);
+    const draftSections = parseMarkdownSectionsForAutoMerge(draftContent);
+    if (!baseSections || !serverSections || !draftSections) return null;
+    if (
+      !hasSameSectionShape(baseSections, serverSections)
+      || !hasSameSectionShape(baseSections, draftSections)
+    ) {
+      return null;
+    }
+
+    let hasServerChange = false;
+    let hasDraftChange = false;
+    const mergedSectionLines: string[][] = [];
+
+    for (let index = 0; index < baseSections.sections.length; index += 1) {
+      const baseSectionLines = baseSections.sections[index].lines;
+      const serverSectionLines = serverSections.sections[index].lines;
+      const draftSectionLines = draftSections.sections[index].lines;
+      const serverChanged = !areLineGroupsEqual(baseSectionLines, serverSectionLines);
+      const draftChanged = !areLineGroupsEqual(baseSectionLines, draftSectionLines);
+
+      if (
+        serverChanged
+        && draftChanged
+        && !areLineGroupsEqual(serverSectionLines, draftSectionLines)
+      ) {
+        return null;
+      }
+
+      if (draftChanged) {
+        hasDraftChange = true;
+        mergedSectionLines.push(draftSectionLines);
+      } else if (serverChanged) {
+        hasServerChange = true;
+        mergedSectionLines.push(serverSectionLines);
+      } else {
+        mergedSectionLines.push(baseSectionLines);
+      }
+    }
+
+    if (!hasServerChange || !hasDraftChange) return null;
+
+    const mergedContent = [
+      ...baseSections.preambleLines,
+      ...mergedSectionLines.flat(),
+    ].join('\n');
+    if (mergedContent === serverContent.replace(/\r\n/g, '\n')) return null;
+
+    return {
+      content: mergedContent,
+      summary: '合并轨迹：自动合并服务端与草稿的非重叠章节改写',
+    };
+  };
   const selectedVersionDiff = useMemo(
     () => selectedVersion
       ? buildLineDiff(selectedVersion.content, artifactContent)
@@ -1330,9 +1454,10 @@ export const ArtifactPane: React.FC = () => {
     () => new Map(conflictDraftModifiedBlocks.map(block => [block.addedStartIndex, block])),
     [conflictDraftModifiedBlocks]
   );
-  const autoMergedConflictContent = useMemo(
+  const autoMergedConflict = useMemo(
     () => conflictArtifact
-      ? buildAutoMergedInsertionContent(artifactContent, conflictArtifact.content, editDraft)
+      ? buildAutoMergedInsertionResult(artifactContent, conflictArtifact.content, editDraft)
+        ?? buildAutoMergedSectionRewriteResult(artifactContent, conflictArtifact.content, editDraft)
       : null,
     [artifactContent, conflictArtifact, editDraft]
   );
@@ -1684,13 +1809,13 @@ export const ArtifactPane: React.FC = () => {
   };
 
   const applyAutoMergedConflictContent = () => {
-    if (!autoMergedConflictContent || !currentStageId) return;
+    if (!autoMergedConflict || !currentStageId) return;
 
-    setEditDraft(autoMergedConflictContent);
+    setEditDraft(autoMergedConflict.content);
     addArtifactAuditEvent({
       stageId: currentStageId,
       eventType: 'artifact_auto_merge_applied',
-      summary: '合并轨迹：自动合并服务端与草稿的非重叠补充',
+      summary: autoMergedConflict.summary,
     });
   };
 
@@ -2193,7 +2318,7 @@ export const ArtifactPane: React.FC = () => {
                     )}
                     {conflictArtifact && (
                       <div className="ml-auto flex shrink-0 items-center gap-2">
-                        {autoMergedConflictContent && (
+                        {autoMergedConflict && (
                           <button
                             type="button"
                             onClick={applyAutoMergedConflictContent}

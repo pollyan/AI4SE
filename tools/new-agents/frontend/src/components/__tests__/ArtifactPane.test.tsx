@@ -1724,6 +1724,183 @@ describe('ArtifactPane Component', () => {
         ]);
     });
 
+    it('auto-merges non-overlapping section rewrites during an artifact conflict', async () => {
+        vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
+            '产出物已被更新，请刷新后再保存',
+            {
+                stageId: 'STRATEGY',
+                content: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '服务端风险策略：优先覆盖支付链路',
+                    '',
+                    '## 验收口径',
+                    '旧验收口径',
+                ].join('\n'),
+                versionNumber: 3,
+            },
+        ));
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentRunId: 'run-123',
+            artifactContent: [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '旧风险策略',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            stageArtifacts: {
+                STRATEGY: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '旧风险策略',
+                    '',
+                    '## 验收口径',
+                    '旧验收口径',
+                ].join('\n'),
+            },
+            artifactHistory: [
+                {
+                    id: 'run-123-STRATEGY-v2',
+                    timestamp: 123,
+                    content: [
+                        '# 测试策略蓝图',
+                        '',
+                        '## 风险策略',
+                        '旧风险策略',
+                        '',
+                        '## 验收口径',
+                        '旧验收口径',
+                    ].join('\n'),
+                    stageId: 'STRATEGY',
+                },
+            ],
+            artifactAuditEvents: [],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: {
+                value: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '旧风险策略',
+                    '',
+                    '## 验收口径',
+                    '用户验收口径：增加异常回滚检查',
+                ].join('\n'),
+            },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+        fireEvent.click(await screen.findByRole('button', { name: '自动合并非重叠变更' }));
+
+        expect((screen.getByLabelText('编辑产出物 Markdown') as HTMLTextAreaElement).value).toBe([
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '服务端风险策略：优先覆盖支付链路',
+            '',
+            '## 验收口径',
+            '用户验收口径：增加异常回滚检查',
+        ].join('\n'));
+        expect(useStore.getState().artifactAuditEvents).toEqual([
+            expect.objectContaining({
+                stageId: 'STRATEGY',
+                eventType: 'artifact_auto_merge_applied',
+                summary: '合并轨迹：自动合并服务端与草稿的非重叠章节改写',
+            }),
+        ]);
+    });
+
+    it('does not auto-merge section rewrites when both sides changed the same section', async () => {
+        vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
+            '产出物已被更新，请刷新后再保存',
+            {
+                stageId: 'STRATEGY',
+                content: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '服务端风险策略：优先覆盖支付链路',
+                    '',
+                    '## 验收口径',
+                    '旧验收口径',
+                ].join('\n'),
+                versionNumber: 3,
+            },
+        ));
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentRunId: 'run-123',
+            artifactContent: [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '旧风险策略',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            stageArtifacts: {
+                STRATEGY: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '旧风险策略',
+                    '',
+                    '## 验收口径',
+                    '旧验收口径',
+                ].join('\n'),
+            },
+            artifactHistory: [
+                {
+                    id: 'run-123-STRATEGY-v2',
+                    timestamp: 123,
+                    content: [
+                        '# 测试策略蓝图',
+                        '',
+                        '## 风险策略',
+                        '旧风险策略',
+                        '',
+                        '## 验收口径',
+                        '旧验收口径',
+                    ].join('\n'),
+                    stageId: 'STRATEGY',
+                },
+            ],
+            artifactAuditEvents: [],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: {
+                value: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '用户风险策略：优先覆盖退款链路',
+                    '',
+                    '## 验收口径',
+                    '旧验收口径',
+                ].join('\n'),
+            },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+        await screen.findByRole('button', { name: '对比服务端版本' });
+        expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
+    });
+
     it('does not auto-merge draft deletions when repeated base lines make the anchor ambiguous', async () => {
         vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
             '产出物已被更新，请刷新后再保存',

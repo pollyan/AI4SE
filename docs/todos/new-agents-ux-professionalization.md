@@ -521,3 +521,10 @@
   - 实现继续复用共享 Artifact PDF 导出路径，不新增 Req Review、Incident Review、Test Design、Lisa/Alex 或 workflow 专属分支；复杂 pie 语法仍按文本摘要降级，不阻断下载。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "draws Mermaid pie"` 观察到 pie 仍缺少标题、清洗后的分类值和图形命令失败；实现后同命令通过；`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`。
   - 剩余：更复杂的改写/移动语义自动合并、journey 等复杂 Mermaid/SVG 高保真嵌入仍可作为后续增强切片。
+- 2026-06-20：完成第三十六块 CGA「Artifact 章节级非重叠改写自动合并」。
+  - 保存冲突现在会在现有插入/安全删除自动合并之外，识别唯一 Markdown 标题章节的非重叠改写：服务端改写一个章节、用户草稿改写另一个章节时，可继续使用 `自动合并非重叠变更`。
+  - 点击后编辑草稿会按原章节顺序同时保留服务端章节改写和用户章节改写，避免把有效改写追加到末尾或要求用户逐块处理。
+  - 自动合并会记录 `artifact_auto_merge_applied` 活动轨迹，并区分 `非重叠章节改写`；同一章节双方都改、标题重复或标题结构变化时不显示自动合并入口，继续交给人工对比。
+  - 实现继续复用 ArtifactPane 现有冲突卡片、编辑草稿和审计轨迹，不改变服务端 artifact update API，也不新增 workflow 专属协作分支。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "auto-merges non-overlapping section rewrites"` 观察到缺少自动合并入口失败；实现后同命令通过；`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`。
+  - 剩余：移动语义自动合并、重复标题精确锚点、journey/复杂 Mermaid/SVG 高保真嵌入仍可作为后续增强切片。
