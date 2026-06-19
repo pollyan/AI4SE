@@ -262,6 +262,11 @@
   - `buildObservabilityAlerts` 新增 `模型/供应商异常集中` 告警，即使整体成功率尚可，也能提示模型配置、供应商额度、鉴权或网络方向的排查路径。
   - 剩余：默认 LLM 未配置发生在 runtime turn metric 创建之前，暂未进入运行统计；如需覆盖，需要新增 pre-runtime 失败记录或配置检查观测事件。
   - 验证：`.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_observability_endpoint_groups_provider_issue_codes tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_observability_endpoint_returns_runtime_turn_summary tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_observability_endpoint_filters_by_workflow_and_stage`；`npm run test -- --run src/services/__tests__/observabilityService.test.ts src/core/__tests__/observabilityAlerts.test.ts src/components/__tests__/Header.test.tsx`。
+- 2026-06-20：完成第四块 CGA「默认 LLM 缺失的 pre-runtime 观测记录」。
+  - 默认 LLM 未配置现在会在 `/api/agent/runs/stream` 请求校验通过后写入独立的 pre-runtime config issue，不创建假的 `AgentRun`、不伪装成真实 provider 调用。
+  - `/api/agent/observability` 的 totals 和 byStage 会把该配置失败计入 `turns`、`failedTurns`、`errorCodes`、`providerIssueCount` 和 `providerIssueCodes`，因此运行统计能解释“为什么刚刚没有进入模型生成”。
+  - byProvider 和 recentTurns 仍只展示真实 runtime turn metric；纯配置缺失场景下保持为空，避免污染供应商分组和运行历史。
+  - 验证：先运行 `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_runs_stream_records_default_llm_missing_observability_issue` 观察到 totals.turns 仍为 0 的预期失败，再实现后通过；`.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_observability_endpoint_returns_runtime_turn_summary tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_observability_endpoint_filters_by_workflow_and_stage tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_observability_endpoint_groups_provider_issue_codes`。
 
 ### 7. Artifact 协作体验深化
 

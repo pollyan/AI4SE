@@ -237,6 +237,19 @@ class AgentRunTurnMetric(db.Model):
     run = db.relationship("AgentRun", back_populates="turn_metrics")
 
 
+class AgentRuntimeConfigIssue(db.Model):
+    __tablename__ = "agent_runtime_config_issues"
+
+    id = db.Column(db.Integer, primary_key=True)
+    workflow_id = db.Column(db.String(64), nullable=False, index=True)
+    stage_id = db.Column(db.String(64), nullable=False, index=True)
+    error_code = db.Column(db.String(64), nullable=False, index=True)
+    issue_scope = db.Column(db.String(64), nullable=False, index=True)
+    route = db.Column(db.String(128), nullable=False)
+    request_id = db.Column(db.String(64), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+
+
 class AgentArtifactComment(db.Model):
     __tablename__ = "agent_artifact_comments"
 

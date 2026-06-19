@@ -1589,6 +1589,56 @@ def test_agent_runs_stream_returns_503_when_default_config_missing(client):
     }
 
 
+def test_agent_runs_stream_records_default_llm_missing_observability_issue(
+    app,
+    client,
+):
+    response = client.post(
+        "/api/agent/runs/stream",
+        json={
+            "prompt": "用户需求: 登录功能",
+            "systemPrompt": "你是 Lisa 测试专家。",
+            "workflowId": "TEST_DESIGN",
+            "stageId": "CLARIFY",
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json == {
+        "error": "系统未配置默认 LLM，请维护后端默认 LLM 配置后重试"
+    }
+    with app.app_context():
+        assert AgentRun.query.count() == 0
+
+    observability_response = client.get("/api/agent/observability")
+
+    assert observability_response.status_code == 200
+    assert observability_response.json["totals"]["turns"] == 1
+    assert observability_response.json["totals"]["failedTurns"] == 1
+    assert observability_response.json["totals"]["successRate"] == 0.0
+    assert observability_response.json["totals"]["estimatedTokens"] == 0
+    assert observability_response.json["totals"]["providerIssueCount"] == 1
+    assert observability_response.json["totals"]["providerIssueCodes"] == {
+        "DEFAULT_LLM_CONFIG_MISSING": 1
+    }
+    assert observability_response.json["byStage"] == [
+        {
+            "workflowId": "TEST_DESIGN",
+            "stageId": "CLARIFY",
+            "turns": 1,
+            "failedTurns": 1,
+            "successRate": 0.0,
+            "avgDurationMs": 0.0,
+            "estimatedTokens": 0,
+            "errorCodes": {"DEFAULT_LLM_CONFIG_MISSING": 1},
+            "providerIssueCount": 1,
+            "providerIssueCodes": {"DEFAULT_LLM_CONFIG_MISSING": 1},
+        }
+    ]
+    assert observability_response.json["byProvider"] == []
+    assert observability_response.json["recentTurns"] == []
+
+
 @patch("stream_services.build_pydantic_agent_runtime")
 def test_agent_runs_stream_returns_typed_error_when_runtime_dependency_missing(
     mock_build_runtime,

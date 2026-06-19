@@ -4,6 +4,7 @@ from flask import Response, jsonify
 DEFAULT_LLM_CONFIG_MISSING_MESSAGE = (
     "系统未配置默认 LLM，请维护后端默认 LLM 配置后重试"
 )
+DEFAULT_LLM_CONFIG_MISSING_CODE = "DEFAULT_LLM_CONFIG_MISSING"
 
 
 def json_error_response(message: str, status_code: int) -> tuple[Response, int]:

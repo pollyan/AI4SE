@@ -2,6 +2,7 @@ import json
 import time
 from uuid import uuid4
 
+from api_responses import DEFAULT_LLM_CONFIG_MISSING_CODE
 from agent_contracts import WORKFLOW_STAGES
 from context_summary_format import (
     CURRENT_ARTIFACT_SUMMARY_TYPE,
@@ -23,6 +24,7 @@ from models import (
     AgentMessage,
     AgentRun,
     AgentRunTurnMetric,
+    AgentRuntimeConfigIssue,
     db,
 )
 from workflow_manifest import get_workflow_agent_id
@@ -35,7 +37,7 @@ SUMMARY_SOURCE_ARTIFACT = "artifact"
 SUMMARY_SOURCE_USER_INPUT = "user_input"
 DEFAULT_RUN_LIST_LIMIT = 20
 MAX_RUN_LIST_LIMIT = 100
-PROVIDER_ISSUE_ERROR_CODES = {"LLM_ERROR"}
+PROVIDER_ISSUE_ERROR_CODES = {"LLM_ERROR", DEFAULT_LLM_CONFIG_MISSING_CODE}
 
 
 class ArtifactVersionConflictError(ValueError):
@@ -779,6 +781,29 @@ def record_turn_metric(
     return metric
 
 
+def record_runtime_config_issue(
+    *,
+    workflow_id: str,
+    stage_id: str,
+    error_code: str,
+    issue_scope: str,
+    route: str,
+    request_id: str,
+) -> AgentRuntimeConfigIssue:
+    _validate_workflow_stage(workflow_id, stage_id)
+    issue = AgentRuntimeConfigIssue(
+        workflow_id=workflow_id,
+        stage_id=stage_id,
+        error_code=error_code,
+        issue_scope=issue_scope,
+        route=route,
+        request_id=request_id,
+    )
+    db.session.add(issue)
+    db.session.commit()
+    return issue
+
+
 def get_runtime_observability_summary(
     *,
     limit: int = 20,
@@ -807,29 +832,65 @@ def get_runtime_observability_summary(
         AgentRunTurnMetric.created_at.desc(),
         AgentRunTurnMetric.id.desc(),
     ).all()
-    total_turns = len(metrics)
-    failed_turns = sum(1 for metric in metrics if metric.status != "success")
-    provider_issue_codes = _provider_issue_codes(metrics)
 
+    config_issue_query = AgentRuntimeConfigIssue.query
+    if workflow_id is not None:
+        config_issue_query = config_issue_query.filter(
+            AgentRuntimeConfigIssue.workflow_id == workflow_id
+        )
+    if stage_id is not None:
+        config_issue_query = config_issue_query.filter(
+            AgentRuntimeConfigIssue.stage_id == stage_id
+        )
+    config_issues = config_issue_query.order_by(
+        AgentRuntimeConfigIssue.created_at.desc(),
+        AgentRuntimeConfigIssue.id.desc(),
+    ).all()
+
+    total_turns = len(metrics) + len(config_issues)
+    failed_turns = (
+        sum(1 for metric in metrics if metric.status != "success")
+        + len(config_issues)
+    )
+    provider_issue_codes = _merge_error_codes(
+        _provider_issue_codes(metrics),
+        _config_issue_provider_codes(config_issues),
+    )
+
+    stage_config_issue_index: dict[tuple[str, str], list[AgentRuntimeConfigIssue]] = {}
     stage_index: dict[tuple[str, str], list[AgentRunTurnMetric]] = {}
     provider_index: dict[str, list[AgentRunTurnMetric]] = {}
     for metric in metrics:
         stage_index.setdefault((metric.workflow_id, metric.stage_id), []).append(metric)
         provider_index.setdefault(metric.provider, []).append(metric)
+    for issue in config_issues:
+        stage_config_issue_index.setdefault(
+            (issue.workflow_id, issue.stage_id),
+            [],
+        ).append(issue)
+    stage_keys = sorted(set(stage_index) | set(stage_config_issue_index))
 
     return {
         "totals": {
             "turns": total_turns,
             "failedTurns": failed_turns,
             "successRate": _success_rate(total_turns, failed_turns),
-            "avgDurationMs": _avg_duration(metrics),
+            "avgDurationMs": _avg_duration(
+                metrics,
+                zero_duration_count=len(config_issues),
+            ),
             "estimatedTokens": sum(metric.estimated_tokens for metric in metrics),
             "providerIssueCount": sum(provider_issue_codes.values()),
             "providerIssueCodes": provider_issue_codes,
         },
         "byStage": [
-            _stage_observability_item(workflow_id, stage_id, stage_metrics)
-            for (workflow_id, stage_id), stage_metrics in sorted(stage_index.items())
+            _stage_observability_item(
+                workflow_id,
+                stage_id,
+                stage_index.get((workflow_id, stage_id), []),
+                stage_config_issue_index.get((workflow_id, stage_id), []),
+            )
+            for workflow_id, stage_id in stage_keys
         ],
         "byProvider": [
             _provider_observability_item(provider, provider_metrics)
@@ -848,13 +909,26 @@ def _success_rate(total_turns: int, failed_turns: int) -> float:
     return round(((total_turns - failed_turns) / total_turns) * 100, 2)
 
 
-def _avg_duration(metrics: list[AgentRunTurnMetric]) -> float:
-    if not metrics:
+def _avg_duration(
+    metrics: list[AgentRunTurnMetric],
+    *,
+    zero_duration_count: int = 0,
+) -> float:
+    total_count = len(metrics) + zero_duration_count
+    if total_count == 0:
         return 0.0
     return round(
-        sum(metric.duration_ms for metric in metrics) / len(metrics),
+        sum(metric.duration_ms for metric in metrics) / total_count,
         2,
     )
+
+
+def _merge_error_codes(*code_groups: dict[str, int]) -> dict[str, int]:
+    merged: dict[str, int] = {}
+    for codes in code_groups:
+        for code, count in codes.items():
+            merged[code] = merged.get(code, 0) + count
+    return dict(sorted(merged.items()))
 
 
 def _provider_issue_codes(metrics: list[AgentRunTurnMetric]) -> dict[str, int]:
@@ -865,25 +939,49 @@ def _provider_issue_codes(metrics: list[AgentRunTurnMetric]) -> dict[str, int]:
     return dict(sorted(issue_codes.items()))
 
 
+def _config_issue_provider_codes(
+    config_issues: list[AgentRuntimeConfigIssue],
+) -> dict[str, int]:
+    issue_codes: dict[str, int] = {}
+    for issue in config_issues:
+        if issue.error_code in PROVIDER_ISSUE_ERROR_CODES:
+            issue_codes[issue.error_code] = issue_codes.get(issue.error_code, 0) + 1
+    return dict(sorted(issue_codes.items()))
+
+
 def _stage_observability_item(
     workflow_id: str,
     stage_id: str,
     metrics: list[AgentRunTurnMetric],
+    config_issues: list[AgentRuntimeConfigIssue] | None = None,
 ) -> dict:
-    failed_turns = sum(1 for metric in metrics if metric.status != "success")
+    config_issues = config_issues or []
+    total_turns = len(metrics) + len(config_issues)
+    failed_turns = (
+        sum(1 for metric in metrics if metric.status != "success")
+        + len(config_issues)
+    )
     error_codes: dict[str, int] = {}
     for metric in metrics:
         if metric.error_code:
             error_codes[metric.error_code] = error_codes.get(metric.error_code, 0) + 1
-    provider_issue_codes = _provider_issue_codes(metrics)
+    for issue in config_issues:
+        error_codes[issue.error_code] = error_codes.get(issue.error_code, 0) + 1
+    provider_issue_codes = _merge_error_codes(
+        _provider_issue_codes(metrics),
+        _config_issue_provider_codes(config_issues),
+    )
 
     return {
         "workflowId": workflow_id,
         "stageId": stage_id,
-        "turns": len(metrics),
+        "turns": total_turns,
         "failedTurns": failed_turns,
-        "successRate": _success_rate(len(metrics), failed_turns),
-        "avgDurationMs": _avg_duration(metrics),
+        "successRate": _success_rate(total_turns, failed_turns),
+        "avgDurationMs": _avg_duration(
+            metrics,
+            zero_duration_count=len(config_issues),
+        ),
         "estimatedTokens": sum(metric.estimated_tokens for metric in metrics),
         "errorCodes": dict(sorted(error_codes.items())),
         "providerIssueCount": sum(provider_issue_codes.values()),

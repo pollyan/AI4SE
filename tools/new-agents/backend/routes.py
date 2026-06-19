@@ -2,7 +2,7 @@ from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.exceptions import HTTPException
 
-from api_responses import json_error_response
+from api_responses import DEFAULT_LLM_CONFIG_MISSING_CODE, json_error_response
 from config_service import (
     build_default_llm_config_payload,
     check_default_llm_config,
@@ -17,6 +17,7 @@ from run_persistence import (
     get_run_snapshot,
     get_runtime_observability_summary,
     list_agent_runs,
+    record_runtime_config_issue,
     replace_artifact_collaboration_state,
     update_context_summary,
     update_run_artifact,
@@ -123,6 +124,19 @@ def agent_runs_stream():
         context="agent runtime",
     )
     if error_response:
+        try:
+            record_runtime_config_issue(
+                workflow_id=agent_request.workflow_id,
+                stage_id=agent_request.stage_id,
+                error_code=DEFAULT_LLM_CONFIG_MISSING_CODE,
+                issue_scope="default_llm_config",
+                route="/api/agent/runs/stream",
+                request_id=request_id,
+            )
+        except SQLAlchemyError as e:
+            current_app.logger.error(
+                f"[{request_id}] Error recording runtime config issue: {str(e)}"
+            )
         return error_response
 
     return build_sse_response(
