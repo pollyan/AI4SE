@@ -833,6 +833,61 @@ describe('ArtifactPane Component', () => {
         expect(click).toHaveBeenCalledTimes(1);
     });
 
+    it('draws Mermaid pie charts as vector distribution shapes in exported PDF content streams', async () => {
+        const createdAnchors: HTMLAnchorElement[] = [];
+        const click = vi.fn();
+        const createObjectURL = vi
+            .spyOn(URL, 'createObjectURL')
+            .mockReturnValue('blob:artifact-mermaid-pie-pdf');
+        vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+        vi.spyOn(document, 'createElement').mockImplementation((tagName, options) => {
+            const element = originalCreateElement(tagName, options);
+            if (tagName.toLowerCase() === 'a') {
+                Object.defineProperty(element, 'click', {
+                    configurable: true,
+                    value: click,
+                });
+                createdAnchors.push(element as HTMLAnchorElement);
+            }
+            return element;
+        });
+        useStore.setState({
+            workflow: 'REQ_REVIEW',
+            artifactContent: [
+                '# 评审报告',
+                '',
+                '```mermaid',
+                'pie title 评审问题优先级分布',
+                '    "P0 (阻塞)" : 2',
+                '    "P1 (重要)" : 3',
+                '    "P2 (建议)" : 5',
+                '```',
+            ].join('\n'),
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('下载'));
+        fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+
+        const blob = createObjectURL.mock.calls[0][0] as Blob;
+        const content = await blob.text();
+        const rectangleCount = content.match(/ re S/g)?.length ?? 0;
+        expect(createdAnchors[0].download).toBe('req_review_artifact.pdf');
+        expect(content).toContain(toUtf16BeHex('Mermaid 图表：pie'));
+        expect(content).toContain(toUtf16BeHex('评审问题优先级分布'));
+        expect(content).toContain(toUtf16BeHex('P0 (阻塞)：2'));
+        expect(content).toContain(toUtf16BeHex('P1 (重要)：3'));
+        expect(content).toContain(toUtf16BeHex('P2 (建议)：5'));
+        expect(content).not.toContain(toUtf16BeHex('pie title 评审问题优先级分布'));
+        expect(content).not.toContain(toUtf16BeHex('"P0 (阻塞)" : 2'));
+        expect(content).toContain('0.18 0.55 0.95 RG');
+        expect(content).toContain(' c ');
+        expect(rectangleCount).toBeGreaterThanOrEqual(3);
+        expect(content).toContain(' m ');
+        expect(content).toContain(' l S');
+        expect(click).toHaveBeenCalledTimes(1);
+    });
+
     it('draws structured visual tables in exported PDF content streams', async () => {
         const createdAnchors: HTMLAnchorElement[] = [];
         const click = vi.fn();

@@ -236,10 +236,25 @@ export const ArtifactPane: React.FC = () => {
     nodes: PdfMermaidMindmapNode[];
   };
 
+  type PdfMermaidPieSlice = {
+    label: string;
+    value: number;
+    valueText: string;
+  };
+
+  type PdfMermaidPieDiagram = {
+    kind: 'pie';
+    startLineIndex: number;
+    diagramType: 'pie';
+    title: string | null;
+    slices: PdfMermaidPieSlice[];
+  };
+
   type PdfMermaidDiagram =
     | PdfMermaidFlowchartDiagram
     | PdfMermaidTimelineDiagram
-    | PdfMermaidMindmapDiagram;
+    | PdfMermaidMindmapDiagram
+    | PdfMermaidPieDiagram;
 
   const parseMermaidEndpoint = (source: string): PdfMermaidFlowchartNode | null => {
     const trimmedSource = source.trim();
@@ -424,6 +439,52 @@ export const ArtifactPane: React.FC = () => {
     };
   };
 
+  const cleanMermaidPieLabel = (source: string): string => {
+    const label = source.trim().replace(/^["'“”]+|["'“”]+$/g, '').trim();
+    return stripInlineMarkdown(label);
+  };
+
+  const parseMermaidPieForPdf = (
+    source: string,
+    startLineIndex: number
+  ): PdfMermaidPieDiagram | null => {
+    const mermaidLines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const firstLine = mermaidLines[0] || '';
+    if (firstLine.split(/\s+/)[0] !== 'pie') return null;
+
+    const inlineTitleMatch = firstLine.match(/^pie\s+title\s+(.+)$/i);
+    let title = inlineTitleMatch ? stripInlineMarkdown(inlineTitleMatch[1]) : null;
+    const slices: PdfMermaidPieSlice[] = [];
+
+    mermaidLines.slice(1).forEach((line) => {
+      if (line.startsWith('title ')) {
+        title = stripInlineMarkdown(line.replace(/^title\s+/, ''));
+        return;
+      }
+
+      const sliceMatch = line.match(/^(.+?)\s*:\s*([+-]?\d+(?:\.\d+)?)\s*$/);
+      if (!sliceMatch) return;
+      const label = cleanMermaidPieLabel(sliceMatch[1]);
+      const value = Number(sliceMatch[2]);
+      if (!label || !Number.isFinite(value) || value <= 0) return;
+      slices.push({
+        label,
+        value,
+        valueText: sliceMatch[2],
+      });
+    });
+
+    if (slices.length === 0) return null;
+
+    return {
+      kind: 'pie',
+      startLineIndex,
+      diagramType: 'pie',
+      title,
+      slices: slices.slice(0, 8),
+    };
+  };
+
   const parseMermaidDiagramForPdf = (
     source: string,
     startLineIndex: number
@@ -431,6 +492,7 @@ export const ArtifactPane: React.FC = () => {
     parseMermaidFlowchartForPdf(source, startLineIndex)
     || parseMermaidTimelineForPdf(source, startLineIndex)
     || parseMermaidMindmapForPdf(source, startLineIndex)
+    || parseMermaidPieForPdf(source, startLineIndex)
   );
 
   const projectMermaidToPdfLines = (source: string): string[] => {
@@ -450,6 +512,13 @@ export const ArtifactPane: React.FC = () => {
       return [
         `Mermaid 图表：${diagramType}`,
         ...parsedDiagram.nodes.map(node => node.label),
+      ];
+    }
+    if (parsedDiagram?.kind === 'pie') {
+      return [
+        `Mermaid 图表：${diagramType}`,
+        ...(parsedDiagram.title ? [parsedDiagram.title] : []),
+        ...parsedDiagram.slices.map(slice => `${slice.label}：${slice.valueText}`),
       ];
     }
     return [
@@ -717,13 +786,20 @@ export const ArtifactPane: React.FC = () => {
     const mindmapNodeHeight = 22;
     const mindmapColumnGap = 144;
     const mindmapRowGap = 10;
+    const pieCenterX = 124;
+    const pieRadius = 42;
+    const pieLegendLeft = 210;
+    const pieLegendSize = 10;
+    const pieLegendGap = 18;
 
     diagrams.forEach((diagram) => {
       const diagramLineCount = diagram.kind === 'flowchart'
         ? Math.max(diagram.nodes.length + 1, 2)
         : diagram.kind === 'timeline'
           ? Math.max(diagram.events.length + diagram.sections.length + 2, 3)
-          : Math.max(diagram.nodes.length + 1, 2);
+          : diagram.kind === 'mindmap'
+            ? Math.max(diagram.nodes.length + 1, 2)
+            : Math.max(diagram.slices.length + (diagram.title ? 2 : 1), 2);
       const diagramEndLineIndex = diagram.startLineIndex + diagramLineCount;
       if (diagram.startLineIndex >= pageEndLineIndex || diagramEndLineIndex <= pageStartLineIndex) {
         return;
@@ -782,6 +858,56 @@ export const ArtifactPane: React.FC = () => {
           const endX = Number(nodePosition.x.toFixed(2));
           const endY = Number((nodePosition.y + mindmapNodeHeight / 2).toFixed(2));
           commands.push(`${startX} ${startY} m ${endX} ${endY} l S`);
+        });
+        return;
+      }
+
+      if (diagram.kind === 'pie') {
+        const centerY = Math.max(136, topY - 58);
+        const bezierKappa = Number((pieRadius * 0.5522847498).toFixed(2));
+        commands.push(`${pieCenterX} ${centerY + pieRadius} m`);
+        commands.push(
+          `${pieCenterX + bezierKappa} ${centerY + pieRadius} `
+          + `${pieCenterX + pieRadius} ${centerY + bezierKappa} `
+          + `${pieCenterX + pieRadius} ${centerY} c`
+        );
+        commands.push(
+          `${pieCenterX + pieRadius} ${centerY - bezierKappa} `
+          + `${pieCenterX + bezierKappa} ${centerY - pieRadius} `
+          + `${pieCenterX} ${centerY - pieRadius} c`
+        );
+        commands.push(
+          `${pieCenterX - bezierKappa} ${centerY - pieRadius} `
+          + `${pieCenterX - pieRadius} ${centerY - bezierKappa} `
+          + `${pieCenterX - pieRadius} ${centerY} c`
+        );
+        commands.push(
+          `${pieCenterX - pieRadius} ${centerY + bezierKappa} `
+          + `${pieCenterX - bezierKappa} ${centerY + pieRadius} `
+          + `${pieCenterX} ${centerY + pieRadius} c S`
+        );
+
+        const total = diagram.slices.reduce((sum, slice) => sum + slice.value, 0);
+        let currentAngle = -Math.PI / 2;
+        diagram.slices.forEach((slice, sliceIndex) => {
+          const sliceAngle = total > 0 ? (slice.value / total) * Math.PI * 2 : 0;
+          const endAngle = currentAngle + sliceAngle;
+          if (sliceIndex > 0) {
+            const separatorX = Number((pieCenterX + Math.cos(currentAngle) * pieRadius).toFixed(2));
+            const separatorY = Number((centerY + Math.sin(currentAngle) * pieRadius).toFixed(2));
+            commands.push(`${pieCenterX} ${centerY} m ${separatorX} ${separatorY} l S`);
+          }
+
+          const legendY = Math.max(
+            82,
+            centerY + pieRadius - sliceIndex * pieLegendGap - pieLegendSize
+          );
+          commands.push(`${pieLegendLeft} ${legendY} ${pieLegendSize} ${pieLegendSize} re S`);
+          commands.push(
+            `${pieLegendLeft + pieLegendSize + 4} ${legendY + pieLegendSize / 2} m `
+            + `${pieLegendLeft + 64} ${legendY + pieLegendSize / 2} l S`
+          );
+          currentAngle = endAngle;
         });
         return;
       }

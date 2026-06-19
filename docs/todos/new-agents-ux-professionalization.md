@@ -515,3 +515,9 @@
   - 实现继续复用共享 Artifact PDF 导出路径，不新增 Idea/Incident、Lisa/Alex 或 workflow 专属分支；复杂 mindmap 语法仍按文本摘要降级，不阻断下载。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "draws Mermaid mindmaps"` 观察到 mindmap 仍输出原始 `root((...))` / `[节点]` 且缺少图形命令失败；实现后同命令通过；`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`。
   - 剩余：更复杂的改写/移动语义自动合并、journey/pie 等复杂 Mermaid/SVG 高保真嵌入仍可作为后续增强切片。
+- 2026-06-20：完成第三十五块 CGA「Artifact PDF Mermaid Pie 矢量投影」。
+  - PDF 导出现在会识别 Mermaid `pie`，清洗 `pie title ...` 和 `"分类" : 数值` 源码行，保留标题、分类和数值为可搜索文本。
+  - PDF content stream 会绘制轻量圆形分布图、分隔线和分类图例框，让需求评审优先级、故障改进优先级和测试用例优先级分布导出后不再只是 Mermaid 源码摘要。
+  - 实现继续复用共享 Artifact PDF 导出路径，不新增 Req Review、Incident Review、Test Design、Lisa/Alex 或 workflow 专属分支；复杂 pie 语法仍按文本摘要降级，不阻断下载。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "draws Mermaid pie"` 观察到 pie 仍缺少标题、清洗后的分类值和图形命令失败；实现后同命令通过；`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`。
+  - 剩余：更复杂的改写/移动语义自动合并、journey 等复杂 Mermaid/SVG 高保真嵌入仍可作为后续增强切片。
