@@ -888,6 +888,65 @@ describe('ArtifactPane Component', () => {
         expect(click).toHaveBeenCalledTimes(1);
     });
 
+    it('draws Mermaid journeys as vector journey map shapes in exported PDF content streams', async () => {
+        const createdAnchors: HTMLAnchorElement[] = [];
+        const click = vi.fn();
+        const createObjectURL = vi
+            .spyOn(URL, 'createObjectURL')
+            .mockReturnValue('blob:artifact-mermaid-journey-pdf');
+        vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+        vi.spyOn(document, 'createElement').mockImplementation((tagName, options) => {
+            const element = originalCreateElement(tagName, options);
+            if (tagName.toLowerCase() === 'a') {
+                Object.defineProperty(element, 'click', {
+                    configurable: true,
+                    value: click,
+                });
+                createdAnchors.push(element as HTMLAnchorElement);
+            }
+            return element;
+        });
+        useStore.setState({
+            workflow: 'VALUE_DISCOVERY',
+            artifactContent: [
+                '# 用户旅程分析',
+                '',
+                '```mermaid',
+                'journey',
+                '    title 核心用户旅程',
+                '    section 问题认知',
+                '        意识到问题存在: 3: 用户',
+                '    section 寻找方案',
+                '        搜索解决方案: 2: 用户',
+                '        对比不同选择: 2: 用户',
+                '```',
+            ].join('\n'),
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('下载'));
+        fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+
+        const blob = createObjectURL.mock.calls[0][0] as Blob;
+        const content = await blob.text();
+        const rectangleCount = content.match(/ re S/g)?.length ?? 0;
+        expect(createdAnchors[0].download).toBe('value_discovery_artifact.pdf');
+        expect(content).toContain(toUtf16BeHex('Mermaid 图表：journey'));
+        expect(content).toContain(toUtf16BeHex('核心用户旅程'));
+        expect(content).toContain(toUtf16BeHex('问题认知'));
+        expect(content).toContain(toUtf16BeHex('意识到问题存在：3（用户）'));
+        expect(content).toContain(toUtf16BeHex('寻找方案'));
+        expect(content).toContain(toUtf16BeHex('搜索解决方案：2（用户）'));
+        expect(content).not.toContain(toUtf16BeHex('title 核心用户旅程'));
+        expect(content).not.toContain(toUtf16BeHex('section 问题认知'));
+        expect(content).not.toContain(toUtf16BeHex('意识到问题存在: 3: 用户'));
+        expect(content).toContain('0.18 0.55 0.95 RG');
+        expect(rectangleCount).toBeGreaterThanOrEqual(4);
+        expect(content).toContain(' m ');
+        expect(content).toContain(' l S');
+        expect(click).toHaveBeenCalledTimes(1);
+    });
+
     it('draws structured visual tables in exported PDF content streams', async () => {
         const createdAnchors: HTMLAnchorElement[] = [];
         const click = vi.fn();

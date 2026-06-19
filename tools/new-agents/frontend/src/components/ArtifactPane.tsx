@@ -250,11 +250,29 @@ export const ArtifactPane: React.FC = () => {
     slices: PdfMermaidPieSlice[];
   };
 
+  type PdfMermaidJourneyTask = {
+    section: string;
+    label: string;
+    score: number | null;
+    scoreText: string;
+    actor: string | null;
+  };
+
+  type PdfMermaidJourneyDiagram = {
+    kind: 'journey';
+    startLineIndex: number;
+    diagramType: 'journey';
+    title: string | null;
+    sections: string[];
+    tasks: PdfMermaidJourneyTask[];
+  };
+
   type PdfMermaidDiagram =
     | PdfMermaidFlowchartDiagram
     | PdfMermaidTimelineDiagram
     | PdfMermaidMindmapDiagram
-    | PdfMermaidPieDiagram;
+    | PdfMermaidPieDiagram
+    | PdfMermaidJourneyDiagram;
 
   const parseMermaidEndpoint = (source: string): PdfMermaidFlowchartNode | null => {
     const trimmedSource = source.trim();
@@ -485,6 +503,60 @@ export const ArtifactPane: React.FC = () => {
     };
   };
 
+  const parseMermaidJourneyForPdf = (
+    source: string,
+    startLineIndex: number
+  ): PdfMermaidJourneyDiagram | null => {
+    const mermaidLines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const firstLine = mermaidLines[0] || '';
+    if (firstLine.split(/\s+/)[0] !== 'journey') return null;
+
+    let title: string | null = null;
+    let currentSection = '旅程';
+    const sections: string[] = [];
+    const tasks: PdfMermaidJourneyTask[] = [];
+
+    mermaidLines.slice(1).forEach((line) => {
+      if (line.startsWith('title ')) {
+        title = stripInlineMarkdown(line.replace(/^title\s+/, ''));
+        return;
+      }
+
+      if (line.startsWith('section ')) {
+        currentSection = stripInlineMarkdown(line.replace(/^section\s+/, ''));
+        if (currentSection && !sections.includes(currentSection)) {
+          sections.push(currentSection);
+        }
+        return;
+      }
+
+      const taskMatch = line.match(/^(.+?)\s*:\s*([+-]?\d+(?:\.\d+)?)\s*(?::\s*(.+))?$/);
+      if (!taskMatch) return;
+      if (currentSection && !sections.includes(currentSection)) {
+        sections.push(currentSection);
+      }
+      const score = Number(taskMatch[2]);
+      tasks.push({
+        section: currentSection,
+        label: stripInlineMarkdown(taskMatch[1]),
+        score: Number.isFinite(score) ? score : null,
+        scoreText: stripInlineMarkdown(taskMatch[2]),
+        actor: taskMatch[3] ? stripInlineMarkdown(taskMatch[3]) : null,
+      });
+    });
+
+    if (tasks.length === 0) return null;
+
+    return {
+      kind: 'journey',
+      startLineIndex,
+      diagramType: 'journey',
+      title,
+      sections: sections.slice(0, 6),
+      tasks: tasks.slice(0, 8),
+    };
+  };
+
   const parseMermaidDiagramForPdf = (
     source: string,
     startLineIndex: number
@@ -493,6 +565,7 @@ export const ArtifactPane: React.FC = () => {
     || parseMermaidTimelineForPdf(source, startLineIndex)
     || parseMermaidMindmapForPdf(source, startLineIndex)
     || parseMermaidPieForPdf(source, startLineIndex)
+    || parseMermaidJourneyForPdf(source, startLineIndex)
   );
 
   const projectMermaidToPdfLines = (source: string): string[] => {
@@ -519,6 +592,16 @@ export const ArtifactPane: React.FC = () => {
         `Mermaid 图表：${diagramType}`,
         ...(parsedDiagram.title ? [parsedDiagram.title] : []),
         ...parsedDiagram.slices.map(slice => `${slice.label}：${slice.valueText}`),
+      ];
+    }
+    if (parsedDiagram?.kind === 'journey') {
+      return [
+        `Mermaid 图表：${diagramType}`,
+        ...(parsedDiagram.title ? [parsedDiagram.title] : []),
+        ...parsedDiagram.sections,
+        ...parsedDiagram.tasks.map(task => (
+          `${task.label}：${task.scoreText}${task.actor ? `（${task.actor}）` : ''}`
+        )),
       ];
     }
     return [
@@ -791,6 +874,11 @@ export const ArtifactPane: React.FC = () => {
     const pieLegendLeft = 210;
     const pieLegendSize = 10;
     const pieLegendGap = 18;
+    const journeyLeft = 62;
+    const journeyWidth = 480;
+    const journeyTaskWidth = 112;
+    const journeyTaskHeight = 24;
+    const journeySectionHeight = 18;
 
     diagrams.forEach((diagram) => {
       const diagramLineCount = diagram.kind === 'flowchart'
@@ -799,7 +887,9 @@ export const ArtifactPane: React.FC = () => {
           ? Math.max(diagram.events.length + diagram.sections.length + 2, 3)
           : diagram.kind === 'mindmap'
             ? Math.max(diagram.nodes.length + 1, 2)
-            : Math.max(diagram.slices.length + (diagram.title ? 2 : 1), 2);
+            : diagram.kind === 'pie'
+              ? Math.max(diagram.slices.length + (diagram.title ? 2 : 1), 2)
+              : Math.max(diagram.tasks.length + diagram.sections.length + (diagram.title ? 2 : 1), 3);
       const diagramEndLineIndex = diagram.startLineIndex + diagramLineCount;
       if (diagram.startLineIndex >= pageEndLineIndex || diagramEndLineIndex <= pageStartLineIndex) {
         return;
@@ -908,6 +998,42 @@ export const ArtifactPane: React.FC = () => {
             + `${pieLegendLeft + 64} ${legendY + pieLegendSize / 2} l S`
           );
           currentAngle = endAngle;
+        });
+        return;
+      }
+
+      if (diagram.kind === 'journey') {
+        const taskCount = Math.max(diagram.tasks.length, 1);
+        const baselineY = Math.max(130, topY - 46);
+        const taskGap = taskCount > 1 ? journeyWidth / (taskCount - 1) : 0;
+        commands.push(`${journeyLeft} ${baselineY} m ${journeyLeft + journeyWidth} ${baselineY} l S`);
+
+        const seenSections = new Set<string>();
+        diagram.tasks.forEach((task, taskIndex) => {
+          const taskX = Number((journeyLeft + taskGap * taskIndex).toFixed(2));
+          const taskY = taskIndex % 2 === 0
+            ? baselineY + 26
+            : baselineY - 58;
+          const cardX = Math.max(
+            40,
+            Math.min(458, taskX - journeyTaskWidth / 2)
+          );
+          const connectorEndY = taskIndex % 2 === 0
+            ? taskY
+            : taskY + journeyTaskHeight;
+
+          commands.push(`${taskX} ${baselineY - 5} m ${taskX} ${baselineY + 5} l S`);
+          commands.push(`${taskX} ${baselineY} m ${taskX} ${connectorEndY} l S`);
+          commands.push(`${Number(cardX.toFixed(2))} ${taskY} ${journeyTaskWidth} ${journeyTaskHeight} re S`);
+
+          if (!seenSections.has(task.section)) {
+            seenSections.add(task.section);
+            const sectionY = Math.min(780, baselineY + 66);
+            const sectionX = Math.max(40, Math.min(460, taskX - journeyTaskWidth / 2));
+            commands.push(
+              `${Number(sectionX.toFixed(2))} ${sectionY} ${journeyTaskWidth} ${journeySectionHeight} re S`
+            );
+          }
         });
         return;
       }

@@ -528,3 +528,9 @@
   - 实现继续复用 ArtifactPane 现有冲突卡片、编辑草稿和审计轨迹，不改变服务端 artifact update API，也不新增 workflow 专属协作分支。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "auto-merges non-overlapping section rewrites"` 观察到缺少自动合并入口失败；实现后同命令通过；`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`。
   - 剩余：移动语义自动合并、重复标题精确锚点、journey/复杂 Mermaid/SVG 高保真嵌入仍可作为后续增强切片。
+- 2026-06-20：完成第三十七块 CGA「Artifact PDF Mermaid Journey 矢量投影」。
+  - PDF 导出现在会识别 Mermaid `journey`，清洗 `title`、`section` 和 `任务: 评分: 角色` 源码行，保留旅程标题、阶段、任务、评分和角色为可搜索文本。
+  - PDF content stream 会绘制轻量旅程主线、阶段框、任务卡片和连接线，让价值发现用户旅程图导出后不再只是 Mermaid 源码摘要。
+  - 实现继续复用共享 Artifact PDF 导出路径，不新增 Value Discovery、Lisa/Alex 或 workflow 专属分支；复杂 journey 语法仍按文本摘要降级，不阻断下载。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "draws Mermaid journeys"` 观察到 journey 仍输出 `title` / `section` / 原始任务行且缺少图形命令失败；实现后同命令通过；`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`。
+  - 剩余：复杂 Mermaid/SVG 高保真图片级嵌入、移动语义自动合并、重复标题精确锚点仍可作为后续增强切片。
