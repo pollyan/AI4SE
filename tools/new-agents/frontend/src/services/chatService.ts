@@ -176,6 +176,9 @@ function formatAssistantErrorContent(errorMessage: string): string {
     if (
         errorMessage.includes('SCHEMA_VALIDATION_FAILED')
         || errorMessage.includes('Exceeded maximum output retries')
+        || errorMessage.includes('Artifact Mermaid parse failed')
+        || errorMessage.includes('Artifact validation failed')
+        || errorMessage.includes('Mermaid parse failed')
     ) {
         return [
             '⚠️ **结构化输出生成失败**',

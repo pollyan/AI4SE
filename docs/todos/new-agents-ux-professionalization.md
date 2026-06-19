@@ -70,6 +70,13 @@
   - 恢复卡片提供主操作 `重试本阶段生成`，复用现有 `handleRetry` / artifact rollback 逻辑。
   - 最新 assistant 消息为结构化失败时，隐藏阶段推进确认卡片，避免用户带着无效产物继续进入下一阶段。
   - 验证：`npm run test -- --run src/components/__tests__/ChatPane.test.tsx src/services/__tests__/chatService.test.ts`；`npm run build`；`git diff --check`。
+- 2026-06-20：完成第二块结构化失败恢复切片。
+  - `Artifact Mermaid parse failed`、`Artifact validation failed`、`Mermaid parse failed` 等 artifact / Mermaid 预校验失败会进入 `结构化输出生成失败` 恢复卡片，不再退回裸 `**Error:**`。
+  - 连续两次结构化恢复失败时，最新失败卡片新增 `补充信息后再试`，点击后把可编辑补充说明写入左侧输入框并聚焦，不会自动发送，也不会触发盲目重试。
+  - 单次结构化失败仍只展示主操作 `重试本阶段生成`，避免第一次失败时就暴露过多动作。
+  - 最新 assistant 消息为结构化失败时，继续隐藏阶段推进确认卡片，避免带着无效产物进入下一阶段。
+  - 验证：`npm run test -- --run src/services/__tests__/chatService.test.ts -t "artifact Mermaid validation"`；`npm run test -- --run src/components/__tests__/ChatPane.test.tsx -t "supplement guidance"`；`npm run test -- --run src/services/__tests__/chatService.test.ts src/components/__tests__/ChatPane.test.tsx`；`npm run build`；`git diff --check`。
+  - 剩余：右侧 Mermaid 运行时渲染失败和 `ai4se-visual` 预览失败仍需继续补左侧轻量提示，避免用户只在右侧滚动时才发现问题。
 
 ### 3. 全流程专业产出物与可视化增强
 

@@ -42,6 +42,8 @@ const isProviderFailureContent = (content: string | undefined): boolean => (
   Boolean(content?.includes('模型配置或供应商异常'))
 );
 
+const STRUCTURED_FAILURE_SUPPLEMENT_PROMPT = '请补充更明确的需求或阶段确认信息，我会基于补充内容重新生成当前阶段产出物。';
+
 export const ChatPane: React.FC = () => {
   const navigate = useNavigate();
   // 使用选择器订阅特定状态，减少不必要的重渲染 (rerender-defer-reads)
@@ -71,11 +73,21 @@ export const ChatPane: React.FC = () => {
     latestMessage?.role === 'assistant'
     && isProviderFailureContent(latestMessage.content)
   );
+  const latestAssistantMessages = chatHistory
+    .filter((message) => message.role === 'assistant')
+    .slice(-2);
+  const hasRepeatedStructuredOutputFailures = (
+    latestAssistantMessages.length === 2
+    && latestAssistantMessages.every((message) => (
+      isStructuredOutputFailureContent(message.content)
+    ))
+  );
 
   const updateMessage = useStore((state) => state.updateMessage);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -200,6 +212,11 @@ export const ChatPane: React.FC = () => {
     }
   };
 
+  const handleSupplementStructuredFailure = () => {
+    setInput(STRUCTURED_FAILURE_SUPPLEMENT_PROMPT);
+    textareaRef.current?.focus();
+  };
+
   const renderablePendingAttachments = asRenderableAttachments(pendingAttachments);
 
   return (
@@ -294,6 +311,11 @@ export const ChatPane: React.FC = () => {
           const isProviderFailure = (
             msg.role === 'assistant'
             && isProviderFailureContent(msg.content)
+          );
+          const shouldShowSupplementStructuredFailure = (
+            isStructuredOutputFailure
+            && hasRepeatedStructuredOutputFailures
+            && msg.id === latestMessage?.id
           );
           let mermaidBlockCounter = 0;
           const headingClassName = msg.role === 'user' ? "text-white" : "text-slate-100";
@@ -400,7 +422,16 @@ export const ChatPane: React.FC = () => {
                           </p>
                         </div>
                       </div>
-                      <div className="mt-3 flex justify-end">
+                      <div className="mt-3 flex flex-wrap justify-end gap-2">
+                        {shouldShowSupplementStructuredFailure && (
+                          <button
+                            type="button"
+                            onClick={handleSupplementStructuredFailure}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-100 transition-colors hover:bg-amber-400/20"
+                          >
+                            补充信息后再试
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={handleRetry}
@@ -553,6 +584,7 @@ export const ChatPane: React.FC = () => {
               <PlusCircle className="w-5 h-5" />
             </button>
             <textarea
+              ref={textareaRef}
               className="w-full bg-transparent border-0 text-gray-200 placeholder-slate-500 focus:ring-0 resize-none py-2.5 max-h-32 text-sm leading-relaxed"
               placeholder={onboardingConfig.inputPlaceholder}
               rows={1}

@@ -1,3 +1,4 @@
+import React from 'react';
 import { describe, it, expect, beforeEach, beforeAll, afterEach, vi } from 'vitest';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChatPane } from '../ChatPane';
@@ -185,6 +186,7 @@ describe('ChatPane Component', () => {
 
         expect(screen.getByText('右侧产出物已保持不变')).toBeDefined();
         expect(screen.getByText('连续失败时，请补充更明确的需求或阶段确认信息后再试。')).toBeDefined();
+        expect(screen.queryByRole('button', { name: '补充信息后再试' })).toBeNull();
         expect(mockHandleRetry).toHaveBeenCalledOnce();
     });
 
@@ -207,6 +209,59 @@ describe('ChatPane Component', () => {
         expect(screen.getByRole('button', { name: '重试本阶段生成' })).toBeDefined();
         expect(screen.queryByText(/AI 建议进入下一阶段：策略制定/)).toBeNull();
         expect(screen.queryByText('确认进入 策略制定')).toBeNull();
+    });
+
+    it('shows supplement guidance after repeated structured failures without retrying or sending', () => {
+        const mockSetInput = vi.fn();
+        const mockHandleRetry = vi.fn();
+        const mockHandleSend = vi.fn();
+        vi.mocked(useChatService).mockImplementation(() => {
+            const [input, setInputState] = React.useState('');
+            return {
+                input,
+                setInput: (nextInput: string) => {
+                    mockSetInput(nextInput);
+                    setInputState(nextInput);
+                },
+                pendingAttachments: [],
+                setPendingAttachments: vi.fn(),
+                handleSend: mockHandleSend,
+                handleConfirmStageTransition: vi.fn(),
+                handleRetry: mockHandleRetry,
+                handleStop: vi.fn(),
+                handleFileChange: vi.fn(),
+                removeAttachment: vi.fn()
+            };
+        });
+        useStore.setState({
+            chatHistory: [
+                { id: '1', role: 'user', content: '生成测试策略', timestamp: Date.now() },
+                {
+                    id: '2',
+                    role: 'assistant',
+                    content: '⚠️ **结构化输出生成失败**\n\n右侧产出物已保持不变。可以直接重试。',
+                    timestamp: Date.now() + 1000,
+                },
+                { id: '3', role: 'user', content: '重试', timestamp: Date.now() + 2000 },
+                {
+                    id: '4',
+                    role: 'assistant',
+                    content: '⚠️ **结构化输出生成失败**\n\n右侧产出物已保持不变。可以直接重试。',
+                    timestamp: Date.now() + 3000,
+                },
+            ],
+        });
+
+        render(<ChatPane />);
+
+        fireEvent.click(screen.getByRole('button', { name: '补充信息后再试' }));
+
+        const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+        expect(textarea.value).toContain('请补充更明确的需求或阶段确认信息');
+        expect(document.activeElement).toBe(textarea);
+        expect(mockSetInput).toHaveBeenCalledWith(expect.stringContaining('请补充更明确的需求或阶段确认信息'));
+        expect(mockHandleRetry).not.toHaveBeenCalled();
+        expect(mockHandleSend).not.toHaveBeenCalled();
     });
 
     it('shows a provider failure recovery card with a retry action', () => {

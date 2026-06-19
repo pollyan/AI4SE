@@ -1943,6 +1943,36 @@ describe('useChatService', () => {
         expect(state.artifactHistory).toEqual([]);
     });
 
+    it.each([
+        'Artifact Mermaid parse failed: Parse error on line 3',
+        'Artifact validation failed: missing required section',
+        'Mermaid parse failed: invalid edge syntax',
+    ])('should show structured recovery when artifact validation fails without changing artifact: %s', async (errorMessage) => {
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            throw new Error(errorMessage);
+        });
+
+        const { result } = renderHook(() => useChatService());
+
+        act(() => {
+            result.current.setInput('生成包含流程图的测试策略');
+        });
+
+        await act(async () => {
+            await result.current.handleSend();
+        });
+
+        const state = useStore.getState();
+        expect(state.chatHistory).toHaveLength(2);
+        expect(state.chatHistory[1]).toMatchObject({
+            role: 'assistant',
+        });
+        expect(state.chatHistory[1].content).toContain('结构化输出生成失败');
+        expect(state.chatHistory[1].content).not.toContain('**Error:**');
+        expect(state.artifactContent).toBe('initial artifact');
+        expect(state.artifactHistory).toEqual([]);
+    });
+
     it('should append an error to the in-progress assistant message when stream fails after a chunk', async () => {
         vi.mocked(generateResponseStream).mockImplementation(async function* () {
             yield {
