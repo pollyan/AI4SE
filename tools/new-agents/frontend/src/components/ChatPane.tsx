@@ -50,13 +50,16 @@ export const ChatPane: React.FC = () => {
   const chatHistory = useStore((state) => state.chatHistory);
   const isGenerating = useStore((state) => state.isGenerating);
   const workflow = useStore((state) => state.workflow);
+  const stageIndex = useStore((state) => state.stageIndex);
   const currentRunId = useStore((state) => state.currentRunId);
   const pendingStageTransition = useStore((state) => state.pendingStageTransition);
+  const artifactVisualDiagnostics = useStore((state) => state.artifactVisualDiagnostics);
   const clearPendingStageTransition = useStore((state) => state.clearPendingStageTransition);
   const applyWorkflowHandoff = useStore((state) => state.applyWorkflowHandoff);
   
   const onboardingConfig = WORKFLOWS[workflow].onboarding;
   const workflowStages = WORKFLOWS[workflow].stages;
+  const currentStageId = workflowStages[stageIndex]?.id;
   const agentId = WORKFLOWS[workflow].agentId;
   const agentConfig = getAgentById(agentId);
   const displayTitle = agentConfig?.displayTitle || agentId;
@@ -82,6 +85,9 @@ export const ChatPane: React.FC = () => {
       isStructuredOutputFailureContent(message.content)
     ))
   );
+  const currentArtifactVisualDiagnostic = currentStageId
+    ? [...artifactVisualDiagnostics].reverse().find((diagnostic) => diagnostic.stageId === currentStageId)
+    : null;
 
   const updateMessage = useStore((state) => state.updateMessage);
 
@@ -254,6 +260,23 @@ export const ChatPane: React.FC = () => {
                     <ArrowRight className="h-3.5 w-3.5" />
                   </button>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {currentArtifactVisualDiagnostic && (
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-100 shadow-sm">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+              <div className="min-w-0">
+                <div className="text-xs font-semibold">右侧产物有可视化需要处理</div>
+                <p className="mt-1 text-[11px] leading-relaxed text-amber-100/80">
+                  {currentArtifactVisualDiagnostic.message}
+                </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-amber-100/70">
+                  请在右侧产物中查看对应图表或结构化可视化块，必要时使用重新生成图表。
+                </p>
               </div>
             </div>
           </div>

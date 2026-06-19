@@ -18,6 +18,8 @@ interface CodeRenderArgs {
 interface MarkdownCodeRendererOptions {
     nextMermaidBlockIndex: () => number;
     onMermaidRetry?: MermaidProps['onRetry'];
+    onMermaidRenderError?: MermaidProps['onRenderError'];
+    onMermaidRenderSuccess?: MermaidProps['onRenderSuccess'];
     renderStructuredVisual?: (args: CodeRenderArgs) => ReactNode;
     renderBlockCode: (args: CodeRenderArgs) => ReactNode;
     renderInlineCode: (args: CodeRenderArgs) => ReactNode;
@@ -51,6 +53,8 @@ function isInlineCodeNode({
 export function createMarkdownCodeRenderer({
     nextMermaidBlockIndex,
     onMermaidRetry,
+    onMermaidRenderError,
+    onMermaidRenderSuccess,
     renderStructuredVisual,
     renderBlockCode,
     renderInlineCode,
@@ -71,6 +75,8 @@ export function createMarkdownCodeRenderer({
                     chart={normalizeMermaidChart(children)}
                     blockIndex={nextMermaidBlockIndex()}
                     onRetry={onMermaidRetry}
+                    onRenderError={onMermaidRenderError}
+                    onRenderSuccess={onMermaidRenderSuccess}
                 />
             );
         }

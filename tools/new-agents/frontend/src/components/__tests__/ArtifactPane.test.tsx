@@ -68,6 +68,7 @@ describe('ArtifactPane Component', () => {
             artifactHistory: [],
             stageArtifacts: {},
             artifactTruncated: false,
+            artifactVisualDiagnostics: [],
             currentRunId: null,
             isGenerating: false,
         });
@@ -140,6 +141,31 @@ describe('ArtifactPane Component', () => {
         expect(screen.queryByText('ai4se-visual')).toBeNull();
     });
 
+    it('records a current-stage diagnostic when a structured visual block is invalid', async () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: [
+                '```ai4se-visual',
+                '{ broken',
+                '```',
+            ].join('\n'),
+        });
+
+        render(<ArtifactPane />);
+
+        expect(screen.getByText('结构化可视化格式错误')).toBeTruthy();
+        await waitFor(() => {
+            expect(useStore.getState().artifactVisualDiagnostics).toEqual([
+                expect.objectContaining({
+                    stageId: 'CLARIFY',
+                    kind: 'structured-visual',
+                    message: '结构化可视化必须是合法 JSON。',
+                }),
+            ]);
+        });
+    });
+
     it('does not expose Mermaid retry actions in read-only history preview', () => {
         useStore.setState({
             artifactContent: '# Current artifact',
@@ -159,6 +185,36 @@ describe('ArtifactPane Component', () => {
         expect(screen.getByText(/版本预览/)).toBeTruthy();
         expect(screen.getByTestId('mermaid').textContent).toContain('graph TD');
         expect(screen.queryByRole('button', { name: '重新生成图表' })).toBeNull();
+    });
+
+    it('does not record visual diagnostics from read-only history preview', async () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# Current artifact',
+            artifactHistory: [
+                {
+                    id: 'v1',
+                    timestamp: 123,
+                    content: [
+                        '# Historical artifact',
+                        '',
+                        '```ai4se-visual',
+                        '{ broken',
+                        '```',
+                    ].join('\n'),
+                    stageId: 'CLARIFY',
+                },
+            ],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('历史版本'));
+
+        expect(screen.getByText('结构化可视化格式错误')).toBeTruthy();
+        await waitFor(() => {
+            expect(useStore.getState().artifactVisualDiagnostics).toEqual([]);
+        });
     });
 
     it('only lists history versions for the current workflow stage', () => {

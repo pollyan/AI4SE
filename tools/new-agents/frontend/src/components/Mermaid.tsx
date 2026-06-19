@@ -28,9 +28,17 @@ export interface MermaidProps {
   chart: string;
   blockIndex?: number;
   onRetry?: (brokenCode: string, errorMessage: string, blockIndex: number) => Promise<boolean>;
+  onRenderError?: (details: { code: string; message: string; blockIndex: number }) => void;
+  onRenderSuccess?: (blockIndex: number) => void;
 }
 
-export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) => {
+export const Mermaid: React.FC<MermaidProps> = ({
+  chart,
+  blockIndex,
+  onRetry,
+  onRenderError,
+  onRenderSuccess,
+}) => {
   const ref = useRef<HTMLDivElement>(null);
   const [renderState, setRenderState] = useState<'success' | 'loading' | 'error'>('loading');
   const [svgHtml, setSvgHtml] = useState<string>('');
@@ -59,6 +67,7 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
           if (isMounted) {
             setSvgHtml(generatedSvg);
             setRenderState('success');
+            onRenderSuccess?.(blockIndex ?? 0);
           }
           return;
         }
@@ -71,6 +80,7 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
           if (isMounted) {
             setSvgHtml(generatedSvg);
             setRenderState('success');
+            onRenderSuccess?.(blockIndex ?? 0);
           }
           return;
         } catch {
@@ -86,6 +96,7 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
           if (isMounted) {
             setSvgHtml(generatedSvg);
             setRenderState('success');
+            onRenderSuccess?.(blockIndex ?? 0);
           }
           return;
         }
@@ -99,6 +110,11 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
         const errorMessage = error instanceof Error ? error.message : String(error);
         setErrorInfo({ code: chart, message: errorMessage });
         setRenderState('error');
+        onRenderError?.({
+          code: chart,
+          message: errorMessage,
+          blockIndex: blockIndex ?? 0,
+        });
       }
     };
 
@@ -107,7 +123,7 @@ export const Mermaid: React.FC<MermaidProps> = ({ chart, blockIndex, onRetry }) 
     return () => {
       isMounted = false;
     };
-  }, [chart, onRetry, blockIndex]);
+  }, [chart, onRetry, onRenderError, onRenderSuccess, blockIndex]);
 
   const handleManualRetry = async () => {
     if (!onRetry) return;

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import { StructuredVisual } from '../StructuredVisual';
 
 describe('StructuredVisual', () => {
@@ -103,5 +103,34 @@ describe('StructuredVisual', () => {
 
         expect(screen.getByText('结构化可视化格式错误')).toBeTruthy();
         expect(screen.getByText('结构化可视化必须是合法 JSON。')).toBeTruthy();
+    });
+
+    it('reports invalid visual JSON through the validation error callback', async () => {
+        const onValidationError = vi.fn();
+
+        render(<StructuredVisual source="{ broken" onValidationError={onValidationError} />);
+
+        await waitFor(() => {
+            expect(onValidationError).toHaveBeenCalledWith('结构化可视化必须是合法 JSON。');
+        });
+    });
+
+    it('reports valid visual JSON through the validation success callback', async () => {
+        const onValidationSuccess = vi.fn();
+
+        render(
+            <StructuredVisual
+                source={JSON.stringify({
+                    type: 'score-matrix',
+                    columns: ['维度', '评分'],
+                    rows: [{ 维度: '价值', 评分: 4 }],
+                })}
+                onValidationSuccess={onValidationSuccess}
+            />
+        );
+
+        await waitFor(() => {
+            expect(onValidationSuccess).toHaveBeenCalledOnce();
+        });
     });
 });

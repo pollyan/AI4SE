@@ -54,6 +54,20 @@ export type ArtifactAuditEvent = {
 
 export type ArtifactAuditEventInput = Pick<ArtifactAuditEvent, 'eventType' | 'summary'> & Partial<Pick<ArtifactAuditEvent, 'stageId' | 'createdAt'>>;
 
+export type ArtifactVisualDiagnosticKind = 'mermaid' | 'structured-visual';
+
+export type ArtifactVisualDiagnostic = {
+    id: string;
+    stageId: string;
+    kind: ArtifactVisualDiagnosticKind;
+    title: string;
+    message: string;
+    blockIndex?: number;
+    createdAt: number;
+};
+
+export type ArtifactVisualDiagnosticInput = Omit<ArtifactVisualDiagnostic, 'createdAt'> & Partial<Pick<ArtifactVisualDiagnostic, 'createdAt'>>;
+
 export type PendingStageTransition = {
     fromStageIndex: number;
     toStageIndex: number;
@@ -435,6 +449,7 @@ export interface ChatState {
     artifactComments: ArtifactComment[];
     artifactSectionLocks: ArtifactSectionLock[];
     artifactAuditEvents: ArtifactAuditEvent[];
+    artifactVisualDiagnostics: ArtifactVisualDiagnostic[];
     stageArtifacts: Record<string, string>;
     contextSummaries: AgentRunSnapshotContextSummary[];
     currentRunId: string | null;
@@ -465,6 +480,9 @@ export interface ChatState {
     getArtifactSectionLocksForStage: (stageId: string) => ArtifactSectionLock[];
     addArtifactAuditEvent: (event: ArtifactAuditEventInput) => void;
     getArtifactAuditEventsForStage: (stageId: string) => ArtifactAuditEvent[];
+    setArtifactVisualDiagnostic: (diagnostic: ArtifactVisualDiagnosticInput) => void;
+    clearArtifactVisualDiagnostic: (diagnosticId: string) => void;
+    clearArtifactVisualDiagnosticsForStage: (stageId: string) => void;
     setCurrentRunId: (runId: string | null) => void;
     applyWorkflowHandoff: (handoff: WorkflowHandoff) => void;
     restoreRunSnapshot: (snapshot: AgentRunSnapshot) => void;

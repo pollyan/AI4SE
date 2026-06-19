@@ -64,6 +64,7 @@ describe('ChatPane Component', () => {
             workflow: 'TEST_DESIGN' as WorkflowType,
             stageIndex: 0,
             pendingStageTransition: null,
+            artifactVisualDiagnostics: [],
             currentRunId: null,
         });
         vi.mocked(fetchWorkflowHandoffs).mockResolvedValue([]);
@@ -262,6 +263,52 @@ describe('ChatPane Component', () => {
         expect(mockSetInput).toHaveBeenCalledWith(expect.stringContaining('请补充更明确的需求或阶段确认信息'));
         expect(mockHandleRetry).not.toHaveBeenCalled();
         expect(mockHandleSend).not.toHaveBeenCalled();
+    });
+
+    it('shows a lightweight notice for current-stage artifact visual diagnostics', () => {
+        useStore.setState({
+            chatHistory: [
+                { id: '1', role: 'assistant', content: '右侧产物已更新。', timestamp: Date.now() },
+            ],
+            artifactVisualDiagnostics: [
+                {
+                    id: 'structured-visual:CLARIFY:0',
+                    stageId: 'CLARIFY',
+                    kind: 'structured-visual',
+                    title: '结构化可视化格式错误',
+                    message: '结构化可视化必须是合法 JSON。',
+                    createdAt: Date.now(),
+                },
+            ],
+        });
+
+        render(<ChatPane />);
+
+        expect(screen.getByText('右侧产物有可视化需要处理')).toBeDefined();
+        expect(screen.getByText('结构化可视化必须是合法 JSON。')).toBeDefined();
+    });
+
+    it('does not show visual diagnostics from another stage', () => {
+        useStore.setState({
+            chatHistory: [
+                { id: '1', role: 'assistant', content: '右侧产物已更新。', timestamp: Date.now() },
+            ],
+            artifactVisualDiagnostics: [
+                {
+                    id: 'structured-visual:STRATEGY:0',
+                    stageId: 'STRATEGY',
+                    kind: 'structured-visual',
+                    title: '结构化可视化格式错误',
+                    message: '策略阶段可视化错误。',
+                    createdAt: Date.now(),
+                },
+            ],
+        });
+
+        render(<ChatPane />);
+
+        expect(screen.queryByText('右侧产物有可视化需要处理')).toBeNull();
+        expect(screen.queryByText('策略阶段可视化错误。')).toBeNull();
     });
 
     it('shows a provider failure recovery card with a retry action', () => {

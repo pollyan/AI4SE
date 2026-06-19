@@ -34,6 +34,8 @@ export const ArtifactPane: React.FC = () => {
   const addArtifactSectionLock = useStore((state) => state.addArtifactSectionLock);
   const removeArtifactSectionLock = useStore((state) => state.removeArtifactSectionLock);
   const addArtifactAuditEvent = useStore((state) => state.addArtifactAuditEvent);
+  const setArtifactVisualDiagnostic = useStore((state) => state.setArtifactVisualDiagnostic);
+  const clearArtifactVisualDiagnostic = useStore((state) => state.clearArtifactVisualDiagnostic);
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
   const [showHistory, setShowHistory] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -1400,11 +1402,49 @@ export const ArtifactPane: React.FC = () => {
     currentStageSectionLocks.find(lock => lock.heading === heading)
   );
 
+  const buildVisualDiagnosticId = (kind: 'mermaid' | 'structured-visual', blockIndex: number): string => (
+    `${kind}:${currentStageId || 'unknown'}:${blockIndex}`
+  );
+
+  const handleMermaidRenderError = useCallback((details: { message: string; blockIndex: number }) => {
+    if (!currentStageId) return;
+    setArtifactVisualDiagnostic({
+      id: buildVisualDiagnosticId('mermaid', details.blockIndex),
+      stageId: currentStageId,
+      kind: 'mermaid',
+      title: 'Mermaid 图表渲染失败',
+      message: details.message || '右侧 Mermaid 图表暂时无法渲染。',
+      blockIndex: details.blockIndex,
+    });
+  }, [currentStageId, setArtifactVisualDiagnostic]);
+
+  const handleMermaidRenderSuccess = useCallback((blockIndex: number) => {
+    clearArtifactVisualDiagnostic(buildVisualDiagnosticId('mermaid', blockIndex));
+  }, [clearArtifactVisualDiagnostic, currentStageId]);
+
+  const handleStructuredVisualValidationError = useCallback((blockIndex: number, message: string) => {
+    if (!currentStageId) return;
+    setArtifactVisualDiagnostic({
+      id: buildVisualDiagnosticId('structured-visual', blockIndex),
+      stageId: currentStageId,
+      kind: 'structured-visual',
+      title: '结构化可视化格式错误',
+      message,
+      blockIndex,
+    });
+  }, [currentStageId, setArtifactVisualDiagnostic]);
+
+  const handleStructuredVisualValidationSuccess = useCallback((blockIndex: number) => {
+    clearArtifactVisualDiagnostic(buildVisualDiagnosticId('structured-visual', blockIndex));
+  }, [clearArtifactVisualDiagnostic, currentStageId]);
+
   const createArtifactMarkdownComponents = (
     onMermaidRetry?: Parameters<typeof createMarkdownCodeRenderer>[0]['onMermaidRetry'],
-    activeAnchorText?: string | null
+    activeAnchorText?: string | null,
+    reportVisualDiagnostics = false
   ): Components => {
     let mermaidBlockCounter = 0;
+    let structuredVisualBlockCounter = 0;
     let anchorHighlighted = false;
     const normalizedActiveAnchorText = activeAnchorText?.trim() || null;
     const highlightAnchorInChildren = (children: React.ReactNode): React.ReactNode => {
@@ -1459,8 +1499,23 @@ export const ArtifactPane: React.FC = () => {
     code: createMarkdownCodeRenderer({
       nextMermaidBlockIndex: () => mermaidBlockCounter++,
       onMermaidRetry,
+      onMermaidRenderError: reportVisualDiagnostics ? handleMermaidRenderError : undefined,
+      onMermaidRenderSuccess: reportVisualDiagnostics ? handleMermaidRenderSuccess : undefined,
       renderStructuredVisual: ({ children }) => (
-        <StructuredVisual source={String(children).replace(/\n$/, '')} />
+        (() => {
+          const blockIndex = structuredVisualBlockCounter++;
+          return (
+            <StructuredVisual
+              source={String(children).replace(/\n$/, '')}
+              onValidationError={reportVisualDiagnostics
+                ? (message) => handleStructuredVisualValidationError(blockIndex, message)
+                : undefined}
+              onValidationSuccess={reportVisualDiagnostics
+                ? () => handleStructuredVisualValidationSuccess(blockIndex)
+                : undefined}
+            />
+          );
+        })()
       ),
       renderBlockCode: ({ language, className, children, props }) => (
         <div className="relative my-6 rounded-lg overflow-hidden border border-[#1e293b] bg-[#0f172a]">
@@ -1485,7 +1540,7 @@ export const ArtifactPane: React.FC = () => {
     };
   };
 
-  const editableMarkdownComponents = createArtifactMarkdownComponents(handleMermaidRetry, activeCommentAnchorText);
+  const editableMarkdownComponents = createArtifactMarkdownComponents(handleMermaidRetry, activeCommentAnchorText, true);
   const readOnlyMarkdownComponents = createArtifactMarkdownComponents();
 
   return (

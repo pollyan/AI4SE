@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { WORKFLOWS } from './core/workflows';
-import { AgentRunSnapshot, AgentRunSnapshotContextSummary, ArtifactAuditEvent, ArtifactComment, ArtifactCommentReply, ArtifactCommentStatus, ArtifactSectionLock, ChatState as AppState, ArtifactVersion, Message, WorkflowHandoff, WorkflowType } from './core/types';
+import { AgentRunSnapshot, AgentRunSnapshotContextSummary, ArtifactAuditEvent, ArtifactComment, ArtifactCommentReply, ArtifactCommentStatus, ArtifactSectionLock, ArtifactVisualDiagnosticInput, ChatState as AppState, ArtifactVersion, Message, WorkflowHandoff, WorkflowType } from './core/types';
 import { getAgentById } from './core/config/agents';
 import { planStageTransitionConfirmation } from './core/agentCore';
 
@@ -435,6 +435,7 @@ export const useStore = create<AppState>()(
       artifactComments: [],
       artifactSectionLocks: [],
       artifactAuditEvents: [],
+      artifactVisualDiagnostics: [],
       stageArtifacts: {
         [WORKFLOWS[DEFAULT_WORKFLOW].stages[0].id]: getWelcomeMessage(DEFAULT_WORKFLOW)
       },
@@ -455,6 +456,7 @@ export const useStore = create<AppState>()(
         artifactComments: [],
         artifactSectionLocks: [],
         artifactAuditEvents: [],
+        artifactVisualDiagnostics: [],
         artifactContent: getWelcomeMessage(workflow),
         stageArtifacts: {
           [WORKFLOWS[workflow].stages[0].id]: getWelcomeMessage(workflow)
@@ -483,6 +485,7 @@ export const useStore = create<AppState>()(
           stageArtifacts: newStageArtifacts,
           artifactContent: newStageArtifacts[targetStageId] || `# ${targetStage.name}\n\n暂无产出物。`,
           artifactTruncated: false,
+          artifactVisualDiagnostics: [],
           pendingStageTransition: null,
           isGenerating: false,
         };
@@ -512,6 +515,7 @@ export const useStore = create<AppState>()(
           artifactContent: nextArtifactContent,
           pendingStageTransition: null,
           artifactTruncated: false,
+          artifactVisualDiagnostics: [],
           isGenerating: false,
         };
       }),
@@ -540,7 +544,7 @@ export const useStore = create<AppState>()(
         const newStageArtifacts = { ...state.stageArtifacts };
         const currentStageId = WORKFLOWS[state.workflow].stages[state.stageIndex].id;
         newStageArtifacts[currentStageId] = artifactContent;
-        return { artifactContent, stageArtifacts: newStageArtifacts };
+        return { artifactContent, stageArtifacts: newStageArtifacts, artifactVisualDiagnostics: [] };
       }),
       setStageArtifact: (stageId, content) => set((state) => {
         const workflowStageIds = new Set(
@@ -552,7 +556,12 @@ export const useStore = create<AppState>()(
 
         const newStageArtifacts = { ...state.stageArtifacts };
         newStageArtifacts[stageId] = content;
-        return { stageArtifacts: newStageArtifacts };
+        return {
+          stageArtifacts: newStageArtifacts,
+          artifactVisualDiagnostics: state.artifactVisualDiagnostics.filter(
+            diagnostic => diagnostic.stageId !== stageId
+          ),
+        };
       }),
       addArtifactVersion: (version) => set((state) => {
         const currentStageId = WORKFLOWS[state.workflow].stages[state.stageIndex].id;
@@ -695,6 +704,56 @@ export const useStore = create<AppState>()(
       getArtifactAuditEventsForStage: (stageId) => (
         useStore.getState().artifactAuditEvents.filter(event => event.stageId === stageId)
       ),
+      setArtifactVisualDiagnostic: (diagnostic: ArtifactVisualDiagnosticInput) => set((state) => {
+        const message = diagnostic.message.trim();
+        if (!diagnostic.id.trim() || !diagnostic.stageId.trim() || !message) {
+          return {};
+        }
+        const existingDiagnostic = state.artifactVisualDiagnostics.find(
+          existing => existing.id === diagnostic.id
+        );
+        if (
+          existingDiagnostic
+          && existingDiagnostic.stageId === diagnostic.stageId
+          && existingDiagnostic.kind === diagnostic.kind
+          && existingDiagnostic.title === diagnostic.title
+          && existingDiagnostic.message === message
+          && existingDiagnostic.blockIndex === diagnostic.blockIndex
+        ) {
+          return {};
+        }
+        const nextDiagnostic = {
+          ...diagnostic,
+          message,
+          createdAt: diagnostic.createdAt ?? existingDiagnostic?.createdAt ?? Date.now(),
+        };
+        return {
+          artifactVisualDiagnostics: [
+            ...state.artifactVisualDiagnostics.filter(existing => existing.id !== diagnostic.id),
+            nextDiagnostic,
+          ],
+        };
+      }),
+      clearArtifactVisualDiagnostic: (diagnosticId) => set((state) => {
+        if (!state.artifactVisualDiagnostics.some(diagnostic => diagnostic.id === diagnosticId)) {
+          return {};
+        }
+        return {
+          artifactVisualDiagnostics: state.artifactVisualDiagnostics.filter(
+            diagnostic => diagnostic.id !== diagnosticId
+          ),
+        };
+      }),
+      clearArtifactVisualDiagnosticsForStage: (stageId) => set((state) => {
+        if (!state.artifactVisualDiagnostics.some(diagnostic => diagnostic.stageId === stageId)) {
+          return {};
+        }
+        return {
+          artifactVisualDiagnostics: state.artifactVisualDiagnostics.filter(
+            diagnostic => diagnostic.stageId !== stageId
+          ),
+        };
+      }),
       setCurrentRunId: (runId) => set({ currentRunId: sanitizeCurrentRunId(runId) }),
       applyWorkflowHandoff: (handoff) => set(() => {
         const targetWorkflow = handoff.targetWorkflowId;
@@ -726,6 +785,7 @@ export const useStore = create<AppState>()(
           artifactComments: [],
           artifactSectionLocks: [],
           artifactAuditEvents: [],
+          artifactVisualDiagnostics: [],
           stageArtifacts: {
             [targetStage.id]: artifactContent,
           },
@@ -780,6 +840,7 @@ export const useStore = create<AppState>()(
           currentRunId: snapshot.run.id,
           pendingStageTransition: null,
           artifactTruncated: false,
+          artifactVisualDiagnostics: [],
           isGenerating: false,
         };
       }),
@@ -791,6 +852,7 @@ export const useStore = create<AppState>()(
         artifactComments: [],
         artifactSectionLocks: [],
         artifactAuditEvents: [],
+        artifactVisualDiagnostics: [],
         artifactContent: getWelcomeMessage(state.workflow),
         stageArtifacts: {
           [WORKFLOWS[state.workflow].stages[0].id]: getWelcomeMessage(state.workflow)

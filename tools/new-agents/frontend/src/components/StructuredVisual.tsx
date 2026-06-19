@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { parseStructuredVisual, StructuredVisualType } from '../core/structuredVisuals';
 
 interface StructuredVisualProps {
     source: string;
+    onValidationError?: (message: string) => void;
+    onValidationSuccess?: () => void;
 }
 
 const DEFAULT_TITLES: Record<StructuredVisualType, string> = {
@@ -18,8 +20,20 @@ const DEFAULT_TITLES: Record<StructuredVisualType, string> = {
     'roadmap': '产品路线图',
 };
 
-export const StructuredVisual: React.FC<StructuredVisualProps> = ({ source }) => {
-    const result = parseStructuredVisual(source);
+export const StructuredVisual: React.FC<StructuredVisualProps> = ({
+    source,
+    onValidationError,
+    onValidationSuccess,
+}) => {
+    const result = useMemo(() => parseStructuredVisual(source), [source]);
+
+    useEffect(() => {
+        if (result.valid === false) {
+            onValidationError?.(result.message);
+            return;
+        }
+        onValidationSuccess?.();
+    }, [onValidationError, onValidationSuccess, result]);
 
     if (result.valid === false) {
         return (

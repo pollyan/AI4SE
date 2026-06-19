@@ -47,6 +47,17 @@ describe('Mermaid Component', () => {
         });
     });
 
+    it('reports render success through the success callback', async () => {
+        const mockOnRenderSuccess = vi.fn();
+        const chartCode = 'graph TD\nA-->B';
+
+        render(<Mermaid chart={chartCode} blockIndex={3} onRenderSuccess={mockOnRenderSuccess} />);
+
+        await waitFor(() => {
+            expect(mockOnRenderSuccess).toHaveBeenCalledWith(3);
+        });
+    });
+
     it('shows loading animation when generating and encountering parse error (AC6)', async () => {
         vi.mocked(mermaid.parse).mockRejectedValue(new Error('Syntax Error'));
 
@@ -62,14 +73,20 @@ describe('Mermaid Component', () => {
         vi.mocked(mermaid.parse).mockRejectedValue(new Error('Syntax Error'));
 
         const mockOnRetry = vi.fn().mockResolvedValue(true);
+        const mockOnRenderError = vi.fn();
         const brokenCode = 'graph TD\nA-->?';
 
-        render(<Mermaid chart={brokenCode} onRetry={mockOnRetry} blockIndex={0} />);
+        render(<Mermaid chart={brokenCode} onRetry={mockOnRetry} onRenderError={mockOnRenderError} blockIndex={0} />);
 
         await waitFor(() => {
             expect(screen.getByText('重新生成图表')).toBeDefined();
         });
         expect(mockOnRetry).not.toHaveBeenCalled();
+        expect(mockOnRenderError).toHaveBeenCalledWith(expect.objectContaining({
+            code: brokenCode,
+            message: 'Syntax Error',
+            blockIndex: 0,
+        }));
     });
 
     it('keeps the same broken code in error state on rerender without retrying', async () => {

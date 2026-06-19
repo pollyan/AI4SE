@@ -76,7 +76,13 @@
   - 单次结构化失败仍只展示主操作 `重试本阶段生成`，避免第一次失败时就暴露过多动作。
   - 最新 assistant 消息为结构化失败时，继续隐藏阶段推进确认卡片，避免带着无效产物进入下一阶段。
   - 验证：`npm run test -- --run src/services/__tests__/chatService.test.ts -t "artifact Mermaid validation"`；`npm run test -- --run src/components/__tests__/ChatPane.test.tsx -t "supplement guidance"`；`npm run test -- --run src/services/__tests__/chatService.test.ts src/components/__tests__/ChatPane.test.tsx`；`npm run build`；`git diff --check`。
-  - 剩余：右侧 Mermaid 运行时渲染失败和 `ai4se-visual` 预览失败仍需继续补左侧轻量提示，避免用户只在右侧滚动时才发现问题。
+- 2026-06-20：完成第三块可视化运行时失败发现性切片。
+  - Mermaid 运行时渲染失败会通过共享 `artifactVisualDiagnostics` 上报当前阶段诊断，右侧仍保留 `重新生成图表` 和 Live Editor 修复入口。
+  - `ai4se-visual` JSON / schema 解析失败会通过同一套共享诊断状态上报，不写入 chat history，不污染下一轮模型上下文。
+  - ChatPane 会在当前阶段存在可视化诊断时显示轻量提示 `右侧产物有可视化需要处理`，并提示用户去右侧查看图表或结构化可视化块；其他阶段诊断不会显示。
+  - 切换工作流、阶段、清空历史、恢复 run snapshot 或更新 artifact 内容时会清理旧诊断，避免跨阶段误报。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx src/components/__tests__/ChatPane.test.tsx src/components/__tests__/StructuredVisual.test.tsx` 观察到 4 个预期失败，再实现后通过；`npm run test -- --run src/components/__tests__/Mermaid.test.tsx src/components/__tests__/ArtifactPane.test.tsx src/components/__tests__/ChatPane.test.tsx src/components/__tests__/StructuredVisual.test.tsx`；`npm run test`；`npm run build`；`git diff --check`。
+  - 剩余：可继续增强为从左侧提示直接定位/滚动到右侧失败图表块。
 
 ### 3. 全流程专业产出物与可视化增强
 
