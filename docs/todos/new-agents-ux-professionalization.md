@@ -251,6 +251,12 @@
   - `检测连接` 复用现有 `/new-agents/api/config/check`，在卡片内显示检测中、成功或失败结果，支持后端 `message` / `error` 错误体，并按消息隔离检测状态；配置恢复后仍保留 `重试本阶段生成`。
   - 剩余：将连接检测结果、provider 失败归因和高失败率阶段进一步联动到 `运行统计` 视图。
   - 验证：`npm run test -- --run src/components/__tests__/ChatPane.test.tsx`。
+- 2026-06-20：完成第三块 CGA「运行统计中的模型/供应商问题可见性」。
+  - `/api/agent/observability` 在 totals、stage summary、provider summary 中新增 `providerIssueCount` / `providerIssueCodes`，当前按真实持久化错误码 `LLM_ERROR` 统计模型/供应商侧运行失败。
+  - 运行统计弹窗新增 `模型/供应商问题` 总览卡；阶段和供应商卡片在相关问题存在时显示 `模型/供应商问题 xN`，同时保留原始 `errorCodes`。
+  - `buildObservabilityAlerts` 新增 `模型/供应商异常集中` 告警，即使整体成功率尚可，也能提示模型配置、供应商额度、鉴权或网络方向的排查路径。
+  - 剩余：默认 LLM 未配置发生在 runtime turn metric 创建之前，暂未进入运行统计；如需覆盖，需要新增 pre-runtime 失败记录或配置检查观测事件。
+  - 验证：`.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_observability_endpoint_groups_provider_issue_codes tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_observability_endpoint_returns_runtime_turn_summary tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_observability_endpoint_filters_by_workflow_and_stage`；`npm run test -- --run src/services/__tests__/observabilityService.test.ts src/core/__tests__/observabilityAlerts.test.ts src/components/__tests__/Header.test.tsx`。
 
 ### 7. Artifact 协作体验深化
 

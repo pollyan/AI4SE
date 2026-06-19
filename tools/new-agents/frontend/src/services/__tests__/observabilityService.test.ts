@@ -10,6 +10,8 @@ const OBSERVABILITY_PAYLOAD = {
         successRate: 66.67,
         avgDurationMs: 1200,
         estimatedTokens: 900,
+        providerIssueCount: 1,
+        providerIssueCodes: { LLM_ERROR: 1 },
     },
     byStage: [
         {
@@ -20,7 +22,9 @@ const OBSERVABILITY_PAYLOAD = {
             successRate: 50,
             avgDurationMs: 1500,
             estimatedTokens: 700,
-            errorCodes: { SCHEMA_VALIDATION_FAILED: 1 },
+            errorCodes: { LLM_ERROR: 1 },
+            providerIssueCount: 1,
+            providerIssueCodes: { LLM_ERROR: 1 },
         },
     ],
     byProvider: [
@@ -31,7 +35,9 @@ const OBSERVABILITY_PAYLOAD = {
             successRate: 66.67,
             avgDurationMs: 1200,
             estimatedTokens: 900,
-            errorCodes: { SCHEMA_VALIDATION_FAILED: 1 },
+            errorCodes: { LLM_ERROR: 1 },
+            providerIssueCount: 1,
+            providerIssueCodes: { LLM_ERROR: 1 },
         },
     ],
     recentTurns: [
@@ -43,7 +49,7 @@ const OBSERVABILITY_PAYLOAD = {
             model: 'gpt-test',
             provider: 'api.test.com',
             status: 'error',
-            errorCode: 'SCHEMA_VALIDATION_FAILED',
+            errorCode: 'LLM_ERROR',
             durationMs: 1500,
             inputChars: 300,
             outputChars: 600,
@@ -71,7 +77,10 @@ describe('observabilityService', () => {
         expect(summary.totals.turns).toBe(3);
         expect(summary.byStage[0].workflowId).toBe('TEST_DESIGN');
         expect(summary.byProvider[0].provider).toBe('api.test.com');
-        expect(summary.recentTurns[0].errorCode).toBe('SCHEMA_VALIDATION_FAILED');
+        expect(summary.totals.providerIssueCount).toBe(1);
+        expect(summary.byStage[0].providerIssueCodes).toEqual({ LLM_ERROR: 1 });
+        expect(summary.byProvider[0].providerIssueCount).toBe(1);
+        expect(summary.recentTurns[0].errorCode).toBe('LLM_ERROR');
     });
 
     it('serializes workflow and stage filters', async () => {
@@ -105,6 +114,23 @@ describe('observabilityService', () => {
     it('fails explicitly when the summary payload is malformed', async () => {
         vi.mocked(fetch).mockResolvedValue(new Response(
             JSON.stringify({ totals: {}, recentTurns: 'broken' }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ));
+
+        await expect(fetchObservabilitySummary({ limit: 20 })).rejects.toThrow(
+            'Invalid observability summary response'
+        );
+    });
+
+    it('fails explicitly when provider issue counts are malformed', async () => {
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({
+                ...OBSERVABILITY_PAYLOAD,
+                totals: {
+                    ...OBSERVABILITY_PAYLOAD.totals,
+                    providerIssueCount: '1',
+                },
+            }),
             { status: 200, headers: { 'Content-Type': 'application/json' } },
         ));
 

@@ -65,6 +65,8 @@ const parseTotals = (value: unknown): ObservabilityTotals => {
         successRate: parseNumber(value.successRate),
         avgDurationMs: parseNumber(value.avgDurationMs),
         estimatedTokens: parseInteger(value.estimatedTokens),
+        providerIssueCount: parseInteger(value.providerIssueCount),
+        providerIssueCodes: parseErrorCodes(value.providerIssueCodes),
     };
 };
 

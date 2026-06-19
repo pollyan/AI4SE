@@ -372,6 +372,8 @@ export type ObservabilityTotals = {
     successRate: number;
     avgDurationMs: number;
     estimatedTokens: number;
+    providerIssueCount: number;
+    providerIssueCodes: Record<string, number>;
 };
 
 export type ObservabilityStageSummary = ObservabilityTotals & {

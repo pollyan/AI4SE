@@ -35,6 +35,7 @@ SUMMARY_SOURCE_ARTIFACT = "artifact"
 SUMMARY_SOURCE_USER_INPUT = "user_input"
 DEFAULT_RUN_LIST_LIMIT = 20
 MAX_RUN_LIST_LIMIT = 100
+PROVIDER_ISSUE_ERROR_CODES = {"LLM_ERROR"}
 
 
 class ArtifactVersionConflictError(ValueError):
@@ -808,6 +809,7 @@ def get_runtime_observability_summary(
     ).all()
     total_turns = len(metrics)
     failed_turns = sum(1 for metric in metrics if metric.status != "success")
+    provider_issue_codes = _provider_issue_codes(metrics)
 
     stage_index: dict[tuple[str, str], list[AgentRunTurnMetric]] = {}
     provider_index: dict[str, list[AgentRunTurnMetric]] = {}
@@ -822,6 +824,8 @@ def get_runtime_observability_summary(
             "successRate": _success_rate(total_turns, failed_turns),
             "avgDurationMs": _avg_duration(metrics),
             "estimatedTokens": sum(metric.estimated_tokens for metric in metrics),
+            "providerIssueCount": sum(provider_issue_codes.values()),
+            "providerIssueCodes": provider_issue_codes,
         },
         "byStage": [
             _stage_observability_item(workflow_id, stage_id, stage_metrics)
@@ -853,6 +857,14 @@ def _avg_duration(metrics: list[AgentRunTurnMetric]) -> float:
     )
 
 
+def _provider_issue_codes(metrics: list[AgentRunTurnMetric]) -> dict[str, int]:
+    issue_codes: dict[str, int] = {}
+    for metric in metrics:
+        if metric.error_code in PROVIDER_ISSUE_ERROR_CODES:
+            issue_codes[metric.error_code] = issue_codes.get(metric.error_code, 0) + 1
+    return dict(sorted(issue_codes.items()))
+
+
 def _stage_observability_item(
     workflow_id: str,
     stage_id: str,
@@ -863,6 +875,7 @@ def _stage_observability_item(
     for metric in metrics:
         if metric.error_code:
             error_codes[metric.error_code] = error_codes.get(metric.error_code, 0) + 1
+    provider_issue_codes = _provider_issue_codes(metrics)
 
     return {
         "workflowId": workflow_id,
@@ -873,6 +886,8 @@ def _stage_observability_item(
         "avgDurationMs": _avg_duration(metrics),
         "estimatedTokens": sum(metric.estimated_tokens for metric in metrics),
         "errorCodes": dict(sorted(error_codes.items())),
+        "providerIssueCount": sum(provider_issue_codes.values()),
+        "providerIssueCodes": provider_issue_codes,
     }
 
 
@@ -885,6 +900,7 @@ def _provider_observability_item(
     for metric in metrics:
         if metric.error_code:
             error_codes[metric.error_code] = error_codes.get(metric.error_code, 0) + 1
+    provider_issue_codes = _provider_issue_codes(metrics)
 
     return {
         "provider": provider,
@@ -894,6 +910,8 @@ def _provider_observability_item(
         "avgDurationMs": _avg_duration(metrics),
         "estimatedTokens": sum(metric.estimated_tokens for metric in metrics),
         "errorCodes": dict(sorted(error_codes.items())),
+        "providerIssueCount": sum(provider_issue_codes.values()),
+        "providerIssueCodes": provider_issue_codes,
     }
 
 

@@ -856,7 +856,7 @@ export const Header: React.FC = () => {
                     </section>
                   )}
 
-                  <div className="grid gap-3 sm:grid-cols-4">
+                  <div className="grid gap-3 sm:grid-cols-5">
                     <div className="rounded-lg border border-[#1e293b] bg-[#0f1623] p-4">
                       <div className="text-xs text-slate-500">总轮次</div>
                       <div className="mt-2 text-xl font-bold text-white">{observabilitySummary.totals.turns}</div>
@@ -874,6 +874,15 @@ export const Header: React.FC = () => {
                     <div className="rounded-lg border border-[#1e293b] bg-[#0f1623] p-4">
                       <div className="text-xs text-slate-500">估算 Token</div>
                       <div className="mt-2 text-xl font-bold text-white">{observabilitySummary.totals.estimatedTokens}</div>
+                    </div>
+                    <div className="rounded-lg border border-[#1e293b] bg-[#0f1623] p-4">
+                      <div className="text-xs text-slate-500">模型/供应商问题</div>
+                      <div className={clsx(
+                        "mt-2 text-xl font-bold",
+                        observabilitySummary.totals.providerIssueCount > 0 ? "text-amber-200" : "text-white"
+                      )}>
+                        {observabilitySummary.totals.providerIssueCount}
+                      </div>
                     </div>
                   </div>
 
@@ -895,6 +904,11 @@ export const Header: React.FC = () => {
                             </div>
                             {Object.keys(stage.errorCodes).length > 0 && (
                               <div className="mt-2 flex flex-wrap gap-2">
+                                {stage.providerIssueCount > 0 && (
+                                  <span className="rounded bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-200">
+                                    模型/供应商问题 x{stage.providerIssueCount}
+                                  </span>
+                                )}
                                 {Object.entries(stage.errorCodes).map(([code, count]) => (
                                   <span key={code} className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-200">
                                     {code} x{count}
@@ -924,6 +938,11 @@ export const Header: React.FC = () => {
                             </div>
                             {Object.keys(provider.errorCodes).length > 0 && (
                               <div className="mt-2 flex flex-wrap gap-2">
+                                {provider.providerIssueCount > 0 && (
+                                  <span className="rounded bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-200">
+                                    模型/供应商问题 x{provider.providerIssueCount}
+                                  </span>
+                                )}
                                 {Object.entries(provider.errorCodes).map(([code, count]) => (
                                   <span key={code} className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-200">
                                     {code} x{count}

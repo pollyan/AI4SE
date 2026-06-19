@@ -30,6 +30,13 @@ const buildProviderAlert = (provider: ObservabilityProviderSummary): Observabili
     detail: `${provider.provider} 成功率 ${provider.successRate}%，失败 ${provider.failedTurns}/${provider.turns} 轮。`,
 });
 
+const formatTopProviderIssueCode = (issueCodes: Record<string, number>): string => {
+    const [code, count] = Object.entries(issueCodes).sort((left, right) => (
+        right[1] - left[1] || left[0].localeCompare(right[0])
+    ))[0] || ['未知错误', 0];
+    return `${code} x${count}`;
+};
+
 export const buildObservabilityAlerts = (summary: ObservabilitySummary): ObservabilityAlert[] => {
     const alerts: ObservabilityAlert[] = [];
 
@@ -38,6 +45,14 @@ export const buildObservabilityAlerts = (summary: ObservabilitySummary): Observa
             id: 'runtime-failures',
             title: '检测到失败运行',
             detail: `最近 ${summary.totals.turns} 轮中有 ${summary.totals.failedTurns} 轮失败，成功率 ${summary.totals.successRate}%。`,
+        });
+    }
+
+    if (summary.totals.providerIssueCount > 0) {
+        alerts.push({
+            id: 'provider-issues',
+            title: '模型/供应商异常集中',
+            detail: `最近 ${summary.totals.turns} 轮中有 ${summary.totals.providerIssueCount} 轮与模型配置、供应商额度、鉴权或网络有关。最高频错误：${formatTopProviderIssueCode(summary.totals.providerIssueCodes)}。`,
         });
     }
 

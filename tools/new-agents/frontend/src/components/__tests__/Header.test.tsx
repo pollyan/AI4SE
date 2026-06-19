@@ -207,6 +207,8 @@ const OBSERVABILITY_SUMMARY: ObservabilitySummary = {
         successRate: 66.67,
         avgDurationMs: 1200,
         estimatedTokens: 900,
+        providerIssueCount: 1,
+        providerIssueCodes: { LLM_ERROR: 1 },
     },
     byStage: [
         {
@@ -217,7 +219,9 @@ const OBSERVABILITY_SUMMARY: ObservabilitySummary = {
             successRate: 50,
             avgDurationMs: 1500,
             estimatedTokens: 700,
-            errorCodes: { SCHEMA_VALIDATION_FAILED: 1 },
+            errorCodes: { LLM_ERROR: 1 },
+            providerIssueCount: 1,
+            providerIssueCodes: { LLM_ERROR: 1 },
         },
     ],
     byProvider: [
@@ -228,7 +232,9 @@ const OBSERVABILITY_SUMMARY: ObservabilitySummary = {
             successRate: 66.67,
             avgDurationMs: 1200,
             estimatedTokens: 900,
-            errorCodes: { SCHEMA_VALIDATION_FAILED: 1 },
+            errorCodes: { LLM_ERROR: 1 },
+            providerIssueCount: 1,
+            providerIssueCodes: { LLM_ERROR: 1 },
         },
     ],
     recentTurns: [
@@ -240,7 +246,7 @@ const OBSERVABILITY_SUMMARY: ObservabilitySummary = {
             model: 'gpt-test',
             provider: 'api.test.com',
             status: 'error',
-            errorCode: 'SCHEMA_VALIDATION_FAILED',
+            errorCode: 'LLM_ERROR',
             durationMs: 1500,
             inputChars: 300,
             outputChars: 600,
@@ -457,7 +463,8 @@ describe('Header Component', () => {
         expect((await screen.findAllByText('成功率 66.67%')).length).toBeGreaterThan(0);
         expect(screen.getByText('TEST_DESIGN / CLARIFY')).toBeTruthy();
         expect(screen.getAllByText('api.test.com').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('SCHEMA_VALIDATION_FAILED').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('LLM_ERROR').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('模型/供应商问题 x1').length).toBeGreaterThan(0);
         expect(screen.getByText(/run-123/)).toBeTruthy();
     });
 
@@ -543,6 +550,7 @@ describe('Header Component', () => {
         expect(screen.getByText('检测到失败运行')).toBeTruthy();
         expect(screen.getByText('阶段成功率偏低')).toBeTruthy();
         expect(screen.getByText('供应商成功率偏低')).toBeTruthy();
+        expect(screen.getByText('模型/供应商异常集中')).toBeTruthy();
     });
 
     it('filters runtime observability by workflow and stage', async () => {

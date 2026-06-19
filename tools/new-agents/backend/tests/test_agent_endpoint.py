@@ -1710,6 +1710,8 @@ def test_agent_observability_endpoint_returns_runtime_turn_summary(
             "avgDurationMs": response.json["byStage"][0]["avgDurationMs"],
             "estimatedTokens": response.json["byStage"][0]["estimatedTokens"],
             "errorCodes": {"SCHEMA_VALIDATION_FAILED": 1},
+            "providerIssueCount": 0,
+            "providerIssueCodes": {},
         }
     ]
     assert response.json["byProvider"] == [
@@ -1721,6 +1723,8 @@ def test_agent_observability_endpoint_returns_runtime_turn_summary(
             "avgDurationMs": response.json["byProvider"][0]["avgDurationMs"],
             "estimatedTokens": response.json["byProvider"][0]["estimatedTokens"],
             "errorCodes": {"SCHEMA_VALIDATION_FAILED": 1},
+            "providerIssueCount": 0,
+            "providerIssueCodes": {},
         }
     ]
     assert response.json["recentTurns"][0]["runId"]
@@ -1797,6 +1801,8 @@ def test_agent_observability_endpoint_filters_by_workflow_and_stage(
             "avgDurationMs": 100.0,
             "estimatedTokens": 75,
             "errorCodes": {},
+            "providerIssueCount": 0,
+            "providerIssueCodes": {},
         }
     ]
     assert response.json["byProvider"][0]["provider"] == "api.test.com"
@@ -1818,6 +1824,84 @@ def test_agent_observability_endpoint_filters_by_workflow_and_stage(
             "createdAt": response.json["recentTurns"][0]["createdAt"],
         }
     ]
+
+
+def test_agent_observability_endpoint_groups_provider_issue_codes(
+    app,
+    client,
+):
+    with app.app_context():
+        provider_run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        record_turn_metric(
+            run_id=provider_run.id,
+            workflow_id="TEST_DESIGN",
+            stage_id="CLARIFY",
+            model_name="test-model",
+            provider="api.test.com",
+            status="error",
+            error_code="LLM_ERROR",
+            duration_ms=200,
+            input_chars=100,
+            output_chars=50,
+            estimated_tokens=40,
+            contract_retry_count=0,
+        )
+        contract_run = create_agent_run("TEST_DESIGN", "lisa", "STRATEGY")
+        record_turn_metric(
+            run_id=contract_run.id,
+            workflow_id="TEST_DESIGN",
+            stage_id="STRATEGY",
+            model_name="test-model",
+            provider="api.test.com",
+            status="error",
+            error_code="SCHEMA_VALIDATION_FAILED",
+            duration_ms=300,
+            input_chars=120,
+            output_chars=80,
+            estimated_tokens=50,
+            contract_retry_count=3,
+        )
+        runtime_run = create_agent_run("TEST_DESIGN", "lisa", "CASES")
+        record_turn_metric(
+            run_id=runtime_run.id,
+            workflow_id="TEST_DESIGN",
+            stage_id="CASES",
+            model_name="test-model",
+            provider="api.test.com",
+            status="error",
+            error_code="AGENT_RUNTIME_UNAVAILABLE",
+            duration_ms=250,
+            input_chars=90,
+            output_chars=10,
+            estimated_tokens=25,
+            contract_retry_count=0,
+        )
+
+    response = client.get("/api/agent/observability")
+
+    assert response.status_code == 200
+    assert response.json["totals"]["providerIssueCount"] == 1
+    assert response.json["totals"]["providerIssueCodes"] == {"LLM_ERROR": 1}
+    clarify_stage = next(
+        stage for stage in response.json["byStage"]
+        if stage["stageId"] == "CLARIFY"
+    )
+    strategy_stage = next(
+        stage for stage in response.json["byStage"]
+        if stage["stageId"] == "STRATEGY"
+    )
+    cases_stage = next(
+        stage for stage in response.json["byStage"]
+        if stage["stageId"] == "CASES"
+    )
+    assert clarify_stage["providerIssueCount"] == 1
+    assert clarify_stage["providerIssueCodes"] == {"LLM_ERROR": 1}
+    assert strategy_stage["providerIssueCount"] == 0
+    assert strategy_stage["providerIssueCodes"] == {}
+    assert cases_stage["providerIssueCount"] == 0
+    assert cases_stage["providerIssueCodes"] == {}
+    assert response.json["byProvider"][0]["providerIssueCount"] == 1
+    assert response.json["byProvider"][0]["providerIssueCodes"] == {"LLM_ERROR": 1}
 
 
 def test_agent_observability_endpoint_rejects_stage_without_workflow(client):
