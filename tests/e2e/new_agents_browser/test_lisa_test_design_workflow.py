@@ -28,6 +28,7 @@ def _lisa_scenario() -> WorkflowScenario:
                     "## 1. 被测系统与边界",
                     "## 4. 隐式需求与非功能性考量",
                 ),
+                visual_markers=("flowchart TD",),
                 user_turns=(
                     "补充：登录方式包括账号密码、短信验证码和第三方登录；支付只覆盖微信和银行卡。",
                     "确认边界：本次不测第三方渠道底层稳定性，但要测回调超时、重复回调和订单状态一致性。",
@@ -45,6 +46,7 @@ def _lisa_scenario() -> WorkflowScenario:
                     "## 1. 质量目标",
                     "## 5. 测试点拓扑",
                 ),
+                visual_markers=("risk-board",),
                 user_turns=(
                     "策略补充：P0 必须覆盖登录成功后发起支付、支付成功回调、订单状态更新。",
                     "风险确认：账号锁定、安全审计、重复支付、回调幂等都按高风险处理。",
@@ -58,6 +60,7 @@ def _lisa_scenario() -> WorkflowScenario:
                     "## 1. 用例统计",
                     "## 3. 测试点覆盖追溯",
                 ),
+                visual_markers=("traceability-matrix",),
                 user_turns=(
                     "用例补充：请把正向、异常、安全和兼容性分组，不要只有一个大表。",
                     "确认用例粒度：每条用例都要包含前置条件、操作步骤、预期结果和优先级。",
@@ -71,6 +74,7 @@ def _lisa_scenario() -> WorkflowScenario:
                     "## 文档信息",
                     "## 附录：验收标准",
                 ),
+                visual_markers=("coverage-map",),
             ),
         ),
     )

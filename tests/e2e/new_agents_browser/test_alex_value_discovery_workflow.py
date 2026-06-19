@@ -38,6 +38,7 @@ def _alex_scenario() -> WorkflowScenario:
                     "## 产品核心定位",
                     "60 秒电梯演讲",
                 ),
+                visual_markers=("score-matrix",),
                 user_turns=(
                     "价值补充：目标用户是 10 人以上测试团队的测试负责人，痛点是需求变更快、测试设计耗时。",
                     "商业补充：先做 SaaS 订阅，团队愿意为节省测试设计时间和降低漏测风险付费。",
@@ -64,6 +65,7 @@ def _alex_scenario() -> WorkflowScenario:
                     "## 用户旅程地图",
                     "## 核心机会点",
                 ),
+                visual_markers=("journey-map",),
                 user_turns=(
                     "旅程补充：用户从需求评审开始，先识别风险，再设计策略，最后补充用例并组织评审。",
                     "机会补充：最痛的是需求信息不完整和测试点遗漏，产品应优先切入风险识别和用例追溯。",
@@ -77,6 +79,7 @@ def _alex_scenario() -> WorkflowScenario:
                     "## 1. 产品概述",
                     "## 7. 风险评估",
                 ),
+                visual_markers=("roadmap",),
             ),
         ),
     )
@@ -171,6 +174,7 @@ def test_alex_to_lisa_handoff_passes_optional_llm_judge(new_agents_page):
                         "## 1. 被测系统与边界",
                         "## 4. 隐式需求与非功能性考量",
                     ),
+                    visual_markers=("flowchart TD",),
                     user_turns=(
                         "补充：重点检查权限隔离、输出质量和需求追溯。",
                         "确认：请进入策略制定，并保留 Alex 需求蓝图中的风险。",
@@ -181,9 +185,10 @@ def test_alex_to_lisa_handoff_passes_optional_llm_judge(new_agents_page):
                     transition_label="确认进入 用例编写",
                     artifact_headings=(
                         "# 测试策略蓝图",
-                        "## 1. 质量目标与风险分层",
-                        "## 5. 覆盖追溯策略",
+                        "## 1. 质量目标",
+                        "## 5. 测试点拓扑",
                     ),
+                    visual_markers=("risk-board",),
                     user_turns=(
                         "策略补充：P0 先覆盖蓝图中的输出质量和权限隔离。",
                         "确认：请进入用例编写。",
@@ -197,6 +202,7 @@ def test_alex_to_lisa_handoff_passes_optional_llm_judge(new_agents_page):
                         "## 1. 用例统计",
                         "## 3. 测试点覆盖追溯",
                     ),
+                    visual_markers=("traceability-matrix",),
                 ),
             ),
         ),

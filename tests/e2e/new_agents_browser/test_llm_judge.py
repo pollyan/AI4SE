@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from .llm_judge import build_handoff_judge_prompt, build_judge_prompt, parse_judge_result
+from .llm_judge import (
+    assert_visualization_quality_dimension,
+    build_handoff_judge_prompt,
+    build_judge_prompt,
+    parse_judge_result,
+)
 from .workflow_runner import (
     ConversationEvent,
     StageArtifactSnapshot,
@@ -148,6 +153,7 @@ def test_build_handoff_judge_prompt_uses_cross_agent_rubric() -> None:
     assert "权限隔离、输出质量、追溯能力" in prompt
     assert "Alex 价值发现 -> Lisa 测试设计" in prompt
     assert "dimension_scores" in prompt
+    assert "可视化质量" in prompt
 
 
 def test_parse_judge_result_accepts_strict_verdict() -> None:
@@ -158,7 +164,8 @@ def test_parse_judge_result_accepts_strict_verdict() -> None:
           "score": 86,
           "dimension_scores": {
             "需求澄清": 90,
-            "交互体验": 82
+            "交互体验": 82,
+            "可视化质量": 88
           },
           "issues": ["风险矩阵还可以更细"],
           "evidence": ["阶段切换完整", "最终产物包含追溯表"],
@@ -169,10 +176,54 @@ def test_parse_judge_result_accepts_strict_verdict() -> None:
 
     assert result.passed is True
     assert result.score == 86
-    assert result.dimension_scores == {"需求澄清": 90, "交互体验": 82}
+    assert result.dimension_scores == {
+        "需求澄清": 90,
+        "交互体验": 82,
+        "可视化质量": 88,
+    }
     assert result.issues == ["风险矩阵还可以更细"]
     assert result.evidence == ["阶段切换完整", "最终产物包含追溯表"]
     assert result.recommendations == ["补充非功能测试说明"]
+
+
+def test_parse_judge_result_rejects_missing_visualization_dimension() -> None:
+    with pytest.raises(ValueError, match="visualization quality dimension"):
+        parse_judge_result(
+            """
+            {
+              "pass": true,
+              "score": 86,
+              "dimension_scores": {
+                "需求澄清": 90,
+                "交互体验": 82
+              },
+              "issues": [],
+              "evidence": [],
+              "recommendations": []
+            }
+            """
+        )
+
+
+def test_assert_visualization_quality_dimension_rejects_low_score() -> None:
+    result = parse_judge_result(
+        """
+        {
+          "pass": true,
+          "score": 86,
+          "dimension_scores": {
+            "需求澄清": 90,
+            "可视化质量": 69
+          },
+          "issues": ["可视化较弱"],
+          "evidence": ["产物只有文字说明"],
+          "recommendations": ["补充结构化图表"]
+        }
+        """
+    )
+
+    with pytest.raises(AssertionError, match="Visualization quality score too low"):
+        assert_visualization_quality_dimension(result)
 
 
 def test_parse_judge_result_rejects_missing_required_field() -> None:
@@ -197,7 +248,7 @@ def test_parse_judge_result_rejects_out_of_range_scores() -> None:
             {
               "pass": true,
               "score": 101,
-              "dimension_scores": {"交互体验": 90},
+              "dimension_scores": {"交互体验": 90, "可视化质量": 90},
               "issues": [],
               "evidence": [],
               "recommendations": []
@@ -214,7 +265,7 @@ def test_parse_judge_result_rejects_out_of_range_scores() -> None:
             {
               "pass": true,
               "score": 90,
-              "dimension_scores": {"交互体验": -1},
+              "dimension_scores": {"交互体验": -1, "可视化质量": 90},
               "issues": [],
               "evidence": [],
               "recommendations": []

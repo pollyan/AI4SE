@@ -25,6 +25,10 @@ class JudgeResult:
     recommendations: list[str]
 
 
+MIN_VISUALIZATION_QUALITY_SCORE = 70
+VISUALIZATION_DIMENSION_KEYWORDS = ("可视化", "visual")
+
+
 def _load_dotenv() -> None:
     global _DOTENV_LOADED
     if _DOTENV_LOADED:
@@ -195,6 +199,11 @@ def build_handoff_judge_prompt(
 - 风险延续：Alex 识别的关键业务风险是否进入 Lisa 的测试风险、优先级和覆盖设计。
 - 执行落地：Lisa 输出是否形成可评审、可执行、可导出或可进入测试管理工具的资产。
 - 体验连续性：用户是否能感知从 Alex 到 Lisa 的角色切换，且无需重复粘贴源产物。
+- 可视化连续性：Lisa 是否保留或转换 Alex 产物中的图表、矩阵、路线图或追溯结构。
+
+可视化质量维度：
+- 图表、矩阵、时间线、看板或评分卡是否帮助用户理解跨 Agent 接力重点。
+- dimension_scores 中必须包含“可视化质量”或等价维度分数。
 
 Lisa 测试专业维度：
 {_professional_rubric("Lisa 测试策略与用例设计")}
@@ -254,6 +263,8 @@ def parse_judge_result(content: str) -> JudgeResult:
             value,
             "dimension score",
         )
+    if _find_visualization_dimension(normalized_dimension_scores) is None:
+        raise ValueError("missing visualization quality dimension")
 
     return JudgeResult(
         passed=passed,
@@ -265,6 +276,34 @@ def parse_judge_result(content: str) -> JudgeResult:
             parsed["recommendations"],
             "recommendations",
         ),
+    )
+
+
+def _find_visualization_dimension(dimension_scores: dict[str, int]) -> str | None:
+    for dimension in dimension_scores:
+        normalized_dimension = dimension.strip().lower()
+        if any(
+            keyword in normalized_dimension
+            for keyword in VISUALIZATION_DIMENSION_KEYWORDS
+        ):
+            return dimension
+    return None
+
+
+def assert_visualization_quality_dimension(
+    result: JudgeResult,
+    *,
+    minimum_score: int = MIN_VISUALIZATION_QUALITY_SCORE,
+) -> None:
+    dimension = _find_visualization_dimension(result.dimension_scores)
+    if dimension is None:
+        raise AssertionError(
+            "LLM judge result is missing visualization quality dimension"
+        )
+    score = result.dimension_scores[dimension]
+    assert score >= minimum_score, (
+        f"Visualization quality score too low: {score}, "
+        f"minimum: {minimum_score}, issues: {result.issues}"
     )
 
 
@@ -334,6 +373,7 @@ def assert_llm_judges_artifact_quality(
     assert result.score >= 70, (
         f"LLM judge score too low: {result.score}, issues: {result.issues}"
     )
+    assert_visualization_quality_dimension(result)
 
 
 def assert_llm_judges_handoff_quality(
@@ -391,3 +431,4 @@ def assert_llm_judges_handoff_quality(
     assert result.score >= 75, (
         f"LLM handoff judge score too low: {result.score}, issues: {result.issues}"
     )
+    assert_visualization_quality_dimension(result)

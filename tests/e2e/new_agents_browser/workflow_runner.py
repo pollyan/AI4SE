@@ -10,6 +10,7 @@ class StageExpectation:
     stage_tab: str
     transition_label: str | None
     artifact_headings: tuple[str, ...]
+    visual_markers: tuple[str, ...] = ()
     user_turns: tuple[str, ...] = ()
     reject_transition_once_with: str | None = None
 
@@ -87,6 +88,11 @@ def _assert_artifact_contains(page: Page, headings: tuple[str, ...]) -> None:
         expect(artifact_pane).to_contain_text(heading, timeout=10000)
 
 
+def _assert_stage_artifact(page: Page, stage: StageExpectation) -> None:
+    _assert_artifact_contains(page, stage.artifact_headings)
+    _assert_artifact_contains(page, stage.visual_markers)
+
+
 def _assert_chat_does_not_contain_full_artifact(
     page: Page,
     forbidden_headings: tuple[str, ...],
@@ -133,9 +139,9 @@ def _assert_manual_stage_restore(
     current_stage: StageExpectation,
 ) -> None:
     _open_stage_tab(page, previous_stage.stage_tab)
-    _assert_artifact_contains(page, previous_stage.artifact_headings)
+    _assert_stage_artifact(page, previous_stage)
     _open_stage_tab(page, current_stage.stage_tab)
-    _assert_artifact_contains(page, current_stage.artifact_headings)
+    _assert_stage_artifact(page, current_stage)
 
 
 def run_complete_workflow(
@@ -169,7 +175,7 @@ def run_complete_workflow(
     all_headings: list[str] = []
     completed_stages: list[StageExpectation] = []
     for stage_index, stage in enumerate(scenario.stages):
-        _assert_artifact_contains(page, stage.artifact_headings)
+        _assert_stage_artifact(page, stage)
         previous_chat_text = _append_assistant_delta(
             page,
             previous_chat_text,
@@ -198,7 +204,7 @@ def run_complete_workflow(
                 )
                 previous_chat_text = _chat_text(page)
                 _send_message(page, message)
-                _assert_artifact_contains(page, stage.artifact_headings)
+                _assert_stage_artifact(page, stage)
                 previous_chat_text = _append_assistant_delta(
                     page,
                     previous_chat_text,
@@ -218,7 +224,7 @@ def run_complete_workflow(
             )
             previous_chat_text = _chat_text(page)
             _send_message(page, final_user_turn)
-            _assert_artifact_contains(page, stage.artifact_headings)
+            _assert_stage_artifact(page, stage)
             previous_chat_text = _append_assistant_delta(
                 page,
                 previous_chat_text,
@@ -255,7 +261,7 @@ def run_complete_workflow(
                 )
                 previous_chat_text = _chat_text(page)
                 _send_message(page, stage.reject_transition_once_with)
-                _assert_artifact_contains(page, stage.artifact_headings)
+                _assert_stage_artifact(page, stage)
                 previous_chat_text = _append_assistant_delta(
                     page,
                     previous_chat_text,

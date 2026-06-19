@@ -132,6 +132,14 @@
   - `VALUE_DISCOVERY/BLUEPRINT` 新增 `roadmap`，稳定表达版本、时间、核心功能、目标和成功指标。
   - 验证：`.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_contracts.py::test_later_stage_structured_visual_contracts_cover_professional_views tools/new-agents/backend/tests/test_agent_contracts.py::test_validate_agent_turn_accepts_complete_required_artifact_template tools/new-agents/backend/tests/test_agent_contracts.py::test_build_artifact_contract_prompt_includes_required_structured_visual_contract`；`npm run test -- --run src/core/__tests__/structuredVisuals.test.ts src/components/__tests__/StructuredVisual.test.tsx`。
   - 剩余：可继续做 E2E/LLM judge 证据，评价全流程专业感和可视化质量。
+- 2026-06-20：完成第四块 CGA「E2E 与 LLM judge 可视化质量证据硬化」。
+  - E2E `StageExpectation` 新增 `visual_markers`，Lisa/Alex 浏览器主流程现在不仅检查 artifact 标题，还会检查每阶段 Mermaid 或 `ai4se-visual` marker。
+  - `TEST_DESIGN` mock 产物覆盖首阶段 Mermaid `flowchart`、策略 `risk-board`、用例 `traceability-matrix` 和交付 `coverage-map`。
+  - `VALUE_DISCOVERY` mock 产物覆盖 `score-matrix`、`journey-map` 和 `roadmap`。
+  - Alex -> Lisa handoff mock 产物改为继承 Alex 的 AI 测试设计助手蓝图，避免接力后退回无关的登录支付样例。
+  - LLM judge verdict 解析现在要求包含“可视化质量”或等价维度，且 artifact/handoff judge 都会校验该维度分数阈值。
+  - 验证：先运行 `.venv/bin/python -m pytest tests/e2e/new_agents_browser/test_llm_judge.py` 观察到 handoff prompt 缺少 `可视化质量` 失败，再实现后通过；先运行 `.venv/bin/python -m pytest tests/e2e/new_agents_browser/test_lisa_test_design_workflow.py tests/e2e/new_agents_browser/test_alex_value_discovery_workflow.py` 观察到缺少 `flowchart TD` / `score-matrix` 失败，再补 mock 后同命令 6/6 通过；当前环境开启的可选 LLM judge 也覆盖并通过了 Alex -> Lisa handoff 质量评审。
+  - 剩余：复杂 Mermaid/SVG 的 PDF/DOCX 高保真图片级嵌入仍可作为后续增强切片。
 
 ## P1 中优先级
 
