@@ -776,6 +776,63 @@ describe('ArtifactPane Component', () => {
         expect(click).toHaveBeenCalledTimes(1);
     });
 
+    it('draws Mermaid mindmaps as vector hierarchy shapes in exported PDF content streams', async () => {
+        const createdAnchors: HTMLAnchorElement[] = [];
+        const click = vi.fn();
+        const createObjectURL = vi
+            .spyOn(URL, 'createObjectURL')
+            .mockReturnValue('blob:artifact-mermaid-mindmap-pdf');
+        vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+        vi.spyOn(document, 'createElement').mockImplementation((tagName, options) => {
+            const element = originalCreateElement(tagName, options);
+            if (tagName.toLowerCase() === 'a') {
+                Object.defineProperty(element, 'click', {
+                    configurable: true,
+                    value: click,
+                });
+                createdAnchors.push(element as HTMLAnchorElement);
+            }
+            return element;
+        });
+        useStore.setState({
+            workflow: 'INCIDENT_REVIEW',
+            artifactContent: [
+                '# 根因分析',
+                '',
+                '```mermaid',
+                'mindmap',
+                '  root(("故障根因分析"))',
+                '    流程',
+                '      [发布前缺少回归门禁]',
+                '    技术',
+                '      [告警覆盖不足]',
+                '```',
+            ].join('\n'),
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('下载'));
+        fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+
+        const blob = createObjectURL.mock.calls[0][0] as Blob;
+        const content = await blob.text();
+        const rectangleCount = content.match(/ re S/g)?.length ?? 0;
+        expect(createdAnchors[0].download).toBe('incident_review_artifact.pdf');
+        expect(content).toContain(toUtf16BeHex('Mermaid 图表：mindmap'));
+        expect(content).toContain(toUtf16BeHex('故障根因分析'));
+        expect(content).toContain(toUtf16BeHex('流程'));
+        expect(content).toContain(toUtf16BeHex('发布前缺少回归门禁'));
+        expect(content).toContain(toUtf16BeHex('技术'));
+        expect(content).toContain(toUtf16BeHex('告警覆盖不足'));
+        expect(content).not.toContain(toUtf16BeHex('root(("故障根因分析"))'));
+        expect(content).not.toContain(toUtf16BeHex('[发布前缺少回归门禁]'));
+        expect(content).toContain('0.18 0.55 0.95 RG');
+        expect(rectangleCount).toBeGreaterThanOrEqual(5);
+        expect(content).toContain(' m ');
+        expect(content).toContain(' l S');
+        expect(click).toHaveBeenCalledTimes(1);
+    });
+
     it('draws structured visual tables in exported PDF content streams', async () => {
         const createdAnchors: HTMLAnchorElement[] = [];
         const click = vi.fn();

@@ -222,7 +222,24 @@ export const ArtifactPane: React.FC = () => {
     events: PdfMermaidTimelineEvent[];
   };
 
-  type PdfMermaidDiagram = PdfMermaidFlowchartDiagram | PdfMermaidTimelineDiagram;
+  type PdfMermaidMindmapNode = {
+    id: string;
+    label: string;
+    depth: number;
+    parentId: string | null;
+  };
+
+  type PdfMermaidMindmapDiagram = {
+    kind: 'mindmap';
+    startLineIndex: number;
+    diagramType: 'mindmap';
+    nodes: PdfMermaidMindmapNode[];
+  };
+
+  type PdfMermaidDiagram =
+    | PdfMermaidFlowchartDiagram
+    | PdfMermaidTimelineDiagram
+    | PdfMermaidMindmapDiagram;
 
   const parseMermaidEndpoint = (source: string): PdfMermaidFlowchartNode | null => {
     const trimmedSource = source.trim();
@@ -333,12 +350,87 @@ export const ArtifactPane: React.FC = () => {
     };
   };
 
+  const cleanMermaidMindmapLabel = (source: string): string => {
+    let label = source.trim().replace(/^root\s*/i, '').trim();
+    for (let index = 0; index < 4; index += 1) {
+      const nextLabel = label.trim();
+      if (
+        (nextLabel.startsWith('((') && nextLabel.endsWith('))'))
+        || (nextLabel.startsWith('[[') && nextLabel.endsWith(']]'))
+      ) {
+        label = nextLabel.slice(2, -2);
+        continue;
+      }
+      if (
+        (nextLabel.startsWith('[') && nextLabel.endsWith(']'))
+        || (nextLabel.startsWith('(') && nextLabel.endsWith(')'))
+        || (nextLabel.startsWith('{') && nextLabel.endsWith('}'))
+      ) {
+        label = nextLabel.slice(1, -1);
+        continue;
+      }
+      label = nextLabel;
+      break;
+    }
+    label = label.trim().replace(/^["'“”]+|["'“”]+$/g, '').trim();
+    return stripInlineMarkdown(label);
+  };
+
+  const parseMermaidMindmapForPdf = (
+    source: string,
+    startLineIndex: number
+  ): PdfMermaidMindmapDiagram | null => {
+    const lines = source.split(/\r?\n/);
+    const firstLineIndex = lines.findIndex(line => line.trim());
+    if (firstLineIndex < 0 || lines[firstLineIndex].trim() !== 'mindmap') return null;
+
+    const nodes: PdfMermaidMindmapNode[] = [];
+    const stack: Array<{ indent: number; node: PdfMermaidMindmapNode }> = [];
+
+    for (const rawLine of lines.slice(firstLineIndex + 1)) {
+      if (!rawLine.trim()) continue;
+      if (rawLine.includes('\t')) return null;
+
+      const trimmedLine = rawLine.trim();
+      if (/^(class|style|:::)/.test(trimmedLine)) return null;
+      const indent = rawLine.match(/^ */)?.[0].length ?? 0;
+      const label = cleanMermaidMindmapLabel(trimmedLine);
+      if (!label) return null;
+
+      while (stack.length > 0 && indent <= stack[stack.length - 1].indent) {
+        stack.pop();
+      }
+
+      const parentNode = stack[stack.length - 1]?.node ?? null;
+      const node: PdfMermaidMindmapNode = {
+        id: `mindmap-${nodes.length}`,
+        label,
+        depth: parentNode ? Math.min(parentNode.depth + 1, 3) : 0,
+        parentId: parentNode?.id ?? null,
+      };
+      nodes.push(node);
+      stack.push({ indent, node });
+
+      if (nodes.length >= 12) break;
+    }
+
+    if (nodes.length < 2) return null;
+
+    return {
+      kind: 'mindmap',
+      startLineIndex,
+      diagramType: 'mindmap',
+      nodes,
+    };
+  };
+
   const parseMermaidDiagramForPdf = (
     source: string,
     startLineIndex: number
   ): PdfMermaidDiagram | null => (
     parseMermaidFlowchartForPdf(source, startLineIndex)
     || parseMermaidTimelineForPdf(source, startLineIndex)
+    || parseMermaidMindmapForPdf(source, startLineIndex)
   );
 
   const projectMermaidToPdfLines = (source: string): string[] => {
@@ -352,6 +444,12 @@ export const ArtifactPane: React.FC = () => {
         ...(parsedDiagram.title ? [parsedDiagram.title] : []),
         ...parsedDiagram.sections,
         ...parsedDiagram.events.map(event => `${event.time}：${event.description}`),
+      ];
+    }
+    if (parsedDiagram?.kind === 'mindmap') {
+      return [
+        `Mermaid 图表：${diagramType}`,
+        ...parsedDiagram.nodes.map(node => node.label),
       ];
     }
     return [
@@ -614,11 +712,18 @@ export const ArtifactPane: React.FC = () => {
     const timelineWidth = 480;
     const timelineEventWidth = 120;
     const timelineEventHeight = 24;
+    const mindmapLeft = 56;
+    const mindmapNodeWidth = 132;
+    const mindmapNodeHeight = 22;
+    const mindmapColumnGap = 144;
+    const mindmapRowGap = 10;
 
     diagrams.forEach((diagram) => {
       const diagramLineCount = diagram.kind === 'flowchart'
         ? Math.max(diagram.nodes.length + 1, 2)
-        : Math.max(diagram.events.length + diagram.sections.length + 2, 3);
+        : diagram.kind === 'timeline'
+          ? Math.max(diagram.events.length + diagram.sections.length + 2, 3)
+          : Math.max(diagram.nodes.length + 1, 2);
       const diagramEndLineIndex = diagram.startLineIndex + diagramLineCount;
       if (diagram.startLineIndex >= pageEndLineIndex || diagramEndLineIndex <= pageStartLineIndex) {
         return;
@@ -650,6 +755,33 @@ export const ArtifactPane: React.FC = () => {
           commands.push(`${tickX} ${baselineY - 5} m ${tickX} ${baselineY + 5} l S`);
           commands.push(`${tickX} ${connectorStartY} m ${tickX} ${connectorEndY} l S`);
           commands.push(`${Number(eventX.toFixed(2))} ${eventY} ${timelineEventWidth} ${timelineEventHeight} re S`);
+        });
+        return;
+      }
+
+      if (diagram.kind === 'mindmap') {
+        const nodePositions = new Map<string, { x: number; y: number }>();
+        diagram.nodes.forEach((node, nodeIndex) => {
+          const x = Math.min(430, mindmapLeft + node.depth * mindmapColumnGap);
+          const y = Math.max(
+            82,
+            topY - nodeIndex * (mindmapNodeHeight + mindmapRowGap) - mindmapNodeHeight
+          );
+          nodePositions.set(node.id, { x, y });
+          commands.push(`${x} ${y} ${mindmapNodeWidth} ${mindmapNodeHeight} re S`);
+        });
+
+        diagram.nodes.forEach((node) => {
+          if (!node.parentId) return;
+          const parentPosition = nodePositions.get(node.parentId);
+          const nodePosition = nodePositions.get(node.id);
+          if (!parentPosition || !nodePosition) return;
+
+          const startX = Number((parentPosition.x + mindmapNodeWidth).toFixed(2));
+          const startY = Number((parentPosition.y + mindmapNodeHeight / 2).toFixed(2));
+          const endX = Number(nodePosition.x.toFixed(2));
+          const endY = Number((nodePosition.y + mindmapNodeHeight / 2).toFixed(2));
+          commands.push(`${startX} ${startY} m ${endX} ${endY} l S`);
         });
         return;
       }
