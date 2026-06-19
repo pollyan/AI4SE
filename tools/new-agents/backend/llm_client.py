@@ -1,5 +1,5 @@
 from collections.abc import Iterator, Sequence
-from typing import Protocol, TypeGuard
+from typing import Any, Protocol, TypeGuard
 
 from openai import APIError, AuthenticationError, OpenAI, OpenAIError, RateLimitError
 
@@ -56,15 +56,22 @@ def stream_chat_completion_content(
     model: str,
     messages: list[ChatMessage],
     temperature: float,
+    response_format: dict[str, Any] | None = None,
+    extra_body: dict[str, Any] | None = None,
 ) -> Iterator[str]:
     try:
         client = OpenAI(api_key=api_key, base_url=base_url)
-        stream = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            stream=True,
-        )
+        request_kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": True,
+        }
+        if response_format is not None:
+            request_kwargs["response_format"] = response_format
+        if extra_body is not None:
+            request_kwargs["extra_body"] = extra_body
+        stream = client.chat.completions.create(**request_kwargs)
 
         for chunk in stream:
             content = extract_delta_content(chunk)

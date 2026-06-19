@@ -78,6 +78,8 @@ services:
       - NEW_AGENTS_DEFAULT_LLM_MODEL=${NEW_AGENTS_DEFAULT_LLM_MODEL:-}
       - NEW_AGENTS_DEFAULT_LLM_DESCRIPTION=${NEW_AGENTS_DEFAULT_LLM_DESCRIPTION:-}
       - PROXY_API_KEY=${PROXY_API_KEY:-}
+    volumes:
+      - ./tools/new-agents/backend:/app
     depends_on:
       postgres:
         condition: service_healthy

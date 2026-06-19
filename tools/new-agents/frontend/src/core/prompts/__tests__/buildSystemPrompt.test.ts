@@ -102,6 +102,19 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('不要填写阶段中文名称');
     });
 
+    it('requests the transition confirmation control in the same turn when a stage is complete', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            currentArtifact: '# 需求分析文档\n已有内容',
+        });
+
+        expect(prompt).toContain('同一轮返回 stage_action');
+        expect(prompt).toContain('前端显示确认控件');
+        expect(prompt).not.toContain('只有当用户在对话中明确回复同意或确认进入下一阶段后');
+    });
+
     it('requires chat to bridge the left conversation and right artifact', () => {
         const prompt = buildSystemPrompt({
             agentId: 'lisa',
@@ -114,6 +127,21 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('本轮总结');
         expect(prompt).toContain('右侧产出物');
         expect(prompt).toContain('确认后继续');
+    });
+
+    it('requires chat to keep a conversational summary with progress, focus, and next step', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            currentArtifact: '# 需求分析文档\n已有内容',
+        });
+
+        expect(prompt).toContain('像一次自然的工作对话');
+        expect(prompt).toContain('我本轮已经做了什么');
+        expect(prompt).toContain('本轮确认或假定的关键点');
+        expect(prompt).toContain('接下来需要用户确认或补充什么');
+        expect(prompt).toContain('不要只用一两句模板化提示');
     });
 
     it('keeps next-stage confirmation separate from next-stage artifact generation', () => {

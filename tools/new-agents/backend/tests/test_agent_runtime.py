@@ -6,8 +6,13 @@ from agent_runtime import (
     AgentRuntimeSchemaError,
     AgentTurnValidationDeps,
     PydanticAgentRuntime,
+    RawStreamingConfig,
+    TEXT_STRUCTURED_OUTPUT_INSTRUCTION,
+    build_partial_agent_delta,
     build_agent_retries,
     build_model_settings,
+    extract_json_string_prefix,
+    parse_agent_turn_output_text,
     register_contract_output_validator,
 )
 from sse_schemas import AgentTurnDeltaOutput
@@ -141,6 +146,156 @@ def test_runtime_stream_turn_yields_partial_outputs_and_validates_final_output()
             current_stage_id="CLARIFY",
         )
     ]
+
+
+def test_raw_streaming_instruction_keeps_left_chat_conversational():
+    assert "简短中文说明" not in TEXT_STRUCTURED_OUTPUT_INSTRUCTION
+    assert "像一次自然的工作对话" in TEXT_STRUCTURED_OUTPUT_INSTRUCTION
+    assert "我本轮已经做了什么" in TEXT_STRUCTURED_OUTPUT_INSTRUCTION
+    assert "本轮确认或假定的关键点" in TEXT_STRUCTURED_OUTPUT_INSTRUCTION
+    assert "接下来需要用户确认或补充什么" in TEXT_STRUCTURED_OUTPUT_INSTRUCTION
+
+
+def test_extract_json_string_prefix_reads_incomplete_streamed_string():
+    text = (
+        '{"chat":"正在梳理需求。",'
+        '"artifact_update":{"type":"replace","markdown":"# 需求分析文档\\n\\n'
+        '## 1. 被测系统与边界\\n内容'
+    )
+
+    assert extract_json_string_prefix(text, "chat") == "正在梳理需求。"
+    assert extract_json_string_prefix(
+        text,
+        "markdown",
+    ) == "# 需求分析文档\n\n## 1. 被测系统与边界\n内容"
+
+
+def test_build_partial_agent_delta_extracts_chat_and_artifact_markdown():
+    delta = build_partial_agent_delta(
+        '{"chat":"正在生成。","artifact_update":{"type":"replace",'
+        '"markdown":"# 需求分析文档\\n\\n## 1. 被测系统与边界\\n内容"}}'
+    )
+
+    assert delta == AgentTurnDeltaOutput(
+        chat="正在生成。",
+        artifact_update={
+            "type": "replace",
+            "markdown": "# 需求分析文档\n\n## 1. 被测系统与边界\n内容",
+        },
+    )
+
+
+def test_parse_agent_turn_output_text_accepts_plain_json_or_fenced_json():
+    json_text = """{
+      "chat": "已更新右侧需求分析文档。",
+      "artifact_update": {
+        "type": "replace",
+        "markdown": "# 需求分析文档\\n\\n## 1. 被测系统与边界\\n内容\\n\\n## 2. 系统交互与核心链路\\n内容\\n\\n## 3. 待澄清与阻断性问题\\n内容\\n\\n## 4. 隐式需求与非功能性考量\\n内容"
+      },
+      "stage_action": null,
+      "warnings": []
+    }"""
+
+    assert parse_agent_turn_output_text(json_text).chat == "已更新右侧需求分析文档。"
+    assert parse_agent_turn_output_text(
+        f"```json\n{json_text}\n```"
+    ).artifact_update.markdown.startswith("# 需求分析文档")
+
+
+def test_runtime_raw_json_stream_turn_yields_real_delta_before_final_output(
+    monkeypatch,
+):
+    final_json = (
+        '{"chat":"正在梳理需求。",'
+        '"artifact_update":{"type":"replace","markdown":"'
+        '# 需求分析文档\\n\\n'
+        '## 1. 被测系统与边界\\n内容\\n\\n'
+        '## 2. 系统交互与核心链路\\n内容\\n\\n'
+        '## 3. 待澄清与阻断性问题\\n内容\\n\\n'
+        '## 4. 隐式需求与非功能性考量\\n内容"},'
+        '"stage_action":null,"warnings":[]}'
+    )
+    chunks = [
+        '{"chat":"正在',
+        '梳理需求。","artifact_update":{"type":"replace","markdown":"# 需求分析文档\\n\\n',
+        '## 1. 被测系统与边界\\n内容',
+    ]
+    chunks = [chunks[0], chunks[1], chunks[2], final_json[len("".join(chunks[:3])):]]
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield from chunks
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            system_prompt="system prompt",
+        ),
+    )
+
+    outputs = list(runtime.stream_turn(
+        "用户需求",
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    ))
+
+    assert isinstance(outputs[0], AgentTurnDeltaOutput)
+    assert outputs[0].chat == "正在"
+    assert isinstance(outputs[1], AgentTurnDeltaOutput)
+    assert outputs[1].chat == "正在梳理需求。"
+    assert outputs[-1].chat == "正在梳理需求。"
+    assert outputs[-1].artifact_update.markdown == VALID_CLARIFY_ARTIFACT
+    assert calls[0]["response_format"] == {"type": "json_object"}
+    assert "结构化输出格式要求" in calls[0]["messages"][0]["content"]
+
+
+def test_runtime_raw_json_stream_turn_keeps_latest_delta_when_final_json_is_truncated(
+    monkeypatch,
+):
+    chunks = [
+        '{"chat":"已更新需求文档。",',
+        '"artifact_update":{"type":"replace","markdown":"# 需求分析文档\\n\\n'
+        '## 1. 被测系统与边界\\n内容',
+    ]
+
+    def fake_stream_chat_completion_content(**kwargs):
+        yield from chunks
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            system_prompt="system prompt",
+        ),
+    )
+
+    outputs = list(runtime.stream_turn(
+        "用户需求",
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    ))
+
+    assert isinstance(outputs[0], AgentTurnDeltaOutput)
+    assert outputs[-1].chat == "已更新需求文档。"
+    assert outputs[-1].artifact_update.markdown == (
+        "# 需求分析文档\n\n## 1. 被测系统与边界\n内容"
+    )
+    assert outputs[-1].stage_action is None
+    assert outputs[-1].warnings == ["artifact_truncated"]
 
 
 def test_contract_output_validator_requests_model_retry_for_invalid_artifact():

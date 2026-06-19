@@ -80,6 +80,10 @@ def test_artifact_contract_prompt_includes_exact_next_stage_action_target():
 
     assert '"target_stage_id": "STRATEGY"' in prompt
     assert "不要填写阶段中文名称" in prompt
+    assert "前端显示确认控件" in prompt
+    assert "自然工作对话" in prompt
+    assert "简短中文说明" not in prompt
+    assert "只有用户明确确认进入下一阶段时" not in prompt
 
 
 def test_artifact_contract_prompt_requires_full_artifact_after_short_confirmations():

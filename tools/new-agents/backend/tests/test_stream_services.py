@@ -87,7 +87,10 @@ def test_stream_agent_run_events_yields_started_delta_and_final_events(
     assert "artifact_update.type 必须为 replace" in (
         runtime_kwargs["system_prompt"]
     )
-    assert "chat 只允许返回给用户看的简短中文说明" in (
+    assert "chat 只允许返回给用户看的自然工作对话" in (
+        runtime_kwargs["system_prompt"]
+    )
+    assert "前端显示确认控件" in (
         runtime_kwargs["system_prompt"]
     )
     assert "## 1. 被测系统与边界" in runtime_kwargs["system_prompt"]

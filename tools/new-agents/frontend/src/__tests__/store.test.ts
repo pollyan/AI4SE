@@ -21,6 +21,20 @@ describe('Zustand Store', () => {
         expect(newState.isGenerating).toBe(false);
     });
 
+    it('should keep chat history reference when updating the last message with identical content', () => {
+        useStore.getState().addMessage({
+            id: 'assistant-1',
+            role: 'assistant',
+            content: '我正在整理右侧产出物，请先关注当前确认点。',
+            timestamp: 123,
+        });
+        const beforeHistory = useStore.getState().chatHistory;
+
+        useStore.getState().updateLastMessage('我正在整理右侧产出物，请先关注当前确认点。');
+
+        expect(useStore.getState().chatHistory).toBe(beforeHistory);
+    });
+
     it('should transition to next stage and preserve artifacts', () => {
         useStore.getState().transitionToNextStage('CLARIFY', 'Stage 0 Data');
         const state = useStore.getState();

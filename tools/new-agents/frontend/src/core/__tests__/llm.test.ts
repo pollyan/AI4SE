@@ -477,6 +477,68 @@ describe('llm.ts', () => {
             });
         });
 
+        it('应将单个长 agent_delta.chat 拆分为多帧聊天更新', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentDeltaEvent({
+                        chat: '第一句分析已经完成。第二句继续补充关键风险。第三句说明下一步需要澄清。',
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('帮我分析登录功能')
+            );
+
+            expect(results.length).toBeGreaterThan(1);
+            expect(results[0]).toMatchObject({
+                chatResponse: '第一句分析已经完成。',
+                hasArtifactUpdate: false,
+            });
+            expect(results.at(-1)).toMatchObject({
+                chatResponse: '第一句分析已经完成。第二句继续补充关键风险。第三句说明下一步需要澄清。',
+                hasArtifactUpdate: false,
+            });
+        });
+
+        it('多个 artifact delta 携带相同长 chat 时不应让左侧聊天回退变短', async () => {
+            const chat = '好的，我们开始梳理手机号验证码登录功能。\n\n我已在右侧生成需求分析文档初稿，请重点确认阻断问题。';
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentDeltaEvent({
+                        chat,
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: '# 需求分析文档\n\n第一段',
+                        },
+                    }),
+                    createAgentDeltaEvent({
+                        chat,
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: '# 需求分析文档\n\n第一段\n\n第二段',
+                        },
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('帮我设计登录功能测试用例')
+            );
+
+            const chatLengths = results.map(result => result.chatResponse.length);
+            expect(chatLengths).toEqual([...chatLengths].sort((a, b) => a - b));
+            expect(results.at(-1)).toMatchObject({
+                chatResponse: chat,
+                newArtifact: '# 需求分析文档\n\n第一段\n\n第二段',
+                hasArtifactUpdate: true,
+            });
+        });
+
         it('TEST_DESIGN/CLARIFY typed artifact 包含坏 Mermaid 时应拒绝更新', async () => {
             resetStore({
                 workflow: 'TEST_DESIGN',
@@ -546,6 +608,115 @@ describe('llm.ts', () => {
                 newArtifact: artifact,
                 action: '',
                 hasArtifactUpdate: true,
+            });
+        });
+
+        it('agent_turn 已建议确认进入下一阶段但缺少 stage_action 时应同轮显示确认控件', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: '# 需求分析文档\n\n初始内容',
+                stageArtifacts: { CLARIFY: '# 需求分析文档\n\n初始内容' },
+            });
+            const artifact = '# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能';
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentTurnEvent({
+                        chat: '已根据默认场景更新《需求分析文档》。请查看右侧文档，确认无误后回复“确认”进入下一阶段（策略制定）。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: artifact,
+                        },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('我想要测试一下当前的工作流，帮我假定一个场景')
+            );
+
+            expect(results.at(-1)).toEqual({
+                chatResponse: '已根据默认场景更新《需求分析文档》。请查看右侧文档，确认无误后回复“确认”进入下一阶段（策略制定）。',
+                newArtifact: artifact,
+                action: 'NEXT_STAGE',
+                hasArtifactUpdate: true,
+            });
+        });
+
+        it('agent_turn 仍要求补充阻断信息时不应推断下一阶段确认控件', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: '# 需求分析文档\n\n初始内容',
+                stageArtifacts: { CLARIFY: '# 需求分析文档\n\n初始内容' },
+            });
+            const artifact = '# 需求分析文档\n\n## 3. 待澄清与阻断性问题\n- 验证码有效期待确认';
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentTurnEvent({
+                        chat: '我已生成需求澄清初稿。请重点确认待澄清问题，需要你确认或补充信息后才能进入下一阶段。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: artifact,
+                        },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('请为手机号验证码登录功能生成需求澄清初稿')
+            );
+
+            expect(results.at(-1)).toEqual({
+                chatResponse: '我已生成需求澄清初稿。请重点确认待澄清问题，需要你确认或补充信息后才能进入下一阶段。',
+                newArtifact: artifact,
+                action: '',
+                hasArtifactUpdate: true,
+            });
+        });
+
+        it('agent_turn 带截断警告时即使文案建议进入下一阶段也不应显示确认控件', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: '# 需求分析文档\n\n初始内容',
+                stageArtifacts: { CLARIFY: '# 需求分析文档\n\n初始内容' },
+            });
+            const artifact = '# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能';
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentTurnEvent({
+                        chat: '已根据默认场景更新《需求分析文档》。确认无误后回复“确认”进入下一阶段（策略制定）。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: artifact,
+                        },
+                        stage_action: null,
+                        warnings: ['artifact_truncated'],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('我想要测试一下当前的工作流，帮我假定一个场景')
+            );
+
+            expect(results.at(-1)).toEqual({
+                chatResponse: '已根据默认场景更新《需求分析文档》。确认无误后回复“确认”进入下一阶段（策略制定）。',
+                newArtifact: artifact,
+                action: '',
+                hasArtifactUpdate: true,
+                artifactTruncated: true,
             });
         });
 

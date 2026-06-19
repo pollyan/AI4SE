@@ -294,10 +294,12 @@ export const useStore = create<AppState>()(
       }),
       addMessage: (msg) => set((state) => ({ chatHistory: [...state.chatHistory, msg] })),
       updateLastMessage: (content) => set((state) => {
-        const newHistory = [...state.chatHistory];
-        if (newHistory.length > 0) {
-          newHistory[newHistory.length - 1].content = content;
+        const lastMessage = state.chatHistory[state.chatHistory.length - 1];
+        if (!lastMessage || lastMessage.content === content) {
+          return state;
         }
+        const newHistory = [...state.chatHistory];
+        newHistory[newHistory.length - 1] = { ...lastMessage, content };
         return { chatHistory: newHistory };
       }),
       updateMessage: (id, content) => set((state) => {

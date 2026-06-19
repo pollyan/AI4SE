@@ -528,6 +528,37 @@ const hasArtifactTruncationWarning = (warnings?: string[]): boolean => {
   });
 };
 
+const shouldInferNextStageActionFromChat = (
+  chat: string,
+  expectedNextStageId: string | undefined
+): boolean => {
+  if (!expectedNextStageId) return false;
+
+  const normalized = chat.replace(/\s+/g, '');
+  if (!normalized) return false;
+
+  const blockingPattern = /(?:阻断|待澄清|补充|不能|无法|不建议|暂不|确认或补充|才能进入下一阶段|后才能进入下一阶段)/;
+  if (blockingPattern.test(normalized)) return false;
+
+  return [
+    /建议进入下一阶段/,
+    /可以进入(?:下一阶段|.{0,16}阶段)/,
+    /确认(?:无误)?后(?:回复[“"']?确认[”"']?)?.{0,24}进入(?:下一阶段|.{0,16}阶段)/,
+    /确认进入(?:下一阶段|.{0,16}阶段)/,
+  ].some((pattern) => pattern.test(normalized));
+};
+
+const getAgentTurnAction = (
+  output: AgentTurnOutput,
+  expectedNextStageId: string | undefined
+): string => {
+  if (hasArtifactTruncationWarning(output.warnings)) return '';
+  if (output.stage_action) return 'NEXT_STAGE';
+  return shouldInferNextStageActionFromChat(output.chat, expectedNextStageId)
+    ? 'NEXT_STAGE'
+    : '';
+};
+
 const getHttpErrorMessage = (payload: unknown): string => {
   if (!payload || typeof payload !== 'object') {
     return '结构化智能体请求失败';
@@ -602,7 +633,9 @@ const mapAgentTurnToStreamChunks = async function* (
     yield {
       chatResponse: isFinalChunk ? output.chat : accumulatedChat,
       newArtifact: isFinalChunk ? newArtifact : artifactFrame,
-      action: isFinalChunk && output.stage_action ? 'NEXT_STAGE' : '',
+      action: isFinalChunk
+        ? getAgentTurnAction(output, expectedNextStageId)
+        : '',
       hasArtifactUpdate,
       ...(artifactTruncated ? { artifactTruncated: true } : {}),
     };
@@ -638,27 +671,58 @@ const mapAgentTurnToFinalChunk = async function* (
   yield {
     chatResponse: output.chat,
     newArtifact,
-    action: output.stage_action ? 'NEXT_STAGE' : '',
+    action: getAgentTurnAction(output, expectedNextStageId),
     hasArtifactUpdate,
     ...(artifactTruncated ? { artifactTruncated: true } : {}),
   };
 };
 
-const mapAgentDeltaToStreamChunk = (
+const getStableAgentDeltaChat = (
   output: AgentTurnDeltaOutput,
-  currentArtifact: string
-): StreamChunk => {
+  previousChat: string
+): string => {
+  const candidate = output.chat || previousChat || '正在生成...';
+  if (!previousChat) return candidate;
+  if (candidate.length < previousChat.length) return previousChat;
+  return candidate;
+};
+
+const mapAgentDeltaToStreamChunks = async function* (
+  output: AgentTurnDeltaOutput,
+  currentArtifact: string,
+  chat: string,
+  previousChat: string
+): AsyncGenerator<StreamChunk, void, unknown> {
   const hasArtifactUpdate = output.artifact_update?.type === 'replace';
   const artifactTruncated = hasArtifactTruncationWarning(output.warnings);
-  return {
-    chatResponse: output.chat || '正在生成...',
-    newArtifact: hasArtifactUpdate
-      ? output.artifact_update.markdown || ''
-      : currentArtifact,
-    action: '',
-    hasArtifactUpdate,
-    ...(artifactTruncated ? { artifactTruncated: true } : {}),
-  };
+  const newArtifact = hasArtifactUpdate
+    ? output.artifact_update?.markdown || ''
+    : currentArtifact;
+  const chatUnits = previousChat ? [chat] : splitChatForStreaming(chat);
+  const frameCount = Math.max(chatUnits.length, 1);
+  let accumulatedChat = '';
+
+  for (let index = 0; index < frameCount; index += 1) {
+    const isFinalChunk = index === frameCount - 1;
+    const chatUnit = chatUnits[Math.min(index, chatUnits.length - 1)];
+    if (index < chatUnits.length) {
+      accumulatedChat = accumulatedChat
+        ? `${accumulatedChat}\n\n${chatUnit}`
+        : chatUnit;
+    }
+
+    yield {
+      chatResponse: isFinalChunk ? chat : accumulatedChat,
+      newArtifact,
+      action: '',
+      hasArtifactUpdate,
+      ...(artifactTruncated ? { artifactTruncated: true } : {}),
+    };
+
+    if (!isFinalChunk) {
+      await waitForSyntheticStreamFrame();
+    }
+  }
 };
 
 async function* generateResponseStreamViaAgentRuntime(
@@ -697,6 +761,7 @@ async function* generateResponseStreamViaAgentRuntime(
   let shouldStop = false;
   let pendingDataLines: string[] = [];
   let receivedAgentDelta = false;
+  let previousAgentDeltaChat = '';
 
   const processSsePayload = async function* (
     payload: string
@@ -723,7 +788,19 @@ async function* generateResponseStreamViaAgentRuntime(
     }
     if (event.type === 'agent_delta') {
       receivedAgentDelta = true;
-      yield mapAgentDeltaToStreamChunk(event.output, currentArtifact);
+      const stableChat = getStableAgentDeltaChat(
+        event.output,
+        previousAgentDeltaChat
+      );
+      for await (const chunk of mapAgentDeltaToStreamChunks(
+        event.output,
+        currentArtifact,
+        stableChat,
+        previousAgentDeltaChat
+      )) {
+        yield chunk;
+      }
+      previousAgentDeltaChat = stableChat;
       return;
     }
     if (event.type === 'agent_turn') {

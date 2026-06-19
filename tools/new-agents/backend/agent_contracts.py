@@ -411,20 +411,22 @@ def build_artifact_contract_prompt(
     )
     return (
         "\n\n【结构化产出物契约】\n"
-        "chat 只允许返回给用户看的简短中文说明，禁止包含 Markdown 标题、"
+        "chat 只允许返回给用户看的自然工作对话，禁止包含 Markdown 标题、"
         "表格、代码块、Mermaid 图、完整文档正文或 <CHART>/<ARTIFACT>/"
         "<CHAT> 旧标签协议。\n"
-        "chat 必须承担左侧对话承接作用：用本轮总结说明本轮确认了什么、"
-        "右侧产出物更新了什么、用户下一步应检查或确认什么；如果当前阶段"
-        "可推进，应引导用户查看右侧产出物并确认后继续。\n"
+        "chat 必须承担左侧对话承接作用：像一次自然的工作对话，"
+        "用适度展开的本轮总结说明我本轮已经做了什么、"
+        "本轮确认或假定的关键点、右侧产出物更新了什么、"
+        "用户下一步应检查或确认什么；如果当前阶段可推进，"
+        "应引导用户查看右侧产出物，并由 stage_action 触发前端确认控件。\n"
         "本阶段必须更新右侧产出物：artifact_update.type 必须为 replace。\n"
         "artifact_update.markdown 必须是完整 Markdown 文档，不能只返回片段，"
         "不能用省略号表示未修改内容。\n"
         "即使用户只回复“继续”“没问题”“确认”等短确认，也必须保留所有必填标题，"
         "并把已确认信息写回当前阶段完整文档；不能只在 chat 中说明已生成或已确认。\n"
-        "当用户确认进入下一阶段时，stage_action 请求阶段切换即可，"
+        "当当前阶段已经完成并建议进入下一阶段时，stage_action 请求前端显示确认控件即可，"
         "不要在同一轮生成下一阶段产出物；artifact_update.markdown "
-        "继续返回当前阶段的完整产出物。\n"
+        "继续返回当前阶段的完整产出物。用户点击确认控件后，系统才会切换阶段。\n"
         f"{h1_keyword_requirements}"
         "以下以 # 开头的条目必须作为真实 Markdown 标题行出现，"
         "不能只放在正文描述或代码块中；非 # 开头条目必须出现在正文中：\n"
@@ -450,11 +452,14 @@ def build_stage_action_contract_prompt(
 
     expected_target = stages[current_index + 1]
     return (
-        "只有用户明确确认进入下一阶段时，stage_action 才能请求阶段推进；"
+        "当当前阶段产出物已经完整、chat 已经建议用户进入下一阶段时，"
+        "必须同一轮返回 stage_action，用于让前端显示确认控件；"
         '此时唯一合法值是 {"type": "request_next_stage", '
         f'"target_stage_id": "{expected_target}"}}。'
         f'target_stage_id 必须填写内部阶段 ID "{expected_target}"，'
-        "不要填写阶段中文名称。\n"
+        "不要填写阶段中文名称。"
+        "stage_action 只请求用户确认，不代表已经切换阶段；"
+        "用户点击确认控件后，系统才会进入下一阶段。\n"
     )
 
 
