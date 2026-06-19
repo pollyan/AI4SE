@@ -4,9 +4,15 @@ import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { useStore, ArtifactVersion, WORKFLOWS } from '../store';
+import type { AgentRunSnapshotArtifact } from '../core/types';
+import { buildLineDiff } from '../core/artifactDiff';
 import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/markdownUtils';
-import { Download, Code, Eye, History, X, AlertTriangle } from 'lucide-react';
+import { Download, Code, Eye, History, X, AlertTriangle, GitCompare, Edit3, Save, MessageSquare, Trash2, Lock, Unlock } from 'lucide-react';
 import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
+import { StructuredVisual } from './StructuredVisual';
+import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../services/runSnapshotService';
+import { buildDocxPackage } from '../core/docxExport';
+import { parseStructuredVisual } from '../core/structuredVisuals';
 
 export const ArtifactPane: React.FC = () => {
   const workflow = useStore((state) => state.workflow);
@@ -15,9 +21,39 @@ export const ArtifactPane: React.FC = () => {
   const artifactHistory = useStore((state) => state.artifactHistory);
   const artifactTruncated = useStore((state) => state.artifactTruncated);
   const isGenerating = useStore((state) => state.isGenerating);
+  const currentRunId = useStore((state) => state.currentRunId);
+  const setArtifactContent = useStore((state) => state.setArtifactContent);
+  const addArtifactVersion = useStore((state) => state.addArtifactVersion);
+  const artifactComments = useStore((state) => state.artifactComments);
+  const addArtifactComment = useStore((state) => state.addArtifactComment);
+  const addArtifactCommentReply = useStore((state) => state.addArtifactCommentReply);
+  const setArtifactCommentStatus = useStore((state) => state.setArtifactCommentStatus);
+  const removeArtifactComment = useStore((state) => state.removeArtifactComment);
+  const artifactSectionLocks = useStore((state) => state.artifactSectionLocks);
+  const artifactAuditEvents = useStore((state) => state.artifactAuditEvents);
+  const addArtifactSectionLock = useStore((state) => state.addArtifactSectionLock);
+  const removeArtifactSectionLock = useStore((state) => state.removeArtifactSectionLock);
+  const addArtifactAuditEvent = useStore((state) => state.addArtifactAuditEvent);
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
   const [showHistory, setShowHistory] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [showSectionLocks, setShowSectionLocks] = useState(false);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [commentReplyDrafts, setCommentReplyDrafts] = useState<Record<string, string>>({});
   const [selectedVersion, setSelectedVersion] = useState<ArtifactVersion | null>(null);
+  const [historyViewMode, setHistoryViewMode] = useState<'preview' | 'diff'>('preview');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState('');
+  const [isSavingManualEdit, setIsSavingManualEdit] = useState(false);
+  const [manualEditError, setManualEditError] = useState<string | null>(null);
+  const [collaborationSyncError, setCollaborationSyncError] = useState<string | null>(null);
+  const [conflictVersionNumber, setConflictVersionNumber] = useState<number | null>(null);
+  const [conflictArtifact, setConflictArtifact] = useState<AgentRunSnapshotArtifact | null>(null);
+  const [showConflictDiff, setShowConflictDiff] = useState(false);
+  const [selectedArtifactText, setSelectedArtifactText] = useState<string | null>(null);
+  const [activeCommentAnchorText, setActiveCommentAnchorText] = useState<string | null>(null);
+  const artifactPreviewRef = useRef<HTMLDivElement | null>(null);
   const currentStageId = WORKFLOWS[workflow].stages[stageIndex]?.id;
   const currentStageArtifactHistory = useMemo(
     () => currentStageId
@@ -25,17 +61,610 @@ export const ArtifactPane: React.FC = () => {
       : [],
     [artifactHistory, currentStageId]
   );
+  const currentStageComments = useMemo(
+    () => currentStageId
+      ? artifactComments.filter(comment => comment.stageId === currentStageId)
+      : [],
+    [artifactComments, currentStageId]
+  );
+  const currentStageSectionLocks = useMemo(
+    () => currentStageId
+      ? artifactSectionLocks.filter(lock => lock.stageId === currentStageId)
+      : [],
+    [artifactSectionLocks, currentStageId]
+  );
+  const currentStageAuditEvents = useMemo(
+    () => currentStageId
+      ? artifactAuditEvents.filter(event => event.stageId === currentStageId)
+      : [],
+    [artifactAuditEvents, currentStageId]
+  );
 
-  const handleDownload = () => {
-    const blob = new Blob([artifactContent], { type: 'text/markdown' });
+  const syncArtifactCollaborationState = useCallback(() => {
+    if (!currentRunId) return;
+    const state = useStore.getState();
+    setCollaborationSyncError(null);
+    void updateRunArtifactCollaboration(
+      currentRunId,
+      state.artifactComments,
+      state.artifactSectionLocks,
+    ).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : '未知错误';
+      setCollaborationSyncError(`协作状态保存失败：${message}`);
+    });
+  }, [currentRunId]);
+
+  const isFenceStart = (line: string): boolean => /^```/.test(line.trim());
+  const isHeading = (line: string): boolean => /^#{1,3}\s+/.test(line);
+  const isBulletItem = (line: string): boolean => /^\s*[-*]\s+/.test(line);
+  const isNumberedItem = (line: string): boolean => /^\s*\d+[.)]\s+/.test(line);
+  const isTableRow = (line: string): boolean => line.trim().includes('|');
+  const splitTableRow = (line: string): string[] => {
+    const trimmedLine = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+    return trimmedLine.split('|').map(cell => cell.trim());
+  };
+  const isTableSeparator = (line: string): boolean => {
+    const cells = splitTableRow(line);
+    return cells.length > 1 && cells.every(cell => /^:?-{3,}:?$/.test(cell));
+  };
+  type ArtifactSection = {
+    heading: string;
+    title: string;
+    content: string;
+  };
+
+  const extractMarkdownSections = (content: string): ArtifactSection[] => {
+    const lines = content.split(/\r?\n/);
+    const sections: ArtifactSection[] = [];
+    let currentStart = -1;
+    let currentHeading = '';
+
+    lines.forEach((line, index) => {
+      if (!/^#{1,3}\s+/.test(line)) return;
+      if (currentStart >= 0) {
+        sections.push({
+          heading: currentHeading,
+          title: currentHeading.replace(/^#{1,3}\s+/, ''),
+          content: lines.slice(currentStart, index).join('\n').trim(),
+        });
+      }
+      currentStart = index;
+      currentHeading = line;
+    });
+
+    if (currentStart >= 0) {
+      sections.push({
+        heading: currentHeading,
+        title: currentHeading.replace(/^#{1,3}\s+/, ''),
+        content: lines.slice(currentStart).join('\n').trim(),
+      });
+    }
+
+    return sections;
+  };
+
+  const toUtf16BeHex = (content: string): string => {
+    const codeUnits = Array.from(content);
+    return `FEFF${codeUnits.map((character) => {
+      const codePoint = character.codePointAt(0) ?? 0x20;
+      if (codePoint > 0xffff) {
+        const adjusted = codePoint - 0x10000;
+        const high = 0xd800 + (adjusted >> 10);
+        const low = 0xdc00 + (adjusted & 0x3ff);
+        return `${high.toString(16).padStart(4, '0')}${low.toString(16).padStart(4, '0')}`;
+      }
+      return codePoint.toString(16).padStart(4, '0');
+    }).join('')}`.toUpperCase();
+  };
+
+  const stripInlineMarkdown = (content: string): string => (
+    content
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .trim()
+  );
+
+  const formatPdfTableRows = (rows: string[][]): string[] => {
+    const columnWidths = rows.reduce<number[]>((widths, row) => {
+      row.forEach((cell, cellIndex) => {
+        widths[cellIndex] = Math.max(widths[cellIndex] ?? 0, cell.length);
+      });
+      return widths;
+    }, []);
+
+    return rows.map(row => row.map((cell, cellIndex) => (
+      cell.padEnd(columnWidths[cellIndex] ?? cell.length, ' ')
+    )).join('    ').trimEnd());
+  };
+
+  const getFenceLanguage = (line: string): string => (
+    line.trim().replace(/^```/, '').trim().toLowerCase()
+  );
+
+  type PdfMermaidFlowchartNode = {
+    id: string;
+    label: string;
+  };
+
+  type PdfMermaidFlowchartEdge = {
+    from: string;
+    to: string;
+  };
+
+  type PdfMermaidDiagram = {
+    startLineIndex: number;
+    diagramType: string;
+    nodes: PdfMermaidFlowchartNode[];
+    edges: PdfMermaidFlowchartEdge[];
+  };
+
+  const parseMermaidEndpoint = (source: string): PdfMermaidFlowchartNode | null => {
+    const trimmedSource = source.trim();
+    const idMatch = trimmedSource.match(/^([A-Za-z0-9_]+)/);
+    if (!idMatch) return null;
+
+    const labelMatch = trimmedSource.match(/\[([^\]]+)\]|\(([^)]+)\)|\{([^}]+)\}/);
+    return {
+      id: idMatch[1],
+      label: stripInlineMarkdown(labelMatch?.[1] || labelMatch?.[2] || labelMatch?.[3] || idMatch[1]),
+    };
+  };
+
+  const parseMermaidFlowchartForPdf = (
+    source: string,
+    startLineIndex: number
+  ): PdfMermaidDiagram | null => {
+    const mermaidLines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const firstLine = mermaidLines[0] || '';
+    const diagramType = firstLine.split(/\s+/)[0] || 'diagram';
+    if (!['flowchart', 'graph'].includes(diagramType)) return null;
+
+    const nodes = new Map<string, PdfMermaidFlowchartNode>();
+    const edges: PdfMermaidFlowchartEdge[] = [];
+    const edgePattern = /\s*(?:-->|---|==>|-.->)\s*/;
+
+    mermaidLines.slice(1).forEach((line) => {
+      const endpoints = line.split(edgePattern);
+      if (endpoints.length < 2) return;
+
+      const parsedNodes = endpoints
+        .map(parseMermaidEndpoint)
+        .filter((node): node is PdfMermaidFlowchartNode => node !== null);
+      parsedNodes.forEach((node) => {
+        const existingNode = nodes.get(node.id);
+        if (!existingNode || existingNode.label === existingNode.id) {
+          nodes.set(node.id, node);
+        }
+      });
+
+      for (let index = 0; index < parsedNodes.length - 1; index += 1) {
+        edges.push({
+          from: parsedNodes[index].id,
+          to: parsedNodes[index + 1].id,
+        });
+      }
+    });
+
+    if (nodes.size === 0 || edges.length === 0) return null;
+
+    return {
+      startLineIndex,
+      diagramType,
+      nodes: Array.from(nodes.values()).slice(0, 6),
+      edges: edges.filter(edge => nodes.has(edge.from) && nodes.has(edge.to)).slice(0, 8),
+    };
+  };
+
+  const projectMermaidToPdfLines = (source: string): string[] => {
+    const mermaidLines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const firstLine = mermaidLines[0] || 'diagram';
+    const diagramType = firstLine.split(/\s+/)[0] || 'diagram';
+    const parsedDiagram = parseMermaidFlowchartForPdf(source, 0);
+    return [
+      `Mermaid 图表：${diagramType}`,
+      ...(
+        parsedDiagram
+          ? parsedDiagram.nodes.map(node => node.label)
+          : []
+      ),
+      ...mermaidLines.slice(1),
+    ];
+  };
+
+  type PdfStructuredVisualTable = {
+    startLineIndex: number;
+    columns: string[];
+    rows: string[][];
+  };
+
+  type PdfProjectedDocument = {
+    lines: string[];
+    structuredTables: PdfStructuredVisualTable[];
+    mermaidDiagrams: PdfMermaidDiagram[];
+  };
+
+  const projectMarkdownToPdfDocument = (content: string): PdfProjectedDocument => {
+    const lines = content.split(/\r?\n/);
+    const pdfLines: string[] = [];
+    const structuredTables: PdfStructuredVisualTable[] = [];
+    const mermaidDiagrams: PdfMermaidDiagram[] = [];
+    let index = 0;
+
+    while (index < lines.length) {
+      const line = lines[index];
+      const trimmedLine = line.trim();
+      const nextLine = lines[index + 1];
+
+      if (!trimmedLine) {
+        pdfLines.push(' ');
+        index += 1;
+        continue;
+      }
+
+      if (isFenceStart(trimmedLine)) {
+        const fenceLanguage = getFenceLanguage(trimmedLine);
+        index += 1;
+        const codeLines: string[] = [];
+        while (index < lines.length && !isFenceStart(lines[index])) {
+          codeLines.push(lines[index]);
+          index += 1;
+        }
+        if (index < lines.length) index += 1;
+        const codeSource = codeLines.join('\n');
+        if (fenceLanguage === 'mermaid') {
+          const startLineIndex = pdfLines.length;
+          pdfLines.push(...projectMermaidToPdfLines(codeSource));
+          const parsedDiagram = parseMermaidFlowchartForPdf(codeSource, startLineIndex);
+          if (parsedDiagram) {
+            mermaidDiagrams.push(parsedDiagram);
+          }
+          continue;
+        }
+        if (fenceLanguage === 'ai4se-visual') {
+          const visualResult = parseStructuredVisual(codeSource);
+          if (visualResult.valid === false) {
+            pdfLines.push(`结构化可视化错误：${visualResult.message}`);
+            continue;
+          }
+          const { visual } = visualResult;
+          const startLineIndex = pdfLines.length;
+          pdfLines.push(
+            `结构化可视化：${visual.title || visual.type}`,
+            ...[
+              visual.columns,
+              ...visual.rows.map(row => row.cells),
+            ].map(row => row.join('    '))
+          );
+          structuredTables.push({
+            startLineIndex,
+            columns: visual.columns,
+            rows: visual.rows.map(row => row.cells),
+          });
+          continue;
+        }
+        codeLines.forEach(codeLine => pdfLines.push(`    ${codeLine}`));
+        continue;
+      }
+
+      const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
+      if (headingMatch) {
+        pdfLines.push(stripInlineMarkdown(headingMatch[2]));
+        index += 1;
+        continue;
+      }
+
+      if (isTableRow(line) && nextLine && isTableSeparator(nextLine)) {
+        const rows = [splitTableRow(line).map(stripInlineMarkdown)];
+        index += 2;
+        while (index < lines.length && isTableRow(lines[index]) && !isTableSeparator(lines[index])) {
+          rows.push(splitTableRow(lines[index]).map(stripInlineMarkdown));
+          index += 1;
+        }
+        const tableLines = formatPdfTableRows(rows);
+        const separatorLength = Math.max(...tableLines.map(tableLine => tableLine.length), 1);
+        pdfLines.push(tableLines[0], '-'.repeat(separatorLength), ...tableLines.slice(1));
+        continue;
+      }
+
+      if (isBulletItem(line)) {
+        while (index < lines.length && isBulletItem(lines[index])) {
+          pdfLines.push(`• ${stripInlineMarkdown(lines[index].replace(/^\s*[-*]\s+/, ''))}`);
+          index += 1;
+        }
+        continue;
+      }
+
+      if (isNumberedItem(line)) {
+        while (index < lines.length && isNumberedItem(lines[index])) {
+          const itemMatch = lines[index].match(/^\s*(\d+)[.)]\s+(.+)$/);
+          if (itemMatch) {
+            pdfLines.push(`${itemMatch[1]}. ${stripInlineMarkdown(itemMatch[2])}`);
+          }
+          index += 1;
+        }
+        continue;
+      }
+
+      pdfLines.push(stripInlineMarkdown(line));
+      index += 1;
+    }
+
+    return {
+      lines: pdfLines.length > 0 ? pdfLines : [' '],
+      structuredTables,
+      mermaidDiagrams,
+    };
+  };
+
+  const buildCommentExcerpt = (content: string): string => {
+    const lines = content.split(/\r?\n/);
+    const firstBodyLine = lines.find((line) => {
+      const trimmedLine = line.trim();
+      return trimmedLine && !isHeading(trimmedLine) && !isFenceStart(trimmedLine);
+    }) || lines.find(line => line.trim()) || '当前产出物';
+    const excerpt = stripInlineMarkdown(firstBodyLine.replace(/^\s*[-*]\s+/, ''));
+    return excerpt.length > 120 ? `${excerpt.slice(0, 117)}...` : excerpt;
+  };
+
+  const normalizeCommentAnchorText = (value: string): string | null => {
+    const normalizedValue = value.replace(/\s+/g, ' ').trim();
+    if (!normalizedValue) return null;
+    return normalizedValue.length > 120
+      ? `${normalizedValue.slice(0, 117)}...`
+      : normalizedValue;
+  };
+
+  const readSelectedArtifactText = (): string | null => {
+    const selection = window.getSelection();
+    const container = artifactPreviewRef.current;
+    if (!selection || selection.rangeCount === 0 || !container) {
+      return null;
+    }
+
+    const range = selection.getRangeAt(0);
+    const anchorNode = range.commonAncestorContainer;
+    const selectedNode = anchorNode.nodeType === Node.ELEMENT_NODE
+      ? anchorNode
+      : anchorNode.parentElement;
+    const selectionInsideArtifact = selectedNode !== null
+      && container.contains(selectedNode);
+    if (!selectionInsideArtifact) {
+      return null;
+    }
+
+    return normalizeCommentAnchorText(selection.toString());
+  };
+
+  const captureSelectedArtifactText = () => {
+    const nextSelectedText = readSelectedArtifactText();
+    if (nextSelectedText) {
+      setSelectedArtifactText(nextSelectedText);
+    }
+    return nextSelectedText;
+  };
+
+  const artifactSections = useMemo(
+    () => extractMarkdownSections(artifactContent),
+    [artifactContent]
+  );
+
+  const findLockedSectionChange = (nextContent: string): string | null => {
+    if (currentStageSectionLocks.length === 0) return null;
+    const nextSections = extractMarkdownSections(nextContent);
+    for (const lock of currentStageSectionLocks) {
+      const nextSection = nextSections.find(section => section.heading === lock.heading);
+      if (!nextSection || nextSection.content.trim() !== lock.content.trim()) {
+        return lock.heading.replace(/^#{1,3}\s+/, '');
+      }
+    }
+    return null;
+  };
+
+  const PDF_LINES_PER_PAGE = 42;
+
+  const buildPdfTableDrawingCommands = (
+    pageStartLineIndex: number,
+    tables: PdfStructuredVisualTable[]
+  ): string[] => {
+    const commands: string[] = [];
+    const pageEndLineIndex = pageStartLineIndex + PDF_LINES_PER_PAGE;
+    const tableLeft = 50;
+    const tableWidth = 512;
+    const rowHeight = 18;
+
+    tables.forEach((table) => {
+      const tableLineStartIndex = table.startLineIndex + 1;
+      const tableLineEndIndex = tableLineStartIndex + 1 + table.rows.length;
+      const visibleStartLineIndex = Math.max(tableLineStartIndex, pageStartLineIndex);
+      const visibleEndLineIndex = Math.min(tableLineEndIndex, pageEndLineIndex);
+      if (visibleStartLineIndex >= visibleEndLineIndex) {
+        return;
+      }
+      const localStartLineIndex = visibleStartLineIndex - pageStartLineIndex;
+      const columnCount = Math.max(table.columns.length, 1);
+      const visibleRowCount = visibleEndLineIndex - visibleStartLineIndex;
+      const desiredTableHeight = visibleRowCount * rowHeight;
+      const topY = 790 - localStartLineIndex * 14 + 4;
+      const bottomY = Math.max(70, topY - desiredTableHeight);
+      const tableHeight = topY - bottomY;
+      const rightX = tableLeft + tableWidth;
+      const columnWidth = tableWidth / columnCount;
+
+      commands.push(`${tableLeft} ${bottomY} ${tableWidth} ${tableHeight} re S`);
+      for (let columnIndex = 1; columnIndex < columnCount; columnIndex += 1) {
+        const x = Number((tableLeft + columnWidth * columnIndex).toFixed(2));
+        commands.push(`${x} ${bottomY} m ${x} ${bottomY + tableHeight} l S`);
+      }
+      for (let rowIndex = 1; rowIndex < visibleRowCount; rowIndex += 1) {
+        const y = Number((bottomY + rowHeight * rowIndex).toFixed(2));
+        commands.push(`${tableLeft} ${y} m ${rightX} ${y} l S`);
+      }
+    });
+
+    return commands.length > 0
+      ? ['q', '0.45 w', '0.23 0.38 0.62 RG', ...commands, 'Q']
+      : [];
+  };
+
+  const buildPdfMermaidDrawingCommands = (
+    pageStartLineIndex: number,
+    diagrams: PdfMermaidDiagram[]
+  ): string[] => {
+    const commands: string[] = [];
+    const pageEndLineIndex = pageStartLineIndex + PDF_LINES_PER_PAGE;
+    const nodeWidth = 150;
+    const nodeHeight = 24;
+    const nodeGap = 18;
+    const nodeLeft = 385;
+
+    diagrams.forEach((diagram) => {
+      const diagramEndLineIndex = diagram.startLineIndex + Math.max(diagram.nodes.length + 1, 2);
+      if (diagram.startLineIndex >= pageEndLineIndex || diagramEndLineIndex <= pageStartLineIndex) {
+        return;
+      }
+
+      const localStartLineIndex = Math.max(diagram.startLineIndex, pageStartLineIndex) - pageStartLineIndex;
+      const topY = Math.min(770, 790 - localStartLineIndex * 14 - 2);
+      const nodePositions = new Map<string, { x: number; y: number }>();
+
+      diagram.nodes.forEach((node, nodeIndex) => {
+        const y = Math.max(82, topY - nodeIndex * (nodeHeight + nodeGap) - nodeHeight);
+        nodePositions.set(node.id, { x: nodeLeft, y });
+        commands.push(`${nodeLeft} ${y} ${nodeWidth} ${nodeHeight} re S`);
+      });
+
+      diagram.edges.forEach((edge) => {
+        const fromPosition = nodePositions.get(edge.from);
+        const toPosition = nodePositions.get(edge.to);
+        if (!fromPosition || !toPosition) return;
+
+        const startX = Number((fromPosition.x + nodeWidth / 2).toFixed(2));
+        const startY = Number(fromPosition.y.toFixed(2));
+        const endX = Number((toPosition.x + nodeWidth / 2).toFixed(2));
+        const endY = Number((toPosition.y + nodeHeight).toFixed(2));
+        commands.push(`${startX} ${startY} m ${endX} ${endY} l S`);
+        commands.push(`${endX - 4} ${endY + 5} m ${endX} ${endY} l ${endX + 4} ${endY + 5} l S`);
+      });
+    });
+
+    return commands.length > 0
+      ? ['q', '0.7 w', '0.18 0.55 0.95 RG', ...commands, 'Q']
+      : [];
+  };
+
+  const buildPdfContentStream = (
+    lines: string[],
+    pageStartLineIndex: number,
+    tables: PdfStructuredVisualTable[],
+    mermaidDiagrams: PdfMermaidDiagram[]
+  ): string => {
+    const drawingCommands = [
+      ...buildPdfMermaidDrawingCommands(pageStartLineIndex, mermaidDiagrams),
+      ...buildPdfTableDrawingCommands(pageStartLineIndex, tables),
+    ];
+    const textCommands = lines.map((line) => `<${toUtf16BeHex(line || ' ')}> Tj T*`);
+    return [
+      ...drawingCommands,
+      'BT',
+      '/F1 11 Tf',
+      '50 790 Td',
+      '14 TL',
+      ...textCommands,
+      'ET',
+    ].join('\n');
+  };
+
+  const buildPlainTextPdf = (content: string): string => {
+    const projectedDocument = projectMarkdownToPdfDocument(content);
+    const sourceLines = projectedDocument.lines;
+    const pages = sourceLines.length > 0
+      ? Array.from(
+        { length: Math.ceil(sourceLines.length / PDF_LINES_PER_PAGE) },
+        (_, pageIndex) => sourceLines.slice(
+          pageIndex * PDF_LINES_PER_PAGE,
+          (pageIndex + 1) * PDF_LINES_PER_PAGE
+        )
+      )
+      : [[' ']];
+    const fontObjectId = 3 + pages.length * 2;
+    const pageObjectIds = pages.map((_, pageIndex) => 3 + pageIndex * 2);
+    const objects = [
+      '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
+      `2 0 obj\n<< /Type /Pages /Kids [${pageObjectIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pages.length} >>\nendobj\n`,
+    ];
+
+    pages.forEach((pageLines, pageIndex) => {
+      const pageObjectId = 3 + pageIndex * 2;
+      const contentObjectId = pageObjectId + 1;
+      const stream = buildPdfContentStream(
+        pageLines,
+        pageIndex * PDF_LINES_PER_PAGE,
+        projectedDocument.structuredTables,
+        projectedDocument.mermaidDiagrams
+      );
+      objects.push(
+        `${pageObjectId} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 ${fontObjectId} 0 R >> >> /Contents ${contentObjectId} 0 R >>\nendobj\n`,
+        `${contentObjectId} 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`,
+      );
+    });
+    objects.push(`${fontObjectId} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n`);
+
+    let pdf = '%PDF-1.4\n';
+    const offsets = [0];
+    objects.forEach((object) => {
+      offsets.push(pdf.length);
+      pdf += object;
+    });
+    const xrefOffset = pdf.length;
+    pdf += `xref\n0 ${objects.length + 1}\n`;
+    pdf += '0000000000 65535 f \n';
+    offsets.slice(1).forEach((offset) => {
+      pdf += `${offset.toString().padStart(10, '0')} 00000 n \n`;
+    });
+    pdf += [
+      'trailer',
+      `<< /Size ${objects.length + 1} /Root 1 0 R >>`,
+      'startxref',
+      `${xrefOffset}`,
+      '%%EOF',
+    ].join('\n');
+    return pdf;
+  };
+
+  const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${workflow.toLowerCase()}_artifact.md`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownload = (format: 'markdown' | 'word' | 'pdf') => {
+    setShowExportMenu(false);
+    if (format === 'word') {
+      downloadBlob(
+        buildDocxPackage(artifactContent),
+        `${workflow.toLowerCase()}_artifact.docx`
+      );
+      return;
+    }
+    if (format === 'pdf') {
+      downloadBlob(
+        new Blob([buildPlainTextPdf(artifactContent)], { type: 'application/pdf' }),
+        `${workflow.toLowerCase()}_artifact.pdf`
+      );
+      return;
+    }
+
+    downloadBlob(
+      new Blob([artifactContent], { type: 'text/markdown' }),
+      `${workflow.toLowerCase()}_artifact.md`
+    );
   };
 
   const openHistory = () => {
@@ -44,6 +673,7 @@ export const ArtifactPane: React.FC = () => {
     } else {
       setSelectedVersion(null);
     }
+    setHistoryViewMode('preview');
     setShowHistory(true);
   };
 
@@ -65,6 +695,197 @@ export const ArtifactPane: React.FC = () => {
   // Content displays using the imported preprocessMarkdown utility
 
   const displayContent = preprocessMarkdown(artifactContent);
+  const truncateAuditLine = (lineContent: string): string => {
+    const normalizedLine = lineContent.replace(/\s+/g, ' ').trim();
+    return normalizedLine.length > 60
+      ? `${normalizedLine.slice(0, 57)}...`
+      : normalizedLine;
+  };
+  const buildConflictMergeBlockLabel = (lineContents: string[]): string => (
+    lineContents.map(truncateAuditLine).join(' / ')
+  );
+  const buildConflictModificationBlockLabel = (removedLines: string[], addedLines: string[]): string => (
+    `${buildConflictMergeBlockLabel(removedLines)} → ${buildConflictMergeBlockLabel(addedLines)}`
+  );
+  const replaceFirstLineSequence = (
+    sourceLines: string[],
+    targetLines: string[],
+    replacementLines: string[]
+  ): string[] => {
+    const normalizedTargetLines = targetLines.filter(line => line.trim());
+    if (normalizedTargetLines.length === 0) return sourceLines;
+
+    const startIndex = sourceLines.findIndex((_, index) => (
+      normalizedTargetLines.every((targetLine, offset) => sourceLines[index + offset] === targetLine)
+    ));
+    if (startIndex < 0) return sourceLines;
+
+    return [
+      ...sourceLines.slice(0, startIndex),
+      ...replacementLines.filter(line => line.trim()),
+      ...sourceLines.slice(startIndex + normalizedTargetLines.length),
+    ];
+  };
+  const collectInsertionSegments = (
+    baseLines: string[],
+    targetLines: string[]
+  ): string[][] | null => {
+    const segments = Array.from({ length: baseLines.length + 1 }, () => [] as string[]);
+    let targetIndex = 0;
+
+    for (let baseIndex = 0; baseIndex < baseLines.length; baseIndex += 1) {
+      while (targetIndex < targetLines.length && targetLines[targetIndex] !== baseLines[baseIndex]) {
+        segments[baseIndex].push(targetLines[targetIndex]);
+        targetIndex += 1;
+      }
+      if (targetIndex >= targetLines.length) {
+        return null;
+      }
+      targetIndex += 1;
+    }
+
+    segments[baseLines.length].push(...targetLines.slice(targetIndex));
+    return segments;
+  };
+  const mergeUniqueInsertions = (primaryLines: string[], secondaryLines: string[]): string[] => {
+    const mergedLines = [...primaryLines];
+    secondaryLines.forEach((line) => {
+      if (!mergedLines.includes(line)) {
+        mergedLines.push(line);
+      }
+    });
+    return mergedLines;
+  };
+  const buildAutoMergedInsertionContent = (
+    baseContent: string,
+    serverContent: string,
+    draftContent: string
+  ): string | null => {
+    const baseLines = baseContent.replace(/\r\n/g, '\n').split('\n');
+    const serverLines = serverContent.replace(/\r\n/g, '\n').split('\n');
+    const draftLines = draftContent.replace(/\r\n/g, '\n').split('\n');
+    const serverSegments = collectInsertionSegments(baseLines, serverLines);
+    const draftSegments = collectInsertionSegments(baseLines, draftLines);
+    if (!serverSegments || !draftSegments) return null;
+
+    const mergedLines: string[] = [];
+    let appliedDraftInsertion = false;
+    for (let segmentIndex = 0; segmentIndex < serverSegments.length; segmentIndex += 1) {
+      const mergedInsertions = mergeUniqueInsertions(serverSegments[segmentIndex], draftSegments[segmentIndex]);
+      if (draftSegments[segmentIndex].some(line => !serverSegments[segmentIndex].includes(line))) {
+        appliedDraftInsertion = true;
+      }
+      mergedLines.push(...mergedInsertions);
+      if (segmentIndex < baseLines.length) {
+        mergedLines.push(baseLines[segmentIndex]);
+      }
+    }
+
+    const mergedContent = mergedLines.join('\n');
+    if (!appliedDraftInsertion || mergedContent === serverContent.replace(/\r\n/g, '\n')) {
+      return null;
+    }
+    return mergedContent;
+  };
+  const selectedVersionDiff = useMemo(
+    () => selectedVersion
+      ? buildLineDiff(selectedVersion.content, artifactContent)
+      : [],
+    [artifactContent, selectedVersion]
+  );
+  const conflictDraftDiff = useMemo(
+    () => conflictArtifact
+      ? buildLineDiff(conflictArtifact.content, editDraft)
+      : [],
+    [conflictArtifact, editDraft]
+  );
+  const conflictDraftAddedBlocks = useMemo(() => {
+    const blocks: Array<{ startIndex: number; lines: string[]; label: string }> = [];
+    let blockStartIndex: number | null = null;
+    let blockLines: string[] = [];
+
+    const flushBlock = () => {
+      if (blockStartIndex !== null && blockLines.length > 1) {
+        blocks.push({
+          startIndex: blockStartIndex,
+          lines: blockLines,
+          label: buildConflictMergeBlockLabel(blockLines),
+        });
+      }
+      blockStartIndex = null;
+      blockLines = [];
+    };
+
+    conflictDraftDiff.forEach((line, index) => {
+      if (line.type === 'added' && line.content.trim()) {
+        if (blockStartIndex === null) {
+          blockStartIndex = index;
+        }
+        blockLines.push(line.content);
+        return;
+      }
+      flushBlock();
+    });
+    flushBlock();
+
+    return blocks;
+  }, [conflictDraftDiff]);
+  const conflictDraftAddedBlockByStartIndex = useMemo(
+    () => new Map(conflictDraftAddedBlocks.map(block => [block.startIndex, block])),
+    [conflictDraftAddedBlocks]
+  );
+  const conflictDraftModifiedBlocks = useMemo(() => {
+    const blocks: Array<{
+      addedStartIndex: number;
+      removedLines: string[];
+      addedLines: string[];
+      label: string;
+    }> = [];
+    let index = 0;
+
+    while (index < conflictDraftDiff.length) {
+      if (conflictDraftDiff[index]?.type !== 'removed') {
+        index += 1;
+        continue;
+      }
+
+      const removedLines: string[] = [];
+      while (conflictDraftDiff[index]?.type === 'removed') {
+        const content = conflictDraftDiff[index].content;
+        if (content.trim()) removedLines.push(content);
+        index += 1;
+      }
+
+      const addedStartIndex = index;
+      const addedLines: string[] = [];
+      while (conflictDraftDiff[index]?.type === 'added') {
+        const content = conflictDraftDiff[index].content;
+        if (content.trim()) addedLines.push(content);
+        index += 1;
+      }
+
+      if (removedLines.length > 0 && addedLines.length > 0) {
+        blocks.push({
+          addedStartIndex,
+          removedLines,
+          addedLines,
+          label: buildConflictModificationBlockLabel(removedLines, addedLines),
+        });
+      }
+    }
+
+    return blocks;
+  }, [conflictDraftDiff]);
+  const conflictDraftModifiedBlockByAddedStartIndex = useMemo(
+    () => new Map(conflictDraftModifiedBlocks.map(block => [block.addedStartIndex, block])),
+    [conflictDraftModifiedBlocks]
+  );
+  const autoMergedConflictContent = useMemo(
+    () => conflictArtifact
+      ? buildAutoMergedInsertionContent(artifactContent, conflictArtifact.content, editDraft)
+      : null,
+    [artifactContent, conflictArtifact, editDraft]
+  );
 
   const handleMermaidRetry = useCallback(async (brokenCode: string, errorMessage: string, blockIndex: number) => {
     // dynamically import to avoid cyclic or immediate heavy deps
@@ -80,28 +901,502 @@ export const ArtifactPane: React.FC = () => {
     return true;
   }, []);
 
+  const handleRestoreSelectedVersion = () => {
+    if (!selectedVersion || !currentStageId || selectedVersion.content === artifactContent) {
+      setShowHistory(false);
+      return;
+    }
+
+    addArtifactVersion({
+      id: `restore-backup-${Date.now()}`,
+      timestamp: Date.now(),
+      content: artifactContent,
+      stageId: currentStageId,
+    });
+    setArtifactContent(selectedVersion.content);
+    setShowHistory(false);
+  };
+
+  const applyHistoryLineReview = (nextContent: string) => {
+    if (!currentStageId || nextContent === artifactContent) return;
+
+    const timestamp = Date.now();
+    addArtifactVersion({
+      id: `history-line-review-backup-${timestamp}`,
+      timestamp,
+      content: artifactContent,
+      stageId: currentStageId,
+    });
+    setArtifactContent(nextContent);
+  };
+
+  const restoreHistoryLine = (lineContent: string) => {
+    if (!selectedVersion || !lineContent.trim()) return;
+
+    const currentLines = artifactContent.replace(/\r\n/g, '\n').split('\n');
+    if (currentLines.includes(lineContent)) return;
+
+    const historyLines = selectedVersion.content.replace(/\r\n/g, '\n').split('\n');
+    const historyLineIndex = historyLines.findIndex(line => line === lineContent);
+    if (historyLineIndex < 0) return;
+
+    const insertIndex = Math.min(historyLineIndex, currentLines.length);
+    applyHistoryLineReview([
+      ...currentLines.slice(0, insertIndex),
+      lineContent,
+      ...currentLines.slice(insertIndex),
+    ].join('\n'));
+  };
+
+  const discardCurrentLine = (lineContent: string) => {
+    if (!lineContent.trim()) return;
+
+    const currentLines = artifactContent.replace(/\r\n/g, '\n').split('\n');
+    const currentLineIndex = currentLines.findIndex(line => line === lineContent);
+    if (currentLineIndex < 0) return;
+
+    applyHistoryLineReview([
+      ...currentLines.slice(0, currentLineIndex),
+      ...currentLines.slice(currentLineIndex + 1),
+    ].join('\n'));
+  };
+
+  const beginManualEdit = () => {
+    setEditDraft(artifactContent);
+    setManualEditError(null);
+    setConflictVersionNumber(null);
+    setConflictArtifact(null);
+    setShowConflictDiff(false);
+    setIsEditing(true);
+    setShowExportMenu(false);
+    setShowComments(false);
+    setShowSectionLocks(false);
+  };
+
+  const cancelManualEdit = () => {
+    if (isSavingManualEdit) return;
+    setEditDraft('');
+    setManualEditError(null);
+    setConflictVersionNumber(null);
+    setConflictArtifact(null);
+    setShowConflictDiff(false);
+    setIsEditing(false);
+  };
+
+  const inferCurrentServerVersionNumber = (): number | undefined => {
+    if (!currentRunId || !currentStageId) return undefined;
+    const latestCurrentStageVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1];
+    if (!latestCurrentStageVersion || latestCurrentStageVersion.content !== artifactContent) {
+      return undefined;
+    }
+    const expectedPrefix = `${currentRunId}-${currentStageId}-v`;
+    if (!latestCurrentStageVersion.id.startsWith(expectedPrefix)) {
+      return undefined;
+    }
+    const versionNumber = Number.parseInt(
+      latestCurrentStageVersion.id.slice(expectedPrefix.length),
+      10
+    );
+    return Number.isInteger(versionNumber) ? versionNumber : undefined;
+  };
+
+  const saveManualEdit = async () => {
+    if (!currentStageId) return;
+
+    if (editDraft === artifactContent) {
+      setIsEditing(false);
+      setEditDraft('');
+      setManualEditError(null);
+      setConflictVersionNumber(null);
+      setConflictArtifact(null);
+      setShowConflictDiff(false);
+      return;
+    }
+
+    setIsSavingManualEdit(true);
+    setManualEditError(null);
+    setConflictVersionNumber(null);
+    setConflictArtifact(null);
+    setShowConflictDiff(false);
+
+    const changedLockedSection = findLockedSectionChange(editDraft);
+    if (changedLockedSection) {
+      setManualEditError(`保存失败：锁定章节“${changedLockedSection}”已被修改，请先解锁后再保存。`);
+      setIsSavingManualEdit(false);
+      return;
+    }
+
+    let savedContent = editDraft;
+    let savedVersionId: string | null = null;
+    if (currentRunId) {
+      try {
+        const savedArtifact = await updateRunArtifact(
+          currentRunId,
+          currentStageId,
+          editDraft,
+          { expectedVersionNumber: inferCurrentServerVersionNumber() },
+        );
+        savedContent = savedArtifact.content;
+        savedVersionId = `${currentRunId}-${savedArtifact.stageId}-v${savedArtifact.versionNumber}`;
+      } catch (error) {
+        if (error instanceof ArtifactConflictError) {
+          setManualEditError(`保存冲突：${error.message}`);
+          setConflictVersionNumber(error.currentArtifact.versionNumber);
+          setConflictArtifact(error.currentArtifact);
+          setIsSavingManualEdit(false);
+          return;
+        }
+        const message = error instanceof Error ? error.message : '未知错误';
+        setManualEditError(`保存失败：${message}`);
+        setIsSavingManualEdit(false);
+        return;
+      }
+    }
+
+    const latestCurrentStageVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1];
+    const timestamp = Date.now();
+    if (latestCurrentStageVersion?.content !== artifactContent) {
+      addArtifactVersion({
+        id: `manual-edit-backup-${timestamp}`,
+        timestamp,
+        content: artifactContent,
+        stageId: currentStageId,
+      });
+    }
+    addArtifactVersion({
+      id: savedVersionId ?? `manual-edit-${timestamp}`,
+      timestamp: timestamp + 1,
+      content: savedContent,
+      stageId: currentStageId,
+    });
+    setArtifactContent(savedContent);
+    setEditDraft('');
+    setManualEditError(null);
+    setConflictVersionNumber(null);
+    setConflictArtifact(null);
+    setShowConflictDiff(false);
+    setIsSavingManualEdit(false);
+    setIsEditing(false);
+  };
+
+  const refreshToConflictArtifact = () => {
+    if (!conflictArtifact || !currentStageId) return;
+
+    const latestCurrentStageVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1];
+    const timestamp = Date.now();
+    if (latestCurrentStageVersion?.content !== artifactContent) {
+      addArtifactVersion({
+        id: `conflict-local-backup-${timestamp}`,
+        timestamp,
+        content: artifactContent,
+        stageId: currentStageId,
+      });
+    }
+    addArtifactVersion({
+      id: `conflict-draft-${timestamp}`,
+      timestamp: timestamp + 1,
+      content: editDraft,
+      stageId: currentStageId,
+    });
+    addArtifactVersion({
+      id: currentRunId
+        ? `${currentRunId}-${conflictArtifact.stageId}-v${conflictArtifact.versionNumber}`
+        : `conflict-server-${timestamp}`,
+      timestamp: timestamp + 2,
+      content: conflictArtifact.content,
+      stageId: currentStageId,
+    });
+    setArtifactContent(conflictArtifact.content);
+    setEditDraft('');
+    setManualEditError(null);
+    setConflictVersionNumber(null);
+    setConflictArtifact(null);
+    setShowConflictDiff(false);
+    setIsEditing(false);
+  };
+
+  const recordArtifactMergeAuditEvent = (
+    eventType: 'artifact_merge_line_accepted' | 'artifact_merge_line_discarded',
+    lineContent: string
+  ) => {
+    if (!currentStageId) return;
+    const actionLabel = eventType === 'artifact_merge_line_accepted' ? '采纳草稿行' : '丢弃草稿行';
+    addArtifactAuditEvent({
+      stageId: currentStageId,
+      eventType,
+      summary: `合并轨迹：${actionLabel}「${truncateAuditLine(lineContent)}」`,
+    });
+  };
+
+  const recordArtifactMergeBlockAuditEvent = (
+    eventType: 'artifact_merge_block_accepted' | 'artifact_merge_block_discarded',
+    lineContents: string[]
+  ) => {
+    if (!currentStageId) return;
+    const actionLabel = eventType === 'artifact_merge_block_accepted' ? '采纳草稿变更块' : '丢弃草稿变更块';
+    addArtifactAuditEvent({
+      stageId: currentStageId,
+      eventType,
+      summary: `合并轨迹：${actionLabel}「${buildConflictMergeBlockLabel(lineContents)}」`,
+    });
+  };
+
+  const recordArtifactModifiedBlockAuditEvent = (
+    eventType: 'artifact_merge_block_modified_accepted' | 'artifact_merge_block_modified_kept',
+    removedLines: string[],
+    addedLines: string[]
+  ) => {
+    if (!currentStageId) return;
+    const actionLabel = eventType === 'artifact_merge_block_modified_accepted'
+      ? '采纳草稿修改块'
+      : '保留服务端修改块';
+    addArtifactAuditEvent({
+      stageId: currentStageId,
+      eventType,
+      summary: `合并轨迹：${actionLabel}「${buildConflictModificationBlockLabel(removedLines, addedLines)}」`,
+    });
+  };
+
+  const discardConflictDraftLine = (lineContent: string) => {
+    if (!lineContent.trim()) return;
+
+    const draftLines = editDraft.replace(/\r\n/g, '\n').split('\n');
+    const lineIndex = draftLines.findIndex(line => line === lineContent);
+    if (lineIndex < 0) return;
+
+    setEditDraft([
+      ...draftLines.slice(0, lineIndex),
+      ...draftLines.slice(lineIndex + 1),
+    ].join('\n'));
+    recordArtifactMergeAuditEvent('artifact_merge_line_discarded', lineContent);
+  };
+
+  const discardConflictDraftBlock = (lineContents: string[]) => {
+    const blockLines = lineContents.filter(line => line.trim());
+    if (blockLines.length === 0) return;
+
+    const nextDraftLines = editDraft.replace(/\r\n/g, '\n').split('\n');
+    blockLines.forEach((lineContent) => {
+      const lineIndex = nextDraftLines.findIndex(line => line === lineContent);
+      if (lineIndex >= 0) {
+        nextDraftLines.splice(lineIndex, 1);
+      }
+    });
+
+    setEditDraft(nextDraftLines.join('\n'));
+    recordArtifactMergeBlockAuditEvent('artifact_merge_block_discarded', blockLines);
+  };
+
+  const acceptConflictDraftBlock = (lineContents: string[]) => {
+    if (!conflictArtifact) return;
+    const blockLines = lineContents.filter(line => line.trim());
+    if (blockLines.length === 0) return;
+
+    const serverContent = conflictArtifact.content.replace(/\r\n/g, '\n');
+    const serverLines = serverContent.split('\n');
+    const linesToAppend = blockLines.filter(lineContent => !serverLines.includes(lineContent));
+    if (linesToAppend.length === 0) {
+      setEditDraft(serverContent);
+      return;
+    }
+
+    setEditDraft(
+      serverContent.endsWith('\n')
+        ? `${serverContent}${linesToAppend.join('\n')}`
+        : `${serverContent}\n${linesToAppend.join('\n')}`
+    );
+    recordArtifactMergeBlockAuditEvent('artifact_merge_block_accepted', linesToAppend);
+  };
+
+  const acceptConflictDraftModificationBlock = (removedLines: string[], addedLines: string[]) => {
+    if (!conflictArtifact) return;
+    const serverLines = conflictArtifact.content.replace(/\r\n/g, '\n').split('\n');
+    const nextDraftLines = replaceFirstLineSequence(serverLines, removedLines, addedLines);
+    if (nextDraftLines === serverLines) return;
+
+    setEditDraft(nextDraftLines.join('\n'));
+    recordArtifactModifiedBlockAuditEvent(
+      'artifact_merge_block_modified_accepted',
+      removedLines.filter(line => line.trim()),
+      addedLines.filter(line => line.trim())
+    );
+  };
+
+  const keepServerModificationBlock = (removedLines: string[], addedLines: string[]) => {
+    if (!conflictArtifact) return;
+
+    setEditDraft(conflictArtifact.content.replace(/\r\n/g, '\n'));
+    recordArtifactModifiedBlockAuditEvent(
+      'artifact_merge_block_modified_kept',
+      removedLines.filter(line => line.trim()),
+      addedLines.filter(line => line.trim())
+    );
+  };
+
+  const applyAutoMergedConflictContent = () => {
+    if (!autoMergedConflictContent || !currentStageId) return;
+
+    setEditDraft(autoMergedConflictContent);
+    addArtifactAuditEvent({
+      stageId: currentStageId,
+      eventType: 'artifact_auto_merge_applied',
+      summary: '合并轨迹：自动合并服务端与草稿的非重叠补充',
+    });
+  };
+
+  const acceptConflictDraftLine = (lineContent: string) => {
+    if (!conflictArtifact || !lineContent.trim()) return;
+
+    const serverContent = conflictArtifact.content.replace(/\r\n/g, '\n');
+    const serverLines = serverContent.split('\n');
+    if (serverLines.includes(lineContent)) {
+      setEditDraft(serverContent);
+      return;
+    }
+
+    setEditDraft(
+      serverContent.endsWith('\n')
+        ? `${serverContent}${lineContent}`
+        : `${serverContent}\n${lineContent}`
+    );
+    recordArtifactMergeAuditEvent('artifact_merge_line_accepted', lineContent);
+  };
+
+  const addCurrentStageComment = () => {
+    if (!currentStageId) return;
+    const content = commentDraft.trim();
+    if (!content) return;
+    const anchorText = captureSelectedArtifactText() ?? selectedArtifactText;
+    const artifactExcerpt = anchorText ?? buildCommentExcerpt(artifactContent);
+    addArtifactComment({
+      stageId: currentStageId,
+      content,
+      artifactExcerpt,
+      anchorText,
+    });
+    syncArtifactCollaborationState();
+    setCommentDraft('');
+  };
+
+  const removeCurrentStageComment = (commentId: string) => {
+    removeArtifactComment(commentId);
+    syncArtifactCollaborationState();
+  };
+
+  const addCurrentStageCommentReply = (commentId: string) => {
+    const content = commentReplyDrafts[commentId]?.trim() ?? '';
+    if (!content) return;
+    addArtifactCommentReply(commentId, content);
+    syncArtifactCollaborationState();
+    setCommentReplyDrafts((drafts) => ({
+      ...drafts,
+      [commentId]: '',
+    }));
+  };
+
+  const toggleCurrentStageCommentStatus = (
+    commentId: string,
+    currentStatus: 'open' | 'resolved'
+  ) => {
+    setArtifactCommentStatus(commentId, currentStatus === 'resolved' ? 'open' : 'resolved');
+    syncArtifactCollaborationState();
+  };
+
+  const locateArtifactCommentAnchor = (anchorText: string) => {
+    const normalizedAnchorText = normalizeCommentAnchorText(anchorText);
+    if (!normalizedAnchorText) return;
+    setIsEditing(false);
+    setViewMode('preview');
+    setActiveCommentAnchorText(normalizedAnchorText);
+    window.setTimeout(() => {
+      const highlight = artifactPreviewRef.current?.querySelector('[data-artifact-anchor-highlight="true"]');
+      if (highlight instanceof HTMLElement && typeof highlight.scrollIntoView === 'function') {
+        highlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 0);
+  };
+
+  const lockSection = (section: ArtifactSection) => {
+    if (!currentStageId) return;
+    addArtifactSectionLock({
+      stageId: currentStageId,
+      heading: section.heading,
+      content: section.content,
+    });
+    syncArtifactCollaborationState();
+  };
+
+  const unlockSection = (lockId: string) => {
+    removeArtifactSectionLock(lockId);
+    syncArtifactCollaborationState();
+  };
+
+  const getSectionLock = (heading: string) => (
+    currentStageSectionLocks.find(lock => lock.heading === heading)
+  );
+
   const createArtifactMarkdownComponents = (
-    onMermaidRetry?: Parameters<typeof createMarkdownCodeRenderer>[0]['onMermaidRetry']
+    onMermaidRetry?: Parameters<typeof createMarkdownCodeRenderer>[0]['onMermaidRetry'],
+    activeAnchorText?: string | null
   ): Components => {
     let mermaidBlockCounter = 0;
+    let anchorHighlighted = false;
+    const normalizedActiveAnchorText = activeAnchorText?.trim() || null;
+    const highlightAnchorInChildren = (children: React.ReactNode): React.ReactNode => {
+      if (!normalizedActiveAnchorText || anchorHighlighted) return children;
+
+      const visitNode = (node: React.ReactNode): React.ReactNode => {
+        if (!normalizedActiveAnchorText || anchorHighlighted) return node;
+        if (typeof node === 'string') {
+          const anchorIndex = node.indexOf(normalizedActiveAnchorText);
+          if (anchorIndex < 0) return node;
+          anchorHighlighted = true;
+          return (
+            <>
+              {node.slice(0, anchorIndex)}
+              <mark
+                data-artifact-anchor-highlight="true"
+                className="rounded bg-amber-300/25 px-1 py-0.5 font-medium text-amber-100 ring-1 ring-amber-300/40"
+              >
+                {normalizedActiveAnchorText}
+              </mark>
+              {node.slice(anchorIndex + normalizedActiveAnchorText.length)}
+            </>
+          );
+        }
+        if (Array.isArray(node)) {
+          return node.map((child, index) => (
+            <React.Fragment key={index}>{visitNode(child)}</React.Fragment>
+          ));
+        }
+        return node;
+      };
+
+      return visitNode(children);
+    };
+
     return {
-    h1: ({ node, ...props }) => <h1 className="text-3xl font-bold text-white mb-6 pb-2 border-b border-[#1e293b]" {...props} />,
-    h2: ({ node, ...props }) => <h2 className="text-2xl font-bold text-white mt-8 mb-4 before:content-['#'] before:text-blue-500 before:opacity-50 before:mr-2" {...props} />,
-    h3: ({ node, ...props }) => <h3 className="text-xl font-semibold text-slate-200 mt-6 mb-3" {...props} />,
-    p: ({ node, ...props }) => <p className="mb-4 leading-relaxed text-slate-400" {...props} />,
+    h1: ({ node, children, ...props }) => <h1 className="text-3xl font-bold text-white mb-6 pb-2 border-b border-[#1e293b]" {...props}>{highlightAnchorInChildren(children)}</h1>,
+    h2: ({ node, children, ...props }) => <h2 className="text-2xl font-bold text-white mt-8 mb-4 before:content-['#'] before:text-blue-500 before:opacity-50 before:mr-2" {...props}>{highlightAnchorInChildren(children)}</h2>,
+    h3: ({ node, children, ...props }) => <h3 className="text-xl font-semibold text-slate-200 mt-6 mb-3" {...props}>{highlightAnchorInChildren(children)}</h3>,
+    p: ({ node, children, ...props }) => <p className="mb-4 leading-relaxed text-slate-400" {...props}>{highlightAnchorInChildren(children)}</p>,
     ul: ({ node, ...props }) => <ul className="list-disc pl-6 mb-4 space-y-2 text-slate-400" {...props} />,
     ol: ({ node, ...props }) => <ol className="list-decimal pl-6 mb-4 space-y-2 text-slate-400" {...props} />,
-    li: ({ node, ...props }) => <li className="leading-relaxed" {...props} />,
-    strong: ({ node, ...props }) => <strong className="font-bold text-white" {...props} />,
-    blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-blue-500 pl-4 py-2 my-4 bg-blue-500/5 rounded-r text-slate-400 italic" {...props} />,
+    li: ({ node, children, ...props }) => <li className="leading-relaxed" {...props}>{highlightAnchorInChildren(children)}</li>,
+    strong: ({ node, children, ...props }) => <strong className="font-bold text-white" {...props}>{highlightAnchorInChildren(children)}</strong>,
+    blockquote: ({ node, children, ...props }) => <blockquote className="border-l-4 border-blue-500 pl-4 py-2 my-4 bg-blue-500/5 rounded-r text-slate-400 italic" {...props}>{highlightAnchorInChildren(children)}</blockquote>,
     table: ({ node, ...props }) => <div className="overflow-x-auto mb-6"><table className="w-full border-collapse text-sm" {...props} /></div>,
-    th: ({ node, ...props }) => <th className="bg-[#1e293b] text-slate-200 font-semibold text-left p-3 border-b border-[#334155]" {...props} />,
-    td: ({ node, ...props }) => <td className="p-3 border-b border-[#1e293b] text-slate-400 group-hover:bg-white/5" {...props} />,
+    th: ({ node, children, ...props }) => <th className="bg-[#1e293b] text-slate-200 font-semibold text-left p-3 border-b border-[#334155]" {...props}>{highlightAnchorInChildren(children)}</th>,
+    td: ({ node, children, ...props }) => <td className="p-3 border-b border-[#1e293b] text-slate-400 group-hover:bg-white/5" {...props}>{highlightAnchorInChildren(children)}</td>,
     tr: ({ node, ...props }) => <tr className="hover:bg-white/[0.02] transition-colors group" {...props} />,
     mark: ({ node, ...props }) => <mark className="bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded font-medium shadow-[0_0_8px_rgba(16,185,129,0.1)] box-decoration-clone" {...props} />,
+    pre: ({ node, children }) => <>{children}</>,
     code: createMarkdownCodeRenderer({
       nextMermaidBlockIndex: () => mermaidBlockCounter++,
       onMermaidRetry,
+      renderStructuredVisual: ({ children }) => (
+        <StructuredVisual source={String(children).replace(/\n$/, '')} />
+      ),
       renderBlockCode: ({ language, className, children, props }) => (
         <div className="relative my-6 rounded-lg overflow-hidden border border-[#1e293b] bg-[#0f172a]">
           {language && (
@@ -125,7 +1420,7 @@ export const ArtifactPane: React.FC = () => {
     };
   };
 
-  const editableMarkdownComponents = createArtifactMarkdownComponents(handleMermaidRetry);
+  const editableMarkdownComponents = createArtifactMarkdownComponents(handleMermaidRetry, activeCommentAnchorText);
   const readOnlyMarkdownComponents = createArtifactMarkdownComponents();
 
   return (
@@ -176,9 +1471,68 @@ export const ArtifactPane: React.FC = () => {
           <button onClick={openHistory} className="p-1.5 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors" title="历史版本">
             <History className="w-4 h-4" />
           </button>
-          <button onClick={handleDownload} className="p-1.5 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors" title="下载">
-            <Download className="w-4 h-4" />
+          <button
+            onClick={beginManualEdit}
+            disabled={isGenerating}
+            className="p-1.5 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+            title="编辑产出物"
+          >
+            <Edit3 className="w-4 h-4" />
           </button>
+          <button
+            onClick={() => {
+              captureSelectedArtifactText();
+              setShowComments((current) => !current);
+              setShowExportMenu(false);
+              setShowSectionLocks(false);
+            }}
+            className={`p-1.5 rounded transition-colors ${showComments ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+            title="批注"
+          >
+            <MessageSquare className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => {
+              setShowSectionLocks((current) => !current);
+              setShowExportMenu(false);
+              setShowComments(false);
+            }}
+            className={`p-1.5 rounded transition-colors ${showSectionLocks ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+            title="章节锁定"
+          >
+            <Lock className="w-4 h-4" />
+          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu((current) => !current)}
+              className="p-1.5 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+              title="下载"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 top-full z-20 mt-2 w-36 overflow-hidden rounded-lg border border-[#1e293b] bg-[#0f172a] shadow-xl">
+                <button
+                  onClick={() => handleDownload('markdown')}
+                  className="block w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/5"
+                >
+                  Markdown
+                </button>
+                <button
+                  onClick={() => handleDownload('word')}
+                  className="block w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/5"
+                >
+                  Word
+                </button>
+                <button
+                  onClick={() => handleDownload('pdf')}
+                  className="block w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/5"
+                >
+                  PDF
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -208,13 +1562,191 @@ export const ArtifactPane: React.FC = () => {
                 <span className="block h-4 w-1.5 rounded-full bg-sky-300/70 animate-pulse [animation-delay:360ms]"></span>
               </div>
             </div>
-            <div className="mt-3 h-1 overflow-hidden rounded-full bg-sky-950/80">
-              <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-sky-400 via-cyan-200 to-blue-300 animate-pulse"></div>
-            </div>
           </div>
         )}
-        <div className="max-w-4xl mx-auto pb-20">
-          {viewMode === 'preview' ? (
+        <div
+          ref={artifactPreviewRef}
+          onMouseUp={captureSelectedArtifactText}
+          onKeyUp={captureSelectedArtifactText}
+          className="max-w-4xl mx-auto pb-20"
+        >
+          {isEditing ? (
+            <div className="rounded-xl border border-blue-500/20 bg-[#0f172a] shadow-xl">
+              <div className="flex items-center justify-between gap-3 border-b border-[#1e293b] px-4 py-3">
+                <div>
+                  <div className="text-sm font-semibold text-slate-100">编辑当前阶段产出物</div>
+                  <div className="mt-0.5 text-xs text-slate-500">
+                    保存后会写入当前阶段历史版本，可在历史版本中对比和恢复。
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={cancelManualEdit}
+                    disabled={isSavingManualEdit}
+                    className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    取消编辑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveManualEdit}
+                    aria-label="保存修改"
+                    disabled={isSavingManualEdit}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Save className="h-3.5 w-3.5" />
+                    {isSavingManualEdit ? '保存中' : '保存修改'}
+                  </button>
+                </div>
+              </div>
+              {manualEditError && (
+                <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-200">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>{manualEditError}</span>
+                    {conflictVersionNumber !== null && (
+                      <span className="text-red-100/80">
+                        服务端当前版本：v{conflictVersionNumber}
+                      </span>
+                    )}
+                    {conflictArtifact && (
+                      <div className="ml-auto flex shrink-0 items-center gap-2">
+                        {autoMergedConflictContent && (
+                          <button
+                            type="button"
+                            onClick={applyAutoMergedConflictContent}
+                            className="rounded-md border border-emerald-300/20 px-2 py-1 text-[11px] font-semibold text-emerald-50 transition-colors hover:bg-emerald-400/10"
+                          >
+                            自动合并非重叠变更
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setShowConflictDiff((current) => !current)}
+                          className="rounded-md border border-red-300/20 px-2 py-1 text-[11px] font-semibold text-red-50 transition-colors hover:bg-red-400/10"
+                        >
+                          对比服务端版本
+                        </button>
+                        <button
+                          type="button"
+                          onClick={refreshToConflictArtifact}
+                          className="rounded-md bg-red-200 px-2 py-1 text-[11px] font-bold text-red-950 transition-colors hover:bg-red-100"
+                        >
+                          刷新为服务端版本
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {showConflictDiff && conflictArtifact && (
+                    <div className="mt-3 rounded-lg border border-red-300/20 bg-[#0B1120] p-3">
+                      <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-red-100">
+                        服务端版本 vs 你的草稿
+                      </div>
+                      <div className="max-h-52 overflow-auto rounded border border-[#1e293b] bg-black/20 font-mono text-[11px] leading-relaxed">
+                        {conflictDraftDiff.map((line, index) => (
+                          <div
+                            key={`${line.type}-${index}-${line.content}`}
+                            className={`flex items-center gap-2 px-3 py-0.5 ${
+                              line.type === 'added'
+                                ? 'bg-emerald-500/10 text-emerald-200'
+                                : line.type === 'removed'
+                                  ? 'bg-red-500/10 text-red-200'
+                                  : 'text-slate-400'
+                            }`}
+                          >
+                            <span className="min-w-0 flex-1 whitespace-pre-wrap">
+                              {line.type === 'added' ? '+ ' : line.type === 'removed' ? '- ' : '  '}
+                              {line.content || ' '}
+                            </span>
+                            {line.type === 'added' && line.content.trim() && (
+                              <span className="flex shrink-0 items-center gap-1">
+                                {conflictDraftModifiedBlockByAddedStartIndex.has(index) && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const block = conflictDraftModifiedBlockByAddedStartIndex.get(index);
+                                        if (block) acceptConflictDraftModificationBlock(block.removedLines, block.addedLines);
+                                      }}
+                                      aria-label={`采纳修改块：${conflictDraftModifiedBlockByAddedStartIndex.get(index)?.label ?? line.content}`}
+                                      className="rounded border border-blue-300/20 px-1.5 py-0.5 text-[10px] font-semibold text-blue-100 hover:bg-blue-300/10"
+                                    >
+                                      采纳修改块
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const block = conflictDraftModifiedBlockByAddedStartIndex.get(index);
+                                        if (block) keepServerModificationBlock(block.removedLines, block.addedLines);
+                                      }}
+                                      aria-label={`保留服务端修改块：${conflictDraftModifiedBlockByAddedStartIndex.get(index)?.label ?? line.content}`}
+                                      className="rounded border border-rose-300/20 px-1.5 py-0.5 text-[10px] font-semibold text-rose-100 hover:bg-rose-300/10"
+                                    >
+                                      保留服务端
+                                    </button>
+                                  </>
+                                )}
+                                {conflictDraftAddedBlockByStartIndex.has(index) && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const block = conflictDraftAddedBlockByStartIndex.get(index);
+                                        if (block) acceptConflictDraftBlock(block.lines);
+                                      }}
+                                      aria-label={`采纳变更块：${conflictDraftAddedBlockByStartIndex.get(index)?.label ?? line.content}`}
+                                      className="rounded border border-cyan-300/20 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-100 hover:bg-cyan-300/10"
+                                    >
+                                      采纳块
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const block = conflictDraftAddedBlockByStartIndex.get(index);
+                                        if (block) discardConflictDraftBlock(block.lines);
+                                      }}
+                                      aria-label={`丢弃变更块：${conflictDraftAddedBlockByStartIndex.get(index)?.label ?? line.content}`}
+                                      className="rounded border border-amber-300/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-100 hover:bg-amber-300/10"
+                                    >
+                                      丢弃块
+                                    </button>
+                                  </>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => acceptConflictDraftLine(line.content)}
+                                  aria-label={`采纳到草稿：${line.content}`}
+                                  className="rounded border border-emerald-300/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-100 hover:bg-emerald-300/10"
+                                >
+                                  采纳
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => discardConflictDraftLine(line.content)}
+                                  aria-label={`丢弃此行：${line.content}`}
+                                  className="rounded border border-slate-300/20 px-1.5 py-0.5 text-[10px] font-semibold text-slate-200 hover:bg-white/10"
+                                >
+                                  丢弃
+                                </button>
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              <textarea
+                aria-label="编辑产出物 Markdown"
+                value={editDraft}
+                onChange={(event) => setEditDraft(event.target.value)}
+                disabled={isSavingManualEdit}
+                className="min-h-[58vh] w-full resize-none bg-[#0B1120] p-5 font-mono text-sm leading-relaxed text-slate-200 outline-none placeholder:text-slate-600"
+                spellCheck={false}
+              />
+            </div>
+          ) : viewMode === 'preview' ? (
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw]}
@@ -229,6 +1761,201 @@ export const ArtifactPane: React.FC = () => {
           )}
         </div>
       </div>
+
+      {showComments && (
+        <aside className="absolute right-6 top-20 z-20 w-[min(360px,calc(100%-3rem))] rounded-xl border border-[#1e293b] bg-[#0f172a] shadow-2xl">
+          <div className="flex items-center justify-between border-b border-[#1e293b] px-4 py-3">
+            <div>
+              <h3 className="text-sm font-semibold text-white">产出物批注</h3>
+              <p className="text-xs text-slate-500">当前阶段 {currentStageId}</p>
+            </div>
+            <button
+              onClick={() => setShowComments(false)}
+              className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white"
+              title="关闭批注"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="space-y-3 p-4">
+            <label className="block text-xs font-semibold text-slate-300" htmlFor="artifact-comment-draft">
+              新增批注
+            </label>
+            <textarea
+              id="artifact-comment-draft"
+              aria-label="新增批注"
+              value={commentDraft}
+              onChange={(event) => setCommentDraft(event.target.value)}
+              className="min-h-24 w-full resize-y rounded-lg border border-[#334155] bg-[#020617] p-3 text-sm leading-relaxed text-slate-200 outline-none focus:border-blue-500"
+              placeholder="记录需要确认、后续跟进或人工校准的点..."
+            />
+            <button
+              onClick={addCurrentStageComment}
+              disabled={!commentDraft.trim()}
+              className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+            >
+              添加批注
+            </button>
+
+            <div className="border-t border-[#1e293b] pt-3">
+              {currentStageComments.length === 0 ? (
+                <p className="text-sm text-slate-500">当前阶段还没有批注。</p>
+              ) : (
+                <div className="space-y-3">
+                  {currentStageComments.map((comment) => (
+                    <article key={comment.id} className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
+                      <div className="mb-2 flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${comment.status === 'resolved'
+                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                              : 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                              }`}
+                            >
+                              {comment.status === 'resolved' ? '已解决' : '未解决'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => toggleCurrentStageCommentStatus(comment.id, comment.status)}
+                              className="rounded border border-[#334155] px-2 py-1 text-[10px] font-semibold text-slate-300 transition-colors hover:border-blue-500/60 hover:text-blue-200"
+                            >
+                              {comment.status === 'resolved' ? '重新打开' : '标记已解决'}
+                            </button>
+                          </div>
+                          <p className="break-words text-sm leading-relaxed text-slate-200">{comment.content}</p>
+                        </div>
+                        <button
+                          onClick={() => removeCurrentStageComment(comment.id)}
+                          className="rounded p-1 text-slate-500 hover:bg-red-500/10 hover:text-red-300"
+                          title="删除批注"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <blockquote className="border-l-2 border-blue-500/50 pl-3 text-xs leading-relaxed text-slate-500">
+                        {comment.artifactExcerpt || '当前产出物'}
+                      </blockquote>
+                      {comment.anchorText && (
+                        <button
+                          type="button"
+                          onClick={() => locateArtifactCommentAnchor(comment.anchorText ?? '')}
+                          className="mt-2 rounded border border-blue-500/30 px-2 py-1 text-[10px] font-semibold text-blue-200 transition-colors hover:bg-blue-500/10"
+                        >
+                          定位正文
+                        </button>
+                      )}
+                      {comment.replies.length > 0 && (
+                        <div className="mt-3 space-y-2 border-t border-[#1e293b] pt-3">
+                          {comment.replies.map((reply) => (
+                            <div key={reply.id} className="rounded-md bg-white/[0.03] px-3 py-2">
+                              <p className="break-words text-xs leading-relaxed text-slate-300">{reply.content}</p>
+                              <p className="mt-1 text-[10px] text-slate-600">
+                                {new Date(reply.createdAt).toLocaleString()}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="mt-3 flex items-start gap-2">
+                        <label className="sr-only" htmlFor={`artifact-comment-reply-${comment.id}`}>
+                          回复批注：{comment.content}
+                        </label>
+                        <textarea
+                          id={`artifact-comment-reply-${comment.id}`}
+                          aria-label={`回复批注：${comment.content}`}
+                          value={commentReplyDrafts[comment.id] ?? ''}
+                          onChange={(event) => setCommentReplyDrafts((drafts) => ({
+                            ...drafts,
+                            [comment.id]: event.target.value,
+                          }))}
+                          className="min-h-16 flex-1 resize-y rounded-lg border border-[#1e293b] bg-[#0f172a] p-2 text-xs leading-relaxed text-slate-200 outline-none focus:border-blue-500"
+                          placeholder="补充处理结论..."
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addCurrentStageCommentReply(comment.id)}
+                          disabled={!commentReplyDrafts[comment.id]?.trim()}
+                          className="rounded-lg bg-slate-700 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-slate-600 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+                        >
+                          添加回复
+                        </button>
+                      </div>
+                      <p className="mt-2 text-[10px] text-slate-600">
+                        {new Date(comment.createdAt).toLocaleString()}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+            {collaborationSyncError && (
+              <p className="px-4 pb-3 text-xs text-red-300">{collaborationSyncError}</p>
+            )}
+          </div>
+        </aside>
+      )}
+
+      {showSectionLocks && (
+        <aside className="absolute right-6 top-20 z-20 w-[min(380px,calc(100%-3rem))] rounded-xl border border-[#1e293b] bg-[#0f172a] shadow-2xl">
+          <div className="flex items-center justify-between border-b border-[#1e293b] px-4 py-3">
+            <div>
+              <h3 className="text-sm font-semibold text-white">章节锁定</h3>
+              <p className="text-xs text-slate-500">保护已确认章节不被手工误改</p>
+            </div>
+            <button
+              onClick={() => setShowSectionLocks(false)}
+              className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white"
+              title="关闭章节锁定"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="max-h-[60vh] space-y-3 overflow-auto p-4">
+            {artifactSections.length === 0 ? (
+              <p className="text-sm text-slate-500">当前产出物还没有可锁定的 Markdown 标题章节。</p>
+            ) : (
+              artifactSections.map((section) => {
+                const lock = getSectionLock(section.heading);
+                return (
+                  <article key={section.heading} className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h4 className="truncate text-sm font-semibold text-slate-100">{section.title}</h4>
+                        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">
+                          {section.content.replace(section.heading, '').trim() || '空章节'}
+                        </p>
+                      </div>
+                      {lock ? (
+                        <button
+                          onClick={() => unlockSection(lock.id)}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-400/20 px-2 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-400/10"
+                          aria-label={`解除章节锁定 ${section.title}`}
+                          title="解除章节锁定"
+                        >
+                          <Unlock className="h-3.5 w-3.5" />
+                          解锁
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => lockSection(section)}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-md bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-500"
+                          aria-label={`锁定 ${section.title}`}
+                        >
+                          <Lock className="h-3.5 w-3.5" />
+                          锁定 {section.title}
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })
+            )}
+            {collaborationSyncError && (
+              <p className="text-xs text-red-300">{collaborationSyncError}</p>
+            )}
+          </div>
+        </aside>
+      )}
 
       {showHistory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -266,6 +1993,28 @@ export const ArtifactPane: React.FC = () => {
                     );
                   })
                 )}
+                <div className="mt-4 border-t border-[#1e293b] pt-4">
+                  <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                    活动轨迹
+                  </div>
+                  {currentStageAuditEvents.length === 0 ? (
+                    <p className="text-xs text-slate-600">暂无活动记录</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {[...currentStageAuditEvents].reverse().map((event, index) => (
+                        <div
+                          key={`${event.eventType}-${event.createdAt}-${index}`}
+                          className="rounded-lg border border-[#1e293b] bg-[#0f172a] px-3 py-2"
+                        >
+                          <p className="text-xs leading-relaxed text-slate-300">{event.summary}</p>
+                          <p className="mt-1 text-[10px] text-slate-600">
+                            {new Date(event.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -273,13 +2022,42 @@ export const ArtifactPane: React.FC = () => {
             <div className="flex-1 flex flex-col bg-[#0B0F17] overflow-hidden relative">
               <div className="px-6 py-3 border-b border-[#1e293b] bg-[#0d1117]/80 backdrop-blur flex items-center justify-between shadow-sm">
                 <h2 className="text-gray-200 font-semibold text-sm tracking-tight flex items-center gap-2">
-                  <Eye className="w-4 h-4 text-slate-400" />
-                  版本预览 <span className="text-slate-500 font-normal">（只读）</span>
+                  {historyViewMode === 'preview' ? (
+                    <Eye className="w-4 h-4 text-slate-400" />
+                  ) : (
+                    <GitCompare className="w-4 h-4 text-slate-400" />
+                  )}
+                  {historyViewMode === 'preview' ? '版本预览' : '与当前产出物对比'} <span className="text-slate-500 font-normal">（只读）</span>
                 </h2>
+                <div className="flex items-center gap-1 rounded-lg border border-[#1e293b] bg-[#0f172a] p-1">
+                  {selectedVersion && (
+                    <>
+                      <button
+                        onClick={handleRestoreSelectedVersion}
+                        className="rounded px-3 py-1.5 text-xs font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/10"
+                      >
+                        恢复此版本
+                      </button>
+                      <div className="mx-1 h-4 w-px bg-[#1e293b]"></div>
+                    </>
+                  )}
+                  <button
+                    onClick={() => setHistoryViewMode('preview')}
+                    className={`rounded px-3 py-1.5 text-xs font-semibold transition-colors ${historyViewMode === 'preview' ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
+                  >
+                    预览
+                  </button>
+                  <button
+                    onClick={() => setHistoryViewMode('diff')}
+                    className={`rounded px-3 py-1.5 text-xs font-semibold transition-colors ${historyViewMode === 'diff' ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
+                  >
+                    差异
+                  </button>
+                </div>
               </div>
               <div className="flex-1 overflow-y-auto p-8 md:px-16 custom-scrollbar">
                 <div className="max-w-4xl mx-auto pb-20">
-                  {selectedVersion ? (
+                  {selectedVersion && historyViewMode === 'preview' ? (
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       rehypePlugins={[rehypeRaw]}
@@ -287,6 +2065,40 @@ export const ArtifactPane: React.FC = () => {
                     >
                       {preprocessMarkdown(selectedVersion.content)}
                     </ReactMarkdown>
+                  ) : selectedVersion ? (
+                    <div className="overflow-hidden rounded-lg border border-[#1e293b] bg-[#0f172a] font-mono text-xs">
+                      {selectedVersionDiff.map((entry, index) => {
+                        const prefix = entry.type === 'added' ? '+ ' : entry.type === 'removed' ? '- ' : '  ';
+                        return (
+                          <div
+                            key={`${entry.type}-${index}`}
+                            className={`flex items-center gap-2 whitespace-pre-wrap px-4 py-1.5 ${entry.type === 'added' ? 'bg-emerald-500/10 text-emerald-200' : entry.type === 'removed' ? 'bg-red-500/10 text-red-200' : 'text-slate-400'}`}
+                          >
+                            <span className="min-w-0 flex-1">{prefix}{entry.content}</span>
+                            {entry.type === 'removed' && entry.content.trim() && (
+                              <button
+                                type="button"
+                                onClick={() => restoreHistoryLine(entry.content)}
+                                aria-label={`恢复此行：${entry.content}`}
+                                className="shrink-0 rounded border border-red-300/20 px-1.5 py-0.5 text-[10px] font-semibold text-red-100 hover:bg-red-300/10"
+                              >
+                                恢复此行
+                              </button>
+                            )}
+                            {entry.type === 'added' && entry.content.trim() && (
+                              <button
+                                type="button"
+                                onClick={() => discardCurrentLine(entry.content)}
+                                aria-label={`丢弃当前行：${entry.content}`}
+                                className="shrink-0 rounded border border-emerald-300/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-100 hover:bg-emerald-300/10"
+                              >
+                                丢弃当前行
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   ) : (
                     <div className="flex items-center justify-center h-full text-slate-500">
                       请在左侧选择一个历史版本查看

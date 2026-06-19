@@ -114,6 +114,7 @@ class PydanticAgentRuntime:
     ):
         self.agent = agent
         self.raw_streaming_config = raw_streaming_config
+        self.last_token_usage: int | None = None
 
     @staticmethod
     def _coerce_output(output: Any) -> AgentTurnOutput:
@@ -236,6 +237,7 @@ class PydanticAgentRuntime:
     ) -> Iterator[AgentTurnDeltaOutput | AgentTurnOutput]:
         assert self.raw_streaming_config is not None
         config = self.raw_streaming_config
+        self.last_token_usage = None
         accumulated = ""
         latest_chat = ""
         latest_markdown = ""
@@ -262,6 +264,11 @@ class PydanticAgentRuntime:
             temperature=0,
             response_format={"type": "json_object"},
             extra_body=extra_body,
+            on_usage=lambda total_tokens: setattr(
+                self,
+                "last_token_usage",
+                total_tokens,
+            ),
         ):
             accumulated += text_chunk
             delta = build_partial_agent_delta(accumulated)

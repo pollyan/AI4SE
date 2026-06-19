@@ -24,6 +24,13 @@ VALID_CLARIFY_ARTIFACT = """# 需求分析文档
 内容
 
 ## 2. 系统交互与核心链路
+```mermaid
+flowchart TD
+    User["用户"] --> Login["登录入口"]
+    Login --> Auth["认证服务"]
+    Auth --> Session["会话状态"]
+```
+
 内容
 
 ## 3. 待澄清与阻断性问题
@@ -31,6 +38,21 @@ VALID_CLARIFY_ARTIFACT = """# 需求分析文档
 
 ## 4. 隐式需求与非功能性考量
 内容"""
+
+VALID_CLARIFY_ARTIFACT_JSON = (
+    "# 需求分析文档\\n\\n"
+    "## 1. 被测系统与边界\\n内容\\n\\n"
+    "## 2. 系统交互与核心链路\\n"
+    "```mermaid\\n"
+    "flowchart TD\\n"
+    "    User[\\\"用户\\\"] --> Login[\\\"登录入口\\\"]\\n"
+    "    Login --> Auth[\\\"认证服务\\\"]\\n"
+    "    Auth --> Session[\\\"会话状态\\\"]\\n"
+    "```\\n\\n"
+    "内容\\n\\n"
+    "## 3. 待澄清与阻断性问题\\n内容\\n\\n"
+    "## 4. 隐式需求与非功能性考量\\n内容"
+)
 
 
 class FakeRunResult:
@@ -208,11 +230,7 @@ def test_runtime_raw_json_stream_turn_yields_real_delta_before_final_output(
     final_json = (
         '{"chat":"正在梳理需求。",'
         '"artifact_update":{"type":"replace","markdown":"'
-        '# 需求分析文档\\n\\n'
-        '## 1. 被测系统与边界\\n内容\\n\\n'
-        '## 2. 系统交互与核心链路\\n内容\\n\\n'
-        '## 3. 待澄清与阻断性问题\\n内容\\n\\n'
-        '## 4. 隐式需求与非功能性考量\\n内容"},'
+        f'{VALID_CLARIFY_ARTIFACT_JSON}' + '"},'
         '"stage_action":null,"warnings":[]}'
     )
     chunks = [
@@ -255,6 +273,42 @@ def test_runtime_raw_json_stream_turn_yields_real_delta_before_final_output(
     assert outputs[-1].artifact_update.markdown == VALID_CLARIFY_ARTIFACT
     assert calls[0]["response_format"] == {"type": "json_object"}
     assert "结构化输出格式要求" in calls[0]["messages"][0]["content"]
+
+
+def test_raw_streaming_runtime_records_stream_usage(monkeypatch):
+    final_json = (
+        '{"chat":"正在梳理需求。",'
+        '"artifact_update":{"type":"replace","markdown":"'
+        f'{VALID_CLARIFY_ARTIFACT_JSON}' + '"},'
+        '"stage_action":null,"warnings":[]}'
+    )
+
+    def fake_stream_chat_completion_content(**kwargs):
+        kwargs["on_usage"](123)
+        yield final_json
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            system_prompt="system prompt",
+        ),
+    )
+
+    outputs = list(runtime.stream_turn(
+        "用户需求",
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    ))
+
+    assert outputs[-1].chat == "正在梳理需求。"
+    assert runtime.last_token_usage == 123
 
 
 def test_runtime_raw_json_stream_turn_keeps_latest_delta_when_final_json_is_truncated(

@@ -415,5 +415,14 @@ def build_agent_sse_response(
             "type": "request_next_stage",
             "target_stage_id": payload.next_stage_id,
         }
+    run_started_event = {
+        "type": "run_started",
+        "runId": request_body.get("runId") or f"mock-run-{workflow_id.lower()}",
+        "warnings": [],
+    }
     event = {"type": "agent_turn", "output": output}
-    return f"data: {json.dumps(event, ensure_ascii=False)}\n\ndata: [DONE]\n\n"
+    return (
+        f"data: {json.dumps(run_started_event, ensure_ascii=False)}\n\n"
+        f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        "data: [DONE]\n\n"
+    )

@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore, WORKFLOWS } from '../store';
-import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw, Copy, Check, ChevronRight } from 'lucide-react';
+import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw, Copy, Check, ChevronRight, ArrowRight, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -9,7 +10,8 @@ import { useChatService } from '../services/chatService';
 import { getAgentById } from '../core/config/agents';
 import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/markdownUtils';
 import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
-import type { Attachment } from '../store';
+import { fetchWorkflowHandoffs, startWorkflowHandoff } from '../services/workflowHandoffService';
+import type { Attachment, WorkflowHandoff } from '../store';
 
 const asRenderableAttachments = (attachments: unknown): Attachment[] => {
   if (!Array.isArray(attachments)) return [];
@@ -32,13 +34,24 @@ const asRenderableAttachments = (attachments: unknown): Attachment[] => {
   });
 };
 
+const isStructuredOutputFailureContent = (content: string | undefined): boolean => (
+  Boolean(content?.includes('结构化输出生成失败'))
+);
+
+const isProviderFailureContent = (content: string | undefined): boolean => (
+  Boolean(content?.includes('模型配置或供应商异常'))
+);
+
 export const ChatPane: React.FC = () => {
+  const navigate = useNavigate();
   // 使用选择器订阅特定状态，减少不必要的重渲染 (rerender-defer-reads)
   const chatHistory = useStore((state) => state.chatHistory);
   const isGenerating = useStore((state) => state.isGenerating);
   const workflow = useStore((state) => state.workflow);
+  const currentRunId = useStore((state) => state.currentRunId);
   const pendingStageTransition = useStore((state) => state.pendingStageTransition);
   const clearPendingStageTransition = useStore((state) => state.clearPendingStageTransition);
+  const applyWorkflowHandoff = useStore((state) => state.applyWorkflowHandoff);
   
   const onboardingConfig = WORKFLOWS[workflow].onboarding;
   const workflowStages = WORKFLOWS[workflow].stages;
@@ -49,6 +62,15 @@ export const ChatPane: React.FC = () => {
   const pendingNextStage = pendingStageTransition
     ? workflowStages[pendingStageTransition.toStageIndex]
     : null;
+  const latestMessage = chatHistory[chatHistory.length - 1];
+  const isLatestStructuredOutputFailure = (
+    latestMessage?.role === 'assistant'
+    && isStructuredOutputFailureContent(latestMessage.content)
+  );
+  const isLatestProviderFailure = (
+    latestMessage?.role === 'assistant'
+    && isProviderFailureContent(latestMessage.content)
+  );
 
   const updateMessage = useStore((state) => state.updateMessage);
 
@@ -57,6 +79,7 @@ export const ChatPane: React.FC = () => {
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [workflowHandoffs, setWorkflowHandoffs] = useState<WorkflowHandoff[]>([]);
 
   const handleCopy = async (content: string, msgId: string) => {
     if (copyFeedbackTimeoutRef.current) {
@@ -84,6 +107,46 @@ export const ChatPane: React.FC = () => {
       clearTimeout(copyFeedbackTimeoutRef.current);
     }
   }, []);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!currentRunId) {
+      setWorkflowHandoffs([]);
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    fetchWorkflowHandoffs(currentRunId)
+      .then((handoffs) => {
+        if (isCurrent) {
+          setWorkflowHandoffs(handoffs);
+        }
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setWorkflowHandoffs([]);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [currentRunId, chatHistory.length]);
+
+  const handleApplyWorkflowHandoff = async (handoff: WorkflowHandoff) => {
+    const startedHandoff = currentRunId
+      ? await startWorkflowHandoff(currentRunId, handoff.id)
+      : handoff;
+    applyWorkflowHandoff(startedHandoff);
+    setWorkflowHandoffs([]);
+    const targetWorkflow = WORKFLOWS[startedHandoff.targetWorkflowId];
+    const targetRunQuery = startedHandoff.targetRunId
+      ? `?runId=${encodeURIComponent(startedHandoff.targetRunId)}`
+      : '';
+    navigate(`/workspace/${startedHandoff.targetAgentId}/${targetWorkflow.slug}${targetRunQuery}`);
+  };
 
   const {
     input,
@@ -153,6 +216,32 @@ export const ChatPane: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
+        {workflowHandoffs.length > 0 && !isGenerating && (
+          <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-cyan-100">跨智能体接力</p>
+                <p className="mt-0.5 truncate text-[11px] text-cyan-200/70">
+                  当前产出物可以作为下游工作流输入
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                {workflowHandoffs.map((handoff) => (
+                  <button
+                    key={handoff.id}
+                    onClick={() => handleApplyWorkflowHandoff(handoff)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition-colors hover:border-cyan-300/40 hover:bg-cyan-400/20"
+                    title={handoff.label}
+                  >
+                    <span>{handoff.label}</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {chatHistory.length === 0 && (
           <div className="flex flex-col h-full items-center justify-center space-y-8 animate-fade-in-up pb-10">
             <div className="text-center space-y-4 max-w-xl px-4 flex flex-col items-center">
@@ -198,10 +287,44 @@ export const ChatPane: React.FC = () => {
             return null;
           }
           const messageAttachments = asRenderableAttachments(msg.attachments);
+          const isStructuredOutputFailure = (
+            msg.role === 'assistant'
+            && isStructuredOutputFailureContent(msg.content)
+          );
+          const isProviderFailure = (
+            msg.role === 'assistant'
+            && isProviderFailureContent(msg.content)
+          );
           let mermaidBlockCounter = 0;
+          const headingClassName = msg.role === 'user' ? "text-white" : "text-slate-100";
           const messageMarkdownComponents: Components = {
+            h1: ({ node, ...props }) => <h1 className={`text-base font-bold mb-2 ${headingClassName}`} {...props} />,
+            h2: ({ node, ...props }) => <h2 className={`text-sm font-bold mt-3 mb-2 ${headingClassName}`} {...props} />,
+            h3: ({ node, ...props }) => <h3 className={`text-sm font-semibold mt-3 mb-1.5 ${headingClassName}`} {...props} />,
             p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
+            ul: ({ node, ...props }) => <ul className="list-disc pl-5 my-2 space-y-1.5" {...props} />,
+            ol: ({ node, ...props }) => <ol className="list-decimal pl-5 my-2 space-y-1.5" {...props} />,
+            li: ({ node, ...props }) => <li className="leading-relaxed pl-0.5" {...props} />,
             strong: ({ node, ...props }) => <strong className={msg.role === 'user' ? "text-white font-bold" : "text-blue-400 font-bold"} {...props} />,
+            em: ({ node, ...props }) => <em className={msg.role === 'user' ? "text-blue-100 italic" : "text-slate-100 italic"} {...props} />,
+            a: ({ node, ...props }) => (
+              <a
+                className={msg.role === 'user' ? "text-blue-100 underline underline-offset-2" : "text-cyan-300 underline underline-offset-2 hover:text-cyan-200"}
+                target="_blank"
+                rel="noreferrer"
+                {...props}
+              />
+            ),
+            blockquote: ({ node, ...props }) => (
+              <blockquote
+                className={msg.role === 'user'
+                  ? "border-l-2 border-blue-200/70 pl-3 my-2 text-blue-50/90"
+                  : "border-l-2 border-blue-500/60 pl-3 my-2 text-slate-300 bg-blue-500/5 py-1 rounded-r"}
+                {...props}
+              />
+            ),
+            hr: ({ node, ...props }) => <hr className="my-3 border-white/10" {...props} />,
+            pre: ({ node, children }) => <>{children}</>,
             code: createMarkdownCodeRenderer({
               nextMermaidBlockIndex: () => mermaidBlockCounter++,
               onMermaidRetry: (brokenCode, errorMessage, blockIndex) => handleChatMermaidRetry(msg.id, brokenCode, errorMessage, blockIndex),
@@ -263,6 +386,58 @@ export const ChatPane: React.FC = () => {
                       {preprocessMarkdown(msg.content)}
                     </ReactMarkdown>
                   )}
+                  {isStructuredOutputFailure && (
+                    <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-100">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold">结构化结果未更新</div>
+                          <p className="mt-1 text-xs leading-relaxed text-amber-100/80">
+                            右侧产出物已保持不变
+                          </p>
+                          <p className="mt-1 text-xs leading-relaxed text-amber-100/70">
+                            连续失败时，请补充更明确的需求或阶段确认信息后再试。
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleRetry}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-slate-950 transition-colors hover:bg-amber-400"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          重试本阶段生成
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {isProviderFailure && (
+                    <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-rose-100">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" />
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold">模型调用未完成</div>
+                          <p className="mt-1 text-xs leading-relaxed text-rose-100/80">
+                            右侧产出物已保持不变
+                          </p>
+                          <p className="mt-1 text-xs leading-relaxed text-rose-100/70">
+                            请先检查模型配置、供应商额度或网络连通性，确认恢复后再重试。
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleRetry}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-rose-400"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          重试本阶段生成
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <div className="mt-3 pt-3 border-t border-white/10 flex justify-end gap-3">
                     <button
                       onClick={() => handleCopy(msg.content || '', msg.id)}
@@ -275,7 +450,7 @@ export const ChatPane: React.FC = () => {
                       {copiedId === msg.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedId === msg.id ? '已复制' : '复制'}</span>
                     </button>
-                    {msg.role === 'assistant' && msg.retryable !== false && !isGenerating && msg.id === chatHistory[chatHistory.length - 1]?.id && (
+                    {msg.role === 'assistant' && msg.retryable !== false && !isGenerating && msg.id === chatHistory[chatHistory.length - 1]?.id && !isStructuredOutputFailure && !isProviderFailure && (
                       <button
                         onClick={handleRetry}
                         className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-blue-400 transition-colors"
@@ -292,7 +467,7 @@ export const ChatPane: React.FC = () => {
           );
         })}
 
-        {pendingStageTransition && pendingNextStage && !isGenerating && (
+        {pendingStageTransition && pendingNextStage && !isGenerating && !isLatestStructuredOutputFailure && !isLatestProviderFailure && (
           <div className="flex items-start gap-4 animate-fade-in-up">
             <div className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 mt-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
               <ChevronRight className="w-5 h-5" />

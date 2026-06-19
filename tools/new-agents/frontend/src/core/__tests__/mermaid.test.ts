@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import mermaid from 'mermaid';
 import { WORKFLOWS } from '../workflows';
 
-describe('Mermaid Syntax Validation for INCIDENT_REVIEW Workflow', () => {
+describe('Mermaid Syntax Validation for workflow prompt examples', () => {
 
     // Helper to safely parse syntax (since Mermaid might throw exception straight up instead of returning false)
     const validateMermaid = async (code: string) => {
@@ -14,6 +14,17 @@ describe('Mermaid Syntax Validation for INCIDENT_REVIEW Workflow', () => {
             return false;
         }
     };
+
+    it('does not expose literal FENCE placeholders in workflow templates', () => {
+        const templatesWithLiteralFence = Object.entries(WORKFLOWS)
+            .flatMap(([workflowId, workflow]) => (
+                workflow.stages
+                    .filter((stage) => stage.template.includes('${FENCE}'))
+                    .map((stage) => `${workflowId}/${stage.id}`)
+            ));
+
+        expect(templatesWithLiteralFence).toEqual([]);
+    });
 
     it('should successfully parse the timeline mermaid syntax from timeline prompt', async () => {
         const promptText = WORKFLOWS.INCIDENT_REVIEW.stages.find(s => s.id === 'TIMELINE')?.template || '';
@@ -51,6 +62,24 @@ describe('Mermaid Syntax Validation for INCIDENT_REVIEW Workflow', () => {
             .replace(/\[数量\]/g, '2');
 
         const isValid = await validateMermaid(rawCode);
+        expect(isValid).toBe(true);
+    });
+
+    it('should successfully parse the flowchart mermaid syntax from test design clarify prompt', async () => {
+        const promptText = WORKFLOWS.TEST_DESIGN.stages.find(s => s.id === 'CLARIFY')?.template || '';
+        const match = promptText.match(/```mermaid\n([\s\S]*?)```/);
+        expect(match).toBeTruthy();
+
+        const isValid = await validateMermaid(match![1]);
+        expect(isValid).toBe(true);
+    });
+
+    it('should successfully parse the mindmap mermaid syntax from idea brainstorm define prompt', async () => {
+        const promptText = WORKFLOWS.IDEA_BRAINSTORM.stages.find(s => s.id === 'DEFINE')?.template || '';
+        const match = promptText.match(/```mermaid\n([\s\S]*?)```/);
+        expect(match).toBeTruthy();
+
+        const isValid = await validateMermaid(match![1]);
         expect(isValid).toBe(true);
     });
 });

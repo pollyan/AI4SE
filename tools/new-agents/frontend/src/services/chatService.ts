@@ -21,13 +21,155 @@ type ArtifactRollbackSnapshot = {
     stageArtifacts: ReturnType<typeof useStore.getState>['stageArtifacts'];
 };
 
+type MarkdownSection = {
+    heading: string;
+    startLine: number;
+    endLine: number;
+};
+
 function createMessageId(): string {
     messageIdSequence += 1;
     return `${Date.now()}-${messageIdSequence}`;
 }
 
+function parseMarkdownSections(markdown: string): MarkdownSection[] {
+    const lines = markdown.split(/\r?\n/);
+    const headingIndexes = lines.flatMap((line, index) => (
+        /^#{1,3}\s+/.test(line)
+            ? [{ heading: line.trim(), startLine: index }]
+            : []
+    ));
+
+    return headingIndexes.map((section, index) => ({
+        ...section,
+        endLine: headingIndexes[index + 1]?.startLine ?? lines.length,
+    }));
+}
+
+function replaceSectionContent(
+    markdown: string,
+    section: MarkdownSection,
+    replacementContent: string
+): string {
+    const lines = markdown.split(/\r?\n/);
+    const replacementLines = replacementContent.split(/\r?\n/);
+    return [
+        ...lines.slice(0, section.startLine),
+        ...replacementLines,
+        ...lines.slice(section.endLine),
+    ].join('\n');
+}
+
+function preserveLockedSections(
+    nextArtifact: string,
+    locks: ReturnType<typeof useStore.getState>['artifactSectionLocks']
+): string {
+    if (locks.length === 0) return nextArtifact;
+
+    let protectedArtifact = nextArtifact;
+    locks.forEach((lock) => {
+        const sections = parseMarkdownSections(protectedArtifact);
+        const section = sections.find(candidate => candidate.heading === lock.heading);
+        if (!section) {
+            protectedArtifact = protectedArtifact.endsWith('\n')
+                ? `${protectedArtifact}${lock.content}`
+                : `${protectedArtifact}\n\n${lock.content}`;
+            return;
+        }
+        protectedArtifact = replaceSectionContent(
+            protectedArtifact,
+            section,
+            lock.content,
+        );
+    });
+    return protectedArtifact;
+}
+
 function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : 'Something went wrong.';
+}
+
+type ProviderErrorDiagnostic = {
+    reason: string;
+    action: string;
+};
+
+function diagnoseProviderError(errorMessage: string): ProviderErrorDiagnostic | null {
+    const normalized = errorMessage.toLowerCase();
+
+    if (
+        errorMessage.includes('系统未配置默认 LLM')
+        || normalized.includes('default llm')
+        || normalized.includes('default_llm_missing')
+        || normalized.includes('llm config')
+    ) {
+        return {
+            reason: '模型配置缺失',
+            action: '请先到设置中维护后端默认 LLM 配置，至少包含 API Key、Base URL 和模型名称。',
+        };
+    }
+
+    if (
+        normalized.includes('401')
+        || normalized.includes('403')
+        || normalized.includes('api key')
+        || normalized.includes('authentication')
+        || normalized.includes('unauthorized')
+        || normalized.includes('forbidden')
+        || normalized.includes('permission')
+    ) {
+        return {
+            reason: '密钥或权限异常',
+            action: '请检查 API Key、Base URL、模型名称和供应商权限，确认密钥仍有效且具备调用当前模型的权限。',
+        };
+    }
+
+    if (
+        errorMessage.includes('429')
+        || normalized.includes('quota')
+        || normalized.includes('rate limit')
+        || normalized.includes('ratelimit')
+        || normalized.includes('too many requests')
+    ) {
+        return {
+            reason: '模型额度或限流异常',
+            action: '请检查供应商额度、并发限制和账户状态；如果是临时限流，可以稍后重试本阶段生成。',
+        };
+    }
+
+    if (
+        normalized.includes('timeout')
+        || normalized.includes('timed out')
+        || normalized.includes('network')
+        || normalized.includes('unreachable')
+        || normalized.includes('connection')
+        || normalized.includes('connect')
+    ) {
+        return {
+            reason: '供应商连接异常',
+            action: '请检查 Base URL、网络连通性或供应商服务状态；如果服务恢复，可以重试本阶段生成。',
+        };
+    }
+
+    return null;
+}
+
+function formatProviderErrorContent(errorMessage: string, diagnostic: ProviderErrorDiagnostic): string {
+    return [
+        '⚠️ **模型配置或供应商异常**',
+        '',
+        `**可能原因**：${diagnostic.reason}`,
+        '',
+        `**建议处理**：${diagnostic.action}`,
+        '',
+        '右侧产出物已保持不变。处理配置或供应商问题后，可以直接重试本阶段生成。',
+        '',
+        '---',
+        '*原始错误附录：*',
+        '```text',
+        errorMessage,
+        '```',
+    ].join('\n');
 }
 
 function formatAssistantErrorContent(errorMessage: string): string {
@@ -42,8 +184,9 @@ function formatAssistantErrorContent(errorMessage: string): string {
         ].join('\n');
     }
 
-    if (errorMessage.includes('429') || errorMessage.toLowerCase().includes('quota')) {
-        return `⚠️ **模型额度或限流异常**\n\n后端默认 LLM 配置当前返回额度或限流错误。主 Agent 调用只通过后端结构化 Agent Runtime 执行，请检查后端默认 LLM 的 API Key、Base URL、模型名称和服务商额度。\n\n---\n*原始错误附录：*\n\`\`\`text\n${errorMessage}\n\`\`\``;
+    const providerDiagnostic = diagnoseProviderError(errorMessage);
+    if (providerDiagnostic) {
+        return formatProviderErrorContent(errorMessage, providerDiagnostic);
     }
 
     return `**Error:** ${errorMessage}`;
@@ -291,18 +434,25 @@ export function useChatService() {
 
                 if (decision.artifactUpdate) {
                     const latestState = useStore.getState();
+                    const currentStageLocks = latestState.artifactSectionLocks.filter(
+                        lock => lock.stageId === decision.artifactUpdate?.stageId
+                    );
+                    const protectedArtifactContent = preserveLockedSections(
+                        decision.artifactUpdate.content,
+                        currentStageLocks,
+                    );
                     latestState.setStageArtifact(
                         decision.artifactUpdate.stageId,
-                        decision.artifactUpdate.content
+                        protectedArtifactContent
                     );
                     latestState.setArtifactContent(
-                        decision.artifactUpdate.content
+                        protectedArtifactContent
                     );
                     if (!decision.artifactTruncated) {
                         latestState.setArtifactTruncated(false);
                     }
                     didUpdateArtifact = true;
-                    latestRunArtifactContent = decision.artifactUpdate.content;
+                    latestRunArtifactContent = protectedArtifactContent;
                 }
 
                 if (decision.shouldStopStream) {

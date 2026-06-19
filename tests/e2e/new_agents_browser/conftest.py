@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import socket
 import subprocess
@@ -149,8 +150,133 @@ def new_agents_page(
 
     route_agent_stream.call_counts = {}
 
+    def route_run_handoffs(route: Route) -> None:
+        has_value_blueprint = (
+            route_agent_stream.call_counts.get(("VALUE_DISCOVERY", "BLUEPRINT"), 0)
+            > 0
+        )
+        handoffs = []
+        if has_value_blueprint:
+            handoffs = [
+                {
+                    "id": "value-blueprint-to-test-design",
+                    "label": "交给 Lisa 做测试设计",
+                    "sourceWorkflowId": "VALUE_DISCOVERY",
+                    "sourceStageId": "BLUEPRINT",
+                    "sourceArtifactVersion": 1,
+                    "targetWorkflowId": "TEST_DESIGN",
+                    "targetStageId": "CLARIFY",
+                    "targetAgentId": "lisa",
+                    "prompt": (
+                        "请基于 Alex 的价值蓝图继续做 Lisa 测试设计。\n\n"
+                        "# AI 测试设计助手需求蓝图\n\n"
+                        "## 1. 产品概述\n"
+                        "AI 测试设计助手帮助测试负责人从需求生成测试策略和测试用例。\n\n"
+                        "## 7. 风险评估\n"
+                        "重点关注输出质量、权限隔离、需求追溯和 LLM judge 质量门。"
+                    ),
+                },
+                {
+                    "id": "value-blueprint-to-req-review",
+                    "label": "交给 Lisa 做需求评审",
+                    "sourceWorkflowId": "VALUE_DISCOVERY",
+                    "sourceStageId": "BLUEPRINT",
+                    "sourceArtifactVersion": 1,
+                    "targetWorkflowId": "REQ_REVIEW",
+                    "targetStageId": "REVIEW",
+                    "targetAgentId": "lisa",
+                    "prompt": "请基于 Alex 的价值蓝图继续做 Lisa 需求评审。",
+                },
+            ]
+
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "runId": "mock-run-value_discovery",
+                    "sourceWorkflowId": "VALUE_DISCOVERY",
+                    "handoffs": handoffs,
+                },
+                ensure_ascii=False,
+            ),
+        )
+
+    def route_start_handoff(route: Route) -> None:
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "id": "value-blueprint-to-test-design",
+                    "label": "交给 Lisa 做测试设计",
+                    "sourceRunId": "mock-run-value_discovery",
+                    "sourceWorkflowId": "VALUE_DISCOVERY",
+                    "sourceStageId": "BLUEPRINT",
+                    "sourceArtifactVersion": 1,
+                    "targetRunId": "mock-run-test_design-handoff",
+                    "targetWorkflowId": "TEST_DESIGN",
+                    "targetStageId": "CLARIFY",
+                    "targetAgentId": "lisa",
+                    "prompt": (
+                        "请基于 Alex 的价值蓝图继续做 Lisa 测试设计。\n\n"
+                        "# AI 测试设计助手需求蓝图\n\n"
+                        "## 1. 产品概述\n"
+                        "AI 测试设计助手帮助测试负责人从需求生成测试策略和测试用例。\n\n"
+                        "## 7. 风险评估\n"
+                        "重点关注输出质量、权限隔离、需求追溯和 LLM judge 质量门。"
+                    ),
+                },
+                ensure_ascii=False,
+            ),
+        )
+
+    def route_run_snapshot(route: Route) -> None:
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "run": {
+                        "id": "mock-run-test_design-handoff",
+                        "workflowId": "TEST_DESIGN",
+                        "agentId": "lisa",
+                        "currentStageId": "CLARIFY",
+                        "status": "active",
+                        "model": "mock",
+                    },
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": (
+                                "请基于 Alex 的价值蓝图继续做 Lisa 测试设计。\n\n"
+                                "# AI 测试设计助手需求蓝图\n\n"
+                                "## 1. 产品概述\n"
+                                "AI 测试设计助手帮助测试负责人从需求生成测试策略和测试用例。\n\n"
+                                "## 7. 风险评估\n"
+                                "重点关注输出质量、权限隔离、需求追溯和 LLM judge 质量门。"
+                            ),
+                            "sequenceIndex": 1,
+                        }
+                    ],
+                    "artifacts": [],
+                    "contextSummaries": [],
+                },
+                ensure_ascii=False,
+            ),
+        )
+
     page.route("**/new-agents/api/config", route_config)
     page.route("**/new-agents/api/agent/runs/stream", route_agent_stream)
+    page.route(
+        "**/new-agents/api/agent/runs/*/handoffs/*/start",
+        route_start_handoff,
+    )
+    page.route("**/new-agents/api/agent/runs/*/handoffs", route_run_handoffs)
+    page.route(
+        "**/new-agents/api/agent/runs/mock-run-test_design-handoff",
+        route_run_snapshot,
+    )
     page.goto(new_agents_base_url)
     page.evaluate("localStorage.clear()")
     page.reload()

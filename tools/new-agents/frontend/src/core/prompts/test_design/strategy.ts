@@ -2,6 +2,7 @@ import { FENCE } from '../../utils/constants';
 
 export const STRATEGY_PROMPT = `基于需求澄清阶段的结论，制定测试策略蓝图并在右侧生成《测试策略蓝图》。
 【重要警告】：产出物中绝对不要包含"下一步计划"或类似章节。
+风险分析必须同时输出 Mermaid quadrantChart 和 ai4se-visual risk-board。risk-board 用于稳定展示 FMEA 三因子、RPN、缓解策略和测试覆盖建议。
 `;
 
 export const STRATEGY_TEMPLATE = `# 测试策略蓝图
@@ -21,7 +22,7 @@ export const STRATEGY_TEMPLATE = `# 测试策略蓝图
 > - **RPN = S × O × D**（满分 125），RPN >= 60 为高风险需优先覆盖
 
 ### 2.1 风险矩阵
-\${FENCE}mermaid
+${FENCE}mermaid
 quadrantChart
     title 风险优先级矩阵
     x-axis "低发生度" --> "高发生度"
@@ -32,12 +33,31 @@ quadrantChart
     quadrant-4 "常规覆盖"
     "[风险名称1]": [发生度0-1, 严重度0-1]
     "[风险名称2]": [发生度0-1, 严重度0-1]
-\${FENCE}
+${FENCE}
 
 ### 2.2 风险明细
 | ID | 风险名称 | 失效模式 | 影响 | 严重度 S(1-5) | 发生度 O(1-5) | 检出度 D(1-5) | RPN(SxOxD) | 缓解策略 |
 |---|---|---|---|---|---|---|---|---|
 | R-001 | [名称] | [模式] | [影响] | [S] | [O] | [D] | [S×O×D] | [策略] |
+
+${FENCE}ai4se-visual
+{
+  "type": "risk-board",
+  "title": "FMEA 风险处置看板",
+  "columns": ["风险", "S", "O", "D", "RPN", "缓解策略", "覆盖建议"],
+  "rows": [
+    {
+      "风险": "[风险名称]",
+      "S": "[1-5]",
+      "O": "[1-5]",
+      "D": "[1-5]",
+      "RPN": "[S×O×D]",
+      "缓解策略": "[降低发生度或检出度的措施]",
+      "覆盖建议": "[对应 P0/P1 测试点或用例方向]"
+    }
+  ]
+}
+${FENCE}
 
 > RPN = S × O × D，RPN >= 60 为高风险，需优先覆盖。检出度 D 最易被改善（加强测试即可降低 D），是缓解策略的首要切入点。
 
@@ -49,13 +69,13 @@ quadrantChart
 ## 4. 测试分层策略
 
 ### 4.1 测试金字塔
-\${FENCE}mermaid
+${FENCE}mermaid
 block-beta
     columns 1
     block:e2e["E2E (占比%)\\n端到端验证"]:1
     block:integ["集成 (占比%)\\n接口与数据流验证"]:1
     block:unit["单元 (占比%)\\n核心逻辑与边界值"]:1
-\${FENCE}
+${FENCE}
 
 ### 4.2 分层明细
 | 层级 | 占比 | 覆盖范围 | 推荐工具 |

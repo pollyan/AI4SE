@@ -25,6 +25,17 @@ class MockChunk:
         self.choices = [MockChoice(content)] if content is not None else []
 
 
+class MockUsage:
+    def __init__(self, total_tokens: int) -> None:
+        self.total_tokens = total_tokens
+
+
+class MockUsageChunk:
+    def __init__(self, total_tokens: int) -> None:
+        self.choices = []
+        self.usage = MockUsage(total_tokens)
+
+
 @patch("llm_client.OpenAI")
 def test_stream_chat_completion_content_calls_openai_and_yields_content(
     mock_openai: MagicMock,
@@ -58,6 +69,39 @@ def test_stream_chat_completion_content_calls_openai_and_yields_content(
         messages=messages,
         temperature=0.2,
         stream=True,
+    )
+
+
+@patch("llm_client.OpenAI")
+def test_stream_chat_completion_content_reports_usage_when_callback_is_supplied(
+    mock_openai: MagicMock,
+) -> None:
+    mock_client = MagicMock()
+    mock_openai.return_value = mock_client
+    mock_client.chat.completions.create.return_value = [
+        MockChunk("Hello"),
+        MockUsageChunk(42),
+    ]
+    usage_values: list[int] = []
+    messages = [{"role": "user", "content": "Hi"}]
+
+    chunks = list(stream_chat_completion_content(
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model="test-model",
+        messages=messages,
+        temperature=0.2,
+        on_usage=usage_values.append,
+    ))
+
+    assert chunks == ["Hello"]
+    assert usage_values == [42]
+    mock_client.chat.completions.create.assert_called_once_with(
+        model="test-model",
+        messages=messages,
+        temperature=0.2,
+        stream=True,
+        stream_options={"include_usage": True},
     )
 
 

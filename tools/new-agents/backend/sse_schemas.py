@@ -13,9 +13,11 @@ class AgentTurnEvent(BaseModel):
 
 
 class RunStartedEvent(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     type: Literal["run_started"] = "run_started"
+    run_id: str | None = Field(default=None, alias="runId")
+    warnings: list[str] | None = None
 
 
 class AgentTurnDeltaOutput(BaseModel):

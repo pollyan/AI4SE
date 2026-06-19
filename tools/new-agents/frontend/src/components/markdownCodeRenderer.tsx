@@ -18,6 +18,7 @@ interface CodeRenderArgs {
 interface MarkdownCodeRendererOptions {
     nextMermaidBlockIndex: () => number;
     onMermaidRetry?: MermaidProps['onRetry'];
+    renderStructuredVisual?: (args: CodeRenderArgs) => ReactNode;
     renderBlockCode: (args: CodeRenderArgs) => ReactNode;
     renderInlineCode: (args: CodeRenderArgs) => ReactNode;
 }
@@ -33,9 +34,24 @@ function normalizeMermaidChart(children: ReactNode): string {
         .replace(/\$\{FENCE\}/g, '```');
 }
 
+function isInlineCodeNode({
+    inline,
+    language,
+    children,
+}: {
+    inline?: boolean;
+    language: string;
+    children: ReactNode;
+}): boolean {
+    if (inline === true) return true;
+    if (inline === false) return false;
+    return !language && !String(children).includes('\n');
+}
+
 export function createMarkdownCodeRenderer({
     nextMermaidBlockIndex,
     onMermaidRetry,
+    renderStructuredVisual,
     renderBlockCode,
     renderInlineCode,
 }: MarkdownCodeRendererOptions) {
@@ -47,8 +63,9 @@ export function createMarkdownCodeRenderer({
         ...props
     }: MarkdownCodeRendererProps) {
         const language = getCodeLanguage(className);
+        const isInline = isInlineCodeNode({ inline, language, children });
 
-        if (!inline && language === 'mermaid') {
+        if (!isInline && language === 'mermaid') {
             return (
                 <Mermaid
                     chart={normalizeMermaidChart(children)}
@@ -64,6 +81,11 @@ export function createMarkdownCodeRenderer({
             children,
             props,
         };
-        return !inline ? renderBlockCode(renderArgs) : renderInlineCode(renderArgs);
+
+        if (!isInline && language === 'ai4se-visual' && renderStructuredVisual) {
+            return renderStructuredVisual(renderArgs);
+        }
+
+        return isInline ? renderInlineCode(renderArgs) : renderBlockCode(renderArgs);
     };
 }

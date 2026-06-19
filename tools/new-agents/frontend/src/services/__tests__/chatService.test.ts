@@ -17,6 +17,8 @@ describe('useChatService', () => {
             chatHistory: [],
             artifactContent: 'initial artifact',
             artifactHistory: [],
+            artifactComments: [],
+            artifactSectionLocks: [],
             stageArtifacts: {
                 CLARIFY: 'initial artifact',
             },
@@ -404,6 +406,75 @@ describe('useChatService', () => {
         expect(state.chatHistory[1].content).toBe('已更新右侧需求分析文档，请确认。');
         expect(state.chatHistory[1].content).not.toContain('# 需求分析文档');
         expect(state.artifactContent).toBe(artifactMarkdown);
+    });
+
+    it('should preserve locked artifact sections when applying model artifact updates', async () => {
+        const originalArtifact = [
+            '# 需求分析文档',
+            '',
+            '## 已确认范围',
+            '',
+            '登录边界已经由业务确认。',
+            '',
+            '## 可更新建议',
+            '',
+            '旧建议。',
+        ].join('\n');
+        const modelArtifact = [
+            '# 需求分析文档',
+            '',
+            '## 已确认范围',
+            '',
+            '模型试图改写登录边界。',
+            '',
+            '## 可更新建议',
+            '',
+            '新建议。',
+        ].join('\n');
+        useStore.setState({
+            artifactContent: originalArtifact,
+            stageArtifacts: {
+                CLARIFY: originalArtifact,
+            },
+            artifactSectionLocks: [
+                {
+                    id: 'lock-1',
+                    stageId: 'CLARIFY',
+                    heading: '## 已确认范围',
+                    content: [
+                        '## 已确认范围',
+                        '',
+                        '登录边界已经由业务确认。',
+                    ].join('\n'),
+                    createdAt: 1710000000000,
+                },
+            ],
+        });
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            yield {
+                chatResponse: '已补充建议，锁定章节保持不变。',
+                newArtifact: modelArtifact,
+                action: '',
+                hasArtifactUpdate: true,
+            };
+        });
+
+        const { result } = renderHook(() => useChatService());
+
+        act(() => {
+            result.current.setInput('继续补充建议');
+        });
+
+        await act(async () => {
+            await result.current.handleSend();
+        });
+
+        const state = useStore.getState();
+        expect(state.artifactContent).toContain('登录边界已经由业务确认。');
+        expect(state.artifactContent).not.toContain('模型试图改写登录边界。');
+        expect(state.artifactContent).toContain('新建议。');
+        expect(state.stageArtifacts.CLARIFY).toBe(state.artifactContent);
+        expect(state.artifactHistory[state.artifactHistory.length - 1].content).toBe(state.artifactContent);
     });
 
     it('should keep truncation warning when an artifact update is marked truncated', async () => {
@@ -2076,6 +2147,50 @@ describe('useChatService', () => {
         const state = useStore.getState();
         expect(state.chatHistory[1].content).toContain('模型额度或限流异常');
         expect(state.chatHistory[1].content).toContain('429 quota exceeded');
+        expect(state.artifactHistory).toEqual([]);
+    });
+
+    it.each([
+        [
+            '系统未配置默认 LLM',
+            '模型配置缺失',
+            '请先到设置中维护后端默认 LLM 配置',
+        ],
+        [
+            '401 invalid api key',
+            '密钥或权限异常',
+            '请检查 API Key、Base URL、模型名称和供应商权限',
+        ],
+        [
+            'request timeout while connecting to provider',
+            '供应商连接异常',
+            '请检查 Base URL、网络连通性或供应商服务状态',
+        ],
+    ])('should show actionable provider diagnostics for %s', async (
+        rawError,
+        expectedReason,
+        expectedAction,
+    ) => {
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            throw new Error(rawError);
+        });
+
+        const { result } = renderHook(() => useChatService());
+
+        act(() => {
+            result.current.setInput('模型供应商错误');
+        });
+
+        await act(async () => {
+            await result.current.handleSend();
+        });
+
+        const state = useStore.getState();
+        expect(state.chatHistory[1].content).toContain('模型配置或供应商异常');
+        expect(state.chatHistory[1].content).toContain(expectedReason);
+        expect(state.chatHistory[1].content).toContain(expectedAction);
+        expect(state.chatHistory[1].content).toContain(rawError);
+        expect(state.chatHistory[1].content).not.toContain('**Error:**');
         expect(state.artifactHistory).toEqual([]);
     });
 });

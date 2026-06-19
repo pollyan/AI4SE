@@ -1,4 +1,4 @@
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import Any, Protocol, TypeGuard
 
 from openai import APIError, AuthenticationError, OpenAI, OpenAIError, RateLimitError
@@ -14,6 +14,10 @@ class ChatChoice(Protocol):
 
 class ChatStreamChunk(Protocol):
     choices: Sequence[ChatChoice]
+
+
+class ChatUsage(Protocol):
+    total_tokens: int
 
 
 ChatMessage = dict[str, str]
@@ -49,6 +53,16 @@ def extract_delta_content(chunk: object) -> str | None:
     return content
 
 
+def extract_total_tokens(chunk: object) -> int | None:
+    usage = getattr(chunk, "usage", None)
+    if usage is None:
+        return None
+    total_tokens = getattr(usage, "total_tokens", None)
+    if not isinstance(total_tokens, int):
+        return None
+    return total_tokens
+
+
 def stream_chat_completion_content(
     *,
     api_key: str,
@@ -58,6 +72,7 @@ def stream_chat_completion_content(
     temperature: float,
     response_format: dict[str, Any] | None = None,
     extra_body: dict[str, Any] | None = None,
+    on_usage: Callable[[int], None] | None = None,
 ) -> Iterator[str]:
     try:
         client = OpenAI(api_key=api_key, base_url=base_url)
@@ -71,9 +86,14 @@ def stream_chat_completion_content(
             request_kwargs["response_format"] = response_format
         if extra_body is not None:
             request_kwargs["extra_body"] = extra_body
+        if on_usage is not None:
+            request_kwargs["stream_options"] = {"include_usage": True}
         stream = client.chat.completions.create(**request_kwargs)
 
         for chunk in stream:
+            total_tokens = extract_total_tokens(chunk)
+            if total_tokens is not None and on_usage is not None:
+                on_usage(total_tokens)
             content = extract_delta_content(chunk)
             if content:
                 yield content

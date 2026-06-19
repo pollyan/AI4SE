@@ -60,6 +60,24 @@ describe('createMarkdownCodeRenderer', () => {
         expect(screen.queryByTestId('mermaid')).toBeNull();
     });
 
+    it('treats language-less single-line code as inline when react-markdown omits inline prop', () => {
+        const CodeRenderer = createMarkdownCodeRenderer({
+            nextMermaidBlockIndex: () => 0,
+            onMermaidRetry: vi.fn(),
+            renderBlockCode: ({ children }) => (
+                <pre data-testid="block-code">{children}</pre>
+            ),
+            renderInlineCode: ({ children }) => (
+                <code data-testid="inline-code">{children}</code>
+            ),
+        });
+
+        render(<CodeRenderer>{'token'}</CodeRenderer>);
+
+        expect(screen.getByTestId('inline-code').textContent).toBe('token');
+        expect(screen.queryByTestId('block-code')).toBeNull();
+    });
+
     it('does not treat mermaid-like language names as mermaid diagrams', () => {
         const CodeRenderer = createMarkdownCodeRenderer({
             nextMermaidBlockIndex: () => 0,

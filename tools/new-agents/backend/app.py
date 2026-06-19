@@ -4,6 +4,7 @@ import time
 import uuid
 from flask import Flask, request, jsonify, g
 from flask_cors import CORS
+from sqlalchemy import inspect, text
 from models import db
 from config import Config
 from config_service import upsert_default_llm_config_from_env
@@ -14,7 +15,30 @@ def init_db(app):
     """Create database tables and seed server-managed defaults."""
     with app.app_context():
         db.create_all()
+        _ensure_artifact_comment_columns()
         upsert_default_llm_config_from_env()
+
+
+def _ensure_artifact_comment_columns():
+    """Upgrade existing comment tables created before threaded comments."""
+    inspector = inspect(db.engine)
+    if "agent_artifact_comments" not in inspector.get_table_names():
+        return
+
+    existing_columns = {
+        column["name"]
+        for column in inspector.get_columns("agent_artifact_comments")
+    }
+    column_migrations = {
+        "anchor_text": "ALTER TABLE agent_artifact_comments ADD COLUMN anchor_text TEXT",
+        "status": "ALTER TABLE agent_artifact_comments ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'open'",
+        "resolved_at_ms": "ALTER TABLE agent_artifact_comments ADD COLUMN resolved_at_ms INTEGER",
+        "replies_json": "ALTER TABLE agent_artifact_comments ADD COLUMN replies_json TEXT NOT NULL DEFAULT '[]'",
+    }
+    for column_name, statement in column_migrations.items():
+        if column_name not in existing_columns:
+            db.session.execute(text(statement))
+    db.session.commit()
 
 
 def create_app(test_config=None):

@@ -16,6 +16,7 @@ class AgentRunStreamRequest(BaseModel):
     system_prompt: str = Field(alias="systemPrompt", min_length=1)
     workflow_id: str = Field(alias="workflowId", min_length=1)
     stage_id: str = Field(alias="stageId", min_length=1)
+    run_id: str | None = Field(default=None, alias="runId")
 
 
 class MermaidRepairRequest(BaseModel):
@@ -24,6 +25,15 @@ class MermaidRepairRequest(BaseModel):
     broken_code: str = Field(alias="brokenCode", min_length=1)
     error_message: str = Field(alias="errorMessage", min_length=1)
     block_index: int | None = Field(default=None, alias="blockIndex")
+
+
+class DefaultLlmConfigUpdateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    api_key: str | None = Field(default=None, alias="apiKey")
+    base_url: str = Field(alias="baseUrl", min_length=1)
+    model: str = Field(min_length=1)
+    description: str | None = None
 
 
 def _is_blank(value: Any) -> bool:
@@ -69,6 +79,11 @@ def parse_agent_run_stream_request(
         raise RequestValidationError("stageId 不能为空")
     workflow_id = data["workflowId"].strip()
     stage_id = data["stageId"].strip()
+    run_id = data.get("runId")
+    if run_id is not None:
+        if _is_blank(run_id):
+            raise RequestValidationError("runId 不能为空")
+        run_id = run_id.strip()
     workflow_stages = WORKFLOW_STAGES.get(workflow_id)
     if workflow_stages is None:
         raise RequestValidationError(f"未知 workflowId: {workflow_id}")
@@ -80,6 +95,7 @@ def parse_agent_run_stream_request(
         **data,
         "workflowId": workflow_id,
         "stageId": stage_id,
+        "runId": run_id,
     }
     return AgentRunStreamRequest.model_validate(normalized_data)
 
@@ -99,3 +115,27 @@ def parse_mermaid_repair_request(
         if block_index < 0:
             raise RequestValidationError("blockIndex 不能为负数")
     return MermaidRepairRequest.model_validate(data)
+
+
+def parse_default_llm_config_update_request(
+    data: dict[str, Any] | None,
+) -> DefaultLlmConfigUpdateRequest:
+    data = _ensure_request_object(data)
+    if _is_blank(data.get("baseUrl")):
+        raise RequestValidationError("baseUrl 不能为空")
+    if _is_blank(data.get("model")):
+        raise RequestValidationError("model 不能为空")
+    api_key = data.get("apiKey")
+    if api_key is not None and not isinstance(api_key, str):
+        raise RequestValidationError("apiKey 必须是字符串")
+    description = data.get("description")
+    if description is not None and not isinstance(description, str):
+        raise RequestValidationError("description 必须是字符串")
+    normalized_data = {
+        **data,
+        "apiKey": api_key.strip() if isinstance(api_key, str) and api_key.strip() else None,
+        "baseUrl": data["baseUrl"].strip(),
+        "model": data["model"].strip(),
+        "description": description.strip() if isinstance(description, str) else None,
+    }
+    return DefaultLlmConfigUpdateRequest.model_validate(normalized_data)

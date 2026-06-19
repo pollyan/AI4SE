@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AgentSelect } from './pages/AgentSelect';
 import { WorkflowSelect } from './pages/WorkflowSelect';
 import { Workspace } from './pages/Workspace';
+import { TestAssetsPage } from './pages/TestAssetsPage';
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
         <Route path="/" element={<AgentSelect />} />
         <Route path="/workflows/:agentId" element={<WorkflowSelect />} />
         <Route path="/workspace/:agentId/:workflowId" element={<Workspace />} />
+        <Route path="/test-assets/:collectionId" element={<TestAssetsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

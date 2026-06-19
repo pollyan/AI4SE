@@ -6,6 +6,7 @@ COPY tools/new-agents/backend/requirements.txt .
 RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
     pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com -r requirements.txt
 
+COPY tools/new-agents/workflow_manifest.json /workflow_manifest.json
 COPY tools/new-agents/backend/ .
 
 EXPOSE 5002

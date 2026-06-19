@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { SettingsModal } from '../components/SettingsModal';
 import { useStore, SLUG_TO_WORKFLOW, WORKFLOWS } from '../store';
+import { fetchRunSnapshot } from '../services/runSnapshotService';
 
 const ChatPane = React.lazy(() =>
     import('../components/ChatPane').then(module => ({ default: module.ChatPane }))
@@ -14,7 +15,7 @@ const ArtifactPane = React.lazy(() =>
 export function Workspace() {
     const navigate = useNavigate();
     const { agentId, workflowId } = useParams();
-    const { workflow, setWorkflow, chatHistory } = useStore();
+    const { setWorkflow, chatHistory, restoreRunSnapshot } = useStore();
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [backendAvailable, setBackendAvailable] = useState<boolean | null>(null);
 
@@ -32,11 +33,45 @@ export function Workspace() {
                 return;
             }
 
-            if (targetWorkflow !== workflow) {
+            if (targetWorkflow !== useStore.getState().workflow) {
                 setWorkflow(targetWorkflow);
             }
         }
-    }, [agentId, navigate, setWorkflow, workflow, workflowId]);
+    }, [agentId, navigate, setWorkflow, workflowId]);
+
+    useEffect(() => {
+        let isCurrent = true;
+        const runId = new URLSearchParams(window.location.search).get('runId')?.trim();
+        if (!runId || useStore.getState().currentRunId === runId) {
+            return () => {
+                isCurrent = false;
+            };
+        }
+
+        fetchRunSnapshot(runId)
+            .then((snapshot) => {
+                if (!isCurrent) return;
+                restoreRunSnapshot(snapshot);
+                const snapshotWorkflow = WORKFLOWS[snapshot.run.workflowId];
+                const targetWorkspacePath = `/workspace/${snapshot.run.agentId}/${snapshotWorkflow.slug}`;
+                const targetPath = `${targetWorkspacePath}?runId=${encodeURIComponent(snapshot.run.id)}`;
+                const currentRunId = new URLSearchParams(window.location.search).get('runId');
+                const isAlreadyOnTargetWorkspace = (
+                    window.location.pathname.endsWith(targetWorkspacePath)
+                    && currentRunId === snapshot.run.id
+                );
+                if (!isAlreadyOnTargetWorkspace) {
+                    navigate(targetPath, { replace: true });
+                }
+            })
+            .catch(() => {
+                // Keep the current local workspace when snapshot recovery fails.
+            });
+
+        return () => {
+            isCurrent = false;
+        };
+    }, [navigate, restoreRunSnapshot]);
 
     // P0-10: First-time usage detection
     // Check if backend has the default LLM config required by Agent Runtime.

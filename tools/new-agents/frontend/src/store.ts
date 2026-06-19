@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { WORKFLOWS } from './core/workflows';
-import { ChatState as AppState, ArtifactVersion, Message, WorkflowType } from './core/types';
+import { AgentRunSnapshot, AgentRunSnapshotContextSummary, ArtifactAuditEvent, ArtifactComment, ArtifactCommentReply, ArtifactCommentStatus, ArtifactSectionLock, ChatState as AppState, ArtifactVersion, Message, WorkflowHandoff, WorkflowType } from './core/types';
 import { getAgentById } from './core/config/agents';
 import { planStageTransitionConfirmation } from './core/agentCore';
 
@@ -139,6 +139,215 @@ const sanitizeArtifactHistory = (artifactHistory: unknown): ArtifactVersion[] =>
   });
 };
 
+const sanitizeArtifactCommentReplies = (replies: unknown): ArtifactCommentReply[] => {
+  if (!Array.isArray(replies)) return [];
+
+  return replies.flatMap((reply): ArtifactCommentReply[] => {
+    if (
+      !isRecord(reply)
+      || typeof reply.id !== 'string'
+      || typeof reply.content !== 'string'
+      || !reply.content.trim()
+      || typeof reply.createdAt !== 'number'
+    ) {
+      return [];
+    }
+
+    return [{
+      id: reply.id,
+      content: reply.content,
+      createdAt: reply.createdAt,
+    }];
+  });
+};
+
+const sanitizeArtifactCommentStatus = (
+  status: unknown
+): ArtifactCommentStatus => (
+  status === 'resolved' ? 'resolved' : 'open'
+);
+
+const sanitizeArtifactCommentResolvedAt = (
+  status: ArtifactCommentStatus,
+  resolvedAt: unknown
+): number | null => (
+  status === 'resolved' && typeof resolvedAt === 'number'
+    ? resolvedAt
+    : null
+);
+
+const sanitizeOptionalArtifactText = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const normalizedValue = value.replace(/\s+/g, ' ').trim();
+  return normalizedValue ? normalizedValue : null;
+};
+
+const sanitizeArtifactComments = (
+  artifactComments: unknown,
+  workflow: WorkflowType
+): ArtifactComment[] => {
+  if (!Array.isArray(artifactComments)) return [];
+
+  const workflowStageIds = new Set(
+    WORKFLOWS[workflow].stages.map(stage => stage.id)
+  );
+  return artifactComments.flatMap((comment): ArtifactComment[] => {
+    if (
+      !isRecord(comment)
+      || typeof comment.id !== 'string'
+      || typeof comment.stageId !== 'string'
+      || !workflowStageIds.has(comment.stageId)
+      || typeof comment.content !== 'string'
+      || !comment.content.trim()
+      || typeof comment.artifactExcerpt !== 'string'
+      || typeof comment.createdAt !== 'number'
+    ) {
+      return [];
+    }
+
+    return [{
+      id: comment.id,
+      stageId: comment.stageId,
+      content: comment.content,
+      artifactExcerpt: comment.artifactExcerpt,
+      anchorText: sanitizeOptionalArtifactText(comment.anchorText),
+      createdAt: comment.createdAt,
+      status: sanitizeArtifactCommentStatus(comment.status),
+      resolvedAt: sanitizeArtifactCommentResolvedAt(
+        sanitizeArtifactCommentStatus(comment.status),
+        comment.resolvedAt
+      ),
+      replies: sanitizeArtifactCommentReplies(comment.replies),
+    }];
+  });
+};
+
+const sanitizeArtifactSectionLocks = (
+  artifactSectionLocks: unknown,
+  workflow: WorkflowType
+): ArtifactSectionLock[] => {
+  if (!Array.isArray(artifactSectionLocks)) return [];
+
+  const workflowStageIds = new Set(
+    WORKFLOWS[workflow].stages.map(stage => stage.id)
+  );
+  return artifactSectionLocks.flatMap((lock): ArtifactSectionLock[] => {
+    if (
+      !isRecord(lock)
+      || typeof lock.id !== 'string'
+      || typeof lock.stageId !== 'string'
+      || !workflowStageIds.has(lock.stageId)
+      || typeof lock.heading !== 'string'
+      || !lock.heading.trim()
+      || typeof lock.content !== 'string'
+      || !lock.content.trim()
+      || typeof lock.createdAt !== 'number'
+    ) {
+      return [];
+    }
+
+    return [{
+      id: lock.id,
+      stageId: lock.stageId,
+      heading: lock.heading,
+      content: lock.content,
+      createdAt: lock.createdAt,
+    }];
+  });
+};
+
+const sanitizeArtifactAuditEvents = (
+  artifactAuditEvents: unknown,
+  workflow: WorkflowType
+): ArtifactAuditEvent[] => {
+  if (!Array.isArray(artifactAuditEvents)) return [];
+
+  const workflowStageIds = new Set(
+    WORKFLOWS[workflow].stages.map(stage => stage.id)
+  );
+  return artifactAuditEvents.flatMap((event): ArtifactAuditEvent[] => {
+    if (
+      !isRecord(event)
+      || typeof event.stageId !== 'string'
+      || !workflowStageIds.has(event.stageId)
+      || typeof event.eventType !== 'string'
+      || !event.eventType.trim()
+      || typeof event.summary !== 'string'
+      || !event.summary.trim()
+      || typeof event.createdAt !== 'number'
+    ) {
+      return [];
+    }
+
+    return [{
+      stageId: event.stageId,
+      eventType: event.eventType,
+      summary: event.summary,
+      createdAt: event.createdAt,
+    }];
+  });
+};
+
+const sanitizeCurrentRunId = (currentRunId: unknown): string | null => (
+  typeof currentRunId === 'string' && currentRunId.trim()
+    ? currentRunId.trim()
+    : null
+);
+
+const getInitialArtifactForStage = (
+  workflow: WorkflowType,
+  stageIndex: number
+): string => {
+  const stage = WORKFLOWS[workflow].stages[stageIndex];
+  if (!stage) return getWelcomeMessage(workflow);
+  if (stageIndex === 0) return getWelcomeMessage(workflow);
+  return stage.template || `# ${stage.name}\n\n暂无产出物。`;
+};
+
+const buildHandoffMessage = (handoff: WorkflowHandoff): Message => ({
+  id: `handoff-${handoff.id}-v${handoff.sourceArtifactVersion}`,
+  role: 'user',
+  content: handoff.prompt,
+  timestamp: Date.now(),
+});
+
+const buildSnapshotMessages = (snapshot: AgentRunSnapshot): Message[] => (
+  [...snapshot.messages]
+    .sort((left, right) => left.sequenceIndex - right.sequenceIndex)
+    .map((message) => ({
+      id: `${snapshot.run.id}-message-${message.sequenceIndex}`,
+      role: message.role,
+      content: message.content,
+      timestamp: Date.now() + message.sequenceIndex,
+    }))
+);
+
+const buildSnapshotArtifactHistory = (
+  snapshot: AgentRunSnapshot,
+  validStageIds: Set<string>
+): ArtifactVersion[] => (
+  snapshot.artifacts.flatMap((artifact): ArtifactVersion[] => {
+    if (!validStageIds.has(artifact.stageId)) {
+      return [];
+    }
+    return [{
+      id: `${snapshot.run.id}-${artifact.stageId}-v${artifact.versionNumber}`,
+      timestamp: Date.now() + artifact.versionNumber,
+      content: artifact.content,
+      stageId: artifact.stageId,
+    }];
+  })
+);
+
+const isSameContextSummary = (
+  left: Pick<AgentRunSnapshotContextSummary, 'sourceType' | 'sourceStageId' | 'summaryType'>,
+  right: Pick<AgentRunSnapshotContextSummary, 'sourceType' | 'sourceStageId' | 'summaryType'>
+): boolean => (
+  left.sourceType === right.sourceType
+  && left.sourceStageId === right.sourceStageId
+  && left.summaryType === right.summaryType
+);
+
 const sanitizePersistedWorkspaceState = (
   persistedState: Record<string, unknown>,
   currentState: AppState
@@ -181,10 +390,14 @@ const sanitizePersistedWorkspaceState = (
     chatHistory: sanitizeChatHistory(persistedState.chatHistory),
     artifactContent,
     artifactHistory: sanitizeArtifactHistory(persistedState.artifactHistory),
+    artifactComments: sanitizeArtifactComments(persistedState.artifactComments, workflow),
+    artifactSectionLocks: sanitizeArtifactSectionLocks(persistedState.artifactSectionLocks, workflow),
+    artifactAuditEvents: sanitizeArtifactAuditEvents(persistedState.artifactAuditEvents, workflow),
     stageArtifacts: {
       ...stageArtifacts,
       [currentStageId]: artifactContent,
     },
+    currentRunId: sanitizeCurrentRunId(persistedState.currentRunId),
     isGenerating: currentState.isGenerating,
     pendingStageTransition: currentState.pendingStageTransition,
     artifactTruncated,
@@ -212,16 +425,21 @@ if (typeof window !== 'undefined') {
 }
 
 export const useStore = create<AppState>()(
-  persist(
+  persist<AppState, [], [], Partial<AppState>>(
     (set) => ({
-      workflow: 'TEST_DESIGN',
+      workflow: DEFAULT_WORKFLOW,
       stageIndex: 0,
       chatHistory: [],
-      artifactContent: getWelcomeMessage('TEST_DESIGN'),
+      artifactContent: getWelcomeMessage(DEFAULT_WORKFLOW),
       artifactHistory: [],
+      artifactComments: [],
+      artifactSectionLocks: [],
+      artifactAuditEvents: [],
       stageArtifacts: {
-        [WORKFLOWS['TEST_DESIGN'].stages[0].id]: getWelcomeMessage('TEST_DESIGN')
+        [WORKFLOWS[DEFAULT_WORKFLOW].stages[0].id]: getWelcomeMessage(DEFAULT_WORKFLOW)
       },
+      contextSummaries: [],
+      currentRunId: null,
       isSettingsOpen: false,
       isGenerating: false,
       // P0-4: Stage transition confirmation gate
@@ -234,13 +452,18 @@ export const useStore = create<AppState>()(
         stageIndex: 0,
         chatHistory: [],
         artifactHistory: [],
+        artifactComments: [],
+        artifactSectionLocks: [],
+        artifactAuditEvents: [],
         artifactContent: getWelcomeMessage(workflow),
         stageArtifacts: {
           [WORKFLOWS[workflow].stages[0].id]: getWelcomeMessage(workflow)
         },
+        contextSummaries: [],
         pendingStageTransition: null,
         artifactTruncated: false,
         isGenerating: false,
+        currentRunId: null,
       }),
       setStageIndex: (index) => set((state) => {
         const workflowStages = WORKFLOWS[state.workflow].stages;
@@ -343,16 +566,238 @@ export const useStore = create<AppState>()(
           ],
         };
       }),
+      addArtifactComment: (comment) => set((state) => {
+        const currentStageId = WORKFLOWS[state.workflow].stages[state.stageIndex].id;
+        const stageId = comment.stageId ?? currentStageId;
+        const workflowStageIds = new Set(
+          WORKFLOWS[state.workflow].stages.map(stage => stage.id)
+        );
+        const content = comment.content.trim();
+        if (!workflowStageIds.has(stageId) || !content) {
+          return {};
+        }
+
+        return {
+          artifactComments: [
+            ...state.artifactComments,
+            {
+              id: `artifact-comment-${Date.now()}-${state.artifactComments.length + 1}`,
+              stageId,
+              content,
+              artifactExcerpt: comment.artifactExcerpt.trim(),
+              anchorText: sanitizeOptionalArtifactText(comment.anchorText),
+              createdAt: Date.now(),
+              status: 'open',
+              resolvedAt: null,
+              replies: [],
+            },
+          ],
+        };
+      }),
+      addArtifactCommentReply: (commentId, content) => set((state) => {
+        const replyContent = content.trim();
+        if (!replyContent) {
+          return {};
+        }
+
+        return {
+          artifactComments: state.artifactComments.map((comment) => (
+            comment.id === commentId
+              ? {
+                ...comment,
+                replies: [
+                  ...comment.replies,
+                  {
+                    id: `artifact-comment-reply-${Date.now()}-${comment.replies.length + 1}`,
+                    content: replyContent,
+                    createdAt: Date.now(),
+                  },
+                ],
+              }
+              : comment
+          )),
+        };
+      }),
+      setArtifactCommentStatus: (commentId, status) => set((state) => ({
+        artifactComments: state.artifactComments.map((comment) => (
+          comment.id === commentId
+            ? {
+              ...comment,
+              status,
+              resolvedAt: status === 'resolved' ? Date.now() : null,
+            }
+            : comment
+        )),
+      })),
+      removeArtifactComment: (commentId) => set((state) => ({
+        artifactComments: state.artifactComments.filter(comment => comment.id !== commentId),
+      })),
+      getArtifactCommentsForStage: (stageId) => (
+        useStore.getState().artifactComments.filter(comment => comment.stageId === stageId)
+      ),
+      addArtifactSectionLock: (lock) => set((state) => {
+        const currentStageId = WORKFLOWS[state.workflow].stages[state.stageIndex].id;
+        const stageId = lock.stageId ?? currentStageId;
+        const workflowStageIds = new Set(
+          WORKFLOWS[state.workflow].stages.map(stage => stage.id)
+        );
+        const heading = lock.heading.trim();
+        const content = lock.content.trim();
+        if (!workflowStageIds.has(stageId) || !heading || !content) {
+          return {};
+        }
+
+        return {
+          artifactSectionLocks: [
+            ...state.artifactSectionLocks.filter(existing => !(
+              existing.stageId === stageId && existing.heading === heading
+            )),
+            {
+              id: `artifact-section-lock-${Date.now()}-${state.artifactSectionLocks.length + 1}`,
+              stageId,
+              heading,
+              content,
+              createdAt: Date.now(),
+            },
+          ],
+        };
+      }),
+      removeArtifactSectionLock: (lockId) => set((state) => ({
+        artifactSectionLocks: state.artifactSectionLocks.filter(lock => lock.id !== lockId),
+      })),
+      getArtifactSectionLocksForStage: (stageId) => (
+        useStore.getState().artifactSectionLocks.filter(lock => lock.stageId === stageId)
+      ),
+      addArtifactAuditEvent: (event) => set((state) => {
+        const currentStageId = WORKFLOWS[state.workflow].stages[state.stageIndex].id;
+        const stageId = event.stageId ?? currentStageId;
+        const workflowStageIds = new Set(
+          WORKFLOWS[state.workflow].stages.map(stage => stage.id)
+        );
+        const eventType = event.eventType.trim();
+        const summary = event.summary.trim();
+        if (!workflowStageIds.has(stageId) || !eventType || !summary) {
+          return {};
+        }
+
+        return {
+          artifactAuditEvents: [
+            ...state.artifactAuditEvents,
+            {
+              stageId,
+              eventType,
+              summary,
+              createdAt: event.createdAt ?? Date.now(),
+            },
+          ],
+        };
+      }),
+      getArtifactAuditEventsForStage: (stageId) => (
+        useStore.getState().artifactAuditEvents.filter(event => event.stageId === stageId)
+      ),
+      setCurrentRunId: (runId) => set({ currentRunId: sanitizeCurrentRunId(runId) }),
+      applyWorkflowHandoff: (handoff) => set(() => {
+        const targetWorkflow = handoff.targetWorkflowId;
+        if (!isWorkflowType(targetWorkflow)) {
+          return {};
+        }
+
+        const workflowConfig = WORKFLOWS[targetWorkflow];
+        if (workflowConfig.agentId !== handoff.targetAgentId) {
+          return {};
+        }
+
+        const targetStageIndex = workflowConfig.stages.findIndex(
+          stage => stage.id === handoff.targetStageId
+        );
+        const targetStage = workflowConfig.stages[targetStageIndex];
+        if (targetStageIndex < 0 || !targetStage) {
+          return {};
+        }
+
+        const artifactContent = getInitialArtifactForStage(targetWorkflow, targetStageIndex);
+
+        return {
+          workflow: targetWorkflow,
+          stageIndex: targetStageIndex,
+          chatHistory: [buildHandoffMessage(handoff)],
+          artifactContent,
+          artifactHistory: [],
+          artifactComments: [],
+          artifactSectionLocks: [],
+          artifactAuditEvents: [],
+          stageArtifacts: {
+            [targetStage.id]: artifactContent,
+          },
+          contextSummaries: [],
+          currentRunId: sanitizeCurrentRunId(handoff.targetRunId ?? null),
+          pendingStageTransition: null,
+          artifactTruncated: false,
+          isGenerating: false,
+        };
+      }),
+      restoreRunSnapshot: (snapshot) => set(() => {
+        const workflow = snapshot.run.workflowId;
+        if (!isWorkflowType(workflow)) {
+          return {};
+        }
+
+        const workflowConfig = WORKFLOWS[workflow];
+        if (workflowConfig.agentId !== snapshot.run.agentId) {
+          return {};
+        }
+
+        const stageIndex = workflowConfig.stages.findIndex(
+          stage => stage.id === snapshot.run.currentStageId
+        );
+        const currentStage = workflowConfig.stages[stageIndex];
+        if (stageIndex < 0 || !currentStage) {
+          return {};
+        }
+
+        const validStageIds = new Set(workflowConfig.stages.map(stage => stage.id));
+        const stageArtifacts: Record<string, string> = {};
+        snapshot.artifacts.forEach((artifact) => {
+          if (validStageIds.has(artifact.stageId)) {
+            stageArtifacts[artifact.stageId] = artifact.content;
+          }
+        });
+        const artifactContent = stageArtifacts[currentStage.id]
+          || getInitialArtifactForStage(workflow, stageIndex);
+        stageArtifacts[currentStage.id] = artifactContent;
+
+        return {
+          workflow,
+          stageIndex,
+          chatHistory: buildSnapshotMessages(snapshot),
+          artifactContent,
+          artifactHistory: buildSnapshotArtifactHistory(snapshot, validStageIds),
+          artifactComments: sanitizeArtifactComments(snapshot.artifactComments, workflow),
+          artifactSectionLocks: sanitizeArtifactSectionLocks(snapshot.artifactSectionLocks, workflow),
+          artifactAuditEvents: sanitizeArtifactAuditEvents(snapshot.artifactAuditEvents, workflow),
+          stageArtifacts,
+          contextSummaries: snapshot.contextSummaries,
+          currentRunId: snapshot.run.id,
+          pendingStageTransition: null,
+          artifactTruncated: false,
+          isGenerating: false,
+        };
+      }),
       setSettingsOpen: (isSettingsOpen) => set({ isSettingsOpen }),
       setIsGenerating: (isGenerating) => set({ isGenerating }),
       clearHistory: () => set((state) => ({
         chatHistory: [],
         artifactHistory: [],
+        artifactComments: [],
+        artifactSectionLocks: [],
+        artifactAuditEvents: [],
         artifactContent: getWelcomeMessage(state.workflow),
         stageArtifacts: {
           [WORKFLOWS[state.workflow].stages[0].id]: getWelcomeMessage(state.workflow)
         },
         stageIndex: 0,
+        contextSummaries: [],
+        currentRunId: null,
         // P0-4: Reset transition state on clear
         pendingStageTransition: null,
         // P0-9: Reset truncation flag on clear
@@ -371,6 +816,29 @@ export const useStore = create<AppState>()(
           stageArtifacts: state.stageArtifacts,
         }) || {};
       }),
+      updateContextSummaryContent: (summary, content) => set((state) => ({
+        contextSummaries: state.contextSummaries.map((currentSummary) => (
+          isSameContextSummary(currentSummary, summary)
+            ? { ...currentSummary, content }
+            : currentSummary
+        )),
+      })),
+      upsertContextSummary: (summary) => set((state) => {
+        const existingSummaryIndex = state.contextSummaries.findIndex(
+          currentSummary => isSameContextSummary(currentSummary, summary)
+        );
+        if (existingSummaryIndex < 0) {
+          return {
+            contextSummaries: [...state.contextSummaries, summary],
+          };
+        }
+
+        return {
+          contextSummaries: state.contextSummaries.map((currentSummary, index) => (
+            index === existingSummaryIndex ? summary : currentSummary
+          )),
+        };
+      }),
       // P0-9: Artifact truncation action
       setArtifactTruncated: (truncated) => set({ artifactTruncated: truncated }),
     }),
@@ -382,14 +850,19 @@ export const useStore = create<AppState>()(
         chatHistory: sanitizeChatHistory(state.chatHistory),
         artifactContent: state.artifactContent,
         artifactHistory: state.artifactHistory,
+        artifactComments: state.artifactComments,
+        artifactSectionLocks: state.artifactSectionLocks,
+        artifactAuditEvents: state.artifactAuditEvents,
         stageArtifacts: state.stageArtifacts,
+        currentRunId: state.currentRunId,
         artifactTruncated: state.artifactTruncated,
       }),
-      merge: (persistedState, currentState) => {
-        if (!isRecord(persistedState)) return currentState;
+      merge: (persistedState, currentState): AppState => {
+        const baseState = currentState as AppState;
+        if (!isRecord(persistedState)) return baseState;
         return {
-          ...currentState,
-          ...sanitizePersistedWorkspaceState(persistedState, currentState),
+          ...baseState,
+          ...sanitizePersistedWorkspaceState(persistedState, baseState),
         };
       },
     }

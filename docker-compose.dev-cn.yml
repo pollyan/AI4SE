@@ -80,6 +80,7 @@ services:
       - PROXY_API_KEY=${PROXY_API_KEY:-}
     volumes:
       - ./tools/new-agents/backend:/app
+      - ./tools/new-agents/workflow_manifest.json:/workflow_manifest.json:ro
     depends_on:
       postgres:
         condition: service_healthy

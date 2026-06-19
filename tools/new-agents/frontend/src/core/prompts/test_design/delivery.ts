@@ -1,5 +1,8 @@
+import { FENCE } from '../../utils/constants';
+
 export const DELIVERY_PROMPT = `整合需求澄清、策略制定、用例编写三个阶段的所有产出物，形成完整的《测试设计交付文档》。
 【重要警告】：必须包含前面所有阶段的完整内容，绝不能省略或用"参见上文"替代。所有 Mermaid 图表（风险矩阵、测试金字塔、用例饼图）都必须保留。
+终稿必须包含 ai4se-visual coverage-map，用于展示需求、风险、测试点、用例和验收状态的最终覆盖关系。
 `;
 
 export const DELIVERY_TEMPLATE = `# 测试设计文档
@@ -31,4 +34,21 @@ export const DELIVERY_TEMPLATE = `# 测试设计文档
 - [ ] 所有 P0 用例 100% 执行通过
 - [ ] 所有 P1 用例 95% 以上通过
 - [ ] 高风险项 (RPN≥15) 均有对应缓解策略和用例覆盖
-- [ ] 产品/开发/测试三方确认签字`;
+- [ ] 产品/开发/测试三方确认签字
+
+${FENCE}ai4se-visual
+{
+  "type": "coverage-map",
+  "title": "测试交付覆盖地图",
+  "columns": ["需求", "风险", "测试点", "用例", "验收状态"],
+  "rows": [
+    {
+      "需求": "REQ-1",
+      "风险": "RISK-1",
+      "测试点": "TP-1",
+      "用例": "TC-001",
+      "验收状态": "已覆盖"
+    }
+  ]
+}
+${FENCE}`;

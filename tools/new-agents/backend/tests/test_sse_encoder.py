@@ -3,7 +3,7 @@ import json
 import pytest
 
 from sse_encoder import encode_sse_done, encode_sse_event
-from sse_schemas import AgentTurnEvent, ErrorEvent
+from sse_schemas import AgentTurnEvent, ErrorEvent, RunStartedEvent
 
 
 def test_encode_error_event_uses_typed_message_contract():
@@ -23,6 +23,16 @@ def test_encode_error_event_uses_typed_message_contract():
 
 def test_encode_sse_done_keeps_done_sentinel():
     assert encode_sse_done() == "data: [DONE]\n\n"
+
+
+def test_encode_run_started_event_uses_run_id_alias():
+    encoded = encode_sse_event(RunStartedEvent(run_id="run-123"))
+
+    payload = json.loads(encoded.removeprefix("data: ").strip())
+    assert payload == {
+        "type": "run_started",
+        "runId": "run-123",
+    }
 
 
 @pytest.mark.parametrize(

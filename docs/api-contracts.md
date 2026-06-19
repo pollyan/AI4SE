@@ -136,7 +136,15 @@
 |------|------|------|------|
 | GET | `/api/health` | 健康检查 | 无 |
 | GET | `/api/config` | 获取默认 LLM 配置（不含 API Key） | 无 |
+| POST | `/api/config` | 创建或更新默认 LLM 配置（不返回 API Key） | 无 |
+| POST | `/api/config/check` | 检测默认 LLM 配置是否可调用当前模型 | 无 |
 | POST | `/api/agent/runs/stream` | 结构化 Agent Runtime SSE | 无 |
+| GET | `/api/agent/runs/{runId}` | 获取已持久化 run snapshot | 无 |
+| GET | `/api/agent/observability` | 获取 Agent Runtime 运行统计 | 无 |
+| GET | `/api/agent/runs/{runId}/test-assets` | 只读导出 Lisa 测试资产 | 无 |
+| POST | `/api/agent/runs/{runId}/test-assets/materialize` | 将 Lisa CASES artifact 实体化为可编辑测试资产集 | 无 |
+| GET | `/api/agent/test-assets/{collectionId}` | 读取已实体化测试资产集 | 无 |
+| PATCH | `/api/agent/test-assets/{collectionId}/test-cases/{caseId}` | 追加更新单条测试用例版本 | 无 |
 | POST | `/api/utils/mermaid/repair` | Mermaid 修复工具 | 无 |
 
 ### GET `/api/config` 响应
@@ -156,6 +164,43 @@
 }
 ```
 
+### POST `/api/config` 请求
+
+创建或更新后端默认 LLM 配置。默认配置 key 为 `default`；部署环境可通过 `NEW_AGENTS_DEFAULT_LLM_CONFIG_KEY` 选择不同配置 key，从而让不同环境启用不同模型。已有默认配置时，`apiKey` 可省略或留空，表示保留当前密钥；提供新 `apiKey` 时用于密钥轮换。响应永不返回密钥。
+
+```json
+{
+  "apiKey": "sk-...",
+  "baseUrl": "https://api.example.com/v1",
+  "model": "gpt-4o",
+  "description": "默认配置"
+}
+```
+
+### POST `/api/config` 响应
+
+```json
+{
+  "hasDefault": true,
+  "baseUrl": "https://api.example.com/v1",
+  "model": "gpt-4o",
+  "description": "默认配置"
+}
+```
+
+### POST `/api/config/check` 响应
+
+使用当前默认 LLM 配置执行一次最小模型调用。缺少默认配置时返回 503；供应商不可用、鉴权失败或限流时返回 200 且 `ok: false`，由调用方展示业务状态。
+
+```json
+{
+  "ok": true,
+  "baseUrl": "https://api.example.com/v1",
+  "model": "gpt-4o",
+  "message": "模型配置可用"
+}
+```
+
 ### POST `/api/agent/runs/stream` 请求
 
 ```json
@@ -163,21 +208,370 @@
   "prompt": "用户输入与必要上下文",
   "systemPrompt": "当前智能体和阶段提示词",
   "workflowId": "TEST_DESIGN",
-  "stageId": "CLARIFY"
+  "stageId": "CLARIFY",
+  "runId": "可选，复用已有服务端 run"
 }
 ```
 
 ### Agent Runtime SSE 响应格式
 
 ```text
-data: {"type": "agent_turn", "output": {"chat": "已更新右侧文档。", "artifact_update": {"type": "none"}, "stage_action": null, "warnings": []}}
+data: {"type": "run_started", "runId": "0c6d6d3f-9e0c-4f9b-b0d5-1a8e8c8c8c8c"}
+
+data: {"type": "agent_turn", "output": {"chat": "已更新右侧文档，请查看关键风险和待确认问题。", "artifact_update": {"type": "replace", "markdown": "# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能\n\n## 2. 系统交互与核心链路\n待补充\n\n## 3. 待澄清与阻断性问题\n- 待确认异常路径\n\n## 4. 隐式需求与非功能性考量\n- 安全与性能待确认"}, "stage_action": null, "warnings": []}}
 
 data: [DONE]
 ```
 
+`runId` 为空时，后端会为本轮创建服务端 run 并通过 `run_started.runId` 返回；后续请求带回同一个 `runId` 时，会复用该 run 并追加消息与产物版本。
+
+当服务端上下文构建器因为历史过长裁剪了较早对话时，`run_started` 可携带 `warnings:["context_truncated"]`；前端应在左侧对话首帧提示用户本轮模型只看到了最近上下文。这不同于 artifact 输出截断。
+
+`artifact_update.type="replace"` 表示右侧 artifact 被完整 Markdown 文档替换；有必需 artifact contract 的阶段必须使用 `replace` 并包含当前阶段必需标题、字段和可视化契约。`artifact_update.type="none"` 仅用于本轮不更新右侧 artifact 的合法场景，不能用来跳过必需产出物阶段。
+
 错误时：
 ```text
 data: {"type": "error", "code": "CONTRACT_VALIDATION_FAILED", "message": "Artifact 缺少必备章节"}
+```
+
+### GET `/api/agent/runs/{runId}` 响应
+
+```json
+{
+  "run": {
+    "id": "0c6d6d3f-9e0c-4f9b-b0d5-1a8e8c8c8c8c",
+    "workflowId": "TEST_DESIGN",
+    "agentId": "lisa",
+    "currentStageId": "CLARIFY",
+    "status": "active",
+    "model": "gpt-4o"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "用户需求",
+      "sequenceIndex": 1
+    },
+    {
+      "role": "assistant",
+      "content": "已更新右侧需求分析文档。",
+      "sequenceIndex": 2
+    }
+  ],
+  "artifacts": [
+    {
+      "stageId": "CLARIFY",
+      "content": "# 需求分析文档\n...",
+      "versionNumber": 1
+    }
+  ],
+  "contextSummaries": [
+    {
+      "sourceType": "artifact",
+      "sourceStageId": "CLARIFY",
+      "summaryType": "current_artifact",
+      "content": "# 需求分析文档\n..."
+    }
+  ]
+}
+```
+
+未知 run：
+
+```json
+{
+  "error": "未知 runId: unknown-run"
+}
+```
+
+### GET `/api/agent/observability` 响应
+
+返回 Agent Runtime turn metric 的只读统计摘要，支持 `limit` 查询参数限制 `recentTurns` 数量，并支持 `workflowId` 与 `stageId` 聚焦某个工作流/阶段。`stageId` 必须与 `workflowId` 一起使用，未知 workflow 或不匹配 stage 会返回 JSON 错误。统计包含总体、按 workflow/stage、按 provider 和最近 turn 明细；`estimatedTokens` 当前为估算值，`contractRetryCount` 当前为占位采集值。
+
+```json
+{
+  "totals": {
+    "turns": 3,
+    "failedTurns": 1,
+    "successRate": 66.67,
+    "avgDurationMs": 1200.0,
+    "estimatedTokens": 900
+  },
+  "byStage": [
+    {
+      "workflowId": "TEST_DESIGN",
+      "stageId": "CLARIFY",
+      "turns": 2,
+      "failedTurns": 1,
+      "successRate": 50.0,
+      "avgDurationMs": 1500.0,
+      "estimatedTokens": 700,
+      "errorCodes": {"SCHEMA_VALIDATION_FAILED": 1}
+    }
+  ],
+  "byProvider": [
+    {
+      "provider": "api.test.com",
+      "turns": 3,
+      "failedTurns": 1,
+      "successRate": 66.67,
+      "avgDurationMs": 1200.0,
+      "estimatedTokens": 900,
+      "errorCodes": {"SCHEMA_VALIDATION_FAILED": 1}
+    }
+  ],
+  "recentTurns": [
+    {
+      "id": 11,
+      "runId": "0c6d6d3f-9e0c-4f9b-b0d5-1a8e8c8c8c8c",
+      "workflowId": "TEST_DESIGN",
+      "stageId": "CLARIFY",
+      "model": "gpt-4o",
+      "provider": "api.test.com",
+      "status": "error",
+      "errorCode": "SCHEMA_VALIDATION_FAILED",
+      "durationMs": 1500,
+      "inputChars": 300,
+      "outputChars": 600,
+      "estimatedTokens": 225,
+      "contractRetryCount": 0,
+      "createdAt": "2026-06-19T10:00:00"
+    }
+  ]
+}
+```
+
+### GET `/api/agent/runs/{runId}/test-assets` 响应
+
+该端点只读导出 Lisa `TEST_DESIGN/CASES` artifact 中的结构化测试资产；缺少测试用例集或非 `TEST_DESIGN` run 时返回 JSON 错误，不返回空成功。
+
+```json
+{
+  "runId": "0c6d6d3f-9e0c-4f9b-b0d5-1a8e8c8c8c8c",
+  "workflowId": "TEST_DESIGN",
+  "sourceStageId": "CASES",
+  "sourceArtifactVersion": 1,
+  "testCases": [
+    {
+      "id": "TC-001",
+      "title": "用户登录成功",
+      "priority": "P0",
+      "dimension": "正向功能验证",
+      "testPoint": "登录主链路",
+      "risk": "R-LOGIN-001",
+      "precondition": "用户已注册",
+      "steps": "1. 输入账号密码 2. 点击登录",
+      "testData": "正确账号密码",
+      "expectedResult": "进入工作台"
+    }
+  ],
+  "coverageTrace": [
+    {
+      "testPoint": "登录主链路",
+      "priority": "P0",
+      "risk": "R-LOGIN-001",
+      "testCases": ["TC-001"],
+      "status": "已覆盖"
+    }
+  ],
+  "coverageSummary": {
+    "totalTestCases": 1,
+    "totalTestPoints": 1,
+    "coveredTestPoints": 1,
+    "partiallyCoveredTestPoints": 0,
+    "uncoveredTestPoints": 0,
+    "coverageRate": 100.0,
+    "byPriority": [
+      {
+        "priority": "P0",
+        "total": 1,
+        "covered": 1,
+        "partial": 0,
+        "uncovered": 0,
+        "coverageRate": 100.0
+      }
+    ]
+  },
+  "assetIssues": [],
+  "riskMatrix": [
+    {
+      "risk": "R-LOGIN-001",
+      "testCases": ["TC-001"],
+      "testPoints": ["登录主链路"],
+      "priorities": ["P0"],
+      "dimensions": ["正向功能验证"],
+      "coverageStatuses": ["已覆盖"]
+    }
+  ],
+  "intentTesterDrafts": [
+    {
+      "sourceCaseId": "TC-001",
+      "name": "TC-001 用户登录成功",
+      "description": "来源: New Agents Lisa TEST_DESIGN/CASES\n测试点: 登录主链路\n关联风险: R-LOGIN-001\n前置条件: 用户已注册\n测试数据: 正确账号密码\n预期结果: 进入工作台",
+      "category": "正向功能验证",
+      "priority": 1,
+      "tags": ["lisa", "new-agents", "TC-001", "P0", "R-LOGIN-001"],
+      "steps": [
+        {
+          "action": "ai_assert",
+          "params": {"prompt": "验证预期结果：进入工作台"}
+        }
+      ],
+      "draftWarnings": [
+        "该草稿由 Lisa Markdown 用例派生，导入 intent-tester 前需要人工校准页面 URL、定位语义和可执行步骤。"
+      ]
+    }
+  ]
+}
+```
+
+`assetIssues` 为非阻断质量问题列表，例如覆盖追溯引用不存在的用例 ID，或某条测试用例未被任何测试点引用。缺少 `TEST_DESIGN/CASES` artifact 或 Markdown 表格不可解析时仍返回 JSON 错误。
+`intentTesterDrafts` 是 intent-tester `/api/testcases` 创建 payload 草稿；后端导出不会自动写入 intent-tester，前端测试资产弹层可由用户手动触发单条或批量草稿导入。
+
+### POST `/api/agent/runs/{runId}/test-assets/materialize` 响应
+
+该端点会读取当前 `TEST_DESIGN/CASES` artifact 并创建或刷新同一 run 的可编辑测试资产集。响应在只读导出结构基础上增加集合 `id`、`testPoints`，并为每条 `testCases[]` 增加当前 `versionNumber` 与历史 `versions`。
+
+```json
+{
+  "id": 7,
+  "runId": "0c6d6d3f-9e0c-4f9b-b0d5-1a8e8c8c8c8c",
+  "workflowId": "TEST_DESIGN",
+  "sourceStageId": "CASES",
+  "sourceArtifactVersion": 2,
+  "coverageSummary": {
+    "totalTestCases": 1,
+    "totalTestPoints": 1,
+    "coveredTestPoints": 1,
+    "partiallyCoveredTestPoints": 0,
+    "uncoveredTestPoints": 0,
+    "coverageRate": 100.0,
+    "byPriority": []
+  },
+  "testCases": [
+    {
+      "id": "TC-001",
+      "title": "用户登录成功",
+      "priority": "P0",
+      "dimension": "正向功能验证",
+      "testPoint": "登录主链路",
+      "risk": "R-LOGIN-001",
+      "precondition": "用户已注册",
+      "steps": "1. 输入账号密码",
+      "testData": "正确账号密码",
+      "expectedResult": "进入工作台",
+      "versionNumber": 1,
+      "versions": [
+        {
+          "versionNumber": 1,
+          "title": "用户登录成功",
+          "priority": "P0",
+          "dimension": "正向功能验证",
+          "testPoint": "登录主链路",
+          "risk": "R-LOGIN-001",
+          "precondition": "用户已注册",
+          "steps": "1. 输入账号密码",
+          "testData": "正确账号密码",
+          "expectedResult": "进入工作台"
+        }
+      ]
+    }
+  ],
+  "testPoints": [
+    {
+      "testPoint": "登录主链路",
+      "priority": "P0",
+      "risk": "R-LOGIN-001",
+      "testCases": ["TC-001"],
+      "status": "已覆盖"
+    }
+  ],
+  "coverageTrace": [],
+  "assetIssues": [],
+  "riskMatrix": [],
+  "intentTesterDrafts": []
+}
+```
+
+### GET `/api/agent/test-assets/{collectionId}` 响应
+
+返回已实体化测试资产集，结构与 `POST /api/agent/runs/{runId}/test-assets/materialize` 相同。未知集合返回 JSON 错误。
+
+### PATCH `/api/agent/test-assets/{collectionId}/test-cases/{caseId}` 请求与响应
+
+请求体只允许更新测试用例可编辑字段，当前字段包括 `title`、`priority`、`dimension`、`testPoint`、`risk`、`precondition`、`steps`、`testData` 和 `expectedResult`；未知字段或空字符串会返回 JSON 错误。成功后不会覆盖旧版本，而是追加新版本并返回更新后的当前测试用例。
+
+```json
+{
+  "title": "登录成功后进入首页",
+  "priority": "P1"
+}
+```
+
+```json
+{
+  "id": "TC-001",
+  "title": "登录成功后进入首页",
+  "priority": "P1",
+  "dimension": "正向功能验证",
+  "testPoint": "登录主链路",
+  "risk": "R-LOGIN-001",
+  "precondition": "用户已注册",
+  "steps": "1. 输入账号密码",
+  "testData": "正确账号密码",
+  "expectedResult": "进入工作台",
+  "versionNumber": 2,
+  "versions": [
+    {
+      "versionNumber": 1,
+      "title": "用户登录成功",
+      "priority": "P0",
+      "dimension": "正向功能验证",
+      "testPoint": "登录主链路",
+      "risk": "R-LOGIN-001",
+      "precondition": "用户已注册",
+      "steps": "1. 输入账号密码",
+      "testData": "正确账号密码",
+      "expectedResult": "进入工作台"
+    },
+    {
+      "versionNumber": 2,
+      "title": "登录成功后进入首页",
+      "priority": "P1",
+      "dimension": "正向功能验证",
+      "testPoint": "登录主链路",
+      "risk": "R-LOGIN-001",
+      "precondition": "用户已注册",
+      "steps": "1. 输入账号密码",
+      "testData": "正确账号密码",
+      "expectedResult": "进入工作台"
+    }
+  ]
+}
+```
+
+### GET `/api/agent/runs/{runId}/handoffs` 响应
+
+该端点只读返回当前 run 可用的配置化 workflow handoff。当前首批覆盖 Alex `VALUE_DISCOVERY/BLUEPRINT` 到 Lisa `TEST_DESIGN/CLARIFY` 与 `REQ_REVIEW/REVIEW`。端点不会自动创建目标 run，也不改变 `/api/agent/runs/stream` 主链路。
+
+```json
+{
+  "runId": "0c6d6d3f-9e0c-4f9b-b0d5-1a8e8c8c8c8c",
+  "sourceWorkflowId": "VALUE_DISCOVERY",
+  "handoffs": [
+    {
+      "id": "value-discovery-blueprint-to-test-design",
+      "label": "交给 Lisa 做测试设计",
+      "sourceWorkflowId": "VALUE_DISCOVERY",
+      "sourceStageId": "BLUEPRINT",
+      "sourceArtifactVersion": 1,
+      "targetWorkflowId": "TEST_DESIGN",
+      "targetStageId": "CLARIFY",
+      "targetAgentId": "lisa",
+      "prompt": "请基于以下 Alex 产出的需求蓝图继续工作..."
+    }
+  ]
+}
 ```
 
 ### POST `/api/utils/mermaid/repair` 请求

@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect } from 'vitest';
-import { useStore } from '../store';
+import { getWelcomeMessage, useStore } from '../store';
 
 describe('Zustand Store', () => {
     beforeEach(() => {
@@ -12,6 +12,7 @@ describe('Zustand Store', () => {
         state.addMessage({ id: '1', role: 'user', content: 'hello', timestamp: 123 });
         state.setStageIndex(2);
         state.setIsGenerating(true);
+        state.setCurrentRunId('run-123');
 
         useStore.getState().clearHistory();
         const newState = useStore.getState();
@@ -19,6 +20,13 @@ describe('Zustand Store', () => {
         expect(newState.chatHistory).toHaveLength(0);
         expect(newState.stageIndex).toBe(0);
         expect(newState.isGenerating).toBe(false);
+        expect(newState.currentRunId).toBeNull();
+    });
+
+    it('should store the current server run id', () => {
+        useStore.getState().setCurrentRunId('run-123');
+
+        expect(useStore.getState().currentRunId).toBe('run-123');
     });
 
     it('should keep chat history reference when updating the last message with identical content', () => {
@@ -159,10 +167,255 @@ describe('Zustand Store', () => {
         );
     });
 
+    it('should keep artifact comments scoped to the current workflow stage and clear them with workspace resets', () => {
+        useStore.getState().setArtifactContent('# Clarify artifact\n\n需要确认登录边界。');
+
+        useStore.getState().addArtifactComment({
+            content: '这里需要业务确认。',
+            artifactExcerpt: '需要确认登录边界。',
+            anchorText: '需要确认登录边界。',
+        });
+
+        expect(useStore.getState().getArtifactCommentsForStage('CLARIFY')).toEqual([
+            expect.objectContaining({
+                stageId: 'CLARIFY',
+                content: '这里需要业务确认。',
+                artifactExcerpt: '需要确认登录边界。',
+                anchorText: '需要确认登录边界。',
+                status: 'open',
+                resolvedAt: null,
+                replies: [],
+            }),
+        ]);
+
+        useStore.getState().setStageIndex(1);
+        expect(useStore.getState().getArtifactCommentsForStage('STRATEGY')).toEqual([]);
+
+        useStore.getState().addArtifactComment({
+            content: '策略阶段单独批注。',
+            artifactExcerpt: '暂无产出物。',
+        });
+        const strategyComment = useStore.getState().getArtifactCommentsForStage('STRATEGY')[0];
+        useStore.getState().removeArtifactComment(strategyComment.id);
+
+        expect(useStore.getState().getArtifactCommentsForStage('STRATEGY')).toEqual([]);
+        expect(useStore.getState().getArtifactCommentsForStage('CLARIFY')).toHaveLength(1);
+
+        useStore.getState().clearHistory();
+
+        expect(useStore.getState().artifactComments).toEqual([]);
+    });
+
+    it('should support replies and resolved state for artifact comments', () => {
+        useStore.getState().addArtifactComment({
+            content: '这里需要确认优先级。',
+            artifactExcerpt: '优先级 P1',
+            anchorText: '优先级 P1',
+        });
+        const comment = useStore.getState().getArtifactCommentsForStage('CLARIFY')[0];
+
+        useStore.getState().addArtifactCommentReply(comment.id, '已确认按 P1 处理。');
+        useStore.getState().setArtifactCommentStatus(comment.id, 'resolved');
+
+        const resolvedComment = useStore.getState().getArtifactCommentsForStage('CLARIFY')[0];
+        expect(resolvedComment.status).toBe('resolved');
+        expect(resolvedComment.resolvedAt).toEqual(expect.any(Number));
+        expect(resolvedComment.replies).toEqual([
+            expect.objectContaining({
+                content: '已确认按 P1 处理。',
+                createdAt: expect.any(Number),
+            }),
+        ]);
+
+        useStore.getState().setArtifactCommentStatus(comment.id, 'open');
+
+        expect(useStore.getState().getArtifactCommentsForStage('CLARIFY')[0]).toEqual(
+            expect.objectContaining({
+                status: 'open',
+                resolvedAt: null,
+            })
+        );
+    });
+
+    it('should keep artifact section locks scoped to the current workflow stage and clear them with workspace resets', () => {
+        useStore.getState().addArtifactSectionLock({
+            heading: '## 业务规则',
+            content: '## 业务规则\n\n已确认的登录规则。',
+        });
+
+        expect(useStore.getState().getArtifactSectionLocksForStage('CLARIFY')).toEqual([
+            expect.objectContaining({
+                stageId: 'CLARIFY',
+                heading: '## 业务规则',
+                content: '## 业务规则\n\n已确认的登录规则。',
+            }),
+        ]);
+
+        useStore.getState().setStageIndex(1);
+        expect(useStore.getState().getArtifactSectionLocksForStage('STRATEGY')).toEqual([]);
+
+        useStore.getState().addArtifactSectionLock({
+            heading: '## 策略章节',
+            content: '## 策略章节\n\n已确认的策略。',
+        });
+        const strategyLock = useStore.getState().getArtifactSectionLocksForStage('STRATEGY')[0];
+        useStore.getState().removeArtifactSectionLock(strategyLock.id);
+
+        expect(useStore.getState().getArtifactSectionLocksForStage('STRATEGY')).toEqual([]);
+        expect(useStore.getState().getArtifactSectionLocksForStage('CLARIFY')).toHaveLength(1);
+
+        useStore.getState().clearHistory();
+
+        expect(useStore.getState().artifactSectionLocks).toEqual([]);
+    });
+
+    it('should restore artifact comments and section locks from a run snapshot', () => {
+        useStore.getState().restoreRunSnapshot({
+            run: {
+                id: 'run-123',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'CLARIFY',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [],
+            artifacts: [
+                {
+                    stageId: 'CLARIFY',
+                    content: '# 需求分析文档\n\n## 业务规则\n\n已确认的登录规则。',
+                    versionNumber: 1,
+                },
+            ],
+            contextSummaries: [],
+            artifactComments: [
+                {
+                    id: 'comment-1',
+                    stageId: 'CLARIFY',
+                    content: '这里需要业务确认。',
+                    artifactExcerpt: '登录边界',
+                    anchorText: '登录边界',
+                    createdAt: 1710000000000,
+                    status: 'resolved',
+                    resolvedAt: 1710000000300,
+                    replies: [
+                        {
+                            id: 'reply-1',
+                            content: '已补充登录异常边界。',
+                            createdAt: 1710000000200,
+                        },
+                    ],
+                },
+                {
+                    id: 'comment-outside-workflow',
+                    stageId: 'REPORT',
+                    content: '跨工作流批注应被过滤。',
+                    artifactExcerpt: '报告',
+                    createdAt: 1710000000001,
+                },
+            ],
+            artifactSectionLocks: [
+                {
+                    id: 'lock-1',
+                    stageId: 'CLARIFY',
+                    heading: '## 业务规则',
+                    content: '## 业务规则\n\n已确认的登录规则。',
+                    createdAt: 1710000000100,
+                },
+                {
+                    id: 'lock-outside-workflow',
+                    stageId: 'REPORT',
+                    heading: '## 报告章节',
+                    content: '## 报告章节\n\n跨工作流锁应被过滤。',
+                    createdAt: 1710000000101,
+                },
+            ],
+            artifactAuditEvents: [
+                {
+                    stageId: 'CLARIFY',
+                    eventType: 'artifact_saved',
+                    summary: '保存了 CLARIFY 阶段产出物 v1',
+                    createdAt: 1710000000200,
+                },
+                {
+                    stageId: 'REPORT',
+                    eventType: 'artifact_saved',
+                    summary: '跨工作流活动应被过滤。',
+                    createdAt: 1710000000201,
+                },
+            ],
+        });
+
+        expect(useStore.getState().getArtifactCommentsForStage('CLARIFY')).toEqual([
+            {
+                id: 'comment-1',
+                stageId: 'CLARIFY',
+                content: '这里需要业务确认。',
+                artifactExcerpt: '登录边界',
+                anchorText: '登录边界',
+                createdAt: 1710000000000,
+                status: 'resolved',
+                resolvedAt: 1710000000300,
+                replies: [
+                    {
+                        id: 'reply-1',
+                        content: '已补充登录异常边界。',
+                        createdAt: 1710000000200,
+                    },
+                ],
+            },
+        ]);
+        expect(useStore.getState().getArtifactSectionLocksForStage('CLARIFY')).toEqual([
+            {
+                id: 'lock-1',
+                stageId: 'CLARIFY',
+                heading: '## 业务规则',
+                content: '## 业务规则\n\n已确认的登录规则。',
+                createdAt: 1710000000100,
+            },
+        ]);
+        expect(useStore.getState().getArtifactAuditEventsForStage('CLARIFY')).toEqual([
+            {
+                stageId: 'CLARIFY',
+                eventType: 'artifact_saved',
+                summary: '保存了 CLARIFY 阶段产出物 v1',
+                createdAt: 1710000000200,
+            },
+        ]);
+    });
+
+    it('should add local artifact audit events for the current workflow stage', () => {
+        useStore.getState().setWorkflow('TEST_DESIGN');
+        useStore.getState().setStageIndex(1);
+
+        useStore.getState().addArtifactAuditEvent({
+            eventType: ' artifact_merge_line_accepted ',
+            summary: ' 合并轨迹：采纳草稿行「用户补充风险」 ',
+            createdAt: 1710000000300,
+        });
+        useStore.getState().addArtifactAuditEvent({
+            stageId: 'UNKNOWN_STAGE',
+            eventType: 'artifact_merge_line_discarded',
+            summary: '不应写入',
+            createdAt: 1710000000400,
+        });
+
+        expect(useStore.getState().getArtifactAuditEventsForStage('STRATEGY')).toEqual([
+            {
+                stageId: 'STRATEGY',
+                eventType: 'artifact_merge_line_accepted',
+                summary: '合并轨迹：采纳草稿行「用户补充风险」',
+                createdAt: 1710000000300,
+            },
+        ]);
+        expect(useStore.getState().artifactAuditEvents).toHaveLength(1);
+    });
+
     it('should switch workflows and clear state', () => {
         useStore.getState().setStageIndex(2);
         useStore.getState().setArtifactTruncated(true);
         useStore.getState().setIsGenerating(true);
+        useStore.getState().setCurrentRunId('run-123');
         useStore.getState().setWorkflow('REQ_REVIEW');
         const state = useStore.getState();
 
@@ -170,6 +423,337 @@ describe('Zustand Store', () => {
         expect(state.stageIndex).toBe(0);
         expect(state.artifactTruncated).toBe(false);
         expect(state.isGenerating).toBe(false);
+        expect(state.currentRunId).toBeNull();
+    });
+
+    it('should apply a workflow handoff as a fresh target workflow context', () => {
+        useStore.getState().setWorkflow('VALUE_DISCOVERY');
+        useStore.getState().setStageIndex(3);
+        useStore.getState().addMessage({
+            id: 'source-user-message',
+            role: 'user',
+            content: '这是 Alex 的旧对话',
+            timestamp: 123,
+        });
+        useStore.getState().setArtifactTruncated(true);
+        useStore.getState().setIsGenerating(true);
+        useStore.getState().setCurrentRunId('alex-run-123');
+
+        useStore.getState().applyWorkflowHandoff({
+            id: 'handoff-1',
+            label: '交给 Lisa 做测试设计',
+            sourceWorkflowId: 'VALUE_DISCOVERY',
+            sourceStageId: 'BLUEPRINT',
+            sourceArtifactVersion: 2,
+            targetWorkflowId: 'TEST_DESIGN',
+            targetStageId: 'CLARIFY',
+            targetAgentId: 'lisa',
+            prompt: '请基于 Alex 的价值蓝图设计测试策略。',
+        });
+
+        const state = useStore.getState();
+        expect(state.workflow).toBe('TEST_DESIGN');
+        expect(state.stageIndex).toBe(0);
+        expect(state.currentRunId).toBeNull();
+        expect(state.isGenerating).toBe(false);
+        expect(state.artifactTruncated).toBe(false);
+        expect(state.pendingStageTransition).toBeNull();
+        expect(state.artifactContent).toBe(getWelcomeMessage('TEST_DESIGN'));
+        expect(state.stageArtifacts).toEqual({
+            CLARIFY: getWelcomeMessage('TEST_DESIGN'),
+        });
+        expect(state.artifactHistory).toEqual([]);
+        expect(state.chatHistory).toEqual([
+            expect.objectContaining({
+                id: 'handoff-handoff-1-v2',
+                role: 'user',
+                content: '请基于 Alex 的价值蓝图设计测试策略。',
+            }),
+        ]);
+    });
+
+    it('should ignore workflow handoffs that do not match the configured target agent or stage', () => {
+        useStore.getState().setWorkflow('TEST_DESIGN');
+        useStore.getState().setArtifactContent('# Stable artifact');
+        const before = useStore.getState();
+
+        useStore.getState().applyWorkflowHandoff({
+            id: 'handoff-bad-agent',
+            label: '错误接力',
+            sourceWorkflowId: 'VALUE_DISCOVERY',
+            sourceStageId: 'BLUEPRINT',
+            sourceArtifactVersion: 1,
+            targetWorkflowId: 'TEST_DESIGN',
+            targetStageId: 'CLARIFY',
+            targetAgentId: 'alex',
+            prompt: '不应应用',
+        });
+
+        useStore.getState().applyWorkflowHandoff({
+            id: 'handoff-bad-stage',
+            label: '错误阶段',
+            sourceWorkflowId: 'VALUE_DISCOVERY',
+            sourceStageId: 'BLUEPRINT',
+            sourceArtifactVersion: 1,
+            targetWorkflowId: 'TEST_DESIGN',
+            targetStageId: 'UNKNOWN_STAGE',
+            targetAgentId: 'lisa',
+            prompt: '不应应用',
+        });
+
+        const after = useStore.getState();
+        expect(after.workflow).toBe(before.workflow);
+        expect(after.stageIndex).toBe(before.stageIndex);
+        expect(after.artifactContent).toBe(before.artifactContent);
+        expect(after.chatHistory).toEqual(before.chatHistory);
+        expect(after.currentRunId).toBe(before.currentRunId);
+    });
+
+    it('should restore workspace state from a server run snapshot', () => {
+        useStore.getState().setWorkflow('REQ_REVIEW');
+        useStore.getState().setCurrentRunId('old-run');
+        useStore.getState().addMessage({
+            id: 'old-message',
+            role: 'user',
+            content: '旧对话',
+            timestamp: 1,
+        });
+
+        useStore.getState().restoreRunSnapshot({
+            run: {
+                id: 'run-123',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'STRATEGY',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [
+                {
+                    role: 'user',
+                    content: '用户需求: 登录功能',
+                    sequenceIndex: 1,
+                },
+                {
+                    role: 'assistant',
+                    content: '已更新需求分析文档。',
+                    sequenceIndex: 2,
+                },
+            ],
+            artifacts: [
+                {
+                    stageId: 'CLARIFY',
+                    content: '# 需求分析文档',
+                    versionNumber: 1,
+                },
+                {
+                    stageId: 'STRATEGY',
+                    content: '# 测试策略蓝图',
+                    versionNumber: 3,
+                },
+            ],
+            contextSummaries: [],
+        });
+
+        const state = useStore.getState();
+        expect(state.workflow).toBe('TEST_DESIGN');
+        expect(state.stageIndex).toBe(1);
+        expect(state.currentRunId).toBe('run-123');
+        expect(state.artifactContent).toBe('# 测试策略蓝图');
+        expect(state.stageArtifacts).toEqual({
+            CLARIFY: '# 需求分析文档',
+            STRATEGY: '# 测试策略蓝图',
+        });
+        expect(state.artifactHistory).toEqual([
+            expect.objectContaining({
+                id: 'run-123-CLARIFY-v1',
+                stageId: 'CLARIFY',
+                content: '# 需求分析文档',
+            }),
+            expect.objectContaining({
+                id: 'run-123-STRATEGY-v3',
+                stageId: 'STRATEGY',
+                content: '# 测试策略蓝图',
+            }),
+        ]);
+        expect(state.chatHistory).toEqual([
+            expect.objectContaining({
+                id: 'run-123-message-1',
+                role: 'user',
+                content: '用户需求: 登录功能',
+            }),
+            expect.objectContaining({
+                id: 'run-123-message-2',
+                role: 'assistant',
+                content: '已更新需求分析文档。',
+            }),
+        ]);
+        expect(state.pendingStageTransition).toBeNull();
+        expect(state.artifactTruncated).toBe(false);
+        expect(state.isGenerating).toBe(false);
+    });
+
+    it('should restore and locally calibrate context summaries from a server run snapshot', () => {
+        useStore.getState().restoreRunSnapshot({
+            run: {
+                id: 'run-123',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'STRATEGY',
+                status: 'active',
+                model: null,
+            },
+            messages: [],
+            artifacts: [],
+            contextSummaries: [
+                {
+                    sourceType: 'stage',
+                    sourceStageId: 'CLARIFY',
+                    summaryType: 'user_supplement',
+                    content: '用户补充了登录异常场景。',
+                },
+            ],
+        });
+
+        expect(useStore.getState().contextSummaries).toEqual([
+            {
+                sourceType: 'stage',
+                sourceStageId: 'CLARIFY',
+                summaryType: 'user_supplement',
+                content: '用户补充了登录异常场景。',
+            },
+        ]);
+
+        useStore.getState().updateContextSummaryContent(
+            {
+                sourceType: 'stage',
+                sourceStageId: 'CLARIFY',
+                summaryType: 'user_supplement',
+            },
+            '用户补充了登录异常和锁定场景。'
+        );
+
+        expect(useStore.getState().contextSummaries[0].content).toBe(
+            '用户补充了登录异常和锁定场景。'
+        );
+    });
+
+    it('should upsert context summaries by source and summary identity', () => {
+        useStore.getState().upsertContextSummary({
+            sourceType: 'artifact',
+            sourceStageId: 'STRATEGY',
+            summaryType: 'decision',
+            content: '旧决策',
+        });
+        useStore.getState().upsertContextSummary({
+            sourceType: 'artifact',
+            sourceStageId: 'STRATEGY',
+            summaryType: 'decision',
+            content: '新决策',
+        });
+
+        expect(useStore.getState().contextSummaries).toEqual([
+            {
+                sourceType: 'artifact',
+                sourceStageId: 'STRATEGY',
+                summaryType: 'decision',
+                content: '新决策',
+            },
+        ]);
+    });
+
+    it('should clear context summaries when leaving the current workspace boundary', () => {
+        useStore.getState().restoreRunSnapshot({
+            run: {
+                id: 'run-123',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'CLARIFY',
+                status: 'active',
+                model: null,
+            },
+            messages: [],
+            artifacts: [],
+            contextSummaries: [
+                {
+                    sourceType: 'stage',
+                    sourceStageId: 'CLARIFY',
+                    summaryType: 'decision',
+                    content: '优先覆盖 P0 登录主链路。',
+                },
+            ],
+        });
+
+        expect(useStore.getState().contextSummaries).toHaveLength(1);
+
+        useStore.getState().clearHistory();
+        expect(useStore.getState().contextSummaries).toEqual([]);
+
+        useStore.getState().restoreRunSnapshot({
+            run: {
+                id: 'run-456',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'CLARIFY',
+                status: 'active',
+                model: null,
+            },
+            messages: [],
+            artifacts: [],
+            contextSummaries: [
+                {
+                    sourceType: 'stage',
+                    sourceStageId: 'CLARIFY',
+                    summaryType: 'decision',
+                    content: '第二个 run 的决策摘要。',
+                },
+            ],
+        });
+
+        useStore.getState().setWorkflow('VALUE_DISCOVERY');
+
+        expect(useStore.getState().contextSummaries).toEqual([]);
+    });
+
+    it('should ignore server run snapshots with mismatched target agent or stage', () => {
+        useStore.getState().setWorkflow('TEST_DESIGN');
+        useStore.getState().setArtifactContent('# Stable artifact');
+        const before = useStore.getState();
+
+        useStore.getState().restoreRunSnapshot({
+            run: {
+                id: 'run-bad-agent',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'alex',
+                currentStageId: 'CLARIFY',
+                status: 'active',
+                model: null,
+            },
+            messages: [],
+            artifacts: [],
+            contextSummaries: [],
+        });
+
+        useStore.getState().restoreRunSnapshot({
+            run: {
+                id: 'run-bad-stage',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'REPORT',
+                status: 'active',
+                model: null,
+            },
+            messages: [],
+            artifacts: [],
+            contextSummaries: [],
+        });
+
+        const after = useStore.getState();
+        expect(after.workflow).toBe(before.workflow);
+        expect(after.stageIndex).toBe(before.stageIndex);
+        expect(after.artifactContent).toBe(before.artifactContent);
+        expect(after.chatHistory).toEqual(before.chatHistory);
+        expect(after.currentRunId).toBe(before.currentRunId);
     });
 
     it('should ignore stage artifact updates for stages outside the active workflow', () => {
@@ -215,6 +799,54 @@ describe('Zustand Store', () => {
         const [message] = useStore.getState().chatHistory;
         expect(message.content).toBe('历史消息');
         expect(message.attachments).toBeUndefined();
+    });
+
+    it('should hydrate a valid persisted current run id', async () => {
+        localStorage.setItem(
+            'agent-workspace-storage',
+            JSON.stringify({
+                state: {
+                    workflow: 'TEST_DESIGN',
+                    stageIndex: 0,
+                    chatHistory: [],
+                    artifactContent: '# Persisted',
+                    artifactHistory: [],
+                    stageArtifacts: {
+                        CLARIFY: '# Persisted',
+                    },
+                    currentRunId: 'run-123',
+                },
+                version: 0,
+            })
+        );
+
+        await useStore.persist.rehydrate();
+
+        expect(useStore.getState().currentRunId).toBe('run-123');
+    });
+
+    it('should drop a blank persisted current run id', async () => {
+        localStorage.setItem(
+            'agent-workspace-storage',
+            JSON.stringify({
+                state: {
+                    workflow: 'TEST_DESIGN',
+                    stageIndex: 0,
+                    chatHistory: [],
+                    artifactContent: '# Persisted',
+                    artifactHistory: [],
+                    stageArtifacts: {
+                        CLARIFY: '# Persisted',
+                    },
+                    currentRunId: '   ',
+                },
+                version: 0,
+            })
+        );
+
+        await useStore.persist.rehydrate();
+
+        expect(useStore.getState().currentRunId).toBeNull();
     });
 
     it('should drop malformed attachment entries when hydrating persisted chat history', async () => {

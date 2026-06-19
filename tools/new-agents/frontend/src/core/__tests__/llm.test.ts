@@ -142,6 +142,7 @@ function resetStore(overrides: Partial<ChatState> = {}) {
         artifactContent: '# Initial',
         artifactHistory: [],
         stageArtifacts: { ELEVATOR: '# Initial' },
+        currentRunId: null,
         isSettingsOpen: false,
         isGenerating: false,
         ...overrides,
@@ -184,6 +185,7 @@ describe('llm.ts', () => {
                 workflowId: 'VALUE_DISCOVERY',
                 stageId: 'ELEVATOR',
             });
+            expect(JSON.parse(options.body)).not.toHaveProperty('runId');
 
             // 验证解析结果
             expect(results).toEqual([
@@ -474,6 +476,65 @@ describe('llm.ts', () => {
                 newArtifact: finalArtifact,
                 action: '',
                 hasArtifactUpdate: true,
+            });
+        });
+
+        it('应保存 run_started 返回的 runId', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"run_started","runId":"run-123"}',
+                    createAgentTurnEvent({
+                        chat: '你好',
+                        artifact_update: { type: 'none' },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            await collectStream(generateResponseStream('hello'));
+
+            expect(useStore.getState().currentRunId).toBe('run-123');
+        });
+
+        it('run_started 带 context_truncated warning 时应显示可见上下文截断提示', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"run_started","runId":"run-123","warnings":["context_truncated"]}',
+                    createAgentTurnEvent({
+                        chat: '你好',
+                        artifact_update: { type: 'none' },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(generateResponseStream('hello'));
+
+            expect(results[0]).toMatchObject({
+                chatResponse: expect.stringContaining('上下文'),
+                hasArtifactUpdate: false,
+            });
+            expect(results[0].chatResponse).toContain('截断');
+        });
+
+        it('已有 currentRunId 时应在请求体中携带 runId', async () => {
+            useStore.getState().setCurrentRunId('run-123');
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createDefaultAgentTurnStream('你好'),
+            });
+
+            await collectStream(generateResponseStream('hello'));
+
+            const [, options] = mockFetch.mock.calls[0];
+            expect(JSON.parse(options.body)).toMatchObject({
+                runId: 'run-123',
             });
         });
 
@@ -1374,6 +1435,29 @@ describe('llm.ts', () => {
             expect(body.prompt).toContain('[助手]\n回复');
             expect(body.prompt).toContain('[用户]\n新消息');
             expect(body).not.toHaveProperty('messages');
+        });
+
+        it('已有 currentRunId 时不应把本地聊天历史注入 runtime prompt', async () => {
+            resetStore({
+                currentRunId: 'run-123',
+                chatHistory: [
+                    { id: '1', role: 'user', content: '第一条消息', timestamp: 1 },
+                    { id: '2', role: 'assistant', content: '回复', timestamp: 2 },
+                ],
+            });
+
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createDefaultAgentTurnStream(),
+            });
+
+            await collectStream(generateResponseStream('新消息'));
+
+            const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+            expect(body.runId).toBe('run-123');
+            expect(body.prompt).toBe('新消息');
+            expect(body.prompt).not.toContain('第一条消息');
+            expect(body.prompt).not.toContain('回复');
         });
 
         it('不应将错误或停止控制反馈注入到结构化 runtime prompt 中', async () => {

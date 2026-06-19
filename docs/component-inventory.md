@@ -43,8 +43,8 @@
 |------|------|------|------|
 | `ChatPane` | `components/ChatPane.tsx` | 交互 | 左侧对话面板（消息列表、输入框、附件） |
 | `ArtifactPane` | `components/ArtifactPane.tsx` | 展示 | 右侧产出物面板（Markdown 预览、版本历史） |
-| `Header` | `components/Header.tsx` | 导航 | 顶部栏（返回、工作流、阶段切换、导出） |
-| `SettingsModal` | `components/SettingsModal.tsx` | 配置 | 设置弹窗（系统 LLM 配置说明、本地数据清理） |
+| `Header` | `components/Header.tsx` | 导航 | 顶部栏（返回、工作流、阶段切换、历史会话、运行统计、Lisa 测试资产入口、导出） |
+| `SettingsModal` | `components/SettingsModal.tsx` | 配置 | 设置弹窗（默认 LLM 配置读取/更新、API Key 轮换、模型可用性检测、本地数据清理） |
 | `WorkflowDropdown` | `components/WorkflowDropdown.tsx` | 导航 | 工作流切换下拉（带确认弹窗） |
 | `Mermaid` | `components/Mermaid.tsx` | 渲染 | Mermaid 图表渲染（含容错与 LLM 重试） |
 
@@ -52,11 +52,12 @@
 
 | 模块 | 路径 | 说明 |
 |------|------|------|
-| `store` | `core/store.ts` | Zustand 全局状态（含 localStorage 持久化） |
+| `workflow_manifest` | `../workflow_manifest.json` | 在线 workflow 共享元数据源（id、agentId、slug、listing、stage id/name、onboarding） |
+| `store` | `src/store.ts` | Zustand 全局状态（含 localStorage 持久化、服务端 `currentRunId` 复用） |
 | `types` | `core/types.ts` | TypeScript 类型定义 |
-| `workflows` | `core/workflows.ts` | 5 个工作流定义（阶段、prompt 模板） |
+| `workflows` | `core/workflows.ts` | 从共享 manifest 组装运行时 `WORKFLOWS`，并挂接阶段 prompt/template |
 | `llm` | `core/llm.ts` | 主 Agent LLM 调用封装：统一调用后端 typed Agent Runtime |
-| `buildSystemPrompt` | `core/buildSystemPrompt.ts` | 系统提示词动态构建 |
+| `buildSystemPrompt` | `core/prompts/buildSystemPrompt.ts` | 系统提示词动态构建 |
 
 ### 服务模块
 
@@ -64,6 +65,11 @@
 |------|------|------|
 | `chatService` | `services/chatService.ts` | `useChatService` Hook：发送、重试、停止 |
 | `mermaidRetryService` | `services/mermaidRetryService.ts` | Mermaid 语法错误 LLM 修复 |
+| `runSnapshotService` | `services/runSnapshotService.ts` | 服务端 run snapshot 与历史会话列表读取 |
+| `observabilityService` | `services/observabilityService.ts` | Agent Runtime 运行统计读取与协议校验 |
+| `testAssetService` | `services/testAssetService.ts` | Lisa 测试资产实体化与单条用例版本更新 |
+| `intentTesterImportService` | `services/intentTesterImportService.ts` | 将 Lisa `intentTesterDrafts` 手动写入 intent-tester 用例库，供单条、批量导入和导入后执行页接力复用 |
+| `workflowHandoffService` | `services/workflowHandoffService.ts` | 跨 workflow handoff 候选读取与目标 run 创建 |
 
 ### 工具模块
 
@@ -89,6 +95,27 @@
 | `prompts/incident_review/` | 故障复盘 | timeline, root_cause, improvement |
 | `prompts/idea_brainstorm/` | 创意风暴 | define, diverge, converge, concept |
 | `prompts/value_discovery/` | 价值发现 | elevator, persona, journey, blueprint |
+
+---
+
+## AI 智能体后端 (tools/new-agents/backend)
+
+### 核心模块
+
+| 模块 | 路径 | 说明 |
+|------|------|------|
+| `app` | `app.py` | Flask 应用工厂与数据库初始化 |
+| `routes` | `routes.py` | New Agents API Blueprint，包括 typed Agent Runtime SSE 与 Mermaid 修复端点 |
+| `agent_contracts` | `agent_contracts.py` | `AgentTurnOutput`、阶段推进、artifact 标题和 Mermaid 可视化契约 |
+| `agent_runtime` | `agent_runtime.py` | PydanticAI Agent Runtime 适配与模型输出校验 |
+| `stream_services` | `stream_services.py` | typed SSE 编排与异常映射 |
+| `context_builder` | `context_builder.py` | 基于持久化 run messages 组装 bounded runtime prompt |
+| `models` | `models.py` | `llm_config` 以及通用 `agent_runs` / `agent_messages` / `agent_artifacts` / `agent_artifact_versions` 数据模型 |
+| `run_persistence` | `run_persistence.py` | 服务端 run/session/message/artifact version repository，复用 `WORKFLOW_STAGES` 校验 workflow/stage |
+| `workflow_manifest` | `workflow_manifest.py` | 读取共享 `workflow_manifest.json`，为后端持久化提供 workflow 到 agent 的归属 |
+| `config_service` | `config_service.py` | 默认 LLM 配置读取、环境变量 upsert、UI 更新持久化和模型可用性检测 |
+| `test_assets` | `test_assets.py` | Lisa `TEST_DESIGN/CASES` 测试资产导出、实体化、覆盖摘要和用例版本更新 |
+| `workflow_handoffs` | `workflow_handoffs.py` | 基于 manifest 的跨 workflow handoff 候选和目标 run 启动 |
 
 ---
 

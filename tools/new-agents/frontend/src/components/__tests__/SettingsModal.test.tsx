@@ -1,10 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SettingsModal } from '../SettingsModal';
 import { useStore } from '../../store';
 
 describe('SettingsModal Component', () => {
+    const mockFetch = vi.fn();
+
     beforeEach(() => {
+        vi.clearAllMocks();
+        global.fetch = mockFetch;
+        mockFetch.mockReturnValue(new Promise(() => {}));
         // Reset the store to default state
         useStore.setState({ 
             isSettingsOpen: true,
@@ -15,10 +20,108 @@ describe('SettingsModal Component', () => {
     it('renders correctly when open', () => {
         render(<SettingsModal />);
         expect(screen.getByText('设置')).toBeDefined();
-        expect(screen.getByText('LLM 由后端系统配置统一管理')).toBeDefined();
-        expect(screen.queryByText('API Key')).toBeNull();
-        expect(screen.queryByText('Base URL')).toBeNull();
-        expect(screen.queryByText('模型名称')).toBeNull();
+        expect(screen.getByLabelText('Base URL')).toBeDefined();
+        expect(screen.getByLabelText('模型名称')).toBeDefined();
+        expect(screen.getByLabelText('新 API Key')).toBeDefined();
+    });
+
+    it('loads sanitized backend config without showing an existing API key', async () => {
+        mockFetch.mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve({
+                hasDefault: true,
+                baseUrl: 'https://api.test.com/v1',
+                model: 'test-model',
+                description: 'Test config',
+            }),
+        });
+        render(<SettingsModal />);
+
+        expect(await screen.findByDisplayValue('https://api.test.com/v1')).toBeDefined();
+        expect(screen.getByDisplayValue('test-model')).toBeDefined();
+        expect(screen.getByDisplayValue('Test config')).toBeDefined();
+        expect(screen.getByLabelText('新 API Key')).toHaveProperty('value', '');
+    });
+
+    it('saves default backend config through the management form', async () => {
+        mockFetch
+            .mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({ hasDefault: false }),
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({
+                    hasDefault: true,
+                    baseUrl: 'https://api.new.test/v1',
+                    model: 'new-model',
+                    description: 'New config',
+                }),
+            });
+
+        render(<SettingsModal />);
+
+        fireEvent.change(screen.getByLabelText('Base URL'), {
+            target: { value: 'https://api.new.test/v1' },
+        });
+        fireEvent.change(screen.getByLabelText('模型名称'), {
+            target: { value: 'new-model' },
+        });
+        fireEvent.change(screen.getByLabelText('描述'), {
+            target: { value: 'New config' },
+        });
+        fireEvent.change(screen.getByLabelText('新 API Key'), {
+            target: { value: 'new-secret' },
+        });
+        fireEvent.click(screen.getByText('保存配置'));
+
+        await waitFor(() => {
+            expect(mockFetch).toHaveBeenLastCalledWith('/new-agents/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    baseUrl: 'https://api.new.test/v1',
+                    model: 'new-model',
+                    description: 'New config',
+                    apiKey: 'new-secret',
+                }),
+            });
+        });
+        expect(await screen.findByText('配置已保存')).toBeDefined();
+        expect(screen.getByLabelText('新 API Key')).toHaveProperty('value', '');
+    });
+
+    it('checks current model availability from settings', async () => {
+        mockFetch
+            .mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({
+                    hasDefault: true,
+                    baseUrl: 'https://api.test.com/v1',
+                    model: 'test-model',
+                    description: 'Test config',
+                }),
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({
+                    ok: true,
+                    baseUrl: 'https://api.test.com/v1',
+                    model: 'test-model',
+                    message: '模型配置可用',
+                }),
+            });
+
+        render(<SettingsModal />);
+
+        fireEvent.click(await screen.findByText('检测连接'));
+
+        await waitFor(() => {
+            expect(mockFetch).toHaveBeenLastCalledWith('/new-agents/api/config/check', {
+                method: 'POST',
+            });
+        });
+        expect(await screen.findByText('模型配置可用')).toBeDefined();
     });
 
     it('does not render when isSettingsOpen is false', () => {

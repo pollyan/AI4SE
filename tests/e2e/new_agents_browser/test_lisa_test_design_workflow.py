@@ -77,15 +77,32 @@ def _lisa_scenario() -> WorkflowScenario:
 
 
 def test_lisa_test_design_workflow_completes_all_stages(new_agents_page):
-    final_artifact = run_complete_workflow(new_agents_page, _lisa_scenario())
+    run_result = run_complete_workflow(new_agents_page, _lisa_scenario())
 
-    assert "登录支付链路测试设计" in final_artifact
+    assert "登录支付链路测试设计" in run_result.final_artifact
+    assert [snapshot.stage_name for snapshot in run_result.stage_artifacts] == [
+        "需求澄清",
+        "策略制定",
+        "用例编写",
+        "文档交付",
+    ]
+    assert len(run_result.stage_transitions) >= 3
+    assert any(
+        event.role == "user"
+        and "登录和支付联动功能" in event.content
+        for event in run_result.conversation_events
+    )
+    assert any(
+        event.role == "assistant"
+        and "确认进入策略制定" in event.content
+        for event in run_result.conversation_events
+    )
 
 
 def test_lisa_final_artifact_passes_optional_llm_judge(new_agents_page):
     if not is_llm_judge_enabled():
         pytest.skip("NEW_AGENTS_E2E_LLM_JUDGE is not enabled")
 
-    final_artifact = run_complete_workflow(new_agents_page, _lisa_scenario())
+    run_result = run_complete_workflow(new_agents_page, _lisa_scenario())
 
-    assert_llm_judges_artifact_quality("Lisa 测试策略与用例设计", final_artifact)
+    assert_llm_judges_artifact_quality("Lisa 测试策略与用例设计", run_result)

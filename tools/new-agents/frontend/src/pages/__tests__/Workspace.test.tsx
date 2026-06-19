@@ -15,7 +15,12 @@ vi.mock('react-router-dom', async () => {
 
 const mockUseParams = vi.mocked(await import('react-router-dom')).useParams;
 
+vi.mock('../../services/runSnapshotService', () => ({
+    fetchRunSnapshot: vi.fn(),
+}));
+
 import { Workspace } from '../../pages/Workspace';
+import { fetchRunSnapshot } from '../../services/runSnapshotService';
 
 // Mock child components
 vi.mock('../../components/Header', () => ({
@@ -38,11 +43,14 @@ global.fetch = mockFetch;
 describe('Workspace Page', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        window.history.pushState({}, '', '/new-agents/workspace/lisa/test-design');
         mockUseParams.mockReturnValue({});
+        vi.mocked(fetchRunSnapshot).mockReset();
         useStore.setState({
             chatHistory: [],
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
+            currentRunId: null,
         });
     });
 
@@ -157,5 +165,107 @@ describe('Workspace Page', () => {
                 { replace: true }
             );
         });
+    });
+
+    it('restores workspace state from the runId query parameter', async () => {
+        window.history.pushState({}, '', '/new-agents/workspace/lisa/test-design?runId=run-123');
+        mockUseParams.mockReturnValue({
+            agentId: 'lisa',
+            workflowId: 'test-design',
+        });
+        mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ hasDefault: true }) });
+        vi.mocked(fetchRunSnapshot).mockResolvedValue({
+            run: {
+                id: 'run-123',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'STRATEGY',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [
+                {
+                    role: 'user',
+                    content: '用户需求: 登录功能',
+                    sequenceIndex: 1,
+                },
+                {
+                    role: 'assistant',
+                    content: '已更新测试策略。',
+                    sequenceIndex: 2,
+                },
+            ],
+            artifacts: [
+                {
+                    stageId: 'STRATEGY',
+                    content: '# 测试策略蓝图',
+                    versionNumber: 1,
+                },
+            ],
+            contextSummaries: [],
+            artifactComments: [],
+            artifactSectionLocks: [],
+            artifactAuditEvents: [],
+        });
+
+        render(
+            <BrowserRouter>
+                <Workspace />
+            </BrowserRouter>
+        );
+
+        await waitFor(() => {
+            expect(fetchRunSnapshot).toHaveBeenCalledWith('run-123');
+        });
+        await waitFor(() => {
+            expect(useStore.getState().currentRunId).toBe('run-123');
+        });
+        expect(useStore.getState().workflow).toBe('TEST_DESIGN');
+        expect(useStore.getState().stageIndex).toBe(1);
+        expect(useStore.getState().artifactContent).toBe('# 测试策略蓝图');
+        expect(useStore.getState().chatHistory[0].content).toBe('用户需求: 登录功能');
+        expect(mockNavigate).not.toHaveBeenCalledWith(
+            expect.stringContaining('/workspace/lisa/test-design?runId=run-123'),
+            expect.anything()
+        );
+    });
+
+    it('redirects to the snapshot workflow when runId query points to a different workflow', async () => {
+        window.history.pushState({}, '', '/new-agents/workspace/lisa/test-design?runId=alex-run-123');
+        mockUseParams.mockReturnValue({
+            agentId: 'lisa',
+            workflowId: 'test-design',
+        });
+        mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ hasDefault: true }) });
+        vi.mocked(fetchRunSnapshot).mockResolvedValue({
+            run: {
+                id: 'alex-run-123',
+                workflowId: 'VALUE_DISCOVERY',
+                agentId: 'alex',
+                currentStageId: 'BLUEPRINT',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [],
+            artifacts: [],
+            contextSummaries: [],
+            artifactComments: [],
+            artifactSectionLocks: [],
+            artifactAuditEvents: [],
+        });
+
+        render(
+            <BrowserRouter>
+                <Workspace />
+            </BrowserRouter>
+        );
+
+        await waitFor(() => {
+            expect(useStore.getState().currentRunId).toBe('alex-run-123');
+        });
+        expect(mockNavigate).toHaveBeenCalledWith(
+            '/workspace/alex/value-discovery?runId=alex-run-123',
+            { replace: true }
+        );
     });
 });

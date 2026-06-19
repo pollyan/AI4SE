@@ -34,7 +34,7 @@ type AgentTurnDeltaOutput = {
 };
 
 type AgentRuntimeEvent =
-  | { type: 'run_started' }
+  | { type: 'run_started'; runId?: string | null; warnings?: string[] }
   | { type: 'agent_delta'; output: AgentTurnDeltaOutput }
   | { type: 'agent_turn'; output: AgentTurnOutput }
   | { type: 'error'; code: string; message: string };
@@ -275,6 +275,22 @@ const parseAgentRuntimeEvent = (payload: string): AgentRuntimeEvent | null => {
   }
 
   if (event.type === 'run_started') {
+    if (
+      event.runId !== undefined
+      && event.runId !== null
+      && (typeof event.runId !== 'string' || !event.runId.trim())
+    ) {
+      throw new Error('结构化智能体 SSE 事件格式错误');
+    }
+    if (
+      event.warnings !== undefined
+      && (
+        !Array.isArray(event.warnings)
+        || event.warnings.some(warning => typeof warning !== 'string')
+      )
+    ) {
+      throw new Error('结构化智能体 SSE 事件格式错误');
+    }
     return event as AgentRuntimeEvent;
   }
 
@@ -528,6 +544,11 @@ const hasArtifactTruncationWarning = (warnings?: string[]): boolean => {
   });
 };
 
+const hasContextTruncationWarning = (warnings?: string[]): boolean => {
+  if (!warnings) return false;
+  return warnings.some(warning => warning.trim().toLowerCase() === 'context_truncated');
+};
+
 const shouldInferNextStageActionFromChat = (
   chat: string,
   expectedNextStageId: string | undefined
@@ -730,6 +751,7 @@ async function* generateResponseStreamViaAgentRuntime(
   systemPrompt: string,
   workflowId: WorkflowType,
   stageId: string,
+  currentRunId: string | null,
   currentArtifact: string,
   expectedNextStageId: string | undefined,
   signal?: AbortSignal
@@ -742,6 +764,7 @@ async function* generateResponseStreamViaAgentRuntime(
       systemPrompt,
       workflowId,
       stageId,
+      ...(currentRunId ? { runId: currentRunId } : {}),
     }),
     signal
   });
@@ -778,8 +801,13 @@ async function* generateResponseStreamViaAgentRuntime(
       throw new Error(`${event.code}: ${event.message}`);
     }
     if (event.type === 'run_started') {
+      if (event.runId) {
+        useStore.getState().setCurrentRunId(event.runId);
+      }
       yield {
-        chatResponse: '正在生成...',
+        chatResponse: hasContextTruncationWarning(event.warnings)
+          ? '正在生成...\n\n⚠️ 上下文较长，较早对话已被截断，本轮仅保留最近的对话内容作为模型上下文。'
+          : '正在生成...',
         newArtifact: currentArtifact,
         action: '',
         hasArtifactUpdate: false,
@@ -897,7 +925,14 @@ async function* generateResponseStreamViaAgentRuntime(
 
 export const generateResponseStream = async function* (userMessage: string, attachments?: Attachment[], signal?: AbortSignal): AsyncGenerator<StreamChunk, void, unknown> {
   const state = useStore.getState();
-  const { workflow, stageIndex, artifactContent, chatHistory, stageArtifacts } = state;
+  const {
+    workflow,
+    stageIndex,
+    artifactContent,
+    chatHistory,
+    stageArtifacts,
+    currentRunId,
+  } = state;
 
   const agentId = WORKFLOWS[workflow].agentId;
   const systemInstruction = buildSystemPrompt({
@@ -910,17 +945,20 @@ export const generateResponseStream = async function* (userMessage: string, atta
 
   const currentStageId = getStructuredRuntimeStageId(workflow, stageIndex);
   const expectedNextStageId = WORKFLOWS[workflow].stages[stageIndex + 1]?.id;
-  const prompt = buildRuntimePrompt(
-    userMessage,
-    attachments,
-    chatHistory
-  );
+  const prompt = currentRunId
+    ? buildContentWithAttachments(userMessage, attachments)
+    : buildRuntimePrompt(
+      userMessage,
+      attachments,
+      chatHistory
+    );
 
   for await (const chunk of generateResponseStreamViaAgentRuntime(
     prompt,
     systemInstruction,
     workflow,
     currentStageId,
+    currentRunId,
     artifactContent,
     expectedNextStageId,
     signal

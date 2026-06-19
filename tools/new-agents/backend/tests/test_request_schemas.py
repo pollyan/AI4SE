@@ -26,6 +26,19 @@ def test_parse_agent_run_stream_request_accepts_alias_fields() -> None:
     assert parsed.system_prompt == "你是 Lisa。"
     assert parsed.workflow_id == "TEST_DESIGN"
     assert parsed.stage_id == "CLARIFY"
+    assert parsed.run_id is None
+
+
+def test_parse_agent_run_stream_request_accepts_optional_run_id() -> None:
+    parsed = parse_agent_run_stream_request({
+        "prompt": "用户需求",
+        "systemPrompt": "你是 Lisa。",
+        "workflowId": "TEST_DESIGN",
+        "stageId": "CLARIFY",
+        "runId": " existing-run ",
+    })
+
+    assert parsed.run_id == "existing-run"
 
 
 def test_read_json_request_body_returns_none_for_empty_raw_body() -> None:
@@ -143,6 +156,16 @@ def test_parse_agent_run_stream_request_rejects_unknown_workflow_or_stage(
                 "workflowId": "TEST_DESIGN",
             },
             "stageId 不能为空",
+        ),
+        (
+            {
+                "prompt": "用户需求",
+                "systemPrompt": "你是 Lisa。",
+                "workflowId": "TEST_DESIGN",
+                "stageId": "CLARIFY",
+                "runId": "   ",
+            },
+            "runId 不能为空",
         ),
     ],
 )

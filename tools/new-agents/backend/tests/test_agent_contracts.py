@@ -5,6 +5,8 @@ from agent_contracts import (
     ArtifactUpdate,
     ContractValidationError,
     REQUIRED_ARTIFACT_HEADINGS,
+    REQUIRED_ARTIFACT_MERMAID_DIAGRAMS,
+    REQUIRED_ARTIFACT_STRUCTURED_VISUALS,
     StageAction,
     WORKFLOW_STAGES,
     build_artifact_contract_prompt,
@@ -27,6 +29,48 @@ def _complete_marked_heading_markdown(required_headings: list[str]) -> str:
         for heading in required_headings
     ]
     return _complete_markdown(marked_headings)
+
+
+def _minimal_mermaid_block(diagram_type: str) -> str:
+    return f"```mermaid\n{diagram_type}\n```\n"
+
+
+def _minimal_structured_visual_block(visual_type: str) -> str:
+    return (
+        "```ai4se-visual\n"
+        "{\n"
+        f'  "type": "{visual_type}",\n'
+        '  "title": "需求-风险-测试点-用例追溯矩阵",\n'
+        '  "columns": ["需求", "风险", "测试点", "用例", "覆盖状态"],\n'
+        '  "rows": [\n'
+        '    {"需求": "REQ-1", "风险": "RISK-1", "测试点": "TP-1", "用例": "TC-1", "覆盖状态": "已覆盖"}\n'
+        "  ]\n"
+        "}\n"
+        "```\n"
+    )
+
+
+def _complete_markdown_for_stage(workflow_id: str, stage_id: str) -> str:
+    markdown = _complete_markdown(
+        REQUIRED_ARTIFACT_HEADINGS[(workflow_id, stage_id)]
+    )
+    visual_blocks = [
+        _minimal_mermaid_block(diagram_type)
+        for diagram_type in REQUIRED_ARTIFACT_MERMAID_DIAGRAMS.get(
+            (workflow_id, stage_id),
+            [],
+        )
+    ]
+    visual_blocks.extend(
+        _minimal_structured_visual_block(visual_type)
+        for visual_type in REQUIRED_ARTIFACT_STRUCTURED_VISUALS.get(
+            (workflow_id, stage_id),
+            [],
+        )
+    )
+    if visual_blocks:
+        return markdown + "\n\n" + "\n\n".join(visual_blocks)
+    return markdown
 
 
 def test_agent_turn_output_accepts_structured_artifact_update():
@@ -103,7 +147,12 @@ def test_artifact_contract_prompt_requires_left_right_chat_bridge():
     )
 
     assert "左侧对话" in prompt
-    assert "本轮总结" in prompt
+    assert "自然顾问式对话" in prompt
+    assert "短段落" in prompt
+    assert "适度使用 bullet" in prompt
+    assert "少量重点加粗" in prompt
+    assert "固定栏目" in prompt
+    assert "本轮总结" not in prompt
     assert "右侧产出物" in prompt
 
 
@@ -421,6 +470,44 @@ def test_required_artifact_headings_cover_every_known_workflow_stage():
     assert required_stage_keys == workflow_stage_keys
 
 
+def test_required_mermaid_contract_covers_every_known_workflow():
+    workflows_with_required_visuals = {
+        workflow_id
+        for workflow_id, _stage_id in REQUIRED_ARTIFACT_MERMAID_DIAGRAMS
+    }
+
+    assert workflows_with_required_visuals == set(WORKFLOW_STAGES)
+
+
+def test_first_stage_visual_contract_covers_every_known_workflow():
+    visual_stage_keys = (
+        set(REQUIRED_ARTIFACT_MERMAID_DIAGRAMS)
+        | set(REQUIRED_ARTIFACT_STRUCTURED_VISUALS)
+    )
+    first_stage_keys = {
+        (workflow_id, stage_ids[0])
+        for workflow_id, stage_ids in WORKFLOW_STAGES.items()
+    }
+
+    assert first_stage_keys <= visual_stage_keys
+
+
+def test_later_stage_structured_visual_contracts_cover_professional_views():
+    expected_visual_contracts = {
+        ("TEST_DESIGN", "STRATEGY"): ["risk-board"],
+        ("INCIDENT_REVIEW", "IMPROVEMENT"): ["action-board"],
+        ("VALUE_DISCOVERY", "JOURNEY"): ["journey-map"],
+        ("TEST_DESIGN", "DELIVERY"): ["coverage-map"],
+        ("REQ_REVIEW", "REPORT"): ["priority-board"],
+        ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["cause-map"],
+        ("IDEA_BRAINSTORM", "CONCEPT"): ["mvp-map"],
+        ("VALUE_DISCOVERY", "BLUEPRINT"): ["roadmap"],
+    }
+
+    for stage_key, visual_types in expected_visual_contracts.items():
+        assert REQUIRED_ARTIFACT_STRUCTURED_VISUALS.get(stage_key) == visual_types
+
+
 @pytest.mark.parametrize(
     ("workflow_id", "stage_id"),
     sorted(REQUIRED_ARTIFACT_HEADINGS),
@@ -429,9 +516,7 @@ def test_validate_agent_turn_accepts_complete_required_artifact_template(
     workflow_id,
     stage_id,
 ):
-    markdown = _complete_markdown(
-        REQUIRED_ARTIFACT_HEADINGS[(workflow_id, stage_id)]
-    )
+    markdown = _complete_markdown_for_stage(workflow_id, stage_id)
     if (workflow_id, stage_id) == ("VALUE_DISCOVERY", "BLUEPRINT"):
         markdown = f"# 产品需求蓝图\n合法的动态产品名 H1。\n\n{markdown}"
 
@@ -460,8 +545,12 @@ def test_validate_agent_turn_accepts_required_headings_wrapped_in_mark_tags():
             "chat": "已更新右侧问题域分析，请查看并确认。",
             "artifact_update": {
                 "type": "replace",
-                "markdown": _complete_marked_heading_markdown(
-                    REQUIRED_ARTIFACT_HEADINGS[("IDEA_BRAINSTORM", "DEFINE")]
+                "markdown": (
+                    _complete_marked_heading_markdown(
+                        REQUIRED_ARTIFACT_HEADINGS[("IDEA_BRAINSTORM", "DEFINE")]
+                    )
+                    + "\n\n"
+                    + _minimal_mermaid_block("mindmap")
                 ),
             },
             "stage_action": None,
@@ -496,6 +585,122 @@ def test_build_artifact_contract_prompt_includes_h1_keyword_requirements():
 
     assert "H1 标题" in prompt
     assert "需求蓝图" in prompt
+
+
+def test_build_artifact_contract_prompt_includes_required_mermaid_contract():
+    prompt = build_artifact_contract_prompt(
+        workflow_id="TEST_DESIGN",
+        current_stage_id="STRATEGY",
+    )
+
+    assert "Mermaid" in prompt
+    assert "quadrantChart" in prompt
+    assert "block-beta" in prompt
+
+
+def test_build_artifact_contract_prompt_includes_required_structured_visual_contract():
+    prompt = build_artifact_contract_prompt(
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CASES",
+    )
+
+    assert "ai4se-visual" in prompt
+    assert "traceability-matrix" in prompt
+    assert '"columns"' in prompt
+    assert '"rows"' in prompt
+    assert "fenced:ai4se-visual" in prompt
+    assert "data.requirements" in prompt
+    assert "复杂 HTML" in prompt
+
+
+def test_validate_agent_turn_rejects_missing_required_mermaid_contract():
+    output = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新测试策略蓝图。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": _complete_markdown(
+                    REQUIRED_ARTIFACT_HEADINGS[("TEST_DESIGN", "STRATEGY")]
+                ),
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+
+    with pytest.raises(
+        ContractValidationError,
+        match="missing required artifact visualizations",
+    ):
+        validate_agent_turn(
+            output,
+            workflow_id="TEST_DESIGN",
+            current_stage_id="STRATEGY",
+        )
+
+
+def test_validate_agent_turn_rejects_missing_required_structured_visual_contract():
+    output = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新测试用例集。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": _complete_markdown(
+                    REQUIRED_ARTIFACT_HEADINGS[("TEST_DESIGN", "CASES")]
+                ),
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+
+    with pytest.raises(
+        ContractValidationError,
+        match="missing required artifact visualizations",
+    ):
+        validate_agent_turn(
+            output,
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CASES",
+        )
+
+
+def test_validate_agent_turn_rejects_legacy_traceability_matrix_shape():
+    output = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新测试用例集。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": (
+                    _complete_markdown(
+                        REQUIRED_ARTIFACT_HEADINGS[("TEST_DESIGN", "CASES")]
+                    )
+                    + "\n\n```ai4se-visual\n"
+                    + "{\n"
+                    + '  "type": "traceability-matrix",\n'
+                    + '  "data": {\n'
+                    + '    "requirements": ["用户名校验"],\n'
+                    + '    "testCases": ["TC-001"],\n'
+                    + '    "matrix": [[1]]\n'
+                    + "  }\n"
+                    + "}\n"
+                    + "```\n"
+                ),
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+
+    with pytest.raises(
+        ContractValidationError,
+        match="traceability-matrix 必须使用 columns 和 rows",
+    ):
+        validate_agent_turn(
+            output,
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CASES",
+        )
 
 
 def test_build_artifact_contract_prompt_is_empty_without_required_headings():
@@ -549,6 +754,42 @@ def test_validate_agent_turn_rejects_test_design_artifact_missing_headings(
         )
 
 
+def test_validate_agent_turn_rejects_test_design_cases_missing_executable_fields():
+    output = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新测试用例集。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": (
+                    "# 测试用例集\n\n"
+                    "## 1. 用例统计\n"
+                    "共 2 条用例。\n\n"
+                    "## 2. 用例清单\n\n"
+                    "| ID | 用例标题 | 优先级 | 关联风险 | 前置条件 | 操作步骤 | 预期结果 |\n"
+                    "|---|---|---|---|---|---|---|\n"
+                    "| TC-001 | 登录成功 | P0 | R-001 | 用户存在 | 输入账号密码并提交 | 登录成功 |\n\n"
+                    "## 3. 测试点覆盖追溯\n\n"
+                    "| 测试点 | 优先级 | 关联风险 | 覆盖用例 | 覆盖状态 |\n"
+                    "|---|---|---|---|---|\n"
+                    "| 登录链路 | P0 | R-001 | TC-001 | 已覆盖 |\n"
+                ),
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+
+    with pytest.raises(
+        ContractValidationError,
+        match="missing required artifact headings",
+    ):
+        validate_agent_turn(
+            output,
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CASES",
+        )
+
+
 @pytest.mark.parametrize(
     ("stage_id", "markdown"),
     [
@@ -586,6 +827,38 @@ def test_validate_agent_turn_rejects_req_review_artifact_missing_headings(
             output,
             workflow_id="REQ_REVIEW",
             current_stage_id=stage_id,
+        )
+
+
+def test_validate_agent_turn_rejects_req_review_review_missing_actionable_issue_fields():
+    output = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新需求评审问题清单。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": (
+                    "# 需求评审问题清单\n\n"
+                    "## 评审概要\n内容\n\n"
+                    "## 问题统计\n内容\n\n"
+                    "## 1. 可测试性问题\n\n"
+                    "| ID | 问题描述 | 优先级 | 所属需求章节 | 建议 |\n"
+                    "|----|---------|--------|------------|------|\n"
+                    "| Q-001 | 验收标准不明确 | P0 | 登录需求 | 补充断言 |\n"
+                ),
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+
+    with pytest.raises(
+        ContractValidationError,
+        match="missing required artifact headings",
+    ):
+        validate_agent_turn(
+            output,
+            workflow_id="REQ_REVIEW",
+            current_stage_id="REVIEW",
         )
 
 
@@ -630,6 +903,45 @@ def test_validate_agent_turn_rejects_incident_review_artifact_missing_headings(
             output,
             workflow_id="INCIDENT_REVIEW",
             current_stage_id=stage_id,
+        )
+
+
+def test_validate_agent_turn_rejects_incident_review_improvement_missing_action_fields():
+    output = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新故障复盘报告。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": (
+                    "# 故障复盘报告\n\n"
+                    "## 报告信息\n内容\n\n"
+                    "## 第一部分：事件还原\n内容\n\n"
+                    "## 第二部分：根因分析\n内容\n\n"
+                    "## 第三部分：改进措施\n\n"
+                    "### 7. 改进措施\n\n"
+                    "#### 7.1 改进优先级分布\n内容\n\n"
+                    "#### 7.2 改进行动清单\n\n"
+                    "| ID | 改进措施 | 类型 | 对应根因 | 建议负责人 | 完成期限 | 验收标准 | 优先级 |\n"
+                    "|----|---------|------|---------|-----------|---------|---------|------|\n"
+                    "| A-001 | 增加发布前检查 | 流程 | Why-3 | 测试负责人 | 2026-07-01 | 检查项上线 | 紧急 |\n\n"
+                    "### 8. 防复发检查清单\n内容\n\n"
+                    "### 9. 经验教训\n内容\n\n"
+                    "## 签署确认\n内容\n"
+                ),
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+
+    with pytest.raises(
+        ContractValidationError,
+        match="missing required artifact headings",
+    ):
+        validate_agent_turn(
+            output,
+            workflow_id="INCIDENT_REVIEW",
+            current_stage_id="IMPROVEMENT",
         )
 
 
@@ -681,6 +993,38 @@ def test_validate_agent_turn_rejects_idea_brainstorm_artifact_missing_headings(
         )
 
 
+def test_validate_agent_turn_rejects_idea_brainstorm_converge_missing_decision_fields():
+    output = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新收敛聚焦产出物。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": (
+                    "# 收敛聚焦\n\n"
+                    "## 决策矩阵\n内容\n\n"
+                    "## ICE 评估表\n\n"
+                    "| 编号 | 创意名称 | 影响力 (1-5) | 信心 (1-5) | 实现难度 (1-5) | ICE得分 | 排名 | 结论 |\n"
+                    "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                    "| C-01 | 智能推荐 | 4 | 3 | 4 | 48 | 1 | 入选 |\n\n"
+                    "## 整合演进路径（如果触发合并）\n内容\n"
+                ),
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+
+    with pytest.raises(
+        ContractValidationError,
+        match="missing required artifact headings",
+    ):
+        validate_agent_turn(
+            output,
+            workflow_id="IDEA_BRAINSTORM",
+            current_stage_id="CONVERGE",
+        )
+
+
 @pytest.mark.parametrize(
     ("stage_id", "markdown"),
     [
@@ -726,6 +1070,55 @@ def test_validate_agent_turn_rejects_value_discovery_artifact_missing_headings(
             output,
             workflow_id="VALUE_DISCOVERY",
             current_stage_id=stage_id,
+        )
+
+
+def test_validate_agent_turn_rejects_value_discovery_journey_missing_stage_fields():
+    output = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新用户旅程分析。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": (
+                    "# 用户旅程分析\n\n"
+                    "## 用户旅程地图\n"
+                    "journey\n\n"
+                    "## 关键阶段详细分析\n\n"
+                    "### 阶段 1：问题认知\n"
+                    "| 维度 | 描述 |\n"
+                    "| --- | --- |\n"
+                    "| 用户目标 | 发现问题 |\n"
+                    "| 用户行为 | 搜索资料 |\n"
+                    "| 触点渠道 | 搜索引擎 |\n"
+                    "| 主要痛点 | 信息分散 |\n"
+                    "| 产品机会 | 聚合推荐 |\n\n"
+                    "## 痛点优先级排序\n\n"
+                    "### 高优先级痛点（必须解决）\n"
+                    "内容\n\n"
+                    "### 中等优先级痛点（应该解决）\n"
+                    "内容\n\n"
+                    "### 低优先级痛点（可以解决）\n"
+                    "内容\n\n"
+                    "## 核心机会点\n\n"
+                    "### 主要机会点\n"
+                    "内容\n\n"
+                    "### 产品切入策略\n"
+                    "内容\n"
+                ),
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+
+    with pytest.raises(
+        ContractValidationError,
+        match="missing required artifact headings",
+    ):
+        validate_agent_turn(
+            output,
+            workflow_id="VALUE_DISCOVERY",
+            current_stage_id="JOURNEY",
         )
 
 

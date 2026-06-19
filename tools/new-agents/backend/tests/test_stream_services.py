@@ -30,6 +30,47 @@ VALID_CLARIFY_ARTIFACT = """# 需求分析文档
 内容"""
 
 
+class FakePersistence:
+    def __init__(self) -> None:
+        self.calls = []
+        self.context_warnings = []
+
+    def ensure_run(self, agent_request, *, model_name: str) -> str:
+        self.calls.append((
+            "ensure_run",
+            agent_request.workflow_id,
+            agent_request.stage_id,
+            agent_request.run_id,
+            model_name,
+        ))
+        return "run-123"
+
+    def append_user_message(self, run_id: str, content: str) -> None:
+        self.calls.append(("append_user_message", run_id, content))
+
+    def append_assistant_message(self, run_id: str, content: str) -> None:
+        self.calls.append(("append_assistant_message", run_id, content))
+
+    def record_artifact_version(
+        self,
+        run_id: str,
+        stage_id: str,
+        content: str,
+    ) -> None:
+        self.calls.append(("record_artifact_version", run_id, stage_id, content))
+
+    def build_runtime_prompt(self, run_id: str, current_prompt: str) -> str:
+        self.calls.append(("build_runtime_prompt", run_id, current_prompt))
+        return f"服务端上下文\n\n[用户]\n{current_prompt}"
+
+    def build_runtime_context(self, run_id: str, current_prompt: str):
+        self.calls.append(("build_runtime_context", run_id, current_prompt))
+        return f"服务端上下文\n\n[用户]\n{current_prompt}", self.context_warnings
+
+    def record_turn_metric(self, **kwargs) -> None:
+        self.calls.append(("record_turn_metric", kwargs))
+
+
 @patch("stream_services.build_pydantic_agent_runtime")
 def test_stream_agent_run_events_yields_started_delta_and_final_events(
     mock_build_runtime: MagicMock,
@@ -98,6 +139,242 @@ def test_stream_agent_run_events_yields_started_delta_and_final_events(
         "用户需求",
         workflow_id="TEST_DESIGN",
         current_stage_id="CLARIFY",
+    )
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_records_turn_through_persistence_adapter(
+    mock_build_runtime: MagicMock,
+) -> None:
+    final = AgentTurnOutput.model_validate({
+        "chat": "已更新右侧需求分析文档，请确认。",
+        "artifact_update": {
+            "type": "replace",
+            "markdown": VALID_CLARIFY_ARTIFACT,
+        },
+        "stage_action": None,
+        "warnings": [],
+    })
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter([final])
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+    request = AgentRunStreamRequest.model_validate({
+        "prompt": "用户需求",
+        "systemPrompt": "你是 Lisa。",
+        "workflowId": "TEST_DESIGN",
+        "stageId": "CLARIFY",
+    })
+
+    events = list(stream_agent_run_events(
+        request,
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+        persistence=persistence,
+    ))
+
+    assert events[0] == RunStartedEvent(run_id="run-123")
+    assert events[-1] == AgentTurnEvent(output=final)
+    assert persistence.calls[:-1] == [
+        ("ensure_run", "TEST_DESIGN", "CLARIFY", None, "test-model"),
+        ("build_runtime_context", "run-123", "用户需求"),
+        ("append_user_message", "run-123", "用户需求"),
+        ("append_assistant_message", "run-123", "已更新右侧需求分析文档，请确认。"),
+        ("record_artifact_version", "run-123", "CLARIFY", VALID_CLARIFY_ARTIFACT),
+    ]
+    metric = persistence.calls[-1][1]
+    assert persistence.calls[-1][0] == "record_turn_metric"
+    assert metric["run_id"] == "run-123"
+    assert metric["workflow_id"] == "TEST_DESIGN"
+    assert metric["stage_id"] == "CLARIFY"
+    assert metric["model_name"] == "test-model"
+    assert metric["provider"] == "api.test.com"
+    assert metric["status"] == "success"
+    assert metric["error_code"] is None
+    assert metric["input_chars"] == len("用户需求")
+    assert metric["output_chars"] == (
+        len("已更新右侧需求分析文档，请确认。") + len(VALID_CLARIFY_ARTIFACT)
+    )
+    assert metric["estimated_tokens"] >= 1
+    assert metric["duration_ms"] >= 0
+    assert metric["contract_retry_count"] == 0
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_records_real_token_usage_when_runtime_exposes_it(
+    mock_build_runtime: MagicMock,
+) -> None:
+    final = AgentTurnOutput.model_validate({
+        "chat": "已更新右侧需求分析文档，请确认。",
+        "artifact_update": {
+            "type": "replace",
+            "markdown": VALID_CLARIFY_ARTIFACT,
+        },
+        "stage_action": None,
+        "warnings": [],
+    })
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter([final])
+    runtime.last_token_usage = 321
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    events = list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+        persistence=persistence,
+    ))
+
+    assert events[-1] == AgentTurnEvent(output=final)
+    metric = persistence.calls[-1][1]
+    assert persistence.calls[-1][0] == "record_turn_metric"
+    assert metric["estimated_tokens"] == 321
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_records_error_turn_metric(
+    mock_build_runtime: MagicMock,
+) -> None:
+    runtime = MagicMock()
+    runtime.stream_turn.side_effect = AgentRuntimeModelError(
+        "provider API failed"
+    )
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    events = list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+        persistence=persistence,
+    ))
+
+    assert events == [
+        RunStartedEvent(run_id="run-123"),
+        ErrorEvent(
+            code="LLM_ERROR",
+            message="provider API failed",
+        ),
+    ]
+    metric = persistence.calls[-1][1]
+    assert persistence.calls[-1][0] == "record_turn_metric"
+    assert metric["run_id"] == "run-123"
+    assert metric["workflow_id"] == "TEST_DESIGN"
+    assert metric["stage_id"] == "CLARIFY"
+    assert metric["model_name"] == "test-model"
+    assert metric["provider"] == "api.test.com"
+    assert metric["status"] == "error"
+    assert metric["error_code"] == "LLM_ERROR"
+    assert metric["input_chars"] == len("用户需求")
+    assert metric["output_chars"] == 0
+    assert metric["estimated_tokens"] >= 1
+    assert metric["duration_ms"] >= 0
+    assert metric["contract_retry_count"] == 0
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_records_schema_retry_count_from_runtime_error(
+    mock_build_runtime: MagicMock,
+) -> None:
+    runtime = MagicMock()
+    runtime.stream_turn.side_effect = AgentRuntimeSchemaError(
+        "Exceeded maximum output retries (3)"
+    )
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    events = list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+        persistence=persistence,
+    ))
+
+    assert events == [
+        RunStartedEvent(run_id="run-123"),
+        ErrorEvent(
+            code="SCHEMA_VALIDATION_FAILED",
+            message=(
+                "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
+                "如果多次失败，请补充更明确的需求或阶段确认信息。"
+            ),
+        ),
+    ]
+    metric = persistence.calls[-1][1]
+    assert persistence.calls[-1][0] == "record_turn_metric"
+    assert metric["status"] == "error"
+    assert metric["error_code"] == "SCHEMA_VALIDATION_FAILED"
+    assert metric["contract_retry_count"] == 3
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_sends_persisted_context_prompt_to_runtime(
+    mock_build_runtime: MagicMock,
+) -> None:
+    final = AgentTurnOutput.model_validate({
+        "chat": "已更新右侧需求分析文档，请确认。",
+        "artifact_update": {
+            "type": "replace",
+            "markdown": VALID_CLARIFY_ARTIFACT,
+        },
+        "stage_action": None,
+        "warnings": [],
+    })
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter([final])
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+        persistence=persistence,
+    ))
+
+    runtime.stream_turn.assert_called_once_with(
+        "服务端上下文\n\n[用户]\n用户需求",
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_emits_context_warnings_on_run_started(
+    mock_build_runtime: MagicMock,
+) -> None:
+    final = AgentTurnOutput.model_validate({
+        "chat": "已更新右侧需求分析文档，请确认。",
+        "artifact_update": {
+            "type": "replace",
+            "markdown": VALID_CLARIFY_ARTIFACT,
+        },
+        "stage_action": None,
+        "warnings": [],
+    })
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter([final])
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+    persistence.context_warnings = ["context_truncated"]
+
+    events = list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+        persistence=persistence,
+    ))
+
+    assert events[0] == RunStartedEvent(
+        run_id="run-123",
+        warnings=["context_truncated"],
     )
 
 

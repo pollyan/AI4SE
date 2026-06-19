@@ -38,6 +38,16 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
         "## 1. 用例统计",
         "## 2. 用例清单",
         "## 3. 测试点覆盖追溯",
+        "ID",
+        "用例标题",
+        "优先级",
+        "测试维度",
+        "关联测试点",
+        "关联风险",
+        "前置条件",
+        "操作步骤",
+        "测试数据",
+        "预期结果",
     ],
     ("TEST_DESIGN", "DELIVERY"): [
         "# 测试设计文档",
@@ -51,6 +61,13 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
         "# 需求评审问题清单",
         "## 评审概要",
         "## 问题统计",
+        "问题描述",
+        "优先级",
+        "所属需求章节",
+        "影响范围",
+        "证据/依据",
+        "建议",
+        "责任方/确认人",
     ],
     ("REQ_REVIEW", "REPORT"): [
         "# 需求评审报告",
@@ -91,6 +108,17 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
         "### 8. 防复发检查清单",
         "### 9. 经验教训",
         "## 签署确认",
+        "ID",
+        "改进措施",
+        "类型",
+        "对应根因",
+        "建议负责人",
+        "完成期限",
+        "验证方式",
+        "验收标准",
+        "优先级",
+        "当前状态",
+        "追踪机制",
     ],
     ("IDEA_BRAINSTORM", "DEFINE"): [
         "# 问题域分析",
@@ -111,6 +139,15 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
         "## 决策矩阵",
         "## ICE 评估表",
         "## 整合演进路径（如果触发合并）",
+        "评分口径",
+        "影响力",
+        "信心",
+        "实现难度",
+        "ICE得分",
+        "淘汰理由",
+        "推荐方案",
+        "下一步验证",
+        "合并逻辑",
     ],
     ("IDEA_BRAINSTORM", "CONCEPT"): [
         "# 产品概念简报",
@@ -150,6 +187,14 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
         "## 核心机会点",
         "主要机会点",
         "### 产品切入策略",
+        "旅程阶段",
+        "触点渠道",
+        "用户任务",
+        "情绪评分",
+        "关键痛点",
+        "现有方案不足",
+        "机会假设",
+        "成功指标",
     ],
     ("VALUE_DISCOVERY", "BLUEPRINT"): [
         "需求蓝图",
@@ -176,6 +221,121 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
 
 REQUIRED_ARTIFACT_H1_KEYWORDS: dict[tuple[str, str], list[str]] = {
     ("VALUE_DISCOVERY", "BLUEPRINT"): ["需求蓝图"],
+}
+
+REQUIRED_ARTIFACT_MERMAID_DIAGRAMS: dict[tuple[str, str], list[str]] = {
+    ("TEST_DESIGN", "CLARIFY"): ["flowchart"],
+    ("TEST_DESIGN", "STRATEGY"): ["quadrantChart", "block-beta"],
+    ("REQ_REVIEW", "REPORT"): ["pie"],
+    ("INCIDENT_REVIEW", "TIMELINE"): ["timeline"],
+    ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["mindmap"],
+    ("INCIDENT_REVIEW", "IMPROVEMENT"): ["pie"],
+    ("IDEA_BRAINSTORM", "DEFINE"): ["mindmap"],
+    ("IDEA_BRAINSTORM", "CONVERGE"): ["quadrantChart"],
+    ("VALUE_DISCOVERY", "JOURNEY"): ["journey"],
+}
+
+REQUIRED_ARTIFACT_STRUCTURED_VISUALS: dict[tuple[str, str], list[str]] = {
+    ("REQ_REVIEW", "REVIEW"): ["score-matrix"],
+    ("TEST_DESIGN", "STRATEGY"): ["risk-board"],
+    ("TEST_DESIGN", "CASES"): ["traceability-matrix"],
+    ("TEST_DESIGN", "DELIVERY"): ["coverage-map"],
+    ("INCIDENT_REVIEW", "IMPROVEMENT"): ["action-board"],
+    ("VALUE_DISCOVERY", "ELEVATOR"): ["score-matrix"],
+    ("VALUE_DISCOVERY", "JOURNEY"): ["journey-map"],
+    ("REQ_REVIEW", "REPORT"): ["priority-board"],
+    ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["cause-map"],
+    ("IDEA_BRAINSTORM", "CONCEPT"): ["mvp-map"],
+    ("VALUE_DISCOVERY", "BLUEPRINT"): ["roadmap"],
+}
+
+STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {
+    "traceability-matrix": (
+        'traceability-matrix 必须严格使用如下 JSON 结构：{"type": '
+        '"traceability-matrix", "title": "可选标题", "columns": ["测试点", '
+        '"TC-001"], "rows": [{"测试点": "登录链路", "TC-001": "覆盖"}]}。'
+        "columns 必须是非空字符串数组；rows 必须是对象数组，每个对象的 key "
+        "必须对应 columns 中的列名。禁止使用 fenced:ai4se-visual 文本，"
+        "禁止使用 data.requirements / data.testCases / data.matrix 旧结构。"
+    ),
+    "score-matrix": (
+        'score-matrix 必须严格使用如下 JSON 结构：{"type": '
+        '"score-matrix", "title": "可选标题", "columns": ["维度", '
+        '"评分", "依据", "风险"], "rows": [{"维度": "可测试性", '
+        '"评分": 3, "依据": "验收标准不完整", "风险": "用例断言不稳定"}]}。'
+        "columns 必须是非空字符串数组；rows 必须是对象数组，每个对象的 key "
+        "必须对应 columns 中的列名。禁止使用 data/matrix 嵌套旧结构。"
+    ),
+    "risk-board": (
+        'risk-board 必须严格使用如下 JSON 结构：{"type": '
+        '"risk-board", "title": "可选标题", "columns": ["风险", '
+        '"S", "O", "D", "RPN", "缓解策略", "覆盖建议"], '
+        '"rows": [{"风险": "支付失败", "S": 5, "O": 3, "D": 4, '
+        '"RPN": 60, "缓解策略": "补充异常重试", "覆盖建议": "P0 用例"}]}。'
+        "columns 必须是非空字符串数组；rows 必须是对象数组，每个对象的 key "
+        "必须对应 columns 中的列名。"
+    ),
+    "action-board": (
+        'action-board 必须严格使用如下 JSON 结构：{"type": '
+        '"action-board", "title": "可选标题", "columns": ["行动", '
+        '"对应根因", "负责人", "期限", "状态", "验证方式"], '
+        '"rows": [{"行动": "增加发布门禁", "对应根因": "Why-3", '
+        '"负责人": "测试负责人", "期限": "一周内", "状态": "待开始", '
+        '"验证方式": "CI 检查通过"}]}。columns 必须是非空字符串数组；'
+        "rows 必须是对象数组，每个对象的 key 必须对应 columns 中的列名。"
+    ),
+    "journey-map": (
+        'journey-map 必须严格使用如下 JSON 结构：{"type": '
+        '"journey-map", "title": "可选标题", "columns": ["阶段", '
+        '"用户任务", "触点", "情绪评分", "关键痛点", "机会假设"], '
+        '"rows": [{"阶段": "方案评估", "用户任务": "比较替代方案", '
+        '"触点": "社区/官网", "情绪评分": 2, "关键痛点": "信息分散", '
+        '"机会假设": "统一评估清单"}]}。columns 必须是非空字符串数组；'
+        "rows 必须是对象数组，每个对象的 key 必须对应 columns 中的列名。"
+    ),
+    "coverage-map": (
+        'coverage-map 必须严格使用如下 JSON 结构：{"type": '
+        '"coverage-map", "title": "可选标题", "columns": ["需求", '
+        '"风险", "测试点", "用例", "验收状态"], "rows": [{"需求": '
+        '"REQ-1", "风险": "RISK-1", "测试点": "TP-1", "用例": '
+        '"TC-001", "验收状态": "已覆盖"}]}。columns 必须是非空字符串数组；'
+        "rows 必须是对象数组，每个对象的 key 必须对应 columns 中的列名。"
+    ),
+    "priority-board": (
+        'priority-board 必须严格使用如下 JSON 结构：{"type": '
+        '"priority-board", "title": "可选标题", "columns": ["问题", '
+        '"优先级", "影响范围", "责任方", "下一步"], "rows": [{"问题": '
+        '"验收标准缺失", "优先级": "P0", "影响范围": "核心链路", '
+        '"责任方": "产品负责人", "下一步": "补充验收标准"}]}。'
+        "columns 必须是非空字符串数组；rows 必须是对象数组，每个对象的 key "
+        "必须对应 columns 中的列名。"
+    ),
+    "cause-map": (
+        'cause-map 必须严格使用如下 JSON 结构：{"type": '
+        '"cause-map", "title": "可选标题", "columns": ["层级", '
+        '"问题", "回答", "原因类型", "证据"], "rows": [{"层级": '
+        '"Why-2", "问题": "为什么未被拦截", "回答": "缺少发布门禁", '
+        '"原因类型": "流程", "证据": "发布记录"}]}。columns 必须是非空字符串数组；'
+        "rows 必须是对象数组，每个对象的 key 必须对应 columns 中的列名。"
+    ),
+    "mvp-map": (
+        'mvp-map 必须严格使用如下 JSON 结构：{"type": '
+        '"mvp-map", "title": "可选标题", "columns": ["模块", '
+        '"MVP层级", "用户价值", "验证指标", "取舍理由"], "rows": [{"模块": '
+        '"核心闭环", "MVP层级": "P0", "用户价值": "完成关键任务", '
+        '"验证指标": "激活率", "取舍理由": "支撑定位声明"}]}。'
+        "columns 必须是非空字符串数组；rows 必须是对象数组，每个对象的 key "
+        "必须对应 columns 中的列名。"
+    ),
+    "roadmap": (
+        'roadmap 必须严格使用如下 JSON 结构：{"type": '
+        '"roadmap", "title": "可选标题", "columns": ["版本", '
+        '"时间", "核心功能", "目标", "成功指标"], "rows": [{"版本": '
+        '"v1.0 MVP", "时间": "4 周", "核心功能": "核心闭环", '
+        '"目标": "验证主价值", "成功指标": "任务完成率"}]}。'
+        "columns 必须是非空字符串数组；rows 必须是对象数组，每个对象的 key "
+        "必须对应 columns 中的列名。"
+    ),
 }
 
 LEGACY_PROTOCOL_TAG_PATTERN = re.compile(
@@ -292,7 +452,20 @@ def validate_artifact_template(
     stage_key = (workflow_id, current_stage_id)
     required_headings = REQUIRED_ARTIFACT_HEADINGS.get(stage_key)
     required_h1_keywords = REQUIRED_ARTIFACT_H1_KEYWORDS.get(stage_key, [])
-    if not required_headings and not required_h1_keywords:
+    required_mermaid_diagrams = REQUIRED_ARTIFACT_MERMAID_DIAGRAMS.get(
+        stage_key,
+        [],
+    )
+    required_structured_visuals = REQUIRED_ARTIFACT_STRUCTURED_VISUALS.get(
+        stage_key,
+        [],
+    )
+    if (
+        not required_headings
+        and not required_h1_keywords
+        and not required_mermaid_diagrams
+        and not required_structured_visuals
+    ):
         return
 
     if output.artifact_update.type != "replace":
@@ -327,6 +500,52 @@ def validate_artifact_template(
         raise ContractValidationError(
             "missing required artifact headings: "
             + ", ".join(all_missing_headings)
+        )
+
+    mermaid_blocks = extract_mermaid_code_blocks(markdown)
+    missing_mermaid_diagrams = [
+        f"Mermaid {diagram_type}"
+        for diagram_type in required_mermaid_diagrams
+        if not has_required_mermaid_diagram(
+            mermaid_blocks,
+            diagram_type=diagram_type,
+        )
+    ]
+    if missing_mermaid_diagrams:
+        raise ContractValidationError(
+            "missing required artifact visualizations: "
+            + ", ".join(missing_mermaid_diagrams)
+        )
+
+    structured_visual_blocks = extract_structured_visual_blocks(markdown)
+    if required_structured_visuals and "fenced:ai4se-visual" in markdown:
+        raise ContractValidationError(
+            "ai4se-visual 必须使用 Markdown 三反引号代码块："
+            "```ai4se-visual ... ```，不要使用 fenced:ai4se-visual"
+        )
+    missing_structured_visuals = [
+        f"ai4se-visual {visual_type}"
+        for visual_type in required_structured_visuals
+        if not has_required_structured_visual(
+            structured_visual_blocks,
+            visual_type=visual_type,
+        )
+    ]
+    if missing_structured_visuals:
+        invalid_required_blocks = [
+            block
+            for block in structured_visual_blocks
+            if block.get("type") in required_structured_visuals
+        ]
+        if invalid_required_blocks:
+            invalid_type = str(invalid_required_blocks[0].get("type"))
+            raise ContractValidationError(
+                f"{invalid_type} 必须使用 columns 和 rows 结构；"
+                "columns 必须是非空字符串数组，rows 必须是对象数组。"
+            )
+        raise ContractValidationError(
+            "missing required artifact visualizations: "
+            + ", ".join(missing_structured_visuals)
         )
 
 
@@ -385,6 +604,115 @@ def has_heading_level_containing(
     )
 
 
+def extract_mermaid_code_blocks(markdown: str) -> list[str]:
+    blocks: list[str] = []
+    in_fence = False
+    fence_marker = ""
+    is_mermaid = False
+    current_lines: list[str] = []
+
+    for line in markdown.splitlines():
+        stripped = line.lstrip()
+        if not in_fence and (stripped.startswith("```") or stripped.startswith("~~~")):
+            fence_marker = stripped[:3]
+            language = stripped[3:].strip().split(maxsplit=1)[0].lower()
+            in_fence = True
+            is_mermaid = language == "mermaid"
+            current_lines = []
+            continue
+
+        if in_fence:
+            if stripped.startswith(fence_marker):
+                if is_mermaid:
+                    blocks.append("\n".join(current_lines))
+                in_fence = False
+                fence_marker = ""
+                is_mermaid = False
+                current_lines = []
+                continue
+            if is_mermaid:
+                current_lines.append(line)
+
+    return blocks
+
+
+def has_required_mermaid_diagram(
+    mermaid_blocks: list[str],
+    *,
+    diagram_type: str,
+) -> bool:
+    diagram_pattern = re.compile(
+        rf"(?im)^\s*{re.escape(diagram_type)}\b"
+    )
+    return any(diagram_pattern.search(block) for block in mermaid_blocks)
+
+
+def extract_structured_visual_blocks(markdown: str) -> list[dict[str, Any]]:
+    blocks: list[dict[str, Any]] = []
+    in_fence = False
+    fence_marker = ""
+    is_structured_visual = False
+    current_lines: list[str] = []
+
+    for line in markdown.splitlines():
+        stripped = line.lstrip()
+        if not in_fence and (stripped.startswith("```") or stripped.startswith("~~~")):
+            fence_marker = stripped[:3]
+            language = stripped[3:].strip().split(maxsplit=1)[0].lower()
+            in_fence = True
+            is_structured_visual = language == "ai4se-visual"
+            current_lines = []
+            continue
+
+        if in_fence:
+            if stripped.startswith(fence_marker):
+                if is_structured_visual:
+                    try:
+                        parsed = json.loads("\n".join(current_lines))
+                    except json.JSONDecodeError:
+                        parsed = None
+                    if isinstance(parsed, dict):
+                        blocks.append(parsed)
+                in_fence = False
+                fence_marker = ""
+                is_structured_visual = False
+                current_lines = []
+                continue
+            if is_structured_visual:
+                current_lines.append(line)
+
+    return blocks
+
+
+def has_required_structured_visual(
+    structured_visual_blocks: list[dict[str, Any]],
+    *,
+    visual_type: str,
+) -> bool:
+    return any(
+        is_valid_structured_visual_block(block, visual_type=visual_type)
+        for block in structured_visual_blocks
+    )
+
+
+def is_valid_structured_visual_block(
+    block: dict[str, Any],
+    *,
+    visual_type: str,
+) -> bool:
+    if block.get("type") != visual_type:
+        return False
+    columns = block.get("columns")
+    rows = block.get("rows")
+    return (
+        isinstance(columns, list)
+        and bool(columns)
+        and all(isinstance(column, str) and column.strip() for column in columns)
+        and isinstance(rows, list)
+        and all(isinstance(row, dict) for row in rows)
+    )
+
+
 def build_artifact_contract_prompt(
     *,
     workflow_id: str,
@@ -393,7 +721,20 @@ def build_artifact_contract_prompt(
     stage_key = (workflow_id, current_stage_id)
     required_headings = REQUIRED_ARTIFACT_HEADINGS.get(stage_key)
     required_h1_keywords = REQUIRED_ARTIFACT_H1_KEYWORDS.get(stage_key, [])
-    if not required_headings and not required_h1_keywords:
+    required_mermaid_diagrams = REQUIRED_ARTIFACT_MERMAID_DIAGRAMS.get(
+        stage_key,
+        [],
+    )
+    required_structured_visuals = REQUIRED_ARTIFACT_STRUCTURED_VISUALS.get(
+        stage_key,
+        [],
+    )
+    if (
+        not required_headings
+        and not required_h1_keywords
+        and not required_mermaid_diagrams
+        and not required_structured_visuals
+    ):
         return ""
 
     headings = "\n".join(
@@ -405,6 +746,27 @@ def build_artifact_contract_prompt(
         h1_keyword_requirements = (
             f"真实 H1 标题必须包含以下关键词：{keywords}。\n"
         )
+    mermaid_requirements = ""
+    if required_mermaid_diagrams:
+        diagrams = "、".join(required_mermaid_diagrams)
+        mermaid_requirements = (
+            "本阶段必须包含 fenced Mermaid 代码块，且代码块中必须出现以下图类型："
+            f"{diagrams}。不要把 Mermaid 图放在 chat 中。\n"
+        )
+    structured_visual_requirements = ""
+    if required_structured_visuals:
+        visual_types = "、".join(required_structured_visuals)
+        visual_schema_prompts = "".join(
+            STRUCTURED_VISUAL_SCHEMA_PROMPTS.get(visual_type, "")
+            for visual_type in required_structured_visuals
+        )
+        structured_visual_requirements = (
+            "本阶段必须包含 fenced ai4se-visual 代码块，代码块内容必须是合法 JSON 对象，"
+            f'且 type 必须包含以下结构化可视化类型：{visual_types}。'
+            f"{visual_schema_prompts}"
+            "优先输出结构化数据并交给前端共享组件渲染，不要手写复杂 HTML；"
+            "不要把 ai4se-visual 放在 chat 中。\n"
+        )
     stage_action_contract = build_stage_action_contract_prompt(
         workflow_id=workflow_id,
         current_stage_id=current_stage_id,
@@ -414,11 +776,11 @@ def build_artifact_contract_prompt(
         "chat 只允许返回给用户看的自然工作对话，禁止包含 Markdown 标题、"
         "表格、代码块、Mermaid 图、完整文档正文或 <CHART>/<ARTIFACT>/"
         "<CHAT> 旧标签协议。\n"
-        "chat 必须承担左侧对话承接作用：像一次自然的工作对话，"
-        "用适度展开的本轮总结说明我本轮已经做了什么、"
-        "本轮确认或假定的关键点、右侧产出物更新了什么、"
-        "用户下一步应检查或确认什么；如果当前阶段可推进，"
-        "应引导用户查看右侧产出物，并由 stage_action 触发前端确认控件。\n"
+        "chat 必须承担左侧对话承接作用：像自然顾问式对话，"
+        "用短段落说明本次判断、关键假设、右侧产出物更新和用户下一步；"
+        "可以适度使用 bullet、少量重点加粗或引用块帮助扫读，但不要每轮都套用"
+        "固定栏目或固定字段模板。如果当前阶段可推进，应自然引导用户查看右侧产出物，"
+        "并由 stage_action 触发前端确认控件。\n"
         "本阶段必须更新右侧产出物：artifact_update.type 必须为 replace。\n"
         "artifact_update.markdown 必须是完整 Markdown 文档，不能只返回片段，"
         "不能用省略号表示未修改内容。\n"
@@ -431,6 +793,8 @@ def build_artifact_contract_prompt(
         "以下以 # 开头的条目必须作为真实 Markdown 标题行出现，"
         "不能只放在正文描述或代码块中；非 # 开头条目必须出现在正文中：\n"
         f"{headings}\n"
+        f"{mermaid_requirements}"
+        f"{structured_visual_requirements}"
         f"{stage_action_contract}"
         "如果用户需求信息不足，也要先生成需求分析/待澄清问题文档，"
         "把阻断问题写入对应章节，不能只在 chat 中提问。\n"

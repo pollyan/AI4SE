@@ -27,14 +27,14 @@ export const DEFINE_TEMPLATE = `# 问题域分析
 | 付费意愿 | [他们是否有预算解决此问题？预估金额区间] |
 
 ## 问题域全景
-\${FENCE}mermaid
+${FENCE}mermaid
 mindmap
   root(("核心问题"))
     ["子问题1"]
       ["表现"]
     ["子问题2"]
       ["表现"]
-\${FENCE}
+${FENCE}
 
 ## 问题-用户-场景匹配
 | 检验维度 | 当前判断 | 证据/假设 |

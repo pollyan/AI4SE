@@ -3,6 +3,12 @@ import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { ChatPane } from '../ChatPane';
 import { useStore, WORKFLOWS, WorkflowType, type Attachment } from '../../store';
 
+const mockNavigate = vi.hoisted(() => vi.fn());
+
+vi.mock('react-router-dom', () => ({
+    useNavigate: () => mockNavigate,
+}));
+
 // Mock chatService since we only want to test the UI component
 vi.mock('../../services/chatService', () => {
     return {
@@ -21,7 +27,13 @@ vi.mock('../../services/chatService', () => {
     };
 });
 
+vi.mock('../../services/workflowHandoffService', () => ({
+    fetchWorkflowHandoffs: vi.fn(),
+    startWorkflowHandoff: vi.fn(),
+}));
+
 import { useChatService } from '../../services/chatService';
+import { fetchWorkflowHandoffs, startWorkflowHandoff } from '../../services/workflowHandoffService';
 
 // Mock Mermaid and ReactMarkdown to simplify component testing
 vi.mock('react-markdown', () => ({
@@ -50,8 +62,11 @@ describe('ChatPane Component', () => {
             isGenerating: false,
             workflow: 'TEST_DESIGN' as WorkflowType,
             stageIndex: 0,
-            pendingStageTransition: null
+            pendingStageTransition: null,
+            currentRunId: null,
         });
+        vi.mocked(fetchWorkflowHandoffs).mockResolvedValue([]);
+        vi.mocked(startWorkflowHandoff).mockReset();
         vi.clearAllMocks();
     });
 
@@ -133,6 +148,129 @@ describe('ChatPane Component', () => {
         render(<ChatPane />);
 
         expect(screen.queryByTitle('重新生成')).toBeNull();
+    });
+
+    it('shows a structured output failure recovery card with a primary retry action', () => {
+        const mockHandleRetry = vi.fn();
+        vi.mocked(useChatService).mockReturnValue({
+            input: '',
+            setInput: vi.fn(),
+            pendingAttachments: [],
+            setPendingAttachments: vi.fn(),
+            handleSend: vi.fn(),
+            handleConfirmStageTransition: vi.fn(),
+            handleRetry: mockHandleRetry,
+            handleStop: vi.fn(),
+            handleFileChange: vi.fn(),
+            removeAttachment: vi.fn()
+        });
+        useStore.setState({
+            chatHistory: [
+                { id: '1', role: 'user', content: '进入下一阶段', timestamp: Date.now() },
+                {
+                    id: '2',
+                    role: 'assistant',
+                    content: [
+                        '⚠️ **结构化输出生成失败**',
+                        '',
+                        '模型本轮没有生成符合工作流契约的结果，右侧产出物已保持不变。可以直接重试。',
+                    ].join('\n'),
+                    timestamp: Date.now() + 1000,
+                },
+            ],
+        });
+
+        render(<ChatPane />);
+        fireEvent.click(screen.getByRole('button', { name: '重试本阶段生成' }));
+
+        expect(screen.getByText('右侧产出物已保持不变')).toBeDefined();
+        expect(screen.getByText('连续失败时，请补充更明确的需求或阶段确认信息后再试。')).toBeDefined();
+        expect(mockHandleRetry).toHaveBeenCalledOnce();
+    });
+
+    it('hides stage transition confirmation when the latest assistant message is a structured output failure', () => {
+        useStore.setState({
+            pendingStageTransition: { fromStageIndex: 0, toStageIndex: 1 },
+            chatHistory: [
+                { id: '1', role: 'user', content: '进入下一阶段', timestamp: Date.now() },
+                {
+                    id: '2',
+                    role: 'assistant',
+                    content: '⚠️ **结构化输出生成失败**\n\n右侧产出物已保持不变。可以直接重试。',
+                    timestamp: Date.now() + 1000,
+                },
+            ],
+        });
+
+        render(<ChatPane />);
+
+        expect(screen.getByRole('button', { name: '重试本阶段生成' })).toBeDefined();
+        expect(screen.queryByText(/AI 建议进入下一阶段：策略制定/)).toBeNull();
+        expect(screen.queryByText('确认进入 策略制定')).toBeNull();
+    });
+
+    it('shows a provider failure recovery card with a retry action', () => {
+        const mockHandleRetry = vi.fn();
+        vi.mocked(useChatService).mockReturnValue({
+            input: '',
+            setInput: vi.fn(),
+            pendingAttachments: [],
+            setPendingAttachments: vi.fn(),
+            handleSend: vi.fn(),
+            handleConfirmStageTransition: vi.fn(),
+            handleRetry: mockHandleRetry,
+            handleStop: vi.fn(),
+            handleFileChange: vi.fn(),
+            removeAttachment: vi.fn()
+        });
+        useStore.setState({
+            chatHistory: [
+                { id: '1', role: 'user', content: '生成测试策略', timestamp: Date.now() },
+                {
+                    id: '2',
+                    role: 'assistant',
+                    content: [
+                        '⚠️ **模型配置或供应商异常**',
+                        '',
+                        '**可能原因**：密钥或权限异常',
+                        '',
+                        '**建议处理**：请检查 API Key、Base URL、模型名称和供应商权限。',
+                        '',
+                        '右侧产出物已保持不变。',
+                    ].join('\n'),
+                    timestamp: Date.now() + 1000,
+                },
+            ],
+        });
+
+        render(<ChatPane />);
+        fireEvent.click(screen.getByRole('button', { name: '重试本阶段生成' }));
+
+        expect(screen.getByText('模型调用未完成')).toBeDefined();
+        expect(screen.getByText('右侧产出物已保持不变')).toBeDefined();
+        expect(screen.getByText('请先检查模型配置、供应商额度或网络连通性，确认恢复后再重试。')).toBeDefined();
+        expect(mockHandleRetry).toHaveBeenCalledOnce();
+    });
+
+    it('hides stage transition confirmation when the latest assistant message is a provider failure', () => {
+        useStore.setState({
+            pendingStageTransition: { fromStageIndex: 0, toStageIndex: 1 },
+            chatHistory: [
+                { id: '1', role: 'user', content: '进入下一阶段', timestamp: Date.now() },
+                {
+                    id: '2',
+                    role: 'assistant',
+                    content: '⚠️ **模型配置或供应商异常**\n\n右侧产出物已保持不变。',
+                    timestamp: Date.now() + 1000,
+                },
+            ],
+        });
+
+        render(<ChatPane />);
+
+        expect(screen.getByRole('button', { name: '重试本阶段生成' })).toBeDefined();
+        expect(screen.queryByText(/AI 建议进入下一阶段：策略制定/)).toBeNull();
+        expect(screen.queryByText('确认进入 策略制定')).toBeNull();
     });
 
     it('shows the active workflow name in the chat header', () => {
@@ -322,6 +460,86 @@ describe('ChatPane Component', () => {
         expect(screen.getByText(/AI 建议进入下一阶段：策略制定/)).toBeDefined();
         expect(screen.getByText('暂不进入')).toBeDefined();
         expect(screen.getByText('确认进入 策略制定')).toBeDefined();
+    });
+
+    it('loads workflow handoff actions for the current persisted run', async () => {
+        useStore.setState({
+            workflow: 'VALUE_DISCOVERY' as WorkflowType,
+            stageIndex: 3,
+            currentRunId: 'alex-run-123',
+            chatHistory: [
+                { id: '1', role: 'assistant', content: '价值蓝图已完成', timestamp: Date.now() },
+            ],
+        });
+        vi.mocked(fetchWorkflowHandoffs).mockResolvedValue([
+            {
+                id: 'handoff-1',
+                label: '交给 Lisa 做测试设计',
+                sourceWorkflowId: 'VALUE_DISCOVERY',
+                sourceStageId: 'BLUEPRINT',
+                sourceArtifactVersion: 2,
+                targetWorkflowId: 'TEST_DESIGN',
+                targetStageId: 'CLARIFY',
+                targetAgentId: 'lisa',
+                prompt: '请基于 Alex 的价值蓝图设计测试策略。',
+            },
+        ]);
+
+        render(<ChatPane />);
+
+        expect(fetchWorkflowHandoffs).toHaveBeenCalledWith('alex-run-123');
+        expect(await screen.findByText('交给 Lisa 做测试设计')).toBeDefined();
+    });
+
+    it('applies a workflow handoff from the chat pane action', async () => {
+        useStore.setState({
+            workflow: 'VALUE_DISCOVERY' as WorkflowType,
+            stageIndex: 3,
+            currentRunId: 'alex-run-123',
+            chatHistory: [
+                { id: '1', role: 'assistant', content: '价值蓝图已完成', timestamp: Date.now() },
+            ],
+        });
+        vi.mocked(fetchWorkflowHandoffs).mockResolvedValue([
+            {
+                id: 'handoff-1',
+                label: '交给 Lisa 做测试设计',
+                sourceWorkflowId: 'VALUE_DISCOVERY',
+                sourceStageId: 'BLUEPRINT',
+                sourceArtifactVersion: 2,
+                targetWorkflowId: 'TEST_DESIGN',
+                targetStageId: 'CLARIFY',
+                targetAgentId: 'lisa',
+                prompt: '请基于 Alex 的价值蓝图设计测试策略。',
+            },
+        ]);
+        vi.mocked(startWorkflowHandoff).mockResolvedValue({
+            id: 'handoff-1',
+            label: '交给 Lisa 做测试设计',
+            sourceWorkflowId: 'VALUE_DISCOVERY',
+            sourceStageId: 'BLUEPRINT',
+            sourceArtifactVersion: 2,
+            targetWorkflowId: 'TEST_DESIGN',
+            targetStageId: 'CLARIFY',
+            targetAgentId: 'lisa',
+            targetRunId: 'lisa-run-456',
+            prompt: '请基于 Alex 的价值蓝图设计测试策略。',
+        });
+
+        render(<ChatPane />);
+        fireEvent.click(await screen.findByText('交给 Lisa 做测试设计'));
+
+        await waitFor(() => {
+            expect(startWorkflowHandoff).toHaveBeenCalledWith('alex-run-123', 'handoff-1');
+        });
+        expect(useStore.getState().workflow).toBe('TEST_DESIGN');
+        expect(useStore.getState().stageIndex).toBe(0);
+        expect(useStore.getState().currentRunId).toBe('lisa-run-456');
+        expect(useStore.getState().chatHistory[0]).toEqual(expect.objectContaining({
+            role: 'user',
+            content: '请基于 Alex 的价值蓝图设计测试策略。',
+        }));
+        expect(mockNavigate).toHaveBeenCalledWith('/workspace/lisa/test-design?runId=lisa-run-456');
     });
 
     it('clears pending transition when user declines in chat pane', () => {

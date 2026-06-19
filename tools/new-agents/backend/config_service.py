@@ -1,17 +1,25 @@
 import os
 from typing import Any
 
+from llm_client import LlmClientError, stream_chat_completion_content
 from models import LlmConfig, db
+from openai import APIError, AuthenticationError, RateLimitError
+from request_schemas import DefaultLlmConfigUpdateRequest
 
 
 DEFAULT_LLM_CONFIG_KEY = "default"
+DEFAULT_LLM_CONFIG_KEY_ENV = "NEW_AGENTS_DEFAULT_LLM_CONFIG_KEY"
 DEFAULT_LLM_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_LLM_DESCRIPTION = "Environment default LLM config"
 
 
+def get_default_llm_config_key() -> str:
+    return _read_env_value(DEFAULT_LLM_CONFIG_KEY_ENV) or DEFAULT_LLM_CONFIG_KEY
+
+
 def get_active_default_llm_config() -> LlmConfig | None:
     return LlmConfig.query.filter_by(
-        config_key=DEFAULT_LLM_CONFIG_KEY,
+        config_key=get_default_llm_config_key(),
         is_active=True,
     ).first()
 
@@ -34,9 +42,10 @@ def upsert_default_llm_config_from_env() -> LlmConfig | None:
         or DEFAULT_LLM_DESCRIPTION
     )
 
-    config = LlmConfig.query.filter_by(config_key=DEFAULT_LLM_CONFIG_KEY).first()
+    config_key = get_default_llm_config_key()
+    config = LlmConfig.query.filter_by(config_key=config_key).first()
     if config is None:
-        config = LlmConfig(config_key=DEFAULT_LLM_CONFIG_KEY)
+        config = LlmConfig(config_key=config_key)
         db.session.add(config)
 
     config.api_key = api_key
@@ -64,3 +73,67 @@ def build_default_llm_config_payload(
 
 def get_default_llm_config_payload() -> dict[str, Any]:
     return build_default_llm_config_payload(get_active_default_llm_config())
+
+
+def upsert_default_llm_config(
+    update: DefaultLlmConfigUpdateRequest,
+) -> LlmConfig:
+    config_key = get_default_llm_config_key()
+    config = LlmConfig.query.filter_by(config_key=config_key).first()
+    if config is None:
+        if not update.api_key:
+            raise ValueError("apiKey 不能为空")
+        config = LlmConfig(config_key=config_key)
+        db.session.add(config)
+    if update.api_key:
+        config.api_key = update.api_key
+
+    config.base_url = update.base_url
+    config.model = update.model
+    config.description = update.description or DEFAULT_LLM_DESCRIPTION
+    config.is_active = True
+
+    db.session.commit()
+    return config
+
+
+def check_default_llm_config(config: LlmConfig) -> dict[str, Any]:
+    try:
+        response = "".join(stream_chat_completion_content(
+            api_key=config.api_key,
+            base_url=config.base_url,
+            model=config.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are checking whether the configured model is reachable.",
+                },
+                {
+                    "role": "user",
+                    "content": "Reply with ok.",
+                },
+            ],
+            temperature=0,
+        )).strip()
+    except (LlmClientError, AuthenticationError, RateLimitError, APIError) as e:
+        return {
+            "ok": False,
+            "baseUrl": config.base_url,
+            "model": config.model,
+            "message": str(e),
+        }
+
+    if not response:
+        return {
+            "ok": False,
+            "baseUrl": config.base_url,
+            "model": config.model,
+            "message": "模型返回为空",
+        }
+
+    return {
+        "ok": True,
+        "baseUrl": config.base_url,
+        "model": config.model,
+        "message": "模型配置可用",
+    }
