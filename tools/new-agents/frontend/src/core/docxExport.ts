@@ -9,6 +9,17 @@ type ZipEntry = {
     localHeaderOffset: number;
 };
 
+type DocxMediaEntry = {
+    fileName: string;
+    target: string;
+    relationshipId: string;
+    content: string;
+};
+
+type DocxBuildContext = {
+    media: DocxMediaEntry[];
+};
+
 const textEncoder = new TextEncoder();
 
 const xmlEscape = (content: string): string => (
@@ -94,6 +105,16 @@ type MermaidDocxNode = {
     label: string;
 };
 
+type MermaidDocxEdge = {
+    from: string;
+    to: string;
+};
+
+type MermaidFlowchartProjection = {
+    diagramType: string;
+    svg: string;
+};
+
 const parseMermaidNodeToken = (token: string): MermaidDocxNode | null => {
     const trimmedToken = token.trim();
     const labelMatch = trimmedToken.match(/^([A-Za-z0-9_]+)(?:\[[^\]]*\]|\([^)]+\)|\{[^}]+\})$/);
@@ -110,6 +131,87 @@ const parseMermaidNodeToken = (token: string): MermaidDocxNode | null => {
         return { id: trimmedToken, label: trimmedToken };
     }
     return null;
+};
+
+const parseMermaidFlowchartProjection = (source: string): MermaidFlowchartProjection | null => {
+    const mermaidLines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const firstLine = mermaidLines[0] || '';
+    const diagramType = firstLine.split(/\s+/)[0] || 'diagram';
+    if (!/^(flowchart|graph)$/i.test(diagramType)) return null;
+
+    const nodeLabels = new Map<string, string>();
+    const edges: MermaidDocxEdge[] = [];
+    mermaidLines.slice(1).forEach((line) => {
+        const edgeMatch = line.match(/^(.+?)\s*-+>+\s*(.+)$/);
+        if (!edgeMatch) return;
+
+        const fromNode = parseMermaidNodeToken(edgeMatch[1]);
+        const toNode = parseMermaidNodeToken(edgeMatch[2]);
+        if (!fromNode || !toNode) return;
+
+        if (!nodeLabels.has(fromNode.id) || fromNode.label !== fromNode.id) {
+            nodeLabels.set(fromNode.id, fromNode.label);
+        }
+        if (!nodeLabels.has(toNode.id) || toNode.label !== toNode.id) {
+            nodeLabels.set(toNode.id, toNode.label);
+        }
+        edges.push({ from: fromNode.id, to: toNode.id });
+    });
+
+    const nodes = Array.from(nodeLabels.entries()).map(([id, label]) => ({ id, label }));
+    if (nodes.length === 0 || edges.length === 0) return null;
+
+    const nodeWidth = 150;
+    const nodeHeight = 52;
+    const horizontalGap = 70;
+    const verticalGap = 54;
+    const columns = Math.min(3, Math.max(1, nodes.length));
+    const rows = Math.ceil(nodes.length / columns);
+    const width = columns * nodeWidth + (columns - 1) * horizontalGap + 80;
+    const height = rows * nodeHeight + (rows - 1) * verticalGap + 80;
+    const positions = new Map<string, { x: number; y: number }>();
+
+    nodes.forEach((node, index) => {
+        const row = Math.floor(index / columns);
+        const column = index % columns;
+        positions.set(node.id, {
+            x: 40 + column * (nodeWidth + horizontalGap),
+            y: 40 + row * (nodeHeight + verticalGap),
+        });
+    });
+
+    const edgeSvg = edges.map((edge) => {
+        const from = positions.get(edge.from);
+        const to = positions.get(edge.to);
+        if (!from || !to) return '';
+        const x1 = from.x + nodeWidth / 2;
+        const y1 = from.y + nodeHeight;
+        const x2 = to.x + nodeWidth / 2;
+        const y2 = to.y;
+        return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>`;
+    }).join('');
+
+    const nodeSvg = nodes.map((node) => {
+        const position = positions.get(node.id);
+        if (!position) return '';
+        return [
+            `<rect x="${position.x}" y="${position.y}" width="${nodeWidth}" height="${nodeHeight}" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>`,
+            `<text x="${position.x + nodeWidth / 2}" y="${position.y + 31}" text-anchor="middle" font-size="13" font-family="Arial, sans-serif" fill="#0f172a">${xmlEscape(node.label)}</text>`,
+        ].join('');
+    }).join('');
+
+    return {
+        diagramType,
+        svg: [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
+            '<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,4 L0,8 z" fill="#2563eb"/></marker></defs>',
+            '<rect x="0" y="0" width="100%" height="100%" fill="#ffffff"/>',
+            edgeSvg,
+            nodeSvg,
+            '</svg>',
+        ].join(''),
+    };
 };
 
 const projectMermaidFlowLine = (
@@ -131,14 +233,57 @@ const projectMermaidFlowLine = (
     return `${fromLabel} -> ${toLabel}`;
 };
 
-const projectMermaidToWordParagraphs = (source: string): string[] => {
+const mediaDrawing = (media: DocxMediaEntry, description: string): string => (
+    '<w:p><w:r><w:drawing>'
+    + '<wp:inline distT="0" distB="0" distL="0" distR="0">'
+    + '<wp:extent cx="5486400" cy="2743200"/>'
+    + `<wp:docPr id="${media.relationshipId.replace(/^rId/, '') || '1'}" name="${xmlEscape(media.fileName)}" descr="${xmlEscape(description)}"/>`
+    + '<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
+    + '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+    + '<pic:pic><pic:nvPicPr>'
+    + `<pic:cNvPr id="0" name="${xmlEscape(media.fileName)}"/>`
+    + '<pic:cNvPicPr/>'
+    + '</pic:nvPicPr><pic:blipFill>'
+    + `<a:blip r:embed="${media.relationshipId}"/>`
+    + '<a:stretch><a:fillRect/></a:stretch>'
+    + '</pic:blipFill><pic:spPr>'
+    + '<a:xfrm><a:off x="0" y="0"/><a:ext cx="5486400" cy="2743200"/></a:xfrm>'
+    + '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
+    + '</pic:spPr></pic:pic>'
+    + '</a:graphicData></a:graphic>'
+    + '</wp:inline>'
+    + '</w:drawing></w:r></w:p>'
+);
+
+const registerMedia = (context: DocxBuildContext, content: string): DocxMediaEntry => {
+    const index = context.media.length + 1;
+    const media: DocxMediaEntry = {
+        fileName: `word/media/mermaid-${index}.svg`,
+        target: `media/mermaid-${index}.svg`,
+        relationshipId: `rId${index}`,
+        content,
+    };
+    context.media.push(media);
+    return media;
+};
+
+const projectMermaidToWordParagraphs = (source: string, context: DocxBuildContext): string[] => {
     const mermaidLines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
     const firstLine = mermaidLines[0] || 'diagram';
     const diagramType = firstLine.split(/\s+/)[0] || 'diagram';
     const nodeLabels = new Map<string, string>();
-    return [
+    const paragraphs = [
         paragraph(`Mermaid 图表：${diagramType}`),
         ...mermaidLines.slice(1).map(line => paragraph(projectMermaidFlowLine(line, nodeLabels))),
+    ];
+    const flowchartProjection = parseMermaidFlowchartProjection(source);
+    if (!flowchartProjection) return paragraphs;
+
+    const media = registerMedia(context, flowchartProjection.svg);
+    return [
+        paragraphs[0],
+        mediaDrawing(media, `Mermaid 图表：${flowchartProjection.diagramType}`),
+        ...paragraphs.slice(1),
     ];
 };
 
@@ -158,7 +303,7 @@ const projectStructuredVisualToWordParagraphs = (source: string): string[] => {
     ];
 };
 
-const markdownToWordParagraphs = (content: string): string[] => {
+const markdownToWordParagraphs = (content: string, context: DocxBuildContext): string[] => {
     const lines = content.split(/\r?\n/);
     const paragraphs: string[] = [];
     let index = 0;
@@ -184,7 +329,7 @@ const markdownToWordParagraphs = (content: string): string[] => {
             if (index < lines.length) index += 1;
             const codeSource = codeLines.join('\n');
             if (fenceLanguage === 'mermaid') {
-                paragraphs.push(...projectMermaidToWordParagraphs(codeSource));
+                paragraphs.push(...projectMermaidToWordParagraphs(codeSource, context));
                 continue;
             }
             if (fenceLanguage === 'ai4se-visual') {
@@ -242,24 +387,25 @@ const markdownToWordParagraphs = (content: string): string[] => {
     return paragraphs.length > 0 ? paragraphs : [paragraph(' ')];
 };
 
-const buildDocumentXml = (content: string): string => (
+const buildDocumentXml = (content: string, context: DocxBuildContext): string => (
     [
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">',
         '<w:body>',
-        ...markdownToWordParagraphs(content),
+        ...markdownToWordParagraphs(content, context),
         '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>',
         '</w:body>',
         '</w:document>',
     ].join('')
 );
 
-const buildContentTypesXml = (): string => (
+const buildContentTypesXml = (context: DocxBuildContext): string => (
     [
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
         '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
         '<Default Extension="xml" ContentType="application/xml"/>',
+        ...(context.media.length > 0 ? ['<Default Extension="svg" ContentType="image/svg+xml"/>'] : []),
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>',
         '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>',
         '</Types>',
@@ -271,6 +417,17 @@ const buildRootRelationshipsXml = (): string => (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
         '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>',
+        '</Relationships>',
+    ].join('')
+);
+
+const buildDocumentRelationshipsXml = (context: DocxBuildContext): string => (
+    [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+        ...context.media.map(media => (
+            `<Relationship Id="${media.relationshipId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="${media.target}"/>`
+        )),
         '</Relationships>',
     ].join('')
 );
@@ -453,11 +610,15 @@ const buildStoredZip = (files: Array<{ fileName: string; content: string }>): Ui
 };
 
 export const buildDocxPackage = (content: string): Blob => {
+    const context: DocxBuildContext = { media: [] };
+    const documentXml = buildDocumentXml(content, context);
     const packageBytes = buildStoredZip([
-        { fileName: '[Content_Types].xml', content: buildContentTypesXml() },
+        { fileName: '[Content_Types].xml', content: buildContentTypesXml(context) },
         { fileName: '_rels/.rels', content: buildRootRelationshipsXml() },
-        { fileName: 'word/document.xml', content: buildDocumentXml(content) },
+        ...(context.media.length > 0 ? [{ fileName: 'word/_rels/document.xml.rels', content: buildDocumentRelationshipsXml(context) }] : []),
+        { fileName: 'word/document.xml', content: documentXml },
         { fileName: 'word/styles.xml', content: buildStylesXml() },
+        ...context.media.map(media => ({ fileName: media.fileName, content: media.content })),
     ]);
 
     return new Blob([packageBytes], { type: DOCX_MIME_TYPE });

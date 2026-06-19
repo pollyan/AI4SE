@@ -534,3 +534,9 @@
   - 实现继续复用共享 Artifact PDF 导出路径，不新增 Value Discovery、Lisa/Alex 或 workflow 专属分支；复杂 journey 语法仍按文本摘要降级，不阻断下载。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "draws Mermaid journeys"` 观察到 journey 仍输出 `title` / `section` / 原始任务行且缺少图形命令失败；实现后同命令通过；`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`。
   - 剩余：复杂 Mermaid/SVG 高保真图片级嵌入、移动语义自动合并、重复标题精确锚点仍可作为后续增强切片。
+- 2026-06-20：完成第三十八块 CGA「Artifact DOCX Mermaid SVG 图片级嵌入」。
+  - Word/DOCX 导出现在会对支持的 Mermaid `flowchart` / `graph` 生成本地 SVG media part，并写入 `word/_rels/document.xml.rels` 与 `w:drawing` 引用，用户在 Word 中能看到真实图形而不只是文本摘要。
+  - DOCX 仍保留 `Mermaid 图表：flowchart` 和节点/边语义文本，保证导出物可搜索、可复制；不支持或无法解析的 Mermaid 继续按现有文本语义投影降级，不阻断下载。
+  - SVG 由前端本地保守投影生成，节点文本经过 XML 转义，不把模型输出的任意 SVG/HTML 原样写入 DOCX；实现继续复用共享 Artifact DOCX 导出路径，不新增 Lisa/Alex 或 workflow 专属分支。
+  - 验证：先运行 `npm run test -- --run src/core/__tests__/docxExport.test.ts -t "embeds supported Mermaid flowcharts"` 观察到缺少 `word/_rels/document.xml.rels` 和 `word/media/mermaid-1.svg` 失败；实现后同命令通过；`npm run test -- --run src/core/__tests__/docxExport.test.ts`；`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`。
+  - 剩余：PDF 图片级嵌入、DOCX 更多 Mermaid 类型嵌入、重复标题精确锚点、移动语义自动合并仍可作为后续增强切片。

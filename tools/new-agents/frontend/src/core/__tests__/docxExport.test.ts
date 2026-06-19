@@ -139,4 +139,49 @@ describe('docxExport', () => {
         expect(documentXml).not.toContain('&quot;rows&quot;');
         expect(documentXml).not.toContain('Consolas');
     });
+
+    it('embeds supported Mermaid flowcharts as SVG media in DOCX packages', async () => {
+        const blob = buildDocxPackage([
+            '# 系统边界图',
+            '',
+            '```mermaid',
+            'flowchart TD',
+            'A[用户入口] --> B[认证服务]',
+            'B --> C[订单服务 <script>alert("x")</script>]',
+            '```',
+        ].join('\n'));
+
+        const entries = await readStoredZipEntries(blob);
+        const contentTypesXml = entries['[Content_Types].xml'];
+        const documentXml = entries['word/document.xml'];
+        const documentRelationshipsXml = entries['word/_rels/document.xml.rels'];
+        const svg = entries['word/media/mermaid-1.svg'];
+
+        expect(Object.keys(entries)).toEqual(expect.arrayContaining([
+            'word/_rels/document.xml.rels',
+            'word/media/mermaid-1.svg',
+        ]));
+        expect(contentTypesXml).toContain('image/svg+xml');
+        expect(documentRelationshipsXml).toContain('relationships/image');
+        expect(documentRelationshipsXml).toContain('Target="media/mermaid-1.svg"');
+        expect(documentXml).toContain('<w:drawing>');
+        expect(documentXml).toContain('r:embed="rId1"');
+        expect(documentXml).toContain('Mermaid 图表：flowchart');
+        expect(documentXml).toContain('用户入口');
+        expect(documentXml).toContain('认证服务');
+        expect(documentXml).toContain('订单服务');
+        expect(documentXml).not.toContain('```mermaid');
+        expect(documentXml).not.toContain('flowchart TD');
+        expect(documentXml).not.toContain('A[用户入口] --&gt; B[认证服务]');
+
+        expect(svg).toContain('<svg');
+        expect(svg).toContain('<rect');
+        expect(svg).toContain('<line');
+        expect(svg).toContain('用户入口');
+        expect(svg).toContain('认证服务');
+        expect(svg).toContain('订单服务 &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
+        expect(svg).not.toContain('<script>');
+        expect(svg).not.toContain('<foreignObject');
+        expect(svg).not.toContain('onload=');
+    });
 });
