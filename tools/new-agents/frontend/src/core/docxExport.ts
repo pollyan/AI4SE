@@ -1,3 +1,5 @@
+import { parseStructuredVisual } from './structuredVisuals';
+
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 type ZipEntry = {
@@ -27,6 +29,9 @@ const stripInlineMarkdown = (content: string): string => (
 );
 
 const isFenceStart = (line: string): boolean => /^```/.test(line.trim());
+const getFenceLanguage = (line: string): string => (
+    line.trim().replace(/^```/, '').trim().split(/\s+/)[0] || ''
+);
 const isBulletItem = (line: string): boolean => /^\s*[-*]\s+/.test(line);
 const isNumberedItem = (line: string): boolean => /^\s*\d+[.)]\s+/.test(line);
 const isTableRow = (line: string): boolean => line.trim().includes('|');
@@ -84,6 +89,75 @@ const table = (rows: string[][]): string => (
     + '</w:tbl>'
 );
 
+type MermaidDocxNode = {
+    id: string;
+    label: string;
+};
+
+const parseMermaidNodeToken = (token: string): MermaidDocxNode | null => {
+    const trimmedToken = token.trim();
+    const labelMatch = trimmedToken.match(/^([A-Za-z0-9_]+)(?:\[[^\]]*\]|\([^)]+\)|\{[^}]+\})$/);
+    if (labelMatch) {
+        const id = labelMatch[1];
+        const label = trimmedToken
+            .slice(id.length)
+            .replace(/^[\[{(]/, '')
+            .replace(/[\]})]$/, '')
+            .trim();
+        return { id, label: label || id };
+    }
+    if (/^[A-Za-z0-9_]+$/.test(trimmedToken)) {
+        return { id: trimmedToken, label: trimmedToken };
+    }
+    return null;
+};
+
+const projectMermaidFlowLine = (
+    line: string,
+    nodeLabels: Map<string, string>
+): string => {
+    const edgeMatch = line.match(/^(.+?)\s*-+>+\s*(.+)$/);
+    if (!edgeMatch) return stripInlineMarkdown(line);
+
+    const fromNode = parseMermaidNodeToken(edgeMatch[1]);
+    const toNode = parseMermaidNodeToken(edgeMatch[2]);
+    if (!fromNode || !toNode) return stripInlineMarkdown(line);
+
+    if (fromNode.label !== fromNode.id) nodeLabels.set(fromNode.id, fromNode.label);
+    if (toNode.label !== toNode.id) nodeLabels.set(toNode.id, toNode.label);
+
+    const fromLabel = nodeLabels.get(fromNode.id) || fromNode.label;
+    const toLabel = nodeLabels.get(toNode.id) || toNode.label;
+    return `${fromLabel} -> ${toLabel}`;
+};
+
+const projectMermaidToWordParagraphs = (source: string): string[] => {
+    const mermaidLines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const firstLine = mermaidLines[0] || 'diagram';
+    const diagramType = firstLine.split(/\s+/)[0] || 'diagram';
+    const nodeLabels = new Map<string, string>();
+    return [
+        paragraph(`Mermaid 图表：${diagramType}`),
+        ...mermaidLines.slice(1).map(line => paragraph(projectMermaidFlowLine(line, nodeLabels))),
+    ];
+};
+
+const projectStructuredVisualToWordParagraphs = (source: string): string[] => {
+    const result = parseStructuredVisual(source);
+    if (result.valid === false) {
+        return [paragraph(`结构化可视化错误：${result.message}`)];
+    }
+
+    const { visual } = result;
+    return [
+        paragraph(`结构化可视化：${visual.title || visual.type}`),
+        table([
+            visual.columns,
+            ...visual.rows.map(row => row.cells),
+        ]),
+    ];
+};
+
 const markdownToWordParagraphs = (content: string): string[] => {
     const lines = content.split(/\r?\n/);
     const paragraphs: string[] = [];
@@ -100,12 +174,24 @@ const markdownToWordParagraphs = (content: string): string[] => {
         }
 
         if (isFenceStart(trimmedLine)) {
+            const fenceLanguage = getFenceLanguage(trimmedLine);
             index += 1;
+            const codeLines: string[] = [];
             while (index < lines.length && !isFenceStart(lines[index])) {
-                paragraphs.push(codeParagraph(lines[index]));
+                codeLines.push(lines[index]);
                 index += 1;
             }
             if (index < lines.length) index += 1;
+            const codeSource = codeLines.join('\n');
+            if (fenceLanguage === 'mermaid') {
+                paragraphs.push(...projectMermaidToWordParagraphs(codeSource));
+                continue;
+            }
+            if (fenceLanguage === 'ai4se-visual') {
+                paragraphs.push(...projectStructuredVisualToWordParagraphs(codeSource));
+                continue;
+            }
+            codeLines.forEach(codeLine => paragraphs.push(codeParagraph(codeLine)));
             continue;
         }
 

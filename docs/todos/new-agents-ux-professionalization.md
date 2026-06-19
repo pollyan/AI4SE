@@ -491,3 +491,10 @@
   - 为避免重复旧行导致锚点不可判定，若草稿存在删除且旧版中存在重复非空行，则不会显示自动合并入口，继续交给人工对比处理。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "does not auto-merge draft deletions"` 观察到重复旧行仍显示自动合并入口失败；实现保守降级后同命令通过；`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx` 45/45 通过。
   - 剩余：更复杂的改写/移动语义自动合并、复杂 Mermaid/SVG 高保真嵌入仍可作为后续增强切片。
+- 2026-06-20：完成第三十二块 CGA「Artifact DOCX 可视化语义投影」。
+  - Word/DOCX 导出现在会识别 Mermaid fenced block，输出 `Mermaid 图表：<type>` 和简化后的语义边，不再把 Mermaid 当普通代码块暴露。
+  - Word/DOCX 导出现在会识别合法 `ai4se-visual`，复用共享 parser 输出结构化可视化标题和真实 Word 表格。
+  - 非法 `ai4se-visual` 会输出结构化可视化错误摘要，下载仍保持成功。
+  - 普通 fenced code 继续保持代码段输出，不影响 Gherkin、Python 等既有导出行为。
+  - 验证：先运行 `npm run test -- --run src/core/__tests__/docxExport.test.ts` 观察到 DOCX 仍输出 Mermaid 源码和原始 JSON 失败；实现后同命令通过；`npm run test -- --run src/core/__tests__/docxExport.test.ts src/components/__tests__/ArtifactPane.test.tsx`；`npm run lint`；`npm run build`；`git diff --check`。
+  - 剩余：更复杂的改写/移动语义自动合并、复杂 Mermaid/SVG 高保真嵌入仍可作为后续增强切片。
