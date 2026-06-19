@@ -267,6 +267,11 @@
   - `/api/agent/observability` 的 totals 和 byStage 会把该配置失败计入 `turns`、`failedTurns`、`errorCodes`、`providerIssueCount` 和 `providerIssueCodes`，因此运行统计能解释“为什么刚刚没有进入模型生成”。
   - byProvider 和 recentTurns 仍只展示真实 runtime turn metric；纯配置缺失场景下保持为空，避免污染供应商分组和运行历史。
   - 验证：先运行 `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_runs_stream_records_default_llm_missing_observability_issue` 观察到 totals.turns 仍为 0 的预期失败，再实现后通过；`.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_observability_endpoint_returns_runtime_turn_summary tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_observability_endpoint_filters_by_workflow_and_stage tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_observability_endpoint_groups_provider_issue_codes`。
+- 2026-06-20：完成第五块 CGA「运行统计供应商告警动作链」。
+  - Header 运行统计的 `模型/供应商异常集中` 告警新增 `打开模型设置` 和 `检测连接`，用户可从告警卡片直接进入默认模型配置或触发连接检测。
+  - 前端新增 `checkDefaultLlmConfig` service，复用 `/new-agents/api/config/check` 并统一返回成功、后端错误文本或默认失败文案；Header 在告警卡片内展示检测结果。
+  - 剩余：DOCX/PDF 可视化导出增强和 Artifact 合并增强仍作为独立切片推进。
+  - 验证：`npm run test -- --run src/services/__tests__/configService.test.ts src/components/__tests__/Header.test.tsx`；`npm run lint`；`npm run build`；`git diff --check`。
 
 ### 7. Artifact 协作体验深化
 

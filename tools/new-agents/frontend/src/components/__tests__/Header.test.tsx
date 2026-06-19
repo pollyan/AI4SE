@@ -40,6 +40,10 @@ vi.mock('../../services/intentTesterImportService', () => ({
     importIntentTesterDraft: vi.fn(),
 }));
 
+vi.mock('../../services/configService', () => ({
+    checkDefaultLlmConfig: vi.fn(),
+}));
+
 // Mock lucide-react icons to avoid SVG complexity
 vi.mock('lucide-react', () => {
     const icons = ['Settings', 'Share', 'Bot', 'Plus', 'AlertTriangle', 'ArrowLeft', 'ChevronRight', 'History', 'Search', 'ClipboardList', 'Save', 'Activity', 'Upload', 'FileText', 'MoreHorizontal'];
@@ -54,6 +58,7 @@ import { createRunDecisionSummary, fetchRunList, updateRunContextSummary } from 
 import { materializeRunTestAssets, updateTestAssetCase, updateTestAssetIssueStatus } from '../../services/testAssetService';
 import { fetchObservabilitySummary } from '../../services/observabilityService';
 import { importIntentTesterDraft } from '../../services/intentTesterImportService';
+import { checkDefaultLlmConfig } from '../../services/configService';
 import type { ObservabilitySummary, TestAssetCollection } from '../../store';
 
 const TEST_ASSET_COLLECTION: TestAssetCollection = {
@@ -314,6 +319,11 @@ describe('Header Component', () => {
             id: 42,
             name: 'TC-001 用户登录成功',
         });
+        vi.mocked(checkDefaultLlmConfig).mockReset();
+        vi.mocked(checkDefaultLlmConfig).mockResolvedValue({
+            ok: true,
+            message: '模型配置可用',
+        });
     });
 
     function renderHeader() {
@@ -551,6 +561,58 @@ describe('Header Component', () => {
         expect(screen.getByText('阶段成功率偏低')).toBeTruthy();
         expect(screen.getByText('供应商成功率偏低')).toBeTruthy();
         expect(screen.getByText('模型/供应商异常集中')).toBeTruthy();
+    });
+
+    it('opens settings from provider issue observability alert', async () => {
+        useStore.setState({ isSettingsOpen: false });
+
+        renderHeader();
+        clickMoreAction(/运行统计/);
+
+        await screen.findByText('模型/供应商异常集中');
+        expect(screen.getByRole('button', { name: '打开模型设置' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: '检测连接' })).toBeTruthy();
+
+        fireEvent.click(screen.getByRole('button', { name: '打开模型设置' }));
+
+        expect(useStore.getState().isSettingsOpen).toBe(true);
+        expect(screen.getByText('运行统计详情')).toBeTruthy();
+    });
+
+    it('checks model connectivity from observability provider alert', async () => {
+        vi.mocked(checkDefaultLlmConfig).mockResolvedValue({
+            ok: true,
+            message: '模型配置可用',
+        });
+
+        renderHeader();
+        clickMoreAction(/运行统计/);
+
+        await screen.findByText('模型/供应商异常集中');
+        fireEvent.click(screen.getByRole('button', { name: '检测连接' }));
+
+        await waitFor(() => {
+            expect(checkDefaultLlmConfig).toHaveBeenCalledTimes(1);
+        });
+        expect(await screen.findByText('模型配置可用')).toBeTruthy();
+    });
+
+    it('shows model connectivity check failure from observability provider alert', async () => {
+        vi.mocked(checkDefaultLlmConfig).mockResolvedValue({
+            ok: false,
+            message: 'API Key 无效',
+        });
+
+        renderHeader();
+        clickMoreAction(/运行统计/);
+
+        await screen.findByText('模型/供应商异常集中');
+        fireEvent.click(screen.getByRole('button', { name: '检测连接' }));
+
+        await waitFor(() => {
+            expect(checkDefaultLlmConfig).toHaveBeenCalledTimes(1);
+        });
+        expect(await screen.findByText('API Key 无效')).toBeTruthy();
     });
 
     it('filters runtime observability by workflow and stage', async () => {

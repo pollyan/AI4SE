@@ -8,6 +8,7 @@ import { createRunDecisionSummary, fetchRunList, updateRunContextSummary } from 
 import { materializeRunTestAssets, updateTestAssetCase, updateTestAssetIssueStatus } from '../services/testAssetService';
 import { fetchObservabilitySummary } from '../services/observabilityService';
 import { importIntentTesterDraft } from '../services/intentTesterImportService';
+import { checkDefaultLlmConfig } from '../services/configService';
 import { buildObservabilityAlerts } from '../core/observabilityAlerts';
 import type { AgentRunListItem, AgentRunSnapshotContextSummary, ObservabilitySummary, TestAssetCase, TestAssetCollection, TestAssetIssueStatus, WorkflowType } from '../store';
 
@@ -22,6 +23,10 @@ const CONTEXT_SUMMARY_TYPE_LABELS: Record<string, string> = {
   stage_conclusion: '阶段结论',
   decision: '关键决策',
   current_artifact: '产物摘要',
+};
+type ProviderConfigCheckState = {
+  status: 'idle' | 'checking' | 'success' | 'error';
+  message: string | null;
 };
 
 const getContextSummaryKey = (
@@ -86,6 +91,10 @@ export const Header: React.FC = () => {
   const [observabilityWorkflowFilter, setObservabilityWorkflowFilter] = useState<WorkflowType | ''>('');
   const [observabilityStageFilter, setObservabilityStageFilter] = useState('');
   const [isObservabilityAutoRefreshEnabled, setIsObservabilityAutoRefreshEnabled] = useState(false);
+  const [providerConfigCheck, setProviderConfigCheck] = useState<ProviderConfigCheckState>({
+    status: 'idle',
+    message: null,
+  });
   const [showMoreActions, setShowMoreActions] = useState(false);
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId: string }>();
@@ -270,12 +279,26 @@ export const Header: React.FC = () => {
     setObservabilityWorkflowFilter('');
     setObservabilityStageFilter('');
     setIsObservabilityAutoRefreshEnabled(false);
+    setProviderConfigCheck({ status: 'idle', message: null });
     await loadObservabilitySummary();
   };
 
   const handleApplyObservabilityFilters = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await loadObservabilitySummary(getActiveObservabilityFilters());
+  };
+
+  const handleOpenSettingsFromObservabilityAlert = () => {
+    setSettingsOpen(true);
+  };
+
+  const handleCheckProviderConfigFromObservabilityAlert = async () => {
+    setProviderConfigCheck({ status: 'checking', message: null });
+    const result = await checkDefaultLlmConfig();
+    setProviderConfigCheck({
+      status: result.ok ? 'success' : 'error',
+      message: result.message,
+    });
   };
 
   useEffect(() => {
@@ -850,6 +873,37 @@ export const Header: React.FC = () => {
                             <div className="mt-2 text-xs leading-relaxed text-amber-100">
                               {alert.detail}
                             </div>
+                            {alert.id === 'provider-issues' && (
+                              <div className="mt-3 space-y-2">
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={handleOpenSettingsFromObservabilityAlert}
+                                    className="rounded-lg border border-amber-400/30 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-400/10"
+                                  >
+                                    打开模型设置
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleCheckProviderConfigFromObservabilityAlert()}
+                                    disabled={providerConfigCheck.status === 'checking'}
+                                    className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    {providerConfigCheck.status === 'checking' ? '正在检测...' : '检测连接'}
+                                  </button>
+                                </div>
+                                {providerConfigCheck.message && (
+                                  <div className={clsx(
+                                    "rounded-lg border px-3 py-2 text-xs leading-relaxed",
+                                    providerConfigCheck.status === 'success'
+                                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                                      : "border-red-500/30 bg-red-500/10 text-red-100"
+                                  )}>
+                                    {providerConfigCheck.message}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
