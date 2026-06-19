@@ -1,4 +1,5 @@
 import { buildSystemPrompt } from './prompts/buildSystemPrompt';
+import { sanitizeMermaidCode } from './utils/mermaidSanitizer';
 import { useStore, WORKFLOWS, WorkflowType, Attachment, Message } from '../store';
 
 type StreamChunk = {
@@ -458,9 +459,10 @@ const validateMermaidBlocks = async (markdown: string): Promise<void> => {
 
   const { default: mermaid } = await import('mermaid');
   for (const diagram of diagrams) {
+    const sanitizedDiagram = sanitizeMermaidCode(diagram);
     try {
       const parseResult = await mermaid.parse(
-        diagram,
+        sanitizedDiagram,
         { suppressErrors: false }
       );
       if ((parseResult as unknown) === false) {

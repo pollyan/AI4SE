@@ -625,6 +625,61 @@ describe('llm.ts', () => {
             );
         });
 
+        it('TEST_DESIGN/STRATEGY typed artifact 应先清洗可修复 Mermaid 再校验', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 1,
+                artifactContent: '# 测试策略蓝图\n\n初始内容',
+                stageArtifacts: { STRATEGY: '# 测试策略蓝图\n\n初始内容' },
+            });
+            mockMermaidParse.mockImplementationOnce(async (code: string) => {
+                if (code.includes('title 登录功能风险矩阵 x-axis')) {
+                    throw new Error('raw quadrant syntax should be sanitized first');
+                }
+                return {};
+            });
+            const artifact = [
+                '# 测试策略蓝图',
+                '',
+                '```mermaid',
+                'quadrantChart',
+                'title 登录功能风险矩阵 x-axis 低发生概率 --> 高发生概率',
+                'y-axis 低严重度 --> 高严重度',
+                'quadrant-1 高优先级',
+                '登录失败锁定: [0.7, 0.8]',
+                '```',
+            ].join('\n');
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    `data: ${JSON.stringify({
+                        type: 'agent_turn',
+                        output: {
+                            chat: '已更新测试策略蓝图。',
+                            artifact_update: {
+                                type: 'replace',
+                                markdown: artifact,
+                            },
+                            stage_action: null,
+                            warnings: [],
+                        },
+                    })}`,
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(generateResponseStream('继续'));
+
+            expect(results.at(-1)).toMatchObject({
+                newArtifact: artifact,
+                hasArtifactUpdate: true,
+            });
+            expect(mockMermaidParse).toHaveBeenCalledWith(
+                expect.stringContaining('title 登录功能风险矩阵\n    x-axis "低发生概率" --> "高发生概率"'),
+                { suppressErrors: false }
+            );
+        });
+
         it('TEST_DESIGN/CLARIFY typed artifact 不应把 mermaid-js 代码块当作 Mermaid 校验', async () => {
             resetStore({
                 workflow: 'TEST_DESIGN',

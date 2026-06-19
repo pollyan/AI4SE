@@ -74,6 +74,22 @@ describe('Mermaid Syntax Validation for workflow prompt examples', () => {
         expect(isValid).toBe(true);
     });
 
+    it('should successfully parse the strategy mermaid syntax from test design strategy prompt', async () => {
+        const promptText = WORKFLOWS.TEST_DESIGN.stages.find(s => s.id === 'STRATEGY')?.template || '';
+        const matches = Array.from(promptText.matchAll(/```mermaid\n([\s\S]*?)```/g));
+        expect(matches).toHaveLength(2);
+
+        const quadrantCode = matches[0][1]
+            .replace(/\[风险名称1\]/g, '登录失败锁定')
+            .replace(/\[风险名称2\]/g, '验证码绕过')
+            .replace(/\[发生度0-1, 严重度0-1\]/g, '[0.7, 0.8]');
+        const blockCode = matches[1][1]
+            .replace(/占比%/g, '20%');
+
+        expect(await validateMermaid(quadrantCode)).toBe(true);
+        expect(await validateMermaid(blockCode)).toBe(true);
+    });
+
     it('should successfully parse the mindmap mermaid syntax from idea brainstorm define prompt', async () => {
         const promptText = WORKFLOWS.IDEA_BRAINSTORM.stages.find(s => s.id === 'DEFINE')?.template || '';
         const match = promptText.match(/```mermaid\n([\s\S]*?)```/);

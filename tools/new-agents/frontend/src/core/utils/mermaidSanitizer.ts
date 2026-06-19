@@ -37,9 +37,62 @@ export function sanitizeMermaidCode(code: string): string {
 
     // 7. Fix quadrantChart string labels
     if (sanitized.trim().startsWith('quadrantChart')) {
+        sanitized = sanitized
+            .replace(/([^\n])\s+(x-axis\s+)/g, '$1\n    $2')
+            .replace(/([^\n])\s+(y-axis\s+)/g, '$1\n    $2')
+            .replace(/([^\n])\s+(quadrant-[1-4]\s+)/g, '$1\n    $2');
+
+        sanitized = sanitized.split('\n').map((line) => {
+            const axisMatch = line.match(/^(\s*[xy]-axis\s+)(?:"([^"]+)"|(.+?))\s+-->\s+(?:"([^"]+)"|(.+))$/);
+            if (axisMatch) {
+                const left = (axisMatch[2] ?? axisMatch[3]).trim();
+                const right = (axisMatch[4] ?? axisMatch[5]).trim();
+                return `${axisMatch[1]}"${left}" --> "${right}"`;
+            }
+
+            const quadrantMatch = line.match(/^(\s*quadrant-[1-4]\s+)(?!")(.+)$/);
+            if (quadrantMatch) {
+                return `${quadrantMatch[1]}"${quadrantMatch[2].trim()}"`;
+            }
+
+            return line;
+        }).join('\n');
+
         // Enforce quotes around point labels if they are missing
         // 创意A: [0.8, 0.9] -> "创意A": [0.8, 0.9]
         sanitized = sanitized.replace(/^([ \t]*)([^"\n:-]+):\s*(\[.*\])$/gm, '$1"$2": $3');
+    }
+
+    // 8. Fix block-beta group syntax frequently produced by LLMs.
+    if (sanitized.trim().startsWith('block-beta')) {
+        let generatedBlockId = 0;
+        sanitized = sanitized
+            .split('\n')
+            .flatMap((line) => {
+                const columnGroupMatch = line.match(/^(\s*)columns\s+(auto|\d+)\s+block\["([^"]+)"\]\s*\{\s*$/);
+                if (columnGroupMatch) {
+                    generatedBlockId += 1;
+                    const [, indent, columns, label] = columnGroupMatch;
+                    return [
+                        `${indent}columns ${columns}`,
+                        `${indent}block_${generatedBlockId}["${label}"]`,
+                    ];
+                }
+
+                const groupMatch = line.match(/^(\s*)block\["([^"]+)"\]\s*\{\s*$/);
+                if (groupMatch) {
+                    generatedBlockId += 1;
+                    const [, indent, label] = groupMatch;
+                    return `${indent}block_${generatedBlockId}["${label}"]`;
+                }
+
+                if (/^\s*}\s*$/.test(line)) {
+                    return [];
+                }
+
+                return line;
+            })
+            .join('\n');
     }
 
     return sanitized.trim();
