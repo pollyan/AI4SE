@@ -47,6 +47,7 @@ vi.mock('../Mermaid', () => ({
 
 describe('ChatPane Component', () => {
     const originalClipboard = navigator.clipboard;
+    const mockFetch = vi.fn();
 
     beforeAll(() => {
         window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -66,7 +67,10 @@ describe('ChatPane Component', () => {
             pendingStageTransition: null,
             artifactVisualDiagnostics: [],
             currentRunId: null,
+            isSettingsOpen: false,
         });
+        global.fetch = mockFetch;
+        mockFetch.mockReset();
         vi.mocked(fetchWorkflowHandoffs).mockResolvedValue([]);
         vi.mocked(startWorkflowHandoff).mockReset();
         vi.clearAllMocks();
@@ -351,7 +355,143 @@ describe('ChatPane Component', () => {
         expect(screen.getByText('模型调用未完成')).toBeDefined();
         expect(screen.getByText('右侧产出物已保持不变')).toBeDefined();
         expect(screen.getByText('请先检查模型配置、供应商额度或网络连通性，确认恢复后再重试。')).toBeDefined();
+        expect(screen.getByRole('button', { name: '打开模型设置' })).toBeDefined();
+        expect(screen.getByRole('button', { name: '检测连接' })).toBeDefined();
         expect(mockHandleRetry).toHaveBeenCalledOnce();
+    });
+
+    it('opens settings from the provider failure recovery card', () => {
+        useStore.setState({
+            chatHistory: [
+                {
+                    id: '1',
+                    role: 'assistant',
+                    content: '⚠️ **模型配置或供应商异常**\n\n右侧产出物已保持不变。',
+                    timestamp: Date.now(),
+                },
+            ],
+            isSettingsOpen: false,
+        });
+
+        render(<ChatPane />);
+        fireEvent.click(screen.getByRole('button', { name: '打开模型设置' }));
+
+        expect(useStore.getState().isSettingsOpen).toBe(true);
+    });
+
+    it('checks model connectivity from the provider failure recovery card', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({
+                ok: true,
+                message: '模型配置可用',
+            }),
+        });
+        useStore.setState({
+            chatHistory: [
+                {
+                    id: '1',
+                    role: 'assistant',
+                    content: '⚠️ **模型配置或供应商异常**\n\n右侧产出物已保持不变。',
+                    timestamp: Date.now(),
+                },
+            ],
+        });
+
+        render(<ChatPane />);
+        fireEvent.click(screen.getByRole('button', { name: '检测连接' }));
+
+        await waitFor(() => {
+            expect(mockFetch).toHaveBeenCalledWith('/new-agents/api/config/check', {
+                method: 'POST',
+            });
+        });
+        expect(await screen.findByText('模型配置可用')).toBeDefined();
+    });
+
+    it('shows a connection check failure from the provider failure recovery card', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: false,
+            json: () => Promise.resolve({
+                message: '供应商无法访问',
+            }),
+        });
+        useStore.setState({
+            chatHistory: [
+                {
+                    id: '1',
+                    role: 'assistant',
+                    content: '⚠️ **模型配置或供应商异常**\n\n右侧产出物已保持不变。',
+                    timestamp: Date.now(),
+                },
+            ],
+        });
+
+        render(<ChatPane />);
+        fireEvent.click(screen.getByRole('button', { name: '检测连接' }));
+
+        expect(await screen.findByText('供应商无法访问')).toBeDefined();
+    });
+
+    it('shows backend error details from the provider failure connection check', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: false,
+            json: () => Promise.resolve({
+                error: '系统未配置默认 LLM，请维护后端默认 LLM 配置后重试',
+            }),
+        });
+        useStore.setState({
+            chatHistory: [
+                {
+                    id: '1',
+                    role: 'assistant',
+                    content: '⚠️ **模型配置或供应商异常**\n\n右侧产出物已保持不变。',
+                    timestamp: Date.now(),
+                },
+            ],
+        });
+
+        render(<ChatPane />);
+        fireEvent.click(screen.getByRole('button', { name: '检测连接' }));
+
+        expect(await screen.findByText('系统未配置默认 LLM，请维护后端默认 LLM 配置后重试')).toBeDefined();
+    });
+
+    it('keeps provider connection check feedback on the clicked failure message', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({
+                ok: true,
+                message: '模型配置可用',
+            }),
+        });
+        useStore.setState({
+            chatHistory: [
+                {
+                    id: '1',
+                    role: 'assistant',
+                    content: '⚠️ **模型配置或供应商异常**\n\n第一次失败。',
+                    timestamp: Date.now(),
+                },
+                {
+                    id: '2',
+                    role: 'assistant',
+                    content: '⚠️ **模型配置或供应商异常**\n\n第二次失败。',
+                    timestamp: Date.now() + 1000,
+                },
+            ],
+        });
+
+        render(<ChatPane />);
+        const failureCards = screen.getAllByText('模型调用未完成').map((title) => title.closest('.rounded-xl'));
+        const firstFailureCard = failureCards[0] as HTMLElement;
+        const secondFailureCard = failureCards[1] as HTMLElement;
+        fireEvent.click(screen.getAllByRole('button', { name: '检测连接' })[0]);
+
+        await waitFor(() => {
+            expect(firstFailureCard.textContent).toContain('模型配置可用');
+        });
+        expect(secondFailureCard.textContent).not.toContain('模型配置可用');
     });
 
     it('hides stage transition confirmation when the latest assistant message is a provider failure', () => {

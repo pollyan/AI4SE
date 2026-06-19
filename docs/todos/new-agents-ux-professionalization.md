@@ -246,6 +246,11 @@
   - ChatPane 会把供应商失败消息渲染为恢复卡片，提供 `重试本阶段生成`，并在最新消息为供应商失败时隐藏阶段推进确认。
   - 后端 context builder 会过滤该类控制反馈，避免下一轮把供应商错误卡片作为业务上下文送回模型。
   - 验证：`npm run test -- --run src/services/__tests__/chatService.test.ts src/components/__tests__/ChatPane.test.tsx src/components/__tests__/ChatPane.markdown.test.tsx`；`.venv/bin/python -m pytest tools/new-agents/backend/tests/test_context_builder.py tools/new-agents/backend/tests/test_agent_contracts.py tools/new-agents/backend/tests/test_workflow_contract_sync.py`。
+- 2026-06-20：完成第二块 CGA「供应商失败卡片可操作化」。
+  - ChatPane 的供应商失败恢复卡片新增 `打开模型设置` 和 `检测连接`，用户不需要再到顶部菜单里寻找模型配置入口。
+  - `检测连接` 复用现有 `/new-agents/api/config/check`，在卡片内显示检测中、成功或失败结果，支持后端 `message` / `error` 错误体，并按消息隔离检测状态；配置恢复后仍保留 `重试本阶段生成`。
+  - 剩余：将连接检测结果、provider 失败归因和高失败率阶段进一步联动到 `运行统计` 视图。
+  - 验证：`npm run test -- --run src/components/__tests__/ChatPane.test.tsx`。
 
 ### 7. Artifact 协作体验深化
 

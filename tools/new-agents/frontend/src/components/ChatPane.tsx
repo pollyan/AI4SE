@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, WORKFLOWS } from '../store';
-import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw, Copy, Check, ChevronRight, ArrowRight, AlertTriangle } from 'lucide-react';
+import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw, Copy, Check, ChevronRight, ArrowRight, AlertTriangle, Settings } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -44,6 +44,13 @@ const isProviderFailureContent = (content: string | undefined): boolean => (
 
 const STRUCTURED_FAILURE_SUPPLEMENT_PROMPT = '请补充更明确的需求或阶段确认信息，我会基于补充内容重新生成当前阶段产出物。';
 
+type ProviderCheckState = {
+  status: 'idle' | 'checking' | 'success' | 'error';
+  message: string | null;
+};
+
+type ProviderCheckStateByMessage = Record<string, ProviderCheckState>;
+
 export const ChatPane: React.FC = () => {
   const navigate = useNavigate();
   // 使用选择器订阅特定状态，减少不必要的重渲染 (rerender-defer-reads)
@@ -56,6 +63,7 @@ export const ChatPane: React.FC = () => {
   const artifactVisualDiagnostics = useStore((state) => state.artifactVisualDiagnostics);
   const clearPendingStageTransition = useStore((state) => state.clearPendingStageTransition);
   const applyWorkflowHandoff = useStore((state) => state.applyWorkflowHandoff);
+  const setSettingsOpen = useStore((state) => state.setSettingsOpen);
   
   const onboardingConfig = WORKFLOWS[workflow].onboarding;
   const workflowStages = WORKFLOWS[workflow].stages;
@@ -98,6 +106,7 @@ export const ChatPane: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [workflowHandoffs, setWorkflowHandoffs] = useState<WorkflowHandoff[]>([]);
+  const [providerCheckByMessageId, setProviderCheckByMessageId] = useState<ProviderCheckStateByMessage>({});
 
   const handleCopy = async (content: string, msgId: string) => {
     if (copyFeedbackTimeoutRef.current) {
@@ -118,6 +127,48 @@ export const ChatPane: React.FC = () => {
       setToast(null);
       copyFeedbackTimeoutRef.current = null;
     }, 2000);
+  };
+
+  const handleProviderConfigCheck = async (messageId: string) => {
+    setProviderCheckByMessageId(current => ({
+      ...current,
+      [messageId]: { status: 'checking', message: '正在检测模型连接...' },
+    }));
+
+    try {
+      const response = await fetch('/new-agents/api/config/check', {
+        method: 'POST',
+      });
+      let data: { ok?: boolean; message?: unknown; error?: unknown } = {};
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
+
+      const message = typeof data.message === 'string' && data.message.trim()
+        ? data.message
+        : typeof data.error === 'string' && data.error.trim()
+          ? data.error
+          : response.ok && data.ok !== false
+            ? '模型配置可用'
+            : '模型连接检测失败';
+      setProviderCheckByMessageId(current => ({
+        ...current,
+        [messageId]: {
+          status: response.ok && data.ok !== false ? 'success' : 'error',
+          message,
+        },
+      }));
+    } catch {
+      setProviderCheckByMessageId(current => ({
+        ...current,
+        [messageId]: {
+          status: 'error',
+          message: '无法完成连接检测，请检查网络或稍后重试。',
+        },
+      }));
+    }
   };
 
   useEffect(() => () => {
@@ -340,6 +391,10 @@ export const ChatPane: React.FC = () => {
             && hasRepeatedStructuredOutputFailures
             && msg.id === latestMessage?.id
           );
+          const providerCheck = providerCheckByMessageId[msg.id] || {
+            status: 'idle',
+            message: null,
+          };
           let mermaidBlockCounter = 0;
           const headingClassName = msg.role === 'user' ? "text-white" : "text-slate-100";
           const messageMarkdownComponents: Components = {
@@ -480,7 +535,39 @@ export const ChatPane: React.FC = () => {
                           </p>
                         </div>
                       </div>
-                      <div className="mt-3 flex justify-end">
+                      {providerCheck.status !== 'idle' && (
+                        <div className={clsx(
+                          "mt-3 rounded-lg border px-3 py-2 text-xs leading-relaxed",
+                          providerCheck.status === 'success'
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                            : providerCheck.status === 'checking'
+                              ? "border-rose-300/20 bg-rose-400/10 text-rose-100/80"
+                              : "border-rose-400/40 bg-rose-400/10 text-rose-100"
+                        )}>
+                          {providerCheck.message}
+                        </div>
+                      )}
+                      <div className="mt-3 flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSettingsOpen(true)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300/30 bg-rose-300/10 px-3 py-1.5 text-xs font-bold text-rose-100 transition-colors hover:bg-rose-300/20"
+                        >
+                          <Settings className="h-3.5 w-3.5" />
+                          打开模型设置
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleProviderConfigCheck(msg.id)}
+                          disabled={providerCheck.status === 'checking'}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300/30 bg-rose-300/10 px-3 py-1.5 text-xs font-bold text-rose-100 transition-colors hover:bg-rose-300/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <RefreshCw className={clsx(
+                            "h-3.5 w-3.5",
+                            providerCheck.status === 'checking' && "animate-spin"
+                          )} />
+                          {providerCheck.status === 'checking' ? '正在检测...' : '检测连接'}
+                        </button>
                         <button
                           type="button"
                           onClick={handleRetry}
