@@ -436,6 +436,7 @@ export const useStore = create<AppState>()(
       artifactSectionLocks: [],
       artifactAuditEvents: [],
       artifactVisualDiagnostics: [],
+      artifactVisualDiagnosticFocusRequest: null,
       stageArtifacts: {
         [WORKFLOWS[DEFAULT_WORKFLOW].stages[0].id]: getWelcomeMessage(DEFAULT_WORKFLOW)
       },
@@ -457,6 +458,7 @@ export const useStore = create<AppState>()(
         artifactSectionLocks: [],
         artifactAuditEvents: [],
         artifactVisualDiagnostics: [],
+        artifactVisualDiagnosticFocusRequest: null,
         artifactContent: getWelcomeMessage(workflow),
         stageArtifacts: {
           [WORKFLOWS[workflow].stages[0].id]: getWelcomeMessage(workflow)
@@ -486,6 +488,7 @@ export const useStore = create<AppState>()(
           artifactContent: newStageArtifacts[targetStageId] || `# ${targetStage.name}\n\n暂无产出物。`,
           artifactTruncated: false,
           artifactVisualDiagnostics: [],
+          artifactVisualDiagnosticFocusRequest: null,
           pendingStageTransition: null,
           isGenerating: false,
         };
@@ -516,6 +519,7 @@ export const useStore = create<AppState>()(
           pendingStageTransition: null,
           artifactTruncated: false,
           artifactVisualDiagnostics: [],
+          artifactVisualDiagnosticFocusRequest: null,
           isGenerating: false,
         };
       }),
@@ -544,7 +548,12 @@ export const useStore = create<AppState>()(
         const newStageArtifacts = { ...state.stageArtifacts };
         const currentStageId = WORKFLOWS[state.workflow].stages[state.stageIndex].id;
         newStageArtifacts[currentStageId] = artifactContent;
-        return { artifactContent, stageArtifacts: newStageArtifacts, artifactVisualDiagnostics: [] };
+        return {
+          artifactContent,
+          stageArtifacts: newStageArtifacts,
+          artifactVisualDiagnostics: [],
+          artifactVisualDiagnosticFocusRequest: null,
+        };
       }),
       setStageArtifact: (stageId, content) => set((state) => {
         const workflowStageIds = new Set(
@@ -561,6 +570,12 @@ export const useStore = create<AppState>()(
           artifactVisualDiagnostics: state.artifactVisualDiagnostics.filter(
             diagnostic => diagnostic.stageId !== stageId
           ),
+          artifactVisualDiagnosticFocusRequest: state.artifactVisualDiagnostics.some(
+            diagnostic => diagnostic.stageId === stageId
+              && diagnostic.id === state.artifactVisualDiagnosticFocusRequest?.id
+          )
+            ? null
+            : state.artifactVisualDiagnosticFocusRequest,
         };
       }),
       addArtifactVersion: (version) => set((state) => {
@@ -742,6 +757,9 @@ export const useStore = create<AppState>()(
           artifactVisualDiagnostics: state.artifactVisualDiagnostics.filter(
             diagnostic => diagnostic.id !== diagnosticId
           ),
+          artifactVisualDiagnosticFocusRequest: state.artifactVisualDiagnosticFocusRequest?.id === diagnosticId
+            ? null
+            : state.artifactVisualDiagnosticFocusRequest,
         };
       }),
       clearArtifactVisualDiagnosticsForStage: (stageId) => set((state) => {
@@ -752,6 +770,25 @@ export const useStore = create<AppState>()(
           artifactVisualDiagnostics: state.artifactVisualDiagnostics.filter(
             diagnostic => diagnostic.stageId !== stageId
           ),
+          artifactVisualDiagnosticFocusRequest: state.artifactVisualDiagnostics.some(
+            diagnostic => diagnostic.stageId === stageId
+              && diagnostic.id === state.artifactVisualDiagnosticFocusRequest?.id
+          )
+            ? null
+            : state.artifactVisualDiagnosticFocusRequest,
+        };
+      }),
+      focusArtifactVisualDiagnostic: (diagnosticId) => set((state) => {
+        const id = diagnosticId.trim();
+        if (!id || !state.artifactVisualDiagnostics.some(diagnostic => diagnostic.id === id)) {
+          return {};
+        }
+
+        return {
+          artifactVisualDiagnosticFocusRequest: {
+            id,
+            seq: (state.artifactVisualDiagnosticFocusRequest?.seq ?? 0) + 1,
+          },
         };
       }),
       setCurrentRunId: (runId) => set({ currentRunId: sanitizeCurrentRunId(runId) }),
@@ -786,6 +823,7 @@ export const useStore = create<AppState>()(
           artifactSectionLocks: [],
           artifactAuditEvents: [],
           artifactVisualDiagnostics: [],
+          artifactVisualDiagnosticFocusRequest: null,
           stageArtifacts: {
             [targetStage.id]: artifactContent,
           },
@@ -841,6 +879,7 @@ export const useStore = create<AppState>()(
           pendingStageTransition: null,
           artifactTruncated: false,
           artifactVisualDiagnostics: [],
+          artifactVisualDiagnosticFocusRequest: null,
           isGenerating: false,
         };
       }),
@@ -853,6 +892,7 @@ export const useStore = create<AppState>()(
         artifactSectionLocks: [],
         artifactAuditEvents: [],
         artifactVisualDiagnostics: [],
+        artifactVisualDiagnosticFocusRequest: null,
         artifactContent: getWelcomeMessage(state.workflow),
         stageArtifacts: {
           [WORKFLOWS[state.workflow].stages[0].id]: getWelcomeMessage(state.workflow)

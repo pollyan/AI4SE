@@ -37,6 +37,32 @@ describe('createMarkdownCodeRenderer', () => {
         expect(screen.queryByTestId('block-code')).toBeNull();
     });
 
+    it('allows callers to wrap rendered mermaid blocks with the full block index', () => {
+        const CodeRenderer = createMarkdownCodeRenderer({
+            nextMermaidBlockIndex: () => 0,
+            renderMermaid: ({ blockIndex, element }) => (
+                <section data-testid="mermaid-wrapper" data-block-index={blockIndex}>
+                    {element}
+                </section>
+            ),
+            renderBlockCode: ({ language, children }) => (
+                <pre data-testid="block-code" data-language={language}>{children}</pre>
+            ),
+            renderInlineCode: ({ children }) => (
+                <code data-testid="inline-code">{children}</code>
+            ),
+        });
+
+        render(
+            <CodeRenderer inline={false} className="language-mermaid">
+                {'graph TD\nA-->B\n'}
+            </CodeRenderer>
+        );
+
+        expect(screen.getByTestId('mermaid-wrapper').getAttribute('data-block-index')).toBe('0');
+        expect(screen.getByTestId('mermaid')).toBeTruthy();
+    });
+
     it('delegates non-mermaid block code rendering to the caller', () => {
         const CodeRenderer = createMarkdownCodeRenderer({
             nextMermaidBlockIndex: () => 0,

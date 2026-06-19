@@ -82,7 +82,12 @@
   - ChatPane 会在当前阶段存在可视化诊断时显示轻量提示 `右侧产物有可视化需要处理`，并提示用户去右侧查看图表或结构化可视化块；其他阶段诊断不会显示。
   - 切换工作流、阶段、清空历史、恢复 run snapshot 或更新 artifact 内容时会清理旧诊断，避免跨阶段误报。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx src/components/__tests__/ChatPane.test.tsx src/components/__tests__/StructuredVisual.test.tsx` 观察到 4 个预期失败，再实现后通过；`npm run test -- --run src/components/__tests__/Mermaid.test.tsx src/components/__tests__/ArtifactPane.test.tsx src/components/__tests__/ChatPane.test.tsx src/components/__tests__/StructuredVisual.test.tsx`；`npm run test`；`npm run build`；`git diff --check`。
-  - 剩余：可继续增强为从左侧提示直接定位/滚动到右侧失败图表块。
+- 2026-06-20：完成第四块可视化诊断定位切片。
+  - ChatPane 的当前阶段可视化诊断提示新增 `查看问题位置`，用户可从左侧直接定位右侧失败图表或结构化可视化块。
+  - Store 新增一次性 `artifactVisualDiagnosticFocusRequest`，使用递增 `seq` 支持同一个诊断重复点击也能重新触发定位；该状态不进入持久化。
+  - ArtifactPane 会在收到定位请求时切回预览模式，滚动到匹配的 Mermaid 或 `ai4se-visual` 诊断块，并用高亮 ring 标出位置。
+  - 定位锚点只挂在当前产物预览，不污染只读历史版本预览，避免同一阶段同一 block index 产生重复锚点。
+  - 验证：先运行 `npm run test -- --run src/__tests__/store.test.ts src/components/__tests__/ChatPane.test.tsx src/components/__tests__/ArtifactPane.test.tsx src/components/__tests__/markdownCodeRenderer.test.tsx` 观察到 6 个预期失败，再实现后通过；`npm run lint`；`npm run build`。
 
 ### 3. 全流程专业产出物与可视化增强
 

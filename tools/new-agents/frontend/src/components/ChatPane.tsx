@@ -64,6 +64,7 @@ export const ChatPane: React.FC = () => {
   const clearPendingStageTransition = useStore((state) => state.clearPendingStageTransition);
   const applyWorkflowHandoff = useStore((state) => state.applyWorkflowHandoff);
   const setSettingsOpen = useStore((state) => state.setSettingsOpen);
+  const focusArtifactVisualDiagnostic = useStore((state) => state.focusArtifactVisualDiagnostic);
   
   const onboardingConfig = WORKFLOWS[workflow].onboarding;
   const workflowStages = WORKFLOWS[workflow].stages;
@@ -328,6 +329,14 @@ export const ChatPane: React.FC = () => {
                 <p className="mt-1 text-[11px] leading-relaxed text-amber-100/70">
                   请在右侧产物中查看对应图表或结构化可视化块，必要时使用重新生成图表。
                 </p>
+                <button
+                  type="button"
+                  onClick={() => focusArtifactVisualDiagnostic(currentArtifactVisualDiagnostic.id)}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-[11px] font-semibold text-amber-50 transition-colors hover:border-amber-200/40 hover:bg-amber-300/15"
+                >
+                  <span>查看问题位置</span>
+                  <ArrowRight className="h-3 w-3" />
+                </button>
               </div>
             </div>
           </div>

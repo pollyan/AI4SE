@@ -15,11 +15,18 @@ interface CodeRenderArgs {
     props: HTMLAttributes<HTMLElement>;
 }
 
+interface MermaidRenderArgs {
+    chart: string;
+    blockIndex: number;
+    element: ReactNode;
+}
+
 interface MarkdownCodeRendererOptions {
     nextMermaidBlockIndex: () => number;
     onMermaidRetry?: MermaidProps['onRetry'];
     onMermaidRenderError?: MermaidProps['onRenderError'];
     onMermaidRenderSuccess?: MermaidProps['onRenderSuccess'];
+    renderMermaid?: (args: MermaidRenderArgs) => ReactNode;
     renderStructuredVisual?: (args: CodeRenderArgs) => ReactNode;
     renderBlockCode: (args: CodeRenderArgs) => ReactNode;
     renderInlineCode: (args: CodeRenderArgs) => ReactNode;
@@ -55,6 +62,7 @@ export function createMarkdownCodeRenderer({
     onMermaidRetry,
     onMermaidRenderError,
     onMermaidRenderSuccess,
+    renderMermaid,
     renderStructuredVisual,
     renderBlockCode,
     renderInlineCode,
@@ -70,15 +78,20 @@ export function createMarkdownCodeRenderer({
         const isInline = isInlineCodeNode({ inline, language, children });
 
         if (!isInline && language === 'mermaid') {
-            return (
+            const blockIndex = nextMermaidBlockIndex();
+            const chart = normalizeMermaidChart(children);
+            const element = (
                 <Mermaid
-                    chart={normalizeMermaidChart(children)}
-                    blockIndex={nextMermaidBlockIndex()}
+                    chart={chart}
+                    blockIndex={blockIndex}
                     onRetry={onMermaidRetry}
                     onRenderError={onMermaidRenderError}
                     onRenderSuccess={onMermaidRenderSuccess}
                 />
             );
+            return renderMermaid
+                ? renderMermaid({ chart, blockIndex, element })
+                : element;
         }
 
         const renderArgs = {

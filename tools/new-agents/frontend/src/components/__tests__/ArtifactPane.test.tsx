@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ArtifactPane } from '../ArtifactPane';
 import { useStore } from '../../store';
 import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../../services/runSnapshotService';
@@ -166,6 +166,81 @@ describe('ArtifactPane Component', () => {
         });
     });
 
+    it('scrolls and highlights a focused Mermaid visual diagnostic in the current preview', async () => {
+        const scrollIntoView = vi.fn();
+        window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: [
+                '```mermaid',
+                'graph TD',
+                'A-->B',
+                '```',
+            ].join('\n'),
+            artifactVisualDiagnostics: [
+                {
+                    id: 'mermaid:CLARIFY:0',
+                    stageId: 'CLARIFY',
+                    kind: 'mermaid',
+                    title: 'Mermaid 图表渲染失败',
+                    message: 'Mermaid syntax error',
+                    blockIndex: 0,
+                    createdAt: Date.now(),
+                },
+            ],
+            artifactVisualDiagnosticFocusRequest: { id: 'mermaid:CLARIFY:0', seq: 1 },
+        });
+
+        const { container } = render(<ArtifactPane />);
+
+        await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+        const focusedBlock = container.querySelector('[data-artifact-visual-diagnostic-id="mermaid:CLARIFY:0"]');
+        expect(focusedBlock).toBeTruthy();
+        expect(focusedBlock?.getAttribute('data-artifact-visual-focused')).toBe('true');
+    });
+
+    it('switches from code mode to preview and refocuses repeated structured visual diagnostic requests', async () => {
+        const scrollIntoView = vi.fn();
+        window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: [
+                '```ai4se-visual',
+                '{ broken',
+                '```',
+            ].join('\n'),
+            artifactVisualDiagnostics: [],
+        });
+
+        const { container } = render(<ArtifactPane />);
+        await waitFor(() => {
+            expect(useStore.getState().artifactVisualDiagnostics).toEqual([
+                expect.objectContaining({
+                    id: 'structured-visual:CLARIFY:0',
+                    stageId: 'CLARIFY',
+                    kind: 'structured-visual',
+                }),
+            ]);
+        });
+
+        fireEvent.click(screen.getByTitle('代码'));
+        await act(async () => {
+            useStore.getState().focusArtifactVisualDiagnostic('structured-visual:CLARIFY:0');
+        });
+
+        await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+        expect(screen.getByText('结构化可视化格式错误')).toBeTruthy();
+        const focusedBlock = container.querySelector('[data-artifact-visual-diagnostic-id="structured-visual:CLARIFY:0"]');
+        expect(focusedBlock?.getAttribute('data-artifact-visual-focused')).toBe('true');
+
+        await act(async () => {
+            useStore.getState().focusArtifactVisualDiagnostic('structured-visual:CLARIFY:0');
+        });
+        await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(2));
+    });
+
     it('does not expose Mermaid retry actions in read-only history preview', () => {
         useStore.setState({
             artifactContent: '# Current artifact',
@@ -215,6 +290,26 @@ describe('ArtifactPane Component', () => {
         await waitFor(() => {
             expect(useStore.getState().artifactVisualDiagnostics).toEqual([]);
         });
+    });
+
+    it('does not attach visual diagnostic focus anchors to read-only history preview', () => {
+        useStore.setState({
+            artifactContent: '# Current artifact',
+            artifactHistory: [
+                {
+                    id: 'v1',
+                    timestamp: 123,
+                    content: '# Historical artifact\n\n```mermaid\ngraph TD\nA-->B\n```',
+                    stageId: 'CLARIFY',
+                },
+            ],
+        });
+
+        const { container } = render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('历史版本'));
+
+        expect(screen.getByText(/版本预览/)).toBeTruthy();
+        expect(container.querySelector('[data-artifact-visual-diagnostic-id]')).toBeNull();
     });
 
     it('only lists history versions for the current workflow stage', () => {

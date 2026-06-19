@@ -23,6 +23,31 @@ describe('Zustand Store', () => {
         expect(newState.currentRunId).toBeNull();
     });
 
+    it('should focus existing artifact visual diagnostics with repeatable requests', () => {
+        useStore.getState().setArtifactVisualDiagnostic({
+            id: 'structured-visual:CLARIFY:0',
+            stageId: 'CLARIFY',
+            kind: 'structured-visual',
+            title: '结构化可视化格式错误',
+            message: '结构化可视化必须是合法 JSON。',
+        });
+
+        useStore.getState().focusArtifactVisualDiagnostic('structured-visual:CLARIFY:0');
+        const firstRequest = useStore.getState().artifactVisualDiagnosticFocusRequest;
+        useStore.getState().focusArtifactVisualDiagnostic('structured-visual:CLARIFY:0');
+        const secondRequest = useStore.getState().artifactVisualDiagnosticFocusRequest;
+
+        expect(firstRequest).toEqual({ id: 'structured-visual:CLARIFY:0', seq: expect.any(Number) });
+        expect(secondRequest?.id).toBe('structured-visual:CLARIFY:0');
+        expect(secondRequest?.seq).toBeGreaterThan(firstRequest?.seq ?? 0);
+    });
+
+    it('should ignore focus requests for missing artifact visual diagnostics', () => {
+        useStore.getState().focusArtifactVisualDiagnostic('structured-visual:CLARIFY:404');
+
+        expect(useStore.getState().artifactVisualDiagnosticFocusRequest).toBeNull();
+    });
+
     it('should store the current server run id', () => {
         useStore.getState().setCurrentRunId('run-123');
 

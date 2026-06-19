@@ -4,7 +4,7 @@ import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { useStore, ArtifactVersion, WORKFLOWS } from '../store';
-import type { AgentRunSnapshotArtifact } from '../core/types';
+import type { AgentRunSnapshotArtifact, ArtifactVisualDiagnostic, ArtifactVisualDiagnosticFocusRequest } from '../core/types';
 import { buildLineDiff } from '../core/artifactDiff';
 import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/markdownUtils';
 import { Download, Code, Eye, History, X, AlertTriangle, GitCompare, Edit3, Save, MessageSquare, Trash2, Lock, Unlock } from 'lucide-react';
@@ -36,6 +36,8 @@ export const ArtifactPane: React.FC = () => {
   const addArtifactAuditEvent = useStore((state) => state.addArtifactAuditEvent);
   const setArtifactVisualDiagnostic = useStore((state) => state.setArtifactVisualDiagnostic);
   const clearArtifactVisualDiagnostic = useStore((state) => state.clearArtifactVisualDiagnostic);
+  const artifactVisualDiagnostics = useStore((state) => state.artifactVisualDiagnostics);
+  const artifactVisualDiagnosticFocusRequest = useStore((state) => state.artifactVisualDiagnosticFocusRequest);
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
   const [showHistory, setShowHistory] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -55,7 +57,9 @@ export const ArtifactPane: React.FC = () => {
   const [showConflictDiff, setShowConflictDiff] = useState(false);
   const [selectedArtifactText, setSelectedArtifactText] = useState<string | null>(null);
   const [activeCommentAnchorText, setActiveCommentAnchorText] = useState<string | null>(null);
+  const [activeVisualDiagnosticId, setActiveVisualDiagnosticId] = useState<string | null>(null);
   const artifactPreviewRef = useRef<HTMLDivElement | null>(null);
+  const handledVisualDiagnosticFocusSeqRef = useRef<number | null>(null);
   const currentStageId = WORKFLOWS[workflow].stages[stageIndex]?.id;
   const currentStageArtifactHistory = useMemo(
     () => currentStageId
@@ -1383,6 +1387,46 @@ export const ArtifactPane: React.FC = () => {
     }, 0);
   };
 
+  const locateArtifactVisualDiagnostic = useCallback((
+    request: ArtifactVisualDiagnosticFocusRequest | null,
+    diagnostics: ArtifactVisualDiagnostic[]
+  ) => {
+    if (!request || !currentStageId) return;
+    if (handledVisualDiagnosticFocusSeqRef.current === request.seq) return;
+
+    const diagnostic = diagnostics.find(
+      candidate => candidate.id === request.id && candidate.stageId === currentStageId
+    );
+    if (!diagnostic) return;
+
+    handledVisualDiagnosticFocusSeqRef.current = request.seq;
+    setIsEditing(false);
+    setViewMode('preview');
+    setActiveVisualDiagnosticId(diagnostic.id);
+    window.setTimeout(() => {
+      const target = artifactPreviewRef.current?.querySelector(
+        `[data-artifact-visual-diagnostic-id="${diagnostic.id}"]`
+      );
+      if (target instanceof HTMLElement && typeof target.scrollIntoView === 'function') {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 0);
+  }, [currentStageId]);
+
+  useEffect(() => {
+    locateArtifactVisualDiagnostic(
+      artifactVisualDiagnosticFocusRequest,
+      artifactVisualDiagnostics
+    );
+  }, [artifactVisualDiagnosticFocusRequest, artifactVisualDiagnostics, currentStageId]);
+
+  useEffect(() => useStore.subscribe((state) => {
+    locateArtifactVisualDiagnostic(
+      state.artifactVisualDiagnosticFocusRequest,
+      state.artifactVisualDiagnostics
+    );
+  }), [locateArtifactVisualDiagnostic]);
+
   const lockSection = (section: ArtifactSection) => {
     if (!currentStageId) return;
     addArtifactSectionLock({
@@ -1404,6 +1448,12 @@ export const ArtifactPane: React.FC = () => {
 
   const buildVisualDiagnosticId = (kind: 'mermaid' | 'structured-visual', blockIndex: number): string => (
     `${kind}:${currentStageId || 'unknown'}:${blockIndex}`
+  );
+
+  const getVisualDiagnosticContainerClass = (diagnosticId: string): string => (
+    `my-6 rounded-xl transition-shadow ${activeVisualDiagnosticId === diagnosticId
+      ? 'ring-2 ring-amber-300/70 shadow-[0_0_0_4px_rgba(252,211,77,0.12)]'
+      : 'ring-1 ring-transparent'}`
   );
 
   const handleMermaidRenderError = useCallback((details: { message: string; blockIndex: number }) => {
@@ -1441,7 +1491,8 @@ export const ArtifactPane: React.FC = () => {
   const createArtifactMarkdownComponents = (
     onMermaidRetry?: Parameters<typeof createMarkdownCodeRenderer>[0]['onMermaidRetry'],
     activeAnchorText?: string | null,
-    reportVisualDiagnostics = false
+    reportVisualDiagnostics = false,
+    attachVisualDiagnosticAnchors = false
   ): Components => {
     let mermaidBlockCounter = 0;
     let structuredVisualBlockCounter = 0;
@@ -1501,10 +1552,25 @@ export const ArtifactPane: React.FC = () => {
       onMermaidRetry,
       onMermaidRenderError: reportVisualDiagnostics ? handleMermaidRenderError : undefined,
       onMermaidRenderSuccess: reportVisualDiagnostics ? handleMermaidRenderSuccess : undefined,
+      renderMermaid: attachVisualDiagnosticAnchors
+        ? ({ blockIndex, element }) => {
+          const diagnosticId = buildVisualDiagnosticId('mermaid', blockIndex);
+          return (
+            <div
+              data-artifact-visual-diagnostic-id={diagnosticId}
+              data-artifact-visual-focused={activeVisualDiagnosticId === diagnosticId ? 'true' : undefined}
+              className={getVisualDiagnosticContainerClass(diagnosticId)}
+            >
+              {element}
+            </div>
+          );
+        }
+        : undefined,
       renderStructuredVisual: ({ children }) => (
         (() => {
           const blockIndex = structuredVisualBlockCounter++;
-          return (
+          const diagnosticId = buildVisualDiagnosticId('structured-visual', blockIndex);
+          const visual = (
             <StructuredVisual
               source={String(children).replace(/\n$/, '')}
               onValidationError={reportVisualDiagnostics
@@ -1514,6 +1580,18 @@ export const ArtifactPane: React.FC = () => {
                 ? () => handleStructuredVisualValidationSuccess(blockIndex)
                 : undefined}
             />
+          );
+          if (!attachVisualDiagnosticAnchors) {
+            return visual;
+          }
+          return (
+            <div
+              data-artifact-visual-diagnostic-id={diagnosticId}
+              data-artifact-visual-focused={activeVisualDiagnosticId === diagnosticId ? 'true' : undefined}
+              className={getVisualDiagnosticContainerClass(diagnosticId)}
+            >
+              {visual}
+            </div>
           );
         })()
       ),
@@ -1540,7 +1618,12 @@ export const ArtifactPane: React.FC = () => {
     };
   };
 
-  const editableMarkdownComponents = createArtifactMarkdownComponents(handleMermaidRetry, activeCommentAnchorText, true);
+  const editableMarkdownComponents = createArtifactMarkdownComponents(
+    handleMermaidRetry,
+    activeCommentAnchorText,
+    true,
+    true
+  );
   const readOnlyMarkdownComponents = createArtifactMarkdownComponents();
 
   return (

@@ -68,6 +68,11 @@ export type ArtifactVisualDiagnostic = {
 
 export type ArtifactVisualDiagnosticInput = Omit<ArtifactVisualDiagnostic, 'createdAt'> & Partial<Pick<ArtifactVisualDiagnostic, 'createdAt'>>;
 
+export type ArtifactVisualDiagnosticFocusRequest = {
+    id: string;
+    seq: number;
+};
+
 export type PendingStageTransition = {
     fromStageIndex: number;
     toStageIndex: number;
@@ -452,6 +457,7 @@ export interface ChatState {
     artifactSectionLocks: ArtifactSectionLock[];
     artifactAuditEvents: ArtifactAuditEvent[];
     artifactVisualDiagnostics: ArtifactVisualDiagnostic[];
+    artifactVisualDiagnosticFocusRequest: ArtifactVisualDiagnosticFocusRequest | null;
     stageArtifacts: Record<string, string>;
     contextSummaries: AgentRunSnapshotContextSummary[];
     currentRunId: string | null;
@@ -485,6 +491,7 @@ export interface ChatState {
     setArtifactVisualDiagnostic: (diagnostic: ArtifactVisualDiagnosticInput) => void;
     clearArtifactVisualDiagnostic: (diagnosticId: string) => void;
     clearArtifactVisualDiagnosticsForStage: (stageId: string) => void;
+    focusArtifactVisualDiagnostic: (diagnosticId: string) => void;
     setCurrentRunId: (runId: string | null) => void;
     applyWorkflowHandoff: (handoff: WorkflowHandoff) => void;
     restoreRunSnapshot: (snapshot: AgentRunSnapshot) => void;
