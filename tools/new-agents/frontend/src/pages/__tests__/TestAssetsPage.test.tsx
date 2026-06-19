@@ -618,6 +618,16 @@ describe('TestAssetsPage', () => {
             .mockResolvedValueOnce(
                 TEST_ASSET_COLLECTION_WITH_INTENT_TESTER_MAPPING.intentTesterMappings[0],
             );
+        vi.mocked(recordTestAssetIntentTesterCase).mockImplementationOnce(async () => {
+            await new Promise(resolve => setTimeout(resolve, 0));
+            return {
+                sourceCaseId: 'TC-001',
+                intentTesterCaseId: 42,
+                intentTesterCaseName: 'TC-001 用户登录成功',
+                latestExecution: null,
+                latestResult: null,
+            };
+        });
 
         renderPage();
 
@@ -639,7 +649,7 @@ describe('TestAssetsPage', () => {
             intentTesterCaseName: 'TC-001 用户登录成功',
         });
         const importedCaseCard = screen.getByTestId('test-asset-case-TC-001');
-        expect(within(importedCaseCard).getByText('已导入 intent-tester #42')).toBeTruthy();
+        expect(await within(importedCaseCard).findByText('已导入 intent-tester #42')).toBeTruthy();
 
         fireEvent.click(screen.getByRole('button', { name: '创建执行记录 #42' }));
 
