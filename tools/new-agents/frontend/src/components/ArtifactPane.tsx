@@ -747,6 +747,60 @@ export const ArtifactPane: React.FC = () => {
     segments[baseLines.length].push(...targetLines.slice(targetIndex));
     return segments;
   };
+  const collectDraftInsertionSegments = (
+    baseLines: string[],
+    draftLines: string[]
+  ): {
+    segments: string[][];
+    retainedBaseLineIndexes: Set<number>;
+    hasDraftDeletion: boolean;
+  } | null => {
+    const segments = Array.from({ length: baseLines.length + 1 }, () => [] as string[]);
+    const retainedBaseLineIndexes = new Set<number>();
+    const pendingInsertions: string[] = [];
+    let baseIndex = 0;
+
+    const flushPendingInsertions = (segmentIndex: number) => {
+      if (pendingInsertions.length === 0) return;
+      segments[segmentIndex].push(...pendingInsertions);
+      pendingInsertions.length = 0;
+    };
+
+    for (const draftLine of draftLines) {
+      if (baseIndex >= baseLines.length) {
+        if (baseLines.includes(draftLine)) return null;
+        pendingInsertions.push(draftLine);
+        continue;
+      }
+
+      if (draftLine === baseLines[baseIndex]) {
+        flushPendingInsertions(baseIndex);
+        retainedBaseLineIndexes.add(baseIndex);
+        baseIndex += 1;
+        continue;
+      }
+
+      const futureMatchIndex = baseLines.findIndex((baseLine, index) => (
+        index > baseIndex && baseLine === draftLine
+      ));
+      if (futureMatchIndex >= 0) {
+        flushPendingInsertions(futureMatchIndex);
+        retainedBaseLineIndexes.add(futureMatchIndex);
+        baseIndex = futureMatchIndex + 1;
+        continue;
+      }
+
+      if (baseLines.includes(draftLine)) return null;
+      pendingInsertions.push(draftLine);
+    }
+
+    flushPendingInsertions(baseLines.length);
+    return {
+      segments,
+      retainedBaseLineIndexes,
+      hasDraftDeletion: retainedBaseLineIndexes.size < baseLines.length,
+    };
+  };
   const mergeUniqueInsertions = (primaryLines: string[], secondaryLines: string[]): string[] => {
     const mergedLines = [...primaryLines];
     secondaryLines.forEach((line) => {
@@ -755,6 +809,15 @@ export const ArtifactPane: React.FC = () => {
       }
     });
     return mergedLines;
+  };
+  const hasRepeatedNonBlankLines = (lines: string[]): boolean => {
+    const seenLines = new Set<string>();
+    return lines.some((line) => {
+      if (!line.trim()) return false;
+      if (seenLines.has(line)) return true;
+      seenLines.add(line);
+      return false;
+    });
   };
   const buildAutoMergedInsertionContent = (
     baseContent: string,
@@ -765,24 +828,26 @@ export const ArtifactPane: React.FC = () => {
     const serverLines = serverContent.replace(/\r\n/g, '\n').split('\n');
     const draftLines = draftContent.replace(/\r\n/g, '\n').split('\n');
     const serverSegments = collectInsertionSegments(baseLines, serverLines);
-    const draftSegments = collectInsertionSegments(baseLines, draftLines);
-    if (!serverSegments || !draftSegments) return null;
+    const draftMerge = collectDraftInsertionSegments(baseLines, draftLines);
+    if (!serverSegments || !draftMerge) return null;
+    if (draftMerge.hasDraftDeletion && hasRepeatedNonBlankLines(baseLines)) return null;
 
     const mergedLines: string[] = [];
-    let appliedDraftInsertion = false;
+    let appliedDraftChange = draftMerge.hasDraftDeletion;
     for (let segmentIndex = 0; segmentIndex < serverSegments.length; segmentIndex += 1) {
-      const mergedInsertions = mergeUniqueInsertions(serverSegments[segmentIndex], draftSegments[segmentIndex]);
-      if (draftSegments[segmentIndex].some(line => !serverSegments[segmentIndex].includes(line))) {
-        appliedDraftInsertion = true;
+      const draftInsertions = draftMerge.segments[segmentIndex];
+      const mergedInsertions = mergeUniqueInsertions(serverSegments[segmentIndex], draftInsertions);
+      if (draftInsertions.some(line => !serverSegments[segmentIndex].includes(line))) {
+        appliedDraftChange = true;
       }
       mergedLines.push(...mergedInsertions);
-      if (segmentIndex < baseLines.length) {
+      if (segmentIndex < baseLines.length && draftMerge.retainedBaseLineIndexes.has(segmentIndex)) {
         mergedLines.push(baseLines[segmentIndex]);
       }
     }
 
     const mergedContent = mergedLines.join('\n');
-    if (!appliedDraftInsertion || mergedContent === serverContent.replace(/\r\n/g, '\n')) {
+    if (!appliedDraftChange || mergedContent === serverContent.replace(/\r\n/g, '\n')) {
       return null;
     }
     return mergedContent;

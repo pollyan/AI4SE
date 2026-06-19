@@ -1357,6 +1357,93 @@ describe('ArtifactPane Component', () => {
         ]);
     });
 
+    it('auto-merges server insertions with draft deletions during an artifact conflict', async () => {
+        vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
+            '产出物已被更新，请刷新后再保存',
+            {
+                stageId: 'STRATEGY',
+                content: '# 测试策略蓝图\n\n背景\n服务端补充\n旧风险\n共同内容\n服务端后置补充',
+                versionNumber: 3,
+            },
+        ));
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentRunId: 'run-123',
+            artifactContent: '# 测试策略蓝图\n\n背景\n旧风险\n共同内容',
+            stageArtifacts: {
+                STRATEGY: '# 测试策略蓝图\n\n背景\n旧风险\n共同内容',
+            },
+            artifactHistory: [
+                {
+                    id: 'run-123-STRATEGY-v2',
+                    timestamp: 123,
+                    content: '# 测试策略蓝图\n\n背景\n旧风险\n共同内容',
+                    stageId: 'STRATEGY',
+                },
+            ],
+            artifactAuditEvents: [],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: { value: '# 测试策略蓝图\n\n背景\n用户补充\n共同内容' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+        fireEvent.click(await screen.findByRole('button', { name: '自动合并非重叠变更' }));
+
+        expect((screen.getByLabelText('编辑产出物 Markdown') as HTMLTextAreaElement).value).toBe(
+            '# 测试策略蓝图\n\n背景\n服务端补充\n用户补充\n共同内容\n服务端后置补充'
+        );
+        expect(useStore.getState().artifactAuditEvents).toEqual([
+            expect.objectContaining({
+                stageId: 'STRATEGY',
+                eventType: 'artifact_auto_merge_applied',
+                summary: '合并轨迹：自动合并服务端与草稿的非重叠补充',
+            }),
+        ]);
+    });
+
+    it('does not auto-merge draft deletions when repeated base lines make the anchor ambiguous', async () => {
+        vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
+            '产出物已被更新，请刷新后再保存',
+            {
+                stageId: 'STRATEGY',
+                content: '# 测试策略蓝图\n\n背景\n重复风险\n服务端补充\n重复风险\n共同内容',
+                versionNumber: 3,
+            },
+        ));
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentRunId: 'run-123',
+            artifactContent: '# 测试策略蓝图\n\n背景\n重复风险\n重复风险\n共同内容',
+            stageArtifacts: {
+                STRATEGY: '# 测试策略蓝图\n\n背景\n重复风险\n重复风险\n共同内容',
+            },
+            artifactHistory: [
+                {
+                    id: 'run-123-STRATEGY-v2',
+                    timestamp: 123,
+                    content: '# 测试策略蓝图\n\n背景\n重复风险\n重复风险\n共同内容',
+                    stageId: 'STRATEGY',
+                },
+            ],
+            artifactAuditEvents: [],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: { value: '# 测试策略蓝图\n\n背景\n重复风险\n共同内容' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+        await screen.findByRole('button', { name: '对比服务端版本' });
+        expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
+    });
+
     it('records accepted conflict merge lines in the artifact activity trail', async () => {
         vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
             '产出物已被更新，请刷新后再保存',

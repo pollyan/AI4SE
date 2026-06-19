@@ -443,7 +443,14 @@
   - 保存冲突现在会检测旧版本行是否仍按顺序存在于服务端版本和用户草稿；只有双方都只是插入内容时，才显示 `自动合并非重叠变更`。
   - 点击后编辑草稿会同时保留服务端插入和用户草稿独有插入，减少安全场景下逐行/逐块处理成本。
   - 自动合并会记录 `artifact_auto_merge_applied` 活动轨迹，历史面板可回看系统辅助合并决策。
-  - 删除、改写、移动或锚点无法可靠匹配时不会自动合并，继续使用现有手工冲突处理能力，不改变服务端保存或冲突 API。
+  - 当时删除、改写、移动或锚点无法可靠匹配时不会自动合并，继续使用现有手工冲突处理能力，不改变服务端保存或冲突 API。
   - 同步更新 `docs/strategy/goal-mode-playbook.md`，明确后续多子智能体开发采用“可写 worker 独立 worktree、主 Agent 统一集成”的方式。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "auto-merges non-overlapping"` 观察到缺少 `自动合并非重叠变更` 入口失败；实现后同命令通过。
   - 剩余：更完整三方 merge 的删除/改写/移动语义、复杂 Mermaid/SVG 高保真嵌入仍可作为后续增强切片。
+- 2026-06-20：完成第三十一块 CGA「Artifact 冲突安全删除自动合并」。
+  - 保存冲突的自动合并从插入-only 扩展到“服务端只插入、用户草稿删除旧行并可插入补充”的安全场景。
+  - 点击 `自动合并非重叠变更` 后，编辑草稿会同时保留服务端新增内容、用户补充内容，并应用用户删除旧行的意图。
+  - 自动合并继续记录 `artifact_auto_merge_applied` 活动轨迹，不改变 UI 文案、服务端保存 API 或既有逐行/块级手工冲突处理。
+  - 为避免重复旧行导致锚点不可判定，若草稿存在删除且旧版中存在重复非空行，则不会显示自动合并入口，继续交给人工对比处理。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "does not auto-merge draft deletions"` 观察到重复旧行仍显示自动合并入口失败；实现保守降级后同命令通过；`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx` 45/45 通过。
+  - 剩余：更复杂的改写/移动语义自动合并、复杂 Mermaid/SVG 高保真嵌入仍可作为后续增强切片。
