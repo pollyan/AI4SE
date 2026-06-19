@@ -199,12 +199,30 @@ export const ArtifactPane: React.FC = () => {
     to: string;
   };
 
-  type PdfMermaidDiagram = {
+  type PdfMermaidFlowchartDiagram = {
+    kind: 'flowchart';
     startLineIndex: number;
     diagramType: string;
     nodes: PdfMermaidFlowchartNode[];
     edges: PdfMermaidFlowchartEdge[];
   };
+
+  type PdfMermaidTimelineEvent = {
+    section: string;
+    time: string;
+    description: string;
+  };
+
+  type PdfMermaidTimelineDiagram = {
+    kind: 'timeline';
+    startLineIndex: number;
+    diagramType: 'timeline';
+    title: string | null;
+    sections: string[];
+    events: PdfMermaidTimelineEvent[];
+  };
+
+  type PdfMermaidDiagram = PdfMermaidFlowchartDiagram | PdfMermaidTimelineDiagram;
 
   const parseMermaidEndpoint = (source: string): PdfMermaidFlowchartNode | null => {
     const trimmedSource = source.trim();
@@ -221,7 +239,7 @@ export const ArtifactPane: React.FC = () => {
   const parseMermaidFlowchartForPdf = (
     source: string,
     startLineIndex: number
-  ): PdfMermaidDiagram | null => {
+  ): PdfMermaidFlowchartDiagram | null => {
     const mermaidLines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
     const firstLine = mermaidLines[0] || '';
     const diagramType = firstLine.split(/\s+/)[0] || 'diagram';
@@ -256,6 +274,7 @@ export const ArtifactPane: React.FC = () => {
     if (nodes.size === 0 || edges.length === 0) return null;
 
     return {
+      kind: 'flowchart',
       startLineIndex,
       diagramType,
       nodes: Array.from(nodes.values()).slice(0, 6),
@@ -263,15 +282,82 @@ export const ArtifactPane: React.FC = () => {
     };
   };
 
+  const parseMermaidTimelineForPdf = (
+    source: string,
+    startLineIndex: number
+  ): PdfMermaidTimelineDiagram | null => {
+    const mermaidLines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const firstLine = mermaidLines[0] || '';
+    if (firstLine.split(/\s+/)[0] !== 'timeline') return null;
+
+    let title: string | null = null;
+    let currentSection = '事件';
+    const sections: string[] = [];
+    const events: PdfMermaidTimelineEvent[] = [];
+
+    mermaidLines.slice(1).forEach((line) => {
+      if (line.startsWith('title ')) {
+        title = stripInlineMarkdown(line.replace(/^title\s+/, ''));
+        return;
+      }
+
+      if (line.startsWith('section ')) {
+        currentSection = stripInlineMarkdown(line.replace(/^section\s+/, ''));
+        if (currentSection && !sections.includes(currentSection)) {
+          sections.push(currentSection);
+        }
+        return;
+      }
+
+      const eventMatch = line.match(/^(.+?)\s*:\s*(.+)$/);
+      if (!eventMatch) return;
+      if (currentSection && !sections.includes(currentSection)) {
+        sections.push(currentSection);
+      }
+      events.push({
+        section: currentSection,
+        time: stripInlineMarkdown(eventMatch[1]),
+        description: stripInlineMarkdown(eventMatch[2]),
+      });
+    });
+
+    if (events.length === 0) return null;
+
+    return {
+      kind: 'timeline',
+      startLineIndex,
+      diagramType: 'timeline',
+      title,
+      sections: sections.slice(0, 5),
+      events: events.slice(0, 8),
+    };
+  };
+
+  const parseMermaidDiagramForPdf = (
+    source: string,
+    startLineIndex: number
+  ): PdfMermaidDiagram | null => (
+    parseMermaidFlowchartForPdf(source, startLineIndex)
+    || parseMermaidTimelineForPdf(source, startLineIndex)
+  );
+
   const projectMermaidToPdfLines = (source: string): string[] => {
     const mermaidLines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
     const firstLine = mermaidLines[0] || 'diagram';
     const diagramType = firstLine.split(/\s+/)[0] || 'diagram';
-    const parsedDiagram = parseMermaidFlowchartForPdf(source, 0);
+    const parsedDiagram = parseMermaidDiagramForPdf(source, 0);
+    if (parsedDiagram?.kind === 'timeline') {
+      return [
+        `Mermaid 图表：${diagramType}`,
+        ...(parsedDiagram.title ? [parsedDiagram.title] : []),
+        ...parsedDiagram.sections,
+        ...parsedDiagram.events.map(event => `${event.time}：${event.description}`),
+      ];
+    }
     return [
       `Mermaid 图表：${diagramType}`,
       ...(
-        parsedDiagram
+        parsedDiagram?.kind === 'flowchart'
           ? parsedDiagram.nodes.map(node => node.label)
           : []
       ),
@@ -322,7 +408,7 @@ export const ArtifactPane: React.FC = () => {
         if (fenceLanguage === 'mermaid') {
           const startLineIndex = pdfLines.length;
           pdfLines.push(...projectMermaidToPdfLines(codeSource));
-          const parsedDiagram = parseMermaidFlowchartForPdf(codeSource, startLineIndex);
+          const parsedDiagram = parseMermaidDiagramForPdf(codeSource, startLineIndex);
           if (parsedDiagram) {
             mermaidDiagrams.push(parsedDiagram);
           }
@@ -524,15 +610,50 @@ export const ArtifactPane: React.FC = () => {
     const nodeHeight = 24;
     const nodeGap = 18;
     const nodeLeft = 385;
+    const timelineLeft = 64;
+    const timelineWidth = 480;
+    const timelineEventWidth = 120;
+    const timelineEventHeight = 24;
 
     diagrams.forEach((diagram) => {
-      const diagramEndLineIndex = diagram.startLineIndex + Math.max(diagram.nodes.length + 1, 2);
+      const diagramLineCount = diagram.kind === 'flowchart'
+        ? Math.max(diagram.nodes.length + 1, 2)
+        : Math.max(diagram.events.length + diagram.sections.length + 2, 3);
+      const diagramEndLineIndex = diagram.startLineIndex + diagramLineCount;
       if (diagram.startLineIndex >= pageEndLineIndex || diagramEndLineIndex <= pageStartLineIndex) {
         return;
       }
 
       const localStartLineIndex = Math.max(diagram.startLineIndex, pageStartLineIndex) - pageStartLineIndex;
       const topY = Math.min(770, 790 - localStartLineIndex * 14 - 2);
+      if (diagram.kind === 'timeline') {
+        const eventCount = Math.max(diagram.events.length, 1);
+        const baselineY = Math.max(130, topY - 44);
+        const eventGap = eventCount > 1 ? timelineWidth / (eventCount - 1) : 0;
+        commands.push(`${timelineLeft} ${baselineY} m ${timelineLeft + timelineWidth} ${baselineY} l S`);
+        diagram.events.forEach((event, eventIndex) => {
+          const tickX = Number((timelineLeft + eventGap * eventIndex).toFixed(2));
+          const eventY = eventIndex % 2 === 0
+            ? baselineY + 28
+            : baselineY - 58;
+          const eventX = Math.max(
+            42,
+            Math.min(448, tickX - timelineEventWidth / 2)
+          );
+          const connectorStartY = eventIndex % 2 === 0
+            ? baselineY + 3
+            : baselineY - 3;
+          const connectorEndY = eventIndex % 2 === 0
+            ? eventY
+            : eventY + timelineEventHeight;
+
+          commands.push(`${tickX} ${baselineY - 5} m ${tickX} ${baselineY + 5} l S`);
+          commands.push(`${tickX} ${connectorStartY} m ${tickX} ${connectorEndY} l S`);
+          commands.push(`${Number(eventX.toFixed(2))} ${eventY} ${timelineEventWidth} ${timelineEventHeight} re S`);
+        });
+        return;
+      }
+
       const nodePositions = new Map<string, { x: number; y: number }>();
 
       diagram.nodes.forEach((node, nodeIndex) => {

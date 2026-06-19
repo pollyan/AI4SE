@@ -720,6 +720,62 @@ describe('ArtifactPane Component', () => {
         expect(click).toHaveBeenCalledTimes(1);
     });
 
+    it('draws Mermaid timelines as vector timeline shapes in exported PDF content streams', async () => {
+        const createdAnchors: HTMLAnchorElement[] = [];
+        const click = vi.fn();
+        const createObjectURL = vi
+            .spyOn(URL, 'createObjectURL')
+            .mockReturnValue('blob:artifact-mermaid-timeline-pdf');
+        vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+        vi.spyOn(document, 'createElement').mockImplementation((tagName, options) => {
+            const element = originalCreateElement(tagName, options);
+            if (tagName.toLowerCase() === 'a') {
+                Object.defineProperty(element, 'click', {
+                    configurable: true,
+                    value: click,
+                });
+                createdAnchors.push(element as HTMLAnchorElement);
+            }
+            return element;
+        });
+        useStore.setState({
+            workflow: 'INCIDENT_REVIEW',
+            artifactContent: [
+                '# 事件还原',
+                '',
+                '```mermaid',
+                'timeline',
+                '    title 登录事故时间线',
+                '    section 发现',
+                '      09点10分 : 监控触发告警',
+                '      09点18分 : 值班确认影响范围',
+                '    section 恢复',
+                '      09点42分 : 回滚异常发布',
+                '```',
+            ].join('\n'),
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('下载'));
+        fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+
+        const blob = createObjectURL.mock.calls[0][0] as Blob;
+        const content = await blob.text();
+        const rectangleCount = content.match(/ re S/g)?.length ?? 0;
+        expect(createdAnchors[0].download).toBe('incident_review_artifact.pdf');
+        expect(content).toContain(toUtf16BeHex('Mermaid 图表：timeline'));
+        expect(content).toContain(toUtf16BeHex('登录事故时间线'));
+        expect(content).toContain(toUtf16BeHex('发现'));
+        expect(content).toContain(toUtf16BeHex('09点10分：监控触发告警'));
+        expect(content).not.toContain(toUtf16BeHex('section 发现'));
+        expect(content).not.toContain(toUtf16BeHex('title 登录事故时间线'));
+        expect(content).toContain('0.18 0.55 0.95 RG');
+        expect(rectangleCount).toBeGreaterThanOrEqual(3);
+        expect(content).toContain(' m ');
+        expect(content).toContain(' l S');
+        expect(click).toHaveBeenCalledTimes(1);
+    });
+
     it('draws structured visual tables in exported PDF content streams', async () => {
         const createdAnchors: HTMLAnchorElement[] = [];
         const click = vi.fn();
