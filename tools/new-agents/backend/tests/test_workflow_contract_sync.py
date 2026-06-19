@@ -87,6 +87,12 @@ def test_backend_container_packages_shared_workflow_manifest():
     assert "./tools/new-agents/workflow_manifest.json:/workflow_manifest.json:ro" in dev_cn_compose
 
 
+def test_frontend_container_packages_shared_workflow_manifest_for_vite_build():
+    dockerfile = (NEW_AGENTS_ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
+
+    assert "COPY tools/new-agents/workflow_manifest.json /workflow_manifest.json" in dockerfile
+
+
 def test_frontend_templates_include_required_structured_visual_contract_examples():
     prompt_files = {
         ("REQ_REVIEW", "REVIEW"): (
