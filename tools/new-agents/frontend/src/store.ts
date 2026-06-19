@@ -250,6 +250,7 @@ const sanitizeArtifactSectionLocks = (
       id: lock.id,
       stageId: lock.stageId,
       heading: lock.heading,
+      sectionAnchor: sanitizeOptionalArtifactText(lock.sectionAnchor),
       content: lock.content,
       createdAt: lock.createdAt,
     }];
@@ -667,6 +668,7 @@ export const useStore = create<AppState>()(
         );
         const heading = lock.heading.trim();
         const content = lock.content.trim();
+        const sectionAnchor = sanitizeOptionalArtifactText(lock.sectionAnchor);
         if (!workflowStageIds.has(stageId) || !heading || !content) {
           return {};
         }
@@ -674,12 +676,17 @@ export const useStore = create<AppState>()(
         return {
           artifactSectionLocks: [
             ...state.artifactSectionLocks.filter(existing => !(
-              existing.stageId === stageId && existing.heading === heading
+              existing.stageId === stageId
+              && (
+                (sectionAnchor !== null && existing.sectionAnchor === sectionAnchor)
+                || (sectionAnchor === null && existing.sectionAnchor === null && existing.heading === heading)
+              )
             )),
             {
               id: `artifact-section-lock-${Date.now()}-${state.artifactSectionLocks.length + 1}`,
               stageId,
               heading,
+              sectionAnchor,
               content,
               createdAt: Date.now(),
             },

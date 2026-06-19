@@ -178,6 +178,7 @@ def test_run_snapshot_returns_artifact_collaboration_state(app):
                         "id": "lock-1",
                         "stageId": "CLARIFY",
                         "heading": "## 业务规则",
+                        "sectionAnchor": "h2:业务规则:1",
                         "content": "## 业务规则\n\n已确认登录规则。",
                         "createdAt": 1710000000100,
                     }
@@ -211,6 +212,7 @@ def test_run_snapshot_returns_artifact_collaboration_state(app):
                 "id": "lock-1",
                 "stageId": "CLARIFY",
                 "heading": "## 业务规则",
+                "sectionAnchor": "h2:业务规则:1",
                 "content": "## 业务规则\n\n已确认登录规则。",
                 "createdAt": 1710000000100,
             }

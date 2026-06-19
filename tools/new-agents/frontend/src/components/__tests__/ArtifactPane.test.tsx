@@ -2434,4 +2434,94 @@ describe('ArtifactPane Component', () => {
         expect(useStore.getState().artifactContent).toContain('登录边界被授权修改。');
         expect(screen.queryByLabelText('编辑产出物 Markdown')).toBeNull();
     });
+
+    it('locks the second duplicate artifact section without locking the first duplicate heading', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: [
+                '# 需求分析文档',
+                '',
+                '## 验收口径',
+                '',
+                '第一个验收口径保持可调整。',
+                '',
+                '## 验收口径',
+                '',
+                '第二个验收口径已经确认。',
+            ].join('\n'),
+            stageArtifacts: {
+                CLARIFY: [
+                    '# 需求分析文档',
+                    '',
+                    '## 验收口径',
+                    '',
+                    '第一个验收口径保持可调整。',
+                    '',
+                    '## 验收口径',
+                    '',
+                    '第二个验收口径已经确认。',
+                ].join('\n'),
+            },
+            artifactSectionLocks: [],
+            artifactHistory: [],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('章节锁定'));
+        fireEvent.click(screen.getByRole('button', { name: '锁定 验收口径 #2' }));
+
+        expect(useStore.getState().artifactSectionLocks).toEqual([
+            expect.objectContaining({
+                stageId: 'CLARIFY',
+                heading: '## 验收口径',
+                content: '## 验收口径\n\n第二个验收口径已经确认。',
+                sectionAnchor: expect.stringContaining('验收口径:2'),
+            }),
+        ]);
+        expect(screen.getByRole('button', { name: '锁定 验收口径 #1' })).toBeTruthy();
+        expect(screen.getByLabelText('解除章节锁定 验收口径 #2')).toBeTruthy();
+
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: {
+                value: [
+                    '# 需求分析文档',
+                    '',
+                    '## 验收口径',
+                    '',
+                    '第一个验收口径已调整。',
+                    '',
+                    '## 验收口径',
+                    '',
+                    '第二个验收口径已经确认。',
+                ].join('\n'),
+            },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+        expect(screen.queryByLabelText('编辑产出物 Markdown')).toBeNull();
+        expect(useStore.getState().artifactContent).toContain('第一个验收口径已调整。');
+
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: {
+                value: [
+                    '# 需求分析文档',
+                    '',
+                    '## 验收口径',
+                    '',
+                    '第一个验收口径已调整。',
+                    '',
+                    '## 验收口径',
+                    '',
+                    '第二个验收口径被误改。',
+                ].join('\n'),
+            },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+        expect(screen.getByText('保存失败：锁定章节“验收口径 #2”已被修改，请先解锁后再保存。')).toBeTruthy();
+        expect(useStore.getState().artifactContent).toContain('第二个验收口径已经确认。');
+    });
 });

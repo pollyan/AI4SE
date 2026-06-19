@@ -286,6 +286,7 @@ class AgentArtifactSectionLock(db.Model):
     client_id = db.Column(db.String(128), nullable=False)
     stage_id = db.Column(db.String(64), nullable=False, index=True)
     heading = db.Column(db.Text, nullable=False)
+    section_anchor = db.Column(db.Text)
     content = db.Column(db.Text, nullable=False)
     created_at_ms = db.Column(db.Integer, nullable=False)
 

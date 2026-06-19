@@ -184,6 +184,9 @@ const parseArtifactSectionLock = (lock: unknown): ArtifactSectionLock => {
         id: lock.id,
         stageId: lock.stageId,
         heading: lock.heading,
+        sectionAnchor: typeof lock.sectionAnchor === 'string' && lock.sectionAnchor.trim()
+            ? lock.sectionAnchor.trim()
+            : null,
         content: lock.content,
         createdAt: lock.createdAt,
     };

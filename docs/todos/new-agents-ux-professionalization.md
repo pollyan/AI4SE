@@ -540,3 +540,10 @@
   - SVG 由前端本地保守投影生成，节点文本经过 XML 转义，不把模型输出的任意 SVG/HTML 原样写入 DOCX；实现继续复用共享 Artifact DOCX 导出路径，不新增 Lisa/Alex 或 workflow 专属分支。
   - 验证：先运行 `npm run test -- --run src/core/__tests__/docxExport.test.ts -t "embeds supported Mermaid flowcharts"` 观察到缺少 `word/_rels/document.xml.rels` 和 `word/media/mermaid-1.svg` 失败；实现后同命令通过；`npm run test -- --run src/core/__tests__/docxExport.test.ts`；`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`。
   - 剩余：PDF 图片级嵌入、DOCX 更多 Mermaid 类型嵌入、重复标题精确锚点、移动语义自动合并仍可作为后续增强切片。
+- 2026-06-20：完成第三十九块 CGA「Artifact 重复标题章节锚点」。
+  - 章节锁新增轻量 `sectionAnchor`，用 Markdown 标题层级、标题文本和同名出现序号定位同名章节；旧锁没有 anchor 时继续按标题兼容。
+  - 章节锁面板会把重复标题显示为 `标题 #1`、`标题 #2`，用户可以单独锁定第二个同名章节，不再误锁或覆盖第一个章节。
+  - 手工保存校验优先按 `sectionAnchor` 匹配锁定章节，只修改未锁定的同名章节可以保存，修改被锁定的那个重复章节会明确提示对应 `#2`。
+  - 后端协作状态、run snapshot 和旧表迁移都支持 `sectionAnchor`，刷新后不会丢失重复标题锁定定位。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx src/__tests__/store.test.ts src/services/__tests__/runSnapshotService.test.ts` 与后端协作/迁移定向测试观察到预期失败；实现后运行同一前端目标测试、`.venv/bin/python -m pytest tools/new-agents/backend/tests/test_api.py::test_init_db_upgrades_existing_artifact_section_lock_table tools/new-agents/backend/tests/test_run_persistence.py::test_run_snapshot_returns_artifact_collaboration_state tools/new-agents/backend/tests/test_agent_endpoint.py::test_agent_run_artifact_collaboration_endpoint_replaces_state`、`npm run lint`、`npm run build`、`git diff --check` 通过。
+  - 剩余：PDF 图片级嵌入、DOCX 更多 Mermaid 类型嵌入、移动语义自动合并、完整三方 merge 的更复杂冲突解析仍可作为后续增强切片。

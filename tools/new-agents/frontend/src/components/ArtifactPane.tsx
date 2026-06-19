@@ -116,22 +116,26 @@ export const ArtifactPane: React.FC = () => {
   type ArtifactSection = {
     heading: string;
     title: string;
+    displayTitle: string;
+    anchor: string;
     content: string;
   };
 
   const extractMarkdownSections = (content: string): ArtifactSection[] => {
     const lines = content.split(/\r?\n/);
-    const sections: ArtifactSection[] = [];
+    const rawSections: Array<Pick<ArtifactSection, 'heading' | 'title' | 'content'> & { level: number }> = [];
     let currentStart = -1;
     let currentHeading = '';
 
     lines.forEach((line, index) => {
       if (!/^#{1,3}\s+/.test(line)) return;
       if (currentStart >= 0) {
-        sections.push({
+        const headingLevel = currentHeading.match(/^(#{1,3})\s+/)?.[1].length ?? 1;
+        rawSections.push({
           heading: currentHeading,
           title: currentHeading.replace(/^#{1,3}\s+/, ''),
           content: lines.slice(currentStart, index).join('\n').trim(),
+          level: headingLevel,
         });
       }
       currentStart = index;
@@ -139,14 +143,34 @@ export const ArtifactPane: React.FC = () => {
     });
 
     if (currentStart >= 0) {
-      sections.push({
+      const headingLevel = currentHeading.match(/^(#{1,3})\s+/)?.[1].length ?? 1;
+      rawSections.push({
         heading: currentHeading,
         title: currentHeading.replace(/^#{1,3}\s+/, ''),
         content: lines.slice(currentStart).join('\n').trim(),
+        level: headingLevel,
       });
     }
 
-    return sections;
+    const duplicateCounts = rawSections.reduce<Record<string, number>>((counts, section) => {
+      counts[section.title] = (counts[section.title] ?? 0) + 1;
+      return counts;
+    }, {});
+    const occurrenceCounts: Record<string, number> = {};
+
+    return rawSections.map((section) => {
+      const occurrence = (occurrenceCounts[section.title] ?? 0) + 1;
+      occurrenceCounts[section.title] = occurrence;
+      const isDuplicateTitle = duplicateCounts[section.title] > 1;
+
+      return {
+        heading: section.heading,
+        title: section.title,
+        displayTitle: isDuplicateTitle ? `${section.title} #${occurrence}` : section.title,
+        anchor: `h${section.level}:${section.title}:${occurrence}`,
+        content: section.content,
+      };
+    });
   };
 
   const toUtf16BeHex = (content: string): string => {
@@ -796,9 +820,18 @@ export const ArtifactPane: React.FC = () => {
     if (currentStageSectionLocks.length === 0) return null;
     const nextSections = extractMarkdownSections(nextContent);
     for (const lock of currentStageSectionLocks) {
-      const nextSection = nextSections.find(section => section.heading === lock.heading);
+      const currentSection = artifactSections.find(section => (
+        lock.sectionAnchor
+          ? section.anchor === lock.sectionAnchor
+          : section.heading === lock.heading
+      ));
+      const nextSection = nextSections.find(section => (
+        lock.sectionAnchor
+          ? section.anchor === lock.sectionAnchor
+          : section.heading === lock.heading
+      ));
       if (!nextSection || nextSection.content.trim() !== lock.content.trim()) {
-        return lock.heading.replace(/^#{1,3}\s+/, '');
+        return currentSection?.displayTitle ?? lock.heading.replace(/^#{1,3}\s+/, '');
       }
     }
     return null;
@@ -2062,6 +2095,7 @@ export const ArtifactPane: React.FC = () => {
     addArtifactSectionLock({
       stageId: currentStageId,
       heading: section.heading,
+      sectionAnchor: section.anchor,
       content: section.content,
     });
     syncArtifactCollaborationState();
@@ -2072,8 +2106,12 @@ export const ArtifactPane: React.FC = () => {
     syncArtifactCollaborationState();
   };
 
-  const getSectionLock = (heading: string) => (
-    currentStageSectionLocks.find(lock => lock.heading === heading)
+  const getSectionLock = (section: ArtifactSection) => (
+    currentStageSectionLocks.find(lock => (
+      lock.sectionAnchor
+        ? lock.sectionAnchor === section.anchor
+        : lock.heading === section.heading
+    ))
   );
 
   const buildVisualDiagnosticId = (kind: 'mermaid' | 'structured-visual', blockIndex: number): string => (
@@ -2748,12 +2786,12 @@ export const ArtifactPane: React.FC = () => {
               <p className="text-sm text-slate-500">当前产出物还没有可锁定的 Markdown 标题章节。</p>
             ) : (
               artifactSections.map((section) => {
-                const lock = getSectionLock(section.heading);
+                const lock = getSectionLock(section);
                 return (
-                  <article key={section.heading} className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
+                  <article key={section.anchor} className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h4 className="truncate text-sm font-semibold text-slate-100">{section.title}</h4>
+                        <h4 className="truncate text-sm font-semibold text-slate-100">{section.displayTitle}</h4>
                         <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">
                           {section.content.replace(section.heading, '').trim() || '空章节'}
                         </p>
@@ -2762,7 +2800,7 @@ export const ArtifactPane: React.FC = () => {
                         <button
                           onClick={() => unlockSection(lock.id)}
                           className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-400/20 px-2 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-400/10"
-                          aria-label={`解除章节锁定 ${section.title}`}
+                          aria-label={`解除章节锁定 ${section.displayTitle}`}
                           title="解除章节锁定"
                         >
                           <Unlock className="h-3.5 w-3.5" />
@@ -2772,10 +2810,10 @@ export const ArtifactPane: React.FC = () => {
                         <button
                           onClick={() => lockSection(section)}
                           className="inline-flex shrink-0 items-center gap-1 rounded-md bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-500"
-                          aria-label={`锁定 ${section.title}`}
+                          aria-label={`锁定 ${section.displayTitle}`}
                         >
                           <Lock className="h-3.5 w-3.5" />
-                          锁定 {section.title}
+                          锁定 {section.displayTitle}
                         </button>
                       )}
                     </div>

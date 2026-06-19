@@ -39,11 +39,12 @@ export type ArtifactSectionLock = {
     id: string;
     stageId: string;
     heading: string;
+    sectionAnchor: string | null;
     content: string;
     createdAt: number;
 };
 
-export type ArtifactSectionLockInput = Pick<ArtifactSectionLock, 'heading' | 'content'> & Partial<Pick<ArtifactSectionLock, 'stageId'>>;
+export type ArtifactSectionLockInput = Pick<ArtifactSectionLock, 'heading' | 'content'> & Partial<Pick<ArtifactSectionLock, 'stageId' | 'sectionAnchor'>>;
 
 export type ArtifactAuditEvent = {
     stageId: string;

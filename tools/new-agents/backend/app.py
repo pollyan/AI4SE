@@ -16,6 +16,7 @@ def init_db(app):
     with app.app_context():
         db.create_all()
         _ensure_artifact_comment_columns()
+        _ensure_artifact_section_lock_columns()
         upsert_default_llm_config_from_env()
 
 
@@ -39,6 +40,23 @@ def _ensure_artifact_comment_columns():
         if column_name not in existing_columns:
             db.session.execute(text(statement))
     db.session.commit()
+
+
+def _ensure_artifact_section_lock_columns():
+    """Upgrade existing section lock tables created before section anchors."""
+    inspector = inspect(db.engine)
+    if "agent_artifact_section_locks" not in inspector.get_table_names():
+        return
+
+    existing_columns = {
+        column["name"]
+        for column in inspector.get_columns("agent_artifact_section_locks")
+    }
+    if "section_anchor" not in existing_columns:
+        db.session.execute(text(
+            "ALTER TABLE agent_artifact_section_locks ADD COLUMN section_anchor TEXT"
+        ))
+        db.session.commit()
 
 
 def create_app(test_config=None):

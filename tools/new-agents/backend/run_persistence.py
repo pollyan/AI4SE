@@ -543,6 +543,7 @@ def _section_lock_snapshot(lock: AgentArtifactSectionLock) -> dict:
         "id": lock.client_id,
         "stageId": lock.stage_id,
         "heading": lock.heading,
+        "sectionAnchor": lock.section_anchor,
         "content": lock.content,
         "createdAt": lock.created_at_ms,
     }
@@ -608,6 +609,7 @@ def replace_artifact_collaboration_state(run_id: str, patch: dict) -> dict:
                 client_id=_read_collaboration_string(item, "id"),
                 stage_id=stage_id,
                 heading=_read_collaboration_string(item, "heading"),
+                section_anchor=_read_optional_collaboration_string(item, "sectionAnchor"),
                 content=_read_collaboration_string(item, "content"),
                 created_at_ms=_read_collaboration_integer(item, "createdAt"),
             )

@@ -627,6 +627,7 @@ def test_agent_run_artifact_collaboration_endpoint_replaces_state(
                     "id": "lock-1",
                     "stageId": "CLARIFY",
                     "heading": "## 业务规则",
+                    "sectionAnchor": "h2:业务规则:1",
                     "content": "## 业务规则\n\n已确认登录规则。",
                     "createdAt": 1710000000100,
                 }
@@ -660,6 +661,7 @@ def test_agent_run_artifact_collaboration_endpoint_replaces_state(
                 "id": "lock-1",
                 "stageId": "CLARIFY",
                 "heading": "## 业务规则",
+                "sectionAnchor": "h2:业务规则:1",
                 "content": "## 业务规则\n\n已确认登录规则。",
                 "createdAt": 1710000000100,
             }
@@ -687,6 +689,7 @@ def test_agent_run_artifact_collaboration_endpoint_replaces_state(
                     "id": "lock-2",
                     "stageId": "CLARIFY",
                     "heading": "## 验收口径",
+                    "sectionAnchor": "h2:验收口径:1",
                     "content": "## 验收口径\n\n验收标准已确认。",
                     "createdAt": 1710000000200,
                 }
@@ -701,6 +704,7 @@ def test_agent_run_artifact_collaboration_endpoint_replaces_state(
             "id": "lock-2",
             "stageId": "CLARIFY",
             "heading": "## 验收口径",
+            "sectionAnchor": "h2:验收口径:1",
             "content": "## 验收口径\n\n验收标准已确认。",
             "createdAt": 1710000000200,
         }

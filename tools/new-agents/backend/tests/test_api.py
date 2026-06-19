@@ -78,6 +78,44 @@ def test_init_db_upgrades_existing_artifact_comment_table():
         os.unlink(db_path)
 
 
+def test_init_db_upgrades_existing_artifact_section_lock_table():
+    db_fd, db_path = tempfile.mkstemp()
+    app = create_app({
+        'TESTING': True,
+        'SQLALCHEMY_DATABASE_URI': f'sqlite:///{db_path}',
+        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+    })
+
+    try:
+        with app.app_context():
+            db.session.execute(text("""
+                CREATE TABLE agent_artifact_section_locks (
+                    id INTEGER PRIMARY KEY,
+                    run_id VARCHAR(36) NOT NULL,
+                    client_id VARCHAR(128) NOT NULL,
+                    stage_id VARCHAR(64) NOT NULL,
+                    heading TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at_ms INTEGER NOT NULL
+                )
+            """))
+            db.session.commit()
+
+            init_db(app)
+
+            columns = {
+                row[1]
+                for row in db.session.execute(
+                    text("PRAGMA table_info(agent_artifact_section_locks)")
+                )
+            }
+
+        assert "section_anchor" in columns
+    finally:
+        os.close(db_fd)
+        os.unlink(db_path)
+
+
 def test_health_endpoint(client):
     response = client.get('/api/health')
     assert response.status_code == 200

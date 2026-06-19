@@ -294,6 +294,32 @@ describe('Zustand Store', () => {
         expect(useStore.getState().artifactSectionLocks).toEqual([]);
     });
 
+    it('should preserve section anchors and keep duplicate heading locks distinct', () => {
+        useStore.getState().addArtifactSectionLock({
+            heading: '## 验收口径',
+            content: '## 验收口径\n\n第一个验收口径。',
+            sectionAnchor: 'h2:验收口径:1',
+        });
+        useStore.getState().addArtifactSectionLock({
+            heading: '## 验收口径',
+            content: '## 验收口径\n\n第二个验收口径。',
+            sectionAnchor: 'h2:验收口径:2',
+        });
+
+        expect(useStore.getState().getArtifactSectionLocksForStage('CLARIFY')).toEqual([
+            expect.objectContaining({
+                heading: '## 验收口径',
+                content: '## 验收口径\n\n第一个验收口径。',
+                sectionAnchor: 'h2:验收口径:1',
+            }),
+            expect.objectContaining({
+                heading: '## 验收口径',
+                content: '## 验收口径\n\n第二个验收口径。',
+                sectionAnchor: 'h2:验收口径:2',
+            }),
+        ]);
+    });
+
     it('should restore artifact comments and section locks from a run snapshot', () => {
         useStore.getState().restoreRunSnapshot({
             run: {
@@ -345,6 +371,7 @@ describe('Zustand Store', () => {
                     stageId: 'CLARIFY',
                     heading: '## 业务规则',
                     content: '## 业务规则\n\n已确认的登录规则。',
+                    sectionAnchor: 'h2:业务规则:1',
                     createdAt: 1710000000100,
                 },
                 {
@@ -396,6 +423,7 @@ describe('Zustand Store', () => {
                 stageId: 'CLARIFY',
                 heading: '## 业务规则',
                 content: '## 业务规则\n\n已确认的登录规则。',
+                sectionAnchor: 'h2:业务规则:1',
                 createdAt: 1710000000100,
             },
         ]);
