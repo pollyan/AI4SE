@@ -3798,8 +3798,17 @@ export const ArtifactPane: React.FC = () => {
     () => new Map(conflictDraftAddedBlocks.map(block => [block.startIndex, block])),
     [conflictDraftAddedBlocks]
   );
+  const conflictDraftRemovedBlocks = useMemo(
+    () => buildContiguousDiffBlocks(conflictDraftDiff, 'removed'),
+    [conflictDraftDiff]
+  );
+  const conflictDraftRemovedBlockByStartIndex = useMemo(
+    () => new Map(conflictDraftRemovedBlocks.map(block => [block.startIndex, block])),
+    [conflictDraftRemovedBlocks]
+  );
   const conflictDraftModifiedBlocks = useMemo(() => {
     const blocks: Array<{
+      removedStartIndex: number;
       addedStartIndex: number;
       removedLines: string[];
       addedLines: string[];
@@ -3813,6 +3822,7 @@ export const ArtifactPane: React.FC = () => {
         continue;
       }
 
+      const removedStartIndex = index;
       const removedLines: string[] = [];
       while (conflictDraftDiff[index]?.type === 'removed') {
         const content = conflictDraftDiff[index].content;
@@ -3830,6 +3840,7 @@ export const ArtifactPane: React.FC = () => {
 
       if (removedLines.length > 0 && addedLines.length > 0) {
         blocks.push({
+          removedStartIndex,
           addedStartIndex,
           removedLines,
           addedLines,
@@ -3842,6 +3853,10 @@ export const ArtifactPane: React.FC = () => {
   }, [conflictDraftDiff]);
   const conflictDraftModifiedBlockByAddedStartIndex = useMemo(
     () => new Map(conflictDraftModifiedBlocks.map(block => [block.addedStartIndex, block])),
+    [conflictDraftModifiedBlocks]
+  );
+  const conflictDraftModifiedBlockByRemovedStartIndex = useMemo(
+    () => new Map(conflictDraftModifiedBlocks.map(block => [block.removedStartIndex, block])),
     [conflictDraftModifiedBlocks]
   );
   const autoMergedConflict = useMemo(
@@ -4254,6 +4269,15 @@ export const ArtifactPane: React.FC = () => {
     });
   };
 
+  const recordArtifactServerBlockRestoredEvent = (lineContents: string[]) => {
+    if (!currentStageId) return;
+    addArtifactAuditEvent({
+      stageId: currentStageId,
+      eventType: 'artifact_merge_block_server_restored',
+      summary: `合并轨迹：恢复服务端删除块「${buildConflictMergeBlockLabel(lineContents)}」`,
+    });
+  };
+
   const recordArtifactModifiedBlockAuditEvent = (
     eventType: 'artifact_merge_block_modified_accepted' | 'artifact_merge_block_modified_kept',
     removedLines: string[],
@@ -4298,6 +4322,28 @@ export const ArtifactPane: React.FC = () => {
 
     setEditDraft(nextDraftLines.join('\n'));
     recordArtifactMergeBlockAuditEvent('artifact_merge_block_discarded', blockLines);
+  };
+
+  const restoreConflictServerBlock = (lineContents: string[]) => {
+    if (!conflictArtifact) return;
+    const blockLines = lineContents.filter(line => line.trim());
+    if (blockLines.length === 0) return;
+
+    const draftLines = editDraft.replace(/\r\n/g, '\n').split('\n');
+    const linesToRestore = blockLines.filter(lineContent => !draftLines.includes(lineContent));
+    if (linesToRestore.length === 0) return;
+
+    const serverLines = conflictArtifact.content.replace(/\r\n/g, '\n').split('\n');
+    const serverLineIndex = serverLines.findIndex(line => line === blockLines[0]);
+    if (serverLineIndex < 0) return;
+
+    const insertIndex = Math.min(serverLineIndex, draftLines.length);
+    setEditDraft([
+      ...draftLines.slice(0, insertIndex),
+      ...linesToRestore,
+      ...draftLines.slice(insertIndex),
+    ].join('\n'));
+    recordArtifactServerBlockRestoredEvent(linesToRestore);
   };
 
   const acceptConflictDraftBlock = (lineContents: string[]) => {
@@ -4944,6 +4990,24 @@ export const ArtifactPane: React.FC = () => {
                               {line.type === 'added' ? '+ ' : line.type === 'removed' ? '- ' : '  '}
                               {line.content || ' '}
                             </span>
+                            {line.type === 'removed'
+                              && line.content.trim()
+                              && conflictDraftRemovedBlockByStartIndex.has(index)
+                              && !conflictDraftModifiedBlockByRemovedStartIndex.has(index) && (
+                                <span className="flex shrink-0 items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const block = conflictDraftRemovedBlockByStartIndex.get(index);
+                                      if (block) restoreConflictServerBlock(block.lines);
+                                    }}
+                                    aria-label={`恢复服务端变更块：${conflictDraftRemovedBlockByStartIndex.get(index)?.label ?? line.content}`}
+                                    className="rounded border border-rose-300/20 px-1.5 py-0.5 text-[10px] font-semibold text-rose-100 hover:bg-rose-300/10"
+                                  >
+                                    恢复服务端块
+                                  </button>
+                                </span>
+                              )}
                             {line.type === 'added' && line.content.trim() && (
                               <span className="flex shrink-0 items-center gap-1">
                                 {conflictDraftModifiedBlockByAddedStartIndex.has(index) && (

@@ -651,6 +651,13 @@
   - 块级操作继续先把修改前的当前产物写入 `artifactHistory`，再同步更新 `artifactContent` 和当前阶段 `stageArtifacts`；逐行按钮仍保留，避免用户只能全块处理。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "history block"` 观察到缺少 `恢复变更块` / `丢弃变更块` 失败；实现后运行同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "history"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`npm run test`、`git diff --check`。
   - 剩余：冲突面板中 `server-only` 删除块仍需要补齐块级恢复入口；更复杂三方 merge 解析继续只覆盖可证明安全场景，歧义场景保持人工处理。
+- 2026-06-20：完成第五十四块 CGA「Artifact 冲突服务端删除块恢复」。
+  - 保存冲突的 `服务端版本 vs 你的草稿` 面板现在会识别服务端存在、草稿删除的连续非空块，并在块起始行显示 `恢复服务端块`。
+  - 点击后会按服务端原位置把缺失块插回编辑草稿，适合恢复被用户误删的连续风险、验收口径、结论段落等内容。
+  - 该入口会避开 `removed+added` 组成的修改块，避免和已有 `采纳修改块` / `保留服务端修改块` 决策重复或误导。
+  - 恢复操作会记录 `artifact_merge_block_server_restored` 审计轨迹；用户仍需点击 `保存修改` 走现有冲突检测和服务端保存流程。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "server-only block"` 观察到缺少 `恢复服务端变更块` 失败；实现后运行同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "block"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`。
+  - 剩余：更复杂三方 merge 解析继续只覆盖可证明安全场景；统一 Artifact 审阅面板和批注锚点稳定性仍是协作体验后续切片。
 - 2026-06-20：产品决策更新「Artifact 协作后续收敛」。
   - 高保真导出不再继续深挖：DOCX 包级导出、Markdown/PDF 语义投影、DOCX Mermaid SVG 嵌入已经达到本轮可接受水位；PDF 图片级嵌入和更复杂排版按当前阶段止步完成。
   - 恢复中心、分享/权限、多人实时协同、与 intent-tester 自动打通暂不纳入本轮目标。

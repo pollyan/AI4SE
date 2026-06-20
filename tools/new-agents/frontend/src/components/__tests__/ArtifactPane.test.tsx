@@ -1589,6 +1589,55 @@ describe('ArtifactPane Component', () => {
         ]);
     });
 
+    it('restores a contiguous server-only block into the artifact conflict draft', async () => {
+        vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
+            '产出物已被更新，请刷新后再保存',
+            {
+                stageId: 'STRATEGY',
+                content: '# 测试策略蓝图\n\n服务端保留风险\n服务端保留验收口径\n共同内容',
+                versionNumber: 3,
+            },
+        ));
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentRunId: 'run-123',
+            artifactContent: '# 测试策略蓝图\n\n服务端保留风险\n服务端保留验收口径\n共同内容',
+            stageArtifacts: {
+                STRATEGY: '# 测试策略蓝图\n\n服务端保留风险\n服务端保留验收口径\n共同内容',
+            },
+            artifactHistory: [
+                {
+                    id: 'run-123-STRATEGY-v2',
+                    timestamp: 123,
+                    content: '# 测试策略蓝图\n\n服务端保留风险\n服务端保留验收口径\n共同内容',
+                    stageId: 'STRATEGY',
+                },
+            ],
+            artifactAuditEvents: [],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: { value: '# 测试策略蓝图\n\n共同内容' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+        fireEvent.click(await screen.findByRole('button', { name: '对比服务端版本' }));
+        fireEvent.click(screen.getByRole('button', { name: '恢复服务端变更块：服务端保留风险 / 服务端保留验收口径' }));
+
+        expect((screen.getByLabelText('编辑产出物 Markdown') as HTMLTextAreaElement).value).toBe(
+            '# 测试策略蓝图\n\n服务端保留风险\n服务端保留验收口径\n共同内容'
+        );
+        expect(useStore.getState().artifactAuditEvents).toEqual([
+            expect.objectContaining({
+                stageId: 'STRATEGY',
+                eventType: 'artifact_merge_block_server_restored',
+                summary: '合并轨迹：恢复服务端删除块「服务端保留风险 / 服务端保留验收口径」',
+            }),
+        ]);
+    });
+
     it('accepts a draft-only line into a server-based conflict draft', async () => {
         vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
             '产出物已被更新，请刷新后再保存',
