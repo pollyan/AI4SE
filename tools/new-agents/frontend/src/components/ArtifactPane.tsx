@@ -1498,6 +1498,10 @@ export const ArtifactPane: React.FC = () => {
     targetHeading: string;
     sectionOrders: Map<string, string[]>;
   };
+  type TableRowReorderChange = {
+    heading: string;
+    targetLines: string[];
+  };
   type SectionMovementUnit = {
     heading: string;
     key: string;
@@ -1625,6 +1629,97 @@ export const ArtifactPane: React.FC = () => {
     hasUnsafeUnitReorder(baseSectionLines, targetSectionLines, heading)
     || hasSafeParagraphOrderChange(baseSectionLines, targetSectionLines)
   );
+  const isMarkdownTableLine = (line: string): boolean => /^\|.*\|$/.test(line.trim());
+  const isMarkdownTableSeparatorLine = (line: string): boolean => {
+    const trimmedLine = line.trim();
+    return (
+      isMarkdownTableLine(trimmedLine)
+      && trimmedLine.includes('---')
+      && /^[\s|:-]+$/.test(trimmedLine)
+    );
+  };
+  const hasMarkdownTableLineChangeInSection = (
+    baseSectionLines: string[],
+    targetSectionLines: string[]
+  ): boolean => {
+    if (areLineGroupsEqual(baseSectionLines, targetSectionLines)) return false;
+    return (
+      baseSectionLines.some(isMarkdownTableLine)
+      || targetSectionLines.some(isMarkdownTableLine)
+    );
+  };
+  const parseTableRowReorderSectionLines = (
+    baseSectionLines: string[],
+    targetSectionLines: string[]
+  ): string[] | null => {
+    if (baseSectionLines.length !== targetSectionLines.length) return null;
+
+    const tableStarts = baseSectionLines.reduce<number[]>((starts, line, index) => {
+      if (
+        index > 0
+        && index < baseSectionLines.length - 2
+        && isMarkdownTableLine(line)
+        && isMarkdownTableSeparatorLine(baseSectionLines[index + 1])
+      ) {
+        starts.push(index);
+      }
+      return starts;
+    }, []);
+    if (tableStarts.length !== 1) return null;
+
+    const tableStart = tableStarts[0];
+    let tableEndExclusive = tableStart + 2;
+    while (
+      tableEndExclusive < baseSectionLines.length
+      && isMarkdownTableLine(baseSectionLines[tableEndExclusive])
+    ) {
+      tableEndExclusive += 1;
+    }
+    if (tableEndExclusive - tableStart < 4) return null;
+
+    for (let index = 0; index < baseSectionLines.length; index += 1) {
+      const isDataRow = index >= tableStart + 2 && index < tableEndExclusive;
+      if (isDataRow) continue;
+      if (baseSectionLines[index] !== targetSectionLines[index]) return null;
+    }
+
+    const baseRows = baseSectionLines.slice(tableStart + 2, tableEndExclusive);
+    const targetRows = targetSectionLines.slice(tableStart + 2, tableEndExclusive);
+    if (!targetRows.every(isMarkdownTableLine)) return null;
+    if (new Set(baseRows).size !== baseRows.length || new Set(targetRows).size !== targetRows.length) {
+      return null;
+    }
+    if (!areSectionOrdersEqual([...baseRows].sort(), [...targetRows].sort())) return null;
+    if (areSectionOrdersEqual(baseRows, targetRows)) return null;
+
+    return targetSectionLines;
+  };
+  const findTableRowReorderChange = (
+    baseSections: ParsedMarkdownSections,
+    targetSections: ParsedMarkdownSections
+  ): TableRowReorderChange | null => {
+    if (
+      !areLineGroupsEqual(baseSections.preambleLines, targetSections.preambleLines)
+      || !hasSameSectionShape(baseSections, targetSections)
+    ) {
+      return null;
+    }
+
+    let change: TableRowReorderChange | null = null;
+    for (let index = 0; index < baseSections.sections.length; index += 1) {
+      const baseSection = baseSections.sections[index];
+      const targetSection = targetSections.sections[index];
+      if (areLineGroupsEqual(baseSection.lines, targetSection.lines)) continue;
+      const reorderedLines = parseTableRowReorderSectionLines(baseSection.lines, targetSection.lines);
+      if (!reorderedLines) return null;
+      if (change) return null;
+      change = {
+        heading: baseSection.heading,
+        targetLines: reorderedLines,
+      };
+    }
+    return change;
+  };
   const parseSectionParagraphBlocks = (sectionLines: string[]): ParsedParagraphBlock[] | null => {
     const blocks: ParsedParagraphBlock[] = [];
     let currentBlockLines: string[] = [];
@@ -1975,6 +2070,12 @@ export const ArtifactPane: React.FC = () => {
     ) {
       return null;
     }
+    if (baseSections.sections.some((baseSection, index) => (
+      hasMarkdownTableLineChangeInSection(baseSection.lines, serverSections.sections[index].lines)
+      || hasMarkdownTableLineChangeInSection(baseSection.lines, draftSections.sections[index].lines)
+    ))) {
+      return null;
+    }
 
     let hasServerChange = false;
     let hasDraftChange = false;
@@ -2017,6 +2118,108 @@ export const ArtifactPane: React.FC = () => {
     return {
       content: mergedContent,
       summary: '合并轨迹：自动合并服务端与草稿的非重叠章节改写',
+    };
+  };
+  const buildAutoMergedTableRowReorderResult = (
+    baseContent: string,
+    serverContent: string,
+    draftContent: string
+  ): AutoMergedConflictResult | null => {
+    const baseSections = parseMarkdownSectionsForAutoMerge(baseContent);
+    const serverSections = parseMarkdownSectionsForAutoMerge(serverContent);
+    const draftSections = parseMarkdownSectionsForAutoMerge(draftContent);
+    if (!baseSections || !serverSections || !draftSections) return null;
+    if (
+      !areLineGroupsEqual(baseSections.preambleLines, serverSections.preambleLines)
+      || !areLineGroupsEqual(baseSections.preambleLines, draftSections.preambleLines)
+      || !hasSameSectionShape(baseSections, serverSections)
+      || !hasSameSectionShape(baseSections, draftSections)
+    ) {
+      return null;
+    }
+
+    const serverReorder = findTableRowReorderChange(baseSections, serverSections);
+    const draftReorder = findTableRowReorderChange(baseSections, draftSections);
+    if (!serverReorder && !draftReorder) return null;
+    if (
+      serverReorder
+      && draftReorder
+      && (
+        serverReorder.heading !== draftReorder.heading
+        || !areLineGroupsEqual(serverReorder.targetLines, draftReorder.targetLines)
+      )
+    ) {
+      return null;
+    }
+
+    const reorder = draftReorder ?? serverReorder;
+    if (!reorder) return null;
+    if (draftReorder && !serverReorder && hasMovementThatShouldBypassSectionRewrite(baseSections, serverSections)) {
+      return null;
+    }
+    if (serverReorder && !draftReorder && hasMovementThatShouldBypassSectionRewrite(baseSections, draftSections)) {
+      return null;
+    }
+
+    const mergedSectionLines: string[][] = [];
+    let hasOtherSideChange = false;
+    for (let index = 0; index < baseSections.sections.length; index += 1) {
+      const baseSection = baseSections.sections[index];
+      const serverSection = serverSections.sections[index];
+      const draftSection = draftSections.sections[index];
+      const serverChanged = !areLineGroupsEqual(baseSection.lines, serverSection.lines);
+      const draftChanged = !areLineGroupsEqual(baseSection.lines, draftSection.lines);
+
+      if (baseSection.heading === reorder.heading) {
+        const nonReorderSection = draftReorder ? serverSection : draftSection;
+        if (
+          !serverReorder
+          || !draftReorder
+        ) {
+          if (!areLineGroupsEqual(nonReorderSection.lines, baseSection.lines)) return null;
+        }
+        mergedSectionLines.push(reorder.targetLines);
+        continue;
+      }
+
+      if (
+        (serverChanged && hasSectionMovementForAutoMerge(baseSection.lines, serverSection.lines, baseSection.heading))
+        || (draftChanged && hasSectionMovementForAutoMerge(baseSection.lines, draftSection.lines, baseSection.heading))
+      ) {
+        return null;
+      }
+      if (
+        serverChanged
+        && draftChanged
+        && !areLineGroupsEqual(serverSection.lines, draftSection.lines)
+      ) {
+        return null;
+      }
+
+      if (draftChanged) {
+        hasOtherSideChange = true;
+        mergedSectionLines.push(draftSection.lines);
+      } else if (serverChanged) {
+        hasOtherSideChange = true;
+        mergedSectionLines.push(serverSection.lines);
+      } else {
+        mergedSectionLines.push(baseSection.lines);
+      }
+    }
+
+    if (!serverReorder || !draftReorder) {
+      if (!hasOtherSideChange) return null;
+    }
+
+    const mergedContent = [
+      ...baseSections.preambleLines,
+      ...mergedSectionLines.flat(),
+    ].join('\n');
+    if (mergedContent === serverContent.replace(/\r\n/g, '\n')) return null;
+
+    return {
+      content: mergedContent,
+      summary: '合并轨迹：自动合并服务端与草稿的非重叠表格行重排',
     };
   };
   const buildAutoMergedParagraphMoveResult = (
@@ -2621,6 +2824,28 @@ export const ArtifactPane: React.FC = () => {
       || hasMovementThatShouldBypassSectionRewrite(baseSections, draftSections)
     );
   };
+  const hasMarkdownTableChangeForAutoMerge = (
+    baseContent: string,
+    serverContent: string,
+    draftContent: string
+  ): boolean => {
+    const baseSections = parseMarkdownSectionsForAutoMerge(baseContent);
+    const serverSections = parseMarkdownSectionsForAutoMerge(serverContent);
+    const draftSections = parseMarkdownSectionsForAutoMerge(draftContent);
+    if (!baseSections || !serverSections || !draftSections) return false;
+    if (!hasSameSectionShape(baseSections, serverSections) || !hasSameSectionShape(baseSections, draftSections)) {
+      return false;
+    }
+
+    const targetHasTableChange = (targetSections: ParsedMarkdownSections): boolean => (
+      baseSections.sections.some((baseSection, index) => {
+        const targetSection = targetSections.sections[index];
+        return hasMarkdownTableLineChangeInSection(baseSection.lines, targetSection.lines);
+      })
+    );
+
+    return targetHasTableChange(serverSections) || targetHasTableChange(draftSections);
+  };
   const hasStructuredBlockReorderForAutoMerge = (
     baseContent: string,
     serverContent: string,
@@ -2744,6 +2969,19 @@ export const ArtifactPane: React.FC = () => {
         editDraft
       );
       if (sectionRewriteMerge) return sectionRewriteMerge;
+      const tableRowReorderMerge = buildAutoMergedTableRowReorderResult(
+        artifactContent,
+        conflictArtifact.content,
+        editDraft
+      );
+      if (tableRowReorderMerge) return tableRowReorderMerge;
+      if (hasMarkdownTableChangeForAutoMerge(
+        artifactContent,
+        conflictArtifact.content,
+        editDraft
+      )) {
+        return null;
+      }
       const paragraphMoveMerge = buildAutoMergedParagraphMoveResult(
         artifactContent,
         conflictArtifact.content,

@@ -2068,6 +2068,18 @@ describe('ArtifactPane Component', () => {
         ]);
     };
 
+    const expectTableRowReorderAutoMerge = async (expectedContent: string) => {
+        fireEvent.click(await screen.findByRole('button', { name: '自动合并非重叠变更' }));
+        expect((screen.getByLabelText('编辑产出物 Markdown') as HTMLTextAreaElement).value).toBe(expectedContent);
+        expect(useStore.getState().artifactAuditEvents).toEqual([
+            expect.objectContaining({
+                stageId: 'STRATEGY',
+                eventType: 'artifact_auto_merge_applied',
+                summary: '合并轨迹：自动合并服务端与草稿的非重叠表格行重排',
+            }),
+        ]);
+    };
+
     const expectNoParagraphMovementAutoMerge = async () => {
         await screen.findByRole('button', { name: '对比服务端版本' });
         expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
@@ -2837,7 +2849,7 @@ describe('ArtifactPane Component', () => {
         await expectStructuredBlockReorderReason();
     });
 
-    it('does not auto-merge paragraph movement for table rows when the server rewrites another section', async () => {
+    it('does not auto-merge table row reordering when a reordered row is rewritten', async () => {
         const tableBaseContent = [
             '# 测试策略蓝图',
             '',
@@ -2871,6 +2883,66 @@ describe('ArtifactPane Component', () => {
                 '## 风险策略',
                 '| 场景 | 风险 |',
                 '| --- | --- |',
+                '| 风控 | 极高 |',
+                '| 支付 | 高 |',
+                '| 退款 | 中 |',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            tableBaseContent,
+        );
+
+        await expectNoStructuredBlockReorderReason();
+    });
+
+    it('auto-merges table row reordering when draft reorders rows and server rewrites another section', async () => {
+        const tableBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '| 场景 | 风险 |',
+            '| --- | --- |',
+            '| 支付 | 高 |',
+            '| 退款 | 中 |',
+            '| 风控 | 高 |',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        const expectedContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '| 场景 | 风险 |',
+            '| --- | --- |',
+            '| 风控 | 高 |',
+            '| 支付 | 高 |',
+            '| 退款 | 中 |',
+            '',
+            '## 验收口径',
+            '服务端补充验收口径。',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '| 场景 | 风险 |',
+                '| --- | --- |',
+                '| 支付 | 高 |',
+                '| 退款 | 中 |',
+                '| 风控 | 高 |',
+                '',
+                '## 验收口径',
+                '服务端补充验收口径。',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '| 场景 | 风险 |',
+                '| --- | --- |',
                 '| 风控 | 高 |',
                 '| 支付 | 高 |',
                 '| 退款 | 中 |',
@@ -2881,7 +2953,67 @@ describe('ArtifactPane Component', () => {
             tableBaseContent,
         );
 
-        await expectStructuredBlockReorderReason();
+        await expectTableRowReorderAutoMerge(expectedContent);
+    });
+
+    it('auto-merges table row reordering when server reorders rows and draft rewrites another section', async () => {
+        const tableBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '| 场景 | 风险 |',
+            '| --- | --- |',
+            '| 支付 | 高 |',
+            '| 退款 | 中 |',
+            '| 风控 | 高 |',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        const expectedContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '| 场景 | 风险 |',
+            '| --- | --- |',
+            '| 风控 | 高 |',
+            '| 支付 | 高 |',
+            '| 退款 | 中 |',
+            '',
+            '## 验收口径',
+            '用户补充验收口径。',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '| 场景 | 风险 |',
+                '| --- | --- |',
+                '| 风控 | 高 |',
+                '| 支付 | 高 |',
+                '| 退款 | 中 |',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '| 场景 | 风险 |',
+                '| --- | --- |',
+                '| 支付 | 高 |',
+                '| 退款 | 中 |',
+                '| 风控 | 高 |',
+                '',
+                '## 验收口径',
+                '用户补充验收口径。',
+            ].join('\n'),
+            tableBaseContent,
+        );
+
+        await expectTableRowReorderAutoMerge(expectedContent);
     });
 
     it('does not auto-merge paragraph movement inside fenced blocks when the server rewrites another section', async () => {

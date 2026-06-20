@@ -605,3 +605,9 @@
   - 该提示复用现有 ArtifactPane 冲突态，不新增后端契约、不写审计轨迹，也不改变普通段落/章节自动合并算法。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "table rows when the server rewrites another section"` 观察到缺少提示失败；实现后同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "paragraph movement"`。
   - 剩余：结构化块内部安全自动合并（如可证明无内容改写的表格行重排、fenced block 内部行重排）和更复杂三方 merge 解析仍可作为后续增强切片。
+- 2026-06-20：完成第四十八块 CGA「Artifact 表格行重排自动合并」。
+  - 保存冲突现在会识别保守 Markdown 表格行重排：一侧只调整同一张表格的数据行顺序，表头、分隔行、行内容和行集合完全不变，另一侧只改写其他章节时，可使用 `自动合并非重叠变更`。
+  - 点击后编辑草稿会同时保留安全的表格行顺序和另一侧章节改写，并记录 `artifact_auto_merge_applied`，summary 区分 `非重叠表格行重排`。
+  - 表格行内容变化、重复行、表头变化、双方不同表格顺序、表格重排叠加其他段落/章节移动时继续拒绝自动合并，避免把结构化数据误合并。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "auto-merges table row reordering"` 观察到缺少自动合并入口失败；实现后同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "table row"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`。
+  - 剩余：fenced block 内部行重排、列表项安全重排和更复杂三方 merge 解析仍可作为后续增强切片。
