@@ -4487,6 +4487,14 @@ export const ArtifactPane: React.FC = () => {
     }, 0);
   };
 
+  const getCommentAnchorStatus = (anchorText: string | null): 'none' | 'active' | 'stale' => {
+    const normalizedAnchorText = normalizeCommentAnchorText(anchorText ?? '');
+    if (!normalizedAnchorText) return 'none';
+
+    const normalizedArtifactContent = artifactContent.replace(/\s+/g, ' ');
+    return normalizedArtifactContent.includes(normalizedAnchorText) ? 'active' : 'stale';
+  };
+
   const locateArtifactVisualDiagnostic = useCallback((
     request: ArtifactVisualDiagnosticFocusRequest | null,
     diagnostics: ArtifactVisualDiagnostic[]
@@ -5185,14 +5193,22 @@ export const ArtifactPane: React.FC = () => {
                   当前阶段没有未解决批注。
                 </p>
               ) : (
-                currentStageOpenComments.map((comment) => (
-                  <article key={comment.id} className="rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
-                    <p className="break-words text-sm leading-relaxed text-slate-100">{comment.content}</p>
-                    <blockquote className="mt-2 border-l-2 border-amber-300/40 pl-3 text-xs leading-relaxed text-slate-500">
-                      {comment.artifactExcerpt || '当前产出物'}
-                    </blockquote>
-                  </article>
-                ))
+                currentStageOpenComments.map((comment) => {
+                  const anchorStatus = getCommentAnchorStatus(comment.anchorText);
+                  return (
+                    <article key={comment.id} className="rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
+                      <p className="break-words text-sm leading-relaxed text-slate-100">{comment.content}</p>
+                      <blockquote className="mt-2 border-l-2 border-amber-300/40 pl-3 text-xs leading-relaxed text-slate-500">
+                        {comment.artifactExcerpt || '当前产出物'}
+                      </blockquote>
+                      {anchorStatus === 'stale' && (
+                        <div className="mt-2 inline-flex rounded border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-[10px] font-bold text-amber-200">
+                          锚点已失效
+                        </div>
+                      )}
+                    </article>
+                  );
+                })
               )}
             </section>
 
@@ -5282,7 +5298,9 @@ export const ArtifactPane: React.FC = () => {
                 <p className="text-sm text-slate-500">当前阶段还没有批注。</p>
               ) : (
                 <div className="space-y-3">
-                  {currentStageComments.map((comment) => (
+                  {currentStageComments.map((comment) => {
+                    const anchorStatus = getCommentAnchorStatus(comment.anchorText);
+                    return (
                     <article key={comment.id} className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
                       <div className="mb-2 flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
@@ -5315,7 +5333,7 @@ export const ArtifactPane: React.FC = () => {
                       <blockquote className="border-l-2 border-blue-500/50 pl-3 text-xs leading-relaxed text-slate-500">
                         {comment.artifactExcerpt || '当前产出物'}
                       </blockquote>
-                      {comment.anchorText && (
+                      {anchorStatus === 'active' && comment.anchorText && (
                         <button
                           type="button"
                           onClick={() => locateArtifactCommentAnchor(comment.anchorText ?? '')}
@@ -5323,6 +5341,14 @@ export const ArtifactPane: React.FC = () => {
                         >
                           定位正文
                         </button>
+                      )}
+                      {anchorStatus === 'stale' && (
+                        <div className="mt-2 rounded border border-amber-400/20 bg-amber-400/10 px-2 py-1.5">
+                          <div className="text-[10px] font-bold text-amber-200">锚点已失效</div>
+                          <div className="mt-0.5 text-[10px] leading-relaxed text-amber-100/80">
+                            正文已变化，请重新确认这条批注的位置。
+                          </div>
+                        </div>
                       )}
                       {comment.replies.length > 0 && (
                         <div className="mt-3 space-y-2 border-t border-[#1e293b] pt-3">
@@ -5364,7 +5390,8 @@ export const ArtifactPane: React.FC = () => {
                         {new Date(comment.createdAt).toLocaleString()}
                       </p>
                     </article>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

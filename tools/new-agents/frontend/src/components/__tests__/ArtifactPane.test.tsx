@@ -6250,6 +6250,39 @@ describe('ArtifactPane Component', () => {
         expect(highlight?.textContent).toBe('请重点确认 SSO 回调失败后的登录边界。');
     });
 
+    it('shows stale anchor status when anchored comment text no longer exists', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 需求分析文档\n\n登录边界已经被改写。',
+            artifactComments: [
+                {
+                    id: 'comment-1',
+                    stageId: 'CLARIFY',
+                    content: '这里需要业务确认登录边界。',
+                    artifactExcerpt: '请重点确认 SSO 回调失败后的登录边界。',
+                    anchorText: '请重点确认 SSO 回调失败后的登录边界。',
+                    createdAt: 1710000000000,
+                    status: 'open',
+                    resolvedAt: null,
+                    replies: [],
+                },
+            ],
+        });
+
+        render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('批注');
+
+        expect(screen.getByText('锚点已失效')).toBeTruthy();
+        expect(screen.getByText('正文已变化，请重新确认这条批注的位置。')).toBeTruthy();
+
+        fireEvent.click(screen.getByTitle('关闭批注'));
+        fireEvent.click(screen.getByRole('button', { name: '更多产物操作' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: '审阅' }));
+
+        expect(screen.getByText('锚点已失效')).toBeTruthy();
+    });
+
     it('syncs artifact comments to the current server run', async () => {
         vi.mocked(updateRunArtifactCollaboration).mockResolvedValue({
             artifactComments: [],
