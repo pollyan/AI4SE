@@ -122,9 +122,9 @@ export function Workspace() {
     }, [chatHistory.length]);
 
     return (
-        <div className="flex flex-col h-screen w-full bg-[#0B1120] text-slate-200 font-sans overflow-hidden antialiased selection:bg-blue-500/30 selection:text-white">
+        <div className="flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden bg-[#0B1120] text-slate-200 font-sans antialiased selection:bg-blue-500/30 selection:text-white">
             <Header />
-            <main className="flex flex-1 overflow-hidden relative">
+            <main className="relative flex min-h-0 flex-1 overflow-hidden">
                 <Suspense fallback={<div className="flex flex-1 bg-[#0B1120]" />}>
                     <ChatPane />
                     <ArtifactPane />

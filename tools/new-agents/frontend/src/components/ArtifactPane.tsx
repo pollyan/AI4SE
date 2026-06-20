@@ -2729,7 +2729,7 @@ export const ArtifactPane: React.FC = () => {
   const readOnlyMarkdownComponents = createArtifactMarkdownComponents();
 
   return (
-    <section className="flex flex-col w-full lg:w-[60%] bg-[#0B0F17] text-gray-300 relative shadow-2xl overflow-hidden bg-grid-pattern h-full">
+    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#0B0F17] text-gray-300 relative shadow-2xl bg-grid-pattern lg:w-[60%]">
       <style>{`
         .bg-grid-pattern {
             background-image: linear-gradient(to right, #1f2937 1px, transparent 1px), linear-gradient(to bottom, #1f2937 1px, transparent 1px);
@@ -2841,7 +2841,7 @@ export const ArtifactPane: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-8 md:px-16 relative z-0 custom-scrollbar">
+      <div className="relative z-0 min-h-0 flex-1 overflow-y-auto p-8 custom-scrollbar md:px-16">
         {/* P0-9: Truncation warning banner */}
         {artifactTruncated && (
           <div className="max-w-4xl mx-auto mb-4 flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm">

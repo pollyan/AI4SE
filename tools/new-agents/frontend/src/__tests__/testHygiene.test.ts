@@ -180,4 +180,20 @@ describe('test hygiene', () => {
 
         expect(offenders).toEqual([]);
     });
+
+    it('keeps the workspace shell dark and height-constrained during streaming visual renders', () => {
+        const indexCss = readFileSync(join(sourceRoot, 'index.css'), 'utf8');
+        const workspace = readFileSync(join(sourceRoot, 'pages', 'Workspace.tsx'), 'utf8');
+        const artifactPane = readFileSync(join(sourceRoot, 'components', 'ArtifactPane.tsx'), 'utf8');
+        const expectClassTokens = (source: string, selectorPattern: RegExp, tokens: string[]) => {
+            const className = source.match(selectorPattern)?.[1] ?? '';
+            expect(tokens.filter((token) => !className.split(/\s+/).includes(token))).toEqual([]);
+        };
+
+        expect(indexCss).toMatch(/html,\s*body,\s*#root\s*\{[^}]*background:\s*#0B1120;/s);
+        expectClassTokens(workspace, /<div className="([^"]*)">/, ['h-[100dvh]', 'min-h-0', 'overflow-hidden']);
+        expectClassTokens(workspace, /<main className="([^"]*)">/, ['flex-1', 'min-h-0', 'overflow-hidden']);
+        expectClassTokens(artifactPane, /<section className="([^"]*)">/, ['min-h-0', 'overflow-hidden', 'bg-grid-pattern']);
+        expectClassTokens(artifactPane, /<div className="([^"]*overflow-y-auto[^"]*)">/, ['flex-1', 'min-h-0', 'overflow-y-auto']);
+    });
 });
