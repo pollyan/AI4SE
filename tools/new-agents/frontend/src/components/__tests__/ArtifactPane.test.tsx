@@ -215,6 +215,145 @@ describe('ArtifactPane Component', () => {
         expect(screen.getByText('最近版本：run-123-CLARIFY-v2')).toBeTruthy();
     });
 
+    it('resolves unresolved comments directly from the artifact review panel', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 需求分析\n\n## 登录边界\n\n需要确认',
+            artifactComments: [
+                {
+                    id: 'comment-open',
+                    stageId: 'CLARIFY',
+                    content: '这里需要业务确认登录边界。',
+                    artifactExcerpt: '登录边界',
+                    anchorText: '登录边界',
+                    createdAt: 1710000000000,
+                    status: 'open',
+                    resolvedAt: null,
+                    replies: [],
+                },
+            ],
+        });
+        render(<ArtifactPane />);
+
+        clickArtifactToolbarMenuItem('审阅');
+        fireEvent.click(screen.getByRole('button', {
+            name: '标记已解决：这里需要业务确认登录边界。',
+        }));
+
+        expect(screen.queryByText('这里需要业务确认登录边界。')).toBeNull();
+        expect(screen.getByText('当前阶段没有未解决批注。')).toBeTruthy();
+        expect(useStore.getState().artifactComments).toEqual([
+            expect.objectContaining({
+                id: 'comment-open',
+                status: 'resolved',
+            }),
+        ]);
+    });
+
+    it('locates active comment anchors from the artifact review panel', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 需求分析文档\n\n默认正文。\n\n请重点确认 SSO 回调失败后的登录边界。',
+            artifactComments: [
+                {
+                    id: 'comment-1',
+                    stageId: 'CLARIFY',
+                    content: '这里需要业务确认登录边界。',
+                    artifactExcerpt: '请重点确认 SSO 回调失败后的登录边界。',
+                    anchorText: '请重点确认 SSO 回调失败后的登录边界。',
+                    createdAt: 1710000000000,
+                    status: 'open',
+                    resolvedAt: null,
+                    replies: [],
+                },
+            ],
+        });
+
+        const { container } = render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('审阅');
+        fireEvent.click(screen.getByRole('button', {
+            name: '定位正文：这里需要业务确认登录边界。',
+        }));
+
+        const highlight = container.querySelector('[data-artifact-anchor-highlight="true"]');
+        expect(highlight?.textContent).toBe('请重点确认 SSO 回调失败后的登录边界。');
+    });
+
+    it('opens comment handling for stale anchors from the artifact review panel', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 需求分析\n\n新的正文',
+            artifactComments: [
+                {
+                    id: 'comment-stale',
+                    stageId: 'CLARIFY',
+                    content: '旧位置需要处理。',
+                    artifactExcerpt: '旧正文',
+                    anchorText: '旧正文',
+                    createdAt: 1710000000000,
+                    status: 'open',
+                    resolvedAt: null,
+                    replies: [],
+                },
+            ],
+        });
+        render(<ArtifactPane />);
+
+        clickArtifactToolbarMenuItem('审阅');
+        fireEvent.click(screen.getByRole('button', {
+            name: '处理失效锚点：旧位置需要处理。',
+        }));
+
+        expect(screen.getByText('产出物批注')).toBeTruthy();
+        expect(screen.getByRole('button', { name: '重新绑定选区' })).toBeTruthy();
+        expect(screen.queryByText('产物审阅')).toBeNull();
+    });
+
+    it('opens section locks and history from the artifact review panel', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 需求分析\n\n## 已确认范围\n\n登录',
+            artifactHistory: [
+                {
+                    id: 'version-1',
+                    content: '# 历史版本',
+                    timestamp: 1710000000000,
+                    stageId: 'CLARIFY',
+                },
+            ],
+            artifactSectionLocks: [
+                {
+                    id: 'lock-1',
+                    stageId: 'CLARIFY',
+                    heading: '## 已确认范围',
+                    sectionAnchor: '已确认范围::1',
+                    content: '## 已确认范围\n\n登录',
+                    createdAt: 1710000000000,
+                },
+            ],
+        });
+        render(<ArtifactPane />);
+
+        clickArtifactToolbarMenuItem('审阅');
+        fireEvent.click(screen.getByRole('button', {
+            name: '管理锁定章节：## 已确认范围',
+        }));
+        expect(screen.getByText('章节锁定')).toBeTruthy();
+        expect(screen.queryByText('产物审阅')).toBeNull();
+
+        fireEvent.click(screen.getByTitle('关闭章节锁定'));
+        clickArtifactToolbarMenuItem('审阅');
+        fireEvent.click(screen.getByRole('button', {
+            name: '查看最近版本：version-1',
+        }));
+        expect(screen.getByText('版本预览')).toBeTruthy();
+        expect(screen.queryByText('产物审阅')).toBeNull();
+    });
+
     it('renders mermaid diagrams', () => {
         useStore.setState({ artifactContent: '```mermaid\ngraph TD\nA-->B\n```' });
         render(<ArtifactPane />);

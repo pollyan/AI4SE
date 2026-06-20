@@ -706,3 +706,8 @@
   - 冲突提示会显示 `自动合并暂不可用`，说明 `双方改动涉及同一章节的多处段落，已保留你的草稿，请手工确认后重试保存。`；textarea 仍保留用户草稿，用户可以继续手工处理后再次保存。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "paragraph insertion|auto-merge unavailable"` 观察到正例缺少自动合并入口、危险场景误显示自动合并入口、不可用原因缺失；实现后同命令 4/4 通过。扩展验证见本轮收尾记录。
   - 剩余：更复杂三方语义 merge 继续只覆盖能证明安全的场景；若需要继续推进，应按“Artifact 冲突处理能力包”聚合，而不是按单个算法分支拆薄。
+- 2026-06-20：完成第五十九块 CGA「Artifact 审阅面板处理闭环」。
+  - `更多产物操作 -> 审阅` 不再只是只读摘要；用户可直接标记未解决批注、定位有效锚点、进入失效锚点重绑、打开章节锁定面板或切到历史版本视图。
+  - 审阅面板继续复用现有批注、章节锁定、历史版本和审计轨迹状态，不新增后端 API、Lisa/Alex 专属分支或多人实时协同能力。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "artifact review panel"` 观察到 4 个缺少审阅处理入口的预期失败；实现后同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run test -- --run src/__tests__/store.test.ts -t "artifact comment"`、`npm run lint`、`npm run build`、`npm run test`、`git diff --check`。
+  - 剩余：更复杂三方 merge 解析只继续覆盖可证明安全的完整冲突场景；歧义场景保持人工处理。

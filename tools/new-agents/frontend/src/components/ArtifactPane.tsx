@@ -4736,6 +4736,28 @@ export const ArtifactPane: React.FC = () => {
     syncArtifactCollaborationState();
   };
 
+  const resolveCommentFromReview = (commentId: string) => {
+    setArtifactCommentStatus(commentId, 'resolved');
+    syncArtifactCollaborationState();
+  };
+
+  const openCommentsFromReview = () => {
+    setShowReviewPanel(false);
+    setShowSectionLocks(false);
+    setShowComments(true);
+  };
+
+  const openSectionLocksFromReview = () => {
+    setShowReviewPanel(false);
+    setShowComments(false);
+    setShowSectionLocks(true);
+  };
+
+  const openHistoryFromReview = () => {
+    setShowReviewPanel(false);
+    openHistory();
+  };
+
   const rebindCurrentStageCommentAnchor = (commentId: string) => {
     const anchorText = captureSelectedArtifactText() ?? selectedArtifactText;
     if (!anchorText) {
@@ -4767,6 +4789,11 @@ export const ArtifactPane: React.FC = () => {
         highlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }, 0);
+  };
+
+  const locateCommentAnchorFromReview = (anchorText: string) => {
+    setShowReviewPanel(false);
+    locateArtifactCommentAnchor(anchorText);
   };
 
   const getCommentAnchorStatus = (anchorText: string | null): 'none' | 'active' | 'stale' => {
@@ -5483,6 +5510,36 @@ export const ArtifactPane: React.FC = () => {
                       <blockquote className="mt-2 border-l-2 border-amber-300/40 pl-3 text-xs leading-relaxed text-slate-500">
                         {comment.artifactExcerpt || '当前产出物'}
                       </blockquote>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => resolveCommentFromReview(comment.id)}
+                          className="rounded border border-emerald-400/30 px-2 py-1 text-[10px] font-semibold text-emerald-200 transition-colors hover:bg-emerald-400/10"
+                          aria-label={`标记已解决：${comment.content}`}
+                        >
+                          标记已解决
+                        </button>
+                        {anchorStatus === 'active' && comment.anchorText && (
+                          <button
+                            type="button"
+                            onClick={() => locateCommentAnchorFromReview(comment.anchorText ?? '')}
+                            className="rounded border border-blue-400/30 px-2 py-1 text-[10px] font-semibold text-blue-200 transition-colors hover:bg-blue-400/10"
+                            aria-label={`定位正文：${comment.content}`}
+                          >
+                            定位正文
+                          </button>
+                        )}
+                        {anchorStatus === 'stale' && (
+                          <button
+                            type="button"
+                            onClick={openCommentsFromReview}
+                            className="rounded border border-amber-300/30 px-2 py-1 text-[10px] font-semibold text-amber-100 transition-colors hover:bg-amber-300/10"
+                            aria-label={`处理失效锚点：${comment.content}`}
+                          >
+                            处理失效锚点
+                          </button>
+                        )}
+                      </div>
                       {anchorStatus === 'stale' && (
                         <div className="mt-2 inline-flex rounded border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-[10px] font-bold text-amber-200">
                           锚点已失效
@@ -5507,6 +5564,14 @@ export const ArtifactPane: React.FC = () => {
                     <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">
                       {lock.content.replace(lock.heading, '').trim() || '空章节'}
                     </p>
+                    <button
+                      type="button"
+                      onClick={openSectionLocksFromReview}
+                      className="mt-3 rounded border border-blue-400/30 px-2 py-1 text-[10px] font-semibold text-blue-100 transition-colors hover:bg-blue-400/10"
+                      aria-label={`管理锁定章节：${lock.heading}`}
+                    >
+                      管理锁定章节
+                    </button>
                   </article>
                 ))
               )}
@@ -5535,6 +5600,16 @@ export const ArtifactPane: React.FC = () => {
                   ? `最近版本：${latestStageArtifactVersion.id}`
                   : '当前阶段还没有历史版本'}
               </p>
+              {latestStageArtifactVersion && (
+                <button
+                  type="button"
+                  onClick={openHistoryFromReview}
+                  className="mt-3 rounded border border-slate-500/40 px-2 py-1 text-[10px] font-semibold text-slate-200 transition-colors hover:bg-white/10"
+                  aria-label={`查看最近版本：${latestStageArtifactVersion.id}`}
+                >
+                  查看最近版本
+                </button>
+              )}
             </section>
           </div>
         </aside>
