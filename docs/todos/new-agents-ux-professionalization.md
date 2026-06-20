@@ -207,6 +207,12 @@
   - Mermaid 组件新增模块级渲染缓存，同一 chart 重挂载时复用已生成 SVG，不再重复调用 Mermaid runtime；缓存上限 50 条，避免长会话无限增长。
   - 新增回归测试覆盖“同一 chart 在 artifact streaming 期间重挂载时只渲染一次”的行为。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/Mermaid.test.tsx -t "reuses the rendered SVG"` 观察到重复调用 `mermaid.render` 失败；实现后通过，并运行 `npm run test -- --run src/components/__tests__/Mermaid.test.tsx`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx src/components/__tests__/markdownCodeRenderer.test.tsx src/__tests__/testHygiene.test.ts`、`npm run lint`、`npm run build`、`npm run test`。
+- 2026-06-20：完成策略产物 Mermaid 语法兼容遗留修复。
+  - 回顾历史 worktree 时发现 `codex/fix-new-agents-mermaid-parse` 分支存在未进入主干的 Mermaid 兼容提交；该分支已落后主干，不能直接合并，因此按当前主干重新实现有效差异。
+  - `validateMermaidBlocks` 现在会先复用共享 `sanitizeMermaidCode` 再调用 `mermaid.parse`，避免可修正的模型语法变体直接触发结构化输出失败。
+  - `sanitizeMermaidCode` 新增 `quadrantChart` 轴/象限标签断行和引号规范化，以及 `block-beta block["..."] { ... }` 分组语法降级为普通节点的保守修正。
+  - `TEST_DESIGN/STRATEGY` prompt 和模板收紧 Mermaid 输出格式，`block-beta` 示例改为 Mermaid 可解析的普通节点写法。
+  - 验证：先运行 `npm run test -- --run src/core/__tests__/mermaidSanitizer.test.ts src/core/__tests__/llm.test.ts src/core/__tests__/mermaid.test.ts` 观察到 4 个预期失败；实现后同命令通过。扩展验证见本轮收尾记录。
 
 ### 5. 左侧对话自然表达与重点可扫描
 

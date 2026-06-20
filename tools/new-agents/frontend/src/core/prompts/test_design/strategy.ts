@@ -3,6 +3,7 @@ import { FENCE } from '../../utils/constants';
 export const STRATEGY_PROMPT = `基于需求澄清阶段的结论，制定测试策略蓝图并在右侧生成《测试策略蓝图》。
 【重要警告】：产出物中绝对不要包含"下一步计划"或类似章节。
 风险分析必须同时输出 Mermaid quadrantChart 和 ai4se-visual risk-board。risk-board 用于稳定展示 FMEA 三因子、RPN、缓解策略和测试覆盖建议。
+Mermaid 必须严格按模板格式输出：quadrantChart 的 title、x-axis、y-axis、quadrant-* 各自独立成行，轴标签和象限标签必须使用英文双引号；block-beta 只使用 columns 与普通节点，不要使用 block["..."] { ... } 分组语法。
 `;
 
 export const STRATEGY_TEMPLATE = `# 测试策略蓝图
@@ -72,9 +73,9 @@ ${FENCE}
 ${FENCE}mermaid
 block-beta
     columns 1
-    block:e2e["E2E (占比%)\\n端到端验证"]:1
-    block:integ["集成 (占比%)\\n接口与数据流验证"]:1
-    block:unit["单元 (占比%)\\n核心逻辑与边界值"]:1
+    e2e["E2E (占比%) - 端到端验证"]
+    integ["集成 (占比%) - 接口与数据流验证"]
+    unit["单元 (占比%) - 核心逻辑与边界值"]
 ${FENCE}
 
 ### 4.2 分层明细

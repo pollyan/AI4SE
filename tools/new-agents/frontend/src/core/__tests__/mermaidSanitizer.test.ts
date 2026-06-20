@@ -37,6 +37,42 @@ describe('Mermaid Sanitizer', () => {
             const expected = 'graph TD\nA --> B\nB --> C';
             expect(sanitizeMermaidCode(input)).toBe(expected);
         });
+
+        it('should normalize quadrantChart axis and quadrant labels emitted on one line', () => {
+            const input = [
+                'quadrantChart',
+                '    title 风险优先级矩阵 x-axis 低影响 --> 高影响 y-axis 低概率 --> 高概率 quadrant-1 重点验证 quadrant-2 监控 quadrant-3 接受 quadrant-4 补充分析',
+                '    登录风险: [0.8, 0.6]',
+            ].join('\n');
+
+            expect(sanitizeMermaidCode(input)).toBe([
+                'quadrantChart',
+                '    title 风险优先级矩阵',
+                '    x-axis "低影响" --> "高影响"',
+                '    y-axis "低概率" --> "高概率"',
+                '    quadrant-1 "重点验证"',
+                '    quadrant-2 "监控"',
+                '    quadrant-3 "接受"',
+                '    quadrant-4 "补充分析"',
+                '    "登录风险": [0.8, 0.6]',
+            ].join('\n'));
+        });
+
+        it('should normalize unsupported block-beta grouped block syntax', () => {
+            const input = [
+                'block-beta',
+                '    columns 1 block["测试分层"] {',
+                '        e2e["端到端验证"]',
+                '    }',
+            ].join('\n');
+
+            expect(sanitizeMermaidCode(input)).toBe([
+                'block-beta',
+                '    columns 1',
+                '    block_1["测试分层"]',
+                '        e2e["端到端验证"]',
+            ].join('\n'));
+        });
     });
 
     describe('aggressiveSanitize', () => {

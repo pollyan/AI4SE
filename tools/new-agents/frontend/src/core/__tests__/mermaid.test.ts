@@ -74,6 +74,15 @@ describe('Mermaid Syntax Validation for workflow prompt examples', () => {
         expect(isValid).toBe(true);
     });
 
+    it('should successfully parse the block-beta mermaid syntax from test design strategy prompt', async () => {
+        const promptText = WORKFLOWS.TEST_DESIGN.stages.find(s => s.id === 'STRATEGY')?.template || '';
+        const matches = [...promptText.matchAll(/```mermaid\n([\s\S]*?)```/g)];
+        expect(matches.length).toBeGreaterThan(1);
+
+        const isValid = await validateMermaid(matches[1][1]);
+        expect(isValid).toBe(true);
+    });
+
     it('should successfully parse the mindmap mermaid syntax from idea brainstorm define prompt', async () => {
         const promptText = WORKFLOWS.IDEA_BRAINSTORM.stages.find(s => s.id === 'DEFINE')?.template || '';
         const match = promptText.match(/```mermaid\n([\s\S]*?)```/);

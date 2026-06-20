@@ -625,6 +625,62 @@ describe('llm.ts', () => {
             );
         });
 
+        it('TEST_DESIGN/STRATEGY typed artifact 应先修正常见 Mermaid 变体再预校验', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 1,
+                artifactContent: '# 测试策略蓝图\n\n初始内容',
+                stageArtifacts: { STRATEGY: '# 测试策略蓝图\n\n初始内容' },
+            });
+            const artifact = [
+                '# 测试策略蓝图',
+                '',
+                '```mermaid',
+                'block-beta',
+                '    columns 1 block["测试分层"] {',
+                '        e2e["端到端验证"]',
+                '    }',
+                '```',
+            ].join('\n');
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    `data: ${JSON.stringify({
+                        type: 'agent_turn',
+                        output: {
+                            chat: '已更新测试策略蓝图。',
+                            artifact_update: {
+                                type: 'replace',
+                                markdown: artifact,
+                            },
+                            stage_action: null,
+                            warnings: [],
+                        },
+                    })}`,
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('制定测试策略')
+            );
+
+            expect(mockMermaidParse).toHaveBeenCalledWith(
+                [
+                    'block-beta',
+                    '    columns 1',
+                    '    block_1["测试分层"]',
+                    '        e2e["端到端验证"]',
+                ].join('\n'),
+                { suppressErrors: false }
+            );
+            expect(results.at(-1)).toMatchObject({
+                chatResponse: '已更新测试策略蓝图。',
+                newArtifact: artifact,
+                hasArtifactUpdate: true,
+            });
+        });
+
         it('TEST_DESIGN/CLARIFY typed artifact 不应把 mermaid-js 代码块当作 Mermaid 校验', async () => {
             resetStore({
                 workflow: 'TEST_DESIGN',
