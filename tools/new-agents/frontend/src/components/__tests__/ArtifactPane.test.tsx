@@ -2073,6 +2073,17 @@ describe('ArtifactPane Component', () => {
         expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
     };
 
+    const expectStructuredBlockReorderReason = async () => {
+        await expectNoParagraphMovementAutoMerge();
+        expect(screen.getByText('结构化块重排需人工处理')).toBeTruthy();
+        expect(screen.getByText(/列表项、表格行或代码块位置调整/)).toBeTruthy();
+    };
+
+    const expectNoStructuredBlockReorderReason = async () => {
+        await expectNoParagraphMovementAutoMerge();
+        expect(screen.queryByText('结构化块重排需人工处理')).toBeNull();
+    };
+
     it('auto-merges paragraph movement when draft moves one paragraph and server rewrites another paragraph in the same section', async () => {
         renderParagraphMoveConflict(
             [
@@ -2212,7 +2223,7 @@ describe('ArtifactPane Component', () => {
             ].join('\n'),
         );
 
-        await expectNoParagraphMovementAutoMerge();
+        await expectNoStructuredBlockReorderReason();
     });
 
     it('does not auto-merge paragraph movement when paragraph blocks repeat', async () => {
@@ -2823,7 +2834,7 @@ describe('ArtifactPane Component', () => {
             listBaseContent,
         );
 
-        await expectNoParagraphMovementAutoMerge();
+        await expectStructuredBlockReorderReason();
     });
 
     it('does not auto-merge paragraph movement for table rows when the server rewrites another section', async () => {
@@ -2870,7 +2881,7 @@ describe('ArtifactPane Component', () => {
             tableBaseContent,
         );
 
-        await expectNoParagraphMovementAutoMerge();
+        await expectStructuredBlockReorderReason();
     });
 
     it('does not auto-merge paragraph movement inside fenced blocks when the server rewrites another section', async () => {
@@ -2920,7 +2931,7 @@ describe('ArtifactPane Component', () => {
             fencedBaseContent,
         );
 
-        await expectNoParagraphMovementAutoMerge();
+        await expectStructuredBlockReorderReason();
     });
 
     it('does not auto-merge paragraph movement when a paragraph is split while the server rewrites the same section', async () => {

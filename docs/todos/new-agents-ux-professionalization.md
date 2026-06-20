@@ -599,3 +599,9 @@
   - 自动合并会记录 `artifact_auto_merge_applied` 活动轨迹，并区分 `非重叠跨章节段落移动`。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "across sections"` 观察到跨章节正例失败；实现后同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "paragraph movement"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`git diff --check`。
   - 剩余：结构化块内部重排和更复杂三方 merge 解析仍可作为后续增强切片。
+- 2026-06-20：完成第四十七块 CGA「Artifact 结构化块重排拒绝原因可见化」。
+  - 保存冲突检测到列表项、表格行或 fenced code / Mermaid block 整体位置调整时，仍保持保守拒绝自动合并，避免把结构化内容误合并。
+  - 冲突提示条现在会显示 `结构化块重排需人工处理`，说明需要打开 `对比服务端版本` 人工确认；用户不再只看到自动合并按钮缺失。
+  - 该提示复用现有 ArtifactPane 冲突态，不新增后端契约、不写审计轨迹，也不改变普通段落/章节自动合并算法。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "table rows when the server rewrites another section"` 观察到缺少提示失败；实现后同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "paragraph movement"`。
+  - 剩余：结构化块内部安全自动合并（如可证明无内容改写的表格行重排、fenced block 内部行重排）和更复杂三方 merge 解析仍可作为后续增强切片。

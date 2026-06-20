@@ -2621,6 +2621,27 @@ export const ArtifactPane: React.FC = () => {
       || hasMovementThatShouldBypassSectionRewrite(baseSections, draftSections)
     );
   };
+  const hasStructuredBlockReorderForAutoMerge = (
+    baseContent: string,
+    serverContent: string,
+    draftContent: string
+  ): boolean => {
+    const baseSections = parseMarkdownSectionsForAutoMerge(baseContent);
+    const serverSections = parseMarkdownSectionsForAutoMerge(serverContent);
+    const draftSections = parseMarkdownSectionsForAutoMerge(draftContent);
+    if (!baseSections || !serverSections || !draftSections) return false;
+
+    const hasUnsafeReorder = (targetSections: ParsedMarkdownSections): boolean => {
+      const targetSectionMap = buildSectionMap(targetSections);
+      return baseSections.sections.some((baseSection) => {
+        const targetSectionLines = targetSectionMap.get(baseSection.heading);
+        if (!targetSectionLines) return false;
+        return hasUnsafeUnitReorder(baseSection.lines, targetSectionLines, baseSection.heading);
+      });
+    };
+
+    return hasUnsafeReorder(serverSections) || hasUnsafeReorder(draftSections);
+  };
   const selectedVersionDiff = useMemo(
     () => selectedVersion
       ? buildLineDiff(selectedVersion.content, artifactContent)
@@ -2771,6 +2792,20 @@ export const ArtifactPane: React.FC = () => {
     },
     [artifactContent, conflictArtifact, editDraft]
   );
+  const autoMergeRejectionReason = useMemo(() => {
+    if (!conflictArtifact || autoMergedConflict) return null;
+    if (!hasStructuredBlockReorderForAutoMerge(
+      artifactContent,
+      conflictArtifact.content,
+      editDraft
+    )) {
+      return null;
+    }
+    return {
+      title: '结构化块重排需人工处理',
+      description: '检测到列表项、表格行或代码块位置调整，为避免误合并，请打开对比服务端版本手动确认。',
+    };
+  }, [artifactContent, autoMergedConflict, conflictArtifact, editDraft]);
 
   const handleMermaidRetry = useCallback(async (brokenCode: string, errorMessage: string, blockIndex: number) => {
     // dynamically import to avoid cyclic or immediate heavy deps
@@ -3659,6 +3694,12 @@ export const ArtifactPane: React.FC = () => {
                     {conflictVersionNumber !== null && (
                       <span className="text-red-100/80">
                         服务端当前版本：v{conflictVersionNumber}
+                      </span>
+                    )}
+                    {autoMergeRejectionReason && (
+                      <span className="rounded-md border border-amber-300/20 bg-amber-400/10 px-2 py-1 text-[11px] text-amber-100">
+                        <span className="font-bold">{autoMergeRejectionReason.title}</span>
+                        <span className="ml-1 text-amber-50/80">{autoMergeRejectionReason.description}</span>
                       </span>
                     )}
                     {conflictArtifact && (
