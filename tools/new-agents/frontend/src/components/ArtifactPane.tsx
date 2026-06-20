@@ -42,6 +42,7 @@ export const ArtifactPane: React.FC = () => {
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
   const [showHistory, setShowHistory] = useState(false);
   const [showArtifactActionsMenu, setShowArtifactActionsMenu] = useState(false);
+  const [showReviewPanel, setShowReviewPanel] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showSectionLocks, setShowSectionLocks] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
@@ -86,6 +87,17 @@ export const ArtifactPane: React.FC = () => {
       : [],
     [artifactAuditEvents, currentStageId]
   );
+  const currentStageOpenComments = useMemo(
+    () => currentStageComments.filter(comment => comment.status !== 'resolved'),
+    [currentStageComments]
+  );
+  const recentStageAuditEvents = useMemo(
+    () => [...currentStageAuditEvents]
+      .sort((left, right) => right.createdAt - left.createdAt)
+      .slice(0, 5),
+    [currentStageAuditEvents]
+  );
+  const latestStageArtifactVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1] ?? null;
 
   const syncArtifactCollaborationState = useCallback(() => {
     if (!currentRunId) return;
@@ -4799,9 +4811,25 @@ export const ArtifactPane: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    setShowReviewPanel((current) => !current);
+                    setShowArtifactActionsMenu(false);
+                    setShowComments(false);
+                    setShowSectionLocks(false);
+                  }}
+                  aria-label="审阅"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/5"
+                  role="menuitem"
+                >
+                  <GitCompare className="h-3.5 w-3.5 text-slate-400" />
+                  审阅
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     captureSelectedArtifactText();
                     setShowComments((current) => !current);
                     setShowArtifactActionsMenu(false);
+                    setShowReviewPanel(false);
                     setShowSectionLocks(false);
                   }}
                   aria-label="批注"
@@ -4816,6 +4844,7 @@ export const ArtifactPane: React.FC = () => {
                   onClick={() => {
                     setShowSectionLocks((current) => !current);
                     setShowArtifactActionsMenu(false);
+                    setShowReviewPanel(false);
                     setShowComments(false);
                   }}
                   aria-label="章节锁定"
@@ -5111,6 +5140,107 @@ export const ArtifactPane: React.FC = () => {
           )}
         </div>
       </div>
+
+      {showReviewPanel && (
+        <aside className="absolute right-6 top-20 z-20 w-[min(400px,calc(100%-3rem))] rounded-xl border border-[#1e293b] bg-[#0f172a] shadow-2xl">
+          <div className="flex items-center justify-between border-b border-[#1e293b] px-4 py-3">
+            <div>
+              <h3 className="text-sm font-semibold text-white">产物审阅</h3>
+              <p className="text-xs text-slate-500">当前阶段 {currentStageId}</p>
+            </div>
+            <button
+              onClick={() => setShowReviewPanel(false)}
+              className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white"
+              title="关闭审阅"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="max-h-[70vh] space-y-4 overflow-auto p-4">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
+                <div className="text-lg font-bold text-amber-200">{currentStageOpenComments.length}</div>
+                <div className="mt-1 text-[11px] text-slate-500">
+                  {currentStageOpenComments.length} 条未解决批注
+                </div>
+              </div>
+              <div className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
+                <div className="text-lg font-bold text-blue-200">{currentStageSectionLocks.length}</div>
+                <div className="mt-1 text-[11px] text-slate-500">
+                  {currentStageSectionLocks.length} 个锁定章节
+                </div>
+              </div>
+              <div className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
+                <div className="text-lg font-bold text-emerald-200">{recentStageAuditEvents.length}</div>
+                <div className="mt-1 text-[11px] text-slate-500">
+                  {recentStageAuditEvents.length} 条近期轨迹
+                </div>
+              </div>
+            </div>
+
+            <section className="space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">未解决批注</h4>
+              {currentStageOpenComments.length === 0 ? (
+                <p className="rounded-lg border border-[#1e293b] bg-[#020617] p-3 text-xs text-slate-500">
+                  当前阶段没有未解决批注。
+                </p>
+              ) : (
+                currentStageOpenComments.map((comment) => (
+                  <article key={comment.id} className="rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
+                    <p className="break-words text-sm leading-relaxed text-slate-100">{comment.content}</p>
+                    <blockquote className="mt-2 border-l-2 border-amber-300/40 pl-3 text-xs leading-relaxed text-slate-500">
+                      {comment.artifactExcerpt || '当前产出物'}
+                    </blockquote>
+                  </article>
+                ))
+              )}
+            </section>
+
+            <section className="space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">锁定章节</h4>
+              {currentStageSectionLocks.length === 0 ? (
+                <p className="rounded-lg border border-[#1e293b] bg-[#020617] p-3 text-xs text-slate-500">
+                  当前阶段没有锁定章节。
+                </p>
+              ) : (
+                currentStageSectionLocks.map((lock) => (
+                  <article key={lock.id} className="rounded-lg border border-blue-400/20 bg-blue-400/5 p-3">
+                    <p className="text-sm font-semibold text-blue-100">{lock.heading}</p>
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">
+                      {lock.content.replace(lock.heading, '').trim() || '空章节'}
+                    </p>
+                  </article>
+                ))
+              )}
+            </section>
+
+            <section className="space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">最近轨迹</h4>
+              {recentStageAuditEvents.length === 0 ? (
+                <p className="rounded-lg border border-[#1e293b] bg-[#020617] p-3 text-xs text-slate-500">
+                  当前阶段还没有合并或协作轨迹。
+                </p>
+              ) : (
+                recentStageAuditEvents.map((event) => (
+                  <article key={`${event.createdAt}-${event.summary}`} className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
+                    <p className="text-xs leading-relaxed text-slate-200">{event.summary}</p>
+                    <p className="mt-1 text-[10px] text-slate-600">{new Date(event.createdAt).toLocaleString()}</p>
+                  </article>
+                ))
+              )}
+            </section>
+
+            <section className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
+              <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">最近版本</h4>
+              <p className="mt-2 text-xs text-slate-300">
+                {latestStageArtifactVersion
+                  ? `最近版本：${latestStageArtifactVersion.id}`
+                  : '当前阶段还没有历史版本'}
+              </p>
+            </section>
+          </div>
+        </aside>
+      )}
 
       {showComments && (
         <aside className="absolute right-6 top-20 z-20 w-[min(360px,calc(100%-3rem))] rounded-xl border border-[#1e293b] bg-[#0f172a] shadow-2xl">

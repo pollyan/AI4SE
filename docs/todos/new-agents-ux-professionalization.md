@@ -658,6 +658,13 @@
   - 恢复操作会记录 `artifact_merge_block_server_restored` 审计轨迹；用户仍需点击 `保存修改` 走现有冲突检测和服务端保存流程。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "server-only block"` 观察到缺少 `恢复服务端变更块` 失败；实现后运行同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "block"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`。
   - 剩余：更复杂三方 merge 解析继续只覆盖可证明安全场景；统一 Artifact 审阅面板和批注锚点稳定性仍是协作体验后续切片。
+- 2026-06-20：完成第五十五块 CGA「Artifact 统一审阅面板 MVP」。
+  - `更多产物操作` 新增 `审阅` 入口，用户可在一个面板内查看当前阶段未解决批注、锁定章节、最近合并/协作轨迹和最近历史版本。
+  - 审阅面板只读聚合现有 `artifactComments`、`artifactSectionLocks`、`artifactAuditEvents` 和 `artifactHistory`，不新增后端契约、不改变保存或同步逻辑。
+  - 已解决批注不会进入待处理列表，避免用户把已闭环事项误认为仍需处理。
+  - 打开审阅面板时会关闭批注和章节锁定浮层，避免右侧多个协作面板叠加。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "artifact review panel"` 观察到缺少 `审阅` 菜单项失败；实现后运行同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "artifact toolbar|opens comments|artifact review panel"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`。
+  - 剩余：批注锚点失效提示与重新定位仍可继续作为协作体验后续切片。
 - 2026-06-20：产品决策更新「Artifact 协作后续收敛」。
   - 高保真导出不再继续深挖：DOCX 包级导出、Markdown/PDF 语义投影、DOCX Mermaid SVG 嵌入已经达到本轮可接受水位；PDF 图片级嵌入和更复杂排版按当前阶段止步完成。
   - 恢复中心、分享/权限、多人实时协同、与 intent-tester 自动打通暂不纳入本轮目标。

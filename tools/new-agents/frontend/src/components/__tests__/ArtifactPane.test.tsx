@@ -143,6 +143,78 @@ describe('ArtifactPane Component', () => {
         expect(screen.queryByRole('menuitem', { name: '下载 Markdown' })).toBeNull();
     });
 
+    it('opens an artifact review panel that summarizes unresolved collaboration work', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 需求分析\n\n## 登录边界\n\n需要确认',
+            artifactComments: [
+                {
+                    id: 'comment-open',
+                    stageId: 'CLARIFY',
+                    content: '这里需要业务确认登录边界。',
+                    artifactExcerpt: '登录边界',
+                    anchorText: '登录边界',
+                    createdAt: 1710000000000,
+                    status: 'open',
+                    resolvedAt: null,
+                    replies: [],
+                },
+                {
+                    id: 'comment-resolved',
+                    stageId: 'CLARIFY',
+                    content: '已确认的旧批注不应进入待办列表。',
+                    artifactExcerpt: '旧内容',
+                    anchorText: null,
+                    createdAt: 1710000001000,
+                    status: 'resolved',
+                    resolvedAt: 1710000002000,
+                    replies: [],
+                },
+            ],
+            artifactSectionLocks: [
+                {
+                    id: 'lock-login',
+                    stageId: 'CLARIFY',
+                    heading: '## 登录边界',
+                    sectionAnchor: '登录边界::1',
+                    content: '## 登录边界\n\n需要确认',
+                    createdAt: 1710000003000,
+                },
+            ],
+            artifactAuditEvents: [
+                {
+                    stageId: 'CLARIFY',
+                    eventType: 'artifact_merge_block_server_restored',
+                    summary: '合并轨迹：恢复服务端删除块「风险 / 验收」',
+                    createdAt: 1710000004000,
+                },
+            ],
+            artifactHistory: [
+                {
+                    id: 'run-123-CLARIFY-v2',
+                    timestamp: 1710000005000,
+                    content: '# 需求分析\n\n版本 2',
+                    stageId: 'CLARIFY',
+                },
+            ],
+        });
+        render(<ArtifactPane />);
+
+        fireEvent.click(screen.getByRole('button', { name: '更多产物操作' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: '审阅' }));
+
+        expect(screen.getByText('产物审阅')).toBeTruthy();
+        expect(screen.getByText('1 条未解决批注')).toBeTruthy();
+        expect(screen.getByText('1 个锁定章节')).toBeTruthy();
+        expect(screen.getByText('1 条近期轨迹')).toBeTruthy();
+        expect(screen.getByText('这里需要业务确认登录边界。')).toBeTruthy();
+        expect(screen.queryByText('已确认的旧批注不应进入待办列表。')).toBeNull();
+        expect(screen.getByText('## 登录边界')).toBeTruthy();
+        expect(screen.getByText('合并轨迹：恢复服务端删除块「风险 / 验收」')).toBeTruthy();
+        expect(screen.getByText('最近版本：run-123-CLARIFY-v2')).toBeTruthy();
+    });
+
     it('renders mermaid diagrams', () => {
         useStore.setState({ artifactContent: '```mermaid\ngraph TD\nA-->B\n```' });
         render(<ArtifactPane />);
