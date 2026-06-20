@@ -1479,6 +1479,9 @@ export const ArtifactPane: React.FC = () => {
   const buildSectionMap = (sections: ParsedMarkdownSections): Map<string, string[]> => (
     new Map(sections.sections.map(section => [section.heading, section.lines]))
   );
+  const getSectionHeadingSet = (sections: ParsedMarkdownSections): Set<string> => (
+    new Set(getSectionOrder(sections))
+  );
   const buildAutoMergedSectionRewriteResult = (
     baseContent: string,
     serverContent: string,
@@ -1610,6 +1613,150 @@ export const ArtifactPane: React.FC = () => {
       summary: '合并轨迹：自动合并服务端与草稿的非重叠章节移动',
     };
   };
+  const buildAutoMergedSectionAddDeleteResult = (
+    baseContent: string,
+    serverContent: string,
+    draftContent: string
+  ): AutoMergedConflictResult | null => {
+    const baseSections = parseMarkdownSectionsForAutoMerge(baseContent);
+    const serverSections = parseMarkdownSectionsForAutoMerge(serverContent);
+    const draftSections = parseMarkdownSectionsForAutoMerge(draftContent);
+    if (!baseSections || !serverSections || !draftSections) return null;
+    if (
+      !areLineGroupsEqual(baseSections.preambleLines, serverSections.preambleLines)
+      || !areLineGroupsEqual(baseSections.preambleLines, draftSections.preambleLines)
+    ) {
+      return null;
+    }
+
+    const baseSectionMap = buildSectionMap(baseSections);
+    const serverSectionMap = buildSectionMap(serverSections);
+    const draftSectionMap = buildSectionMap(draftSections);
+    const baseHeadingSet = getSectionHeadingSet(baseSections);
+    const serverHeadingSet = getSectionHeadingSet(serverSections);
+    const draftHeadingSet = getSectionHeadingSet(draftSections);
+    const serverAddedHeadings = getSectionOrder(serverSections).filter(heading => !baseHeadingSet.has(heading));
+    const serverDeletedHeadings = getSectionOrder(baseSections).filter(heading => !serverHeadingSet.has(heading));
+    const draftAddedHeadings = getSectionOrder(draftSections).filter(heading => !baseHeadingSet.has(heading));
+    const draftDeletedHeadings = getSectionOrder(baseSections).filter(heading => !draftHeadingSet.has(heading));
+
+    if (
+      (serverAddedHeadings.length > 0 && serverDeletedHeadings.length > 0)
+      || (draftAddedHeadings.length > 0 && draftDeletedHeadings.length > 0)
+    ) {
+      return null;
+    }
+    if (
+      serverAddedHeadings.length === 0
+      && serverDeletedHeadings.length === 0
+      && draftAddedHeadings.length === 0
+      && draftDeletedHeadings.length === 0
+    ) {
+      return null;
+    }
+
+    let hasServerChange = serverAddedHeadings.length > 0 || serverDeletedHeadings.length > 0;
+    const mergedSectionLines: string[][] = [];
+
+    for (const section of serverSections.sections) {
+      const heading = section.heading;
+      const serverSectionLines = serverSectionMap.get(heading);
+      const draftSectionLines = draftSectionMap.get(heading);
+      if (!serverSectionLines) return null;
+
+      if (!baseHeadingSet.has(heading)) {
+        if (
+          draftSectionLines
+          && !areLineGroupsEqual(serverSectionLines, draftSectionLines)
+        ) {
+          return null;
+        }
+        mergedSectionLines.push(serverSectionLines);
+        continue;
+      }
+
+      const baseSectionLines = baseSectionMap.get(heading);
+      if (!baseSectionLines) return null;
+      const serverChanged = !areLineGroupsEqual(baseSectionLines, serverSectionLines);
+      if (draftDeletedHeadings.includes(heading)) {
+        if (serverChanged) return null;
+        continue;
+      }
+
+      if (!draftSectionLines) return null;
+      const draftChanged = !areLineGroupsEqual(baseSectionLines, draftSectionLines);
+      if (
+        serverChanged
+        && draftChanged
+        && !areLineGroupsEqual(serverSectionLines, draftSectionLines)
+      ) {
+        return null;
+      }
+
+      if (draftChanged) {
+        mergedSectionLines.push(draftSectionLines);
+      } else if (serverChanged) {
+        hasServerChange = true;
+        mergedSectionLines.push(serverSectionLines);
+      } else {
+        mergedSectionLines.push(baseSectionLines);
+      }
+    }
+
+    for (const heading of serverDeletedHeadings) {
+      const baseSectionLines = baseSectionMap.get(heading);
+      const draftSectionLines = draftSectionMap.get(heading);
+      if (!baseSectionLines) return null;
+      if (
+        draftSectionLines
+        && !areLineGroupsEqual(baseSectionLines, draftSectionLines)
+      ) {
+        return null;
+      }
+    }
+
+    for (const heading of draftAddedHeadings) {
+      if (serverHeadingSet.has(heading)) continue;
+      const draftSectionLines = draftSectionMap.get(heading);
+      if (!draftSectionLines) return null;
+      const previousSectionLines = mergedSectionLines[mergedSectionLines.length - 1];
+      if (
+        previousSectionLines
+        && previousSectionLines[previousSectionLines.length - 1]?.trim()
+        && draftSectionLines[0]?.trim()
+      ) {
+        mergedSectionLines.push(['']);
+      }
+      mergedSectionLines.push(draftSectionLines);
+    }
+
+    if (!hasServerChange) return null;
+
+    const mergedContent = [
+      ...baseSections.preambleLines,
+      ...mergedSectionLines.flat(),
+    ].join('\n');
+    if (mergedContent === serverContent.replace(/\r\n/g, '\n')) return null;
+
+    return {
+      content: mergedContent,
+      summary: '合并轨迹：自动合并服务端与草稿的非重叠章节增删',
+    };
+  };
+  const hasMarkdownSectionSetChangeForAutoMerge = (
+    baseContent: string,
+    serverContent: string,
+    draftContent: string
+  ): boolean => {
+    const baseSections = parseMarkdownSectionsForAutoMerge(baseContent);
+    const serverSections = parseMarkdownSectionsForAutoMerge(serverContent);
+    const draftSections = parseMarkdownSectionsForAutoMerge(draftContent);
+    if (!baseSections || !serverSections || !draftSections) return false;
+    return (
+      !haveSameSectionSet(baseSections, serverSections)
+      || !haveSameSectionSet(baseSections, draftSections)
+    );
+  };
   const selectedVersionDiff = useMemo(
     () => selectedVersion
       ? buildLineDiff(selectedVersion.content, artifactContent)
@@ -1704,11 +1851,35 @@ export const ArtifactPane: React.FC = () => {
     [conflictDraftModifiedBlocks]
   );
   const autoMergedConflict = useMemo(
-    () => conflictArtifact
-      ? buildAutoMergedInsertionResult(artifactContent, conflictArtifact.content, editDraft)
-        ?? buildAutoMergedSectionRewriteResult(artifactContent, conflictArtifact.content, editDraft)
-        ?? buildAutoMergedSectionMoveResult(artifactContent, conflictArtifact.content, editDraft)
-      : null,
+    () => {
+      if (!conflictArtifact) return null;
+      const sectionRewriteMerge = buildAutoMergedSectionRewriteResult(
+        artifactContent,
+        conflictArtifact.content,
+        editDraft
+      );
+      if (sectionRewriteMerge) return sectionRewriteMerge;
+      const sectionMoveMerge = buildAutoMergedSectionMoveResult(
+        artifactContent,
+        conflictArtifact.content,
+        editDraft
+      );
+      if (sectionMoveMerge) return sectionMoveMerge;
+      const sectionAddDeleteMerge = buildAutoMergedSectionAddDeleteResult(
+        artifactContent,
+        conflictArtifact.content,
+        editDraft
+      );
+      if (sectionAddDeleteMerge) return sectionAddDeleteMerge;
+      if (hasMarkdownSectionSetChangeForAutoMerge(
+        artifactContent,
+        conflictArtifact.content,
+        editDraft
+      )) {
+        return null;
+      }
+      return buildAutoMergedInsertionResult(artifactContent, conflictArtifact.content, editDraft);
+    },
     [artifactContent, conflictArtifact, editDraft]
   );
 
