@@ -128,6 +128,19 @@ type MermaidMindmapNode = {
     parentId: string | null;
 };
 
+type MermaidPieSlice = {
+    label: string;
+    value: number;
+    valueText: string;
+};
+
+type MermaidJourneyTask = {
+    section: string;
+    label: string;
+    scoreText: string;
+    actor: string | null;
+};
+
 const parseMermaidNodeToken = (token: string): MermaidDocxNode | null => {
     const trimmedToken = token.trim();
     const labelMatch = trimmedToken.match(/^([A-Za-z0-9_]+)(?:\[[^\]]*\]|\([^)]+\)|\{[^}]+\})$/);
@@ -399,10 +412,168 @@ const parseMermaidMindmapProjection = (source: string): MermaidDocxProjection | 
     };
 };
 
+const cleanMermaidPieLabel = (source: string): string => {
+    const label = source.trim().replace(/^["'“”]+|["'“”]+$/g, '').trim();
+    return stripInlineMarkdown(label);
+};
+
+const parseMermaidPieProjection = (source: string): MermaidDocxProjection | null => {
+    const mermaidLines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const firstLine = mermaidLines[0] || '';
+    const diagramType = firstLine.split(/\s+/)[0] || 'diagram';
+    if (!/^pie$/i.test(diagramType)) return null;
+
+    const inlineTitleMatch = firstLine.match(/^pie\s+title\s+(.+)$/i);
+    let title = inlineTitleMatch ? stripInlineMarkdown(inlineTitleMatch[1].trim()) : 'Pie Chart';
+    const slices: MermaidPieSlice[] = [];
+
+    mermaidLines.slice(1).forEach((line) => {
+        const titleMatch = line.match(/^title\s+(.+)$/i);
+        if (titleMatch) {
+            title = stripInlineMarkdown(titleMatch[1].trim());
+            return;
+        }
+
+        const sliceMatch = line.match(/^(.+?)\s*:\s*([+-]?\d+(?:\.\d+)?)\s*$/);
+        if (!sliceMatch) return;
+        const label = cleanMermaidPieLabel(sliceMatch[1]);
+        const value = Number(sliceMatch[2]);
+        if (!label || !Number.isFinite(value) || value <= 0) return;
+        slices.push({
+            label,
+            value,
+            valueText: sliceMatch[2],
+        });
+    });
+
+    const boundedSlices = slices.slice(0, 8);
+    if (boundedSlices.length === 0) return null;
+
+    const width = 720;
+    const height = 260;
+    const centerX = 150;
+    const centerY = 145;
+    const radius = 64;
+    const legendLeft = 260;
+    const legendTop = 80;
+    const legendGap = 22;
+    const total = boundedSlices.reduce((sum, slice) => sum + slice.value, 0);
+    let currentAngle = -Math.PI / 2;
+
+    const separatorSvg = boundedSlices.slice(0, -1).map((slice) => {
+        currentAngle += (slice.value / total) * Math.PI * 2;
+        const x = Number((centerX + Math.cos(currentAngle) * radius).toFixed(2));
+        const y = Number((centerY + Math.sin(currentAngle) * radius).toFixed(2));
+        return `<line x1="${centerX}" y1="${centerY}" x2="${x}" y2="${y}" stroke="#2563eb" stroke-width="1.4"/>`;
+    }).join('');
+
+    const legendSvg = boundedSlices.map((slice, index) => {
+        const y = legendTop + index * legendGap;
+        return [
+            `<rect x="${legendLeft}" y="${y - 10}" width="10" height="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2"/>`,
+            `<text x="${legendLeft + 18}" y="${y}" font-size="12" font-family="Arial, sans-serif" fill="#0f172a">${xmlEscape(slice.label)}：${xmlEscape(slice.valueText)}</text>`,
+        ].join('');
+    }).join('');
+
+    return {
+        diagramType,
+        svg: [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
+            '<rect x="0" y="0" width="100%" height="100%" fill="#ffffff"/>',
+            `<text x="40" y="42" font-size="20" font-family="Arial, sans-serif" font-weight="700" fill="#0f172a">${xmlEscape(title)}</text>`,
+            `<circle cx="${centerX}" cy="${centerY}" r="${radius}" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>`,
+            separatorSvg,
+            legendSvg,
+            '</svg>',
+        ].join(''),
+    };
+};
+
+const parseMermaidJourneyProjection = (source: string): MermaidDocxProjection | null => {
+    const mermaidLines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const firstLine = mermaidLines[0] || '';
+    const diagramType = firstLine.split(/\s+/)[0] || 'diagram';
+    if (!/^journey$/i.test(diagramType)) return null;
+
+    let title = 'Journey';
+    let currentSection = '旅程';
+    const sections: string[] = [];
+    const tasks: MermaidJourneyTask[] = [];
+
+    mermaidLines.slice(1).forEach((line) => {
+        const titleMatch = line.match(/^title\s+(.+)$/i);
+        if (titleMatch) {
+            title = stripInlineMarkdown(titleMatch[1].trim());
+            return;
+        }
+
+        const sectionMatch = line.match(/^section\s+(.+)$/i);
+        if (sectionMatch) {
+            currentSection = stripInlineMarkdown(sectionMatch[1].trim());
+            if (currentSection && !sections.includes(currentSection)) {
+                sections.push(currentSection);
+            }
+            return;
+        }
+
+        const taskMatch = line.match(/^(.+?)\s*:\s*([+-]?\d+(?:\.\d+)?)\s*(?::\s*(.+))?$/);
+        if (!taskMatch) return;
+        if (currentSection && !sections.includes(currentSection)) {
+            sections.push(currentSection);
+        }
+        tasks.push({
+            section: currentSection,
+            label: stripInlineMarkdown(taskMatch[1].trim()),
+            scoreText: stripInlineMarkdown(taskMatch[2].trim()),
+            actor: taskMatch[3] ? stripInlineMarkdown(taskMatch[3].trim()) : null,
+        });
+    });
+
+    const boundedTasks = tasks.slice(0, 8);
+    if (boundedTasks.length === 0) return null;
+
+    const cardWidth = 128;
+    const cardHeight = 56;
+    const cardGap = 26;
+    const width = Math.max(760, boundedTasks.length * cardWidth + (boundedTasks.length - 1) * cardGap + 80);
+    const height = 300;
+    const baselineY = 138;
+    const cardTop = 166;
+
+    const taskSvg = boundedTasks.map((task, index) => {
+        const x = 40 + index * (cardWidth + cardGap);
+        const centerX = x + cardWidth / 2;
+        return [
+            `<line x1="${centerX}" y1="${baselineY}" x2="${centerX}" y2="${cardTop}" stroke="#64748b" stroke-width="1.4"/>`,
+            `<circle cx="${centerX}" cy="${baselineY}" r="4.5" fill="#2563eb"/>`,
+            `<text x="${centerX}" y="104" text-anchor="middle" font-size="12" font-family="Arial, sans-serif" font-weight="700" fill="#1e40af">${xmlEscape(task.section)}</text>`,
+            `<rect x="${x}" y="${cardTop}" width="${cardWidth}" height="${cardHeight}" rx="8" fill="#f8fafc" stroke="#2563eb" stroke-width="1.3"/>`,
+            `<text x="${x + 10}" y="${cardTop + 21}" font-size="12" font-family="Arial, sans-serif" font-weight="700" fill="#0f172a">${xmlEscape(task.label)}</text>`,
+            `<text x="${x + 10}" y="${cardTop + 42}" font-size="11" font-family="Arial, sans-serif" fill="#334155">评分 ${xmlEscape(task.scoreText)}${task.actor ? ` · ${xmlEscape(task.actor)}` : ''}</text>`,
+        ].join('');
+    }).join('');
+
+    return {
+        diagramType,
+        svg: [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
+            '<rect x="0" y="0" width="100%" height="100%" fill="#ffffff"/>',
+            `<text x="40" y="42" font-size="20" font-family="Arial, sans-serif" font-weight="700" fill="#0f172a">${xmlEscape(title)}</text>`,
+            `<line x1="40" y1="${baselineY}" x2="${width - 40}" y2="${baselineY}" stroke="#93c5fd" stroke-width="3"/>`,
+            taskSvg,
+            '</svg>',
+        ].join(''),
+    };
+};
+
 const parseMermaidDocxProjection = (source: string): MermaidDocxProjection | null => (
     parseMermaidFlowchartProjection(source)
     || parseMermaidTimelineProjection(source)
     || parseMermaidMindmapProjection(source)
+    || parseMermaidPieProjection(source)
+    || parseMermaidJourneyProjection(source)
 );
 
 const projectMermaidFlowLine = (
@@ -439,6 +610,34 @@ const projectMermaidMindmapLine = (line: string): string | null => {
     return label ? stripInlineMarkdown(label) : null;
 };
 
+const projectMermaidPieLine = (line: string): string | null => {
+    const inlineTitleMatch = line.match(/^pie\s+title\s+(.+)$/i);
+    if (inlineTitleMatch) return stripInlineMarkdown(inlineTitleMatch[1].trim());
+    const titleMatch = line.match(/^title\s+(.+)$/i);
+    if (titleMatch) return stripInlineMarkdown(titleMatch[1].trim());
+    const sliceMatch = line.match(/^(.+?)\s*:\s*([+-]?\d+(?:\.\d+)?)\s*$/);
+    if (sliceMatch) {
+        const label = cleanMermaidPieLabel(sliceMatch[1]);
+        return label ? `${label}：${sliceMatch[2].trim()}` : null;
+    }
+    return stripInlineMarkdown(line);
+};
+
+const projectMermaidJourneyLine = (line: string): string | null => {
+    const titleMatch = line.match(/^title\s+(.+)$/i);
+    if (titleMatch) return stripInlineMarkdown(titleMatch[1].trim());
+    const sectionMatch = line.match(/^section\s+(.+)$/i);
+    if (sectionMatch) return stripInlineMarkdown(sectionMatch[1].trim());
+    const taskMatch = line.match(/^(.+?)\s*:\s*([+-]?\d+(?:\.\d+)?)\s*(?::\s*(.+))?$/);
+    if (taskMatch) {
+        const label = stripInlineMarkdown(taskMatch[1].trim());
+        const score = stripInlineMarkdown(taskMatch[2].trim());
+        const actor = taskMatch[3] ? stripInlineMarkdown(taskMatch[3].trim()) : null;
+        return `${label}：${score}${actor ? `（${actor}）` : ''}`;
+    }
+    return stripInlineMarkdown(line);
+};
+
 const projectMermaidSemanticLine = (
     diagramType: string,
     line: string,
@@ -447,6 +646,8 @@ const projectMermaidSemanticLine = (
     if (/^(flowchart|graph)$/i.test(diagramType)) return projectMermaidFlowLine(line, nodeLabels);
     if (/^timeline$/i.test(diagramType)) return projectMermaidTimelineLine(line);
     if (/^mindmap$/i.test(diagramType)) return projectMermaidMindmapLine(line);
+    if (/^pie$/i.test(diagramType)) return projectMermaidPieLine(line);
+    if (/^journey$/i.test(diagramType)) return projectMermaidJourneyLine(line);
     return stripInlineMarkdown(line);
 };
 
@@ -489,8 +690,10 @@ const projectMermaidToWordParagraphs = (source: string, context: DocxBuildContex
     const firstLine = mermaidLines[0] || 'diagram';
     const diagramType = firstLine.split(/\s+/)[0] || 'diagram';
     const nodeLabels = new Map<string, string>();
-    const semanticLines = mermaidLines
-        .slice(1)
+    const semanticSourceLines = /^pie$/i.test(diagramType) && /^pie\s+title\s+.+/i.test(firstLine)
+        ? mermaidLines
+        : mermaidLines.slice(1);
+    const semanticLines = semanticSourceLines
         .map(line => projectMermaidSemanticLine(diagramType, line, nodeLabels))
         .filter((line): line is string => Boolean(line));
     const paragraphs = [

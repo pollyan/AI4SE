@@ -558,3 +558,9 @@
   - SVG 继续由前端本地保守投影生成，文本经过 XML 转义，不把模型输出的任意 SVG/HTML 原样写入 DOCX；实现复用共享 DOCX 导出路径，不新增 Lisa/Alex 或 workflow 专属分支。
   - 验证：先运行 `npm run test -- --run src/core/__tests__/docxExport.test.ts -t "embeds supported Mermaid"` 观察到新增 timeline/mindmap 用例因缺少 `word/media/mermaid-1.svg` 失败；实现后运行 `npm run test -- --run src/core/__tests__/docxExport.test.ts`、`npm run lint`、`npm run build`、`git diff --check`。
   - 剩余：DOCX `pie` / `journey` SVG 嵌入、PDF Mermaid 图片级嵌入、移动语义自动合并、完整三方 merge 的更复杂冲突解析仍可作为后续增强切片。
+- 2026-06-20：完成第四十一块 CGA「Artifact DOCX Mermaid Pie/Journey SVG 嵌入」。
+  - Word/DOCX 导出现在会对 Mermaid `pie` 和 `journey` 生成本地 SVG media part，并写入 `word/_rels/document.xml.rels` 与 `w:drawing` 引用，让优先级分布和用户旅程在 Word 中呈现为图形。
+  - DOCX 仍保留 `Mermaid 图表：pie` / `Mermaid 图表：journey` 与清洗后的标题、分类、数值、阶段、任务、评分和角色语义文本，保证导出物可搜索、可复制，不暴露 fenced source。
+  - SVG 继续由前端本地保守投影生成，文本经过 XML 转义，不把模型输出的任意 SVG/HTML 原样写入 DOCX；实现复用共享 DOCX 导出路径，不新增 Lisa/Alex 或 workflow 专属分支。
+  - 验证：先运行 `npm run test -- --run src/core/__tests__/docxExport.test.ts -t "embeds supported Mermaid"` 观察到新增 pie/journey 用例因缺少 `word/media/mermaid-1.svg` 失败；实现后运行 `npm run test -- --run src/core/__tests__/docxExport.test.ts`、`npm run lint`、`npm run build`、`git diff --check`。
+  - 剩余：PDF Mermaid 图片级嵌入、移动语义自动合并、完整三方 merge 的更复杂冲突解析仍可作为后续增强切片。

@@ -265,4 +265,98 @@ describe('docxExport', () => {
         expect(svg).not.toContain('<foreignObject');
         expect(svg).not.toContain('onload=');
     });
+
+    it('embeds supported Mermaid pies as SVG media in DOCX packages', async () => {
+        const blob = buildDocxPackage([
+            '# 优先级分布',
+            '',
+            '```mermaid',
+            'pie title 评审问题优先级分布',
+            '"高优先级" : 5',
+            '"中优先级" : 3',
+            '"低优先级 <script>alert("x")</script>" : 2',
+            '```',
+        ].join('\n'));
+
+        const entries = await readStoredZipEntries(blob);
+        const documentXml = entries['word/document.xml'];
+        const documentRelationshipsXml = entries['word/_rels/document.xml.rels'];
+        const svg = entries['word/media/mermaid-1.svg'];
+
+        expect(Object.keys(entries)).toEqual(expect.arrayContaining([
+            'word/_rels/document.xml.rels',
+            'word/media/mermaid-1.svg',
+        ]));
+        expect(documentRelationshipsXml).toContain('Target="media/mermaid-1.svg"');
+        expect(documentXml).toContain('<w:drawing>');
+        expect(documentXml).toContain('Mermaid 图表：pie');
+        expect(documentXml).toContain('评审问题优先级分布');
+        expect(documentXml).toContain('高优先级：5');
+        expect(documentXml).toContain('中优先级：3');
+        expect(documentXml).not.toContain('```mermaid');
+        expect(documentXml).not.toContain('pie title 评审问题优先级分布');
+
+        expect(svg).toContain('<svg');
+        expect(svg).toContain('评审问题优先级分布');
+        expect(svg).toContain('高优先级');
+        expect(svg).toContain('5');
+        expect(svg).toContain('中优先级');
+        expect(svg).toContain('3');
+        expect(svg).toContain('低优先级 &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
+        expect(svg).toContain('2');
+        expect(svg).not.toContain('<script>');
+        expect(svg).not.toContain('<foreignObject');
+        expect(svg).not.toContain('onload=');
+    });
+
+    it('embeds supported Mermaid journeys as SVG media in DOCX packages', async () => {
+        const blob = buildDocxPackage([
+            '# 用户旅程',
+            '',
+            '```mermaid',
+            'journey',
+            'title 登录体验旅程',
+            'section 发现问题',
+            '收到告警: 3: 值班员',
+            '确认影响范围 <script>alert("x")</script>: 4: SRE',
+            'section 恢复服务',
+            '回滚配置: 5: 发布负责人',
+            '```',
+        ].join('\n'));
+
+        const entries = await readStoredZipEntries(blob);
+        const documentXml = entries['word/document.xml'];
+        const svg = entries['word/media/mermaid-1.svg'];
+
+        expect(Object.keys(entries)).toEqual(expect.arrayContaining([
+            'word/_rels/document.xml.rels',
+            'word/media/mermaid-1.svg',
+        ]));
+        expect(documentXml).toContain('<w:drawing>');
+        expect(documentXml).toContain('Mermaid 图表：journey');
+        expect(documentXml).toContain('登录体验旅程');
+        expect(documentXml).toContain('发现问题');
+        expect(documentXml).toContain('收到告警：3（值班员）');
+        expect(documentXml).toContain('恢复服务');
+        expect(documentXml).not.toContain('```mermaid');
+        expect(documentXml).not.toContain('title 登录体验旅程');
+        expect(documentXml).not.toContain('section 发现问题');
+
+        expect(svg).toContain('<svg');
+        expect(svg).toContain('登录体验旅程');
+        expect(svg).toContain('发现问题');
+        expect(svg).toContain('收到告警');
+        expect(svg).toContain('3');
+        expect(svg).toContain('值班员');
+        expect(svg).toContain('确认影响范围 &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
+        expect(svg).toContain('4');
+        expect(svg).toContain('SRE');
+        expect(svg).toContain('恢复服务');
+        expect(svg).toContain('回滚配置');
+        expect(svg).toContain('5');
+        expect(svg).toContain('发布负责人');
+        expect(svg).not.toContain('<script>');
+        expect(svg).not.toContain('<foreignObject');
+        expect(svg).not.toContain('onload=');
+    });
 });
