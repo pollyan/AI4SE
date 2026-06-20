@@ -1960,6 +1960,328 @@ describe('ArtifactPane Component', () => {
         expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
     });
 
+    const baseSectionRenameContent = [
+        '# 测试策略蓝图',
+        '',
+        '## 风险策略',
+        '旧风险策略',
+        '',
+        '## 验收口径',
+        '旧验收口径',
+    ].join('\n');
+
+    const renderSectionRenameConflict = (
+        serverContent: string,
+        draftContent: string,
+        baseContent = baseSectionRenameContent,
+    ) => {
+        vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
+            '产出物已被更新，请刷新后再保存',
+            {
+                stageId: 'STRATEGY',
+                content: serverContent,
+                versionNumber: 3,
+            },
+        ));
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentRunId: 'run-123',
+            artifactContent: baseContent,
+            stageArtifacts: {
+                STRATEGY: baseContent,
+            },
+            artifactHistory: [
+                {
+                    id: 'run-123-STRATEGY-v2',
+                    timestamp: 123,
+                    content: baseContent,
+                    stageId: 'STRATEGY',
+                },
+            ],
+            artifactAuditEvents: [],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: {
+                value: draftContent,
+            },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+    };
+
+    it('auto-merges non-overlapping section rename when draft renames and server rewrites another section', async () => {
+        renderSectionRenameConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '服务端风险策略：优先覆盖支付链路',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '旧风险策略',
+                '',
+                '## 质量口径',
+                '旧验收口径',
+            ].join('\n'),
+        );
+
+        fireEvent.click(await screen.findByRole('button', { name: '自动合并非重叠变更' }));
+
+        expect((screen.getByLabelText('编辑产出物 Markdown') as HTMLTextAreaElement).value).toBe([
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '服务端风险策略：优先覆盖支付链路',
+            '',
+            '## 质量口径',
+            '旧验收口径',
+        ].join('\n'));
+        expect(useStore.getState().artifactAuditEvents).toEqual([
+            expect.objectContaining({
+                stageId: 'STRATEGY',
+                eventType: 'artifact_auto_merge_applied',
+                summary: '合并轨迹：自动合并服务端与草稿的非重叠章节重命名',
+            }),
+        ]);
+    });
+
+    it('auto-merges non-overlapping section rename when server renames and draft rewrites another section', async () => {
+        renderSectionRenameConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '旧风险策略',
+                '',
+                '## 质量口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '用户风险策略：优先覆盖退款链路',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+        );
+
+        fireEvent.click(await screen.findByRole('button', { name: '自动合并非重叠变更' }));
+
+        expect((screen.getByLabelText('编辑产出物 Markdown') as HTMLTextAreaElement).value).toBe([
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '用户风险策略：优先覆盖退款链路',
+            '',
+            '## 质量口径',
+            '旧验收口径',
+        ].join('\n'));
+        expect(useStore.getState().artifactAuditEvents).toEqual([
+            expect.objectContaining({
+                stageId: 'STRATEGY',
+                eventType: 'artifact_auto_merge_applied',
+                summary: '合并轨迹：自动合并服务端与草稿的非重叠章节重命名',
+            }),
+        ]);
+    });
+
+    it('auto-merges section rename when both sides rename to the same heading', async () => {
+        renderSectionRenameConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '旧风险策略',
+                '',
+                '## 质量口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '用户风险策略：优先覆盖退款链路',
+                '',
+                '## 质量口径',
+                '旧验收口径',
+            ].join('\n'),
+        );
+
+        fireEvent.click(await screen.findByRole('button', { name: '自动合并非重叠变更' }));
+
+        expect((screen.getByLabelText('编辑产出物 Markdown') as HTMLTextAreaElement).value).toBe([
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '用户风险策略：优先覆盖退款链路',
+            '',
+            '## 质量口径',
+            '旧验收口径',
+        ].join('\n'));
+        expect(useStore.getState().artifactAuditEvents).toEqual([
+            expect.objectContaining({
+                stageId: 'STRATEGY',
+                eventType: 'artifact_auto_merge_applied',
+                summary: '合并轨迹：自动合并服务端与草稿的非重叠章节重命名',
+            }),
+        ]);
+    });
+
+    it('does not auto-merge section rename when both sides rename to different headings', async () => {
+        renderSectionRenameConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '旧风险策略',
+                '',
+                '## 服务验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '旧风险策略',
+                '',
+                '## 质量口径',
+                '旧验收口径',
+            ].join('\n'),
+        );
+
+        await screen.findByRole('button', { name: '对比服务端版本' });
+        expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
+    });
+
+    it('does not auto-merge section rename when renamed section body also changes', async () => {
+        renderSectionRenameConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '服务端风险策略：优先覆盖支付链路',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '旧风险策略',
+                '',
+                '## 质量口径',
+                '用户质量口径：增加回滚检查',
+            ].join('\n'),
+        );
+
+        await screen.findByRole('button', { name: '对比服务端版本' });
+        expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
+    });
+
+    it('does not auto-merge section rename when the other side changed the renamed section body', async () => {
+        renderSectionRenameConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '旧风险策略',
+                '',
+                '## 验收口径',
+                '服务端验收口径：增加支付回归',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '旧风险策略',
+                '',
+                '## 质量口径',
+                '旧验收口径',
+            ].join('\n'),
+        );
+
+        await screen.findByRole('button', { name: '对比服务端版本' });
+        expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
+    });
+
+    it('does not auto-merge section rename when the other side also moves and rewrites a section', async () => {
+        const baseContentWithTrailingBlank = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '旧风险策略',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+            '',
+        ].join('\n');
+
+        renderSectionRenameConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+                '',
+                '## 风险策略',
+                '服务端风险策略：优先覆盖支付链路',
+                '',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '旧风险策略',
+                '',
+                '## 质量口径',
+                '旧验收口径',
+                '',
+            ].join('\n'),
+            baseContentWithTrailingBlank,
+        );
+
+        await screen.findByRole('button', { name: '对比服务端版本' });
+        expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
+    });
+
+    it('does not auto-merge section rename when heading depth changes', async () => {
+        renderSectionRenameConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '服务端风险策略：优先覆盖支付链路',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '旧风险策略',
+                '',
+                '### 质量口径',
+                '旧验收口径',
+            ].join('\n'),
+        );
+
+        await screen.findByRole('button', { name: '对比服务端版本' });
+        expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
+    });
+
     it('auto-merges non-overlapping section add/delete when draft adds a section', async () => {
         vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
             '产出物已被更新，请刷新后再保存',
@@ -2715,7 +3037,7 @@ describe('ArtifactPane Component', () => {
         expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
     });
 
-    it('does not auto-merge section add/delete when the change looks like a section rename', async () => {
+    it('does not auto-merge section add/delete when an unsafe section rename changes the body', async () => {
         vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
             '产出物已被更新，请刷新后再保存',
             {
@@ -2784,7 +3106,7 @@ describe('ArtifactPane Component', () => {
                     '旧风险策略',
                     '',
                     '## 质量口径',
-                    '旧验收口径',
+                    '用户质量口径：增加回滚检查',
                 ].join('\n'),
             },
         });

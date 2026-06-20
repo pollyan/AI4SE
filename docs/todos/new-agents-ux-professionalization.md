@@ -576,3 +576,9 @@
   - 章节重命名、重复标题、服务端删除了草稿改写章节、草稿删除了服务端改写章节、双方改写同一章节且内容不同、双方新增同名章节且内容不同等歧义场景不显示自动合并入口，继续交给人工冲突处理。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "section add/delete"` 观察到 server-side 章节新增/删除正例失败；实现后同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`git diff --check`。
   - 剩余：章节重命名、段落级移动和更复杂三方 merge 解析仍可作为后续增强切片。
+- 2026-06-20：完成第四十四块 CGA「Artifact 章节重命名自动合并」。
+  - 保存冲突现在会在章节增删自动合并之外，识别保守章节重命名：当一侧只修改章节标题且正文不变，另一侧只改写其他章节时，可使用 `自动合并非重叠变更`。
+  - 点击后编辑草稿会保留安全的新章节标题、另一侧非冲突章节改写，并记录 `artifact_auto_merge_applied` 活动轨迹，summary 区分 `非重叠章节重命名`。
+  - 正文同时变化、双方重命名到不同标题、另一侧改写被重命名章节、混入章节移动、重复标题或跨层级重组等歧义场景不显示自动合并入口，继续交给人工冲突处理。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "section rename"` 观察到缺少自动合并入口失败；实现后同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`git diff --check`。
+  - 剩余：段落级移动和更复杂三方 merge 解析仍可作为后续增强切片。

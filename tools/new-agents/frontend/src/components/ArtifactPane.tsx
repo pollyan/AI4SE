@@ -1482,6 +1482,47 @@ export const ArtifactPane: React.FC = () => {
   const getSectionHeadingSet = (sections: ParsedMarkdownSections): Set<string> => (
     new Set(getSectionOrder(sections))
   );
+  const getSectionBodyLines = (sectionLines: string[]): string[] => sectionLines.slice(1);
+  const getMarkdownHeadingDepth = (heading: string): number => heading.match(/^#+/)?.[0].length ?? 0;
+  type SectionRenameChange = {
+    oldHeading: string;
+    newHeading: string;
+    newLines: string[];
+  };
+  const findSectionRenameChange = (
+    baseSections: ParsedMarkdownSections,
+    targetSections: ParsedMarkdownSections
+  ): SectionRenameChange | null => {
+    const baseHeadingSet = getSectionHeadingSet(baseSections);
+    const targetHeadingSet = getSectionHeadingSet(targetSections);
+    const deletedHeadings = getSectionOrder(baseSections).filter(heading => !targetHeadingSet.has(heading));
+    const addedHeadings = getSectionOrder(targetSections).filter(heading => !baseHeadingSet.has(heading));
+    if (deletedHeadings.length !== 1 || addedHeadings.length !== 1) return null;
+
+    const oldHeading = deletedHeadings[0];
+    const newHeading = addedHeadings[0];
+    if (getMarkdownHeadingDepth(oldHeading) !== getMarkdownHeadingDepth(newHeading)) {
+      return null;
+    }
+    const expectedTargetOrder = getSectionOrder(baseSections).map(heading => (
+      heading === oldHeading ? newHeading : heading
+    ));
+    if (!areSectionOrdersEqual(expectedTargetOrder, getSectionOrder(targetSections))) {
+      return null;
+    }
+
+    const baseSection = buildSectionMap(baseSections).get(oldHeading);
+    const targetSection = buildSectionMap(targetSections).get(newHeading);
+    if (!baseSection || !targetSection) return null;
+    if (!areLineGroupsEqual(getSectionBodyLines(baseSection), getSectionBodyLines(targetSection))) {
+      return null;
+    }
+    return {
+      oldHeading,
+      newHeading,
+      newLines: targetSection,
+    };
+  };
   const buildAutoMergedSectionRewriteResult = (
     baseContent: string,
     serverContent: string,
@@ -1611,6 +1652,131 @@ export const ArtifactPane: React.FC = () => {
         ...mergedSectionLines.flat(),
       ].join('\n'),
       summary: '合并轨迹：自动合并服务端与草稿的非重叠章节移动',
+    };
+  };
+  const buildAutoMergedSectionRenameResult = (
+    baseContent: string,
+    serverContent: string,
+    draftContent: string
+  ): AutoMergedConflictResult | null => {
+    const baseSections = parseMarkdownSectionsForAutoMerge(baseContent);
+    const serverSections = parseMarkdownSectionsForAutoMerge(serverContent);
+    const draftSections = parseMarkdownSectionsForAutoMerge(draftContent);
+    if (!baseSections || !serverSections || !draftSections) return null;
+    if (
+      !areLineGroupsEqual(baseSections.preambleLines, serverSections.preambleLines)
+      || !areLineGroupsEqual(baseSections.preambleLines, draftSections.preambleLines)
+    ) {
+      return null;
+    }
+
+    const serverRename = findSectionRenameChange(baseSections, serverSections);
+    const draftRename = findSectionRenameChange(baseSections, draftSections);
+    if (!serverRename && !draftRename) return null;
+
+    const baseSectionMap = buildSectionMap(baseSections);
+    const serverSectionMap = buildSectionMap(serverSections);
+    const draftSectionMap = buildSectionMap(draftSections);
+    let rename: SectionRenameChange;
+    let sameRename = false;
+
+    if (serverRename && draftRename) {
+      if (
+        serverRename.oldHeading !== draftRename.oldHeading
+        || serverRename.newHeading !== draftRename.newHeading
+        || !areLineGroupsEqual(serverRename.newLines, draftRename.newLines)
+      ) {
+        return null;
+      }
+      rename = draftRename;
+      sameRename = true;
+    } else if (serverRename) {
+      if (!haveSameSectionSet(baseSections, draftSections)) return null;
+      if (!areSectionOrdersEqual(getSectionOrder(baseSections), getSectionOrder(draftSections))) {
+        return null;
+      }
+      const baseRenamedSection = baseSectionMap.get(serverRename.oldHeading);
+      const draftRenamedSection = draftSectionMap.get(serverRename.oldHeading);
+      if (
+        !baseRenamedSection
+        || !draftRenamedSection
+        || !areLineGroupsEqual(baseRenamedSection, draftRenamedSection)
+      ) {
+        return null;
+      }
+      rename = serverRename;
+    } else {
+      if (!draftRename || !haveSameSectionSet(baseSections, serverSections)) return null;
+      if (!areSectionOrdersEqual(getSectionOrder(baseSections), getSectionOrder(serverSections))) {
+        return null;
+      }
+      const baseRenamedSection = baseSectionMap.get(draftRename.oldHeading);
+      const serverRenamedSection = serverSectionMap.get(draftRename.oldHeading);
+      if (
+        !baseRenamedSection
+        || !serverRenamedSection
+        || !areLineGroupsEqual(baseRenamedSection, serverRenamedSection)
+      ) {
+        return null;
+      }
+      rename = draftRename;
+    }
+
+    const mergedSectionLines: string[][] = [];
+    let hasServerContentChange = false;
+    let hasDraftContentChange = false;
+
+    for (const baseSection of baseSections.sections) {
+      if (baseSection.heading === rename.oldHeading) {
+        mergedSectionLines.push(rename.newLines);
+        continue;
+      }
+
+      const baseSectionLines = baseSectionMap.get(baseSection.heading);
+      const serverSectionLines = serverSectionMap.get(baseSection.heading);
+      const draftSectionLines = draftSectionMap.get(baseSection.heading);
+      if (!baseSectionLines || !serverSectionLines || !draftSectionLines) return null;
+
+      const serverChanged = !areLineGroupsEqual(baseSectionLines, serverSectionLines);
+      const draftChanged = !areLineGroupsEqual(baseSectionLines, draftSectionLines);
+      if (
+        serverChanged
+        && draftChanged
+        && !areLineGroupsEqual(serverSectionLines, draftSectionLines)
+      ) {
+        return null;
+      }
+
+      if (draftChanged) {
+        hasDraftContentChange = true;
+        mergedSectionLines.push(draftSectionLines);
+      } else if (serverChanged) {
+        hasServerContentChange = true;
+        mergedSectionLines.push(serverSectionLines);
+      } else {
+        mergedSectionLines.push(baseSectionLines);
+      }
+    }
+
+    if (
+      !sameRename
+      && (
+        (draftRename && !hasServerContentChange)
+        || (serverRename && !hasDraftContentChange)
+      )
+    ) {
+      return null;
+    }
+
+    const mergedContent = [
+      ...baseSections.preambleLines,
+      ...mergedSectionLines.flat(),
+    ].join('\n');
+    if (!sameRename && mergedContent === serverContent.replace(/\r\n/g, '\n')) return null;
+
+    return {
+      content: mergedContent,
+      summary: '合并轨迹：自动合并服务端与草稿的非重叠章节重命名',
     };
   };
   const buildAutoMergedSectionAddDeleteResult = (
@@ -1865,6 +2031,12 @@ export const ArtifactPane: React.FC = () => {
         editDraft
       );
       if (sectionMoveMerge) return sectionMoveMerge;
+      const sectionRenameMerge = buildAutoMergedSectionRenameResult(
+        artifactContent,
+        conflictArtifact.content,
+        editDraft
+      );
+      if (sectionRenameMerge) return sectionRenameMerge;
       const sectionAddDeleteMerge = buildAutoMergedSectionAddDeleteResult(
         artifactContent,
         conflictArtifact.content,
