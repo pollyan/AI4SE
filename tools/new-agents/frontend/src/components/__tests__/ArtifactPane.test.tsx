@@ -2080,6 +2080,18 @@ describe('ArtifactPane Component', () => {
         ]);
     };
 
+    const expectListItemReorderAutoMerge = async (expectedContent: string) => {
+        fireEvent.click(await screen.findByRole('button', { name: '自动合并非重叠变更' }));
+        expect((screen.getByLabelText('编辑产出物 Markdown') as HTMLTextAreaElement).value).toBe(expectedContent);
+        expect(useStore.getState().artifactAuditEvents).toEqual([
+            expect.objectContaining({
+                stageId: 'STRATEGY',
+                eventType: 'artifact_auto_merge_applied',
+                summary: '合并轨迹：自动合并服务端与草稿的非重叠列表项重排',
+            }),
+        ]);
+    };
+
     const expectNoParagraphMovementAutoMerge = async () => {
         await screen.findByRole('button', { name: '对比服务端版本' });
         expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
@@ -2808,7 +2820,7 @@ describe('ArtifactPane Component', () => {
         await expectNoParagraphMovementAutoMerge();
     });
 
-    it('does not auto-merge paragraph movement for list items when the server rewrites another section', async () => {
+    it('does not auto-merge list item reordering when a reordered item is rewritten', async () => {
         const listBaseContent = [
             '# 测试策略蓝图',
             '',
@@ -2819,6 +2831,313 @@ describe('ArtifactPane Component', () => {
             '',
             '## 验收口径',
             '旧验收口径',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '- 覆盖支付主链路并补充观测点',
+                '- 覆盖退款逆向链路',
+                '- 覆盖风控拦截链路',
+                '',
+                '## 验收口径',
+                '服务端补充验收口径。',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '- 覆盖风控拦截链路',
+                '- 覆盖支付主链路',
+                '- 覆盖退款逆向链路',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            listBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge list item reordering when another section also rewrites list items', async () => {
+        const listBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '- 覆盖支付主链路',
+            '- 覆盖退款逆向链路',
+            '- 覆盖风控拦截链路',
+            '',
+            '## 观察记录',
+            '- 旧观察A',
+            '- 旧观察B',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '- 覆盖支付主链路',
+                '- 覆盖退款逆向链路',
+                '- 覆盖风控拦截链路',
+                '',
+                '## 观察记录',
+                '- 服务端改写观察A',
+                '- 旧观察B',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '- 覆盖风控拦截链路',
+                '- 覆盖支付主链路',
+                '- 覆盖退款逆向链路',
+                '',
+                '## 观察记录',
+                '- 旧观察A',
+                '- 旧观察B',
+            ].join('\n'),
+            listBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge section movement when the other side reorders list items', async () => {
+        const listBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '- 覆盖支付主链路',
+            '- 覆盖退款逆向链路',
+            '- 覆盖风控拦截链路',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+                '',
+                '## 风险策略',
+                '- 覆盖支付主链路',
+                '- 覆盖退款逆向链路',
+                '- 覆盖风控拦截链路',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '- 覆盖风控拦截链路',
+                '- 覆盖支付主链路',
+                '- 覆盖退款逆向链路',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            listBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge section movement when the other side reorders indented list items', async () => {
+        const listBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            ' - 覆盖支付主链路',
+            ' - 覆盖退款逆向链路',
+            ' - 覆盖风控拦截链路',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+                '',
+                '## 风险策略',
+                ' - 覆盖支付主链路',
+                ' - 覆盖退款逆向链路',
+                ' - 覆盖风控拦截链路',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                ' - 覆盖风控拦截链路',
+                ' - 覆盖支付主链路',
+                ' - 覆盖退款逆向链路',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            listBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge section rename when the other side reorders indented list items', async () => {
+        const listBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            ' - 覆盖支付主链路',
+            ' - 覆盖退款逆向链路',
+            ' - 覆盖风控拦截链路',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                ' - 覆盖支付主链路',
+                ' - 覆盖退款逆向链路',
+                ' - 覆盖风控拦截链路',
+                '',
+                '## 验收标准',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                ' - 覆盖风控拦截链路',
+                ' - 覆盖支付主链路',
+                ' - 覆盖退款逆向链路',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            listBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge nested list item reordering', async () => {
+        const listBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '- 支付链路',
+            '  - 支付成功',
+            '- 退款链路',
+            '  - 退款成功',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '- 支付链路',
+                '  - 支付成功',
+                '- 退款链路',
+                '  - 退款成功',
+                '',
+                '## 验收口径',
+                '服务端补充验收口径。',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '- 退款链路',
+                '  - 退款成功',
+                '- 支付链路',
+                '  - 支付成功',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            listBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge list-like lines inside fenced blocks', async () => {
+        const listBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '```text',
+            '- 支付脚本步骤',
+            '- 退款脚本步骤',
+            '```',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '```text',
+                '- 支付脚本步骤',
+                '- 退款脚本步骤',
+                '```',
+                '',
+                '## 验收口径',
+                '服务端补充验收口径。',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '```text',
+                '- 退款脚本步骤',
+                '- 支付脚本步骤',
+                '```',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            listBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('auto-merges list item reordering when draft reorders list items and server rewrites another section', async () => {
+        const listBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '- 覆盖支付主链路',
+            '- 覆盖退款逆向链路',
+            '- 覆盖风控拦截链路',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        const expectedContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '- 覆盖风控拦截链路',
+            '- 覆盖支付主链路',
+            '- 覆盖退款逆向链路',
+            '',
+            '## 验收口径',
+            '服务端补充验收口径。',
         ].join('\n');
         renderParagraphMoveConflict(
             [
@@ -2846,7 +3165,59 @@ describe('ArtifactPane Component', () => {
             listBaseContent,
         );
 
-        await expectStructuredBlockReorderReason();
+        await expectListItemReorderAutoMerge(expectedContent);
+    });
+
+    it('auto-merges list item reordering when server reorders list items and draft rewrites another section', async () => {
+        const listBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '- 覆盖支付主链路',
+            '- 覆盖退款逆向链路',
+            '- 覆盖风控拦截链路',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        const expectedContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '- 覆盖风控拦截链路',
+            '- 覆盖支付主链路',
+            '- 覆盖退款逆向链路',
+            '',
+            '## 验收口径',
+            '用户补充验收口径。',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '- 覆盖风控拦截链路',
+                '- 覆盖支付主链路',
+                '- 覆盖退款逆向链路',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '- 覆盖支付主链路',
+                '- 覆盖退款逆向链路',
+                '- 覆盖风控拦截链路',
+                '',
+                '## 验收口径',
+                '用户补充验收口径。',
+            ].join('\n'),
+            listBaseContent,
+        );
+
+        await expectListItemReorderAutoMerge(expectedContent);
     });
 
     it('does not auto-merge table row reordering when a reordered row is rewritten', async () => {

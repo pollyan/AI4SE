@@ -611,3 +611,9 @@
   - 表格行内容变化、重复行、表头变化、双方不同表格顺序、表格重排叠加其他段落/章节移动时继续拒绝自动合并，避免把结构化数据误合并。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "auto-merges table row reordering"` 观察到缺少自动合并入口失败；实现后同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "table row"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`。
   - 剩余：fenced block 内部行重排、列表项安全重排和更复杂三方 merge 解析仍可作为后续增强切片。
+- 2026-06-20：完成第四十九块 CGA「Artifact 列表项重排自动合并」。
+  - 保存冲突现在会识别保守 Markdown 列表项重排：一侧只调整同一连续列表块的列表项顺序，列表项文本和集合完全不变，另一侧只改写其他章节时，可使用 `自动合并非重叠变更`。
+  - 点击后编辑草稿会同时保留安全的列表项顺序和另一侧章节改写，并记录 `artifact_auto_merge_applied`，summary 区分 `非重叠列表项重排`。
+  - 列表项内容变化、重复项、多列表块、缩进/嵌套列表、fenced block 内 list-like 行、双方不同列表顺序、列表重排叠加其他段落/章节移动或重命名时继续拒绝自动合并，避免把结构化要点误合并。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "auto-merges list item reordering"` 观察到缺少自动合并入口失败；评审补强后又用定向测试捕获到其他章节列表项改写、嵌套列表、fenced block 和缩进列表混合章节重命名误合并；实现保守 guard 后运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "list item|nested list|list-like|indented list"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "table row"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "paragraph movement"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`git diff --check`。
+  - 剩余：fenced block 内部行重排和更复杂三方 merge 解析仍可作为后续增强切片。
