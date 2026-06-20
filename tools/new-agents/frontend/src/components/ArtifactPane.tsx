@@ -4238,16 +4238,19 @@ export const ArtifactPane: React.FC = () => {
         description: '双方改动涉及同一章节的多处段落，已保留你的草稿，请手工确认后重试保存。',
       };
     }
-    if (!hasStructuredBlockReorderForAutoMerge(
+    if (hasStructuredBlockReorderForAutoMerge(
       artifactContent,
       conflictArtifact.content,
       editDraft
     )) {
-      return null;
+      return {
+        title: '结构化块重排需人工处理',
+        description: '检测到列表项、表格行或代码块位置调整，为避免误合并，请打开对比服务端版本手动确认。',
+      };
     }
     return {
-      title: '结构化块重排需人工处理',
-      description: '检测到列表项、表格行或代码块位置调整，为避免误合并，请打开对比服务端版本手动确认。',
+      title: '自动合并暂不可用',
+      description: '双方改动存在重叠或顺序无法证明安全，已保留你的草稿，请打开对比服务端版本后手工确认。',
     };
   }, [artifactContent, autoMergedConflict, conflictArtifact, editDraft]);
 

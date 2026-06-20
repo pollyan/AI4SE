@@ -711,3 +711,9 @@
   - 审阅面板继续复用现有批注、章节锁定、历史版本和审计轨迹状态，不新增后端 API、Lisa/Alex 专属分支或多人实时协同能力。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "artifact review panel"` 观察到 4 个缺少审阅处理入口的预期失败；实现后同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run test -- --run src/__tests__/store.test.ts -t "artifact comment"`、`npm run lint`、`npm run build`、`npm run test`、`git diff --check`。
   - 剩余：更复杂三方 merge 解析只继续覆盖可证明安全的完整冲突场景；歧义场景保持人工处理。
+- 2026-06-20：完成第六十块 CGA「Artifact 冲突安全边界收口」。
+  - 保存冲突无法证明自动合并安全时，冲突卡片会显示 `自动合并暂不可用` 和手工处理路径，明确草稿已保留并引导打开 `对比服务端版本`。
+  - 已有可证明安全的 `自动合并非重叠变更` 继续保留；结构化块重排和同章节多段插入/改写等已有具体拒绝原因优先显示。
+  - 本轮不新增复杂三方 merge 算法分支；后续只有出现完整、可证明安全的用户冲突场景时，才按 Artifact 冲突处理能力包继续推进。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "manual merge reason"` 观察到复杂冲突缺少 `自动合并暂不可用` 的预期失败；实现后运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "manual merge reason|auto-merge unavailable|structured block"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "auto-merges same-section paragraph insertion|table row|list item|fenced block line reordering|paragraph movement|section"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`npm run test`。
+  - 剩余：更复杂三方 merge 解析不再按单算法分支拆薄；歧义场景保持人工处理。
