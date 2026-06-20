@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useStore } from '../../store';
 import { BrowserRouter } from 'react-router-dom';
 
@@ -92,8 +92,66 @@ describe('Workspace Page', () => {
         // Wait for async fetch + state update
         const onboarding = await screen.findByText(/后端默认 LLM 未配置/);
         expect(onboarding).toBeTruthy();
-        expect(screen.getByText(/NEW_AGENTS_DEFAULT_LLM_API_KEY/)).toBeTruthy();
-        expect(screen.getByText(/NEW_AGENTS_DEFAULT_LLM_MODEL/)).toBeTruthy();
+        expect(screen.getByText(/直接打开模型设置/)).toBeTruthy();
+        expect(screen.getByRole('button', { name: '打开模型设置' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: '重新检查配置' })).toBeTruthy();
+    });
+
+    it('opens model settings from the missing default LLM onboarding overlay', async () => {
+        mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ hasDefault: false }) });
+        render(
+            <BrowserRouter>
+                <Workspace />
+            </BrowserRouter>
+        );
+
+        expect(await screen.findByText(/后端默认 LLM 未配置/)).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: '打开模型设置' }));
+
+        expect(useStore.getState().isSettingsOpen).toBe(true);
+    });
+
+    it('hides onboarding after settings report a usable default LLM config', async () => {
+        mockFetch
+            .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ hasDefault: false }) })
+            .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ hasDefault: true }) });
+        render(
+            <BrowserRouter>
+                <Workspace />
+            </BrowserRouter>
+        );
+
+        expect(await screen.findByText(/后端默认 LLM 未配置/)).toBeTruthy();
+        act(() => {
+            const state = useStore.getState() as unknown as {
+                notifyDefaultLlmConfigChanged?: () => void;
+            };
+            state.notifyDefaultLlmConfigChanged?.();
+        });
+
+        await waitFor(() => {
+            expect(screen.queryByText(/后端默认 LLM 未配置/)).toBeNull();
+        });
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps onboarding visible when a manual default LLM config recheck still fails', async () => {
+        mockFetch
+            .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ hasDefault: false }) })
+            .mockRejectedValueOnce(new Error('backend unavailable'));
+        render(
+            <BrowserRouter>
+                <Workspace />
+            </BrowserRouter>
+        );
+
+        expect(await screen.findByText(/后端默认 LLM 未配置/)).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: '重新检查配置' }));
+
+        await waitFor(() => {
+            expect(mockFetch).toHaveBeenCalledTimes(2);
+        });
+        expect(screen.getByText(/后端默认 LLM 未配置/)).toBeTruthy();
     });
 
     it('shows onboarding overlay when backend config response has malformed hasDefault', async () => {

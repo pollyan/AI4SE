@@ -463,6 +463,7 @@ export interface ChatState {
     contextSummaries: AgentRunSnapshotContextSummary[];
     currentRunId: string | null;
     isSettingsOpen: boolean;
+    configRefreshSeq: number;
     isGenerating: boolean;
     // P0-4: Stage transition confirmation gate
     pendingStageTransition: PendingStageTransition | null;
@@ -503,6 +504,7 @@ export interface ChatState {
     ) => void;
     upsertContextSummary: (summary: AgentRunSnapshotContextSummary) => void;
     setSettingsOpen: (isOpen: boolean) => void;
+    notifyDefaultLlmConfigChanged: () => void;
     setIsGenerating: (isGenerating: boolean) => void;
     clearHistory: () => void;
     setStageArtifact: (stageId: string, content: string) => void;

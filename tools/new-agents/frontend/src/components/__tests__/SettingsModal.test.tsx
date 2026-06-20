@@ -91,6 +91,44 @@ describe('SettingsModal Component', () => {
         expect(screen.getByLabelText('新 API Key')).toHaveProperty('value', '');
     });
 
+    it('notifies workspace after saving default backend config', async () => {
+        const notifyDefaultLlmConfigChanged = vi.fn();
+        useStore.setState({
+            notifyDefaultLlmConfigChanged,
+        } as unknown as Partial<ReturnType<typeof useStore.getState>>);
+        mockFetch
+            .mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({ hasDefault: false }),
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({
+                    hasDefault: true,
+                    baseUrl: 'https://api.new.test/v1',
+                    model: 'new-model',
+                    description: 'New config',
+                }),
+            });
+
+        render(<SettingsModal />);
+
+        fireEvent.change(screen.getByLabelText('Base URL'), {
+            target: { value: 'https://api.new.test/v1' },
+        });
+        fireEvent.change(screen.getByLabelText('模型名称'), {
+            target: { value: 'new-model' },
+        });
+        fireEvent.change(screen.getByLabelText('新 API Key'), {
+            target: { value: 'new-secret' },
+        });
+        fireEvent.click(screen.getByText('保存配置'));
+
+        await waitFor(() => {
+            expect(notifyDefaultLlmConfigChanged).toHaveBeenCalledTimes(1);
+        });
+    });
+
     it('checks current model availability from settings', async () => {
         mockFetch
             .mockResolvedValueOnce({
@@ -122,6 +160,71 @@ describe('SettingsModal Component', () => {
             });
         });
         expect(await screen.findByText('模型配置可用')).toBeDefined();
+    });
+
+    it('notifies workspace after a successful model connectivity check', async () => {
+        const notifyDefaultLlmConfigChanged = vi.fn();
+        useStore.setState({
+            notifyDefaultLlmConfigChanged,
+        } as unknown as Partial<ReturnType<typeof useStore.getState>>);
+        mockFetch
+            .mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({
+                    hasDefault: true,
+                    baseUrl: 'https://api.test.com/v1',
+                    model: 'test-model',
+                    description: 'Test config',
+                }),
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({
+                    ok: true,
+                    baseUrl: 'https://api.test.com/v1',
+                    model: 'test-model',
+                    message: '模型配置可用',
+                }),
+            });
+
+        render(<SettingsModal />);
+
+        fireEvent.click(await screen.findByText('检测连接'));
+
+        await waitFor(() => {
+            expect(notifyDefaultLlmConfigChanged).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    it('does not notify workspace when model connectivity check fails', async () => {
+        const notifyDefaultLlmConfigChanged = vi.fn();
+        useStore.setState({
+            notifyDefaultLlmConfigChanged,
+        } as unknown as Partial<ReturnType<typeof useStore.getState>>);
+        mockFetch
+            .mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({
+                    hasDefault: true,
+                    baseUrl: 'https://api.test.com/v1',
+                    model: 'test-model',
+                    description: 'Test config',
+                }),
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({
+                    ok: false,
+                    message: '鉴权失败',
+                }),
+            });
+
+        render(<SettingsModal />);
+
+        fireEvent.click(await screen.findByText('检测连接'));
+
+        await screen.findByText('鉴权失败');
+        expect(notifyDefaultLlmConfigChanged).not.toHaveBeenCalled();
     });
 
     it('does not render when isSettingsOpen is false', () => {

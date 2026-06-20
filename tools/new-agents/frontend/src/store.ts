@@ -444,6 +444,7 @@ export const useStore = create<AppState>()(
       contextSummaries: [],
       currentRunId: null,
       isSettingsOpen: false,
+      configRefreshSeq: 0,
       isGenerating: false,
       // P0-4: Stage transition confirmation gate
       pendingStageTransition: null,
@@ -909,6 +910,9 @@ export const useStore = create<AppState>()(
         };
       }),
       setSettingsOpen: (isSettingsOpen) => set({ isSettingsOpen }),
+      notifyDefaultLlmConfigChanged: () => set((state) => ({
+        configRefreshSeq: state.configRefreshSeq + 1,
+      })),
       setIsGenerating: (isGenerating) => set({ isGenerating }),
       clearHistory: () => set((state) => ({
         chatHistory: [],

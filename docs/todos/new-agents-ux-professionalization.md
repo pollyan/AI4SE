@@ -288,6 +288,12 @@
   - 前端新增 `checkDefaultLlmConfig` service，复用 `/new-agents/api/config/check` 并统一返回成功、后端错误文本或默认失败文案；Header 在告警卡片内展示检测结果。
   - 剩余：DOCX/PDF 可视化导出增强和 Artifact 合并增强仍作为独立切片推进。
   - 验证：`npm run test -- --run src/services/__tests__/configService.test.ts src/components/__tests__/Header.test.tsx`；`npm run lint`；`npm run build`；`git diff --check`。
+- 2026-06-20：完成第六块 CGA「首次模型配置自检与修复闭环」。
+  - 默认 LLM 缺失时，Workspace onboarding 不再只展示静态后端配置说明，而是提供 `打开模型设置` 和 `重新检查配置`，用户可以在当前工作区直接进入配置修复流程。
+  - SettingsModal 保存默认 LLM 配置成功后，会通过共享 store 的轻量运行时事件触发 Workspace 复检；如果 `/new-agents/api/config` 返回 `hasDefault: true`，缺配置遮罩自动关闭，用户回到当前 workflow。
+  - SettingsModal 连接检测只有在 `ok: true` 时才触发 Workspace 复检；保存失败、检测失败或后端仍不可用时，遮罩不会误关闭，并保留可读状态提示。
+  - 该能力继续复用共享 `/new-agents/api/config` 与 `/new-agents/api/config/check`，不新增 Lisa/Alex 或 workflow-specific 模型配置分支。
+  - 验证：先运行 `npm run test -- --run src/pages/__tests__/Workspace.test.tsx` 和 `npm run test -- --run src/components/__tests__/SettingsModal.test.tsx` 观察到缺少设置入口、复检事件和通知调用的预期失败；实现后两组测试通过。扩展验证见本轮收尾记录。
 
 ### 7. Artifact 协作体验深化
 

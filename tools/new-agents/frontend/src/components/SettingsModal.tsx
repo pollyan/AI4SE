@@ -13,6 +13,7 @@ export const SettingsModal: React.FC = () => {
     isSettingsOpen,
     setSettingsOpen,
     clearHistory,
+    notifyDefaultLlmConfigChanged,
   } = useStore();
   const [baseUrl, setBaseUrl] = useState('');
   const [model, setModel] = useState('');
@@ -95,6 +96,7 @@ export const SettingsModal: React.FC = () => {
       setApiKey('');
       setStatus('saved');
       setStatusMessage('配置已保存');
+      notifyDefaultLlmConfigChanged();
     } catch (error) {
       setStatus('error');
       setStatusMessage(error instanceof Error ? error.message : '配置保存失败');
@@ -115,6 +117,9 @@ export const SettingsModal: React.FC = () => {
       }
       setStatus(data.ok === true ? 'saved' : 'error');
       setStatusMessage(readString(data.message) || '模型检测完成');
+      if (data.ok === true) {
+        notifyDefaultLlmConfigChanged();
+      }
     } catch (error) {
       setStatus('error');
       setStatusMessage(error instanceof Error ? error.message : '模型检测失败');
