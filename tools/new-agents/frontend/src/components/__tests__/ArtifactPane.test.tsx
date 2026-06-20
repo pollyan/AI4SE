@@ -2475,6 +2475,302 @@ describe('ArtifactPane Component', () => {
         ]);
     });
 
+    it('auto-merges same-section paragraph insertion with a non-overlapping server paragraph rewrite', async () => {
+        vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
+            '产出物已被更新，请刷新后再保存',
+            {
+                stageId: 'STRATEGY',
+                content: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '段落A：覆盖支付主链路。',
+                    '',
+                    '段落B：服务端补充退款逆向链路观测点。',
+                ].join('\n'),
+                versionNumber: 3,
+            },
+        ));
+        const baseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '段落A：覆盖支付主链路。',
+            '',
+            '段落B：覆盖退款逆向链路。',
+        ].join('\n');
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentRunId: 'run-123',
+            artifactContent: baseContent,
+            stageArtifacts: {
+                STRATEGY: baseContent,
+            },
+            artifactHistory: [
+                {
+                    id: 'run-123-STRATEGY-v2',
+                    timestamp: 123,
+                    content: baseContent,
+                    stageId: 'STRATEGY',
+                },
+            ],
+            artifactAuditEvents: [],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: {
+                value: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '段落A：覆盖支付主链路。',
+                    '',
+                    '段落A-补充：用户新增支付失败后的人工复核。',
+                    '',
+                    '段落B：覆盖退款逆向链路。',
+                ].join('\n'),
+            },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+        fireEvent.click(await screen.findByRole('button', { name: '自动合并非重叠变更' }));
+
+        expect((screen.getByLabelText('编辑产出物 Markdown') as HTMLTextAreaElement).value).toBe([
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '段落A：覆盖支付主链路。',
+            '',
+            '段落A-补充：用户新增支付失败后的人工复核。',
+            '',
+            '段落B：服务端补充退款逆向链路观测点。',
+        ].join('\n'));
+        expect(useStore.getState().artifactAuditEvents).toEqual([
+            expect.objectContaining({
+                stageId: 'STRATEGY',
+                eventType: 'artifact_auto_merge_applied',
+                summary: '合并轨迹：自动合并服务端与草稿的同章节非重叠段落插入与改写',
+            }),
+        ]);
+    });
+
+    it('auto-merges same-section server paragraph insertion with a draft paragraph rewrite', async () => {
+        vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
+            '产出物已被更新，请刷新后再保存',
+            {
+                stageId: 'STRATEGY',
+                content: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '段落A：覆盖支付主链路。',
+                    '',
+                    '段落A-补充：服务端新增支付失败后的回归策略。',
+                    '',
+                    '段落B：覆盖退款逆向链路。',
+                ].join('\n'),
+                versionNumber: 3,
+            },
+        ));
+        const baseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '段落A：覆盖支付主链路。',
+            '',
+            '段落B：覆盖退款逆向链路。',
+        ].join('\n');
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentRunId: 'run-123',
+            artifactContent: baseContent,
+            stageArtifacts: {
+                STRATEGY: baseContent,
+            },
+            artifactHistory: [
+                {
+                    id: 'run-123-STRATEGY-v2',
+                    timestamp: 123,
+                    content: baseContent,
+                    stageId: 'STRATEGY',
+                },
+            ],
+            artifactAuditEvents: [],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: {
+                value: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '段落A：覆盖支付主链路。',
+                    '',
+                    '段落B：用户补充退款失败后的人工复核。',
+                ].join('\n'),
+            },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+        fireEvent.click(await screen.findByRole('button', { name: '自动合并非重叠变更' }));
+
+        expect((screen.getByLabelText('编辑产出物 Markdown') as HTMLTextAreaElement).value).toBe([
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '段落A：覆盖支付主链路。',
+            '',
+            '段落A-补充：服务端新增支付失败后的回归策略。',
+            '',
+            '段落B：用户补充退款失败后的人工复核。',
+        ].join('\n'));
+        expect(useStore.getState().artifactAuditEvents).toEqual([
+            expect.objectContaining({
+                stageId: 'STRATEGY',
+                eventType: 'artifact_auto_merge_applied',
+                summary: '合并轨迹：自动合并服务端与草稿的同章节非重叠段落插入与改写',
+            }),
+        ]);
+    });
+
+    it('does not auto-merge same-section paragraph insertion when the rewrite side changes multiple paragraphs', async () => {
+        vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
+            '产出物已被更新，请刷新后再保存',
+            {
+                stageId: 'STRATEGY',
+                content: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '段落A：覆盖支付主链路。',
+                    '',
+                    '段落A-补充：服务端新增支付失败后的回归策略。',
+                    '',
+                    '段落B：覆盖退款逆向链路。',
+                ].join('\n'),
+                versionNumber: 3,
+            },
+        ));
+        const baseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '段落A：覆盖支付主链路。',
+            '',
+            '段落B：覆盖退款逆向链路。',
+        ].join('\n');
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentRunId: 'run-123',
+            artifactContent: baseContent,
+            stageArtifacts: {
+                STRATEGY: baseContent,
+            },
+            artifactHistory: [
+                {
+                    id: 'run-123-STRATEGY-v2',
+                    timestamp: 123,
+                    content: baseContent,
+                    stageId: 'STRATEGY',
+                },
+            ],
+            artifactAuditEvents: [],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: {
+                value: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '段落A：用户补充支付失败后的降级策略。',
+                    '',
+                    '段落B：用户补充退款失败后的人工复核。',
+                ].join('\n'),
+            },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+        await screen.findByRole('button', { name: '对比服务端版本' });
+        expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
+    });
+
+    it('shows an auto-merge unavailable reason for unsafe paragraph insertion conflicts', async () => {
+        vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
+            '产出物已被更新，请刷新后再保存',
+            {
+                stageId: 'STRATEGY',
+                content: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '段落A：覆盖支付主链路。',
+                    '',
+                    '段落A-补充：服务端新增支付失败后的回归策略。',
+                    '',
+                    '段落B：覆盖退款逆向链路。',
+                ].join('\n'),
+                versionNumber: 3,
+            },
+        ));
+        const baseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '段落A：覆盖支付主链路。',
+            '',
+            '段落B：覆盖退款逆向链路。',
+        ].join('\n');
+        const draftContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '段落A：用户补充支付失败后的降级策略。',
+            '',
+            '段落B：用户补充退款失败后的人工复核。',
+        ].join('\n');
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentRunId: 'run-123',
+            artifactContent: baseContent,
+            stageArtifacts: {
+                STRATEGY: baseContent,
+            },
+            artifactHistory: [
+                {
+                    id: 'run-123-STRATEGY-v2',
+                    timestamp: 123,
+                    content: baseContent,
+                    stageId: 'STRATEGY',
+                },
+            ],
+            artifactAuditEvents: [],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: {
+                value: draftContent,
+            },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+        await screen.findByRole('button', { name: '对比服务端版本' });
+        expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
+        expect(screen.getByText('自动合并暂不可用')).not.toBeNull();
+        expect(screen.getByText('双方改动涉及同一章节的多处段落，已保留你的草稿，请手工确认后重试保存。')).not.toBeNull();
+        expect((screen.getByLabelText('编辑产出物 Markdown') as HTMLTextAreaElement).value).toBe(draftContent);
+    });
+
     it('does not auto-merge same-section paragraph deletion when the deleted paragraph is rewritten', async () => {
         vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
             '产出物已被更新，请刷新后再保存',
