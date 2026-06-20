@@ -564,3 +564,9 @@
   - SVG 继续由前端本地保守投影生成，文本经过 XML 转义，不把模型输出的任意 SVG/HTML 原样写入 DOCX；实现复用共享 DOCX 导出路径，不新增 Lisa/Alex 或 workflow 专属分支。
   - 验证：先运行 `npm run test -- --run src/core/__tests__/docxExport.test.ts -t "embeds supported Mermaid"` 观察到新增 pie/journey 用例因缺少 `word/media/mermaid-1.svg` 失败；实现后运行 `npm run test -- --run src/core/__tests__/docxExport.test.ts`、`npm run lint`、`npm run build`、`git diff --check`。
   - 剩余：PDF Mermaid 图片级嵌入、移动语义自动合并、完整三方 merge 的更复杂冲突解析仍可作为后续增强切片。
+- 2026-06-20：完成第四十二块 CGA「Artifact 唯一章节移动自动合并」。
+  - 保存冲突现在会在插入、安全删除和非重叠章节改写之外，识别唯一 Markdown 标题章节的整体移动：当用户只调整章节顺序，服务端只改写其他章节时，可继续使用 `自动合并非重叠变更`。
+  - 点击后编辑草稿会采用安全移动顺序，并保留服务端非冲突章节改写和用户非冲突章节改写；自动合并会记录 `artifact_auto_merge_applied` 活动轨迹，并区分 `非重叠章节移动`。
+  - 重复标题、章节集合变化、双方移动为不同顺序或双方改写同一章节时不显示自动合并入口，继续交给人工冲突处理。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "section movement"` 观察到缺少自动合并入口失败；实现后同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`git diff --check`。
+  - 剩余：段落级移动、章节新增/删除/重命名的三方 merge、更复杂冲突解析仍可作为后续增强切片。

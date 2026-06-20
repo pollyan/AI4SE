@@ -1461,6 +1461,24 @@ export const ArtifactPane: React.FC = () => {
   const areLineGroupsEqual = (leftLines: string[], rightLines: string[]): boolean => (
     leftLines.join('\n') === rightLines.join('\n')
   );
+  const getSectionOrder = (sections: ParsedMarkdownSections): string[] => (
+    sections.sections.map(section => section.heading)
+  );
+  const haveSameSectionSet = (
+    baseSections: ParsedMarkdownSections,
+    targetSections: ParsedMarkdownSections
+  ): boolean => {
+    if (baseSections.sections.length !== targetSections.sections.length) return false;
+    const targetHeadings = new Set(getSectionOrder(targetSections));
+    return baseSections.sections.every(section => targetHeadings.has(section.heading));
+  };
+  const areSectionOrdersEqual = (leftOrder: string[], rightOrder: string[]): boolean => (
+    leftOrder.length === rightOrder.length
+    && leftOrder.every((heading, index) => heading === rightOrder[index])
+  );
+  const buildSectionMap = (sections: ParsedMarkdownSections): Map<string, string[]> => (
+    new Map(sections.sections.map(section => [section.heading, section.lines]))
+  );
   const buildAutoMergedSectionRewriteResult = (
     baseContent: string,
     serverContent: string,
@@ -1518,6 +1536,78 @@ export const ArtifactPane: React.FC = () => {
     return {
       content: mergedContent,
       summary: '合并轨迹：自动合并服务端与草稿的非重叠章节改写',
+    };
+  };
+  const buildAutoMergedSectionMoveResult = (
+    baseContent: string,
+    serverContent: string,
+    draftContent: string
+  ): AutoMergedConflictResult | null => {
+    const baseSections = parseMarkdownSectionsForAutoMerge(baseContent);
+    const serverSections = parseMarkdownSectionsForAutoMerge(serverContent);
+    const draftSections = parseMarkdownSectionsForAutoMerge(draftContent);
+    if (!baseSections || !serverSections || !draftSections) return null;
+    if (
+      !areLineGroupsEqual(baseSections.preambleLines, serverSections.preambleLines)
+      || !areLineGroupsEqual(baseSections.preambleLines, draftSections.preambleLines)
+      || !haveSameSectionSet(baseSections, serverSections)
+      || !haveSameSectionSet(baseSections, draftSections)
+    ) {
+      return null;
+    }
+
+    const baseOrder = getSectionOrder(baseSections);
+    const serverOrder = getSectionOrder(serverSections);
+    const draftOrder = getSectionOrder(draftSections);
+    const serverMoved = !areSectionOrdersEqual(baseOrder, serverOrder);
+    const draftMoved = !areSectionOrdersEqual(baseOrder, draftOrder);
+    if (!serverMoved && !draftMoved) return null;
+    if (serverMoved && draftMoved && !areSectionOrdersEqual(serverOrder, draftOrder)) {
+      return null;
+    }
+
+    const movementOrder = draftMoved ? draftOrder : serverOrder;
+    const baseSectionMap = buildSectionMap(baseSections);
+    const serverSectionMap = buildSectionMap(serverSections);
+    const draftSectionMap = buildSectionMap(draftSections);
+    const mergedSectionLines: string[][] = [];
+    let hasContentChange = false;
+
+    for (const heading of movementOrder) {
+      const baseSectionLines = baseSectionMap.get(heading);
+      const serverSectionLines = serverSectionMap.get(heading);
+      const draftSectionLines = draftSectionMap.get(heading);
+      if (!baseSectionLines || !serverSectionLines || !draftSectionLines) return null;
+
+      const serverChanged = !areLineGroupsEqual(baseSectionLines, serverSectionLines);
+      const draftChanged = !areLineGroupsEqual(baseSectionLines, draftSectionLines);
+      if (
+        serverChanged
+        && draftChanged
+        && !areLineGroupsEqual(serverSectionLines, draftSectionLines)
+      ) {
+        return null;
+      }
+
+      if (draftChanged) {
+        hasContentChange = true;
+        mergedSectionLines.push(draftSectionLines);
+      } else if (serverChanged) {
+        hasContentChange = true;
+        mergedSectionLines.push(serverSectionLines);
+      } else {
+        mergedSectionLines.push(baseSectionLines);
+      }
+    }
+
+    if (!serverMoved && !draftMoved && !hasContentChange) return null;
+
+    return {
+      content: [
+        ...baseSections.preambleLines,
+        ...mergedSectionLines.flat(),
+      ].join('\n'),
+      summary: '合并轨迹：自动合并服务端与草稿的非重叠章节移动',
     };
   };
   const selectedVersionDiff = useMemo(
@@ -1617,6 +1707,7 @@ export const ArtifactPane: React.FC = () => {
     () => conflictArtifact
       ? buildAutoMergedInsertionResult(artifactContent, conflictArtifact.content, editDraft)
         ?? buildAutoMergedSectionRewriteResult(artifactContent, conflictArtifact.content, editDraft)
+        ?? buildAutoMergedSectionMoveResult(artifactContent, conflictArtifact.content, editDraft)
       : null,
     [artifactContent, conflictArtifact, editDraft]
   );
