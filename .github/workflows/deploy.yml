@@ -1,20 +1,8 @@
-name: Deploy to Tencent Cloud via SCP/SSH
+name: Production Deploy to Tencent Cloud
 
 on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
     inputs:
-      skip_tests:
-        description: '跳过测试直接部署 (仅用于紧急修复)'
-        required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'false'
-          - 'true'
       environment:
         description: '部署环境'
         required: true
@@ -179,10 +167,8 @@ jobs:
   # ====================================
   deploy-to-production:
     name: Build and Deploy to Tencent Cloud
-    needs: [backend-api-test, common-frontend-test, new-agents-frontend-test, proxy-test]  # 必须等待所有测试完成且成功
+    needs: [backend-api-test, common-frontend-test, new-agents-frontend-test, code-quality, proxy-test]  # 必须等待所有门禁完成且成功
     runs-on: ubuntu-latest
-    # 生产环境部署必须由人工从 GitHub Actions 手动触发；push/PR 只运行测试门禁。
-    if: github.event_name == 'workflow_dispatch'
     
     steps:
     - name: 📥 Checkout code
