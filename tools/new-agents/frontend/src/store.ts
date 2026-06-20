@@ -654,6 +654,24 @@ export const useStore = create<AppState>()(
             : comment
         )),
       })),
+      updateArtifactCommentAnchor: (commentId, anchorText) => set((state) => {
+        const normalizedAnchorText = sanitizeOptionalArtifactText(anchorText);
+        if (!normalizedAnchorText) {
+          return {};
+        }
+
+        return {
+          artifactComments: state.artifactComments.map((comment) => (
+            comment.id === commentId
+              ? {
+                ...comment,
+                artifactExcerpt: normalizedAnchorText,
+                anchorText: normalizedAnchorText,
+              }
+              : comment
+          )),
+        };
+      }),
       removeArtifactComment: (commentId) => set((state) => ({
         artifactComments: state.artifactComments.filter(comment => comment.id !== commentId),
       })),

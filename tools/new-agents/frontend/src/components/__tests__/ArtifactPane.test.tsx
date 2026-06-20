@@ -6283,6 +6283,103 @@ describe('ArtifactPane Component', () => {
         expect(screen.getByText('锚点已失效')).toBeTruthy();
     });
 
+    it('rebinds stale comment anchor to selected artifact text and syncs it', async () => {
+        vi.mocked(updateRunArtifactCollaboration).mockResolvedValue({
+            artifactComments: [],
+            artifactSectionLocks: [],
+        });
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            currentRunId: 'run-1',
+            artifactContent: '# 需求分析文档\n\n新的登录边界需要覆盖 SSO 回调。',
+            artifactSectionLocks: [],
+            artifactComments: [
+                {
+                    id: 'comment-1',
+                    stageId: 'CLARIFY',
+                    content: '这里需要业务确认登录边界。',
+                    artifactExcerpt: '旧登录边界',
+                    anchorText: '旧登录边界',
+                    createdAt: 1710000000000,
+                    status: 'open',
+                    resolvedAt: null,
+                    replies: [],
+                },
+            ],
+        });
+
+        const { container } = render(<ArtifactPane />);
+        const selectedParagraph = screen.getByText('新的登录边界需要覆盖 SSO 回调。');
+        const textNode = selectedParagraph.firstChild;
+        expect(textNode).toBeTruthy();
+        const range = document.createRange();
+        range.setStart(textNode as ChildNode, 0);
+        range.setEnd(textNode as ChildNode, '新的登录边界'.length);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+
+        clickArtifactToolbarMenuItem('批注');
+        fireEvent.click(screen.getByRole('button', { name: '重新绑定选区' }));
+
+        expect(useStore.getState().artifactComments[0]).toEqual(expect.objectContaining({
+            artifactExcerpt: '新的登录边界',
+            anchorText: '新的登录边界',
+        }));
+        await waitFor(() => {
+            expect(updateRunArtifactCollaboration).toHaveBeenCalledWith(
+                'run-1',
+                [
+                    expect.objectContaining({
+                        id: 'comment-1',
+                        artifactExcerpt: '新的登录边界',
+                        anchorText: '新的登录边界',
+                    }),
+                ],
+                [],
+            );
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: '定位正文' }));
+        const highlight = container.querySelector('[data-artifact-anchor-highlight="true"]');
+        expect(highlight?.textContent).toBe('新的登录边界');
+    });
+
+    it('does not rebind stale comment anchor without artifact selection', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 需求分析文档\n\n新的登录边界需要覆盖 SSO 回调。',
+            artifactSectionLocks: [],
+            artifactComments: [
+                {
+                    id: 'comment-1',
+                    stageId: 'CLARIFY',
+                    content: '这里需要业务确认登录边界。',
+                    artifactExcerpt: '旧登录边界',
+                    anchorText: '旧登录边界',
+                    createdAt: 1710000000000,
+                    status: 'open',
+                    resolvedAt: null,
+                    replies: [],
+                },
+            ],
+        });
+
+        window.getSelection()?.removeAllRanges();
+
+        render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('批注');
+        fireEvent.click(screen.getByRole('button', { name: '重新绑定选区' }));
+
+        expect(screen.getByText('请先在右侧正文中选中新的批注位置。')).toBeTruthy();
+        expect(useStore.getState().artifactComments[0]).toEqual(expect.objectContaining({
+            artifactExcerpt: '旧登录边界',
+            anchorText: '旧登录边界',
+        }));
+    });
+
     it('syncs artifact comments to the current server run', async () => {
         vi.mocked(updateRunArtifactCollaboration).mockResolvedValue({
             artifactComments: [],

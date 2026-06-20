@@ -262,6 +262,36 @@ describe('Zustand Store', () => {
         );
     });
 
+    it('should update artifact comment anchor and excerpt', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactComments: [
+                {
+                    id: 'comment-1',
+                    stageId: 'CLARIFY',
+                    content: '确认登录边界。',
+                    artifactExcerpt: '旧登录边界',
+                    anchorText: '旧登录边界',
+                    createdAt: 1710000000000,
+                    status: 'open',
+                    resolvedAt: null,
+                    replies: [],
+                },
+            ],
+        });
+
+        useStore.getState().updateArtifactCommentAnchor('comment-1', '新的登录边界');
+
+        expect(useStore.getState().artifactComments).toEqual([
+            expect.objectContaining({
+                id: 'comment-1',
+                artifactExcerpt: '新的登录边界',
+                anchorText: '新的登录边界',
+            }),
+        ]);
+    });
+
     it('should keep artifact section locks scoped to the current workflow stage and clear them with workspace resets', () => {
         useStore.getState().addArtifactSectionLock({
             heading: '## 业务规则',

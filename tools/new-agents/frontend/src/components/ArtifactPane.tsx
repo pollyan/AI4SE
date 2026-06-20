@@ -29,6 +29,7 @@ export const ArtifactPane: React.FC = () => {
   const addArtifactComment = useStore((state) => state.addArtifactComment);
   const addArtifactCommentReply = useStore((state) => state.addArtifactCommentReply);
   const setArtifactCommentStatus = useStore((state) => state.setArtifactCommentStatus);
+  const updateArtifactCommentAnchor = useStore((state) => state.updateArtifactCommentAnchor);
   const removeArtifactComment = useStore((state) => state.removeArtifactComment);
   const artifactSectionLocks = useStore((state) => state.artifactSectionLocks);
   const artifactAuditEvents = useStore((state) => state.artifactAuditEvents);
@@ -47,6 +48,7 @@ export const ArtifactPane: React.FC = () => {
   const [showSectionLocks, setShowSectionLocks] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
   const [commentReplyDrafts, setCommentReplyDrafts] = useState<Record<string, string>>({});
+  const [commentAnchorRebindErrors, setCommentAnchorRebindErrors] = useState<Record<string, string>>({});
   const [selectedVersion, setSelectedVersion] = useState<ArtifactVersion | null>(null);
   const [historyViewMode, setHistoryViewMode] = useState<'preview' | 'diff'>('preview');
   const [isEditing, setIsEditing] = useState(false);
@@ -4473,6 +4475,25 @@ export const ArtifactPane: React.FC = () => {
     syncArtifactCollaborationState();
   };
 
+  const rebindCurrentStageCommentAnchor = (commentId: string) => {
+    const anchorText = captureSelectedArtifactText() ?? selectedArtifactText;
+    if (!anchorText) {
+      setCommentAnchorRebindErrors((errors) => ({
+        ...errors,
+        [commentId]: '请先在右侧正文中选中新的批注位置。',
+      }));
+      return;
+    }
+
+    updateArtifactCommentAnchor(commentId, anchorText);
+    syncArtifactCollaborationState();
+    setCommentAnchorRebindErrors((errors) => {
+      const nextErrors = { ...errors };
+      delete nextErrors[commentId];
+      return nextErrors;
+    });
+  };
+
   const locateArtifactCommentAnchor = (anchorText: string) => {
     const normalizedAnchorText = normalizeCommentAnchorText(anchorText);
     if (!normalizedAnchorText) return;
@@ -5348,6 +5369,18 @@ export const ArtifactPane: React.FC = () => {
                           <div className="mt-0.5 text-[10px] leading-relaxed text-amber-100/80">
                             正文已变化，请重新确认这条批注的位置。
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => rebindCurrentStageCommentAnchor(comment.id)}
+                            className="mt-2 rounded border border-amber-300/30 px-2 py-1 text-[10px] font-semibold text-amber-100 transition-colors hover:bg-amber-300/10"
+                          >
+                            重新绑定选区
+                          </button>
+                          {commentAnchorRebindErrors[comment.id] && (
+                            <div className="mt-1 text-[10px] leading-relaxed text-amber-100">
+                              {commentAnchorRebindErrors[comment.id]}
+                            </div>
+                          )}
                         </div>
                       )}
                       {comment.replies.length > 0 && (

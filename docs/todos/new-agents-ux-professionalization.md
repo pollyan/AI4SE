@@ -671,10 +671,16 @@
   - 可定位批注继续保留现有 `定位正文` 高亮行为；无 `anchorText` 的普通批注不显示失效状态。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "stale anchor"` 观察到缺少提示失败；实现后同命令通过，并运行批注/审阅相关回归、`ArtifactPane` 全量组件测试、`npm run lint`、`npm run build`、完整前端测试和 `git diff --check`。
   - 剩余：批注锚点重新绑定当前选区仍是协作体验后续候选。
+- 2026-06-20：完成第五十七块 CGA「Artifact 批注锚点重新绑定」。
+  - 批注锚点失效后，用户可以在当前 artifact 正文中选中新位置，并点击 `重新绑定选区` 更新批注的 `anchorText` 和 `artifactExcerpt`。
+  - 重新绑定后 `定位正文` 恢复可用，协作状态继续通过现有 run collaboration snapshot 同步，不新增后端字段。
+  - 没有有效 artifact 选区时不会写入错误锚点，会提示 `请先在右侧正文中选中新的批注位置。`。
+  - 验证：先运行 `npm run test -- --run src/__tests__/store.test.ts -t "update artifact comment anchor|updates artifact comment anchor"` 观察到缺少 store action 失败；再运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "rebinds stale comment anchor|does not rebind stale comment anchor"` 观察到缺少 `重新绑定选区` 失败；实现后运行上述命令、批注锚点回归、store 批注回归、`ArtifactPane` 全量组件测试、`npm run lint`、`npm run build`、完整前端测试和 `git diff --check` 通过。
+  - 剩余：更复杂但可证明安全的三方 merge 解析仍是下一候选。
 - 2026-06-20：产品决策更新「Artifact 协作后续收敛」。
   - 高保真导出不再继续深挖：DOCX 包级导出、Markdown/PDF 语义投影、DOCX Mermaid SVG 嵌入已经达到本轮可接受水位；PDF 图片级嵌入和更复杂排版按当前阶段止步完成。
   - 恢复中心、分享/权限、多人实时协同、与 intent-tester 自动打通暂不纳入本轮目标。
-  - 保留具体后续项：块级接受/保留/手工合并、批注锚点重新绑定、更复杂但可证明安全的三方 merge 解析。
+  - 保留具体后续项：块级接受/保留/手工合并、更复杂但可证明安全的三方 merge 解析。
   - 该记录是产品范围收敛，不涉及代码变更；如后续重启高保真导出或多人协同，需要重新做 CGA 和价值评估。
 - 2026-06-20：产品决策更新「Artifact 冲突保护收尾优先级」。
   - 当前三方 merge 的主链路已基本完成：旧版本保存可检测冲突、保留用户草稿、展示服务端当前版本、支持刷新/对比，并已覆盖大量安全自动合并场景。

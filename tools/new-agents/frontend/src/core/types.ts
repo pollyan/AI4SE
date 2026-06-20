@@ -482,6 +482,7 @@ export interface ChatState {
     addArtifactComment: (comment: ArtifactCommentInput) => void;
     addArtifactCommentReply: (commentId: string, content: string) => void;
     setArtifactCommentStatus: (commentId: string, status: ArtifactCommentStatus) => void;
+    updateArtifactCommentAnchor: (commentId: string, anchorText: string) => void;
     removeArtifactComment: (commentId: string) => void;
     getArtifactCommentsForStage: (stageId: string) => ArtifactComment[];
     addArtifactSectionLock: (lock: ArtifactSectionLockInput) => void;
