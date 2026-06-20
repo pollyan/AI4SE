@@ -36,7 +36,7 @@ vi.mock('../../services/mermaidRetryService', () => ({
 
 // Mock lucide-react
 vi.mock('lucide-react', () => {
-    const icons = ['Download', 'Code', 'Eye', 'History', 'X', 'AlertTriangle', 'GitCompare', 'Edit3', 'Save', 'MessageSquare', 'Trash2', 'Lock', 'Unlock'];
+    const icons = ['Download', 'Code', 'Eye', 'History', 'X', 'AlertTriangle', 'GitCompare', 'Edit3', 'Save', 'MessageSquare', 'Trash2', 'Lock', 'Unlock', 'MoreHorizontal'];
     const mod: Record<string, React.FC> = {};
     icons.forEach(name => {
         mod[name] = () => <span>{name}</span>;
@@ -74,6 +74,19 @@ describe('ArtifactPane Component', () => {
         });
     });
 
+    const openArtifactToolbarMenu = () => {
+        fireEvent.click(screen.getByRole('button', { name: '更多产物操作' }));
+    };
+
+    const clickArtifactToolbarMenuItem = (name: string) => {
+        openArtifactToolbarMenu();
+        fireEvent.click(screen.getByRole('menuitem', { name }));
+    };
+
+    const downloadArtifactAs = (format: 'Markdown' | 'Word' | 'PDF') => {
+        clickArtifactToolbarMenuItem(`下载 ${format}`);
+    };
+
     it('shows placeholder when content is empty', () => {
         render(<ArtifactPane />);
         // Should render the pane with "当前产出物.md" header
@@ -100,6 +113,34 @@ describe('ArtifactPane Component', () => {
         expect(screen.getByText('正在构建右侧产出物')).toBeTruthy();
         expect(screen.getByTestId('artifact-generation-animation')).toBeTruthy();
         expect(container.querySelector('.mt-3.h-1')).toBeNull();
+    });
+
+    it('keeps secondary artifact actions behind the artifact toolbar menu', () => {
+        useStore.setState({ artifactContent: '# 当前产出物' });
+        render(<ArtifactPane />);
+
+        expect(screen.queryByTitle('批注')).toBeNull();
+        expect(screen.queryByTitle('章节锁定')).toBeNull();
+        expect(screen.queryByTitle('下载')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: '更多产物操作' }));
+
+        expect(screen.getByRole('menuitem', { name: '批注' })).toBeTruthy();
+        expect(screen.getByRole('menuitem', { name: '章节锁定' })).toBeTruthy();
+        expect(screen.getByRole('menuitem', { name: '下载 Markdown' })).toBeTruthy();
+        expect(screen.getByRole('menuitem', { name: '下载 Word' })).toBeTruthy();
+        expect(screen.getByRole('menuitem', { name: '下载 PDF' })).toBeTruthy();
+    });
+
+    it('opens comments from the artifact toolbar menu', () => {
+        useStore.setState({ artifactContent: '# 当前产物\n\n需要批注的内容' });
+        render(<ArtifactPane />);
+
+        fireEvent.click(screen.getByRole('button', { name: '更多产物操作' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: '批注' }));
+
+        expect(screen.getByText('产出物批注')).toBeTruthy();
+        expect(screen.queryByRole('menuitem', { name: '下载 Markdown' })).toBeNull();
     });
 
     it('renders mermaid diagrams', () => {
@@ -400,8 +441,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('下载'));
-        fireEvent.click(screen.getByRole('button', { name: 'Markdown' }));
+        downloadArtifactAs('Markdown');
 
         expect(createdAnchors).toHaveLength(1);
         expect(createdAnchors[0].download).toBe('req_review_artifact.md');
@@ -452,8 +492,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('下载'));
-        fireEvent.click(screen.getByRole('button', { name: 'Word' }));
+        downloadArtifactAs('Word');
 
         expect(createdAnchors).toHaveLength(1);
         expect(createdAnchors[0].download).toBe('test_design_artifact.docx');
@@ -500,8 +539,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('下载'));
-        fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+        downloadArtifactAs('PDF');
 
         expect(createdAnchors).toHaveLength(1);
         expect(createdAnchors[0].download).toBe('test_design_artifact.pdf');
@@ -542,8 +580,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('下载'));
-        fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+        downloadArtifactAs('PDF');
 
         const blob = createObjectURL.mock.calls[0][0] as Blob;
         const content = await blob.text();
@@ -593,8 +630,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('下载'));
-        fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+        downloadArtifactAs('PDF');
 
         const blob = createObjectURL.mock.calls[0][0] as Blob;
         const content = await blob.text();
@@ -653,8 +689,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('下载'));
-        fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+        downloadArtifactAs('PDF');
 
         const blob = createObjectURL.mock.calls[0][0] as Blob;
         const content = await blob.text();
@@ -702,8 +737,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('下载'));
-        fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+        downloadArtifactAs('PDF');
 
         const blob = createObjectURL.mock.calls[0][0] as Blob;
         const content = await blob.text();
@@ -756,8 +790,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('下载'));
-        fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+        downloadArtifactAs('PDF');
 
         const blob = createObjectURL.mock.calls[0][0] as Blob;
         const content = await blob.text();
@@ -811,8 +844,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('下载'));
-        fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+        downloadArtifactAs('PDF');
 
         const blob = createObjectURL.mock.calls[0][0] as Blob;
         const content = await blob.text();
@@ -866,8 +898,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('下载'));
-        fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+        downloadArtifactAs('PDF');
 
         const blob = createObjectURL.mock.calls[0][0] as Blob;
         const content = await blob.text();
@@ -924,8 +955,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('下载'));
-        fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+        downloadArtifactAs('PDF');
 
         const blob = createObjectURL.mock.calls[0][0] as Blob;
         const content = await blob.text();
@@ -985,8 +1015,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('下载'));
-        fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+        downloadArtifactAs('PDF');
 
         const blob = createObjectURL.mock.calls[0][0] as Blob;
         const content = await blob.text();
@@ -1039,8 +1068,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('下载'));
-        fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+        downloadArtifactAs('PDF');
 
         const blob = createObjectURL.mock.calls[0][0] as Blob;
         const content = await blob.text();
@@ -4425,7 +4453,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('批注'));
+        clickArtifactToolbarMenuItem('批注');
         fireEvent.change(screen.getByLabelText('新增批注'), {
             target: { value: '这里需要业务确认登录边界。' },
         });
@@ -4466,7 +4494,7 @@ describe('ArtifactPane Component', () => {
         selection?.removeAllRanges();
         selection?.addRange(range);
 
-        fireEvent.click(screen.getByTitle('批注'));
+        clickArtifactToolbarMenuItem('批注');
         fireEvent.change(screen.getByLabelText('新增批注'), {
             target: { value: '这里需要业务确认登录边界。' },
         });
@@ -4503,7 +4531,7 @@ describe('ArtifactPane Component', () => {
         });
 
         const { container } = render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('批注'));
+        clickArtifactToolbarMenuItem('批注');
         fireEvent.click(screen.getByRole('button', { name: '定位正文' }));
 
         const highlight = container.querySelector('[data-artifact-anchor-highlight="true"]');
@@ -4525,7 +4553,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('批注'));
+        clickArtifactToolbarMenuItem('批注');
         fireEvent.change(screen.getByLabelText('新增批注'), {
             target: { value: '这里需要业务确认登录边界。' },
         });
@@ -4582,7 +4610,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('批注'));
+        clickArtifactToolbarMenuItem('批注');
         fireEvent.change(screen.getByLabelText('回复批注：这里需要业务确认登录边界。'), {
             target: { value: '已确认包含账号密码和 SSO 登录。' },
         });
@@ -4666,7 +4694,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('章节锁定'));
+        clickArtifactToolbarMenuItem('章节锁定');
         fireEvent.click(screen.getByRole('button', { name: '锁定 已确认范围' }));
 
         expect(useStore.getState().artifactSectionLocks).toEqual([
@@ -4699,7 +4727,7 @@ describe('ArtifactPane Component', () => {
         expect(useStore.getState().artifactContent).toContain('登录边界已经确认。');
 
         fireEvent.click(screen.getByRole('button', { name: '取消编辑' }));
-        fireEvent.click(screen.getByTitle('章节锁定'));
+        clickArtifactToolbarMenuItem('章节锁定');
         fireEvent.click(screen.getByTitle('解除章节锁定'));
         fireEvent.click(screen.getByTitle('编辑产出物'));
         fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
@@ -4756,7 +4784,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('章节锁定'));
+        clickArtifactToolbarMenuItem('章节锁定');
         fireEvent.click(screen.getByRole('button', { name: '锁定 验收口径 #2' }));
 
         expect(useStore.getState().artifactSectionLocks).toEqual([

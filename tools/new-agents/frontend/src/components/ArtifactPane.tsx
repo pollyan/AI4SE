@@ -7,7 +7,7 @@ import { useStore, ArtifactVersion, WORKFLOWS } from '../store';
 import type { AgentRunSnapshotArtifact, ArtifactVisualDiagnostic, ArtifactVisualDiagnosticFocusRequest } from '../core/types';
 import { buildLineDiff } from '../core/artifactDiff';
 import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/markdownUtils';
-import { Download, Code, Eye, History, X, AlertTriangle, GitCompare, Edit3, Save, MessageSquare, Trash2, Lock, Unlock } from 'lucide-react';
+import { Download, Code, Eye, History, X, AlertTriangle, GitCompare, Edit3, Save, MessageSquare, Trash2, Lock, Unlock, MoreHorizontal } from 'lucide-react';
 import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
 import { StructuredVisual } from './StructuredVisual';
 import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../services/runSnapshotService';
@@ -40,7 +40,7 @@ export const ArtifactPane: React.FC = () => {
   const artifactVisualDiagnosticFocusRequest = useStore((state) => state.artifactVisualDiagnosticFocusRequest);
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
   const [showHistory, setShowHistory] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showArtifactActionsMenu, setShowArtifactActionsMenu] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showSectionLocks, setShowSectionLocks] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
@@ -1189,7 +1189,7 @@ export const ArtifactPane: React.FC = () => {
   };
 
   const handleDownload = (format: 'markdown' | 'word' | 'pdf') => {
-    setShowExportMenu(false);
+    setShowArtifactActionsMenu(false);
     if (format === 'word') {
       downloadBlob(
         buildDocxPackage(artifactContent),
@@ -2555,7 +2555,7 @@ export const ArtifactPane: React.FC = () => {
     setConflictArtifact(null);
     setShowConflictDiff(false);
     setIsEditing(true);
-    setShowExportMenu(false);
+    setShowArtifactActionsMenu(false);
     setShowComments(false);
     setShowSectionLocks(false);
   };
@@ -3203,56 +3203,86 @@ export const ArtifactPane: React.FC = () => {
           >
             <Edit3 className="w-4 h-4" />
           </button>
-          <button
-            onClick={() => {
-              captureSelectedArtifactText();
-              setShowComments((current) => !current);
-              setShowExportMenu(false);
-              setShowSectionLocks(false);
-            }}
-            className={`p-1.5 rounded transition-colors ${showComments ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-            title="批注"
-          >
-            <MessageSquare className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => {
-              setShowSectionLocks((current) => !current);
-              setShowExportMenu(false);
-              setShowComments(false);
-            }}
-            className={`p-1.5 rounded transition-colors ${showSectionLocks ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-            title="章节锁定"
-          >
-            <Lock className="w-4 h-4" />
-          </button>
           <div className="relative">
             <button
-              onClick={() => setShowExportMenu((current) => !current)}
-              className="p-1.5 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
-              title="下载"
+              type="button"
+              onMouseDown={captureSelectedArtifactText}
+              onClick={() => {
+                captureSelectedArtifactText();
+                setShowArtifactActionsMenu((current) => !current);
+              }}
+              aria-expanded={showArtifactActionsMenu}
+              aria-haspopup="menu"
+              aria-label="更多产物操作"
+              className={`p-1.5 rounded transition-colors ${showArtifactActionsMenu ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+              title="更多产物操作"
             >
-              <Download className="w-4 h-4" />
+              <MoreHorizontal className="w-4 h-4" />
             </button>
-            {showExportMenu && (
-              <div className="absolute right-0 top-full z-20 mt-2 w-36 overflow-hidden rounded-lg border border-[#1e293b] bg-[#0f172a] shadow-xl">
+            {showArtifactActionsMenu && (
+              <div
+                className="absolute right-0 top-full z-20 mt-2 w-44 overflow-hidden rounded-lg border border-[#1e293b] bg-[#0f172a] py-1 shadow-xl"
+                role="menu"
+              >
                 <button
-                  onClick={() => handleDownload('markdown')}
-                  className="block w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/5"
+                  type="button"
+                  onClick={() => {
+                    captureSelectedArtifactText();
+                    setShowComments((current) => !current);
+                    setShowArtifactActionsMenu(false);
+                    setShowSectionLocks(false);
+                  }}
+                  aria-label="批注"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/5"
+                  role="menuitem"
                 >
-                  Markdown
+                  <MessageSquare className="h-3.5 w-3.5 text-slate-400" />
+                  批注
                 </button>
                 <button
-                  onClick={() => handleDownload('word')}
-                  className="block w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/5"
+                  type="button"
+                  onClick={() => {
+                    setShowSectionLocks((current) => !current);
+                    setShowArtifactActionsMenu(false);
+                    setShowComments(false);
+                  }}
+                  aria-label="章节锁定"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/5"
+                  role="menuitem"
                 >
-                  Word
+                  <Lock className="h-3.5 w-3.5 text-slate-400" />
+                  章节锁定
+                </button>
+                <div className="my-1 h-px bg-[#1e293b]" />
+                <button
+                  type="button"
+                  onClick={() => handleDownload('markdown')}
+                  aria-label="下载 Markdown"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/5"
+                  role="menuitem"
+                >
+                  <Download className="h-3.5 w-3.5 text-slate-400" />
+                  下载 Markdown
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownload('word')}
+                  aria-label="下载 Word"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/5"
+                  role="menuitem"
+                >
+                  <Download className="h-3.5 w-3.5 text-slate-400" />
+                  下载 Word
                 </button>
                 <button
                   onClick={() => handleDownload('pdf')}
-                  className="block w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/5"
+                  type="button"
+                  aria-label="下载 PDF"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/5"
+                  role="menuitem"
                 >
-                  PDF
+                  <Download className="h-3.5 w-3.5 text-slate-400" />
+                  下载 PDF
                 </button>
               </div>
             )}

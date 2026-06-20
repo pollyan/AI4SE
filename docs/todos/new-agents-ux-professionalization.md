@@ -43,6 +43,11 @@
   - Header 移除 `导出报告`，产物导出只保留在 ArtifactPane 下载菜单。
   - ArtifactPane 移除无真实进度来源的横向进度条，保留明确生成文案和轻量非确定性动画。
   - 验证：`npm run test -- --run src/components/__tests__/Header.test.tsx src/components/__tests__/ArtifactPane.test.tsx`；`npm run build`；`git diff --check`。
+- 2026-06-20：完成第二块 CGA「Artifact 工具条二级操作收敛」。
+  - ArtifactPane 顶部一级操作保留预览、代码、历史和编辑；批注、章节锁定和 Markdown/Word/PDF 下载收敛到 `更多产物操作`。
+  - 右侧产物协作和导出能力仍保留原行为，但不再作为一排等权重图标挤占阅读区顶部。
+  - 打开 `更多产物操作` 时会先捕获当前选中的产物文本，避免用户选中文本后添加批注时丢失锚点。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "artifact toolbar"` 观察到缺少菜单失败；实现后同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`git diff --check`。
 
 ### 2. 结构化输出失败与重试体验
 
