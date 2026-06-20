@@ -1506,6 +1506,10 @@ export const ArtifactPane: React.FC = () => {
     heading: string;
     targetLines: string[];
   };
+  type FencedBlockLineReorderChange = {
+    heading: string;
+    targetLines: string[];
+  };
   type SectionMovementUnit = {
     heading: string;
     key: string;
@@ -1664,6 +1668,17 @@ export const ArtifactPane: React.FC = () => {
       || targetSectionLines.some(isMarkdownListItemLine)
     );
   };
+  const isFencedBlockBoundaryLine = (line: string): boolean => /^```/.test(line.trim());
+  const hasFencedBlockLineChangeInSection = (
+    baseSectionLines: string[],
+    targetSectionLines: string[]
+  ): boolean => {
+    if (areLineGroupsEqual(baseSectionLines, targetSectionLines)) return false;
+    return (
+      baseSectionLines.some(isFencedBlockBoundaryLine)
+      || targetSectionLines.some(isFencedBlockBoundaryLine)
+    );
+  };
   const parseTableRowReorderSectionLines = (
     baseSectionLines: string[],
     targetSectionLines: string[]
@@ -1800,6 +1815,88 @@ export const ArtifactPane: React.FC = () => {
       const targetSection = targetSections.sections[index];
       if (areLineGroupsEqual(baseSection.lines, targetSection.lines)) continue;
       const reorderedLines = parseListItemReorderSectionLines(baseSection.lines, targetSection.lines);
+      if (!reorderedLines) return null;
+      if (change) return null;
+      change = {
+        heading: baseSection.heading,
+        targetLines: reorderedLines,
+      };
+    }
+    return change;
+  };
+  const parseFencedBlockLineReorderSectionLines = (
+    baseSectionLines: string[],
+    targetSectionLines: string[]
+  ): string[] | null => {
+    if (baseSectionLines.length !== targetSectionLines.length) return null;
+
+    const fenceStarts: number[] = [];
+    for (let index = 1; index < baseSectionLines.length; index += 1) {
+      if (isFencedBlockBoundaryLine(baseSectionLines[index])) {
+        fenceStarts.push(index);
+        index += 1;
+        while (index < baseSectionLines.length && !isFencedBlockBoundaryLine(baseSectionLines[index])) {
+          index += 1;
+        }
+        if (index >= baseSectionLines.length) return null;
+      }
+    }
+    if (fenceStarts.length !== 1) return null;
+
+    const fenceStart = fenceStarts[0];
+    let fenceEnd = fenceStart + 1;
+    while (fenceEnd < baseSectionLines.length && !isFencedBlockBoundaryLine(baseSectionLines[fenceEnd])) {
+      fenceEnd += 1;
+    }
+    if (fenceEnd >= baseSectionLines.length) return null;
+    if (fenceEnd - fenceStart < 3) return null;
+
+    if (
+      baseSectionLines[fenceStart] !== targetSectionLines[fenceStart]
+      || baseSectionLines[fenceEnd] !== targetSectionLines[fenceEnd]
+    ) {
+      return null;
+    }
+
+    for (let index = 0; index < baseSectionLines.length; index += 1) {
+      const isFenceBodyLine = index > fenceStart && index < fenceEnd;
+      if (isFenceBodyLine) continue;
+      if (baseSectionLines[index] !== targetSectionLines[index]) return null;
+    }
+
+    const baseBodyLines = baseSectionLines.slice(fenceStart + 1, fenceEnd);
+    const targetBodyLines = targetSectionLines.slice(fenceStart + 1, fenceEnd);
+    if (
+      baseBodyLines.some(isFencedBlockBoundaryLine)
+      || targetBodyLines.some(isFencedBlockBoundaryLine)
+    ) {
+      return null;
+    }
+    if (new Set(baseBodyLines).size !== baseBodyLines.length || new Set(targetBodyLines).size !== targetBodyLines.length) {
+      return null;
+    }
+    if (!areSectionOrdersEqual([...baseBodyLines].sort(), [...targetBodyLines].sort())) return null;
+    if (areSectionOrdersEqual(baseBodyLines, targetBodyLines)) return null;
+
+    return targetSectionLines;
+  };
+  const findFencedBlockLineReorderChange = (
+    baseSections: ParsedMarkdownSections,
+    targetSections: ParsedMarkdownSections
+  ): FencedBlockLineReorderChange | null => {
+    if (
+      !areLineGroupsEqual(baseSections.preambleLines, targetSections.preambleLines)
+      || !hasSameSectionShape(baseSections, targetSections)
+    ) {
+      return null;
+    }
+
+    let change: FencedBlockLineReorderChange | null = null;
+    for (let index = 0; index < baseSections.sections.length; index += 1) {
+      const baseSection = baseSections.sections[index];
+      const targetSection = targetSections.sections[index];
+      if (areLineGroupsEqual(baseSection.lines, targetSection.lines)) continue;
+      const reorderedLines = parseFencedBlockLineReorderSectionLines(baseSection.lines, targetSection.lines);
       if (!reorderedLines) return null;
       if (change) return null;
       change = {
@@ -2164,6 +2261,8 @@ export const ArtifactPane: React.FC = () => {
       || hasMarkdownTableLineChangeInSection(baseSection.lines, draftSections.sections[index].lines)
       || hasMarkdownListItemLineChangeInSection(baseSection.lines, serverSections.sections[index].lines)
       || hasMarkdownListItemLineChangeInSection(baseSection.lines, draftSections.sections[index].lines)
+      || hasFencedBlockLineChangeInSection(baseSection.lines, serverSections.sections[index].lines)
+      || hasFencedBlockLineChangeInSection(baseSection.lines, draftSections.sections[index].lines)
     ))) {
       return null;
     }
@@ -2278,6 +2377,8 @@ export const ArtifactPane: React.FC = () => {
         || (draftChanged && hasSectionMovementForAutoMerge(baseSection.lines, draftSection.lines, baseSection.heading))
         || (serverChanged && hasMarkdownListItemLineChangeInSection(baseSection.lines, serverSection.lines))
         || (draftChanged && hasMarkdownListItemLineChangeInSection(baseSection.lines, draftSection.lines))
+        || (serverChanged && hasFencedBlockLineChangeInSection(baseSection.lines, serverSection.lines))
+        || (draftChanged && hasFencedBlockLineChangeInSection(baseSection.lines, draftSection.lines))
       ) {
         return null;
       }
@@ -2379,6 +2480,8 @@ export const ArtifactPane: React.FC = () => {
         || (draftChanged && hasSectionMovementForAutoMerge(baseSection.lines, draftSection.lines, baseSection.heading))
         || (serverChanged && hasMarkdownListItemLineChangeInSection(baseSection.lines, serverSection.lines))
         || (draftChanged && hasMarkdownListItemLineChangeInSection(baseSection.lines, draftSection.lines))
+        || (serverChanged && hasFencedBlockLineChangeInSection(baseSection.lines, serverSection.lines))
+        || (draftChanged && hasFencedBlockLineChangeInSection(baseSection.lines, draftSection.lines))
       ) {
         return null;
       }
@@ -2414,6 +2517,111 @@ export const ArtifactPane: React.FC = () => {
     return {
       content: mergedContent,
       summary: '合并轨迹：自动合并服务端与草稿的非重叠列表项重排',
+    };
+  };
+  const buildAutoMergedFencedBlockLineReorderResult = (
+    baseContent: string,
+    serverContent: string,
+    draftContent: string
+  ): AutoMergedConflictResult | null => {
+    const baseSections = parseMarkdownSectionsForAutoMerge(baseContent);
+    const serverSections = parseMarkdownSectionsForAutoMerge(serverContent);
+    const draftSections = parseMarkdownSectionsForAutoMerge(draftContent);
+    if (!baseSections || !serverSections || !draftSections) return null;
+    if (
+      !areLineGroupsEqual(baseSections.preambleLines, serverSections.preambleLines)
+      || !areLineGroupsEqual(baseSections.preambleLines, draftSections.preambleLines)
+      || !hasSameSectionShape(baseSections, serverSections)
+      || !hasSameSectionShape(baseSections, draftSections)
+    ) {
+      return null;
+    }
+
+    const serverReorder = findFencedBlockLineReorderChange(baseSections, serverSections);
+    const draftReorder = findFencedBlockLineReorderChange(baseSections, draftSections);
+    if (!serverReorder && !draftReorder) return null;
+    if (
+      serverReorder
+      && draftReorder
+      && (
+        serverReorder.heading !== draftReorder.heading
+        || !areLineGroupsEqual(serverReorder.targetLines, draftReorder.targetLines)
+      )
+    ) {
+      return null;
+    }
+
+    const reorder = draftReorder ?? serverReorder;
+    if (!reorder) return null;
+    if (draftReorder && !serverReorder && hasMovementThatShouldBypassSectionRewrite(baseSections, serverSections)) {
+      return null;
+    }
+    if (serverReorder && !draftReorder && hasMovementThatShouldBypassSectionRewrite(baseSections, draftSections)) {
+      return null;
+    }
+
+    const mergedSectionLines: string[][] = [];
+    let hasOtherSideChange = false;
+    for (let index = 0; index < baseSections.sections.length; index += 1) {
+      const baseSection = baseSections.sections[index];
+      const serverSection = serverSections.sections[index];
+      const draftSection = draftSections.sections[index];
+      const serverChanged = !areLineGroupsEqual(baseSection.lines, serverSection.lines);
+      const draftChanged = !areLineGroupsEqual(baseSection.lines, draftSection.lines);
+
+      if (baseSection.heading === reorder.heading) {
+        const nonReorderSection = draftReorder ? serverSection : draftSection;
+        if (!serverReorder || !draftReorder) {
+          if (!areLineGroupsEqual(nonReorderSection.lines, baseSection.lines)) return null;
+        }
+        mergedSectionLines.push(reorder.targetLines);
+        continue;
+      }
+
+      if (
+        (serverChanged && hasSectionMovementForAutoMerge(baseSection.lines, serverSection.lines, baseSection.heading))
+        || (draftChanged && hasSectionMovementForAutoMerge(baseSection.lines, draftSection.lines, baseSection.heading))
+        || (serverChanged && hasMarkdownTableLineChangeInSection(baseSection.lines, serverSection.lines))
+        || (draftChanged && hasMarkdownTableLineChangeInSection(baseSection.lines, draftSection.lines))
+        || (serverChanged && hasMarkdownListItemLineChangeInSection(baseSection.lines, serverSection.lines))
+        || (draftChanged && hasMarkdownListItemLineChangeInSection(baseSection.lines, draftSection.lines))
+        || (serverChanged && hasFencedBlockLineChangeInSection(baseSection.lines, serverSection.lines))
+        || (draftChanged && hasFencedBlockLineChangeInSection(baseSection.lines, draftSection.lines))
+      ) {
+        return null;
+      }
+      if (
+        serverChanged
+        && draftChanged
+        && !areLineGroupsEqual(serverSection.lines, draftSection.lines)
+      ) {
+        return null;
+      }
+
+      if (draftChanged) {
+        hasOtherSideChange = true;
+        mergedSectionLines.push(draftSection.lines);
+      } else if (serverChanged) {
+        hasOtherSideChange = true;
+        mergedSectionLines.push(serverSection.lines);
+      } else {
+        mergedSectionLines.push(baseSection.lines);
+      }
+    }
+
+    if (!serverReorder || !draftReorder) {
+      if (!hasOtherSideChange) return null;
+    }
+
+    const mergedContent = [
+      ...baseSections.preambleLines,
+      ...mergedSectionLines.flat(),
+    ].join('\n');
+    if (mergedContent === serverContent.replace(/\r\n/g, '\n')) return null;
+
+    return {
+      content: mergedContent,
+      summary: '合并轨迹：自动合并服务端与草稿的非重叠代码块行重排',
     };
   };
   const buildAutoMergedParagraphMoveResult = (
@@ -3064,6 +3272,30 @@ export const ArtifactPane: React.FC = () => {
 
     return targetHasListItemChange(serverSections) || targetHasListItemChange(draftSections);
   };
+  const hasFencedBlockChangeForAutoMerge = (
+    baseContent: string,
+    serverContent: string,
+    draftContent: string
+  ): boolean => {
+    const baseSections = parseMarkdownSectionsForAutoMerge(baseContent);
+    const serverSections = parseMarkdownSectionsForAutoMerge(serverContent);
+    const draftSections = parseMarkdownSectionsForAutoMerge(draftContent);
+    if (!baseSections || !serverSections || !draftSections) return false;
+
+    const targetHasFencedBlockChange = (targetSections: ParsedMarkdownSections): boolean => (
+      baseSections.sections.some((baseSection) => {
+        const targetSection = targetSections.sections.find(section => section.heading === baseSection.heading);
+        if (!targetSection) return baseSection.lines.some(isFencedBlockBoundaryLine);
+        return hasFencedBlockLineChangeInSection(baseSection.lines, targetSection.lines);
+      })
+      || targetSections.sections.some((targetSection) => {
+        const baseSection = baseSections.sections.find(section => section.heading === targetSection.heading);
+        return !baseSection && targetSection.lines.some(isFencedBlockBoundaryLine);
+      })
+    );
+
+    return targetHasFencedBlockChange(serverSections) || targetHasFencedBlockChange(draftSections);
+  };
   const hasStructuredBlockReorderForAutoMerge = (
     baseContent: string,
     serverContent: string,
@@ -3199,11 +3431,21 @@ export const ArtifactPane: React.FC = () => {
         editDraft
       );
       if (listItemReorderMerge) return listItemReorderMerge;
+      const fencedBlockLineReorderMerge = buildAutoMergedFencedBlockLineReorderResult(
+        artifactContent,
+        conflictArtifact.content,
+        editDraft
+      );
+      if (fencedBlockLineReorderMerge) return fencedBlockLineReorderMerge;
       if (hasMarkdownTableChangeForAutoMerge(
         artifactContent,
         conflictArtifact.content,
         editDraft
       ) || hasMarkdownListItemChangeForAutoMerge(
+        artifactContent,
+        conflictArtifact.content,
+        editDraft
+      ) || hasFencedBlockChangeForAutoMerge(
         artifactContent,
         conflictArtifact.content,
         editDraft

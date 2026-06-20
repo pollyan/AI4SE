@@ -2092,6 +2092,18 @@ describe('ArtifactPane Component', () => {
         ]);
     };
 
+    const expectFencedBlockLineReorderAutoMerge = async (expectedContent: string) => {
+        fireEvent.click(await screen.findByRole('button', { name: '自动合并非重叠变更' }));
+        expect((screen.getByLabelText('编辑产出物 Markdown') as HTMLTextAreaElement).value).toBe(expectedContent);
+        expect(useStore.getState().artifactAuditEvents).toEqual([
+            expect.objectContaining({
+                stageId: 'STRATEGY',
+                eventType: 'artifact_auto_merge_applied',
+                summary: '合并轨迹：自动合并服务端与草稿的非重叠代码块行重排',
+            }),
+        ]);
+    };
+
     const expectNoParagraphMovementAutoMerge = async () => {
         await screen.findByRole('button', { name: '对比服务端版本' });
         expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
@@ -3072,7 +3084,7 @@ describe('ArtifactPane Component', () => {
         await expectNoParagraphMovementAutoMerge();
     });
 
-    it('does not auto-merge list-like lines inside fenced blocks', async () => {
+    it('auto-merges list-like line reordering inside fenced blocks as fenced block line reordering', async () => {
         const listBaseContent = [
             '# 测试策略蓝图',
             '',
@@ -3084,6 +3096,18 @@ describe('ArtifactPane Component', () => {
             '',
             '## 验收口径',
             '旧验收口径',
+        ].join('\n');
+        const expectedContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '```text',
+            '- 退款脚本步骤',
+            '- 支付脚本步骤',
+            '```',
+            '',
+            '## 验收口径',
+            '服务端补充验收口径。',
         ].join('\n');
         renderParagraphMoveConflict(
             [
@@ -3113,7 +3137,7 @@ describe('ArtifactPane Component', () => {
             listBaseContent,
         );
 
-        await expectNoParagraphMovementAutoMerge();
+        await expectFencedBlockLineReorderAutoMerge(expectedContent);
     });
 
     it('auto-merges list item reordering when draft reorders list items and server rewrites another section', async () => {
@@ -3435,6 +3459,231 @@ describe('ArtifactPane Component', () => {
         );
 
         await expectStructuredBlockReorderReason();
+    });
+
+    it('auto-merges fenced block line reordering when draft reorders lines and server rewrites another section', async () => {
+        const fencedBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '```mermaid',
+            'flowchart TD',
+            'A[支付] --> B[退款]',
+            'B --> C[风控]',
+            'C --> D[验收]',
+            '```',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        const expectedContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '```mermaid',
+            'flowchart TD',
+            'C --> D[验收]',
+            'A[支付] --> B[退款]',
+            'B --> C[风控]',
+            '```',
+            '',
+            '## 验收口径',
+            '服务端补充验收口径。',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '```mermaid',
+                'flowchart TD',
+                'A[支付] --> B[退款]',
+                'B --> C[风控]',
+                'C --> D[验收]',
+                '```',
+                '',
+                '## 验收口径',
+                '服务端补充验收口径。',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '```mermaid',
+                'flowchart TD',
+                'C --> D[验收]',
+                'A[支付] --> B[退款]',
+                'B --> C[风控]',
+                '```',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            fencedBaseContent,
+        );
+
+        await expectFencedBlockLineReorderAutoMerge(expectedContent);
+    });
+
+    it('auto-merges fenced block line reordering when server reorders lines and draft rewrites another section', async () => {
+        const fencedBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '```mermaid',
+            'flowchart TD',
+            'A[支付] --> B[退款]',
+            'B --> C[风控]',
+            'C --> D[验收]',
+            '```',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        const expectedContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '```mermaid',
+            'flowchart TD',
+            'C --> D[验收]',
+            'A[支付] --> B[退款]',
+            'B --> C[风控]',
+            '```',
+            '',
+            '## 验收口径',
+            '用户补充验收口径。',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '```mermaid',
+                'flowchart TD',
+                'C --> D[验收]',
+                'A[支付] --> B[退款]',
+                'B --> C[风控]',
+                '```',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '```mermaid',
+                'flowchart TD',
+                'A[支付] --> B[退款]',
+                'B --> C[风控]',
+                'C --> D[验收]',
+                '```',
+                '',
+                '## 验收口径',
+                '用户补充验收口径。',
+            ].join('\n'),
+            fencedBaseContent,
+        );
+
+        await expectFencedBlockLineReorderAutoMerge(expectedContent);
+    });
+
+    it('does not auto-merge fenced block line reordering when a reordered line is rewritten', async () => {
+        const fencedBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '```mermaid',
+            'flowchart TD',
+            'A[支付] --> B[退款]',
+            'B --> C[风控]',
+            'C --> D[验收]',
+            '```',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '```mermaid',
+                'flowchart TD',
+                'A[支付] --> B[退款]',
+                'B --> C[风控]',
+                'C --> D[验收]',
+                '```',
+                '',
+                '## 验收口径',
+                '服务端补充验收口径。',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '```mermaid',
+                'flowchart TD',
+                'C --> D[验收增强]',
+                'A[支付] --> B[退款]',
+                'B --> C[风控]',
+                '```',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            fencedBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge fenced block line reordering when lines repeat', async () => {
+        const fencedBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '```text',
+            'step: 登录',
+            'step: 登录',
+            'step: 支付',
+            '```',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '```text',
+                'step: 登录',
+                'step: 登录',
+                'step: 支付',
+                '```',
+                '',
+                '## 验收口径',
+                '服务端补充验收口径。',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '```text',
+                'step: 支付',
+                'step: 登录',
+                'step: 登录',
+                '```',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            fencedBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
     });
 
     it('does not auto-merge paragraph movement when a paragraph is split while the server rewrites the same section', async () => {
