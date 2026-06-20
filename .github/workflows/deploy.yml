@@ -181,7 +181,8 @@ jobs:
     name: Build and Deploy to Tencent Cloud
     needs: [backend-api-test, common-frontend-test, new-agents-frontend-test, proxy-test]  # 必须等待所有测试完成且成功
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+    # 生产环境部署必须由人工从 GitHub Actions 手动触发；push/PR 只运行测试门禁。
+    if: github.event_name == 'workflow_dispatch'
     
     steps:
     - name: 📥 Checkout code
