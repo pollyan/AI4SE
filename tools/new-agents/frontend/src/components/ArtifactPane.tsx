@@ -2116,6 +2116,104 @@ export const ArtifactPane: React.FC = () => {
     }
     return lines;
   };
+  type ParagraphRewriteSection = {
+    blocks: ParsedParagraphBlock[];
+    trailingBlankLineCount: number;
+  };
+  const parseParagraphRewriteSection = (
+    heading: string,
+    sectionLines: string[]
+  ): ParagraphRewriteSection | null => {
+    const blocks = parseSafeSectionParagraphBlocks(sectionLines);
+    if (!blocks || blocks.length < 2) return null;
+    const trailingBlankLineCount = getTrailingBlankLineCount(sectionLines);
+    if (!areLineGroupsEqual(
+      sectionLines,
+      buildParagraphSectionLines(heading, blocks, trailingBlankLineCount)
+    )) {
+      return null;
+    }
+
+    return {
+      blocks,
+      trailingBlankLineCount,
+    };
+  };
+  const buildMergedSameSectionParagraphRewriteLines = (
+    heading: string,
+    baseSectionLines: string[],
+    serverSectionLines: string[],
+    draftSectionLines: string[]
+  ): string[] | null => {
+    const baseSection = parseParagraphRewriteSection(heading, baseSectionLines);
+    const serverSection = parseParagraphRewriteSection(heading, serverSectionLines);
+    const draftSection = parseParagraphRewriteSection(heading, draftSectionLines);
+    if (!baseSection || !serverSection || !draftSection) return null;
+    if (
+      baseSection.blocks.length !== serverSection.blocks.length
+      || baseSection.blocks.length !== draftSection.blocks.length
+      || baseSection.trailingBlankLineCount !== serverSection.trailingBlankLineCount
+      || baseSection.trailingBlankLineCount !== draftSection.trailingBlankLineCount
+    ) {
+      return null;
+    }
+
+    const baseBlockIndexByKey = new Map(
+      baseSection.blocks.map((block, index) => [block.key, index])
+    );
+    const preservesBaseBlockPositions = (targetSection: ParagraphRewriteSection): boolean => (
+      targetSection.blocks.every((block, index) => {
+        const baseIndex = baseBlockIndexByKey.get(block.key);
+        return baseIndex === undefined || baseIndex === index;
+      })
+    );
+    if (
+      !preservesBaseBlockPositions(serverSection)
+      || !preservesBaseBlockPositions(draftSection)
+    ) {
+      return null;
+    }
+
+    let hasServerOnlyParagraphChange = false;
+    let hasDraftOnlyParagraphChange = false;
+    const mergedBlocks: ParsedParagraphBlock[] = [];
+
+    for (let blockIndex = 0; blockIndex < baseSection.blocks.length; blockIndex += 1) {
+      const baseBlock = baseSection.blocks[blockIndex];
+      const serverBlock = serverSection.blocks[blockIndex];
+      const draftBlock = draftSection.blocks[blockIndex];
+      const serverChanged = !areLineGroupsEqual(baseBlock.lines, serverBlock.lines);
+      const draftChanged = !areLineGroupsEqual(baseBlock.lines, draftBlock.lines);
+
+      if (serverChanged && draftChanged) {
+        if (!areLineGroupsEqual(serverBlock.lines, draftBlock.lines)) {
+          return null;
+        }
+        mergedBlocks.push(serverBlock);
+        continue;
+      }
+
+      if (serverChanged) {
+        hasServerOnlyParagraphChange = true;
+        mergedBlocks.push(serverBlock);
+      } else if (draftChanged) {
+        hasDraftOnlyParagraphChange = true;
+        mergedBlocks.push(draftBlock);
+      } else {
+        mergedBlocks.push(baseBlock);
+      }
+    }
+
+    if (!hasServerOnlyParagraphChange || !hasDraftOnlyParagraphChange) {
+      return null;
+    }
+
+    return buildParagraphSectionLines(
+      heading,
+      mergedBlocks,
+      baseSection.trailingBlankLineCount
+    );
+  };
   const findParagraphMoveChange = (
     baseSections: ParsedMarkdownSections,
     targetSections: ParsedMarkdownSections
@@ -2308,6 +2406,85 @@ export const ArtifactPane: React.FC = () => {
     return {
       content: mergedContent,
       summary: '合并轨迹：自动合并服务端与草稿的非重叠章节改写',
+    };
+  };
+  const buildAutoMergedSameSectionParagraphRewriteResult = (
+    baseContent: string,
+    serverContent: string,
+    draftContent: string
+  ): AutoMergedConflictResult | null => {
+    const baseSections = parseMarkdownSectionsForAutoMerge(baseContent);
+    const serverSections = parseMarkdownSectionsForAutoMerge(serverContent);
+    const draftSections = parseMarkdownSectionsForAutoMerge(draftContent);
+    if (!baseSections || !serverSections || !draftSections) return null;
+    if (
+      !hasSameSectionShape(baseSections, serverSections)
+      || !hasSameSectionShape(baseSections, draftSections)
+    ) {
+      return null;
+    }
+    if (
+      hasMovementThatShouldBypassSectionRewrite(baseSections, serverSections)
+      || hasMovementThatShouldBypassSectionRewrite(baseSections, draftSections)
+    ) {
+      return null;
+    }
+    if (baseSections.sections.some((baseSection, index) => (
+      hasMarkdownTableLineChangeInSection(baseSection.lines, serverSections.sections[index].lines)
+      || hasMarkdownTableLineChangeInSection(baseSection.lines, draftSections.sections[index].lines)
+      || hasMarkdownListItemLineChangeInSection(baseSection.lines, serverSections.sections[index].lines)
+      || hasMarkdownListItemLineChangeInSection(baseSection.lines, draftSections.sections[index].lines)
+      || hasFencedBlockLineChangeInSection(baseSection.lines, serverSections.sections[index].lines)
+      || hasFencedBlockLineChangeInSection(baseSection.lines, draftSections.sections[index].lines)
+    ))) {
+      return null;
+    }
+
+    let hasSameSectionParagraphMerge = false;
+    const mergedSectionLines: string[][] = [];
+
+    for (let index = 0; index < baseSections.sections.length; index += 1) {
+      const baseSection = baseSections.sections[index];
+      const baseSectionLines = baseSection.lines;
+      const serverSectionLines = serverSections.sections[index].lines;
+      const draftSectionLines = draftSections.sections[index].lines;
+      const serverChanged = !areLineGroupsEqual(baseSectionLines, serverSectionLines);
+      const draftChanged = !areLineGroupsEqual(baseSectionLines, draftSectionLines);
+
+      if (serverChanged && draftChanged) {
+        if (areLineGroupsEqual(serverSectionLines, draftSectionLines)) {
+          mergedSectionLines.push(serverSectionLines);
+          continue;
+        }
+        const mergedSameSectionLines = buildMergedSameSectionParagraphRewriteLines(
+          baseSection.heading,
+          baseSectionLines,
+          serverSectionLines,
+          draftSectionLines
+        );
+        if (!mergedSameSectionLines) return null;
+        hasSameSectionParagraphMerge = true;
+        mergedSectionLines.push(mergedSameSectionLines);
+      } else if (draftChanged) {
+        mergedSectionLines.push(draftSectionLines);
+      } else if (serverChanged) {
+        mergedSectionLines.push(serverSectionLines);
+      } else {
+        mergedSectionLines.push(baseSectionLines);
+      }
+    }
+
+    if (!hasSameSectionParagraphMerge) return null;
+
+    const mergedContent = [
+      ...baseSections.preambleLines,
+      ...mergedSectionLines.flat(),
+    ].join('\n');
+    if (mergedContent === serverContent.replace(/\r\n/g, '\n')) return null;
+
+    return {
+      content: mergedContent,
+      summary: '合并轨迹：自动合并服务端与草稿的同章节非重叠段落改写',
     };
   };
   const buildAutoMergedTableRowReorderResult = (
@@ -3419,6 +3596,12 @@ export const ArtifactPane: React.FC = () => {
         editDraft
       );
       if (sectionRewriteMerge) return sectionRewriteMerge;
+      const sameSectionParagraphRewriteMerge = buildAutoMergedSameSectionParagraphRewriteResult(
+        artifactContent,
+        conflictArtifact.content,
+        editDraft
+      );
+      if (sameSectionParagraphRewriteMerge) return sameSectionParagraphRewriteMerge;
       const tableRowReorderMerge = buildAutoMergedTableRowReorderResult(
         artifactContent,
         conflictArtifact.content,

@@ -623,3 +623,9 @@
   - fenced block 内容变化、重复行、多 fenced block、同一 block 双方不同顺序、fence 边界变化、结构化块重排叠加表格/列表/段落/章节移动时继续拒绝自动合并，避免把 Mermaid 或代码语义误合并。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "fenced block line reordering"` 观察到正例被章节改写路径误归因、负例误显示自动合并入口；实现后运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "table row|list item|fenced blocks|fenced block line reordering|paragraph movement"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`git diff --check`，并通过独立 subagent 复审。
   - 剩余：更复杂三方 merge 解析仍可作为后续增强切片。
+- 2026-06-20：完成第五十一块 CGA「Artifact 同章节非重叠段落改写自动合并」。
+  - 保存冲突现在会识别同一 Markdown 章节内的普通段落非重叠改写：服务端改写一个段落、用户草稿改写另一个段落时，可使用 `自动合并非重叠变更`。
+  - 点击后编辑草稿会按原段落顺序同时保留服务端段落改写和用户段落改写，并记录 `artifact_auto_merge_applied`，summary 区分 `同章节非重叠段落改写`。
+  - 双方改写同一段落、段落数量变化、重复段落、异常空行结构、列表/表格/fenced block 或段落移动混入时继续拒绝自动合并，避免误合并结构化内容或语义移动。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "same-section paragraph rewrites|same section"` 观察到缺少自动合并入口失败；实现后运行同命令、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "section rewrites|same-section paragraph rewrites|paragraph movement|table row|list item|fenced block line reordering"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`git diff --check`。
+  - 剩余：更复杂三方 merge 解析仍可作为后续增强切片。
