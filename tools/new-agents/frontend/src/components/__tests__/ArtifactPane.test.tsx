@@ -1205,6 +1205,74 @@ describe('ArtifactPane Component', () => {
         ]));
     });
 
+    it('restores a contiguous removed history block from the history diff', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 当前产物\n\n新结论\n保留内容',
+            stageArtifacts: {
+                CLARIFY: '# 当前产物\n\n新结论\n保留内容',
+            },
+            artifactHistory: [
+                {
+                    id: 'v1',
+                    timestamp: 123,
+                    content: '# 当前产物\n\n旧风险\n旧验收口径\n保留内容',
+                    stageId: 'CLARIFY',
+                },
+            ],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('历史版本'));
+        fireEvent.click(screen.getByRole('button', { name: '差异' }));
+        fireEvent.click(screen.getByRole('button', { name: '恢复变更块：旧风险 / 旧验收口径' }));
+
+        const state = useStore.getState();
+        expect(state.artifactContent).toBe('# 当前产物\n\n旧风险\n旧验收口径\n新结论\n保留内容');
+        expect(state.stageArtifacts.CLARIFY).toBe('# 当前产物\n\n旧风险\n旧验收口径\n新结论\n保留内容');
+        expect(state.artifactHistory).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                content: '# 当前产物\n\n新结论\n保留内容',
+                stageId: 'CLARIFY',
+            }),
+        ]));
+    });
+
+    it('discards a contiguous current-only history block from the history diff', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 当前产物\n\n新风险\n新验收口径\n保留内容',
+            stageArtifacts: {
+                CLARIFY: '# 当前产物\n\n新风险\n新验收口径\n保留内容',
+            },
+            artifactHistory: [
+                {
+                    id: 'v1',
+                    timestamp: 123,
+                    content: '# 当前产物\n\n保留内容',
+                    stageId: 'CLARIFY',
+                },
+            ],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('历史版本'));
+        fireEvent.click(screen.getByRole('button', { name: '差异' }));
+        fireEvent.click(screen.getByRole('button', { name: '丢弃变更块：新风险 / 新验收口径' }));
+
+        const state = useStore.getState();
+        expect(state.artifactContent).toBe('# 当前产物\n\n保留内容');
+        expect(state.stageArtifacts.CLARIFY).toBe('# 当前产物\n\n保留内容');
+        expect(state.artifactHistory).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                content: '# 当前产物\n\n新风险\n新验收口径\n保留内容',
+                stageId: 'CLARIFY',
+            }),
+        ]));
+    });
+
     it('saves a controlled manual edit into the current artifact, stage artifact, and history', () => {
         useStore.setState({
             workflow: 'TEST_DESIGN',

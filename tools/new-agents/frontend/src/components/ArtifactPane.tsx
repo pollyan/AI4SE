@@ -6,6 +6,7 @@ import rehypeRaw from 'rehype-raw';
 import { useStore, ArtifactVersion, WORKFLOWS } from '../store';
 import type { AgentRunSnapshotArtifact, ArtifactVisualDiagnostic, ArtifactVisualDiagnosticFocusRequest } from '../core/types';
 import { buildLineDiff } from '../core/artifactDiff';
+import type { LineDiffEntry } from '../core/artifactDiff';
 import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/markdownUtils';
 import { Download, Code, Eye, History, X, AlertTriangle, GitCompare, Edit3, Save, MessageSquare, Trash2, Lock, Unlock, MoreHorizontal } from 'lucide-react';
 import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
@@ -1251,6 +1252,40 @@ export const ArtifactPane: React.FC = () => {
   const buildConflictModificationBlockLabel = (removedLines: string[], addedLines: string[]): string => (
     `${buildConflictMergeBlockLabel(removedLines)} → ${buildConflictMergeBlockLabel(addedLines)}`
   );
+  const buildContiguousDiffBlocks = (
+    diff: LineDiffEntry[],
+    type: Extract<LineDiffEntry['type'], 'added' | 'removed'>
+  ): Array<{ startIndex: number; lines: string[]; label: string }> => {
+    const blocks: Array<{ startIndex: number; lines: string[]; label: string }> = [];
+    let blockStartIndex: number | null = null;
+    let blockLines: string[] = [];
+
+    const flushBlock = () => {
+      if (blockStartIndex !== null && blockLines.length > 1) {
+        blocks.push({
+          startIndex: blockStartIndex,
+          lines: blockLines,
+          label: buildConflictMergeBlockLabel(blockLines),
+        });
+      }
+      blockStartIndex = null;
+      blockLines = [];
+    };
+
+    diff.forEach((line, index) => {
+      if (line.type === type && line.content.trim()) {
+        if (blockStartIndex === null) {
+          blockStartIndex = index;
+        }
+        blockLines.push(line.content);
+        return;
+      }
+      flushBlock();
+    });
+    flushBlock();
+
+    return blocks;
+  };
   type AutoMergedConflictResult = {
     content: string;
     summary: string;
@@ -3706,6 +3741,22 @@ export const ArtifactPane: React.FC = () => {
       : [],
     [artifactContent, selectedVersion]
   );
+  const selectedVersionRemovedBlocks = useMemo(
+    () => buildContiguousDiffBlocks(selectedVersionDiff, 'removed'),
+    [selectedVersionDiff]
+  );
+  const selectedVersionRemovedBlockByStartIndex = useMemo(
+    () => new Map(selectedVersionRemovedBlocks.map(block => [block.startIndex, block])),
+    [selectedVersionRemovedBlocks]
+  );
+  const selectedVersionAddedBlocks = useMemo(
+    () => buildContiguousDiffBlocks(selectedVersionDiff, 'added'),
+    [selectedVersionDiff]
+  );
+  const selectedVersionAddedBlockByStartIndex = useMemo(
+    () => new Map(selectedVersionAddedBlocks.map(block => [block.startIndex, block])),
+    [selectedVersionAddedBlocks]
+  );
   const conflictDraftDiff = useMemo(
     () => conflictArtifact
       ? buildLineDiff(conflictArtifact.content, editDraft)
@@ -3971,6 +4022,28 @@ export const ArtifactPane: React.FC = () => {
     ].join('\n'));
   };
 
+  const restoreHistoryBlock = (lineContents: string[]) => {
+    if (!selectedVersion) return;
+
+    const blockLines = lineContents.filter(line => line.trim());
+    if (blockLines.length === 0) return;
+
+    const currentLines = artifactContent.replace(/\r\n/g, '\n').split('\n');
+    const linesToRestore = blockLines.filter(line => !currentLines.includes(line));
+    if (linesToRestore.length === 0) return;
+
+    const historyLines = selectedVersion.content.replace(/\r\n/g, '\n').split('\n');
+    const historyLineIndex = historyLines.findIndex(line => line === blockLines[0]);
+    if (historyLineIndex < 0) return;
+
+    const insertIndex = Math.min(historyLineIndex, currentLines.length);
+    applyHistoryLineReview([
+      ...currentLines.slice(0, insertIndex),
+      ...linesToRestore,
+      ...currentLines.slice(insertIndex),
+    ].join('\n'));
+  };
+
   const discardCurrentLine = (lineContent: string) => {
     if (!lineContent.trim()) return;
 
@@ -3982,6 +4055,23 @@ export const ArtifactPane: React.FC = () => {
       ...currentLines.slice(0, currentLineIndex),
       ...currentLines.slice(currentLineIndex + 1),
     ].join('\n'));
+  };
+
+  const discardCurrentBlock = (lineContents: string[]) => {
+    const blockLines = lineContents.filter(line => line.trim());
+    if (blockLines.length === 0) return;
+
+    const nextCurrentLines = artifactContent.replace(/\r\n/g, '\n').split('\n');
+    let removedAnyLine = false;
+    blockLines.forEach((lineContent) => {
+      const currentLineIndex = nextCurrentLines.findIndex(line => line === lineContent);
+      if (currentLineIndex < 0) return;
+      nextCurrentLines.splice(currentLineIndex, 1);
+      removedAnyLine = true;
+    });
+    if (!removedAnyLine) return;
+
+    applyHistoryLineReview(nextCurrentLines.join('\n'));
   };
 
   const beginManualEdit = () => {
@@ -5265,12 +5355,24 @@ export const ArtifactPane: React.FC = () => {
                     <div className="overflow-hidden rounded-lg border border-[#1e293b] bg-[#0f172a] font-mono text-xs">
                       {selectedVersionDiff.map((entry, index) => {
                         const prefix = entry.type === 'added' ? '+ ' : entry.type === 'removed' ? '- ' : '  ';
+                        const removedBlock = selectedVersionRemovedBlockByStartIndex.get(index);
+                        const addedBlock = selectedVersionAddedBlockByStartIndex.get(index);
                         return (
                           <div
                             key={`${entry.type}-${index}`}
                             className={`flex items-center gap-2 whitespace-pre-wrap px-4 py-1.5 ${entry.type === 'added' ? 'bg-emerald-500/10 text-emerald-200' : entry.type === 'removed' ? 'bg-red-500/10 text-red-200' : 'text-slate-400'}`}
                           >
                             <span className="min-w-0 flex-1">{prefix}{entry.content}</span>
+                            {removedBlock && (
+                              <button
+                                type="button"
+                                onClick={() => restoreHistoryBlock(removedBlock.lines)}
+                                aria-label={`恢复变更块：${removedBlock.label}`}
+                                className="shrink-0 rounded border border-red-300/20 px-1.5 py-0.5 text-[10px] font-semibold text-red-100 hover:bg-red-300/10"
+                              >
+                                恢复块
+                              </button>
+                            )}
                             {entry.type === 'removed' && entry.content.trim() && (
                               <button
                                 type="button"
@@ -5279,6 +5381,16 @@ export const ArtifactPane: React.FC = () => {
                                 className="shrink-0 rounded border border-red-300/20 px-1.5 py-0.5 text-[10px] font-semibold text-red-100 hover:bg-red-300/10"
                               >
                                 恢复此行
+                              </button>
+                            )}
+                            {addedBlock && (
+                              <button
+                                type="button"
+                                onClick={() => discardCurrentBlock(addedBlock.lines)}
+                                aria-label={`丢弃变更块：${addedBlock.label}`}
+                                className="shrink-0 rounded border border-emerald-300/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-100 hover:bg-emerald-300/10"
+                              >
+                                丢弃块
                               </button>
                             )}
                             {entry.type === 'added' && entry.content.trim() && (

@@ -644,6 +644,13 @@
   - 被删除段落同时被另一侧改写、改写侧多段改写导致顺序无法证明、段落移动/重排、重复段落、列表/表格/fenced block、异常空行结构或双方都呈现删除形态时继续拒绝自动合并，避免误删有效内容。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "same-section paragraph deletion"` 观察到正例缺少自动合并入口失败；独立复审指出多段改写可能掩盖重排后，补充失败用例 `rewrite side may have reordered rewritten paragraphs` 并收紧为单段改写；实现后运行同命令、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "same-section paragraph|paragraph movement|section rewrites|table row|list item|fenced block line reordering|draft deletions"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`git diff --check`。
   - 剩余：更复杂三方 merge 解析仍可作为后续增强切片。
+- 2026-06-20：完成第五十三块 CGA「Artifact 历史 Diff 块级审阅」。
+  - 历史版本 `差异` 视图在原有逐行 `恢复此行` / `丢弃当前行` 基础上，新增连续多行变更的 `恢复块` / `丢弃块` 操作。
+  - `恢复块` 会按历史版本中的块起始位置把缺失的非空行插回当前 artifact，适合一次性找回被误删的风险、验收口径、结论段落等连续内容。
+  - `丢弃块` 会从当前 artifact 中移除连续新增行，适合一次性撤销用户或 Agent 刚加入但不需要的一组校准内容。
+  - 块级操作继续先把修改前的当前产物写入 `artifactHistory`，再同步更新 `artifactContent` 和当前阶段 `stageArtifacts`；逐行按钮仍保留，避免用户只能全块处理。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "history block"` 观察到缺少 `恢复变更块` / `丢弃变更块` 失败；实现后运行同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "history"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`npm run test`、`git diff --check`。
+  - 剩余：冲突面板中 `server-only` 删除块仍需要补齐块级恢复入口；更复杂三方 merge 解析继续只覆盖可证明安全场景，歧义场景保持人工处理。
 - 2026-06-20：产品决策更新「Artifact 协作后续收敛」。
   - 高保真导出不再继续深挖：DOCX 包级导出、Markdown/PDF 语义投影、DOCX Mermaid SVG 嵌入已经达到本轮可接受水位；PDF 图片级嵌入和更复杂排版按当前阶段止步完成。
   - 恢复中心、分享/权限、多人实时协同、与 intent-tester 自动打通暂不纳入本轮目标。
