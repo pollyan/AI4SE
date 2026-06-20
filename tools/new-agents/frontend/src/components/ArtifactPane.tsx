@@ -1482,6 +1482,278 @@ export const ArtifactPane: React.FC = () => {
   const getSectionHeadingSet = (sections: ParsedMarkdownSections): Set<string> => (
     new Set(getSectionOrder(sections))
   );
+  type ParsedParagraphBlock = {
+    baseIndex: number;
+    lines: string[];
+    key: string;
+  };
+  type ParagraphMoveChange = {
+    heading: string;
+    movedBaseIndex: number;
+    targetOrder: number[];
+  };
+  type SectionMovementUnit = {
+    heading: string;
+    key: string;
+    unsafe: boolean;
+  };
+  const isUnsafeParagraphMoveBlock = (lines: string[]): boolean => (
+    lines.some(line => (
+      /^```/.test(line.trim())
+      || /^[-*+]\s+/.test(line.trim())
+      || /^\d+\.\s+/.test(line.trim())
+      || /^\|.*\|$/.test(line.trim())
+    ))
+  );
+  const collectSectionMovementUnits = (heading: string, sectionLines: string[]): SectionMovementUnit[] => {
+    const units: SectionMovementUnit[] = [];
+    let normalBlockLines: string[] = [];
+
+    const flushNormalBlock = () => {
+      if (normalBlockLines.length === 0) return;
+      units.push({
+        heading,
+        key: normalBlockLines.join('\n'),
+        unsafe: false,
+      });
+      normalBlockLines = [];
+    };
+
+    for (let index = 1; index < sectionLines.length; index += 1) {
+      const line = sectionLines[index];
+      const trimmedLine = line.trim();
+      if (!trimmedLine) {
+        flushNormalBlock();
+        continue;
+      }
+
+      if (/^```/.test(trimmedLine)) {
+        flushNormalBlock();
+        const fenceLines = [line];
+        index += 1;
+        while (index < sectionLines.length) {
+          fenceLines.push(sectionLines[index]);
+          if (/^```/.test(sectionLines[index].trim())) break;
+          index += 1;
+        }
+        units.push({
+          heading,
+          key: fenceLines.join('\n'),
+          unsafe: true,
+        });
+        continue;
+      }
+
+      if (isUnsafeParagraphMoveBlock([line])) {
+        flushNormalBlock();
+        units.push({
+          heading,
+          key: line,
+          unsafe: true,
+        });
+        continue;
+      }
+
+      normalBlockLines.push(line);
+    }
+
+    flushNormalBlock();
+    return units;
+  };
+  const countUnitKeys = (units: SectionMovementUnit[]): Map<string, number> => (
+    units.reduce((counts, unit) => {
+      counts.set(unit.key, (counts.get(unit.key) ?? 0) + 1);
+      return counts;
+    }, new Map<string, number>())
+  );
+  const hasUnsafeUnitReorder = (
+    baseSectionLines: string[],
+    targetSectionLines: string[],
+    heading: string
+  ): boolean => {
+    const baseUnits = collectSectionMovementUnits(heading, baseSectionLines);
+    const targetUnits = collectSectionMovementUnits(heading, targetSectionLines);
+    const baseCounts = countUnitKeys(baseUnits);
+    const targetCounts = countUnitKeys(targetUnits);
+    const comparableKeys = new Set(
+      baseUnits
+        .map(unit => unit.key)
+        .filter(key => baseCounts.get(key) === 1 && targetCounts.get(key) === 1)
+    );
+    if (comparableKeys.size < 2) return false;
+
+    const baseOrder = baseUnits.filter(unit => comparableKeys.has(unit.key)).map(unit => unit.key);
+    const targetOrder = targetUnits.filter(unit => comparableKeys.has(unit.key)).map(unit => unit.key);
+    if (areSectionOrdersEqual(baseOrder, targetOrder)) return false;
+
+    const baseUnitByKey = new Map(baseUnits.map(unit => [unit.key, unit]));
+    return Array.from(comparableKeys).some((key) => {
+      const unit = baseUnitByKey.get(key);
+      return Boolean(unit?.unsafe) && baseOrder.indexOf(key) !== targetOrder.indexOf(key);
+    });
+  };
+  const parseSectionParagraphBlocks = (sectionLines: string[]): ParsedParagraphBlock[] | null => {
+    const blocks: ParsedParagraphBlock[] = [];
+    let currentBlockLines: string[] = [];
+
+    const flushBlock = () => {
+      if (currentBlockLines.length === 0) return;
+      if (isUnsafeParagraphMoveBlock(currentBlockLines)) {
+        currentBlockLines = [];
+        blocks.push({
+          baseIndex: -1,
+          lines: [],
+          key: '__unsafe__',
+        });
+        return;
+      }
+      blocks.push({
+        baseIndex: blocks.length,
+        lines: currentBlockLines,
+        key: currentBlockLines.join('\n'),
+      });
+      currentBlockLines = [];
+    };
+
+    sectionLines.slice(1).forEach((line) => {
+      if (!line.trim()) {
+        flushBlock();
+        return;
+      }
+      currentBlockLines.push(line);
+    });
+    flushBlock();
+
+    if (blocks.some(block => block.key === '__unsafe__')) return null;
+    if (blocks.length < 2) return null;
+    const blockKeys = blocks.map(block => block.key);
+    if (new Set(blockKeys).size !== blockKeys.length) return null;
+    return blocks;
+  };
+  const findSingleMovedParagraphIndex = (baseOrder: number[], targetOrder: number[]): number | null => {
+    if (
+      baseOrder.length !== targetOrder.length
+      || baseOrder.every((baseIndex, index) => baseIndex === targetOrder[index])
+    ) {
+      return null;
+    }
+
+    const matchingMovedIndexes = new Set<number>();
+    for (let fromIndex = 0; fromIndex < baseOrder.length; fromIndex += 1) {
+      for (let toIndex = 0; toIndex < baseOrder.length; toIndex += 1) {
+        if (fromIndex === toIndex) continue;
+        const reordered = [...baseOrder];
+        const [movedBaseIndex] = reordered.splice(fromIndex, 1);
+        reordered.splice(toIndex, 0, movedBaseIndex);
+        if (reordered.every((baseIndex, index) => baseIndex === targetOrder[index])) {
+          matchingMovedIndexes.add(movedBaseIndex);
+        }
+      }
+    }
+
+    return matchingMovedIndexes.size === 1 ? Array.from(matchingMovedIndexes)[0] : null;
+  };
+  const getTrailingBlankLineCount = (sectionLines: string[]): number => {
+    let count = 0;
+    for (let index = sectionLines.length - 1; index > 0; index -= 1) {
+      if (sectionLines[index].trim()) break;
+      count += 1;
+    }
+    return count;
+  };
+  const buildParagraphSectionLines = (
+    heading: string,
+    blocks: ParsedParagraphBlock[],
+    trailingBlankLineCount: number
+  ): string[] => {
+    const lines = [heading];
+    blocks.forEach((block, index) => {
+      if (index > 0) lines.push('');
+      lines.push(...block.lines);
+    });
+    for (let index = 0; index < trailingBlankLineCount; index += 1) {
+      lines.push('');
+    }
+    return lines;
+  };
+  const findParagraphMoveChange = (
+    baseSections: ParsedMarkdownSections,
+    targetSections: ParsedMarkdownSections
+  ): ParagraphMoveChange | null => {
+    if (!hasSameSectionShape(baseSections, targetSections)) return null;
+    const targetSectionMap = buildSectionMap(targetSections);
+    let move: ParagraphMoveChange | null = null;
+
+    for (const baseSection of baseSections.sections) {
+      const targetSection = targetSectionMap.get(baseSection.heading);
+      if (!targetSection) return null;
+      const baseBlocks = parseSectionParagraphBlocks(baseSection.lines);
+      const targetBlocks = parseSectionParagraphBlocks(targetSection);
+      if (!baseBlocks || !targetBlocks) {
+        if (!areLineGroupsEqual(baseSection.lines, targetSection)) return null;
+        continue;
+      }
+
+      const baseKeys = baseBlocks.map(block => block.key);
+      const targetKeys = targetBlocks.map(block => block.key);
+      if (
+        baseKeys.length !== targetKeys.length
+        || targetKeys.some(key => !baseKeys.includes(key))
+      ) {
+        return null;
+      }
+
+      const baseOrder = baseBlocks.map(block => block.baseIndex);
+      const targetOrder = targetKeys.map(key => baseKeys.indexOf(key));
+      if (areSectionOrdersEqual(baseOrder.map(String), targetOrder.map(String))) {
+        if (!areLineGroupsEqual(baseSection.lines, targetSection)) return null;
+        continue;
+      }
+      const movedBaseIndex = findSingleMovedParagraphIndex(baseOrder, targetOrder);
+      if (movedBaseIndex === null) return null;
+      if (move) return null;
+      move = {
+        heading: baseSection.heading,
+        movedBaseIndex,
+        targetOrder,
+      };
+    }
+
+    return move;
+  };
+  const hasCrossSectionUnitMovement = (
+    baseSections: ParsedMarkdownSections,
+    targetSections: ParsedMarkdownSections
+  ): boolean => {
+    const baseUnits = baseSections.sections.flatMap(section => (
+      collectSectionMovementUnits(section.heading, section.lines)
+    ));
+    const targetUnits = targetSections.sections.flatMap(section => (
+      collectSectionMovementUnits(section.heading, section.lines)
+    ));
+    const baseCounts = countUnitKeys(baseUnits);
+    const targetCounts = countUnitKeys(targetUnits);
+    const targetUnitByKey = new Map(targetUnits.map(unit => [unit.key, unit]));
+
+    return baseUnits.some((unit) => {
+      if (baseCounts.get(unit.key) !== 1 || targetCounts.get(unit.key) !== 1) return false;
+      return targetUnitByKey.get(unit.key)?.heading !== unit.heading;
+    });
+  };
+  const hasMovementThatShouldBypassSectionRewrite = (
+    baseSections: ParsedMarkdownSections,
+    targetSections: ParsedMarkdownSections
+  ): boolean => {
+    if (findParagraphMoveChange(baseSections, targetSections)) return true;
+    if (hasCrossSectionUnitMovement(baseSections, targetSections)) return true;
+    return baseSections.sections.some((baseSection, index) => (
+      hasUnsafeUnitReorder(
+        baseSection.lines,
+        targetSections.sections[index]?.lines ?? [],
+        baseSection.heading
+      )
+    ));
+  };
   const getSectionBodyLines = (sectionLines: string[]): string[] => sectionLines.slice(1);
   const getMarkdownHeadingDepth = (heading: string): number => heading.match(/^#+/)?.[0].length ?? 0;
   type SectionRenameChange = {
@@ -1538,6 +1810,12 @@ export const ArtifactPane: React.FC = () => {
     ) {
       return null;
     }
+    if (
+      hasMovementThatShouldBypassSectionRewrite(baseSections, serverSections)
+      || hasMovementThatShouldBypassSectionRewrite(baseSections, draftSections)
+    ) {
+      return null;
+    }
 
     let hasServerChange = false;
     let hasDraftChange = false;
@@ -1580,6 +1858,141 @@ export const ArtifactPane: React.FC = () => {
     return {
       content: mergedContent,
       summary: '合并轨迹：自动合并服务端与草稿的非重叠章节改写',
+    };
+  };
+  const buildAutoMergedParagraphMoveResult = (
+    baseContent: string,
+    serverContent: string,
+    draftContent: string
+  ): AutoMergedConflictResult | null => {
+    const baseSections = parseMarkdownSectionsForAutoMerge(baseContent);
+    const serverSections = parseMarkdownSectionsForAutoMerge(serverContent);
+    const draftSections = parseMarkdownSectionsForAutoMerge(draftContent);
+    if (!baseSections || !serverSections || !draftSections) return null;
+    if (
+      !areLineGroupsEqual(baseSections.preambleLines, serverSections.preambleLines)
+      || !areLineGroupsEqual(baseSections.preambleLines, draftSections.preambleLines)
+      || !hasSameSectionShape(baseSections, serverSections)
+      || !hasSameSectionShape(baseSections, draftSections)
+    ) {
+      return null;
+    }
+
+    const serverMove = findParagraphMoveChange(baseSections, serverSections);
+    const draftMove = findParagraphMoveChange(baseSections, draftSections);
+    if (!serverMove && !draftMove) return null;
+
+    const sameMove = Boolean(serverMove && draftMove);
+    const move = draftMove ?? serverMove;
+    if (!move) return null;
+    if (
+      serverMove
+      && draftMove
+      && (
+        serverMove.heading !== draftMove.heading
+        || serverMove.movedBaseIndex !== draftMove.movedBaseIndex
+        || !areSectionOrdersEqual(serverMove.targetOrder.map(String), draftMove.targetOrder.map(String))
+      )
+    ) {
+      return null;
+    }
+
+    const serverSectionMap = buildSectionMap(serverSections);
+    const draftSectionMap = buildSectionMap(draftSections);
+    const mergedSectionLines: string[][] = [];
+    let hasNonMoveContentChange = false;
+
+    for (const baseSection of baseSections.sections) {
+      const baseSectionLines = baseSection.lines;
+      const serverSectionLines = serverSectionMap.get(baseSection.heading);
+      const draftSectionLines = draftSectionMap.get(baseSection.heading);
+      if (!serverSectionLines || !draftSectionLines) return null;
+
+      if (baseSection.heading === move.heading) {
+        const baseBlocks = parseSectionParagraphBlocks(baseSectionLines);
+        const serverBlocks = parseSectionParagraphBlocks(serverSectionLines);
+        const draftBlocks = parseSectionParagraphBlocks(draftSectionLines);
+        if (!baseBlocks || !serverBlocks || !draftBlocks) return null;
+
+        const moveBlocks = draftMove ? draftBlocks : serverBlocks;
+        const moveSideOrder = moveBlocks.map(block => baseBlocks.findIndex(baseBlock => baseBlock.key === block.key));
+        if (!areSectionOrdersEqual(moveSideOrder.map(String), move.targetOrder.map(String))) {
+          return null;
+        }
+        if (moveSideOrder.some(baseIndex => baseIndex < 0)) return null;
+        if (moveBlocks.some((block, index) => (
+          !areLineGroupsEqual(block.lines, baseBlocks[move.targetOrder[index]].lines)
+        ))) {
+          return null;
+        }
+
+        const nonMovingBlocks = sameMove ? null : (draftMove ? serverBlocks : draftBlocks);
+        if (nonMovingBlocks) {
+          if (nonMovingBlocks.length !== baseBlocks.length) return null;
+          const baseKeys = baseBlocks.map(block => block.key);
+          if (nonMovingBlocks.some((block, index) => (
+            block.key !== baseBlocks[index].key && baseKeys.includes(block.key)
+          ))) {
+            return null;
+          }
+          if (!areLineGroupsEqual(nonMovingBlocks[move.movedBaseIndex].lines, baseBlocks[move.movedBaseIndex].lines)) {
+            return null;
+          }
+        }
+
+        const orderedBlocks = move.targetOrder.map((baseIndex) => {
+          const baseBlock = baseBlocks[baseIndex];
+          const nonMovingBlock = nonMovingBlocks?.[baseIndex];
+          if (
+            nonMovingBlock
+            && baseIndex !== move.movedBaseIndex
+            && !areLineGroupsEqual(nonMovingBlock.lines, baseBlock.lines)
+          ) {
+            hasNonMoveContentChange = true;
+            return {
+              ...nonMovingBlock,
+              baseIndex,
+            };
+          }
+          return baseBlock;
+        });
+        mergedSectionLines.push(buildParagraphSectionLines(
+          baseSection.heading,
+          orderedBlocks,
+          getTrailingBlankLineCount(baseSectionLines)
+        ));
+        continue;
+      }
+
+      const serverChanged = !areLineGroupsEqual(baseSectionLines, serverSectionLines);
+      const draftChanged = !areLineGroupsEqual(baseSectionLines, draftSectionLines);
+      if (
+        serverChanged
+        && draftChanged
+        && !areLineGroupsEqual(serverSectionLines, draftSectionLines)
+      ) {
+        return null;
+      }
+
+      if (draftChanged) {
+        hasNonMoveContentChange = true;
+        mergedSectionLines.push(draftSectionLines);
+      } else if (serverChanged) {
+        hasNonMoveContentChange = true;
+        mergedSectionLines.push(serverSectionLines);
+      } else {
+        mergedSectionLines.push(baseSectionLines);
+      }
+    }
+
+    if (!sameMove && !hasNonMoveContentChange) return null;
+
+    return {
+      content: [
+        ...baseSections.preambleLines,
+        ...mergedSectionLines.flat(),
+      ].join('\n'),
+      summary: '合并轨迹：自动合并服务端与草稿的非重叠段落移动',
     };
   };
   const buildAutoMergedSectionMoveResult = (
@@ -2025,6 +2438,12 @@ export const ArtifactPane: React.FC = () => {
         editDraft
       );
       if (sectionRewriteMerge) return sectionRewriteMerge;
+      const paragraphMoveMerge = buildAutoMergedParagraphMoveResult(
+        artifactContent,
+        conflictArtifact.content,
+        editDraft
+      );
+      if (paragraphMoveMerge) return paragraphMoveMerge;
       const sectionMoveMerge = buildAutoMergedSectionMoveResult(
         artifactContent,
         conflictArtifact.content,

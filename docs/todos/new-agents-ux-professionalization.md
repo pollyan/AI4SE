@@ -582,3 +582,9 @@
   - 正文同时变化、双方重命名到不同标题、另一侧改写被重命名章节、混入章节移动、重复标题或跨层级重组等歧义场景不显示自动合并入口，继续交给人工冲突处理。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "section rename"` 观察到缺少自动合并入口失败；实现后同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`git diff --check`。
   - 剩余：段落级移动和更复杂三方 merge 解析仍可作为后续增强切片。
+- 2026-06-20：完成第四十五块 CGA「Artifact 段落级移动自动合并」。
+  - 保存冲突现在会在章节级合并能力之外，识别同一章节内保守段落移动：当一侧只移动唯一段落块，另一侧只改写同章节或其他章节的非冲突段落时，可使用 `自动合并非重叠变更`。
+  - 点击后编辑草稿会保留安全的段落顺序和另一侧非冲突段落改写，并记录 `artifact_auto_merge_applied` 活动轨迹，summary 区分 `非重叠段落移动`。
+  - 重复段落、移动段落本身被改写、双方移动不同段落、跨章节移动、列表项/表格行/fenced block 移动等歧义场景不显示自动合并入口，继续交给人工冲突处理。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "paragraph movement"` 观察到缺少自动合并入口失败；评审补强后同命令又捕获到跨章节移动、列表项/表格行/fenced block 重排被章节级 helper 误合并；实现 veto 后同命令通过，并运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`git diff --check`。
+  - 剩余：更复杂三方 merge 解析、跨章节语义移动和结构化块内部重排仍可作为后续增强切片。

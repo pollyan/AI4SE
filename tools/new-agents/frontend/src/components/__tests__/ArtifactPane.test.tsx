@@ -1960,6 +1960,654 @@ describe('ArtifactPane Component', () => {
         expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
     });
 
+    const baseParagraphMoveContent = [
+        '# 测试策略蓝图',
+        '',
+        '## 风险策略',
+        '段落A：覆盖支付主链路。',
+        '',
+        '段落B：覆盖退款逆向链路。',
+        '',
+        '段落C：覆盖风控拦截链路。',
+        '',
+        '## 验收口径',
+        '旧验收口径',
+    ].join('\n');
+
+    const renderParagraphMoveConflict = (
+        serverContent: string,
+        draftContent: string,
+        baseContent = baseParagraphMoveContent,
+    ) => {
+        vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
+            '产出物已被更新，请刷新后再保存',
+            {
+                stageId: 'STRATEGY',
+                content: serverContent,
+                versionNumber: 3,
+            },
+        ));
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentRunId: 'run-123',
+            artifactContent: baseContent,
+            stageArtifacts: {
+                STRATEGY: baseContent,
+            },
+            artifactHistory: [
+                {
+                    id: 'run-123-STRATEGY-v2',
+                    timestamp: 123,
+                    content: baseContent,
+                    stageId: 'STRATEGY',
+                },
+            ],
+            artifactAuditEvents: [],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: {
+                value: draftContent,
+            },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+    };
+
+    const expectParagraphMovementAutoMerge = async (expectedContent: string) => {
+        fireEvent.click(await screen.findByRole('button', { name: '自动合并非重叠变更' }));
+        expect((screen.getByLabelText('编辑产出物 Markdown') as HTMLTextAreaElement).value).toBe(expectedContent);
+        expect(useStore.getState().artifactAuditEvents).toEqual([
+            expect.objectContaining({
+                stageId: 'STRATEGY',
+                eventType: 'artifact_auto_merge_applied',
+                summary: '合并轨迹：自动合并服务端与草稿的非重叠段落移动',
+            }),
+        ]);
+    };
+
+    const expectNoParagraphMovementAutoMerge = async () => {
+        await screen.findByRole('button', { name: '对比服务端版本' });
+        expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
+    };
+
+    it('auto-merges paragraph movement when draft moves one paragraph and server rewrites another paragraph in the same section', async () => {
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落A：服务端补充支付主链路观测点。',
+                '',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '段落C：覆盖风控拦截链路。',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落C：覆盖风控拦截链路。',
+                '',
+                '段落A：覆盖支付主链路。',
+                '',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+        );
+
+        await expectParagraphMovementAutoMerge([
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '段落C：覆盖风控拦截链路。',
+            '',
+            '段落A：服务端补充支付主链路观测点。',
+            '',
+            '段落B：覆盖退款逆向链路。',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n'));
+    });
+
+    it('auto-merges paragraph movement when server moves one paragraph and draft rewrites another paragraph in the same section', async () => {
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落C：覆盖风控拦截链路。',
+                '',
+                '段落A：覆盖支付主链路。',
+                '',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落A：用户补充支付主链路异常回滚。',
+                '',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '段落C：覆盖风控拦截链路。',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+        );
+
+        await expectParagraphMovementAutoMerge([
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '段落C：覆盖风控拦截链路。',
+            '',
+            '段落A：用户补充支付主链路异常回滚。',
+            '',
+            '段落B：覆盖退款逆向链路。',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n'));
+    });
+
+    it('auto-merges paragraph movement when both sides move the same paragraph to the same position', async () => {
+        const movedContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '段落C：覆盖风控拦截链路。',
+            '',
+            '段落A：覆盖支付主链路。',
+            '',
+            '段落B：覆盖退款逆向链路。',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        renderParagraphMoveConflict(movedContent, movedContent);
+
+        await expectParagraphMovementAutoMerge(movedContent);
+    });
+
+    it('does not auto-merge paragraph movement when the moved paragraph is also rewritten', async () => {
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落A：覆盖支付主链路。',
+                '',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '段落C：服务端改写风控拦截链路。',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落C：覆盖风控拦截链路。',
+                '',
+                '段落A：覆盖支付主链路。',
+                '',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge paragraph movement when paragraph blocks repeat', async () => {
+        const repeatedBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '重复段落：覆盖支付主链路。',
+            '',
+            '段落B：覆盖退款逆向链路。',
+            '',
+            '重复段落：覆盖支付主链路。',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '重复段落：服务端补充支付观测点。',
+                '',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '重复段落：覆盖支付主链路。',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '重复段落：覆盖支付主链路。',
+                '',
+                '重复段落：覆盖支付主链路。',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            repeatedBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge paragraph movement when both sides move paragraphs differently', async () => {
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落C：覆盖风控拦截链路。',
+                '',
+                '段落A：覆盖支付主链路。',
+                '',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '段落A：覆盖支付主链路。',
+                '',
+                '段落C：覆盖风控拦截链路。',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge paragraph movement across sections', async () => {
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落A：服务端补充支付主链路观测点。',
+                '',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '段落C：覆盖风控拦截链路。',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落A：覆盖支付主链路。',
+                '',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '## 验收口径',
+                '段落C：覆盖风控拦截链路。',
+                '',
+                '旧验收口径',
+            ].join('\n'),
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge paragraph movement for list items', async () => {
+        const listBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '- 覆盖支付主链路',
+            '- 覆盖退款逆向链路',
+            '- 覆盖风控拦截链路',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '- 覆盖支付主链路并补充观测点',
+                '- 覆盖退款逆向链路',
+                '- 覆盖风控拦截链路',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '- 覆盖风控拦截链路',
+                '- 覆盖支付主链路',
+                '- 覆盖退款逆向链路',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            listBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge paragraph movement inside fenced blocks', async () => {
+        const fencedBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '```mermaid',
+            'flowchart TD',
+            'A[支付] --> B[退款]',
+            '```',
+            '',
+            '段落A：覆盖支付主链路。',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '```mermaid',
+                'flowchart TD',
+                'A[支付] --> B[退款]',
+                '```',
+                '',
+                '段落A：服务端补充支付观测点。',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落A：覆盖支付主链路。',
+                '',
+                '```mermaid',
+                'flowchart TD',
+                'A[支付] --> B[退款]',
+                '```',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            fencedBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge paragraph movement across sections when the server rewrites another section', async () => {
+        const crossSectionBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '段落A：覆盖支付主链路。',
+            '',
+            '段落B：覆盖退款逆向链路。',
+            '',
+            '段落C：覆盖风控拦截链路。',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+            '',
+            '## 观察记录',
+            '旧观察记录',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落A：覆盖支付主链路。',
+                '',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '段落C：覆盖风控拦截链路。',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+                '',
+                '## 观察记录',
+                '服务端补充观察记录。',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落A：覆盖支付主链路。',
+                '',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '## 验收口径',
+                '段落C：覆盖风控拦截链路。',
+                '',
+                '旧验收口径',
+                '',
+                '## 观察记录',
+                '旧观察记录',
+            ].join('\n'),
+            crossSectionBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge paragraph movement for list items when the server rewrites another section', async () => {
+        const listBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '- 覆盖支付主链路',
+            '- 覆盖退款逆向链路',
+            '- 覆盖风控拦截链路',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '- 覆盖支付主链路',
+                '- 覆盖退款逆向链路',
+                '- 覆盖风控拦截链路',
+                '',
+                '## 验收口径',
+                '服务端补充验收口径。',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '- 覆盖风控拦截链路',
+                '- 覆盖支付主链路',
+                '- 覆盖退款逆向链路',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            listBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge paragraph movement for table rows when the server rewrites another section', async () => {
+        const tableBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '| 场景 | 风险 |',
+            '| --- | --- |',
+            '| 支付 | 高 |',
+            '| 退款 | 中 |',
+            '| 风控 | 高 |',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '| 场景 | 风险 |',
+                '| --- | --- |',
+                '| 支付 | 高 |',
+                '| 退款 | 中 |',
+                '| 风控 | 高 |',
+                '',
+                '## 验收口径',
+                '服务端补充验收口径。',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '| 场景 | 风险 |',
+                '| --- | --- |',
+                '| 风控 | 高 |',
+                '| 支付 | 高 |',
+                '| 退款 | 中 |',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            tableBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge paragraph movement inside fenced blocks when the server rewrites another section', async () => {
+        const fencedBaseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '```mermaid',
+            'flowchart TD',
+            'A[支付] --> B[退款]',
+            '```',
+            '',
+            '段落A：覆盖支付主链路。',
+            '',
+            '## 验收口径',
+            '旧验收口径',
+        ].join('\n');
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '```mermaid',
+                'flowchart TD',
+                'A[支付] --> B[退款]',
+                '```',
+                '',
+                '段落A：覆盖支付主链路。',
+                '',
+                '## 验收口径',
+                '服务端补充验收口径。',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落A：覆盖支付主链路。',
+                '',
+                '```mermaid',
+                'flowchart TD',
+                'A[支付] --> B[退款]',
+                '```',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            fencedBaseContent,
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
+    it('does not auto-merge paragraph movement when a paragraph is split while the server rewrites the same section', async () => {
+        renderParagraphMoveConflict(
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落A：服务端补充支付主链路观测点。',
+                '',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '段落C：覆盖风控拦截链路。',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+            [
+                '# 测试策略蓝图',
+                '',
+                '## 风险策略',
+                '段落A：覆盖支付主链路。',
+                '',
+                '补充分句：拆出支付异常路径。',
+                '',
+                '段落B：覆盖退款逆向链路。',
+                '',
+                '段落C：覆盖风控拦截链路。',
+                '',
+                '## 验收口径',
+                '旧验收口径',
+            ].join('\n'),
+        );
+
+        await expectNoParagraphMovementAutoMerge();
+    });
+
     const baseSectionRenameContent = [
         '# 测试策略蓝图',
         '',
