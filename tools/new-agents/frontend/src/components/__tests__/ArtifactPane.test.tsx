@@ -2205,6 +2205,227 @@ describe('ArtifactPane Component', () => {
         expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
     });
 
+    it('auto-merges same-section paragraph deletion with a non-overlapping paragraph rewrite', async () => {
+        vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
+            '产出物已被更新，请刷新后再保存',
+            {
+                stageId: 'STRATEGY',
+                content: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '段落A：覆盖支付主链路。',
+                    '',
+                    '段落C：覆盖风控拦截链路。',
+                ].join('\n'),
+                versionNumber: 3,
+            },
+        ));
+        const baseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '段落A：覆盖支付主链路。',
+            '',
+            '段落B：覆盖退款逆向链路。',
+            '',
+            '段落C：覆盖风控拦截链路。',
+        ].join('\n');
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentRunId: 'run-123',
+            artifactContent: baseContent,
+            stageArtifacts: {
+                STRATEGY: baseContent,
+            },
+            artifactHistory: [
+                {
+                    id: 'run-123-STRATEGY-v2',
+                    timestamp: 123,
+                    content: baseContent,
+                    stageId: 'STRATEGY',
+                },
+            ],
+            artifactAuditEvents: [],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: {
+                value: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '段落A：覆盖支付主链路。',
+                    '',
+                    '段落B：覆盖退款逆向链路。',
+                    '',
+                    '段落C：用户补充风控拦截后的复核策略。',
+                ].join('\n'),
+            },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+        fireEvent.click(await screen.findByRole('button', { name: '自动合并非重叠变更' }));
+
+        expect((screen.getByLabelText('编辑产出物 Markdown') as HTMLTextAreaElement).value).toBe([
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '段落A：覆盖支付主链路。',
+            '',
+            '段落C：用户补充风控拦截后的复核策略。',
+        ].join('\n'));
+        expect(useStore.getState().artifactAuditEvents).toEqual([
+            expect.objectContaining({
+                stageId: 'STRATEGY',
+                eventType: 'artifact_auto_merge_applied',
+                summary: '合并轨迹：自动合并服务端与草稿的同章节非重叠段落删除与改写',
+            }),
+        ]);
+    });
+
+    it('does not auto-merge same-section paragraph deletion when the deleted paragraph is rewritten', async () => {
+        vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
+            '产出物已被更新，请刷新后再保存',
+            {
+                stageId: 'STRATEGY',
+                content: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '段落A：覆盖支付主链路。',
+                    '',
+                    '段落C：覆盖风控拦截链路。',
+                ].join('\n'),
+                versionNumber: 3,
+            },
+        ));
+        const baseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '段落A：覆盖支付主链路。',
+            '',
+            '段落B：覆盖退款逆向链路。',
+            '',
+            '段落C：覆盖风控拦截链路。',
+        ].join('\n');
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentRunId: 'run-123',
+            artifactContent: baseContent,
+            stageArtifacts: {
+                STRATEGY: baseContent,
+            },
+            artifactHistory: [
+                {
+                    id: 'run-123-STRATEGY-v2',
+                    timestamp: 123,
+                    content: baseContent,
+                    stageId: 'STRATEGY',
+                },
+            ],
+            artifactAuditEvents: [],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: {
+                value: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '段落A：覆盖支付主链路。',
+                    '',
+                    '段落B：用户补充退款失败后的人工复核。',
+                    '',
+                    '段落C：覆盖风控拦截链路。',
+                ].join('\n'),
+            },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+        await screen.findByRole('button', { name: '对比服务端版本' });
+        expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
+    });
+
+    it('does not auto-merge same-section paragraph deletion when the rewrite side may have reordered rewritten paragraphs', async () => {
+        vi.mocked(updateRunArtifact).mockRejectedValue(new ArtifactConflictError(
+            '产出物已被更新，请刷新后再保存',
+            {
+                stageId: 'STRATEGY',
+                content: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '段落A：覆盖支付主链路。',
+                    '',
+                    '段落B：覆盖退款逆向链路。',
+                    '',
+                    '段落C：覆盖风控拦截链路。',
+                ].join('\n'),
+                versionNumber: 3,
+            },
+        ));
+        const baseContent = [
+            '# 测试策略蓝图',
+            '',
+            '## 风险策略',
+            '段落A：覆盖支付主链路。',
+            '',
+            '段落B：覆盖退款逆向链路。',
+            '',
+            '段落C：覆盖风控拦截链路。',
+            '',
+            '段落D：覆盖通知补偿链路。',
+        ].join('\n');
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentRunId: 'run-123',
+            artifactContent: baseContent,
+            stageArtifacts: {
+                STRATEGY: baseContent,
+            },
+            artifactHistory: [
+                {
+                    id: 'run-123-STRATEGY-v2',
+                    timestamp: 123,
+                    content: baseContent,
+                    stageId: 'STRATEGY',
+                },
+            ],
+            artifactAuditEvents: [],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        fireEvent.change(screen.getByLabelText('编辑产出物 Markdown'), {
+            target: {
+                value: [
+                    '# 测试策略蓝图',
+                    '',
+                    '## 风险策略',
+                    '段落B：用户重写退款逆向链路。',
+                    '',
+                    '段落C：用户重写风控拦截链路。',
+                    '',
+                    '段落A：用户重写支付主链路。',
+                    '',
+                    '段落D：覆盖通知补偿链路。',
+                ].join('\n'),
+            },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+        await screen.findByRole('button', { name: '对比服务端版本' });
+        expect(screen.queryByRole('button', { name: '自动合并非重叠变更' })).toBeNull();
+    });
+
     const baseParagraphMoveContent = [
         '# 测试策略蓝图',
         '',

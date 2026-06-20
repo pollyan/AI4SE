@@ -629,3 +629,9 @@
   - 双方改写同一段落、段落数量变化、重复段落、异常空行结构、列表/表格/fenced block 或段落移动混入时继续拒绝自动合并，避免误合并结构化内容或语义移动。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "same-section paragraph rewrites|same section"` 观察到缺少自动合并入口失败；实现后运行同命令、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "section rewrites|same-section paragraph rewrites|paragraph movement|table row|list item|fenced block line reordering"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`git diff --check`。
   - 剩余：更复杂三方 merge 解析仍可作为后续增强切片。
+- 2026-06-20：完成第五十二块 CGA「Artifact 同章节段落删除与改写自动合并」。
+  - 保存冲突现在会识别同一 Markdown 章节内的普通段落删除与单段非重叠改写：一侧删除旧段落，另一侧改写一个不同旧段落时，可使用 `自动合并非重叠变更`。
+  - 点击后编辑草稿会保留段落删除结果，并把另一侧的非冲突段落改写合入，记录 `artifact_auto_merge_applied`，summary 区分 `同章节非重叠段落删除与改写`。
+  - 被删除段落同时被另一侧改写、改写侧多段改写导致顺序无法证明、段落移动/重排、重复段落、列表/表格/fenced block、异常空行结构或双方都呈现删除形态时继续拒绝自动合并，避免误删有效内容。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "same-section paragraph deletion"` 观察到正例缺少自动合并入口失败；独立复审指出多段改写可能掩盖重排后，补充失败用例 `rewrite side may have reordered rewritten paragraphs` 并收紧为单段改写；实现后运行同命令、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "same-section paragraph|paragraph movement|section rewrites|table row|list item|fenced block line reordering|draft deletions"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`git diff --check`。
+  - 剩余：更复杂三方 merge 解析仍可作为后续增强切片。
