@@ -1,15 +1,11 @@
-name: Production Deploy to Tencent Cloud
+name: Deploy to Tencent Cloud via SCP/SSH
 
 on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
   workflow_dispatch:
-    inputs:
-      environment:
-        description: '部署环境'
-        required: true
-        default: 'production'
-        type: choice
-        options:
-          - 'production'
 
 jobs:
   # ====================================
@@ -169,6 +165,10 @@ jobs:
     name: Build and Deploy to Tencent Cloud
     needs: [backend-api-test, common-frontend-test, new-agents-frontend-test, code-quality, proxy-test]  # 必须等待所有门禁完成且成功
     runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: http://www.datou212.tech
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
     
     steps:
     - name: 📥 Checkout code
