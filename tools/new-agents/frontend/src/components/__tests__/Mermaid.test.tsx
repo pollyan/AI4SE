@@ -36,7 +36,7 @@ describe('Mermaid Component', () => {
 
     it('renders successfully with valid chart data without triggering onRetry (AC8 - F10)', async () => {
         const mockOnRetry = vi.fn().mockResolvedValue(true);
-        const chartCode = 'graph TD\nA-->B';
+        const chartCode = 'graph TD\nStreamingStart-->StreamingEnd';
 
         const { container } = render(<Mermaid chart={chartCode} onRetry={mockOnRetry} blockIndex={0} />);
 
@@ -49,13 +49,32 @@ describe('Mermaid Component', () => {
 
     it('reports render success through the success callback', async () => {
         const mockOnRenderSuccess = vi.fn();
-        const chartCode = 'graph TD\nA-->B';
+        const chartCode = 'graph TD\nCallbackStart-->CallbackEnd';
 
         render(<Mermaid chart={chartCode} blockIndex={3} onRenderSuccess={mockOnRenderSuccess} />);
 
         await waitFor(() => {
             expect(mockOnRenderSuccess).toHaveBeenCalledWith(3);
         });
+    });
+
+    it('reuses the rendered SVG when the same chart remounts during artifact streaming', async () => {
+        const chartCode = 'graph TD\nRemountStart-->RemountEnd';
+
+        const firstRender = render(<Mermaid chart={chartCode} blockIndex={0} />);
+
+        await waitFor(() => {
+            expect(firstRender.container.innerHTML).toContain('mocked-svg');
+        });
+        expect(mermaid.render).toHaveBeenCalledTimes(1);
+
+        firstRender.unmount();
+        const secondRender = render(<Mermaid chart={chartCode} blockIndex={0} />);
+
+        await waitFor(() => {
+            expect(secondRender.container.innerHTML).toContain('mocked-svg');
+        });
+        expect(mermaid.render).toHaveBeenCalledTimes(1);
     });
 
     it('shows loading animation when generating and encountering parse error (AC6)', async () => {

@@ -202,6 +202,11 @@
   - 修复 `TEST_DESIGN/CASES`、`REQ_REVIEW/REPORT`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`VALUE_DISCOVERY/BLUEPRINT` 中输出字面量 `${FENCE}` 的问题，避免模板示例无法形成真实 Mermaid fenced code block。
   - 新增 `WORKFLOWS` 全量模板测试，防止后续 workflow template 再暴露字面量 `${FENCE}`。
   - 验证：`rg -n '\\\\\\$\\{FENCE\\}' tools/new-agents/frontend/src/core/prompts` 无匹配；`npm run test -- --run src/core/__tests__/mermaid.test.ts`；`npm run build`。
+- 2026-06-20：完成生产环境 Mermaid 重复渲染卡顿修复。
+  - 根因判断：生产环境真实流式更新和 ReactMarkdown 重挂载会让同一 Mermaid chart 在 Artifact 更新过程中被重复 `parse/render`，Mermaid runtime 和布局计算较重，容易造成浏览器主线程长时间阻塞。
+  - Mermaid 组件新增模块级渲染缓存，同一 chart 重挂载时复用已生成 SVG，不再重复调用 Mermaid runtime；缓存上限 50 条，避免长会话无限增长。
+  - 新增回归测试覆盖“同一 chart 在 artifact streaming 期间重挂载时只渲染一次”的行为。
+  - 验证：先运行 `npm run test -- --run src/components/__tests__/Mermaid.test.tsx -t "reuses the rendered SVG"` 观察到重复调用 `mermaid.render` 失败；实现后通过，并运行 `npm run test -- --run src/components/__tests__/Mermaid.test.tsx`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx src/components/__tests__/markdownCodeRenderer.test.tsx src/__tests__/testHygiene.test.ts`、`npm run lint`、`npm run build`、`npm run test`。
 
 ### 5. 左侧对话自然表达与重点可扫描
 
@@ -280,23 +285,27 @@
 
 ### 7. Artifact 协作体验深化
 
-**目标**：从当前历史 diff / 恢复 / 简单导出，升级到更完整的文档协作能力。
+**目标**：从历史 diff / 恢复 / 导出能力，升级到更完整的 Artifact 文档审阅与协作能力。这里的“协作”主要指用户、Agent、服务端版本和审阅记录围绕同一份产出物协同工作；短期不做多人实时共同编辑、分享权限或 Google Docs 式协同。
 
 **待办**：
 
-- 支持用户在右侧产出物上进行受控人工修改，并明确修改如何进入 artifact history、stage artifact 和服务端 run snapshot。
-- 增强人工修改失败恢复与后续协作处理，避免用户误以为校准已保存或已合并。
-- 章节锁定。
-- 批注。
-- 逐行接受 / 拒绝变更。
-- 真正富文本 DOCX 导出。
-- 支持 Markdown 富排版、Mermaid 渲染和分页的 PDF 导出。
+- 已完成基线能力：右侧受控人工修改、artifact history、stage artifact 同步、服务端 run snapshot 同步、保存冲突保护、历史版本 diff / 恢复、章节锁定、批注、逐行审阅、DOCX 包级导出、PDF Markdown/可视化语义投影、DOCX Mermaid SVG 嵌入。
+- 保留后续增强 1：统一 Artifact 审阅面板，收敛未解决批注、锁定章节、冲突、自动合并记录和最近修改，让用户一眼知道“这份产出物还有哪些需要处理”。
+- 保留后续增强 2：更通用的块级合并体验，在冲突或历史 diff 中支持按段落、列表块、表格块、代码块做接受/保留/手工合并，而不只依赖逐行操作。
+- 保留后续增强 3：批注锚点稳定性增强。当前批注主要依赖选中文本和 anchorText；后续可增加范围锚定、锚点失效提示和重新定位，避免正文大幅改写后批注难以定位。
+- 保留后续增强 4：更复杂三方 merge 解析，仅覆盖能被证明安全的复杂合并场景；遇到歧义仍应明确提示人工处理，不做静默猜测。
+- 下一步执行结论：继续把 Artifact 冲突保护 / 三方 merge 的剩余长尾做完，并补齐上一轮 Artifact 协作能力遗留的审阅面板、块级合并和批注锚点稳定性；这些属于同一条“产出物可信修订”主线，应合并规划，而不是拆成互不相关的小功能。
+- 建议收尾顺序：先完成块级合并与复杂三方 merge 的安全场景，再做统一审阅面板，最后补强批注锚点稳定性。这样先保证不会覆盖用户或 Agent 的有效修改，再提升用户处理未解决事项的效率。
+- 当前不推进：多人实时协同、分享/权限、恢复中心、与 intent-tester 自动打通、高保真 PDF 图片级导出继续深化。相关能力按当前实现止步，视为本阶段完成或暂不纳入本轮目标。
 
 **验收证据**：
 
 - 用户可以校准右侧产出物正文或局部章节，并能回滚、审阅差异。
 - 人工修改不会绕过 artifact history，也不会破坏阶段产物与后续上下文的一致性。
-- 导出的 Word/PDF 更接近专业交付物，而不是纯文本容器。
+- 审阅面板能集中呈现未解决事项，减少用户在历史、批注、锁和冲突状态之间来回寻找。
+- 块级合并和复杂三方 merge 只在可证明安全时提供自动化入口；不安全时给出可理解的拒绝原因和人工处理路径。
+- 用户在基于旧版本编辑时，系统能解释 Base / Server / Draft 的差异，并帮助用户完成可控合并或明确转人工处理。
+- 导出的 Word/PDF 已达到当前可接受的专业交付物水位；不再把图片级 PDF 高保真作为本轮待办。
 
 **进展记录**：
 
@@ -635,3 +644,13 @@
   - 被删除段落同时被另一侧改写、改写侧多段改写导致顺序无法证明、段落移动/重排、重复段落、列表/表格/fenced block、异常空行结构或双方都呈现删除形态时继续拒绝自动合并，避免误删有效内容。
   - 验证：先运行 `npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "same-section paragraph deletion"` 观察到正例缺少自动合并入口失败；独立复审指出多段改写可能掩盖重排后，补充失败用例 `rewrite side may have reordered rewritten paragraphs` 并收紧为单段改写；实现后运行同命令、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "same-section paragraph|paragraph movement|section rewrites|table row|list item|fenced block line reordering|draft deletions"`、`npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx`、`npm run lint`、`npm run build`、`git diff --check`。
   - 剩余：更复杂三方 merge 解析仍可作为后续增强切片。
+- 2026-06-20：产品决策更新「Artifact 协作后续收敛」。
+  - 高保真导出不再继续深挖：DOCX 包级导出、Markdown/PDF 语义投影、DOCX Mermaid SVG 嵌入已经达到本轮可接受水位；PDF 图片级嵌入和更复杂排版按当前阶段止步完成。
+  - 恢复中心、分享/权限、多人实时协同、与 intent-tester 自动打通暂不纳入本轮目标。
+  - 保留具体后续项：统一 Artifact 审阅面板、块级接受/保留/手工合并、批注锚点稳定性、更复杂但可证明安全的三方 merge 解析。
+  - 该记录是产品范围收敛，不涉及代码变更；如后续重启高保真导出或多人协同，需要重新做 CGA 和价值评估。
+- 2026-06-20：产品决策更新「Artifact 冲突保护收尾优先级」。
+  - 当前三方 merge 的主链路已基本完成：旧版本保存可检测冲突、保留用户草稿、展示服务端当前版本、支持刷新/对比，并已覆盖大量安全自动合并场景。
+  - 后续继续收尾该能力，而不是停止在 MVP：优先补齐块级合并和更复杂但可证明安全的三方 merge 解析，减少用户在段落、表格、列表、代码块冲突中逐行处理的负担。
+  - 上一轮 Artifact 协作遗留项一并纳入收尾：统一审阅面板、批注锚点稳定性。它们与三方 merge 都服务于同一个用户价值，即让产出物可以被安全校准、审阅、回退和继续生成。
+  - 边界保持不变：本轮仍不做多人实时协同、分享权限、恢复中心、intent-tester 自动打通，也不重启高保真 PDF 图片级导出深挖。

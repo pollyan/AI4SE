@@ -13,6 +13,8 @@ const mermaidConfig: MermaidConfig = {
 type MermaidRuntime = typeof import('mermaid')['default'];
 
 let mermaidRuntimePromise: Promise<MermaidRuntime> | null = null;
+const mermaidRenderCache = new Map<string, Promise<string>>();
+const MAX_MERMAID_RENDER_CACHE_ENTRIES = 50;
 
 async function loadMermaidRuntime(): Promise<MermaidRuntime> {
   if (!mermaidRuntimePromise) {
@@ -22,6 +24,55 @@ async function loadMermaidRuntime(): Promise<MermaidRuntime> {
     });
   }
   return mermaidRuntimePromise;
+}
+
+async function renderMermaidSvg(chart: string): Promise<string> {
+  const cached = mermaidRenderCache.get(chart);
+  if (cached) return cached;
+
+  const renderPromise = (async () => {
+    const mermaid = await loadMermaidRuntime();
+    const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
+
+    // --- 容错渲染策略 ---
+    // 第一级：原始代码基本清洗
+    const sanitized = sanitizeMermaidCode(chart);
+    const originalParseResult = await mermaid.parse(sanitized, { suppressErrors: true });
+
+    if (originalParseResult) {
+      const { svg: generatedSvg } = await mermaid.render(id, sanitized);
+      return generatedSvg;
+    }
+
+    // 第一级兜底：parse 返回 false 不一定是语法错误
+    // timeline / mindmap 等懒加载图表类型在某些调用时序下 parse 会误返 false
+    // 直接尝试 render，成功则正常显示，失败才走降级
+    try {
+      const { svg: generatedSvg } = await mermaid.render(id, sanitized);
+      return generatedSvg;
+    } catch {
+      // render 也失败，说明真的有语法问题，继续走激进降级
+    }
+
+    // 第二级：激进清洗（LLM 严重幻觉时）
+    const aggressive = aggressiveSanitize(sanitized);
+    const aggressiveParseResult = await mermaid.parse(aggressive, { suppressErrors: true });
+
+    if (aggressiveParseResult) {
+      const { svg: generatedSvg } = await mermaid.render(id, aggressive);
+      return generatedSvg;
+    }
+
+    // 全部尝试失败，抛出错误走降级
+    throw new Error('Mermaid syntax validation failed after all sanitization attempts.');
+  })();
+
+  mermaidRenderCache.set(chart, renderPromise);
+  if (mermaidRenderCache.size > MAX_MERMAID_RENDER_CACHE_ENTRIES) {
+    const oldestKey = mermaidRenderCache.keys().next().value;
+    if (oldestKey) mermaidRenderCache.delete(oldestKey);
+  }
+  return renderPromise;
 }
 
 export interface MermaidProps {
@@ -52,57 +103,12 @@ export const Mermaid: React.FC<MermaidProps> = ({
       if (isMounted) setRenderState('loading');
 
       try {
-        const mermaid = await loadMermaidRuntime();
-        if (!isMounted) return;
-
-        const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
-
-        // --- 容错渲染策略 ---
-        // 第一级：原始代码基本清洗
-        const sanitized = sanitizeMermaidCode(chart);
-        const originalParseResult = await mermaid.parse(sanitized, { suppressErrors: true });
-
-        if (originalParseResult) {
-          const { svg: generatedSvg } = await mermaid.render(id, sanitized);
-          if (isMounted) {
-            setSvgHtml(generatedSvg);
-            setRenderState('success');
-            onRenderSuccess?.(blockIndex ?? 0);
-          }
-          return;
+        const generatedSvg = await renderMermaidSvg(chart);
+        if (isMounted) {
+          setSvgHtml(generatedSvg);
+          setRenderState('success');
+          onRenderSuccess?.(blockIndex ?? 0);
         }
-
-        // 第一级兜底：parse 返回 false 不一定是语法错误
-        // timeline / mindmap 等懒加载图表类型在某些调用时序下 parse 会误返 false
-        // 直接尝试 render，成功则正常显示，失败才走降级
-        try {
-          const { svg: generatedSvg } = await mermaid.render(id, sanitized);
-          if (isMounted) {
-            setSvgHtml(generatedSvg);
-            setRenderState('success');
-            onRenderSuccess?.(blockIndex ?? 0);
-          }
-          return;
-        } catch {
-          // render 也失败，说明真的有语法问题，继续走激进降级
-        }
-
-        // 第二级：激进清洗（LLM 严重幻觉时）
-        const aggressive = aggressiveSanitize(sanitized);
-        const aggressiveParseResult = await mermaid.parse(aggressive, { suppressErrors: true });
-
-        if (aggressiveParseResult) {
-          const { svg: generatedSvg } = await mermaid.render(id, aggressive);
-          if (isMounted) {
-            setSvgHtml(generatedSvg);
-            setRenderState('success');
-            onRenderSuccess?.(blockIndex ?? 0);
-          }
-          return;
-        }
-
-        // 全部尝试失败，抛出错误走降级
-        throw new Error('Mermaid syntax validation failed after all sanitization attempts.');
 
       } catch (error) {
         if (!isMounted) return;
