@@ -6,7 +6,13 @@ import rehypeRaw from 'rehype-raw';
 import { useStore, ArtifactVersion, WORKFLOWS } from '../store';
 import type { AgentRunSnapshotArtifact, ArtifactVisualDiagnostic, ArtifactVisualDiagnosticFocusRequest } from '../core/types';
 import { buildLineDiff } from '../core/artifactDiff';
-import type { LineDiffEntry } from '../core/artifactDiff';
+import {
+  buildConflictMergeBlockLabel,
+  buildConflictModificationBlockLabel,
+  buildContiguousDiffBlocks,
+  replaceFirstLineSequence,
+  truncateAuditLine,
+} from '../core/artifactMerge';
 import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/markdownUtils';
 import { Download, Code, Eye, History, X, AlertTriangle, GitCompare, Edit3, Save, MessageSquare, Trash2, Lock, Unlock, MoreHorizontal } from 'lucide-react';
 import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
@@ -321,52 +327,6 @@ export const ArtifactPane: React.FC = () => {
   // Content displays using the imported preprocessMarkdown utility
 
   const displayContent = preprocessMarkdown(artifactContent);
-  const truncateAuditLine = (lineContent: string): string => {
-    const normalizedLine = lineContent.replace(/\s+/g, ' ').trim();
-    return normalizedLine.length > 60
-      ? `${normalizedLine.slice(0, 57)}...`
-      : normalizedLine;
-  };
-  const buildConflictMergeBlockLabel = (lineContents: string[]): string => (
-    lineContents.map(truncateAuditLine).join(' / ')
-  );
-  const buildConflictModificationBlockLabel = (removedLines: string[], addedLines: string[]): string => (
-    `${buildConflictMergeBlockLabel(removedLines)} → ${buildConflictMergeBlockLabel(addedLines)}`
-  );
-  const buildContiguousDiffBlocks = (
-    diff: LineDiffEntry[],
-    type: Extract<LineDiffEntry['type'], 'added' | 'removed'>
-  ): Array<{ startIndex: number; lines: string[]; label: string }> => {
-    const blocks: Array<{ startIndex: number; lines: string[]; label: string }> = [];
-    let blockStartIndex: number | null = null;
-    let blockLines: string[] = [];
-
-    const flushBlock = () => {
-      if (blockStartIndex !== null && blockLines.length > 1) {
-        blocks.push({
-          startIndex: blockStartIndex,
-          lines: blockLines,
-          label: buildConflictMergeBlockLabel(blockLines),
-        });
-      }
-      blockStartIndex = null;
-      blockLines = [];
-    };
-
-    diff.forEach((line, index) => {
-      if (line.type === type && line.content.trim()) {
-        if (blockStartIndex === null) {
-          blockStartIndex = index;
-        }
-        blockLines.push(line.content);
-        return;
-      }
-      flushBlock();
-    });
-    flushBlock();
-
-    return blocks;
-  };
   type AutoMergedConflictResult = {
     content: string;
     summary: string;
@@ -378,25 +338,6 @@ export const ArtifactPane: React.FC = () => {
   type ParsedMarkdownSections = {
     preambleLines: string[];
     sections: ParsedMarkdownSection[];
-  };
-  const replaceFirstLineSequence = (
-    sourceLines: string[],
-    targetLines: string[],
-    replacementLines: string[]
-  ): string[] => {
-    const normalizedTargetLines = targetLines.filter(line => line.trim());
-    if (normalizedTargetLines.length === 0) return sourceLines;
-
-    const startIndex = sourceLines.findIndex((_, index) => (
-      normalizedTargetLines.every((targetLine, offset) => sourceLines[index + offset] === targetLine)
-    ));
-    if (startIndex < 0) return sourceLines;
-
-    return [
-      ...sourceLines.slice(0, startIndex),
-      ...replacementLines.filter(line => line.trim()),
-      ...sourceLines.slice(startIndex + normalizedTargetLines.length),
-    ];
   };
   const collectInsertionSegments = (
     baseLines: string[],

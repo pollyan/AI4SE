@@ -114,6 +114,59 @@
 
 第 9 轮只在第 8 轮通过后启动。目标是把 diff/merge/automerge 纯逻辑拆到 `core/artifactMerge.ts` 或相近模块，不改编辑器 UI 和冲突处理行为。
 
+### Superpowers/TDD/回归要求
+
+- 流程组织：继续使用 Superpowers `writing-plans` / `executing-plans` / `test-driven-development` 组织每一轮。
+- TDD 口径：每个实现轮先写或强化 RED 测试，确认失败原因正确，再写实现，最后清理。
+- 回归口径：每轮至少跑该轮 touched area 的 targeted regression；第 12 轮必须跑聚合回归。
+- 记录口径：每轮执行记录必须写明 RED、GREEN、verification command、结果、commit 和剩余风险。
+- 不允许用“只是移动代码”作为跳过测试的理由；移动代码也必须证明行为不变。
+
+### 第 9 轮第一切片
+
+第 9 轮不一次性移动全部 automerge 策略。先拆低风险 pure helper：
+
+- `truncateAuditLine`
+- `buildConflictMergeBlockLabel`
+- `buildConflictModificationBlockLabel`
+- `buildContiguousDiffBlocks`
+- `replaceFirstLineSequence`
+
+这些 helper 不依赖 React state、DOM、Zustand 或 services，可先移入 `tools/new-agents/frontend/src/core/artifactMerge.ts`。
+
+#### TDD 任务
+
+- [x] **Step 1: RED helper tests**
+
+  新增 `src/core/__tests__/artifactMerge.test.ts`，验证 contiguous diff blocks 和 line sequence replacement 行为。首次运行应因 `artifactMerge` 模块不存在失败。
+
+- [x] **Step 2: create `artifactMerge.ts`**
+
+  新增 pure helper 模块，不 import React、Zustand、DOM API、services 或 component。
+
+- [x] **Step 3: wire `ArtifactPane.tsx`**
+
+  从组件中删除已迁移 helper，改为 import 使用。保留 UI state、event handler 和 audit event 逻辑在组件内。
+
+- [x] **Step 4: run verification**
+
+  ```bash
+  cd tools/new-agents/frontend
+  npm run test -- --run src/core/__tests__/artifactMerge.test.ts src/components/__tests__/ArtifactPane.test.tsx
+  git diff --check
+  ```
+
+#### 第 9 轮第一切片执行记录
+
+- RED: `src/core/__tests__/artifactMerge.test.ts` 首次运行失败，错误为 Vite 无法解析 `../artifactMerge`。
+- GREEN: 新增 `src/core/artifactMerge.ts`，提供 diff block label、contiguous diff block 和 first line sequence replacement helper。
+- 迁移接入: `ArtifactPane.tsx` 从 `artifactMerge.ts` 导入 helper，删除组件内重复 helper。审计事件仍留在组件内，只复用 `truncateAuditLine`。
+- 回归修复: 首轮 `ArtifactPane` 回归发现审计事件遗漏 `truncateAuditLine` import，已修正。
+- 验证:
+  - `npm run test -- --run src/core/__tests__/artifactMerge.test.ts src/components/__tests__/ArtifactPane.test.tsx` -> `140 passed`
+  - `git diff --check` -> passed
+- 规模变化: `ArtifactPane.tsx` 约从 5103 行降到 5044 行；新增 `artifactMerge.ts` 约 80 行。
+
 ### 第 8 轮执行记录
 
 - RED: `src/core/__tests__/artifactExport.test.ts` 首次运行失败，错误为 Vite 无法解析 `../artifactExport`。
