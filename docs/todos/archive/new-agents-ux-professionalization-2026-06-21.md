@@ -1,5 +1,7 @@
 # New Agents UI/UX 与专业产出物优化 Todo
 
+> 归档日期：2026-06-21。该文件顶部的当前活动状态已显示所有能力包为阶段完成或当前阶段完成；后续目标模式不应从本文历史“剩余”记录直接选择新任务。当前活跃 todo 入口见 `docs/todos/refactor/`。
+
 本文记录 `tools/new-agents/` 下一阶段仍需推进的用户体验、交互恢复、可视化和专业产出物优化。旧长期 backlog 已归档到 `docs/todos/archive/new-agents-evolution-2026-06-19.md`，本文件只保留尚未闭环、且用户可感知的优化项。
 
 ## 使用规则
