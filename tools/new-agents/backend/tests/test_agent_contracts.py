@@ -1159,6 +1159,62 @@ def test_validate_agent_turn_rejects_idea_brainstorm_converge_missing_decision_f
         )
 
 
+def test_idea_brainstorm_contracts_include_professional_artifact_fields():
+    define_fields = REQUIRED_ARTIFACT_HEADINGS[("IDEA_BRAINSTORM", "DEFINE")]
+    diverge_fields = REQUIRED_ARTIFACT_HEADINGS[("IDEA_BRAINSTORM", "DIVERGE")]
+    converge_fields = REQUIRED_ARTIFACT_HEADINGS[("IDEA_BRAINSTORM", "CONVERGE")]
+    concept_fields = REQUIRED_ARTIFACT_HEADINGS[("IDEA_BRAINSTORM", "CONCEPT")]
+
+    for field in [
+        "## 证据与验证状态",
+        "## 阶段门禁",
+        "证据等级",
+        "验证动作",
+        "验证状态",
+    ]:
+        assert field in define_fields
+    assert REQUIRED_ARTIFACT_MERMAID_DIAGRAMS[("IDEA_BRAINSTORM", "DEFINE")] == [
+        "mindmap"
+    ]
+
+    for field in [
+        "## 发散方法说明",
+        "## 创意来源与假设",
+        "## 搁置/排除记录",
+        "## 阶段门禁",
+        "关键假设",
+        "状态理由",
+    ]:
+        assert field in diverge_fields
+
+    for field in [
+        "## 资源约束",
+        "## 敏感性分析",
+        "## 验证实验",
+        "## 阶段门禁",
+        "证据来源",
+        "用户确认状态",
+    ]:
+        assert field in converge_fields
+    assert REQUIRED_ARTIFACT_MERMAID_DIAGRAMS[("IDEA_BRAINSTORM", "CONVERGE")] == [
+        "quadrantChart"
+    ]
+
+    for field in [
+        "## 核心假设",
+        "## 验证路线",
+        "## 不可做范围",
+        "## 决策记录",
+        "## 阶段门禁",
+        "owner",
+        "状态",
+    ]:
+        assert field in concept_fields
+    assert REQUIRED_ARTIFACT_STRUCTURED_VISUALS[("IDEA_BRAINSTORM", "CONCEPT")] == [
+        "mvp-map"
+    ]
+
+
 @pytest.mark.parametrize(
     ("stage_id", "markdown"),
     [

@@ -1165,6 +1165,46 @@ describe('llm.ts', () => {
         });
 
         it('IDEA_BRAINSTORM/DEFINE 应走结构化 Agent Runtime', async () => {
+            const artifact = [
+                '# 问题域分析',
+                '## 问题假设陈述',
+                '我们相信独立开发者在产品变现阶段面临渠道和定价困难。',
+                '> 验证状态：待验证',
+                '## 目标用户画像',
+                '| 维度 | 描述 | 证据等级 | 验证状态 |',
+                '| --- | --- | --- | --- |',
+                '| 角色定义 | 独立开发者 | 用户陈述 | 待验证 |',
+                '## 问题域全景',
+                '```mermaid',
+                'mindmap',
+                '  root(("变现困难"))',
+                '    ["获客渠道不稳定"]',
+                '    ["定价缺少依据"]',
+                '```',
+                '## 证据与验证状态',
+                '| 证据 ID | 关联问题 | 证据来源 | 证据等级 | 验证动作 | owner | 验证状态 |',
+                '| --- | --- | --- | --- | --- | --- | --- |',
+                '| EV-001 | 获客渠道不稳定 | 用户陈述 | 用户陈述 | 访谈 5 位独立开发者 | 产品 | 待验证 |',
+                '## 问题-用户-场景匹配',
+                '| 检验维度 | 当前判断 | 证据/假设 | 验证动作 | 验证状态 |',
+                '| --- | --- | --- | --- | --- |',
+                '| 问题是否真实存在？ | 待验证 | 社区讨论 | 访谈 | 待验证 |',
+                '## 约束与边界',
+                '| 类型 | 内容 | 影响 | 状态 |',
+                '| --- | --- | --- | --- |',
+                '| 不可做边界 | 暂不做全渠道投放工具 | 聚焦定位验证 | 已确认 |',
+                '## 反向验证（风险思考）',
+                '| 失败假设 | 触发信号 | 验证动作 | 验证状态 |',
+                '| --- | --- | --- | --- |',
+                '| 用户不愿付费 | 访谈中无预算 | 定价访谈 | 待验证 |',
+                '## 阶段门禁',
+                '- [ ] 目标用户、核心场景和核心问题已明确。',
+                '- [ ] 至少一个关键问题有证据等级和验证动作。',
+                '- [ ] AI 假设和已验证信息已区分。',
+                '- [ ] 不可做边界或关键约束已记录。',
+                '- [ ] 可进入创意发散的 HMW 问题已形成。',
+            ].join('\n\n');
+
             resetStore({
                 workflow: 'IDEA_BRAINSTORM',
                 stageIndex: 0,
@@ -1176,7 +1216,18 @@ describe('llm.ts', () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
                 body: createSSEStream([
-                    'data: {"type":"agent_turn","output":{"chat":"已更新问题域分析。","artifact_update":{"type":"replace","markdown":"# 问题域分析\\n\\n## 问题假设陈述\\n独立开发者变现困难\\n\\n## 目标用户画像\\n独立开发者"},"stage_action":null,"warnings":[]}}',
+                    `data: ${JSON.stringify({
+                        type: 'agent_turn',
+                        output: {
+                            chat: '已更新问题域分析。',
+                            artifact_update: {
+                                type: 'replace',
+                                markdown: artifact,
+                            },
+                            stage_action: null,
+                            warnings: [],
+                        },
+                    })}`,
                     'data: [DONE]',
                 ]),
             });
@@ -1196,7 +1247,7 @@ describe('llm.ts', () => {
             });
             expect(results.at(-1)).toMatchObject({
                 chatResponse: '已更新问题域分析。',
-                newArtifact: '# 问题域分析\n\n## 问题假设陈述\n独立开发者变现困难\n\n## 目标用户画像\n独立开发者',
+                newArtifact: artifact,
                 hasArtifactUpdate: true,
             });
         });
