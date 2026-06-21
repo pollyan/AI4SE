@@ -1,6 +1,6 @@
 # Refactor Todo
 
-本目录记录重构类扫描、方案和实施待办。已完成的 New Agents UI/UX todo 已归档到 `docs/todos/archive/new-agents-ux-professionalization-2026-06-21.md`；当前活跃 todo 只保留重构扫描和后续重构计划。
+本目录记录重构类扫描、方案和实施待办。已完成的 todo 归档到 `docs/todos/archive/`；当前没有活跃重构 todo。
 
 ## 使用规则
 
@@ -19,10 +19,16 @@
 
 ## 当前入口
 
-- `2026-06-21-new-agents-refactor-scan.md`：第一轮 New Agents 智能体重构扫描模板。
-- `2026-06-21-new-agents-refactor-options.md`：第二轮 New Agents 智能体重构方案设计模板。
-- `2026-06-21-new-agents-refactor-phase1-plan.md`：第三轮 New Agents 智能体重构阶段 1 实施计划。
-- `2026-06-21-new-agents-refactor-phase2-plan.md`：New Agents 智能体重构阶段 2 实施计划。
-- `2026-06-21-new-agents-refactor-phase3-plan.md`：New Agents 智能体重构阶段 3 第一批模块边界计划。
-- `2026-06-21-new-agents-refactor-phase4-plan.md`：New Agents 智能体重构阶段 4 test assets 解析边界计划。
-- `2026-06-21-new-agents-refactor-phase5-remaining-plan.md`：New Agents 智能体重构阶段 5 剩余路线与前端 ArtifactPane 拆分计划。
+暂无。
+
+## 已归档
+
+- `../archive/2026-06-21-new-agents-refactor-scan.md`：第一轮 New Agents 智能体重构扫描报告。
+- `../archive/2026-06-21-new-agents-refactor-options.md`：第二轮 New Agents 智能体重构方案设计。
+- `../archive/2026-06-21-new-agents-refactor-phase1-plan.md`：New Agents 智能体重构阶段 1 实施计划。
+- `../archive/2026-06-21-new-agents-refactor-phase2-plan.md`：New Agents 智能体重构阶段 2 实施计划。
+- `../archive/2026-06-21-new-agents-refactor-phase3-plan.md`：New Agents 智能体重构阶段 3 第一批模块边界计划。
+- `../archive/2026-06-21-new-agents-refactor-phase4-plan.md`：New Agents 智能体重构阶段 4 test assets 解析边界计划。
+- `../archive/2026-06-21-new-agents-refactor-phase5-remaining-plan.md`：New Agents 智能体重构阶段 5 剩余路线与前端 ArtifactPane 拆分计划。
+- `../archive/2026-06-22-new-agents-artifact-professionalization-target.md`：New Agents 全 workflow 产出物专业化目标状态与目标模式输入提示词。
+- `../archive/2026-06-22-new-agents-artifact-professionalization-design.md`：New Agents 全 workflow 产出物专业化目标状态设计。
