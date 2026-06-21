@@ -22,7 +22,7 @@
 
 | 轮次 | 内容 | 目标边界 | 主要验证 | 是否必须 |
 | --- | --- | --- | --- | --- |
-| 第 8 轮 | `ArtifactPane.tsx` 第一批拆分 | 拆 PDF/export/Markdown projection 纯 helper，不改下载 UI 和文件格式 | `ArtifactPane.test.tsx` PDF/download tests、helper unit tests、frontend targeted Vitest | 是 |
+| 第 8 轮 | `ArtifactPane.tsx` 第一批拆分 | 拆 PDF/export/Markdown projection 纯 helper，不改下载 UI 和文件格式 | `ArtifactPane.test.tsx` PDF/download tests、helper unit tests、frontend targeted Vitest | 已完成 |
 | 第 9 轮 | `ArtifactPane.tsx` 第二批拆分 | 拆 diff/merge/automerge 纯 helper，不改编辑器和冲突处理用户行为 | `ArtifactPane.test.tsx` merge/diff/automerge tests、helper unit tests | 是 |
 | 第 10 轮 | `run_persistence.py` 边界拆分 | 拆 snapshot/list/serialization 或 collaboration helper，不改 DB schema/API | `test_run_persistence.py`、agent endpoint tests | 是 |
 | 第 11 轮 | frontend store/workflow adapter 收尾 | 检查 `store.ts`、`workflowRegistry.ts`、services 是否还有重复映射或过宽 helper | store、workflow config、services targeted tests | 视第 8/9 轮结果决定 |
@@ -81,7 +81,7 @@
 
 ### TDD 任务
 
-- [ ] **Step 1: RED helper tests**
+- [x] **Step 1: RED helper tests**
 
   新增 `artifactExport.test.ts`，锁定：
 
@@ -90,19 +90,19 @@
   - Mermaid timeline/mindmap/pie/journey 关键文本会被投影到 PDF。
   - structured visual table 关键文本会被投影到 PDF。
 
-- [ ] **Step 2: create `artifactExport.ts`**
+- [x] **Step 2: create `artifactExport.ts`**
 
   移入 pure helper。模块不得 import React、Zustand、DOM API、services 或 component。
 
-- [ ] **Step 3: wire `ArtifactPane.tsx`**
+- [x] **Step 3: wire `ArtifactPane.tsx`**
 
   组件继续处理 UI、Blob、anchor click 和 filename；PDF 内容由 `buildPlainTextPdf` 生成。
 
-- [ ] **Step 4: remove duplicate helpers**
+- [x] **Step 4: remove duplicate helpers**
 
   删除组件中已迁移 helper 和 type，避免两套 PDF projection 逻辑并存。
 
-- [ ] **Step 5: run verification**
+- [x] **Step 5: run verification**
 
   ```bash
   cd tools/new-agents/frontend
@@ -113,6 +113,17 @@
 ## 第 9 轮：ArtifactPane diff/merge helper 拆分
 
 第 9 轮只在第 8 轮通过后启动。目标是把 diff/merge/automerge 纯逻辑拆到 `core/artifactMerge.ts` 或相近模块，不改编辑器 UI 和冲突处理行为。
+
+### 第 8 轮执行记录
+
+- RED: `src/core/__tests__/artifactExport.test.ts` 首次运行失败，错误为 Vite 无法解析 `../artifactExport`。
+- GREEN: 新增 `src/core/artifactExport.ts`，提供 `buildPlainTextPdf` 和 `toUtf16BeHex`；`ArtifactPane.tsx` 的 PDF 下载改为调用 `buildPlainTextPdf`。
+- 兼容修正: 对齐既有 PDF 断言，包括 flowchart 原始边文本、pie label 保留 `P0/P1/P2`、structured visual table spacing、PDF 曲线命令格式。
+- 清理: 从 `ArtifactPane.tsx` 删除已迁移的 PDF projection、Mermaid PDF parser、structured visual PDF table 和 drawing command helper，保留组件内 UI/download orchestration。
+- 验证:
+  - `npm run test -- --run src/core/__tests__/artifactExport.test.ts src/components/__tests__/ArtifactPane.test.tsx` -> `139 passed`
+  - `git diff --check` -> passed
+- 规模变化: `ArtifactPane.tsx` 从约 6036 行降到约 5103 行；新增 `artifactExport.ts` 约 518 行。
 
 ## 第 10 轮：run_persistence 边界拆分
 
