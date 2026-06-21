@@ -15,7 +15,7 @@
 - 推荐路线总轮数：`6 个目标模式执行轮 + 后续可选模块边界轮`
 - 已完成：目标模式第 1-6 轮
 - 当前计划对应：目标模式第 7 轮
-- 当前状态：待执行
+- 当前状态：目标模式第 7 轮完成
 
 ## 每轮完成后的 Summary 模板
 
@@ -95,7 +95,7 @@
 
 ### TDD 任务
 
-- [ ] **Step 1: parser module RED**
+- [x] **Step 1: parser module RED**
 
   新增 `test_test_asset_parsing.py`，导入 `parse_lisa_test_asset_markdown`，用现有 Lisa CASES markdown 验证它返回：
 
@@ -108,7 +108,7 @@
 
   Expected before implementation: fail because `test_asset_parsing` module does not exist.
 
-- [ ] **Step 2: create parser module**
+- [x] **Step 2: create parser module**
 
   新增 `test_asset_parsing.py`，把 `test_assets.py` 中无 DB 依赖的 parsing/building helpers 移入新模块，并提供 public function:
 
@@ -119,15 +119,15 @@
 
   缺少用例清单表格时继续抛出 `ValueError("测试用例集缺少可解析的用例清单表格")`。
 
-- [ ] **Step 3: wire `test_assets.py` to parser**
+- [x] **Step 3: wire `test_assets.py` to parser**
 
   `export_lisa_test_assets` 改为调用 `parse_lisa_test_asset_markdown(markdown)`，并把返回字段合并进现有 export payload。`_serialize_collection` 和 `_sync_risk_matrix` 等现有内部函数可继续调用从 parser module import 的 builder，或通过更窄的 public helper 调用。
 
-- [ ] **Step 4: remove duplicate pure helpers from `test_assets.py`**
+- [x] **Step 4: remove duplicate pure helpers from `test_assets.py`**
 
   从 `test_assets.py` 删除已迁移的 Markdown parsing、coverage summary、asset issues、risk matrix 和 intent-tester draft helpers，避免形成新旧双事实源。
 
-- [ ] **Step 5: run verification**
+- [x] **Step 5: run verification**
 
   ```bash
   /Users/anhui/Documents/myProgram/AI4SE/.venv/bin/python -m pytest tools/new-agents/backend/tests/test_test_asset_parsing.py tools/new-agents/backend/tests/test_test_assets.py tools/new-agents/backend/tests/test_routes_blueprint.py -q
@@ -141,3 +141,14 @@
 - `export_lisa_test_assets` 输出与本轮前一致。
 - test assets route URL、request/response JSON、DB schema 不变。
 - 不新增通用 asset framework，不新增 Lisa/Alex 专属 runtime/API/store/UI。
+
+### 执行记录
+
+- RED: `tools/new-agents/backend/tests/test_test_asset_parsing.py` 首次运行失败，错误为 `ModuleNotFoundError: No module named 'test_asset_parsing'`。
+- GREEN: 新增 `test_asset_parsing.py`，提供 `parse_lisa_test_asset_markdown`、`build_coverage_summary`、`build_risk_matrix`、`build_intent_tester_drafts`、`normalize_risk`；`test_assets.py` 改为调用新模块。
+- 修复迁移遗漏: risk 创建/重命名路径仍需要 risk normalize，已通过公开 `normalize_risk` 保持原行为。
+- 验证:
+  - `/Users/anhui/Documents/myProgram/AI4SE/.venv/bin/python -m pytest tools/new-agents/backend/tests/test_test_asset_parsing.py tools/new-agents/backend/tests/test_test_assets.py tools/new-agents/backend/tests/test_routes_blueprint.py -q` -> `35 passed`
+  - `rg -n "from flask|SQLAlchemy|from models| db\\b|run_persistence" tools/new-agents/backend/test_asset_parsing.py` -> no matches
+  - `git diff --check` -> passed
+- 规模变化: `test_assets.py` 约从 1234 行降到 956 行；新增纯解析模块 `test_asset_parsing.py` 300 行。
