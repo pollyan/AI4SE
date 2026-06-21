@@ -1,8 +1,8 @@
 from collections.abc import Callable
 from typing import Any
 
-from agent_contracts import WORKFLOW_STAGES
 from pydantic import BaseModel, ConfigDict, Field
+from workflow_contract_registry import get_workflow_stages
 
 
 class RequestValidationError(ValueError):
@@ -84,7 +84,7 @@ def parse_agent_run_stream_request(
         if _is_blank(run_id):
             raise RequestValidationError("runId 不能为空")
         run_id = run_id.strip()
-    workflow_stages = WORKFLOW_STAGES.get(workflow_id)
+    workflow_stages = get_workflow_stages().get(workflow_id)
     if workflow_stages is None:
         raise RequestValidationError(f"未知 workflowId: {workflow_id}")
     if stage_id not in workflow_stages:

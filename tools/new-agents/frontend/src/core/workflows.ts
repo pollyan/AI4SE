@@ -1,5 +1,5 @@
 import { WorkflowDef, WorkflowType } from './types';
-import workflowManifestData from '../../../workflow_manifest.json';
+import { getStagePromptTemplateId, workflowManifest } from './workflowRegistry';
 import { IMPROVEMENT_PROMPT, IMPROVEMENT_TEMPLATE } from './prompts/incident_review/improvement';
 import { ROOT_CAUSE_PROMPT, ROOT_CAUSE_TEMPLATE } from './prompts/incident_review/root_cause';
 import { TIMELINE_PROMPT, TIMELINE_TEMPLATE } from './prompts/incident_review/timeline';
@@ -18,117 +18,92 @@ import { PERSONA_PROMPT, PERSONA_TEMPLATE } from './prompts/value_discovery/pers
 import { JOURNEY_PROMPT, JOURNEY_TEMPLATE } from './prompts/value_discovery/journey';
 import { BLUEPRINT_PROMPT, BLUEPRINT_TEMPLATE } from './prompts/value_discovery/blueprint';
 
-type WorkflowManifestStage = {
-    id: string;
-    name: string;
-};
-
-type WorkflowManifestWorkflow = Omit<WorkflowDef, 'stages' | 'welcomeMessage'> & {
-    stages: WorkflowManifestStage[];
-};
-
-type WorkflowManifest = {
-    workflows: Record<WorkflowType, WorkflowManifestWorkflow>;
-};
-
 type StageContent = {
     description: string;
     template: string;
 };
 
-const workflowManifest = workflowManifestData as WorkflowManifest;
-
-const STAGE_CONTENT: Record<WorkflowType, Record<string, StageContent>> = {
-    TEST_DESIGN: {
-        CLARIFY: {
+const STAGE_CONTENT_BY_TEMPLATE_ID: Record<string, StageContent> = {
+        'test_design.clarify': {
             description: CLARIFY_PROMPT,
             template: CLARIFY_TEMPLATE,
         },
-        STRATEGY: {
+        'test_design.strategy': {
             description: STRATEGY_PROMPT,
             template: STRATEGY_TEMPLATE,
         },
-        CASES: {
+        'test_design.cases': {
             description: CASES_PROMPT,
             template: CASES_TEMPLATE,
         },
-        DELIVERY: {
+        'test_design.delivery': {
             description: DELIVERY_PROMPT,
             template: DELIVERY_TEMPLATE,
         },
-    },
-    REQ_REVIEW: {
-        REVIEW: {
+        'req_review.review': {
             description: REVIEW_PROMPT,
             template: REVIEW_TEMPLATE,
         },
-        REPORT: {
+        'req_review.report': {
             description: REPORT_PROMPT,
             template: REPORT_TEMPLATE,
         },
-    },
-    INCIDENT_REVIEW: {
-        TIMELINE: {
+        'incident_review.timeline': {
             description: TIMELINE_PROMPT,
             template: TIMELINE_TEMPLATE,
         },
-        ROOT_CAUSE: {
+        'incident_review.root_cause': {
             description: ROOT_CAUSE_PROMPT,
             template: ROOT_CAUSE_TEMPLATE,
         },
-        IMPROVEMENT: {
+        'incident_review.improvement': {
             description: IMPROVEMENT_PROMPT,
             template: IMPROVEMENT_TEMPLATE,
         },
-    },
-    IDEA_BRAINSTORM: {
-        DEFINE: {
+        'idea_brainstorm.define': {
             description: DEFINE_PROMPT,
             template: DEFINE_TEMPLATE,
         },
-        DIVERGE: {
+        'idea_brainstorm.diverge': {
             description: DIVERGE_PROMPT,
             template: DIVERGE_TEMPLATE,
         },
-        CONVERGE: {
+        'idea_brainstorm.converge': {
             description: CONVERGE_PROMPT,
             template: CONVERGE_TEMPLATE,
         },
-        CONCEPT: {
+        'idea_brainstorm.concept': {
             description: CONCEPT_PROMPT,
             template: CONCEPT_TEMPLATE,
         },
-    },
-    VALUE_DISCOVERY: {
-        ELEVATOR: {
+        'value_discovery.elevator': {
             description: ELEVATOR_PROMPT,
             template: ELEVATOR_TEMPLATE,
         },
-        PERSONA: {
+        'value_discovery.persona': {
             description: PERSONA_PROMPT,
             template: PERSONA_TEMPLATE,
         },
-        JOURNEY: {
+        'value_discovery.journey': {
             description: JOURNEY_PROMPT,
             template: JOURNEY_TEMPLATE,
         },
-        BLUEPRINT: {
+        'value_discovery.blueprint': {
             description: BLUEPRINT_PROMPT,
             template: BLUEPRINT_TEMPLATE,
         },
-    },
 };
 
 const buildWorkflow = (workflowId: WorkflowType): WorkflowDef => {
     const manifestWorkflow = workflowManifest.workflows[workflowId];
-    const stageContentById = STAGE_CONTENT[workflowId];
 
     return {
         ...manifestWorkflow,
         stages: manifestWorkflow.stages.map((stage) => {
-            const content = stageContentById[stage.id];
+            const promptTemplateId = getStagePromptTemplateId(workflowId, stage.id);
+            const content = STAGE_CONTENT_BY_TEMPLATE_ID[promptTemplateId];
             if (!content) {
-                throw new Error(`Missing prompt/template content for ${workflowId}/${stage.id}`);
+                throw new Error(`Missing prompt/template content for ${workflowId}/${stage.id}: ${promptTemplateId}`);
             }
             return {
                 ...stage,

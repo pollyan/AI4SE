@@ -36,19 +36,23 @@
       "stages": [
         {
           "id": "CLARIFY",
-          "name": "需求澄清"
+          "name": "需求澄清",
+          "promptTemplateId": "test_design.clarify"
         },
         {
           "id": "STRATEGY",
-          "name": "策略制定"
+          "name": "策略制定",
+          "promptTemplateId": "test_design.strategy"
         },
         {
           "id": "CASES",
-          "name": "用例编写"
+          "name": "用例编写",
+          "promptTemplateId": "test_design.cases"
         },
         {
           "id": "DELIVERY",
-          "name": "文档交付"
+          "name": "文档交付",
+          "promptTemplateId": "test_design.delivery"
         }
       ],
       "onboarding": {
@@ -75,11 +79,13 @@
       "stages": [
         {
           "id": "REVIEW",
-          "name": "深度评审"
+          "name": "深度评审",
+          "promptTemplateId": "req_review.review"
         },
         {
           "id": "REPORT",
-          "name": "评审报告"
+          "name": "评审报告",
+          "promptTemplateId": "req_review.report"
         }
       ],
       "onboarding": {
@@ -106,15 +112,18 @@
       "stages": [
         {
           "id": "TIMELINE",
-          "name": "事件还原"
+          "name": "事件还原",
+          "promptTemplateId": "incident_review.timeline"
         },
         {
           "id": "ROOT_CAUSE",
-          "name": "根因分析"
+          "name": "根因分析",
+          "promptTemplateId": "incident_review.root_cause"
         },
         {
           "id": "IMPROVEMENT",
-          "name": "改进报告"
+          "name": "改进报告",
+          "promptTemplateId": "incident_review.improvement"
         }
       ],
       "onboarding": {
@@ -141,19 +150,23 @@
       "stages": [
         {
           "id": "DEFINE",
-          "name": "问题域分析"
+          "name": "问题域分析",
+          "promptTemplateId": "idea_brainstorm.define"
         },
         {
           "id": "DIVERGE",
-          "name": "创意发散"
+          "name": "创意发散",
+          "promptTemplateId": "idea_brainstorm.diverge"
         },
         {
           "id": "CONVERGE",
-          "name": "收敛聚焦"
+          "name": "收敛聚焦",
+          "promptTemplateId": "idea_brainstorm.converge"
         },
         {
           "id": "CONCEPT",
-          "name": "概念输出"
+          "name": "概念输出",
+          "promptTemplateId": "idea_brainstorm.concept"
         }
       ],
       "onboarding": {
@@ -180,19 +193,23 @@
       "stages": [
         {
           "id": "ELEVATOR",
-          "name": "价值定位"
+          "name": "价值定位",
+          "promptTemplateId": "value_discovery.elevator"
         },
         {
           "id": "PERSONA",
-          "name": "用户画像"
+          "name": "用户画像",
+          "promptTemplateId": "value_discovery.persona"
         },
         {
           "id": "JOURNEY",
-          "name": "用户旅程"
+          "name": "用户旅程",
+          "promptTemplateId": "value_discovery.journey"
         },
         {
           "id": "BLUEPRINT",
-          "name": "需求蓝图"
+          "name": "需求蓝图",
+          "promptTemplateId": "value_discovery.blueprint"
         }
       ],
       "onboarding": {

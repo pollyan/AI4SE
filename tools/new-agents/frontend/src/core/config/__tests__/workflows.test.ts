@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getAgentWorkflows } from '../agentWorkflows';
 import { WORKFLOWS, WORKFLOW_SLUGS, SLUG_TO_WORKFLOW } from '../../workflows';
+import { getStagePromptTemplateId } from '../../workflowRegistry';
 import type { WorkflowType } from '../../types';
 
 describe('Workflow Configuration', () => {
@@ -120,6 +121,7 @@ describe('Workflow Configuration', () => {
             const wf = WORKFLOWS[workflowId];
 
             for (const stage of wf.stages) {
+                expect(getStagePromptTemplateId(workflowId, stage.id)).toBeTruthy();
                 expect(stage.description.trim().length).toBeGreaterThan(100);
                 expect(stage.template.trim().length).toBeGreaterThan(100);
             }

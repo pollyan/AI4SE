@@ -70,7 +70,7 @@
 
 阶段 2 拆成两个目标模式执行轮：
 
-1. 目标模式第 4 轮：共享 workflow contract registry 最小闭环。
+1. 目标模式第 4 轮：共享 workflow contract registry 最小闭环。（已完成，2026-06-21）
 2. 目标模式第 5 轮：Artifact 与 visual contract 注册表闭环。
 
 每一轮都必须：
@@ -105,25 +105,25 @@
 
 ### TDD 任务
 
-- [ ] **Step 1: 后端 registry RED**
+- [x] **Step 1: 后端 registry RED**
 
   新增 `test_workflow_contract_registry.py`，断言 registry 能读取每个 workflow/stage 的 `promptTemplateId`，并能导出与 manifest 顺序一致的 `workflowStages`。
 
   Expected before implementation: fail because registry module does not exist or manifest stages do not have `promptTemplateId`.
 
-- [ ] **Step 2: manifest 增加 stage promptTemplateId**
+- [x] **Step 2: manifest 增加 stage promptTemplateId**
 
   在每个 manifest stage 加入 `promptTemplateId`。值应指向现有 TS prompt module key，不迁移 prompt 文本。
 
-- [ ] **Step 3: 后端 registry 最小实现**
+- [x] **Step 3: 后端 registry 最小实现**
 
   新增 `workflow_contract_registry.py`，从 manifest 构建 registry。`request_schemas.py` 可以继续使用兼容导出的 `WORKFLOW_STAGES`，但来源应可由 registry 证明。
 
-- [ ] **Step 4: 前端 registry adapter RED/GREEN**
+- [x] **Step 4: 前端 registry adapter RED/GREEN**
 
   新增 `workflowRegistry.ts`，由 manifest 生成 prompt module key 映射；`workflows.ts` 通过 `promptTemplateId` 查找现有 TS prompt module。前端测试验证每个 stage 都通过 manifest template id 找到 description/template。
 
-- [ ] **Step 5: 运行验证**
+- [x] **Step 5: 运行验证**
 
   ```bash
   /Users/anhui/Documents/myProgram/AI4SE/.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_registry.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_request_schemas.py -q
@@ -136,6 +136,17 @@
 - 新增 manifest stage 时，如果没有 `promptTemplateId`，后端 registry 和前端 config tests 会失败。
 - `WORKFLOWS` 输出、URL、agent listing、request schema 行为不变。
 - 仍不迁移 prompt 文本。
+
+### 执行记录
+
+- RED：新增 `test_workflow_contract_registry.py` 后失败，确认后端 registry 模块尚不存在。
+- RED：前端 workflow config 测试引用 `getStagePromptTemplateId` 后失败，确认前端 registry adapter 尚不存在。
+- GREEN：manifest 每个 stage 增加 `promptTemplateId`；新增后端 `workflow_contract_registry.py`，导出 workflow stage map、stage prompt template ids、handoff prompt template ids。
+- GREEN：`request_schemas.py` 改为通过 registry-derived stage map 校验 workflow/stage；新增前端 `workflowRegistry.ts`，`workflows.ts` 通过 `promptTemplateId` 查找现有 TS prompt 模块。
+- 验证：
+  - `/Users/anhui/Documents/myProgram/AI4SE/.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_registry.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_request_schemas.py -q`：37 passed。
+  - `cd tools/new-agents/frontend && npm run test -- --run src/core/config/__tests__/workflows.test.ts`：13 passed。
+  - `git diff --check`：通过。
 
 ## 目标模式第 5 轮：Artifact 与 visual contract 注册表闭环
 
