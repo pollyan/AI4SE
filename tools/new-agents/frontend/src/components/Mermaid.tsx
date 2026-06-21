@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { MermaidConfig } from 'mermaid';
 import { sanitizeMermaidCode, aggressiveSanitize } from '../core/utils/mermaidSanitizer';
 
@@ -75,6 +75,105 @@ async function renderMermaidSvg(chart: string): Promise<string> {
   return renderPromise;
 }
 
+type LightweightMindmapNode = {
+  id: string;
+  label: string;
+  depth: number;
+};
+
+type LightweightMindmap = {
+  rootLabel: string;
+  nodes: LightweightMindmapNode[];
+};
+
+function getMermaidDiagramType(chart: string): string {
+  return chart
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .find(Boolean)
+    ?.split(/\s+/)[0]
+    ?.toLowerCase() || '';
+}
+
+function cleanMindmapLabel(source: string): string {
+  let label = source.trim().replace(/^root\s*/i, '').trim();
+  for (let index = 0; index < 4; index += 1) {
+    const nextLabel = label.trim();
+    if (
+      (nextLabel.startsWith('((') && nextLabel.endsWith('))'))
+      || (nextLabel.startsWith('[[') && nextLabel.endsWith(']]'))
+    ) {
+      label = nextLabel.slice(2, -2);
+      continue;
+    }
+    if (
+      (nextLabel.startsWith('(') && nextLabel.endsWith(')'))
+      || (nextLabel.startsWith('[') && nextLabel.endsWith(']'))
+      || (nextLabel.startsWith('{') && nextLabel.endsWith('}'))
+    ) {
+      label = nextLabel.slice(1, -1);
+      continue;
+    }
+    label = nextLabel;
+    break;
+  }
+  return label.trim().replace(/^["'“”]+|["'“”]+$/g, '').trim();
+}
+
+function parseLightweightMindmap(chart: string): LightweightMindmap | null {
+  if (getMermaidDiagramType(chart) !== 'mindmap') return null;
+
+  const bodyLines = chart
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .slice(1)
+    .filter(line => line.trim() && !/^\s*(class|style|:::)/.test(line.trim()));
+
+  const nodes = bodyLines
+    .map((line, index): LightweightMindmapNode | null => {
+      const label = cleanMindmapLabel(line);
+      if (!label) return null;
+      const indent = line.match(/^ */)?.[0].length ?? 0;
+      return {
+        id: `mindmap-node-${index}`,
+        label,
+        depth: Math.min(Math.floor(indent / 2), 5),
+      };
+    })
+    .filter((node): node is LightweightMindmapNode => node !== null);
+
+  if (nodes.length === 0) return null;
+  const [rootNode, ...childNodes] = nodes;
+  return {
+    rootLabel: rootNode.label,
+    nodes: childNodes,
+  };
+}
+
+const LightweightMindmapView: React.FC<{ mindmap: LightweightMindmap }> = ({ mindmap }) => (
+  <div className="my-6 w-full overflow-x-auto" data-testid="lightweight-mindmap">
+    <div className="mx-auto w-full max-w-3xl rounded-xl border border-sky-500/25 bg-slate-950/70 p-5 shadow-lg shadow-sky-950/20">
+      <div className="mb-4 inline-flex rounded-lg border border-sky-400/30 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-100">
+        {mindmap.rootLabel}
+      </div>
+      <div className="space-y-2">
+        {mindmap.nodes.map((node) => (
+          <div
+            key={node.id}
+            className="flex items-center gap-3"
+            style={{ paddingLeft: `${Math.max(node.depth - 1, 0) * 24}px` }}
+          >
+            <span className="h-px w-5 shrink-0 bg-sky-500/40" aria-hidden="true" />
+            <span className="rounded-md border border-slate-700/80 bg-slate-900/90 px-3 py-2 text-sm text-slate-200">
+              {node.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
 export interface MermaidProps {
   chart: string;
   blockIndex?: number;
@@ -94,10 +193,20 @@ export const Mermaid: React.FC<MermaidProps> = ({
   const [renderState, setRenderState] = useState<'success' | 'loading' | 'error'>('loading');
   const [svgHtml, setSvgHtml] = useState<string>('');
   const [errorInfo, setErrorInfo] = useState<{ code: string; message: string }>({ code: '', message: '' });
+  const lightweightMindmap = useMemo(() => parseLightweightMindmap(chart), [chart]);
 
   useEffect(() => {
     let isMounted = true;
     if (!chart) return;
+
+    if (lightweightMindmap) {
+      setSvgHtml('');
+      setRenderState('success');
+      onRenderSuccess?.(blockIndex ?? 0);
+      return () => {
+        isMounted = false;
+      };
+    }
 
     const renderChart = async () => {
       if (isMounted) setRenderState('loading');
@@ -129,7 +238,11 @@ export const Mermaid: React.FC<MermaidProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [chart, onRetry, onRenderError, onRenderSuccess, blockIndex]);
+  }, [chart, lightweightMindmap, onRetry, onRenderError, onRenderSuccess, blockIndex]);
+
+  if (lightweightMindmap) {
+    return <LightweightMindmapView mindmap={lightweightMindmap} />;
+  }
 
   const handleManualRetry = async () => {
     if (!onRetry) return;

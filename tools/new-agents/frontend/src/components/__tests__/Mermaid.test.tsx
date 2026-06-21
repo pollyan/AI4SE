@@ -77,6 +77,28 @@ describe('Mermaid Component', () => {
         expect(mermaid.render).toHaveBeenCalledTimes(1);
     });
 
+    it('renders mindmaps with a lightweight hierarchy instead of Mermaid runtime', async () => {
+        const chartCode = [
+            'mindmap',
+            '  root((宠物社区问题域))',
+            '    待探索',
+            '      用户痛点',
+            '      目标人群',
+        ].join('\n');
+        const mockOnRenderSuccess = vi.fn();
+
+        render(<Mermaid chart={chartCode} blockIndex={2} onRenderSuccess={mockOnRenderSuccess} />);
+
+        expect(screen.getByText('宠物社区问题域')).toBeTruthy();
+        expect(screen.getByText('待探索')).toBeTruthy();
+        expect(screen.getByText('用户痛点')).toBeTruthy();
+        expect(mermaid.parse).not.toHaveBeenCalled();
+        expect(mermaid.render).not.toHaveBeenCalled();
+        await waitFor(() => {
+            expect(mockOnRenderSuccess).toHaveBeenCalledWith(2);
+        });
+    });
+
     it('shows loading animation when generating and encountering parse error (AC6)', async () => {
         vi.mocked(mermaid.parse).mockRejectedValue(new Error('Syntax Error'));
 
