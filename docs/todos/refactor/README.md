@@ -15,9 +15,10 @@
 
 - `YYYY-MM-DD-new-agents-refactor-scan.md`：只读架构扫描报告。
 - `YYYY-MM-DD-new-agents-refactor-options.md`：基于扫描报告的重构方案比较。
-- `YYYY-MM-DD-new-agents-refactor-plan.md`：选定方案后的 TDD 实施计划。
+- `YYYY-MM-DD-new-agents-refactor-phaseN-plan.md`：选定阶段后的 TDD 实施计划。
 
 ## 当前入口
 
 - `2026-06-21-new-agents-refactor-scan.md`：第一轮 New Agents 智能体重构扫描模板。
 - `2026-06-21-new-agents-refactor-options.md`：第二轮 New Agents 智能体重构方案设计模板。
+- `2026-06-21-new-agents-refactor-phase1-plan.md`：第三轮 New Agents 智能体重构阶段 1 实施计划。
