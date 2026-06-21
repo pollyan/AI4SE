@@ -89,15 +89,24 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
     ],
     ("REQ_REVIEW", "REVIEW"): [
         "# 需求评审问题清单",
-        "## 评审概要",
+        "## 评审信息",
+        "## 评审范围与不评审范围",
+        "## 需求质量总览",
+        "## 需求质量结构图",
         "## 问题统计",
+        "## 按维度问题清单",
+        "## 修订建议",
+        "## 阶段门禁",
+        "评审维度",
         "问题描述",
         "优先级",
+        "阻断性",
         "所属需求章节",
         "影响范围",
         "证据/依据",
         "建议",
         "责任方/确认人",
+        "状态",
     ],
     ("REQ_REVIEW", "REPORT"): [
         "# 需求评审报告",
@@ -105,11 +114,17 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
         "### 判定标准",
         "## 评审信息",
         "## 问题统计",
-        "## 待确认问题清单",
+        "## 优先级看板",
+        "## 问题关闭清单",
         "### P0 阻塞性问题",
         "### P1 重要问题",
         "### P2 优化建议",
-        "## 评审意见签署",
+        "## 复审条件",
+        "## 签署确认",
+        "## 变更记录",
+        "关闭状态",
+        "复审条件",
+        "签署状态",
     ],
     ("INCIDENT_REVIEW", "TIMELINE"): [
         "# 故障复盘报告",
@@ -256,6 +271,7 @@ REQUIRED_ARTIFACT_H1_KEYWORDS: dict[tuple[str, str], list[str]] = {
 REQUIRED_ARTIFACT_MERMAID_DIAGRAMS: dict[tuple[str, str], list[str]] = {
     ("TEST_DESIGN", "CLARIFY"): ["flowchart"],
     ("TEST_DESIGN", "STRATEGY"): ["quadrantChart", "block-beta"],
+    ("REQ_REVIEW", "REVIEW"): ["flowchart"],
     ("REQ_REVIEW", "REPORT"): ["pie"],
     ("INCIDENT_REVIEW", "TIMELINE"): ["timeline"],
     ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["mindmap"],
@@ -334,9 +350,10 @@ STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {
     "priority-board": (
         'priority-board 必须严格使用如下 JSON 结构：{"type": '
         '"priority-board", "title": "可选标题", "columns": ["问题", '
-        '"优先级", "影响范围", "责任方", "下一步"], "rows": [{"问题": '
+        '"优先级", "影响范围", "责任方", "下一步", "关闭状态"], "rows": [{"问题": '
         '"验收标准缺失", "优先级": "P0", "影响范围": "核心链路", '
-        '"责任方": "产品负责人", "下一步": "补充验收标准"}]}。'
+        '"责任方": "产品负责人", "下一步": "补充验收标准", '
+        '"关闭状态": "待修订"}]}。'
         "columns 必须是非空字符串数组；rows 必须是对象数组，每个对象的 key "
         "必须对应 columns 中的列名。"
     ),

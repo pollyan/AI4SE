@@ -907,6 +907,40 @@ def test_validate_agent_turn_rejects_req_review_review_missing_actionable_issue_
         )
 
 
+def test_req_review_contracts_include_professional_artifact_fields():
+    review_fields = REQUIRED_ARTIFACT_HEADINGS[("REQ_REVIEW", "REVIEW")]
+    report_fields = REQUIRED_ARTIFACT_HEADINGS[("REQ_REVIEW", "REPORT")]
+
+    for field in [
+        "## 评审信息",
+        "## 评审范围与不评审范围",
+        "## 需求质量总览",
+        "## 需求质量结构图",
+        "## 修订建议",
+        "## 阶段门禁",
+        "评审维度",
+        "阻断性",
+        "状态",
+    ]:
+        assert field in review_fields
+
+    assert REQUIRED_ARTIFACT_MERMAID_DIAGRAMS[("REQ_REVIEW", "REVIEW")] == [
+        "flowchart"
+    ]
+
+    for field in [
+        "## 优先级看板",
+        "## 问题关闭清单",
+        "## 复审条件",
+        "## 签署确认",
+        "## 变更记录",
+        "关闭状态",
+        "复审条件",
+        "签署状态",
+    ]:
+        assert field in report_fields
+
+
 @pytest.mark.parametrize(
     ("stage_id", "markdown"),
     [

@@ -785,7 +785,6 @@ describe('llm.ts', () => {
                 artifactContent: '# 需求分析文档\n\n初始内容',
                 stageArtifacts: { CLARIFY: '# 需求分析文档\n\n初始内容' },
             });
-            mockMermaidParse.mockRejectedValueOnce(new Error('should not parse mermaid-js'));
             const artifact = [
                 '# 需求分析文档',
                 '',
@@ -973,6 +972,51 @@ describe('llm.ts', () => {
         });
 
         it('REQ_REVIEW/REVIEW 应走结构化 Agent Runtime', async () => {
+            const artifact = [
+                '# 需求评审问题清单',
+                '',
+                '## 评审信息',
+                '| 字段 | 内容 |',
+                '|---|---|',
+                '| Artifact 名称 | 需求质量诊断与评审问题清单 |',
+                '',
+                '## 评审范围与不评审范围',
+                '| 类型 | 内容 | 评审影响 | 状态 |',
+                '|---|---|---|---|',
+                '| 评审范围 | 登录需求 | 核心链路 | 已确认 |',
+                '',
+                '## 需求质量总览',
+                '| 评审维度 | 质量判断 | 严重度评分(1-5) | 主要证据 | 测试风险 | 状态 |',
+                '|---|---|---|---|---|---|',
+                '| 可测试性 | 部分缺失 | 3 | 验收标准不足 | 断言不稳定 | 待 PM 确认 |',
+                '',
+                '## 需求质量结构图',
+                '```mermaid',
+                'flowchart TD',
+                '    Req["需求文档输入"] --> Issues["问题分级 P0/P1/P2"]',
+                '    Issues --> Report["评审报告与复审条件"]',
+                '```',
+                '',
+                '## 问题统计',
+                '暂无阻塞项',
+                '',
+                '```ai4se-visual',
+                '{"type":"score-matrix","columns":["评审维度","严重度评分","主要证据","测试风险"],"rows":[{"评审维度":"可测试性","严重度评分":3,"主要证据":"验收标准不足","测试风险":"断言不稳定"}]}',
+                '```',
+                '',
+                '## 按维度问题清单',
+                '| ID | 评审维度 | 问题描述 | 优先级 | 阻断性 | 所属需求章节 | 影响范围 | 证据/依据 | 建议 | 责任方/确认人 | 状态 |',
+                '|----|---------|---------|--------|--------|------------|----------|-----------|------|----------------|------|',
+                '| Q-001 | 可测试性 | 验收标准不足 | P1 | 非阻断 | 登录需求 | 测试断言 | 原文未给出成功判定 | 补充验收标准 | PM | 待 PM 确认 |',
+                '',
+                '## 修订建议',
+                '| 建议 ID | 关联问题 | 修订建议 | 验收口径 | 责任方/确认人 | 状态 |',
+                '|---|---|---|---|---|---|',
+                '| FIX-001 | Q-001 | 补充验收标准 | 可写出断言 | PM | 待处理 |',
+                '',
+                '## 阶段门禁',
+                '- [x] 评审范围与不评审范围已明确。',
+            ].join('\n');
             resetStore({
                 workflow: 'REQ_REVIEW',
                 stageIndex: 0,
@@ -984,7 +1028,18 @@ describe('llm.ts', () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
                 body: createSSEStream([
-                    'data: {"type":"agent_turn","output":{"chat":"已更新需求评审问题清单。","artifact_update":{"type":"replace","markdown":"# 需求评审问题清单\\n\\n## 评审概要\\n登录需求评审\\n\\n## 问题统计\\n暂无阻塞项"},"stage_action":null,"warnings":[]}}',
+                    `data: ${JSON.stringify({
+                        type: 'agent_turn',
+                        output: {
+                            chat: '已更新需求评审问题清单。',
+                            artifact_update: {
+                                type: 'replace',
+                                markdown: artifact,
+                            },
+                            stage_action: null,
+                            warnings: [],
+                        },
+                    })}`,
                     'data: [DONE]',
                 ]),
             });
@@ -1004,7 +1059,7 @@ describe('llm.ts', () => {
             });
             expect(results.at(-1)).toMatchObject({
                 chatResponse: '已更新需求评审问题清单。',
-                newArtifact: '# 需求评审问题清单\n\n## 评审概要\n登录需求评审\n\n## 问题统计\n暂无阻塞项',
+                newArtifact: artifact,
                 hasArtifactUpdate: true,
             });
         });
