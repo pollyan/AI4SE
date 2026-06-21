@@ -221,6 +221,70 @@
 
 第 10 轮回到 backend，目标是在已有前端大模块拆分后处理 `run_persistence.py`。优先拆 snapshot/list/serialization helper 或 collaboration helper，不改数据库 schema、不改 API response shape。
 
+### 第 10 轮执行范围
+
+按“每轮一个完整主题”的节奏，第 10 轮一次性拆出 artifact collaboration state 边界：
+
+- 新增 `tools/new-agents/backend/run_collaboration_state.py`。
+- 将 collaboration patch 校验、comment/reply/section lock 模型构造、collaboration audit event 构造迁入新模块。
+- 将 comment、section lock、audit event snapshot 序列化迁入新模块。
+- `run_persistence.py` 保留 `replace_artifact_collaboration_state` 公开入口、DB 删除/写入事务、run snapshot 聚合和现有 API response shape。
+- 不改数据库 schema，不改 URL/API/SSE，不新增 agent-specific path。
+
+### 第 10 轮 TDD 任务
+
+- [x] **Step 1: RED module-boundary tests**
+
+  新增 `tools/new-agents/backend/tests/test_run_collaboration_state.py`，验证：
+
+  - `build_collaboration_state_models` 从 API patch 构造 comment、section lock 和 audit event models。
+  - `comment_snapshot`、`section_lock_snapshot`、`audit_event_snapshot` 保持既有 API snapshot shape。
+  - 跨 workflow stage 的 collaboration payload 被拒绝。
+
+- [x] **Step 2: create `run_collaboration_state.py`**
+
+  新模块只负责 collaboration state payload/model/snapshot，不 import Flask route、Agent Runtime、SSE、store 或 workflow-specific runtime。
+
+- [x] **Step 3: wire `run_persistence.py`**
+
+  `replace_artifact_collaboration_state` 继续作为原公开入口，委托 `build_collaboration_state_models` 构造待写入模型；`get_run_snapshot` 改用新模块 snapshot helper。删除 `run_persistence.py` 中重复 collaboration reader 和 snapshot helper。
+
+- [x] **Step 4: restore backend pytest environment**
+
+  当前 worktree 无 `.venv/bin/python`，系统 `python3` 在沙箱中启动卡住；为保证回归可执行，创建 `/private/tmp/ai4se-new-agents-backend-venv` 临时虚拟环境，并安装 `tools/new-agents/backend/requirements.txt`。该环境不写入仓库。
+
+- [x] **Step 5: run verification**
+
+  ```bash
+  /private/tmp/ai4se-new-agents-backend-venv/bin/python -m pytest \
+    tools/new-agents/backend/tests/test_run_collaboration_state.py \
+    tools/new-agents/backend/tests/test_run_persistence.py
+
+  /private/tmp/ai4se-new-agents-backend-venv/bin/python -m pytest \
+    tools/new-agents/backend/tests/test_run_collaboration_state.py \
+    tools/new-agents/backend/tests/test_run_persistence.py \
+    tools/new-agents/backend/tests/test_context_builder.py \
+    tools/new-agents/backend/tests/test_agent_endpoint.py
+
+  /private/tmp/ai4se-new-agents-backend-venv/bin/python -m pytest \
+    tools/new-agents/backend/tests/test_backend_layering.py \
+    tools/new-agents/backend/tests/test_routes_blueprint.py
+
+  git diff --check
+  ```
+
+### 第 10 轮执行记录
+
+- RED: 新增 `test_run_collaboration_state.py` 后，直接导入新模块失败，错误为 `ModuleNotFoundError: No module named 'run_collaboration_state'`。
+- GREEN: 新增 `run_collaboration_state.py`，提供 collaboration model builder 和 snapshot helper；`run_persistence.py` 删除本地 collaboration payload reader/snapshot helper，改为委托新模块。
+- 测试环境修复: `/private/tmp/ai4se-new-agents-backend-venv` 临时 venv 成功安装 backend requirements；后续 backend pytest 使用该 venv 执行。
+- 验证:
+  - `.../python -m pytest tools/new-agents/backend/tests/test_run_collaboration_state.py tools/new-agents/backend/tests/test_run_persistence.py` -> `24 passed`
+  - `.../python -m pytest tools/new-agents/backend/tests/test_run_collaboration_state.py tools/new-agents/backend/tests/test_run_persistence.py tools/new-agents/backend/tests/test_context_builder.py tools/new-agents/backend/tests/test_agent_endpoint.py` -> `86 passed`
+  - `.../python -m pytest tools/new-agents/backend/tests/test_backend_layering.py tools/new-agents/backend/tests/test_routes_blueprint.py` -> `11 passed`
+  - `git diff --check` -> passed
+- 规模变化: `run_persistence.py` 从约 1186 行降到约 1031 行；新增 `run_collaboration_state.py` 约 214 行；新增 collaboration state 单测约 114 行。
+
 ## 第 11 轮：frontend store/workflow adapter 收尾
 
 第 11 轮视第 8/9 轮结果决定是否执行。重点检查 registry adapter、store helper、services 是否仍存在重复 workflow/stage 映射或过宽职责。
