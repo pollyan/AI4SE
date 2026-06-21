@@ -4917,7 +4917,8 @@ export const ArtifactPane: React.FC = () => {
     onMermaidRetry?: Parameters<typeof createMarkdownCodeRenderer>[0]['onMermaidRetry'],
     activeAnchorText?: string | null,
     reportVisualDiagnostics = false,
-    attachVisualDiagnosticAnchors = false
+    attachVisualDiagnosticAnchors = false,
+    deferMermaidRender = false
   ): Components => {
     let mermaidBlockCounter = 0;
     let structuredVisualBlockCounter = 0;
@@ -4977,8 +4978,26 @@ export const ArtifactPane: React.FC = () => {
       onMermaidRetry,
       onMermaidRenderError: reportVisualDiagnostics ? handleMermaidRenderError : undefined,
       onMermaidRenderSuccess: reportVisualDiagnostics ? handleMermaidRenderSuccess : undefined,
-      renderMermaid: attachVisualDiagnosticAnchors
+      renderMermaid: attachVisualDiagnosticAnchors || deferMermaidRender
         ? ({ blockIndex, element }) => {
+          const mermaidElement = deferMermaidRender
+            ? (
+              <div className="my-6 flex w-full justify-center overflow-x-auto">
+                <div className="flex max-w-xl items-center gap-3 rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-200">
+                  <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-sky-300 border-t-transparent" aria-hidden="true" />
+                  <span>
+                    <span className="block font-medium text-sky-100">图表将在产出物稳定后绘制</span>
+                    <span className="mt-1 block text-xs text-sky-200/75">模型仍在输出图表内容，已暂停实时绘制以保持页面响应。</span>
+                  </span>
+                </div>
+              </div>
+            )
+            : element;
+
+          if (!attachVisualDiagnosticAnchors) {
+            return mermaidElement;
+          }
+
           const diagnosticId = buildVisualDiagnosticId('mermaid', blockIndex);
           return (
             <div
@@ -4986,7 +5005,7 @@ export const ArtifactPane: React.FC = () => {
               data-artifact-visual-focused={activeVisualDiagnosticId === diagnosticId ? 'true' : undefined}
               className={getVisualDiagnosticContainerClass(diagnosticId)}
             >
-              {element}
+              {mermaidElement}
             </div>
           );
         }
@@ -5047,7 +5066,8 @@ export const ArtifactPane: React.FC = () => {
     handleMermaidRetry,
     activeCommentAnchorText,
     true,
-    true
+    true,
+    isGenerating
   );
   const readOnlyMarkdownComponents = createArtifactMarkdownComponents();
 

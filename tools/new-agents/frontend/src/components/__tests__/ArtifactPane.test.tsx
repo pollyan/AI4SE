@@ -360,6 +360,18 @@ describe('ArtifactPane Component', () => {
         expect(screen.getByTestId('mermaid')).toBeTruthy();
     });
 
+    it('defers Mermaid rendering while the artifact is still generating', () => {
+        useStore.setState({
+            artifactContent: '```mermaid\ngraph TD\nA-->B\n```',
+            isGenerating: true,
+        });
+
+        render(<ArtifactPane />);
+
+        expect(screen.queryByTestId('mermaid')).toBeNull();
+        expect(screen.getByText('图表将在产出物稳定后绘制')).toBeTruthy();
+    });
+
     it('renders code blocks', () => {
         useStore.setState({ artifactContent: '```python\nprint("hello")\n```' });
         render(<ArtifactPane />);
