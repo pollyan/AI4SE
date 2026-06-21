@@ -13,6 +13,162 @@ NEW_AGENTS_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = Path(__file__).resolve().parents[4]
 WORKFLOW_MANIFEST = NEW_AGENTS_ROOT / "workflow_manifest.json"
 
+FRONTEND_PROMPT_FILES = {
+    ("REQ_REVIEW", "REVIEW"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "req_review"
+        / "review.ts"
+    ),
+    ("REQ_REVIEW", "REPORT"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "req_review"
+        / "report.ts"
+    ),
+    ("TEST_DESIGN", "CLARIFY"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "test_design"
+        / "clarify.ts"
+    ),
+    ("TEST_DESIGN", "CASES"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "test_design"
+        / "cases.ts"
+    ),
+    ("TEST_DESIGN", "DELIVERY"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "test_design"
+        / "delivery.ts"
+    ),
+    ("TEST_DESIGN", "STRATEGY"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "test_design"
+        / "strategy.ts"
+    ),
+    ("INCIDENT_REVIEW", "TIMELINE"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "incident_review"
+        / "timeline.ts"
+    ),
+    ("INCIDENT_REVIEW", "IMPROVEMENT"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "incident_review"
+        / "improvement.ts"
+    ),
+    ("INCIDENT_REVIEW", "ROOT_CAUSE"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "incident_review"
+        / "root_cause.ts"
+    ),
+    ("IDEA_BRAINSTORM", "DEFINE"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "idea_brainstorm"
+        / "define.ts"
+    ),
+    ("IDEA_BRAINSTORM", "DIVERGE"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "idea_brainstorm"
+        / "diverge.ts"
+    ),
+    ("IDEA_BRAINSTORM", "CONVERGE"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "idea_brainstorm"
+        / "converge.ts"
+    ),
+    ("IDEA_BRAINSTORM", "CONCEPT"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "idea_brainstorm"
+        / "concept.ts"
+    ),
+    ("VALUE_DISCOVERY", "ELEVATOR"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "value_discovery"
+        / "elevator.ts"
+    ),
+    ("VALUE_DISCOVERY", "PERSONA"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "value_discovery"
+        / "persona.ts"
+    ),
+    ("VALUE_DISCOVERY", "JOURNEY"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "value_discovery"
+        / "journey.ts"
+    ),
+    ("VALUE_DISCOVERY", "BLUEPRINT"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "value_discovery"
+        / "blueprint.ts"
+    ),
+}
+
 
 def _workflow_manifest_stages() -> dict[str, list[str]]:
     manifest = json.loads(WORKFLOW_MANIFEST.read_text(encoding="utf-8"))
@@ -42,6 +198,16 @@ def test_shared_workflow_manifest_stage_keys_match_required_artifact_contracts()
     }
 
     assert manifest_stage_keys == set(REQUIRED_ARTIFACT_HEADINGS)
+
+
+def test_shared_workflow_manifest_stage_keys_match_frontend_prompt_templates():
+    manifest_stage_keys = {
+        (workflow_id, stage_id)
+        for workflow_id, stage_ids in _workflow_manifest_stages().items()
+        for stage_id in stage_ids
+    }
+
+    assert manifest_stage_keys == set(FRONTEND_PROMPT_FILES)
 
 
 def test_shared_workflow_manifest_declares_alex_to_lisa_handoffs():
@@ -94,110 +260,8 @@ def test_frontend_container_packages_shared_workflow_manifest_for_vite_build():
 
 
 def test_frontend_templates_include_required_structured_visual_contract_examples():
-    prompt_files = {
-        ("REQ_REVIEW", "REVIEW"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "req_review"
-            / "review.ts"
-        ),
-        ("REQ_REVIEW", "REPORT"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "req_review"
-            / "report.ts"
-        ),
-        ("TEST_DESIGN", "CASES"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "test_design"
-            / "cases.ts"
-        ),
-        ("TEST_DESIGN", "DELIVERY"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "test_design"
-            / "delivery.ts"
-        ),
-        ("TEST_DESIGN", "STRATEGY"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "test_design"
-            / "strategy.ts"
-        ),
-        ("INCIDENT_REVIEW", "IMPROVEMENT"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "incident_review"
-            / "improvement.ts"
-        ),
-        ("INCIDENT_REVIEW", "ROOT_CAUSE"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "incident_review"
-            / "root_cause.ts"
-        ),
-        ("IDEA_BRAINSTORM", "CONCEPT"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "idea_brainstorm"
-            / "concept.ts"
-        ),
-        ("VALUE_DISCOVERY", "ELEVATOR"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "value_discovery"
-            / "elevator.ts"
-        ),
-        ("VALUE_DISCOVERY", "JOURNEY"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "value_discovery"
-            / "journey.ts"
-        ),
-        ("VALUE_DISCOVERY", "BLUEPRINT"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "value_discovery"
-            / "blueprint.ts"
-        ),
-    }
-
     for stage_key, visual_types in REQUIRED_ARTIFACT_STRUCTURED_VISUALS.items():
-        template = prompt_files[stage_key].read_text(encoding="utf-8")
+        template = FRONTEND_PROMPT_FILES[stage_key].read_text(encoding="utf-8")
         rendered_template_section = template.split("TEMPLATE = ", maxsplit=1)[1]
 
         for visual_type in visual_types:
@@ -214,93 +278,8 @@ def test_frontend_templates_include_required_structured_visual_contract_examples
 
 
 def test_frontend_templates_include_required_mermaid_diagram_examples():
-    prompt_files = {
-        ("TEST_DESIGN", "CLARIFY"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "test_design"
-            / "clarify.ts"
-        ),
-        ("TEST_DESIGN", "STRATEGY"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "test_design"
-            / "strategy.ts"
-        ),
-        ("REQ_REVIEW", "REPORT"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "req_review"
-            / "report.ts"
-        ),
-        ("INCIDENT_REVIEW", "TIMELINE"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "incident_review"
-            / "timeline.ts"
-        ),
-        ("INCIDENT_REVIEW", "ROOT_CAUSE"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "incident_review"
-            / "root_cause.ts"
-        ),
-        ("INCIDENT_REVIEW", "IMPROVEMENT"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "incident_review"
-            / "improvement.ts"
-        ),
-        ("IDEA_BRAINSTORM", "DEFINE"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "idea_brainstorm"
-            / "define.ts"
-        ),
-        ("IDEA_BRAINSTORM", "CONVERGE"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "idea_brainstorm"
-            / "converge.ts"
-        ),
-        ("VALUE_DISCOVERY", "JOURNEY"): (
-            NEW_AGENTS_ROOT
-            / "frontend"
-            / "src"
-            / "core"
-            / "prompts"
-            / "value_discovery"
-            / "journey.ts"
-        ),
-    }
-
-    assert set(prompt_files) == set(REQUIRED_ARTIFACT_MERMAID_DIAGRAMS)
     for stage_key, diagram_types in REQUIRED_ARTIFACT_MERMAID_DIAGRAMS.items():
-        template = prompt_files[stage_key].read_text(encoding="utf-8")
+        template = FRONTEND_PROMPT_FILES[stage_key].read_text(encoding="utf-8")
 
         assert "mermaid" in template
         for diagram_type in diagram_types:

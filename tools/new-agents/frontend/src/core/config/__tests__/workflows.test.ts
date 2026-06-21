@@ -115,6 +115,17 @@ describe('Workflow Configuration', () => {
         }
     });
 
+    it('should attach prompt descriptions and templates to every runtime workflow stage', () => {
+        for (const workflowId of Object.keys(WORKFLOWS) as WorkflowType[]) {
+            const wf = WORKFLOWS[workflowId];
+
+            for (const stage of wf.stages) {
+                expect(stage.description.trim().length).toBeGreaterThan(100);
+                expect(stage.template.trim().length).toBeGreaterThan(100);
+            }
+        }
+    });
+
     it('should derive every online agent workflow card from runtime workflow definitions', () => {
         const allCards = [
             ...getAgentWorkflows('lisa'),

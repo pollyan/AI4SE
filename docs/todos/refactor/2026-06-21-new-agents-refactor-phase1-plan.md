@@ -96,7 +96,7 @@
 
 阶段 1 拆成三个目标模式执行轮：
 
-1. 目标模式第 1 轮：Workflow 契约漂移可检测闭环。
+1. 目标模式第 1 轮：Workflow 契约漂移可检测闭环。（已完成，2026-06-21）
 2. 目标模式第 2 轮：Handoff 与 typed SSE 协议护栏闭环。
 3. 目标模式第 3 轮：Workspace 状态恢复与承接稳定闭环。
 
@@ -131,7 +131,7 @@
 
 ### TDD 任务
 
-- [ ] **Step 1: 为 prompt/template 映射完整性写失败测试**
+- [x] **Step 1: 为 prompt/template 映射完整性写失败测试**
 
   在 `tools/new-agents/backend/tests/test_workflow_contract_sync.py` 中新增或改造测试，要求每个 manifest stage 都能映射到 prompt/template 文件或 template id。当前可接受的第一步是把现有 prompt file map 提炼成被所有相关测试复用的 helper，避免 structured visual 和 Mermaid 测试各维护一份清单。
 
@@ -143,11 +143,11 @@
 
   Expected before implementation: fail with a clear missing mapping or helper assertion if a stage is not represented.
 
-- [ ] **Step 2: 最小实现 prompt/template 映射护栏**
+- [x] **Step 2: 最小实现 prompt/template 映射护栏**
 
   调整 `test_workflow_contract_sync.py` 的 helper，使每个 `workflow_manifest.json` stage 都必须在 prompt/template 映射中出现。保持 prompt 文本仍在 TypeScript modules 中，不迁移到 JSON。
 
-- [ ] **Step 3: 为前端 workflow 派生关系补充测试**
+- [x] **Step 3: 为前端 workflow 派生关系补充测试**
 
   在 `tools/new-agents/frontend/src/core/config/__tests__/workflows.test.ts` 中补充测试：每个 `WORKFLOWS[workflow].stages` 都有非空 `description`、非空 `template`，并且 slug/agent listing 仍从 manifest 派生。
 
@@ -159,7 +159,7 @@
 
   Expected before implementation: if current code already satisfies this, keep it as a regression lock; if it fails, fix the mapping instead of weakening assertions.
 
-- [ ] **Step 4: 运行第 1 轮验证**
+- [x] **Step 4: 运行第 1 轮验证**
 
   Run:
 
@@ -176,6 +176,16 @@
 - 修改任意 manifest stage 后，如果缺少 prompt/template、artifact headings、visual contract 或 handoff 引用，测试能失败。
 - 不改变 runtime 行为。
 - 不新增 production fallback 或 mock。
+
+### 执行记录
+
+- RED：新增 manifest stage 与前端 prompt/template 映射一致性测试后，`test_shared_workflow_manifest_stage_keys_match_frontend_prompt_templates` 失败，指出 `VALUE_DISCOVERY/PERSONA` 和 `IDEA_BRAINSTORM/DIVERGE` 未进入 contract sync 映射清单。
+- GREEN：补齐统一 `FRONTEND_PROMPT_FILES` 映射，并让 structured visual 与 Mermaid contract tests 复用同一清单。
+- Frontend lock：新增 `WORKFLOWS` 每个 runtime stage 都有非空 `description` 与 `template` 的前端测试。
+- 验证：
+  - `/Users/anhui/Documents/myProgram/AI4SE/.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py -q`
+  - `cd tools/new-agents/frontend && npm run test -- --run src/core/config/__tests__/workflows.test.ts`
+  - `git diff --check`
 
 ## 目标模式第 2 轮：Handoff 与 typed SSE 协议护栏闭环
 
