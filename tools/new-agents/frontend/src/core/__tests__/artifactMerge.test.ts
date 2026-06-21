@@ -3,6 +3,7 @@ import {
     buildConflictMergeBlockLabel,
     buildConflictModificationBlockLabel,
     buildContiguousDiffBlocks,
+    buildAutoMergedInsertionResult,
     replaceFirstLineSequence,
 } from '../artifactMerge';
 import type { LineDiffEntry } from '../artifactDiff';
@@ -59,5 +60,38 @@ describe('artifactMerge helpers', () => {
         ]);
         expect(replaceFirstLineSequence(source, ['missing'], ['X'])).toBe(source);
         expect(replaceFirstLineSequence(source, ['   '], ['X'])).toBe(source);
+    });
+
+    it('auto-merges non-overlapping server and draft insertions', () => {
+        const result = buildAutoMergedInsertionResult(
+            ['# 策略', '', '## 范围', '基础范围'].join('\n'),
+            ['# 策略', '', '服务端补充风险', '## 范围', '基础范围'].join('\n'),
+            ['# 策略', '', '## 范围', '草稿补充验收', '基础范围'].join('\n')
+        );
+
+        expect(result).toEqual({
+            content: ['# 策略', '', '服务端补充风险', '## 范围', '草稿补充验收', '基础范围'].join('\n'),
+            summary: '合并轨迹：自动合并服务端与草稿的非重叠补充',
+        });
+    });
+
+    it('auto-merges server insertions with draft deletions when base lines are unique', () => {
+        const result = buildAutoMergedInsertionResult(
+            ['A', 'B', 'C'].join('\n'),
+            ['A', 'server', 'B', 'C'].join('\n'),
+            ['A', 'C'].join('\n')
+        );
+
+        expect(result?.content).toBe(['A', 'server', 'C'].join('\n'));
+    });
+
+    it('rejects draft deletions when repeated base lines make anchors ambiguous', () => {
+        const result = buildAutoMergedInsertionResult(
+            ['A', 'B', 'A'].join('\n'),
+            ['A', 'server', 'B', 'A'].join('\n'),
+            ['A', 'B'].join('\n')
+        );
+
+        expect(result).toBeNull();
     });
 });

@@ -167,6 +167,45 @@
   - `git diff --check` -> passed
 - 规模变化: `ArtifactPane.tsx` 约从 5103 行降到 5044 行；新增 `artifactMerge.ts` 约 80 行。
 
+### 第 9 轮第二切片
+
+第 9 轮第二切片继续只迁移 `ArtifactPane.tsx` 中不依赖 React state、DOM、Zustand 或 services 的 pure automerge helper，边界限定为“服务端内容与本地草稿的非重叠插入自动合并”。不迁移 review panel、history UI、section lock、editor state 或 collaboration orchestration。
+
+#### TDD 任务
+
+- [x] **Step 1: RED helper tests**
+
+  扩展 `src/core/__tests__/artifactMerge.test.ts`，锁定：
+
+  - 服务端插入和草稿插入不重叠时可自动合并。
+  - base 行唯一时，服务端插入可与草稿删除合并。
+  - base 存在重复非空行且草稿删除会造成锚点歧义时拒绝自动合并。
+
+- [x] **Step 2: move insertion automerge helper**
+
+  将 `collectInsertionSegments`、`collectDraftInsertionSegments`、`mergeUniqueInsertions`、`hasRepeatedNonBlankLines`、`buildAutoMergedInsertionContent` 和 `buildAutoMergedInsertionResult` 迁入 `src/core/artifactMerge.ts`。内部 helper 保持非导出，仅导出组件需要的 `buildAutoMergedInsertionResult` 和结果类型。
+
+- [x] **Step 3: wire `ArtifactPane.tsx`**
+
+  `ArtifactPane.tsx` 从 `artifactMerge.ts` 导入 `buildAutoMergedInsertionResult` 和 `AutoMergedConflictResult`，删除组件内重复实现。冲突检测、用户操作、审计事件和 UI 展示仍保留在组件内。
+
+- [x] **Step 4: run verification**
+
+  ```bash
+  cd tools/new-agents/frontend
+  npm run test -- --run src/core/__tests__/artifactMerge.test.ts src/components/__tests__/ArtifactPane.test.tsx
+  git diff --check
+  ```
+
+#### 第 9 轮第二切片执行记录
+
+- RED: `src/core/__tests__/artifactMerge.test.ts` 首次运行失败，错误为 `buildAutoMergedInsertionResult is not a function`。
+- GREEN: `src/core/artifactMerge.ts` 新增插入自动合并 helper 和 `AutoMergedConflictResult` type；组件改为复用 core helper。
+- 迁移接入: `ArtifactPane.tsx` 删除插入段收集、草稿插入段收集、唯一插入合并、重复行检测和自动合并结果构造逻辑，只保留 higher-level conflict flow。
+- 验证:
+  - `npm run test -- --run src/core/__tests__/artifactMerge.test.ts src/components/__tests__/ArtifactPane.test.tsx` -> `143 passed`
+- 规模变化: `ArtifactPane.tsx` 约从 5046 行降到 4903 行；`artifactMerge.ts` 约从 80 行增至 230 行。
+
 ### 第 8 轮执行记录
 
 - RED: `src/core/__tests__/artifactExport.test.ts` 首次运行失败，错误为 Vite 无法解析 `../artifactExport`。
