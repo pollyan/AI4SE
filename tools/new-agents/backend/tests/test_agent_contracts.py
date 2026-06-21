@@ -1024,6 +1024,61 @@ def test_validate_agent_turn_rejects_incident_review_improvement_missing_action_
         )
 
 
+def test_incident_review_contracts_include_professional_artifact_fields():
+    timeline_fields = REQUIRED_ARTIFACT_HEADINGS[("INCIDENT_REVIEW", "TIMELINE")]
+    root_cause_fields = REQUIRED_ARTIFACT_HEADINGS[("INCIDENT_REVIEW", "ROOT_CAUSE")]
+    improvement_fields = REQUIRED_ARTIFACT_HEADINGS[("INCIDENT_REVIEW", "IMPROVEMENT")]
+
+    for field in [
+        "## 2. 影响量化",
+        "## 3. 事实来源",
+        "## 5. 事实/推测隔离",
+        "## 9. 阶段门禁",
+        "可信度",
+        "阻断性",
+        "状态",
+    ]:
+        assert field in timeline_fields
+    assert REQUIRED_ARTIFACT_MERMAID_DIAGRAMS[("INCIDENT_REVIEW", "TIMELINE")] == [
+        "timeline"
+    ]
+
+    for field in [
+        "### 6.2 根因证据表",
+        "### 6.5 排除项",
+        "### 6.6 未验证原因",
+        "### 6.7 阶段门禁",
+        "证据强度",
+        "置信度",
+        "可行动性",
+    ]:
+        assert field in root_cause_fields
+    assert REQUIRED_ARTIFACT_MERMAID_DIAGRAMS[("INCIDENT_REVIEW", "ROOT_CAUSE")] == [
+        "mindmap"
+    ]
+    assert REQUIRED_ARTIFACT_STRUCTURED_VISUALS[("INCIDENT_REVIEW", "ROOT_CAUSE")] == [
+        "cause-map"
+    ]
+
+    for field in [
+        "#### 7.3 根因覆盖检查",
+        "### 9. 复查计划",
+        "### 10. 遗留风险与风险接受",
+        "### 12. 组织学习",
+        "### 13. 阶段门禁",
+        "复查日期",
+        "覆盖状态",
+        "风险接受人",
+    ]:
+        assert field in improvement_fields
+    assert REQUIRED_ARTIFACT_MERMAID_DIAGRAMS[("INCIDENT_REVIEW", "IMPROVEMENT")] == [
+        "pie"
+    ]
+    assert REQUIRED_ARTIFACT_STRUCTURED_VISUALS[("INCIDENT_REVIEW", "IMPROVEMENT")] == [
+        "action-board"
+    ]
+
+
 @pytest.mark.parametrize(
     ("stage_id", "markdown"),
     [
