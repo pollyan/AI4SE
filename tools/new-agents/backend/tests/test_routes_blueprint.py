@@ -48,3 +48,11 @@ def test_routes_module_delegates_error_response_and_config_guards() -> None:
     assert 'jsonify({"error":' not in source
     assert "系统未配置默认 LLM" not in source
     assert "require_default_llm_config(" in source
+
+
+def test_routes_module_delegates_test_asset_routes() -> None:
+    routes_source = Path(__file__).resolve().parents[1].joinpath("routes.py")
+    source = routes_source.read_text(encoding="utf-8")
+
+    assert "register_test_asset_routes(api_bp)" in source
+    assert "def agent_run_test_assets(" not in source

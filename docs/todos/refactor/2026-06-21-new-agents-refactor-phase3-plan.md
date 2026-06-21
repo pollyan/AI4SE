@@ -54,12 +54,12 @@
 - `/api/agent/runs/<run_id>/test-assets`
 - `/api/agent/runs/<run_id>/test-assets/materialize`
 - `/api/agent/test-assets/<collection_id>`
-- `/api/agent/test-assets/<collection_id>/cases/<case_id>`
-- `/api/agent/test-assets/<collection_id>/issues/<issue_id>/status`
-- `/api/agent/test-assets/<collection_id>/cases/<case_id>/intent-tester`
-- `/api/agent/test-assets/<collection_id>/cases/<case_id>/intent-tester/executions`
-- `/api/agent/test-assets/<collection_id>/cases/<case_id>/intent-tester/results`
-- `/api/agent/test-assets/<collection_id>/points/<test_point>`
+- `/api/agent/test-assets/<collection_id>/test-cases/<case_id>`
+- `/api/agent/test-assets/<collection_id>/issues/<issue_id>`
+- `/api/agent/test-assets/<collection_id>/intent-tester/cases/<case_id>`
+- `/api/agent/test-assets/<collection_id>/intent-tester/cases/<case_id>/execution`
+- `/api/agent/test-assets/<collection_id>/intent-tester/cases/<case_id>/result`
+- `/api/agent/test-assets/<collection_id>/test-points/<test_point>`
 - risk create/update/delete endpoints
 
 ### 文件范围
@@ -72,24 +72,32 @@
 
 ### TDD 任务
 
-- [ ] **Step 1: route split RED**
+- [x] **Step 1: route split RED**
 
   在 `test_routes_blueprint.py` 中新增测试，断言 `routes.py` 不再直接包含 `def agent_run_test_assets`，并且 source 包含 `register_test_asset_routes(api_bp)`。
 
-- [ ] **Step 2: create `routes_test_assets.py`**
+- [x] **Step 2: create `routes_test_assets.py`**
 
   把 test assets endpoint handlers 和对应 error status helpers 移入新文件，提供 `register_test_asset_routes(api_bp)`。所有 decorators 继续挂在传入的 `api_bp` 上，不创建新 blueprint。
 
-- [ ] **Step 3: simplify `routes.py`**
+- [x] **Step 3: simplify `routes.py`**
 
   从 `routes.py` 删除 test assets endpoint 实现和相关 imports，只保留 `from routes_test_assets import register_test_asset_routes` 并在 `api_bp` 创建后调用。
 
-- [ ] **Step 4: run verification**
+- [x] **Step 4: run verification**
 
   ```bash
   /Users/anhui/Documents/myProgram/AI4SE/.venv/bin/python -m pytest tools/new-agents/backend/tests/test_routes_blueprint.py tools/new-agents/backend/tests/test_backend_layering.py tools/new-agents/backend/tests/test_test_assets.py tools/new-agents/backend/tests/test_agent_endpoint.py -q
   git diff --check
   ```
+
+### 执行记录
+
+- RED: `test_routes_module_delegates_test_asset_routes` 先失败，证明 `routes.py` 仍直接承载 test assets endpoint。
+- GREEN: 新增 `routes_test_assets.py`，通过 `register_test_asset_routes(api_bp)` 把原 test assets handlers 注册回同一个 `new_agents_api` blueprint。
+- 验证:
+  - `/Users/anhui/Documents/myProgram/AI4SE/.venv/bin/python -m pytest tools/new-agents/backend/tests/test_routes_blueprint.py tools/new-agents/backend/tests/test_backend_layering.py tools/new-agents/backend/tests/test_test_assets.py tools/new-agents/backend/tests/test_agent_endpoint.py -q` -> `89 passed`
+  - `git diff --check` -> passed
 
 ### 完成标准
 
