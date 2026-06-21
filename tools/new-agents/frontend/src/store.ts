@@ -4,6 +4,13 @@ import { WORKFLOWS } from './core/workflows';
 import { AgentRunSnapshot, AgentRunSnapshotContextSummary, ArtifactAuditEvent, ArtifactComment, ArtifactCommentReply, ArtifactCommentStatus, ArtifactSectionLock, ArtifactVisualDiagnosticInput, ChatState as AppState, ArtifactVersion, Message, WorkflowHandoff, WorkflowType } from './core/types';
 import { getAgentById } from './core/config/agents';
 import { planStageTransitionConfirmation } from './core/agentCore';
+import {
+  isRecord,
+  isWorkflowType,
+  sanitizeAttachments,
+  sanitizeCurrentRunId,
+  sanitizeStageArtifacts,
+} from './core/workspaceState';
 
 // Re-export for compatibility
 export * from './core/types';
@@ -30,39 +37,6 @@ export const getWelcomeMessage = (workflow: WorkflowType): string => {
 
   // Fallback
   return `# 欢迎使用 ${displayTitle}\n\n我们将通过【${workflowName}】流程，共同为您生成相关的产出物文档。`;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  typeof value === 'object' && value !== null
-);
-
-const isWorkflowType = (value: unknown): value is WorkflowType => (
-  typeof value === 'string'
-  && Object.prototype.hasOwnProperty.call(WORKFLOWS, value)
-);
-
-const sanitizeAttachments = (attachments: unknown): Message['attachments'] => {
-  if (!Array.isArray(attachments)) return undefined;
-
-  const sanitizedAttachments = attachments.flatMap((attachment): Message['attachments'] => {
-    if (
-      !isRecord(attachment)
-      || typeof attachment.name !== 'string'
-      || typeof attachment.data !== 'string'
-      || typeof attachment.mimeType !== 'string'
-    ) {
-      return [];
-    }
-    return [{
-      name: attachment.name,
-      data: attachment.data,
-      mimeType: attachment.mimeType,
-    }];
-  });
-
-  return sanitizedAttachments.length > 0
-    ? sanitizedAttachments
-    : undefined;
 };
 
 const sanitizeChatHistory = (chatHistory: unknown): Message[] => {
@@ -94,27 +68,6 @@ const sanitizeChatHistory = (chatHistory: unknown): Message[] => {
     }
     return [sanitizedMessage];
   });
-};
-
-const sanitizeStageArtifacts = (
-  stageArtifacts: unknown,
-  workflow: WorkflowType
-): Record<string, string> => {
-  if (!isRecord(stageArtifacts)) {
-    return {};
-  }
-
-  const workflowStageIds = new Set(
-    WORKFLOWS[workflow].stages.map(stage => stage.id)
-  );
-  const sanitizedArtifacts: Record<string, string> = {};
-  Object.entries(stageArtifacts).forEach(([stageId, content]) => {
-    if (workflowStageIds.has(stageId) && typeof content === 'string') {
-      sanitizedArtifacts[stageId] = content;
-    }
-  });
-
-  return sanitizedArtifacts;
 };
 
 const sanitizeArtifactHistory = (artifactHistory: unknown): ArtifactVersion[] => {
@@ -288,12 +241,6 @@ const sanitizeArtifactAuditEvents = (
     }];
   });
 };
-
-const sanitizeCurrentRunId = (currentRunId: unknown): string | null => (
-  typeof currentRunId === 'string' && currentRunId.trim()
-    ? currentRunId.trim()
-    : null
-);
 
 const getInitialArtifactForStage = (
   workflow: WorkflowType,
