@@ -289,6 +289,62 @@
 
 第 11 轮视第 8/9 轮结果决定是否执行。重点检查 registry adapter、store helper、services 是否仍存在重复 workflow/stage 映射或过宽职责。
 
+### 第 11 轮执行范围
+
+第 11 轮扫描后判断 `workflowRegistry.ts` 和 `workflows.ts` 已经承接 manifest/registry 主线，不需要为了完成轮次继续改 registry。实际收益更明确的边界在 `store.ts`：artifact collaboration state 的 persisted/snapshot sanitizer 仍留在 store 内，和第 10 轮 backend collaboration state 拆分形成前后端对应边界。
+
+本轮一次性拆出 frontend workspace collaboration sanitizer：
+
+- `tools/new-agents/frontend/src/core/workspaceState.ts` 新增并导出 `sanitizeArtifactComments`、`sanitizeArtifactSectionLocks`、`sanitizeArtifactAuditEvents` 和 `sanitizeOptionalArtifactText`。
+- `tools/new-agents/frontend/src/store.ts` 删除本地 comment/reply/status/lock/audit sanitizer 实现，改为导入 workspace helper。
+- 保持 Zustand store、workflow registry、服务 API、URL、SSE 和 UI 行为不变。
+
+### 第 11 轮 TDD 任务
+
+- [x] **Step 1: RED workspace state tests**
+
+  扩展 `src/core/__tests__/workspaceState.test.ts`，验证：
+
+  - artifact comments 只保留当前 workflow 的合法 stage。
+  - comment reply、resolved 状态、anchorText 归一化保持原行为。
+  - section lock 和 audit event 只保留当前 workflow 的合法 stage。
+
+- [x] **Step 2: move sanitizer helpers**
+
+  将 artifact comment reply/status/resolvedAt、optional artifact text、comments/locks/audit events sanitizer 从 `store.ts` 迁入 `core/workspaceState.ts`。
+
+- [x] **Step 3: wire store**
+
+  `store.ts` 导入 workspace helper，继续在 persisted state hydration、run snapshot restore、comment/lock action 中使用相同 sanitizer。
+
+- [x] **Step 4: run verification**
+
+  ```bash
+  cd tools/new-agents/frontend
+  npm run test -- --run \
+    src/core/__tests__/workspaceState.test.ts \
+    src/__tests__/store.test.ts
+
+  npm run test -- --run \
+    src/core/__tests__/workspaceState.test.ts \
+    src/__tests__/store.test.ts \
+    src/services/__tests__/runSnapshotService.test.ts \
+    src/services/__tests__/workflowHandoffService.test.ts \
+    src/components/__tests__/WorkflowDropdown.test.tsx \
+    src/pages/__tests__/WorkflowSelect.test.tsx
+
+  git diff --check
+  ```
+
+### 第 11 轮执行记录
+
+- RED: `workspaceState.test.ts` 新增测试首次运行失败，错误为 `sanitizeArtifactComments is not a function` / `sanitizeArtifactSectionLocks is not a function`。
+- GREEN: `workspaceState.ts` 导出 collaboration sanitizer；`store.ts` 删除重复 sanitizer 并改用 helper。
+- 验证:
+  - `npm run test -- --run src/core/__tests__/workspaceState.test.ts src/__tests__/store.test.ts` -> `48 passed`
+  - `npm run test -- --run src/core/__tests__/workspaceState.test.ts src/__tests__/store.test.ts src/services/__tests__/runSnapshotService.test.ts src/services/__tests__/workflowHandoffService.test.ts src/components/__tests__/WorkflowDropdown.test.tsx src/pages/__tests__/WorkflowSelect.test.tsx` -> `79 passed`
+- 规模变化: `store.ts` 移除约 120 行 sanitizer 逻辑；`workspaceState.ts` 承接 workspace state sanitizer 边界。
+
 ## 第 12 轮：全链路回归与文档收束
 
 最后一轮必须做 completion audit：
