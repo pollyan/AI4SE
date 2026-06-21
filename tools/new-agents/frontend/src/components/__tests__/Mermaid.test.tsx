@@ -77,26 +77,28 @@ describe('Mermaid Component', () => {
         expect(mermaid.render).toHaveBeenCalledTimes(1);
     });
 
-    it('renders mindmaps with a lightweight hierarchy instead of Mermaid runtime', async () => {
-        const chartCode = [
-            'mindmap',
-            '  root((宠物社区问题域))',
-            '    待探索',
-            '      用户痛点',
-            '      目标人群',
-        ].join('\n');
-        const mockOnRenderSuccess = vi.fn();
+    it('does not rerender the same chart when callback identities change', async () => {
+        const chartCode = 'graph TD\nStableStart-->StableEnd';
 
-        render(<Mermaid chart={chartCode} blockIndex={2} onRenderSuccess={mockOnRenderSuccess} />);
+        const firstOnRenderSuccess = vi.fn();
+        const { container, rerender } = render(
+            <Mermaid chart={chartCode} blockIndex={0} onRenderSuccess={firstOnRenderSuccess} />
+        );
 
-        expect(screen.getByText('宠物社区问题域')).toBeTruthy();
-        expect(screen.getByText('待探索')).toBeTruthy();
-        expect(screen.getByText('用户痛点')).toBeTruthy();
-        expect(mermaid.parse).not.toHaveBeenCalled();
-        expect(mermaid.render).not.toHaveBeenCalled();
         await waitFor(() => {
-            expect(mockOnRenderSuccess).toHaveBeenCalledWith(2);
+            expect(container.innerHTML).toContain('mocked-svg');
         });
+        expect(mermaid.render).toHaveBeenCalledTimes(1);
+        expect(firstOnRenderSuccess).toHaveBeenCalledWith(0);
+
+        const nextOnRenderSuccess = vi.fn();
+        rerender(<Mermaid chart={chartCode} blockIndex={0} onRenderSuccess={nextOnRenderSuccess} />);
+
+        await waitFor(() => {
+            expect(container.innerHTML).toContain('mocked-svg');
+        });
+        expect(mermaid.render).toHaveBeenCalledTimes(1);
+        expect(nextOnRenderSuccess).not.toHaveBeenCalled();
     });
 
     it('shows loading animation when generating and encountering parse error (AC6)', async () => {

@@ -761,7 +761,7 @@ export const useStore = create<AppState>()(
           && existingDiagnostic.message === message
           && existingDiagnostic.blockIndex === diagnostic.blockIndex
         ) {
-          return {};
+          return state;
         }
         const nextDiagnostic = {
           ...diagnostic,
@@ -777,7 +777,7 @@ export const useStore = create<AppState>()(
       }),
       clearArtifactVisualDiagnostic: (diagnosticId) => set((state) => {
         if (!state.artifactVisualDiagnostics.some(diagnostic => diagnostic.id === diagnosticId)) {
-          return {};
+          return state;
         }
         return {
           artifactVisualDiagnostics: state.artifactVisualDiagnostics.filter(
@@ -790,7 +790,7 @@ export const useStore = create<AppState>()(
       }),
       clearArtifactVisualDiagnosticsForStage: (stageId) => set((state) => {
         if (!state.artifactVisualDiagnostics.some(diagnostic => diagnostic.stageId === stageId)) {
-          return {};
+          return state;
         }
         return {
           artifactVisualDiagnostics: state.artifactVisualDiagnostics.filter(
@@ -807,7 +807,7 @@ export const useStore = create<AppState>()(
       focusArtifactVisualDiagnostic: (diagnosticId) => set((state) => {
         const id = diagnosticId.trim();
         if (!id || !state.artifactVisualDiagnostics.some(diagnostic => diagnostic.id === id)) {
-          return {};
+          return state;
         }
 
         return {

@@ -48,6 +48,18 @@ describe('Zustand Store', () => {
         expect(useStore.getState().artifactVisualDiagnosticFocusRequest).toBeNull();
     });
 
+    it('should not notify subscribers when clearing a missing artifact visual diagnostic', () => {
+        let notificationCount = 0;
+        const unsubscribe = useStore.subscribe(() => {
+            notificationCount += 1;
+        });
+
+        useStore.getState().clearArtifactVisualDiagnostic('mermaid:CLARIFY:404');
+        unsubscribe();
+
+        expect(notificationCount).toBe(0);
+    });
+
     it('should store the current server run id', () => {
         useStore.getState().setCurrentRunId('run-123');
 
