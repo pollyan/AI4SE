@@ -7,6 +7,7 @@ from agent_contracts import (
     REQUIRED_ARTIFACT_STRUCTURED_VISUALS,
     WORKFLOW_STAGES,
 )
+from workflow_handoffs import HANDOFF_PROMPT_TEMPLATES
 
 
 NEW_AGENTS_ROOT = Path(__file__).resolve().parents[2]
@@ -239,6 +240,13 @@ def test_shared_workflow_manifest_handoffs_reference_known_workflows_and_stages(
         assert handoff["sourceStageId"] in workflow_stages[source_workflow]
         assert handoff["targetStageId"] in workflow_stages[target_workflow]
         assert handoff["targetAgentId"] == manifest["workflows"][target_workflow]["agentId"]
+
+
+def test_shared_workflow_manifest_handoffs_declare_prompt_templates():
+    manifest = _workflow_manifest()
+
+    for handoff in manifest["handoffs"]:
+        assert handoff.get("promptTemplateId") in HANDOFF_PROMPT_TEMPLATES
 
 
 def test_backend_container_packages_shared_workflow_manifest():

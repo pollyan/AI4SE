@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useStore, type Attachment, type ChatState } from '../../store';
+import agentRuntimeEventFixtures from '../../../../contract-fixtures/agent-runtime-events.json';
 
 type TestStreamChunk = {
     chatResponse: string;
@@ -126,6 +127,13 @@ function createDefaultAgentTurnStream(chat = 'ok'): ReadableStream<Uint8Array> {
             stage_action: null,
             warnings: [],
         }),
+        'data: [DONE]',
+    ]);
+}
+
+function createFixtureEventStream(events: unknown[]): ReadableStream<Uint8Array> {
+    return createSSEStream([
+        ...events.map(event => `data: ${JSON.stringify(event)}`),
         'data: [DONE]',
     ]);
 }
@@ -497,6 +505,40 @@ describe('llm.ts', () => {
             await collectStream(generateResponseStream('hello'));
 
             expect(useStore.getState().currentRunId).toBe('run-123');
+        });
+
+        it('应解析共享 typed Agent Runtime SSE fixture 中的成功事件', async () => {
+            const successEvents = agentRuntimeEventFixtures.events.filter(
+                event => event.type !== 'error'
+            );
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createFixtureEventStream(successEvents),
+            });
+
+            const results = await collectStream(generateResponseStream('hello'));
+
+            expect(useStore.getState().currentRunId).toBe('run-fixture-123');
+            expect(results.at(-1)).toMatchObject({
+                chatResponse: '已更新右侧产出物。',
+                newArtifact: expect.stringContaining('# 价值定位分析'),
+                action: 'NEXT_STAGE',
+                hasArtifactUpdate: true,
+            });
+        });
+
+        it('应解析共享 typed Agent Runtime SSE fixture 中的错误事件', async () => {
+            const errorEvent = agentRuntimeEventFixtures.events.find(
+                event => event.type === 'error'
+            );
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createFixtureEventStream([errorEvent]),
+            });
+
+            await expect(collectStream(generateResponseStream('hello')))
+                .rejects
+                .toThrow('CONTRACT_VALIDATION_FAILED: missing required heading');
         });
 
         it('run_started 带 context_truncated warning 时应显示可见上下文截断提示', async () => {

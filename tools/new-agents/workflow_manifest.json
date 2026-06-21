@@ -7,6 +7,7 @@
       "targetWorkflowId": "TEST_DESIGN",
       "targetStageId": "CLARIFY",
       "targetAgentId": "lisa",
+      "promptTemplateId": "source-artifact-handoff",
       "label": "交给 Lisa 做测试设计"
     },
     {
@@ -16,6 +17,7 @@
       "targetWorkflowId": "REQ_REVIEW",
       "targetStageId": "REVIEW",
       "targetAgentId": "lisa",
+      "promptTemplateId": "source-artifact-handoff",
       "label": "交给 Lisa 做需求评审"
     }
   ],

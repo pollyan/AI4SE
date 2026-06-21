@@ -1,0 +1,39 @@
+{
+  "events": [
+    {
+      "type": "run_started",
+      "runId": "run-fixture-123",
+      "warnings": ["context_truncated"]
+    },
+    {
+      "type": "agent_delta",
+      "output": {
+        "chat": "正在整理右侧产出物。",
+        "artifact_update": {
+          "type": "none"
+        },
+        "warnings": []
+      }
+    },
+    {
+      "type": "agent_turn",
+      "output": {
+        "chat": "已更新右侧产出物。",
+        "artifact_update": {
+          "type": "replace",
+          "markdown": "# 价值定位分析\n\n## 产品核心定位\n面向测试工程师的智能测试设计助手。"
+        },
+        "stage_action": {
+          "type": "request_next_stage",
+          "target_stage_id": "PERSONA"
+        },
+        "warnings": []
+      }
+    },
+    {
+      "type": "error",
+      "code": "CONTRACT_VALIDATION_FAILED",
+      "message": "missing required heading"
+    }
+  ]
+}

@@ -1,9 +1,28 @@
 import json
+from pathlib import Path
 
 import pytest
 
 from sse_encoder import encode_sse_done, encode_sse_event
-from sse_schemas import AgentTurnEvent, ErrorEvent, RunStartedEvent
+from sse_schemas import (
+    AgentTurnDeltaEvent,
+    AgentTurnEvent,
+    ErrorEvent,
+    RunStartedEvent,
+)
+
+
+FIXTURE_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "contract-fixtures"
+    / "agent-runtime-events.json"
+)
+SSE_EVENT_MODELS = {
+    "run_started": RunStartedEvent,
+    "agent_delta": AgentTurnDeltaEvent,
+    "agent_turn": AgentTurnEvent,
+    "error": ErrorEvent,
+}
 
 
 def test_encode_error_event_uses_typed_message_contract():
@@ -67,3 +86,15 @@ def test_agent_turn_event_rejects_unknown_top_level_fields():
             },
             "legacy": True,
         })
+
+
+def test_agent_runtime_event_fixture_matches_backend_sse_schema():
+    fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+
+    for payload in fixture["events"]:
+        model = SSE_EVENT_MODELS[payload["type"]]
+        event = model.model_validate(payload)
+        encoded = encode_sse_event(event)
+        encoded_payload = json.loads(encoded.removeprefix("data: ").strip())
+
+        assert encoded_payload == payload

@@ -62,6 +62,7 @@ def test_export_run_handoffs_returns_configured_lisa_targets(app):
     assert "VALUE_DISCOVERY/BLUEPRINT" in first["prompt"]
     assert "TEST_DESIGN/CLARIFY" in first["prompt"]
     assert "AI 测试资产管理平台" in first["prompt"]
+    assert "Alex 产出的需求蓝图" not in first["prompt"]
 
 
 def test_export_run_handoffs_returns_empty_without_required_artifact(app):

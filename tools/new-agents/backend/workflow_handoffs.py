@@ -4,6 +4,13 @@ from workflow_manifest import get_workflow_handoffs
 
 HANDOFF_CONTEXT_MAX_CHARS = 6000
 HANDOFF_TRUNCATION_NOTICE = "\n\n[源产物内容已截断]"
+HANDOFF_PROMPT_TEMPLATES = {
+    "source-artifact-handoff": (
+        "请基于以下上游产物继续工作。"
+        "来源阶段: {sourceWorkflowId}/{sourceStageId}。"
+        "目标阶段: {targetWorkflowId}/{targetStageId}。"
+    ),
+}
 
 
 def export_run_handoffs(run_id: str) -> dict:
@@ -79,13 +86,13 @@ def _build_handoff(handoff: dict, artifact: dict) -> dict:
 
 def _build_handoff_prompt(handoff: dict, source_artifact: str) -> str:
     bounded_artifact = _bounded_source_artifact(source_artifact)
+    template_id = handoff.get("promptTemplateId")
+    template = HANDOFF_PROMPT_TEMPLATES.get(template_id)
+    if template is None:
+        raise ValueError(f"未知 handoff promptTemplateId: {template_id}")
     return "\n\n".join(
         [
-            (
-                "请基于以下 Alex 产出的需求蓝图继续工作。"
-                f"来源阶段: {handoff['sourceWorkflowId']}/{handoff['sourceStageId']}。"
-                f"目标阶段: {handoff['targetWorkflowId']}/{handoff['targetStageId']}。"
-            ),
+            template.format(**handoff),
             bounded_artifact,
         ]
     )
