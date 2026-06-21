@@ -22,3 +22,4 @@
 - `2026-06-21-new-agents-refactor-scan.md`：第一轮 New Agents 智能体重构扫描模板。
 - `2026-06-21-new-agents-refactor-options.md`：第二轮 New Agents 智能体重构方案设计模板。
 - `2026-06-21-new-agents-refactor-phase1-plan.md`：第三轮 New Agents 智能体重构阶段 1 实施计划。
+- `2026-06-21-new-agents-refactor-phase2-plan.md`：New Agents 智能体重构阶段 2 实施计划。
