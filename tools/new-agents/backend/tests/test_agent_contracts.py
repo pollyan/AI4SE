@@ -573,8 +573,53 @@ def test_build_artifact_contract_prompt_includes_required_update_and_headings():
 
     assert "artifact_update.type 必须为 replace" in prompt
     assert "# 需求分析文档" in prompt
-    assert "## 1. 被测系统与边界" in prompt
-    assert "## 4. 隐式需求与非功能性考量" in prompt
+    assert "## 1. 需求事实清单" in prompt
+    assert "## 3. 业务规则与数据状态" in prompt
+    assert "## 8. 阶段门禁" in prompt
+
+
+def test_test_design_contracts_include_professional_artifact_fields():
+    clarify_fields = REQUIRED_ARTIFACT_HEADINGS[("TEST_DESIGN", "CLARIFY")]
+    strategy_fields = REQUIRED_ARTIFACT_HEADINGS[("TEST_DESIGN", "STRATEGY")]
+    cases_fields = REQUIRED_ARTIFACT_HEADINGS[("TEST_DESIGN", "CASES")]
+    delivery_fields = REQUIRED_ARTIFACT_HEADINGS[("TEST_DESIGN", "DELIVERY")]
+
+    for field in [
+        "事实 ID",
+        "证据等级",
+        "阻断性",
+        "责任方",
+        "状态",
+    ]:
+        assert field in clarify_fields
+    for field in [
+        "## 7. 资源与取舍",
+        "## 8. 阶段门禁",
+        "风险 ID",
+        "测试点 ID",
+        "覆盖建议",
+    ]:
+        assert field in strategy_fields
+    for field in [
+        "## 2. 用例设计依据",
+        "## 4. 测试数据与环境",
+        "## 5. 自动化候选",
+        "## 7. 开放问题",
+        "## 8. 阶段门禁",
+        "断言",
+        "执行层级",
+        "自动化建议",
+        "状态",
+    ]:
+        assert field in cases_fields
+    for field in [
+        "## 2. 执行摘要",
+        "## 6. 覆盖地图",
+        "## 7. 开放风险",
+        "## 9. 签署确认",
+        "## 10. 变更记录",
+    ]:
+        assert field in delivery_fields
 
 
 def test_build_artifact_contract_prompt_includes_h1_keyword_requirements():

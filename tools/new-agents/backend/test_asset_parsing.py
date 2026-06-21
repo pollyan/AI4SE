@@ -10,6 +10,12 @@ TEST_CASE_HEADERS = [
     "测试数据",
     "预期结果",
 ]
+OPTIONAL_TEST_CASE_HEADERS = {
+    "断言": "assertion",
+    "执行层级": "executionLayer",
+    "自动化建议": "automationSuggestion",
+    "状态": "status",
+}
 COVERAGE_HEADERS = ["测试点", "优先级", "关联风险", "覆盖用例", "覆盖状态"]
 
 
@@ -145,7 +151,7 @@ def _split_table_row(line: str) -> list[str]:
 
 
 def _map_test_case(row: dict) -> dict:
-    return {
+    mapped = {
         "id": row["ID"],
         "title": row["用例标题"],
         "priority": row["优先级"],
@@ -157,6 +163,10 @@ def _map_test_case(row: dict) -> dict:
         "testData": row["测试数据"],
         "expectedResult": row["预期结果"],
     }
+    for markdown_header, output_field in OPTIONAL_TEST_CASE_HEADERS.items():
+        if markdown_header in row:
+            mapped[output_field] = row[markdown_header]
+    return mapped
 
 
 def _map_coverage(row: dict) -> dict:
@@ -247,19 +257,29 @@ def _normalize_risk(risk: str) -> str | None:
 
 
 def _build_intent_tester_draft(test_case: dict) -> dict:
+    description_lines = [
+        "来源: New Agents Lisa TEST_DESIGN/CASES",
+        f"测试点: {test_case['testPoint']}",
+        f"关联风险: {test_case['risk']}",
+        f"前置条件: {test_case['precondition']}",
+        f"测试数据: {test_case['testData']}",
+        f"预期结果: {test_case['expectedResult']}",
+    ]
+    optional_descriptions = [
+        ("assertion", "断言"),
+        ("executionLayer", "执行层级"),
+        ("automationSuggestion", "自动化建议"),
+        ("status", "状态"),
+    ]
+    for field, label in optional_descriptions:
+        value = test_case.get(field)
+        if isinstance(value, str) and value.strip():
+            description_lines.append(f"{label}: {value}")
+
     return {
         "sourceCaseId": test_case["id"],
         "name": f"{test_case['id']} {test_case['title']}",
-        "description": "\n".join(
-            [
-                "来源: New Agents Lisa TEST_DESIGN/CASES",
-                f"测试点: {test_case['testPoint']}",
-                f"关联风险: {test_case['risk']}",
-                f"前置条件: {test_case['precondition']}",
-                f"测试数据: {test_case['testData']}",
-                f"预期结果: {test_case['expectedResult']}",
-            ]
-        ),
+        "description": "\n".join(description_lines),
         "category": test_case["dimension"],
         "priority": _intent_tester_priority(test_case["priority"]),
         "tags": _intent_tester_tags(test_case),

@@ -6,7 +6,7 @@
 - 输入：`docs/todos/refactor/2026-06-22-new-agents-artifact-professionalization-target.md`
 - 范围：`tools/new-agents/` 全部 workflow/stage artifact
 - 当前状态：设计完成，待后续按 workflow / artifact 进入目标模式切片实现
-- 本轮边界：只新增本文档；不修改运行时代码、prompt/template、backend contract、测试或前端可视化组件
+- 本轮边界：只新增本文档；不修改运行时代码、prompt/template、backend contract、测试或前端可视化组件。该边界仅适用于本轮“扫描与目标状态设计”，不代表后续实施轮禁止必要代码、契约和测试同步变更。
 
 ## Current State Gap Analysis
 
@@ -500,6 +500,18 @@
 
 ## 后续改造建议
 
+### 实施范围原则
+
+后续目标模式实施时，准确目标不是“只改模板文本”，而是“系统性增强当前 workflow 的 artifact 内容、模板、契约和验证”。因此每轮消化一个 workflow 时，应以产出物专业化目标为中心判断修改范围：
+
+- 必须允许修改该 workflow 相关的 prompt/template，因为它是牵引模型输出的主入口。
+- 必须允许同步修改 backend artifact contract、visual contract 和 contract sync tests，否则新模板只停留在提示词层，无法形成稳定护栏。
+- 必须允许修改相关测试、LLM judge 或 E2E evidence，证明产出物质量要求被验证。
+- 如果 artifact 被下游解析、导出或页面消费，必须允许同步修改对应 consumer 和测试。例如 `TEST_DESIGN/CASES` 的表格结构影响测试资产导出时，应同步评估 `tools/new-agents/backend/test_assets.py` 和 `tools/new-agents/backend/tests/test_test_assets.py`。
+- 不允许的是与当前 workflow artifact 专业化无关的架构重构、runtime 协议变更、UI 基础设施大拆分或 agent-specific 分叉。
+
+后续实施轮提示词中的“允许修改范围”应写成开放但有边界的形式：允许修改与当前 workflow artifact 专业化直接相关的文件；如需要越过默认范围，必须在 CGA 中说明必要性、影响和验证方式。
+
 ### Prompt/template 先做
 
 适合先进入 prompt/template 的要求：
@@ -548,5 +560,5 @@
 - 不拆分 `ArtifactPane.tsx`、`store.ts`、`run_persistence.py` 或 Agent Runtime。
 - 不修改 `/api/agent/runs/stream` request/response/SSE 协议。
 - 不新增 agent-specific runtime、transport、state store、SSE/API path 或 bespoke rendering pipeline。
-- 不直接修改 prompt/template、backend contract 或测试。
+- 本设计轮不直接修改 prompt/template、backend contract 或测试；后续实施轮必须按“实施范围原则”允许必要同步修改。
 - 不提交或推送。

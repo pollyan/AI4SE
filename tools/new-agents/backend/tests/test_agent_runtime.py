@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from agent_contracts import AgentTurnOutput, ContractValidationError
@@ -20,39 +22,59 @@ from sse_schemas import AgentTurnDeltaOutput
 
 VALID_CLARIFY_ARTIFACT = """# 需求分析文档
 
-## 1. 被测系统与边界
-内容
+## 文档信息
+| 字段 | 内容 |
+|---|---|
+| Artifact 名称 | 测试需求分析与澄清基线 |
 
-## 2. 系统交互与核心链路
+## 1. 需求事实清单
+| 事实 ID | 需求事实 | 来源 | 证据等级 | 状态 |
+|---|---|---|---|---|
+| F-001 | 用户需要登录功能 | 用户描述 | 用户陈述 | 已确认 |
+
+## 2. 被测系统与边界
+| 类型 | 具体内容 | 测试含义 | 状态 |
+|---|---|---|---|
+| 测试范围 | 登录页面和登录 API | 验证登录主链路 | 已确认 |
+
+## 3. 业务规则与数据状态
+| 规则 ID | 业务规则 | 触发条件 | 边界值/状态流转 | 异常处理 | 验收口径 | 状态 |
+|---|---|---|---|---|---|---|
+| BR-001 | 正确账号密码允许登录 | 用户提交凭证 | 未登录到已登录 | 返回错误提示 | 登录成功进入工作台 | 已确认 |
+
+## 4. 核心链路与异常链路
 ```mermaid
 flowchart TD
-    User["用户"] --> Login["登录入口"]
-    Login --> Auth["认证服务"]
-    Auth --> Session["会话状态"]
+    User["用户"] --> Entry["登录页"]
+    Entry --> Core["认证服务"]
+    Core --> Data["用户库"]
+    Core --> External["风控服务"]
+    Core --> Result["工作台"]
+    Core --> Failure["错误提示"]
 ```
 
-内容
+## 5. 待澄清问题
+| 问题 ID | 问题描述 | 优先级 | 阻断性 | 影响范围 | 当前假设 | 责任方 | 状态 |
+|---|---|---|---|---|---|---|---|
+| Q-001 | 锁定策略是否存在 | P1 | 非阻断 | 异常登录 | 暂按 5 次失败锁定 | 产品 | 待确认 |
 
-## 3. 待澄清与阻断性问题
-内容
+## 6. 隐式质量需求
+| 质量维度 | 需求或假设 | 可验证指标 | 风险 | 状态 |
+|---|---|---|---|---|
+| 安全 | 防止越权登录 | 未授权请求失败 | 账号风险 | AI 假设 |
 
-## 4. 隐式需求与非功能性考量
-内容"""
+## 7. 后续测试设计输入
+| 输入类型 | ID | 内容 | 来源 | 后续用途 |
+|---|---|---|---|---|
+| 风险种子 | R-SEED-001 | 凭证校验失败处理 | BR-001 | 策略阶段 FMEA |
 
-VALID_CLARIFY_ARTIFACT_JSON = (
-    "# 需求分析文档\\n\\n"
-    "## 1. 被测系统与边界\\n内容\\n\\n"
-    "## 2. 系统交互与核心链路\\n"
-    "```mermaid\\n"
-    "flowchart TD\\n"
-    "    User[\\\"用户\\\"] --> Login[\\\"登录入口\\\"]\\n"
-    "    Login --> Auth[\\\"认证服务\\\"]\\n"
-    "    Auth --> Session[\\\"会话状态\\\"]\\n"
-    "```\\n\\n"
-    "内容\\n\\n"
-    "## 3. 待澄清与阻断性问题\\n内容\\n\\n"
-    "## 4. 隐式需求与非功能性考量\\n内容"
-)
+## 8. 阶段门禁
+- [x] 测试范围和不测范围已明确。"""
+
+VALID_CLARIFY_ARTIFACT_JSON = json.dumps(
+    VALID_CLARIFY_ARTIFACT,
+    ensure_ascii=False,
+)[1:-1]
 
 
 class FakeRunResult:
@@ -233,12 +255,16 @@ def test_runtime_raw_json_stream_turn_yields_real_delta_before_final_output(
         f'{VALID_CLARIFY_ARTIFACT_JSON}' + '"},'
         '"stage_action":null,"warnings":[]}'
     )
+    first_chunk_end = len('{"chat":"正在')
+    second_chunk_end = len(
+        '{"chat":"正在梳理需求。",'
+        '"artifact_update":{"type":"replace","markdown":"# 需求分析文档\\n\\n'
+    )
     chunks = [
-        '{"chat":"正在',
-        '梳理需求。","artifact_update":{"type":"replace","markdown":"# 需求分析文档\\n\\n',
-        '## 1. 被测系统与边界\\n内容',
+        final_json[:first_chunk_end],
+        final_json[first_chunk_end:second_chunk_end],
+        final_json[second_chunk_end:],
     ]
-    chunks = [chunks[0], chunks[1], chunks[2], final_json[len("".join(chunks[:3])):]]
     calls = []
 
     def fake_stream_chat_completion_content(**kwargs):

@@ -66,6 +66,18 @@ Mermaid 和结构化可视化的目标是降低理解成本，不是为了堆视
 - 工作流差异优先进入 prompt/template、artifact contract、visualization contract、workflow manifest 和测试。
 - 如果引入新的 artifact 质量要求，必须同步考虑后端 contract、前端 prompt/template、测试和 LLM judge 证据。
 
+### 6. 实施轮以产出物专业化为中心
+
+本文档中的“第一轮目标模式任务提示词”用于只读扫描和目标状态设计，因此限制“不修改运行时代码、prompt/template、contract 或测试”。该限制不能被照搬为后续实施轮的硬边界。
+
+后续进入具体 workflow 实施时，目标应表述为“系统性增强该 workflow 的 artifact 内容、模板、契约和验证”。如果模板变动导致必要的代码、契约、解析或测试同步变更，应当围绕这个目标一并完成。需要限制的是无关架构重构和 runtime/UI 基础设施分叉，而不是粗暴禁止修改代码文件。
+
+后续实施轮的正确边界：
+
+- 允许修改与当前 workflow artifact 专业化直接相关的 prompt/template、backend artifact contract、contract sync tests、prompt tests、E2E/LLM judge evidence。
+- 如果 artifact 被下游解析或导出消费，允许同步修改对应 consumer 和测试，例如 `TEST_DESIGN/CASES` 影响测试资产导出时，可同步调整 `test_assets.py` 和相关测试。
+- 不允许借 artifact 专业化之名重构 Agent Runtime、`/api/agent/runs/stream`、共享 store、ArtifactPane 或新增 agent-specific runtime/API/SSE/UI pipeline。
+
 ## 目标模式任务提示词
 
 后续启动 Codex 目标模式时，可以直接使用以下提示词。
@@ -127,6 +139,8 @@ docs/todos/refactor/YYYY-MM-DD-new-agents-artifact-professionalization-design.md
 - 不新增前端可视化组件。
 - 不创建 agent-specific runtime、transport、state store、SSE/API path 或 bespoke rendering pipeline。
 - 所有建议必须能在后续目标模式中拆成按 workflow、按 artifact 的薄切片。
+
+注意：以上限制只适用于本提示词对应的“第一轮扫描和目标状态设计”。后续实施轮不得照搬“不修改运行时代码 / 不直接改 prompt/template / 不直接改 backend contract”，而应按“实施轮以产出物专业化为中心”的边界，允许必要的代码、契约、测试和文档同步改动。
 
 输出风格：
 - 用中文写。
