@@ -29,7 +29,10 @@ export const buildSystemPrompt = (config: {
         ? `stage_action 只表示“请求用户确认进入下一阶段”，不会自动切换阶段；不要在同一轮生成下一阶段产出物，artifact_update 继续返回当前阶段的完整产出物。用户点击前端确认控件后，系统才会切换阶段并自动触发下一阶段生成。`
         : '当前已经是最后阶段，不存在下一阶段产出物生成。';
 
-    const persona = PERSONAS[agentId] || PERSONAS['lisa'];
+    const persona = PERSONAS[agentId];
+    if (!persona) {
+        throw new Error(`Unknown agent persona: ${agentId}`);
+    }
 
     // P0-8: 处理上下文注入 — 提升截断阈值到 5000，并添加明确的截断标记
     let previousArtifactsContext = '';

@@ -355,6 +355,32 @@
 - 如 prompt/artifact quality 或用户可见 workflow 行为被改动，再跑 Lisa/Alex 浏览器 E2E 或 LLM judge。
 - 明确记录没有新增 agent-specific runtime、transport、store、SSE/API path 或 bespoke rendering pipeline。
 
+### 第 12 轮执行范围
+
+第 12 轮不再做新的模块拆分，执行全链路回归与完成审计：
+
+- backend 全量 `tools/new-agents/backend/tests`。
+- frontend 全量 Vitest。
+- 生产代码架构约束搜索：旧 `/api/chat/stream`、hidden fallback/fake success、agent-specific runtime/API/SSE/store/rendering pipeline。
+- 文档执行记录检查。
+
+### 第 12 轮执行记录
+
+- backend 聚合回归:
+  - `/private/tmp/ai4se-new-agents-backend-venv/bin/python -m pytest tools/new-agents/backend/tests` -> `343 passed, 1 skipped`
+  - skipped 项为 `test_agent_real_smoke.py`，真实模型 smoke 需要显式环境配置。
+- frontend 聚合回归:
+  - `npm run test -- --run` -> `648 passed`
+- 架构约束审计:
+  - 生产代码未命中旧 `/api/chat/stream`，保留 `/api/agent/runs/stream` 主链路。
+  - 生产代码中的 `lisa/alex` 命中主要来自 agent/persona 配置、URL 参数显示、Lisa test assets 能力；未新增 Lisa/Alex 专属 runtime、transport、store、SSE/API path 或 bespoke rendering pipeline。
+  - `fallback` 生产命中包括 React `Suspense fallback` 和 Mermaid sanitizer 的显式 repair fallback，不属于生产 mock 或 fake success。
+  - 审计发现 `buildSystemPrompt` 对未知 `agentId` 静默回退 Lisa persona，已按 TDD 改为显式抛错，避免 hidden fallback。
+- prompt fallback 修复:
+  - RED: `buildSystemPrompt.test.ts` 新增未知 agentId 测试，失败为未抛错。
+  - GREEN: `buildSystemPrompt.ts` 移除 Lisa persona 默认回退，对未知 agentId 抛出 `Unknown agent persona: ...`。
+  - 验证: `npm run test -- --run src/core/prompts/__tests__/buildSystemPrompt.test.ts` -> `22 passed`
+
 ## 每轮 Summary 要求
 
 每轮完成后必须向用户报告：

@@ -43,6 +43,15 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('Alex');
     });
 
+    it('rejects unknown agent ids instead of silently falling back to Lisa', () => {
+        expect(() => buildSystemPrompt({
+            agentId: 'unknown-agent',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            currentArtifact: '',
+        })).toThrow('Unknown agent persona: unknown-agent');
+    });
+
     it('includes correct stage info', () => {
         const prompt = buildSystemPrompt({
             agentId: 'lisa',
