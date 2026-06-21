@@ -1201,6 +1201,59 @@ def test_validate_agent_turn_rejects_value_discovery_journey_missing_stage_field
         )
 
 
+def test_value_discovery_contracts_include_professional_artifact_fields():
+    elevator_fields = REQUIRED_ARTIFACT_HEADINGS[("VALUE_DISCOVERY", "ELEVATOR")]
+    persona_fields = REQUIRED_ARTIFACT_HEADINGS[("VALUE_DISCOVERY", "PERSONA")]
+    journey_fields = REQUIRED_ARTIFACT_HEADINGS[("VALUE_DISCOVERY", "JOURNEY")]
+    blueprint_fields = REQUIRED_ARTIFACT_HEADINGS[("VALUE_DISCOVERY", "BLUEPRINT")]
+
+    for field in [
+        "## 定位摘要",
+        "## 价值结构图",
+        "## 痛点证据",
+        "## 未验证假设",
+        "## 阶段门禁",
+        "证据等级",
+        "验证动作",
+        "状态",
+    ]:
+        assert field in elevator_fields
+    assert REQUIRED_ARTIFACT_MERMAID_DIAGRAMS[("VALUE_DISCOVERY", "ELEVATOR")] == [
+        "flowchart"
+    ]
+
+    for field in [
+        "## 画像摘要",
+        "## 行为与场景",
+        "## 决策链",
+        "## 痛点证据",
+        "## 反画像",
+        "## 阶段门禁",
+        "证据等级",
+        "验证状态",
+    ]:
+        assert field in persona_fields
+
+    for field in [
+        "## 机会评分",
+        "## 验证实验",
+        "## 阶段门禁",
+        "验证状态",
+        "成功指标",
+    ]:
+        assert field in journey_fields
+
+    for field in [
+        "## 7. 非功能需求",
+        "## 8. 验收标准",
+        "## 12. 阶段门禁",
+        "可测试性等级",
+        "owner",
+        "状态",
+    ]:
+        assert field in blueprint_fields
+
+
 def test_validate_agent_turn_rejects_blueprint_without_h1_heading():
     output = AgentTurnOutput.model_validate(
         {

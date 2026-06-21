@@ -1139,6 +1139,58 @@ describe('llm.ts', () => {
         });
 
         it('VALUE_DISCOVERY/ELEVATOR 应走结构化 Agent Runtime', async () => {
+            const artifact = [
+                '# 价值定位分析',
+                '',
+                '## 定位摘要',
+                '| 字段 | 内容 |',
+                '| --- | --- |',
+                '| Artifact 名称 | 价值定位诊断报告 |',
+                '| 一句话定位 | 开发者变现工具 |',
+                '',
+                '## 价值结构图',
+                '```mermaid',
+                'flowchart TD',
+                '    User["目标用户"] --> Pain["核心痛点"]',
+                '    Pain --> Value["产品独特价值"]',
+                '    Value --> Business["商业验证"]',
+                '```',
+                '',
+                '## 目标用户与场景',
+                '| 维度 | 描述 | 证据等级 | 状态 |',
+                '| --- | --- | --- | --- |',
+                '| 主要用户群体 | 独立开发者 | 用户陈述 | 已确认 |',
+                '',
+                '## 痛点证据',
+                '| 痛点 ID | 痛点描述 | 发生场景 | 影响程度 | 证据等级 | 验证动作 | 状态 |',
+                '| --- | --- | --- | --- | --- | --- | --- |',
+                '| PAIN-001 | 变现路径不清晰 | 发布产品后 | 收入机会损失 | 用户陈述 | 访谈验证 | 待验证 |',
+                '',
+                '## 差异化价值',
+                '| 维度 | 我们 | 现有方案/竞品 | 差异化证据 | 状态 |',
+                '| --- | --- | --- | --- | --- |',
+                '| 核心优势 | 一站式变现指导 | 分散教程 | 合理推断 | AI 假设 |',
+                '',
+                '## 商业可行性',
+                '| 维度 | 判断 | 依据 | 验证动作 | 状态 |',
+                '| --- | --- | --- | --- | --- |',
+                '| 用户付费意愿 | 待验证 | 痛点明确 | 定价访谈 | 待验证 |',
+                '',
+                '```ai4se-visual',
+                '{"type":"score-matrix","columns":["评估维度","评分","依据","下一步验证"],"rows":[{"评估维度":"痛点强度","评分":4,"依据":"用户频繁遇到","下一步验证":"访谈 5 位用户"}]}',
+                '```',
+                '',
+                '## 未验证假设',
+                '| 假设 ID | 假设内容 | 影响范围 | 验证动作 | 责任方/验证人 | 状态 |',
+                '| --- | --- | --- | --- | --- | --- |',
+                '| H-001 | 用户愿意付费 | 商业模式 | 定价访谈 | 产品 | 待验证 |',
+                '',
+                '## 60 秒电梯演讲',
+                '> 开发者变现工具帮助独立开发者找到更清晰的产品变现路径。',
+                '',
+                '## 阶段门禁',
+                '- [x] 目标用户、核心场景和核心痛点已明确。',
+            ].join('\n');
             resetStore({
                 workflow: 'VALUE_DISCOVERY',
                 stageIndex: 0,
@@ -1150,7 +1202,18 @@ describe('llm.ts', () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
                 body: createSSEStream([
-                    'data: {"type":"agent_turn","output":{"chat":"已更新价值定位。","artifact_update":{"type":"replace","markdown":"# 价值定位分析\\n\\n## 产品核心定位\\n开发者变现工具\\n\\n## 目标用户概览\\n独立开发者"},"stage_action":null,"warnings":[]}}',
+                    `data: ${JSON.stringify({
+                        type: 'agent_turn',
+                        output: {
+                            chat: '已更新价值定位。',
+                            artifact_update: {
+                                type: 'replace',
+                                markdown: artifact,
+                            },
+                            stage_action: null,
+                            warnings: [],
+                        },
+                    })}`,
                     'data: [DONE]',
                 ]),
             });
@@ -1170,7 +1233,7 @@ describe('llm.ts', () => {
             });
             expect(results.at(-1)).toMatchObject({
                 chatResponse: '已更新价值定位。',
-                newArtifact: '# 价值定位分析\n\n## 产品核心定位\n开发者变现工具\n\n## 目标用户概览\n独立开发者',
+                newArtifact: artifact,
                 hasArtifactUpdate: true,
             });
         });
