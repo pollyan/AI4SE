@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
+import mermaid from 'mermaid';
 import { sanitizeMermaidCode, aggressiveSanitize } from '../utils/mermaidSanitizer';
 
 describe('Mermaid Sanitizer', () => {
+    const validateMermaid = async (code: string) => {
+        mermaid.initialize({ startOnLoad: false, securityLevel: 'loose' });
+        await mermaid.parse(code);
+    };
+
     describe('sanitizeMermaidCode', () => {
         it('should remove HTML line break tags', () => {
             const input = 'A[Hello<br>World] --> B[Test<br/>Cases]';
@@ -72,6 +78,30 @@ describe('Mermaid Sanitizer', () => {
                 '    block_1["测试分层"]',
                 '        e2e["端到端验证"]',
             ].join('\n'));
+        });
+
+        it('should split collapsed quadrantChart axis directives into parseable lines', async () => {
+            const input = [
+                'quadrantChart',
+                'title 登录功能风险矩阵 x-axis 低发生概率 --> 高发生概率',
+                'y-axis 低严重度 --> 高严重度',
+                'quadrant-1 高优先级',
+                'quadrant-2 重点关注',
+                '登录失败锁定: [0.7, 0.8]',
+            ].join('\n');
+
+            await validateMermaid(sanitizeMermaidCode(input));
+        });
+
+        it('should normalize LLM block-beta group syntax into parseable block nodes', async () => {
+            const input = [
+                'block-beta',
+                '    columns 1 block["UI 端到端测试 (10%)"] {',
+                '      login["登录主链路"]',
+                '    }',
+            ].join('\n');
+
+            await validateMermaid(sanitizeMermaidCode(input));
         });
     });
 
