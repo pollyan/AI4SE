@@ -1,6 +1,14 @@
 from workflow_contract_registry import (
+    get_required_artifact_headings,
+    get_required_artifact_mermaid_diagrams,
+    get_required_artifact_structured_visuals,
     get_stage_prompt_template_ids,
     get_workflow_stages,
+)
+from agent_contracts import (
+    REQUIRED_ARTIFACT_HEADINGS,
+    REQUIRED_ARTIFACT_MERMAID_DIAGRAMS,
+    REQUIRED_ARTIFACT_STRUCTURED_VISUALS,
 )
 
 
@@ -25,3 +33,12 @@ def test_registry_requires_prompt_template_id_for_every_stage():
         for workflow_id, stage_ids in get_workflow_stages().items()
         for stage_id in stage_ids
     }
+
+
+def test_registry_artifact_contract_metadata_matches_backend_contracts():
+    assert get_required_artifact_headings() == REQUIRED_ARTIFACT_HEADINGS
+
+
+def test_registry_visual_contract_metadata_matches_backend_contracts():
+    assert get_required_artifact_mermaid_diagrams() == REQUIRED_ARTIFACT_MERMAID_DIAGRAMS
+    assert get_required_artifact_structured_visuals() == REQUIRED_ARTIFACT_STRUCTURED_VISUALS

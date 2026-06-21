@@ -37,22 +37,97 @@
         {
           "id": "CLARIFY",
           "name": "需求澄清",
-          "promptTemplateId": "test_design.clarify"
+          "promptTemplateId": "test_design.clarify",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 需求分析文档",
+              "## 1. 被测系统与边界",
+              "## 2. 系统交互与核心链路",
+              "## 3. 待澄清与阻断性问题",
+              "## 4. 隐式需求与非功能性考量"
+            ]
+          },
+          "visualContract": {
+            "requiredMermaidDiagrams": [
+              "flowchart"
+            ]
+          }
         },
         {
           "id": "STRATEGY",
           "name": "策略制定",
-          "promptTemplateId": "test_design.strategy"
+          "promptTemplateId": "test_design.strategy",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 测试策略蓝图",
+              "## 1. 质量目标",
+              "## 2. 风险分析",
+              "### 2.1 风险矩阵",
+              "### 2.2 风险明细",
+              "## 3. 测试技术选型",
+              "## 4. 测试分层策略",
+              "### 4.1 测试金字塔",
+              "### 4.2 分层明细",
+              "## 5. 测试点拓扑"
+            ]
+          },
+          "visualContract": {
+            "requiredMermaidDiagrams": [
+              "quadrantChart",
+              "block-beta"
+            ],
+            "requiredStructuredVisuals": [
+              "risk-board"
+            ]
+          }
         },
         {
           "id": "CASES",
           "name": "用例编写",
-          "promptTemplateId": "test_design.cases"
+          "promptTemplateId": "test_design.cases",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 测试用例集",
+              "## 1. 用例统计",
+              "## 2. 用例清单",
+              "## 3. 测试点覆盖追溯",
+              "ID",
+              "用例标题",
+              "优先级",
+              "测试维度",
+              "关联测试点",
+              "关联风险",
+              "前置条件",
+              "操作步骤",
+              "测试数据",
+              "预期结果"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "traceability-matrix"
+            ]
+          }
         },
         {
           "id": "DELIVERY",
           "name": "文档交付",
-          "promptTemplateId": "test_design.delivery"
+          "promptTemplateId": "test_design.delivery",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 测试设计文档",
+              "## 文档信息",
+              "## 第一部分：需求分析",
+              "## 第二部分：测试策略",
+              "## 第三部分：测试用例",
+              "## 附录：验收标准"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "coverage-map"
+            ]
+          }
         }
       ],
       "onboarding": {
@@ -80,12 +155,53 @@
         {
           "id": "REVIEW",
           "name": "深度评审",
-          "promptTemplateId": "req_review.review"
+          "promptTemplateId": "req_review.review",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 需求评审问题清单",
+              "## 评审概要",
+              "## 问题统计",
+              "问题描述",
+              "优先级",
+              "所属需求章节",
+              "影响范围",
+              "证据/依据",
+              "建议",
+              "责任方/确认人"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "score-matrix"
+            ]
+          }
         },
         {
           "id": "REPORT",
           "name": "评审报告",
-          "promptTemplateId": "req_review.report"
+          "promptTemplateId": "req_review.report",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 需求评审报告",
+              "## 评审结论",
+              "### 判定标准",
+              "## 评审信息",
+              "## 问题统计",
+              "## 待确认问题清单",
+              "### P0 阻塞性问题",
+              "### P1 重要问题",
+              "### P2 优化建议",
+              "## 评审意见签署"
+            ]
+          },
+          "visualContract": {
+            "requiredMermaidDiagrams": [
+              "pie"
+            ],
+            "requiredStructuredVisuals": [
+              "priority-board"
+            ]
+          }
         }
       ],
       "onboarding": {
@@ -113,17 +229,83 @@
         {
           "id": "TIMELINE",
           "name": "事件还原",
-          "promptTemplateId": "incident_review.timeline"
+          "promptTemplateId": "incident_review.timeline",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 故障复盘报告",
+              "## 1. 事件概要",
+              "## 2. 事件时间线",
+              "## 3. 事实摘要",
+              "## 4. 参与人员",
+              "## 5. 待补充信息"
+            ]
+          },
+          "visualContract": {
+            "requiredMermaidDiagrams": [
+              "timeline"
+            ]
+          }
         },
         {
           "id": "ROOT_CAUSE",
           "name": "根因分析",
-          "promptTemplateId": "incident_review.root_cause"
+          "promptTemplateId": "incident_review.root_cause",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 故障复盘报告",
+              "## 6. 根因分析",
+              "### 6.1 5-Why 分析链",
+              "### 6.2 原因鱼骨图",
+              "### 6.3 根因结论"
+            ]
+          },
+          "visualContract": {
+            "requiredMermaidDiagrams": [
+              "mindmap"
+            ],
+            "requiredStructuredVisuals": [
+              "cause-map"
+            ]
+          }
         },
         {
           "id": "IMPROVEMENT",
           "name": "改进报告",
-          "promptTemplateId": "incident_review.improvement"
+          "promptTemplateId": "incident_review.improvement",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 故障复盘报告",
+              "## 报告信息",
+              "## 第一部分：事件还原",
+              "## 第二部分：根因分析",
+              "## 第三部分：改进措施",
+              "### 7. 改进措施",
+              "#### 7.1 改进优先级分布",
+              "#### 7.2 改进行动清单",
+              "### 8. 防复发检查清单",
+              "### 9. 经验教训",
+              "## 签署确认",
+              "ID",
+              "改进措施",
+              "类型",
+              "对应根因",
+              "建议负责人",
+              "完成期限",
+              "验证方式",
+              "验收标准",
+              "优先级",
+              "当前状态",
+              "追踪机制"
+            ]
+          },
+          "visualContract": {
+            "requiredMermaidDiagrams": [
+              "pie"
+            ],
+            "requiredStructuredVisuals": [
+              "action-board"
+            ]
+          }
         }
       ],
       "onboarding": {
@@ -151,22 +333,83 @@
         {
           "id": "DEFINE",
           "name": "问题域分析",
-          "promptTemplateId": "idea_brainstorm.define"
+          "promptTemplateId": "idea_brainstorm.define",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 问题域分析",
+              "## 问题假设陈述",
+              "## 目标用户画像",
+              "## 问题域全景",
+              "## 问题-用户-场景匹配",
+              "## 约束与边界",
+              "## 反向验证（风险思考）"
+            ]
+          },
+          "visualContract": {
+            "requiredMermaidDiagrams": [
+              "mindmap"
+            ]
+          }
         },
         {
           "id": "DIVERGE",
           "name": "创意发散",
-          "promptTemplateId": "idea_brainstorm.diverge"
+          "promptTemplateId": "idea_brainstorm.diverge",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 创意发散",
+              "## 发散全景图",
+              "## 创意卡片库"
+            ]
+          }
         },
         {
           "id": "CONVERGE",
           "name": "收敛聚焦",
-          "promptTemplateId": "idea_brainstorm.converge"
+          "promptTemplateId": "idea_brainstorm.converge",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 收敛聚焦",
+              "## 决策矩阵",
+              "## ICE 评估表",
+              "## 整合演进路径（如果触发合并）",
+              "评分口径",
+              "影响力",
+              "信心",
+              "实现难度",
+              "ICE得分",
+              "淘汰理由",
+              "推荐方案",
+              "下一步验证",
+              "合并逻辑"
+            ]
+          },
+          "visualContract": {
+            "requiredMermaidDiagrams": [
+              "quadrantChart"
+            ]
+          }
         },
         {
           "id": "CONCEPT",
           "name": "概念输出",
-          "promptTemplateId": "idea_brainstorm.concept"
+          "promptTemplateId": "idea_brainstorm.concept",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 产品概念简报",
+              "## 定位声明",
+              "## Lean Canvas 产品画布",
+              "## MVP 功能分布",
+              "## 核心增长漏斗",
+              "## Pre-mortem 风险分析",
+              "## 下一步行动"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "mvp-map"
+            ]
+          }
         }
       ],
       "onboarding": {
@@ -194,22 +437,107 @@
         {
           "id": "ELEVATOR",
           "name": "价值定位",
-          "promptTemplateId": "value_discovery.elevator"
+          "promptTemplateId": "value_discovery.elevator",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 价值定位分析",
+              "## 产品核心定位",
+              "## 目标用户概览",
+              "## 独特价值主张",
+              "## 商业可行性初判",
+              "60 秒电梯演讲"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "score-matrix"
+            ]
+          }
         },
         {
           "id": "PERSONA",
           "name": "用户画像",
-          "promptTemplateId": "value_discovery.persona"
+          "promptTemplateId": "value_discovery.persona",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 用户画像分析",
+              "## 主要用户画像",
+              "### 画像 1",
+              "#### 基础特征",
+              "#### 行为特征",
+              "#### 需求动机",
+              "#### 核心痛点",
+              "## 用户优先级排序"
+            ]
+          }
         },
         {
           "id": "JOURNEY",
           "name": "用户旅程",
-          "promptTemplateId": "value_discovery.journey"
+          "promptTemplateId": "value_discovery.journey",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 用户旅程分析",
+              "## 用户旅程地图",
+              "## 关键阶段详细分析",
+              "## 痛点优先级排序",
+              "高优先级痛点",
+              "中等优先级痛点",
+              "低优先级痛点",
+              "## 核心机会点",
+              "主要机会点",
+              "### 产品切入策略",
+              "旅程阶段",
+              "触点渠道",
+              "用户任务",
+              "情绪评分",
+              "关键痛点",
+              "现有方案不足",
+              "机会假设",
+              "成功指标"
+            ]
+          },
+          "visualContract": {
+            "requiredMermaidDiagrams": [
+              "journey"
+            ],
+            "requiredStructuredVisuals": [
+              "journey-map"
+            ]
+          }
         },
         {
           "id": "BLUEPRINT",
           "name": "需求蓝图",
-          "promptTemplateId": "value_discovery.blueprint"
+          "promptTemplateId": "value_discovery.blueprint",
+          "artifactContract": {
+            "requiredHeadings": [
+              "需求蓝图",
+              "## 文档信息",
+              "## 1. 产品概述",
+              "### 1.1 产品愿景",
+              "### 1.2 定位声明",
+              "### 1.3 核心价值",
+              "## 2. 目标用户（摘要）",
+              "## 3. 核心需求",
+              "### 功能架构",
+              "### P0 需求（核心功能，必须实现）",
+              "### P1 需求（重要功能，应该实现）",
+              "### P2 需求（增值功能，可以实现）",
+              "## 4. 核心流程",
+              "### 主流程图",
+              "## 5. 成功指标",
+              "## 6. MVP 范围与计划",
+              "### MVP 包含功能",
+              "### 迭代路线",
+              "## 7. 风险评估"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "roadmap"
+            ]
+          }
         }
       ],
       "onboarding": {

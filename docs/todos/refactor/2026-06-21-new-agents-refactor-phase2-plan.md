@@ -71,7 +71,7 @@
 阶段 2 拆成两个目标模式执行轮：
 
 1. 目标模式第 4 轮：共享 workflow contract registry 最小闭环。（已完成，2026-06-21）
-2. 目标模式第 5 轮：Artifact 与 visual contract 注册表闭环。
+2. 目标模式第 5 轮：Artifact 与 visual contract 注册表闭环。（已完成，2026-06-21）
 
 每一轮都必须：
 
@@ -165,11 +165,11 @@
 
 ### TDD 任务
 
-- [ ] **Step 1: registry contract metadata RED**
+- [x] **Step 1: registry contract metadata RED**
 
   在 registry tests 中断言每个 manifest stage 都有 artifact headings metadata，且 optional visual metadata 与 Python required constants 一致。
 
-- [ ] **Step 2: manifest 增加 artifactContract / visualContract metadata**
+- [x] **Step 2: manifest 增加 artifactContract / visualContract metadata**
 
   为每个 stage 加入最小 metadata：
 
@@ -177,11 +177,11 @@
   - `visualContract.requiredMermaidDiagrams`
   - `visualContract.requiredStructuredVisuals`
 
-- [ ] **Step 3: 后端 contract 读取入口**
+- [x] **Step 3: 后端 contract 读取入口**
 
   让 `agent_contracts.py` 的 `WORKFLOW_STAGES`、`REQUIRED_ARTIFACT_HEADINGS`、`REQUIRED_ARTIFACT_MERMAID_DIAGRAMS`、`REQUIRED_ARTIFACT_STRUCTURED_VISUALS` 可由 registry-derived 数据构建，或至少由 tests 证明 manifest metadata 与现有 constants 完全一致后再切换读取源。
 
-- [ ] **Step 4: 运行验证**
+- [x] **Step 4: 运行验证**
 
   ```bash
   /Users/anhui/Documents/myProgram/AI4SE/.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_registry.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_contracts.py -q
@@ -194,3 +194,22 @@
 - 需要 visual contract 的 stage 若缺少 Mermaid 或 structured visual metadata，测试失败。
 - Artifact validation 行为不变。
 - 不改变 prompt 文本、runtime API、SSE 或数据库 schema。
+
+### 执行记录
+
+- RED：registry tests 引入 `get_required_artifact_headings`、`get_required_artifact_mermaid_diagrams`、`get_required_artifact_structured_visuals` 后失败，确认 registry 尚未提供 artifact/visual metadata 入口。
+- GREEN：从现有 `agent_contracts.py` 常量机械生成 manifest `artifactContract.requiredHeadings` 和 `visualContract` metadata，避免手抄错误。
+- GREEN：`workflow_contract_registry.py` 新增 artifact headings、Mermaid diagrams、structured visuals 读取函数；测试证明 manifest-derived metadata 与现有后端 contract constants 完全一致。
+- 行为边界：本轮没有改 artifact validation 逻辑、prompt 文本、runtime API、SSE event shape 或数据库 schema。
+- 验证：
+  - `/Users/anhui/Documents/myProgram/AI4SE/.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_registry.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_contracts.py -q`：94 passed。
+
+## 阶段 2 末尾验证
+
+阶段 2 聚合验证已完成于 2026-06-21：
+
+- `/Users/anhui/Documents/myProgram/AI4SE/.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_registry.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_request_schemas.py tools/new-agents/backend/tests/test_agent_contracts.py -q`：119 passed。
+- `cd tools/new-agents/frontend && npm run test -- --run src/core/config/__tests__/workflows.test.ts`：13 passed。
+- `git diff --check`：通过。
+
+本阶段未修改 prompt 文本、runtime API、SSE event shape、artifact validation 逻辑、数据库 schema 或用户可见 workflow 行为，因此未运行浏览器 E2E 与 LLM judge。
