@@ -20,6 +20,7 @@ import {
     fetchIntentTesterExecutionDetail,
     fetchLatestIntentTesterExecution,
 } from '../services/intentTesterExecutionService';
+import { deriveTestAssetQualityStatus } from '../core/testAssetQuality';
 import type {
     IntentTesterDraft,
     IntentTesterExecutionDetail,
@@ -815,6 +816,7 @@ export function TestAssetsPage() {
         return null;
     }
 
+    const assetQuality = deriveTestAssetQualityStatus(collection);
     const allCasesSelected = selectedCaseIds.length === paginatedTestCases.length && paginatedTestCases.length > 0;
 
     return (
@@ -842,6 +844,40 @@ export function TestAssetsPage() {
                         {successMessage}
                     </div>
                 )}
+
+                <section className={clsx(
+                    "rounded-lg border px-5 py-4",
+                    assetQuality.status === 'blocked'
+                        ? "border-amber-500/30 bg-amber-500/10"
+                        : assetQuality.status === 'attention'
+                            ? "border-blue-500/30 bg-blue-500/10"
+                            : "border-emerald-500/30 bg-emerald-500/10"
+                )}>
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <div className="text-xs font-semibold uppercase text-slate-300">质量状态</div>
+                            <div className="mt-1 text-2xl font-bold text-white">{assetQuality.label}</div>
+                            <p className="mt-2 text-sm text-slate-300">{assetQuality.summary}</p>
+                        </div>
+                        <div className="max-w-xl text-sm text-slate-200">
+                            {assetQuality.nextAction}
+                        </div>
+                    </div>
+                    {(assetQuality.blockingItems.length > 0 || assetQuality.attentionItems.length > 0) && (
+                        <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
+                            {assetQuality.blockingItems.map(item => (
+                                <span key={item} className="rounded bg-amber-500/15 px-2.5 py-1 text-amber-100">
+                                    {item}
+                                </span>
+                            ))}
+                            {assetQuality.attentionItems.map(item => (
+                                <span key={item} className="rounded bg-blue-500/15 px-2.5 py-1 text-blue-100">
+                                    {item}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                </section>
 
                 <section className="grid gap-3 md:grid-cols-4">
                     <div className="rounded-lg border border-[#1e293b] bg-[#111827] p-4">

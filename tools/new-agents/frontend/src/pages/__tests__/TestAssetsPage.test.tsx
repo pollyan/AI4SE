@@ -440,6 +440,11 @@ describe('TestAssetsPage', () => {
         expect(await screen.findByText('Lisa 测试资产中心')).toBeTruthy();
         expect(fetchTestAssetCollection).toHaveBeenCalledWith(7);
         expect(screen.getByText('覆盖率 50%')).toBeTruthy();
+        expect(screen.getByText('质量状态')).toBeTruthy();
+        expect(screen.getByText('需修复')).toBeTruthy();
+        expect(screen.getByText('1 个资产问题待处理')).toBeTruthy();
+        expect(screen.getByText('1 个测试点未覆盖')).toBeTruthy();
+        expect(screen.getByText(/先处理阻断项/)).toBeTruthy();
         expect(screen.getByText('用户登录成功')).toBeTruthy();
         expect(screen.getByText('用户登录失败提示错误')).toBeTruthy();
         expect(screen.getByText('覆盖追溯引用了不存在的测试用例 TC-999')).toBeTruthy();
@@ -755,6 +760,8 @@ describe('TestAssetsPage', () => {
         });
         const issue = screen.getByTestId('asset-issue-5');
         expect(within(issue).getByText('已确认')).toBeTruthy();
+        expect(screen.queryByText('1 个资产问题待处理')).toBeNull();
+        expect(screen.getByText('1 个测试点未覆盖')).toBeTruthy();
     });
 
     it('edits a test point and refreshes derived coverage and risk matrix', async () => {

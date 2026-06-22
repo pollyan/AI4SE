@@ -724,6 +724,10 @@ describe('Header Component', () => {
         expect(screen.getByText('覆盖追溯引用了不存在的测试用例 TC-999')).toBeTruthy();
         expect(screen.getByText('TC-999')).toBeTruthy();
         expect(screen.getByText('登录异常链路')).toBeTruthy();
+        expect(screen.getByText('质量状态')).toBeTruthy();
+        expect(screen.getByText('需修复')).toBeTruthy();
+        expect(screen.getByText('1 个资产问题待处理')).toBeTruthy();
+        expect(screen.getByText(/先处理阻断项/)).toBeTruthy();
     });
 
     it('triages Lisa test asset quality issue status locally', async () => {

@@ -10,6 +10,7 @@ import { fetchObservabilitySummary } from '../services/observabilityService';
 import { importIntentTesterDraft } from '../services/intentTesterImportService';
 import { checkDefaultLlmConfig } from '../services/configService';
 import { buildObservabilityAlerts } from '../core/observabilityAlerts';
+import { deriveTestAssetQualityStatus } from '../core/testAssetQuality';
 import type { AgentRunListItem, AgentRunSnapshotContextSummary, ObservabilitySummary, TestAssetCase, TestAssetCollection, TestAssetIssueStatus, WorkflowType } from '../store';
 
 const RUN_LIST_PAGE_SIZE = 20;
@@ -520,6 +521,15 @@ export const Header: React.FC = () => {
       (issueStatuses[getIssueKey(issue, index)] || issue.status) === 'pending'
     )).length
     : 0;
+  const testAssetQuality = testAssetCollection
+    ? deriveTestAssetQualityStatus({
+      ...testAssetCollection,
+      assetIssues: testAssetCollection.assetIssues.map((issue, index) => ({
+        ...issue,
+        status: issueStatuses[getIssueKey(issue, index)] || issue.status,
+      })),
+    })
+    : null;
 
   return (
     <>
@@ -1089,6 +1099,41 @@ export const Header: React.FC = () => {
               )}
               {!isLoadingTestAssets && testAssetCollection && (
                 <div className="space-y-5">
+                  {testAssetQuality && (
+                    <section className={clsx(
+                      "rounded-lg border px-4 py-3",
+                      testAssetQuality.status === 'blocked'
+                        ? "border-amber-500/30 bg-amber-500/10"
+                        : testAssetQuality.status === 'attention'
+                          ? "border-blue-500/30 bg-blue-500/10"
+                          : "border-emerald-500/30 bg-emerald-500/10"
+                    )}>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold uppercase text-slate-300">质量状态</div>
+                          <div className="mt-1 text-lg font-bold text-white">{testAssetQuality.label}</div>
+                        </div>
+                        <div className="text-right text-xs text-slate-300">
+                          <div>{testAssetQuality.summary}</div>
+                          <div className="mt-1">{testAssetQuality.nextAction}</div>
+                        </div>
+                      </div>
+                      {(testAssetQuality.blockingItems.length > 0 || testAssetQuality.attentionItems.length > 0) && (
+                        <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold">
+                          {testAssetQuality.blockingItems.map(item => (
+                            <span key={item} className="rounded bg-amber-500/15 px-2 py-1 text-amber-100">
+                              {item}
+                            </span>
+                          ))}
+                          {testAssetQuality.attentionItems.map(item => (
+                            <span key={item} className="rounded bg-blue-500/15 px-2 py-1 text-blue-100">
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  )}
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div className="rounded-lg border border-[#1e293b] bg-[#0f1623] p-4">
                       <div className="text-xs text-slate-500">覆盖率</div>

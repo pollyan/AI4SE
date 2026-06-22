@@ -67,7 +67,7 @@
 | E01 | Workflow 入口 preview | 改造现有功能 | 体验 | S | P0 | 已消化：每个在线 workflow 展示适用/不适用、输入要求、预期产物和样例输入 |
 | E02 | 阶段缺失信息清单 | 深化现有功能 | 专业内容 | S | P0 | 已消化：共享 artifact quality summary 派生缺失信息项，chat 和 artifact 审阅区都能标明缺失项、阻断性和用户下一步 |
 | E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | P0 | 已消化：共享 ArtifactPane 审阅面板展示 headings、visual、stage gate、专业字段和现有 visual diagnostic 的通过/失败/警告；2026-06-23 已合流到 DeepSeek 结构化输出最新基线 |
-| E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 测试点、风险、用例 issue 可修复、确认、追踪并影响资产质量状态 |
+| E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 已消化：Header 测试资产弹层和资产中心共享 Lisa 资产质量状态，基于待处理 issue、测试点覆盖和风险处置派生可交付/需关注/需修复，并随 issue 确认、测试点校准和风险处置更新 |
 | E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
 | E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 支持继续、复制为新 run、按 workflow/质量筛选、预览当前 artifact |
 | E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入 |
@@ -106,7 +106,7 @@
 
 目标: 1-2 周内明显提升专业感和产出可信度。
 
-包含: E04。E01 已在 2026-06-23 workflow 入口 preview milestone 中消化；E02 已在 2026-06-23 阶段缺失信息清单 milestone 中消化；E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化。
+包含: 暂无剩余 P0 快速专业化切片。E01 已在 2026-06-23 workflow 入口 preview milestone 中消化；E02 已在 2026-06-23 阶段缺失信息清单 milestone 中消化；E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化；E04 已在 2026-06-23 Lisa 测试资产质量状态 milestone 中消化。
 
 暂不做:
 
@@ -183,7 +183,8 @@
 
 - 涉及模块: `test_assets.py`、`routes_test_assets.py`、`testAssetService.ts`、`Header.tsx`。
 - 需要同步: TEST_DESIGN/CASES artifact contract、资产 issue schema、前端资产 modal。
-- 完成定义: 测试点、风险、用例 issue 可处理并持久化质量状态。
+- 完成定义: 已在 2026-06-23 本轮消化。Header 测试资产弹层和资产中心页面复用共享 `testAssetQuality` 派生层，基于 `assetIssues`、`testPoints`、`riskMatrix` 和 coverage 字段显示“需修复 / 需关注 / 可交付”质量状态；用户确认/忽略 issue、校准测试点覆盖、处置风险后，质量状态基于持久化资产字段同步变化。
+- 验证记录: 新增 `testAssetQuality.ts` 纯函数测试，并扩展 `Header` 与 `TestAssetsPage` 组件测试；本轮验证 `npm run test -- --run src/core/__tests__/testAssetQuality.test.ts src/components/__tests__/Header.test.tsx src/pages/__tests__/TestAssetsPage.test.tsx`、`npm run lint` 和 `git diff --check` 通过。
 - 不纳入: 新增 intent-tester 联动或自动执行。
 
 ### 5. 历史会话复用增强
