@@ -417,11 +417,22 @@ export type ObservabilitySummary = {
     recentTurns: ObservabilityTurn[];
 };
 
+export interface ArtifactContract {
+    requiredHeadings: string[];
+}
+
+export interface VisualContract {
+    requiredMermaidDiagrams?: string[];
+    requiredStructuredVisuals?: string[];
+}
+
 export interface WorkflowStage {
     id: string;
     name: string;
     description: string;
     template?: string;
+    artifactContract?: ArtifactContract;
+    visualContract?: VisualContract;
 }
 
 export interface OnboardingConfig {

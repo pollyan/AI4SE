@@ -66,7 +66,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | E01 | Workflow 入口 preview | 改造现有功能 | 体验 | S | P0 | 已消化：每个在线 workflow 展示适用/不适用、输入要求、预期产物和样例输入 |
 | E02 | 阶段缺失信息清单 | 深化现有功能 | 专业内容 | S | P0 | chat 和 artifact 都能标明缺失项、阻断性和用户下一步 |
-| E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | P0 | 展示 headings、visual、stage gate、专业字段通过/失败/警告 |
+| E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | P0 | 已消化：共享 ArtifactPane 审阅面板展示 headings、visual、stage gate、专业字段和现有 visual diagnostic 的通过/失败/警告 |
 | E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 测试点、风险、用例 issue 可修复、确认、追踪并影响资产质量状态 |
 | E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
 | E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 支持继续、复制为新 run、按 workflow/质量筛选、预览当前 artifact |
@@ -161,7 +161,8 @@
 
 - 涉及模块: `ArtifactPane.tsx`、`StructuredVisual.tsx`、`agent_contracts.py`、`workflow_contract_registry.py`、相关 tests。
 - 需要同步: manifest artifact/visual contract、前端诊断展示、后端 contract helper。
-- 完成定义: 当前阶段 artifact 能展示必填标题、可视化、阶段门禁、专业字段的通过/失败/警告。
+- 完成定义: 已在 2026-06-23 本轮消化。当前阶段 artifact 可在共享 `ArtifactPane` 审阅面板中展示必填标题、可视化、阶段门禁、专业字段和现有 visual diagnostic 的通过/失败/警告；可定位的 Mermaid / structured visual 错误继续复用现有 visual diagnostic focus action。
+- 验证记录: 新增 `artifactQuality.ts` 纯函数测试和 `ArtifactPane` 组件测试；保留后端 manifest artifact contract registry 基线。
 - 不纳入: 自动修复全文。
 
 ### 2. Workflow 入口专业 preview
