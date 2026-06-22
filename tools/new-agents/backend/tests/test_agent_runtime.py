@@ -21,7 +21,10 @@ from agent_runtime import (
     resolve_structured_output_capability,
 )
 from sse_schemas import AgentTurnDeltaOutput
-from test_artifact_data_renderers import VALID_STRATEGY_ARTIFACT_DATA
+from test_artifact_data_renderers import (
+    VALID_CASES_ARTIFACT_DATA,
+    VALID_STRATEGY_ARTIFACT_DATA,
+)
 
 VALID_CLARIFY_ARTIFACT = """# 需求分析文档
 
@@ -417,6 +420,65 @@ def test_strategy_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite()
 
     assert "artifact_data" in prompt
     assert "risks.0.rpn" in prompt
+    assert "不要输出 Markdown 文档" in prompt
+    assert "Mermaid 代码块或表格" in prompt
+    assert "artifact_update.type 必须为 replace" not in prompt
+
+
+def test_parse_agent_turn_output_text_renders_cases_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "我已生成可执行测试用例集，请确认右侧内容。",
+            "artifact_data": VALID_CASES_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "DELIVERY",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CASES",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 测试用例集")
+    assert '"type": "traceability-matrix"' in output.artifact_update.markdown
+    assert output.stage_action is not None
+    assert output.stage_action.target_stage_id == "DELIVERY"
+
+
+def test_cases_structured_output_instruction_requests_artifact_data_not_markdown():
+    instruction = build_structured_output_instruction(
+        "TEST_DESIGN",
+        "CASES",
+    )
+
+    assert "artifact_data" in instruction
+    assert "case_groups" in instruction
+    assert "coverage_trace" in instruction
+    assert "traceability-matrix" in instruction
+    assert "stage_action" in instruction
+    assert '"target_stage_id": "DELIVERY"' in instruction
+    assert "不要输出完整 Markdown" in instruction
+    assert "artifact_update.markdown" not in instruction
+
+
+def test_cases_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
+    prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        ValueError("coverage_trace.0.covered_cases contains unknown case id TC-404"),
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CASES",
+    )
+
+    assert "artifact_data" in prompt
+    assert "coverage_trace.0.covered_cases" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "Mermaid 代码块或表格" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt

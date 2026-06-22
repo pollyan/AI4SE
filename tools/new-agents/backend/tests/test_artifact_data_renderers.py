@@ -3,10 +3,12 @@ from pydantic import ValidationError
 
 from agent_contracts import validate_agent_turn
 from artifact_data_renderers import (
+    CasesArtifactData,
     ClarifyArtifactData,
     StrategyArtifactData,
     render_agent_turn_from_artifact_data,
 )
+from test_asset_parsing import parse_lisa_test_asset_markdown
 
 VALID_CLARIFY_ARTIFACT_DATA = {
     "document_info": {
@@ -212,6 +214,132 @@ VALID_STRATEGY_ARTIFACT_DATA = {
     ],
 }
 
+VALID_CASES_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "登录功能测试用例集",
+        "workflow": "TEST_DESIGN",
+        "stage": "CASES",
+        "status": "可进入交付汇总",
+    },
+    "case_statistics": {
+        "total": 2,
+        "p0_count": 1,
+        "p1_count": 1,
+        "p2_count": 0,
+    },
+    "design_bases": [
+        {
+            "basis_id": "BASIS-001",
+            "source_type": "测试点",
+            "source_id": "TP-001",
+            "basis": "错误凭证必须被拒绝且不能创建登录会话",
+            "case_direction": "异常与边界值",
+        }
+    ],
+    "case_groups": [
+        {
+            "dimension": "正向功能验证",
+            "cases": [
+                {
+                    "case_id": "TC-001",
+                    "title": "用户使用正确密码登录成功",
+                    "priority": "P0",
+                    "dimension": "正向功能验证",
+                    "test_point": "登录主链路",
+                    "risk": "R-LOGIN-001",
+                    "precondition": "用户已注册且账号可用",
+                    "steps": "1. 打开登录页 2. 输入正确账号密码 3. 点击登录",
+                    "test_data": "user@example.com / 正确密码",
+                    "expected_result": "跳转到工作台",
+                    "assertion": "工作台 URL、用户昵称和登录态均正确",
+                    "execution_layer": "E2E",
+                    "automation_suggestion": "优先自动化",
+                    "status": "可执行",
+                }
+            ],
+        },
+        {
+            "dimension": "异常与边界值",
+            "cases": [
+                {
+                    "case_id": "TC-002",
+                    "title": "密码错误时提示失败",
+                    "priority": "P1",
+                    "dimension": "异常与边界值",
+                    "test_point": "登录错误处理",
+                    "risk": "R-LOGIN-002",
+                    "precondition": "用户已注册且账号未锁定",
+                    "steps": "1. 输入正确账号 2. 输入错误密码 3. 点击登录",
+                    "test_data": "user@example.com / 错误密码",
+                    "expected_result": "显示密码错误提示",
+                    "assertion": "错误提示文案出现且不会创建登录会话",
+                    "execution_layer": "E2E",
+                    "automation_suggestion": "可自动化",
+                    "status": "可执行",
+                }
+            ],
+        },
+    ],
+    "test_data_environments": [
+        {
+            "data_id": "DATA-001",
+            "type": "测试账号",
+            "content": "已注册普通用户账号",
+            "preparation": "测试环境预置",
+            "related_cases": "TC-001, TC-002",
+            "status": "已具备",
+        }
+    ],
+    "automation_candidates": [
+        {
+            "candidate_id": "AUTO-001",
+            "case_id": "TC-001",
+            "recommended_layer": "E2E",
+            "value": "核心登录链路高频回归",
+            "prerequisite": "稳定测试账号和浏览器环境",
+            "risk_or_limit": "需要隔离登录态",
+            "status": "推荐",
+        }
+    ],
+    "coverage_trace": [
+        {
+            "test_point": "登录主链路",
+            "priority": "P0",
+            "risk": "R-LOGIN-001",
+            "covered_cases": ["TC-001"],
+            "status": "已覆盖",
+        },
+        {
+            "test_point": "登录错误处理",
+            "priority": "P1",
+            "risk": "R-LOGIN-002",
+            "covered_cases": ["TC-002"],
+            "status": "部分覆盖",
+        },
+    ],
+    "open_questions": [
+        {
+            "question_id": "CASE-Q-001",
+            "question": "连续错误密码后是否锁定账号",
+            "related": "TC-002 / 登录错误处理",
+            "priority": "P1",
+            "blocking": "非阻断",
+            "owner": "产品",
+            "status": "待确认",
+        }
+    ],
+    "stage_gate": [
+        {
+            "checked": True,
+            "item": "所有 P0 测试点都有至少一条用例覆盖",
+        },
+        {
+            "checked": True,
+            "item": "每条用例都有测试数据、预期结果和断言",
+        },
+    ],
+}
+
 
 def test_clarify_artifact_data_rejects_blank_required_values():
     invalid = {
@@ -341,3 +469,68 @@ def test_render_strategy_artifact_data_is_deterministic_and_contract_valid():
         )
         == first
     )
+
+
+def test_cases_artifact_data_rejects_inconsistent_statistics():
+    invalid = {
+        **VALID_CASES_ARTIFACT_DATA,
+        "case_statistics": {
+            "total": 99,
+            "p0_count": 1,
+            "p1_count": 1,
+            "p2_count": 0,
+        },
+    }
+
+    with pytest.raises(ValidationError, match="case_statistics"):
+        CasesArtifactData.model_validate(invalid)
+
+
+def test_cases_artifact_data_rejects_unknown_coverage_case_reference():
+    invalid = {
+        **VALID_CASES_ARTIFACT_DATA,
+        "coverage_trace": [
+            {
+                **VALID_CASES_ARTIFACT_DATA["coverage_trace"][0],
+                "covered_cases": ["TC-404"],
+            }
+        ],
+    }
+
+    with pytest.raises(ValidationError, match="coverage_trace"):
+        CasesArtifactData.model_validate(invalid)
+
+
+def test_render_cases_artifact_data_is_contract_valid_and_asset_parseable():
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已生成可执行测试用例集，请确认右侧内容。",
+            "artifact_data": VALID_CASES_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "DELIVERY",
+            },
+            "warnings": [],
+        },
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CASES",
+    )
+
+    assert output is not None
+    assert output.artifact_update.markdown is not None
+    assert "# 测试用例集" in output.artifact_update.markdown
+    assert "```ai4se-visual" in output.artifact_update.markdown
+    assert '"type": "traceability-matrix"' in output.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            output,
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CASES",
+        )
+        == output
+    )
+
+    parsed = parse_lisa_test_asset_markdown(output.artifact_update.markdown)
+    assert [case["id"] for case in parsed["testCases"]] == ["TC-001", "TC-002"]
+    assert parsed["coverageSummary"]["totalTestCases"] == 2
+    assert parsed["riskMatrix"][0]["risk"] == "R-LOGIN-001"

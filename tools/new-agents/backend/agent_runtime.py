@@ -162,11 +162,45 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
+CASES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮已经生成哪些用例、覆盖了哪些测试点、哪些环境或数据仍需确认。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "...", "workflow": "TEST_DESIGN", "stage": "CASES", "status": "..."},
+    "case_statistics": {"total": 2, "p0_count": 1, "p1_count": 1, "p2_count": 0},
+    "design_bases": [{"basis_id": "BASIS-001", "source_type": "质量目标/风险/测试点/业务规则", "source_id": "TP-001", "basis": "...", "case_direction": "正向/异常/边界/安全/性能"}],
+    "case_groups": [{"dimension": "正向功能验证", "cases": [{"case_id": "TC-001", "title": "...", "priority": "P0", "dimension": "正向功能验证", "test_point": "TP-001 登录主链路", "risk": "R-001", "precondition": "...", "steps": "1. ... 2. ...", "test_data": "...", "expected_result": "...", "assertion": "...", "execution_layer": "单元/集成/E2E/探索", "automation_suggestion": "优先自动化/可自动化/暂不自动化", "status": "草稿/待确认/可执行/需补环境"}]}],
+    "test_data_environments": [{"data_id": "DATA-001", "type": "测试账号/业务数据/配置/第三方依赖/环境", "content": "...", "preparation": "人工准备/脚本构造/mock/现网只读", "related_cases": "TC-001", "status": "已具备/待准备/需确认"}],
+    "automation_candidates": [{"candidate_id": "AUTO-001", "case_id": "TC-001", "recommended_layer": "单元/集成/E2E", "value": "...", "prerequisite": "...", "risk_or_limit": "...", "status": "推荐/暂缓/不建议"}],
+    "coverage_trace": [{"test_point": "登录主链路", "priority": "P0", "risk": "R-001", "covered_cases": ["TC-001"], "status": "已覆盖/部分覆盖/未覆盖"}],
+    "open_questions": [{"question_id": "CASE-Q-001", "question": "...", "related": "TC-001 / TP-001", "priority": "P1", "blocking": "阻断/非阻断", "owner": "产品/研发/测试/用户确认", "status": "待确认/已确认"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "DELIVERY"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；case_statistics 必须与 case_groups 中的用例总数和 P0/P1/P2 计数一致；coverage_trace.covered_cases 只能引用已存在的 case_id。不要输出完整 Markdown、Mermaid 代码块、traceability-matrix JSON 代码块或表格，后端会负责确定性渲染右侧测试用例集和 ai4se-visual traceability-matrix。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
 
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in {
         ("TEST_DESIGN", "CLARIFY"),
         ("TEST_DESIGN", "STRATEGY"),
+        ("TEST_DESIGN", "CASES"),
     }
 
 
@@ -178,6 +212,8 @@ def build_structured_output_instruction(
         return ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
         return STRATEGY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CASES"):
+        return CASES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
 
 

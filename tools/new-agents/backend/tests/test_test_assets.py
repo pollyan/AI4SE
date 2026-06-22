@@ -8,8 +8,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 os.environ["FLASK_TESTING"] = "1"
 
 from app import create_app
+from artifact_data_renderers import render_agent_turn_from_artifact_data
 from models import db
 from run_persistence import create_agent_run, record_artifact_version
+from test_artifact_data_renderers import VALID_CASES_ARTIFACT_DATA
 from test_assets import (
     create_lisa_test_asset_risk,
     delete_lisa_test_asset_risk,
@@ -25,7 +27,6 @@ from test_assets import (
     update_lisa_test_case_asset,
     update_lisa_test_point_asset,
 )
-
 
 CASES_MARKDOWN = """# 测试用例集
 
@@ -223,11 +224,57 @@ def test_export_lisa_test_assets_parses_cases_and_coverage(app):
     assert assets["intentTesterDrafts"][1]["priority"] == 2
 
 
+def test_export_lisa_test_assets_accepts_cases_artifact_data_renderer_output(app):
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已生成可执行测试用例集，请确认右侧内容。",
+            "artifact_data": VALID_CASES_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "DELIVERY",
+            },
+            "warnings": [],
+        },
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CASES",
+    )
+    assert output is not None
+    assert output.artifact_update.markdown is not None
+
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CASES")
+        record_artifact_version(run.id, "CASES", output.artifact_update.markdown)
+
+        assets = export_lisa_test_assets(run.id)
+
+    assert [case["id"] for case in assets["testCases"]] == ["TC-001", "TC-002"]
+    assert assets["coverageSummary"]["totalTestCases"] == 2
+    assert assets["coverageTrace"] == [
+        {
+            "testPoint": "登录主链路",
+            "priority": "P0",
+            "risk": "R-LOGIN-001",
+            "testCases": ["TC-001"],
+            "status": "已覆盖",
+        },
+        {
+            "testPoint": "登录错误处理",
+            "priority": "P1",
+            "risk": "R-LOGIN-002",
+            "testCases": ["TC-002"],
+            "status": "部分覆盖",
+        },
+    ]
+    assert assets["riskMatrix"][0]["risk"] == "R-LOGIN-001"
+
+
 def test_export_lisa_test_assets_reports_latest_source_artifact_version(app):
     with app.app_context():
         run = create_agent_run("TEST_DESIGN", "lisa", "CASES")
         record_artifact_version(run.id, "CASES", CASES_MARKDOWN)
-        record_artifact_version(run.id, "CASES", CASES_MARKDOWN.replace("TC-001", "TC-101"))
+        record_artifact_version(
+            run.id, "CASES", CASES_MARKDOWN.replace("TC-001", "TC-101")
+        )
 
         assets = export_lisa_test_assets(run.id)
 
@@ -389,7 +436,9 @@ def test_materialize_lisa_test_assets_refreshes_from_latest_artifact_version(app
         run = create_agent_run("TEST_DESIGN", "lisa", "CASES")
         record_artifact_version(run.id, "CASES", CASES_MARKDOWN)
         first = materialize_lisa_test_assets(run.id)
-        record_artifact_version(run.id, "CASES", CASES_MARKDOWN.replace("TC-001", "TC-101"))
+        record_artifact_version(
+            run.id, "CASES", CASES_MARKDOWN.replace("TC-001", "TC-101")
+        )
 
         refreshed = materialize_lisa_test_assets(run.id)
 
@@ -574,7 +623,9 @@ def test_intent_tester_mapping_is_removed_when_source_case_disappears(app):
                 "intentTesterCaseName": "TC-001 用户使用正确密码登录成功",
             },
         )
-        record_artifact_version(run.id, "CASES", CASES_MARKDOWN.replace("TC-001", "TC-101"))
+        record_artifact_version(
+            run.id, "CASES", CASES_MARKDOWN.replace("TC-001", "TC-101")
+        )
 
         refreshed = materialize_lisa_test_assets(run.id)
 
@@ -615,7 +666,9 @@ def test_lisa_test_asset_risks_include_stable_id_and_manual_flag(app):
 
         collection = materialize_lisa_test_assets(run.id)
 
-    risk = next(item for item in collection["riskMatrix"] if item["risk"] == "R-LOGIN-001")
+    risk = next(
+        item for item in collection["riskMatrix"] if item["risk"] == "R-LOGIN-001"
+    )
     assert isinstance(risk["id"], int)
     assert risk["id"] > 0
     assert risk["isManual"] is False
@@ -669,9 +722,7 @@ def test_update_lisa_test_case_asset_creates_new_case_version(app):
     assert updated["title"] == "用户登录成功后进入项目首页"
     assert updated["priority"] == "P1"
     assert updated["versionNumber"] == 2
-    test_case = next(
-        item for item in reloaded["testCases"] if item["id"] == "TC-001"
-    )
+    test_case = next(item for item in reloaded["testCases"] if item["id"] == "TC-001")
     assert [version["versionNumber"] for version in test_case["versions"]] == [1, 2]
     assert test_case["versions"][0]["title"] == "用户使用正确密码登录成功"
     assert test_case["versions"][1]["title"] == "用户登录成功后进入项目首页"
@@ -705,7 +756,9 @@ def test_update_lisa_test_point_asset_persists_point_and_rebuilds_risk_matrix(ap
     assert reloaded["coverageSummary"]["coveredTestPoints"] == 2
     assert reloaded["coverageSummary"]["partiallyCoveredTestPoints"] == 0
     assert reloaded["coverageSummary"]["coverageRate"] == 100.0
-    risk = next(item for item in reloaded["riskMatrix"] if item["risk"] == "R-LOGIN-LOCK")
+    risk = next(
+        item for item in reloaded["riskMatrix"] if item["risk"] == "R-LOGIN-LOCK"
+    )
     assert risk["id"] > 0
     assert risk["isManual"] is False
     assert risk["testCases"] == ["TC-002"]
@@ -753,7 +806,9 @@ def test_update_lisa_test_asset_risk_lifecycle_persists_status_owner_note(app):
     assert updated["status"] == "mitigating"
     assert updated["owner"] == "QA 张三"
     assert updated["note"] == "补充锁定场景"
-    risk = next(item for item in reloaded["riskMatrix"] if item["risk"] == "R-LOGIN-002")
+    risk = next(
+        item for item in reloaded["riskMatrix"] if item["risk"] == "R-LOGIN-002"
+    )
     assert risk["status"] == "mitigating"
     assert risk["owner"] == "QA 张三"
     assert risk["note"] == "补充锁定场景"
@@ -784,7 +839,9 @@ def test_update_lisa_test_asset_risk_lifecycle_survives_risk_matrix_rebuild(app)
         )
         reloaded = get_lisa_test_asset_collection(collection["id"])
 
-    risk = next(item for item in reloaded["riskMatrix"] if item["risk"] == "R-LOGIN-002")
+    risk = next(
+        item for item in reloaded["riskMatrix"] if item["risk"] == "R-LOGIN-002"
+    )
     assert risk["coverageStatuses"] == ["已覆盖"]
     assert risk["status"] == "accepted"
     assert risk["owner"] == "QA 李四"
@@ -833,7 +890,9 @@ def test_risk_library_create_lisa_test_asset_risk_adds_manual_unlinked_risk(app)
     assert risk["note"] == "人工补充支付风控风险"
 
 
-def test_risk_library_rename_lisa_test_asset_risk_by_id_updates_sources_and_preserves_id(app):
+def test_risk_library_rename_lisa_test_asset_risk_by_id_updates_sources_and_preserves_id(
+    app,
+):
     with app.app_context():
         run = create_agent_run("TEST_DESIGN", "lisa", "CASES")
         record_artifact_version(run.id, "CASES", CASES_MARKDOWN)
@@ -861,7 +920,9 @@ def test_risk_library_rename_lisa_test_asset_risk_by_id_updates_sources_and_pres
         "R-LOGIN-001",
         "R-LOGIN-LOCK",
     }
-    renamed = next(item for item in reloaded["riskMatrix"] if item["id"] == original["id"])
+    renamed = next(
+        item for item in reloaded["riskMatrix"] if item["id"] == original["id"]
+    )
     assert renamed["risk"] == "R-LOGIN-LOCK"
     point = next(
         item for item in reloaded["testPoints"] if item["testPoint"] == "登录错误处理"

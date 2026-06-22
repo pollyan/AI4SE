@@ -190,6 +190,129 @@ class StrategyArtifactData(StrictArtifactDataModel):
     stage_gate: list[StageGateCheck] = Field(min_length=1)
 
 
+class CaseStatistics(StrictArtifactDataModel):
+    total: int = Field(ge=0)
+    p0_count: int = Field(ge=0)
+    p1_count: int = Field(ge=0)
+    p2_count: int = Field(ge=0)
+
+
+class DesignBasis(StrictArtifactDataModel):
+    basis_id: str
+    source_type: str
+    source_id: str
+    basis: str
+    case_direction: str
+
+
+class TestCaseItem(StrictArtifactDataModel):
+    case_id: str
+    title: str
+    priority: str
+    dimension: str
+    test_point: str
+    risk: str
+    precondition: str
+    steps: str
+    test_data: str
+    expected_result: str
+    assertion: str
+    execution_layer: str
+    automation_suggestion: str
+    status: str
+
+
+class CaseGroup(StrictArtifactDataModel):
+    dimension: str
+    cases: list[TestCaseItem] = Field(min_length=1)
+
+
+class TestDataEnvironment(StrictArtifactDataModel):
+    data_id: str
+    type: str
+    content: str
+    preparation: str
+    related_cases: str
+    status: str
+
+
+class AutomationCandidate(StrictArtifactDataModel):
+    candidate_id: str
+    case_id: str
+    recommended_layer: str
+    value: str
+    prerequisite: str
+    risk_or_limit: str
+    status: str
+
+
+class CoverageTraceItem(StrictArtifactDataModel):
+    test_point: str
+    priority: str
+    risk: str
+    covered_cases: list[str] = Field(min_length=1)
+    status: str
+
+
+class OpenQuestion(StrictArtifactDataModel):
+    question_id: str
+    question: str
+    related: str
+    priority: str
+    blocking: str
+    owner: str
+    status: str
+
+
+class CasesArtifactData(StrictArtifactDataModel):
+    document_info: DocumentInfo
+    case_statistics: CaseStatistics
+    design_bases: list[DesignBasis] = Field(min_length=1)
+    case_groups: list[CaseGroup] = Field(min_length=1)
+    test_data_environments: list[TestDataEnvironment] = Field(min_length=1)
+    automation_candidates: list[AutomationCandidate] = Field(min_length=1)
+    coverage_trace: list[CoverageTraceItem] = Field(min_length=1)
+    open_questions: list[OpenQuestion] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_case_consistency(self) -> "CasesArtifactData":
+        cases = [case for group in self.case_groups for case in group.cases]
+        case_ids = {case.case_id for case in cases}
+        if len(case_ids) != len(cases):
+            raise ValueError("case_groups contains duplicate case_id")
+
+        priority_counts = {
+            "P0": sum(1 for case in cases if case.priority == "P0"),
+            "P1": sum(1 for case in cases if case.priority == "P1"),
+            "P2": sum(1 for case in cases if case.priority == "P2"),
+        }
+        if (
+            self.case_statistics.total != len(cases)
+            or self.case_statistics.p0_count != priority_counts["P0"]
+            or self.case_statistics.p1_count != priority_counts["P1"]
+            or self.case_statistics.p2_count != priority_counts["P2"]
+        ):
+            raise ValueError(
+                "case_statistics must match case_groups totals and P0/P1/P2 counts"
+            )
+
+        unknown_references = sorted(
+            {
+                case_id
+                for trace in self.coverage_trace
+                for case_id in trace.covered_cases
+                if case_id not in case_ids
+            }
+        )
+        if unknown_references:
+            raise ValueError(
+                "coverage_trace references unknown case ids: "
+                + ", ".join(unknown_references)
+            )
+        return self
+
+
 def render_agent_turn_from_artifact_data(
     payload: dict[str, Any],
     *,
@@ -204,6 +327,9 @@ def render_agent_turn_from_artifact_data(
     elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
         artifact_data = StrategyArtifactData.model_validate(payload["artifact_data"])
         markdown = render_test_design_strategy_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "CASES"):
+        artifact_data = CasesArtifactData.model_validate(payload["artifact_data"])
+        markdown = render_test_design_cases_markdown(artifact_data)
     else:
         raise ValueError(
             f"artifact_data renderer is not configured for {workflow_id}/{current_stage_id}"
@@ -248,6 +374,21 @@ def render_test_design_strategy_markdown(data: StrategyArtifactData) -> str:
         _render_test_layers(data.test_layers),
         _render_test_points(data.test_points),
         _render_tradeoffs(data.tradeoffs),
+        _render_stage_gate(data.stage_gate),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_test_design_cases_markdown(data: CasesArtifactData) -> str:
+    sections = [
+        "# 测试用例集",
+        _render_case_statistics(data.case_statistics),
+        _render_design_bases(data.design_bases),
+        _render_case_groups(data.case_groups),
+        _render_test_data_environments(data.test_data_environments),
+        _render_automation_candidates(data.automation_candidates),
+        _render_coverage_trace(data.coverage_trace),
+        _render_open_questions(data.open_questions),
         _render_stage_gate(data.stage_gate),
     ]
     return "\n\n".join(sections)
@@ -537,6 +678,205 @@ def _render_tradeoffs(tradeoffs: list[Tradeoff]) -> str:
     ]
     return "## 7. 资源与取舍\n" + _markdown_table(
         ["取舍项", "决策", "影响", "需要确认人", "状态"],
+        rows,
+    )
+
+
+def _render_case_statistics(statistics: CaseStatistics) -> str:
+    rows = [
+        ("用例总数", statistics.total),
+        ("P0 用例数", statistics.p0_count),
+        ("P1 用例数", statistics.p1_count),
+        ("P2 用例数", statistics.p2_count),
+    ]
+    return (
+        "## 1. 用例统计\n"
+        + _markdown_table(["指标", "数量"], rows)
+        + "\n\n"
+        + f"**统计摘要**：共 {statistics.total} 条用例，"
+        + f"P0: {statistics.p0_count} 条 | "
+        + f"P1: {statistics.p1_count} 条 | "
+        + f"P2: {statistics.p2_count} 条"
+    )
+
+
+def _render_design_bases(bases: list[DesignBasis]) -> str:
+    rows = [
+        (
+            item.basis_id,
+            item.source_type,
+            item.source_id,
+            item.basis,
+            item.case_direction,
+        )
+        for item in bases
+    ]
+    return "## 2. 用例设计依据\n" + _markdown_table(
+        ["依据 ID", "来源类型", "来源 ID", "设计依据", "派生用例方向"],
+        rows,
+    )
+
+
+def _render_case_groups(groups: list[CaseGroup]) -> str:
+    sections = ["## 3. 按维度分组的用例清单"]
+    headers = [
+        "ID",
+        "用例标题",
+        "优先级",
+        "测试维度",
+        "关联测试点",
+        "关联风险",
+        "前置条件",
+        "操作步骤",
+        "测试数据",
+        "预期结果",
+        "断言",
+        "执行层级",
+        "自动化建议",
+        "状态",
+    ]
+    for index, group in enumerate(groups, start=1):
+        rows = [
+            (
+                item.case_id,
+                item.title,
+                item.priority,
+                item.dimension,
+                item.test_point,
+                item.risk,
+                item.precondition,
+                item.steps,
+                item.test_data,
+                item.expected_result,
+                item.assertion,
+                item.execution_layer,
+                item.automation_suggestion,
+                item.status,
+            )
+            for item in group.cases
+        ]
+        sections.append(
+            f"### 3.{index} {group.dimension}\n" + _markdown_table(headers, rows)
+        )
+    return "\n\n".join(sections)
+
+
+def _render_test_data_environments(items: list[TestDataEnvironment]) -> str:
+    rows = [
+        (
+            item.data_id,
+            item.type,
+            item.content,
+            item.preparation,
+            item.related_cases,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 4. 测试数据与环境\n" + _markdown_table(
+        ["数据/环境 ID", "类型", "内容", "准备方式", "关联用例", "状态"],
+        rows,
+    )
+
+
+def _render_automation_candidates(items: list[AutomationCandidate]) -> str:
+    rows = [
+        (
+            item.candidate_id,
+            item.case_id,
+            item.recommended_layer,
+            item.value,
+            item.prerequisite,
+            item.risk_or_limit,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 5. 自动化候选\n" + _markdown_table(
+        [
+            "候选 ID",
+            "用例 ID",
+            "推荐自动化层级",
+            "自动化价值",
+            "前置条件",
+            "风险或限制",
+            "状态",
+        ],
+        rows,
+    )
+
+
+def _render_coverage_trace(items: list[CoverageTraceItem]) -> str:
+    rows = [
+        (
+            item.test_point,
+            item.priority,
+            item.risk,
+            ", ".join(item.covered_cases),
+            item.status,
+        )
+        for item in items
+    ]
+    total = len(items)
+    covered = sum(1 for item in items if item.status == "已覆盖")
+    coverage_rate = (covered / total * 100) if total else 0.0
+    return (
+        "## 6. 测试点覆盖追溯\n"
+        + _markdown_table(
+            ["测试点", "优先级", "关联风险", "覆盖用例", "覆盖状态"],
+            rows,
+        )
+        + "\n\n"
+        + _render_traceability_matrix_visual(items)
+        + "\n\n"
+        + f"> **覆盖率**：总覆盖率 {coverage_rate:.1f}%"
+    )
+
+
+def _render_traceability_matrix_visual(items: list[CoverageTraceItem]) -> str:
+    visual = {
+        "type": "traceability-matrix",
+        "title": "测试点-用例覆盖追溯矩阵",
+        "columns": ["测试点", "优先级", "关联风险", "覆盖用例", "覆盖状态"],
+        "rows": [
+            {
+                "测试点": item.test_point,
+                "优先级": item.priority,
+                "关联风险": item.risk,
+                "覆盖用例": ", ".join(item.covered_cases),
+                "覆盖状态": item.status,
+            }
+            for item in items
+        ],
+    }
+    return (
+        "```ai4se-visual\n" + json.dumps(visual, ensure_ascii=False, indent=2) + "\n```"
+    )
+
+
+def _render_open_questions(items: list[OpenQuestion]) -> str:
+    rows = [
+        (
+            item.question_id,
+            item.question,
+            item.related,
+            item.priority,
+            item.blocking,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 7. 开放问题\n" + _markdown_table(
+        [
+            "问题 ID",
+            "问题描述",
+            "关联用例/测试点",
+            "优先级",
+            "阻断性",
+            "责任方",
+            "状态",
+        ],
         rows,
     )
 
