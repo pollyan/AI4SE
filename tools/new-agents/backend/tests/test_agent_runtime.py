@@ -13,12 +13,13 @@ from agent_runtime import (
     build_partial_agent_delta,
     build_agent_retries,
     build_model_settings,
+    build_structured_output_instruction,
     extract_json_string_prefix,
     parse_agent_turn_output_text,
     register_contract_output_validator,
+    resolve_structured_output_capability,
 )
 from sse_schemas import AgentTurnDeltaOutput
-
 
 VALID_CLARIFY_ARTIFACT = """# 需求分析文档
 
@@ -75,6 +76,85 @@ VALID_CLARIFY_ARTIFACT_JSON = json.dumps(
     VALID_CLARIFY_ARTIFACT,
     ensure_ascii=False,
 )[1:-1]
+
+VALID_CLARIFY_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "测试需求分析与澄清基线",
+        "workflow": "TEST_DESIGN",
+        "stage": "CLARIFY",
+        "status": "可进入策略制定",
+    },
+    "requirement_facts": [
+        {
+            "fact_id": "F-001",
+            "fact": "用户需要登录功能",
+            "source": "用户描述",
+            "evidence_level": "用户陈述",
+            "status": "已确认",
+        }
+    ],
+    "system_boundaries": [
+        {
+            "boundary_type": "测试范围",
+            "content": "登录页面和登录 API",
+            "testing_meaning": "验证登录主链路",
+            "status": "已确认",
+        }
+    ],
+    "business_rules": [
+        {
+            "rule_id": "BR-001",
+            "rule": "正确账号密码允许登录",
+            "trigger": "用户提交凭证",
+            "state_transition": "未登录到已登录",
+            "exception_handling": "错误凭证返回错误提示",
+            "acceptance": "登录成功进入工作台",
+            "status": "已确认",
+        }
+    ],
+    "flow_links": [
+        {"from_node": "用户", "to_node": "登录页", "label": "打开登录入口"},
+        {"from_node": "登录页", "to_node": "认证服务", "label": "提交账号密码"},
+        {"from_node": "认证服务", "to_node": "工作台", "label": "认证成功"},
+        {"from_node": "认证服务", "to_node": "错误提示", "label": "认证失败"},
+    ],
+    "clarification_questions": [
+        {
+            "question_id": "Q-001",
+            "question": "连续失败后是否锁定账号",
+            "priority": "P1",
+            "blocking": "非阻断",
+            "impact": "异常登录",
+            "assumption": "暂按 5 次失败锁定",
+            "owner": "产品",
+            "status": "待确认",
+        }
+    ],
+    "quality_requirements": [
+        {
+            "dimension": "安全",
+            "requirement_or_assumption": "防止越权登录",
+            "metric": "未授权请求失败",
+            "risk": "账号风险",
+            "status": "AI 假设",
+        }
+    ],
+    "downstream_inputs": [
+        {
+            "input_type": "风险种子",
+            "input_id": "R-SEED-001",
+            "content": "凭证校验失败处理",
+            "source": "BR-001",
+            "usage": "策略阶段 FMEA",
+        }
+    ],
+    "stage_gate": [
+        {
+            "checked": True,
+            "item": "测试范围和不测范围已明确",
+        }
+    ],
+}
 
 
 class FakeRunResult:
@@ -173,11 +253,13 @@ def test_runtime_stream_turn_yields_partial_outputs_and_validates_final_output()
     agent = FakeStreamingAgent([partial, final])
     runtime = PydanticAgentRuntime(agent)
 
-    outputs = list(runtime.stream_turn(
-        "用户需求: 登录功能",
-        workflow_id="TEST_DESIGN",
-        current_stage_id="CLARIFY",
-    ))
+    outputs = list(
+        runtime.stream_turn(
+            "用户需求: 登录功能",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    )
 
     assert outputs[0] == AgentTurnDeltaOutput(chat="正在梳理需求。")
     assert isinstance(outputs[1], AgentTurnOutput)
@@ -204,14 +286,17 @@ def test_extract_json_string_prefix_reads_incomplete_streamed_string():
     text = (
         '{"chat":"正在梳理需求。",'
         '"artifact_update":{"type":"replace","markdown":"# 需求分析文档\\n\\n'
-        '## 1. 被测系统与边界\\n内容'
+        "## 1. 被测系统与边界\\n内容"
     )
 
     assert extract_json_string_prefix(text, "chat") == "正在梳理需求。"
-    assert extract_json_string_prefix(
-        text,
-        "markdown",
-    ) == "# 需求分析文档\n\n## 1. 被测系统与边界\n内容"
+    assert (
+        extract_json_string_prefix(
+            text,
+            "markdown",
+        )
+        == "# 需求分析文档\n\n## 1. 被测系统与边界\n内容"
+    )
 
 
 def test_build_partial_agent_delta_extracts_chat_and_artifact_markdown():
@@ -246,13 +331,41 @@ def test_parse_agent_turn_output_text_accepts_plain_json_or_fenced_json():
     ).artifact_update.markdown.startswith("# 需求分析文档")
 
 
+def test_parse_agent_turn_output_text_renders_clarify_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "我已整理登录需求澄清基线，请确认右侧文档。",
+            "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "STRATEGY",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 需求分析文档")
+    assert "flowchart TD" in output.artifact_update.markdown
+    assert output.stage_action is not None
+    assert output.stage_action.target_stage_id == "STRATEGY"
+
+
 def test_runtime_raw_json_stream_turn_yields_real_delta_before_final_output(
     monkeypatch,
 ):
     final_json = (
         '{"chat":"正在梳理需求。",'
         '"artifact_update":{"type":"replace","markdown":"'
-        f'{VALID_CLARIFY_ARTIFACT_JSON}' + '"},'
+        f"{VALID_CLARIFY_ARTIFACT_JSON}" + '"},'
         '"stage_action":null,"warnings":[]}'
     )
     first_chunk_end = len('{"chat":"正在')
@@ -285,11 +398,13 @@ def test_runtime_raw_json_stream_turn_yields_real_delta_before_final_output(
         ),
     )
 
-    outputs = list(runtime.stream_turn(
-        "用户需求",
-        workflow_id="TEST_DESIGN",
-        current_stage_id="CLARIFY",
-    ))
+    outputs = list(
+        runtime.stream_turn(
+            "用户需求",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    )
 
     assert isinstance(outputs[0], AgentTurnDeltaOutput)
     assert outputs[0].chat == "正在"
@@ -298,6 +413,59 @@ def test_runtime_raw_json_stream_turn_yields_real_delta_before_final_output(
     assert outputs[-1].chat == "正在梳理需求。"
     assert outputs[-1].artifact_update.markdown == VALID_CLARIFY_ARTIFACT
     assert calls[0]["response_format"] == {"type": "json_object"}
+
+
+def test_runtime_raw_json_stream_turn_renders_artifact_data_before_final_output(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "我已整理登录需求澄清基线，请确认右侧文档。",
+            "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield final_json
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是测试专家。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "用户需求: 登录功能",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    )
+
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert outputs[-1].artifact_update.markdown is not None
+    assert outputs[-1].artifact_update.markdown.startswith("# 需求分析文档")
+    assert "flowchart TD" in outputs[-1].artifact_update.markdown
+    assert calls[0]["response_format"] == {"type": "json_object"}
+    assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert "artifact_data" in calls[0]["messages"][0]["content"]
+    assert "artifact_update.markdown" not in build_structured_output_instruction(
+        "TEST_DESIGN",
+        "CLARIFY",
+    )
     assert "结构化输出格式要求" in calls[0]["messages"][0]["content"]
 
 
@@ -305,7 +473,7 @@ def test_raw_streaming_runtime_records_stream_usage(monkeypatch):
     final_json = (
         '{"chat":"正在梳理需求。",'
         '"artifact_update":{"type":"replace","markdown":"'
-        f'{VALID_CLARIFY_ARTIFACT_JSON}' + '"},'
+        f"{VALID_CLARIFY_ARTIFACT_JSON}" + '"},'
         '"stage_action":null,"warnings":[]}'
     )
 
@@ -327,11 +495,13 @@ def test_raw_streaming_runtime_records_stream_usage(monkeypatch):
         ),
     )
 
-    outputs = list(runtime.stream_turn(
-        "用户需求",
-        workflow_id="TEST_DESIGN",
-        current_stage_id="CLARIFY",
-    ))
+    outputs = list(
+        runtime.stream_turn(
+            "用户需求",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    )
 
     assert outputs[-1].chat == "正在梳理需求。"
     assert runtime.last_token_usage == 123
@@ -343,7 +513,7 @@ def test_runtime_raw_json_stream_turn_keeps_latest_delta_when_final_json_is_trun
     chunks = [
         '{"chat":"已更新需求文档。",',
         '"artifact_update":{"type":"replace","markdown":"# 需求分析文档\\n\\n'
-        '## 1. 被测系统与边界\\n内容',
+        "## 1. 被测系统与边界\\n内容",
     ]
 
     def fake_stream_chat_completion_content(**kwargs):
@@ -363,11 +533,13 @@ def test_runtime_raw_json_stream_turn_keeps_latest_delta_when_final_json_is_trun
         ),
     )
 
-    outputs = list(runtime.stream_turn(
-        "用户需求",
-        workflow_id="TEST_DESIGN",
-        current_stage_id="CLARIFY",
-    ))
+    outputs = list(
+        runtime.stream_turn(
+            "用户需求",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    )
 
     assert isinstance(outputs[0], AgentTurnDeltaOutput)
     assert outputs[-1].chat == "已更新需求文档。"
@@ -389,7 +561,7 @@ def test_runtime_raw_json_stream_turn_retries_contract_failure_with_feedback(
     valid_json = (
         '{"chat":"已更新右侧需求分析文档。",'
         '"artifact_update":{"type":"replace","markdown":"'
-        f'{VALID_CLARIFY_ARTIFACT_JSON}' + '"},'
+        f"{VALID_CLARIFY_ARTIFACT_JSON}" + '"},'
         '"stage_action":null,"warnings":[]}'
     )
     calls = []
@@ -412,11 +584,13 @@ def test_runtime_raw_json_stream_turn_retries_contract_failure_with_feedback(
         ),
     )
 
-    outputs = list(runtime.stream_turn(
-        "用户需求",
-        workflow_id="TEST_DESIGN",
-        current_stage_id="CLARIFY",
-    ))
+    outputs = list(
+        runtime.stream_turn(
+            "用户需求",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    )
 
     assert len(calls) == 2
     assert "上一轮结构化输出未通过校验" in calls[1]["messages"][1]["content"]
@@ -432,7 +606,7 @@ def test_runtime_raw_json_stream_turn_retries_schema_shape_failure_with_feedback
     valid_json = (
         '{"chat":"已更新右侧需求分析文档。",'
         '"artifact_update":{"type":"replace","markdown":"'
-        f'{VALID_CLARIFY_ARTIFACT_JSON}' + '"},'
+        f"{VALID_CLARIFY_ARTIFACT_JSON}" + '"},'
         '"stage_action":null,"warnings":[]}'
     )
     calls = []
@@ -455,11 +629,13 @@ def test_runtime_raw_json_stream_turn_retries_schema_shape_failure_with_feedback
         ),
     )
 
-    outputs = list(runtime.stream_turn(
-        "用户需求",
-        workflow_id="TEST_DESIGN",
-        current_stage_id="CLARIFY",
-    ))
+    outputs = list(
+        runtime.stream_turn(
+            "用户需求",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    )
 
     assert len(calls) == 2
     assert "上一轮结构化输出未通过校验" in calls[1]["messages"][1]["content"]
@@ -478,15 +654,17 @@ def test_contract_output_validator_requests_model_retry_for_invalid_artifact():
 
     agent = ValidatorRecordingAgent()
     register_contract_output_validator(agent)
-    invalid_output = AgentTurnOutput.model_validate({
-        "chat": "已更新右侧需求分析文档。",
-        "artifact_update": {
-            "type": "replace",
-            "markdown": "# 需求分析文档\n\n## 1. 被测系统与边界\n内容",
-        },
-        "stage_action": None,
-        "warnings": [],
-    })
+    invalid_output = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新右侧需求分析文档。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": "# 需求分析文档\n\n## 1. 被测系统与边界\n内容",
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
 
     class FakeContext:
         deps = AgentTurnValidationDeps(
@@ -557,9 +735,7 @@ def test_runtime_maps_pydantic_ai_model_errors_to_runtime_model_error(
         "agent_runtime.PYDANTIC_AI_MODEL_ERRORS",
         (FakeModelError,),
     )
-    runtime = PydanticAgentRuntime(
-        FailingAgent(FakeModelError("provider API failed"))
-    )
+    runtime = PydanticAgentRuntime(FailingAgent(FakeModelError("provider API failed")))
 
     with pytest.raises(AgentRuntimeModelError, match="provider API failed"):
         runtime.run_turn(
@@ -613,3 +789,10 @@ def test_non_deepseek_v4_uses_pydantic_ai_default_retries():
 
 def test_non_deepseek_v4_settings_keep_provider_defaults():
     assert build_model_settings("gpt-4.1-mini") is None
+
+
+def test_deepseek_v4_resolves_json_object_only_capability():
+    capability = resolve_structured_output_capability("deepseek-v4-flash")
+
+    assert capability.tier == "json_object_only"
+    assert capability.response_format == {"type": "json_object"}

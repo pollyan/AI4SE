@@ -11,6 +11,7 @@ from agent_contracts import (
     ContractValidationError,
     validate_agent_turn,
 )
+from artifact_data_renderers import render_agent_turn_from_artifact_data
 from llm_client import LlmClientError, stream_chat_completion_content
 from sse_schemas import AgentTurnDeltaOutput
 
@@ -26,9 +27,7 @@ except ImportError:
     UnexpectedModelBehavior = None
 
 PYDANTIC_AI_SCHEMA_ERRORS = tuple(
-    error_type
-    for error_type in (UnexpectedModelBehavior,)
-    if error_type is not None
+    error_type for error_type in (UnexpectedModelBehavior,) if error_type is not None
 )
 PYDANTIC_AI_MODEL_ERRORS = tuple(
     error_type
@@ -63,6 +62,12 @@ class RawStreamingConfig:
     system_prompt: str
 
 
+@dataclass(frozen=True)
+class StructuredOutputCapability:
+    tier: str
+    response_format: dict[str, Any] | None
+
+
 TEXT_STRUCTURED_OUTPUT_INSTRUCTION = """
 
 【结构化输出格式要求】
@@ -91,7 +96,74 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 RAW_JSON_STREAMING_MAX_ATTEMPTS = 2
 
 
-def build_raw_json_retry_prompt(prompt: str, error: Exception) -> str:
+ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮已经做了什么、本轮确认或假定的关键点、右侧产出物会更新哪些部分、接下来需要用户确认或补充什么。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "...", "workflow": "TEST_DESIGN", "stage": "CLARIFY", "status": "..."},
+    "requirement_facts": [{"fact_id": "F-001", "fact": "...", "source": "...", "evidence_level": "...", "status": "..."}],
+    "system_boundaries": [{"boundary_type": "...", "content": "...", "testing_meaning": "...", "status": "..."}],
+    "business_rules": [{"rule_id": "BR-001", "rule": "...", "trigger": "...", "state_transition": "...", "exception_handling": "...", "acceptance": "...", "status": "..."}],
+    "flow_links": [{"from_node": "用户", "to_node": "登录页", "label": "打开入口"}],
+    "clarification_questions": [{"question_id": "Q-001", "question": "...", "priority": "P1", "blocking": "阻断/非阻断", "impact": "...", "assumption": "...", "owner": "...", "status": "..."}],
+    "quality_requirements": [{"dimension": "...", "requirement_or_assumption": "...", "metric": "...", "risk": "...", "status": "..."}],
+    "downstream_inputs": [{"input_type": "...", "input_id": "...", "content": "...", "source": "...", "usage": "..."}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "STRATEGY"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；不要输出完整 Markdown、Mermaid 代码块或表格，后端会负责确定性渲染右侧产出物。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
+def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
+    return (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY")
+
+
+def build_structured_output_instruction(
+    workflow_id: str,
+    current_stage_id: str,
+) -> str:
+    if supports_artifact_data_rendering(workflow_id, current_stage_id):
+        return ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
+
+
+def build_raw_json_retry_prompt(
+    prompt: str,
+    error: Exception,
+    *,
+    workflow_id: str | None = None,
+    current_stage_id: str | None = None,
+) -> str:
+    if (
+        workflow_id is not None
+        and current_stage_id is not None
+        and supports_artifact_data_rendering(workflow_id, current_stage_id)
+    ):
+        return (
+            f"{prompt}\n\n"
+            "【上一轮结构化输出未通过校验】\n"
+            f"{error}\n\n"
+            "请立刻重新输出一个完整合法的 JSON 对象，不要输出 JSON 之外的解释。"
+            "必须修正上述 artifact_data 数据问题；所有必填字段必须存在，"
+            "所有字符串必须非空，数组必须至少包含一项。不要输出 Markdown 文档、"
+            "Mermaid 代码块或表格，后端会根据 artifact_data 渲染右侧产出物。"
+        )
     return (
         f"{prompt}\n\n"
         "【上一轮结构化输出未通过校验】\n"
@@ -141,9 +213,7 @@ class PydanticAgentRuntime:
         if isinstance(output, AgentTurnDeltaOutput):
             return output
         if isinstance(output, AgentTurnOutput):
-            return AgentTurnDeltaOutput.model_validate(
-                output.model_dump(mode="json")
-            )
+            return AgentTurnDeltaOutput.model_validate(output.model_dump(mode="json"))
         return AgentTurnDeltaOutput.model_validate(output)
 
     def run_turn(
@@ -256,6 +326,9 @@ class PydanticAgentRuntime:
         model_settings = build_model_settings(config.model_name)
         if model_settings:
             extra_body = model_settings.get("extra_body")
+        structured_output_capability = resolve_structured_output_capability(
+            config.model_name
+        )
 
         attempt_prompt = prompt
         for attempt_index in range(RAW_JSON_STREAMING_MAX_ATTEMPTS):
@@ -273,13 +346,16 @@ class PydanticAgentRuntime:
                         "role": "system",
                         "content": (
                             config.system_prompt
-                            + TEXT_STRUCTURED_OUTPUT_INSTRUCTION
+                            + build_structured_output_instruction(
+                                workflow_id,
+                                current_stage_id,
+                            )
                         ),
                     },
                     {"role": "user", "content": attempt_prompt},
                 ],
                 temperature=0,
-                response_format={"type": "json_object"},
+                response_format=structured_output_capability.response_format,
                 extra_body=extra_body,
                 on_usage=lambda total_tokens: setattr(
                     self,
@@ -310,25 +386,37 @@ class PydanticAgentRuntime:
                 yield delta
 
             try:
-                final_output = parse_agent_turn_output_text(accumulated)
+                final_output = parse_agent_turn_output_text(
+                    accumulated,
+                    workflow_id=workflow_id,
+                    current_stage_id=current_stage_id,
+                )
             except json.JSONDecodeError:
                 if emitted_any_delta and (latest_chat or latest_markdown):
-                    yield AgentTurnOutput.model_validate({
-                        "chat": latest_chat or "本轮响应已中断，右侧产出物可能不完整。",
-                        "artifact_update": (
-                            {"type": "replace", "markdown": latest_markdown}
-                            if latest_markdown
-                            else {"type": "none"}
-                        ),
-                        "stage_action": None,
-                        "warnings": ["artifact_truncated"],
-                    })
+                    yield AgentTurnOutput.model_validate(
+                        {
+                            "chat": latest_chat
+                            or "本轮响应已中断，右侧产出物可能不完整。",
+                            "artifact_update": (
+                                {"type": "replace", "markdown": latest_markdown}
+                                if latest_markdown
+                                else {"type": "none"}
+                            ),
+                            "stage_action": None,
+                            "warnings": ["artifact_truncated"],
+                        }
+                    )
                     return
                 raise
             except ValidationError as exc:
                 if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:
                     raise
-                attempt_prompt = build_raw_json_retry_prompt(prompt, exc)
+                attempt_prompt = build_raw_json_retry_prompt(
+                    prompt,
+                    exc,
+                    workflow_id=workflow_id,
+                    current_stage_id=current_stage_id,
+                )
                 continue
 
             try:
@@ -340,7 +428,12 @@ class PydanticAgentRuntime:
             except (ContractValidationError, ValidationError) as exc:
                 if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:
                     raise
-                attempt_prompt = build_raw_json_retry_prompt(prompt, exc)
+                attempt_prompt = build_raw_json_retry_prompt(
+                    prompt,
+                    exc,
+                    workflow_id=workflow_id,
+                    current_stage_id=current_stage_id,
+                )
                 continue
 
             if not emitted_any_delta:
@@ -373,6 +466,20 @@ def build_agent_retries(model_name: str) -> int | None:
     return None
 
 
+def resolve_structured_output_capability(
+    model_name: str,
+) -> StructuredOutputCapability:
+    if model_name.startswith("deepseek-v4-"):
+        return StructuredOutputCapability(
+            tier="json_object_only",
+            response_format={"type": "json_object"},
+        )
+    return StructuredOutputCapability(
+        tier="json_object_only",
+        response_format={"type": "json_object"},
+    )
+
+
 def strip_json_fence(text: str) -> str:
     stripped = text.strip()
     fence_match = re.fullmatch(
@@ -385,8 +492,28 @@ def strip_json_fence(text: str) -> str:
     return stripped
 
 
-def parse_agent_turn_output_text(text: str) -> AgentTurnOutput:
+def parse_agent_turn_output_text(
+    text: str,
+    *,
+    workflow_id: str | None = None,
+    current_stage_id: str | None = None,
+) -> AgentTurnOutput:
     parsed = json.loads(strip_json_fence(text))
+    if "artifact_data" in parsed:
+        if workflow_id is None or current_stage_id is None:
+            raise ValueError(
+                "workflow_id and current_stage_id are required for artifact_data"
+            )
+        rendered = render_agent_turn_from_artifact_data(
+            parsed,
+            workflow_id=workflow_id,
+            current_stage_id=current_stage_id,
+        )
+        if rendered is None:
+            raise ValueError(
+                f"artifact_data renderer is not configured for {workflow_id}/{current_stage_id}"
+            )
+        return rendered
     return AgentTurnOutput.model_validate(parsed)
 
 
@@ -427,7 +554,7 @@ def extract_json_string_prefix(text: str, key: str) -> str | None:
         elif escape in {'"', "\\", "/"}:
             chars.append(escape)
         elif escape == "u":
-            hex_value = text[index + 1:index + 5]
+            hex_value = text[index + 1 : index + 5]
             if len(hex_value) < 4 or not re.fullmatch(r"[0-9a-fA-F]{4}", hex_value):
                 break
             chars.append(chr(int(hex_value, 16)))
@@ -446,9 +573,7 @@ def build_partial_agent_delta(text: str) -> AgentTurnDeltaOutput | None:
     return AgentTurnDeltaOutput(
         chat=chat,
         artifact_update=(
-            {"type": "replace", "markdown": markdown}
-            if markdown
-            else None
+            {"type": "replace", "markdown": markdown} if markdown else None
         ),
     )
 
