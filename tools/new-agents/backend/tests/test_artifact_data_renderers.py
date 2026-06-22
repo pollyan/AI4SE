@@ -12,6 +12,7 @@ from artifact_data_renderers import (
     ReqReviewReportArtifactData,
     StrategyArtifactData,
     ValueDiscoveryElevatorArtifactData,
+    ValueDiscoveryJourneyArtifactData,
     ValueDiscoveryPersonaArtifactData,
     render_agent_turn_from_artifact_data,
 )
@@ -1033,6 +1034,177 @@ VALID_VALUE_PERSONA_ARTIFACT_DATA = {
     ],
 }
 
+VALID_VALUE_JOURNEY_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "用户旅程与机会地图",
+        "workflow": "VALUE_DISCOVERY",
+        "stage": "JOURNEY",
+        "status": "可进入需求蓝图",
+    },
+    "journey_summary": {
+        "core_persona": "中小研发团队测试负责人",
+        "core_pain": "测试设计质量受个人经验影响大，评审返工多。",
+        "entry_strategy": "优先切入需求评审后的测试设计初稿阶段。",
+        "blueprint_readiness": "可进入需求蓝图，但需继续验证试点节省时间指标。",
+    },
+    "journey_stages": [
+        {
+            "stage_id": "JS-001",
+            "stage_name": "问题认知",
+            "user_task": "意识到新需求缺少系统化测试设计方法",
+            "touchpoint": "需求评审会议和历史测试模板",
+            "user_goal": "确认本次需求是否存在高风险测试盲区",
+            "user_behavior": "翻找历史案例并询问资深同事",
+            "emotion_score": 2,
+            "emotion_reason": "风险判断依赖个人经验，时间压力大",
+            "pain_id": "PAIN-001",
+            "key_pain": "需求评审后不知道从哪里开始拆测试策略",
+            "existing_solution_gap": "历史模板只能记录结论，不能提示风险遗漏",
+            "opportunity_id": "OPP-001",
+            "opportunity_hypothesis": "用 AI 引导式澄清和风险种子降低启动成本",
+            "success_metric": "测试设计初稿产出时间减少 30%",
+            "validation_status": "待验证",
+        },
+        {
+            "stage_id": "JS-002",
+            "stage_name": "方案评估",
+            "user_task": "比较模板、测试管理工具和 AI 辅助方案",
+            "touchpoint": "团队文档库、测试平台、AI 助手试用",
+            "user_goal": "找到能直接产出可评审测试资产的方法",
+            "user_behavior": "试用不同工具并向研发负责人解释投入产出",
+            "emotion_score": 3,
+            "emotion_reason": "有潜在方案，但缺少可信度证明",
+            "pain_id": "PAIN-002",
+            "key_pain": "通用工具无法证明测试设计质量是否足够",
+            "existing_solution_gap": "工具关注管理流程，不关注测试设计专业门禁",
+            "opportunity_id": "OPP-002",
+            "opportunity_hypothesis": "提供可追溯 artifact 和质量门禁提升采纳信心",
+            "success_metric": "评审一次通过率提升到 80%",
+            "validation_status": "AI 假设",
+        },
+        {
+            "stage_id": "JS-003",
+            "stage_name": "试点使用",
+            "user_task": "用 AI4SE 为一个真实需求生成测试设计初稿",
+            "touchpoint": "New Agents 工作台和右侧 artifact",
+            "user_goal": "快速获得可编辑、可评审、可交接的测试设计",
+            "user_behavior": "输入需求背景，审阅澄清、策略和用例产物",
+            "emotion_score": 4,
+            "emotion_reason": "如果产物结构完整，能显著降低手工整理成本",
+            "pain_id": "PAIN-003",
+            "key_pain": "AI 输出如果格式不稳定会增加返工",
+            "existing_solution_gap": "直接让模型写 Markdown 容易漏标题和图表",
+            "opportunity_id": "OPP-003",
+            "opportunity_hypothesis": "后端确定性渲染结构化产物降低格式失败",
+            "success_metric": "artifact contract 首次通过率达到 95%",
+            "validation_status": "部分验证",
+        },
+    ],
+    "pain_priorities": [
+        {
+            "priority_level": "高优先级痛点",
+            "pain_id": "PAIN-001",
+            "pain": "需求评审后不知道从哪里开始拆测试策略",
+            "stage_id": "JS-001",
+            "impact": "严重",
+            "frequency": "每个新需求",
+            "existing_solution_gap": "历史模板不能主动发现风险遗漏",
+        },
+        {
+            "priority_level": "中等优先级痛点",
+            "pain_id": "PAIN-002",
+            "pain": "工具无法证明测试设计质量是否足够",
+            "stage_id": "JS-002",
+            "impact": "中等",
+            "frequency": "高频",
+            "existing_solution_gap": "现有工具缺少专业门禁说明",
+        },
+        {
+            "priority_level": "低优先级痛点",
+            "pain_id": "PAIN-003",
+            "pain": "AI 输出格式不稳定会增加返工",
+            "stage_id": "JS-003",
+            "impact": "轻微",
+            "frequency": "中频",
+            "existing_solution_gap": "直接生成 Markdown 依赖模型稳定性",
+        },
+    ],
+    "opportunity_scores": [
+        {
+            "opportunity_id": "OPP-001",
+            "opportunity": "需求评审后自动生成测试设计启动框架",
+            "pain_id": "PAIN-001",
+            "value_potential": "高",
+            "competition_strength": "中",
+            "feasibility": "高",
+            "success_metric": "测试设计初稿产出时间减少 30%",
+            "validation_status": "待验证",
+        },
+        {
+            "opportunity_id": "OPP-002",
+            "opportunity": "把质量门禁和追溯链作为评审依据",
+            "pain_id": "PAIN-002",
+            "value_potential": "中",
+            "competition_strength": "弱",
+            "feasibility": "中",
+            "success_metric": "评审一次通过率提升到 80%",
+            "validation_status": "AI 假设",
+        },
+        {
+            "opportunity_id": "OPP-003",
+            "opportunity": "以结构化数据驱动稳定 artifact 输出",
+            "pain_id": "PAIN-003",
+            "value_potential": "中",
+            "competition_strength": "弱",
+            "feasibility": "高",
+            "success_metric": "artifact contract 首次通过率达到 95%",
+            "validation_status": "部分验证",
+        },
+    ],
+    "entry_strategy": [
+        {
+            "strategy_item": "优先切入阶段",
+            "content": "需求评审结束后的测试设计启动阶段",
+            "related_opportunity": "OPP-001",
+            "tradeoff_reason": "该阶段痛点强、频率高、能最快证明节省时间价值",
+            "status": "已确认",
+        },
+        {
+            "strategy_item": "暂缓阶段",
+            "content": "深度测试平台集成和多团队治理",
+            "related_opportunity": "OPP-002",
+            "tradeoff_reason": "会拉高实现复杂度，适合在试点价值验证后推进",
+            "status": "AI 假设",
+        },
+    ],
+    "validation_experiments": [
+        {
+            "experiment_id": "EXP-001",
+            "hypothesis": "结构化测试设计助手能把初稿产出时间减少 30%",
+            "opportunity_id": "OPP-001",
+            "method": "选择 3 个真实需求做人工模板与 AI4SE 对照试点",
+            "success_metric": "平均初稿时间、返工次数和评审通过率",
+            "owner": "产品",
+            "status": "待执行",
+        },
+        {
+            "experiment_id": "EXP-002",
+            "hypothesis": "确定性 renderer 能显著减少 artifact 格式失败",
+            "opportunity_id": "OPP-003",
+            "method": "对比 Markdown 直出与 artifact_data 渲染的 contract 通过率",
+            "success_metric": "首次 contract 通过率达到 95%",
+            "owner": "研发",
+            "status": "部分验证",
+        },
+    ],
+    "stage_gate": [
+        {"checked": True, "item": "主要机会点关联到高优先级痛点。"},
+        {"checked": True, "item": "每个主要机会点都有成功指标和验证实验。"},
+        {"checked": True, "item": "产品切入策略说明了优先做什么和暂缓什么。"},
+        {"checked": True, "item": "可进入蓝图阶段的 P0 机会已明确。"},
+    ],
+}
+
 
 def test_clarify_artifact_data_rejects_blank_required_values():
     invalid = {
@@ -1274,6 +1446,22 @@ def test_value_persona_artifact_data_rejects_duplicate_priority_persona():
         match="priority_ranking contains duplicate persona_id",
     ):
         ValueDiscoveryPersonaArtifactData.model_validate(invalid)
+
+
+def test_value_journey_artifact_data_rejects_unknown_stage_reference():
+    invalid = copy.deepcopy(VALID_VALUE_JOURNEY_ARTIFACT_DATA)
+    invalid["pain_priorities"][0]["stage_id"] = "JS-404"
+
+    with pytest.raises(ValidationError, match="references unknown stage ids"):
+        ValueDiscoveryJourneyArtifactData.model_validate(invalid)
+
+
+def test_value_journey_artifact_data_rejects_unknown_opportunity_reference():
+    invalid = copy.deepcopy(VALID_VALUE_JOURNEY_ARTIFACT_DATA)
+    invalid["validation_experiments"][0]["opportunity_id"] = "OPP-404"
+
+    with pytest.raises(ValidationError, match="references unknown opportunity ids"):
+        ValueDiscoveryJourneyArtifactData.model_validate(invalid)
 
 
 def test_render_cases_artifact_data_is_contract_valid_and_asset_parseable():
@@ -1527,6 +1715,61 @@ def test_render_value_persona_artifact_data_is_deterministic_and_contract_valid(
             first,
             workflow_id="VALUE_DISCOVERY",
             current_stage_id="PERSONA",
+        )
+        == first
+    )
+
+
+def test_render_value_journey_artifact_data_is_deterministic_and_contract_valid():
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已生成用户旅程分析。",
+            "artifact_data": VALID_VALUE_JOURNEY_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "BLUEPRINT",
+            },
+            "warnings": [],
+        },
+        workflow_id="VALUE_DISCOVERY",
+        current_stage_id="JOURNEY",
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已生成用户旅程分析。",
+            "artifact_data": VALID_VALUE_JOURNEY_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "BLUEPRINT",
+            },
+            "warnings": [],
+        },
+        workflow_id="VALUE_DISCOVERY",
+        current_stage_id="JOURNEY",
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert first.artifact_update.type == "replace"
+    assert first.stage_action is not None
+    assert first.stage_action.target_stage_id == "BLUEPRINT"
+    assert "# 用户旅程分析" in first.artifact_update.markdown
+    assert "journey\n    title 核心用户旅程" in first.artifact_update.markdown
+    assert "## 结构化旅程地图" in first.artifact_update.markdown
+    assert '"type": "journey-map"' in first.artifact_update.markdown
+    assert "## 痛点优先级排序" in first.artifact_update.markdown
+    assert "高优先级痛点" in first.artifact_update.markdown
+    assert "中等优先级痛点" in first.artifact_update.markdown
+    assert "低优先级痛点" in first.artifact_update.markdown
+    assert "## 机会评分" in first.artifact_update.markdown
+    assert "## 产品切入策略" in first.artifact_update.markdown
+    assert "## 验证实验" in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="VALUE_DISCOVERY",
+            current_stage_id="JOURNEY",
         )
         == first
     )

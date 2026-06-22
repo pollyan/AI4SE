@@ -892,6 +892,140 @@ class ValueDiscoveryPersonaArtifactData(StrictArtifactDataModel):
         return self
 
 
+class JourneySummary(StrictArtifactDataModel):
+    core_persona: str
+    core_pain: str
+    entry_strategy: str
+    blueprint_readiness: str
+
+
+class JourneyStage(StrictArtifactDataModel):
+    stage_id: str
+    stage_name: str
+    user_task: str
+    touchpoint: str
+    user_goal: str
+    user_behavior: str
+    emotion_score: int = Field(ge=1, le=5)
+    emotion_reason: str
+    pain_id: str
+    key_pain: str
+    existing_solution_gap: str
+    opportunity_id: str
+    opportunity_hypothesis: str
+    success_metric: str
+    validation_status: str
+
+
+class JourneyPainPriority(StrictArtifactDataModel):
+    priority_level: str
+    pain_id: str
+    pain: str
+    stage_id: str
+    impact: str
+    frequency: str
+    existing_solution_gap: str
+
+
+class JourneyOpportunityScore(StrictArtifactDataModel):
+    opportunity_id: str
+    opportunity: str
+    pain_id: str
+    value_potential: str
+    competition_strength: str
+    feasibility: str
+    success_metric: str
+    validation_status: str
+
+
+class JourneyEntryStrategy(StrictArtifactDataModel):
+    strategy_item: str
+    content: str
+    related_opportunity: str
+    tradeoff_reason: str
+    status: str
+
+
+class JourneyValidationExperiment(StrictArtifactDataModel):
+    experiment_id: str
+    hypothesis: str
+    opportunity_id: str
+    method: str
+    success_metric: str
+    owner: str
+    status: str
+
+
+class ValueDiscoveryJourneyArtifactData(StrictArtifactDataModel):
+    document_info: DocumentInfo
+    journey_summary: JourneySummary
+    journey_stages: list[JourneyStage] = Field(min_length=1)
+    pain_priorities: list[JourneyPainPriority] = Field(min_length=1)
+    opportunity_scores: list[JourneyOpportunityScore] = Field(min_length=1)
+    entry_strategy: list[JourneyEntryStrategy] = Field(min_length=1)
+    validation_experiments: list[JourneyValidationExperiment] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_journey_consistency(self) -> "ValueDiscoveryJourneyArtifactData":
+        stage_ids = {item.stage_id for item in self.journey_stages}
+        if len(stage_ids) != len(self.journey_stages):
+            raise ValueError("journey_stages contains duplicate stage_id")
+
+        pain_ids = {item.pain_id for item in self.journey_stages}
+        if len(pain_ids) != len(self.journey_stages):
+            raise ValueError("journey_stages contains duplicate pain_id")
+
+        opportunity_ids = {item.opportunity_id for item in self.journey_stages}
+        if len(opportunity_ids) != len(self.journey_stages):
+            raise ValueError("journey_stages contains duplicate opportunity_id")
+
+        unknown_stage_ids = sorted(
+            {
+                item.stage_id
+                for item in self.pain_priorities
+                if item.stage_id not in stage_ids
+            }
+        )
+        if unknown_stage_ids:
+            raise ValueError(
+                "pain_priorities references unknown stage ids: "
+                + ", ".join(unknown_stage_ids)
+            )
+
+        referenced_pain_ids = [
+            *(item.pain_id for item in self.pain_priorities),
+            *(item.pain_id for item in self.opportunity_scores),
+        ]
+        unknown_pain_ids = sorted(
+            {pain_id for pain_id in referenced_pain_ids if pain_id not in pain_ids}
+        )
+        if unknown_pain_ids:
+            raise ValueError(
+                "journey references unknown pain ids: " + ", ".join(unknown_pain_ids)
+            )
+
+        referenced_opportunity_ids = [
+            *(item.opportunity_id for item in self.opportunity_scores),
+            *(item.related_opportunity for item in self.entry_strategy),
+            *(item.opportunity_id for item in self.validation_experiments),
+        ]
+        unknown_opportunity_ids = sorted(
+            {
+                opportunity_id
+                for opportunity_id in referenced_opportunity_ids
+                if opportunity_id not in opportunity_ids
+            }
+        )
+        if unknown_opportunity_ids:
+            raise ValueError(
+                "journey references unknown opportunity ids: "
+                + ", ".join(unknown_opportunity_ids)
+            )
+
+        return self
+
+
 def render_agent_turn_from_artifact_data(
     payload: dict[str, Any],
     *,
@@ -930,6 +1064,11 @@ def render_agent_turn_from_artifact_data(
             payload["artifact_data"]
         )
         markdown = render_value_discovery_persona_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "JOURNEY"):
+        artifact_data = ValueDiscoveryJourneyArtifactData.model_validate(
+            payload["artifact_data"]
+        )
+        markdown = render_value_discovery_journey_markdown(artifact_data)
     else:
         raise ValueError(
             f"artifact_data renderer is not configured for {workflow_id}/{current_stage_id}"
@@ -1074,6 +1213,24 @@ def render_value_discovery_persona_markdown(
         _render_persona_pain_evidence(data.pain_evidence, data.personas),
         _render_anti_personas(data.anti_personas),
         _render_persona_priority_ranking(data.priority_ranking, data.personas),
+        _render_value_stage_gate(data.stage_gate),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_value_discovery_journey_markdown(
+    data: ValueDiscoveryJourneyArtifactData,
+) -> str:
+    sections = [
+        "# 用户旅程分析",
+        _render_journey_map(data.journey_stages),
+        _render_journey_map_visual(data.journey_stages),
+        _render_journey_stage_details(data.journey_stages),
+        _render_journey_pain_priorities(data.pain_priorities, data.journey_stages),
+        _render_journey_opportunity_scores(data.opportunity_scores),
+        _render_journey_entry_strategy(data.entry_strategy),
+        _render_journey_validation_experiments(data.validation_experiments),
+        _render_journey_summary(data.journey_summary),
         _render_value_stage_gate(data.stage_gate),
     ]
     return "\n\n".join(sections)
@@ -2455,6 +2612,193 @@ def _render_persona_priority_ranking(
         ["优先级", "用户类型", "理由", "关联痛点", "证据等级", "验证状态"],
         rows,
     )
+
+
+def _render_journey_map(stages: list[JourneyStage]) -> str:
+    lines = [
+        "```mermaid",
+        "journey",
+        "    title 核心用户旅程",
+    ]
+    for stage in stages:
+        lines.append(f"    section {_escape_journey_text(stage.stage_name)}")
+        lines.append(
+            f"        {_escape_journey_text(stage.user_task)}: "
+            f"{stage.emotion_score}: 用户"
+        )
+    lines.append("```")
+    return (
+        "## 用户旅程地图\n"
+        + "\n".join(lines)
+        + "\n\n> 数字为情绪评分：1=非常沮丧，5=非常满意"
+    )
+
+
+def _render_journey_map_visual(stages: list[JourneyStage]) -> str:
+    visual = {
+        "type": "journey-map",
+        "title": "用户旅程结构化地图",
+        "columns": [
+            "阶段",
+            "用户任务",
+            "触点",
+            "情绪评分",
+            "关键痛点",
+            "机会假设",
+            "成功指标",
+            "验证状态",
+        ],
+        "rows": [
+            {
+                "阶段": item.stage_name,
+                "用户任务": item.user_task,
+                "触点": item.touchpoint,
+                "情绪评分": item.emotion_score,
+                "关键痛点": item.key_pain,
+                "机会假设": item.opportunity_hypothesis,
+                "成功指标": item.success_metric,
+                "验证状态": item.validation_status,
+            }
+            for item in stages
+        ],
+    }
+    return (
+        "## 结构化旅程地图\n"
+        "```ai4se-visual\n" + json.dumps(visual, ensure_ascii=False, indent=2) + "\n```"
+    )
+
+
+def _render_journey_stage_details(stages: list[JourneyStage]) -> str:
+    sections = ["## 关键阶段详细分析"]
+    for index, stage in enumerate(stages, start=1):
+        rows = [
+            ("旅程阶段", f"{stage.stage_id} {stage.stage_name}"),
+            ("触点渠道", stage.touchpoint),
+            ("用户任务", stage.user_task),
+            ("用户目标", stage.user_goal),
+            ("用户行为", stage.user_behavior),
+            ("情绪评分", f"{stage.emotion_score} 分：{stage.emotion_reason}"),
+            ("关键痛点", f"{stage.pain_id} {stage.key_pain}"),
+            ("现有方案不足", stage.existing_solution_gap),
+            ("机会假设", f"{stage.opportunity_id} {stage.opportunity_hypothesis}"),
+            ("成功指标", stage.success_metric),
+            ("验证状态", stage.validation_status),
+        ]
+        sections.append(
+            f"### 阶段 {index}：{stage.stage_name}\n"
+            + _markdown_table(["维度", "描述"], rows)
+        )
+    return "\n\n".join(sections)
+
+
+def _render_journey_pain_priorities(
+    items: list[JourneyPainPriority],
+    stages: list[JourneyStage],
+) -> str:
+    stage_names = {stage.stage_id: stage.stage_name for stage in stages}
+    sections = ["## 痛点优先级排序"]
+    priority_levels = ["高优先级痛点", "中等优先级痛点", "低优先级痛点"]
+    headers = ["痛点 ID", "痛点", "影响阶段", "影响程度", "发生频率", "现有方案不足"]
+    for level in priority_levels:
+        rows = [
+            (
+                item.pain_id,
+                item.pain,
+                stage_names[item.stage_id],
+                item.impact,
+                item.frequency,
+                item.existing_solution_gap,
+            )
+            for item in items
+            if item.priority_level == level
+        ]
+        if not rows:
+            rows = [("无", "本轮未识别", "无", "无", "无", "无")]
+        sections.append(f"### {level}\n" + _markdown_table(headers, rows))
+    return "\n\n".join(sections)
+
+
+def _render_journey_opportunity_scores(
+    items: list[JourneyOpportunityScore],
+) -> str:
+    rows = [
+        (
+            item.opportunity_id,
+            item.opportunity,
+            item.pain_id,
+            item.value_potential,
+            item.competition_strength,
+            item.feasibility,
+            item.success_metric,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 机会评分\n" + _markdown_table(
+        [
+            "机会 ID",
+            "机会",
+            "对应痛点",
+            "价值潜力",
+            "竞争强度",
+            "实现可行性",
+            "成功指标",
+            "验证状态",
+        ],
+        rows,
+    )
+
+
+def _render_journey_entry_strategy(items: list[JourneyEntryStrategy]) -> str:
+    rows = [
+        (
+            item.strategy_item,
+            item.content,
+            item.related_opportunity,
+            item.tradeoff_reason,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 产品切入策略\n" + _markdown_table(
+        ["策略项", "内容", "关联机会", "取舍理由", "状态"],
+        rows,
+    )
+
+
+def _render_journey_validation_experiments(
+    items: list[JourneyValidationExperiment],
+) -> str:
+    rows = [
+        (
+            item.experiment_id,
+            item.hypothesis,
+            item.opportunity_id,
+            item.method,
+            item.success_metric,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 验证实验\n" + _markdown_table(
+        ["实验 ID", "验证假设", "关联机会", "实验方式", "成功指标", "责任方", "状态"],
+        rows,
+    )
+
+
+def _render_journey_summary(summary: JourneySummary) -> str:
+    rows = [
+        ("核心用户", summary.core_persona),
+        ("核心痛点", summary.core_pain),
+        ("产品切入策略", summary.entry_strategy),
+        ("需求蓝图就绪判断", summary.blueprint_readiness),
+    ]
+    return "## 旅程摘要\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _escape_journey_text(value: str) -> str:
+    return value.replace("\n", " ").replace(":", "：").replace("|", "｜")
 
 
 def _render_flow_links(links: list[FlowLink]) -> str:

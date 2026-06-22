@@ -377,6 +377,55 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+VALUE_JOURNEY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮已经形成哪些旅程阶段、情绪低谷、关键痛点、机会假设和验证实验。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "用户旅程与机会地图", "workflow": "VALUE_DISCOVERY", "stage": "JOURNEY", "status": "可进入需求蓝图/需补充旅程证据/暂缓"},
+    "journey_summary": {"core_persona": "...", "core_pain": "...", "entry_strategy": "...", "blueprint_readiness": "可进入需求蓝图/需补充旅程证据/暂缓"},
+    "journey_stages": [{
+      "stage_id": "JS-001",
+      "stage_name": "问题认知",
+      "user_task": "...",
+      "touchpoint": "...",
+      "user_goal": "...",
+      "user_behavior": "...",
+      "emotion_score": 2,
+      "emotion_reason": "...",
+      "pain_id": "PAIN-001",
+      "key_pain": "...",
+      "existing_solution_gap": "...",
+      "opportunity_id": "OPP-001",
+      "opportunity_hypothesis": "...",
+      "success_metric": "...",
+      "validation_status": "已验证/部分验证/待验证/AI 假设"
+    }],
+    "pain_priorities": [{"priority_level": "高优先级痛点/中等优先级痛点/低优先级痛点", "pain_id": "PAIN-001", "pain": "...", "stage_id": "JS-001", "impact": "严重/中等/轻微", "frequency": "高频/中频/低频", "existing_solution_gap": "..."}],
+    "opportunity_scores": [{"opportunity_id": "OPP-001", "opportunity": "...", "pain_id": "PAIN-001", "value_potential": "高/中/低", "competition_strength": "强/中/弱", "feasibility": "高/中/低", "success_metric": "...", "validation_status": "已验证/部分验证/待验证/AI 假设"}],
+    "entry_strategy": [{"strategy_item": "优先切入阶段/暂缓阶段/验证优先级", "content": "...", "related_opportunity": "OPP-001", "tradeoff_reason": "...", "status": "已确认/AI 假设/待验证"}],
+    "validation_experiments": [{"experiment_id": "EXP-001", "hypothesis": "...", "opportunity_id": "OPP-001", "method": "访谈/原型测试/Landing Page/数据分析/对照试点", "success_metric": "...", "owner": "产品/用户研究/业务/研发", "status": "待执行/已执行/已否定/部分验证"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "BLUEPRINT"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；journey_stages.stage_id、pain_id、opportunity_id 必须分别唯一；emotion_score 必须是 1 到 5 的整数；pain_priorities.stage_id 只能引用 journey_stages 中已存在的 stage_id；pain_priorities.pain_id 和 opportunity_scores.pain_id 只能引用 journey_stages 中已存在的 pain_id；opportunity_scores.opportunity_id、entry_strategy.related_opportunity、validation_experiments.opportunity_id 只能引用 journey_stages 中已存在的 opportunity_id。不要输出完整 Markdown 文档、Markdown 表格、Mermaid journey 代码块或 journey-map JSON 代码块，后端会负责确定性渲染右侧用户旅程分析、Mermaid journey 和 ai4se-visual journey-map。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in {
         ("TEST_DESIGN", "CLARIFY"),
@@ -387,6 +436,7 @@ def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) ->
         ("REQ_REVIEW", "REPORT"),
         ("VALUE_DISCOVERY", "ELEVATOR"),
         ("VALUE_DISCOVERY", "PERSONA"),
+        ("VALUE_DISCOVERY", "JOURNEY"),
     }
 
 
@@ -410,6 +460,8 @@ def build_structured_output_instruction(
         return VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "PERSONA"):
         return VALUE_PERSONA_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "JOURNEY"):
+        return VALUE_JOURNEY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
 
 
