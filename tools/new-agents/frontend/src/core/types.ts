@@ -430,10 +430,19 @@ export interface OnboardingConfig {
     inputPlaceholder: string;
 }
 
+export interface WorkflowPreviewConfig {
+    suitableFor: string[];
+    notSuitableFor: string[];
+    requiredInputs: string[];
+    expectedOutputs: string[];
+    sampleInput: string;
+}
+
 export interface WorkflowListingConfig {
     name: string;
     description: string;
     icon: string;
+    preview: WorkflowPreviewConfig;
 }
 
 export interface WorkflowDef {

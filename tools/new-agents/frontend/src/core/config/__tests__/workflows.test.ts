@@ -148,6 +148,12 @@ describe('Workflow Configuration', () => {
             expect(card?.description).toBe(wf.listing.description);
             expect(card?.icon).toBe(wf.listing.icon);
             expect(card?.link).toBe(`/workspace/${wf.agentId}/${wf.slug}`);
+            expect(card?.preview).toEqual(wf.listing.preview);
+            expect(card?.preview?.suitableFor.length).toBeGreaterThanOrEqual(2);
+            expect(card?.preview?.notSuitableFor.length).toBeGreaterThanOrEqual(1);
+            expect(card?.preview?.requiredInputs.length).toBeGreaterThanOrEqual(2);
+            expect(card?.preview?.expectedOutputs.length).toBeGreaterThanOrEqual(2);
+            expect(card?.preview?.sampleInput.trim()).not.toBe('');
         }
     });
 

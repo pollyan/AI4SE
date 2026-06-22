@@ -1,4 +1,5 @@
 import { WORKFLOWS } from '../workflows';
+import type { WorkflowPreviewConfig } from '../types';
 
 export interface AgentWorkflowConfig {
     id: string;
@@ -9,6 +10,7 @@ export interface AgentWorkflowConfig {
     icon: string;
     link?: string;
     statusLabel?: string;
+    preview?: WorkflowPreviewConfig;
 }
 
 const ONLINE_AGENT_WORKFLOWS: AgentWorkflowConfig[] = Object.values(WORKFLOWS).map((workflow) => ({
@@ -19,6 +21,7 @@ const ONLINE_AGENT_WORKFLOWS: AgentWorkflowConfig[] = Object.values(WORKFLOWS).m
     description: workflow.listing.description,
     icon: workflow.listing.icon,
     link: `/workspace/${workflow.agentId}/${workflow.slug}`,
+    preview: workflow.listing.preview,
 }));
 
 const NON_RUNTIME_AGENT_WORKFLOWS: AgentWorkflowConfig[] = [

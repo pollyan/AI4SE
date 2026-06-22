@@ -63,6 +63,17 @@ describe('WorkflowSelect Page', () => {
             expect(screen.getByText('线上故障复盘')).toBeTruthy();
         });
 
+        it('renders professional preview details for online workflows', () => {
+            renderComponent('lisa');
+
+            expect(screen.getAllByText('适合').length).toBeGreaterThanOrEqual(1);
+            expect(screen.getAllByText('不适合').length).toBeGreaterThanOrEqual(1);
+            expect(screen.getAllByText('准备输入').length).toBeGreaterThanOrEqual(1);
+            expect(screen.getAllByText('产出').length).toBeGreaterThanOrEqual(1);
+            expect(screen.getAllByText('样例输入').length).toBeGreaterThanOrEqual(1);
+            expect(screen.getByText(/支付功能上线前/)).toBeTruthy();
+        });
+
         it('shows dev and plan status labels', () => {
             renderComponent('lisa');
             expect(screen.getByText('Dev')).toBeTruthy();
