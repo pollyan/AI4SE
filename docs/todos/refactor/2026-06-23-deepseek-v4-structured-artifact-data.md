@@ -29,6 +29,7 @@
 - 2026-06-23 已完成结构化产物数据持久化闭环: renderer 返回的 validated `artifact_data` 会随 artifact version 保存，并在 run snapshot 当前 artifact 的 `artifactData` 中暴露；旧版本和手工编辑版本明确返回 `artifactData: null`，继续只依赖 Markdown 内容。
 - 2026-06-23 已完成真实 DeepSeek V4 Flash smoke gate 对齐: `test_agent_real_smoke.py` 默认无凭证时 skip，配置 `DEEPSEEK_V4_SMOKE_*` 或兼容的 `NEW_AGENTS_SMOKE_*` 后走 raw JSON streaming、`artifact_data` schema、后端 renderer 和 artifact contract，不再要求模型直接输出完整 Markdown。
 - 2026-06-23 已完成信任闭环整合: `codex/deepseek-confidence-consolidation` 以 cherry-pick 方式汇总 readiness gate、`artifact_data` persistence 和真实 smoke gate 三条已验证分支，作为后续 DeepSeek V4 格式化输出需求的主线基础。
+- 2026-06-23 已完成 prompt 边界去格式化闭环: 已迁移 `artifact_data` stage 的前端 system prompt 不再注入 `<mark>`、`artifact_update`、完整 Markdown 重写要求或 Mermaid fence 参考，避免与后端 DeepSeek `artifact_data` 指令冲突。
 
 ## 目标
 
