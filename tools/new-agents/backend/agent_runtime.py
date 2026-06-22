@@ -426,6 +426,45 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+VALUE_BLUEPRINT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮已经整合哪些前序价值发现成果、形成哪些 P0/P1/P2 需求、哪些验收标准和 Lisa Handoff 输入仍需确认。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"product_name": "...", "version": "v1.0", "created_at": "YYYY-MM-DD", "product_direction": "...", "artifact_name": "可评审需求蓝图", "blueprint_status": "草稿/待确认/可交接 Lisa"},
+    "product_overview": {"vision": "...", "positioning_for": "...", "positioning_who": "...", "positioning_product": "...", "positioning_category": "...", "positioning_value": "...", "positioning_unlike": "...", "positioning_differentiator": "...", "user_value": "...", "business_value": "...", "business_model": "..."},
+    "target_users": [{"user_type": "...", "core_pain": "...", "priority": "核心用户/重要用户/潜在用户"}],
+    "feature_modules": [{"module_id": "MOD-001", "module_name": "...", "features": [{"feature_id": "FTR-001", "feature_name": "...", "requirement_id": "F-001"}]}],
+    "requirements": [{"requirement_id": "F-001", "priority": "P0/P1/P2", "name": "...", "user_story": "作为...我想要...以便...", "related_pain": "PAIN-001 或 OPP-001", "scope": "...", "dependency": "...", "acceptance": "...", "testability_level": "高/中/低", "owner": "产品/研发/测试/业务", "status": "已确认/AI 假设/待确认"}],
+    "main_flow": {"nodes": [{"node_id": "START", "label": "..."}], "links": [{"from_node": "START", "to_node": "NEXT", "label": "..."}]},
+    "success_metrics": [{"metric_type": "业务指标/用户指标/产品指标", "metric_name": "...", "target": "...", "measurement": "..."}],
+    "mvp_plan": {"included_features": [{"requirement_id": "F-001", "feature_name": "...", "included": true, "release": "v1.0 MVP"}], "iterations": [{"version": "v1.0 MVP", "time": "...", "core_features": "...", "goal": "..."}]},
+    "non_functional_requirements": [{"type": "性能/安全/兼容性/可观测性", "description": "...", "metric_or_constraint": "...", "verification": "...", "owner": "研发/测试/安全/产品", "status": "已确认/AI 假设/待确认"}],
+    "acceptance_criteria": [{"acceptance_id": "AC-001", "requirement_id": "F-001", "criterion": "...", "verification": "人工测试/自动化/数据核对/用户访谈", "testability_level": "高/中/低", "owner": "测试/产品/研发", "status": "已确认/待确认"}],
+    "roadmap": [{"version": "v1.0 MVP", "time": "4 周", "core_features": "...", "goal": "...", "success_metric": "..."}],
+    "risks": [{"risk_type": "市场风险/产品风险/执行风险", "description": "...", "probability": "高/中/低", "impact": "高/中/低", "mitigation": "...", "owner": "产品/业务/研发/测试", "status": "已确认/AI 假设/待确认"}],
+    "lisa_handoff_inputs": [{"input_type": "需求/验收标准/风险/数据/依赖", "reference_id": "F-001 或 AC-001 或 RISK-001", "content": "...", "source": "...", "usage": "需求评审 / 测试设计 / 测试断言 / 测试策略风险种子", "status": "已确认/待确认"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null,
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；requirements.requirement_id 必须唯一；feature_modules.features.requirement_id、mvp_plan.included_features.requirement_id、acceptance_criteria.requirement_id 和 input_type 为“需求”的 lisa_handoff_inputs.reference_id 只能引用 requirements 中已存在的 requirement_id；input_type 为“验收标准”的 lisa_handoff_inputs.reference_id 只能引用 acceptance_criteria 中已存在的 acceptance_id；main_flow.links 只能引用 main_flow.nodes 中已存在的 node_id。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 roadmap JSON 代码块，后端会负责确定性渲染右侧需求蓝图、功能架构、主流程图和 ai4se-visual roadmap。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in {
         ("TEST_DESIGN", "CLARIFY"),
@@ -437,6 +476,7 @@ def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) ->
         ("VALUE_DISCOVERY", "ELEVATOR"),
         ("VALUE_DISCOVERY", "PERSONA"),
         ("VALUE_DISCOVERY", "JOURNEY"),
+        ("VALUE_DISCOVERY", "BLUEPRINT"),
     }
 
 
@@ -462,6 +502,8 @@ def build_structured_output_instruction(
         return VALUE_PERSONA_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "JOURNEY"):
         return VALUE_JOURNEY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "BLUEPRINT"):
+        return VALUE_BLUEPRINT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
 
 

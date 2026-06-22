@@ -11,6 +11,7 @@ from artifact_data_renderers import (
     ReqReviewArtifactData,
     ReqReviewReportArtifactData,
     StrategyArtifactData,
+    ValueDiscoveryBlueprintArtifactData,
     ValueDiscoveryElevatorArtifactData,
     ValueDiscoveryJourneyArtifactData,
     ValueDiscoveryPersonaArtifactData,
@@ -1205,6 +1206,281 @@ VALID_VALUE_JOURNEY_ARTIFACT_DATA = {
     ],
 }
 
+VALID_VALUE_BLUEPRINT_ARTIFACT_DATA = {
+    "document_info": {
+        "product_name": "AI4SE 测试设计助手",
+        "version": "v1.0",
+        "created_at": "2026-06-23",
+        "product_direction": "面向中小研发团队的 AI 测试设计工作台",
+        "artifact_name": "可评审需求蓝图",
+        "blueprint_status": "可交接 Lisa",
+    },
+    "product_overview": {
+        "vision": "让缺少测试架构师支持的团队，也能稳定产出可评审、可追溯的测试设计资产。",
+        "positioning_for": "中小研发团队测试负责人",
+        "positioning_who": "需要在需求评审后快速形成测试策略和用例方向",
+        "positioning_product": "AI 测试设计助手",
+        "positioning_category": "质量工程工作台",
+        "positioning_value": "把需求澄清、风险分析、测试策略和用例追溯统一成可审阅 artifact。",
+        "positioning_unlike": "通用文档模板和零散 AI 对话",
+        "positioning_differentiator": "输出通过后端 contract 校验、可交接 Lisa 的结构化测试资产。",
+        "user_value": "减少测试设计启动成本和评审返工。",
+        "business_value": "提升需求交付质量，降低漏测和返工成本。",
+        "business_model": "按团队订阅或按试点项目包收费。",
+    },
+    "target_users": [
+        {
+            "user_type": "中小研发团队测试负责人",
+            "core_pain": "测试设计依赖个人经验，评审返工多。",
+            "priority": "核心用户",
+        },
+        {
+            "user_type": "产品负责人",
+            "core_pain": "需求交接到测试时经常暴露遗漏和歧义。",
+            "priority": "重要用户",
+        },
+    ],
+    "feature_modules": [
+        {
+            "module_id": "MOD-001",
+            "module_name": "需求澄清",
+            "features": [
+                {
+                    "feature_id": "F-001",
+                    "feature_name": "结构化需求澄清",
+                    "requirement_id": "F-001",
+                }
+            ],
+        },
+        {
+            "module_id": "MOD-002",
+            "module_name": "风险驱动测试设计",
+            "features": [
+                {
+                    "feature_id": "F-002",
+                    "feature_name": "风险与测试策略生成",
+                    "requirement_id": "F-002",
+                }
+            ],
+        },
+    ],
+    "requirements": [
+        {
+            "requirement_id": "F-001",
+            "priority": "P0",
+            "name": "结构化需求澄清",
+            "user_story": "作为测试负责人，我想把需求输入转成澄清清单，以便在开发前发现遗漏。",
+            "related_pain": "PAIN-001",
+            "scope": "覆盖需求事实、边界、业务规则、待澄清问题和质量需求；不替代 PM 决策。",
+            "dependency": "需要用户提供需求背景和业务规则来源。",
+            "acceptance": "同一输入能生成包含必填标题和阶段门禁的需求分析 artifact。",
+            "testability_level": "高",
+            "owner": "产品",
+            "status": "已确认",
+        },
+        {
+            "requirement_id": "F-002",
+            "priority": "P0",
+            "name": "风险驱动测试策略生成",
+            "user_story": "作为测试负责人，我想自动获得风险、测试点和测试层级建议，以便快速组织评审。",
+            "related_pain": "PAIN-002",
+            "scope": "覆盖 FMEA、质量目标、测试点和资源取舍；不自动执行测试。",
+            "dependency": "依赖需求澄清输出和风险偏好。",
+            "acceptance": "能生成通过 contract 的测试策略蓝图，并包含风险可视化。",
+            "testability_level": "高",
+            "owner": "研发",
+            "status": "已确认",
+        },
+        {
+            "requirement_id": "F-003",
+            "priority": "P1",
+            "name": "测试用例追溯矩阵",
+            "user_story": "作为测试负责人，我想把测试点转成用例和覆盖追溯，以便评审覆盖完整性。",
+            "related_pain": "PAIN-002",
+            "scope": "生成用例集、覆盖矩阵和开放问题；不连接外部测试管理系统。",
+            "dependency": "依赖测试策略蓝图。",
+            "acceptance": "生成的用例集可被测试资产解析器识别。",
+            "testability_level": "中",
+            "owner": "测试",
+            "status": "AI 假设",
+        },
+    ],
+    "main_flow": {
+        "nodes": [
+            {"node_id": "START", "label": "输入需求背景"},
+            {"node_id": "CLARIFY", "label": "生成需求澄清"},
+            {"node_id": "STRATEGY", "label": "生成测试策略"},
+            {"node_id": "CASES", "label": "生成测试用例"},
+            {"node_id": "HANDOFF", "label": "交接 Lisa 评审"},
+        ],
+        "links": [
+            {"from_node": "START", "to_node": "CLARIFY", "label": "澄清"},
+            {"from_node": "CLARIFY", "to_node": "STRATEGY", "label": "风险分析"},
+            {"from_node": "STRATEGY", "to_node": "CASES", "label": "用例设计"},
+            {"from_node": "CASES", "to_node": "HANDOFF", "label": "交付"},
+        ],
+    },
+    "success_metrics": [
+        {
+            "metric_type": "业务指标",
+            "metric_name": "试点团队采用率",
+            "target": "3 个团队完成试点",
+            "measurement": "试点项目记录",
+        },
+        {
+            "metric_type": "用户指标",
+            "metric_name": "测试设计初稿时间",
+            "target": "减少 30%",
+            "measurement": "人工模板与 AI4SE 对照",
+        },
+    ],
+    "mvp_plan": {
+        "included_features": [
+            {
+                "requirement_id": "F-001",
+                "feature_name": "结构化需求澄清",
+                "included": True,
+                "release": "v1.0 MVP",
+            },
+            {
+                "requirement_id": "F-002",
+                "feature_name": "风险驱动测试策略生成",
+                "included": True,
+                "release": "v1.0 MVP",
+            },
+            {
+                "requirement_id": "F-003",
+                "feature_name": "测试用例追溯矩阵",
+                "included": False,
+                "release": "v1.1",
+            },
+        ],
+        "iterations": [
+            {
+                "version": "v1.0 MVP",
+                "time": "4 周",
+                "core_features": "F-001, F-002",
+                "goal": "验证测试设计启动价值",
+            },
+            {
+                "version": "v1.1",
+                "time": "8 周",
+                "core_features": "F-003",
+                "goal": "完善用例追溯闭环",
+            },
+        ],
+    },
+    "non_functional_requirements": [
+        {
+            "type": "性能",
+            "description": "单阶段生成在可接受时间内返回进度和最终 artifact。",
+            "metric_or_constraint": "SSE 持续输出，最终响应不超过试点阈值",
+            "verification": "接口测试和运行统计",
+            "owner": "研发",
+            "status": "AI 假设",
+        },
+        {
+            "type": "安全",
+            "description": "模型供应商密钥只存在后端环境变量中。",
+            "metric_or_constraint": "前端 bundle 不包含密钥",
+            "verification": "配置审查",
+            "owner": "研发",
+            "status": "已确认",
+        },
+    ],
+    "acceptance_criteria": [
+        {
+            "acceptance_id": "AC-001",
+            "requirement_id": "F-001",
+            "criterion": "给定需求文本时，系统生成包含需求事实、边界、业务规则和阶段门禁的 artifact。",
+            "verification": "后端 contract test",
+            "testability_level": "高",
+            "owner": "测试",
+            "status": "已确认",
+        },
+        {
+            "acceptance_id": "AC-002",
+            "requirement_id": "F-002",
+            "criterion": "生成的测试策略蓝图包含风险矩阵、测试点和资源取舍。",
+            "verification": "后端 renderer test",
+            "testability_level": "高",
+            "owner": "测试",
+            "status": "已确认",
+        },
+    ],
+    "roadmap": [
+        {
+            "version": "v1.0 MVP",
+            "time": "4 周",
+            "core_features": "结构化需求澄清、风险驱动测试策略",
+            "goal": "验证主价值",
+            "success_metric": "初稿时间减少 30%",
+        },
+        {
+            "version": "v1.1",
+            "time": "8 周",
+            "core_features": "测试用例追溯矩阵",
+            "goal": "完善交付闭环",
+            "success_metric": "用例评审通过率达到 80%",
+        },
+    ],
+    "risks": [
+        {
+            "risk_type": "产品风险",
+            "description": "AI 产物专业质量不足导致用户不信任。",
+            "probability": "中",
+            "impact": "高",
+            "mitigation": "用 artifact contract、质量门禁和可编辑审阅闭环降低风险。",
+            "owner": "产品",
+            "status": "待验证",
+        },
+        {
+            "risk_type": "执行风险",
+            "description": "不同模型输出格式差异导致 artifact 失败。",
+            "probability": "中",
+            "impact": "高",
+            "mitigation": "采用 artifact_data schema 和后端确定性 renderer。",
+            "owner": "研发",
+            "status": "部分验证",
+        },
+    ],
+    "lisa_handoff_inputs": [
+        {
+            "input_type": "需求",
+            "reference_id": "F-001",
+            "content": "结构化需求澄清能力需要 Lisa 做需求可测试性评审。",
+            "source": "P0 需求",
+            "usage": "需求评审 / 测试设计",
+            "status": "已确认",
+        },
+        {
+            "input_type": "验收标准",
+            "reference_id": "AC-001",
+            "content": "需求澄清 artifact 必须包含必填标题和阶段门禁。",
+            "source": "验收标准",
+            "usage": "测试断言",
+            "status": "已确认",
+        },
+        {
+            "input_type": "风险",
+            "reference_id": "RISK-001",
+            "content": "AI 产物质量不足可能造成评审返工。",
+            "source": "风险评估",
+            "usage": "测试策略风险种子",
+            "status": "待验证",
+        },
+    ],
+    "stage_gate": [
+        {"checked": True, "item": "P0 需求均具备验收标准、owner 和可测试性等级。"},
+        {
+            "checked": True,
+            "item": "非功能需求中的性能、安全、兼容性或可观测性已按实际场景标注。",
+        },
+        {"checked": True, "item": "roadmap 与 MVP 范围一致。"},
+        {"checked": True, "item": "Lisa Handoff 输入足以支撑需求评审或测试设计。"},
+    ],
+}
+
 
 def test_clarify_artifact_data_rejects_blank_required_values():
     invalid = {
@@ -1462,6 +1738,22 @@ def test_value_journey_artifact_data_rejects_unknown_opportunity_reference():
 
     with pytest.raises(ValidationError, match="references unknown opportunity ids"):
         ValueDiscoveryJourneyArtifactData.model_validate(invalid)
+
+
+def test_value_blueprint_artifact_data_rejects_unknown_requirement_reference():
+    invalid = copy.deepcopy(VALID_VALUE_BLUEPRINT_ARTIFACT_DATA)
+    invalid["acceptance_criteria"][0]["requirement_id"] = "F-404"
+
+    with pytest.raises(ValidationError, match="references unknown requirement ids"):
+        ValueDiscoveryBlueprintArtifactData.model_validate(invalid)
+
+
+def test_value_blueprint_artifact_data_rejects_unknown_handoff_reference():
+    invalid = copy.deepcopy(VALID_VALUE_BLUEPRINT_ARTIFACT_DATA)
+    invalid["lisa_handoff_inputs"][1]["reference_id"] = "AC-404"
+
+    with pytest.raises(ValidationError, match="references unknown acceptance ids"):
+        ValueDiscoveryBlueprintArtifactData.model_validate(invalid)
 
 
 def test_render_cases_artifact_data_is_contract_valid_and_asset_parseable():
@@ -1770,6 +2062,55 @@ def test_render_value_journey_artifact_data_is_deterministic_and_contract_valid(
             first,
             workflow_id="VALUE_DISCOVERY",
             current_stage_id="JOURNEY",
+        )
+        == first
+    )
+
+
+def test_render_value_blueprint_artifact_data_is_deterministic_and_contract_valid():
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已生成需求蓝图。",
+            "artifact_data": VALID_VALUE_BLUEPRINT_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="VALUE_DISCOVERY",
+        current_stage_id="BLUEPRINT",
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已生成需求蓝图。",
+            "artifact_data": VALID_VALUE_BLUEPRINT_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="VALUE_DISCOVERY",
+        current_stage_id="BLUEPRINT",
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert first.artifact_update.type == "replace"
+    assert first.stage_action is None
+    assert "# AI4SE 测试设计助手 需求蓝图" in first.artifact_update.markdown
+    assert "## 文档信息" in first.artifact_update.markdown
+    assert "### 功能架构" in first.artifact_update.markdown
+    assert "mindmap" in first.artifact_update.markdown
+    assert "### 主流程图" in first.artifact_update.markdown
+    assert "flowchart TD" in first.artifact_update.markdown
+    assert "## 9. 路线图" in first.artifact_update.markdown
+    assert '"type": "roadmap"' in first.artifact_update.markdown
+    assert "## 11. Lisa Handoff 输入" in first.artifact_update.markdown
+    assert "可测试性等级" in first.artifact_update.markdown
+    assert "owner" in first.artifact_update.markdown
+    assert "状态" in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="VALUE_DISCOVERY",
+            current_stage_id="BLUEPRINT",
         )
         == first
     )

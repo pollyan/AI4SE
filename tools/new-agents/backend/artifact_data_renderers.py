@@ -1026,6 +1026,240 @@ class ValueDiscoveryJourneyArtifactData(StrictArtifactDataModel):
         return self
 
 
+class BlueprintDocumentInfo(StrictArtifactDataModel):
+    product_name: str
+    version: str
+    created_at: str
+    product_direction: str
+    artifact_name: str
+    blueprint_status: str
+
+
+class BlueprintProductOverview(StrictArtifactDataModel):
+    vision: str
+    positioning_for: str
+    positioning_who: str
+    positioning_product: str
+    positioning_category: str
+    positioning_value: str
+    positioning_unlike: str
+    positioning_differentiator: str
+    user_value: str
+    business_value: str
+    business_model: str
+
+
+class BlueprintTargetUser(StrictArtifactDataModel):
+    user_type: str
+    core_pain: str
+    priority: str
+
+
+class BlueprintFeatureItem(StrictArtifactDataModel):
+    feature_id: str
+    feature_name: str
+    requirement_id: str | None = None
+
+
+class BlueprintFeatureModule(StrictArtifactDataModel):
+    module_id: str
+    module_name: str
+    features: list[BlueprintFeatureItem] = Field(min_length=1)
+
+
+class BlueprintRequirement(StrictArtifactDataModel):
+    requirement_id: str
+    priority: str
+    name: str
+    user_story: str
+    related_pain: str
+    scope: str
+    dependency: str
+    acceptance: str
+    testability_level: str
+    owner: str
+    status: str
+
+
+class BlueprintFlowNode(StrictArtifactDataModel):
+    node_id: str
+    label: str
+
+
+class BlueprintFlowLink(StrictArtifactDataModel):
+    from_node: str
+    to_node: str
+    label: str
+
+
+class BlueprintMainFlow(StrictArtifactDataModel):
+    nodes: list[BlueprintFlowNode] = Field(min_length=1)
+    links: list[BlueprintFlowLink] = Field(min_length=1)
+
+
+class BlueprintSuccessMetric(StrictArtifactDataModel):
+    metric_type: str
+    metric_name: str
+    target: str
+    measurement: str
+
+
+class BlueprintMvpFeature(StrictArtifactDataModel):
+    requirement_id: str
+    feature_name: str
+    included: bool
+    release: str
+
+
+class BlueprintIteration(StrictArtifactDataModel):
+    version: str
+    time: str
+    core_features: str
+    goal: str
+
+
+class BlueprintMvpPlan(StrictArtifactDataModel):
+    included_features: list[BlueprintMvpFeature] = Field(min_length=1)
+    iterations: list[BlueprintIteration] = Field(min_length=1)
+
+
+class BlueprintNonFunctionalRequirement(StrictArtifactDataModel):
+    type: str
+    description: str
+    metric_or_constraint: str
+    verification: str
+    owner: str
+    status: str
+
+
+class BlueprintAcceptanceCriterion(StrictArtifactDataModel):
+    acceptance_id: str
+    requirement_id: str
+    criterion: str
+    verification: str
+    testability_level: str
+    owner: str
+    status: str
+
+
+class BlueprintRoadmapItem(StrictArtifactDataModel):
+    version: str
+    time: str
+    core_features: str
+    goal: str
+    success_metric: str
+
+
+class BlueprintRisk(StrictArtifactDataModel):
+    risk_type: str
+    description: str
+    probability: str
+    impact: str
+    mitigation: str
+    owner: str
+    status: str
+
+
+class BlueprintLisaHandoffInput(StrictArtifactDataModel):
+    input_type: str
+    reference_id: str
+    content: str
+    source: str
+    usage: str
+    status: str
+
+
+class ValueDiscoveryBlueprintArtifactData(StrictArtifactDataModel):
+    document_info: BlueprintDocumentInfo
+    product_overview: BlueprintProductOverview
+    target_users: list[BlueprintTargetUser] = Field(min_length=1)
+    feature_modules: list[BlueprintFeatureModule] = Field(min_length=1)
+    requirements: list[BlueprintRequirement] = Field(min_length=1)
+    main_flow: BlueprintMainFlow
+    success_metrics: list[BlueprintSuccessMetric] = Field(min_length=1)
+    mvp_plan: BlueprintMvpPlan
+    non_functional_requirements: list[BlueprintNonFunctionalRequirement] = Field(
+        min_length=1
+    )
+    acceptance_criteria: list[BlueprintAcceptanceCriterion] = Field(min_length=1)
+    roadmap: list[BlueprintRoadmapItem] = Field(min_length=1)
+    risks: list[BlueprintRisk] = Field(min_length=1)
+    lisa_handoff_inputs: list[BlueprintLisaHandoffInput] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_blueprint_consistency(self) -> "ValueDiscoveryBlueprintArtifactData":
+        requirement_ids = {item.requirement_id for item in self.requirements}
+        if len(requirement_ids) != len(self.requirements):
+            raise ValueError("requirements contains duplicate requirement_id")
+
+        acceptance_ids = {item.acceptance_id for item in self.acceptance_criteria}
+        if len(acceptance_ids) != len(self.acceptance_criteria):
+            raise ValueError("acceptance_criteria contains duplicate acceptance_id")
+
+        feature_requirement_ids = [
+            feature.requirement_id
+            for module in self.feature_modules
+            for feature in module.features
+            if feature.requirement_id is not None
+        ]
+        referenced_requirement_ids = [
+            *feature_requirement_ids,
+            *(item.requirement_id for item in self.mvp_plan.included_features),
+            *(item.requirement_id for item in self.acceptance_criteria),
+            *(
+                item.reference_id
+                for item in self.lisa_handoff_inputs
+                if item.input_type == "需求"
+            ),
+        ]
+        unknown_requirement_ids = sorted(
+            {
+                requirement_id
+                for requirement_id in referenced_requirement_ids
+                if requirement_id not in requirement_ids
+            }
+        )
+        if unknown_requirement_ids:
+            raise ValueError(
+                "blueprint references unknown requirement ids: "
+                + ", ".join(unknown_requirement_ids)
+            )
+
+        unknown_acceptance_ids = sorted(
+            {
+                item.reference_id
+                for item in self.lisa_handoff_inputs
+                if item.input_type == "验收标准"
+                and item.reference_id not in acceptance_ids
+            }
+        )
+        if unknown_acceptance_ids:
+            raise ValueError(
+                "blueprint references unknown acceptance ids: "
+                + ", ".join(unknown_acceptance_ids)
+            )
+
+        flow_node_ids = {item.node_id for item in self.main_flow.nodes}
+        if len(flow_node_ids) != len(self.main_flow.nodes):
+            raise ValueError("main_flow.nodes contains duplicate node_id")
+        unknown_flow_nodes = sorted(
+            {
+                node_id
+                for link in self.main_flow.links
+                for node_id in (link.from_node, link.to_node)
+                if node_id not in flow_node_ids
+            }
+        )
+        if unknown_flow_nodes:
+            raise ValueError(
+                "main_flow.links references unknown node ids: "
+                + ", ".join(unknown_flow_nodes)
+            )
+
+        return self
+
+
 def render_agent_turn_from_artifact_data(
     payload: dict[str, Any],
     *,
@@ -1069,6 +1303,11 @@ def render_agent_turn_from_artifact_data(
             payload["artifact_data"]
         )
         markdown = render_value_discovery_journey_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "BLUEPRINT"):
+        artifact_data = ValueDiscoveryBlueprintArtifactData.model_validate(
+            payload["artifact_data"]
+        )
+        markdown = render_value_discovery_blueprint_markdown(artifact_data)
     else:
         raise ValueError(
             f"artifact_data renderer is not configured for {workflow_id}/{current_stage_id}"
@@ -1232,6 +1471,28 @@ def render_value_discovery_journey_markdown(
         _render_journey_validation_experiments(data.validation_experiments),
         _render_journey_summary(data.journey_summary),
         _render_value_stage_gate(data.stage_gate),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_value_discovery_blueprint_markdown(
+    data: ValueDiscoveryBlueprintArtifactData,
+) -> str:
+    sections = [
+        f"# {data.document_info.product_name} 需求蓝图",
+        _render_blueprint_document_info(data.document_info),
+        _render_blueprint_product_overview(data.product_overview),
+        _render_blueprint_target_users(data.target_users),
+        _render_blueprint_requirements(data.feature_modules, data.requirements),
+        _render_blueprint_main_flow(data.main_flow),
+        _render_blueprint_success_metrics(data.success_metrics),
+        _render_blueprint_mvp_plan(data.mvp_plan),
+        _render_blueprint_non_functional_requirements(data.non_functional_requirements),
+        _render_blueprint_acceptance_criteria(data.acceptance_criteria),
+        _render_blueprint_roadmap(data.roadmap),
+        _render_blueprint_risks(data.risks),
+        _render_blueprint_lisa_handoff_inputs(data.lisa_handoff_inputs),
+        _render_blueprint_stage_gate(data.stage_gate),
     ]
     return "\n\n".join(sections)
 
@@ -2799,6 +3060,285 @@ def _render_journey_summary(summary: JourneySummary) -> str:
 
 def _escape_journey_text(value: str) -> str:
     return value.replace("\n", " ").replace(":", "：").replace("|", "｜")
+
+
+def _render_blueprint_document_info(info: BlueprintDocumentInfo) -> str:
+    rows = [
+        ("文档版本", info.version),
+        ("创建日期", info.created_at),
+        ("产品方向", info.product_direction),
+        ("Artifact 名称", info.artifact_name),
+        ("蓝图状态", info.blueprint_status),
+    ]
+    return "## 文档信息\n" + _markdown_table(["维度", "内容"], rows)
+
+
+def _render_blueprint_product_overview(overview: BlueprintProductOverview) -> str:
+    core_value_rows = [
+        ("用户价值", overview.user_value),
+        ("商业价值", overview.business_value),
+        ("商业模式", overview.business_model),
+    ]
+    return (
+        "## 1. 产品概述\n\n"
+        "### 1.1 产品愿景\n"
+        f"> {overview.vision}\n\n"
+        "### 1.2 定位声明\n"
+        f"**For** {overview.positioning_for} **who** {overview.positioning_who},\n"
+        f"**the** {overview.positioning_product} **is a** "
+        f"{overview.positioning_category}\n"
+        f"**that** {overview.positioning_value}. **Unlike** "
+        f"{overview.positioning_unlike},\n"
+        f"**our product** {overview.positioning_differentiator}.\n\n"
+        "### 1.3 核心价值\n" + _markdown_table(["维度", "描述"], core_value_rows)
+    )
+
+
+def _render_blueprint_target_users(items: list[BlueprintTargetUser]) -> str:
+    rows = [(item.user_type, item.core_pain, item.priority) for item in items]
+    return "## 2. 目标用户（摘要）\n" + _markdown_table(
+        ["用户类型", "核心痛点", "优先级"], rows
+    )
+
+
+def _render_blueprint_requirements(
+    modules: list[BlueprintFeatureModule],
+    requirements: list[BlueprintRequirement],
+) -> str:
+    sections = [
+        "## 3. 核心需求",
+        "### 功能架构\n" + _render_blueprint_feature_mindmap(modules),
+    ]
+    headings = [
+        ("P0", "### P0 需求（核心功能，必须实现）"),
+        ("P1", "### P1 需求（重要功能，应该实现）"),
+        ("P2", "### P2 需求（增值功能，可以实现）"),
+    ]
+    headers = [
+        "ID",
+        "需求名称",
+        "用户故事",
+        "对应痛点",
+        "范围边界",
+        "依赖",
+        "验收标准",
+        "可测试性等级",
+        "owner",
+        "状态",
+    ]
+    for priority, heading in headings:
+        rows = [
+            (
+                item.requirement_id,
+                item.name,
+                item.user_story,
+                item.related_pain,
+                item.scope,
+                item.dependency,
+                item.acceptance,
+                item.testability_level,
+                item.owner,
+                item.status,
+            )
+            for item in requirements
+            if item.priority == priority
+        ]
+        if not rows:
+            rows = [
+                ("无", "本轮未规划", "无", "无", "无", "无", "无", "无", "无", "无")
+            ]
+        sections.append(heading + "\n" + _markdown_table(headers, rows))
+    return "\n\n".join(sections)
+
+
+def _render_blueprint_feature_mindmap(modules: list[BlueprintFeatureModule]) -> str:
+    lines = ["```mermaid", "mindmap", '    root(("产品名称"))']
+    for module in modules:
+        lines.append(f'        ("{_escape_mermaid_label(module.module_name)}")')
+        for feature in module.features:
+            lines.append(
+                f'            ["{_escape_mermaid_label(feature.feature_name)}"]'
+            )
+    lines.append("```")
+    return "\n".join(lines)
+
+
+def _render_blueprint_main_flow(flow: BlueprintMainFlow) -> str:
+    node_lookup = {node.node_id: node for node in flow.nodes}
+    existing_ids: dict[str, str] = {}
+    safe_ids = {
+        node.node_id: _node_id(node.node_id, existing_ids) for node in flow.nodes
+    }
+    lines = ["```mermaid", "flowchart TD"]
+    for node in flow.nodes:
+        lines.append(
+            f'    {safe_ids[node.node_id]}["{_escape_mermaid_label(node.label)}"]'
+        )
+    for link in flow.links:
+        lines.append(
+            f"    {safe_ids[link.from_node]} -->|"
+            f'"{_escape_mermaid_label(link.label)}"| {safe_ids[link.to_node]}'
+        )
+    lines.append("```")
+    rows = [
+        (
+            link.from_node,
+            node_lookup[link.from_node].label,
+            link.label,
+            link.to_node,
+            node_lookup[link.to_node].label,
+        )
+        for link in flow.links
+    ]
+    return "## 4. 核心流程\n\n" "### 主流程图\n" + "\n".join(
+        lines
+    ) + "\n\n" + _markdown_table(["起点 ID", "起点", "动作", "终点 ID", "终点"], rows)
+
+
+def _render_blueprint_success_metrics(
+    items: list[BlueprintSuccessMetric],
+) -> str:
+    rows = [
+        (item.metric_type, item.metric_name, item.target, item.measurement)
+        for item in items
+    ]
+    return "## 5. 成功指标\n" + _markdown_table(
+        ["指标类型", "指标名称", "目标值", "衡量方式"],
+        rows,
+    )
+
+
+def _render_blueprint_mvp_plan(plan: BlueprintMvpPlan) -> str:
+    feature_lines = [
+        f"- [{'x' if item.included else ' '}] {item.requirement_id}: "
+        f"{item.feature_name} — {item.release}"
+        for item in plan.included_features
+    ]
+    iteration_rows = [
+        (item.version, item.time, item.core_features, item.goal)
+        for item in plan.iterations
+    ]
+    return (
+        "## 6. MVP 范围与计划\n"
+        "### MVP 包含功能\n" + "\n".join(feature_lines) + "\n\n"
+        "### 迭代路线\n"
+        + _markdown_table(["版本", "时间", "核心功能", "目标"], iteration_rows)
+    )
+
+
+def _render_blueprint_non_functional_requirements(
+    items: list[BlueprintNonFunctionalRequirement],
+) -> str:
+    rows = [
+        (
+            item.type,
+            item.description,
+            item.metric_or_constraint,
+            item.verification,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 7. 非功能需求\n" + _markdown_table(
+        ["类型", "需求描述", "指标/约束", "验证方式", "owner", "状态"],
+        rows,
+    )
+
+
+def _render_blueprint_acceptance_criteria(
+    items: list[BlueprintAcceptanceCriterion],
+) -> str:
+    rows = [
+        (
+            item.acceptance_id,
+            item.requirement_id,
+            item.criterion,
+            item.verification,
+            item.testability_level,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 8. 验收标准\n" + _markdown_table(
+        [
+            "验收 ID",
+            "关联需求",
+            "验收标准",
+            "验证方式",
+            "可测试性等级",
+            "owner",
+            "状态",
+        ],
+        rows,
+    )
+
+
+def _render_blueprint_roadmap(items: list[BlueprintRoadmapItem]) -> str:
+    visual = {
+        "type": "roadmap",
+        "title": "产品迭代路线图",
+        "columns": ["版本", "时间", "核心功能", "目标", "成功指标"],
+        "rows": [
+            {
+                "版本": item.version,
+                "时间": item.time,
+                "核心功能": item.core_features,
+                "目标": item.goal,
+                "成功指标": item.success_metric,
+            }
+            for item in items
+        ],
+    }
+    return (
+        "## 9. 路线图\n"
+        "```ai4se-visual\n" + json.dumps(visual, ensure_ascii=False, indent=2) + "\n```"
+    )
+
+
+def _render_blueprint_risks(items: list[BlueprintRisk]) -> str:
+    rows = [
+        (
+            item.risk_type,
+            item.description,
+            item.probability,
+            item.impact,
+            item.mitigation,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 10. 风险评估\n" + _markdown_table(
+        ["风险类型", "风险描述", "可能性", "影响", "缓解措施", "owner", "状态"],
+        rows,
+    )
+
+
+def _render_blueprint_lisa_handoff_inputs(
+    items: list[BlueprintLisaHandoffInput],
+) -> str:
+    rows = [
+        (
+            item.input_type,
+            item.reference_id,
+            item.content,
+            item.source,
+            item.usage,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 11. Lisa Handoff 输入\n" + _markdown_table(
+        ["输入类型", "ID", "内容", "来源", "给 Lisa 的用途", "状态"],
+        rows,
+    )
+
+
+def _render_blueprint_stage_gate(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 12. 阶段门禁\n" + "\n".join(lines)
 
 
 def _render_flow_links(links: list[FlowLink]) -> str:
