@@ -775,6 +775,123 @@ class ValueDiscoveryElevatorArtifactData(StrictArtifactDataModel):
         return self
 
 
+class PersonaSummary(StrictArtifactDataModel):
+    artifact_name: str
+    core_user_judgement: str
+    primary_pain: str
+    validation_status: str
+    journey_readiness: str
+
+
+class PersonaFeature(StrictArtifactDataModel):
+    dimension: str
+    description: str
+    evidence_level: str
+    validation_status: str
+
+
+class PersonaBehaviorFeature(StrictArtifactDataModel):
+    dimension: str
+    description: str
+    trigger: str
+    evidence_level: str
+    validation_status: str
+
+
+class PersonaProfile(StrictArtifactDataModel):
+    persona_id: str
+    name: str
+    priority: str
+    summary: str
+    basic_features: list[PersonaFeature] = Field(min_length=1)
+    behavior_features: list[PersonaBehaviorFeature] = Field(min_length=1)
+
+
+class PersonaBehaviorScenario(StrictArtifactDataModel):
+    scenario_id: str
+    persona_id: str
+    scenario: str
+    trigger: str
+    user_goal: str
+    current_solution: str
+    status: str
+
+
+class PersonaDecisionRole(StrictArtifactDataModel):
+    role: str
+    persona_id: str
+    concern: str
+    influence: str
+    payment_relation: str
+    evidence_level: str
+    validation_status: str
+
+
+class PersonaPainEvidence(StrictArtifactDataModel):
+    pain_id: str
+    persona_id: str
+    pain: str
+    frequency: str
+    impact: str
+    existing_solution_gap: str
+    evidence_level: str
+    validation_status: str
+
+
+class AntiPersona(StrictArtifactDataModel):
+    name: str
+    reason: str
+    boundary: str
+    risk: str
+    status: str
+
+
+class PersonaPriorityRanking(StrictArtifactDataModel):
+    priority: str
+    persona_id: str
+    reason: str
+    related_pain: str
+    evidence_level: str
+    validation_status: str
+
+
+class ValueDiscoveryPersonaArtifactData(StrictArtifactDataModel):
+    document_info: DocumentInfo
+    persona_summary: PersonaSummary
+    personas: list[PersonaProfile] = Field(min_length=1)
+    behavior_scenarios: list[PersonaBehaviorScenario] = Field(min_length=1)
+    decision_chain: list[PersonaDecisionRole] = Field(min_length=1)
+    pain_evidence: list[PersonaPainEvidence] = Field(min_length=1)
+    anti_personas: list[AntiPersona] = Field(min_length=1)
+    priority_ranking: list[PersonaPriorityRanking] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_persona_consistency(self) -> "ValueDiscoveryPersonaArtifactData":
+        persona_ids = {persona.persona_id for persona in self.personas}
+        if len(persona_ids) != len(self.personas):
+            raise ValueError("personas contains duplicate persona_id")
+
+        references = [
+            *(item.persona_id for item in self.behavior_scenarios),
+            *(item.persona_id for item in self.decision_chain),
+            *(item.persona_id for item in self.pain_evidence),
+            *(item.persona_id for item in self.priority_ranking),
+        ]
+        unknown = sorted(
+            {persona_id for persona_id in references if persona_id not in persona_ids}
+        )
+        if unknown:
+            raise ValueError(
+                "persona references unknown persona ids: " + ", ".join(unknown)
+            )
+
+        ranked_ids = [item.persona_id for item in self.priority_ranking]
+        if len(set(ranked_ids)) != len(ranked_ids):
+            raise ValueError("priority_ranking contains duplicate persona_id")
+        return self
+
+
 def render_agent_turn_from_artifact_data(
     payload: dict[str, Any],
     *,
@@ -808,6 +925,11 @@ def render_agent_turn_from_artifact_data(
             payload["artifact_data"]
         )
         markdown = render_value_discovery_elevator_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "PERSONA"):
+        artifact_data = ValueDiscoveryPersonaArtifactData.model_validate(
+            payload["artifact_data"]
+        )
+        markdown = render_value_discovery_persona_markdown(artifact_data)
     else:
         raise ValueError(
             f"artifact_data renderer is not configured for {workflow_id}/{current_stage_id}"
@@ -935,6 +1057,23 @@ def render_value_discovery_elevator_markdown(
         _render_value_score_matrix(data.score_matrix, data.score_summary),
         _render_value_assumptions(data.assumptions),
         _render_elevator_pitch(data.elevator_pitch),
+        _render_value_stage_gate(data.stage_gate),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_value_discovery_persona_markdown(
+    data: ValueDiscoveryPersonaArtifactData,
+) -> str:
+    sections = [
+        "# 用户画像分析",
+        _render_persona_summary(data.persona_summary),
+        _render_persona_profiles(data.personas),
+        _render_persona_behavior_scenarios(data.behavior_scenarios, data.personas),
+        _render_persona_decision_chain(data.decision_chain, data.personas),
+        _render_persona_pain_evidence(data.pain_evidence, data.personas),
+        _render_anti_personas(data.anti_personas),
+        _render_persona_priority_ranking(data.priority_ranking, data.personas),
         _render_value_stage_gate(data.stage_gate),
     ]
     return "\n\n".join(sections)
@@ -2140,6 +2279,182 @@ def _render_elevator_pitch(pitch: str) -> str:
 def _render_value_stage_gate(checks: list[StageGateCheck]) -> str:
     lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
     return "## 阶段门禁\n" + "\n".join(lines)
+
+
+def _persona_names(personas: list[PersonaProfile]) -> dict[str, str]:
+    return {persona.persona_id: persona.name for persona in personas}
+
+
+def _render_persona_summary(summary: PersonaSummary) -> str:
+    rows = [
+        ("Artifact 名称", summary.artifact_name),
+        ("核心用户判断", summary.core_user_judgement),
+        ("主要痛点", summary.primary_pain),
+        ("验证状态", summary.validation_status),
+        ("进入旅程阶段判断", summary.journey_readiness),
+    ]
+    return "## 画像摘要\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_persona_profiles(personas: list[PersonaProfile]) -> str:
+    sections = ["## 主要用户画像"]
+    for index, persona in enumerate(personas, start=1):
+        basic_rows = [
+            (
+                item.dimension,
+                item.description,
+                item.evidence_level,
+                item.validation_status,
+            )
+            for item in persona.basic_features
+        ]
+        behavior_rows = [
+            (
+                item.dimension,
+                item.description,
+                item.trigger,
+                item.evidence_level,
+                item.validation_status,
+            )
+            for item in persona.behavior_features
+        ]
+        sections.append(
+            f"### 画像 {index}\n\n"
+            f"**用户类型名称**：{persona.name}（{persona.priority}）\n\n"
+            f"> {persona.summary}\n\n"
+            "#### 基础特征\n"
+            + _markdown_table(
+                ["维度", "描述", "证据等级", "验证状态"],
+                basic_rows,
+            )
+            + "\n\n"
+            + "#### 行为特征\n"
+            + _markdown_table(
+                ["维度", "描述", "场景触发", "证据等级", "验证状态"],
+                behavior_rows,
+            )
+        )
+    return "\n\n".join(sections)
+
+
+def _render_persona_behavior_scenarios(
+    items: list[PersonaBehaviorScenario],
+    personas: list[PersonaProfile],
+) -> str:
+    persona_names = _persona_names(personas)
+    rows = [
+        (
+            item.scenario_id,
+            persona_names[item.persona_id],
+            item.scenario,
+            item.trigger,
+            item.user_goal,
+            item.current_solution,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 行为与场景\n" + _markdown_table(
+        ["场景 ID", "用户类型", "场景描述", "触发条件", "用户目标", "当前做法", "状态"],
+        rows,
+    )
+
+
+def _render_persona_decision_chain(
+    items: list[PersonaDecisionRole],
+    personas: list[PersonaProfile],
+) -> str:
+    persona_names = _persona_names(personas)
+    rows = [
+        (
+            item.role,
+            persona_names[item.persona_id],
+            item.concern,
+            item.influence,
+            item.payment_relation,
+            item.evidence_level,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 决策链\n" + _markdown_table(
+        [
+            "决策角色",
+            "用户类型/岗位",
+            "关注点",
+            "影响力",
+            "付费/采购关系",
+            "证据等级",
+            "验证状态",
+        ],
+        rows,
+    )
+
+
+def _render_persona_pain_evidence(
+    items: list[PersonaPainEvidence],
+    personas: list[PersonaProfile],
+) -> str:
+    persona_names = _persona_names(personas)
+    rows = [
+        (
+            item.pain_id,
+            persona_names[item.persona_id],
+            item.pain,
+            item.frequency,
+            item.impact,
+            item.existing_solution_gap,
+            item.evidence_level,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 痛点证据\n" + _markdown_table(
+        [
+            "痛点 ID",
+            "用户类型",
+            "痛点",
+            "频率",
+            "影响程度",
+            "现有方案不足",
+            "证据等级",
+            "验证状态",
+        ],
+        rows,
+    )
+
+
+def _render_anti_personas(items: list[AntiPersona]) -> str:
+    rows = [
+        (item.name, item.reason, item.boundary, item.risk, item.status)
+        for item in items
+    ]
+    return "## 反画像\n" + _markdown_table(
+        ["非目标用户", "为什么不是当前核心用户", "不服务的边界", "风险", "状态"],
+        rows,
+    )
+
+
+def _render_persona_priority_ranking(
+    items: list[PersonaPriorityRanking],
+    personas: list[PersonaProfile],
+) -> str:
+    persona_names = _persona_names(personas)
+    rows = [
+        (
+            item.priority,
+            persona_names[item.persona_id],
+            item.reason,
+            item.related_pain,
+            item.evidence_level,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 用户优先级排序\n" + _markdown_table(
+        ["优先级", "用户类型", "理由", "关联痛点", "证据等级", "验证状态"],
+        rows,
+    )
 
 
 def _render_flow_links(links: list[FlowLink]) -> str:

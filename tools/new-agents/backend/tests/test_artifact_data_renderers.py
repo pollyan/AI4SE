@@ -12,6 +12,7 @@ from artifact_data_renderers import (
     ReqReviewReportArtifactData,
     StrategyArtifactData,
     ValueDiscoveryElevatorArtifactData,
+    ValueDiscoveryPersonaArtifactData,
     render_agent_turn_from_artifact_data,
 )
 from test_asset_parsing import parse_lisa_test_asset_markdown
@@ -872,6 +873,166 @@ VALID_VALUE_ELEVATOR_ARTIFACT_DATA = {
     ],
 }
 
+VALID_VALUE_PERSONA_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "用户画像与决策链分析",
+        "workflow": "VALUE_DISCOVERY",
+        "stage": "PERSONA",
+        "status": "可进入用户旅程",
+    },
+    "persona_summary": {
+        "artifact_name": "用户画像与决策链分析",
+        "core_user_judgement": "最优先服务缺少测试架构支持的中小团队测试负责人",
+        "primary_pain": "PAIN-001 测试设计质量受个人经验影响大",
+        "validation_status": "部分验证",
+        "journey_readiness": "可进入",
+    },
+    "personas": [
+        {
+            "persona_id": "PER-001",
+            "name": "中小研发团队测试负责人",
+            "priority": "核心用户",
+            "summary": "负责把需求转成测试策略和用例，但缺少稳定方法和架构师支持。",
+            "basic_features": [
+                {
+                    "dimension": "用户类型",
+                    "description": "管理 3-8 名测试或质量成员的测试负责人",
+                    "evidence_level": "用户陈述",
+                    "validation_status": "部分验证",
+                },
+                {
+                    "dimension": "企业属性",
+                    "description": "20-100 人研发团队，需求变化快，交付节奏紧",
+                    "evidence_level": "合理推断",
+                    "validation_status": "待验证",
+                },
+                {
+                    "dimension": "技术水平",
+                    "description": "熟悉测试管理工具，愿意试用 AI 辅助设计",
+                    "evidence_level": "合理推断",
+                    "validation_status": "待验证",
+                },
+                {
+                    "dimension": "决策角色",
+                    "description": "既是使用者，也是工具试点影响者",
+                    "evidence_level": "用户陈述",
+                    "validation_status": "部分验证",
+                },
+            ],
+            "behavior_features": [
+                {
+                    "dimension": "日常工作模式",
+                    "description": "围绕需求评审、测试设计、用例评审和上线风险跟踪工作",
+                    "trigger": "新需求进入开发前",
+                    "evidence_level": "用户陈述",
+                    "validation_status": "部分验证",
+                },
+                {
+                    "dimension": "信息获取方式",
+                    "description": "通过团队复盘、测试社区和竞品文档寻找方法",
+                    "trigger": "现有模板无法覆盖新业务",
+                    "evidence_level": "合理推断",
+                    "validation_status": "待验证",
+                },
+                {
+                    "dimension": "决策模式",
+                    "description": "先试点一个需求，再向研发负责人证明返工减少",
+                    "trigger": "有明确项目试点机会",
+                    "evidence_level": "合理推断",
+                    "validation_status": "待验证",
+                },
+                {
+                    "dimension": "工具使用习惯",
+                    "description": "常用测试管理、文档协作和缺陷跟踪工具",
+                    "trigger": "需求进入测试设计阶段",
+                    "evidence_level": "用户陈述",
+                    "validation_status": "部分验证",
+                },
+            ],
+        }
+    ],
+    "behavior_scenarios": [
+        {
+            "scenario_id": "SC-001",
+            "persona_id": "PER-001",
+            "scenario": "需求评审结束后，需要在一天内输出测试设计初稿",
+            "trigger": "需求确认进入开发排期",
+            "user_goal": "快速形成可评审的风险、测试点和用例方向",
+            "current_solution": "复制历史模板并人工补充风险清单",
+            "status": "AI 假设",
+        }
+    ],
+    "decision_chain": [
+        {
+            "role": "使用者",
+            "persona_id": "PER-001",
+            "concern": "产物是否减少测试设计返工",
+            "influence": "高",
+            "payment_relation": "提出试点需求但不直接采购",
+            "evidence_level": "合理推断",
+            "validation_status": "待验证",
+        },
+        {
+            "role": "决策者",
+            "persona_id": "PER-001",
+            "concern": "ROI、数据安全和团队采用成本",
+            "influence": "中",
+            "payment_relation": "影响预算审批",
+            "evidence_level": "合理推断",
+            "validation_status": "待验证",
+        },
+    ],
+    "pain_evidence": [
+        {
+            "pain_id": "PAIN-001",
+            "persona_id": "PER-001",
+            "pain": "测试设计依赖个人经验，评审返工多",
+            "frequency": "每个新需求",
+            "impact": "返工、漏测和上线风险",
+            "existing_solution_gap": "模板只能记录结论，不能强制风险追溯",
+            "evidence_level": "用户陈述",
+            "validation_status": "部分验证",
+        }
+    ],
+    "anti_personas": [
+        {
+            "name": "大型成熟测试平台团队",
+            "reason": "已有完备质量平台和测试架构师支持，痛点不够强",
+            "boundary": "暂不覆盖深度平台定制和多团队权限治理",
+            "risk": "过早服务会拉高集成和权限复杂度",
+            "status": "AI 假设",
+        }
+    ],
+    "priority_ranking": [
+        {
+            "priority": "核心用户",
+            "persona_id": "PER-001",
+            "reason": "痛点强、场景高频、能直接验证价值",
+            "related_pain": "PAIN-001",
+            "evidence_level": "用户陈述",
+            "validation_status": "部分验证",
+        }
+    ],
+    "stage_gate": [
+        {
+            "checked": True,
+            "item": "至少一个核心用户画像包含角色、场景、痛点、影响程度和证据等级。",
+        },
+        {
+            "checked": True,
+            "item": "使用者、决策者、付费者的关系已说明，或明确标注为待验证。",
+        },
+        {
+            "checked": True,
+            "item": "反画像已列出，避免下一阶段旅程范围过宽。",
+        },
+        {
+            "checked": True,
+            "item": "可进入旅程阶段的核心场景已明确。",
+        },
+    ],
+}
+
 
 def test_clarify_artifact_data_rejects_blank_required_values():
     invalid = {
@@ -1091,6 +1252,30 @@ def test_value_elevator_artifact_data_rejects_unknown_value_flow_reference():
         ValueDiscoveryElevatorArtifactData.model_validate(invalid)
 
 
+def test_value_persona_artifact_data_rejects_unknown_persona_reference():
+    invalid = copy.deepcopy(VALID_VALUE_PERSONA_ARTIFACT_DATA)
+    invalid["behavior_scenarios"][0]["persona_id"] = "USER-404"
+
+    with pytest.raises(ValidationError, match="references unknown persona ids"):
+        ValueDiscoveryPersonaArtifactData.model_validate(invalid)
+
+
+def test_value_persona_artifact_data_rejects_duplicate_priority_persona():
+    invalid = copy.deepcopy(VALID_VALUE_PERSONA_ARTIFACT_DATA)
+    invalid["priority_ranking"].append(
+        {
+            **invalid["priority_ranking"][0],
+            "priority": "重要用户",
+        }
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match="priority_ranking contains duplicate persona_id",
+    ):
+        ValueDiscoveryPersonaArtifactData.model_validate(invalid)
+
+
 def test_render_cases_artifact_data_is_contract_valid_and_asset_parseable():
     output = render_agent_turn_from_artifact_data(
         {
@@ -1292,6 +1477,56 @@ def test_render_value_elevator_artifact_data_is_deterministic_and_contract_valid
             first,
             workflow_id="VALUE_DISCOVERY",
             current_stage_id="ELEVATOR",
+        )
+        == first
+    )
+
+
+def test_render_value_persona_artifact_data_is_deterministic_and_contract_valid():
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已生成用户画像分析。",
+            "artifact_data": VALID_VALUE_PERSONA_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "JOURNEY",
+            },
+            "warnings": [],
+        },
+        workflow_id="VALUE_DISCOVERY",
+        current_stage_id="PERSONA",
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已生成用户画像分析。",
+            "artifact_data": VALID_VALUE_PERSONA_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "JOURNEY",
+            },
+            "warnings": [],
+        },
+        workflow_id="VALUE_DISCOVERY",
+        current_stage_id="PERSONA",
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert first.artifact_update.type == "replace"
+    assert first.stage_action is not None
+    assert first.stage_action.target_stage_id == "JOURNEY"
+    assert "# 用户画像分析" in first.artifact_update.markdown
+    assert "### 画像 1" in first.artifact_update.markdown
+    assert "#### 基础特征" in first.artifact_update.markdown
+    assert "#### 行为特征" in first.artifact_update.markdown
+    assert "## 决策链" in first.artifact_update.markdown
+    assert "## 用户优先级排序" in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="VALUE_DISCOVERY",
+            current_stage_id="PERSONA",
         )
         == first
     )

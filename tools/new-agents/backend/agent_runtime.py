@@ -336,6 +336,47 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+VALUE_PERSONA_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮已经形成哪些画像、哪些画像证据仍待验证、决策链和反画像有什么关键结论。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "用户画像与决策链分析", "workflow": "VALUE_DISCOVERY", "stage": "PERSONA", "status": "可进入用户旅程/需补充画像证据/暂缓"},
+    "persona_summary": {"artifact_name": "用户画像与决策链分析", "core_user_judgement": "...", "primary_pain": "PAIN-001 ...", "validation_status": "已验证/部分验证/待验证", "journey_readiness": "可进入/需补充画像证据/暂缓"},
+    "personas": [{
+      "persona_id": "PER-001",
+      "name": "...",
+      "priority": "核心用户/重要用户/潜在用户",
+      "summary": "...",
+      "basic_features": [{"dimension": "用户类型/人口或企业属性/技术水平/决策角色", "description": "...", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "validation_status": "已验证/部分验证/待验证"}],
+      "behavior_features": [{"dimension": "日常工作模式/信息获取方式/决策模式/工具使用习惯", "description": "...", "trigger": "...", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "validation_status": "已验证/部分验证/待验证"}]
+    }],
+    "behavior_scenarios": [{"scenario_id": "SC-001", "persona_id": "PER-001", "scenario": "...", "trigger": "...", "user_goal": "...", "current_solution": "...", "status": "已验证/AI 假设/待验证"}],
+    "decision_chain": [{"role": "使用者/决策者/付费者", "persona_id": "PER-001", "concern": "...", "influence": "高/中/低", "payment_relation": "...", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "validation_status": "已验证/部分验证/待验证"}],
+    "pain_evidence": [{"pain_id": "PAIN-001", "persona_id": "PER-001", "pain": "...", "frequency": "...", "impact": "...", "existing_solution_gap": "...", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "validation_status": "已验证/部分验证/待验证"}],
+    "anti_personas": [{"name": "...", "reason": "...", "boundary": "...", "risk": "...", "status": "已确认/AI 假设/待验证"}],
+    "priority_ranking": [{"priority": "核心用户", "persona_id": "PER-001", "reason": "...", "related_pain": "PAIN-001", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "validation_status": "已验证/部分验证/待验证"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "JOURNEY"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；personas.persona_id 必须唯一；behavior_scenarios、decision_chain、pain_evidence、priority_ranking 中的 persona_id 只能引用 personas 中已存在的 persona_id；priority_ranking 中同一个 persona_id 只能出现一次。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或解释文字，后端会负责确定性渲染右侧用户画像分析。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in {
         ("TEST_DESIGN", "CLARIFY"),
@@ -345,6 +386,7 @@ def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) ->
         ("REQ_REVIEW", "REVIEW"),
         ("REQ_REVIEW", "REPORT"),
         ("VALUE_DISCOVERY", "ELEVATOR"),
+        ("VALUE_DISCOVERY", "PERSONA"),
     }
 
 
@@ -366,6 +408,8 @@ def build_structured_output_instruction(
         return REQ_REVIEW_REPORT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
         return VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "PERSONA"):
+        return VALUE_PERSONA_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
 
 
