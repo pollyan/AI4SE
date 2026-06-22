@@ -296,6 +296,46 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮已经澄清哪些价值定位信息、哪些内容是已确认事实/AI 假设/待验证项、右侧价值定位分析会更新哪些部分。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "价值定位诊断报告", "workflow": "VALUE_DISCOVERY", "stage": "ELEVATOR", "status": "可进入用户画像/需补充定位信息/暂缓"},
+    "positioning_summary": {"one_liner": "...", "core_user": "...", "core_pain": "...", "unique_value": "...", "current_judgement": "可继续画像分析/需补充定位信息/暂缓"},
+    "value_flow": {
+      "nodes": [{"node_id": "USER", "label": "目标用户", "description": "..."}, {"node_id": "PAIN", "label": "核心痛点", "description": "..."}],
+      "links": [{"from_node": "USER", "to_node": "PAIN", "label": "面临"}]
+    },
+    "target_scenarios": [{"dimension": "主要用户群体/核心使用场景/现有应对方式/现有方案不足", "description": "...", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "status": "已确认/AI 假设/待验证"}],
+    "pain_evidence": [{"pain_id": "PAIN-001", "description": "...", "scene": "...", "impact": "...", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "validation_action": "...", "status": "已确认/AI 假设/待验证"}],
+    "differentiators": [{"dimension": "核心优势/用户获益/差异化壁垒", "our_value": "...", "existing_solution": "...", "evidence": "...", "status": "已确认/AI 假设/待验证"}],
+    "business_feasibility": [{"dimension": "用户付费意愿/商业模式方向/市场规模感知", "judgement": "...", "basis": "...", "validation_action": "...", "status": "已确认/AI 假设/待验证"}],
+    "score_matrix": [{"dimension": "痛点强度", "score": 4, "basis": "...", "next_validation": "..."}, {"dimension": "证据强度", "score": 2, "basis": "...", "next_validation": "..."}],
+    "score_summary": {"total_score": 6, "average_score": 3.0, "judgement": "..."},
+    "assumptions": [{"assumption_id": "H-001", "content": "...", "impact": "...", "validation_action": "...", "owner": "产品/业务/用户研究", "status": "待验证/已验证/否定"}],
+    "elevator_pitch": "60 秒内能讲完、让外行听懂、能引起兴趣的完整电梯演讲稿。",
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "PERSONA"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；value_flow.links 只能引用 value_flow.nodes 中已存在的 node_id；score_matrix.score 必须是 1 到 5 的整数；score_summary.total_score 必须等于 score_matrix.score 总和；score_summary.average_score 必须等于平均分。不要输出完整 Markdown、Mermaid 代码块、score-matrix JSON 代码块或表格，后端会负责确定性渲染右侧价值定位分析、flowchart 和 ai4se-visual score-matrix。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in {
         ("TEST_DESIGN", "CLARIFY"),
@@ -304,6 +344,7 @@ def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) ->
         ("TEST_DESIGN", "DELIVERY"),
         ("REQ_REVIEW", "REVIEW"),
         ("REQ_REVIEW", "REPORT"),
+        ("VALUE_DISCOVERY", "ELEVATOR"),
     }
 
 
@@ -323,6 +364,8 @@ def build_structured_output_instruction(
         return REQ_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("REQ_REVIEW", "REPORT"):
         return REQ_REVIEW_REPORT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
+        return VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
 
 

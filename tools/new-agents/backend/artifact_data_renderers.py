@@ -646,6 +646,135 @@ class ReqReviewReportArtifactData(StrictArtifactDataModel):
         return self
 
 
+class PositioningSummary(StrictArtifactDataModel):
+    one_liner: str
+    core_user: str
+    core_pain: str
+    unique_value: str
+    current_judgement: str
+
+
+class ValueFlowNode(StrictArtifactDataModel):
+    node_id: str
+    label: str
+    description: str
+
+
+class ValueFlowLink(StrictArtifactDataModel):
+    from_node: str
+    to_node: str
+    label: str
+
+
+class ValueFlow(StrictArtifactDataModel):
+    nodes: list[ValueFlowNode] = Field(min_length=1)
+    links: list[ValueFlowLink] = Field(min_length=1)
+
+
+class TargetScenario(StrictArtifactDataModel):
+    dimension: str
+    description: str
+    evidence_level: str
+    status: str
+
+
+class PainEvidence(StrictArtifactDataModel):
+    pain_id: str
+    description: str
+    scene: str
+    impact: str
+    evidence_level: str
+    validation_action: str
+    status: str
+
+
+class Differentiator(StrictArtifactDataModel):
+    dimension: str
+    our_value: str
+    existing_solution: str
+    evidence: str
+    status: str
+
+
+class BusinessFeasibility(StrictArtifactDataModel):
+    dimension: str
+    judgement: str
+    basis: str
+    validation_action: str
+    status: str
+
+
+class ValueScore(StrictArtifactDataModel):
+    dimension: str
+    score: int = Field(ge=1, le=5)
+    basis: str
+    next_validation: str
+
+
+class ValueScoreSummary(StrictArtifactDataModel):
+    total_score: int = Field(ge=1)
+    average_score: float = Field(ge=1, le=5)
+    judgement: str
+
+
+class ValueAssumption(StrictArtifactDataModel):
+    assumption_id: str
+    content: str
+    impact: str
+    validation_action: str
+    owner: str
+    status: str
+
+
+class ValueDiscoveryElevatorArtifactData(StrictArtifactDataModel):
+    document_info: DocumentInfo
+    positioning_summary: PositioningSummary
+    value_flow: ValueFlow
+    target_scenarios: list[TargetScenario] = Field(min_length=1)
+    pain_evidence: list[PainEvidence] = Field(min_length=1)
+    differentiators: list[Differentiator] = Field(min_length=1)
+    business_feasibility: list[BusinessFeasibility] = Field(min_length=1)
+    score_matrix: list[ValueScore] = Field(min_length=1)
+    score_summary: ValueScoreSummary
+    assumptions: list[ValueAssumption] = Field(min_length=1)
+    elevator_pitch: str
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_value_consistency(self) -> "ValueDiscoveryElevatorArtifactData":
+        node_ids = {node.node_id for node in self.value_flow.nodes}
+        if len(node_ids) != len(self.value_flow.nodes):
+            raise ValueError("value_flow.nodes contains duplicate node_id")
+
+        unknown_references = sorted(
+            {
+                reference
+                for link in self.value_flow.links
+                for reference in (link.from_node, link.to_node)
+                if reference not in node_ids
+            }
+        )
+        if unknown_references:
+            raise ValueError(
+                "value_flow.links references unknown node ids: "
+                + ", ".join(unknown_references)
+            )
+
+        total_score = sum(item.score for item in self.score_matrix)
+        if self.score_summary.total_score != total_score:
+            raise ValueError(
+                "score_summary.total_score must equal score_matrix score sum"
+            )
+
+        expected_average = round(total_score / len(self.score_matrix), 2)
+        if abs(self.score_summary.average_score - expected_average) > 0.001:
+            raise ValueError(
+                "score_summary.average_score must equal score_matrix average score "
+                f"({expected_average})"
+            )
+        return self
+
+
 def render_agent_turn_from_artifact_data(
     payload: dict[str, Any],
     *,
@@ -674,6 +803,11 @@ def render_agent_turn_from_artifact_data(
             payload["artifact_data"]
         )
         markdown = render_req_review_report_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
+        artifact_data = ValueDiscoveryElevatorArtifactData.model_validate(
+            payload["artifact_data"]
+        )
+        markdown = render_value_discovery_elevator_markdown(artifact_data)
     else:
         raise ValueError(
             f"artifact_data renderer is not configured for {workflow_id}/{current_stage_id}"
@@ -783,6 +917,25 @@ def render_req_review_report_markdown(data: ReqReviewReportArtifactData) -> str:
         _render_req_review_report_conditions(data.review_conditions),
         _render_req_review_report_signoffs(data.signoffs),
         _render_req_review_report_change_log(data.change_log),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_value_discovery_elevator_markdown(
+    data: ValueDiscoveryElevatorArtifactData,
+) -> str:
+    sections = [
+        "# 价值定位分析",
+        _render_value_positioning_summary(data.positioning_summary),
+        _render_value_flow(data.value_flow),
+        _render_target_scenarios(data.target_scenarios),
+        _render_pain_evidence(data.pain_evidence),
+        _render_differentiators(data.differentiators),
+        _render_business_feasibility(data.business_feasibility),
+        _render_value_score_matrix(data.score_matrix, data.score_summary),
+        _render_value_assumptions(data.assumptions),
+        _render_elevator_pitch(data.elevator_pitch),
+        _render_value_stage_gate(data.stage_gate),
     ]
     return "\n\n".join(sections)
 
@@ -1819,6 +1972,174 @@ def _render_req_review_report_change_log(
         ["版本", "日期", "变更内容", "变更原因", "责任方"],
         rows,
     )
+
+
+def _render_value_positioning_summary(summary: PositioningSummary) -> str:
+    rows = [
+        ("Artifact 名称", "价值定位诊断报告"),
+        ("一句话定位", summary.one_liner),
+        ("核心用户", summary.core_user),
+        ("核心痛点", summary.core_pain),
+        ("独特价值", summary.unique_value),
+        ("当前判断", summary.current_judgement),
+    ]
+    return "## 定位摘要\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_value_flow(flow: ValueFlow) -> str:
+    node_lookup = {node.node_id: node for node in flow.nodes}
+    safe_ids: dict[str, str] = {}
+    rendered_ids = {
+        node.node_id: _node_id(node.node_id, safe_ids) for node in flow.nodes
+    }
+    lines = ["```mermaid", "flowchart TD"]
+    for node in flow.nodes:
+        lines.append(
+            f'    {rendered_ids[node.node_id]}["{_escape_mermaid_label(node.label)}<br/>'
+            f'{_escape_mermaid_label(node.description)}"]'
+        )
+    for link in flow.links:
+        lines.append(
+            f"    {rendered_ids[link.from_node]} -->|"
+            f'"{_escape_mermaid_label(link.label)}"| '
+            f"{rendered_ids[link.to_node]}"
+        )
+    lines.append("```")
+
+    rows = [
+        (node.node_id, node.label, node.description) for node in node_lookup.values()
+    ]
+    return (
+        "## 价值结构图\n"
+        + "\n".join(lines)
+        + "\n\n"
+        + _markdown_table(["节点 ID", "节点", "说明"], rows)
+    )
+
+
+def _render_target_scenarios(items: list[TargetScenario]) -> str:
+    rows = [
+        (item.dimension, item.description, item.evidence_level, item.status)
+        for item in items
+    ]
+    return "## 目标用户与场景\n" + _markdown_table(
+        ["维度", "描述", "证据等级", "状态"],
+        rows,
+    )
+
+
+def _render_pain_evidence(items: list[PainEvidence]) -> str:
+    rows = [
+        (
+            item.pain_id,
+            item.description,
+            item.scene,
+            item.impact,
+            item.evidence_level,
+            item.validation_action,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 痛点证据\n" + _markdown_table(
+        ["痛点 ID", "痛点描述", "发生场景", "影响程度", "证据等级", "验证动作", "状态"],
+        rows,
+    )
+
+
+def _render_differentiators(items: list[Differentiator]) -> str:
+    rows = [
+        (
+            item.dimension,
+            item.our_value,
+            item.existing_solution,
+            item.evidence,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 差异化价值\n" + _markdown_table(
+        ["维度", "我们", "现有方案/竞品", "差异化证据", "状态"],
+        rows,
+    )
+
+
+def _render_business_feasibility(items: list[BusinessFeasibility]) -> str:
+    rows = [
+        (
+            item.dimension,
+            item.judgement,
+            item.basis,
+            item.validation_action,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 商业可行性\n" + _markdown_table(
+        ["维度", "判断", "依据", "验证动作", "状态"],
+        rows,
+    )
+
+
+def _render_value_score_matrix(
+    items: list[ValueScore],
+    summary: ValueScoreSummary,
+) -> str:
+    rows = [
+        (item.dimension, item.score, item.basis, item.next_validation) for item in items
+    ]
+    visual = {
+        "type": "score-matrix",
+        "title": "价值主张初筛评分矩阵",
+        "columns": ["评估维度", "评分", "依据", "下一步验证"],
+        "rows": [
+            {
+                "评估维度": item.dimension,
+                "评分": item.score,
+                "依据": item.basis,
+                "下一步验证": item.next_validation,
+            }
+            for item in items
+        ],
+    }
+    return (
+        "## 价值主张评分\n"
+        + _markdown_table(["评估维度", "评分", "依据", "下一步验证"], rows)
+        + "\n\n"
+        + "```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+        + "\n\n"
+        + f"> **评分结论**：总分 {summary.total_score}，平均分 "
+        + f"{summary.average_score:.2f}。{summary.judgement}"
+    )
+
+
+def _render_value_assumptions(items: list[ValueAssumption]) -> str:
+    rows = [
+        (
+            item.assumption_id,
+            item.content,
+            item.impact,
+            item.validation_action,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 未验证假设\n" + _markdown_table(
+        ["假设 ID", "假设内容", "影响范围", "验证动作", "责任方/验证人", "状态"],
+        rows,
+    )
+
+
+def _render_elevator_pitch(pitch: str) -> str:
+    return "## 60 秒电梯演讲\n\n> " + pitch
+
+
+def _render_value_stage_gate(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 阶段门禁\n" + "\n".join(lines)
 
 
 def _render_flow_links(links: list[FlowLink]) -> str:
