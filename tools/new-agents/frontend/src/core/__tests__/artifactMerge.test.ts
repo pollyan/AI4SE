@@ -21,12 +21,12 @@ describe('artifactMerge helpers', () => {
 
     it('collects contiguous non-blank added or removed diff blocks with at least two lines', () => {
         const diff: LineDiffEntry[] = [
-            { type: 'context', content: '保留' },
+            { type: 'unchanged', content: '保留' },
             { type: 'removed', content: '旧第一行' },
             { type: 'removed', content: '旧第二行' },
             { type: 'removed', content: '   ' },
             { type: 'added', content: '新单行不成块' },
-            { type: 'context', content: '间隔' },
+            { type: 'unchanged', content: '间隔' },
             { type: 'added', content: '新第一行' },
             { type: 'added', content: '新第二行' },
         ];
