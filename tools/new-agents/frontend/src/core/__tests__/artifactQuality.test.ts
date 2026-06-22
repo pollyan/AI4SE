@@ -118,4 +118,46 @@ describe('buildArtifactQualitySummary', () => {
             actionDiagnosticId: 'structured-visual:CLARIFY:0',
         }));
     });
+
+    it('builds missing information items with blocking state and next actions', () => {
+        const summary = buildArtifactQualitySummary({
+            stage: clarifyStage,
+            content: '# 草稿\n\n## 8. 阶段门禁\n\n等待确认',
+            visualDiagnostics: [],
+        });
+
+        expect(summary.missingInfoItems).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                title: '缺少标题：# 需求分析文档',
+                blocking: true,
+                nextAction: expect.stringContaining('补充'),
+            }),
+            expect.objectContaining({
+                title: '缺少专业字段：事实 ID',
+                blocking: true,
+                nextAction: expect.stringContaining('补充'),
+            }),
+            expect.objectContaining({
+                title: '缺少 Mermaid 图：flowchart',
+                blocking: true,
+                nextAction: expect.stringContaining('重新生成'),
+            }),
+            expect.objectContaining({
+                title: '阶段门禁缺少决策项',
+                blocking: false,
+                nextAction: expect.stringContaining('确认'),
+            }),
+        ]));
+    });
+
+    it('does not report missing information before the stage has artifact content', () => {
+        const summary = buildArtifactQualitySummary({
+            stage: clarifyStage,
+            content: '',
+            visualDiagnostics: [],
+        });
+
+        expect(summary.status).toBe('empty');
+        expect(summary.missingInfoItems).toEqual([]);
+    });
 });

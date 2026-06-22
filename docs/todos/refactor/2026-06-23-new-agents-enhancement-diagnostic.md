@@ -65,7 +65,7 @@
 | ID | 增强点 | 类型 | 类别 | 复杂度 | 优先级 | 验收标准 |
 | --- | --- | --- | --- | --- | --- | --- |
 | E01 | Workflow 入口 preview | 改造现有功能 | 体验 | S | P0 | 已消化：每个在线 workflow 展示适用/不适用、输入要求、预期产物和样例输入 |
-| E02 | 阶段缺失信息清单 | 深化现有功能 | 专业内容 | S | P0 | chat 和 artifact 都能标明缺失项、阻断性和用户下一步 |
+| E02 | 阶段缺失信息清单 | 深化现有功能 | 专业内容 | S | P0 | 已消化：共享 artifact quality summary 派生缺失信息项，chat 和 artifact 审阅区都能标明缺失项、阻断性和用户下一步 |
 | E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | P0 | 已消化：共享 ArtifactPane 审阅面板展示 headings、visual、stage gate、专业字段和现有 visual diagnostic 的通过/失败/警告；2026-06-23 已合流到 DeepSeek 结构化输出最新基线 |
 | E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 测试点、风险、用例 issue 可修复、确认、追踪并影响资产质量状态 |
 | E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
@@ -106,7 +106,7 @@
 
 目标: 1-2 周内明显提升专业感和产出可信度。
 
-包含: E02、E03、E04。E01 已在 2026-06-23 workflow 入口 preview milestone 中消化。
+包含: E04。E01 已在 2026-06-23 workflow 入口 preview milestone 中消化；E02 已在 2026-06-23 阶段缺失信息清单 milestone 中消化；E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化。
 
 暂不做:
 
@@ -157,7 +157,14 @@
 
 ## 首批建议落地切片
 
-### 1. Artifact 质量诊断面板
+### 1. 阶段缺失信息清单
+
+- 涉及模块: `artifactQuality.ts`、`ArtifactPane.tsx`、`ChatPane.tsx`、相关 frontend tests。
+- 完成定义: 已在 2026-06-23 本轮消化。当前阶段 artifact 缺少标题、专业字段、visual、stage gate 决策或存在 visual diagnostic 时，共享诊断层会派生缺失信息项；Artifact 审阅面板和 ChatPane 左侧提示都展示缺失项、阻断/提醒和下一步动作。
+- 验证记录: 新增 `artifactQuality.ts` 纯函数测试、`ArtifactPane` 组件测试和 `ChatPane` 组件测试。
+- 不纳入: 自动修复全文、质量评分、趋势分析。
+
+### 2. Artifact 质量诊断面板
 
 - 涉及模块: `ArtifactPane.tsx`、`StructuredVisual.tsx`、`agent_contracts.py`、`workflow_contract_registry.py`、相关 tests。
 - 需要同步: manifest artifact/visual contract、前端诊断展示、后端 contract helper。
@@ -165,28 +172,28 @@
 - 验证记录: 新增 `artifactQuality.ts` 纯函数测试和 `ArtifactPane` 组件测试；保留后端 manifest artifact contract registry 基线。
 - 不纳入: 自动修复全文。
 
-### 2. Workflow 入口专业 preview
+### 3. Workflow 入口专业 preview
 
 - 涉及模块: `workflow_manifest.json`、`AgentSelect.tsx`、`WorkflowSelect.tsx`、`agentWorkflows.ts`、onboarding tests。
 - 需要同步: listing、onboarding、starter prompts、workflow slug tests。
 - 完成定义: 用户进入工作区前能判断 workflow 是否适合当前目标。
 - 不纳入: 自动 workflow 推荐排序。
 
-### 3. Lisa 测试资产质量闭环
+### 4. Lisa 测试资产质量闭环
 
 - 涉及模块: `test_assets.py`、`routes_test_assets.py`、`testAssetService.ts`、`Header.tsx`。
 - 需要同步: TEST_DESIGN/CASES artifact contract、资产 issue schema、前端资产 modal。
 - 完成定义: 测试点、风险、用例 issue 可处理并持久化质量状态。
 - 不纳入: 新增 intent-tester 联动或自动执行。
 
-### 4. 历史会话复用增强
+### 5. 历史会话复用增强
 
 - 涉及模块: `run_persistence.py`、`routes.py`、`runSnapshotService.ts`、`Header.tsx`。
 - 需要同步: run list response、snapshot restore、store reset/clone 行为。
 - 完成定义: 历史 run 可复制为新 run、继续、预览 artifact，并按 workflow/质量状态筛选。
 - 不纳入: 多用户分享权限。
 
-### 5. Handoff 上下文强化
+### 6. Handoff 上下文强化
 
 - 涉及模块: `workflow_manifest.json`、`workflow_handoffs.py`、Alex blueprint prompt/template、`ChatPane.tsx`。
 - 需要同步: handoff prompt template、target workflow/stage、context truncation policy。

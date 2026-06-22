@@ -4466,6 +4466,52 @@ export const ArtifactPane: React.FC = () => {
                   ))}
                 </div>
               )}
+              {artifactQualitySummary.missingInfoItems.length > 0 && (
+                <div className="space-y-2 border-t border-[#1e293b] pt-3">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">缺失信息清单</h4>
+                    <p className="mt-1 text-[11px] text-slate-500">按阻断性列出当前阶段需要用户处理的事项</p>
+                  </div>
+                  {artifactQualitySummary.missingInfoItems.map((item) => (
+                    <article
+                      key={item.id}
+                      className={`rounded-md border p-3 ${
+                        item.blocking
+                          ? 'border-rose-400/20 bg-rose-400/5'
+                          : 'border-amber-400/20 bg-amber-400/5'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                            item.blocking
+                              ? 'border-rose-300/30 bg-rose-300/10 text-rose-100'
+                              : 'border-amber-300/30 bg-amber-300/10 text-amber-100'
+                          }`}>
+                            {item.blocking ? '阻断' : '提醒'}
+                          </span>
+                          <p className="mt-2 text-xs font-semibold text-slate-100">缺失项：{item.title}</p>
+                          <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{item.reason}</p>
+                          <p className="mt-1 text-[11px] leading-relaxed text-slate-300">
+                            <span className="font-semibold text-slate-200">下一步：</span>
+                            {item.nextAction}
+                          </p>
+                        </div>
+                        {item.actionDiagnosticId && (
+                          <button
+                            type="button"
+                            onClick={() => focusArtifactVisualDiagnostic(item.actionDiagnosticId ?? '')}
+                            className="shrink-0 rounded border border-blue-400/30 px-2 py-1 text-[10px] font-semibold text-blue-200 transition-colors hover:bg-blue-400/10"
+                            aria-label={`定位缺失信息：${item.title}`}
+                          >
+                            定位
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
             </section>
 
             <div className="grid grid-cols-3 gap-2">

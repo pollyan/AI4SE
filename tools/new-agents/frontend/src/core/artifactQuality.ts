@@ -18,12 +18,23 @@ export type ArtifactQualityItem = {
     actionDiagnosticId?: string;
 };
 
+export type MissingInfoItem = {
+    id: string;
+    title: string;
+    blocking: boolean;
+    severity: 'blocking' | 'warning';
+    reason: string;
+    nextAction: string;
+    actionDiagnosticId?: string;
+};
+
 export type ArtifactQualitySummary = {
     status: ArtifactQualityStatus;
     passedCount: number;
     failedCount: number;
     warningCount: number;
     items: ArtifactQualityItem[];
+    missingInfoItems: MissingInfoItem[];
 };
 
 export type BuildArtifactQualitySummaryInput = {
@@ -55,6 +66,39 @@ const buildItem = (
     message,
     ...(actionDiagnosticId ? { actionDiagnosticId } : {}),
 });
+
+const buildMissingInfoNextAction = (item: ArtifactQualityItem): string => {
+    switch (item.category) {
+        case 'heading':
+        case 'field':
+            return '补充缺失内容后重新生成或手动完善当前阶段产物。';
+        case 'visual':
+            return '重新生成当前阶段产物，确保图表和结构化可视化按合同输出。';
+        case 'stage-gate':
+            return '确认阶段门禁决策项，明确是否可以进入下一阶段。';
+        case 'visual-diagnostic':
+            return '定位问题位置，修复可视化内容后再继续推进。';
+        default:
+            return '处理该缺失项后再继续推进当前阶段。';
+    }
+};
+
+const buildMissingInfoItems = (items: ArtifactQualityItem[]): MissingInfoItem[] => (
+    items
+        .filter((item) => item.status !== 'pass')
+        .map((item) => {
+            const blocking = item.status === 'fail';
+            return {
+                id: `missing:${item.id}`,
+                title: item.title,
+                blocking,
+                severity: blocking ? 'blocking' : 'warning',
+                reason: item.message,
+                nextAction: buildMissingInfoNextAction(item),
+                ...(item.actionDiagnosticId ? { actionDiagnosticId: item.actionDiagnosticId } : {}),
+            };
+        })
+);
 
 const extractMarkdownFences = (content: string): MarkdownFence[] => {
     const lines = content.split(/\r?\n/);
@@ -146,6 +190,7 @@ export const buildArtifactQualitySummary = ({
             failedCount: 0,
             warningCount: 0,
             items: [],
+            missingInfoItems: [],
         };
     }
 
@@ -240,6 +285,7 @@ export const buildArtifactQualitySummary = ({
             : warningCount > 0
                 ? 'warning'
                 : 'pass';
+    const missingInfoItems = status === 'empty' ? [] : buildMissingInfoItems(items);
 
     return {
         status,
@@ -247,5 +293,6 @@ export const buildArtifactQualitySummary = ({
         failedCount,
         warningCount,
         items,
+        missingInfoItems,
     };
 };

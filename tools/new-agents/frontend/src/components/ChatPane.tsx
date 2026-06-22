@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, WORKFLOWS } from '../store';
 import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw, Copy, Check, ChevronRight, ArrowRight, AlertTriangle, Settings } from 'lucide-react';
@@ -12,6 +12,7 @@ import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/ma
 import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
 import { fetchWorkflowHandoffs, startWorkflowHandoff } from '../services/workflowHandoffService';
 import type { Attachment, WorkflowHandoff } from '../store';
+import { buildArtifactQualitySummary } from '../core/artifactQuality';
 
 const asRenderableAttachments = (attachments: unknown): Attachment[] => {
   if (!Array.isArray(attachments)) return [];
@@ -60,6 +61,7 @@ export const ChatPane: React.FC = () => {
   const stageIndex = useStore((state) => state.stageIndex);
   const currentRunId = useStore((state) => state.currentRunId);
   const pendingStageTransition = useStore((state) => state.pendingStageTransition);
+  const artifactContent = useStore((state) => state.artifactContent);
   const artifactVisualDiagnostics = useStore((state) => state.artifactVisualDiagnostics);
   const clearPendingStageTransition = useStore((state) => state.clearPendingStageTransition);
   const applyWorkflowHandoff = useStore((state) => state.applyWorkflowHandoff);
@@ -68,7 +70,8 @@ export const ChatPane: React.FC = () => {
   
   const onboardingConfig = WORKFLOWS[workflow].onboarding;
   const workflowStages = WORKFLOWS[workflow].stages;
-  const currentStageId = workflowStages[stageIndex]?.id;
+  const currentStage = workflowStages[stageIndex];
+  const currentStageId = currentStage?.id;
   const agentId = WORKFLOWS[workflow].agentId;
   const agentConfig = getAgentById(agentId);
   const displayTitle = agentConfig?.displayTitle || agentId;
@@ -97,6 +100,28 @@ export const ChatPane: React.FC = () => {
   const currentArtifactVisualDiagnostic = currentStageId
     ? [...artifactVisualDiagnostics].reverse().find((diagnostic) => diagnostic.stageId === currentStageId)
     : null;
+  const currentStageVisualDiagnostics = useMemo(
+    () => currentStageId
+      ? artifactVisualDiagnostics.filter((diagnostic) => diagnostic.stageId === currentStageId)
+      : [],
+    [artifactVisualDiagnostics, currentStageId]
+  );
+  const artifactQualitySummary = useMemo(
+    () => buildArtifactQualitySummary({
+      stage: currentStage,
+      content: artifactContent,
+      visualDiagnostics: currentStageVisualDiagnostics,
+    }),
+    [artifactContent, currentStage, currentStageVisualDiagnostics]
+  );
+  const visibleMissingInfoItems = useMemo(() => {
+    const blockingItems = artifactQualitySummary.missingInfoItems.filter((item) => item.blocking);
+    const warningItems = artifactQualitySummary.missingInfoItems.filter((item) => !item.blocking);
+    const leadingBlockingItems = blockingItems.slice(0, warningItems.length > 0 ? 2 : 3);
+    const leadingWarningItems = warningItems.slice(0, 3 - leadingBlockingItems.length);
+    return [...leadingBlockingItems, ...leadingWarningItems];
+  }, [artifactQualitySummary.missingInfoItems]);
+  const hiddenMissingInfoCount = Math.max(0, artifactQualitySummary.missingInfoItems.length - visibleMissingInfoItems.length);
 
   const updateMessage = useStore((state) => state.updateMessage);
 
@@ -338,6 +363,44 @@ export const ChatPane: React.FC = () => {
                   <span>查看问题位置</span>
                   <ArrowRight className="h-3 w-3" />
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isGenerating && visibleMissingInfoItems.length > 0 && (
+          <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-rose-100 shadow-sm">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" />
+              <div className="min-w-0">
+                <div className="text-xs font-semibold">当前阶段缺失信息</div>
+                <p className="mt-1 text-[11px] leading-relaxed text-rose-100/75">
+                  右侧产物还没有满足当前阶段合同，请先处理缺失项再继续推进。
+                </p>
+                <div className="mt-2 space-y-2">
+                  {visibleMissingInfoItems.map((item) => (
+                    <div key={item.id} className="rounded-lg border border-white/10 bg-black/10 p-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                          item.blocking
+                            ? 'border-rose-300/30 bg-rose-300/10 text-rose-100'
+                            : 'border-amber-300/30 bg-amber-300/10 text-amber-100'
+                        }`}>
+                          {item.blocking ? '阻断' : '提醒'}
+                        </span>
+                        <span className="text-[11px] font-semibold text-rose-50">{item.title}</span>
+                      </div>
+                      <p className="mt-1 text-[11px] leading-relaxed text-rose-100/75">
+                        {item.nextAction}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                {hiddenMissingInfoCount > 0 && (
+                  <p className="mt-2 text-[11px] text-rose-100/65">
+                    还有 {hiddenMissingInfoCount} 项缺失信息，请在右侧产物审阅中查看完整清单。
+                  </p>
+                )}
               </div>
             </div>
           </div>

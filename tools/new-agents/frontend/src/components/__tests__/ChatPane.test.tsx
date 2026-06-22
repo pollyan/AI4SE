@@ -347,6 +347,27 @@ describe('ChatPane Component', () => {
         expect(screen.queryByText('策略阶段可视化错误。')).toBeNull();
     });
 
+    it('shows current-stage missing information with blocking state and next actions', () => {
+        useStore.setState({
+            chatHistory: [
+                { id: '1', role: 'assistant', content: '右侧产物已更新。', timestamp: Date.now() },
+            ],
+            workflow: 'TEST_DESIGN' as WorkflowType,
+            stageIndex: 0,
+            artifactContent: '# 草稿\n\n## 8. 阶段门禁\n\n等待确认',
+            artifactVisualDiagnostics: [],
+        });
+
+        render(<ChatPane />);
+
+        expect(screen.getByText('当前阶段缺失信息')).toBeDefined();
+        expect(screen.getAllByText('阻断').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('提醒').length).toBeGreaterThan(0);
+        expect(screen.getByText('缺少标题：# 需求分析文档')).toBeDefined();
+        expect(screen.getAllByText('补充缺失内容后重新生成或手动完善当前阶段产物。').length).toBeGreaterThan(0);
+        expect(screen.getByText('确认阶段门禁决策项，明确是否可以进入下一阶段。')).toBeDefined();
+    });
+
     it('shows a provider failure recovery card with a retry action', () => {
         const mockHandleRetry = vi.fn();
         const mockHandleRetryCurrentStageGeneration = vi.fn();
