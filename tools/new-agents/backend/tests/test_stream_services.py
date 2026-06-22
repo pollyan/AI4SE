@@ -15,6 +15,17 @@ from sse_schemas import (
 from stream_services import stream_agent_run_events
 
 
+VALID_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "测试需求分析与澄清基线",
+    },
+    "stage_gate": {
+        "status": "需要用户补充",
+        "blocking": True,
+    },
+}
+
+
 VALID_CLARIFY_ARTIFACT = """# 需求分析文档
 
 ## 文档信息
@@ -93,8 +104,16 @@ class FakePersistence:
         run_id: str,
         stage_id: str,
         content: str,
+        *,
+        artifact_data=None,
     ) -> None:
-        self.calls.append(("record_artifact_version", run_id, stage_id, content))
+        self.calls.append((
+            "record_artifact_version",
+            run_id,
+            stage_id,
+            content,
+            artifact_data,
+        ))
 
     def build_runtime_prompt(self, run_id: str, current_prompt: str) -> str:
         self.calls.append(("build_runtime_prompt", run_id, current_prompt))
@@ -127,6 +146,7 @@ def test_stream_agent_run_events_yields_started_delta_and_final_events(
             "type": "replace",
             "markdown": VALID_CLARIFY_ARTIFACT,
         },
+        "artifact_data": VALID_ARTIFACT_DATA,
         "stage_action": None,
         "warnings": [],
     })
@@ -189,6 +209,7 @@ def test_stream_agent_run_events_records_turn_through_persistence_adapter(
             "type": "replace",
             "markdown": VALID_CLARIFY_ARTIFACT,
         },
+        "artifact_data": VALID_ARTIFACT_DATA,
         "stage_action": None,
         "warnings": [],
     })
@@ -218,7 +239,13 @@ def test_stream_agent_run_events_records_turn_through_persistence_adapter(
         ("build_runtime_context", "run-123", "用户需求"),
         ("append_user_message", "run-123", "用户需求"),
         ("append_assistant_message", "run-123", "已更新右侧需求分析文档，请确认。"),
-        ("record_artifact_version", "run-123", "CLARIFY", VALID_CLARIFY_ARTIFACT),
+        (
+            "record_artifact_version",
+            "run-123",
+            "CLARIFY",
+            VALID_CLARIFY_ARTIFACT,
+            VALID_ARTIFACT_DATA,
+        ),
     ]
     metric = persistence.calls[-1][1]
     assert persistence.calls[-1][0] == "record_turn_metric"

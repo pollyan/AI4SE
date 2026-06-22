@@ -173,6 +173,7 @@ class AgentArtifactVersion(db.Model):
     )
     version_number = db.Column(db.Integer, nullable=False)
     content = db.Column(db.Text, nullable=False)
+    artifact_data_json = db.Column(db.Text)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
     artifact = db.relationship("AgentArtifact", back_populates="versions")

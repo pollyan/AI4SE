@@ -121,7 +121,20 @@ def test_run_snapshot_returns_messages_and_current_artifacts(app):
         append_run_message(run.id, "user", "输入")
         append_run_message(run.id, "assistant", "回复")
         record_artifact_version(run.id, "CLARIFY", "初版")
-        record_artifact_version(run.id, "CLARIFY", "二版")
+        record_artifact_version(
+            run.id,
+            "CLARIFY",
+            "二版",
+            artifact_data={
+                "document_info": {
+                    "artifact_name": "测试需求分析与澄清基线",
+                },
+                "stage_gate": {
+                    "status": "需要用户补充",
+                    "blocking": True,
+                },
+            },
+        )
 
         snapshot = get_run_snapshot(run.id)
 
@@ -141,10 +154,36 @@ def test_run_snapshot_returns_messages_and_current_artifacts(app):
             "stageId": "CLARIFY",
             "content": "二版",
             "versionNumber": 2,
+            "artifactData": {
+                "document_info": {
+                    "artifact_name": "测试需求分析与澄清基线",
+                },
+                "stage_gate": {
+                    "status": "需要用户补充",
+                    "blocking": True,
+                },
+            },
         }
     ]
     assert snapshot["artifactComments"] == []
     assert snapshot["artifactSectionLocks"] == []
+
+
+def test_run_snapshot_returns_null_artifact_data_for_manual_versions(app):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY", model="gpt-test")
+        record_artifact_version(run.id, "CLARIFY", "手工编辑版本")
+
+        snapshot = get_run_snapshot(run.id)
+
+    assert snapshot["artifacts"] == [
+        {
+            "stageId": "CLARIFY",
+            "content": "手工编辑版本",
+            "versionNumber": 1,
+            "artifactData": None,
+        }
+    ]
 
 
 def test_run_snapshot_returns_artifact_collaboration_state(app):

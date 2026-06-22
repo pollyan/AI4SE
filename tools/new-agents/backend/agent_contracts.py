@@ -504,6 +504,7 @@ class AgentTurnOutput(BaseModel):
 
     chat: str = Field(min_length=1)
     artifact_update: ArtifactUpdate
+    artifact_data: dict[str, Any] | None = Field(default=None, exclude=True)
     stage_action: StageAction | None = None
     warnings: list[str] = Field(default_factory=list)
 

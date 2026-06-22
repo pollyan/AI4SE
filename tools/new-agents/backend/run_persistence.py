@@ -1,3 +1,4 @@
+import json
 import time
 from uuid import uuid4
 
@@ -172,8 +173,15 @@ class AgentRunPersistence:
         run_id: str,
         stage_id: str,
         content: str,
+        *,
+        artifact_data: dict | None = None,
     ) -> None:
-        record_artifact_version(run_id, stage_id, content)
+        record_artifact_version(
+            run_id,
+            stage_id,
+            content,
+            artifact_data=artifact_data,
+        )
 
     def record_turn_metric(self, **kwargs) -> None:
         record_turn_metric(**kwargs)
@@ -201,6 +209,8 @@ def record_artifact_version(
     run_id: str,
     stage_id: str,
     content: str,
+    *,
+    artifact_data: dict | None = None,
 ) -> AgentArtifactVersion:
     run = _get_run(run_id)
     _validate_workflow_stage(run.workflow_id, stage_id)
@@ -218,6 +228,11 @@ def record_artifact_version(
         artifact_id=artifact.id,
         version_number=_next_artifact_version(artifact.id),
         content=content,
+        artifact_data_json=(
+            json.dumps(artifact_data, ensure_ascii=False)
+            if artifact_data is not None
+            else None
+        ),
     )
     db.session.add(version)
     db.session.flush()
@@ -1028,4 +1043,9 @@ def _artifact_snapshot(artifact: AgentArtifact) -> dict:
         "stageId": artifact.stage_id,
         "content": version.content,
         "versionNumber": version.version_number,
+        "artifactData": (
+            json.loads(version.artifact_data_json)
+            if version.artifact_data_json
+            else None
+        ),
     }

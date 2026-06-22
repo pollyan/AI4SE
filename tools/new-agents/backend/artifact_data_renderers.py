@@ -2350,6 +2350,7 @@ def render_agent_turn_from_artifact_data(
                 "type": "replace",
                 "markdown": markdown,
             },
+            "artifact_data": artifact_data.model_dump(mode="json"),
             "stage_action": payload.get("stage_action"),
             "warnings": payload.get("warnings", []),
         }

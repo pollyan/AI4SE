@@ -25,6 +25,7 @@
 - 2026-06-23 已完成第十七个垂直切片: `IDEA_BRAINSTORM/CONCEPT` 支持模型输出 `artifact_data`，后端校验定位声明、核心假设、Lean Canvas、MVP 功能、增长漏斗、Pre-mortem 风险、验证路线、不可做范围、决策记录、下一步行动和阶段门禁后，确定性渲染《产品概念简报》、Mermaid `pie`/`flowchart` 和 `ai4se-visual` `mvp-map`。
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
 - `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM` 四阶段已完成结构化产物数据迁移；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
+- 2026-06-23 已完成结构化产物数据持久化闭环: renderer 返回的 validated `artifact_data` 会随 artifact version 保存，并在 run snapshot 当前 artifact 的 `artifactData` 中暴露；旧版本和手工编辑版本明确返回 `artifactData: null`，继续只依赖 Markdown 内容。
 
 ## 目标
 
@@ -158,6 +159,7 @@ renderer 职责:
 
 - DeepSeek V4 Flash 下，模型只输出 JSON 数据，后端负责产物格式。
 - 至少一个完整 workflow stage 能完成: 用户输入 -> DeepSeek JSON mode -> Pydantic data schema -> backend renderer -> artifact contract -> typed SSE -> 前端展示。
+- validated `artifact_data` 与 renderer 输出的 Markdown 一起进入 artifact version persistence，run snapshot 可审计当前 artifact 的结构化业务数据来源。
 - “格式不完整 / 结构化输出生成失败”不再由 Markdown 标题缺失、Mermaid fence 不完整或表格格式错误高频触发。
 - 所有失败都能定位到 schema path、contract rule 或 renderer rule。
 
@@ -172,5 +174,5 @@ renderer 职责:
 ## 进入实现前需要补的设计问题
 
 - `artifact_data` schema 是按 workflow/stage 手写 Pydantic model，还是先定义通用 block schema 再按 stage 组合。
-- renderer 输出是否继续保存为 Markdown，或同时持久化 `artifact_data` 便于后续重渲染和审计。
+- 已裁决并完成: renderer 输出继续保存为 Markdown，同时持久化 validated `artifact_data`，便于后续重渲染、审计和质量诊断。
 - 真实 DeepSeek V4 Flash smoke gate 是否作为可选验证，还是每个阶段迁移都要求人工触发一次。
