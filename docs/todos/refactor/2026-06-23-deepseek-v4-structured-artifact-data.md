@@ -9,8 +9,9 @@
 - 2026-06-23 已完成首个垂直切片: `TEST_DESIGN/CLARIFY` 支持模型输出 `artifact_data`，后端 Pydantic schema 校验后确定性渲染完整 Markdown/Mermaid artifact，并继续通过现有 `AgentTurnOutput`、artifact contract、typed SSE 和 run artifact persistence 交付。
 - 2026-06-23 已完成第二个垂直切片: `TEST_DESIGN/STRATEGY` 支持模型输出 `artifact_data`，后端校验 FMEA 风险、质量目标、测试分层、测试点和资源取舍后，确定性渲染《测试策略蓝图》、Mermaid `quadrantChart`、Mermaid `block-beta` 和 `ai4se-visual` `risk-board`。
 - 2026-06-23 已完成第三个垂直切片: `TEST_DESIGN/CASES` 支持模型输出 `artifact_data`，后端校验用例统计、用例分组、覆盖追溯和开放问题后，确定性渲染《测试用例集》和 `ai4se-visual` `traceability-matrix`；renderer 输出继续可被 Lisa 测试资产导出链路解析。
+- 2026-06-23 已完成第四个垂直切片: `TEST_DESIGN/DELIVERY` 支持模型输出 `artifact_data`，后端校验交付指标、执行摘要、需求/策略/用例摘要、覆盖地图、开放风险、验收清单、签署和变更记录后，确定性渲染《测试设计文档》和 `ai4se-visual` `coverage-map`。
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
-- 尚未迁移 `TEST_DESIGN/DELIVERY` 或其它 workflow；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
+- `TEST_DESIGN` 四阶段已完成结构化产物数据迁移；尚未迁移 `REQ_REVIEW`、`VALUE_DISCOVERY`、`IDEA_BRAINSTORM`、`INCIDENT_REVIEW` 等其它 workflow。真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
 
 ## 目标
 
@@ -107,7 +108,7 @@ renderer 职责:
 1. 已完成: `TEST_DESIGN/CLARIFY` 垂直切片。
 2. 已完成: `TEST_DESIGN/STRATEGY` 垂直切片。
 3. 已完成: `TEST_DESIGN/CASES` 垂直切片。
-4. 再迁移 `TEST_DESIGN/DELIVERY`。
+4. 已完成: `TEST_DESIGN/DELIVERY` 垂直切片。
 5. 再迁移 `REQ_REVIEW`、`VALUE_DISCOVERY`、`IDEA_BRAINSTORM`、`INCIDENT_REVIEW`。
 
 每个阶段迁移必须同步:

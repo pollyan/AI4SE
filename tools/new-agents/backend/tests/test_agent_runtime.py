@@ -23,6 +23,7 @@ from agent_runtime import (
 from sse_schemas import AgentTurnDeltaOutput
 from test_artifact_data_renderers import (
     VALID_CASES_ARTIFACT_DATA,
+    VALID_DELIVERY_ARTIFACT_DATA,
     VALID_STRATEGY_ARTIFACT_DATA,
 )
 
@@ -484,6 +485,61 @@ def test_cases_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
     assert "artifact_update.type 必须为 replace" not in prompt
 
 
+def test_parse_agent_turn_output_text_renders_delivery_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "我已整理测试设计交付文档，请确认右侧终稿。",
+            "artifact_data": VALID_DELIVERY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="DELIVERY",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 测试设计文档")
+    assert '"type": "coverage-map"' in output.artifact_update.markdown
+    assert output.stage_action is None
+
+
+def test_delivery_structured_output_instruction_requests_artifact_data_not_markdown():
+    instruction = build_structured_output_instruction(
+        "TEST_DESIGN",
+        "DELIVERY",
+    )
+
+    assert "artifact_data" in instruction
+    assert "delivery_metrics" in instruction
+    assert "coverage_map" in instruction
+    assert "coverage-map" in instruction
+    assert "stage_action" in instruction
+    assert 'stage_action": null' in instruction
+    assert "不要输出完整 Markdown" in instruction
+    assert "artifact_update.markdown" not in instruction
+
+
+def test_delivery_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
+    prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        ValueError("delivery_metrics.total_cases must match case_summary_items"),
+        workflow_id="TEST_DESIGN",
+        current_stage_id="DELIVERY",
+    )
+
+    assert "artifact_data" in prompt
+    assert "delivery_metrics.total_cases" in prompt
+    assert "不要输出 Markdown 文档" in prompt
+    assert "Mermaid 代码块或表格" in prompt
+    assert "artifact_update.type 必须为 replace" not in prompt
+
+
 def test_runtime_raw_json_stream_turn_yields_real_delta_before_final_output(
     monkeypatch,
 ):
@@ -592,6 +648,60 @@ def test_runtime_raw_json_stream_turn_renders_artifact_data_before_final_output(
         "CLARIFY",
     )
     assert "结构化输出格式要求" in calls[0]["messages"][0]["content"]
+
+
+def test_runtime_raw_json_stream_turn_renders_delivery_artifact_data_before_final_output(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "我已整理测试设计交付文档，请确认右侧终稿。",
+            "artifact_data": VALID_DELIVERY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield final_json
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是测试专家。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "请交付测试设计文档",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="DELIVERY",
+        )
+    )
+
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert outputs[-1].artifact_update.markdown is not None
+    assert outputs[-1].artifact_update.markdown.startswith("# 测试设计文档")
+    assert '"type": "coverage-map"' in outputs[-1].artifact_update.markdown
+    assert calls[0]["response_format"] == {"type": "json_object"}
+    assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert "artifact_data" in calls[0]["messages"][0]["content"]
+    assert "delivery_metrics" in calls[0]["messages"][0]["content"]
+    assert "artifact_update.markdown" not in build_structured_output_instruction(
+        "TEST_DESIGN",
+        "DELIVERY",
+    )
 
 
 def test_raw_streaming_runtime_records_stream_usage(monkeypatch):

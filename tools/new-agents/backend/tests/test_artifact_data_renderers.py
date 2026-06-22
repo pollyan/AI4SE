@@ -5,6 +5,7 @@ from agent_contracts import validate_agent_turn
 from artifact_data_renderers import (
     CasesArtifactData,
     ClarifyArtifactData,
+    DeliveryArtifactData,
     StrategyArtifactData,
     render_agent_turn_from_artifact_data,
 )
@@ -340,6 +341,146 @@ VALID_CASES_ARTIFACT_DATA = {
     ],
 }
 
+VALID_DELIVERY_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "登录功能测试设计交付评审文档",
+        "workflow": "TEST_DESIGN",
+        "stage": "DELIVERY",
+        "status": "可签署",
+    },
+    "delivery_metrics": {
+        "project_name": "登录功能",
+        "version": "v1.0",
+        "generated_at": "2026-06-23",
+        "delivery_status": "可签署",
+        "total_cases": 2,
+        "high_risk_count": 1,
+    },
+    "executive_summary": [
+        {
+            "summary_item": "测试范围",
+            "conclusion": "覆盖登录页面、登录 API、认证服务和登录态创建。",
+            "evidence_source": "CLARIFY / STRATEGY / CASES",
+            "status": "已确认",
+        },
+        {
+            "summary_item": "交付判断",
+            "conclusion": "P0 登录主链路可进入评审，账号锁定策略需作为非阻断风险确认。",
+            "evidence_source": "阶段门禁",
+            "status": "可签署",
+        },
+    ],
+    "requirement_summary": [
+        {
+            "content_type": "事实",
+            "reference": "F-001",
+            "conclusion": "用户需要通过正确账号密码登录进入工作台。",
+            "open_status": "已确认",
+        },
+        {
+            "content_type": "澄清问题",
+            "reference": "Q-001",
+            "conclusion": "连续错误密码后是否锁定账号仍需产品确认。",
+            "open_status": "待确认",
+        },
+    ],
+    "strategy_summary_items": [
+        {
+            "strategy_item": "高风险项",
+            "conclusion": "错误凭证绕过认证为 P0 风险，必须由负向认证用例覆盖。",
+            "related": "R-001 / TP-001",
+            "coverage_status": "已覆盖",
+        },
+        {
+            "strategy_item": "测试分层",
+            "conclusion": "单元、集成、E2E 分层覆盖认证规则、API 会话和用户主链路。",
+            "related": "TP-001 / TP-002 / TP-003",
+            "coverage_status": "已确认",
+        },
+    ],
+    "case_summary_items": [
+        {
+            "dimension": "正向功能验证",
+            "case_count": 1,
+            "p0_count": 1,
+            "p1_count": 0,
+            "p2_count": 0,
+            "automation_candidates": 1,
+            "blocked_or_needs_env": 0,
+        },
+        {
+            "dimension": "异常与边界值",
+            "case_count": 1,
+            "p0_count": 0,
+            "p1_count": 1,
+            "p2_count": 0,
+            "automation_candidates": 0,
+            "blocked_or_needs_env": 0,
+        },
+    ],
+    "coverage_map": [
+        {
+            "requirement": "REQ-登录",
+            "risk": "R-LOGIN-001",
+            "test_point": "登录主链路",
+            "case_ids": ["TC-001"],
+            "acceptance_status": "已覆盖",
+        },
+        {
+            "requirement": "REQ-登录",
+            "risk": "R-LOGIN-002",
+            "test_point": "登录错误处理",
+            "case_ids": ["TC-002"],
+            "acceptance_status": "部分覆盖",
+        },
+    ],
+    "open_risks": [
+        {
+            "risk_id": "OPEN-001",
+            "risk_type": "风险接受",
+            "description": "账号锁定策略尚未由产品确认。",
+            "impact": "锁定前后重试路径只能按 AI 假设覆盖。",
+            "acceptable": "否",
+            "owner": "产品",
+            "next_step": "确认连续失败次数和解锁方式。",
+            "status": "待处理",
+        }
+    ],
+    "acceptance_checklist": [
+        {
+            "checked": True,
+            "item": "所有 P0 风险均有用例覆盖或风险接受结论",
+        },
+        {
+            "checked": True,
+            "item": "coverage-map 中需求、风险、测试点、用例、验收状态可追溯",
+        },
+    ],
+    "signoffs": [
+        {
+            "role": "产品负责人",
+            "owner": "产品",
+            "opinion": "有条件通过",
+            "status": "待签署",
+        },
+        {
+            "role": "测试负责人",
+            "owner": "测试",
+            "opinion": "通过",
+            "status": "待签署",
+        },
+    ],
+    "change_log": [
+        {
+            "version": "v1.0",
+            "date": "2026-06-23",
+            "change": "首次生成测试设计交付文档",
+            "reason": "完成测试设计阶段交付",
+            "owner": "Lisa",
+        }
+    ],
+}
+
 
 def test_clarify_artifact_data_rejects_blank_required_values():
     invalid = {
@@ -501,6 +642,19 @@ def test_cases_artifact_data_rejects_unknown_coverage_case_reference():
         CasesArtifactData.model_validate(invalid)
 
 
+def test_delivery_artifact_data_rejects_inconsistent_case_totals():
+    invalid = {
+        **VALID_DELIVERY_ARTIFACT_DATA,
+        "delivery_metrics": {
+            **VALID_DELIVERY_ARTIFACT_DATA["delivery_metrics"],
+            "total_cases": 99,
+        },
+    }
+
+    with pytest.raises(ValidationError, match="total_cases"):
+        DeliveryArtifactData.model_validate(invalid)
+
+
 def test_render_cases_artifact_data_is_contract_valid_and_asset_parseable():
     output = render_agent_turn_from_artifact_data(
         {
@@ -534,3 +688,42 @@ def test_render_cases_artifact_data_is_contract_valid_and_asset_parseable():
     assert [case["id"] for case in parsed["testCases"]] == ["TC-001", "TC-002"]
     assert parsed["coverageSummary"]["totalTestCases"] == 2
     assert parsed["riskMatrix"][0]["risk"] == "R-LOGIN-001"
+
+
+def test_render_delivery_artifact_data_is_deterministic_and_contract_valid():
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已整理测试设计交付文档，请确认右侧终稿。",
+            "artifact_data": VALID_DELIVERY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="TEST_DESIGN",
+        current_stage_id="DELIVERY",
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已整理测试设计交付文档，请确认右侧终稿。",
+            "artifact_data": VALID_DELIVERY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="TEST_DESIGN",
+        current_stage_id="DELIVERY",
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert "# 测试设计文档" in first.artifact_update.markdown
+    assert "## 10. 变更记录" in first.artifact_update.markdown
+    assert "```ai4se-visual" in first.artifact_update.markdown
+    assert '"type": "coverage-map"' in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="TEST_DESIGN",
+            current_stage_id="DELIVERY",
+        )
+        == first
+    )

@@ -313,6 +313,120 @@ class CasesArtifactData(StrictArtifactDataModel):
         return self
 
 
+class DeliveryMetrics(StrictArtifactDataModel):
+    project_name: str
+    version: str
+    generated_at: str
+    delivery_status: str
+    total_cases: int = Field(ge=0)
+    high_risk_count: int = Field(ge=0)
+
+
+class DeliveryExecutiveSummaryItem(StrictArtifactDataModel):
+    summary_item: str
+    conclusion: str
+    evidence_source: str
+    status: str
+
+
+class DeliveryRequirementSummaryItem(StrictArtifactDataModel):
+    content_type: str
+    reference: str
+    conclusion: str
+    open_status: str
+
+
+class DeliveryStrategySummaryItem(StrictArtifactDataModel):
+    strategy_item: str
+    conclusion: str
+    related: str
+    coverage_status: str
+
+
+class DeliveryCaseSummaryItem(StrictArtifactDataModel):
+    dimension: str
+    case_count: int = Field(ge=0)
+    p0_count: int = Field(ge=0)
+    p1_count: int = Field(ge=0)
+    p2_count: int = Field(ge=0)
+    automation_candidates: int = Field(ge=0)
+    blocked_or_needs_env: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_priority_counts(self) -> "DeliveryCaseSummaryItem":
+        priority_total = self.p0_count + self.p1_count + self.p2_count
+        if priority_total != self.case_count:
+            raise ValueError("case_count must equal p0_count + p1_count + p2_count")
+        return self
+
+
+class DeliveryCoverageMapItem(StrictArtifactDataModel):
+    requirement: str
+    risk: str
+    test_point: str
+    case_ids: list[str] = Field(min_length=1)
+    acceptance_status: str
+
+
+class DeliveryOpenRisk(StrictArtifactDataModel):
+    risk_id: str
+    risk_type: str
+    description: str
+    impact: str
+    acceptable: str
+    owner: str
+    next_step: str
+    status: str
+
+
+class DeliverySignoff(StrictArtifactDataModel):
+    role: str
+    owner: str
+    opinion: str
+    status: str
+
+
+class DeliveryChangeLogItem(StrictArtifactDataModel):
+    version: str
+    date: str
+    change: str
+    reason: str
+    owner: str
+
+
+class DeliveryArtifactData(StrictArtifactDataModel):
+    document_info: DocumentInfo
+    delivery_metrics: DeliveryMetrics
+    executive_summary: list[DeliveryExecutiveSummaryItem] = Field(min_length=1)
+    requirement_summary: list[DeliveryRequirementSummaryItem] = Field(min_length=1)
+    strategy_summary_items: list[DeliveryStrategySummaryItem] = Field(min_length=1)
+    case_summary_items: list[DeliveryCaseSummaryItem] = Field(min_length=1)
+    coverage_map: list[DeliveryCoverageMapItem] = Field(min_length=1)
+    open_risks: list[DeliveryOpenRisk] = Field(min_length=1)
+    acceptance_checklist: list[StageGateCheck] = Field(min_length=1)
+    signoffs: list[DeliverySignoff] = Field(min_length=1)
+    change_log: list[DeliveryChangeLogItem] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_delivery_consistency(self) -> "DeliveryArtifactData":
+        total_cases = sum(item.case_count for item in self.case_summary_items)
+        if self.delivery_metrics.total_cases != total_cases:
+            raise ValueError(
+                "delivery_metrics.total_cases must match case_summary_items total_cases"
+            )
+
+        high_risk_count = sum(
+            1
+            for item in self.open_risks
+            if "风险" in item.risk_type and item.acceptable != "是"
+        )
+        if self.delivery_metrics.high_risk_count != high_risk_count:
+            raise ValueError(
+                "delivery_metrics.high_risk_count must match unacceptable open risks"
+            )
+        return self
+
+
 def render_agent_turn_from_artifact_data(
     payload: dict[str, Any],
     *,
@@ -330,6 +444,9 @@ def render_agent_turn_from_artifact_data(
     elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "CASES"):
         artifact_data = CasesArtifactData.model_validate(payload["artifact_data"])
         markdown = render_test_design_cases_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "DELIVERY"):
+        artifact_data = DeliveryArtifactData.model_validate(payload["artifact_data"])
+        markdown = render_test_design_delivery_markdown(artifact_data)
     else:
         raise ValueError(
             f"artifact_data renderer is not configured for {workflow_id}/{current_stage_id}"
@@ -390,6 +507,23 @@ def render_test_design_cases_markdown(data: CasesArtifactData) -> str:
         _render_coverage_trace(data.coverage_trace),
         _render_open_questions(data.open_questions),
         _render_stage_gate(data.stage_gate),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_test_design_delivery_markdown(data: DeliveryArtifactData) -> str:
+    sections = [
+        "# 测试设计文档",
+        _render_delivery_document_info(data.document_info, data.delivery_metrics),
+        _render_delivery_executive_summary(data.executive_summary),
+        _render_delivery_requirement_summary(data.requirement_summary),
+        _render_delivery_strategy_summary(data.strategy_summary_items),
+        _render_delivery_case_summary(data.case_summary_items),
+        _render_delivery_coverage_map(data.coverage_map),
+        _render_delivery_open_risks(data.open_risks),
+        _render_delivery_acceptance_checklist(data.acceptance_checklist),
+        _render_delivery_signoffs(data.signoffs),
+        _render_delivery_change_log(data.change_log),
     ]
     return "\n\n".join(sections)
 
@@ -877,6 +1011,179 @@ def _render_open_questions(items: list[OpenQuestion]) -> str:
             "责任方",
             "状态",
         ],
+        rows,
+    )
+
+
+def _render_delivery_document_info(
+    info: DocumentInfo,
+    metrics: DeliveryMetrics,
+) -> str:
+    rows = [
+        ("Artifact 名称", info.artifact_name),
+        ("项目/需求名称", metrics.project_name),
+        ("版本", metrics.version),
+        ("生成时间", metrics.generated_at),
+        ("Workflow", info.workflow),
+        ("Stage", info.stage),
+        ("交付状态", metrics.delivery_status),
+        ("总用例数", metrics.total_cases),
+        ("高风险项", metrics.high_risk_count),
+        ("状态", info.status),
+    ]
+    return "## 1. 文档信息\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_delivery_executive_summary(
+    items: list[DeliveryExecutiveSummaryItem],
+) -> str:
+    rows = [
+        (item.summary_item, item.conclusion, item.evidence_source, item.status)
+        for item in items
+    ]
+    return "## 2. 执行摘要\n" + _markdown_table(
+        ["摘要项", "结论", "证据来源", "状态"],
+        rows,
+    )
+
+
+def _render_delivery_requirement_summary(
+    items: list[DeliveryRequirementSummaryItem],
+) -> str:
+    rows = [
+        (item.content_type, item.reference, item.conclusion, item.open_status)
+        for item in items
+    ]
+    return "## 3. 需求分析摘要\n" + _markdown_table(
+        ["内容类型", "ID/范围", "核心结论", "开放状态"],
+        rows,
+    )
+
+
+def _render_delivery_strategy_summary(
+    items: list[DeliveryStrategySummaryItem],
+) -> str:
+    rows = [
+        (item.strategy_item, item.conclusion, item.related, item.coverage_status)
+        for item in items
+    ]
+    return "## 4. 测试策略摘要\n" + _markdown_table(
+        ["策略项", "结论", "关联风险/目标", "覆盖状态"],
+        rows,
+    )
+
+
+def _render_delivery_case_summary(items: list[DeliveryCaseSummaryItem]) -> str:
+    rows = [
+        (
+            item.dimension,
+            item.case_count,
+            item.p0_count,
+            item.p1_count,
+            item.p2_count,
+            item.automation_candidates,
+            item.blocked_or_needs_env,
+        )
+        for item in items
+    ]
+    return "## 5. 测试用例摘要\n" + _markdown_table(
+        ["维度", "用例数", "P0", "P1", "P2", "自动化候选", "不可执行/需补环境"],
+        rows,
+    )
+
+
+def _render_delivery_coverage_map(items: list[DeliveryCoverageMapItem]) -> str:
+    rows = [
+        (
+            item.requirement,
+            item.risk,
+            item.test_point,
+            ", ".join(item.case_ids),
+            item.acceptance_status,
+        )
+        for item in items
+    ]
+    return (
+        "## 6. 覆盖地图\n"
+        + _markdown_table(
+            ["需求", "风险", "测试点", "用例", "验收状态"],
+            rows,
+        )
+        + "\n\n"
+        + _render_coverage_map_visual(items)
+    )
+
+
+def _render_coverage_map_visual(items: list[DeliveryCoverageMapItem]) -> str:
+    visual = {
+        "type": "coverage-map",
+        "title": "测试交付覆盖地图",
+        "columns": ["需求", "风险", "测试点", "用例", "验收状态"],
+        "rows": [
+            {
+                "需求": item.requirement,
+                "风险": item.risk,
+                "测试点": item.test_point,
+                "用例": ", ".join(item.case_ids),
+                "验收状态": item.acceptance_status,
+            }
+            for item in items
+        ],
+    }
+    return (
+        "```ai4se-visual\n" + json.dumps(visual, ensure_ascii=False, indent=2) + "\n```"
+    )
+
+
+def _render_delivery_open_risks(items: list[DeliveryOpenRisk]) -> str:
+    rows = [
+        (
+            item.risk_id,
+            item.risk_type,
+            item.description,
+            item.impact,
+            item.acceptable,
+            item.owner,
+            item.next_step,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 7. 开放风险\n" + _markdown_table(
+        [
+            "风险/问题 ID",
+            "类型",
+            "描述",
+            "影响",
+            "是否可接受",
+            "责任方",
+            "后续处理",
+            "状态",
+        ],
+        rows,
+    )
+
+
+def _render_delivery_acceptance_checklist(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 8. 交付验收清单\n" + "\n".join(lines)
+
+
+def _render_delivery_signoffs(items: list[DeliverySignoff]) -> str:
+    rows = [(item.role, item.owner, item.opinion, item.status) for item in items]
+    return "## 9. 签署确认\n" + _markdown_table(
+        ["角色", "姓名/责任方", "签署意见", "状态"],
+        rows,
+    )
+
+
+def _render_delivery_change_log(items: list[DeliveryChangeLogItem]) -> str:
+    rows = [
+        (item.version, item.date, item.change, item.reason, item.owner)
+        for item in items
+    ]
+    return "## 10. 变更记录\n" + _markdown_table(
+        ["版本", "日期", "变更内容", "变更原因", "责任方"],
         rows,
     )
 
