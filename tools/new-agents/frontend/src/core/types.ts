@@ -91,6 +91,8 @@ export type Message = {
 // 已实现的工作流类型（仅包含 online 状态）
 export type WorkflowType = 'TEST_DESIGN' | 'REQ_REVIEW' | 'INCIDENT_REVIEW' | 'IDEA_BRAINSTORM' | 'VALUE_DISCOVERY';
 
+export type RunQualityStatus = 'reusable' | 'needs_artifact' | 'failed';
+
 export type WorkflowHandoffContext = {
     sourceArtifactTitle: string;
     sourceArtifactSummary: string;
@@ -154,6 +156,7 @@ export type AgentRunListItem = {
     agentId: string;
     currentStageId: string;
     status: string;
+    qualityStatus: RunQualityStatus;
     model: string | null;
     createdAt: string | null;
     updatedAt: string | null;

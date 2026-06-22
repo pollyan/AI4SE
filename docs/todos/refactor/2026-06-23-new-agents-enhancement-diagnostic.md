@@ -69,7 +69,7 @@
 | E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | P0 | 已消化：共享 ArtifactPane 审阅面板展示 headings、visual、stage gate、专业字段和现有 visual diagnostic 的通过/失败/警告；2026-06-23 已合流到 DeepSeek 结构化输出最新基线 |
 | E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 已消化：Header 测试资产弹层和资产中心共享 Lisa 资产质量状态，基于待处理 issue、测试点覆盖和风险处置派生可交付/需关注/需修复，并随 issue 确认、测试点校准和风险处置更新 |
 | E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
-| E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 支持继续、复制为新 run、按 workflow/质量筛选、预览当前 artifact |
+| E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 已消化：历史中心支持继续原 run、复制为新 run、按 workflow/质量筛选，并预览当前 artifact |
 | E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | 已消化：现有 Alex 到 Lisa handoff API 返回结构化上下文，展示来源版本、来源摘要、目标输入和未确认项；目标 run 首条消息包含结构化接力上下文 |
 | E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 | 每个 stage 有质量分、证据明细和待处理项 |
 | E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 显示 workflow/stage/provider 趋势、contract retry 原因和行动建议 |
@@ -124,7 +124,7 @@
 
 目标: 让用户从开始、生成、审阅、修订、恢复、复用形成闭环。
 
-包含: E05、E06、E08。E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化；E07 已在 2026-06-23 Workflow handoff 上下文强化 milestone 中消化。
+包含: E05、E08。E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化；E06 已在 2026-06-23 Run 历史中心增强 milestone 中消化；E07 已在 2026-06-23 Workflow handoff 上下文强化 milestone 中消化。
 
 暂不做:
 
@@ -191,7 +191,8 @@
 
 - 涉及模块: `run_persistence.py`、`routes.py`、`runSnapshotService.ts`、`Header.tsx`。
 - 需要同步: run list response、snapshot restore、store reset/clone 行为。
-- 完成定义: 历史 run 可复制为新 run、继续、预览 artifact，并按 workflow/质量状态筛选。
+- 完成定义: 已在 2026-06-23 本轮消化。后端 run list 返回 `qualityStatus` 并支持 `qualityStatus` 查询；历史 run 可通过共享持久化模型复制为新的 active run，复制 messages、当前 artifact 版本、结构化 `artifactData` 和 context summaries，但不复制批注、章节锁、审计事件或指标；Header 历史中心支持按 workflow/质量状态筛选、预览当前 artifact、继续原 run 和复制为新会话。
+- 验证记录: 新增/扩展 `test_run_persistence.py`、`test_agent_endpoint.py`、`runSnapshotService.test.ts` 和 `Header.test.tsx` 覆盖 clone contract、质量筛选、畸形 quality status 失败、artifact preview 和复制跳转；本轮验证后端 persistence/API 与前端 service/Header 测试通过。
 - 不纳入: 多用户分享权限。
 
 ### 6. Handoff 上下文强化

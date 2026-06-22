@@ -35,9 +35,9 @@ from models import (
 )
 from workflow_manifest import get_workflow_agent_id
 
-
 MESSAGE_ROLES = {"user", "assistant"}
 RUN_STATUSES = {"active", "completed", "failed"}
+RUN_QUALITY_STATUSES = {"reusable", "needs_artifact", "failed"}
 SUMMARY_SOURCE_ARTIFACT = "artifact"
 SUMMARY_SOURCE_USER_INPUT = "user_input"
 DEFAULT_RUN_LIST_LIMIT = 20
@@ -383,8 +383,7 @@ def update_context_summary(run_id: str, patch: dict) -> dict:
     ).first()
     if summary is None:
         raise ValueError(
-            "未知上下文摘要: "
-            f"{source_type}/{source_stage_id}/{summary_type}"
+            "未知上下文摘要: " f"{source_type}/{source_stage_id}/{summary_type}"
         )
 
     summary.content = content
@@ -488,12 +487,10 @@ def replace_artifact_collaboration_state(run_id: str, patch: dict) -> dict:
     db.session.commit()
     return {
         "artifactComments": [
-            comment_snapshot(comment)
-            for comment in collaboration_state.comments
+            comment_snapshot(comment) for comment in collaboration_state.comments
         ],
         "artifactSectionLocks": [
-            section_lock_snapshot(lock)
-            for lock in collaboration_state.section_locks
+            section_lock_snapshot(lock) for lock in collaboration_state.section_locks
         ],
     }
 
@@ -594,16 +591,13 @@ def get_run_snapshot(run_id: str) -> dict:
             for summary in context_summaries
         ],
         "artifactComments": [
-            comment_snapshot(comment)
-            for comment in artifact_comments
+            comment_snapshot(comment) for comment in artifact_comments
         ],
         "artifactSectionLocks": [
-            section_lock_snapshot(lock)
-            for lock in artifact_section_locks
+            section_lock_snapshot(lock) for lock in artifact_section_locks
         ],
         "artifactAuditEvents": [
-            audit_event_snapshot(event)
-            for event in artifact_audit_events
+            audit_event_snapshot(event) for event in artifact_audit_events
         ],
     }
 
@@ -710,9 +704,8 @@ def get_runtime_observability_summary(
     ).all()
 
     total_turns = len(metrics) + len(config_issues)
-    failed_turns = (
-        sum(1 for metric in metrics if metric.status != "success")
-        + len(config_issues)
+    failed_turns = sum(1 for metric in metrics if metric.status != "success") + len(
+        config_issues
     )
     provider_issue_codes = _merge_error_codes(
         _provider_issue_codes(metrics),
@@ -758,10 +751,7 @@ def get_runtime_observability_summary(
             _provider_observability_item(provider, provider_metrics)
             for provider, provider_metrics in sorted(provider_index.items())
         ],
-        "recentTurns": [
-            _turn_metric_snapshot(metric)
-            for metric in metrics[:limit]
-        ],
+        "recentTurns": [_turn_metric_snapshot(metric) for metric in metrics[:limit]],
     }
 
 
@@ -819,9 +809,8 @@ def _stage_observability_item(
 ) -> dict:
     config_issues = config_issues or []
     total_turns = len(metrics) + len(config_issues)
-    failed_turns = (
-        sum(1 for metric in metrics if metric.status != "success")
-        + len(config_issues)
+    failed_turns = sum(1 for metric in metrics if metric.status != "success") + len(
+        config_issues
     )
     error_codes: dict[str, int] = {}
     for metric in metrics:
@@ -894,15 +883,79 @@ def _turn_metric_snapshot(metric: AgentRunTurnMetric) -> dict:
     }
 
 
+def clone_agent_run(run_id: str) -> dict:
+    source = _get_run(run_id)
+    clone = AgentRun(
+        id=str(uuid4()),
+        workflow_id=source.workflow_id,
+        agent_id=source.agent_id,
+        current_stage_id=source.current_stage_id,
+        status="active",
+        model=source.model,
+    )
+    db.session.add(clone)
+    db.session.flush()
+
+    for message in source.messages:
+        db.session.add(
+            AgentMessage(
+                run_id=clone.id,
+                role=message.role,
+                content=message.content,
+                sequence_index=message.sequence_index,
+            )
+        )
+
+    for artifact in source.artifacts:
+        current_version = db.session.get(
+            AgentArtifactVersion,
+            artifact.current_version_id,
+        )
+        if current_version is None:
+            continue
+        cloned_artifact = AgentArtifact(
+            run_id=clone.id,
+            stage_id=artifact.stage_id,
+        )
+        db.session.add(cloned_artifact)
+        db.session.flush()
+        cloned_version = AgentArtifactVersion(
+            artifact_id=cloned_artifact.id,
+            version_number=1,
+            content=current_version.content,
+            artifact_data_json=current_version.artifact_data_json,
+        )
+        db.session.add(cloned_version)
+        db.session.flush()
+        cloned_artifact.current_version_id = cloned_version.id
+
+    for summary in source.context_summaries:
+        db.session.add(
+            AgentContextSummary(
+                run_id=clone.id,
+                source_type=summary.source_type,
+                source_stage_id=summary.source_stage_id,
+                summary_type=summary.summary_type,
+                content=summary.content,
+            )
+        )
+
+    db.session.commit()
+    return get_run_snapshot(clone.id)
+
+
 def list_agent_runs(
     *,
     workflow_id: str | None = None,
+    quality_status: str | None = None,
     limit: int = DEFAULT_RUN_LIST_LIMIT,
     offset: int = 0,
     query_text: str | None = None,
 ) -> dict:
     if workflow_id is not None and workflow_id not in WORKFLOW_STAGES:
         raise ValueError(f"未知 workflowId: {workflow_id}")
+    if quality_status is not None and quality_status not in RUN_QUALITY_STATUSES:
+        raise ValueError(f"未知 qualityStatus: {quality_status}")
     if limit < 1:
         limit = DEFAULT_RUN_LIST_LIMIT
     if limit > MAX_RUN_LIST_LIMIT:
@@ -914,6 +967,8 @@ def list_agent_runs(
     query = AgentRun.query
     if workflow_id is not None:
         query = query.filter_by(workflow_id=workflow_id)
+    if quality_status is not None:
+        query = _apply_quality_status_filter(query, quality_status)
     if normalized_query:
         query = _apply_run_search_filter(query, normalized_query)
 
@@ -969,6 +1024,22 @@ def _apply_run_search_filter(query, query_text: str):
     )
 
 
+def _apply_quality_status_filter(query, quality_status: str):
+    artifact_exists = (
+        db.session.query(AgentArtifact.id)
+        .filter(
+            AgentArtifact.run_id == AgentRun.id,
+            AgentArtifact.current_version_id.isnot(None),
+        )
+        .exists()
+    )
+    if quality_status == "failed":
+        return query.filter(AgentRun.status == "failed")
+    if quality_status == "reusable":
+        return query.filter(AgentRun.status != "failed", artifact_exists)
+    return query.filter(AgentRun.status != "failed", ~artifact_exists)
+
+
 def _run_list_item(run: AgentRun) -> dict:
     return {
         "id": run.id,
@@ -976,12 +1047,29 @@ def _run_list_item(run: AgentRun) -> dict:
         "agentId": run.agent_id,
         "currentStageId": run.current_stage_id,
         "status": run.status,
+        "qualityStatus": _run_quality_status(run),
         "model": run.model,
         "createdAt": _format_datetime(run.created_at),
         "updatedAt": _format_datetime(run.updated_at),
         "lastMessage": _last_message_snapshot(run.id),
         "currentArtifact": _current_artifact_summary(run.id),
     }
+
+
+def _run_quality_status(run: AgentRun) -> str:
+    if run.status == "failed":
+        return "failed"
+    return "reusable" if _run_has_current_artifact(run.id) else "needs_artifact"
+
+
+def _run_has_current_artifact(run_id: str) -> bool:
+    return (
+        AgentArtifact.query.filter(
+            AgentArtifact.run_id == run_id,
+            AgentArtifact.current_version_id.isnot(None),
+        ).first()
+        is not None
+    )
 
 
 def _format_datetime(value) -> str | None:

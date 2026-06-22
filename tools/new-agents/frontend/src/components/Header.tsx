@@ -4,14 +4,14 @@ import { Settings, Bot, Plus, AlertTriangle, ArrowLeft, History, Search, Clipboa
 import { useNavigate, useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { WorkflowDropdown } from './WorkflowDropdown';
-import { createRunDecisionSummary, fetchRunList, updateRunContextSummary } from '../services/runSnapshotService';
+import { cloneRun, createRunDecisionSummary, fetchRunList, updateRunContextSummary } from '../services/runSnapshotService';
 import { materializeRunTestAssets, updateTestAssetCase, updateTestAssetIssueStatus } from '../services/testAssetService';
 import { fetchObservabilitySummary } from '../services/observabilityService';
 import { importIntentTesterDraft } from '../services/intentTesterImportService';
 import { checkDefaultLlmConfig } from '../services/configService';
 import { buildObservabilityAlerts } from '../core/observabilityAlerts';
 import { deriveTestAssetQualityStatus } from '../core/testAssetQuality';
-import type { AgentRunListItem, AgentRunSnapshotContextSummary, ObservabilitySummary, TestAssetCase, TestAssetCollection, TestAssetIssueStatus, WorkflowType } from '../store';
+import type { AgentRunListItem, AgentRunSnapshotContextSummary, ObservabilitySummary, RunQualityStatus, TestAssetCase, TestAssetCollection, TestAssetIssueStatus, WorkflowType } from '../store';
 
 const RUN_LIST_PAGE_SIZE = 20;
 const TEST_ASSET_ISSUE_STATUS_LABELS: Record<TestAssetIssueStatus, string> = {
@@ -24,6 +24,11 @@ const CONTEXT_SUMMARY_TYPE_LABELS: Record<string, string> = {
   stage_conclusion: '阶段结论',
   decision: '关键决策',
   current_artifact: '产物摘要',
+};
+const RUN_QUALITY_LABELS: Record<RunQualityStatus, string> = {
+  reusable: '可复用',
+  needs_artifact: '缺少产物',
+  failed: '失败',
 };
 type ProviderConfigCheckState = {
   status: 'idle' | 'checking' | 'success' | 'error';
@@ -61,11 +66,13 @@ export const Header: React.FC = () => {
   const [isLoadingRuns, setIsLoadingRuns] = useState(false);
   const [runsError, setRunsError] = useState<string | null>(null);
   const [runListScope, setRunListScope] = useState<'all' | 'workflow'>('all');
+  const [runQualityFilter, setRunQualityFilter] = useState<RunQualityStatus | ''>('');
   const [runSearchDraft, setRunSearchDraft] = useState('');
   const [activeRunQuery, setActiveRunQuery] = useState('');
   const [hasMoreRuns, setHasMoreRuns] = useState(false);
   const [nextRunOffset, setNextRunOffset] = useState<number | null>(null);
   const [runTotal, setRunTotal] = useState(0);
+  const [cloningRunId, setCloningRunId] = useState<string | null>(null);
   const [showContextSummaries, setShowContextSummaries] = useState(false);
   const [contextSummaryDrafts, setContextSummaryDrafts] = useState<Record<string, string>>({});
   const [contextSummariesError, setContextSummariesError] = useState<string | null>(null);
@@ -114,6 +121,7 @@ export const Header: React.FC = () => {
     options?: {
       offset?: number;
       query?: string;
+      qualityStatus?: RunQualityStatus | '';
       append?: boolean;
     },
   ) => {
@@ -122,6 +130,7 @@ export const Header: React.FC = () => {
     try {
       const result = await fetchRunList({
         ...(scope === 'workflow' ? { workflowId: workflow } : {}),
+        ...(options?.qualityStatus ? { qualityStatus: options.qualityStatus } : {}),
         limit: RUN_LIST_PAGE_SIZE,
         ...(options?.offset !== undefined ? { offset: options.offset } : {}),
         ...(options?.query ? { query: options.query } : {}),
@@ -148,6 +157,7 @@ export const Header: React.FC = () => {
   const handleOpenRuns = async () => {
     setShowRuns(true);
     setRunListScope('all');
+    setRunQualityFilter('');
     setRunSearchDraft('');
     setActiveRunQuery('');
     await loadRuns('all');
@@ -155,14 +165,19 @@ export const Header: React.FC = () => {
 
   const handleRunListScopeChange = async (scope: 'all' | 'workflow') => {
     setRunListScope(scope);
-    await loadRuns(scope, { query: activeRunQuery });
+    await loadRuns(scope, { query: activeRunQuery, qualityStatus: runQualityFilter });
+  };
+
+  const handleRunQualityFilterChange = async (qualityStatus: RunQualityStatus | '') => {
+    setRunQualityFilter(qualityStatus);
+    await loadRuns(runListScope, { query: activeRunQuery, qualityStatus });
   };
 
   const handleSearchRuns = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedQuery = runSearchDraft.trim();
     setActiveRunQuery(normalizedQuery);
-    await loadRuns(runListScope, { query: normalizedQuery });
+    await loadRuns(runListScope, { query: normalizedQuery, qualityStatus: runQualityFilter });
   };
 
   const handleLoadMoreRuns = async () => {
@@ -170,6 +185,7 @@ export const Header: React.FC = () => {
     await loadRuns(runListScope, {
       offset: nextRunOffset,
       query: activeRunQuery,
+      qualityStatus: runQualityFilter,
       append: true,
     });
   };
@@ -178,6 +194,21 @@ export const Header: React.FC = () => {
     const targetWorkflow = WORKFLOWS[run.workflowId];
     navigate(`/workspace/${run.agentId}/${targetWorkflow.slug}?runId=${encodeURIComponent(run.id)}`);
     setShowRuns(false);
+  };
+
+  const handleCloneRun = async (run: AgentRunListItem) => {
+    setCloningRunId(run.id);
+    setRunsError(null);
+    try {
+      const snapshot = await cloneRun(run.id);
+      const targetWorkflow = WORKFLOWS[snapshot.run.workflowId];
+      navigate(`/workspace/${snapshot.run.agentId}/${targetWorkflow.slug}?runId=${encodeURIComponent(snapshot.run.id)}`);
+      setShowRuns(false);
+    } catch {
+      setRunsError('无法复制历史会话');
+    } finally {
+      setCloningRunId(null);
+    }
   };
 
   const handleOpenContextSummaries = () => {
@@ -1476,7 +1507,7 @@ export const Header: React.FC = () => {
 
       {showRuns && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="flex w-full max-w-xl flex-col overflow-hidden rounded-xl bg-[#151f2b] shadow-2xl ring-1 ring-white/10">
+          <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-[#151f2b] shadow-2xl ring-1 ring-white/10">
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
               <h3 className="text-base font-bold text-white">历史会话</h3>
               <button
@@ -1509,6 +1540,22 @@ export const Header: React.FC = () => {
               >
                 当前工作流
               </button>
+            </div>
+            <div className="border-b border-white/10 px-5 py-3">
+              <label htmlFor="run-quality-filter" className="block text-xs font-semibold text-slate-300">
+                复用质量
+              </label>
+              <select
+                id="run-quality-filter"
+                value={runQualityFilter}
+                onChange={(event) => void handleRunQualityFilterChange(event.target.value as RunQualityStatus | '')}
+                className="mt-2 w-full rounded-lg border border-[#1e293b] bg-[#0f1623] px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+              >
+                <option value="">全部质量</option>
+                <option value="reusable">可复用</option>
+                <option value="needs_artifact">缺少产物</option>
+                <option value="failed">失败</option>
+              </select>
             </div>
             <form
               onSubmit={handleSearchRuns}
@@ -1551,17 +1598,24 @@ export const Header: React.FC = () => {
                     {recentRuns.map((run) => {
                       const workflowConfig = WORKFLOWS[run.workflowId];
                       const stageName = workflowConfig.stages.find(stage => stage.id === run.currentStageId)?.name || run.currentStageId;
-                      const summary = run.currentArtifact?.summary || run.lastMessage?.content || '暂无摘要';
+                      const summary = run.lastMessage?.content || (run.currentArtifact ? `${stageName} 阶段产物可预览` : '暂无摘要');
+                      const artifactVersion = run.currentArtifact?.versionNumber === null
+                        ? '-'
+                        : run.currentArtifact?.versionNumber;
                       return (
-                        <button
+                        <div
                           key={run.id}
-                          onClick={() => handleOpenRun(run)}
-                          className="w-full rounded-lg border border-[#1e293b] bg-[#0f1623] p-3 text-left transition-colors hover:border-blue-500/40 hover:bg-[#172033]"
+                          className="rounded-lg border border-[#1e293b] bg-[#0f1623] p-3"
                         >
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold text-white">
-                                {workflowConfig.name} / {stageName}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="truncate text-sm font-semibold text-white">
+                                  {workflowConfig.name} / {stageName}
+                                </span>
+                                <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-200">
+                                  {RUN_QUALITY_LABELS[run.qualityStatus]}
+                                </span>
                               </div>
                               <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">
                                 {summary}
@@ -1571,7 +1625,37 @@ export const Header: React.FC = () => {
                               {run.status}
                             </div>
                           </div>
-                        </button>
+                          <div className="mt-3 rounded-lg border border-[#1e293b] bg-[#111827] p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs font-semibold text-slate-300">产物预览</span>
+                              {run.currentArtifact && (
+                                <span className="text-xs text-slate-500">
+                                  {run.currentArtifact.stageId} · v{artifactVersion}
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-400">
+                              {run.currentArtifact?.summary || '暂无产物预览'}
+                            </div>
+                          </div>
+                          <div className="mt-3 flex flex-wrap justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRun(run)}
+                              className="rounded-lg border border-[#1e293b] px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-blue-500/40 hover:bg-white/5"
+                            >
+                              打开原会话 · {workflowConfig.name}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={cloningRunId === run.id}
+                              onClick={() => void handleCloneRun(run)}
+                              className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {cloningRunId === run.id ? '复制中...' : '复制为新会话'}
+                            </button>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>

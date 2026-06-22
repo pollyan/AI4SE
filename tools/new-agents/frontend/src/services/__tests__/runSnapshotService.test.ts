@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ArtifactConflictError, createRunDecisionSummary, fetchRunList, fetchRunSnapshot, updateRunArtifact, updateRunArtifactCollaboration, updateRunContextSummary } from '../runSnapshotService';
+import { ArtifactConflictError, cloneRun, createRunDecisionSummary, fetchRunList, fetchRunSnapshot, updateRunArtifact, updateRunArtifactCollaboration, updateRunContextSummary } from '../runSnapshotService';
 
 global.fetch = vi.fn();
 
@@ -453,6 +453,7 @@ describe('runSnapshotService', () => {
                         agentId: 'lisa',
                         currentStageId: 'STRATEGY',
                         status: 'active',
+                        qualityStatus: 'reusable',
                         model: 'test-model',
                         createdAt: '2026-06-19T09:00:00',
                         updatedAt: '2026-06-19T09:05:00',
@@ -485,6 +486,7 @@ describe('runSnapshotService', () => {
         expect(result.nextOffset).toBeNull();
         expect(result.query).toBeNull();
         expect(result.runs[0].id).toBe('run-123');
+        expect(result.runs[0].qualityStatus).toBe('reusable');
         expect(result.runs[0].lastMessage?.content).toBe('已更新测试策略。');
         expect(result.runs[0].currentArtifact?.summary).toContain('登录绕过');
     });
@@ -508,17 +510,99 @@ describe('runSnapshotService', () => {
 
         const result = await fetchRunList({
             workflowId: 'TEST_DESIGN',
+            qualityStatus: 'reusable',
             limit: 5,
             offset: 10,
             query: '登录 链路',
         });
 
         expect(fetch).toHaveBeenCalledWith(
-            '/new-agents/api/agent/runs?workflowId=TEST_DESIGN&limit=5&offset=10&query=%E7%99%BB%E5%BD%95+%E9%93%BE%E8%B7%AF'
+            '/new-agents/api/agent/runs?workflowId=TEST_DESIGN&qualityStatus=reusable&limit=5&offset=10&query=%E7%99%BB%E5%BD%95+%E9%93%BE%E8%B7%AF'
         );
         expect(result.offset).toBe(10);
         expect(result.total).toBe(12);
         expect(result.query).toBe('登录 链路');
+    });
+
+    it('should fail explicitly when a run list item has malformed quality status', async () => {
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({
+                limit: 20,
+                offset: 0,
+                total: 1,
+                hasMore: false,
+                nextOffset: null,
+                query: null,
+                runs: [
+                    {
+                        id: 'run-123',
+                        workflowId: 'TEST_DESIGN',
+                        agentId: 'lisa',
+                        currentStageId: 'STRATEGY',
+                        status: 'active',
+                        qualityStatus: 'unknown',
+                        model: 'test-model',
+                        createdAt: '2026-06-19T09:00:00',
+                        updatedAt: '2026-06-19T09:05:00',
+                        lastMessage: null,
+                        currentArtifact: null,
+                    },
+                ],
+            }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            },
+        ));
+
+        await expect(fetchRunList()).rejects.toThrow('Invalid run list response');
+    });
+
+    it('should clone a persisted run and parse the cloned snapshot', async () => {
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({
+                run: {
+                    id: 'clone-456',
+                    workflowId: 'TEST_DESIGN',
+                    agentId: 'lisa',
+                    currentStageId: 'STRATEGY',
+                    status: 'active',
+                    model: 'test-model',
+                },
+                messages: [
+                    {
+                        role: 'user',
+                        content: '原始需求',
+                        sequenceIndex: 1,
+                    },
+                ],
+                artifacts: [
+                    {
+                        stageId: 'STRATEGY',
+                        content: '# 测试策略',
+                        versionNumber: 1,
+                    },
+                ],
+                contextSummaries: [],
+                artifactComments: [],
+                artifactSectionLocks: [],
+                artifactAuditEvents: [],
+            }),
+            {
+                status: 201,
+                headers: { 'Content-Type': 'application/json' },
+            },
+        ));
+
+        const snapshot = await cloneRun('run-123');
+
+        expect(fetch).toHaveBeenCalledWith(
+            '/new-agents/api/agent/runs/run-123/clone',
+            { method: 'POST' },
+        );
+        expect(snapshot.run.id).toBe('clone-456');
+        expect(snapshot.messages[0].content).toBe('原始需求');
+        expect(snapshot.artifacts[0].versionNumber).toBe(1);
     });
 
     it('should fail explicitly when the run list payload is malformed', async () => {

@@ -14,6 +14,7 @@ from route_guards import require_default_llm_config
 from run_persistence import (
     AgentRunPersistence,
     ArtifactVersionConflictError,
+    clone_agent_run,
     get_run_snapshot,
     get_runtime_observability_summary,
     list_agent_runs,
@@ -35,7 +36,6 @@ from sse_response import build_sse_response
 from stream_services import stream_agent_run_events
 from routes_test_assets import register_test_asset_routes
 from workflow_handoffs import export_run_handoffs, start_workflow_handoff
-
 
 api_bp = Blueprint("new_agents_api", __name__, url_prefix="/api")
 register_test_asset_routes(api_bp)
@@ -141,6 +141,7 @@ def agent_runs_stream():
 def agent_runs_list():
     """Return recent persisted Agent Runtime runs."""
     workflow_id = request.args.get("workflowId")
+    quality_status = request.args.get("qualityStatus")
     limit_arg = request.args.get("limit", "20")
     offset_arg = request.args.get("offset", "0")
     query_text = request.args.get("query")
@@ -153,14 +154,18 @@ def agent_runs_list():
     except ValueError:
         return json_error_response("offset 必须是整数", 400)
     try:
-        return jsonify(
-            list_agent_runs(
-                workflow_id=workflow_id,
-                limit=limit,
-                offset=offset,
-                query_text=query_text,
-            )
-        ), 200
+        return (
+            jsonify(
+                list_agent_runs(
+                    workflow_id=workflow_id,
+                    quality_status=quality_status,
+                    limit=limit,
+                    offset=offset,
+                    query_text=query_text,
+                )
+            ),
+            200,
+        )
     except ValueError as e:
         return json_error_response(str(e), 400)
 
@@ -176,13 +181,16 @@ def agent_observability():
     except ValueError:
         return json_error_response("limit 必须是整数", 400)
     try:
-        return jsonify(
-            get_runtime_observability_summary(
-                limit=limit,
-                workflow_id=workflow_id,
-                stage_id=stage_id,
-            )
-        ), 200
+        return (
+            jsonify(
+                get_runtime_observability_summary(
+                    limit=limit,
+                    workflow_id=workflow_id,
+                    stage_id=stage_id,
+                )
+            ),
+            200,
+        )
     except ValueError as e:
         return json_error_response(str(e), 400)
 
@@ -192,6 +200,15 @@ def agent_run_snapshot(run_id: str):
     """Return a persisted Agent Runtime run snapshot."""
     try:
         return jsonify(get_run_snapshot(run_id)), 200
+    except ValueError as e:
+        return json_error_response(str(e), 404)
+
+
+@api_bp.route("/agent/runs/<run_id>/clone", methods=["POST"])
+def agent_run_clone(run_id: str):
+    """Clone a persisted Agent Runtime run into a new reusable run."""
+    try:
+        return jsonify(clone_agent_run(run_id)), 201
     except ValueError as e:
         return json_error_response(str(e), 404)
 
@@ -206,10 +223,14 @@ def agent_run_context_summary_update(run_id: str):
         return json_error_response(str(e), 400)
     except ValueError as e:
         message = str(e)
-        status_code = 404 if (
-            message.startswith("未知 runId:")
-            or message.startswith("未知上下文摘要:")
-        ) else 400
+        status_code = (
+            404
+            if (
+                message.startswith("未知 runId:")
+                or message.startswith("未知上下文摘要:")
+            )
+            else 400
+        )
         return json_error_response(message, status_code)
 
 
@@ -222,10 +243,15 @@ def agent_run_artifact_update(run_id: str):
     except RequestValidationError as e:
         return json_error_response(str(e), 400)
     except ArtifactVersionConflictError as e:
-        return jsonify({
-            "error": str(e),
-            "currentArtifact": e.current_artifact,
-        }), 409
+        return (
+            jsonify(
+                {
+                    "error": str(e),
+                    "currentArtifact": e.current_artifact,
+                }
+            ),
+            409,
+        )
     except ValueError as e:
         message = str(e)
         status_code = 404 if message.startswith("未知 runId:") else 400

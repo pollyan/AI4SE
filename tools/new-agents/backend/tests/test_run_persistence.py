@@ -7,6 +7,7 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 os.environ["FLASK_TESTING"] = "1"
 
+import run_persistence
 from app import create_app
 from models import AgentArtifact, AgentArtifactVersion, AgentMessage, AgentRun, db
 from run_persistence import (
@@ -112,7 +113,9 @@ def test_artifact_versions_increment_per_run_stage(app):
         assert first.version_number == 1
         assert second.version_number == 2
         assert artifact.current_version_id == second.id
-        assert AgentArtifactVersion.query.filter_by(artifact_id=artifact.id).count() == 2
+        assert (
+            AgentArtifactVersion.query.filter_by(artifact_id=artifact.id).count() == 2
+        )
 
 
 def test_run_snapshot_returns_messages_and_current_artifacts(app):
@@ -293,10 +296,10 @@ def test_run_snapshot_returns_artifact_audit_events(app):
         )
         snapshot = get_run_snapshot(run.id)
 
-    assert [
-        event["eventType"]
-        for event in snapshot["artifactAuditEvents"]
-    ] == ["artifact_saved", "collaboration_updated"]
+    assert [event["eventType"] for event in snapshot["artifactAuditEvents"]] == [
+        "artifact_saved",
+        "collaboration_updated",
+    ]
     assert snapshot["artifactAuditEvents"][0] == {
         "stageId": "CLARIFY",
         "eventType": "artifact_saved",
@@ -319,8 +322,7 @@ def test_record_artifact_version_persists_current_artifact_summary(app):
         snapshot = get_run_snapshot(run.id)
 
     summaries = {
-        summary["summaryType"]: summary
-        for summary in snapshot["contextSummaries"]
+        summary["summaryType"]: summary for summary in snapshot["contextSummaries"]
     }
     assert summaries["current_artifact"] == {
         "sourceType": "artifact",
@@ -398,8 +400,7 @@ def test_record_artifact_version_persists_decision_summary(app):
     }
     assert "覆盖登录主链路和异常链路" in summaries["stage_conclusion"]
     assert summaries["decision"] == (
-        "- 决定优先自动化登录回归\n"
-        "- P0 风险先覆盖第三方回调失败"
+        "- 决定优先自动化登录回归\n" "- P0 风险先覆盖第三方回调失败"
     )
 
 
@@ -540,6 +541,80 @@ def test_upsert_manual_decision_summary_rejects_stage_outside_workflow(app):
                     "content": "跨工作流决策",
                 },
             )
+
+
+def test_clone_agent_run_copies_messages_artifacts_and_context(app):
+    with app.app_context():
+        source = create_agent_run("TEST_DESIGN", "lisa", "STRATEGY", model="gpt-test")
+        append_run_message(source.id, "user", "原始需求")
+        append_run_message(source.id, "assistant", "原始回复")
+        record_artifact_version(
+            source.id,
+            "CLARIFY",
+            "# 需求分析文档\n\n## 1. 被测系统与边界\n系统",
+            artifact_data={"requirement_facts": [{"fact_id": "F-001"}]},
+        )
+        record_artifact_version(
+            source.id,
+            "STRATEGY",
+            "# 测试策略\n\n## 1. 测试范围\n范围",
+        )
+        replace_artifact_collaboration_state(
+            source.id,
+            {
+                "comments": [
+                    {
+                        "id": "comment-1",
+                        "stageId": "STRATEGY",
+                        "content": "源 run 审阅批注",
+                        "artifactExcerpt": "范围",
+                        "createdAt": 100,
+                        "status": "open",
+                        "resolvedAt": None,
+                        "replies": [],
+                    }
+                ],
+                "sectionLocks": [
+                    {
+                        "id": "lock-1",
+                        "stageId": "STRATEGY",
+                        "heading": "## 1. 测试范围",
+                        "sectionAnchor": "h2:测试范围:1",
+                        "content": "## 1. 测试范围\n范围",
+                        "createdAt": 101,
+                    }
+                ],
+            },
+        )
+        source_id = source.id
+
+        cloned = run_persistence.clone_agent_run(source_id)
+        source_snapshot = get_run_snapshot(source_id)
+
+    assert cloned["run"]["id"] != source_id
+    assert cloned["run"]["workflowId"] == "TEST_DESIGN"
+    assert cloned["run"]["agentId"] == "lisa"
+    assert cloned["run"]["currentStageId"] == "STRATEGY"
+    assert cloned["run"]["model"] == "gpt-test"
+    assert [message["content"] for message in cloned["messages"]] == [
+        "原始需求",
+        "原始回复",
+    ]
+    assert {artifact["stageId"] for artifact in cloned["artifacts"]} == {
+        "CLARIFY",
+        "STRATEGY",
+    }
+    assert all(artifact["versionNumber"] == 1 for artifact in cloned["artifacts"])
+    cloned_clarify = next(
+        artifact for artifact in cloned["artifacts"] if artifact["stageId"] == "CLARIFY"
+    )
+    assert cloned_clarify["artifactData"] == {
+        "requirement_facts": [{"fact_id": "F-001"}]
+    }
+    assert cloned["contextSummaries"] == source_snapshot["contextSummaries"]
+    assert cloned["artifactComments"] == []
+    assert cloned["artifactSectionLocks"] == []
+    assert cloned["artifactAuditEvents"] == []
 
 
 @pytest.mark.parametrize(

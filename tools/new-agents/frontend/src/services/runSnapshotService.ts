@@ -1,4 +1,4 @@
-import { AgentRunListItem, AgentRunListResponse, AgentRunSnapshot, AgentRunSnapshotArtifact, AgentRunSnapshotContextSummary, AgentRunSnapshotMessage, ArtifactAuditEvent, ArtifactComment, ArtifactCommentReply, ArtifactCommentStatus, ArtifactSectionLock, WorkflowType } from '../core/types';
+import { AgentRunListItem, AgentRunListResponse, AgentRunSnapshot, AgentRunSnapshotArtifact, AgentRunSnapshotContextSummary, AgentRunSnapshotMessage, ArtifactAuditEvent, ArtifactComment, ArtifactCommentReply, ArtifactCommentStatus, ArtifactSectionLock, RunQualityStatus, WorkflowType } from '../core/types';
 import { WORKFLOWS } from '../core/workflows';
 
 const INVALID_SNAPSHOT_ERROR = 'Invalid run snapshot response';
@@ -21,6 +21,12 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
 const isWorkflowType = (value: unknown): value is WorkflowType => (
     typeof value === 'string'
     && Object.prototype.hasOwnProperty.call(WORKFLOWS, value)
+);
+
+const isRunQualityStatus = (value: unknown): value is RunQualityStatus => (
+    value === 'reusable'
+    || value === 'needs_artifact'
+    || value === 'failed'
 );
 
 const parseMessage = (message: unknown): AgentRunSnapshotMessage => {
@@ -474,6 +480,7 @@ const parseRunListItem = (run: unknown): AgentRunListItem => {
     const agentId = run.agentId;
     const currentStageId = run.currentStageId;
     const status = run.status;
+    const qualityStatus = run.qualityStatus;
     const model = parseNullableString(run.model, INVALID_RUN_LIST_ERROR);
     const createdAt = parseNullableString(run.createdAt, INVALID_RUN_LIST_ERROR);
     const updatedAt = parseNullableString(run.updatedAt, INVALID_RUN_LIST_ERROR);
@@ -484,6 +491,7 @@ const parseRunListItem = (run: unknown): AgentRunListItem => {
         || typeof agentId !== 'string'
         || typeof currentStageId !== 'string'
         || typeof status !== 'string'
+        || !isRunQualityStatus(qualityStatus)
     ) {
         throw new Error(INVALID_RUN_LIST_ERROR);
     }
@@ -526,6 +534,7 @@ const parseRunListItem = (run: unknown): AgentRunListItem => {
         agentId,
         currentStageId,
         status,
+        qualityStatus,
         model,
         createdAt,
         updatedAt,
@@ -556,6 +565,7 @@ const parseRunList = (payload: unknown): AgentRunListResponse => {
 
 export const fetchRunList = async (options?: {
     workflowId?: WorkflowType;
+    qualityStatus?: RunQualityStatus;
     limit?: number;
     offset?: number;
     query?: string;
@@ -563,6 +573,9 @@ export const fetchRunList = async (options?: {
     const params = new URLSearchParams();
     if (options?.workflowId) {
         params.set('workflowId', options.workflowId);
+    }
+    if (options?.qualityStatus) {
+        params.set('qualityStatus', options.qualityStatus);
     }
     if (options?.limit !== undefined) {
         params.set('limit', String(options.limit));
@@ -584,4 +597,22 @@ export const fetchRunList = async (options?: {
     }
 
     return parseRunList(await response.json());
+};
+
+export const cloneRun = async (runId: string): Promise<AgentRunSnapshot> => {
+    const normalizedRunId = runId.trim();
+    if (!normalizedRunId) {
+        throw new Error('runId is required');
+    }
+
+    const response = await fetch(
+        `/new-agents/api/agent/runs/${encodeURIComponent(normalizedRunId)}/clone`,
+        { method: 'POST' }
+    );
+
+    if (!response.ok) {
+        throw new Error(`Failed to clone run: ${response.status}`);
+    }
+
+    return parseRunSnapshot(await response.json());
 };
