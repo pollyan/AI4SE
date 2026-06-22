@@ -22,6 +22,7 @@ import { StructuredVisual } from './StructuredVisual';
 import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../services/runSnapshotService';
 import { buildDocxPackage } from '../core/docxExport';
 import { buildPlainTextPdf as buildArtifactPdf } from '../core/artifactExport';
+import { buildArtifactQualitySummary } from '../core/artifactQuality';
 
 export const ArtifactPane: React.FC = () => {
   const workflow = useStore((state) => state.workflow);
@@ -48,6 +49,7 @@ export const ArtifactPane: React.FC = () => {
   const clearArtifactVisualDiagnostic = useStore((state) => state.clearArtifactVisualDiagnostic);
   const artifactVisualDiagnostics = useStore((state) => state.artifactVisualDiagnostics);
   const artifactVisualDiagnosticFocusRequest = useStore((state) => state.artifactVisualDiagnosticFocusRequest);
+  const focusArtifactVisualDiagnostic = useStore((state) => state.focusArtifactVisualDiagnostic);
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
   const [showHistory, setShowHistory] = useState(false);
   const [showArtifactActionsMenu, setShowArtifactActionsMenu] = useState(false);
@@ -72,7 +74,8 @@ export const ArtifactPane: React.FC = () => {
   const [activeVisualDiagnosticId, setActiveVisualDiagnosticId] = useState<string | null>(null);
   const artifactPreviewRef = useRef<HTMLDivElement | null>(null);
   const handledVisualDiagnosticFocusSeqRef = useRef<number | null>(null);
-  const currentStageId = WORKFLOWS[workflow].stages[stageIndex]?.id;
+  const currentStage = WORKFLOWS[workflow].stages[stageIndex];
+  const currentStageId = currentStage?.id;
   const currentStageArtifactHistory = useMemo(
     () => currentStageId
       ? artifactHistory.filter(version => version.stageId === currentStageId)
@@ -108,6 +111,24 @@ export const ArtifactPane: React.FC = () => {
     [currentStageAuditEvents]
   );
   const latestStageArtifactVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1] ?? null;
+  const currentStageVisualDiagnostics = useMemo(
+    () => currentStageId
+      ? artifactVisualDiagnostics.filter(diagnostic => diagnostic.stageId === currentStageId)
+      : [],
+    [artifactVisualDiagnostics, currentStageId]
+  );
+  const artifactQualitySummary = useMemo(
+    () => buildArtifactQualitySummary({
+      stage: currentStage,
+      content: artifactContent,
+      visualDiagnostics: currentStageVisualDiagnostics,
+    }),
+    [artifactContent, currentStage, currentStageVisualDiagnostics]
+  );
+  const artifactQualityIssues = useMemo(
+    () => artifactQualitySummary.items.filter(item => item.status !== 'pass'),
+    [artifactQualitySummary.items]
+  );
 
   const syncArtifactCollaborationState = useCallback(() => {
     if (!currentRunId) return;
@@ -4364,6 +4385,89 @@ export const ArtifactPane: React.FC = () => {
             </button>
           </div>
           <div className="max-h-[70vh] space-y-4 overflow-auto p-4">
+            <section className="space-y-3 rounded-lg border border-[#1e293b] bg-[#020617] p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">质量诊断</h4>
+                  <p className="mt-1 text-xs text-slate-500">当前阶段产物合同检查</p>
+                </div>
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                  artifactQualitySummary.status === 'fail'
+                    ? 'border-rose-400/30 bg-rose-400/10 text-rose-200'
+                    : artifactQualitySummary.status === 'warning'
+                      ? 'border-amber-400/30 bg-amber-400/10 text-amber-200'
+                      : artifactQualitySummary.status === 'pass'
+                        ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
+                        : 'border-slate-500/30 bg-slate-500/10 text-slate-300'
+                }`}>
+                  {artifactQualitySummary.status === 'fail'
+                    ? '需处理'
+                    : artifactQualitySummary.status === 'warning'
+                      ? '有提醒'
+                      : artifactQualitySummary.status === 'pass'
+                        ? '已通过'
+                        : '暂无内容'}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-md border border-emerald-400/15 bg-emerald-400/5 p-2">
+                  <div className="text-base font-bold text-emerald-200">{artifactQualitySummary.passedCount}</div>
+                  <div className="mt-0.5 text-[10px] text-slate-500">通过</div>
+                </div>
+                <div className="rounded-md border border-rose-400/15 bg-rose-400/5 p-2">
+                  <div className="text-base font-bold text-rose-200">{artifactQualitySummary.failedCount}</div>
+                  <div className="mt-0.5 text-[10px] text-slate-500">需处理</div>
+                </div>
+                <div className="rounded-md border border-amber-400/15 bg-amber-400/5 p-2">
+                  <div className="text-base font-bold text-amber-200">{artifactQualitySummary.warningCount}</div>
+                  <div className="mt-0.5 text-[10px] text-slate-500">提醒</div>
+                </div>
+              </div>
+              {artifactQualitySummary.status === 'empty' ? (
+                <p className="rounded-md border border-[#1e293b] bg-[#0f172a] p-3 text-xs text-slate-500">
+                  当前阶段暂无可诊断内容。
+                </p>
+              ) : artifactQualityIssues.length === 0 ? (
+                <p className="rounded-md border border-emerald-400/20 bg-emerald-400/5 p-3 text-xs text-emerald-100">
+                  当前产物满足当前阶段质量合同。
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {artifactQualityIssues.map((item) => (
+                    <article
+                      key={item.id}
+                      className={`rounded-md border p-3 ${
+                        item.status === 'fail'
+                          ? 'border-rose-400/20 bg-rose-400/5'
+                          : 'border-amber-400/20 bg-amber-400/5'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className={`text-xs font-semibold ${
+                            item.status === 'fail' ? 'text-rose-100' : 'text-amber-100'
+                          }`}>
+                            {item.title}
+                          </p>
+                          <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{item.message}</p>
+                        </div>
+                        {item.actionDiagnosticId && (
+                          <button
+                            type="button"
+                            onClick={() => focusArtifactVisualDiagnostic(item.actionDiagnosticId ?? '')}
+                            className="shrink-0 rounded border border-blue-400/30 px-2 py-1 text-[10px] font-semibold text-blue-200 transition-colors hover:bg-blue-400/10"
+                            aria-label={`定位质量诊断：${item.title}`}
+                          >
+                            定位
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
             <div className="grid grid-cols-3 gap-2">
               <div className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
                 <div className="text-lg font-bold text-amber-200">{currentStageOpenComments.length}</div>
