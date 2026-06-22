@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from agent_contracts import validate_agent_turn
+from agent_runtime import ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS
 from artifact_data_renderers import (
     CasesArtifactData,
     ClarifyArtifactData,
@@ -22,9 +23,17 @@ from artifact_data_renderers import (
     ValueDiscoveryElevatorArtifactData,
     ValueDiscoveryJourneyArtifactData,
     ValueDiscoveryPersonaArtifactData,
+    get_artifact_data_renderer_stage_keys,
     render_agent_turn_from_artifact_data,
 )
 from test_asset_parsing import parse_lisa_test_asset_markdown
+
+
+def test_artifact_data_renderer_stage_keys_match_runtime_instruction_registry():
+    assert get_artifact_data_renderer_stage_keys() == set(
+        ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS
+    )
+
 
 VALID_CLARIFY_ARTIFACT_DATA = {
     "document_info": {

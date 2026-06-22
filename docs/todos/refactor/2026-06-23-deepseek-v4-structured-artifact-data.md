@@ -25,6 +25,7 @@
 - 2026-06-23 已完成第十七个垂直切片: `IDEA_BRAINSTORM/CONCEPT` 支持模型输出 `artifact_data`，后端校验定位声明、核心假设、Lean Canvas、MVP 功能、增长漏斗、Pre-mortem 风险、验证路线、不可做范围、决策记录、下一步行动和阶段门禁后，确定性渲染《产品概念简报》、Mermaid `pie`/`flowchart` 和 `ai4se-visual` `mvp-map`。
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
 - `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM` 四阶段已完成结构化产物数据迁移；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
+- 2026-06-23 已补迁移后防回退门禁: runtime instruction registry、renderer stage key registry 和 manifest coverage tests 会保证所有在线 workflow stage 同时具备 `artifact_data` instruction 与后端 renderer；未来新增 stage 若漏配任一侧，后端测试会失败，避免 DeepSeek V4 路径静默回退到完整 Markdown/Mermaid/表格输出职责。
 
 ## 目标
 
@@ -37,11 +38,11 @@
 - 不新增 Lisa/Alex 专属运行时: 所有 workflow 继续走共享 `/api/agent/runs/stream`、共享 Agent Runtime、共享 typed SSE、共享 UI。
 - 降低“格式不完整”频率: 模型不再负责拼完整 Markdown 标题、表格、Mermaid 代码块和 fenced block，后端 renderer 统一生成这些格式。
 
-## 当前问题
+## 当前剩余风险
 
-- 现有 raw JSON streaming 已比纯文本标签稳定，但模型仍要把完整 Markdown 文档、Mermaid 和表格塞进 JSON 字符串，容易出现字段缺失、Markdown 结构不完整、Mermaid 格式错误或输出截断。
-- DeepSeek V4 Flash 的 JSON mode 只能要求返回合法 JSON，不能保证字段完整、枚举合法、跨字段一致或业务 contract 合格。
-- 失败时前端会看到“结构化输出生成失败”，即使 backend 已经做了校验与一次纠错重试，根因仍是模型承担了过多最终交付格式责任。
+- 当前在线 stages 已不再要求模型直接拼完整 Markdown 文档、Mermaid 和表格；剩余核心风险是后续新增 stage 或重构 runtime 时漏配 `artifact_data` instruction 或 renderer，导致 DeepSeek V4 路径静默回退到旧 Markdown 输出职责。
+- DeepSeek V4 Flash 的 JSON mode 只能要求返回合法 JSON，不能保证字段完整、枚举合法、跨字段一致或业务 contract 合格；因此后端 Pydantic schema、renderer 和 manifest coverage tests 仍是最终可靠边界。
+- 真实 DeepSeek V4 Flash smoke 仍依赖外部凭证、网络和额度；默认本地门禁只能证明本地 runtime、schema、renderer、contract 和 retry prompt 不回退。
 
 ## 改造方向
 
@@ -157,7 +158,8 @@ renderer 职责:
 ## 关键验收
 
 - DeepSeek V4 Flash 下，模型只输出 JSON 数据，后端负责产物格式。
-- 至少一个完整 workflow stage 能完成: 用户输入 -> DeepSeek JSON mode -> Pydantic data schema -> backend renderer -> artifact contract -> typed SSE -> 前端展示。
+- 所有当前在线 workflow stage 都有 registry 覆盖门禁，能防止 instruction、renderer 或 manifest 之间漏配。
+- 至少一个完整 workflow stage 能完成: 用户输入 -> DeepSeek JSON mode -> Pydantic data schema -> backend renderer -> artifact contract -> typed SSE -> 前端展示；当前 17 个在线 stage 已完成本地结构化迁移测试。
 - “格式不完整 / 结构化输出生成失败”不再由 Markdown 标题缺失、Mermaid fence 不完整或表格格式错误高频触发。
 - 所有失败都能定位到 schema path、contract rule 或 renderer rule。
 
