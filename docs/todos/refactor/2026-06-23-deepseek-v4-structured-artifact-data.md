@@ -28,6 +28,7 @@
 - 2026-06-23 已完成本地 readiness gate: 从 `workflow_manifest.json` 枚举全部 17 个在线 stage，验证每个 stage 都有 `artifact_data` renderer、有效 fixture、artifact contract 通过、structured output instruction 要求 `artifact_data` 且不要求 `artifact_update.markdown`，并用 fake DeepSeek raw JSON stream 验证 `response_format={"type":"json_object"}` 与 thinking disabled。
 - 2026-06-23 已完成结构化产物数据持久化闭环: renderer 返回的 validated `artifact_data` 会随 artifact version 保存，并在 run snapshot 当前 artifact 的 `artifactData` 中暴露；旧版本和手工编辑版本明确返回 `artifactData: null`，继续只依赖 Markdown 内容。
 - 2026-06-23 已完成真实 DeepSeek V4 Flash smoke gate 对齐: `test_agent_real_smoke.py` 默认无凭证时 skip，配置 `DEEPSEEK_V4_SMOKE_*` 或兼容的 `NEW_AGENTS_SMOKE_*` 后走 raw JSON streaming、`artifact_data` schema、后端 renderer 和 artifact contract，不再要求模型直接输出完整 Markdown。
+- 2026-06-23 已完成信任闭环整合: `codex/deepseek-confidence-consolidation` 以 cherry-pick 方式汇总 readiness gate、`artifact_data` persistence 和真实 smoke gate 三条已验证分支，作为后续 DeepSeek V4 格式化输出需求的主线基础。
 
 ## 目标
 
