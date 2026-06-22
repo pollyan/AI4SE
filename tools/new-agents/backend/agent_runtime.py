@@ -702,6 +702,41 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+STORY_BREAKDOWN_BACKLOG_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮已经如何理解输入、拆出了哪些 Epic/User Story/验收标准、哪些风险或依赖需要确认，以及这些内容如何交给 Lisa。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "用户故事拆解包", "workflow": "STORY_BREAKDOWN", "stage": "BACKLOG", "status": "草稿/待评审/可进入研发评审"},
+    "scope_summary": {"product_name": "...", "input_source": "PRD/需求蓝图/用户描述", "goal": "...", "in_scope": "...", "out_of_scope": "..."},
+    "epics": [{"epic_id": "EPIC-001", "title": "...", "business_value": "...", "priority": "P0/P1/P2", "success_metric": "..."}],
+    "user_stories": [{"story_id": "US-001", "epic_id": "EPIC-001", "title": "...", "user_role": "...", "user_need": "...", "user_value": "...", "priority": "P0/P1/P2", "story_points": 5, "status": "待评审/可开发/需补充"}],
+    "acceptance_criteria": [{"ac_id": "AC-001", "story_id": "US-001", "criterion": "Given/When/Then 或可测试验收标准", "test_method": "Lisa TEST_DESIGN/REQ_REVIEW 可使用的验证方式", "status": "待确认/已确认"}],
+    "dependencies": [{"dependency_id": "DEP-001", "description": "...", "related_story_ids": ["US-001"], "owner": "产品/研发/测试/业务", "status": "待确认/已确认"}],
+    "risks": [{"risk_id": "RISK-001", "description": "...", "related_story_ids": ["US-001"], "impact": "高/中/低", "mitigation": "...", "status": "需跟踪/已接受/待确认"}],
+    "sprint_slices": [{"slice_id": "SPR-001", "sprint": "Sprint 1", "goal": "...", "story_ids": ["US-001"], "demo_outcome": "...", "release_risk": "高/中/低"}],
+    "lisa_handoff_inputs": [{"input_type": "用户故事/验收标准/依赖/风险/Sprint切片", "reference_id": "US-001 或 AC-001 或 DEP-001 或 RISK-001 或 SPR-001", "content": "...", "target_workflow": "TEST_DESIGN 或 REQ_REVIEW", "usage": "...", "status": "待 Lisa 评审/可交接"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null,
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；user_stories.epic_id 只能引用 epics.epic_id；acceptance_criteria.story_id、dependencies.related_story_ids、risks.related_story_ids、sprint_slices.story_ids 只能引用已存在的 user_stories.story_id；lisa_handoff_inputs.reference_id 只能引用已存在的 Story、AC、依赖、风险或 Sprint 切片 ID；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown、Mermaid 代码块、Markdown 表格或 story-map JSON 代码块，后端会负责确定性渲染用户故事拆解包、flowchart 和 ai4se-visual story-map。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in {
         ("IDEA_BRAINSTORM", "DEFINE"),
@@ -721,6 +756,7 @@ def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) ->
         ("INCIDENT_REVIEW", "TIMELINE"),
         ("INCIDENT_REVIEW", "ROOT_CAUSE"),
         ("INCIDENT_REVIEW", "IMPROVEMENT"),
+        ("STORY_BREAKDOWN", "BACKLOG"),
     }
 
 
@@ -762,6 +798,8 @@ def build_structured_output_instruction(
         return INCIDENT_ROOT_CAUSE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "IMPROVEMENT"):
         return INCIDENT_IMPROVEMENT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if (workflow_id, current_stage_id) == ("STORY_BREAKDOWN", "BACKLOG"):
+        return STORY_BREAKDOWN_BACKLOG_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
 
 

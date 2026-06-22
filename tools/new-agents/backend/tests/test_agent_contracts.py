@@ -502,10 +502,26 @@ def test_later_stage_structured_visual_contracts_cover_professional_views():
         ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["cause-map"],
         ("IDEA_BRAINSTORM", "CONCEPT"): ["mvp-map"],
         ("VALUE_DISCOVERY", "BLUEPRINT"): ["roadmap"],
+        ("STORY_BREAKDOWN", "BACKLOG"): ["story-map"],
     }
 
     for stage_key, visual_types in expected_visual_contracts.items():
         assert REQUIRED_ARTIFACT_STRUCTURED_VISUALS.get(stage_key) == visual_types
+
+
+def test_story_breakdown_contracts_include_story_package_fields():
+    story_fields = REQUIRED_ARTIFACT_HEADINGS[("STORY_BREAKDOWN", "BACKLOG")]
+
+    assert "# 用户故事拆解包" in story_fields
+    assert "## User Story Backlog" in story_fields
+    assert "## 验收标准矩阵" in story_fields
+    assert "## Lisa Handoff 输入" in story_fields
+    assert REQUIRED_ARTIFACT_MERMAID_DIAGRAMS[("STORY_BREAKDOWN", "BACKLOG")] == [
+        "flowchart"
+    ]
+    assert REQUIRED_ARTIFACT_STRUCTURED_VISUALS[("STORY_BREAKDOWN", "BACKLOG")] == [
+        "story-map"
+    ]
 
 
 @pytest.mark.parametrize(

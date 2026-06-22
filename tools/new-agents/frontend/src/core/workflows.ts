@@ -17,6 +17,7 @@ import { ELEVATOR_PROMPT, ELEVATOR_TEMPLATE } from './prompts/value_discovery/el
 import { PERSONA_PROMPT, PERSONA_TEMPLATE } from './prompts/value_discovery/persona';
 import { JOURNEY_PROMPT, JOURNEY_TEMPLATE } from './prompts/value_discovery/journey';
 import { BLUEPRINT_PROMPT, BLUEPRINT_TEMPLATE } from './prompts/value_discovery/blueprint';
+import { BACKLOG_PROMPT, BACKLOG_TEMPLATE } from './prompts/story_breakdown/backlog';
 
 type StageContent = {
     description: string;
@@ -91,6 +92,10 @@ const STAGE_CONTENT_BY_TEMPLATE_ID: Record<string, StageContent> = {
         'value_discovery.blueprint': {
             description: BLUEPRINT_PROMPT,
             template: BLUEPRINT_TEMPLATE,
+        },
+        'story_breakdown.backlog': {
+            description: BACKLOG_PROMPT,
+            template: BACKLOG_TEMPLATE,
         },
 };
 

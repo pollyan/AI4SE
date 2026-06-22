@@ -11,6 +11,7 @@ WORKFLOW_STAGES: dict[str, list[str]] = {
     "INCIDENT_REVIEW": ["TIMELINE", "ROOT_CAUSE", "IMPROVEMENT"],
     "IDEA_BRAINSTORM": ["DEFINE", "DIVERGE", "CONVERGE", "CONCEPT"],
     "VALUE_DISCOVERY": ["ELEVATOR", "PERSONA", "JOURNEY", "BLUEPRINT"],
+    "STORY_BREAKDOWN": ["BACKLOG"],
 }
 
 REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
@@ -333,6 +334,23 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
         "owner",
         "状态",
     ],
+    ("STORY_BREAKDOWN", "BACKLOG"): [
+        "# 用户故事拆解包",
+        "## 文档信息",
+        "## 输入理解与拆解边界",
+        "## Epic 地图",
+        "## User Story Backlog",
+        "## 验收标准矩阵",
+        "## 依赖与风险",
+        "## Sprint 切片建议",
+        "## Lisa Handoff 输入",
+        "## 阶段门禁",
+        "Story ID",
+        "Epic",
+        "优先级",
+        "Sprint",
+        "状态",
+    ],
 }
 
 REQUIRED_ARTIFACT_H1_KEYWORDS: dict[tuple[str, str], list[str]] = {
@@ -352,6 +370,7 @@ REQUIRED_ARTIFACT_MERMAID_DIAGRAMS: dict[tuple[str, str], list[str]] = {
     ("IDEA_BRAINSTORM", "CONVERGE"): ["quadrantChart"],
     ("VALUE_DISCOVERY", "ELEVATOR"): ["flowchart"],
     ("VALUE_DISCOVERY", "JOURNEY"): ["journey"],
+    ("STORY_BREAKDOWN", "BACKLOG"): ["flowchart"],
 }
 
 REQUIRED_ARTIFACT_STRUCTURED_VISUALS: dict[tuple[str, str], list[str]] = {
@@ -366,6 +385,7 @@ REQUIRED_ARTIFACT_STRUCTURED_VISUALS: dict[tuple[str, str], list[str]] = {
     ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["cause-map"],
     ("IDEA_BRAINSTORM", "CONCEPT"): ["mvp-map"],
     ("VALUE_DISCOVERY", "BLUEPRINT"): ["roadmap"],
+    ("STORY_BREAKDOWN", "BACKLOG"): ["story-map"],
 }
 
 STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {
@@ -427,6 +447,15 @@ STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {
         '"验收标准缺失", "优先级": "P0", "影响范围": "核心链路", '
         '"责任方": "产品负责人", "下一步": "补充验收标准", '
         '"关闭状态": "待修订"}]}。'
+        "columns 必须是非空字符串数组；rows 必须是对象数组，每个对象的 key "
+        "必须对应 columns 中的列名。"
+    ),
+    "story-map": (
+        'story-map 必须严格使用如下 JSON 结构：{"type": '
+        '"story-map", "title": "可选标题", "columns": ["Epic", '
+        '"Story", "优先级", "Sprint", "状态"], "rows": [{"Epic": '
+        '"EPIC-001 用户管理", "Story": "US-001 创建用户", "优先级": '
+        '"P0", "Sprint": "Sprint 1", "状态": "待评审"}]}。'
         "columns 必须是非空字符串数组；rows 必须是对象数组，每个对象的 key "
         "必须对应 columns 中的列名。"
     ),

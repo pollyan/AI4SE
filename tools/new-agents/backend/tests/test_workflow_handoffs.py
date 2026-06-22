@@ -115,6 +115,51 @@ flowchart TD
 - [x] P0 需求均具备验收标准、owner 和可测试性等级。
 """
 
+STORY_BREAKDOWN_MARKDOWN = """# 用户故事拆解包
+
+## 文档信息
+| 字段 | 内容 |
+| --- | --- |
+| Artifact 名称 | 用户故事拆解包 |
+
+## 输入理解与拆解边界
+AI 测试资产管理平台。
+
+## Epic 地图
+```mermaid
+flowchart TD
+    EPIC001["测试资产生成"] --> US001["生成测试策略"]
+```
+
+## User Story Backlog
+| Story ID | Epic | 标题 | 用户角色 | 用户需要 | 用户价值 | 优先级 | 状态 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| US-001 | EPIC-001 | 生成测试策略 | 测试负责人 | 输入需求后生成测试策略 | 更快完成评审 | P0 | 待评审 |
+
+## 验收标准矩阵
+| AC ID | Story ID | 验收标准 | 测试方式 | 状态 |
+| --- | --- | --- | --- | --- |
+| AC-001 | US-001 | 输出风险、测试点和阶段门禁 | Lisa 测试设计 | 待确认 |
+
+## 依赖与风险
+| 类型 | ID | 描述 | 关联 Story | owner/缓解 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 依赖 | DEP-001 | 默认 LLM 配置可用 | US-001 | 研发 | 待确认 |
+
+## Sprint 切片建议
+| Slice ID | Sprint | 目标 | Story | Demo Outcome | Release Risk |
+| --- | --- | --- | --- | --- | --- |
+| SPR-001 | Sprint 1 | 完成策略生成闭环 | US-001 | 可生成策略 | 中 |
+
+## Lisa Handoff 输入
+| 输入类型 | Reference ID | 内容 | Target Workflow | 用途 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 用户故事 | US-001 | 生成测试策略 | TEST_DESIGN | 作为测试设计输入 | 待 Lisa 评审 |
+
+## 阶段门禁
+- [x] 所有 P0 用户故事均具备验收标准和 Sprint 切片。
+"""
+
 
 @pytest.fixture
 def app():
@@ -212,3 +257,22 @@ def test_start_workflow_handoff_rejects_unknown_candidate(app):
 
         with pytest.raises(ValueError, match="未知 handoff"):
             start_workflow_handoff(source_run.id, "missing-handoff")
+
+
+def test_story_breakdown_backlog_exports_lisa_handoffs(app):
+    with app.app_context():
+        run = create_agent_run("STORY_BREAKDOWN", "alex", "BACKLOG")
+        record_artifact_version(run.id, "BACKLOG", STORY_BREAKDOWN_MARKDOWN)
+
+        result = export_run_handoffs(run.id)
+
+    assert result["sourceWorkflowId"] == "STORY_BREAKDOWN"
+    assert [
+        (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
+        for handoff in result["handoffs"]
+    ] == [
+        ("TEST_DESIGN", "CLARIFY", "lisa"),
+        ("REQ_REVIEW", "REVIEW", "lisa"),
+    ]
+    assert "STORY_BREAKDOWN/BACKLOG" in result["handoffs"][0]["prompt"]
+    assert "US-001" in result["handoffs"][0]["prompt"]

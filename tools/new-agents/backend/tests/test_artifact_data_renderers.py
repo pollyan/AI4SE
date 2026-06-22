@@ -17,6 +17,7 @@ from artifact_data_renderers import (
     IncidentTimelineArtifactData,
     ReqReviewArtifactData,
     ReqReviewReportArtifactData,
+    StoryBreakdownBacklogArtifactData,
     StrategyArtifactData,
     ValueDiscoveryBlueprintArtifactData,
     ValueDiscoveryElevatorArtifactData,
@@ -117,6 +118,109 @@ VALID_CLARIFY_ARTIFACT_DATA = {
         {
             "checked": True,
             "item": "测试范围和不测范围已明确",
+        }
+    ],
+}
+
+VALID_STORY_BREAKDOWN_BACKLOG_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "用户故事拆解包",
+        "workflow": "STORY_BREAKDOWN",
+        "stage": "BACKLOG",
+        "status": "可进入研发评审",
+    },
+    "scope_summary": {
+        "product_name": "AI 测试资产管理平台",
+        "input_source": "需求蓝图",
+        "goal": "把测试资产生成能力拆成 Sprint 可交付用户故事",
+        "in_scope": "测试策略生成、测试用例生成、资产评审",
+        "out_of_scope": "外部项目管理系统写入",
+    },
+    "epics": [
+        {
+            "epic_id": "EPIC-001",
+            "title": "测试资产生成",
+            "business_value": "帮助测试负责人快速沉淀可复用资产",
+            "priority": "P0",
+            "success_metric": "核心测试资产生成完成率达到 90%",
+        }
+    ],
+    "user_stories": [
+        {
+            "story_id": "US-001",
+            "epic_id": "EPIC-001",
+            "title": "生成测试策略",
+            "user_role": "测试负责人",
+            "user_need": "输入需求后生成测试策略",
+            "user_value": "更快完成测试设计评审",
+            "priority": "P0",
+            "story_points": 5,
+            "status": "待评审",
+        },
+        {
+            "story_id": "US-002",
+            "epic_id": "EPIC-001",
+            "title": "生成测试用例",
+            "user_role": "测试负责人",
+            "user_need": "基于测试策略生成测试用例",
+            "user_value": "减少重复编写用例工作",
+            "priority": "P0",
+            "story_points": 8,
+            "status": "待评审",
+        },
+    ],
+    "acceptance_criteria": [
+        {
+            "ac_id": "AC-001",
+            "story_id": "US-001",
+            "criterion": "给定明确需求，当用户运行策略生成时，应输出风险、测试点和阶段门禁",
+            "test_method": "Lisa TEST_DESIGN/STRATEGY 评审",
+            "status": "待确认",
+        }
+    ],
+    "dependencies": [
+        {
+            "dependency_id": "DEP-001",
+            "description": "默认 LLM 配置可用",
+            "related_story_ids": ["US-001", "US-002"],
+            "owner": "研发",
+            "status": "待确认",
+        }
+    ],
+    "risks": [
+        {
+            "risk_id": "RISK-001",
+            "description": "模型输出质量不稳定",
+            "related_story_ids": ["US-001"],
+            "impact": "高",
+            "mitigation": "使用 artifact_data schema 和评审门禁",
+            "status": "需跟踪",
+        }
+    ],
+    "sprint_slices": [
+        {
+            "slice_id": "SPR-001",
+            "sprint": "Sprint 1",
+            "goal": "完成策略生成闭环",
+            "story_ids": ["US-001"],
+            "demo_outcome": "用户可生成可评审测试策略",
+            "release_risk": "中",
+        }
+    ],
+    "lisa_handoff_inputs": [
+        {
+            "input_type": "用户故事",
+            "reference_id": "US-001",
+            "content": "生成测试策略",
+            "target_workflow": "TEST_DESIGN",
+            "usage": "作为测试设计输入",
+            "status": "待 Lisa 评审",
+        }
+    ],
+    "stage_gate": [
+        {
+            "checked": True,
+            "item": "所有 P0 用户故事均具备验收标准和 Sprint 切片",
         }
     ],
 }
@@ -3175,6 +3279,38 @@ def test_value_blueprint_artifact_data_rejects_unknown_handoff_reference():
 
     with pytest.raises(ValidationError, match="references unknown acceptance ids"):
         ValueDiscoveryBlueprintArtifactData.model_validate(invalid)
+
+
+def test_story_breakdown_backlog_artifact_data_renders_story_package():
+    turn = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已完成用户故事拆解。",
+            "artifact_data": VALID_STORY_BREAKDOWN_BACKLOG_ARTIFACT_DATA,
+        },
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="BACKLOG",
+    )
+
+    markdown = turn.artifact_update.markdown
+    assert "# 用户故事拆解包" in markdown
+    assert "## User Story Backlog" in markdown
+    assert "US-001" in markdown
+    assert "```mermaid" in markdown
+    assert "flowchart" in markdown
+    assert '"type": "story-map"' in markdown
+    validate_agent_turn(
+        turn,
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="BACKLOG",
+    )
+
+
+def test_story_breakdown_backlog_artifact_data_rejects_unknown_story_reference():
+    invalid = copy.deepcopy(VALID_STORY_BREAKDOWN_BACKLOG_ARTIFACT_DATA)
+    invalid["acceptance_criteria"][0]["story_id"] = "US-404"
+
+    with pytest.raises(ValidationError):
+        StoryBreakdownBacklogArtifactData.model_validate(invalid)
 
 
 def test_render_cases_artifact_data_is_contract_valid_and_asset_parseable():

@@ -33,6 +33,7 @@ from test_artifact_data_renderers import (
     VALID_DELIVERY_ARTIFACT_DATA,
     VALID_REQ_REVIEW_ARTIFACT_DATA,
     VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA,
+    VALID_STORY_BREAKDOWN_BACKLOG_ARTIFACT_DATA,
     VALID_STRATEGY_ARTIFACT_DATA,
     VALID_VALUE_BLUEPRINT_ARTIFACT_DATA,
     VALID_VALUE_ELEVATOR_ARTIFACT_DATA,
@@ -1331,6 +1332,31 @@ def test_idea_concept_retry_prompt_requests_artifact_data_fix_not_markdown_rewri
     assert "growth_funnel" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
+
+
+def test_story_breakdown_backlog_structured_output_instruction_requests_artifact_data():
+    instruction = build_structured_output_instruction(
+        "STORY_BREAKDOWN",
+        "BACKLOG",
+    )
+
+    assert "artifact_data" in instruction
+    assert "user_stories" in instruction
+    assert "lisa_handoff_inputs" in instruction
+    assert "不要输出完整 Markdown" in instruction
+
+
+def test_story_breakdown_backlog_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
+    prompt = build_raw_json_retry_prompt(
+        "请拆解用户故事",
+        ValueError("artifact_data.acceptance_criteria.0.story_id 无效"),
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="BACKLOG",
+    )
+
+    assert "artifact_data" in prompt
+    assert "不要输出 Markdown 文档" in prompt
+    assert "artifact_update.markdown" not in prompt
 
 
 def test_runtime_raw_json_stream_turn_yields_real_delta_before_final_output(

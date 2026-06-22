@@ -168,6 +168,15 @@ FRONTEND_PROMPT_FILES = {
         / "value_discovery"
         / "blueprint.ts"
     ),
+    ("STORY_BREAKDOWN", "BACKLOG"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "story_breakdown"
+        / "backlog.ts"
+    ),
 }
 
 
@@ -225,6 +234,8 @@ def test_shared_workflow_manifest_declares_alex_to_lisa_handoffs():
     } >= {
         ("VALUE_DISCOVERY", "BLUEPRINT", "TEST_DESIGN", "CLARIFY"),
         ("VALUE_DISCOVERY", "BLUEPRINT", "REQ_REVIEW", "REVIEW"),
+        ("STORY_BREAKDOWN", "BACKLOG", "TEST_DESIGN", "CLARIFY"),
+        ("STORY_BREAKDOWN", "BACKLOG", "REQ_REVIEW", "REVIEW"),
     }
 
 
