@@ -2958,6 +2958,7 @@ def test_render_clarify_artifact_data_is_deterministic_and_contract_valid():
 
     assert first == second
     assert first is not None
+    assert first.artifact_data == VALID_CLARIFY_ARTIFACT_DATA
     assert first.artifact_update.markdown is not None
     assert "# 需求分析文档" in first.artifact_update.markdown
     assert "## 8. 阶段门禁" in first.artifact_update.markdown
