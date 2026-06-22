@@ -499,6 +499,39 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+INCIDENT_ROOT_CAUSE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮已经完成哪些 5-Why 推理、识别了哪些直接原因/根本原因/促成因素、哪些原因仍待验证。不要复制完整产出物正文。",
+  "artifact_data": {
+    "analysis_context": {"incident_name": "...", "scope": "...", "upstream_facts": "...", "current_judgement": "..."},
+    "why_chain": [{"level": "现象 或 Why-1/Why-2/Why-3", "question": "...", "answer": "...", "cause_type": "现象/技术/流程/人员/环境/度量/管理", "evidence": "...", "evidence_strength": "高/中/低", "confidence": "高/中/低", "actionability": "可行动/不可行动/待判断/不适用", "verification_status": "已确认/待验证/已排除"}],
+    "cause_evidence": [{"cause_id": "CAUSE-001", "cause": "...", "related_level": "Why-1", "evidence": "...", "evidence_strength": "高/中/低", "confidence": "高/中/低", "actionability": "可行动/不可行动/待判断", "verification_status": "已确认/待验证/已排除"}],
+    "fishbone_categories": [{"category": "技术/流程/人员/环境/度量/管理", "causes": ["..."], "cause_ids": ["CAUSE-001"]}],
+    "root_cause_conclusions": [{"conclusion_type": "直接原因/根本原因/促成因素", "description": "...", "category": "技术/流程/人员/环境/度量/管理", "related_cause_id": "CAUSE-001", "evidence_strength": "高/中/低", "confidence": "高/中/低", "actionability": "可行动/不可行动/待判断", "verification_status": "已确认/待验证"}],
+    "excluded_causes": [{"exclusion_id": "EX-001", "suspected_cause": "...", "basis": "...", "evidence_strength": "高/中/低", "still_monitor": "是/否"}],
+    "unverified_causes": [{"cause": "...", "reason": "...", "possible_impact": "...", "verification_action": "...", "owner": "...", "status": "待验证/已验证/已排除"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "IMPROVEMENT"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；why_chain 至少包含 3 层 Why；cause_evidence.cause_id 必须唯一；fishbone_categories 至少包含 2 个分类；fishbone_categories.cause_ids 和 root_cause_conclusions.related_cause_id 只能引用已存在的 cause_id；root_cause_conclusions 必须包含“根本原因”。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块、mindmap 或 cause-map JSON 代码块，后端会负责确定性渲染右侧根因分析、Mermaid mindmap 和 ai4se-visual cause-map。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in {
         ("TEST_DESIGN", "CLARIFY"),
@@ -512,6 +545,7 @@ def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) ->
         ("VALUE_DISCOVERY", "JOURNEY"),
         ("VALUE_DISCOVERY", "BLUEPRINT"),
         ("INCIDENT_REVIEW", "TIMELINE"),
+        ("INCIDENT_REVIEW", "ROOT_CAUSE"),
     }
 
 
@@ -541,6 +575,8 @@ def build_structured_output_instruction(
         return VALUE_BLUEPRINT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
         return INCIDENT_TIMELINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "ROOT_CAUSE"):
+        return INCIDENT_ROOT_CAUSE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
 
 

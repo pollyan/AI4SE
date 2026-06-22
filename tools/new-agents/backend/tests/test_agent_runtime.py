@@ -22,6 +22,7 @@ from agent_runtime import (
 )
 from sse_schemas import AgentTurnDeltaOutput
 from test_artifact_data_renderers import (
+    VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
     VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
     VALID_CASES_ARTIFACT_DATA,
     VALID_DELIVERY_ARTIFACT_DATA,
@@ -834,6 +835,36 @@ def test_parse_agent_turn_output_text_renders_incident_timeline_artifact_data():
     assert output.stage_action.target_stage_id == "ROOT_CAUSE"
 
 
+def test_parse_agent_turn_output_text_renders_incident_root_cause_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "已完成根因分析。",
+            "artifact_data": VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "IMPROVEMENT",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="ROOT_CAUSE",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 故障复盘报告")
+    assert "### 6.1 5-Why 分析链" in output.artifact_update.markdown
+    assert "mindmap" in output.artifact_update.markdown
+    assert '"type": "cause-map"' in output.artifact_update.markdown
+    assert output.stage_action is not None
+    assert output.stage_action.target_stage_id == "IMPROVEMENT"
+
+
 def test_value_persona_structured_output_instruction_requests_artifact_data_not_markdown():
     instruction = build_structured_output_instruction(
         "VALUE_DISCOVERY",
@@ -898,6 +929,24 @@ def test_incident_timeline_structured_output_instruction_requests_artifact_data_
     assert "不要输出完整 Markdown" in instruction
 
 
+def test_incident_root_cause_structured_output_instruction_requests_artifact_data_not_markdown():
+    instruction = build_structured_output_instruction(
+        "INCIDENT_REVIEW",
+        "ROOT_CAUSE",
+    )
+
+    assert "artifact_data" in instruction
+    assert "artifact_update" not in instruction
+    assert "analysis_context" in instruction
+    assert "why_chain" in instruction
+    assert "cause_evidence" in instruction
+    assert "fishbone_categories" in instruction
+    assert "root_cause_conclusions" in instruction
+    assert "cause-map" in instruction
+    assert '"target_stage_id": "IMPROVEMENT"' in instruction
+    assert "不要输出完整 Markdown" in instruction
+
+
 def test_value_persona_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
     prompt = build_raw_json_retry_prompt(
         "原始提示",
@@ -950,6 +999,20 @@ def test_incident_timeline_retry_prompt_requests_artifact_data_fix_not_markdown_
 
     assert "artifact_data" in prompt
     assert "timeline_events references unknown fact ids" in prompt
+    assert "不要输出 Markdown 文档" in prompt
+    assert "artifact_update.type 必须为 replace" not in prompt
+
+
+def test_incident_root_cause_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
+    prompt = build_raw_json_retry_prompt(
+        "原始提示",
+        ValueError("fishbone_categories references unknown cause ids"),
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="ROOT_CAUSE",
+    )
+
+    assert "artifact_data" in prompt
+    assert "fishbone_categories references unknown cause ids" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -1534,6 +1597,69 @@ def test_runtime_raw_json_stream_turn_renders_incident_timeline_artifact_data_be
     assert "artifact_update.markdown" not in build_structured_output_instruction(
         "INCIDENT_REVIEW",
         "TIMELINE",
+    )
+
+
+def test_runtime_raw_json_stream_turn_renders_incident_root_cause_artifact_data_before_final_output(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "已完成根因分析。",
+            "artifact_data": VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "IMPROVEMENT",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield final_json
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是故障复盘专家。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "基于支付回调失败事件，请继续做根因分析",
+            workflow_id="INCIDENT_REVIEW",
+            current_stage_id="ROOT_CAUSE",
+        )
+    )
+
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert outputs[-1].artifact_update.markdown is not None
+    assert outputs[-1].artifact_update.markdown.startswith("# 故障复盘报告")
+    assert "### 6.1 5-Why 分析链" in outputs[-1].artifact_update.markdown
+    assert "mindmap" in outputs[-1].artifact_update.markdown
+    assert '"type": "cause-map"' in outputs[-1].artifact_update.markdown
+    assert outputs[-1].stage_action is not None
+    assert outputs[-1].stage_action.target_stage_id == "IMPROVEMENT"
+    assert calls[0]["response_format"] == {"type": "json_object"}
+    assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert "artifact_data" in calls[0]["messages"][0]["content"]
+    assert "why_chain" in calls[0]["messages"][0]["content"]
+    assert "cause_evidence" in calls[0]["messages"][0]["content"]
+    assert "root_cause_conclusions" in calls[0]["messages"][0]["content"]
+    assert "artifact_update.markdown" not in build_structured_output_instruction(
+        "INCIDENT_REVIEW",
+        "ROOT_CAUSE",
     )
 
 

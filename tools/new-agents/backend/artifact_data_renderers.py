@@ -191,6 +191,142 @@ class IncidentTimelineArtifactData(StrictArtifactDataModel):
         return self
 
 
+class IncidentRootCauseContext(StrictArtifactDataModel):
+    incident_name: str
+    scope: str
+    upstream_facts: str
+    current_judgement: str
+
+
+class IncidentWhyChainItem(StrictArtifactDataModel):
+    level: str
+    question: str
+    answer: str
+    cause_type: str
+    evidence: str
+    evidence_strength: str
+    confidence: str
+    actionability: str
+    verification_status: str
+
+
+class IncidentCauseEvidence(StrictArtifactDataModel):
+    cause_id: str
+    cause: str
+    related_level: str
+    evidence: str
+    evidence_strength: str
+    confidence: str
+    actionability: str
+    verification_status: str
+
+
+class IncidentFishboneCategory(StrictArtifactDataModel):
+    category: str
+    causes: list[str] = Field(min_length=1)
+    cause_ids: list[str] = Field(min_length=1)
+
+
+class IncidentRootCauseConclusion(StrictArtifactDataModel):
+    conclusion_type: str
+    description: str
+    category: str
+    related_cause_id: str
+    evidence_strength: str
+    confidence: str
+    actionability: str
+    verification_status: str
+
+
+class IncidentExcludedCause(StrictArtifactDataModel):
+    exclusion_id: str
+    suspected_cause: str
+    basis: str
+    evidence_strength: str
+    still_monitor: str
+
+
+class IncidentUnverifiedCause(StrictArtifactDataModel):
+    cause: str
+    reason: str
+    possible_impact: str
+    verification_action: str
+    owner: str
+    status: str
+
+
+class IncidentRootCauseArtifactData(StrictArtifactDataModel):
+    analysis_context: IncidentRootCauseContext
+    why_chain: list[IncidentWhyChainItem] = Field(min_length=1)
+    cause_evidence: list[IncidentCauseEvidence] = Field(min_length=1)
+    fishbone_categories: list[IncidentFishboneCategory] = Field(min_length=2)
+    root_cause_conclusions: list[IncidentRootCauseConclusion] = Field(min_length=1)
+    excluded_causes: list[IncidentExcludedCause] = Field(min_length=1)
+    unverified_causes: list[IncidentUnverifiedCause] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_incident_root_cause_consistency(
+        self,
+    ) -> "IncidentRootCauseArtifactData":
+        why_levels = {item.level for item in self.why_chain}
+        why_rows = [item for item in self.why_chain if item.level.startswith("Why-")]
+        if len(why_rows) < 3:
+            raise ValueError("why_chain must include at least 3 Why rows")
+
+        cause_ids = {item.cause_id for item in self.cause_evidence}
+        if len(cause_ids) != len(self.cause_evidence):
+            raise ValueError("cause_evidence contains duplicate cause_id")
+
+        unknown_related_levels = sorted(
+            {
+                item.related_level
+                for item in self.cause_evidence
+                if item.related_level not in why_levels
+            }
+        )
+        if unknown_related_levels:
+            raise ValueError(
+                "cause_evidence references unknown why levels: "
+                + ", ".join(unknown_related_levels)
+            )
+
+        unknown_fishbone_cause_ids = sorted(
+            {
+                cause_id
+                for item in self.fishbone_categories
+                for cause_id in item.cause_ids
+                if cause_id not in cause_ids
+            }
+        )
+        if unknown_fishbone_cause_ids:
+            raise ValueError(
+                "fishbone_categories references unknown cause ids: "
+                + ", ".join(unknown_fishbone_cause_ids)
+            )
+
+        unknown_conclusion_cause_ids = sorted(
+            {
+                item.related_cause_id
+                for item in self.root_cause_conclusions
+                if item.related_cause_id not in cause_ids
+            }
+        )
+        if unknown_conclusion_cause_ids:
+            raise ValueError(
+                "root_cause_conclusions references unknown cause ids: "
+                + ", ".join(unknown_conclusion_cause_ids)
+            )
+
+        if not any(
+            item.conclusion_type == "根本原因" for item in self.root_cause_conclusions
+        ):
+            raise ValueError(
+                "root_cause_conclusions must include root cause conclusion"
+            )
+        return self
+
+
 class StrategySummary(StrictArtifactDataModel):
     conclusion: str
     basis: str
@@ -1367,6 +1503,11 @@ def render_agent_turn_from_artifact_data(
             payload["artifact_data"]
         )
         markdown = render_incident_review_timeline_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "ROOT_CAUSE"):
+        artifact_data = IncidentRootCauseArtifactData.model_validate(
+            payload["artifact_data"]
+        )
+        markdown = render_incident_review_root_cause_markdown(artifact_data)
     elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
         artifact_data = StrategyArtifactData.model_validate(payload["artifact_data"])
         markdown = render_test_design_strategy_markdown(artifact_data)
@@ -1452,6 +1593,23 @@ def render_incident_review_timeline_markdown(
         _render_incident_participants(data.participants),
         _render_incident_missing_information(data.missing_information),
         _render_incident_stage_gate(data.stage_gate),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_incident_review_root_cause_markdown(
+    data: IncidentRootCauseArtifactData,
+) -> str:
+    sections = [
+        "# 故障复盘报告",
+        _render_incident_root_cause_context(data.analysis_context),
+        _render_incident_why_chain(data.why_chain),
+        _render_incident_cause_evidence(data.cause_evidence),
+        _render_incident_fishbone(data.analysis_context, data.fishbone_categories),
+        _render_incident_root_cause_conclusions(data.root_cause_conclusions),
+        _render_incident_excluded_causes(data.excluded_causes),
+        _render_incident_unverified_causes(data.unverified_causes),
+        _render_incident_root_cause_stage_gate(data.stage_gate),
     ]
     return "\n\n".join(sections)
 
@@ -1752,6 +1910,210 @@ def _render_incident_missing_information(
 def _render_incident_stage_gate(checks: list[StageGateCheck]) -> str:
     lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
     return "## 9. 阶段门禁\n" + "\n".join(lines)
+
+
+def _render_incident_root_cause_context(context: IncidentRootCauseContext) -> str:
+    rows = [
+        ("故障名称", context.incident_name),
+        ("分析范围", context.scope),
+        ("上游事实摘要", context.upstream_facts),
+        ("当前判断", context.current_judgement),
+    ]
+    return "## 6. 根因分析\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_incident_why_chain(items: list[IncidentWhyChainItem]) -> str:
+    rows = [
+        (
+            item.level,
+            item.question,
+            item.answer,
+            item.cause_type,
+            item.evidence,
+            item.evidence_strength,
+            item.confidence,
+            item.actionability,
+            item.verification_status,
+        )
+        for item in items
+    ]
+    visual = {
+        "type": "cause-map",
+        "title": "5-Why 根因链路图",
+        "columns": [
+            "层级",
+            "问题",
+            "回答",
+            "原因类型",
+            "证据",
+            "证据强度",
+            "置信度",
+            "可行动性",
+        ],
+        "rows": [
+            {
+                "层级": item.level,
+                "问题": item.question,
+                "回答": item.answer,
+                "原因类型": item.cause_type,
+                "证据": item.evidence,
+                "证据强度": item.evidence_strength,
+                "置信度": item.confidence,
+                "可行动性": item.actionability,
+            }
+            for item in items
+        ],
+    }
+    return (
+        "### 6.1 5-Why 分析链\n"
+        + _markdown_table(
+            [
+                "层级",
+                "问题",
+                "回答",
+                "原因类型",
+                "证据",
+                "证据强度",
+                "置信度",
+                "可行动性",
+                "验证状态",
+            ],
+            rows,
+        )
+        + "\n\n```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+
+
+def _render_incident_cause_evidence(items: list[IncidentCauseEvidence]) -> str:
+    rows = [
+        (
+            item.cause_id,
+            item.cause,
+            item.related_level,
+            item.evidence,
+            item.evidence_strength,
+            item.confidence,
+            item.actionability,
+            item.verification_status,
+        )
+        for item in items
+    ]
+    return "### 6.2 根因证据表\n" + _markdown_table(
+        [
+            "原因 ID",
+            "原因描述",
+            "关联层级",
+            "证据",
+            "证据强度",
+            "置信度",
+            "可行动性",
+            "验证状态",
+        ],
+        rows,
+    )
+
+
+def _render_incident_fishbone(
+    context: IncidentRootCauseContext,
+    categories: list[IncidentFishboneCategory],
+) -> str:
+    lines = [
+        "```mermaid",
+        "mindmap",
+        f'  root(("{_escape_mermaid_mindmap_text(context.incident_name)}"))',
+    ]
+    for item in categories:
+        lines.append(f"    {_escape_mermaid_mindmap_text(item.category)}")
+        for cause in item.causes:
+            lines.append(f"      {_escape_mermaid_mindmap_text(cause)}")
+    lines.append("```")
+    rows = [
+        (item.category, "、".join(item.causes), ", ".join(item.cause_ids))
+        for item in categories
+    ]
+    return (
+        "### 6.3 原因鱼骨图\n"
+        + "\n".join(lines)
+        + "\n\n"
+        + _markdown_table(["分类", "原因项", "关联原因 ID"], rows)
+    )
+
+
+def _render_incident_root_cause_conclusions(
+    items: list[IncidentRootCauseConclusion],
+) -> str:
+    rows = [
+        (
+            item.conclusion_type,
+            item.description,
+            item.category,
+            item.related_cause_id,
+            item.evidence_strength,
+            item.confidence,
+            item.actionability,
+            item.verification_status,
+        )
+        for item in items
+    ]
+    return "### 6.4 根因结论\n" + _markdown_table(
+        [
+            "类型",
+            "描述",
+            "归类",
+            "关联原因",
+            "证据强度",
+            "置信度",
+            "可行动性",
+            "验证状态",
+        ],
+        rows,
+    )
+
+
+def _render_incident_excluded_causes(items: list[IncidentExcludedCause]) -> str:
+    rows = [
+        (
+            item.exclusion_id,
+            item.suspected_cause,
+            item.basis,
+            item.evidence_strength,
+            item.still_monitor,
+        )
+        for item in items
+    ]
+    return "### 6.5 排除项\n" + _markdown_table(
+        ["排除项", "曾经怀疑原因", "排除依据", "证据强度", "仍需关注"],
+        rows,
+    )
+
+
+def _render_incident_unverified_causes(
+    items: list[IncidentUnverifiedCause],
+) -> str:
+    rows = [
+        (
+            item.cause,
+            item.reason,
+            item.possible_impact,
+            item.verification_action,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "### 6.6 未验证原因\n" + _markdown_table(
+        ["原因", "为什么未验证", "可能影响", "后续验证动作", "owner", "状态"],
+        rows,
+    )
+
+
+def _render_incident_root_cause_stage_gate(
+    checks: list[StageGateCheck],
+) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "### 6.7 阶段门禁\n" + "\n".join(lines)
 
 
 def _render_requirement_facts(facts: list[RequirementFact]) -> str:
@@ -3315,6 +3677,12 @@ def _escape_mermaid_time(value: str) -> str:
 
 def _escape_mermaid_timeline_text(value: str) -> str:
     return value.replace("\n", " ").replace(":", "：").replace("|", "｜")
+
+
+def _escape_mermaid_mindmap_text(value: str) -> str:
+    return (
+        value.replace("\n", " ").replace(":", "：").replace("|", "｜").replace('"', "'")
+    )
 
 
 def _render_blueprint_document_info(info: BlueprintDocumentInfo) -> str:

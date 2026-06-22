@@ -8,6 +8,7 @@ from artifact_data_renderers import (
     CasesArtifactData,
     ClarifyArtifactData,
     DeliveryArtifactData,
+    IncidentRootCauseArtifactData,
     IncidentTimelineArtifactData,
     ReqReviewArtifactData,
     ReqReviewReportArtifactData,
@@ -256,6 +257,163 @@ VALID_INCIDENT_TIMELINE_ARTIFACT_DATA = {
         {"checked": True, "item": "关键事实有来源和可信度。"},
         {"checked": True, "item": "推测未混入事实摘要。"},
         {"checked": True, "item": "阻断进入根因分析的信息已明确列出。"},
+    ],
+}
+
+VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA = {
+    "analysis_context": {
+        "incident_name": "支付回调失败导致订单状态延迟",
+        "scope": "基于事件还原阶段已确认的告警、回调堆积和恢复记录分析根因",
+        "upstream_facts": "14:30 告警触发，14:37 重启回调消费者，14:50 队列恢复。",
+        "current_judgement": "初步判断故障与回调消费者缺少积压保护和发布前回归门禁有关。",
+    },
+    "why_chain": [
+        {
+            "level": "现象",
+            "question": "发生了什么？",
+            "answer": "支付成功后订单状态延迟同步，队列在 20 分钟后恢复。",
+            "cause_type": "现象",
+            "evidence": "FACT-001 / FACT-003",
+            "evidence_strength": "高",
+            "confidence": "高",
+            "actionability": "不适用",
+            "verification_status": "已确认",
+        },
+        {
+            "level": "Why-1",
+            "question": "为什么订单状态会延迟同步？",
+            "answer": "支付回调消费者出现堆积，无法及时处理回调消息。",
+            "cause_type": "技术",
+            "evidence": "队列水位监控和重启记录",
+            "evidence_strength": "高",
+            "confidence": "高",
+            "actionability": "可行动",
+            "verification_status": "已确认",
+        },
+        {
+            "level": "Why-2",
+            "question": "为什么消费者堆积没有被自动削峰或告警前置拦截？",
+            "answer": "回调消费者缺少积压保护和自动扩容策略。",
+            "cause_type": "技术",
+            "evidence": "消费者配置和监控告警策略",
+            "evidence_strength": "中",
+            "confidence": "中",
+            "actionability": "可行动",
+            "verification_status": "待验证",
+        },
+        {
+            "level": "Why-3",
+            "question": "为什么发布前没有发现消费者保护缺口？",
+            "answer": "发布前缺少支付回调关键路径容量回归门禁。",
+            "cause_type": "流程",
+            "evidence": "发布检查清单未覆盖回调堆积场景",
+            "evidence_strength": "中",
+            "confidence": "中",
+            "actionability": "可行动",
+            "verification_status": "待验证",
+        },
+    ],
+    "cause_evidence": [
+        {
+            "cause_id": "CAUSE-001",
+            "cause": "支付回调消费者出现堆积",
+            "related_level": "Why-1",
+            "evidence": "队列水位监控和重启记录",
+            "evidence_strength": "高",
+            "confidence": "高",
+            "actionability": "可行动",
+            "verification_status": "已确认",
+        },
+        {
+            "cause_id": "CAUSE-002",
+            "cause": "回调消费者缺少积压保护和自动扩容策略",
+            "related_level": "Why-2",
+            "evidence": "消费者配置和监控告警策略",
+            "evidence_strength": "中",
+            "confidence": "中",
+            "actionability": "可行动",
+            "verification_status": "待验证",
+        },
+        {
+            "cause_id": "CAUSE-003",
+            "cause": "发布前缺少支付回调关键路径容量回归门禁",
+            "related_level": "Why-3",
+            "evidence": "发布检查清单未覆盖回调堆积场景",
+            "evidence_strength": "中",
+            "confidence": "中",
+            "actionability": "可行动",
+            "verification_status": "待验证",
+        },
+    ],
+    "fishbone_categories": [
+        {
+            "category": "技术",
+            "causes": ["回调消费者缺少积压保护", "缺少自动扩容策略"],
+            "cause_ids": ["CAUSE-001", "CAUSE-002"],
+        },
+        {
+            "category": "流程",
+            "causes": ["发布前容量回归门禁缺失"],
+            "cause_ids": ["CAUSE-003"],
+        },
+    ],
+    "root_cause_conclusions": [
+        {
+            "conclusion_type": "直接原因",
+            "description": "支付回调消费者堆积导致订单状态延迟同步。",
+            "category": "技术",
+            "related_cause_id": "CAUSE-001",
+            "evidence_strength": "高",
+            "confidence": "高",
+            "actionability": "可行动",
+            "verification_status": "已确认",
+        },
+        {
+            "conclusion_type": "根本原因",
+            "description": "支付回调关键路径缺少容量回归门禁和积压保护机制。",
+            "category": "流程",
+            "related_cause_id": "CAUSE-003",
+            "evidence_strength": "中",
+            "confidence": "中",
+            "actionability": "可行动",
+            "verification_status": "待验证",
+        },
+        {
+            "conclusion_type": "促成因素",
+            "description": "监控告警只在订单状态延迟后触发，缺少更早的队列积压预警。",
+            "category": "度量",
+            "related_cause_id": "CAUSE-002",
+            "evidence_strength": "中",
+            "confidence": "中",
+            "actionability": "可行动",
+            "verification_status": "待验证",
+        },
+    ],
+    "excluded_causes": [
+        {
+            "exclusion_id": "EX-001",
+            "suspected_cause": "支付平台实际扣款失败",
+            "basis": "支付平台对账未发现扣款失败，主要影响订单状态展示。",
+            "evidence_strength": "中",
+            "still_monitor": "是",
+        }
+    ],
+    "unverified_causes": [
+        {
+            "cause": "上游支付平台回调短时抖动",
+            "reason": "当前只有内部队列和订单侧证据，缺少上游平台回调日志。",
+            "possible_impact": "若成立，需要补充第三方回调重试和超时保护。",
+            "verification_action": "拉取支付平台回调日志并与队列堆积时间对齐。",
+            "owner": "支付研发",
+            "status": "待验证",
+        }
+    ],
+    "stage_gate": [
+        {"checked": True, "item": "至少完成 3 层 5-Why 追问。"},
+        {"checked": True, "item": "根本原因具有可行动性，或明确说明不可行动原因。"},
+        {"checked": True, "item": "鱼骨图至少覆盖 2 个相关原因维度。"},
+        {"checked": True, "item": "关键根因有证据强度、置信度和验证状态。"},
+        {"checked": True, "item": "排除项和未验证原因已记录。"},
     ],
 }
 
@@ -1668,6 +1826,53 @@ def test_incident_timeline_artifact_data_rejects_unknown_timeline_fact_reference
         IncidentTimelineArtifactData.model_validate(invalid)
 
 
+def test_incident_root_cause_artifact_data_rejects_insufficient_why_depth():
+    invalid = copy.deepcopy(VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA)
+    invalid["why_chain"] = invalid["why_chain"][:3]
+
+    with pytest.raises(ValidationError, match="at least 3 Why rows"):
+        IncidentRootCauseArtifactData.model_validate(invalid)
+
+
+def test_incident_root_cause_artifact_data_rejects_duplicate_cause_id():
+    invalid = copy.deepcopy(VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA)
+    invalid["cause_evidence"].append(copy.deepcopy(invalid["cause_evidence"][0]))
+
+    with pytest.raises(ValidationError, match="duplicate cause_id"):
+        IncidentRootCauseArtifactData.model_validate(invalid)
+
+
+def test_incident_root_cause_artifact_data_rejects_unknown_fishbone_cause_reference():
+    invalid = copy.deepcopy(VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA)
+    invalid["fishbone_categories"][0]["cause_ids"] = ["CAUSE-404"]
+
+    with pytest.raises(ValidationError, match="fishbone_categories references unknown"):
+        IncidentRootCauseArtifactData.model_validate(invalid)
+
+
+def test_incident_root_cause_artifact_data_rejects_unknown_conclusion_cause_reference():
+    invalid = copy.deepcopy(VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA)
+    invalid["root_cause_conclusions"][0]["related_cause_id"] = "CAUSE-404"
+
+    with pytest.raises(
+        ValidationError,
+        match="root_cause_conclusions references unknown",
+    ):
+        IncidentRootCauseArtifactData.model_validate(invalid)
+
+
+def test_incident_root_cause_artifact_data_requires_root_cause_conclusion():
+    invalid = copy.deepcopy(VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA)
+    invalid["root_cause_conclusions"] = [
+        item
+        for item in invalid["root_cause_conclusions"]
+        if item["conclusion_type"] != "根本原因"
+    ]
+
+    with pytest.raises(ValidationError, match="must include root cause conclusion"):
+        IncidentRootCauseArtifactData.model_validate(invalid)
+
+
 def test_render_clarify_artifact_data_is_deterministic_and_contract_valid():
     first = render_agent_turn_from_artifact_data(
         {
@@ -2334,6 +2539,65 @@ def test_render_incident_timeline_artifact_data_is_deterministic_and_contract_va
             first,
             workflow_id="INCIDENT_REVIEW",
             current_stage_id="TIMELINE",
+        )
+        == first
+    )
+
+
+def test_render_incident_root_cause_artifact_data_is_deterministic_and_contract_valid():
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已完成根因分析，请确认右侧 5-Why 和鱼骨图。",
+            "artifact_data": VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "IMPROVEMENT",
+            },
+            "warnings": [],
+        },
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="ROOT_CAUSE",
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已完成根因分析，请确认右侧 5-Why 和鱼骨图。",
+            "artifact_data": VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "IMPROVEMENT",
+            },
+            "warnings": [],
+        },
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="ROOT_CAUSE",
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert first.artifact_update.type == "replace"
+    assert first.stage_action is not None
+    assert first.stage_action.target_stage_id == "IMPROVEMENT"
+    assert "# 故障复盘报告" in first.artifact_update.markdown
+    assert "## 6. 根因分析" in first.artifact_update.markdown
+    assert "### 6.1 5-Why 分析链" in first.artifact_update.markdown
+    assert '"type": "cause-map"' in first.artifact_update.markdown
+    assert "### 6.2 根因证据表" in first.artifact_update.markdown
+    assert "### 6.3 原因鱼骨图" in first.artifact_update.markdown
+    assert "mindmap" in first.artifact_update.markdown
+    assert 'root(("支付回调失败导致订单状态延迟"))' in (first.artifact_update.markdown)
+    assert "### 6.4 根因结论" in first.artifact_update.markdown
+    assert "### 6.5 排除项" in first.artifact_update.markdown
+    assert "### 6.6 未验证原因" in first.artifact_update.markdown
+    assert "### 6.7 阶段门禁" in first.artifact_update.markdown
+    assert "证据强度" in first.artifact_update.markdown
+    assert "置信度" in first.artifact_update.markdown
+    assert "可行动性" in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="INCIDENT_REVIEW",
+            current_stage_id="ROOT_CAUSE",
         )
         == first
     )
