@@ -666,11 +666,48 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+IDEA_CONCEPT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮如何把问题域、创意发散和收敛结论整合成产品概念简报，重点说明定位、MVP、验证路线、不可做范围和下一步行动。不要复制完整产出物正文。",
+  "artifact_data": {
+    "positioning_statement": {"target_user": "...", "user_need": "...", "product_name": "...", "category": "...", "value_proposition": "...", "alternative": "...", "differentiation": "..."},
+    "core_assumptions": [{"assumption_id": "H-001", "assumption": "...", "source": "DEFINE/DIVERGE/CONVERGE", "importance": "高/中/低", "validation_action": "...", "owner": "产品/用户研究/业务/用户确认", "status": "待验证/部分验证/已验证"}],
+    "lean_canvas": [{"cell": "问题", "content": "..."}, {"cell": "用户群体", "content": "..."}, {"cell": "独特价值主张", "content": "..."}, {"cell": "解决方案", "content": "..."}, {"cell": "渠道", "content": "..."}, {"cell": "收入来源", "content": "..."}, {"cell": "成本结构", "content": "..."}, {"cell": "关键指标", "content": "..."}, {"cell": "竞争壁垒", "content": "..."}],
+    "mvp_features": [{"module": "...", "mvp_level": "P0/P1/P2", "user_value": "...", "validation_metric": "...", "tradeoff_reason": "...", "assumption_ids": ["H-001"], "status": "待验证/待排期/暂缓"}],
+    "growth_funnel": [{"stage": "Acquisition", "user_behavior": "...", "metric": "...", "mvp_implementation": "..."}, {"stage": "Activation", "user_behavior": "...", "metric": "...", "mvp_implementation": "..."}, {"stage": "Retention", "user_behavior": "...", "metric": "...", "mvp_implementation": "..."}, {"stage": "Revenue", "user_behavior": "...", "metric": "...", "mvp_implementation": "..."}, {"stage": "Referral", "user_behavior": "...", "metric": "...", "mvp_implementation": "..."}],
+    "premortem_risks": [{"risk_id": "R-001", "dimension": "市场风险/产品风险/执行风险", "failure_reason": "...", "likelihood": "高/中/低", "mitigation": "..."}],
+    "validation_roadmap": [{"validation_id": "V0", "stage": "问题验证/价值验证/MVP验证", "goal": "...", "experiment": "...", "success_metric": "...", "time_window": "...", "owner": "产品/用户研究/业务/用户确认", "status": "待执行/进行中/已完成", "assumption_ids": ["H-001"]}],
+    "out_of_scope": [{"item": "...", "reason": "...", "reconsider_condition": "...", "status": "已确认/待确认"}],
+    "decision_records": [{"decision": "推荐概念", "conclusion": "...", "basis": "...", "decider": "角色或用户", "date": "YYYY-MM-DD", "status": "已确认/待确认"}],
+    "next_actions": [{"action_id": "ACT-001", "action": "...", "related_ids": ["H-001", "V0", "R-001"], "owner": "产品/用户研究/业务/用户确认", "due_date": "YYYY-MM-DD", "acceptance": "...", "status": "待开始/进行中/已完成"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null,
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；core_assumptions.assumption_id、validation_roadmap.validation_id 和 next_actions.action_id 必须唯一；lean_canvas 必须覆盖问题、用户群体、独特价值主张、解决方案、渠道、收入来源、成本结构、关键指标和竞争壁垒；growth_funnel 必须覆盖 Acquisition、Activation、Retention、Revenue 和 Referral；mvp_features.assumption_ids 和 validation_roadmap.assumption_ids 只能引用已存在的 assumption_id；next_actions.related_ids 只能引用已存在的 assumption_id、validation_id 或 risk_id；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块、pie、flowchart 或 ai4se-visual mvp-map，后端会负责确定性渲染右侧产品概念简报、Mermaid 图和 mvp-map。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in {
         ("IDEA_BRAINSTORM", "DEFINE"),
         ("IDEA_BRAINSTORM", "DIVERGE"),
         ("IDEA_BRAINSTORM", "CONVERGE"),
+        ("IDEA_BRAINSTORM", "CONCEPT"),
         ("TEST_DESIGN", "CLARIFY"),
         ("TEST_DESIGN", "STRATEGY"),
         ("TEST_DESIGN", "CASES"),
@@ -697,6 +734,8 @@ def build_structured_output_instruction(
         return IDEA_DIVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONVERGE"):
         return IDEA_CONVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONCEPT"):
+        return IDEA_CONCEPT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
         return ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):

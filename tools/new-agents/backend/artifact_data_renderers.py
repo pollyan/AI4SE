@@ -484,6 +484,204 @@ class IdeaConvergeArtifactData(StrictArtifactDataModel):
         return self
 
 
+class IdeaPositioningStatement(StrictArtifactDataModel):
+    target_user: str
+    user_need: str
+    product_name: str
+    category: str
+    value_proposition: str
+    alternative: str
+    differentiation: str
+
+
+class IdeaCoreAssumption(StrictArtifactDataModel):
+    assumption_id: str
+    assumption: str
+    source: str
+    importance: str
+    validation_action: str
+    owner: str
+    status: str
+
+
+class IdeaLeanCanvasCell(StrictArtifactDataModel):
+    cell: str
+    content: str
+
+
+class IdeaMvpFeature(StrictArtifactDataModel):
+    module: str
+    mvp_level: str
+    user_value: str
+    validation_metric: str
+    tradeoff_reason: str
+    assumption_ids: list[str] = Field(min_length=1)
+    status: str
+
+
+class IdeaGrowthFunnelStage(StrictArtifactDataModel):
+    stage: str
+    user_behavior: str
+    metric: str
+    mvp_implementation: str
+
+
+class IdeaPremortemRisk(StrictArtifactDataModel):
+    risk_id: str
+    dimension: str
+    failure_reason: str
+    likelihood: str
+    mitigation: str
+
+
+class IdeaValidationRoadmapItem(StrictArtifactDataModel):
+    validation_id: str
+    stage: str
+    goal: str
+    experiment: str
+    success_metric: str
+    time_window: str
+    owner: str
+    status: str
+    assumption_ids: list[str] = Field(min_length=1)
+
+
+class IdeaOutOfScopeItem(StrictArtifactDataModel):
+    item: str
+    reason: str
+    reconsider_condition: str
+    status: str
+
+
+class IdeaDecisionRecord(StrictArtifactDataModel):
+    decision: str
+    conclusion: str
+    basis: str
+    decider: str
+    date: str
+    status: str
+
+
+class IdeaNextAction(StrictArtifactDataModel):
+    action_id: str
+    action: str
+    related_ids: list[str] = Field(min_length=1)
+    owner: str
+    due_date: str
+    acceptance: str
+    status: str
+
+
+class IdeaConceptArtifactData(StrictArtifactDataModel):
+    positioning_statement: IdeaPositioningStatement
+    core_assumptions: list[IdeaCoreAssumption] = Field(min_length=1)
+    lean_canvas: list[IdeaLeanCanvasCell] = Field(min_length=1)
+    mvp_features: list[IdeaMvpFeature] = Field(min_length=1)
+    growth_funnel: list[IdeaGrowthFunnelStage] = Field(min_length=1)
+    premortem_risks: list[IdeaPremortemRisk] = Field(min_length=1)
+    validation_roadmap: list[IdeaValidationRoadmapItem] = Field(min_length=1)
+    out_of_scope: list[IdeaOutOfScopeItem] = Field(min_length=1)
+    decision_records: list[IdeaDecisionRecord] = Field(min_length=1)
+    next_actions: list[IdeaNextAction] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_idea_concept_consistency(self) -> "IdeaConceptArtifactData":
+        assumption_ids = {item.assumption_id for item in self.core_assumptions}
+        if len(assumption_ids) != len(self.core_assumptions):
+            raise ValueError("core_assumptions contains duplicate assumption_id")
+
+        validation_ids = {item.validation_id for item in self.validation_roadmap}
+        if len(validation_ids) != len(self.validation_roadmap):
+            raise ValueError("validation_roadmap contains duplicate validation_id")
+
+        action_ids = {item.action_id for item in self.next_actions}
+        if len(action_ids) != len(self.next_actions):
+            raise ValueError("next_actions contains duplicate action_id")
+
+        required_canvas_cells = {
+            "问题",
+            "用户群体",
+            "独特价值主张",
+            "解决方案",
+            "渠道",
+            "收入来源",
+            "成本结构",
+            "关键指标",
+            "竞争壁垒",
+        }
+        canvas_cells = {item.cell for item in self.lean_canvas}
+        missing_canvas_cells = sorted(required_canvas_cells - canvas_cells)
+        if missing_canvas_cells:
+            raise ValueError(
+                "lean_canvas missing required cells: " + ", ".join(missing_canvas_cells)
+            )
+
+        required_funnel_stages = {
+            "Acquisition",
+            "Activation",
+            "Retention",
+            "Revenue",
+            "Referral",
+        }
+        funnel_stages = {item.stage for item in self.growth_funnel}
+        missing_funnel_stages = sorted(required_funnel_stages - funnel_stages)
+        if missing_funnel_stages:
+            raise ValueError(
+                "growth_funnel missing required stages: "
+                + ", ".join(missing_funnel_stages)
+            )
+
+        unknown_mvp_assumption_ids = sorted(
+            {
+                assumption_id
+                for feature in self.mvp_features
+                for assumption_id in feature.assumption_ids
+                if assumption_id not in assumption_ids
+            }
+        )
+        if unknown_mvp_assumption_ids:
+            raise ValueError(
+                "mvp_features references unknown assumption ids: "
+                + ", ".join(unknown_mvp_assumption_ids)
+            )
+
+        unknown_validation_assumption_ids = sorted(
+            {
+                assumption_id
+                for item in self.validation_roadmap
+                for assumption_id in item.assumption_ids
+                if assumption_id not in assumption_ids
+            }
+        )
+        if unknown_validation_assumption_ids:
+            raise ValueError(
+                "validation_roadmap references unknown assumption ids: "
+                + ", ".join(unknown_validation_assumption_ids)
+            )
+
+        risk_ids = {item.risk_id for item in self.premortem_risks}
+        allowed_next_action_refs = assumption_ids | validation_ids | risk_ids
+        unknown_next_action_refs = sorted(
+            {
+                related_id
+                for item in self.next_actions
+                for related_id in item.related_ids
+                if related_id not in allowed_next_action_refs
+            }
+        )
+        if unknown_next_action_refs:
+            raise ValueError(
+                "next_actions references unknown ids: "
+                + ", ".join(unknown_next_action_refs)
+            )
+
+        if not any(item.checked for item in self.stage_gate):
+            raise ValueError("stage_gate must include at least one checked item")
+
+        return self
+
+
 class IncidentSummary(StrictArtifactDataModel):
     incident_name: str
     severity: str
@@ -2085,6 +2283,9 @@ def render_agent_turn_from_artifact_data(
             payload["artifact_data"]
         )
         markdown = render_idea_brainstorm_converge_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONCEPT"):
+        artifact_data = IdeaConceptArtifactData.model_validate(payload["artifact_data"])
+        markdown = render_idea_brainstorm_concept_markdown(artifact_data)
     elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
         artifact_data = IncidentTimelineArtifactData.model_validate(
             payload["artifact_data"]
@@ -2211,6 +2412,24 @@ def render_idea_brainstorm_converge_markdown(data: IdeaConvergeArtifactData) -> 
         _render_idea_sensitivity_analysis(data.sensitivity_analysis),
         _render_idea_validation_experiments(data.validation_experiments),
         _render_idea_merge_paths(data.merge_paths),
+        _render_idea_stage_gate(data.stage_gate),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_idea_brainstorm_concept_markdown(data: IdeaConceptArtifactData) -> str:
+    sections = [
+        "# 产品概念简报",
+        _render_idea_concept_positioning(data.positioning_statement),
+        _render_idea_concept_core_assumptions(data.core_assumptions),
+        _render_idea_concept_lean_canvas(data.lean_canvas),
+        _render_idea_concept_mvp_features(data.mvp_features),
+        _render_idea_concept_growth_funnel(data.growth_funnel),
+        _render_idea_concept_premortem_risks(data.premortem_risks),
+        _render_idea_concept_validation_roadmap(data.validation_roadmap),
+        _render_idea_concept_out_of_scope(data.out_of_scope),
+        _render_idea_concept_decision_records(data.decision_records),
+        _render_idea_concept_next_actions(data.next_actions),
         _render_idea_stage_gate(data.stage_gate),
     ]
     return "\n\n".join(sections)
@@ -2903,6 +3122,263 @@ def _render_idea_merge_paths(items: list[IdeaMergePath]) -> str:
             "风险",
             "用户确认状态",
         ],
+        rows,
+    )
+
+
+def _render_idea_concept_positioning(statement: IdeaPositioningStatement) -> str:
+    lines = [
+        "## 定位声明",
+        f"**For** {statement.target_user}",
+        f"**who** {statement.user_need},",
+        f"**the** {statement.product_name} **is a** {statement.category}",
+        f"**that** {statement.value_proposition}.",
+        f"**Unlike** {statement.alternative},",
+        f"**our product** {statement.differentiation}.",
+    ]
+    return "\n".join(lines)
+
+
+def _render_idea_concept_core_assumptions(
+    items: list[IdeaCoreAssumption],
+) -> str:
+    rows = [
+        (
+            item.assumption_id,
+            item.assumption,
+            item.source,
+            item.importance,
+            item.validation_action,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 核心假设\n" + _markdown_table(
+        ["假设 ID", "假设内容", "关联来源", "重要性", "验证动作", "owner", "状态"],
+        rows,
+    )
+
+
+def _render_idea_concept_lean_canvas(items: list[IdeaLeanCanvasCell]) -> str:
+    order = [
+        "问题",
+        "用户群体",
+        "独特价值主张",
+        "解决方案",
+        "渠道",
+        "收入来源",
+        "成本结构",
+        "关键指标",
+        "竞争壁垒",
+    ]
+    cells_by_name = {item.cell: item.content for item in items}
+    rows = [(cell, cells_by_name[cell]) for cell in order if cell in cells_by_name]
+    return "## Lean Canvas 产品画布\n" + _markdown_table(["格子", "内容"], rows)
+
+
+def _render_idea_concept_mvp_features(items: list[IdeaMvpFeature]) -> str:
+    level_counts: dict[str, int] = {}
+    for item in items:
+        level_counts[item.mvp_level] = level_counts.get(item.mvp_level, 0) + 1
+    pie_lines = [
+        "```mermaid",
+        "pie title MVP 功能组成",
+        *[
+            f'    "{_escape_mermaid_label(level)}" : {count}'
+            for level, count in sorted(level_counts.items())
+        ],
+        "```",
+    ]
+    rows = [
+        (
+            item.module,
+            item.mvp_level,
+            item.user_value,
+            item.validation_metric,
+            item.tradeoff_reason,
+            ", ".join(item.assumption_ids),
+            item.status,
+        )
+        for item in items
+    ]
+    visual = {
+        "type": "mvp-map",
+        "title": "MVP 功能地图",
+        "columns": ["模块", "MVP层级", "用户价值", "验证指标", "取舍理由"],
+        "rows": [
+            {
+                "模块": item.module,
+                "MVP层级": item.mvp_level,
+                "用户价值": item.user_value,
+                "验证指标": item.validation_metric,
+                "取舍理由": item.tradeoff_reason,
+            }
+            for item in items
+        ],
+    }
+    return (
+        "## MVP 功能分布\n"
+        + "\n".join(pie_lines)
+        + "\n\n"
+        + _markdown_table(
+            [
+                "模块",
+                "MVP层级",
+                "用户价值",
+                "验证指标",
+                "取舍理由",
+                "关联假设",
+                "状态",
+            ],
+            rows,
+        )
+        + "\n\n```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+
+
+def _render_idea_concept_growth_funnel(
+    items: list[IdeaGrowthFunnelStage],
+) -> str:
+    order = ["Acquisition", "Activation", "Retention", "Revenue", "Referral"]
+    labels = {
+        "Acquisition": "Acquisition 获客",
+        "Activation": "Activation 激活",
+        "Retention": "Retention 留存",
+        "Revenue": "Revenue 变现",
+        "Referral": "Referral 传播",
+    }
+    items_by_stage = {item.stage: item for item in items}
+    flow_lines = [
+        "```mermaid",
+        "flowchart TD",
+        '    A["Acquisition 获客"] --> B["Activation 激活"]',
+        '    B --> C["Retention 留存"]',
+        '    C --> D["Revenue 变现"]',
+        '    D --> E["Referral 传播"]',
+        "```",
+    ]
+    rows = [
+        (
+            labels[stage],
+            items_by_stage[stage].user_behavior,
+            items_by_stage[stage].metric,
+            items_by_stage[stage].mvp_implementation,
+        )
+        for stage in order
+        if stage in items_by_stage
+    ]
+    return (
+        "## 核心增长漏斗\n"
+        + "\n".join(flow_lines)
+        + "\n\n"
+        + _markdown_table(
+            ["漏斗阶段", "用户行为", "核心指标", "MVP 中如何实现"],
+            rows,
+        )
+    )
+
+
+def _render_idea_concept_premortem_risks(
+    items: list[IdeaPremortemRisk],
+) -> str:
+    rows = [
+        (
+            item.risk_id,
+            item.dimension,
+            item.failure_reason,
+            item.likelihood,
+            item.mitigation,
+        )
+        for item in items
+    ]
+    return "## Pre-mortem 风险分析\n" + _markdown_table(
+        ["风险 ID", "风险维度", "失败原因", "可能性", "缓解措施"],
+        rows,
+    )
+
+
+def _render_idea_concept_validation_roadmap(
+    items: list[IdeaValidationRoadmapItem],
+) -> str:
+    rows = [
+        (
+            item.validation_id,
+            item.stage,
+            item.goal,
+            item.experiment,
+            item.success_metric,
+            item.time_window,
+            item.owner,
+            item.status,
+            ", ".join(item.assumption_ids),
+        )
+        for item in items
+    ]
+    return "## 验证路线\n" + _markdown_table(
+        [
+            "验证 ID",
+            "阶段",
+            "验证目标",
+            "实验方式",
+            "成功指标",
+            "时间窗口",
+            "owner",
+            "状态",
+            "关联假设",
+        ],
+        rows,
+    )
+
+
+def _render_idea_concept_out_of_scope(items: list[IdeaOutOfScopeItem]) -> str:
+    rows = [
+        (item.item, item.reason, item.reconsider_condition, item.status)
+        for item in items
+    ]
+    return "## 不可做范围\n" + _markdown_table(
+        ["不做项", "原因", "重新考虑条件", "状态"],
+        rows,
+    )
+
+
+def _render_idea_concept_decision_records(
+    items: list[IdeaDecisionRecord],
+) -> str:
+    rows = [
+        (
+            item.decision,
+            item.conclusion,
+            item.basis,
+            item.decider,
+            item.date,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 决策记录\n" + _markdown_table(
+        ["决策项", "结论", "依据", "决策人/角色", "日期", "状态"],
+        rows,
+    )
+
+
+def _render_idea_concept_next_actions(items: list[IdeaNextAction]) -> str:
+    rows = [
+        (
+            item.action_id,
+            item.action,
+            ", ".join(item.related_ids),
+            item.owner,
+            item.due_date,
+            item.acceptance,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 下一步行动\n" + _markdown_table(
+        ["行动 ID", "行动", "关联假设/风险", "owner", "截止时间", "验收标准", "状态"],
         rows,
     )
 

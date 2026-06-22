@@ -8,6 +8,7 @@ from artifact_data_renderers import (
     CasesArtifactData,
     ClarifyArtifactData,
     DeliveryArtifactData,
+    IdeaConceptArtifactData,
     IdeaDefineArtifactData,
     IdeaConvergeArtifactData,
     IdeaDivergeArtifactData,
@@ -482,6 +483,222 @@ VALID_IDEA_CONVERGE_ARTIFACT_DATA = {
         {"checked": True, "item": "淘汰或暂缓理由已记录。"},
         {"checked": True, "item": "关键资源约束和敏感性已记录。"},
         {"checked": True, "item": "可进入产品概念简报阶段。"},
+    ],
+}
+
+VALID_IDEA_CONCEPT_ARTIFACT_DATA = {
+    "positioning_statement": {
+        "target_user": "维护多个副业产品的独立开发者",
+        "user_need": "他们需要用证据选择下一周最值得投入的产品方向",
+        "product_name": "方向证据评分卡",
+        "category": "轻量级产品方向验证工具",
+        "value_proposition": "把访谈、收入和社群信号转成可比较的投入优先级",
+        "alternative": "凭直觉复盘、普通 Notion 表格或临时咨询",
+        "differentiation": "把 ICE 评分、证据等级和验证实验合成一张决策卡",
+    },
+    "core_assumptions": [
+        {
+            "assumption_id": "H-001",
+            "assumption": "独立开发者愿意每周记录产品方向证据",
+            "source": "DEFINE EV-001 / CONVERGE ID-001",
+            "importance": "高",
+            "validation_action": "让 5 位开发者用表格完成一次方向复盘",
+            "owner": "产品负责人",
+            "status": "待验证",
+        },
+        {
+            "assumption_id": "H-002",
+            "assumption": "证据评分会改变下一周投入排序",
+            "source": "CONVERGE EXP-001",
+            "importance": "高",
+            "validation_action": "比较使用前后的方向排序变化",
+            "owner": "用户研究",
+            "status": "待验证",
+        },
+    ],
+    "lean_canvas": [
+        {
+            "cell": "问题",
+            "content": "独立开发者同时推进多个方向，缺少可比较的证据优先级",
+        },
+        {
+            "cell": "用户群体",
+            "content": "维护多个副业产品且每周需要取舍投入重点的独立开发者",
+        },
+        {
+            "cell": "独特价值主张",
+            "content": "用证据评分替代主观纠结，帮助用户决定下一周投入重点",
+        },
+        {
+            "cell": "解决方案",
+            "content": "方向证据评分卡、每周复盘提醒、验证实验建议",
+        },
+        {
+            "cell": "渠道",
+            "content": "独立开发者社群、产品复盘文章、模板市场",
+        },
+        {
+            "cell": "收入来源",
+            "content": "模板付费、轻量订阅和验证咨询服务",
+        },
+        {
+            "cell": "成本结构",
+            "content": "表格原型维护、访谈服务、内容分发和用户支持",
+        },
+        {
+            "cell": "关键指标",
+            "content": "复盘完成率、排序变化率、二次使用率、付费转化率",
+        },
+        {
+            "cell": "竞争壁垒",
+            "content": "沉淀独立开发者方向证据样本和评分口径",
+        },
+    ],
+    "mvp_features": [
+        {
+            "module": "核心评分卡",
+            "mvp_level": "P0",
+            "user_value": "把多个方向放到同一套证据口径中比较",
+            "validation_metric": "至少 3/5 试用者调整投入排序",
+            "tradeoff_reason": "直接验证定位声明和核心假设",
+            "assumption_ids": ["H-001", "H-002"],
+            "status": "待验证",
+        },
+        {
+            "module": "验证实验建议",
+            "mvp_level": "P1",
+            "user_value": "把评分结果转成下一步实验",
+            "validation_metric": "至少 2 位试用者执行建议实验",
+            "tradeoff_reason": "提升行动转化，但可先人工生成",
+            "assumption_ids": ["H-002"],
+            "status": "待排期",
+        },
+        {
+            "module": "每周复盘提醒",
+            "mvp_level": "P2",
+            "user_value": "持续收集证据形成习惯",
+            "validation_metric": "两周后 40% 试用者完成第二次复盘",
+            "tradeoff_reason": "验证成本高于核心评分卡，先不放首轮",
+            "assumption_ids": ["H-001"],
+            "status": "暂缓",
+        },
+    ],
+    "growth_funnel": [
+        {
+            "stage": "Acquisition",
+            "user_behavior": "从独立开发者社群或复盘文章进入模板介绍页",
+            "metric": "模板访问数",
+            "mvp_implementation": "发布评分卡样例和使用前后对比",
+        },
+        {
+            "stage": "Activation",
+            "user_behavior": "填入 2 到 3 个产品方向并完成首次评分",
+            "metric": "首次评分完成率",
+            "mvp_implementation": "提供手工表格和引导问题",
+        },
+        {
+            "stage": "Retention",
+            "user_behavior": "一周后回到评分卡更新证据",
+            "metric": "7 日复盘率",
+            "mvp_implementation": "人工提醒和复盘邮件",
+        },
+        {
+            "stage": "Revenue",
+            "user_behavior": "购买进阶模板或验证咨询",
+            "metric": "付费转化率",
+            "mvp_implementation": "提供一次人工复盘服务",
+        },
+        {
+            "stage": "Referral",
+            "user_behavior": "分享方向排序结果或复盘模板",
+            "metric": "分享率",
+            "mvp_implementation": "输出可复制的复盘摘要",
+        },
+    ],
+    "premortem_risks": [
+        {
+            "risk_id": "R-001",
+            "dimension": "市场风险",
+            "failure_reason": "用户愿意讨论方向选择，但不愿持续记录证据",
+            "likelihood": "高",
+            "mitigation": "首轮只要求一次 15 分钟复盘，验证最低记录成本",
+        },
+        {
+            "risk_id": "R-002",
+            "dimension": "产品风险",
+            "failure_reason": "评分结果不能明显改变投入决策",
+            "likelihood": "中",
+            "mitigation": "把排序变化作为核心成功指标",
+        },
+    ],
+    "validation_roadmap": [
+        {
+            "validation_id": "V0",
+            "stage": "问题验证",
+            "goal": "确认方向选择困难真实且高频",
+            "experiment": "访谈 5 位独立开发者",
+            "success_metric": "至少 4 位每月经历方向取舍",
+            "time_window": "1 周",
+            "owner": "用户研究",
+            "status": "待执行",
+            "assumption_ids": ["H-001"],
+        },
+        {
+            "validation_id": "V1",
+            "stage": "价值验证",
+            "goal": "确认评分卡能改变投入排序",
+            "experiment": "手工表格评分服务",
+            "success_metric": "至少 3/5 试用者调整下一周投入重点",
+            "time_window": "2 周",
+            "owner": "产品负责人",
+            "status": "待执行",
+            "assumption_ids": ["H-002"],
+        },
+    ],
+    "out_of_scope": [
+        {
+            "item": "自动接入收入和流量数据",
+            "reason": "首轮验证无需接入外部账号且用户授权成本高",
+            "reconsider_condition": "当 5 位试用者都愿意持续使用评分卡后再评估",
+            "status": "已确认",
+        }
+    ],
+    "decision_records": [
+        {
+            "decision": "推荐概念",
+            "conclusion": "优先验证方向证据评分卡",
+            "basis": "CONVERGE 阶段 ID-001 ICE 得分最高且验证成本最低",
+            "decider": "产品负责人",
+            "date": "2026-06-23",
+            "status": "待确认",
+        }
+    ],
+    "next_actions": [
+        {
+            "action_id": "ACT-001",
+            "action": "招募 5 位独立开发者完成首次评分卡复盘",
+            "related_ids": ["H-001", "V0"],
+            "owner": "用户研究",
+            "due_date": "2026-06-30",
+            "acceptance": "完成访谈记录并确认是否存在方向取舍痛点",
+            "status": "待开始",
+        },
+        {
+            "action_id": "ACT-002",
+            "action": "运行手工评分服务并记录排序变化",
+            "related_ids": ["H-002", "V1", "R-002"],
+            "owner": "产品负责人",
+            "due_date": "2026-07-07",
+            "acceptance": "至少 3 位试用者调整下一周投入排序",
+            "status": "待开始",
+        },
+    ],
+    "stage_gate": [
+        {"checked": True, "item": "定位声明能在 3 秒内说明目标用户、品类和核心价值。"},
+        {"checked": True, "item": "MVP 功能能验证至少一个核心假设。"},
+        {"checked": True, "item": "验证路线有成功指标、owner 和状态。"},
+        {"checked": True, "item": "不可做范围和决策记录已明确。"},
+        {"checked": True, "item": "下一步行动具备 owner、截止时间、验收标准和状态。"},
     ],
 }
 
@@ -2524,6 +2741,82 @@ def test_idea_converge_artifact_data_requires_checked_stage_gate():
         IdeaConvergeArtifactData.model_validate(invalid)
 
 
+def test_idea_concept_artifact_data_rejects_duplicate_assumption_id():
+    invalid = copy.deepcopy(VALID_IDEA_CONCEPT_ARTIFACT_DATA)
+    invalid["core_assumptions"].append(copy.deepcopy(invalid["core_assumptions"][0]))
+
+    with pytest.raises(ValidationError, match="duplicate assumption_id"):
+        IdeaConceptArtifactData.model_validate(invalid)
+
+
+def test_idea_concept_artifact_data_rejects_duplicate_validation_id():
+    invalid = copy.deepcopy(VALID_IDEA_CONCEPT_ARTIFACT_DATA)
+    invalid["validation_roadmap"].append(
+        copy.deepcopy(invalid["validation_roadmap"][0])
+    )
+
+    with pytest.raises(ValidationError, match="duplicate validation_id"):
+        IdeaConceptArtifactData.model_validate(invalid)
+
+
+def test_idea_concept_artifact_data_rejects_duplicate_action_id():
+    invalid = copy.deepcopy(VALID_IDEA_CONCEPT_ARTIFACT_DATA)
+    invalid["next_actions"].append(copy.deepcopy(invalid["next_actions"][0]))
+
+    with pytest.raises(ValidationError, match="duplicate action_id"):
+        IdeaConceptArtifactData.model_validate(invalid)
+
+
+def test_idea_concept_artifact_data_rejects_missing_lean_canvas_cell():
+    invalid = copy.deepcopy(VALID_IDEA_CONCEPT_ARTIFACT_DATA)
+    invalid["lean_canvas"] = invalid["lean_canvas"][:-1]
+
+    with pytest.raises(ValidationError, match="lean_canvas"):
+        IdeaConceptArtifactData.model_validate(invalid)
+
+
+def test_idea_concept_artifact_data_rejects_missing_growth_funnel_stage():
+    invalid = copy.deepcopy(VALID_IDEA_CONCEPT_ARTIFACT_DATA)
+    invalid["growth_funnel"] = invalid["growth_funnel"][:-1]
+
+    with pytest.raises(ValidationError, match="growth_funnel"):
+        IdeaConceptArtifactData.model_validate(invalid)
+
+
+def test_idea_concept_artifact_data_rejects_unknown_mvp_feature_assumption():
+    invalid = copy.deepcopy(VALID_IDEA_CONCEPT_ARTIFACT_DATA)
+    invalid["mvp_features"][0]["assumption_ids"] = ["H-404"]
+
+    with pytest.raises(ValidationError, match="mvp_features"):
+        IdeaConceptArtifactData.model_validate(invalid)
+
+
+def test_idea_concept_artifact_data_rejects_unknown_validation_assumption():
+    invalid = copy.deepcopy(VALID_IDEA_CONCEPT_ARTIFACT_DATA)
+    invalid["validation_roadmap"][0]["assumption_ids"] = ["H-404"]
+
+    with pytest.raises(ValidationError, match="validation_roadmap"):
+        IdeaConceptArtifactData.model_validate(invalid)
+
+
+def test_idea_concept_artifact_data_rejects_unknown_next_action_reference():
+    invalid = copy.deepcopy(VALID_IDEA_CONCEPT_ARTIFACT_DATA)
+    invalid["next_actions"][0]["related_ids"] = ["UNKNOWN-404"]
+
+    with pytest.raises(ValidationError, match="next_actions"):
+        IdeaConceptArtifactData.model_validate(invalid)
+
+
+def test_idea_concept_artifact_data_requires_checked_stage_gate():
+    invalid = copy.deepcopy(VALID_IDEA_CONCEPT_ARTIFACT_DATA)
+    invalid["stage_gate"] = [
+        {**item, "checked": False} for item in invalid["stage_gate"]
+    ]
+
+    with pytest.raises(ValidationError, match="stage_gate"):
+        IdeaConceptArtifactData.model_validate(invalid)
+
+
 def test_incident_timeline_artifact_data_rejects_duplicate_fact_id():
     invalid = copy.deepcopy(VALID_INCIDENT_TIMELINE_ARTIFACT_DATA)
     invalid["fact_sources"].append(copy.deepcopy(invalid["fact_sources"][0]))
@@ -3612,6 +3905,60 @@ def test_render_idea_converge_artifact_data_is_deterministic_and_contract_valid(
             first,
             workflow_id="IDEA_BRAINSTORM",
             current_stage_id="CONVERGE",
+        )
+        == first
+    )
+
+
+def test_render_idea_concept_artifact_data_is_deterministic_and_contract_valid():
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已完成产品概念简报，请查看右侧 MVP 和验证路线。",
+            "artifact_data": VALID_IDEA_CONCEPT_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONCEPT",
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已完成产品概念简报，请查看右侧 MVP 和验证路线。",
+            "artifact_data": VALID_IDEA_CONCEPT_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONCEPT",
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert first.artifact_update.type == "replace"
+    assert first.stage_action is None
+    assert "# 产品概念简报" in first.artifact_update.markdown
+    assert "## 定位声明" in first.artifact_update.markdown
+    assert "## 核心假设" in first.artifact_update.markdown
+    assert "## Lean Canvas 产品画布" in first.artifact_update.markdown
+    assert "## MVP 功能分布" in first.artifact_update.markdown
+    assert "pie title MVP 功能组成" in first.artifact_update.markdown
+    assert "## 核心增长漏斗" in first.artifact_update.markdown
+    assert "flowchart TD" in first.artifact_update.markdown
+    assert '"type": "mvp-map"' in first.artifact_update.markdown
+    assert "## Pre-mortem 风险分析" in first.artifact_update.markdown
+    assert "## 验证路线" in first.artifact_update.markdown
+    assert "## 不可做范围" in first.artifact_update.markdown
+    assert "## 决策记录" in first.artifact_update.markdown
+    assert "## 下一步行动" in first.artifact_update.markdown
+    assert "## 阶段门禁" in first.artifact_update.markdown
+    assert "owner" in first.artifact_update.markdown
+    assert "状态" in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="IDEA_BRAINSTORM",
+            current_stage_id="CONCEPT",
         )
         == first
     )

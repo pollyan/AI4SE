@@ -22,6 +22,7 @@ from agent_runtime import (
 )
 from sse_schemas import AgentTurnDeltaOutput
 from test_artifact_data_renderers import (
+    VALID_IDEA_CONCEPT_ARTIFACT_DATA,
     VALID_IDEA_CONVERGE_ARTIFACT_DATA,
     VALID_IDEA_DEFINE_ARTIFACT_DATA,
     VALID_IDEA_DIVERGE_ARTIFACT_DATA,
@@ -989,6 +990,35 @@ def test_parse_agent_turn_output_text_renders_idea_converge_artifact_data():
     assert output.stage_action.target_stage_id == "CONCEPT"
 
 
+def test_parse_agent_turn_output_text_renders_idea_concept_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "已完成产品概念简报。",
+            "artifact_data": VALID_IDEA_CONCEPT_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONCEPT",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 产品概念简报")
+    assert "## 定位声明" in output.artifact_update.markdown
+    assert "## Lean Canvas 产品画布" in output.artifact_update.markdown
+    assert "pie title MVP 功能组成" in output.artifact_update.markdown
+    assert "flowchart TD" in output.artifact_update.markdown
+    assert '"type": "mvp-map"' in output.artifact_update.markdown
+    assert "## 下一步行动" in output.artifact_update.markdown
+    assert output.stage_action is None
+
+
 def test_value_persona_structured_output_instruction_requests_artifact_data_not_markdown():
     instruction = build_structured_output_instruction(
         "VALUE_DISCOVERY",
@@ -1141,6 +1171,26 @@ def test_idea_converge_structured_output_instruction_requests_artifact_data_not_
     assert "不要输出完整 Markdown" in instruction
 
 
+def test_idea_concept_structured_output_instruction_requests_artifact_data_not_markdown():
+    instruction = build_structured_output_instruction(
+        "IDEA_BRAINSTORM",
+        "CONCEPT",
+    )
+
+    assert "artifact_data" in instruction
+    assert "artifact_update" not in instruction
+    assert "positioning_statement" in instruction
+    assert "core_assumptions" in instruction
+    assert "lean_canvas" in instruction
+    assert "mvp_features" in instruction
+    assert "growth_funnel" in instruction
+    assert "premortem_risks" in instruction
+    assert "validation_roadmap" in instruction
+    assert "next_actions" in instruction
+    assert '"stage_action": null' in instruction
+    assert "不要输出完整 Markdown" in instruction
+
+
 def test_value_persona_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
     prompt = build_raw_json_retry_prompt(
         "原始提示",
@@ -1265,6 +1315,20 @@ def test_idea_converge_retry_prompt_requests_artifact_data_fix_not_markdown_rewr
 
     assert "artifact_data" in prompt
     assert "ice_evaluations.0.ice_score" in prompt
+    assert "不要输出 Markdown 文档" in prompt
+    assert "artifact_update.type 必须为 replace" not in prompt
+
+
+def test_idea_concept_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
+    prompt = build_raw_json_retry_prompt(
+        "原始提示",
+        ValueError("growth_funnel missing required stages: Referral"),
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONCEPT",
+    )
+
+    assert "artifact_data" in prompt
+    assert "growth_funnel" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -2164,6 +2228,69 @@ def test_runtime_raw_json_stream_turn_renders_idea_converge_artifact_data_before
     assert "artifact_update.markdown" not in build_structured_output_instruction(
         "IDEA_BRAINSTORM",
         "CONVERGE",
+    )
+
+
+def test_runtime_raw_json_stream_turn_renders_idea_concept_artifact_data_before_final_output(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "已完成产品概念简报。",
+            "artifact_data": VALID_IDEA_CONCEPT_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield final_json
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是创新顾问。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "请把收敛后的创意整理成产品概念简报",
+            workflow_id="IDEA_BRAINSTORM",
+            current_stage_id="CONCEPT",
+        )
+    )
+
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert outputs[-1].artifact_update.markdown is not None
+    assert outputs[-1].artifact_update.markdown.startswith("# 产品概念简报")
+    assert "## 定位声明" in outputs[-1].artifact_update.markdown
+    assert "## Lean Canvas 产品画布" in outputs[-1].artifact_update.markdown
+    assert "pie title MVP 功能组成" in outputs[-1].artifact_update.markdown
+    assert "flowchart TD" in outputs[-1].artifact_update.markdown
+    assert '"type": "mvp-map"' in outputs[-1].artifact_update.markdown
+    assert "## 下一步行动" in outputs[-1].artifact_update.markdown
+    assert outputs[-1].stage_action is None
+    assert calls[0]["response_format"] == {"type": "json_object"}
+    assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert "artifact_data" in calls[0]["messages"][0]["content"]
+    assert "positioning_statement" in calls[0]["messages"][0]["content"]
+    assert "mvp_features" in calls[0]["messages"][0]["content"]
+    assert "growth_funnel" in calls[0]["messages"][0]["content"]
+    assert "validation_roadmap" in calls[0]["messages"][0]["content"]
+    assert "artifact_update.markdown" not in build_structured_output_instruction(
+        "IDEA_BRAINSTORM",
+        "CONCEPT",
     )
 
 

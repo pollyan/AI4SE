@@ -22,8 +22,9 @@
 - 2026-06-23 已完成第十四个垂直切片: `IDEA_BRAINSTORM/DEFINE` 支持模型输出 `artifact_data`，后端校验问题假设、目标用户画像、问题域全景、证据与验证状态、问题-用户-场景匹配、约束边界、反向验证和阶段门禁后，确定性渲染《问题域分析》和 Mermaid `mindmap`。
 - 2026-06-23 已完成第十五个垂直切片: `IDEA_BRAINSTORM/DIVERGE` 支持模型输出 `artifact_data`，后端校验发散方法、创意全景、创意卡片、创意来源、搁置/排除记录和阶段门禁后，确定性渲染《创意发散》和 Mermaid `mindmap`。
 - 2026-06-23 已完成第十六个垂直切片: `IDEA_BRAINSTORM/CONVERGE` 支持模型输出 `artifact_data`，后端校验决策矩阵、ICE 评分、资源约束、敏感性分析、验证实验、合并路径和阶段门禁后，确定性渲染《收敛聚焦》和 Mermaid `quadrantChart`。
+- 2026-06-23 已完成第十七个垂直切片: `IDEA_BRAINSTORM/CONCEPT` 支持模型输出 `artifact_data`，后端校验定位声明、核心假设、Lean Canvas、MVP 功能、增长漏斗、Pre-mortem 风险、验证路线、不可做范围、决策记录、下一步行动和阶段门禁后，确定性渲染《产品概念简报》、Mermaid `pie`/`flowchart` 和 `ai4se-visual` `mvp-map`。
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
-- `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE` 已完成结构化产物数据迁移；尚未迁移 `IDEA_BRAINSTORM/CONCEPT` 等其它阶段。真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
+- `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM` 四阶段已完成结构化产物数据迁移；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
 
 ## 目标
 
@@ -133,7 +134,7 @@ renderer 职责:
 14. 已完成: `IDEA_BRAINSTORM/DEFINE` 垂直切片。
 15. 已完成: `IDEA_BRAINSTORM/DIVERGE` 垂直切片。
 16. 已完成: `IDEA_BRAINSTORM/CONVERGE` 垂直切片。
-17. 再迁移 `IDEA_BRAINSTORM/CONCEPT`。
+17. 已完成: `IDEA_BRAINSTORM/CONCEPT` 垂直切片。
 
 每个阶段迁移必须同步:
 
