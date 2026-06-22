@@ -8,6 +8,7 @@ from artifact_data_renderers import (
     CasesArtifactData,
     ClarifyArtifactData,
     DeliveryArtifactData,
+    IncidentImprovementArtifactData,
     IncidentRootCauseArtifactData,
     IncidentTimelineArtifactData,
     ReqReviewArtifactData,
@@ -414,6 +415,177 @@ VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA = {
         {"checked": True, "item": "鱼骨图至少覆盖 2 个相关原因维度。"},
         {"checked": True, "item": "关键根因有证据强度、置信度和验证状态。"},
         {"checked": True, "item": "排除项和未验证原因已记录。"},
+    ],
+}
+
+VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA = {
+    "report_info": {
+        "incident_name": "支付回调失败导致订单状态延迟",
+        "severity": "P1",
+        "version": "v1.0",
+        "generated_at": "2026-06-23 16:30",
+        "action_count": 3,
+        "review_date": "2026-07-07",
+        "closure_status": "待复查",
+    },
+    "timeline_summary": {
+        "key_events": [
+            "14:30 订单状态延迟告警触发",
+            "14:37 重启支付回调消费者",
+            "14:50 队列水位恢复正常",
+        ],
+        "impact_summary": "约 120 笔订单状态延迟更新，未发现实际扣款失败。",
+        "recovery_summary": "通过重启回调消费者恢复处理能力，并确认延迟队列恢复。",
+    },
+    "root_cause_summary": {
+        "direct_cause": "支付回调消费者堆积导致订单状态延迟同步。",
+        "root_cause": "支付回调关键路径缺少容量回归门禁和积压保护机制。",
+        "contributing_factors": [
+            "监控告警只在订单状态延迟后触发",
+            "发布检查清单未覆盖回调堆积场景",
+        ],
+        "evidence_summary": "队列水位监控、重启记录和发布检查清单共同支撑结论。",
+    },
+    "priority_distribution": {
+        "urgent_count": 1,
+        "important_count": 1,
+        "normal_count": 1,
+    },
+    "improvement_actions": [
+        {
+            "action_id": "A-001",
+            "improvement": "为支付回调消费者增加积压保护和自动扩容策略",
+            "action_type": "纠正措施",
+            "root_cause_id": "CAUSE-002",
+            "root_cause_type": "技术",
+            "owner": "支付研发",
+            "deadline": "2026-06-30",
+            "verification_method": "压测回调队列并验证扩容触发",
+            "acceptance_criteria": "队列积压达到阈值后 2 分钟内自动扩容且无订单状态延迟告警",
+            "priority": "紧急",
+            "status": "待执行",
+            "tracking_method": "故障改进行动看板每日报告",
+        },
+        {
+            "action_id": "A-002",
+            "improvement": "将支付回调容量回归纳入发布门禁",
+            "action_type": "预防措施",
+            "root_cause_id": "CAUSE-003",
+            "root_cause_type": "流程",
+            "owner": "测试负责人",
+            "deadline": "2026-07-03",
+            "verification_method": "检查发布流水线是否阻断未完成容量回归的版本",
+            "acceptance_criteria": "支付回调相关变更必须附带容量回归结果才可发布",
+            "priority": "重要",
+            "status": "待执行",
+            "tracking_method": "发布门禁记录和复盘复查会",
+        },
+        {
+            "action_id": "A-003",
+            "improvement": "补充支付回调队列积压前置预警",
+            "action_type": "监控改进",
+            "root_cause_id": "CAUSE-002",
+            "root_cause_type": "技术",
+            "owner": "SRE",
+            "deadline": "2026-07-05",
+            "verification_method": "模拟队列积压并确认预警早于订单延迟告警触发",
+            "acceptance_criteria": "队列积压预警至少提前 5 分钟触达值班群",
+            "priority": "常规",
+            "status": "待执行",
+            "tracking_method": "监控规则变更单和告警演练记录",
+        },
+    ],
+    "root_cause_coverage": [
+        {
+            "cause_id": "CAUSE-002",
+            "cause_type": "技术",
+            "description": "缺少积压保护、自动扩容和前置预警",
+            "action_ids": ["A-001", "A-003"],
+            "coverage_status": "已覆盖",
+            "uncovered_reason": "不适用",
+            "risk_acceptor": "支付研发负责人",
+        },
+        {
+            "cause_id": "CAUSE-003",
+            "cause_type": "流程",
+            "description": "发布前缺少支付回调关键路径容量回归门禁",
+            "action_ids": ["A-002"],
+            "coverage_status": "已覆盖",
+            "uncovered_reason": "不适用",
+            "risk_acceptor": "测试负责人",
+        },
+    ],
+    "prevention_checklist": [
+        {
+            "item": "支付回调容量回归是否完成",
+            "related_cause_id": "CAUSE-003",
+            "owner": "测试负责人",
+            "status": "待纳入发布门禁",
+        },
+        {
+            "item": "队列积压保护和前置告警是否启用",
+            "related_cause_id": "CAUSE-002",
+            "owner": "SRE",
+            "status": "待验证",
+        },
+    ],
+    "review_plan": [
+        {
+            "review_item": "改进行动完成复查",
+            "review_date": "2026-07-07",
+            "reviewer": "事故复盘主持人",
+            "evidence": "行动看板、发布门禁记录、压测报告、告警演练记录",
+            "pass_criteria": "所有行动项完成且验收标准通过",
+            "status": "待复查",
+        }
+    ],
+    "residual_risks": [
+        {
+            "risk_id": "RR-001",
+            "risk": "第三方支付平台短时回调抖动仍可能造成局部延迟",
+            "impact": "少量订单状态展示延迟",
+            "acceptance_reason": "第三方日志仍需补齐，先通过内部积压保护降低影响",
+            "risk_acceptor": "支付业务负责人",
+            "review_due_date": "2026-07-14",
+            "status": "有条件接受",
+        }
+    ],
+    "lessons_learned": [
+        {
+            "lesson_id": "L-001",
+            "lesson": "高频支付回调链路必须同时具备容量回归、积压保护和前置告警。",
+            "scope": "支付、订单、消息队列相关关键路径",
+            "sharing_suggestion": "纳入季度故障案例复盘",
+        }
+    ],
+    "organizational_learning": [
+        {
+            "learning_item": "更新关键链路发布门禁模板",
+            "audience": "研发、测试、SRE",
+            "channel": "工程效能例会",
+            "owner": "质量负责人",
+            "due_date": "2026-07-10",
+            "status": "待宣导",
+        }
+    ],
+    "signoffs": [
+        {
+            "role": "事故复盘主持人",
+            "owner": "Oncall Lead",
+            "confirmation": "复盘报告内容完整且行动项可追踪",
+            "status": "待签署",
+        },
+        {
+            "role": "业务负责人",
+            "owner": "支付业务负责人",
+            "confirmation": "遗留风险已明确接受人与复查期限",
+            "status": "待签署",
+        },
+    ],
+    "stage_gate": [
+        {"checked": True, "item": "每个根因至少有一项对应改进措施或风险接受说明。"},
+        {"checked": True, "item": "改进行动具备负责人、期限、验证方式和验收标准。"},
+        {"checked": True, "item": "复查计划和遗留风险接受人已记录。"},
     ],
 }
 
@@ -1873,6 +2045,54 @@ def test_incident_root_cause_artifact_data_requires_root_cause_conclusion():
         IncidentRootCauseArtifactData.model_validate(invalid)
 
 
+def test_incident_improvement_artifact_data_rejects_duplicate_action_id():
+    invalid = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
+    invalid["improvement_actions"][1]["action_id"] = "A-001"
+
+    with pytest.raises(ValidationError, match="action_id"):
+        IncidentImprovementArtifactData.model_validate(invalid)
+
+
+def test_incident_improvement_artifact_data_rejects_action_count_mismatch():
+    invalid = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
+    invalid["report_info"]["action_count"] = 4
+
+    with pytest.raises(ValidationError, match="action_count"):
+        IncidentImprovementArtifactData.model_validate(invalid)
+
+
+def test_incident_improvement_artifact_data_rejects_priority_distribution_mismatch():
+    invalid = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
+    invalid["priority_distribution"]["urgent_count"] = 2
+
+    with pytest.raises(ValidationError, match="priority_distribution"):
+        IncidentImprovementArtifactData.model_validate(invalid)
+
+
+def test_incident_improvement_artifact_data_rejects_unknown_coverage_action_reference():
+    invalid = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
+    invalid["root_cause_coverage"][0]["action_ids"] = ["A-404"]
+
+    with pytest.raises(ValidationError, match="root_cause_coverage"):
+        IncidentImprovementArtifactData.model_validate(invalid)
+
+
+def test_incident_improvement_artifact_data_rejects_unknown_action_root_cause_reference():
+    invalid = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
+    invalid["improvement_actions"][0]["root_cause_id"] = "CAUSE-404"
+
+    with pytest.raises(ValidationError, match="root_cause_id"):
+        IncidentImprovementArtifactData.model_validate(invalid)
+
+
+def test_incident_improvement_artifact_data_rejects_covered_cause_without_actions():
+    invalid = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
+    invalid["root_cause_coverage"][0]["action_ids"] = []
+
+    with pytest.raises(ValidationError, match="coverage_status"):
+        IncidentImprovementArtifactData.model_validate(invalid)
+
+
 def test_render_clarify_artifact_data_is_deterministic_and_contract_valid():
     first = render_agent_turn_from_artifact_data(
         {
@@ -2598,6 +2818,78 @@ def test_render_incident_root_cause_artifact_data_is_deterministic_and_contract_
             first,
             workflow_id="INCIDENT_REVIEW",
             current_stage_id="ROOT_CAUSE",
+        )
+        == first
+    )
+
+
+def test_render_incident_improvement_artifact_data_is_deterministic_and_contract_valid():
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已完成故障改进报告，请确认右侧行动项和复查计划。",
+            "artifact_data": VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="IMPROVEMENT",
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已完成故障改进报告，请确认右侧行动项和复查计划。",
+            "artifact_data": VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="IMPROVEMENT",
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert first.artifact_update.type == "replace"
+    assert first.stage_action is None
+    assert "# 故障复盘报告" in first.artifact_update.markdown
+    assert "## 报告信息" in first.artifact_update.markdown
+    assert "## 第一部分：事件还原" in first.artifact_update.markdown
+    assert "## 第二部分：根因分析" in first.artifact_update.markdown
+    assert "## 第三部分：改进措施" in first.artifact_update.markdown
+    assert "### 7. 改进措施" in first.artifact_update.markdown
+    assert "#### 7.1 改进优先级分布" in first.artifact_update.markdown
+    assert "pie title 改进措施优先级分布" in first.artifact_update.markdown
+    assert "#### 7.2 改进行动清单" in first.artifact_update.markdown
+    assert '"type": "action-board"' in first.artifact_update.markdown
+    assert "#### 7.3 根因覆盖检查" in first.artifact_update.markdown
+    assert "### 8. 防复发检查清单" in first.artifact_update.markdown
+    assert "### 9. 复查计划" in first.artifact_update.markdown
+    assert "### 10. 遗留风险与风险接受" in first.artifact_update.markdown
+    assert "### 11. 经验教训" in first.artifact_update.markdown
+    assert "### 12. 组织学习" in first.artifact_update.markdown
+    assert "## 签署确认" in first.artifact_update.markdown
+    assert "### 13. 阶段门禁" in first.artifact_update.markdown
+    for keyword in [
+        "ID",
+        "改进措施",
+        "类型",
+        "对应根因",
+        "建议负责人",
+        "完成期限",
+        "验证方式",
+        "验收标准",
+        "优先级",
+        "当前状态",
+        "追踪机制",
+        "复查日期",
+        "覆盖状态",
+        "风险接受人",
+    ]:
+        assert keyword in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="INCIDENT_REVIEW",
+            current_stage_id="IMPROVEMENT",
         )
         == first
     )

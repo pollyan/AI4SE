@@ -532,6 +532,44 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+INCIDENT_IMPROVEMENT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮已经形成哪些改进行动、根因覆盖、复查计划、遗留风险和签署确认。不要复制完整产出物正文。",
+  "artifact_data": {
+    "report_info": {"incident_name": "...", "severity": "P0/P1/P2/P3", "version": "v1.0", "generated_at": "YYYY-MM-DD HH:MM", "action_count": 3, "review_date": "YYYY-MM-DD", "closure_status": "待复查/可关闭/暂缓关闭"},
+    "timeline_summary": {"key_events": ["..."], "impact_summary": "...", "recovery_summary": "..."},
+    "root_cause_summary": {"direct_cause": "...", "root_cause": "...", "contributing_factors": ["..."], "evidence_summary": "..."},
+    "priority_distribution": {"urgent_count": 1, "important_count": 1, "normal_count": 1},
+    "improvement_actions": [{"action_id": "A-001", "improvement": "...", "action_type": "纠正措施/预防措施/监控改进/流程改进", "root_cause_id": "CAUSE-001", "root_cause_type": "技术/流程/人员/环境/度量/管理", "owner": "...", "deadline": "YYYY-MM-DD", "verification_method": "...", "acceptance_criteria": "...", "priority": "紧急/重要/常规", "status": "待执行/进行中/待验证/已完成", "tracking_method": "..."}],
+    "root_cause_coverage": [{"cause_id": "CAUSE-001", "cause_type": "技术/流程/人员/环境/度量/管理", "description": "...", "action_ids": ["A-001"], "coverage_status": "已覆盖/部分覆盖/风险接受", "uncovered_reason": "不适用 或 ...", "risk_acceptor": "..."}],
+    "prevention_checklist": [{"item": "...", "related_cause_id": "CAUSE-001", "owner": "...", "status": "待验证/已纳入/风险接受"}],
+    "review_plan": [{"review_item": "...", "review_date": "YYYY-MM-DD", "reviewer": "...", "evidence": "...", "pass_criteria": "...", "status": "待复查/通过/未通过"}],
+    "residual_risks": [{"risk_id": "RR-001", "risk": "...", "impact": "...", "acceptance_reason": "...", "risk_acceptor": "...", "review_due_date": "YYYY-MM-DD", "status": "有条件接受/待处理/已关闭"}],
+    "lessons_learned": [{"lesson_id": "L-001", "lesson": "...", "scope": "...", "sharing_suggestion": "..."}],
+    "organizational_learning": [{"learning_item": "...", "audience": "...", "channel": "...", "owner": "...", "due_date": "YYYY-MM-DD", "status": "待宣导/已宣导/待纳入制度"}],
+    "signoffs": [{"role": "事故复盘主持人/业务负责人/研发负责人/测试负责人", "owner": "...", "confirmation": "...", "status": "待签署/已签署"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null,
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；report_info.action_count 必须等于 improvement_actions 数量；improvement_actions.action_id 必须唯一；priority_distribution 必须与 improvement_actions.priority 计数一致；root_cause_coverage.action_ids 只能引用已存在的 action_id；improvement_actions.root_cause_id 必须能在 root_cause_coverage.cause_id 中找到。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块、pie 或 action-board JSON 代码块，后端会负责确定性渲染右侧最终故障复盘报告、Mermaid pie 和 ai4se-visual action-board。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in {
         ("TEST_DESIGN", "CLARIFY"),
@@ -546,6 +584,7 @@ def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) ->
         ("VALUE_DISCOVERY", "BLUEPRINT"),
         ("INCIDENT_REVIEW", "TIMELINE"),
         ("INCIDENT_REVIEW", "ROOT_CAUSE"),
+        ("INCIDENT_REVIEW", "IMPROVEMENT"),
     }
 
 
@@ -577,6 +616,8 @@ def build_structured_output_instruction(
         return INCIDENT_TIMELINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "ROOT_CAUSE"):
         return INCIDENT_ROOT_CAUSE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "IMPROVEMENT"):
+        return INCIDENT_IMPROVEMENT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
 
 

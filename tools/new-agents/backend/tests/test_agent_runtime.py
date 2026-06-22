@@ -22,6 +22,7 @@ from agent_runtime import (
 )
 from sse_schemas import AgentTurnDeltaOutput
 from test_artifact_data_renderers import (
+    VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA,
     VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
     VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
     VALID_CASES_ARTIFACT_DATA,
@@ -865,6 +866,32 @@ def test_parse_agent_turn_output_text_renders_incident_root_cause_artifact_data(
     assert output.stage_action.target_stage_id == "IMPROVEMENT"
 
 
+def test_parse_agent_turn_output_text_renders_incident_improvement_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "已完成故障改进报告。",
+            "artifact_data": VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="IMPROVEMENT",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 故障复盘报告")
+    assert "### 7. 改进措施" in output.artifact_update.markdown
+    assert "pie title 改进措施优先级分布" in output.artifact_update.markdown
+    assert '"type": "action-board"' in output.artifact_update.markdown
+    assert output.stage_action is None
+
+
 def test_value_persona_structured_output_instruction_requests_artifact_data_not_markdown():
     instruction = build_structured_output_instruction(
         "VALUE_DISCOVERY",
@@ -947,6 +974,24 @@ def test_incident_root_cause_structured_output_instruction_requests_artifact_dat
     assert "不要输出完整 Markdown" in instruction
 
 
+def test_incident_improvement_structured_output_instruction_requests_artifact_data_not_markdown():
+    instruction = build_structured_output_instruction(
+        "INCIDENT_REVIEW",
+        "IMPROVEMENT",
+    )
+
+    assert "artifact_data" in instruction
+    assert "artifact_update" not in instruction
+    assert "report_info" in instruction
+    assert "improvement_actions" in instruction
+    assert "root_cause_coverage" in instruction
+    assert "review_plan" in instruction
+    assert "residual_risks" in instruction
+    assert "action-board" in instruction
+    assert 'stage_action": null' in instruction
+    assert "不要输出完整 Markdown" in instruction
+
+
 def test_value_persona_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
     prompt = build_raw_json_retry_prompt(
         "原始提示",
@@ -1013,6 +1058,20 @@ def test_incident_root_cause_retry_prompt_requests_artifact_data_fix_not_markdow
 
     assert "artifact_data" in prompt
     assert "fishbone_categories references unknown cause ids" in prompt
+    assert "不要输出 Markdown 文档" in prompt
+    assert "artifact_update.type 必须为 replace" not in prompt
+
+
+def test_incident_improvement_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
+    prompt = build_raw_json_retry_prompt(
+        "原始提示",
+        ValueError("root_cause_coverage references unknown action ids"),
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="IMPROVEMENT",
+    )
+
+    assert "artifact_data" in prompt
+    assert "root_cause_coverage references unknown action ids" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -1660,6 +1719,65 @@ def test_runtime_raw_json_stream_turn_renders_incident_root_cause_artifact_data_
     assert "artifact_update.markdown" not in build_structured_output_instruction(
         "INCIDENT_REVIEW",
         "ROOT_CAUSE",
+    )
+
+
+def test_runtime_raw_json_stream_turn_renders_incident_improvement_artifact_data_before_final_output(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "已完成故障改进报告。",
+            "artifact_data": VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield final_json
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是故障复盘专家。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "基于支付回调失败根因，请生成改进措施和复查计划",
+            workflow_id="INCIDENT_REVIEW",
+            current_stage_id="IMPROVEMENT",
+        )
+    )
+
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert outputs[-1].artifact_update.markdown is not None
+    assert outputs[-1].artifact_update.markdown.startswith("# 故障复盘报告")
+    assert "### 7. 改进措施" in outputs[-1].artifact_update.markdown
+    assert "pie title 改进措施优先级分布" in outputs[-1].artifact_update.markdown
+    assert '"type": "action-board"' in outputs[-1].artifact_update.markdown
+    assert outputs[-1].stage_action is None
+    assert calls[0]["response_format"] == {"type": "json_object"}
+    assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert "artifact_data" in calls[0]["messages"][0]["content"]
+    assert "improvement_actions" in calls[0]["messages"][0]["content"]
+    assert "root_cause_coverage" in calls[0]["messages"][0]["content"]
+    assert "residual_risks" in calls[0]["messages"][0]["content"]
+    assert "artifact_update.markdown" not in build_structured_output_instruction(
+        "INCIDENT_REVIEW",
+        "IMPROVEMENT",
     )
 
 

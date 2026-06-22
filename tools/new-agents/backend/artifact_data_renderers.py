@@ -327,6 +327,198 @@ class IncidentRootCauseArtifactData(StrictArtifactDataModel):
         return self
 
 
+class IncidentImprovementReportInfo(StrictArtifactDataModel):
+    incident_name: str
+    severity: str
+    version: str
+    generated_at: str
+    action_count: int = Field(ge=1)
+    review_date: str
+    closure_status: str
+
+
+class IncidentImprovementTimelineSummary(StrictArtifactDataModel):
+    key_events: list[str] = Field(min_length=1)
+    impact_summary: str
+    recovery_summary: str
+
+
+class IncidentImprovementRootCauseSummary(StrictArtifactDataModel):
+    direct_cause: str
+    root_cause: str
+    contributing_factors: list[str] = Field(min_length=1)
+    evidence_summary: str
+
+
+class IncidentImprovementPriorityDistribution(StrictArtifactDataModel):
+    urgent_count: int = Field(ge=0)
+    important_count: int = Field(ge=0)
+    normal_count: int = Field(ge=0)
+
+
+class IncidentImprovementAction(StrictArtifactDataModel):
+    action_id: str
+    improvement: str
+    action_type: str
+    root_cause_id: str
+    root_cause_type: str
+    owner: str
+    deadline: str
+    verification_method: str
+    acceptance_criteria: str
+    priority: str
+    status: str
+    tracking_method: str
+
+
+class IncidentRootCauseCoverage(StrictArtifactDataModel):
+    cause_id: str
+    cause_type: str
+    description: str
+    action_ids: list[str]
+    coverage_status: str
+    uncovered_reason: str
+    risk_acceptor: str
+
+
+class IncidentPreventionCheckItem(StrictArtifactDataModel):
+    item: str
+    related_cause_id: str
+    owner: str
+    status: str
+
+
+class IncidentReviewPlanItem(StrictArtifactDataModel):
+    review_item: str
+    review_date: str
+    reviewer: str
+    evidence: str
+    pass_criteria: str
+    status: str
+
+
+class IncidentResidualRisk(StrictArtifactDataModel):
+    risk_id: str
+    risk: str
+    impact: str
+    acceptance_reason: str
+    risk_acceptor: str
+    review_due_date: str
+    status: str
+
+
+class IncidentLessonLearned(StrictArtifactDataModel):
+    lesson_id: str
+    lesson: str
+    scope: str
+    sharing_suggestion: str
+
+
+class IncidentOrganizationalLearning(StrictArtifactDataModel):
+    learning_item: str
+    audience: str
+    channel: str
+    owner: str
+    due_date: str
+    status: str
+
+
+class IncidentSignoff(StrictArtifactDataModel):
+    role: str
+    owner: str
+    confirmation: str
+    status: str
+
+
+class IncidentImprovementArtifactData(StrictArtifactDataModel):
+    report_info: IncidentImprovementReportInfo
+    timeline_summary: IncidentImprovementTimelineSummary
+    root_cause_summary: IncidentImprovementRootCauseSummary
+    priority_distribution: IncidentImprovementPriorityDistribution
+    improvement_actions: list[IncidentImprovementAction] = Field(min_length=1)
+    root_cause_coverage: list[IncidentRootCauseCoverage] = Field(min_length=1)
+    prevention_checklist: list[IncidentPreventionCheckItem] = Field(min_length=1)
+    review_plan: list[IncidentReviewPlanItem] = Field(min_length=1)
+    residual_risks: list[IncidentResidualRisk] = Field(min_length=1)
+    lessons_learned: list[IncidentLessonLearned] = Field(min_length=1)
+    organizational_learning: list[IncidentOrganizationalLearning] = Field(min_length=1)
+    signoffs: list[IncidentSignoff] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_incident_improvement_consistency(
+        self,
+    ) -> "IncidentImprovementArtifactData":
+        action_ids = {item.action_id for item in self.improvement_actions}
+        if len(action_ids) != len(self.improvement_actions):
+            raise ValueError("improvement_actions contains duplicate action_id")
+
+        if self.report_info.action_count != len(self.improvement_actions):
+            raise ValueError(
+                "report_info.action_count must match improvement_actions length"
+            )
+
+        expected_distribution = {
+            "紧急": self.priority_distribution.urgent_count,
+            "重要": self.priority_distribution.important_count,
+            "常规": self.priority_distribution.normal_count,
+        }
+        actual_distribution = {
+            priority: sum(
+                1 for item in self.improvement_actions if item.priority == priority
+            )
+            for priority in expected_distribution
+        }
+        if actual_distribution != expected_distribution:
+            raise ValueError(
+                "priority_distribution must match improvement_actions priorities"
+            )
+
+        coverage_cause_ids = {item.cause_id for item in self.root_cause_coverage}
+        if len(coverage_cause_ids) != len(self.root_cause_coverage):
+            raise ValueError("root_cause_coverage contains duplicate cause_id")
+
+        unknown_coverage_action_ids = sorted(
+            {
+                action_id
+                for item in self.root_cause_coverage
+                for action_id in item.action_ids
+                if action_id not in action_ids
+            }
+        )
+        if unknown_coverage_action_ids:
+            raise ValueError(
+                "root_cause_coverage references unknown action ids: "
+                + ", ".join(unknown_coverage_action_ids)
+            )
+
+        unknown_action_root_causes = sorted(
+            {
+                item.root_cause_id
+                for item in self.improvement_actions
+                if item.root_cause_id not in coverage_cause_ids
+            }
+        )
+        if unknown_action_root_causes:
+            raise ValueError(
+                "improvement_actions.root_cause_id references unknown coverage "
+                "cause ids: " + ", ".join(unknown_action_root_causes)
+            )
+
+        uncovered_completed_causes = [
+            item.cause_id
+            for item in self.root_cause_coverage
+            if item.coverage_status == "已覆盖" and not item.action_ids
+        ]
+        if uncovered_completed_causes:
+            raise ValueError(
+                "root_cause_coverage.coverage_status 已覆盖 requires action_ids: "
+                + ", ".join(uncovered_completed_causes)
+            )
+
+        return self
+
+
 class StrategySummary(StrictArtifactDataModel):
     conclusion: str
     basis: str
@@ -1508,6 +1700,11 @@ def render_agent_turn_from_artifact_data(
             payload["artifact_data"]
         )
         markdown = render_incident_review_root_cause_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "IMPROVEMENT"):
+        artifact_data = IncidentImprovementArtifactData.model_validate(
+            payload["artifact_data"]
+        )
+        markdown = render_incident_review_improvement_markdown(artifact_data)
     elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
         artifact_data = StrategyArtifactData.model_validate(payload["artifact_data"])
         markdown = render_test_design_strategy_markdown(artifact_data)
@@ -1610,6 +1807,32 @@ def render_incident_review_root_cause_markdown(
         _render_incident_excluded_causes(data.excluded_causes),
         _render_incident_unverified_causes(data.unverified_causes),
         _render_incident_root_cause_stage_gate(data.stage_gate),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_incident_review_improvement_markdown(
+    data: IncidentImprovementArtifactData,
+) -> str:
+    sections = [
+        "# 故障复盘报告",
+        _render_incident_improvement_report_info(data.report_info),
+        _render_incident_improvement_timeline_summary(data.timeline_summary),
+        _render_incident_improvement_root_cause_summary(data.root_cause_summary),
+        "## 第三部分：改进措施",
+        "### 7. 改进措施",
+        _render_incident_improvement_priority_distribution(data.priority_distribution),
+        _render_incident_improvement_actions(data.improvement_actions),
+        _render_incident_improvement_root_cause_coverage(data.root_cause_coverage),
+        _render_incident_improvement_prevention_checklist(data.prevention_checklist),
+        _render_incident_improvement_review_plan(data.review_plan),
+        _render_incident_improvement_residual_risks(data.residual_risks),
+        _render_incident_improvement_lessons(data.lessons_learned),
+        _render_incident_improvement_organizational_learning(
+            data.organizational_learning
+        ),
+        _render_incident_improvement_signoffs(data.signoffs),
+        _render_incident_improvement_stage_gate(data.stage_gate),
     ]
     return "\n\n".join(sections)
 
@@ -2114,6 +2337,284 @@ def _render_incident_root_cause_stage_gate(
 ) -> str:
     lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
     return "### 6.7 阶段门禁\n" + "\n".join(lines)
+
+
+def _render_incident_improvement_report_info(
+    info: IncidentImprovementReportInfo,
+) -> str:
+    rows = [
+        ("故障名称", info.incident_name),
+        ("严重等级", info.severity),
+        ("报告版本", info.version),
+        ("生成时间", info.generated_at),
+        ("改进行动总数", info.action_count),
+        ("复查日期", info.review_date),
+        ("关闭状态", info.closure_status),
+    ]
+    return "## 报告信息\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_incident_improvement_timeline_summary(
+    summary: IncidentImprovementTimelineSummary,
+) -> str:
+    rows = [
+        ("关键事件", "<br>".join(summary.key_events)),
+        ("影响摘要", summary.impact_summary),
+        ("恢复摘要", summary.recovery_summary),
+    ]
+    return "## 第一部分：事件还原\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_incident_improvement_root_cause_summary(
+    summary: IncidentImprovementRootCauseSummary,
+) -> str:
+    rows = [
+        ("直接原因", summary.direct_cause),
+        ("根本原因", summary.root_cause),
+        ("促成因素", "<br>".join(summary.contributing_factors)),
+        ("证据摘要", summary.evidence_summary),
+    ]
+    return "## 第二部分：根因分析\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_incident_improvement_priority_distribution(
+    distribution: IncidentImprovementPriorityDistribution,
+) -> str:
+    lines = [
+        "```mermaid",
+        "pie title 改进措施优先级分布",
+        f'    "紧急" : {distribution.urgent_count}',
+        f'    "重要" : {distribution.important_count}',
+        f'    "常规" : {distribution.normal_count}',
+        "```",
+    ]
+    rows = [
+        ("紧急", distribution.urgent_count),
+        ("重要", distribution.important_count),
+        ("常规", distribution.normal_count),
+    ]
+    return (
+        "#### 7.1 改进优先级分布\n"
+        + "\n".join(lines)
+        + "\n\n"
+        + _markdown_table(["优先级", "数量"], rows)
+    )
+
+
+def _render_incident_improvement_actions(
+    items: list[IncidentImprovementAction],
+) -> str:
+    rows = [
+        (
+            item.action_id,
+            item.improvement,
+            item.action_type,
+            item.root_cause_id,
+            item.root_cause_type,
+            item.owner,
+            item.deadline,
+            item.verification_method,
+            item.acceptance_criteria,
+            item.priority,
+            item.status,
+            item.tracking_method,
+        )
+        for item in items
+    ]
+    visual = {
+        "type": "action-board",
+        "title": "故障改进行动看板",
+        "columns": [
+            "ID",
+            "改进措施",
+            "类型",
+            "对应根因",
+            "建议负责人",
+            "完成期限",
+            "验证方式",
+            "验收标准",
+            "优先级",
+            "当前状态",
+            "追踪机制",
+        ],
+        "rows": [
+            {
+                "ID": item.action_id,
+                "改进措施": item.improvement,
+                "类型": item.action_type,
+                "对应根因": item.root_cause_id,
+                "建议负责人": item.owner,
+                "完成期限": item.deadline,
+                "验证方式": item.verification_method,
+                "验收标准": item.acceptance_criteria,
+                "优先级": item.priority,
+                "当前状态": item.status,
+                "追踪机制": item.tracking_method,
+            }
+            for item in items
+        ],
+    }
+    return (
+        "#### 7.2 改进行动清单\n"
+        + _markdown_table(
+            [
+                "ID",
+                "改进措施",
+                "类型",
+                "对应根因",
+                "根因类型",
+                "建议负责人",
+                "完成期限",
+                "验证方式",
+                "验收标准",
+                "优先级",
+                "当前状态",
+                "追踪机制",
+            ],
+            rows,
+        )
+        + "\n\n```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+
+
+def _render_incident_improvement_root_cause_coverage(
+    items: list[IncidentRootCauseCoverage],
+) -> str:
+    rows = [
+        (
+            item.cause_id,
+            item.cause_type,
+            item.description,
+            ", ".join(item.action_ids),
+            item.coverage_status,
+            item.uncovered_reason,
+            item.risk_acceptor,
+        )
+        for item in items
+    ]
+    return "#### 7.3 根因覆盖检查\n" + _markdown_table(
+        [
+            "根因 ID",
+            "类型",
+            "根因说明",
+            "覆盖行动",
+            "覆盖状态",
+            "未覆盖原因",
+            "风险接受人",
+        ],
+        rows,
+    )
+
+
+def _render_incident_improvement_prevention_checklist(
+    items: list[IncidentPreventionCheckItem],
+) -> str:
+    rows = [
+        (item.item, item.related_cause_id, item.owner, item.status) for item in items
+    ]
+    return "### 8. 防复发检查清单\n" + _markdown_table(
+        ["检查项", "对应根因", "建议负责人", "当前状态"],
+        rows,
+    )
+
+
+def _render_incident_improvement_review_plan(
+    items: list[IncidentReviewPlanItem],
+) -> str:
+    rows = [
+        (
+            item.review_item,
+            item.review_date,
+            item.reviewer,
+            item.evidence,
+            item.pass_criteria,
+            item.status,
+        )
+        for item in items
+    ]
+    return "### 9. 复查计划\n" + _markdown_table(
+        ["复查项", "复查日期", "复查人", "证据", "通过标准", "当前状态"],
+        rows,
+    )
+
+
+def _render_incident_improvement_residual_risks(
+    items: list[IncidentResidualRisk],
+) -> str:
+    rows = [
+        (
+            item.risk_id,
+            item.risk,
+            item.impact,
+            item.acceptance_reason,
+            item.risk_acceptor,
+            item.review_due_date,
+            item.status,
+        )
+        for item in items
+    ]
+    return "### 10. 遗留风险与风险接受\n" + _markdown_table(
+        [
+            "风险 ID",
+            "风险",
+            "影响",
+            "接受理由",
+            "风险接受人",
+            "复查日期",
+            "当前状态",
+        ],
+        rows,
+    )
+
+
+def _render_incident_improvement_lessons(
+    items: list[IncidentLessonLearned],
+) -> str:
+    rows = [
+        (item.lesson_id, item.lesson, item.scope, item.sharing_suggestion)
+        for item in items
+    ]
+    return "### 11. 经验教训\n" + _markdown_table(
+        ["经验 ID", "经验教训", "适用范围", "传播建议"],
+        rows,
+    )
+
+
+def _render_incident_improvement_organizational_learning(
+    items: list[IncidentOrganizationalLearning],
+) -> str:
+    rows = [
+        (
+            item.learning_item,
+            item.audience,
+            item.channel,
+            item.owner,
+            item.due_date,
+            item.status,
+        )
+        for item in items
+    ]
+    return "### 12. 组织学习\n" + _markdown_table(
+        ["学习项", "受众", "渠道", "建议负责人", "完成期限", "当前状态"],
+        rows,
+    )
+
+
+def _render_incident_improvement_signoffs(items: list[IncidentSignoff]) -> str:
+    rows = [(item.role, item.owner, item.confirmation, item.status) for item in items]
+    return "## 签署确认\n" + _markdown_table(
+        ["角色", "签署人", "确认项", "当前状态"],
+        rows,
+    )
+
+
+def _render_incident_improvement_stage_gate(
+    checks: list[StageGateCheck],
+) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "### 13. 阶段门禁\n" + "\n".join(lines)
 
 
 def _render_requirement_facts(facts: list[RequirementFact]) -> str:
