@@ -7,6 +7,7 @@ from artifact_data_renderers import (
     ClarifyArtifactData,
     DeliveryArtifactData,
     ReqReviewArtifactData,
+    ReqReviewReportArtifactData,
     StrategyArtifactData,
     render_agent_turn_from_artifact_data,
 )
@@ -598,6 +599,104 @@ VALID_REQ_REVIEW_ARTIFACT_DATA = {
     ],
 }
 
+VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA = {
+    "conclusion": {
+        "artifact_name": "可签署需求评审报告",
+        "review_result": "不通过",
+        "reason": "存在 1 个 P0 阻塞性问题，必须修订需求后重新评审。",
+        "development_gate": "暂缓",
+        "needs_recheck": "是",
+        "summary": "会员权益需求当前缺少核心展示验收标准，暂不建议进入开发和测试设计。",
+    },
+    "review_info": {
+        "requirement_name": "会员权益需求",
+        "review_date": "2026-06-23",
+        "review_input": "REQ_REVIEW/REVIEW 问题清单 v1.0",
+        "participants": "产品 / 研发 / 测试",
+    },
+    "issue_statistics": {
+        "p0_count": 1,
+        "p1_count": 1,
+        "p2_count": 1,
+    },
+    "issue_closures": [
+        {
+            "issue_id": "Q-001",
+            "priority": "P0",
+            "description": "权益状态缺少可验收的展示断言。",
+            "requirement_section": "权益中心展示",
+            "impact": "影响权益展示主链路测试设计",
+            "owner": "PM",
+            "next_step": "补充每种权益状态的展示字段、排序和空态验收标准。",
+            "closure_status": "待修订",
+            "recheck_condition": "修订 PRD 后覆盖已领取、已过期、不可用状态断言。",
+        },
+        {
+            "issue_id": "Q-002",
+            "priority": "P1",
+            "description": "领取次数和过期时间缺少边界规则。",
+            "requirement_section": "权益领取规则",
+            "impact": "影响边界值和异常路径覆盖",
+            "owner": "PM / 研发",
+            "next_step": "明确领取次数、过期时间和重复领取提示。",
+            "closure_status": "待修订",
+            "recheck_condition": "补充每日、每周期和总次数限制。",
+        },
+        {
+            "issue_id": "Q-003",
+            "priority": "P2",
+            "description": "建议补充权益运营配置示例。",
+            "requirement_section": "配置说明",
+            "impact": "提升测试数据准备效率",
+            "owner": "PM",
+            "next_step": "补充典型权益配置样例。",
+            "closure_status": "待排期",
+            "recheck_condition": "后续迭代补充即可。",
+        },
+    ],
+    "review_conditions": [
+        {
+            "condition_id": "RC-001",
+            "condition": "P0 问题 Q-001 关闭后重新评审。",
+            "related_issues": ["Q-001"],
+            "verification": "检查修订 PRD 中权益状态展示验收标准。",
+            "owner": "产品 / 测试",
+            "status": "待满足",
+        },
+        {
+            "condition_id": "RC-002",
+            "condition": "P1 问题 Q-002 给出明确边界规则。",
+            "related_issues": ["Q-002"],
+            "verification": "检查领取次数和过期计算口径。",
+            "owner": "产品 / 研发",
+            "status": "待满足",
+        },
+    ],
+    "signoffs": [
+        {
+            "role": "产品负责人",
+            "owner": "PM",
+            "opinion": "不通过",
+            "status": "待签署",
+        },
+        {
+            "role": "测试负责人",
+            "owner": "测试",
+            "opinion": "不通过",
+            "status": "待签署",
+        },
+    ],
+    "change_log": [
+        {
+            "version": "v1.0",
+            "date": "2026-06-23",
+            "change": "首次生成需求评审报告",
+            "reason": "完成 REVIEW 阶段问题清单汇总",
+            "owner": "Lisa",
+        }
+    ],
+}
+
 
 def test_clarify_artifact_data_rejects_blank_required_values():
     invalid = {
@@ -785,6 +884,19 @@ def test_req_review_artifact_data_rejects_inconsistent_issue_statistics():
         ReqReviewArtifactData.model_validate(invalid)
 
 
+def test_req_review_report_artifact_data_rejects_inconsistent_issue_statistics():
+    invalid = {
+        **VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA,
+        "issue_statistics": {
+            **VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA["issue_statistics"],
+            "p0_count": 99,
+        },
+    }
+
+    with pytest.raises(ValidationError, match="issue_statistics"):
+        ReqReviewReportArtifactData.model_validate(invalid)
+
+
 def test_render_cases_artifact_data_is_contract_valid_and_asset_parseable():
     output = render_agent_turn_from_artifact_data(
         {
@@ -899,6 +1011,45 @@ def test_render_req_review_artifact_data_is_deterministic_and_contract_valid():
             first,
             workflow_id="REQ_REVIEW",
             current_stage_id="REVIEW",
+        )
+        == first
+    )
+
+
+def test_render_req_review_report_artifact_data_is_deterministic_and_contract_valid():
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已整理正式需求评审报告，请确认右侧内容。",
+            "artifact_data": VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="REQ_REVIEW",
+        current_stage_id="REPORT",
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已整理正式需求评审报告，请确认右侧内容。",
+            "artifact_data": VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="REQ_REVIEW",
+        current_stage_id="REPORT",
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert "# 需求评审报告" in first.artifact_update.markdown
+    assert "pie title 评审问题优先级分布" in first.artifact_update.markdown
+    assert "```ai4se-visual" in first.artifact_update.markdown
+    assert '"type": "priority-board"' in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="REQ_REVIEW",
+            current_stage_id="REPORT",
         )
         == first
     )

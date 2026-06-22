@@ -532,6 +532,120 @@ class ReqReviewArtifactData(StrictArtifactDataModel):
         return self
 
 
+class ReqReviewReportConclusion(StrictArtifactDataModel):
+    artifact_name: str
+    review_result: str
+    reason: str
+    development_gate: str
+    needs_recheck: str
+    summary: str
+
+
+class ReqReviewReportInfo(StrictArtifactDataModel):
+    requirement_name: str
+    review_date: str
+    review_input: str
+    participants: str
+
+
+class ReqReviewReportIssueStatistics(StrictArtifactDataModel):
+    p0_count: int = Field(ge=0)
+    p1_count: int = Field(ge=0)
+    p2_count: int = Field(ge=0)
+
+
+class ReqReviewReportIssueClosure(StrictArtifactDataModel):
+    issue_id: str
+    priority: str
+    description: str
+    requirement_section: str
+    impact: str
+    owner: str
+    next_step: str
+    closure_status: str
+    recheck_condition: str
+
+
+class ReqReviewReportCondition(StrictArtifactDataModel):
+    condition_id: str
+    condition: str
+    related_issues: list[str] = Field(min_length=1)
+    verification: str
+    owner: str
+    status: str
+
+
+class ReqReviewReportSignoff(StrictArtifactDataModel):
+    role: str
+    owner: str
+    opinion: str
+    status: str
+
+
+class ReqReviewReportChangeLogItem(StrictArtifactDataModel):
+    version: str
+    date: str
+    change: str
+    reason: str
+    owner: str
+
+
+class ReqReviewReportArtifactData(StrictArtifactDataModel):
+    conclusion: ReqReviewReportConclusion
+    review_info: ReqReviewReportInfo
+    issue_statistics: ReqReviewReportIssueStatistics
+    issue_closures: list[ReqReviewReportIssueClosure] = Field(min_length=1)
+    review_conditions: list[ReqReviewReportCondition] = Field(min_length=1)
+    signoffs: list[ReqReviewReportSignoff] = Field(min_length=1)
+    change_log: list[ReqReviewReportChangeLogItem] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_report_consistency(self) -> "ReqReviewReportArtifactData":
+        issue_ids = {item.issue_id for item in self.issue_closures}
+        if len(issue_ids) != len(self.issue_closures):
+            raise ValueError("issue_closures contains duplicate issue_id")
+
+        priority_counts = {
+            "P0": sum(1 for item in self.issue_closures if item.priority == "P0"),
+            "P1": sum(1 for item in self.issue_closures if item.priority == "P1"),
+            "P2": sum(1 for item in self.issue_closures if item.priority == "P2"),
+        }
+        if (
+            self.issue_statistics.p0_count != priority_counts["P0"]
+            or self.issue_statistics.p1_count != priority_counts["P1"]
+            or self.issue_statistics.p2_count != priority_counts["P2"]
+        ):
+            raise ValueError("issue_statistics must match issue_closures priorities")
+
+        unknown_references = sorted(
+            {
+                issue_id
+                for condition in self.review_conditions
+                for issue_id in condition.related_issues
+                if issue_id not in issue_ids
+            }
+        )
+        if unknown_references:
+            raise ValueError(
+                "review_conditions references unknown issue ids: "
+                + ", ".join(unknown_references)
+            )
+
+        has_open_p0 = any(
+            item.priority == "P0" and item.closure_status != "已关闭"
+            for item in self.issue_closures
+        )
+        has_open_p1 = any(
+            item.priority == "P1" and item.closure_status != "已关闭"
+            for item in self.issue_closures
+        )
+        if self.conclusion.review_result == "通过" and (has_open_p0 or has_open_p1):
+            raise ValueError(
+                "conclusion.review_result cannot be 通过 when open P0/P1 issues remain"
+            )
+        return self
+
+
 def render_agent_turn_from_artifact_data(
     payload: dict[str, Any],
     *,
@@ -555,6 +669,11 @@ def render_agent_turn_from_artifact_data(
     elif (workflow_id, current_stage_id) == ("REQ_REVIEW", "REVIEW"):
         artifact_data = ReqReviewArtifactData.model_validate(payload["artifact_data"])
         markdown = render_req_review_review_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("REQ_REVIEW", "REPORT"):
+        artifact_data = ReqReviewReportArtifactData.model_validate(
+            payload["artifact_data"]
+        )
+        markdown = render_req_review_report_markdown(artifact_data)
     else:
         raise ValueError(
             f"artifact_data renderer is not configured for {workflow_id}/{current_stage_id}"
@@ -649,6 +768,21 @@ def render_req_review_review_markdown(data: ReqReviewArtifactData) -> str:
         _render_req_review_issue_groups(data.issue_groups),
         _render_req_review_revision_suggestions(data.revision_suggestions),
         _render_req_review_stage_gate(data.stage_gate),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_req_review_report_markdown(data: ReqReviewReportArtifactData) -> str:
+    sections = [
+        "# 需求评审报告",
+        _render_req_review_report_conclusion(data.conclusion),
+        _render_req_review_report_info(data.review_info),
+        _render_req_review_report_statistics(data.issue_statistics),
+        _render_req_review_report_priority_board(data.issue_closures),
+        _render_req_review_report_issue_closures(data.issue_closures),
+        _render_req_review_report_conditions(data.review_conditions),
+        _render_req_review_report_signoffs(data.signoffs),
+        _render_req_review_report_change_log(data.change_log),
     ]
     return "\n\n".join(sections)
 
@@ -1476,6 +1610,215 @@ def _render_req_review_revision_suggestions(
 def _render_req_review_stage_gate(checks: list[StageGateCheck]) -> str:
     lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
     return "## 阶段门禁\n" + "\n".join(lines)
+
+
+def _render_req_review_report_conclusion(
+    conclusion: ReqReviewReportConclusion,
+) -> str:
+    rows = [
+        ("Artifact 名称", conclusion.artifact_name),
+        ("评审结果", conclusion.review_result),
+        ("结论理由", conclusion.reason),
+        ("是否允许进入开发/测试设计", conclusion.development_gate),
+        ("需要复审", conclusion.needs_recheck),
+    ]
+    return (
+        "## 评审结论\n"
+        + _markdown_table(["字段", "内容"], rows)
+        + "\n\n"
+        + f"> {conclusion.summary}"
+        + "\n\n"
+        + "### 判定标准\n"
+        + "- **通过**：无 P0 问题，且 P1 问题均已有明确处理方案\n"
+        + "- **有条件通过**：无 P0 问题，但存在未解决的 P1 问题，需在开发阶段同步明确\n"
+        + "- **不通过**：存在 P0 阻塞性问题，必须修订需求后重新评审"
+    )
+
+
+def _render_req_review_report_info(info: ReqReviewReportInfo) -> str:
+    rows = [
+        ("被评审需求", info.requirement_name),
+        ("评审时间", info.review_date),
+        ("评审输入", info.review_input),
+        ("评审参与方", info.participants),
+    ]
+    return "## 评审信息\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_req_review_report_statistics(
+    statistics: ReqReviewReportIssueStatistics,
+) -> str:
+    total = statistics.p0_count + statistics.p1_count + statistics.p2_count
+    return (
+        "## 问题统计\n"
+        + "```mermaid\n"
+        + "pie title 评审问题优先级分布\n"
+        + f'    "P0 (阻塞)" : {statistics.p0_count}\n'
+        + f'    "P1 (重要)" : {statistics.p1_count}\n'
+        + f'    "P2 (建议)" : {statistics.p2_count}\n'
+        + "```\n\n"
+        + f"**统计摘要**：共 {total} 个问题，P0: {statistics.p0_count} 个 | "
+        + f"P1: {statistics.p1_count} 个 | P2: {statistics.p2_count} 个"
+    )
+
+
+def _render_req_review_report_priority_board(
+    items: list[ReqReviewReportIssueClosure],
+) -> str:
+    visual = {
+        "type": "priority-board",
+        "title": "评审问题优先级看板",
+        "columns": ["问题", "优先级", "影响范围", "责任方", "下一步", "关闭状态"],
+        "rows": [
+            {
+                "问题": item.description,
+                "优先级": item.priority,
+                "影响范围": item.impact,
+                "责任方": item.owner,
+                "下一步": item.next_step,
+                "关闭状态": item.closure_status,
+            }
+            for item in items
+        ],
+    }
+    return (
+        "## 优先级看板\n"
+        + "```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+
+
+def _render_req_review_report_issue_closures(
+    items: list[ReqReviewReportIssueClosure],
+) -> str:
+    sections = ["## 问题关闭清单"]
+    sections.append(
+        _render_req_review_report_issue_closure_group(
+            "### P0 阻塞性问题",
+            [item for item in items if item.priority == "P0"],
+            include_impact=True,
+            include_recheck=True,
+        )
+    )
+    sections.append(
+        _render_req_review_report_issue_closure_group(
+            "### P1 重要问题",
+            [item for item in items if item.priority == "P1"],
+            include_impact=True,
+            include_recheck=True,
+        )
+    )
+    sections.append(
+        _render_req_review_report_issue_closure_group(
+            "### P2 优化建议",
+            [item for item in items if item.priority == "P2"],
+            include_impact=False,
+            include_recheck=False,
+        )
+    )
+    return "\n\n".join(sections)
+
+
+def _render_req_review_report_issue_closure_group(
+    title: str,
+    items: list[ReqReviewReportIssueClosure],
+    *,
+    include_impact: bool,
+    include_recheck: bool,
+) -> str:
+    if include_impact and include_recheck:
+        rows = [
+            (
+                item.issue_id,
+                item.description,
+                item.requirement_section,
+                item.impact,
+                item.owner,
+                item.next_step,
+                item.closure_status,
+                item.recheck_condition,
+            )
+            for item in items
+        ]
+        return (
+            title
+            + "\n"
+            + _markdown_table(
+                [
+                    "ID",
+                    "问题描述",
+                    "所属需求章节",
+                    "影响范围",
+                    "责任方",
+                    "下一步",
+                    "关闭状态",
+                    "复审条件",
+                ],
+                rows,
+            )
+        )
+
+    rows = [
+        (
+            item.issue_id,
+            item.description,
+            item.requirement_section,
+            item.owner,
+            item.next_step,
+            item.closure_status,
+        )
+        for item in items
+    ]
+    return (
+        title
+        + "\n"
+        + _markdown_table(
+            ["ID", "问题描述", "所属需求章节", "责任方", "下一步", "关闭状态"],
+            rows,
+        )
+    )
+
+
+def _render_req_review_report_conditions(
+    items: list[ReqReviewReportCondition],
+) -> str:
+    rows = [
+        (
+            item.condition_id,
+            item.condition,
+            ", ".join(item.related_issues),
+            item.verification,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 复审条件\n" + _markdown_table(
+        ["条件 ID", "复审条件", "关联问题", "验证方式", "责任方", "状态"],
+        rows,
+    )
+
+
+def _render_req_review_report_signoffs(items: list[ReqReviewReportSignoff]) -> str:
+    rows = [(item.role, item.owner, item.opinion, item.status) for item in items]
+    return "## 签署确认\n" + _markdown_table(
+        ["角色", "姓名/责任方", "签署意见", "签署状态"],
+        rows,
+    )
+
+
+def _render_req_review_report_change_log(
+    items: list[ReqReviewReportChangeLogItem],
+) -> str:
+    rows = [
+        (item.version, item.date, item.change, item.reason, item.owner)
+        for item in items
+    ]
+    return "## 变更记录\n" + _markdown_table(
+        ["版本", "日期", "变更内容", "变更原因", "责任方"],
+        rows,
+    )
 
 
 def _render_flow_links(links: list[FlowLink]) -> str:

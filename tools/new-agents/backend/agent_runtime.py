@@ -264,6 +264,38 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+REQ_REVIEW_REPORT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮已经形成什么评审结论、P0/P1/P2 问题关闭状态、复审条件和签署状态。不要复制完整产出物正文。",
+  "artifact_data": {
+    "conclusion": {"artifact_name": "可签署需求评审报告", "review_result": "通过/有条件通过/不通过", "reason": "...", "development_gate": "允许/有条件允许/暂缓", "needs_recheck": "是/否", "summary": "..."},
+    "review_info": {"requirement_name": "...", "review_date": "YYYY-MM-DD", "review_input": "REVIEW 阶段问题清单版本/需求文档版本", "participants": "产品 / 研发 / 测试 / 业务方"},
+    "issue_statistics": {"p0_count": 1, "p1_count": 1, "p2_count": 0},
+    "issue_closures": [{"issue_id": "Q-001", "priority": "P0", "description": "...", "requirement_section": "...", "impact": "...", "owner": "PM/研发/测试/业务方", "next_step": "...", "closure_status": "待修订/已关闭/风险接受/待排期/不处理", "recheck_condition": "..."}],
+    "review_conditions": [{"condition_id": "RC-001", "condition": "...", "related_issues": ["Q-001"], "verification": "...", "owner": "产品/测试/研发", "status": "待满足/已满足"}],
+    "signoffs": [{"role": "产品负责人/研发负责人/测试负责人", "owner": "...", "opinion": "通过/有条件通过/不通过", "status": "待签署/已签署"}],
+    "change_log": [{"version": "v1.0", "date": "YYYY-MM-DD", "change": "...", "reason": "...", "owner": "..."}]
+  },
+  "stage_action": null,
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；issue_statistics 的 P0/P1/P2 数量必须与 issue_closures 中的问题优先级计数一致；review_conditions.related_issues 只能引用已存在的 issue_id；存在未关闭 P0/P1 问题时 review_result 不能为“通过”。不要输出完整 Markdown、Mermaid 代码块、priority-board JSON 代码块或表格，后端会负责确定性渲染右侧需求评审报告、pie 和 ai4se-visual priority-board。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in {
         ("TEST_DESIGN", "CLARIFY"),
@@ -271,6 +303,7 @@ def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) ->
         ("TEST_DESIGN", "CASES"),
         ("TEST_DESIGN", "DELIVERY"),
         ("REQ_REVIEW", "REVIEW"),
+        ("REQ_REVIEW", "REPORT"),
     }
 
 
@@ -288,6 +321,8 @@ def build_structured_output_instruction(
         return DELIVERY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("REQ_REVIEW", "REVIEW"):
         return REQ_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if (workflow_id, current_stage_id) == ("REQ_REVIEW", "REPORT"):
+        return REQ_REVIEW_REPORT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
 
 
