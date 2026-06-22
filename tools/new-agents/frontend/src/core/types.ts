@@ -410,8 +410,22 @@ export type ObservabilityTurn = {
     createdAt: string | null;
 };
 
+export type ObservabilityDiagnostic = {
+    id: string;
+    severity: string;
+    title: string;
+    detail: string;
+    action: string;
+    workflowId: WorkflowType | null;
+    stageId: string | null;
+    provider: string | null;
+    metric: string;
+    count: number;
+};
+
 export type ObservabilitySummary = {
     totals: ObservabilityTotals;
+    diagnostics: ObservabilityDiagnostic[];
     byStage: ObservabilityStageSummary[];
     byProvider: ObservabilityProviderSummary[];
     recentTurns: ObservabilityTurn[];

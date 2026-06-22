@@ -4,6 +4,7 @@ import type {
     ObservabilitySummary,
     ObservabilityTotals,
     ObservabilityTurn,
+    ObservabilityDiagnostic,
     WorkflowType,
 } from '../core/types';
 import { WORKFLOWS } from '../core/workflows';
@@ -42,6 +43,11 @@ const parseInteger = (value: unknown): number => {
 const parseWorkflowType = (value: unknown): WorkflowType => {
     if (isWorkflowType(value)) return value;
     throw new Error(INVALID_OBSERVABILITY_ERROR);
+};
+
+const parseNullableWorkflowType = (value: unknown): WorkflowType | null => {
+    if (value === null) return null;
+    return parseWorkflowType(value);
 };
 
 const parseErrorCodes = (value: unknown): Record<string, number> => {
@@ -95,6 +101,25 @@ const parseProviderSummary = (value: unknown): ObservabilityProviderSummary => {
     };
 };
 
+const parseDiagnostic = (value: unknown): ObservabilityDiagnostic => {
+    if (!isRecord(value)) {
+        throw new Error(INVALID_OBSERVABILITY_ERROR);
+    }
+
+    return {
+        id: parseString(value.id),
+        severity: parseString(value.severity),
+        title: parseString(value.title),
+        detail: parseString(value.detail),
+        action: parseString(value.action),
+        workflowId: parseNullableWorkflowType(value.workflowId),
+        stageId: parseNullableString(value.stageId),
+        provider: parseNullableString(value.provider),
+        metric: parseString(value.metric),
+        count: parseInteger(value.count),
+    };
+};
+
 const parseTurn = (value: unknown): ObservabilityTurn => {
     if (!isRecord(value)) {
         throw new Error(INVALID_OBSERVABILITY_ERROR);
@@ -121,6 +146,7 @@ const parseTurn = (value: unknown): ObservabilityTurn => {
 const parseSummary = (payload: unknown): ObservabilitySummary => {
     if (
         !isRecord(payload)
+        || !Array.isArray(payload.diagnostics)
         || !Array.isArray(payload.byStage)
         || !Array.isArray(payload.byProvider)
         || !Array.isArray(payload.recentTurns)
@@ -130,6 +156,7 @@ const parseSummary = (payload: unknown): ObservabilitySummary => {
 
     return {
         totals: parseTotals(payload.totals),
+        diagnostics: payload.diagnostics.map(parseDiagnostic),
         byStage: payload.byStage.map(parseStageSummary),
         byProvider: payload.byProvider.map(parseProviderSummary),
         recentTurns: payload.recentTurns.map(parseTurn),

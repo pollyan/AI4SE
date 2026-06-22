@@ -716,6 +716,23 @@ def get_runtime_observability_summary(
             [],
         ).append(issue)
     stage_keys = sorted(set(stage_index) | set(stage_config_issue_index))
+    by_stage = [
+        _stage_observability_item(
+            workflow_id,
+            stage_id,
+            stage_index.get((workflow_id, stage_id), []),
+            stage_config_issue_index.get((workflow_id, stage_id), []),
+        )
+        for workflow_id, stage_id in stage_keys
+    ]
+    by_provider = [
+        _provider_observability_item(provider, provider_metrics)
+        for provider, provider_metrics in sorted(provider_index.items())
+    ]
+    stage_contract_retry_counts = {
+        stage_key: sum(metric.contract_retry_count for metric in stage_metrics)
+        for stage_key, stage_metrics in stage_index.items()
+    }
 
     return {
         "totals": {
@@ -730,19 +747,14 @@ def get_runtime_observability_summary(
             "providerIssueCount": sum(provider_issue_codes.values()),
             "providerIssueCodes": provider_issue_codes,
         },
-        "byStage": [
-            _stage_observability_item(
-                workflow_id,
-                stage_id,
-                stage_index.get((workflow_id, stage_id), []),
-                stage_config_issue_index.get((workflow_id, stage_id), []),
-            )
-            for workflow_id, stage_id in stage_keys
-        ],
-        "byProvider": [
-            _provider_observability_item(provider, provider_metrics)
-            for provider, provider_metrics in sorted(provider_index.items())
-        ],
+        "diagnostics": _build_observability_diagnostics(
+            by_stage,
+            by_provider,
+            config_issues,
+            stage_contract_retry_counts,
+        ),
+        "byStage": by_stage,
+        "byProvider": by_provider,
         "recentTurns": [
             _turn_metric_snapshot(metric)
             for metric in metrics[:limit]
@@ -858,6 +870,170 @@ def _provider_observability_item(
         "providerIssueCount": sum(provider_issue_codes.values()),
         "providerIssueCodes": provider_issue_codes,
     }
+
+
+def _build_observability_diagnostics(
+    by_stage: list[dict],
+    by_provider: list[dict],
+    config_issues: list[AgentRuntimeConfigIssue],
+    stage_contract_retry_counts: dict[tuple[str, str], int],
+) -> list[dict]:
+    diagnostics: list[dict] = []
+    diagnostics.extend(
+        _contract_retry_diagnostics(stage_contract_retry_counts)
+    )
+    diagnostics.extend(
+        _provider_issue_diagnostics(by_provider, config_issues)
+    )
+    diagnostics.extend(_low_success_stage_diagnostics(by_stage))
+    return diagnostics
+
+
+def _contract_retry_diagnostics(
+    stage_contract_retry_counts: dict[tuple[str, str], int],
+) -> list[dict]:
+    items = sorted(
+        (
+            (workflow_id, stage_id, count)
+            for (workflow_id, stage_id), count in stage_contract_retry_counts.items()
+            if count > 0
+        ),
+        key=lambda item: (-item[2], item[0], item[1]),
+    )
+    return [
+        {
+            "id": f"contract-retry-{workflow_id}-{stage_id}",
+            "severity": "warning",
+            "title": "结构化产物重试集中",
+            "detail": (
+                f"{workflow_id} / {stage_id} 最近触发 {count} 次 contract retry。"
+            ),
+            "action": (
+                "优先检查该阶段 artifact_data schema、required headings、"
+                "visual contract 与 prompt 示例是否一致。"
+            ),
+            "workflowId": workflow_id,
+            "stageId": stage_id,
+            "provider": None,
+            "metric": "contractRetryCount",
+            "count": count,
+        }
+        for workflow_id, stage_id, count in items[:3]
+    ]
+
+
+def _provider_issue_diagnostics(
+    by_provider: list[dict],
+    config_issues: list[AgentRuntimeConfigIssue],
+) -> list[dict]:
+    diagnostics: list[dict] = []
+    config_issue_codes = _config_issue_provider_codes(config_issues)
+    if config_issue_codes:
+        count = sum(config_issue_codes.values())
+        diagnostics.append(
+            {
+                "id": "provider-issue-default-llm-config-missing",
+                "severity": "warning",
+                "title": "模型/供应商异常集中",
+                "detail": (
+                    f"默认模型配置 最近出现 {count} 次 "
+                    f"{_top_observability_code(config_issue_codes)}。"
+                ),
+                "action": (
+                    "打开模型设置，检查默认模型、API Key、Base URL、额度和网络连通性。"
+                ),
+                "workflowId": None,
+                "stageId": None,
+                "provider": "默认模型配置",
+                "metric": "providerIssueCount",
+                "count": count,
+            }
+        )
+
+    provider_items = sorted(
+        (
+            provider
+            for provider in by_provider
+            if provider["providerIssueCount"] > 0
+        ),
+        key=lambda provider: (
+            -provider["providerIssueCount"],
+            provider["provider"],
+        ),
+    )
+    for provider in provider_items[:3]:
+        diagnostics.append(
+            {
+                "id": f"provider-issue-{_diagnostic_id_part(provider['provider'])}",
+                "severity": "warning",
+                "title": "模型/供应商异常集中",
+                "detail": (
+                    f"{provider['provider']} 最近出现 "
+                    f"{provider['providerIssueCount']} 次 "
+                    f"{_top_observability_code(provider['providerIssueCodes'])}。"
+                ),
+                "action": (
+                    "打开模型设置，检查默认模型、API Key、Base URL、额度和网络连通性。"
+                ),
+                "workflowId": None,
+                "stageId": None,
+                "provider": provider["provider"],
+                "metric": "providerIssueCount",
+                "count": provider["providerIssueCount"],
+            }
+        )
+    return diagnostics
+
+
+def _low_success_stage_diagnostics(by_stage: list[dict]) -> list[dict]:
+    stage_items = sorted(
+        (
+            stage for stage in by_stage
+            if stage["failedTurns"] > 0 and stage["successRate"] < 80
+        ),
+        key=lambda stage: (
+            stage["successRate"],
+            -stage["failedTurns"],
+            stage["workflowId"],
+            stage["stageId"],
+        ),
+    )
+    return [
+        {
+            "id": f"stage-success-{stage['workflowId']}-{stage['stageId']}",
+            "severity": "warning",
+            "title": "阶段成功率偏低",
+            "detail": (
+                f"{stage['workflowId']} / {stage['stageId']} 成功率 "
+                f"{stage['successRate']}%，失败 {stage['failedTurns']}/{stage['turns']} 轮。"
+            ),
+            "action": "优先复查该阶段输入完整性、stage prompt、artifact contract 和最近失败错误码。",
+            "workflowId": stage["workflowId"],
+            "stageId": stage["stageId"],
+            "provider": None,
+            "metric": "successRate",
+            "count": stage["failedTurns"],
+        }
+        for stage in stage_items[:3]
+    ]
+
+
+def _top_observability_code(error_codes: dict[str, int]) -> str:
+    return sorted(
+        error_codes.items(),
+        key=lambda item: (-item[1], item[0]),
+    )[0][0]
+
+
+def _diagnostic_id_part(value: str) -> str:
+    chars = [
+        char.lower() if char.isalnum() else "-"
+        for char in value
+    ]
+    normalized = "".join(chars).strip("-")
+    while "--" in normalized:
+        normalized = normalized.replace("--", "-")
+    return normalized or "unknown"
 
 
 def _turn_metric_snapshot(metric: AgentRunTurnMetric) -> dict:

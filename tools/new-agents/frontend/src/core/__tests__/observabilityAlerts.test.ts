@@ -12,6 +12,7 @@ const BASE_SUMMARY: ObservabilitySummary = {
         providerIssueCount: 1,
         providerIssueCodes: { LLM_ERROR: 1 },
     },
+    diagnostics: [],
     byStage: [
         {
             workflowId: 'TEST_DESIGN',
@@ -81,6 +82,7 @@ describe('buildObservabilityAlerts', () => {
                 providerIssueCount: 0,
                 providerIssueCodes: {},
             },
+            diagnostics: [],
             byStage: [
                 {
                     workflowId: 'TEST_DESIGN',

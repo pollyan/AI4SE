@@ -1793,6 +1793,34 @@ def test_agent_runs_stream_records_default_llm_missing_observability_issue(
     assert observability_response.json["totals"]["providerIssueCodes"] == {
         "DEFAULT_LLM_CONFIG_MISSING": 1
     }
+    assert observability_response.json["diagnostics"] == [
+        {
+            "id": "provider-issue-default-llm-config-missing",
+            "severity": "warning",
+            "title": "模型/供应商异常集中",
+            "detail": "默认模型配置 最近出现 1 次 DEFAULT_LLM_CONFIG_MISSING。",
+            "action": (
+                "打开模型设置，检查默认模型、API Key、Base URL、额度和网络连通性。"
+            ),
+            "workflowId": None,
+            "stageId": None,
+            "provider": "默认模型配置",
+            "metric": "providerIssueCount",
+            "count": 1,
+        },
+        {
+            "id": "stage-success-TEST_DESIGN-CLARIFY",
+            "severity": "warning",
+            "title": "阶段成功率偏低",
+            "detail": "TEST_DESIGN / CLARIFY 成功率 0.0%，失败 1/1 轮。",
+            "action": "优先复查该阶段输入完整性、stage prompt、artifact contract 和最近失败错误码。",
+            "workflowId": "TEST_DESIGN",
+            "stageId": "CLARIFY",
+            "provider": None,
+            "metric": "successRate",
+            "count": 1,
+        },
+    ]
     assert observability_response.json["byStage"] == [
         {
             "workflowId": "TEST_DESIGN",
@@ -2124,6 +2152,73 @@ def test_agent_observability_endpoint_groups_provider_issue_codes(
     assert cases_stage["providerIssueCodes"] == {}
     assert response.json["byProvider"][0]["providerIssueCount"] == 1
     assert response.json["byProvider"][0]["providerIssueCodes"] == {"LLM_ERROR": 1}
+    assert response.json["diagnostics"] == [
+        {
+            "id": "contract-retry-TEST_DESIGN-STRATEGY",
+            "severity": "warning",
+            "title": "结构化产物重试集中",
+            "detail": "TEST_DESIGN / STRATEGY 最近触发 3 次 contract retry。",
+            "action": (
+                "优先检查该阶段 artifact_data schema、required headings、"
+                "visual contract 与 prompt 示例是否一致。"
+            ),
+            "workflowId": "TEST_DESIGN",
+            "stageId": "STRATEGY",
+            "provider": None,
+            "metric": "contractRetryCount",
+            "count": 3,
+        },
+        {
+            "id": "provider-issue-api-test-com",
+            "severity": "warning",
+            "title": "模型/供应商异常集中",
+            "detail": "api.test.com 最近出现 1 次 LLM_ERROR。",
+            "action": (
+                "打开模型设置，检查默认模型、API Key、Base URL、额度和网络连通性。"
+            ),
+            "workflowId": None,
+            "stageId": None,
+            "provider": "api.test.com",
+            "metric": "providerIssueCount",
+            "count": 1,
+        },
+        {
+            "id": "stage-success-TEST_DESIGN-CASES",
+            "severity": "warning",
+            "title": "阶段成功率偏低",
+            "detail": "TEST_DESIGN / CASES 成功率 0.0%，失败 1/1 轮。",
+            "action": "优先复查该阶段输入完整性、stage prompt、artifact contract 和最近失败错误码。",
+            "workflowId": "TEST_DESIGN",
+            "stageId": "CASES",
+            "provider": None,
+            "metric": "successRate",
+            "count": 1,
+        },
+        {
+            "id": "stage-success-TEST_DESIGN-CLARIFY",
+            "severity": "warning",
+            "title": "阶段成功率偏低",
+            "detail": "TEST_DESIGN / CLARIFY 成功率 0.0%，失败 1/1 轮。",
+            "action": "优先复查该阶段输入完整性、stage prompt、artifact contract 和最近失败错误码。",
+            "workflowId": "TEST_DESIGN",
+            "stageId": "CLARIFY",
+            "provider": None,
+            "metric": "successRate",
+            "count": 1,
+        },
+        {
+            "id": "stage-success-TEST_DESIGN-STRATEGY",
+            "severity": "warning",
+            "title": "阶段成功率偏低",
+            "detail": "TEST_DESIGN / STRATEGY 成功率 0.0%，失败 1/1 轮。",
+            "action": "优先复查该阶段输入完整性、stage prompt、artifact contract 和最近失败错误码。",
+            "workflowId": "TEST_DESIGN",
+            "stageId": "STRATEGY",
+            "provider": None,
+            "metric": "successRate",
+            "count": 1,
+        },
+    ]
 
 
 def test_agent_observability_endpoint_rejects_stage_without_workflow(client):

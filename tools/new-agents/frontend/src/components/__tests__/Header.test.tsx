@@ -215,6 +215,20 @@ const OBSERVABILITY_SUMMARY: ObservabilitySummary = {
         providerIssueCount: 1,
         providerIssueCodes: { LLM_ERROR: 1 },
     },
+    diagnostics: [
+        {
+            id: 'contract-retry-TEST_DESIGN-CLARIFY',
+            severity: 'warning',
+            title: '结构化产物重试集中',
+            detail: 'TEST_DESIGN / CLARIFY 最近触发 2 次 contract retry。',
+            action: '优先检查该阶段 artifact_data schema、required headings、visual contract 与 prompt 示例是否一致。',
+            workflowId: 'TEST_DESIGN',
+            stageId: 'CLARIFY',
+            provider: null,
+            metric: 'contractRetryCount',
+            count: 2,
+        },
+    ],
     byStage: [
         {
             workflowId: 'TEST_DESIGN',
@@ -471,10 +485,13 @@ describe('Header Component', () => {
             expect(fetchObservabilitySummary).toHaveBeenCalledWith({ limit: 20 });
         });
         expect((await screen.findAllByText('成功率 66.67%')).length).toBeGreaterThan(0);
-        expect(screen.getByText('TEST_DESIGN / CLARIFY')).toBeTruthy();
+        expect(screen.getAllByText('TEST_DESIGN / CLARIFY').length).toBeGreaterThan(0);
         expect(screen.getAllByText('api.test.com').length).toBeGreaterThan(0);
         expect(screen.getAllByText('LLM_ERROR').length).toBeGreaterThan(0);
         expect(screen.getAllByText('模型/供应商问题 x1').length).toBeGreaterThan(0);
+        expect(screen.getByText('诊断建议')).toBeTruthy();
+        expect(screen.getByText('结构化产物重试集中')).toBeTruthy();
+        expect(screen.getByText(/artifact_data schema/)).toBeTruthy();
         expect(screen.getByText(/run-123/)).toBeTruthy();
     });
 

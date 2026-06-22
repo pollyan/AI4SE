@@ -4,6 +4,10 @@
 > 创建日期: 2026-06-23
 > 背景: 对 `tools/new-agents/` 进行只读功能盘点后，当前系统已经具备共享 Agent Runtime、typed SSE、多 workflow、artifact contract、运行持久化、artifact 协作和运行统计基础。后续增强应优先深化已有能力，而不是复制 Lisa/Alex 专属运行时或渲染链路。
 
+## 当前消化记录
+
+- 2026-06-23 本轮已消化 E09 运行统计产品化：`/api/agent/observability` 基于既有 run metrics/config issues 确定性返回 `diagnostics`，覆盖 contract retry 集中、模型/供应商异常集中和低成功率 stage；前端运行统计弹窗展示“诊断建议”和行动文案。实现继续复用共享 Agent Runtime、typed SSE、run persistence 和 Header 现有统计入口，不新增 agent-specific runtime/API/store/renderer。
+
 ## 总体诊断
 
 当前 New Agents 是一个配置化多智能体工作台:
@@ -57,7 +61,7 @@
 | Workflow 入口 | 有 listing、onboarding、starter prompts；2026-06-23 已补在线 workflow 入口 preview | 仍缺自动推荐排序和更深的选择决策引导 | P1 |
 | Run 复用 | 有历史列表、搜索、runId snapshot 恢复 | 缺收藏、复制为新 run、质量状态筛选、跨 run 对比 | P1 |
 | Workflow handoff | 有配置化 handoff 基础 | handoff 上下文摘要、版本解释、未确认项携带不足 | P1 |
-| 可观测性 | 有 success rate、provider、stage、recent turns | 缺面向用户的质量趋势、contract retry drilldown、失败原因行动建议 | P1 |
+| 可观测性 | 有 success rate、provider、stage、recent turns；2026-06-23 已补 contract retry/provider/stage 诊断建议 | 更深的跨 run 质量趋势和长期基线仍待补 | P1 |
 | 平台扩展 | manifest 已承载核心配置 | 缺 schema 校验、dry-run、scaffold、prompt/template 版本管理 | P2 |
 
 ## 增强机会清单
@@ -72,7 +76,7 @@
 | E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 支持继续、复制为新 run、按 workflow/质量筛选、预览当前 artifact |
 | E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入 |
 | E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 | 每个 stage 有质量分、证据明细和待处理项 |
-| E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 显示 workflow/stage/provider 趋势、contract retry 原因和行动建议 |
+| E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 已消化：显示 contract retry、模型/供应商异常和低成功率 stage 的确定性诊断建议与行动文案 |
 | E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | FMEA、JTBD、RICE、Kano、CAPA 等可由配置注入 prompt/template |
 | E11 | Prompt/template 版本管理 | 新增功能 | 平台扩展 | L | P2 | 每个 stage 有 prompt/template version 和回归样例 |
 | E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 | 新 workflow 缺 manifest/prompt/contract/test 任一面时 dry-run 失败 |
@@ -141,7 +145,7 @@
 
 目标: 让后续新增 agent/workflow 更低成本、更可靠。
 
-包含: E09、E10、E11、E12。
+包含: E10、E11、E12。E09 已在 2026-06-23 运行统计产品化闭环 milestone 中消化。
 
 暂不做:
 

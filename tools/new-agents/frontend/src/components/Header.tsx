@@ -910,6 +910,42 @@ export const Header: React.FC = () => {
                     </section>
                   )}
 
+                  {observabilitySummary.diagnostics.length > 0 && (
+                    <section className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-4">
+                      <h4 className="text-sm font-semibold text-sky-100">诊断建议</h4>
+                      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                        {observabilitySummary.diagnostics.map((diagnostic) => (
+                          <div key={diagnostic.id} className="rounded-lg border border-sky-500/20 bg-[#111827] p-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold text-white">{diagnostic.title}</span>
+                              <span className="rounded bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-200">
+                                {diagnostic.metric} x{diagnostic.count}
+                              </span>
+                            </div>
+                            <div className="mt-2 text-xs leading-relaxed text-sky-100">
+                              {diagnostic.detail}
+                            </div>
+                            <div className="mt-2 text-xs leading-relaxed text-slate-300">
+                              {diagnostic.action}
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {diagnostic.workflowId && diagnostic.stageId && (
+                                <span className="rounded bg-white/5 px-2 py-1 text-xs text-slate-300">
+                                  {diagnostic.workflowId} / {diagnostic.stageId}
+                                </span>
+                              )}
+                              {diagnostic.provider && (
+                                <span className="rounded bg-white/5 px-2 py-1 text-xs text-slate-300">
+                                  {diagnostic.provider}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
                   <div className="grid gap-3 sm:grid-cols-5">
                     <div className="rounded-lg border border-[#1e293b] bg-[#0f1623] p-4">
                       <div className="text-xs text-slate-500">总轮次</div>
