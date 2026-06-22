@@ -13,6 +13,7 @@ let messageIdSequence = 0;
 type SendOptions = {
     appendUserMessage?: boolean;
     useDraftAttachments?: boolean;
+    attachmentsOverride?: Attachment[];
 };
 
 type ArtifactRollbackSnapshot = {
@@ -305,10 +306,14 @@ export function useChatService() {
         ) return;
 
         const shouldAppendUserMessage = options?.appendUserMessage !== false;
-        const shouldUseDraftAttachments = options?.useDraftAttachments !== false;
+        const shouldUseDraftAttachments = options?.attachmentsOverride
+            ? false
+            : options?.useDraftAttachments !== false;
         const assistantRetryable = shouldAppendUserMessage ? undefined : false;
         const userMsg = textToSend;
-        const currentAttachments = shouldUseDraftAttachments
+        const currentAttachments = options?.attachmentsOverride
+            ? [...options.attachmentsOverride]
+            : shouldUseDraftAttachments
             ? [...pendingAttachments]
             : [];
         const userMessageId = createMessageId();
@@ -588,6 +593,63 @@ export function useChatService() {
 
     }, []);
 
+    const handleRetryCurrentStageGeneration = useCallback(async () => {
+        const currentState = useStore.getState();
+        if (currentState.isGenerating || currentState.chatHistory.length === 0) return;
+
+        const history = currentState.chatHistory;
+        const retryPlan = planRetryFromHistory(history);
+        const latestMessage = history[history.length - 1];
+        const messagesToRemove = retryPlan
+            ? retryPlan.messagesToRemove
+            : latestMessage?.role === 'assistant'
+                ? 1
+                : 0;
+        if (messagesToRemove === 0) return;
+
+        const removedMessages = history.slice(history.length - messagesToRemove);
+        const inMemoryRollbackSnapshot = [...removedMessages]
+            .reverse()
+            .map(message => artifactRollbackSnapshotsRef.current.get(message.id))
+            .find((snapshot): snapshot is ArtifactRollbackSnapshot => Boolean(snapshot));
+        const rollbackSnapshot = inMemoryRollbackSnapshot
+            || (
+                removedMessages.some(message => message.role === 'assistant')
+                    ? createPersistedArtifactRollbackSnapshot(currentState)
+                    : null
+            );
+
+        for (let i = 0; i < messagesToRemove; i += 1) {
+            useStore.getState().removeLastMessage();
+        }
+        removedMessages.forEach(message => {
+            artifactRollbackSnapshotsRef.current.delete(message.id);
+        });
+
+        if (rollbackSnapshot) {
+            useStore.setState({
+                artifactContent: rollbackSnapshot.artifactContent,
+                artifactHistory: rollbackSnapshot.artifactHistory,
+                stageArtifacts: rollbackSnapshot.stageArtifacts,
+            });
+        }
+
+        useStore.getState().clearPendingStageTransition();
+        useStore.getState().setArtifactTruncated(false);
+
+        if (retryPlan) {
+            await handleSend(retryPlan.retryInput, {
+                attachmentsOverride: retryPlan.retryAttachments,
+            });
+            return;
+        }
+
+        await handleSend(STAGE_CONTINUATION_PROMPT, {
+            appendUserMessage: false,
+            useDraftAttachments: false,
+        });
+    }, [handleSend]);
+
     return {
         input,
         setInput,
@@ -596,6 +658,7 @@ export function useChatService() {
         handleSend,
         handleConfirmStageTransition,
         handleRetry,
+        handleRetryCurrentStageGeneration,
         handleStop,
         handleFileChange,
         removeAttachment

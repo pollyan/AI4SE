@@ -378,6 +378,96 @@ def test_runtime_raw_json_stream_turn_keeps_latest_delta_when_final_json_is_trun
     assert outputs[-1].warnings == ["artifact_truncated"]
 
 
+def test_runtime_raw_json_stream_turn_retries_contract_failure_with_feedback(
+    monkeypatch,
+):
+    invalid_json = (
+        '{"chat":"我会先给出ICE评估建议。",'
+        '"artifact_update":{"type":"none"},'
+        '"stage_action":null,"warnings":[]}'
+    )
+    valid_json = (
+        '{"chat":"已更新右侧需求分析文档。",'
+        '"artifact_update":{"type":"replace","markdown":"'
+        f'{VALID_CLARIFY_ARTIFACT_JSON}' + '"},'
+        '"stage_action":null,"warnings":[]}'
+    )
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield invalid_json if len(calls) == 1 else valid_json
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            system_prompt="system prompt",
+        ),
+    )
+
+    outputs = list(runtime.stream_turn(
+        "用户需求",
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    ))
+
+    assert len(calls) == 2
+    assert "上一轮结构化输出未通过校验" in calls[1]["messages"][1]["content"]
+    assert "artifact update is required" in calls[1]["messages"][1]["content"]
+    assert outputs[-1].chat == "已更新右侧需求分析文档。"
+    assert outputs[-1].artifact_update.markdown == VALID_CLARIFY_ARTIFACT
+
+
+def test_runtime_raw_json_stream_turn_retries_schema_shape_failure_with_feedback(
+    monkeypatch,
+):
+    invalid_json = '{"chat":"已完成分析。","stage_action":null,"warnings":[]}'
+    valid_json = (
+        '{"chat":"已更新右侧需求分析文档。",'
+        '"artifact_update":{"type":"replace","markdown":"'
+        f'{VALID_CLARIFY_ARTIFACT_JSON}' + '"},'
+        '"stage_action":null,"warnings":[]}'
+    )
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield invalid_json if len(calls) == 1 else valid_json
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            system_prompt="system prompt",
+        ),
+    )
+
+    outputs = list(runtime.stream_turn(
+        "用户需求",
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    ))
+
+    assert len(calls) == 2
+    assert "上一轮结构化输出未通过校验" in calls[1]["messages"][1]["content"]
+    assert "artifact_update" in calls[1]["messages"][1]["content"]
+    assert outputs[-1].chat == "已更新右侧需求分析文档。"
+    assert outputs[-1].artifact_update.markdown == VALID_CLARIFY_ARTIFACT
+
+
 def test_contract_output_validator_requests_model_retry_for_invalid_artifact():
     class ValidatorRecordingAgent:
         validator = None

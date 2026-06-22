@@ -48,3 +48,90 @@ body {
 .animate-fade-in-up {
   animation: fadeInUp 0.4s ease-out forwards;
 }
+
+.mermaid-readable-dark svg {
+  max-width: 100%;
+  height: auto;
+  background: transparent !important;
+}
+
+.mermaid-readable-dark .node rect,
+.mermaid-readable-dark .node circle,
+.mermaid-readable-dark .node ellipse,
+.mermaid-readable-dark .node polygon,
+.mermaid-readable-dark .node path {
+  fill: #202020 !important;
+  stroke: #d8d8d8 !important;
+  stroke-width: 1.5px !important;
+}
+
+.mermaid-readable-dark .cluster rect {
+  fill: #4a4c4c !important;
+  stroke: #7a7d7d !important;
+  stroke-width: 1.5px !important;
+}
+
+.mermaid-readable-dark .cluster .node rect,
+.mermaid-readable-dark .cluster .node circle,
+.mermaid-readable-dark .cluster .node ellipse,
+.mermaid-readable-dark .cluster .node polygon,
+.mermaid-readable-dark .cluster .node path {
+  fill: #202020 !important;
+  stroke: #d8d8d8 !important;
+}
+
+.mermaid-readable-dark .label,
+.mermaid-readable-dark .nodeLabel,
+.mermaid-readable-dark .cluster-label,
+.mermaid-readable-dark .label foreignObject,
+.mermaid-readable-dark .nodeLabel foreignObject,
+.mermaid-readable-dark .cluster-label foreignObject,
+.mermaid-readable-dark .label span,
+.mermaid-readable-dark .nodeLabel span,
+.mermaid-readable-dark .cluster-label span,
+.mermaid-readable-dark .label p,
+.mermaid-readable-dark .nodeLabel p,
+.mermaid-readable-dark .cluster-label p {
+  color: #d8d8d8 !important;
+  fill: #d8d8d8 !important;
+  font-size: 18px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+}
+
+.mermaid-readable-dark text {
+  fill: #d8d8d8 !important;
+  font-size: 18px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+}
+
+.mermaid-readable-dark .flowchart-link,
+.mermaid-readable-dark .edgePath path,
+.mermaid-readable-dark path.relation,
+.mermaid-readable-dark line {
+  stroke: #d8d8d8 !important;
+  stroke-width: 1.5px !important;
+}
+
+.mermaid-readable-dark marker,
+.mermaid-readable-dark marker path,
+.mermaid-readable-dark .arrowheadPath {
+  fill: #d8d8d8 !important;
+  stroke: #d8d8d8 !important;
+}
+
+.mermaid-readable-dark .edgeLabel,
+.mermaid-readable-dark .edgeLabel span,
+.mermaid-readable-dark .edgeLabel p,
+.mermaid-readable-dark .edgeLabel foreignObject {
+  color: #f2f2f2 !important;
+  fill: #f2f2f2 !important;
+  background: #6b6b6b !important;
+}
+
+.mermaid-readable-dark .edgeLabel rect,
+.mermaid-readable-dark .edgeLabel .labelBkg {
+  fill: #6b6b6b !important;
+  opacity: 1 !important;
+}

@@ -225,6 +225,7 @@ export const ChatPane: React.FC = () => {
     handleSend,
     handleConfirmStageTransition,
     handleRetry,
+    handleRetryCurrentStageGeneration,
     handleStop,
     handleFileChange,
     removeAttachment
@@ -521,7 +522,7 @@ export const ChatPane: React.FC = () => {
                         )}
                         <button
                           type="button"
-                          onClick={handleRetry}
+                          onClick={() => void handleRetryCurrentStageGeneration()}
                           className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-slate-950 transition-colors hover:bg-amber-400"
                         >
                           <RefreshCw className="h-3.5 w-3.5" />
@@ -579,7 +580,7 @@ export const ChatPane: React.FC = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={handleRetry}
+                          onClick={() => void handleRetryCurrentStageGeneration()}
                           className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-rose-400"
                         >
                           <RefreshCw className="h-3.5 w-3.5" />

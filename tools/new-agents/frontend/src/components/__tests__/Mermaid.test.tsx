@@ -47,6 +47,17 @@ describe('Mermaid Component', () => {
         });
     });
 
+    it('wraps rendered diagrams in the readable dark Mermaid surface', async () => {
+        const chartCode = 'graph TD\nReadableStart-->ReadableEnd';
+
+        const { container } = render(<Mermaid chart={chartCode} blockIndex={0} />);
+
+        await waitFor(() => {
+            expect(container.querySelector('.mermaid-diagram')).toBeTruthy();
+            expect(container.querySelector('.mermaid-readable-dark')).toBeTruthy();
+        });
+    });
+
     it('reports render success through the success callback', async () => {
         const mockOnRenderSuccess = vi.fn();
         const chartCode = 'graph TD\nCallbackStart-->CallbackEnd';

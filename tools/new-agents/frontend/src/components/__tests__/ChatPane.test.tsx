@@ -21,6 +21,7 @@ vi.mock('../../services/chatService', () => {
             handleSend: vi.fn(),
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
+            handleRetryCurrentStageGeneration: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -106,6 +107,7 @@ describe('ChatPane Component', () => {
             handleSend: mockHandleSend,
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
+            handleRetryCurrentStageGeneration: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -158,6 +160,7 @@ describe('ChatPane Component', () => {
 
     it('shows a structured output failure recovery card with a primary retry action', () => {
         const mockHandleRetry = vi.fn();
+        const mockHandleRetryCurrentStageGeneration = vi.fn();
         vi.mocked(useChatService).mockReturnValue({
             input: '',
             setInput: vi.fn(),
@@ -166,6 +169,7 @@ describe('ChatPane Component', () => {
             handleSend: vi.fn(),
             handleConfirmStageTransition: vi.fn(),
             handleRetry: mockHandleRetry,
+            handleRetryCurrentStageGeneration: mockHandleRetryCurrentStageGeneration,
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -192,7 +196,8 @@ describe('ChatPane Component', () => {
         expect(screen.getByText('右侧产出物已保持不变')).toBeDefined();
         expect(screen.getByText('连续失败时，请补充更明确的需求或阶段确认信息后再试。')).toBeDefined();
         expect(screen.queryByRole('button', { name: '补充信息后再试' })).toBeNull();
-        expect(mockHandleRetry).toHaveBeenCalledOnce();
+        expect(mockHandleRetry).not.toHaveBeenCalled();
+        expect(mockHandleRetryCurrentStageGeneration).toHaveBeenCalledOnce();
     });
 
     it('hides stage transition confirmation when the latest assistant message is a structured output failure', () => {
@@ -233,6 +238,7 @@ describe('ChatPane Component', () => {
                 handleSend: mockHandleSend,
                 handleConfirmStageTransition: vi.fn(),
                 handleRetry: mockHandleRetry,
+                handleRetryCurrentStageGeneration: vi.fn(),
                 handleStop: vi.fn(),
                 handleFileChange: vi.fn(),
                 removeAttachment: vi.fn()
@@ -343,6 +349,7 @@ describe('ChatPane Component', () => {
 
     it('shows a provider failure recovery card with a retry action', () => {
         const mockHandleRetry = vi.fn();
+        const mockHandleRetryCurrentStageGeneration = vi.fn();
         vi.mocked(useChatService).mockReturnValue({
             input: '',
             setInput: vi.fn(),
@@ -351,6 +358,7 @@ describe('ChatPane Component', () => {
             handleSend: vi.fn(),
             handleConfirmStageTransition: vi.fn(),
             handleRetry: mockHandleRetry,
+            handleRetryCurrentStageGeneration: mockHandleRetryCurrentStageGeneration,
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -383,7 +391,8 @@ describe('ChatPane Component', () => {
         expect(screen.getByText('请先检查模型配置、供应商额度或网络连通性，确认恢复后再重试。')).toBeDefined();
         expect(screen.getByRole('button', { name: '打开模型设置' })).toBeDefined();
         expect(screen.getByRole('button', { name: '检测连接' })).toBeDefined();
-        expect(mockHandleRetry).toHaveBeenCalledOnce();
+        expect(mockHandleRetry).not.toHaveBeenCalled();
+        expect(mockHandleRetryCurrentStageGeneration).toHaveBeenCalledOnce();
     });
 
     it('opens settings from the provider failure recovery card', () => {
@@ -613,6 +622,7 @@ describe('ChatPane Component', () => {
             handleSend: vi.fn(),
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
+            handleRetryCurrentStageGeneration: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -636,6 +646,7 @@ describe('ChatPane Component', () => {
             handleSend: mockHandleSend,
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
+            handleRetryCurrentStageGeneration: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -660,6 +671,7 @@ describe('ChatPane Component', () => {
             handleSend: mockHandleSend,
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
+            handleRetryCurrentStageGeneration: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -684,6 +696,7 @@ describe('ChatPane Component', () => {
             handleSend: vi.fn(),
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
+            handleRetryCurrentStageGeneration: vi.fn(),
             handleStop: mockHandleStop,
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -897,6 +910,7 @@ describe('ChatPane Component', () => {
             handleSend: vi.fn(),
             handleConfirmStageTransition: mockHandleConfirmStageTransition,
             handleRetry: vi.fn(),
+            handleRetryCurrentStageGeneration: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()

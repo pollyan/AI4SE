@@ -4,10 +4,33 @@ import { sanitizeMermaidCode, aggressiveSanitize } from '../core/utils/mermaidSa
 
 const mermaidConfig: MermaidConfig = {
   startOnLoad: false,
-  theme: 'dark',
+  theme: 'base',
   securityLevel: 'strict',
   fontFamily: 'JetBrains Mono, monospace',
   suppressErrorRendering: true,
+  themeVariables: {
+    darkMode: true,
+    background: '#0b1120',
+    mainBkg: '#202020',
+    secondBkg: '#202020',
+    primaryColor: '#202020',
+    primaryTextColor: '#d8d8d8',
+    primaryBorderColor: '#d8d8d8',
+    secondaryColor: '#202020',
+    secondaryTextColor: '#d8d8d8',
+    secondaryBorderColor: '#d8d8d8',
+    tertiaryColor: '#4a4c4c',
+    tertiaryTextColor: '#f2f2f2',
+    tertiaryBorderColor: '#7a7d7d',
+    clusterBkg: '#4a4c4c',
+    clusterBorder: '#7a7d7d',
+    lineColor: '#d8d8d8',
+    textColor: '#d8d8d8',
+    nodeTextColor: '#d8d8d8',
+    edgeLabelBackground: '#6b6b6b',
+    labelBackground: '#6b6b6b',
+    fontSize: '18px',
+  },
 };
 
 type MermaidRuntime = typeof import('mermaid')['default'];
@@ -223,5 +246,11 @@ export const Mermaid: React.FC<MermaidProps> = ({
     );
   }
 
-  return <div ref={ref} dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex justify-center my-6 w-full overflow-x-auto" />;
+  return (
+    <div
+      ref={ref}
+      dangerouslySetInnerHTML={{ __html: svgHtml }}
+      className="mermaid-diagram mermaid-readable-dark flex justify-center my-6 w-full overflow-x-auto"
+    />
+  );
 };

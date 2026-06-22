@@ -728,6 +728,75 @@ describe('useChatService', () => {
         expect(result.current.input).toBe('');
     });
 
+    it('should immediately retry current stage generation after an internal structured failure', async () => {
+        vi.mocked(generateResponseStream).mockImplementation(async function* (message) {
+            expect(message).toBe('请继续生成当前阶段产出物');
+            yield {
+                chatResponse: '已重新生成策略内容',
+                newArtifact: '# 测试策略蓝图\n重试后的内容',
+                action: '',
+                hasArtifactUpdate: true,
+            };
+        });
+
+        const { result } = renderHook(() => useChatService());
+
+        act(() => {
+            useStore.setState({
+                stageIndex: 1,
+                artifactContent: '# 测试策略蓝图\n暂无产出物。',
+                stageArtifacts: {
+                    CLARIFY: '# 需求分析文档\n内容',
+                    STRATEGY: '# 测试策略蓝图\n暂无产出物。',
+                },
+                chatHistory: [
+                    {
+                        id: 'user-1',
+                        role: 'user',
+                        content: '完成需求澄清并推进',
+                        timestamp: 1,
+                    },
+                    {
+                        id: 'assistant-1',
+                        role: 'assistant',
+                        content: '需求澄清完成，请确认进入策略制定。',
+                        timestamp: 2,
+                    },
+                    {
+                        id: 'assistant-2',
+                        role: 'assistant',
+                        content: '⚠️ **结构化输出生成失败**\n\n模型本轮没有生成符合工作流契约的结果，右侧产出物已保持不变。',
+                        timestamp: 3,
+                        retryable: false,
+                    },
+                ],
+            });
+        });
+
+        await act(async () => {
+            await result.current.handleRetryCurrentStageGeneration();
+        });
+
+        const state = useStore.getState();
+        expect(generateResponseStream).toHaveBeenCalledWith(
+            '请继续生成当前阶段产出物',
+            [],
+            expect.any(AbortSignal)
+        );
+        expect(state.chatHistory).toEqual([
+            expect.objectContaining({ id: 'user-1' }),
+            expect.objectContaining({ id: 'assistant-1' }),
+            expect.objectContaining({
+                role: 'assistant',
+                content: '已重新生成策略内容',
+                retryable: false,
+            }),
+        ]);
+        expect(state.artifactContent).toBe('# 测试策略蓝图\n重试后的内容');
+        expect(state.stageArtifacts.STRATEGY).toBe('# 测试策略蓝图\n重试后的内容');
+        expect(result.current.input).toBe('');
+    });
+
     it('should not save a stale internal continuation artifact after clearing history', async () => {
         let releaseStream: () => void = () => {};
         const continuationArtifact = '# 测试策略蓝图\n内部续写半成品';

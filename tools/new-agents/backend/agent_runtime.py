@@ -88,6 +88,20 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
+RAW_JSON_STREAMING_MAX_ATTEMPTS = 2
+
+
+def build_raw_json_retry_prompt(prompt: str, error: Exception) -> str:
+    return (
+        f"{prompt}\n\n"
+        "【上一轮结构化输出未通过校验】\n"
+        f"{error}\n\n"
+        "请立刻重新输出一个完整合法的 JSON 对象，不要输出 JSON 之外的解释。"
+        "必须修正上述问题；如果当前阶段要求右侧产出物，"
+        "artifact_update.type 必须为 replace，markdown 必须包含当前阶段完整 Markdown 文档、"
+        "所有必填标题、必需 Mermaid/ai4se-visual 可视化和阶段门禁。"
+    )
+
 
 def register_contract_output_validator(agent: Any) -> None:
     from pydantic_ai.exceptions import ModelRetry
@@ -238,86 +252,107 @@ class PydanticAgentRuntime:
         assert self.raw_streaming_config is not None
         config = self.raw_streaming_config
         self.last_token_usage = None
-        accumulated = ""
-        latest_chat = ""
-        latest_markdown = ""
-        emitted_any_delta = False
         extra_body = None
         model_settings = build_model_settings(config.model_name)
         if model_settings:
             extra_body = model_settings.get("extra_body")
 
-        for text_chunk in stream_chat_completion_content(
-            api_key=config.api_key,
-            base_url=config.base_url,
-            model=config.model_name,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        config.system_prompt
-                        + TEXT_STRUCTURED_OUTPUT_INSTRUCTION
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0,
-            response_format={"type": "json_object"},
-            extra_body=extra_body,
-            on_usage=lambda total_tokens: setattr(
-                self,
-                "last_token_usage",
-                total_tokens,
-            ),
-        ):
-            accumulated += text_chunk
-            delta = build_partial_agent_delta(accumulated)
-            if delta is None:
-                continue
-            next_chat = delta.chat or latest_chat
-            next_markdown = (
-                delta.artifact_update.markdown
-                if delta.artifact_update and delta.artifact_update.markdown
-                else latest_markdown
-            )
-            if not should_emit_partial_delta(
-                latest_chat=latest_chat,
-                next_chat=next_chat,
-                latest_markdown=latest_markdown,
-                next_markdown=next_markdown,
-            ):
-                continue
-            latest_chat = next_chat
-            latest_markdown = next_markdown
-            emitted_any_delta = True
-            yield delta
+        attempt_prompt = prompt
+        for attempt_index in range(RAW_JSON_STREAMING_MAX_ATTEMPTS):
+            accumulated = ""
+            latest_chat = ""
+            latest_markdown = ""
+            emitted_any_delta = False
 
-        try:
-            final_output = parse_agent_turn_output_text(accumulated)
-        except json.JSONDecodeError:
-            if emitted_any_delta and (latest_chat or latest_markdown):
-                yield AgentTurnOutput.model_validate({
-                    "chat": latest_chat or "本轮响应已中断，右侧产出物可能不完整。",
-                    "artifact_update": (
-                        {"type": "replace", "markdown": latest_markdown}
-                        if latest_markdown
-                        else {"type": "none"}
-                    ),
-                    "stage_action": None,
-                    "warnings": ["artifact_truncated"],
-                })
-                return
-            raise
-        final_output = validate_agent_turn(
-            final_output,
-            workflow_id=workflow_id,
-            current_stage_id=current_stage_id,
+            for text_chunk in stream_chat_completion_content(
+                api_key=config.api_key,
+                base_url=config.base_url,
+                model=config.model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            config.system_prompt
+                            + TEXT_STRUCTURED_OUTPUT_INSTRUCTION
+                        ),
+                    },
+                    {"role": "user", "content": attempt_prompt},
+                ],
+                temperature=0,
+                response_format={"type": "json_object"},
+                extra_body=extra_body,
+                on_usage=lambda total_tokens: setattr(
+                    self,
+                    "last_token_usage",
+                    total_tokens,
+                ),
+            ):
+                accumulated += text_chunk
+                delta = build_partial_agent_delta(accumulated)
+                if delta is None:
+                    continue
+                next_chat = delta.chat or latest_chat
+                next_markdown = (
+                    delta.artifact_update.markdown
+                    if delta.artifact_update and delta.artifact_update.markdown
+                    else latest_markdown
+                )
+                if not should_emit_partial_delta(
+                    latest_chat=latest_chat,
+                    next_chat=next_chat,
+                    latest_markdown=latest_markdown,
+                    next_markdown=next_markdown,
+                ):
+                    continue
+                latest_chat = next_chat
+                latest_markdown = next_markdown
+                emitted_any_delta = True
+                yield delta
+
+            try:
+                final_output = parse_agent_turn_output_text(accumulated)
+            except json.JSONDecodeError:
+                if emitted_any_delta and (latest_chat or latest_markdown):
+                    yield AgentTurnOutput.model_validate({
+                        "chat": latest_chat or "本轮响应已中断，右侧产出物可能不完整。",
+                        "artifact_update": (
+                            {"type": "replace", "markdown": latest_markdown}
+                            if latest_markdown
+                            else {"type": "none"}
+                        ),
+                        "stage_action": None,
+                        "warnings": ["artifact_truncated"],
+                    })
+                    return
+                raise
+            except ValidationError as exc:
+                if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:
+                    raise
+                attempt_prompt = build_raw_json_retry_prompt(prompt, exc)
+                continue
+
+            try:
+                final_output = validate_agent_turn(
+                    final_output,
+                    workflow_id=workflow_id,
+                    current_stage_id=current_stage_id,
+                )
+            except (ContractValidationError, ValidationError) as exc:
+                if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:
+                    raise
+                attempt_prompt = build_raw_json_retry_prompt(prompt, exc)
+                continue
+
+            if not emitted_any_delta:
+                yield AgentTurnDeltaOutput.model_validate(
+                    final_output.model_dump(mode="json")
+                )
+            yield final_output
+            return
+
+        raise AgentRuntimeSchemaError(
+            "Raw JSON streaming did not produce valid structured output"
         )
-        if not emitted_any_delta:
-            yield AgentTurnDeltaOutput.model_validate(
-                final_output.model_dump(mode="json")
-            )
-        yield final_output
 
 
 def build_model_settings(model_name: str) -> dict[str, Any] | None:
