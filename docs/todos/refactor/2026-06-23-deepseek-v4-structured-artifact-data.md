@@ -19,8 +19,9 @@
 - 2026-06-23 已完成第十一个垂直切片: `INCIDENT_REVIEW/TIMELINE` 支持模型输出 `artifact_data`，后端校验事件概要、影响指标、事实来源、时间线事实引用、事实/推测/待确认分离、参与方和缺失信息后，确定性渲染《故障复盘报告》和 Mermaid `timeline`；timeline 时间标签中的半角冒号由后端转义为全角冒号，避免 Mermaid 解析歧义。
 - 2026-06-23 已完成第十二个垂直切片: `INCIDENT_REVIEW/ROOT_CAUSE` 支持模型输出 `artifact_data`，后端校验 5-Why 分析链、根因证据、鱼骨图原因引用、根因结论、排除项、未验证原因和阶段门禁后，确定性渲染《故障复盘报告》的根因分析章节、Mermaid `mindmap` 和 `ai4se-visual` `cause-map`。
 - 2026-06-23 已完成第十三个垂直切片: `INCIDENT_REVIEW/IMPROVEMENT` 支持模型输出 `artifact_data`，后端校验报告信息、事件摘要、根因摘要、改进优先级、SMART/CAPA 行动项、根因覆盖、复查计划、遗留风险、经验教训、组织学习、签署确认和阶段门禁后，确定性渲染《故障复盘报告》最终改进章节、Mermaid `pie` 和 `ai4se-visual` `action-board`。
+- 2026-06-23 已完成第十四个垂直切片: `IDEA_BRAINSTORM/DEFINE` 支持模型输出 `artifact_data`，后端校验问题假设、目标用户画像、问题域全景、证据与验证状态、问题-用户-场景匹配、约束边界、反向验证和阶段门禁后，确定性渲染《问题域分析》和 Mermaid `mindmap`。
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
-- `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段和 `INCIDENT_REVIEW` 三阶段已完成结构化产物数据迁移；尚未迁移 `IDEA_BRAINSTORM` 等其它阶段。真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
+- `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM/DEFINE` 已完成结构化产物数据迁移；尚未迁移 `IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT` 等其它阶段。真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
 
 ## 目标
 
@@ -127,7 +128,8 @@ renderer 职责:
 11. 已完成: `INCIDENT_REVIEW/TIMELINE` 垂直切片。
 12. 已完成: `INCIDENT_REVIEW/ROOT_CAUSE` 垂直切片。
 13. 已完成: `INCIDENT_REVIEW/IMPROVEMENT` 垂直切片。
-14. 再迁移 `IDEA_BRAINSTORM`。
+14. 已完成: `IDEA_BRAINSTORM/DEFINE` 垂直切片。
+15. 再迁移 `IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE` 和 `IDEA_BRAINSTORM/CONCEPT`。
 
 每个阶段迁移必须同步:
 

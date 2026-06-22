@@ -8,6 +8,7 @@ from artifact_data_renderers import (
     CasesArtifactData,
     ClarifyArtifactData,
     DeliveryArtifactData,
+    IdeaDefineArtifactData,
     IncidentImprovementArtifactData,
     IncidentRootCauseArtifactData,
     IncidentTimelineArtifactData,
@@ -114,6 +115,120 @@ VALID_CLARIFY_ARTIFACT_DATA = {
             "checked": True,
             "item": "测试范围和不测范围已明确",
         }
+    ],
+}
+
+VALID_IDEA_DEFINE_ARTIFACT_DATA = {
+    "problem_statement": {
+        "target_user": "独立开发者",
+        "scenario": "业余时间维护多个小产品并尝试变现",
+        "core_pain": "不知道哪个产品方向最值得继续投入",
+        "existing_alternative": "凭直觉查看收入、反馈和社群讨论",
+        "alternative_gap": "缺少证据化的问题优先级和下一步验证动作",
+        "consequence": "继续投入低价值方向，浪费开发时间和获客预算",
+        "validation_status": "待验证",
+    },
+    "target_users": [
+        {
+            "dimension": "角色定义",
+            "description": "每周投入 10 小时以上做副业产品的独立开发者",
+            "evidence_level": "用户陈述",
+            "validation_status": "部分验证",
+        },
+        {
+            "dimension": "核心痛点",
+            "description": "产品方向多但缺少筛选标准，容易反复换方向",
+            "evidence_level": "合理推断",
+            "validation_status": "待验证",
+        },
+        {
+            "dimension": "付费意愿",
+            "description": "愿意为能减少试错时间的工具支付小额订阅",
+            "evidence_level": "待验证",
+            "validation_status": "待验证",
+        },
+    ],
+    "problem_landscape": {
+        "root_problem": "独立开发者变现方向选择困难",
+        "subproblems": [
+            {
+                "problem_id": "P-001",
+                "problem": "缺少可比较的问题优先级",
+                "symptoms": ["多个想法同时推进", "无法判断先做哪个 MVP"],
+            },
+            {
+                "problem_id": "P-002",
+                "problem": "缺少低成本验证动作",
+                "symptoms": ["先开发再找用户", "验证周期长且反馈稀疏"],
+            },
+        ],
+    },
+    "evidence_items": [
+        {
+            "evidence_id": "EV-001",
+            "related_problem": "独立开发者变现方向选择困难",
+            "source": "独立开发者访谈摘要",
+            "evidence_level": "用户陈述",
+            "validation_action": "访谈 5 位独立开发者并记录当前方向筛选方式",
+            "owner": "产品负责人",
+            "validation_status": "部分验证",
+        },
+        {
+            "evidence_id": "EV-002",
+            "related_problem": "缺少低成本验证动作",
+            "source": "社群帖子和产品复盘文章",
+            "evidence_level": "合理推断",
+            "validation_action": "收集 20 篇变现失败复盘并归类失败原因",
+            "owner": "用户研究",
+            "validation_status": "待验证",
+        },
+    ],
+    "problem_user_fit": [
+        {
+            "dimension": "问题是否真实存在？",
+            "current_judgement": "是，但仍需扩大样本",
+            "evidence_or_assumption": "EV-001 显示多个受访者有方向选择焦虑",
+            "evidence_ids": ["EV-001"],
+            "validation_action": "补充访谈和问卷验证频率",
+            "validation_status": "部分验证",
+        },
+        {
+            "dimension": "用户是否在主动寻求解决方案？",
+            "current_judgement": "待验证",
+            "evidence_or_assumption": "EV-002 提示社群中有相关讨论",
+            "evidence_ids": ["EV-002"],
+            "validation_action": "统计社群问题和工具推荐频次",
+            "validation_status": "待验证",
+        },
+    ],
+    "constraints_boundaries": [
+        {
+            "boundary_type": "约束",
+            "content": "首轮只能用访谈、问卷和手工分析验证问题真实性",
+            "impact": "不先开发复杂自动化产品",
+            "status": "已确认",
+        },
+        {
+            "boundary_type": "不可做边界",
+            "content": "不替用户直接承诺具体收入增长",
+            "impact": "避免把验证工具包装成收益保证",
+            "status": "已确认",
+        },
+    ],
+    "reverse_validation": [
+        {
+            "failure_hypothesis": "目标用户其实更缺流量而不是方向筛选",
+            "trigger_signal": "访谈中多数用户提到获客渠道而非方向判断",
+            "validation_action": "在访谈中区分方向选择、开发效率和获客问题",
+            "validation_status": "待验证",
+        }
+    ],
+    "stage_gate": [
+        {"checked": True, "item": "目标用户、核心场景和核心问题已明确。"},
+        {"checked": True, "item": "至少一个关键问题有证据等级和验证动作。"},
+        {"checked": True, "item": "AI 假设和已验证信息已区分。"},
+        {"checked": True, "item": "不可做边界或关键约束已记录。"},
+        {"checked": True, "item": "可进入创意发散的 HMW 问题已形成。"},
     ],
 }
 
@@ -1982,6 +2097,49 @@ def test_clarify_artifact_data_rejects_empty_required_lists():
         ClarifyArtifactData.model_validate(invalid)
 
 
+def test_idea_define_artifact_data_rejects_duplicate_evidence_id():
+    invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
+    invalid["evidence_items"].append(copy.deepcopy(invalid["evidence_items"][0]))
+
+    with pytest.raises(ValidationError, match="duplicate evidence_id"):
+        IdeaDefineArtifactData.model_validate(invalid)
+
+
+def test_idea_define_artifact_data_rejects_duplicate_problem_id():
+    invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
+    invalid["problem_landscape"]["subproblems"][1]["problem_id"] = "P-001"
+
+    with pytest.raises(ValidationError, match="duplicate problem_id"):
+        IdeaDefineArtifactData.model_validate(invalid)
+
+
+def test_idea_define_artifact_data_rejects_unknown_fit_evidence_reference():
+    invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
+    invalid["problem_user_fit"][0]["evidence_ids"] = ["EV-404"]
+
+    with pytest.raises(ValidationError, match="unknown evidence ids"):
+        IdeaDefineArtifactData.model_validate(invalid)
+
+
+def test_idea_define_artifact_data_requires_root_problem_coverage():
+    invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
+    invalid["evidence_items"][0]["related_problem"] = "其它问题"
+    invalid["problem_user_fit"][0]["evidence_or_assumption"] = "其它判断"
+
+    with pytest.raises(ValidationError, match="root_problem"):
+        IdeaDefineArtifactData.model_validate(invalid)
+
+
+def test_idea_define_artifact_data_requires_checked_stage_gate():
+    invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
+    invalid["stage_gate"] = [
+        {**item, "checked": False} for item in invalid["stage_gate"]
+    ]
+
+    with pytest.raises(ValidationError, match="stage_gate"):
+        IdeaDefineArtifactData.model_validate(invalid)
+
+
 def test_incident_timeline_artifact_data_rejects_duplicate_fact_id():
     invalid = copy.deepcopy(VALID_INCIDENT_TIMELINE_ARTIFACT_DATA)
     invalid["fact_sources"].append(copy.deepcopy(invalid["fact_sources"][0]))
@@ -2890,6 +3048,64 @@ def test_render_incident_improvement_artifact_data_is_deterministic_and_contract
             first,
             workflow_id="INCIDENT_REVIEW",
             current_stage_id="IMPROVEMENT",
+        )
+        == first
+    )
+
+
+def test_render_idea_define_artifact_data_is_deterministic_and_contract_valid():
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已形成问题域验证基线，请确认右侧问题域分析。",
+            "artifact_data": VALID_IDEA_DEFINE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "DIVERGE",
+            },
+            "warnings": [],
+        },
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="DEFINE",
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已形成问题域验证基线，请确认右侧问题域分析。",
+            "artifact_data": VALID_IDEA_DEFINE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "DIVERGE",
+            },
+            "warnings": [],
+        },
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="DEFINE",
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert first.artifact_update.type == "replace"
+    assert first.stage_action is not None
+    assert first.stage_action.target_stage_id == "DIVERGE"
+    assert "# 问题域分析" in first.artifact_update.markdown
+    assert "## 问题假设陈述" in first.artifact_update.markdown
+    assert "## 目标用户画像" in first.artifact_update.markdown
+    assert "## 问题域全景" in first.artifact_update.markdown
+    assert "mindmap" in first.artifact_update.markdown
+    assert 'root(("独立开发者变现方向选择困难"))' in (first.artifact_update.markdown)
+    assert "## 证据与验证状态" in first.artifact_update.markdown
+    assert "## 问题-用户-场景匹配" in first.artifact_update.markdown
+    assert "## 约束与边界" in first.artifact_update.markdown
+    assert "## 反向验证（风险思考）" in first.artifact_update.markdown
+    assert "## 阶段门禁" in first.artifact_update.markdown
+    assert "证据等级" in first.artifact_update.markdown
+    assert "验证动作" in first.artifact_update.markdown
+    assert "验证状态" in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="IDEA_BRAINSTORM",
+            current_stage_id="DEFINE",
         )
         == first
     )

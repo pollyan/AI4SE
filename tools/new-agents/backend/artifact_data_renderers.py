@@ -100,6 +100,120 @@ class ClarifyArtifactData(StrictArtifactDataModel):
     stage_gate: list[StageGateCheck] = Field(min_length=1)
 
 
+class IdeaProblemStatement(StrictArtifactDataModel):
+    target_user: str
+    scenario: str
+    core_pain: str
+    existing_alternative: str
+    alternative_gap: str
+    consequence: str
+    validation_status: str
+
+
+class IdeaTargetUser(StrictArtifactDataModel):
+    dimension: str
+    description: str
+    evidence_level: str
+    validation_status: str
+
+
+class IdeaSubproblem(StrictArtifactDataModel):
+    problem_id: str
+    problem: str
+    symptoms: list[str] = Field(min_length=1)
+
+
+class IdeaProblemLandscape(StrictArtifactDataModel):
+    root_problem: str
+    subproblems: list[IdeaSubproblem] = Field(min_length=1)
+
+
+class IdeaEvidenceItem(StrictArtifactDataModel):
+    evidence_id: str
+    related_problem: str
+    source: str
+    evidence_level: str
+    validation_action: str
+    owner: str
+    validation_status: str
+
+
+class IdeaProblemUserFit(StrictArtifactDataModel):
+    dimension: str
+    current_judgement: str
+    evidence_or_assumption: str
+    evidence_ids: list[str] = Field(min_length=1)
+    validation_action: str
+    validation_status: str
+
+
+class IdeaConstraintBoundary(StrictArtifactDataModel):
+    boundary_type: str
+    content: str
+    impact: str
+    status: str
+
+
+class IdeaReverseValidation(StrictArtifactDataModel):
+    failure_hypothesis: str
+    trigger_signal: str
+    validation_action: str
+    validation_status: str
+
+
+class IdeaDefineArtifactData(StrictArtifactDataModel):
+    problem_statement: IdeaProblemStatement
+    target_users: list[IdeaTargetUser] = Field(min_length=1)
+    problem_landscape: IdeaProblemLandscape
+    evidence_items: list[IdeaEvidenceItem] = Field(min_length=1)
+    problem_user_fit: list[IdeaProblemUserFit] = Field(min_length=1)
+    constraints_boundaries: list[IdeaConstraintBoundary] = Field(min_length=1)
+    reverse_validation: list[IdeaReverseValidation] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_idea_define_consistency(self) -> "IdeaDefineArtifactData":
+        evidence_ids = {item.evidence_id for item in self.evidence_items}
+        if len(evidence_ids) != len(self.evidence_items):
+            raise ValueError("evidence_items contains duplicate evidence_id")
+
+        problem_ids = {item.problem_id for item in self.problem_landscape.subproblems}
+        if len(problem_ids) != len(self.problem_landscape.subproblems):
+            raise ValueError("problem_landscape contains duplicate problem_id")
+
+        unknown_fit_evidence_ids = sorted(
+            {
+                evidence_id
+                for item in self.problem_user_fit
+                for evidence_id in item.evidence_ids
+                if evidence_id not in evidence_ids
+            }
+        )
+        if unknown_fit_evidence_ids:
+            raise ValueError(
+                "problem_user_fit references unknown evidence ids: "
+                + ", ".join(unknown_fit_evidence_ids)
+            )
+
+        root_problem = self.problem_landscape.root_problem
+        root_problem_covered = any(
+            root_problem in item.related_problem for item in self.evidence_items
+        ) or any(
+            root_problem in item.evidence_or_assumption
+            for item in self.problem_user_fit
+        )
+        if not root_problem_covered:
+            raise ValueError(
+                "problem_landscape.root_problem must be covered by evidence_items "
+                "or problem_user_fit"
+            )
+
+        if not any(item.checked for item in self.stage_gate):
+            raise ValueError("stage_gate must include at least one checked item")
+
+        return self
+
+
 class IncidentSummary(StrictArtifactDataModel):
     incident_name: str
     severity: str
@@ -1690,6 +1804,9 @@ def render_agent_turn_from_artifact_data(
     if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
         artifact_data = ClarifyArtifactData.model_validate(payload["artifact_data"])
         markdown = render_test_design_clarify_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DEFINE"):
+        artifact_data = IdeaDefineArtifactData.model_validate(payload["artifact_data"])
+        markdown = render_idea_brainstorm_define_markdown(artifact_data)
     elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
         artifact_data = IncidentTimelineArtifactData.model_validate(
             payload["artifact_data"]
@@ -1772,6 +1889,21 @@ def render_test_design_clarify_markdown(data: ClarifyArtifactData) -> str:
         _render_quality_requirements(data.quality_requirements),
         _render_downstream_inputs(data.downstream_inputs),
         _render_stage_gate(data.stage_gate),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_idea_brainstorm_define_markdown(data: IdeaDefineArtifactData) -> str:
+    sections = [
+        "# 问题域分析",
+        _render_idea_problem_statement(data.problem_statement),
+        _render_idea_target_users(data.target_users),
+        _render_idea_problem_landscape(data.problem_landscape),
+        _render_idea_evidence_items(data.evidence_items),
+        _render_idea_problem_user_fit(data.problem_user_fit),
+        _render_idea_constraints_boundaries(data.constraints_boundaries),
+        _render_idea_reverse_validation(data.reverse_validation),
+        _render_idea_stage_gate(data.stage_gate),
     ]
     return "\n\n".join(sections)
 
@@ -2013,6 +2145,155 @@ def _render_incident_summary(summary: IncidentSummary) -> str:
         ("当前状态", summary.current_status),
     ]
     return "## 1. 事件概要\n" + _markdown_table(["属性", "详情"], rows)
+
+
+def _render_idea_problem_statement(statement: IdeaProblemStatement) -> str:
+    paragraph = (
+        f"我们相信 {statement.target_user} 在 {statement.scenario} 下面临"
+        f" {statement.core_pain} 的问题。目前他们通过 "
+        f"{statement.existing_alternative} 来应对，但 "
+        f"{statement.alternative_gap}。如果该问题得不到有效解决，将导致 "
+        f"{statement.consequence}。"
+    )
+    rows = [
+        ("目标用户", statement.target_user),
+        ("具体场景", statement.scenario),
+        ("核心痛点", statement.core_pain),
+        ("现有替代方案", statement.existing_alternative),
+        ("现有方案不足", statement.alternative_gap),
+        ("不解决的后果", statement.consequence),
+        ("验证状态", statement.validation_status),
+    ]
+    return (
+        "## 问题假设陈述\n"
+        + paragraph
+        + "\n\n"
+        + _markdown_table(["字段", "内容"], rows)
+    )
+
+
+def _render_idea_target_users(items: list[IdeaTargetUser]) -> str:
+    rows = [
+        (
+            item.dimension,
+            item.description,
+            item.evidence_level,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 目标用户画像\n" + _markdown_table(
+        ["维度", "描述", "证据等级", "验证状态"],
+        rows,
+    )
+
+
+def _render_idea_problem_landscape(landscape: IdeaProblemLandscape) -> str:
+    lines = [
+        "```mermaid",
+        "mindmap",
+        f'  root(("{_escape_mermaid_mindmap_text(landscape.root_problem)}"))',
+    ]
+    for item in landscape.subproblems:
+        lines.append(f"    {_escape_mermaid_mindmap_text(item.problem)}")
+        for symptom in item.symptoms:
+            lines.append(f"      {_escape_mermaid_mindmap_text(symptom)}")
+    lines.append("```")
+    rows = [
+        (item.problem_id, item.problem, "、".join(item.symptoms))
+        for item in landscape.subproblems
+    ]
+    return (
+        "## 问题域全景\n"
+        + "\n".join(lines)
+        + "\n\n"
+        + _markdown_table(["问题 ID", "子问题", "表现"], rows)
+    )
+
+
+def _render_idea_evidence_items(items: list[IdeaEvidenceItem]) -> str:
+    rows = [
+        (
+            item.evidence_id,
+            item.related_problem,
+            item.source,
+            item.evidence_level,
+            item.validation_action,
+            item.owner,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 证据与验证状态\n" + _markdown_table(
+        [
+            "证据 ID",
+            "关联问题",
+            "证据来源",
+            "证据等级",
+            "验证动作",
+            "owner",
+            "验证状态",
+        ],
+        rows,
+    )
+
+
+def _render_idea_problem_user_fit(items: list[IdeaProblemUserFit]) -> str:
+    rows = [
+        (
+            item.dimension,
+            item.current_judgement,
+            item.evidence_or_assumption,
+            ", ".join(item.evidence_ids),
+            item.validation_action,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 问题-用户-场景匹配\n" + _markdown_table(
+        [
+            "检验维度",
+            "当前判断",
+            "证据/假设",
+            "关联证据",
+            "验证动作",
+            "验证状态",
+        ],
+        rows,
+    )
+
+
+def _render_idea_constraints_boundaries(
+    items: list[IdeaConstraintBoundary],
+) -> str:
+    rows = [
+        (item.boundary_type, item.content, item.impact, item.status) for item in items
+    ]
+    return "## 约束与边界\n" + _markdown_table(
+        ["类型", "内容", "影响", "状态"],
+        rows,
+    )
+
+
+def _render_idea_reverse_validation(items: list[IdeaReverseValidation]) -> str:
+    rows = [
+        (
+            item.failure_hypothesis,
+            item.trigger_signal,
+            item.validation_action,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 反向验证（风险思考）\n" + _markdown_table(
+        ["失败假设", "触发信号", "验证动作", "验证状态"],
+        rows,
+    )
+
+
+def _render_idea_stage_gate(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 阶段门禁\n" + "\n".join(lines)
 
 
 def _render_incident_impact_metrics(

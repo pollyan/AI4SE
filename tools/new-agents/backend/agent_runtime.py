@@ -570,8 +570,42 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+IDEA_DEFINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮已经形成哪些问题假设、目标用户、证据状态、验证动作、约束边界和风险思考。不要复制完整产出物正文。",
+  "artifact_data": {
+    "problem_statement": {"target_user": "...", "scenario": "...", "core_pain": "...", "existing_alternative": "...", "alternative_gap": "...", "consequence": "...", "validation_status": "待验证/部分验证/已验证"},
+    "target_users": [{"dimension": "角色定义/核心痛点/痛点频率/现有应对/期望状态/付费意愿", "description": "...", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "validation_status": "已验证/部分验证/待验证"}],
+    "problem_landscape": {"root_problem": "...", "subproblems": [{"problem_id": "P-001", "problem": "...", "symptoms": ["..."]}]},
+    "evidence_items": [{"evidence_id": "EV-001", "related_problem": "...", "source": "用户访谈/数据/社区讨论/类比案例/AI 假设", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "validation_action": "...", "owner": "产品/用户研究/业务/用户确认", "validation_status": "已验证/部分验证/待验证"}],
+    "problem_user_fit": [{"dimension": "问题是否真实存在？/受影响用户群规模/用户是否在主动寻求解决方案？/现有替代方案的满意度", "current_judgement": "...", "evidence_or_assumption": "...", "evidence_ids": ["EV-001"], "validation_action": "...", "validation_status": "已验证/部分验证/待验证"}],
+    "constraints_boundaries": [{"boundary_type": "约束/不可做边界", "content": "...", "impact": "...", "status": "已确认/待确认"}],
+    "reverse_validation": [{"failure_hypothesis": "...", "trigger_signal": "...", "validation_action": "...", "validation_status": "待验证/部分验证/已验证"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "DIVERGE"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；evidence_items.evidence_id 必须唯一；problem_landscape.subproblems.problem_id 必须唯一；problem_user_fit.evidence_ids 只能引用已存在的 evidence_id；problem_landscape.root_problem 必须被至少一个 evidence_items 或 problem_user_fit 条目覆盖；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 mindmap，后端会负责确定性渲染右侧问题域分析和 Mermaid mindmap。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in {
+        ("IDEA_BRAINSTORM", "DEFINE"),
         ("TEST_DESIGN", "CLARIFY"),
         ("TEST_DESIGN", "STRATEGY"),
         ("TEST_DESIGN", "CASES"),
@@ -592,6 +626,8 @@ def build_structured_output_instruction(
     workflow_id: str,
     current_stage_id: str,
 ) -> str:
+    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DEFINE"):
+        return IDEA_DEFINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
         return ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
