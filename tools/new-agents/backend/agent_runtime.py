@@ -129,17 +129,55 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
+STRATEGY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮已经做了什么、本轮确认或假定的关键点、右侧测试策略蓝图会更新哪些部分、接下来需要用户确认或补充什么。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "...", "workflow": "TEST_DESIGN", "stage": "STRATEGY", "status": "..."},
+    "strategy_summary": {"conclusion": "...", "basis": "F-001 / BR-001 / R-SEED-001", "case_stage_readiness": "可进入/暂缓进入/需补充策略输入"},
+    "quality_goals": [{"goal_id": "QG-001", "goal": "...", "metric": "...", "source": "...", "priority": "P0", "status": "..."}],
+    "risks": [{"risk_id": "R-001", "name": "...", "failure_mode": "...", "impact": "...", "source": "...", "severity": 5, "occurrence": 3, "detection": 4, "rpn": 60, "mitigation": "...", "coverage": "...", "status": "待覆盖/已覆盖/风险接受"}],
+    "test_techniques": [{"technique_id": "TS-001", "target": "QG-001 / R-001", "category": "...", "technique": "...", "reason": "...", "applies_to": "R-001 / TP-001"}],
+    "test_layers": [{"layer": "单元测试/集成测试/E2E 测试", "ratio": "40%", "scope": "...", "related": "R-001 / TP-001", "tools": "...", "entry_condition": "..."}],
+    "test_points": [{"point_id": "TP-001", "point": "...", "priority": "P0", "quality_goal": "QG-001", "risk": "R-001", "technique": "TS-001", "layer": "单元/集成/E2E", "estimated_cases": 6, "coverage": "...", "status": "待生成用例"}],
+    "tradeoffs": [{"item": "...", "decision": "...", "impact": "...", "owner": "...", "status": "..."}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "CASES"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；severity、occurrence、detection 必须是 1 到 5 的整数；rpn 必须等于 severity * occurrence * detection。不要输出完整 Markdown、Mermaid 代码块、risk-board JSON 代码块或表格，后端会负责确定性渲染右侧测试策略蓝图、quadrantChart、block-beta 和 ai4se-visual risk-board。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
 
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
-    return (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY")
+    return (workflow_id, current_stage_id) in {
+        ("TEST_DESIGN", "CLARIFY"),
+        ("TEST_DESIGN", "STRATEGY"),
+    }
 
 
 def build_structured_output_instruction(
     workflow_id: str,
     current_stage_id: str,
 ) -> str:
-    if supports_artifact_data_rendering(workflow_id, current_stage_id):
+    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
         return ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
+        return STRATEGY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
 
 

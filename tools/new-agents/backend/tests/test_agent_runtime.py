@@ -13,6 +13,7 @@ from agent_runtime import (
     build_partial_agent_delta,
     build_agent_retries,
     build_model_settings,
+    build_raw_json_retry_prompt,
     build_structured_output_instruction,
     extract_json_string_prefix,
     parse_agent_turn_output_text,
@@ -20,6 +21,7 @@ from agent_runtime import (
     resolve_structured_output_capability,
 )
 from sse_schemas import AgentTurnDeltaOutput
+from test_artifact_data_renderers import VALID_STRATEGY_ARTIFACT_DATA
 
 VALID_CLARIFY_ARTIFACT = """# 需求分析文档
 
@@ -357,6 +359,67 @@ def test_parse_agent_turn_output_text_renders_clarify_artifact_data():
     assert "flowchart TD" in output.artifact_update.markdown
     assert output.stage_action is not None
     assert output.stage_action.target_stage_id == "STRATEGY"
+
+
+def test_parse_agent_turn_output_text_renders_strategy_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "我已形成风险驱动测试策略，请确认右侧蓝图。",
+            "artifact_data": VALID_STRATEGY_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "CASES",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="STRATEGY",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 测试策略蓝图")
+    assert "quadrantChart" in output.artifact_update.markdown
+    assert "block-beta" in output.artifact_update.markdown
+    assert '"type": "risk-board"' in output.artifact_update.markdown
+    assert output.stage_action is not None
+    assert output.stage_action.target_stage_id == "CASES"
+
+
+def test_strategy_structured_output_instruction_requests_artifact_data_not_markdown():
+    instruction = build_structured_output_instruction(
+        "TEST_DESIGN",
+        "STRATEGY",
+    )
+
+    assert "artifact_data" in instruction
+    assert "quality_goals" in instruction
+    assert "risks" in instruction
+    assert "risk-board" in instruction
+    assert "stage_action" in instruction
+    assert '"target_stage_id": "CASES"' in instruction
+    assert "不要输出完整 Markdown" in instruction
+    assert "artifact_update.markdown" not in instruction
+
+
+def test_strategy_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
+    prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        ValueError("risks.0.rpn does not match severity * occurrence * detection"),
+        workflow_id="TEST_DESIGN",
+        current_stage_id="STRATEGY",
+    )
+
+    assert "artifact_data" in prompt
+    assert "risks.0.rpn" in prompt
+    assert "不要输出 Markdown 文档" in prompt
+    assert "Mermaid 代码块或表格" in prompt
+    assert "artifact_update.type 必须为 replace" not in prompt
 
 
 def test_runtime_raw_json_stream_turn_yields_real_delta_before_final_output(
