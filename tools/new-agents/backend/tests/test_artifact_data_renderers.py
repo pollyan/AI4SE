@@ -9,6 +9,7 @@ from artifact_data_renderers import (
     ClarifyArtifactData,
     DeliveryArtifactData,
     IdeaDefineArtifactData,
+    IdeaDivergeArtifactData,
     IncidentImprovementArtifactData,
     IncidentRootCauseArtifactData,
     IncidentTimelineArtifactData,
@@ -229,6 +230,112 @@ VALID_IDEA_DEFINE_ARTIFACT_DATA = {
         {"checked": True, "item": "AI 假设和已验证信息已区分。"},
         {"checked": True, "item": "不可做边界或关键约束已记录。"},
         {"checked": True, "item": "可进入创意发散的 HMW 问题已形成。"},
+    ],
+}
+
+VALID_IDEA_DIVERGE_ARTIFACT_DATA = {
+    "divergence_method": {
+        "method_name": "HMW + 类比创新 + 约束反转",
+        "goal": "围绕独立开发者方向选择困难发散可验证产品创意",
+        "input_basis": "DEFINE 阶段的问题域分析、证据项和约束边界",
+        "coverage_dimensions": ["效率提升", "证据收集", "决策辅助"],
+        "constraints": "首轮创意必须能在两周内用低代码或人工服务验证",
+    },
+    "idea_landscape": {
+        "root_theme": "独立开发者变现方向选择辅助",
+        "groups": [
+            {
+                "group_id": "G-001",
+                "theme": "问题优先级判断",
+                "idea_ids": ["ID-001", "ID-002"],
+            },
+            {
+                "group_id": "G-002",
+                "theme": "低成本验证动作",
+                "idea_ids": ["ID-003"],
+            },
+        ],
+    },
+    "idea_cards": [
+        {
+            "idea_id": "ID-001",
+            "title": "方向证据评分卡",
+            "one_liner": "把收入、访谈、社群信号转成可比较的问题优先级",
+            "target_user": "维护多个副业产品的独立开发者",
+            "scenario": "周末复盘多个产品方向并决定下一周投入重点",
+            "value_proposition": "减少凭直觉换方向的试错成本",
+            "key_hypotheses": ["用户愿意记录每个方向的证据", "证据评分能影响投入决策"],
+            "novelty_source": "把 FMEA/ICE 的评分思想迁移到个人产品方向选择",
+            "evidence_level": "合理推断",
+            "validation_action": "用表格手工服务 5 位开发者并观察是否改变排序",
+            "status": "候选",
+            "status_reason": "贴合核心问题且验证成本低",
+        },
+        {
+            "idea_id": "ID-002",
+            "title": "每周方向复盘助手",
+            "one_liner": "用固定问题引导开发者复盘投入、反馈和下周实验",
+            "target_user": "有多个待验证想法的独立开发者",
+            "scenario": "每周结束时整理本周反馈并生成下一步验证任务",
+            "value_proposition": "把混乱反馈转成可执行的验证计划",
+            "key_hypotheses": [
+                "固定复盘节奏能降低拖延",
+                "用户需要下一步动作而不只是总结",
+            ],
+            "novelty_source": "把项目周报和用户研究复盘结合",
+            "evidence_level": "待验证",
+            "validation_action": "发放 Notion 模板并追踪 2 周使用留存",
+            "status": "候选",
+            "status_reason": "适合作为轻量 MVP，但主动使用频率待验证",
+        },
+        {
+            "idea_id": "ID-003",
+            "title": "登陆页实验生成器",
+            "one_liner": "针对某个方向快速生成登陆页文案和访谈问题",
+            "target_user": "准备验证新方向的独立开发者",
+            "scenario": "在开发前先发布登陆页并收集早期兴趣",
+            "value_proposition": "让验证动作先于开发投入发生",
+            "key_hypotheses": ["开发者愿意先做需求验证", "登陆页转化能作为方向信号"],
+            "novelty_source": "约束反转：先验证需求，再写产品功能",
+            "evidence_level": "合理推断",
+            "validation_action": "为 3 个方向生成登陆页并比较报名转化率",
+            "status": "候选",
+            "status_reason": "能验证低成本实验需求，但实现依赖生成质量",
+        },
+    ],
+    "idea_sources": [
+        {
+            "source_id": "SRC-001",
+            "source_type": "问题域证据",
+            "source": "DEFINE 阶段 EV-001：多个受访者有方向选择焦虑",
+            "idea_ids": ["ID-001", "ID-002"],
+            "key_assumption": "方向选择焦虑可以通过结构化复盘缓解",
+            "status_reason": "证据与核心问题直接相关",
+        },
+        {
+            "source_id": "SRC-002",
+            "source_type": "约束反转",
+            "source": "不先开发复杂产品，先做低成本验证",
+            "idea_ids": ["ID-003"],
+            "key_assumption": "登陆页实验足以过滤低价值方向",
+            "status_reason": "符合首轮低成本验证约束",
+        },
+    ],
+    "parked_or_excluded": [
+        {
+            "record_id": "PK-001",
+            "idea_or_direction": "全自动收入预测引擎",
+            "reason": "需要大量真实收入数据，首轮不可获得",
+            "revisit_condition": "当用户愿意接入收入和流量数据后再评估",
+            "status_reason": "超出当前低成本验证边界",
+        }
+    ],
+    "stage_gate": [
+        {"checked": True, "item": "至少形成 3 个可区分创意方向。"},
+        {"checked": True, "item": "每个候选创意都有关键假设和验证动作。"},
+        {"checked": True, "item": "创意来源和状态理由已记录。"},
+        {"checked": True, "item": "高成本或越界方向已搁置或排除。"},
+        {"checked": True, "item": "可进入收敛评估的候选集已形成。"},
     ],
 }
 
@@ -2140,6 +2247,62 @@ def test_idea_define_artifact_data_requires_checked_stage_gate():
         IdeaDefineArtifactData.model_validate(invalid)
 
 
+def test_idea_diverge_artifact_data_rejects_duplicate_idea_id():
+    invalid = copy.deepcopy(VALID_IDEA_DIVERGE_ARTIFACT_DATA)
+    invalid["idea_cards"].append(copy.deepcopy(invalid["idea_cards"][0]))
+
+    with pytest.raises(ValidationError, match="duplicate idea_id"):
+        IdeaDivergeArtifactData.model_validate(invalid)
+
+
+def test_idea_diverge_artifact_data_rejects_duplicate_source_id():
+    invalid = copy.deepcopy(VALID_IDEA_DIVERGE_ARTIFACT_DATA)
+    invalid["idea_sources"].append(copy.deepcopy(invalid["idea_sources"][0]))
+
+    with pytest.raises(ValidationError, match="duplicate source_id"):
+        IdeaDivergeArtifactData.model_validate(invalid)
+
+
+def test_idea_diverge_artifact_data_rejects_duplicate_parked_record_id():
+    invalid = copy.deepcopy(VALID_IDEA_DIVERGE_ARTIFACT_DATA)
+    invalid["parked_or_excluded"].append(
+        copy.deepcopy(invalid["parked_or_excluded"][0])
+    )
+
+    with pytest.raises(ValidationError, match="duplicate record_id"):
+        IdeaDivergeArtifactData.model_validate(invalid)
+
+
+def test_idea_diverge_artifact_data_rejects_unknown_landscape_idea_reference():
+    invalid = copy.deepcopy(VALID_IDEA_DIVERGE_ARTIFACT_DATA)
+    invalid["idea_landscape"]["groups"][0]["idea_ids"] = ["ID-404"]
+
+    with pytest.raises(
+        ValidationError, match="idea_landscape references unknown idea ids"
+    ):
+        IdeaDivergeArtifactData.model_validate(invalid)
+
+
+def test_idea_diverge_artifact_data_rejects_unknown_source_idea_reference():
+    invalid = copy.deepcopy(VALID_IDEA_DIVERGE_ARTIFACT_DATA)
+    invalid["idea_sources"][0]["idea_ids"] = ["ID-404"]
+
+    with pytest.raises(
+        ValidationError, match="idea_sources references unknown idea ids"
+    ):
+        IdeaDivergeArtifactData.model_validate(invalid)
+
+
+def test_idea_diverge_artifact_data_requires_checked_stage_gate():
+    invalid = copy.deepcopy(VALID_IDEA_DIVERGE_ARTIFACT_DATA)
+    invalid["stage_gate"] = [
+        {**item, "checked": False} for item in invalid["stage_gate"]
+    ]
+
+    with pytest.raises(ValidationError, match="stage_gate"):
+        IdeaDivergeArtifactData.model_validate(invalid)
+
+
 def test_incident_timeline_artifact_data_rejects_duplicate_fact_id():
     invalid = copy.deepcopy(VALID_INCIDENT_TIMELINE_ARTIFACT_DATA)
     invalid["fact_sources"].append(copy.deepcopy(invalid["fact_sources"][0]))
@@ -3106,6 +3269,61 @@ def test_render_idea_define_artifact_data_is_deterministic_and_contract_valid():
             first,
             workflow_id="IDEA_BRAINSTORM",
             current_stage_id="DEFINE",
+        )
+        == first
+    )
+
+
+def test_render_idea_diverge_artifact_data_is_deterministic_and_contract_valid():
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已形成创意发散候选集，请确认右侧创意卡片库。",
+            "artifact_data": VALID_IDEA_DIVERGE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "CONVERGE",
+            },
+            "warnings": [],
+        },
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="DIVERGE",
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已形成创意发散候选集，请确认右侧创意卡片库。",
+            "artifact_data": VALID_IDEA_DIVERGE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "CONVERGE",
+            },
+            "warnings": [],
+        },
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="DIVERGE",
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert first.artifact_update.type == "replace"
+    assert first.stage_action is not None
+    assert first.stage_action.target_stage_id == "CONVERGE"
+    assert "# 创意发散" in first.artifact_update.markdown
+    assert "## 发散方法说明" in first.artifact_update.markdown
+    assert "## 发散全景图" in first.artifact_update.markdown
+    assert "mindmap" in first.artifact_update.markdown
+    assert 'root(("独立开发者变现方向选择辅助"))' in (first.artifact_update.markdown)
+    assert "## 创意卡片库" in first.artifact_update.markdown
+    assert "## 创意来源与假设" in first.artifact_update.markdown
+    assert "## 搁置/排除记录" in first.artifact_update.markdown
+    assert "## 阶段门禁" in first.artifact_update.markdown
+    assert "关键假设" in first.artifact_update.markdown
+    assert "状态理由" in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="IDEA_BRAINSTORM",
+            current_stage_id="DIVERGE",
         )
         == first
     )

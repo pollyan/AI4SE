@@ -214,6 +214,113 @@ class IdeaDefineArtifactData(StrictArtifactDataModel):
         return self
 
 
+class IdeaDivergenceMethod(StrictArtifactDataModel):
+    method_name: str
+    goal: str
+    input_basis: str
+    coverage_dimensions: list[str] = Field(min_length=1)
+    constraints: str
+
+
+class IdeaLandscapeGroup(StrictArtifactDataModel):
+    group_id: str
+    theme: str
+    idea_ids: list[str] = Field(min_length=1)
+
+
+class IdeaDivergeLandscape(StrictArtifactDataModel):
+    root_theme: str
+    groups: list[IdeaLandscapeGroup] = Field(min_length=1)
+
+
+class IdeaCard(StrictArtifactDataModel):
+    idea_id: str
+    title: str
+    one_liner: str
+    target_user: str
+    scenario: str
+    value_proposition: str
+    key_hypotheses: list[str] = Field(min_length=1)
+    novelty_source: str
+    evidence_level: str
+    validation_action: str
+    status: str
+    status_reason: str
+
+
+class IdeaSource(StrictArtifactDataModel):
+    source_id: str
+    source_type: str
+    source: str
+    idea_ids: list[str] = Field(min_length=1)
+    key_assumption: str
+    status_reason: str
+
+
+class IdeaParkedOrExcludedRecord(StrictArtifactDataModel):
+    record_id: str
+    idea_or_direction: str
+    reason: str
+    revisit_condition: str
+    status_reason: str
+
+
+class IdeaDivergeArtifactData(StrictArtifactDataModel):
+    divergence_method: IdeaDivergenceMethod
+    idea_landscape: IdeaDivergeLandscape
+    idea_cards: list[IdeaCard] = Field(min_length=1)
+    idea_sources: list[IdeaSource] = Field(min_length=1)
+    parked_or_excluded: list[IdeaParkedOrExcludedRecord] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_idea_diverge_consistency(self) -> "IdeaDivergeArtifactData":
+        idea_ids = {item.idea_id for item in self.idea_cards}
+        if len(idea_ids) != len(self.idea_cards):
+            raise ValueError("idea_cards contains duplicate idea_id")
+
+        source_ids = {item.source_id for item in self.idea_sources}
+        if len(source_ids) != len(self.idea_sources):
+            raise ValueError("idea_sources contains duplicate source_id")
+
+        record_ids = {item.record_id for item in self.parked_or_excluded}
+        if len(record_ids) != len(self.parked_or_excluded):
+            raise ValueError("parked_or_excluded contains duplicate record_id")
+
+        unknown_landscape_idea_ids = sorted(
+            {
+                idea_id
+                for group in self.idea_landscape.groups
+                for idea_id in group.idea_ids
+                if idea_id not in idea_ids
+            }
+        )
+        if unknown_landscape_idea_ids:
+            raise ValueError(
+                "idea_landscape references unknown idea ids: "
+                + ", ".join(unknown_landscape_idea_ids)
+            )
+
+        unknown_source_idea_ids = sorted(
+            {
+                idea_id
+                for source in self.idea_sources
+                for idea_id in source.idea_ids
+                if idea_id not in idea_ids
+            }
+        )
+        if unknown_source_idea_ids:
+            raise ValueError(
+                "idea_sources references unknown idea ids: "
+                + ", ".join(unknown_source_idea_ids)
+            )
+
+        if not any(item.checked for item in self.stage_gate):
+            raise ValueError("stage_gate must include at least one checked item")
+
+        return self
+
+
 class IncidentSummary(StrictArtifactDataModel):
     incident_name: str
     severity: str
@@ -1807,6 +1914,9 @@ def render_agent_turn_from_artifact_data(
     elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DEFINE"):
         artifact_data = IdeaDefineArtifactData.model_validate(payload["artifact_data"])
         markdown = render_idea_brainstorm_define_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DIVERGE"):
+        artifact_data = IdeaDivergeArtifactData.model_validate(payload["artifact_data"])
+        markdown = render_idea_brainstorm_diverge_markdown(artifact_data)
     elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
         artifact_data = IncidentTimelineArtifactData.model_validate(
             payload["artifact_data"]
@@ -1903,6 +2013,19 @@ def render_idea_brainstorm_define_markdown(data: IdeaDefineArtifactData) -> str:
         _render_idea_problem_user_fit(data.problem_user_fit),
         _render_idea_constraints_boundaries(data.constraints_boundaries),
         _render_idea_reverse_validation(data.reverse_validation),
+        _render_idea_stage_gate(data.stage_gate),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_idea_brainstorm_diverge_markdown(data: IdeaDivergeArtifactData) -> str:
+    sections = [
+        "# 创意发散",
+        _render_idea_divergence_method(data.divergence_method),
+        _render_idea_diverge_landscape(data.idea_landscape, data.idea_cards),
+        _render_idea_cards(data.idea_cards),
+        _render_idea_sources(data.idea_sources),
+        _render_idea_parked_or_excluded(data.parked_or_excluded),
         _render_idea_stage_gate(data.stage_gate),
     ]
     return "\n\n".join(sections)
@@ -2294,6 +2417,123 @@ def _render_idea_reverse_validation(items: list[IdeaReverseValidation]) -> str:
 def _render_idea_stage_gate(checks: list[StageGateCheck]) -> str:
     lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
     return "## 阶段门禁\n" + "\n".join(lines)
+
+
+def _render_idea_divergence_method(method: IdeaDivergenceMethod) -> str:
+    rows = [
+        ("发散方法", method.method_name),
+        ("发散目标", method.goal),
+        ("输入依据", method.input_basis),
+        ("覆盖维度", "、".join(method.coverage_dimensions)),
+        ("发散约束", method.constraints),
+    ]
+    return "## 发散方法说明\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_idea_diverge_landscape(
+    landscape: IdeaDivergeLandscape,
+    idea_cards: list[IdeaCard],
+) -> str:
+    idea_titles = {item.idea_id: item.title for item in idea_cards}
+    lines = [
+        "```mermaid",
+        "mindmap",
+        f'  root(("{_escape_mermaid_mindmap_text(landscape.root_theme)}"))',
+    ]
+    for group in landscape.groups:
+        lines.append(f"    {_escape_mermaid_mindmap_text(group.theme)}")
+        for idea_id in group.idea_ids:
+            title = idea_titles[idea_id]
+            lines.append("      " + _escape_mermaid_mindmap_text(f"{idea_id} {title}"))
+    lines.append("```")
+    rows = [
+        (
+            group.group_id,
+            group.theme,
+            ", ".join(group.idea_ids),
+        )
+        for group in landscape.groups
+    ]
+    return (
+        "## 发散全景图\n"
+        + "\n".join(lines)
+        + "\n\n"
+        + _markdown_table(["分组 ID", "主题", "创意 ID"], rows)
+    )
+
+
+def _render_idea_cards(items: list[IdeaCard]) -> str:
+    rows = [
+        (
+            item.idea_id,
+            item.title,
+            item.one_liner,
+            item.target_user,
+            item.scenario,
+            item.value_proposition,
+            "；".join(item.key_hypotheses),
+            item.novelty_source,
+            item.evidence_level,
+            item.validation_action,
+            item.status,
+            item.status_reason,
+        )
+        for item in items
+    ]
+    return "## 创意卡片库\n" + _markdown_table(
+        [
+            "创意 ID",
+            "创意名称",
+            "一句话说明",
+            "目标用户",
+            "使用场景",
+            "价值主张",
+            "关键假设",
+            "创新来源",
+            "证据等级",
+            "验证动作",
+            "状态",
+            "状态理由",
+        ],
+        rows,
+    )
+
+
+def _render_idea_sources(items: list[IdeaSource]) -> str:
+    rows = [
+        (
+            item.source_id,
+            item.source_type,
+            item.source,
+            ", ".join(item.idea_ids),
+            item.key_assumption,
+            item.status_reason,
+        )
+        for item in items
+    ]
+    return "## 创意来源与假设\n" + _markdown_table(
+        ["来源 ID", "来源类型", "来源内容", "关联创意", "关键假设", "状态理由"],
+        rows,
+    )
+
+
+def _render_idea_parked_or_excluded(
+    items: list[IdeaParkedOrExcludedRecord],
+) -> str:
+    rows = [
+        (
+            item.record_id,
+            item.idea_or_direction,
+            item.reason,
+            item.revisit_condition,
+            item.status_reason,
+        )
+        for item in items
+    ]
+    return "## 搁置/排除记录\n" + _markdown_table(
+        ["记录 ID", "创意或方向", "搁置/排除原因", "重新考虑条件", "状态理由"],
+        rows,
+    )
 
 
 def _render_incident_impact_metrics(

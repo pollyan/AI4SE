@@ -348,6 +348,7 @@ REQUIRED_ARTIFACT_MERMAID_DIAGRAMS: dict[tuple[str, str], list[str]] = {
     ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["mindmap"],
     ("INCIDENT_REVIEW", "IMPROVEMENT"): ["pie"],
     ("IDEA_BRAINSTORM", "DEFINE"): ["mindmap"],
+    ("IDEA_BRAINSTORM", "DIVERGE"): ["mindmap"],
     ("IDEA_BRAINSTORM", "CONVERGE"): ["quadrantChart"],
     ("VALUE_DISCOVERY", "ELEVATOR"): ["flowchart"],
     ("VALUE_DISCOVERY", "JOURNEY"): ["journey"],

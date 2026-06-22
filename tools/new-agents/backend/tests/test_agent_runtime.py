@@ -23,6 +23,7 @@ from agent_runtime import (
 from sse_schemas import AgentTurnDeltaOutput
 from test_artifact_data_renderers import (
     VALID_IDEA_DEFINE_ARTIFACT_DATA,
+    VALID_IDEA_DIVERGE_ARTIFACT_DATA,
     VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA,
     VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
     VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
@@ -923,6 +924,38 @@ def test_parse_agent_turn_output_text_renders_idea_define_artifact_data():
     assert output.stage_action.target_stage_id == "DIVERGE"
 
 
+def test_parse_agent_turn_output_text_renders_idea_diverge_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "已形成创意发散候选集。",
+            "artifact_data": VALID_IDEA_DIVERGE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "CONVERGE",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="DIVERGE",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 创意发散")
+    assert "## 发散全景图" in output.artifact_update.markdown
+    assert "mindmap" in output.artifact_update.markdown
+    assert "## 创意卡片库" in output.artifact_update.markdown
+    assert "关键假设" in output.artifact_update.markdown
+    assert "状态理由" in output.artifact_update.markdown
+    assert output.stage_action is not None
+    assert output.stage_action.target_stage_id == "CONVERGE"
+
+
 def test_value_persona_structured_output_instruction_requests_artifact_data_not_markdown():
     instruction = build_structured_output_instruction(
         "VALUE_DISCOVERY",
@@ -1040,6 +1073,23 @@ def test_idea_define_structured_output_instruction_requests_artifact_data_not_ma
     assert "不要输出完整 Markdown" in instruction
 
 
+def test_idea_diverge_structured_output_instruction_requests_artifact_data_not_markdown():
+    instruction = build_structured_output_instruction(
+        "IDEA_BRAINSTORM",
+        "DIVERGE",
+    )
+
+    assert "artifact_data" in instruction
+    assert "artifact_update" not in instruction
+    assert "divergence_method" in instruction
+    assert "idea_landscape" in instruction
+    assert "idea_cards" in instruction
+    assert "idea_sources" in instruction
+    assert "parked_or_excluded" in instruction
+    assert '"target_stage_id": "CONVERGE"' in instruction
+    assert "不要输出完整 Markdown" in instruction
+
+
 def test_value_persona_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
     prompt = build_raw_json_retry_prompt(
         "原始提示",
@@ -1134,6 +1184,20 @@ def test_idea_define_retry_prompt_requests_artifact_data_fix_not_markdown_rewrit
 
     assert "artifact_data" in prompt
     assert "problem_user_fit references unknown evidence ids" in prompt
+    assert "不要输出 Markdown 文档" in prompt
+    assert "artifact_update.type 必须为 replace" not in prompt
+
+
+def test_idea_diverge_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
+    prompt = build_raw_json_retry_prompt(
+        "原始提示",
+        ValueError("idea_sources references unknown idea ids"),
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="DIVERGE",
+    )
+
+    assert "artifact_data" in prompt
+    assert "idea_sources references unknown idea ids" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -1903,6 +1967,71 @@ def test_runtime_raw_json_stream_turn_renders_idea_define_artifact_data_before_f
     assert "artifact_update.markdown" not in build_structured_output_instruction(
         "IDEA_BRAINSTORM",
         "DEFINE",
+    )
+
+
+def test_runtime_raw_json_stream_turn_renders_idea_diverge_artifact_data_before_final_output(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "已形成创意发散候选集。",
+            "artifact_data": VALID_IDEA_DIVERGE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "CONVERGE",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield final_json
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是创新顾问。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "请基于问题域发散多个产品创意",
+            workflow_id="IDEA_BRAINSTORM",
+            current_stage_id="DIVERGE",
+        )
+    )
+
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert outputs[-1].artifact_update.markdown is not None
+    assert outputs[-1].artifact_update.markdown.startswith("# 创意发散")
+    assert "## 发散全景图" in outputs[-1].artifact_update.markdown
+    assert "mindmap" in outputs[-1].artifact_update.markdown
+    assert "## 创意卡片库" in outputs[-1].artifact_update.markdown
+    assert "关键假设" in outputs[-1].artifact_update.markdown
+    assert "状态理由" in outputs[-1].artifact_update.markdown
+    assert outputs[-1].stage_action is not None
+    assert outputs[-1].stage_action.target_stage_id == "CONVERGE"
+    assert calls[0]["response_format"] == {"type": "json_object"}
+    assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert "artifact_data" in calls[0]["messages"][0]["content"]
+    assert "divergence_method" in calls[0]["messages"][0]["content"]
+    assert "idea_cards" in calls[0]["messages"][0]["content"]
+    assert "idea_sources" in calls[0]["messages"][0]["content"]
+    assert "artifact_update.markdown" not in build_structured_output_instruction(
+        "IDEA_BRAINSTORM",
+        "DIVERGE",
     )
 
 

@@ -530,6 +530,11 @@
               "关键假设",
               "状态理由"
             ]
+          },
+          "visualContract": {
+            "requiredMermaidDiagrams": [
+              "mindmap"
+            ]
           }
         },
         {

@@ -603,9 +603,41 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+IDEA_DIVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮如何从问题域发散创意、覆盖了哪些发散维度、形成了哪些候选创意、哪些方向被搁置，以及进入收敛前需要用户确认什么。不要复制完整产出物正文。",
+  "artifact_data": {
+    "divergence_method": {"method_name": "HMW + 类比创新 + 约束反转", "goal": "...", "input_basis": "...", "coverage_dimensions": ["效率提升", "证据收集", "决策辅助"], "constraints": "..."},
+    "idea_landscape": {"root_theme": "...", "groups": [{"group_id": "G-001", "theme": "...", "idea_ids": ["ID-001"]}]},
+    "idea_cards": [{"idea_id": "ID-001", "title": "...", "one_liner": "...", "target_user": "...", "scenario": "...", "value_proposition": "...", "key_hypotheses": ["..."], "novelty_source": "...", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "validation_action": "...", "status": "候选/待验证/搁置/排除", "status_reason": "..."}],
+    "idea_sources": [{"source_id": "SRC-001", "source_type": "问题域证据/HMW/类比案例/约束反转/AI 假设", "source": "...", "idea_ids": ["ID-001"], "key_assumption": "...", "status_reason": "..."}],
+    "parked_or_excluded": [{"record_id": "PK-001", "idea_or_direction": "...", "reason": "...", "revisit_condition": "...", "status_reason": "..."}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "CONVERGE"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；idea_cards.idea_id 必须唯一；idea_sources.source_id 必须唯一；parked_or_excluded.record_id 必须唯一；idea_landscape.groups.idea_ids 和 idea_sources.idea_ids 只能引用已存在的 idea_id；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 mindmap，后端会负责确定性渲染右侧创意发散产物和 Mermaid mindmap。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in {
         ("IDEA_BRAINSTORM", "DEFINE"),
+        ("IDEA_BRAINSTORM", "DIVERGE"),
         ("TEST_DESIGN", "CLARIFY"),
         ("TEST_DESIGN", "STRATEGY"),
         ("TEST_DESIGN", "CASES"),
@@ -628,6 +660,8 @@ def build_structured_output_instruction(
 ) -> str:
     if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DEFINE"):
         return IDEA_DEFINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DIVERGE"):
+        return IDEA_DIVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
         return ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):

@@ -1176,6 +1176,9 @@ def test_idea_brainstorm_contracts_include_professional_artifact_fields():
     assert REQUIRED_ARTIFACT_MERMAID_DIAGRAMS[("IDEA_BRAINSTORM", "DEFINE")] == [
         "mindmap"
     ]
+    assert REQUIRED_ARTIFACT_MERMAID_DIAGRAMS[("IDEA_BRAINSTORM", "DIVERGE")] == [
+        "mindmap"
+    ]
 
     for field in [
         "## 发散方法说明",
