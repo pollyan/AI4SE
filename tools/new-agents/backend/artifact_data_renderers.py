@@ -427,6 +427,111 @@ class DeliveryArtifactData(StrictArtifactDataModel):
         return self
 
 
+class ReqReviewInfo(StrictArtifactDataModel):
+    artifact_name: str
+    requirement_name: str
+    review_date: str
+    requirement_summary: str
+    conclusion: str
+
+
+class ReqReviewScopeItem(StrictArtifactDataModel):
+    scope_type: str
+    content: str
+    review_impact: str
+    status: str
+
+
+class ReqReviewQualityOverviewItem(StrictArtifactDataModel):
+    dimension: str
+    quality_judgement: str
+    severity_score: int = Field(ge=1, le=5)
+    evidence: str
+    testing_risk: str
+    status: str
+
+
+class ReqReviewIssueStatistics(StrictArtifactDataModel):
+    p0_count: int = Field(ge=0)
+    p1_count: int = Field(ge=0)
+    p2_count: int = Field(ge=0)
+    p0_description: str
+    p1_description: str
+    p2_description: str
+
+
+class ReqReviewIssueItem(StrictArtifactDataModel):
+    issue_id: str
+    dimension: str
+    description: str
+    priority: str
+    blocking: str
+    requirement_section: str
+    impact: str
+    evidence: str
+    suggestion: str
+    owner: str
+    status: str
+
+
+class ReqReviewIssueGroup(StrictArtifactDataModel):
+    dimension: str
+    issues: list[ReqReviewIssueItem] = Field(min_length=1)
+
+
+class ReqReviewRevisionSuggestion(StrictArtifactDataModel):
+    suggestion_id: str
+    related_issues: list[str] = Field(min_length=1)
+    suggestion: str
+    acceptance: str
+    owner: str
+    status: str
+
+
+class ReqReviewArtifactData(StrictArtifactDataModel):
+    review_info: ReqReviewInfo
+    scope_items: list[ReqReviewScopeItem] = Field(min_length=1)
+    quality_overview: list[ReqReviewQualityOverviewItem] = Field(min_length=1)
+    issue_statistics: ReqReviewIssueStatistics
+    issue_groups: list[ReqReviewIssueGroup] = Field(min_length=1)
+    revision_suggestions: list[ReqReviewRevisionSuggestion] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_review_consistency(self) -> "ReqReviewArtifactData":
+        issues = [issue for group in self.issue_groups for issue in group.issues]
+        issue_ids = {issue.issue_id for issue in issues}
+        if len(issue_ids) != len(issues):
+            raise ValueError("issue_groups contains duplicate issue_id")
+
+        priority_counts = {
+            "P0": sum(1 for issue in issues if issue.priority == "P0"),
+            "P1": sum(1 for issue in issues if issue.priority == "P1"),
+            "P2": sum(1 for issue in issues if issue.priority == "P2"),
+        }
+        if (
+            self.issue_statistics.p0_count != priority_counts["P0"]
+            or self.issue_statistics.p1_count != priority_counts["P1"]
+            or self.issue_statistics.p2_count != priority_counts["P2"]
+        ):
+            raise ValueError("issue_statistics must match issue_groups priorities")
+
+        unknown_references = sorted(
+            {
+                issue_id
+                for suggestion in self.revision_suggestions
+                for issue_id in suggestion.related_issues
+                if issue_id not in issue_ids
+            }
+        )
+        if unknown_references:
+            raise ValueError(
+                "revision_suggestions references unknown issue ids: "
+                + ", ".join(unknown_references)
+            )
+        return self
+
+
 def render_agent_turn_from_artifact_data(
     payload: dict[str, Any],
     *,
@@ -447,6 +552,9 @@ def render_agent_turn_from_artifact_data(
     elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "DELIVERY"):
         artifact_data = DeliveryArtifactData.model_validate(payload["artifact_data"])
         markdown = render_test_design_delivery_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("REQ_REVIEW", "REVIEW"):
+        artifact_data = ReqReviewArtifactData.model_validate(payload["artifact_data"])
+        markdown = render_req_review_review_markdown(artifact_data)
     else:
         raise ValueError(
             f"artifact_data renderer is not configured for {workflow_id}/{current_stage_id}"
@@ -524,6 +632,23 @@ def render_test_design_delivery_markdown(data: DeliveryArtifactData) -> str:
         _render_delivery_acceptance_checklist(data.acceptance_checklist),
         _render_delivery_signoffs(data.signoffs),
         _render_delivery_change_log(data.change_log),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_req_review_review_markdown(data: ReqReviewArtifactData) -> str:
+    sections = [
+        "# 需求评审问题清单",
+        _render_req_review_info(data.review_info),
+        _render_req_review_scope(data.scope_items),
+        _render_req_review_quality_overview(data.quality_overview),
+        _render_req_review_quality_flowchart(),
+        _render_req_review_issue_statistics(
+            data.issue_statistics, data.quality_overview
+        ),
+        _render_req_review_issue_groups(data.issue_groups),
+        _render_req_review_revision_suggestions(data.revision_suggestions),
+        _render_req_review_stage_gate(data.stage_gate),
     ]
     return "\n\n".join(sections)
 
@@ -1186,6 +1311,171 @@ def _render_delivery_change_log(items: list[DeliveryChangeLogItem]) -> str:
         ["版本", "日期", "变更内容", "变更原因", "责任方"],
         rows,
     )
+
+
+def _render_req_review_info(info: ReqReviewInfo) -> str:
+    rows = [
+        ("Artifact 名称", info.artifact_name),
+        ("被评审需求", info.requirement_name),
+        ("评审时间", info.review_date),
+        ("需求概述", info.requirement_summary),
+        ("评审结论倾向", info.conclusion),
+    ]
+    return "## 评审信息\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_req_review_scope(items: list[ReqReviewScopeItem]) -> str:
+    rows = [
+        (item.scope_type, item.content, item.review_impact, item.status)
+        for item in items
+    ]
+    return "## 评审范围与不评审范围\n" + _markdown_table(
+        ["类型", "内容", "评审影响", "状态"],
+        rows,
+    )
+
+
+def _render_req_review_quality_overview(
+    items: list[ReqReviewQualityOverviewItem],
+) -> str:
+    rows = [
+        (
+            item.dimension,
+            item.quality_judgement,
+            item.severity_score,
+            item.evidence,
+            item.testing_risk,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 需求质量总览\n" + _markdown_table(
+        ["评审维度", "质量判断", "严重度评分(1-5)", "主要证据", "测试风险", "状态"],
+        rows,
+    )
+
+
+def _render_req_review_quality_flowchart() -> str:
+    return """## 需求质量结构图
+```mermaid
+flowchart TD
+    Req["需求文档输入"] --> Scope["评审范围确认"]
+    Scope --> Quality["质量维度扫描"]
+    Quality --> Testability["可测试性"]
+    Quality --> Completeness["功能完整性"]
+    Quality --> Rules["边界与规则"]
+    Quality --> Exception["异常闭环"]
+    Quality --> NonFunctional["非功能需求"]
+    Testability --> Issues["问题分级 P0/P1/P2"]
+    Completeness --> Issues
+    Rules --> Issues
+    Exception --> Issues
+    NonFunctional --> Issues
+    Issues --> Fix["修订建议与责任方"]
+    Fix --> Report["评审报告与复审条件"]
+```"""
+
+
+def _render_req_review_issue_statistics(
+    statistics: ReqReviewIssueStatistics,
+    quality_overview: list[ReqReviewQualityOverviewItem],
+) -> str:
+    rows = [
+        ("P0 (阻塞)", statistics.p0_count, statistics.p0_description),
+        ("P1 (重要)", statistics.p1_count, statistics.p1_description),
+        ("P2 (建议)", statistics.p2_count, statistics.p2_description),
+    ]
+    return (
+        "## 问题统计\n"
+        + _markdown_table(["优先级", "数量", "说明"], rows)
+        + "\n\n"
+        + _render_req_review_score_matrix(quality_overview)
+    )
+
+
+def _render_req_review_score_matrix(
+    items: list[ReqReviewQualityOverviewItem],
+) -> str:
+    visual = {
+        "type": "score-matrix",
+        "title": "需求质量评审维度评分矩阵",
+        "columns": ["评审维度", "严重度评分", "主要证据", "测试风险"],
+        "rows": [
+            {
+                "评审维度": item.dimension,
+                "严重度评分": item.severity_score,
+                "主要证据": item.evidence,
+                "测试风险": item.testing_risk,
+            }
+            for item in items
+        ],
+    }
+    return (
+        "```ai4se-visual\n" + json.dumps(visual, ensure_ascii=False, indent=2) + "\n```"
+    )
+
+
+def _render_req_review_issue_groups(groups: list[ReqReviewIssueGroup]) -> str:
+    sections = ["## 按维度问题清单"]
+    headers = [
+        "ID",
+        "评审维度",
+        "问题描述",
+        "优先级",
+        "阻断性",
+        "所属需求章节",
+        "影响范围",
+        "证据/依据",
+        "建议",
+        "责任方/确认人",
+        "状态",
+    ]
+    for index, group in enumerate(groups, start=1):
+        rows = [
+            (
+                item.issue_id,
+                item.dimension,
+                item.description,
+                item.priority,
+                item.blocking,
+                item.requirement_section,
+                item.impact,
+                item.evidence,
+                item.suggestion,
+                item.owner,
+                item.status,
+            )
+            for item in group.issues
+        ]
+        sections.append(
+            f"### {index}. {group.dimension}\n" + _markdown_table(headers, rows)
+        )
+    return "\n\n".join(sections)
+
+
+def _render_req_review_revision_suggestions(
+    items: list[ReqReviewRevisionSuggestion],
+) -> str:
+    rows = [
+        (
+            item.suggestion_id,
+            ", ".join(item.related_issues),
+            item.suggestion,
+            item.acceptance,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 修订建议\n" + _markdown_table(
+        ["建议 ID", "关联问题", "修订建议", "验收口径", "责任方/确认人", "状态"],
+        rows,
+    )
+
+
+def _render_req_review_stage_gate(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 阶段门禁\n" + "\n".join(lines)
 
 
 def _render_flow_links(links: list[FlowLink]) -> str:
