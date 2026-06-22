@@ -25,6 +25,7 @@
 - 2026-06-23 已完成第十七个垂直切片: `IDEA_BRAINSTORM/CONCEPT` 支持模型输出 `artifact_data`，后端校验定位声明、核心假设、Lean Canvas、MVP 功能、增长漏斗、Pre-mortem 风险、验证路线、不可做范围、决策记录、下一步行动和阶段门禁后，确定性渲染《产品概念简报》、Mermaid `pie`/`flowchart` 和 `ai4se-visual` `mvp-map`。
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
 - `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM` 四阶段已完成结构化产物数据迁移；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
+- 2026-06-23 已完成本地 readiness gate: 从 `workflow_manifest.json` 枚举全部 17 个在线 stage，验证每个 stage 都有 `artifact_data` renderer、有效 fixture、artifact contract 通过、structured output instruction 要求 `artifact_data` 且不要求 `artifact_update.markdown`，并用 fake DeepSeek raw JSON stream 验证 `response_format={"type":"json_object"}` 与 thinking disabled。
 
 ## 目标
 
@@ -171,6 +172,6 @@ renderer 职责:
 
 ## 进入实现前需要补的设计问题
 
-- `artifact_data` schema 是按 workflow/stage 手写 Pydantic model，还是先定义通用 block schema 再按 stage 组合。
-- renderer 输出是否继续保存为 Markdown，或同时持久化 `artifact_data` 便于后续重渲染和审计。
-- 真实 DeepSeek V4 Flash smoke gate 是否作为可选验证，还是每个阶段迁移都要求人工触发一次。
+- `artifact_data` schema 是按 workflow/stage 手写 Pydantic model，还是先定义通用 block schema 再按 stage 组合。当前本地 readiness gate 已能防止新增在线 stage 遗漏 renderer/fixture/runtime 覆盖，但不改变 schema 设计策略。
+- renderer 输出是否继续保存为 Markdown，或同时持久化 `artifact_data` 便于后续重渲染和审计。该问题会触及数据库、snapshot API 和前端审计面，保留为后续独立能力包。
+- 真实 DeepSeek V4 Flash smoke gate 是否作为可选验证，还是每个阶段迁移都要求人工触发一次。当前本地 readiness gate 不需要凭证、网络和额度；真实 smoke 仍需显式环境配置后人工或专项 CI 触发。
