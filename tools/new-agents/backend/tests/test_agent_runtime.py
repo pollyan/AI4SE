@@ -4,6 +4,7 @@ import pytest
 
 from agent_contracts import AgentTurnOutput, ContractValidationError
 from agent_runtime import (
+    ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS,
     AgentRuntimeModelError,
     AgentRuntimeSchemaError,
     AgentTurnValidationDeps,
@@ -19,7 +20,9 @@ from agent_runtime import (
     parse_agent_turn_output_text,
     register_contract_output_validator,
     resolve_structured_output_capability,
+    supports_artifact_data_rendering,
 )
+from artifact_data_renderers import get_artifact_data_renderer_stage_keys
 from sse_schemas import AgentTurnDeltaOutput
 from test_artifact_data_renderers import (
     VALID_IDEA_CONCEPT_ARTIFACT_DATA,
@@ -39,6 +42,7 @@ from test_artifact_data_renderers import (
     VALID_VALUE_JOURNEY_ARTIFACT_DATA,
     VALID_VALUE_PERSONA_ARTIFACT_DATA,
 )
+from workflow_contract_registry import get_workflow_stages
 
 VALID_CLARIFY_ARTIFACT = """# 需求分析文档
 
@@ -422,6 +426,41 @@ def test_strategy_structured_output_instruction_requests_artifact_data_not_markd
     assert '"target_stage_id": "CASES"' in instruction
     assert "不要输出完整 Markdown" in instruction
     assert "artifact_update.markdown" not in instruction
+
+
+def test_all_manifest_stages_use_artifact_data_instructions_without_markdown_fallback():
+    stage_keys = {
+        (workflow_id, stage_id)
+        for workflow_id, stages in get_workflow_stages().items()
+        for stage_id in stages
+    }
+
+    assert stage_keys
+    assert stage_keys == set(ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS)
+    assert stage_keys == set(get_artifact_data_renderer_stage_keys())
+
+    for workflow_id, stage_id in sorted(stage_keys):
+        assert supports_artifact_data_rendering(workflow_id, stage_id)
+        instruction = build_structured_output_instruction(workflow_id, stage_id)
+        assert "artifact_data" in instruction
+        assert "artifact_update.markdown" not in instruction
+        assert "artifact_update.type 必须为 replace" not in instruction
+        assert "后端会负责确定性渲染" in instruction
+
+
+def test_all_manifest_stage_retry_prompts_repair_artifact_data_not_markdown():
+    for workflow_id, stages in get_workflow_stages().items():
+        for stage_id in stages:
+            prompt = build_raw_json_retry_prompt(
+                "原始提示",
+                ValueError("artifact_data.requirements.0.title missing"),
+                workflow_id=workflow_id,
+                current_stage_id=stage_id,
+            )
+
+            assert "artifact_data" in prompt
+            assert "不要输出 Markdown 文档" in prompt
+            assert "artifact_update.type 必须为 replace" not in prompt
 
 
 def test_strategy_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():

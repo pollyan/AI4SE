@@ -1,8 +1,30 @@
 # DeepSeek V4 兼容的后端结构化产物数据改造 Todo
 
-> 状态: 活动候选
+> 状态: 已完成 / 已归档
 > 创建日期: 2026-06-23
+> 归档日期: 2026-06-23
 > 背景: 当前主要使用 DeepSeek V4 Flash。该模型链路适合按 JSON mode 约束“合法 JSON”，但不能把它等同于 OpenAI strict Structured Outputs。长期最稳方案应减少模型直接生成完整 Markdown/Mermaid 的职责。
+
+## 完成态验收记录
+
+本 todo 已完成并从 refactor 活动池归档。完成态边界如下:
+
+- `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM` 四阶段共 17 个在线 stage 已迁移为模型输出 `artifact_data`，后端确定性渲染 Markdown、Mermaid 和 `ai4se-visual`。
+- DeepSeek V4 Flash capability 明确为 `json_object_only`，请求仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
+- readiness gate 已覆盖 workflow manifest 在线 stage、renderer/fixture 存在性、artifact contract、structured output instruction、fake DeepSeek raw JSON stream、response_format 和 thinking 配置。
+- `artifact_data` persistence 已完成: 当前 artifact snapshot 可暴露 validated `artifactData`，旧版本和手工编辑版本明确返回 `artifactData: null`。
+- 真实 DeepSeek V4 Flash smoke gate 已对齐为可选门禁: 默认无凭证时 skip；配置 `DEEPSEEK_V4_SMOKE_*` 或兼容 `NEW_AGENTS_SMOKE_*` 后验证 raw JSON streaming、`artifact_data` schema、后端 renderer 和 artifact contract。
+- prompt 边界硬化已完成: 已迁移 stage 的前端 system prompt 不再注入 `<mark>`、`artifact_update`、完整 Markdown 重写要求或 Mermaid fence 参考。
+- 2026-06-23 本轮目标模式补充了 refactor README 活动候选索引一致性测试，防止已完成归档项继续被误判为活动实现缺口。
+- 2026-06-23 本轮目标模式补充了格式化输出防回退门禁: 共享 runtime 暴露 `ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS` stage registry，所有 manifest 在线 stage 的 structured output instruction 和 retry prompt 均要求修复 `artifact_data`，不要求模型输出或修复完整 Markdown；该 registry 与后端 renderer stage key registry 必须完全一致。
+
+本轮收口验证:
+
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /Users/anhui/Documents/myProgram/AI4SE/.venv/bin/python -m pytest -p no:cacheprovider tools/new-agents/backend/tests/test_agent_runtime.py::test_all_manifest_stages_use_artifact_data_instructions_without_markdown_fallback tools/new-agents/backend/tests/test_agent_runtime.py::test_all_manifest_stage_retry_prompts_repair_artifact_data_not_markdown tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_artifact_data_renderer_stage_keys_match_runtime_instruction_registry -q`：先 RED，统一 runtime 指令 registry 并绑定 renderer stage key 后 GREEN，`3 passed`。
+- `/Users/anhui/Documents/myProgram/AI4SE/.venv/bin/python -m pytest tests/test_refactor_todo_index.py -q`：先 RED，修正 README 与归档状态后 GREEN，`1 passed`。
+- `/Users/anhui/Documents/myProgram/AI4SE/.venv/bin/python -m pytest tools/new-agents/backend/tests/test_deepseek_v4_readiness.py tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_agent_contracts.py tools/new-agents/backend/tests/test_agent_endpoint.py tools/new-agents/backend/tests/test_run_persistence.py tools/new-agents/backend/tests/test_agent_real_smoke.py -q`：`377 passed, 1 skipped`，skip 为无显式 DeepSeek smoke 凭证时的预期门禁。
+- `npm run test -- --run src/core/prompts/__tests__/buildSystemPrompt.test.ts`：`40 passed`。
+- `npm run lint`：通过，执行 `tsc --noEmit`。
 
 ## 当前进展
 
