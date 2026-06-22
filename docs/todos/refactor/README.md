@@ -19,7 +19,7 @@
 
 ## 当前入口
 
-- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选。
+- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选；E01-E04 与 E07 已消化，当前剩余重点为 E05 章节级重生成、E06 Run 历史中心增强、E08 工作流质量评分和 E09 运行统计产品化。
 
 ## 已归档
 

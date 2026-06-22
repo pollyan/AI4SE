@@ -340,6 +340,32 @@ export const ChatPane: React.FC = () => {
                 ))}
               </div>
             </div>
+            <div className="mt-3 space-y-2">
+              {workflowHandoffs.map((handoff) => (
+                handoff.context ? (
+                  <div
+                    key={`${handoff.id}-context`}
+                    className="rounded-lg border border-cyan-400/15 bg-slate-950/30 p-2 text-[11px] leading-relaxed text-cyan-50/80"
+                  >
+                    <div className="flex flex-wrap items-center gap-2 font-semibold text-cyan-100">
+                      <span>来源 v{handoff.sourceArtifactVersion}</span>
+                      {handoff.context.unconfirmedItems.length > 0 && (
+                        <span>未确认 {handoff.context.unconfirmedItems.length} 项</span>
+                      )}
+                    </div>
+                    <p className="mt-1">{handoff.context.sourceArtifactSummary}</p>
+                    <p className="mt-1">{handoff.context.targetInputSummary}</p>
+                    {handoff.context.unconfirmedItems.length > 0 && (
+                      <ul className="mt-1 space-y-0.5">
+                        {handoff.context.unconfirmedItems.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ) : null
+              ))}
+            </div>
           </div>
         )}
 

@@ -70,7 +70,7 @@
 | E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 已消化：Header 测试资产弹层和资产中心共享 Lisa 资产质量状态，基于待处理 issue、测试点覆盖和风险处置派生可交付/需关注/需修复，并随 issue 确认、测试点校准和风险处置更新 |
 | E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
 | E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 支持继续、复制为新 run、按 workflow/质量筛选、预览当前 artifact |
-| E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入 |
+| E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | 已消化：现有 Alex 到 Lisa handoff API 返回结构化上下文，展示来源版本、来源摘要、目标输入和未确认项；目标 run 首条消息包含结构化接力上下文 |
 | E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 | 每个 stage 有质量分、证据明细和待处理项 |
 | E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 显示 workflow/stage/provider 趋势、contract retry 原因和行动建议 |
 | E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | FMEA、JTBD、RICE、Kano、CAPA 等可由配置注入 prompt/template |
@@ -124,7 +124,7 @@
 
 目标: 让用户从开始、生成、审阅、修订、恢复、复用形成闭环。
 
-包含: E03、E05、E06、E07、E08。
+包含: E05、E06、E08。E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化；E07 已在 2026-06-23 Workflow handoff 上下文强化 milestone 中消化。
 
 暂不做:
 
@@ -198,7 +198,8 @@
 
 - 涉及模块: `workflow_manifest.json`、`workflow_handoffs.py`、Alex blueprint prompt/template、`ChatPane.tsx`。
 - 需要同步: handoff prompt template、target workflow/stage、context truncation policy。
-- 完成定义: handoff 明确来源版本、关键需求、验收标准、风险、未确认项和目标用途。
+- 完成定义: 已在 2026-06-23 本轮消化。现有 Alex `VALUE_DISCOVERY/BLUEPRINT` 到 Lisa `TEST_DESIGN/CLARIFY`、`REQ_REVIEW/REVIEW` handoff 继续复用共享 manifest、handoff API、run persistence、frontend service、shared store 和 `ChatPane`；后端从来源 artifact 的标题与 `Lisa Handoff 输入` 表格确定性派生来源摘要、目标输入摘要和未确认项，导出/start 响应携带 `context`，目标 run 首条用户消息包含“接力上下文”块；前端接力卡片展示来源版本、摘要、目标输入和未确认项。
+- 验证记录: 新增/扩展 `test_workflow_handoffs.py`、`workflowHandoffService.test.ts` 和 `ChatPane.test.tsx` 覆盖 handoff context contract、畸形 context 失败、UI 展示和目标 run prompt；本轮验证后端 handoff/API、前端 service/ChatPane/store、lint 和 `git diff --check`。
 - 不纳入: 新 runtime 分支。
 
 ## 架构约束

@@ -12,6 +12,36 @@ const isWorkflowType = (value: unknown): value is WorkflowType => (
     && Object.prototype.hasOwnProperty.call(WORKFLOWS, value)
 );
 
+const parseWorkflowHandoffContext = (context: unknown): WorkflowHandoff['context'] => {
+    if (context === undefined) {
+        return undefined;
+    }
+    if (!isRecord(context)) {
+        throw new Error('Invalid workflow handoff response');
+    }
+
+    const sourceArtifactTitle = context.sourceArtifactTitle;
+    const sourceArtifactSummary = context.sourceArtifactSummary;
+    const targetInputSummary = context.targetInputSummary;
+    const unconfirmedItems = context.unconfirmedItems;
+    if (
+        typeof sourceArtifactTitle !== 'string'
+        || typeof sourceArtifactSummary !== 'string'
+        || typeof targetInputSummary !== 'string'
+        || !Array.isArray(unconfirmedItems)
+        || !unconfirmedItems.every((item): item is string => typeof item === 'string')
+    ) {
+        throw new Error('Invalid workflow handoff response');
+    }
+
+    return {
+        sourceArtifactTitle,
+        sourceArtifactSummary,
+        targetInputSummary,
+        unconfirmedItems,
+    };
+};
+
 const parseWorkflowHandoff = (handoff: unknown): WorkflowHandoff => {
     if (!isRecord(handoff)) {
         throw new Error('Invalid workflow handoff response');
@@ -27,6 +57,7 @@ const parseWorkflowHandoff = (handoff: unknown): WorkflowHandoff => {
     const targetWorkflowId = payload.targetWorkflowId;
     const targetStageId = payload.targetStageId;
     const targetAgentId = payload.targetAgentId;
+    const context = parseWorkflowHandoffContext(payload.context);
     const prompt = payload.prompt;
     let parsedTargetRunId: string | undefined;
     if (targetRunId !== undefined) {
@@ -61,6 +92,7 @@ const parseWorkflowHandoff = (handoff: unknown): WorkflowHandoff => {
         targetWorkflowId,
         targetStageId,
         targetAgentId,
+        ...(context !== undefined ? { context } : {}),
         prompt,
     };
 };

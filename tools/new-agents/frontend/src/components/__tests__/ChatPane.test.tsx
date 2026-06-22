@@ -783,6 +783,12 @@ describe('ChatPane Component', () => {
                 targetWorkflowId: 'TEST_DESIGN',
                 targetStageId: 'CLARIFY',
                 targetAgentId: 'lisa',
+                context: {
+                    sourceArtifactTitle: 'AI 测试资产管理平台需求蓝图',
+                    sourceArtifactSummary: 'AI 测试资产管理平台需求蓝图；Lisa handoff 输入 3 项',
+                    targetInputSummary: '交给 TEST_DESIGN/CLARIFY 使用：需求 F-001、验收标准 AC-001、约束 NFR-001',
+                    unconfirmedItems: ['约束 NFR-001: 数据权限边界待确认'],
+                },
                 prompt: '请基于 Alex 的价值蓝图设计测试策略。',
             },
         ]);
@@ -791,6 +797,11 @@ describe('ChatPane Component', () => {
 
         expect(fetchWorkflowHandoffs).toHaveBeenCalledWith('alex-run-123');
         expect(await screen.findByText('交给 Lisa 做测试设计')).toBeDefined();
+        expect(screen.getByText('来源 v2')).toBeDefined();
+        expect(screen.getByText('AI 测试资产管理平台需求蓝图；Lisa handoff 输入 3 项')).toBeDefined();
+        expect(screen.getByText('交给 TEST_DESIGN/CLARIFY 使用：需求 F-001、验收标准 AC-001、约束 NFR-001')).toBeDefined();
+        expect(screen.getByText('未确认 1 项')).toBeDefined();
+        expect(screen.getByText('约束 NFR-001: 数据权限边界待确认')).toBeDefined();
     });
 
     it('applies a workflow handoff from the chat pane action', async () => {

@@ -91,6 +91,13 @@ export type Message = {
 // 已实现的工作流类型（仅包含 online 状态）
 export type WorkflowType = 'TEST_DESIGN' | 'REQ_REVIEW' | 'INCIDENT_REVIEW' | 'IDEA_BRAINSTORM' | 'VALUE_DISCOVERY';
 
+export type WorkflowHandoffContext = {
+    sourceArtifactTitle: string;
+    sourceArtifactSummary: string;
+    targetInputSummary: string;
+    unconfirmedItems: string[];
+};
+
 export type WorkflowHandoff = {
     id: string;
     label: string;
@@ -101,6 +108,7 @@ export type WorkflowHandoff = {
     targetWorkflowId: WorkflowType;
     targetStageId: string;
     targetAgentId: string;
+    context?: WorkflowHandoffContext;
     prompt: string;
 };
 

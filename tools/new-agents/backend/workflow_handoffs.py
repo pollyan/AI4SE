@@ -1,7 +1,6 @@
 from run_persistence import append_run_message, create_agent_run, get_run_snapshot
 from workflow_manifest import get_workflow_handoffs
 
-
 HANDOFF_CONTEXT_MAX_CHARS = 6000
 HANDOFF_TRUNCATION_NOTICE = "\n\n[源产物内容已截断]"
 HANDOFF_PROMPT_TEMPLATES = {
@@ -71,6 +70,7 @@ def _source_artifact(snapshot: dict, source_stage_id: str) -> dict | None:
 
 
 def _build_handoff(handoff: dict, artifact: dict) -> dict:
+    context = _build_handoff_context(handoff, artifact)
     return {
         "id": handoff["id"],
         "label": handoff["label"],
@@ -80,12 +80,13 @@ def _build_handoff(handoff: dict, artifact: dict) -> dict:
         "targetWorkflowId": handoff["targetWorkflowId"],
         "targetStageId": handoff["targetStageId"],
         "targetAgentId": handoff["targetAgentId"],
-        "prompt": _build_handoff_prompt(handoff, artifact["content"]),
+        "context": context,
+        "prompt": _build_handoff_prompt(handoff, artifact, context),
     }
 
 
-def _build_handoff_prompt(handoff: dict, source_artifact: str) -> str:
-    bounded_artifact = _bounded_source_artifact(source_artifact)
+def _build_handoff_prompt(handoff: dict, artifact: dict, context: dict) -> str:
+    bounded_artifact = _bounded_source_artifact(artifact["content"])
     template_id = handoff.get("promptTemplateId")
     template = HANDOFF_PROMPT_TEMPLATES.get(template_id)
     if template is None:
@@ -93,6 +94,7 @@ def _build_handoff_prompt(handoff: dict, source_artifact: str) -> str:
     return "\n\n".join(
         [
             template.format(**handoff),
+            _format_handoff_context(handoff, artifact, context),
             bounded_artifact,
         ]
     )
@@ -103,3 +105,98 @@ def _bounded_source_artifact(source_artifact: str) -> str:
     if len(content) <= HANDOFF_CONTEXT_MAX_CHARS:
         return content
     return content[:HANDOFF_CONTEXT_MAX_CHARS].rstrip() + HANDOFF_TRUNCATION_NOTICE
+
+
+def _build_handoff_context(handoff: dict, artifact: dict) -> dict:
+    content = artifact["content"]
+    title = _extract_title(content)
+    handoff_inputs = _extract_lisa_handoff_inputs(content)
+    item_labels = [f"{item['inputType']} {item['id']}" for item in handoff_inputs]
+    unconfirmed_items = [
+        f"{item['inputType']} {item['id']}: {item['content']}"
+        for item in handoff_inputs
+        if _is_unconfirmed_status(item["status"])
+    ]
+    target = f"{handoff['targetWorkflowId']}/{handoff['targetStageId']}"
+    target_items = (
+        "、".join(item_labels) if item_labels else "未识别到 Lisa handoff 输入"
+    )
+
+    return {
+        "sourceArtifactTitle": title,
+        "sourceArtifactSummary": f"{title}；Lisa handoff 输入 {len(handoff_inputs)} 项",
+        "targetInputSummary": f"交给 {target} 使用：{target_items}",
+        "unconfirmedItems": unconfirmed_items,
+    }
+
+
+def _format_handoff_context(handoff: dict, artifact: dict, context: dict) -> str:
+    lines = [
+        "## 接力上下文",
+        f"- 来源阶段: {handoff['sourceWorkflowId']}/{handoff['sourceStageId']}",
+        f"- 来源版本: v{artifact['versionNumber']}",
+        f"- 目标阶段: {handoff['targetWorkflowId']}/{handoff['targetStageId']}",
+        f"- 来源摘要: {context['sourceArtifactSummary']}",
+        f"- 目标输入: {context['targetInputSummary']}",
+        "- 未确认项:",
+    ]
+    if context["unconfirmedItems"]:
+        lines.extend(f"  - {item}" for item in context["unconfirmedItems"])
+    else:
+        lines.append("  - 无")
+    return "\n".join(lines)
+
+
+def _extract_title(content: str) -> str:
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            return stripped.removeprefix("# ").strip()
+    return "未命名来源产物"
+
+
+def _extract_lisa_handoff_inputs(content: str) -> list[dict]:
+    lines = content.splitlines()
+    section_start = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if line.strip().lstrip("#").strip() == "11. Lisa Handoff 输入"
+            or line.strip().lstrip("#").strip() == "Lisa Handoff 输入"
+        ),
+        None,
+    )
+    if section_start is None:
+        return []
+
+    table_lines = []
+    for line in lines[section_start + 1 :]:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            break
+        if stripped.startswith("|") and stripped.endswith("|"):
+            table_lines.append(stripped)
+
+    rows = [_parse_markdown_table_row(line) for line in table_lines]
+    data_rows = [
+        row
+        for row in rows[2:]
+        if len(row) >= 6 and any(cell.strip("- ") for cell in row)
+    ]
+    return [
+        {
+            "inputType": row[0],
+            "id": row[1],
+            "content": row[2],
+            "status": row[5],
+        }
+        for row in data_rows
+    ]
+
+
+def _parse_markdown_table_row(line: str) -> list[str]:
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def _is_unconfirmed_status(status: str) -> bool:
+    return any(keyword in status for keyword in ("待确认", "未确认", "假设"))

@@ -12,7 +12,6 @@ from models import db
 from run_persistence import create_agent_run, get_run_snapshot, record_artifact_version
 from workflow_handoffs import export_run_handoffs, start_workflow_handoff
 
-
 BLUEPRINT_MARKDOWN = """# AI 测试资产管理平台需求蓝图
 
 ## 文档信息
@@ -110,6 +109,7 @@ flowchart TD
 | --- | --- | --- | --- | --- | --- |
 | 需求 | F-001 | 自动生成测试策略和用例 | P0 需求 | 需求评审 / 测试设计 | 已确认 |
 | 验收标准 | AC-001 | 可生成策略和用例 artifact | 验收标准 | 测试断言 | 已确认 |
+| 约束 | NFR-001 | 数据权限边界待确认 | 非功能需求 | 风险分析 / 用例边界 | 待确认 |
 
 ## 12. 阶段门禁
 - [x] P0 需求均具备验收标准、owner 和可测试性等级。
@@ -143,7 +143,11 @@ def test_export_run_handoffs_returns_configured_lisa_targets(app):
     assert result["runId"] == run.id
     assert result["sourceWorkflowId"] == "VALUE_DISCOVERY"
     assert [
-        (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
+        (
+            handoff["targetWorkflowId"],
+            handoff["targetStageId"],
+            handoff["targetAgentId"],
+        )
         for handoff in result["handoffs"]
     ] == [
         ("TEST_DESIGN", "CLARIFY", "lisa"),
@@ -152,8 +156,21 @@ def test_export_run_handoffs_returns_configured_lisa_targets(app):
     first = result["handoffs"][0]
     assert first["sourceStageId"] == "BLUEPRINT"
     assert first["sourceArtifactVersion"] == 1
+    assert first["context"] == {
+        "sourceArtifactTitle": "AI 测试资产管理平台需求蓝图",
+        "sourceArtifactSummary": "AI 测试资产管理平台需求蓝图；Lisa handoff 输入 3 项",
+        "targetInputSummary": "交给 TEST_DESIGN/CLARIFY 使用：需求 F-001、验收标准 AC-001、约束 NFR-001",
+        "unconfirmedItems": ["约束 NFR-001: 数据权限边界待确认"],
+    }
+    assert "## 接力上下文" in first["prompt"]
     assert "VALUE_DISCOVERY/BLUEPRINT" in first["prompt"]
     assert "TEST_DESIGN/CLARIFY" in first["prompt"]
+    assert "来源版本: v1" in first["prompt"]
+    assert (
+        "目标输入: 交给 TEST_DESIGN/CLARIFY 使用：需求 F-001、验收标准 AC-001、约束 NFR-001"
+        in first["prompt"]
+    )
+    assert "- 约束 NFR-001: 数据权限边界待确认" in first["prompt"]
     assert "AI 测试资产管理平台" in first["prompt"]
     assert "Alex 产出的需求蓝图" not in first["prompt"]
 
@@ -193,6 +210,7 @@ def test_start_workflow_handoff_creates_target_run_with_handoff_prompt(app):
     assert result["targetWorkflowId"] == "TEST_DESIGN"
     assert result["targetStageId"] == "CLARIFY"
     assert result["targetAgentId"] == "lisa"
+    assert result["context"]["unconfirmedItems"] == ["约束 NFR-001: 数据权限边界待确认"]
     assert target_snapshot["run"]["workflowId"] == "TEST_DESIGN"
     assert target_snapshot["run"]["agentId"] == "lisa"
     assert target_snapshot["run"]["currentStageId"] == "CLARIFY"
@@ -203,6 +221,7 @@ def test_start_workflow_handoff_creates_target_run_with_handoff_prompt(app):
             "sequenceIndex": 1,
         }
     ]
+    assert "## 接力上下文" in target_snapshot["messages"][0]["content"]
 
 
 def test_start_workflow_handoff_rejects_unknown_candidate(app):
