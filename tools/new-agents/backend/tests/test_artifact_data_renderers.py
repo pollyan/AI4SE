@@ -9,6 +9,7 @@ from artifact_data_renderers import (
     ClarifyArtifactData,
     DeliveryArtifactData,
     IdeaDefineArtifactData,
+    IdeaConvergeArtifactData,
     IdeaDivergeArtifactData,
     IncidentImprovementArtifactData,
     IncidentRootCauseArtifactData,
@@ -336,6 +337,151 @@ VALID_IDEA_DIVERGE_ARTIFACT_DATA = {
         {"checked": True, "item": "创意来源和状态理由已记录。"},
         {"checked": True, "item": "高成本或越界方向已搁置或排除。"},
         {"checked": True, "item": "可进入收敛评估的候选集已形成。"},
+    ],
+}
+
+VALID_IDEA_CONVERGE_ARTIFACT_DATA = {
+    "decision_matrix": {
+        "scoring_rubric": "优先选择高影响、高信心、低实现难度且能两周内验证的创意",
+        "recommended_idea_id": "ID-001",
+        "recommendation": "方向证据评分卡",
+        "user_confirmation_status": "待确认",
+        "decision_items": [
+            {
+                "idea_id": "ID-001",
+                "idea_name": "方向证据评分卡",
+                "decision": "推荐方案",
+                "reason": "直接命中核心问题，验证成本低，证据收集路径清晰",
+                "evidence_source": "SRC-001 / DEFINE EV-001",
+            },
+            {
+                "idea_id": "ID-002",
+                "idea_name": "每周方向复盘助手",
+                "decision": "备选",
+                "reason": "使用频率和主动复盘意愿仍需验证",
+                "evidence_source": "SRC-001",
+            },
+            {
+                "idea_id": "ID-003",
+                "idea_name": "登陆页实验生成器",
+                "decision": "暂缓",
+                "reason": "依赖生成质量和投放渠道，首轮验证成本较高",
+                "evidence_source": "SRC-002",
+            },
+        ],
+    },
+    "ice_evaluations": [
+        {
+            "idea_id": "ID-001",
+            "idea_name": "方向证据评分卡",
+            "impact": 5,
+            "confidence": 4,
+            "effort": 2,
+            "ice_score": 10.0,
+            "rank": 1,
+            "conclusion": "推荐方案",
+            "elimination_reason": "不淘汰",
+            "evidence_source": "独立开发者访谈摘要",
+            "next_validation": "用手工评分卡服务 5 位开发者并观察排序是否改变",
+        },
+        {
+            "idea_id": "ID-002",
+            "idea_name": "每周方向复盘助手",
+            "impact": 4,
+            "confidence": 3,
+            "effort": 2,
+            "ice_score": 6.0,
+            "rank": 2,
+            "conclusion": "备选",
+            "elimination_reason": "不淘汰，但需先验证复盘频率",
+            "evidence_source": "社群复盘讨论",
+            "next_validation": "发布 Notion 模板并追踪两周使用留存",
+        },
+        {
+            "idea_id": "ID-003",
+            "idea_name": "登陆页实验生成器",
+            "impact": 4,
+            "confidence": 2,
+            "effort": 4,
+            "ice_score": 2.0,
+            "rank": 3,
+            "conclusion": "暂缓",
+            "elimination_reason": "验证链路依赖外部流量，首轮成本较高",
+            "evidence_source": "约束反转分析",
+            "next_validation": "等推荐方案验证后再评估是否需要登陆页实验",
+        },
+    ],
+    "resource_constraints": [
+        {
+            "constraint_type": "时间",
+            "content": "首轮验证必须在两周内完成",
+            "impact": "优先选择人工服务或表格原型",
+            "handling": "暂不开发完整 SaaS",
+            "status": "已确认",
+        },
+        {
+            "constraint_type": "数据",
+            "content": "无法直接接入用户收入和流量数据",
+            "impact": "评分先基于用户自填和访谈证据",
+            "handling": "用证据等级标注不确定性",
+            "status": "待确认",
+        },
+    ],
+    "sensitivity_analysis": [
+        {
+            "variable": "用户愿意记录证据的程度",
+            "change": "如果记录意愿低",
+            "impact": "方向证据评分卡价值下降",
+            "signal": "用户不愿每周填写 5 分钟表格",
+            "next_validation": "访谈中测试表格填写意愿并观察试用完成率",
+        },
+        {
+            "variable": "访谈样本是否代表目标用户",
+            "change": "如果样本偏向高自律用户",
+            "impact": "评分卡对普通独立开发者的适配性下降",
+            "signal": "低自律用户试用中断",
+            "next_validation": "补充不同经验层级的开发者试用",
+        },
+    ],
+    "validation_experiments": [
+        {
+            "experiment_id": "EXP-001",
+            "idea_ids": ["ID-001"],
+            "goal": "验证方向证据评分卡是否改变投入优先级",
+            "method": "手工访谈 + 表格评分服务",
+            "success_metric": "5 位试用者中至少 3 位调整下一周投入方向",
+            "owner": "产品负责人",
+            "next_validation": "招募 5 位独立开发者完成一次方向复盘",
+            "status": "待执行",
+        },
+        {
+            "experiment_id": "EXP-002",
+            "idea_ids": ["ID-002"],
+            "goal": "验证每周复盘助手的主动使用频率",
+            "method": "发布 Notion 模板并追踪两周复盘提交",
+            "success_metric": "两周后至少 40% 试用者完成第二次复盘",
+            "owner": "用户研究",
+            "next_validation": "作为备选实验排期",
+            "status": "待排期",
+        },
+    ],
+    "merge_paths": [
+        {
+            "path_id": "MERGE-001",
+            "source_idea_ids": ["ID-001", "ID-002"],
+            "merge_logic": "评分卡负责决策，复盘助手负责持续输入证据",
+            "integrated_concept": "方向证据评分卡 + 每周复盘提醒",
+            "applicable_condition": "当用户愿意每周持续记录证据时合并",
+            "risk": "合并后流程变重，可能降低首次试用完成率",
+            "user_confirmation_status": "待确认",
+        }
+    ],
+    "stage_gate": [
+        {"checked": True, "item": "已形成至少一个推荐方案。"},
+        {"checked": True, "item": "推荐方案有 ICE 评分、证据来源和下一步验证。"},
+        {"checked": True, "item": "淘汰或暂缓理由已记录。"},
+        {"checked": True, "item": "关键资源约束和敏感性已记录。"},
+        {"checked": True, "item": "可进入产品概念简报阶段。"},
     ],
 }
 
@@ -2303,6 +2449,81 @@ def test_idea_diverge_artifact_data_requires_checked_stage_gate():
         IdeaDivergeArtifactData.model_validate(invalid)
 
 
+def test_idea_converge_artifact_data_rejects_duplicate_idea_id():
+    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    invalid["ice_evaluations"].append(copy.deepcopy(invalid["ice_evaluations"][0]))
+
+    with pytest.raises(ValidationError, match="duplicate idea_id"):
+        IdeaConvergeArtifactData.model_validate(invalid)
+
+
+def test_idea_converge_artifact_data_rejects_duplicate_rank():
+    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    invalid["ice_evaluations"][1]["rank"] = 1
+
+    with pytest.raises(ValidationError, match="duplicate rank"):
+        IdeaConvergeArtifactData.model_validate(invalid)
+
+
+def test_idea_converge_artifact_data_rejects_invalid_ice_score():
+    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    invalid["ice_evaluations"][0]["ice_score"] = 9.5
+
+    with pytest.raises(ValidationError, match="ice_score"):
+        IdeaConvergeArtifactData.model_validate(invalid)
+
+
+def test_idea_converge_artifact_data_rejects_unknown_recommended_idea():
+    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    invalid["decision_matrix"]["recommended_idea_id"] = "ID-404"
+
+    with pytest.raises(ValidationError, match="recommended_idea_id"):
+        IdeaConvergeArtifactData.model_validate(invalid)
+
+
+def test_idea_converge_artifact_data_rejects_unknown_decision_matrix_idea():
+    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    invalid["decision_matrix"]["decision_items"][0]["idea_id"] = "ID-404"
+
+    with pytest.raises(ValidationError, match="decision_matrix"):
+        IdeaConvergeArtifactData.model_validate(invalid)
+
+
+def test_idea_converge_artifact_data_rejects_unknown_validation_experiment_idea():
+    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    invalid["validation_experiments"][0]["idea_ids"] = ["ID-404"]
+
+    with pytest.raises(ValidationError, match="validation_experiments"):
+        IdeaConvergeArtifactData.model_validate(invalid)
+
+
+def test_idea_converge_artifact_data_rejects_unknown_merge_path_idea():
+    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    invalid["merge_paths"][0]["source_idea_ids"] = ["ID-404"]
+
+    with pytest.raises(ValidationError, match="merge_paths"):
+        IdeaConvergeArtifactData.model_validate(invalid)
+
+
+def test_idea_converge_artifact_data_requires_recommended_idea():
+    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    invalid["decision_matrix"]["recommended_idea_id"] = "ID-002"
+    invalid["ice_evaluations"][0]["conclusion"] = "备选"
+
+    with pytest.raises(ValidationError, match="recommended"):
+        IdeaConvergeArtifactData.model_validate(invalid)
+
+
+def test_idea_converge_artifact_data_requires_checked_stage_gate():
+    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    invalid["stage_gate"] = [
+        {**item, "checked": False} for item in invalid["stage_gate"]
+    ]
+
+    with pytest.raises(ValidationError, match="stage_gate"):
+        IdeaConvergeArtifactData.model_validate(invalid)
+
+
 def test_incident_timeline_artifact_data_rejects_duplicate_fact_id():
     invalid = copy.deepcopy(VALID_INCIDENT_TIMELINE_ARTIFACT_DATA)
     invalid["fact_sources"].append(copy.deepcopy(invalid["fact_sources"][0]))
@@ -3324,6 +3545,73 @@ def test_render_idea_diverge_artifact_data_is_deterministic_and_contract_valid()
             first,
             workflow_id="IDEA_BRAINSTORM",
             current_stage_id="DIVERGE",
+        )
+        == first
+    )
+
+
+def test_render_idea_converge_artifact_data_is_deterministic_and_contract_valid():
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已完成创意收敛评估，请确认右侧推荐方案。",
+            "artifact_data": VALID_IDEA_CONVERGE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "CONCEPT",
+            },
+            "warnings": [],
+        },
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONVERGE",
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已完成创意收敛评估，请确认右侧推荐方案。",
+            "artifact_data": VALID_IDEA_CONVERGE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "CONCEPT",
+            },
+            "warnings": [],
+        },
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONVERGE",
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert first.artifact_update.type == "replace"
+    assert first.stage_action is not None
+    assert first.stage_action.target_stage_id == "CONCEPT"
+    assert "# 收敛聚焦" in first.artifact_update.markdown
+    assert "## 决策矩阵" in first.artifact_update.markdown
+    assert "quadrantChart" in first.artifact_update.markdown
+    assert "## ICE 评估表" in first.artifact_update.markdown
+    assert "## 资源约束" in first.artifact_update.markdown
+    assert "## 敏感性分析" in first.artifact_update.markdown
+    assert "## 验证实验" in first.artifact_update.markdown
+    assert "## 整合演进路径（如果触发合并）" in first.artifact_update.markdown
+    assert "## 阶段门禁" in first.artifact_update.markdown
+    for keyword in [
+        "评分口径",
+        "影响力",
+        "信心",
+        "实现难度",
+        "ICE得分",
+        "淘汰理由",
+        "推荐方案",
+        "下一步验证",
+        "合并逻辑",
+        "证据来源",
+        "用户确认状态",
+    ]:
+        assert keyword in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="IDEA_BRAINSTORM",
+            current_stage_id="CONVERGE",
         )
         == first
     )

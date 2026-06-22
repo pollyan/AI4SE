@@ -22,6 +22,7 @@ from agent_runtime import (
 )
 from sse_schemas import AgentTurnDeltaOutput
 from test_artifact_data_renderers import (
+    VALID_IDEA_CONVERGE_ARTIFACT_DATA,
     VALID_IDEA_DEFINE_ARTIFACT_DATA,
     VALID_IDEA_DIVERGE_ARTIFACT_DATA,
     VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA,
@@ -956,6 +957,38 @@ def test_parse_agent_turn_output_text_renders_idea_diverge_artifact_data():
     assert output.stage_action.target_stage_id == "CONVERGE"
 
 
+def test_parse_agent_turn_output_text_renders_idea_converge_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "已完成创意收敛评估。",
+            "artifact_data": VALID_IDEA_CONVERGE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "CONCEPT",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONVERGE",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 收敛聚焦")
+    assert "## 决策矩阵" in output.artifact_update.markdown
+    assert "quadrantChart" in output.artifact_update.markdown
+    assert "## ICE 评估表" in output.artifact_update.markdown
+    assert "推荐方案" in output.artifact_update.markdown
+    assert "用户确认状态" in output.artifact_update.markdown
+    assert output.stage_action is not None
+    assert output.stage_action.target_stage_id == "CONCEPT"
+
+
 def test_value_persona_structured_output_instruction_requests_artifact_data_not_markdown():
     instruction = build_structured_output_instruction(
         "VALUE_DISCOVERY",
@@ -1090,6 +1123,24 @@ def test_idea_diverge_structured_output_instruction_requests_artifact_data_not_m
     assert "不要输出完整 Markdown" in instruction
 
 
+def test_idea_converge_structured_output_instruction_requests_artifact_data_not_markdown():
+    instruction = build_structured_output_instruction(
+        "IDEA_BRAINSTORM",
+        "CONVERGE",
+    )
+
+    assert "artifact_data" in instruction
+    assert "artifact_update" not in instruction
+    assert "decision_matrix" in instruction
+    assert "ice_evaluations" in instruction
+    assert "resource_constraints" in instruction
+    assert "sensitivity_analysis" in instruction
+    assert "validation_experiments" in instruction
+    assert "merge_paths" in instruction
+    assert '"target_stage_id": "CONCEPT"' in instruction
+    assert "不要输出完整 Markdown" in instruction
+
+
 def test_value_persona_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
     prompt = build_raw_json_retry_prompt(
         "原始提示",
@@ -1198,6 +1249,22 @@ def test_idea_diverge_retry_prompt_requests_artifact_data_fix_not_markdown_rewri
 
     assert "artifact_data" in prompt
     assert "idea_sources references unknown idea ids" in prompt
+    assert "不要输出 Markdown 文档" in prompt
+    assert "artifact_update.type 必须为 replace" not in prompt
+
+
+def test_idea_converge_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
+    prompt = build_raw_json_retry_prompt(
+        "原始提示",
+        ValueError(
+            "ice_evaluations.0.ice_score must equal impact * confidence / effort"
+        ),
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONVERGE",
+    )
+
+    assert "artifact_data" in prompt
+    assert "ice_evaluations.0.ice_score" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -2032,6 +2099,71 @@ def test_runtime_raw_json_stream_turn_renders_idea_diverge_artifact_data_before_
     assert "artifact_update.markdown" not in build_structured_output_instruction(
         "IDEA_BRAINSTORM",
         "DIVERGE",
+    )
+
+
+def test_runtime_raw_json_stream_turn_renders_idea_converge_artifact_data_before_final_output(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "已完成创意收敛评估。",
+            "artifact_data": VALID_IDEA_CONVERGE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "CONCEPT",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield final_json
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是创新顾问。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "请对这些创意做 ICE 收敛评估",
+            workflow_id="IDEA_BRAINSTORM",
+            current_stage_id="CONVERGE",
+        )
+    )
+
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert outputs[-1].artifact_update.markdown is not None
+    assert outputs[-1].artifact_update.markdown.startswith("# 收敛聚焦")
+    assert "## 决策矩阵" in outputs[-1].artifact_update.markdown
+    assert "quadrantChart" in outputs[-1].artifact_update.markdown
+    assert "## ICE 评估表" in outputs[-1].artifact_update.markdown
+    assert "推荐方案" in outputs[-1].artifact_update.markdown
+    assert "用户确认状态" in outputs[-1].artifact_update.markdown
+    assert outputs[-1].stage_action is not None
+    assert outputs[-1].stage_action.target_stage_id == "CONCEPT"
+    assert calls[0]["response_format"] == {"type": "json_object"}
+    assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert "artifact_data" in calls[0]["messages"][0]["content"]
+    assert "decision_matrix" in calls[0]["messages"][0]["content"]
+    assert "ice_evaluations" in calls[0]["messages"][0]["content"]
+    assert "validation_experiments" in calls[0]["messages"][0]["content"]
+    assert "artifact_update.markdown" not in build_structured_output_instruction(
+        "IDEA_BRAINSTORM",
+        "CONVERGE",
     )
 
 

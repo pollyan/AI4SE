@@ -634,10 +634,43 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+IDEA_CONVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮如何对候选创意做收敛评估、推荐了哪个方案、淘汰或暂缓了哪些方向、有哪些资源约束和下一步验证。不要复制完整产出物正文。",
+  "artifact_data": {
+    "decision_matrix": {"scoring_rubric": "...", "recommended_idea_id": "ID-001", "recommendation": "...", "user_confirmation_status": "待确认/已确认", "decision_items": [{"idea_id": "ID-001", "idea_name": "...", "decision": "推荐方案/备选/暂缓/淘汰", "reason": "...", "evidence_source": "..."}]},
+    "ice_evaluations": [{"idea_id": "ID-001", "idea_name": "...", "impact": 5, "confidence": 4, "effort": 2, "ice_score": 10.0, "rank": 1, "conclusion": "推荐方案/备选/暂缓/淘汰", "elimination_reason": "...", "evidence_source": "...", "next_validation": "..."}],
+    "resource_constraints": [{"constraint_type": "时间/数据/技术/渠道/预算", "content": "...", "impact": "...", "handling": "...", "status": "已确认/待确认"}],
+    "sensitivity_analysis": [{"variable": "...", "change": "...", "impact": "...", "signal": "...", "next_validation": "..."}],
+    "validation_experiments": [{"experiment_id": "EXP-001", "idea_ids": ["ID-001"], "goal": "...", "method": "...", "success_metric": "...", "owner": "产品/用户研究/业务/用户确认", "next_validation": "...", "status": "待执行/待排期/进行中/已完成"}],
+    "merge_paths": [{"path_id": "MERGE-001", "source_idea_ids": ["ID-001", "ID-002"], "merge_logic": "...", "integrated_concept": "...", "applicable_condition": "...", "risk": "...", "user_confirmation_status": "待确认/已确认"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "CONCEPT"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；ice_evaluations.idea_id 必须唯一；rank 必须唯一；impact、confidence、effort 必须是 1 到 5 的整数；ice_score 必须等于 impact * confidence / effort；decision_matrix.recommended_idea_id、validation_experiments.idea_ids 和 merge_paths.source_idea_ids 只能引用已存在的 idea_id；推荐方案必须同时出现在 ICE 结论和决策矩阵中；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 quadrantChart，后端会负责确定性渲染右侧收敛聚焦产物和 Mermaid quadrantChart。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in {
         ("IDEA_BRAINSTORM", "DEFINE"),
         ("IDEA_BRAINSTORM", "DIVERGE"),
+        ("IDEA_BRAINSTORM", "CONVERGE"),
         ("TEST_DESIGN", "CLARIFY"),
         ("TEST_DESIGN", "STRATEGY"),
         ("TEST_DESIGN", "CASES"),
@@ -662,6 +695,8 @@ def build_structured_output_instruction(
         return IDEA_DEFINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DIVERGE"):
         return IDEA_DIVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONVERGE"):
+        return IDEA_CONVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
         return ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):

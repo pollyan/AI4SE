@@ -321,6 +321,169 @@ class IdeaDivergeArtifactData(StrictArtifactDataModel):
         return self
 
 
+class IdeaDecisionItem(StrictArtifactDataModel):
+    idea_id: str
+    idea_name: str
+    decision: str
+    reason: str
+    evidence_source: str
+
+
+class IdeaDecisionMatrix(StrictArtifactDataModel):
+    scoring_rubric: str
+    recommended_idea_id: str
+    recommendation: str
+    user_confirmation_status: str
+    decision_items: list[IdeaDecisionItem] = Field(min_length=1)
+
+
+class IdeaIceEvaluation(StrictArtifactDataModel):
+    idea_id: str
+    idea_name: str
+    impact: int = Field(ge=1, le=5)
+    confidence: int = Field(ge=1, le=5)
+    effort: int = Field(ge=1, le=5)
+    ice_score: float
+    rank: int = Field(ge=1)
+    conclusion: str
+    elimination_reason: str
+    evidence_source: str
+    next_validation: str
+
+
+class IdeaResourceConstraint(StrictArtifactDataModel):
+    constraint_type: str
+    content: str
+    impact: str
+    handling: str
+    status: str
+
+
+class IdeaSensitivityItem(StrictArtifactDataModel):
+    variable: str
+    change: str
+    impact: str
+    signal: str
+    next_validation: str
+
+
+class IdeaValidationExperiment(StrictArtifactDataModel):
+    experiment_id: str
+    idea_ids: list[str] = Field(min_length=1)
+    goal: str
+    method: str
+    success_metric: str
+    owner: str
+    next_validation: str
+    status: str
+
+
+class IdeaMergePath(StrictArtifactDataModel):
+    path_id: str
+    source_idea_ids: list[str] = Field(min_length=1)
+    merge_logic: str
+    integrated_concept: str
+    applicable_condition: str
+    risk: str
+    user_confirmation_status: str
+
+
+class IdeaConvergeArtifactData(StrictArtifactDataModel):
+    decision_matrix: IdeaDecisionMatrix
+    ice_evaluations: list[IdeaIceEvaluation] = Field(min_length=1)
+    resource_constraints: list[IdeaResourceConstraint] = Field(min_length=1)
+    sensitivity_analysis: list[IdeaSensitivityItem] = Field(min_length=1)
+    validation_experiments: list[IdeaValidationExperiment] = Field(min_length=1)
+    merge_paths: list[IdeaMergePath] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_idea_converge_consistency(self) -> "IdeaConvergeArtifactData":
+        idea_ids = {item.idea_id for item in self.ice_evaluations}
+        if len(idea_ids) != len(self.ice_evaluations):
+            raise ValueError("ice_evaluations contains duplicate idea_id")
+
+        ranks = {item.rank for item in self.ice_evaluations}
+        if len(ranks) != len(self.ice_evaluations):
+            raise ValueError("ice_evaluations contains duplicate rank")
+
+        for item in self.ice_evaluations:
+            expected_score = item.impact * item.confidence / item.effort
+            if abs(item.ice_score - expected_score) > 0.01:
+                raise ValueError(
+                    f"ice_evaluations.{item.idea_id}.ice_score must equal "
+                    "impact * confidence / effort"
+                )
+
+        recommended_idea_id = self.decision_matrix.recommended_idea_id
+        if recommended_idea_id not in idea_ids:
+            raise ValueError("decision_matrix.recommended_idea_id is unknown")
+
+        decision_idea_ids = {
+            item.idea_id for item in self.decision_matrix.decision_items
+        }
+        unknown_decision_idea_ids = sorted(decision_idea_ids - idea_ids)
+        if unknown_decision_idea_ids:
+            raise ValueError(
+                "decision_matrix references unknown idea ids: "
+                + ", ".join(unknown_decision_idea_ids)
+            )
+
+        recommended_evaluation = next(
+            item for item in self.ice_evaluations if item.idea_id == recommended_idea_id
+        )
+        recommended_decision = next(
+            (
+                item
+                for item in self.decision_matrix.decision_items
+                if item.idea_id == recommended_idea_id
+            ),
+            None,
+        )
+        if (
+            "推荐" not in recommended_evaluation.conclusion
+            or recommended_decision is None
+            or "推荐" not in recommended_decision.decision
+        ):
+            raise ValueError(
+                "recommended idea must match a recommended ICE evaluation "
+                "and decision item"
+            )
+
+        unknown_experiment_idea_ids = sorted(
+            {
+                idea_id
+                for experiment in self.validation_experiments
+                for idea_id in experiment.idea_ids
+                if idea_id not in idea_ids
+            }
+        )
+        if unknown_experiment_idea_ids:
+            raise ValueError(
+                "validation_experiments references unknown idea ids: "
+                + ", ".join(unknown_experiment_idea_ids)
+            )
+
+        unknown_merge_idea_ids = sorted(
+            {
+                idea_id
+                for path in self.merge_paths
+                for idea_id in path.source_idea_ids
+                if idea_id not in idea_ids
+            }
+        )
+        if unknown_merge_idea_ids:
+            raise ValueError(
+                "merge_paths references unknown idea ids: "
+                + ", ".join(unknown_merge_idea_ids)
+            )
+
+        if not any(item.checked for item in self.stage_gate):
+            raise ValueError("stage_gate must include at least one checked item")
+
+        return self
+
+
 class IncidentSummary(StrictArtifactDataModel):
     incident_name: str
     severity: str
@@ -1917,6 +2080,11 @@ def render_agent_turn_from_artifact_data(
     elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DIVERGE"):
         artifact_data = IdeaDivergeArtifactData.model_validate(payload["artifact_data"])
         markdown = render_idea_brainstorm_diverge_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONVERGE"):
+        artifact_data = IdeaConvergeArtifactData.model_validate(
+            payload["artifact_data"]
+        )
+        markdown = render_idea_brainstorm_converge_markdown(artifact_data)
     elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
         artifact_data = IncidentTimelineArtifactData.model_validate(
             payload["artifact_data"]
@@ -2026,6 +2194,23 @@ def render_idea_brainstorm_diverge_markdown(data: IdeaDivergeArtifactData) -> st
         _render_idea_cards(data.idea_cards),
         _render_idea_sources(data.idea_sources),
         _render_idea_parked_or_excluded(data.parked_or_excluded),
+        _render_idea_stage_gate(data.stage_gate),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_idea_brainstorm_converge_markdown(data: IdeaConvergeArtifactData) -> str:
+    sections = [
+        "# 收敛聚焦",
+        _render_idea_converge_decision_matrix(
+            data.decision_matrix,
+            data.ice_evaluations,
+        ),
+        _render_idea_ice_evaluations(data.ice_evaluations),
+        _render_idea_resource_constraints(data.resource_constraints),
+        _render_idea_sensitivity_analysis(data.sensitivity_analysis),
+        _render_idea_validation_experiments(data.validation_experiments),
+        _render_idea_merge_paths(data.merge_paths),
         _render_idea_stage_gate(data.stage_gate),
     ]
     return "\n\n".join(sections)
@@ -2532,6 +2717,192 @@ def _render_idea_parked_or_excluded(
     ]
     return "## 搁置/排除记录\n" + _markdown_table(
         ["记录 ID", "创意或方向", "搁置/排除原因", "重新考虑条件", "状态理由"],
+        rows,
+    )
+
+
+def _render_idea_converge_decision_matrix(
+    matrix: IdeaDecisionMatrix,
+    evaluations: list[IdeaIceEvaluation],
+) -> str:
+    summary_rows = [
+        ("评分口径", matrix.scoring_rubric),
+        ("推荐方案", f"{matrix.recommended_idea_id} {matrix.recommendation}"),
+        ("用户确认状态", matrix.user_confirmation_status),
+    ]
+    decision_rows = [
+        (
+            item.idea_id,
+            item.idea_name,
+            item.decision,
+            item.reason,
+            item.evidence_source,
+        )
+        for item in matrix.decision_items
+    ]
+    return (
+        "## 决策矩阵\n"
+        + _render_idea_converge_quadrant_chart(evaluations)
+        + "\n\n"
+        + _markdown_table(["字段", "内容"], summary_rows)
+        + "\n\n"
+        + _markdown_table(
+            ["创意 ID", "创意名称", "决策", "理由", "证据来源"],
+            decision_rows,
+        )
+    )
+
+
+def _render_idea_converge_quadrant_chart(
+    evaluations: list[IdeaIceEvaluation],
+) -> str:
+    lines = [
+        "```mermaid",
+        "quadrantChart",
+        "    title 创意收敛决策矩阵",
+        '    x-axis "低信心" --> "高信心"',
+        '    y-axis "低影响力" --> "高影响力"',
+        '    quadrant-1 "优先验证"',
+        '    quadrant-2 "潜力观察"',
+        '    quadrant-3 "暂缓"',
+        '    quadrant-4 "低成本尝试"',
+    ]
+    for item in evaluations:
+        x_value = item.confidence / 5
+        y_value = item.impact / 5
+        lines.append(
+            f'    "{_escape_mermaid_label(item.idea_name)}": '
+            f"[{x_value:.2f}, {y_value:.2f}]"
+        )
+    lines.append("```")
+    return "\n".join(lines)
+
+
+def _render_idea_ice_evaluations(items: list[IdeaIceEvaluation]) -> str:
+    rows = [
+        (
+            item.idea_id,
+            item.idea_name,
+            item.impact,
+            item.confidence,
+            item.effort,
+            f"{item.ice_score:.2f}",
+            item.rank,
+            item.conclusion,
+            item.elimination_reason,
+            item.evidence_source,
+            item.next_validation,
+        )
+        for item in sorted(items, key=lambda evaluation: evaluation.rank)
+    ]
+    return "## ICE 评估表\n" + _markdown_table(
+        [
+            "创意 ID",
+            "创意名称",
+            "影响力",
+            "信心",
+            "实现难度",
+            "ICE得分",
+            "排名",
+            "结论",
+            "淘汰理由",
+            "证据来源",
+            "下一步验证",
+        ],
+        rows,
+    )
+
+
+def _render_idea_resource_constraints(
+    items: list[IdeaResourceConstraint],
+) -> str:
+    rows = [
+        (
+            item.constraint_type,
+            item.content,
+            item.impact,
+            item.handling,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 资源约束\n" + _markdown_table(
+        ["约束类型", "内容", "影响", "处理方式", "状态"],
+        rows,
+    )
+
+
+def _render_idea_sensitivity_analysis(items: list[IdeaSensitivityItem]) -> str:
+    rows = [
+        (
+            item.variable,
+            item.change,
+            item.impact,
+            item.signal,
+            item.next_validation,
+        )
+        for item in items
+    ]
+    return "## 敏感性分析\n" + _markdown_table(
+        ["敏感变量", "变化方向", "影响", "观察信号", "下一步验证"],
+        rows,
+    )
+
+
+def _render_idea_validation_experiments(
+    items: list[IdeaValidationExperiment],
+) -> str:
+    rows = [
+        (
+            item.experiment_id,
+            ", ".join(item.idea_ids),
+            item.goal,
+            item.method,
+            item.success_metric,
+            item.owner,
+            item.next_validation,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 验证实验\n" + _markdown_table(
+        [
+            "实验 ID",
+            "关联创意",
+            "实验目标",
+            "方法",
+            "成功指标",
+            "owner",
+            "下一步验证",
+            "状态",
+        ],
+        rows,
+    )
+
+
+def _render_idea_merge_paths(items: list[IdeaMergePath]) -> str:
+    rows = [
+        (
+            item.path_id,
+            ", ".join(item.source_idea_ids),
+            item.merge_logic,
+            item.integrated_concept,
+            item.applicable_condition,
+            item.risk,
+            item.user_confirmation_status,
+        )
+        for item in items
+    ]
+    return "## 整合演进路径（如果触发合并）\n" + _markdown_table(
+        [
+            "路径 ID",
+            "来源创意",
+            "合并逻辑",
+            "整合方案",
+            "适用条件",
+            "风险",
+            "用户确认状态",
+        ],
         rows,
     )
 
