@@ -8,6 +8,7 @@ from artifact_data_renderers import (
     CasesArtifactData,
     ClarifyArtifactData,
     DeliveryArtifactData,
+    IncidentTimelineArtifactData,
     ReqReviewArtifactData,
     ReqReviewReportArtifactData,
     StrategyArtifactData,
@@ -111,6 +112,150 @@ VALID_CLARIFY_ARTIFACT_DATA = {
             "checked": True,
             "item": "测试范围和不测范围已明确",
         }
+    ],
+}
+
+VALID_INCIDENT_TIMELINE_ARTIFACT_DATA = {
+    "incident_summary": {
+        "incident_name": "支付回调失败导致订单状态延迟",
+        "severity": "P1",
+        "detected_at": "2026-06-23 14:30",
+        "recovered_at": "2026-06-23 14:50",
+        "duration": "20 分钟",
+        "impact_scope": "支付成功用户的订单状态同步延迟",
+        "current_status": "已恢复",
+    },
+    "impact_metrics": [
+        {
+            "dimension": "用户影响",
+            "quantification": "约 120 笔订单状态延迟更新",
+            "confidence": "中",
+            "source": "订单监控和客服工单",
+            "status": "待确认",
+        },
+        {
+            "dimension": "业务影响",
+            "quantification": "未发现实际扣款失败，主要影响订单展示",
+            "confidence": "中",
+            "source": "支付平台对账和业务监控",
+            "status": "待确认",
+        },
+    ],
+    "fact_sources": [
+        {
+            "fact_id": "FACT-001",
+            "fact": "14:30 订单状态延迟告警触发",
+            "source": "监控告警",
+            "confidence": "高",
+            "status": "已确认",
+        },
+        {
+            "fact_id": "FACT-002",
+            "fact": "14:37 值班同学重启回调消费者",
+            "source": "值班记录",
+            "confidence": "中",
+            "status": "待确认",
+        },
+        {
+            "fact_id": "FACT-003",
+            "fact": "14:50 订单延迟队列恢复到正常水位",
+            "source": "监控面板",
+            "confidence": "高",
+            "status": "已确认",
+        },
+    ],
+    "timeline_events": [
+        {
+            "section": "故障发生",
+            "occurred_at": "14:30",
+            "event": "订单状态延迟告警触发",
+            "fact_ids": ["FACT-001"],
+        },
+        {
+            "section": "发现与响应",
+            "occurred_at": "14:35",
+            "event": "值班同学确认支付回调堆积",
+            "fact_ids": ["FACT-001"],
+        },
+        {
+            "section": "处理与恢复",
+            "occurred_at": "14:37",
+            "event": "重启回调消费者并观察队列水位",
+            "fact_ids": ["FACT-002"],
+        },
+        {
+            "section": "恢复确认",
+            "occurred_at": "14:50",
+            "event": "订单延迟队列恢复到正常水位",
+            "fact_ids": ["FACT-003"],
+        },
+    ],
+    "fact_separation": [
+        {
+            "item_type": "事实",
+            "content": "告警、重启操作和队列水位恢复均有来源记录。",
+            "handling": "纳入事实摘要和时间线",
+            "blocking": "否",
+            "status": "已确认",
+        },
+        {
+            "item_type": "推测",
+            "content": "可能是上游支付平台回调抖动。",
+            "handling": "移入根因分析阶段验证",
+            "blocking": "否",
+            "status": "待确认",
+        },
+        {
+            "item_type": "待确认",
+            "content": "实际受影响订单数需要数据仓库复核。",
+            "handling": "补充订单查询结果",
+            "blocking": "非阻断",
+            "status": "待补充",
+        },
+    ],
+    "fact_summary": [
+        "2026-06-23 14:30，支付回调相关订单状态延迟告警触发。",
+        "值班同学确认存在回调堆积，并在 14:37 重启回调消费者。",
+        "14:50，订单延迟队列恢复到正常水位，当前状态为已恢复。",
+    ],
+    "participants": [
+        {
+            "role": "发现者",
+            "person": "监控系统",
+            "action": "触发订单状态延迟告警",
+            "participated_at": "14:30",
+            "status": "已确认",
+        },
+        {
+            "role": "一线响应",
+            "person": "支付值班同学",
+            "action": "确认堆积并重启回调消费者",
+            "participated_at": "14:35-14:37",
+            "status": "待确认",
+        },
+    ],
+    "missing_information": [
+        {
+            "item": "最终受影响订单数",
+            "reason": "影响量化和严重等级确认需要精确数据",
+            "supplement_method": "查询订单状态延迟记录和客服工单",
+            "blocking": "非阻断",
+            "owner": "数据分析",
+            "status": "待补充",
+        }
+    ],
+    "stage_gate": [
+        {
+            "checked": True,
+            "item": "故障表现、发现时间、恢复时间和当前状态已记录。",
+        },
+        {
+            "checked": True,
+            "item": "影响范围和影响量化已记录，或明确标注为待补充。",
+        },
+        {"checked": True, "item": "关键事实有来源和可信度。"},
+        {"checked": True, "item": "推测未混入事实摘要。"},
+        {"checked": True, "item": "阻断进入根因分析的信息已明确列出。"},
     ],
 }
 
@@ -1507,6 +1652,22 @@ def test_clarify_artifact_data_rejects_empty_required_lists():
         ClarifyArtifactData.model_validate(invalid)
 
 
+def test_incident_timeline_artifact_data_rejects_duplicate_fact_id():
+    invalid = copy.deepcopy(VALID_INCIDENT_TIMELINE_ARTIFACT_DATA)
+    invalid["fact_sources"].append(copy.deepcopy(invalid["fact_sources"][0]))
+
+    with pytest.raises(ValidationError, match="duplicate fact_id"):
+        IncidentTimelineArtifactData.model_validate(invalid)
+
+
+def test_incident_timeline_artifact_data_rejects_unknown_timeline_fact_reference():
+    invalid = copy.deepcopy(VALID_INCIDENT_TIMELINE_ARTIFACT_DATA)
+    invalid["timeline_events"][0]["fact_ids"] = ["FACT-404"]
+
+    with pytest.raises(ValidationError, match="references unknown fact ids"):
+        IncidentTimelineArtifactData.model_validate(invalid)
+
+
 def test_render_clarify_artifact_data_is_deterministic_and_contract_valid():
     first = render_agent_turn_from_artifact_data(
         {
@@ -2111,6 +2272,68 @@ def test_render_value_blueprint_artifact_data_is_deterministic_and_contract_vali
             first,
             workflow_id="VALUE_DISCOVERY",
             current_stage_id="BLUEPRINT",
+        )
+        == first
+    )
+
+
+def test_render_incident_timeline_artifact_data_is_deterministic_and_contract_valid():
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已还原故障事件时间线。",
+            "artifact_data": VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "ROOT_CAUSE",
+            },
+            "warnings": [],
+        },
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="TIMELINE",
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已还原故障事件时间线。",
+            "artifact_data": VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "ROOT_CAUSE",
+            },
+            "warnings": [],
+        },
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="TIMELINE",
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert first.artifact_update.type == "replace"
+    assert first.stage_action is not None
+    assert first.stage_action.target_stage_id == "ROOT_CAUSE"
+    assert "# 故障复盘报告" in first.artifact_update.markdown
+    assert "## 1. 事件概要" in first.artifact_update.markdown
+    assert "## 2. 影响量化" in first.artifact_update.markdown
+    assert "## 3. 事实来源" in first.artifact_update.markdown
+    assert "## 4. 事件时间线" in first.artifact_update.markdown
+    assert "timeline\n    title 支付回调失败导致订单状态延迟 事件时间线" in (
+        first.artifact_update.markdown
+    )
+    assert "14：30 : 订单状态延迟告警触发" in first.artifact_update.markdown
+    assert "14:30 : 订单状态延迟告警触发" not in first.artifact_update.markdown
+    assert "## 5. 事实/推测隔离" in first.artifact_update.markdown
+    assert "## 6. 事实摘要" in first.artifact_update.markdown
+    assert "## 7. 参与人员" in first.artifact_update.markdown
+    assert "## 8. 待补充信息" in first.artifact_update.markdown
+    assert "## 9. 阶段门禁" in first.artifact_update.markdown
+    assert "可信度" in first.artifact_update.markdown
+    assert "阻断性" in first.artifact_update.markdown
+    assert "状态" in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="INCIDENT_REVIEW",
+            current_stage_id="TIMELINE",
         )
         == first
     )

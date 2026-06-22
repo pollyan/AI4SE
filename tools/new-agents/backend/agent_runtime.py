@@ -465,6 +465,40 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+INCIDENT_TIMELINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮已经梳理哪些事故事实、时间线、影响范围和待确认信息。不要复制完整产出物正文。",
+  "artifact_data": {
+    "incident_summary": {"incident_name": "...", "severity": "P0/P1/P2/P3", "detected_at": "YYYY-MM-DD HH:MM", "recovered_at": "YYYY-MM-DD HH:MM 或 未恢复", "duration": "...", "impact_scope": "...", "current_status": "已恢复/处理中/待确认"},
+    "impact_metrics": [{"dimension": "用户影响/业务影响/系统影响/数据影响", "quantification": "...", "confidence": "高/中/低", "source": "...", "status": "已确认/推测/待确认"}],
+    "fact_sources": [{"fact_id": "FACT-001", "fact": "...", "source": "监控告警/日志/用户反馈/人工确认/会议记录", "confidence": "高/中/低", "status": "已确认/待确认"}],
+    "timeline_events": [{"section": "故障发生/发现与响应/处理与恢复/恢复确认", "occurred_at": "HH:MM 或 YYYY-MM-DD HH:MM", "event": "...", "fact_ids": ["FACT-001"]}],
+    "fact_separation": [{"item_type": "事实/推测/待确认", "content": "...", "handling": "...", "blocking": "阻断/非阻断", "status": "已确认/待确认/需补证据"}],
+    "fact_summary": ["..."],
+    "participants": [{"role": "发现者/一线响应/研发/运维/产品/客服", "person": "...", "action": "...", "participated_at": "HH:MM 或 YYYY-MM-DD HH:MM", "status": "已确认/待确认"}],
+    "missing_information": [{"item": "...", "reason": "...", "supplement_method": "...", "blocking": "阻断/非阻断", "owner": "...", "status": "待补充/已补充/风险接受"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "ROOT_CAUSE"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；fact_sources.fact_id 必须唯一；timeline_events.fact_ids 只能引用已存在的 fact_id。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或解释文字，后端会负责确定性渲染右侧故障复盘报告和 Mermaid timeline，并会处理时间线标签中的半角冒号。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in {
         ("TEST_DESIGN", "CLARIFY"),
@@ -477,6 +511,7 @@ def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) ->
         ("VALUE_DISCOVERY", "PERSONA"),
         ("VALUE_DISCOVERY", "JOURNEY"),
         ("VALUE_DISCOVERY", "BLUEPRINT"),
+        ("INCIDENT_REVIEW", "TIMELINE"),
     }
 
 
@@ -504,6 +539,8 @@ def build_structured_output_instruction(
         return VALUE_JOURNEY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "BLUEPRINT"):
         return VALUE_BLUEPRINT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
+        return INCIDENT_TIMELINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
 
 

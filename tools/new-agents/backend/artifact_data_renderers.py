@@ -100,6 +100,97 @@ class ClarifyArtifactData(StrictArtifactDataModel):
     stage_gate: list[StageGateCheck] = Field(min_length=1)
 
 
+class IncidentSummary(StrictArtifactDataModel):
+    incident_name: str
+    severity: str
+    detected_at: str
+    recovered_at: str
+    duration: str
+    impact_scope: str
+    current_status: str
+
+
+class IncidentImpactMetric(StrictArtifactDataModel):
+    dimension: str
+    quantification: str
+    confidence: str
+    source: str
+    status: str
+
+
+class IncidentFactSource(StrictArtifactDataModel):
+    fact_id: str
+    fact: str
+    source: str
+    confidence: str
+    status: str
+
+
+class IncidentTimelineEvent(StrictArtifactDataModel):
+    section: str
+    occurred_at: str
+    event: str
+    fact_ids: list[str] = Field(min_length=1)
+
+
+class IncidentFactSeparationItem(StrictArtifactDataModel):
+    item_type: str
+    content: str
+    handling: str
+    blocking: str
+    status: str
+
+
+class IncidentParticipant(StrictArtifactDataModel):
+    role: str
+    person: str
+    action: str
+    participated_at: str
+    status: str
+
+
+class IncidentMissingInformation(StrictArtifactDataModel):
+    item: str
+    reason: str
+    supplement_method: str
+    blocking: str
+    owner: str
+    status: str
+
+
+class IncidentTimelineArtifactData(StrictArtifactDataModel):
+    incident_summary: IncidentSummary
+    impact_metrics: list[IncidentImpactMetric] = Field(min_length=1)
+    fact_sources: list[IncidentFactSource] = Field(min_length=1)
+    timeline_events: list[IncidentTimelineEvent] = Field(min_length=1)
+    fact_separation: list[IncidentFactSeparationItem] = Field(min_length=1)
+    fact_summary: list[str] = Field(min_length=1)
+    participants: list[IncidentParticipant] = Field(min_length=1)
+    missing_information: list[IncidentMissingInformation] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_incident_timeline_consistency(
+        self,
+    ) -> "IncidentTimelineArtifactData":
+        fact_ids = {item.fact_id for item in self.fact_sources}
+        if len(fact_ids) != len(self.fact_sources):
+            raise ValueError("fact_sources contains duplicate fact_id")
+
+        referenced_fact_ids = [
+            fact_id for item in self.timeline_events for fact_id in item.fact_ids
+        ]
+        unknown_fact_ids = sorted(
+            {fact_id for fact_id in referenced_fact_ids if fact_id not in fact_ids}
+        )
+        if unknown_fact_ids:
+            raise ValueError(
+                "timeline_events references unknown fact ids: "
+                + ", ".join(unknown_fact_ids)
+            )
+        return self
+
+
 class StrategySummary(StrictArtifactDataModel):
     conclusion: str
     basis: str
@@ -1271,6 +1362,11 @@ def render_agent_turn_from_artifact_data(
     if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
         artifact_data = ClarifyArtifactData.model_validate(payload["artifact_data"])
         markdown = render_test_design_clarify_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
+        artifact_data = IncidentTimelineArtifactData.model_validate(
+            payload["artifact_data"]
+        )
+        markdown = render_incident_review_timeline_markdown(artifact_data)
     elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
         artifact_data = StrategyArtifactData.model_validate(payload["artifact_data"])
         markdown = render_test_design_strategy_markdown(artifact_data)
@@ -1338,6 +1434,24 @@ def render_test_design_clarify_markdown(data: ClarifyArtifactData) -> str:
         _render_quality_requirements(data.quality_requirements),
         _render_downstream_inputs(data.downstream_inputs),
         _render_stage_gate(data.stage_gate),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_incident_review_timeline_markdown(
+    data: IncidentTimelineArtifactData,
+) -> str:
+    sections = [
+        "# 故障复盘报告",
+        _render_incident_summary(data.incident_summary),
+        _render_incident_impact_metrics(data.impact_metrics),
+        _render_incident_fact_sources(data.fact_sources),
+        _render_incident_timeline(data.incident_summary, data.timeline_events),
+        _render_incident_fact_separation(data.fact_separation),
+        _render_incident_fact_summary(data.fact_summary),
+        _render_incident_participants(data.participants),
+        _render_incident_missing_information(data.missing_information),
+        _render_incident_stage_gate(data.stage_gate),
     ]
     return "\n\n".join(sections)
 
@@ -1505,6 +1619,139 @@ def _render_document_info(info: DocumentInfo) -> str:
         ("状态", info.status),
     ]
     return "## 文档信息\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_incident_summary(summary: IncidentSummary) -> str:
+    rows = [
+        ("故障名称", summary.incident_name),
+        ("严重等级", summary.severity),
+        ("发现时间", summary.detected_at),
+        ("恢复时间", summary.recovered_at),
+        ("持续时长", summary.duration),
+        ("影响范围", summary.impact_scope),
+        ("当前状态", summary.current_status),
+    ]
+    return "## 1. 事件概要\n" + _markdown_table(["属性", "详情"], rows)
+
+
+def _render_incident_impact_metrics(
+    items: list[IncidentImpactMetric],
+) -> str:
+    rows = [
+        (
+            item.dimension,
+            item.quantification,
+            item.confidence,
+            item.source,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 2. 影响量化\n" + _markdown_table(
+        ["影响维度", "量化结果", "可信度", "来源", "状态"],
+        rows,
+    )
+
+
+def _render_incident_fact_sources(items: list[IncidentFactSource]) -> str:
+    rows = [
+        (item.fact_id, item.fact, item.source, item.confidence, item.status)
+        for item in items
+    ]
+    return "## 3. 事实来源\n" + _markdown_table(
+        ["事实 ID", "事实描述", "来源", "可信度", "状态"],
+        rows,
+    )
+
+
+def _render_incident_timeline(
+    summary: IncidentSummary,
+    events: list[IncidentTimelineEvent],
+) -> str:
+    lines = [
+        "```mermaid",
+        "timeline",
+        f"    title {_escape_mermaid_timeline_text(summary.incident_name)} 事件时间线",
+    ]
+    current_section = None
+    for item in events:
+        if item.section != current_section:
+            current_section = item.section
+            lines.append(f"    section {_escape_mermaid_timeline_text(item.section)}")
+        lines.append(
+            f"        {_escape_mermaid_time(item.occurred_at)} : "
+            f"{_escape_mermaid_timeline_text(item.event)}"
+        )
+    lines.append("```")
+    rows = [
+        (
+            item.section,
+            item.occurred_at,
+            item.event,
+            ", ".join(item.fact_ids),
+        )
+        for item in events
+    ]
+    return (
+        "## 4. 事件时间线\n"
+        + "\n".join(lines)
+        + "\n\n"
+        + _markdown_table(["阶段", "时间点", "事件描述", "关联事实"], rows)
+    )
+
+
+def _render_incident_fact_separation(
+    items: list[IncidentFactSeparationItem],
+) -> str:
+    rows = [
+        (item.item_type, item.content, item.handling, item.blocking, item.status)
+        for item in items
+    ]
+    return "## 5. 事实/推测隔离\n" + _markdown_table(
+        ["类型", "内容", "处理方式", "阻断性", "状态"],
+        rows,
+    )
+
+
+def _render_incident_fact_summary(items: list[str]) -> str:
+    lines = [f"{index}. {item}" for index, item in enumerate(items, start=1)]
+    return "## 6. 事实摘要\n" + "\n".join(lines)
+
+
+def _render_incident_participants(items: list[IncidentParticipant]) -> str:
+    rows = [
+        (item.role, item.person, item.action, item.participated_at, item.status)
+        for item in items
+    ]
+    return "## 7. 参与人员\n" + _markdown_table(
+        ["角色", "人员", "主要行动", "参与时间", "状态"],
+        rows,
+    )
+
+
+def _render_incident_missing_information(
+    items: list[IncidentMissingInformation],
+) -> str:
+    rows = [
+        (
+            item.item,
+            item.reason,
+            item.supplement_method,
+            item.blocking,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 8. 待补充信息\n" + _markdown_table(
+        ["信息项", "为什么需要", "补充方式", "阻断性", "owner", "状态"],
+        rows,
+    )
+
+
+def _render_incident_stage_gate(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 9. 阶段门禁\n" + "\n".join(lines)
 
 
 def _render_requirement_facts(facts: list[RequirementFact]) -> str:
@@ -3059,6 +3306,14 @@ def _render_journey_summary(summary: JourneySummary) -> str:
 
 
 def _escape_journey_text(value: str) -> str:
+    return value.replace("\n", " ").replace(":", "：").replace("|", "｜")
+
+
+def _escape_mermaid_time(value: str) -> str:
+    return value.replace("\n", " ").replace(":", "：")
+
+
+def _escape_mermaid_timeline_text(value: str) -> str:
     return value.replace("\n", " ").replace(":", "：").replace("|", "｜")
 
 

@@ -22,6 +22,7 @@ from agent_runtime import (
 )
 from sse_schemas import AgentTurnDeltaOutput
 from test_artifact_data_renderers import (
+    VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
     VALID_CASES_ARTIFACT_DATA,
     VALID_DELIVERY_ARTIFACT_DATA,
     VALID_REQ_REVIEW_ARTIFACT_DATA,
@@ -802,6 +803,37 @@ def test_parse_agent_turn_output_text_renders_value_blueprint_artifact_data():
     assert output.stage_action is None
 
 
+def test_parse_agent_turn_output_text_renders_incident_timeline_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "已还原故障事件时间线。",
+            "artifact_data": VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "ROOT_CAUSE",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="TIMELINE",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 故障复盘报告")
+    assert "timeline\n    title 支付回调失败导致订单状态延迟 事件时间线" in (
+        output.artifact_update.markdown
+    )
+    assert "14：30 : 订单状态延迟告警触发" in output.artifact_update.markdown
+    assert output.stage_action is not None
+    assert output.stage_action.target_stage_id == "ROOT_CAUSE"
+
+
 def test_value_persona_structured_output_instruction_requests_artifact_data_not_markdown():
     instruction = build_structured_output_instruction(
         "VALUE_DISCOVERY",
@@ -849,6 +881,23 @@ def test_value_blueprint_structured_output_instruction_requests_artifact_data_no
     assert "不要输出完整 Markdown" in instruction
 
 
+def test_incident_timeline_structured_output_instruction_requests_artifact_data_not_markdown():
+    instruction = build_structured_output_instruction(
+        "INCIDENT_REVIEW",
+        "TIMELINE",
+    )
+
+    assert "artifact_data" in instruction
+    assert "artifact_update" not in instruction
+    assert "incident_summary" in instruction
+    assert "impact_metrics" in instruction
+    assert "fact_sources" in instruction
+    assert "timeline_events" in instruction
+    assert "fact_separation" in instruction
+    assert '"target_stage_id": "ROOT_CAUSE"' in instruction
+    assert "不要输出完整 Markdown" in instruction
+
+
 def test_value_persona_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
     prompt = build_raw_json_retry_prompt(
         "原始提示",
@@ -887,6 +936,20 @@ def test_value_blueprint_retry_prompt_requests_artifact_data_fix_not_markdown_re
 
     assert "artifact_data" in prompt
     assert "acceptance_criteria references unknown requirement ids" in prompt
+    assert "不要输出 Markdown 文档" in prompt
+    assert "artifact_update.type 必须为 replace" not in prompt
+
+
+def test_incident_timeline_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
+    prompt = build_raw_json_retry_prompt(
+        "原始提示",
+        ValueError("timeline_events references unknown fact ids"),
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="TIMELINE",
+    )
+
+    assert "artifact_data" in prompt
+    assert "timeline_events references unknown fact ids" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -1408,6 +1471,69 @@ def test_runtime_raw_json_stream_turn_renders_value_blueprint_artifact_data_befo
     assert "artifact_update.markdown" not in build_structured_output_instruction(
         "VALUE_DISCOVERY",
         "BLUEPRINT",
+    )
+
+
+def test_runtime_raw_json_stream_turn_renders_incident_timeline_artifact_data_before_final_output(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "已还原故障事件时间线。",
+            "artifact_data": VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "ROOT_CAUSE",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield final_json
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是故障复盘专家。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "昨天支付回调失败影响 20 分钟，请做事件还原",
+            workflow_id="INCIDENT_REVIEW",
+            current_stage_id="TIMELINE",
+        )
+    )
+
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert outputs[-1].artifact_update.markdown is not None
+    assert outputs[-1].artifact_update.markdown.startswith("# 故障复盘报告")
+    assert "timeline\n    title 支付回调失败导致订单状态延迟 事件时间线" in (
+        outputs[-1].artifact_update.markdown
+    )
+    assert "14：30 : 订单状态延迟告警触发" in outputs[-1].artifact_update.markdown
+    assert outputs[-1].stage_action is not None
+    assert outputs[-1].stage_action.target_stage_id == "ROOT_CAUSE"
+    assert calls[0]["response_format"] == {"type": "json_object"}
+    assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert "artifact_data" in calls[0]["messages"][0]["content"]
+    assert "incident_summary" in calls[0]["messages"][0]["content"]
+    assert "timeline_events" in calls[0]["messages"][0]["content"]
+    assert "artifact_update.markdown" not in build_structured_output_instruction(
+        "INCIDENT_REVIEW",
+        "TIMELINE",
     )
 
 
