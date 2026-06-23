@@ -14,6 +14,7 @@ from route_guards import require_default_llm_config
 from run_persistence import (
     AgentRunPersistence,
     ArtifactVersionConflictError,
+    clone_agent_run,
     get_run_snapshot,
     get_runtime_observability_summary,
     list_agent_runs,
@@ -141,6 +142,7 @@ def agent_runs_stream():
 def agent_runs_list():
     """Return recent persisted Agent Runtime runs."""
     workflow_id = request.args.get("workflowId")
+    reuse_status = request.args.get("reuseStatus")
     limit_arg = request.args.get("limit", "20")
     offset_arg = request.args.get("offset", "0")
     query_text = request.args.get("query")
@@ -156,6 +158,7 @@ def agent_runs_list():
         return jsonify(
             list_agent_runs(
                 workflow_id=workflow_id,
+                reuse_status=reuse_status,
                 limit=limit,
                 offset=offset,
                 query_text=query_text,
@@ -192,6 +195,16 @@ def agent_run_snapshot(run_id: str):
     """Return a persisted Agent Runtime run snapshot."""
     try:
         return jsonify(get_run_snapshot(run_id)), 200
+    except ValueError as e:
+        return json_error_response(str(e), 404)
+
+
+@api_bp.route("/agent/runs/<run_id>/clone", methods=["POST"])
+def agent_run_clone(run_id: str):
+    """Clone a persisted Agent Runtime run as a new active run."""
+    try:
+        cloned_run = clone_agent_run(run_id)
+        return jsonify(get_run_snapshot(cloned_run.id)), 200
     except ValueError as e:
         return json_error_response(str(e), 404)
 

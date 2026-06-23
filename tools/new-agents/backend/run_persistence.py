@@ -37,6 +37,7 @@ from workflow_manifest import get_workflow_agent_id
 
 MESSAGE_ROLES = {"user", "assistant"}
 RUN_STATUSES = {"active", "completed", "failed"}
+RUN_REUSE_STATUSES = {"ready", "needs_artifact", "failed"}
 SUMMARY_SOURCE_ARTIFACT = "artifact"
 SUMMARY_SOURCE_USER_INPUT = "user_input"
 DEFAULT_RUN_LIST_LIMIT = 20
@@ -136,6 +137,61 @@ def ensure_agent_run(
         run.model = model
     db.session.commit()
     return run
+
+
+def clone_agent_run(source_run_id: str) -> AgentRun:
+    source = _get_run(source_run_id)
+    cloned = create_agent_run(
+        source.workflow_id,
+        source.agent_id,
+        source.current_stage_id,
+        model=source.model,
+        status="active",
+    )
+
+    source_messages = (
+        AgentMessage.query.filter_by(run_id=source.id)
+        .order_by(AgentMessage.sequence_index.asc())
+        .all()
+    )
+    for message in source_messages:
+        db.session.add(
+            AgentMessage(
+                run_id=cloned.id,
+                role=message.role,
+                content=message.content,
+                sequence_index=message.sequence_index,
+            )
+        )
+
+    source_artifacts = (
+        AgentArtifact.query.filter_by(run_id=source.id)
+        .order_by(AgentArtifact.id.asc())
+        .all()
+    )
+    for artifact in source_artifacts:
+        artifact_snapshot = _artifact_snapshot(artifact)
+        record_artifact_version(
+            cloned.id,
+            artifact_snapshot["stageId"],
+            artifact_snapshot["content"],
+        )
+
+    source_summaries = (
+        AgentContextSummary.query.filter_by(run_id=source.id)
+        .order_by(AgentContextSummary.id.asc())
+        .all()
+    )
+    for summary in source_summaries:
+        _upsert_context_summary(
+            cloned.id,
+            source_type=summary.source_type,
+            source_stage_id=summary.source_stage_id,
+            summary_type=summary.summary_type,
+            content=summary.content,
+        )
+    db.session.commit()
+    return cloned
 
 
 class AgentRunPersistence:
@@ -882,12 +938,15 @@ def _turn_metric_snapshot(metric: AgentRunTurnMetric) -> dict:
 def list_agent_runs(
     *,
     workflow_id: str | None = None,
+    reuse_status: str | None = None,
     limit: int = DEFAULT_RUN_LIST_LIMIT,
     offset: int = 0,
     query_text: str | None = None,
 ) -> dict:
     if workflow_id is not None and workflow_id not in WORKFLOW_STAGES:
         raise ValueError(f"未知 workflowId: {workflow_id}")
+    if reuse_status is not None and reuse_status not in RUN_REUSE_STATUSES:
+        raise ValueError(f"未知 reuseStatus: {reuse_status}")
     if limit < 1:
         limit = DEFAULT_RUN_LIST_LIMIT
     if limit > MAX_RUN_LIST_LIMIT:
@@ -899,6 +958,8 @@ def list_agent_runs(
     query = AgentRun.query
     if workflow_id is not None:
         query = query.filter_by(workflow_id=workflow_id)
+    if reuse_status is not None:
+        query = _apply_run_reuse_status_filter(query, reuse_status)
     if normalized_query:
         query = _apply_run_search_filter(query, normalized_query)
 
@@ -954,6 +1015,23 @@ def _apply_run_search_filter(query, query_text: str):
     )
 
 
+def _apply_run_reuse_status_filter(query, reuse_status: str):
+    artifact_summary_exists = (
+        db.session.query(AgentContextSummary.id)
+        .filter(
+            AgentContextSummary.run_id == AgentRun.id,
+            AgentContextSummary.source_type == SUMMARY_SOURCE_ARTIFACT,
+            AgentContextSummary.summary_type == CURRENT_ARTIFACT_SUMMARY_TYPE,
+        )
+        .exists()
+    )
+    if reuse_status == "failed":
+        return query.filter(AgentRun.status == "failed")
+    if reuse_status == "ready":
+        return query.filter(AgentRun.status != "failed", artifact_summary_exists)
+    return query.filter(AgentRun.status != "failed", ~artifact_summary_exists)
+
+
 def _run_list_item(run: AgentRun) -> dict:
     return {
         "id": run.id,
@@ -961,12 +1039,19 @@ def _run_list_item(run: AgentRun) -> dict:
         "agentId": run.agent_id,
         "currentStageId": run.current_stage_id,
         "status": run.status,
+        "reuseStatus": _run_reuse_status(run),
         "model": run.model,
         "createdAt": _format_datetime(run.created_at),
         "updatedAt": _format_datetime(run.updated_at),
         "lastMessage": _last_message_snapshot(run.id),
         "currentArtifact": _current_artifact_summary(run.id),
     }
+
+
+def _run_reuse_status(run: AgentRun) -> str:
+    if run.status == "failed":
+        return "failed"
+    return "ready" if _current_artifact_summary(run.id) is not None else "needs_artifact"
 
 
 def _format_datetime(value) -> str | None:

@@ -21,8 +21,10 @@ vi.mock('../WorkflowDropdown', () => ({
 }));
 
 vi.mock('../../services/runSnapshotService', () => ({
+    cloneRun: vi.fn(),
     createRunDecisionSummary: vi.fn(),
     fetchRunList: vi.fn(),
+    fetchRunSnapshot: vi.fn(),
     updateRunContextSummary: vi.fn(),
 }));
 
@@ -54,7 +56,7 @@ vi.mock('lucide-react', () => {
     return mod;
 });
 
-import { createRunDecisionSummary, fetchRunList, updateRunContextSummary } from '../../services/runSnapshotService';
+import { cloneRun, createRunDecisionSummary, fetchRunList, fetchRunSnapshot, updateRunContextSummary } from '../../services/runSnapshotService';
 import { materializeRunTestAssets, updateTestAssetCase, updateTestAssetIssueStatus } from '../../services/testAssetService';
 import { fetchObservabilitySummary } from '../../services/observabilityService';
 import { importIntentTesterDraft } from '../../services/intentTesterImportService';
@@ -318,6 +320,40 @@ describe('Header Component', () => {
             query: null,
             runs: [],
         });
+        vi.mocked(fetchRunSnapshot).mockReset();
+        vi.mocked(fetchRunSnapshot).mockResolvedValue({
+            run: {
+                id: 'preview-run',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'STRATEGY',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [],
+            artifacts: [],
+            contextSummaries: [],
+            artifactComments: [],
+            artifactSectionLocks: [],
+            artifactAuditEvents: [],
+        });
+        vi.mocked(cloneRun).mockReset();
+        vi.mocked(cloneRun).mockResolvedValue({
+            run: {
+                id: 'cloned-run',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'STRATEGY',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [],
+            artifacts: [],
+            contextSummaries: [],
+            artifactComments: [],
+            artifactSectionLocks: [],
+            artifactAuditEvents: [],
+        });
         vi.mocked(updateRunContextSummary).mockReset();
         vi.mocked(updateRunContextSummary).mockResolvedValue({
             sourceType: 'stage',
@@ -417,6 +453,7 @@ describe('Header Component', () => {
                     agentId: 'alex',
                     currentStageId: 'BLUEPRINT',
                     status: 'active',
+                    reuseStatus: 'ready',
                     model: 'test-model',
                     createdAt: '2026-06-19T09:00:00',
                     updatedAt: '2026-06-19T09:05:00',
@@ -440,11 +477,162 @@ describe('Header Component', () => {
         await waitFor(() => {
             expect(fetchRunList).toHaveBeenCalledWith({ limit: 20 });
         });
+        vi.mocked(fetchRunSnapshot).mockResolvedValueOnce({
+            run: {
+                id: 'alex-run-123',
+                workflowId: 'VALUE_DISCOVERY',
+                agentId: 'alex',
+                currentStageId: 'BLUEPRINT',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [],
+            artifacts: [
+                {
+                    stageId: 'BLUEPRINT',
+                    content: '# 需求蓝图\n\nAI 测试设计助手需求蓝图正文',
+                    versionNumber: 1,
+                },
+            ],
+            contextSummaries: [],
+            artifactComments: [],
+            artifactSectionLocks: [],
+            artifactAuditEvents: [],
+        });
+
         fireEvent.click(await screen.findByRole('button', { name: /价值发现/ }));
+
+        expect(await screen.findByText(/AI 测试设计助手需求蓝图正文/)).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: '继续此 run' }));
 
         expect(mockNavigate).toHaveBeenCalledWith(
             '/workspace/alex/value-discovery?runId=alex-run-123'
         );
+    });
+
+    it('clones a selected historical run as a new workspace run', async () => {
+        vi.mocked(fetchRunList).mockResolvedValue({
+            limit: 20,
+            offset: 0,
+            total: 1,
+            hasMore: false,
+            nextOffset: null,
+            query: null,
+            runs: [
+                {
+                    id: 'source-run-123',
+                    workflowId: 'TEST_DESIGN',
+                    agentId: 'lisa',
+                    currentStageId: 'STRATEGY',
+                    status: 'active',
+                    reuseStatus: 'ready',
+                    model: 'test-model',
+                    createdAt: '2026-06-19T09:00:00',
+                    updatedAt: '2026-06-19T09:05:00',
+                    lastMessage: null,
+                    currentArtifact: {
+                        stageId: 'STRATEGY',
+                        versionNumber: 1,
+                        summary: '测试策略历史',
+                    },
+                },
+            ],
+        });
+        vi.mocked(fetchRunSnapshot).mockResolvedValue({
+            run: {
+                id: 'source-run-123',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'STRATEGY',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [],
+            artifacts: [
+                {
+                    stageId: 'STRATEGY',
+                    content: '# 测试策略蓝图\n\n历史策略正文',
+                    versionNumber: 1,
+                },
+            ],
+            contextSummaries: [],
+            artifactComments: [],
+            artifactSectionLocks: [],
+            artifactAuditEvents: [],
+        });
+        vi.mocked(cloneRun).mockResolvedValue({
+            run: {
+                id: 'cloned-run-456',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'STRATEGY',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [],
+            artifacts: [
+                {
+                    stageId: 'STRATEGY',
+                    content: '# 测试策略蓝图\n\n历史策略正文',
+                    versionNumber: 1,
+                },
+            ],
+            contextSummaries: [],
+            artifactComments: [],
+            artifactSectionLocks: [],
+            artifactAuditEvents: [],
+        });
+
+        renderHeader();
+        fireEvent.click(screen.getByRole('button', { name: /历史会话/ }));
+        fireEvent.click(await screen.findByRole('button', { name: /测试设计/ }));
+        fireEvent.click(await screen.findByRole('button', { name: '复制为新 run' }));
+
+        await waitFor(() => {
+            expect(cloneRun).toHaveBeenCalledWith('source-run-123');
+        });
+        expect(useStore.getState().currentRunId).toBe('cloned-run-456');
+        expect(mockNavigate).toHaveBeenCalledWith(
+            '/workspace/lisa/test-design?runId=cloned-run-456'
+        );
+    });
+
+    it('shows failure feedback when cloning a historical run fails', async () => {
+        vi.mocked(fetchRunList).mockResolvedValue({
+            limit: 20,
+            offset: 0,
+            total: 1,
+            hasMore: false,
+            nextOffset: null,
+            query: null,
+            runs: [
+                {
+                    id: 'source-run-123',
+                    workflowId: 'TEST_DESIGN',
+                    agentId: 'lisa',
+                    currentStageId: 'STRATEGY',
+                    status: 'active',
+                    reuseStatus: 'ready',
+                    model: 'test-model',
+                    createdAt: '2026-06-19T09:00:00',
+                    updatedAt: '2026-06-19T09:05:00',
+                    lastMessage: null,
+                    currentArtifact: {
+                        stageId: 'STRATEGY',
+                        versionNumber: 1,
+                        summary: '测试策略历史',
+                    },
+                },
+            ],
+        });
+        vi.mocked(cloneRun).mockRejectedValue(new Error('clone failed'));
+
+        renderHeader();
+        fireEvent.click(screen.getByRole('button', { name: /历史会话/ }));
+        fireEvent.click(await screen.findByRole('button', { name: /测试设计/ }));
+        fireEvent.click(await screen.findByRole('button', { name: '复制为新 run' }));
+
+        expect(await screen.findByText('无法复制历史会话')).toBeTruthy();
     });
 
     it('opens Lisa test assets and saves an edited test case', async () => {
@@ -926,6 +1114,7 @@ describe('Header Component', () => {
                         agentId: 'alex',
                         currentStageId: 'BLUEPRINT',
                         status: 'active',
+                        reuseStatus: 'ready',
                         model: 'test-model',
                         createdAt: '2026-06-19T09:00:00',
                         updatedAt: '2026-06-19T09:05:00',
@@ -952,6 +1141,7 @@ describe('Header Component', () => {
                         agentId: 'lisa',
                         currentStageId: 'STRATEGY',
                         status: 'active',
+                        reuseStatus: 'ready',
                         model: 'test-model',
                         createdAt: '2026-06-19T10:00:00',
                         updatedAt: '2026-06-19T10:05:00',
@@ -981,6 +1171,59 @@ describe('Header Component', () => {
         expect(screen.queryByText('价值发现历史')).toBeNull();
     });
 
+    it('filters recent runs by reusable status', async () => {
+        vi.mocked(fetchRunList)
+            .mockResolvedValueOnce({
+                limit: 20,
+                offset: 0,
+                total: 0,
+                hasMore: false,
+                nextOffset: null,
+                query: null,
+                runs: [],
+            })
+            .mockResolvedValueOnce({
+                limit: 20,
+                offset: 0,
+                total: 1,
+                hasMore: false,
+                nextOffset: null,
+                query: null,
+                runs: [
+                    {
+                        id: 'ready-run',
+                        workflowId: 'TEST_DESIGN',
+                        agentId: 'lisa',
+                        currentStageId: 'STRATEGY',
+                        status: 'active',
+                        reuseStatus: 'ready',
+                        model: 'test-model',
+                        createdAt: '2026-06-19T10:00:00',
+                        updatedAt: '2026-06-19T10:05:00',
+                        lastMessage: null,
+                        currentArtifact: {
+                            stageId: 'STRATEGY',
+                            versionNumber: 1,
+                            summary: '可复用测试策略',
+                        },
+                    },
+                ],
+            });
+
+        renderHeader();
+        fireEvent.click(screen.getByRole('button', { name: /历史会话/ }));
+        await screen.findByText('暂无历史会话');
+        fireEvent.click(screen.getByRole('button', { name: '可复用' }));
+
+        await waitFor(() => {
+            expect(fetchRunList).toHaveBeenLastCalledWith({
+                reuseStatus: 'ready',
+                limit: 20,
+            });
+        });
+        expect(await screen.findByText('可复用测试策略')).toBeTruthy();
+    });
+
     it('searches recent runs and appends the next page', async () => {
         vi.mocked(fetchRunList)
             .mockResolvedValueOnce({
@@ -1006,6 +1249,7 @@ describe('Header Component', () => {
                         agentId: 'lisa',
                         currentStageId: 'STRATEGY',
                         status: 'active',
+                        reuseStatus: 'ready',
                         model: 'test-model',
                         createdAt: '2026-06-19T10:00:00',
                         updatedAt: '2026-06-19T10:05:00',
@@ -1032,6 +1276,7 @@ describe('Header Component', () => {
                         agentId: 'lisa',
                         currentStageId: 'CASES',
                         status: 'active',
+                        reuseStatus: 'ready',
                         model: 'test-model',
                         createdAt: '2026-06-19T10:10:00',
                         updatedAt: '2026-06-19T10:15:00',

@@ -143,12 +143,15 @@ export type AgentRunSnapshot = {
     artifactAuditEvents: ArtifactAuditEvent[];
 };
 
+export type RunReuseStatus = 'ready' | 'needs_artifact' | 'failed';
+
 export type AgentRunListItem = {
     id: string;
     workflowId: WorkflowType;
     agentId: string;
     currentStageId: string;
     status: string;
+    reuseStatus: RunReuseStatus;
     model: string | null;
     createdAt: string | null;
     updatedAt: string | null;
