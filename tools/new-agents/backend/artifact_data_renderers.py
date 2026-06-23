@@ -2386,6 +2386,188 @@ class ValueDiscoveryBlueprintArtifactData(StrictArtifactDataModel):
         return self
 
 
+class StoryBreakdownInputAnalysis(StrictArtifactDataModel):
+    source_type: str
+    product_goal: str
+    target_users: list[str] = Field(min_length=1)
+    constraints: list[str] = Field(min_length=1)
+    open_questions: list[str] = Field(min_length=1)
+
+
+class StoryBreakdownEpic(StrictArtifactDataModel):
+    epic_id: str
+    name: str
+    value_goal: str
+    scope: str
+    priority: str
+    dependencies: list[str] = Field(min_length=1)
+
+
+class StoryBreakdownUserStory(StrictArtifactDataModel):
+    story_id: str
+    epic_id: str
+    title: str
+    user_story: str
+    priority: str
+    sprint: str
+    story_points: int = Field(ge=1)
+    testability: str
+    status: str
+
+
+class StoryBreakdownAcceptanceCriterion(StrictArtifactDataModel):
+    criterion_id: str
+    story_id: str
+    criterion: str
+    verification_method: str
+    status: str
+
+
+class StoryBreakdownDependency(StrictArtifactDataModel):
+    dependency_id: str
+    source_story_id: str
+    target_story_id: str
+    description: str
+    risk: str
+    mitigation: str
+    owner: str
+    status: str
+
+
+class StoryBreakdownRisk(StrictArtifactDataModel):
+    risk_id: str
+    related_story_ids: list[str] = Field(min_length=1)
+    risk: str
+    impact: str
+    mitigation: str
+    severity: str
+    status: str
+
+
+class StoryBreakdownSprintSlice(StrictArtifactDataModel):
+    sprint_id: str
+    goal: str
+    story_ids: list[str] = Field(min_length=1)
+    deliverable: str
+    acceptance_focus: str
+
+
+class StoryBreakdownHandoffInput(StrictArtifactDataModel):
+    input_id: str
+    story_ids: list[str] = Field(min_length=1)
+    target_workflow: str
+    content: str
+    usage: str
+    status: str
+
+
+class StoryBreakdownArtifactData(StrictArtifactDataModel):
+    document_info: DocumentInfo
+    input_analysis: StoryBreakdownInputAnalysis
+    epics: list[StoryBreakdownEpic] = Field(min_length=1)
+    stories: list[StoryBreakdownUserStory] = Field(min_length=1)
+    acceptance_criteria: list[StoryBreakdownAcceptanceCriterion] = Field(
+        min_length=1
+    )
+    dependencies: list[StoryBreakdownDependency] = Field(min_length=1)
+    risks: list[StoryBreakdownRisk] = Field(min_length=1)
+    sprint_slices: list[StoryBreakdownSprintSlice] = Field(min_length=1)
+    handoff_inputs: list[StoryBreakdownHandoffInput] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_story_breakdown_consistency(self) -> "StoryBreakdownArtifactData":
+        epic_ids = {item.epic_id for item in self.epics}
+        if len(epic_ids) != len(self.epics):
+            raise ValueError("epics contains duplicate epic_id")
+
+        story_ids = {item.story_id for item in self.stories}
+        if len(story_ids) != len(self.stories):
+            raise ValueError("stories contains duplicate story_id")
+
+        criterion_ids = {item.criterion_id for item in self.acceptance_criteria}
+        if len(criterion_ids) != len(self.acceptance_criteria):
+            raise ValueError("acceptance_criteria contains duplicate criterion_id")
+
+        dependency_ids = {item.dependency_id for item in self.dependencies}
+        if len(dependency_ids) != len(self.dependencies):
+            raise ValueError("dependencies contains duplicate dependency_id")
+
+        risk_ids = {item.risk_id for item in self.risks}
+        if len(risk_ids) != len(self.risks):
+            raise ValueError("risks contains duplicate risk_id")
+
+        sprint_ids = {item.sprint_id for item in self.sprint_slices}
+        if len(sprint_ids) != len(self.sprint_slices):
+            raise ValueError("sprint_slices contains duplicate sprint_id")
+
+        handoff_ids = {item.input_id for item in self.handoff_inputs}
+        if len(handoff_ids) != len(self.handoff_inputs):
+            raise ValueError("handoff_inputs contains duplicate input_id")
+
+        unknown_epic_ids = sorted(
+            {item.epic_id for item in self.stories if item.epic_id not in epic_ids}
+        )
+        if unknown_epic_ids:
+            raise ValueError(
+                "stories references unknown epic ids: "
+                + ", ".join(unknown_epic_ids)
+            )
+
+        unknown_story_ids = sorted(
+            {
+                item.story_id
+                for item in self.acceptance_criteria
+                if item.story_id not in story_ids
+            }
+            | {
+                story_id
+                for item in self.dependencies
+                for story_id in (item.source_story_id, item.target_story_id)
+                if story_id not in story_ids
+            }
+            | {
+                story_id
+                for item in self.risks
+                for story_id in item.related_story_ids
+                if story_id not in story_ids
+            }
+            | {
+                story_id
+                for item in self.sprint_slices
+                for story_id in item.story_ids
+                if story_id not in story_ids
+            }
+            | {
+                story_id
+                for item in self.handoff_inputs
+                for story_id in item.story_ids
+                if story_id not in story_ids
+            }
+        )
+        if unknown_story_ids:
+            raise ValueError(
+                "story breakdown references unknown story ids: "
+                + ", ".join(unknown_story_ids)
+            )
+
+        self_dependencies = [
+            item.dependency_id
+            for item in self.dependencies
+            if item.source_story_id == item.target_story_id
+        ]
+        if self_dependencies:
+            raise ValueError(
+                "dependencies contains self dependency: "
+                + ", ".join(self_dependencies)
+            )
+
+        if not any(item.checked for item in self.stage_gate):
+            raise ValueError("stage_gate must include at least one checked item")
+
+        return self
+
+
 def render_agent_turn_from_artifact_data(
     payload: dict[str, Any],
     *,
@@ -2451,6 +2633,16 @@ def render_agent_turn_from_artifact_data(
     }:
         artifact_data = PrdReviewArtifactData.model_validate(payload["artifact_data"])
         markdown = render_prd_review_markdown(artifact_data, current_stage_id)
+    elif workflow_id == "STORY_BREAKDOWN" and current_stage_id in {
+        "INPUT_ANALYSIS",
+        "EPIC_MAPPING",
+        "STORY_BACKLOG",
+        "SPRINT_PLAN",
+    }:
+        artifact_data = StoryBreakdownArtifactData.model_validate(
+            payload["artifact_data"]
+        )
+        markdown = render_story_breakdown_markdown(artifact_data, current_stage_id)
     elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
         artifact_data = ValueDiscoveryElevatorArtifactData.model_validate(
             payload["artifact_data"]
@@ -2487,6 +2679,60 @@ def render_agent_turn_from_artifact_data(
             "warnings": payload.get("warnings", []),
         }
     )
+
+
+def render_story_breakdown_markdown(
+    data: StoryBreakdownArtifactData,
+    stage_id: str,
+) -> str:
+    sections = [
+        "# 用户故事拆解包",
+        _render_story_input_analysis(data.input_analysis),
+    ]
+
+    if stage_id == "INPUT_ANALYSIS":
+        sections.extend(
+            [
+                _render_story_target_users(data.input_analysis),
+                _render_story_scope_constraints(data.input_analysis),
+                _render_story_open_questions(data.input_analysis),
+                _render_story_stage_gate(data.stage_gate),
+            ]
+        )
+    elif stage_id == "EPIC_MAPPING":
+        sections.extend(
+            [
+                _render_story_epic_map(data.epics),
+                _render_story_epic_dependencies(data.epics),
+                _render_story_stage_gate(data.stage_gate),
+            ]
+        )
+    elif stage_id == "STORY_BACKLOG":
+        sections.extend(
+            [
+                _render_story_epic_map(data.epics),
+                _render_story_backlog(data.stories),
+                _render_story_acceptance_criteria(data.acceptance_criteria),
+                _render_story_dependencies_and_risks(data.dependencies, data.risks),
+                _render_story_stage_gate(data.stage_gate),
+            ]
+        )
+    elif stage_id == "SPRINT_PLAN":
+        sections.extend(
+            [
+                _render_story_epic_map(data.epics),
+                _render_story_backlog(data.stories),
+                _render_story_acceptance_criteria(data.acceptance_criteria),
+                _render_story_dependencies_and_risks(data.dependencies, data.risks),
+                _render_story_sprint_slices(data.sprint_slices),
+                _render_story_handoff_inputs(data.handoff_inputs),
+                _render_story_stage_gate(data.stage_gate),
+            ]
+        )
+    else:
+        raise ValueError(f"unsupported STORY_BREAKDOWN stage: {stage_id}")
+
+    return "\n\n".join(sections)
 
 
 def render_test_design_clarify_markdown(data: ClarifyArtifactData) -> str:
@@ -6343,6 +6589,216 @@ def _render_blueprint_lisa_handoff_inputs(
 def _render_blueprint_stage_gate(checks: list[StageGateCheck]) -> str:
     lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
     return "## 12. 阶段门禁\n" + "\n".join(lines)
+
+
+def _render_story_input_analysis(data: StoryBreakdownInputAnalysis) -> str:
+    rows = [
+        ("输入类型", data.source_type),
+        ("产品目标", data.product_goal),
+        ("目标用户", "、".join(data.target_users)),
+        ("约束", "；".join(data.constraints)),
+        ("待澄清问题", "；".join(data.open_questions)),
+    ]
+    return "## 输入分析\n" + _markdown_table(["维度", "内容"], rows)
+
+
+def _render_story_target_users(data: StoryBreakdownInputAnalysis) -> str:
+    rows = [(index + 1, user) for index, user in enumerate(data.target_users)]
+    return "## 目标用户与场景\n" + _markdown_table(["序号", "目标用户或场景"], rows)
+
+
+def _render_story_scope_constraints(data: StoryBreakdownInputAnalysis) -> str:
+    rows = [(index + 1, item) for index, item in enumerate(data.constraints)]
+    return "## 范围与约束\n" + _markdown_table(["序号", "约束"], rows)
+
+
+def _render_story_open_questions(data: StoryBreakdownInputAnalysis) -> str:
+    rows = [(index + 1, item) for index, item in enumerate(data.open_questions)]
+    return "## 待澄清问题\n" + _markdown_table(["序号", "问题"], rows)
+
+
+def _render_story_epic_map(epics: list[StoryBreakdownEpic]) -> str:
+    flow_lines = ["```mermaid", "flowchart TD", '    Goal["产品目标"]']
+    node_ids: dict[str, str] = {}
+    rows = []
+    for index, epic in enumerate(epics, start=1):
+        node_id = f"E{index}"
+        node_ids[epic.epic_id] = node_id
+        flow_lines.append(
+            f'    Goal --> {node_id}["{_escape_mermaid_label(epic.name)}"]'
+        )
+        rows.append(
+            (
+                epic.epic_id,
+                epic.name,
+                epic.value_goal,
+                epic.scope,
+                epic.priority,
+                "；".join(epic.dependencies),
+            )
+        )
+    flow_lines.append("```")
+    return "## Epic Map\n" + "\n".join(flow_lines) + "\n\n" + _markdown_table(
+        ["Epic ID", "名称", "用户价值", "范围", "优先级", "依赖"],
+        rows,
+    )
+
+
+def _render_story_epic_dependencies(epics: list[StoryBreakdownEpic]) -> str:
+    rows = [
+        (epic.epic_id, epic.name, "；".join(epic.dependencies))
+        for epic in epics
+    ]
+    return "## Epic 依赖\n" + _markdown_table(["Epic ID", "名称", "依赖"], rows)
+
+
+def _render_story_backlog(stories: list[StoryBreakdownUserStory]) -> str:
+    rows = [
+        (
+            item.story_id,
+            item.epic_id,
+            item.title,
+            item.user_story,
+            item.priority,
+            item.sprint,
+            item.story_points,
+            item.testability,
+            item.status,
+        )
+        for item in stories
+    ]
+    return "## User Story Backlog\n" + _markdown_table(
+        [
+            "Story ID",
+            "Epic ID",
+            "标题",
+            "User Story",
+            "优先级",
+            "Sprint",
+            "故事点",
+            "可测试性",
+            "状态",
+        ],
+        rows,
+    )
+
+
+def _render_story_acceptance_criteria(
+    criteria: list[StoryBreakdownAcceptanceCriterion],
+) -> str:
+    rows = [
+        (
+            item.criterion_id,
+            item.story_id,
+            item.criterion,
+            item.verification_method,
+            item.status,
+        )
+        for item in criteria
+    ]
+    return "## 验收标准\n" + _markdown_table(
+        ["AC ID", "Story ID", "验收标准", "验证方式", "状态"],
+        rows,
+    )
+
+
+def _render_story_dependencies_and_risks(
+    dependencies: list[StoryBreakdownDependency],
+    risks: list[StoryBreakdownRisk],
+) -> str:
+    dependency_rows = [
+        (
+            "依赖",
+            item.dependency_id,
+            f"{item.source_story_id} -> {item.target_story_id}",
+            item.description,
+            item.risk,
+            item.mitigation,
+            item.owner,
+            item.status,
+        )
+        for item in dependencies
+    ]
+    risk_rows = [
+        (
+            "风险",
+            item.risk_id,
+            ", ".join(item.related_story_ids),
+            item.risk,
+            item.impact,
+            item.mitigation,
+            item.severity,
+            item.status,
+        )
+        for item in risks
+    ]
+    return "## 依赖与风险\n" + _markdown_table(
+        ["类型", "ID", "关联 Story", "内容", "影响/风险", "缓解措施", "负责人/级别", "状态"],
+        [*dependency_rows, *risk_rows],
+    )
+
+
+def _render_story_sprint_slices(sprints: list[StoryBreakdownSprintSlice]) -> str:
+    visual = {
+        "type": "story-map",
+        "title": "用户故事切片地图",
+        "columns": ["Sprint", "目标", "Story IDs", "交付物", "验收重点"],
+        "rows": [
+            {
+                "Sprint": item.sprint_id,
+                "目标": item.goal,
+                "Story IDs": ", ".join(item.story_ids),
+                "交付物": item.deliverable,
+                "验收重点": item.acceptance_focus,
+            }
+            for item in sprints
+        ],
+    }
+    table = _markdown_table(
+        ["Sprint", "目标", "Story IDs", "交付物", "验收重点"],
+        [
+            (
+                item.sprint_id,
+                item.goal,
+                ", ".join(item.story_ids),
+                item.deliverable,
+                item.acceptance_focus,
+            )
+            for item in sprints
+        ],
+    )
+    return (
+        "## Sprint 切片建议\n"
+        + table
+        + "\n\n```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+
+
+def _render_story_handoff_inputs(
+    inputs: list[StoryBreakdownHandoffInput],
+) -> str:
+    rows = [
+        (
+            item.input_id,
+            item.target_workflow,
+            ", ".join(item.story_ids),
+            item.content,
+            item.usage,
+            item.status,
+        )
+        for item in inputs
+    ]
+    return "## Lisa Handoff 输入\n" + _markdown_table(
+        ["输入 ID", "目标 workflow", "Story IDs", "内容", "用途", "状态"],
+        rows,
+    )
+
+
+def _render_story_stage_gate(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 阶段门禁\n" + "\n".join(lines)
 
 
 def _render_flow_links(links: list[FlowLink]) -> str:

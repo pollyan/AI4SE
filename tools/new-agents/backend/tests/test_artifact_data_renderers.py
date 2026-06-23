@@ -18,6 +18,7 @@ from artifact_data_renderers import (
     PrdReviewArtifactData,
     ReqReviewArtifactData,
     ReqReviewReportArtifactData,
+    StoryBreakdownArtifactData,
     StrategyArtifactData,
     ValueDiscoveryBlueprintArtifactData,
     ValueDiscoveryElevatorArtifactData,
@@ -105,6 +106,121 @@ VALID_PRD_REVIEW_ARTIFACT_DATA = {
         {
             "checked": True,
             "item": "P0 阻断问题已映射到补全动作和复审条件",
+        }
+    ],
+}
+
+VALID_STORY_BREAKDOWN_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "用户故事拆解包",
+        "workflow": "STORY_BREAKDOWN",
+        "stage": "SPRINT_PLAN",
+        "status": "可交接 Lisa",
+    },
+    "input_analysis": {
+        "source_type": "PRD",
+        "product_goal": "把测试资产生成能力拆成可交付迭代",
+        "target_users": ["测试负责人", "产品经理"],
+        "constraints": ["首轮不接入外部项目管理工具"],
+        "open_questions": ["是否需要导入历史测试资产"],
+    },
+    "epics": [
+        {
+            "epic_id": "EPIC-001",
+            "name": "测试资产生成",
+            "value_goal": "减少从需求到测试设计的手工整理成本",
+            "scope": "需求澄清、策略、用例和交付文档",
+            "priority": "P0",
+            "dependencies": ["LLM 配置", "Artifact 持久化"],
+        }
+    ],
+    "stories": [
+        {
+            "story_id": "US-001",
+            "epic_id": "EPIC-001",
+            "title": "需求澄清基线",
+            "user_story": "作为测试负责人，我想把需求输入转成澄清清单，以便在开发前发现遗漏。",
+            "priority": "P0",
+            "sprint": "Sprint 1",
+            "story_points": 5,
+            "testability": "高",
+            "status": "待评审",
+        },
+        {
+            "story_id": "US-002",
+            "epic_id": "EPIC-001",
+            "title": "测试策略生成",
+            "user_story": "作为测试负责人，我想自动获得风险、测试点和测试层级建议，以便快速组织评审。",
+            "priority": "P0",
+            "sprint": "Sprint 1",
+            "story_points": 8,
+            "testability": "高",
+            "status": "待评审",
+        },
+    ],
+    "acceptance_criteria": [
+        {
+            "criterion_id": "AC-001",
+            "story_id": "US-001",
+            "criterion": "输入需求后生成事实、边界、业务规则和待澄清问题。",
+            "verification_method": "后端 contract test + UI smoke",
+            "status": "待验证",
+        }
+    ],
+    "dependencies": [
+        {
+            "dependency_id": "DEP-001",
+            "source_story_id": "US-001",
+            "target_story_id": "US-002",
+            "description": "模型输出必须使用 artifact_data 结构化数据。",
+            "risk": "模型直写 Markdown 会绕过 deterministic renderer。",
+            "mitigation": "runtime instruction 和 renderer contract 双门禁。",
+            "owner": "AI 工程",
+            "status": "已识别",
+        }
+    ],
+    "risks": [
+        {
+            "risk_id": "RISK-001",
+            "related_story_ids": ["US-001", "US-002"],
+            "risk": "故事拆解缺少可测试验收标准",
+            "impact": "Lisa 后续测试设计无法稳定生成用例",
+            "mitigation": "所有 P0 故事必须绑定验收标准和 Sprint 切片",
+            "severity": "P0",
+            "status": "待跟进",
+        }
+    ],
+    "sprint_slices": [
+        {
+            "sprint_id": "Sprint 1",
+            "goal": "打通需求澄清到策略的最小闭环",
+            "story_ids": ["US-001", "US-002"],
+            "deliverable": "可评审 artifact_data 输出和右侧 Markdown artifact",
+            "acceptance_focus": "共享 runtime、contract、renderer 均可验证",
+        }
+    ],
+    "handoff_inputs": [
+        {
+            "input_id": "HI-001",
+            "story_ids": ["US-001"],
+            "target_workflow": "TEST_DESIGN",
+            "content": "需求澄清基线及其验收标准",
+            "usage": "Lisa 测试设计输入",
+            "status": "可用",
+        },
+        {
+            "input_id": "HI-002",
+            "story_ids": ["US-001", "US-002"],
+            "target_workflow": "REQ_REVIEW",
+            "content": "故事、验收标准、依赖和风险一致性评审",
+            "usage": "Lisa 需求评审输入",
+            "status": "可用",
+        },
+    ],
+    "stage_gate": [
+        {
+            "checked": True,
+            "item": "所有 P0 用户故事均具备验收标准和 Sprint 切片。",
         }
     ],
 }
@@ -2679,6 +2795,43 @@ def test_prd_review_artifact_data_requires_stage_gate_checked():
         PrdReviewArtifactData.model_validate(invalid)
 
 
+def test_story_breakdown_artifact_data_rejects_unknown_epic_reference():
+    invalid = copy.deepcopy(VALID_STORY_BREAKDOWN_ARTIFACT_DATA)
+    invalid["stories"][0]["epic_id"] = "EPIC-404"
+
+    with pytest.raises(ValidationError, match="unknown epic ids"):
+        StoryBreakdownArtifactData.model_validate(invalid)
+
+
+def test_story_breakdown_artifact_data_rejects_unknown_story_reference():
+    invalid = copy.deepcopy(VALID_STORY_BREAKDOWN_ARTIFACT_DATA)
+    invalid["acceptance_criteria"][0]["story_id"] = "US-404"
+
+    with pytest.raises(ValidationError, match="unknown story ids"):
+        StoryBreakdownArtifactData.model_validate(invalid)
+
+
+def test_story_breakdown_artifact_data_rejects_self_dependency():
+    invalid = copy.deepcopy(VALID_STORY_BREAKDOWN_ARTIFACT_DATA)
+    invalid["dependencies"][0]["target_story_id"] = "US-001"
+
+    with pytest.raises(ValidationError, match="self dependency"):
+        StoryBreakdownArtifactData.model_validate(invalid)
+
+
+def test_story_breakdown_artifact_data_requires_stage_gate_checked():
+    invalid = copy.deepcopy(VALID_STORY_BREAKDOWN_ARTIFACT_DATA)
+    invalid["stage_gate"] = [
+        {
+            "checked": False,
+            "item": "仍缺少 Sprint 门禁",
+        }
+    ]
+
+    with pytest.raises(ValidationError, match="stage_gate"):
+        StoryBreakdownArtifactData.model_validate(invalid)
+
+
 def test_idea_define_artifact_data_rejects_duplicate_evidence_id():
     invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
     invalid["evidence_items"].append(copy.deepcopy(invalid["evidence_items"][0]))
@@ -3701,6 +3854,61 @@ def test_render_prd_review_artifact_data_is_deterministic_and_contract_valid(
         validate_agent_turn(
             first,
             workflow_id="PRD_REVIEW",
+            current_stage_id=stage_id,
+        )
+        == first
+    )
+
+
+@pytest.mark.parametrize(
+    ("stage_id", "expected_heading", "expected_visual"),
+    [
+        ("INPUT_ANALYSIS", "## 输入分析", None),
+        ("EPIC_MAPPING", "## Epic Map", None),
+        ("STORY_BACKLOG", "## User Story Backlog", None),
+        ("SPRINT_PLAN", "## Sprint 切片建议", '"type": "story-map"'),
+    ],
+)
+def test_render_story_breakdown_artifact_data_is_deterministic_and_contract_valid(
+    stage_id,
+    expected_heading,
+    expected_visual,
+):
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已完成用户故事拆解，请查看右侧故事包。",
+            "artifact_data": VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id=stage_id,
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已完成用户故事拆解，请查看右侧故事包。",
+            "artifact_data": VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id=stage_id,
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert first.artifact_update.type == "replace"
+    assert "# 用户故事拆解包" in first.artifact_update.markdown
+    assert expected_heading in first.artifact_update.markdown
+    assert "## 阶段门禁" in first.artifact_update.markdown
+    if expected_visual is not None:
+        assert "```ai4se-visual" in first.artifact_update.markdown
+        assert expected_visual in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="STORY_BREAKDOWN",
             current_stage_id=stage_id,
         )
         == first

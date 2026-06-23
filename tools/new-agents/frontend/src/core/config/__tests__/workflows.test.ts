@@ -118,6 +118,29 @@ describe('Workflow Configuration', () => {
         ]);
     });
 
+    it('should configure STORY_BREAKDOWN as an online Alex workflow', () => {
+        const workflows = getAgentWorkflows('alex');
+        const storyBreakdown = workflows.find(w => w.id === 'story-breakdown');
+
+        expect(storyBreakdown).toBeDefined();
+        expect(storyBreakdown?.status).toBe('online');
+        expect(storyBreakdown?.name).toBe('用户故事拆解');
+        expect(storyBreakdown?.link).toBe('/workspace/alex/story-breakdown');
+        expect(storyBreakdown?.preview?.requiredInputs).toContain('PRD、需求蓝图或 PRD Review 修订蓝图');
+        expect(storyBreakdown?.preview?.expectedOutputs).toContain('Epic Map、User Story Backlog、验收标准和 Sprint 切片建议');
+
+        const wf = WORKFLOWS.STORY_BREAKDOWN;
+        expect(wf.agentId).toBe('alex');
+        expect(wf.slug).toBe('story-breakdown');
+        expect(wf.stages.map(stage => stage.id)).toEqual([
+            'INPUT_ANALYSIS',
+            'EPIC_MAPPING',
+            'STORY_BACKLOG',
+            'SPRINT_PLAN',
+        ]);
+        expect(getStagePromptTemplateId('STORY_BREAKDOWN', 'SPRINT_PLAN')).toBe('story_breakdown.sprint_plan');
+    });
+
     it('every workflow definition should configure an agentId', () => {
         for (const key of Object.keys(WORKFLOWS)) {
             const wf = WORKFLOWS[key as keyof typeof WORKFLOWS];

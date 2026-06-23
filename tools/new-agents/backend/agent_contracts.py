@@ -17,6 +17,12 @@ WORKFLOW_STAGES: dict[str, list[str]] = {
         "COMPLETION_PLAN",
         "REVISION_BLUEPRINT",
     ],
+    "STORY_BREAKDOWN": [
+        "INPUT_ANALYSIS",
+        "EPIC_MAPPING",
+        "STORY_BACKLOG",
+        "SPRINT_PLAN",
+    ],
 }
 
 REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
@@ -394,6 +400,41 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
         "可测试性等级",
         "状态",
     ],
+    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): [
+        "# 用户故事拆解包",
+        "## 输入分析",
+        "## 目标用户与场景",
+        "## 范围与约束",
+        "## 待澄清问题",
+        "## 阶段门禁",
+    ],
+    ("STORY_BREAKDOWN", "EPIC_MAPPING"): [
+        "# 用户故事拆解包",
+        "## 输入分析",
+        "## Epic Map",
+        "## Epic 依赖",
+        "## 阶段门禁",
+    ],
+    ("STORY_BREAKDOWN", "STORY_BACKLOG"): [
+        "# 用户故事拆解包",
+        "## 输入分析",
+        "## Epic Map",
+        "## User Story Backlog",
+        "## 验收标准",
+        "## 依赖与风险",
+        "## 阶段门禁",
+    ],
+    ("STORY_BREAKDOWN", "SPRINT_PLAN"): [
+        "# 用户故事拆解包",
+        "## 输入分析",
+        "## Epic Map",
+        "## User Story Backlog",
+        "## 验收标准",
+        "## 依赖与风险",
+        "## Sprint 切片建议",
+        "## Lisa Handoff 输入",
+        "## 阶段门禁",
+    ],
 }
 
 REQUIRED_ARTIFACT_H1_KEYWORDS: dict[tuple[str, str], list[str]] = {
@@ -430,6 +471,7 @@ REQUIRED_ARTIFACT_STRUCTURED_VISUALS: dict[tuple[str, str], list[str]] = {
     ("PRD_REVIEW", "QUALITY_AUDIT"): ["score-matrix"],
     ("PRD_REVIEW", "COMPLETION_PLAN"): ["action-board"],
     ("PRD_REVIEW", "REVISION_BLUEPRINT"): ["roadmap"],
+    ("STORY_BREAKDOWN", "SPRINT_PLAN"): ["story-map"],
 }
 
 STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {
@@ -457,6 +499,15 @@ STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {
         '"RPN": 60, "缓解策略": "补充异常重试", "覆盖建议": "P0 用例"}]}。'
         "columns 必须是非空字符串数组；rows 必须是对象数组，每个对象的 key "
         "必须对应 columns 中的列名。"
+    ),
+    "story-map": (
+        'story-map 必须严格使用如下 JSON 结构：{"type": '
+        '"story-map", "title": "可选标题", "columns": ["Sprint", '
+        '"目标", "Story IDs", "交付物", "验收重点"], "rows": ['
+        '{"Sprint": "Sprint 1", "目标": "最小闭环", "Story IDs": '
+        '"US-001, US-002", "交付物": "可评审故事包", "验收重点": '
+        '"P0 Story 均有 AC"}]}。columns 必须是非空字符串数组；rows 必须是对象数组，'
+        "每个对象的 key 必须对应 columns 中的列名。"
     ),
     "action-board": (
         'action-board 必须严格使用如下 JSON 结构：{"type": '

@@ -19,6 +19,26 @@
       "targetAgentId": "lisa",
       "promptTemplateId": "source-artifact-handoff",
       "label": "交给 Lisa 做需求评审"
+    },
+    {
+      "id": "story-breakdown-sprint-plan-to-test-design",
+      "sourceWorkflowId": "STORY_BREAKDOWN",
+      "sourceStageId": "SPRINT_PLAN",
+      "targetWorkflowId": "TEST_DESIGN",
+      "targetStageId": "CLARIFY",
+      "targetAgentId": "lisa",
+      "promptTemplateId": "source-artifact-handoff",
+      "label": "交给 Lisa 做测试设计"
+    },
+    {
+      "id": "story-breakdown-sprint-plan-to-req-review",
+      "sourceWorkflowId": "STORY_BREAKDOWN",
+      "sourceStageId": "SPRINT_PLAN",
+      "targetWorkflowId": "REQ_REVIEW",
+      "targetStageId": "REVIEW",
+      "targetAgentId": "lisa",
+      "promptTemplateId": "source-artifact-handoff",
+      "label": "交给 Lisa 做需求评审"
     }
   ],
   "workflows": {
@@ -928,6 +948,119 @@
           "请帮我把这份需求草案整理成可交给 Lisa 做测试设计的版本"
         ],
         "inputPlaceholder": "粘贴 PRD、需求草案、Epic 或用户故事..."
+      }
+    },
+    "STORY_BREAKDOWN": {
+      "id": "STORY_BREAKDOWN",
+      "agentId": "alex",
+      "slug": "story-breakdown",
+      "name": "用户故事拆解",
+      "description": "把 PRD、需求蓝图或 PRD Review 修订蓝图拆成 Epic、User Story、验收标准、依赖风险、Sprint 切片和 Lisa handoff 输入。",
+      "listing": {
+        "name": "用户故事拆解",
+        "description": "将 PRD、需求蓝图或修订蓝图拆解为可评审、可测试、可排期的用户故事包，并可交接给 Lisa。",
+        "icon": "ListChecks",
+        "preview": {
+          "suitableFor": [
+            "已有 PRD 或需求蓝图，需要拆成研发可执行 backlog",
+            "需要为 P0/P1/P2 需求补齐用户故事和验收标准",
+            "需要把产品切片交给 Lisa 继续做测试设计或需求评审"
+          ],
+          "notSuitableFor": [
+            "只有零散产品想法，还没有任何需求上下文",
+            "需要直接写入外部项目管理工具"
+          ],
+          "requiredInputs": [
+            "PRD、需求蓝图或 PRD Review 修订蓝图",
+            "业务目标、目标用户、范围和关键约束",
+            "已有 Epic、验收标准、依赖、风险或待确认问题"
+          ],
+          "expectedOutputs": [
+            "Epic Map、User Story Backlog、验收标准和 Sprint 切片建议",
+            "依赖风险清单和阶段门禁",
+            "Lisa 测试设计或需求评审 handoff 输入"
+          ],
+          "sampleInput": "请把这份 PRD 拆成 Epic、用户故事、验收标准和两轮 Sprint 计划，并整理 Lisa handoff 输入。"
+        }
+      },
+      "stages": [
+        {
+          "id": "INPUT_ANALYSIS",
+          "name": "输入分析",
+          "promptTemplateId": "story_breakdown.input_analysis",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 用户故事拆解包",
+              "## 输入分析",
+              "## 目标用户与场景",
+              "## 范围与约束",
+              "## 待澄清问题",
+              "## 阶段门禁"
+            ]
+          }
+        },
+        {
+          "id": "EPIC_MAPPING",
+          "name": "Epic 映射",
+          "promptTemplateId": "story_breakdown.epic_mapping",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 用户故事拆解包",
+              "## 输入分析",
+              "## Epic Map",
+              "## Epic 依赖",
+              "## 阶段门禁"
+            ]
+          }
+        },
+        {
+          "id": "STORY_BACKLOG",
+          "name": "Story Backlog",
+          "promptTemplateId": "story_breakdown.story_backlog",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 用户故事拆解包",
+              "## 输入分析",
+              "## Epic Map",
+              "## User Story Backlog",
+              "## 验收标准",
+              "## 依赖与风险",
+              "## 阶段门禁"
+            ]
+          }
+        },
+        {
+          "id": "SPRINT_PLAN",
+          "name": "Sprint 计划",
+          "promptTemplateId": "story_breakdown.sprint_plan",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 用户故事拆解包",
+              "## 输入分析",
+              "## Epic Map",
+              "## User Story Backlog",
+              "## 验收标准",
+              "## 依赖与风险",
+              "## Sprint 切片建议",
+              "## Lisa Handoff 输入",
+              "## 阶段门禁"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "story-map"
+            ]
+          }
+        }
+      ],
+      "onboarding": {
+        "welcomeMessage": "你好！我是 Alex，产品用户故事拆解顾问。给我 PRD、需求蓝图或 PRD Review 修订蓝图，我会帮你拆成可评审、可测试、可排期的用户故事包。",
+        "starterPrompts": [
+          "请把这份 PRD 拆成 Epic、用户故事、验收标准和两轮 Sprint 计划",
+          "我们已经有 PRD Review 修订蓝图，想交给研发评审前先整理成 Backlog",
+          "请把这个需求蓝图拆成 Lisa 可以继续做测试设计的用户故事包"
+        ],
+        "inputPlaceholder": "粘贴 PRD、需求蓝图或 PRD Review 修订蓝图..."
       }
     }
   }

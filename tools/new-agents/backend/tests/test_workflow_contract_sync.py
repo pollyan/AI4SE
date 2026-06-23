@@ -204,6 +204,42 @@ FRONTEND_PROMPT_FILES = {
         / "prd_review"
         / "revision_blueprint.ts"
     ),
+    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "story_breakdown"
+        / "input_analysis.ts"
+    ),
+    ("STORY_BREAKDOWN", "EPIC_MAPPING"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "story_breakdown"
+        / "epic_mapping.ts"
+    ),
+    ("STORY_BREAKDOWN", "STORY_BACKLOG"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "story_breakdown"
+        / "story_backlog.ts"
+    ),
+    ("STORY_BREAKDOWN", "SPRINT_PLAN"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "story_breakdown"
+        / "sprint_plan.ts"
+    ),
 }
 
 
@@ -261,6 +297,8 @@ def test_shared_workflow_manifest_declares_alex_to_lisa_handoffs():
     } >= {
         ("VALUE_DISCOVERY", "BLUEPRINT", "TEST_DESIGN", "CLARIFY"),
         ("VALUE_DISCOVERY", "BLUEPRINT", "REQ_REVIEW", "REVIEW"),
+        ("STORY_BREAKDOWN", "SPRINT_PLAN", "TEST_DESIGN", "CLARIFY"),
+        ("STORY_BREAKDOWN", "SPRINT_PLAN", "REQ_REVIEW", "REVIEW"),
     }
 
 

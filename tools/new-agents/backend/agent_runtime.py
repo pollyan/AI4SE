@@ -115,6 +115,10 @@ ARTIFACT_DATA_READY_STAGES: frozenset[tuple[str, str]] = frozenset(
         ("PRD_REVIEW", "QUALITY_AUDIT"),
         ("PRD_REVIEW", "COMPLETION_PLAN"),
         ("PRD_REVIEW", "REVISION_BLUEPRINT"),
+        ("STORY_BREAKDOWN", "INPUT_ANALYSIS"),
+        ("STORY_BREAKDOWN", "EPIC_MAPPING"),
+        ("STORY_BREAKDOWN", "STORY_BACKLOG"),
+        ("STORY_BREAKDOWN", "SPRINT_PLAN"),
         ("INCIDENT_REVIEW", "TIMELINE"),
         ("INCIDENT_REVIEW", "ROOT_CAUSE"),
         ("INCIDENT_REVIEW", "IMPROVEMENT"),
@@ -765,6 +769,40 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+def _story_breakdown_artifact_data_instruction(stage_action: str) -> str:
+    return """【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮如何把输入需求拆成 Epic、User Story、验收标准、依赖风险、Sprint 切片和 Lisa Handoff 输入。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "用户故事拆解包", "workflow": "STORY_BREAKDOWN", "stage": "INPUT_ANALYSIS/EPIC_MAPPING/STORY_BACKLOG/SPRINT_PLAN", "status": "草稿/待确认/可交接 Lisa"},
+    "input_analysis": {"source_type": "PRD/需求蓝图/PRD Review 修订蓝图/用户输入", "product_goal": "...", "target_users": ["..."], "constraints": ["..."], "open_questions": ["..."]},
+    "epics": [{"epic_id": "EPIC-001", "name": "...", "value_goal": "...", "scope": "...", "priority": "P0/P1/P2", "dependencies": ["..."]}],
+    "stories": [{"story_id": "US-001", "epic_id": "EPIC-001", "title": "...", "user_story": "作为...我想...以便...", "priority": "P0/P1/P2", "sprint": "Sprint 1", "story_points": 5, "testability": "高/中/低", "status": "待评审/已确认"}],
+    "acceptance_criteria": [{"criterion_id": "AC-001", "story_id": "US-001", "criterion": "...", "verification_method": "单元/接口/UI/人工评审/LLM judge", "status": "待验证/已验证"}],
+    "dependencies": [{"dependency_id": "DEP-001", "source_story_id": "US-001", "target_story_id": "US-002", "description": "...", "risk": "...", "mitigation": "...", "owner": "产品/研发/测试/AI 工程", "status": "已识别/待确认/已解决"}],
+    "risks": [{"risk_id": "RISK-001", "related_story_ids": ["US-001"], "risk": "...", "impact": "...", "mitigation": "...", "severity": "P0/P1/P2", "status": "待跟进/已缓解"}],
+    "sprint_slices": [{"sprint_id": "Sprint 1", "goal": "...", "story_ids": ["US-001"], "deliverable": "...", "acceptance_focus": "..."}],
+    "handoff_inputs": [{"input_id": "HI-001", "story_ids": ["US-001"], "target_workflow": "TEST_DESIGN/REQ_REVIEW", "content": "...", "usage": "Lisa 测试设计输入/Lisa 需求评审输入", "status": "可用/待补充"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": {stage_action},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；epics.epic_id、stories.story_id、acceptance_criteria.criterion_id、dependencies.dependency_id、risks.risk_id、sprint_slices.sprint_id 和 handoff_inputs.input_id 必须唯一；stories.epic_id 只能引用已存在的 epic_id；acceptance_criteria.story_id、dependencies.source_story_id、dependencies.target_story_id、risks.related_story_ids、sprint_slices.story_ids 和 handoff_inputs.story_ids 只能引用已存在的 story_id；dependencies.source_story_id 和 dependencies.target_story_id 不能相同；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 story-map JSON 代码块，后端会负责确定性渲染右侧用户故事拆解包和 ai4se-visual story-map。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+""".replace("{stage_action}", stage_action)
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in ARTIFACT_DATA_READY_STAGES
 
@@ -800,6 +838,20 @@ def build_structured_output_instruction(
         "REVISION_BLUEPRINT",
     }:
         return PRD_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if (workflow_id, current_stage_id) == ("STORY_BREAKDOWN", "INPUT_ANALYSIS"):
+        return _story_breakdown_artifact_data_instruction(
+            '{"type": "request_next_stage", "target_stage_id": "EPIC_MAPPING"}'
+        )
+    if (workflow_id, current_stage_id) == ("STORY_BREAKDOWN", "EPIC_MAPPING"):
+        return _story_breakdown_artifact_data_instruction(
+            '{"type": "request_next_stage", "target_stage_id": "STORY_BACKLOG"}'
+        )
+    if (workflow_id, current_stage_id) == ("STORY_BREAKDOWN", "STORY_BACKLOG"):
+        return _story_breakdown_artifact_data_instruction(
+            '{"type": "request_next_stage", "target_stage_id": "SPRINT_PLAN"}'
+        )
+    if (workflow_id, current_stage_id) == ("STORY_BREAKDOWN", "SPRINT_PLAN"):
+        return _story_breakdown_artifact_data_instruction("null")
     if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
         return VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "PERSONA"):
