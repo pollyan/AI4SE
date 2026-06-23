@@ -112,6 +112,9 @@ flowchart TD
 
 ## 12. 阶段门禁
 - [x] P0 需求均具备验收标准、owner 和可测试性等级。
+
+## 13. 待确认事项
+- PM 需要确认离线导出是否进入 MVP 范围。
 """
 
 STORY_BREAKDOWN_MARKDOWN = """# 用户故事拆解包
@@ -195,6 +198,20 @@ def test_export_run_handoffs_returns_configured_lisa_targets(app):
     first = result["handoffs"][0]
     assert first["sourceStageId"] == "BLUEPRINT"
     assert first["sourceArtifactVersion"] == 1
+    assert first["sourceArtifactSummary"] == (
+        "AI 测试资产管理平台需求蓝图；AI 测试资产管理平台。"
+    )
+    assert first["unresolvedItems"] == [
+        "PM 需要确认离线导出是否进入 MVP 范围。",
+    ]
+    assert first["targetInputSummary"] == (
+        "将 VALUE_DISCOVERY/BLUEPRINT v1 作为 TEST_DESIGN/CLARIFY 的启动输入，"
+        "重点用于 Lisa 继续测试设计或需求评审。"
+    )
+    assert "来源版本: VALUE_DISCOVERY/BLUEPRINT v1" in first["prompt"]
+    assert "关键摘要: AI 测试资产管理平台需求蓝图；AI 测试资产管理平台。" in first["prompt"]
+    assert "未确认项:\n- PM 需要确认离线导出是否进入 MVP 范围。" in first["prompt"]
+    assert "目标用途: 将 VALUE_DISCOVERY/BLUEPRINT v1 作为 TEST_DESIGN/CLARIFY 的启动输入" in first["prompt"]
     assert "VALUE_DISCOVERY/BLUEPRINT" in first["prompt"]
     assert "TEST_DESIGN/CLARIFY" in first["prompt"]
     assert "AI 测试资产管理平台" in first["prompt"]
@@ -224,6 +241,14 @@ def test_export_story_breakdown_handoffs_returns_lisa_targets(app):
     first = result["handoffs"][0]
     assert first["sourceStageId"] == "SPRINT_PLAN"
     assert first["sourceArtifactVersion"] == 1
+    assert first["sourceArtifactSummary"] == (
+        "用户故事拆解包；来源 PRD，目标是把测试资产生成能力拆成 Sprint 可交付切片。"
+    )
+    assert first["unresolvedItems"] == [
+        "模型直写 Markdown 绕过 renderer",
+    ]
+    assert "来源版本: STORY_BREAKDOWN/SPRINT_PLAN v1" in first["prompt"]
+    assert "未确认项:\n- 模型直写 Markdown 绕过 renderer" in first["prompt"]
     assert "STORY_BREAKDOWN/SPRINT_PLAN" in first["prompt"]
     assert "TEST_DESIGN/CLARIFY" in first["prompt"]
     assert "US-001" in first["prompt"]

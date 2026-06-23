@@ -795,6 +795,9 @@ describe('ChatPane Component', () => {
                 sourceWorkflowId: 'VALUE_DISCOVERY',
                 sourceStageId: 'BLUEPRINT',
                 sourceArtifactVersion: 2,
+                sourceArtifactSummary: 'AI 测试资产管理平台需求蓝图；AI 测试资产管理平台。',
+                unresolvedItems: ['PM 需要确认离线导出是否进入 MVP 范围。'],
+                targetInputSummary: '将 VALUE_DISCOVERY/BLUEPRINT v2 作为 TEST_DESIGN/CLARIFY 的启动输入。',
                 targetWorkflowId: 'TEST_DESIGN',
                 targetStageId: 'CLARIFY',
                 targetAgentId: 'lisa',
@@ -806,6 +809,11 @@ describe('ChatPane Component', () => {
 
         expect(fetchWorkflowHandoffs).toHaveBeenCalledWith('alex-run-123');
         expect(await screen.findByText('交给 Lisa 做测试设计')).toBeDefined();
+        expect(screen.getByText('来源 VALUE_DISCOVERY/BLUEPRINT v2')).toBeDefined();
+        expect(screen.getByText('AI 测试资产管理平台需求蓝图；AI 测试资产管理平台。')).toBeDefined();
+        expect(screen.getByText('未确认项 1')).toBeDefined();
+        expect(screen.getByText('PM 需要确认离线导出是否进入 MVP 范围。')).toBeDefined();
+        expect(screen.getByText('将 VALUE_DISCOVERY/BLUEPRINT v2 作为 TEST_DESIGN/CLARIFY 的启动输入。')).toBeDefined();
     });
 
     it('applies a workflow handoff from the chat pane action', async () => {
@@ -824,6 +832,9 @@ describe('ChatPane Component', () => {
                 sourceWorkflowId: 'VALUE_DISCOVERY',
                 sourceStageId: 'BLUEPRINT',
                 sourceArtifactVersion: 2,
+                sourceArtifactSummary: 'AI 测试资产管理平台需求蓝图；AI 测试资产管理平台。',
+                unresolvedItems: ['PM 需要确认离线导出是否进入 MVP 范围。'],
+                targetInputSummary: '将 VALUE_DISCOVERY/BLUEPRINT v2 作为 TEST_DESIGN/CLARIFY 的启动输入。',
                 targetWorkflowId: 'TEST_DESIGN',
                 targetStageId: 'CLARIFY',
                 targetAgentId: 'lisa',
@@ -836,6 +847,9 @@ describe('ChatPane Component', () => {
             sourceWorkflowId: 'VALUE_DISCOVERY',
             sourceStageId: 'BLUEPRINT',
             sourceArtifactVersion: 2,
+            sourceArtifactSummary: 'AI 测试资产管理平台需求蓝图；AI 测试资产管理平台。',
+            unresolvedItems: ['PM 需要确认离线导出是否进入 MVP 范围。'],
+            targetInputSummary: '将 VALUE_DISCOVERY/BLUEPRINT v2 作为 TEST_DESIGN/CLARIFY 的启动输入。',
             targetWorkflowId: 'TEST_DESIGN',
             targetStageId: 'CLARIFY',
             targetAgentId: 'lisa',

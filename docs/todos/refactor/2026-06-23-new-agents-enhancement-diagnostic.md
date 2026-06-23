@@ -70,7 +70,7 @@
 | E04 | Lisa 测试资产质量闭环 | 已消化 | 专业内容 | M | P0 | 2026-06-23 已主线化：Lisa 测试资产集合 payload 增加 `assetQuality`，聚合待处理 issue、未覆盖/部分覆盖测试点、风险生命周期、覆盖率和下一步动作；`TestAssetsPage` 展示资产质量状态，并在 issue、测试点、风险处理后刷新集合质量；不新增 intent-tester 自动执行、新 runtime、SSE/API transport 或 agent 专属 renderer；验证覆盖 `test_test_assets.py`、`testAssetService.test.ts` 与 `TestAssetsPage.test.tsx` |
 | E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
 | E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 支持继续、复制为新 run、按 workflow/质量筛选、预览当前 artifact |
-| E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入 |
+| E07 | Workflow handoff 增强 | 已消化 | 平台扩展 | M | P1 | 2026-06-23 已主线化：共享 workflow handoff export/start 返回来源版本、关键摘要、未确认项和目标输入说明；handoff prompt 将同一上下文写入目标 run 首条消息；`workflowHandoffService` 严格解析新增字段，`ChatPane` 接力卡片展示来源、摘要、未确认项和目标用途；不新增 agent-specific runtime、SSE/API path、store 或 renderer；验证覆盖 `test_workflow_handoffs.py`、`test_agent_endpoint.py`、`workflowHandoffService.test.ts`、`ChatPane.test.tsx` 与 `store.test.ts` |
 | E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 | 每个 stage 有质量分、证据明细和待处理项 |
 | E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 显示 workflow/stage/provider 趋势、contract retry 原因和行动建议 |
 | E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | FMEA、JTBD、RICE、Kano、CAPA 等可由配置注入 prompt/template |
@@ -126,7 +126,7 @@
 
 目标: 让用户从开始、生成、审阅、修订、恢复、复用形成闭环。
 
-包含: E05、E06、E07、E08。E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化。
+包含: E05、E06、E08。E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化，E07 已在 2026-06-23 Workflow handoff 上下文强化 milestone 中消化。
 
 暂不做:
 
@@ -200,10 +200,12 @@
 
 ### 6. Handoff 上下文强化
 
+- 完成日期: 2026-06-23。
 - 涉及模块: `workflow_manifest.json`、`workflow_handoffs.py`、Alex blueprint prompt/template、`ChatPane.tsx`。
-- 需要同步: handoff prompt template、target workflow/stage、context truncation policy。
-- 完成定义: handoff 明确来源版本、关键需求、验收标准、风险、未确认项和目标用途。
-- 不纳入: 新 runtime 分支。
+- 实际涉及模块: `tools/new-agents/backend/workflow_handoffs.py`、`tools/new-agents/backend/tests/test_workflow_handoffs.py`、`tools/new-agents/backend/tests/test_agent_endpoint.py`、`tools/new-agents/frontend/src/core/types.ts`、`tools/new-agents/frontend/src/services/workflowHandoffService.ts`、`tools/new-agents/frontend/src/components/ChatPane.tsx`、`tools/new-agents/frontend/src/__tests__/store.test.ts`、相关 frontend tests。
+- 完成定义: handoff 明确来源版本、关键摘要、未确认项和目标用途；启动 handoff 后，增强 prompt 写入目标 run 的首条用户消息。
+- 不纳入: 新 runtime 分支、agent-specific API/store/renderer、更多 handoff 类型、run 历史复制或质量评分。
+- 验证记录: `python3 -m pytest tools/new-agents/backend/tests/test_workflow_handoffs.py tools/new-agents/backend/tests/test_agent_endpoint.py -q`；`cd tools/new-agents/frontend && npm run test -- --run src/services/__tests__/workflowHandoffService.test.ts src/components/__tests__/ChatPane.test.tsx src/__tests__/store.test.ts`；`cd tools/new-agents/frontend && npm run lint`；`git diff --check`。
 
 ## 架构约束
 

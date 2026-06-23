@@ -20,6 +20,9 @@ describe('workflowHandoffService', () => {
                         sourceWorkflowId: 'VALUE_DISCOVERY',
                         sourceStageId: 'BLUEPRINT',
                         sourceArtifactVersion: 2,
+                        sourceArtifactSummary: 'AI 测试资产管理平台需求蓝图；AI 测试资产管理平台。',
+                        unresolvedItems: ['PM 需要确认离线导出是否进入 MVP 范围。'],
+                        targetInputSummary: '将 VALUE_DISCOVERY/BLUEPRINT v2 作为 TEST_DESIGN/CLARIFY 的启动输入。',
                         targetWorkflowId: 'TEST_DESIGN',
                         targetStageId: 'CLARIFY',
                         targetAgentId: 'lisa',
@@ -41,6 +44,9 @@ describe('workflowHandoffService', () => {
                 id: 'handoff-1',
                 targetWorkflowId: 'TEST_DESIGN',
                 targetStageId: 'CLARIFY',
+                sourceArtifactSummary: 'AI 测试资产管理平台需求蓝图；AI 测试资产管理平台。',
+                unresolvedItems: ['PM 需要确认离线导出是否进入 MVP 范围。'],
+                targetInputSummary: '将 VALUE_DISCOVERY/BLUEPRINT v2 作为 TEST_DESIGN/CLARIFY 的启动输入。',
                 prompt: '请基于 Alex 的价值蓝图设计测试策略。',
             }),
         ]);
@@ -77,6 +83,9 @@ describe('workflowHandoffService', () => {
                 sourceWorkflowId: 'VALUE_DISCOVERY',
                 sourceStageId: 'BLUEPRINT',
                 sourceArtifactVersion: 2,
+                sourceArtifactSummary: 'AI 测试资产管理平台需求蓝图；AI 测试资产管理平台。',
+                unresolvedItems: ['PM 需要确认离线导出是否进入 MVP 范围。'],
+                targetInputSummary: '将 VALUE_DISCOVERY/BLUEPRINT v2 作为 TEST_DESIGN/CLARIFY 的启动输入。',
                 targetRunId: 'lisa-run-456',
                 targetWorkflowId: 'TEST_DESIGN',
                 targetStageId: 'CLARIFY',
@@ -97,5 +106,6 @@ describe('workflowHandoffService', () => {
         );
         expect(handoff.targetRunId).toBe('lisa-run-456');
         expect(handoff.targetWorkflowId).toBe('TEST_DESIGN');
+        expect(handoff.unresolvedItems).toEqual(['PM 需要确认离线导出是否进入 MVP 范围。']);
     });
 });

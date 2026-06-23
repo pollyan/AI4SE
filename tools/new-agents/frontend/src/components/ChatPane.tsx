@@ -301,25 +301,60 @@ export const ChatPane: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
         {workflowHandoffs.length > 0 && !isGenerating && (
           <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-cyan-100">跨智能体接力</p>
                 <p className="mt-0.5 truncate text-[11px] text-cyan-200/70">
                   当前产出物可以作为下游工作流输入
                 </p>
               </div>
-              <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                {workflowHandoffs.map((handoff) => (
-                  <button
-                    key={handoff.id}
-                    onClick={() => handleApplyWorkflowHandoff(handoff)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition-colors hover:border-cyan-300/40 hover:bg-cyan-400/20"
-                    title={handoff.label}
-                  >
-                    <span>{handoff.label}</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </button>
-                ))}
+              <div className="grid gap-2">
+                {workflowHandoffs.map((handoff) => {
+                  const visibleUnresolvedItems = handoff.unresolvedItems.slice(0, 2);
+                  return (
+                    <div
+                      key={handoff.id}
+                      className="rounded-lg border border-cyan-400/15 bg-slate-950/30 p-3"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-semibold text-cyan-100">
+                            来源 {handoff.sourceWorkflowId}/{handoff.sourceStageId} v{handoff.sourceArtifactVersion}
+                          </p>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-200">
+                            {handoff.sourceArtifactSummary}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleApplyWorkflowHandoff(handoff)}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition-colors hover:border-cyan-300/40 hover:bg-cyan-400/20"
+                          title={handoff.label}
+                        >
+                          <span>{handoff.label}</span>
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <p className="mt-2 text-[11px] leading-relaxed text-cyan-200/75">
+                        {handoff.targetInputSummary}
+                      </p>
+                      <div className="mt-2 rounded border border-cyan-300/10 bg-black/15 px-2.5 py-2">
+                        <p className="text-[11px] font-semibold text-cyan-100">
+                          未确认项 {handoff.unresolvedItems.length}
+                        </p>
+                        {visibleUnresolvedItems.length > 0 ? (
+                          <ul className="mt-1 list-disc space-y-1 pl-4 text-[11px] leading-relaxed text-cyan-100/75">
+                            {visibleUnresolvedItems.map((item) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-1 text-[11px] text-cyan-100/60">暂无待确认项</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

@@ -1697,6 +1697,13 @@ def test_agent_run_handoffs_endpoint_exports_configured_targets(
         ("REQ_REVIEW", "REVIEW", "lisa"),
     ]
     assert response.json["handoffs"][0]["sourceArtifactVersion"] == 1
+    assert response.json["handoffs"][0]["sourceArtifactSummary"]
+    assert isinstance(response.json["handoffs"][0]["unresolvedItems"], list)
+    assert response.json["handoffs"][0]["targetInputSummary"].startswith(
+        "将 VALUE_DISCOVERY/BLUEPRINT v1 作为 TEST_DESIGN/CLARIFY 的启动输入"
+    )
+    assert "关键摘要:" in response.json["handoffs"][0]["prompt"]
+    assert "未确认项:" in response.json["handoffs"][0]["prompt"]
     assert "AI 测试资产管理平台" in response.json["handoffs"][0]["prompt"]
 
 
@@ -1720,6 +1727,11 @@ def test_agent_run_handoff_start_endpoint_creates_target_run(
     assert response.json["targetWorkflowId"] == "TEST_DESIGN"
     assert response.json["targetStageId"] == "CLARIFY"
     assert response.json["targetAgentId"] == "lisa"
+    assert response.json["sourceArtifactSummary"]
+    assert isinstance(response.json["unresolvedItems"], list)
+    assert response.json["targetInputSummary"].startswith(
+        "将 VALUE_DISCOVERY/BLUEPRINT v1 作为 TEST_DESIGN/CLARIFY 的启动输入"
+    )
     assert "AI 测试资产管理平台" in response.json["prompt"]
 
 

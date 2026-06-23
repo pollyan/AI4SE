@@ -23,6 +23,9 @@ const parseWorkflowHandoff = (handoff: unknown): WorkflowHandoff => {
     const sourceWorkflowId = payload.sourceWorkflowId;
     const sourceStageId = payload.sourceStageId;
     const sourceArtifactVersion = payload.sourceArtifactVersion;
+    const sourceArtifactSummary = payload.sourceArtifactSummary;
+    const unresolvedItems = payload.unresolvedItems;
+    const targetInputSummary = payload.targetInputSummary;
     const targetRunId = payload.targetRunId;
     const targetWorkflowId = payload.targetWorkflowId;
     const targetStageId = payload.targetStageId;
@@ -43,6 +46,10 @@ const parseWorkflowHandoff = (handoff: unknown): WorkflowHandoff => {
         || typeof sourceStageId !== 'string'
         || typeof sourceArtifactVersion !== 'number'
         || !Number.isInteger(sourceArtifactVersion)
+        || typeof sourceArtifactSummary !== 'string'
+        || !Array.isArray(unresolvedItems)
+        || !unresolvedItems.every((item) => typeof item === 'string')
+        || typeof targetInputSummary !== 'string'
         || !isWorkflowType(targetWorkflowId)
         || typeof targetStageId !== 'string'
         || typeof targetAgentId !== 'string'
@@ -57,6 +64,9 @@ const parseWorkflowHandoff = (handoff: unknown): WorkflowHandoff => {
         sourceWorkflowId,
         sourceStageId,
         sourceArtifactVersion,
+        sourceArtifactSummary,
+        unresolvedItems,
+        targetInputSummary,
         ...(parsedTargetRunId !== undefined ? { targetRunId: parsedTargetRunId } : {}),
         targetWorkflowId,
         targetStageId,

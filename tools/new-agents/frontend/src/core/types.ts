@@ -97,6 +97,9 @@ export type WorkflowHandoff = {
     sourceWorkflowId: WorkflowType;
     sourceStageId: string;
     sourceArtifactVersion: number;
+    sourceArtifactSummary: string;
+    unresolvedItems: string[];
+    targetInputSummary: string;
     targetRunId?: string;
     targetWorkflowId: WorkflowType;
     targetStageId: string;
