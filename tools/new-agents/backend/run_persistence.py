@@ -1,3 +1,4 @@
+import json
 import time
 from uuid import uuid4
 
@@ -33,7 +34,6 @@ from models import (
     db,
 )
 from workflow_manifest import get_workflow_agent_id
-
 
 MESSAGE_ROLES = {"user", "assistant"}
 RUN_STATUSES = {"active", "completed", "failed"}
@@ -172,8 +172,15 @@ class AgentRunPersistence:
         run_id: str,
         stage_id: str,
         content: str,
+        *,
+        artifact_data: dict | None = None,
     ) -> None:
-        record_artifact_version(run_id, stage_id, content)
+        record_artifact_version(
+            run_id,
+            stage_id,
+            content,
+            artifact_data=artifact_data,
+        )
 
     def record_turn_metric(self, **kwargs) -> None:
         record_turn_metric(**kwargs)
@@ -201,6 +208,8 @@ def record_artifact_version(
     run_id: str,
     stage_id: str,
     content: str,
+    *,
+    artifact_data: dict | None = None,
 ) -> AgentArtifactVersion:
     run = _get_run(run_id)
     _validate_workflow_stage(run.workflow_id, stage_id)
@@ -218,6 +227,11 @@ def record_artifact_version(
         artifact_id=artifact.id,
         version_number=_next_artifact_version(artifact.id),
         content=content,
+        artifact_data_json=(
+            json.dumps(artifact_data, ensure_ascii=False)
+            if artifact_data is not None
+            else None
+        ),
     )
     db.session.add(version)
     db.session.flush()
@@ -368,8 +382,7 @@ def update_context_summary(run_id: str, patch: dict) -> dict:
     ).first()
     if summary is None:
         raise ValueError(
-            "未知上下文摘要: "
-            f"{source_type}/{source_stage_id}/{summary_type}"
+            "未知上下文摘要: " f"{source_type}/{source_stage_id}/{summary_type}"
         )
 
     summary.content = content
@@ -473,12 +486,10 @@ def replace_artifact_collaboration_state(run_id: str, patch: dict) -> dict:
     db.session.commit()
     return {
         "artifactComments": [
-            comment_snapshot(comment)
-            for comment in collaboration_state.comments
+            comment_snapshot(comment) for comment in collaboration_state.comments
         ],
         "artifactSectionLocks": [
-            section_lock_snapshot(lock)
-            for lock in collaboration_state.section_locks
+            section_lock_snapshot(lock) for lock in collaboration_state.section_locks
         ],
     }
 
@@ -579,16 +590,13 @@ def get_run_snapshot(run_id: str) -> dict:
             for summary in context_summaries
         ],
         "artifactComments": [
-            comment_snapshot(comment)
-            for comment in artifact_comments
+            comment_snapshot(comment) for comment in artifact_comments
         ],
         "artifactSectionLocks": [
-            section_lock_snapshot(lock)
-            for lock in artifact_section_locks
+            section_lock_snapshot(lock) for lock in artifact_section_locks
         ],
         "artifactAuditEvents": [
-            audit_event_snapshot(event)
-            for event in artifact_audit_events
+            audit_event_snapshot(event) for event in artifact_audit_events
         ],
     }
 
@@ -695,9 +703,8 @@ def get_runtime_observability_summary(
     ).all()
 
     total_turns = len(metrics) + len(config_issues)
-    failed_turns = (
-        sum(1 for metric in metrics if metric.status != "success")
-        + len(config_issues)
+    failed_turns = sum(1 for metric in metrics if metric.status != "success") + len(
+        config_issues
     )
     provider_issue_codes = _merge_error_codes(
         _provider_issue_codes(metrics),
@@ -743,10 +750,7 @@ def get_runtime_observability_summary(
             _provider_observability_item(provider, provider_metrics)
             for provider, provider_metrics in sorted(provider_index.items())
         ],
-        "recentTurns": [
-            _turn_metric_snapshot(metric)
-            for metric in metrics[:limit]
-        ],
+        "recentTurns": [_turn_metric_snapshot(metric) for metric in metrics[:limit]],
     }
 
 
@@ -804,9 +808,8 @@ def _stage_observability_item(
 ) -> dict:
     config_issues = config_issues or []
     total_turns = len(metrics) + len(config_issues)
-    failed_turns = (
-        sum(1 for metric in metrics if metric.status != "success")
-        + len(config_issues)
+    failed_turns = sum(1 for metric in metrics if metric.status != "success") + len(
+        config_issues
     )
     error_codes: dict[str, int] = {}
     for metric in metrics:
@@ -1028,4 +1031,9 @@ def _artifact_snapshot(artifact: AgentArtifact) -> dict:
         "stageId": artifact.stage_id,
         "content": version.content,
         "versionNumber": version.version_number,
+        "artifactData": (
+            json.loads(version.artifact_data_json)
+            if version.artifact_data_json
+            else None
+        ),
     }

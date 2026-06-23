@@ -4,7 +4,7 @@ db = SQLAlchemy()
 
 
 class LlmConfig(db.Model):
-    __tablename__ = 'llm_config'
+    __tablename__ = "llm_config"
 
     id = db.Column(db.Integer, primary_key=True)
     config_key = db.Column(db.String(64), unique=True, nullable=False)
@@ -14,15 +14,17 @@ class LlmConfig(db.Model):
     description = db.Column(db.Text)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
-    updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now())
+    updated_at = db.Column(
+        db.DateTime, server_default=db.func.now(), onupdate=db.func.now()
+    )
 
     def to_dict(self):
         return {
-            'id': self.id,
-            'config_key': self.config_key,
-            'base_url': self.base_url,
-            'model': self.model,
-            'description': self.description
+            "id": self.id,
+            "config_key": self.config_key,
+            "base_url": self.base_url,
+            "model": self.model,
+            "description": self.description,
             # Note: api_key is intentionally not returned for security
         }
 
@@ -88,8 +90,7 @@ class AgentRun(db.Model):
         back_populates="run",
         cascade="all, delete-orphan",
         order_by=(
-            "AgentArtifactAuditEvent.created_at_ms,"
-            "AgentArtifactAuditEvent.id"
+            "AgentArtifactAuditEvent.created_at_ms," "AgentArtifactAuditEvent.id"
         ),
     )
 
@@ -173,6 +174,7 @@ class AgentArtifactVersion(db.Model):
     )
     version_number = db.Column(db.Integer, nullable=False)
     content = db.Column(db.Text, nullable=False)
+    artifact_data_json = db.Column(db.Text)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
     artifact = db.relationship("AgentArtifact", back_populates="versions")
@@ -397,7 +399,9 @@ class AgentTestCaseAsset(db.Model):
         onupdate=db.func.now(),
     )
 
-    collection = db.relationship("AgentTestAssetCollection", back_populates="test_cases")
+    collection = db.relationship(
+        "AgentTestAssetCollection", back_populates="test_cases"
+    )
     versions = db.relationship(
         "AgentTestCaseVersion",
         back_populates="test_case",
@@ -461,7 +465,9 @@ class AgentTestPointAsset(db.Model):
     test_cases_json = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(32), nullable=False)
 
-    collection = db.relationship("AgentTestAssetCollection", back_populates="test_points")
+    collection = db.relationship(
+        "AgentTestAssetCollection", back_populates="test_points"
+    )
 
 
 class AgentRiskMatrixAsset(db.Model):
@@ -492,7 +498,9 @@ class AgentRiskMatrixAsset(db.Model):
     owner = db.Column(db.Text, nullable=False, default="")
     note = db.Column(db.Text, nullable=False, default="")
 
-    collection = db.relationship("AgentTestAssetCollection", back_populates="risk_matrix")
+    collection = db.relationship(
+        "AgentTestAssetCollection", back_populates="risk_matrix"
+    )
 
 
 class AgentTestAssetIssue(db.Model):

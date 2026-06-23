@@ -19,7 +19,9 @@
 
 ## 当前入口
 
-暂无。
+- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选。
+
+2026-06-23 已复核：DeepSeek V4 结构化产物数据改造已归档；除上述活动候选外，其他重构类事项均已归档或转为历史完成记录。不要从 `archive/` 中的过程性“待办/剩余”直接恢复实施。
 
 ## 已归档
 
@@ -32,3 +34,4 @@
 - `../archive/2026-06-21-new-agents-refactor-phase5-remaining-plan.md`：New Agents 智能体重构阶段 5 剩余路线与前端 ArtifactPane 拆分计划。
 - `../archive/2026-06-22-new-agents-artifact-professionalization-target.md`：New Agents 全 workflow 产出物专业化目标状态与目标模式输入提示词。
 - `../archive/2026-06-22-new-agents-artifact-professionalization-design.md`：New Agents 全 workflow 产出物专业化目标状态设计。
+- `../archive/2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 兼容的后端结构化产物数据改造完成记录。

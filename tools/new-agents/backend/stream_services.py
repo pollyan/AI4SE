@@ -34,7 +34,6 @@ from sse_schemas import (
     SseEvent,
 )
 
-
 SCHEMA_RETRY_EXHAUSTED_MESSAGE = (
     "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
     "如果多次失败，请补充更明确的需求或阶段确认信息。"
@@ -47,35 +46,30 @@ class StreamPersistence(Protocol):
         agent_request: AgentRunStreamRequest,
         *,
         model_name: str,
-    ) -> str:
-        ...
+    ) -> str: ...
 
-    def append_user_message(self, run_id: str, content: str) -> None:
-        ...
+    def append_user_message(self, run_id: str, content: str) -> None: ...
 
-    def build_runtime_prompt(self, run_id: str, current_prompt: str) -> str:
-        ...
+    def build_runtime_prompt(self, run_id: str, current_prompt: str) -> str: ...
 
     def build_runtime_context(
         self,
         run_id: str,
         current_prompt: str,
-    ) -> tuple[str, list[str]]:
-        ...
+    ) -> tuple[str, list[str]]: ...
 
-    def append_assistant_message(self, run_id: str, content: str) -> None:
-        ...
+    def append_assistant_message(self, run_id: str, content: str) -> None: ...
 
     def record_artifact_version(
         self,
         run_id: str,
         stage_id: str,
         content: str,
-    ) -> None:
-        ...
+        *,
+        artifact_data: dict | None = None,
+    ) -> None: ...
 
-    def record_turn_metric(self, **kwargs) -> None:
-        ...
+    def record_turn_metric(self, **kwargs) -> None: ...
 
 
 def build_runtime_system_prompt(agent_request: AgentRunStreamRequest) -> str:
@@ -253,6 +247,7 @@ def stream_agent_run_events(
                         run_id,
                         agent_request.stage_id,
                         artifact_update.markdown,
+                        artifact_data=final_output.artifact_data,
                     )
                     output_chars = len(final_output.chat) + len(
                         artifact_update.markdown

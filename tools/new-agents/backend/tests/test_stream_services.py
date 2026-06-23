@@ -14,6 +14,16 @@ from sse_schemas import (
 )
 from stream_services import stream_agent_run_events
 
+VALID_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "测试需求分析与澄清基线",
+    },
+    "stage_gate": {
+        "status": "需要用户补充",
+        "blocking": True,
+    },
+}
+
 
 VALID_CLARIFY_ARTIFACT = """# 需求分析文档
 
@@ -73,13 +83,15 @@ class FakePersistence:
         self.context_warnings = []
 
     def ensure_run(self, agent_request, *, model_name: str) -> str:
-        self.calls.append((
-            "ensure_run",
-            agent_request.workflow_id,
-            agent_request.stage_id,
-            agent_request.run_id,
-            model_name,
-        ))
+        self.calls.append(
+            (
+                "ensure_run",
+                agent_request.workflow_id,
+                agent_request.stage_id,
+                agent_request.run_id,
+                model_name,
+            )
+        )
         return "run-123"
 
     def append_user_message(self, run_id: str, content: str) -> None:
@@ -93,8 +105,18 @@ class FakePersistence:
         run_id: str,
         stage_id: str,
         content: str,
+        *,
+        artifact_data=None,
     ) -> None:
-        self.calls.append(("record_artifact_version", run_id, stage_id, content))
+        self.calls.append(
+            (
+                "record_artifact_version",
+                run_id,
+                stage_id,
+                content,
+                artifact_data,
+            )
+        )
 
     def build_runtime_prompt(self, run_id: str, current_prompt: str) -> str:
         self.calls.append(("build_runtime_prompt", run_id, current_prompt))
@@ -112,49 +134,58 @@ class FakePersistence:
 def test_stream_agent_run_events_yields_started_delta_and_final_events(
     mock_build_runtime: MagicMock,
 ) -> None:
-    partial = AgentTurnOutput.model_validate({
-        "chat": "正在梳理需求。",
-        "artifact_update": {
-            "type": "replace",
-            "markdown": VALID_CLARIFY_ARTIFACT,
-        },
-        "stage_action": None,
-        "warnings": [],
-    })
-    final = AgentTurnOutput.model_validate({
-        "chat": "已更新右侧需求分析文档，请确认。",
-        "artifact_update": {
-            "type": "replace",
-            "markdown": VALID_CLARIFY_ARTIFACT,
-        },
-        "stage_action": None,
-        "warnings": [],
-    })
+    partial = AgentTurnOutput.model_validate(
+        {
+            "chat": "正在梳理需求。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": VALID_CLARIFY_ARTIFACT,
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+    final = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新右侧需求分析文档，请确认。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": VALID_CLARIFY_ARTIFACT,
+            },
+            "artifact_data": VALID_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
     runtime = MagicMock()
     runtime.stream_turn.return_value = iter([partial, final])
     mock_build_runtime.return_value = runtime
-    request = AgentRunStreamRequest.model_validate({
-        "prompt": "用户需求",
-        "systemPrompt": "你是 Lisa。",
-        "workflowId": "TEST_DESIGN",
-        "stageId": "CLARIFY",
-    })
+    request = AgentRunStreamRequest.model_validate(
+        {
+            "prompt": "用户需求",
+            "systemPrompt": "你是 Lisa。",
+            "workflowId": "TEST_DESIGN",
+            "stageId": "CLARIFY",
+        }
+    )
 
-    events = list(stream_agent_run_events(
-        request,
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-    ))
+    events = list(
+        stream_agent_run_events(
+            request,
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+        )
+    )
 
     assert events == [
         RunStartedEvent(),
-        AgentTurnDeltaEvent(output=AgentTurnDeltaOutput.model_validate(
-            partial.model_dump(mode="json")
-        )),
-        AgentTurnDeltaEvent(output=AgentTurnDeltaOutput.model_validate(
-            final.model_dump(mode="json")
-        )),
+        AgentTurnDeltaEvent(
+            output=AgentTurnDeltaOutput.model_validate(partial.model_dump(mode="json"))
+        ),
+        AgentTurnDeltaEvent(
+            output=AgentTurnDeltaOutput.model_validate(final.model_dump(mode="json"))
+        ),
         AgentTurnEvent(output=final),
     ]
     runtime_kwargs = mock_build_runtime.call_args.kwargs
@@ -162,15 +193,9 @@ def test_stream_agent_run_events_yields_started_delta_and_final_events(
     assert runtime_kwargs["base_url"] == "https://api.test.com/v1"
     assert runtime_kwargs["model_name"] == "test-model"
     assert "你是 Lisa。" in runtime_kwargs["system_prompt"]
-    assert "artifact_update.type 必须为 replace" in (
-        runtime_kwargs["system_prompt"]
-    )
-    assert "chat 只允许返回给用户看的自然工作对话" in (
-        runtime_kwargs["system_prompt"]
-    )
-    assert "前端显示确认控件" in (
-        runtime_kwargs["system_prompt"]
-    )
+    assert "artifact_update.type 必须为 replace" in (runtime_kwargs["system_prompt"])
+    assert "chat 只允许返回给用户看的自然工作对话" in (runtime_kwargs["system_prompt"])
+    assert "前端显示确认控件" in (runtime_kwargs["system_prompt"])
     assert "## 1. 需求事实清单" in runtime_kwargs["system_prompt"]
     runtime.stream_turn.assert_called_once_with(
         "用户需求",
@@ -183,33 +208,40 @@ def test_stream_agent_run_events_yields_started_delta_and_final_events(
 def test_stream_agent_run_events_records_turn_through_persistence_adapter(
     mock_build_runtime: MagicMock,
 ) -> None:
-    final = AgentTurnOutput.model_validate({
-        "chat": "已更新右侧需求分析文档，请确认。",
-        "artifact_update": {
-            "type": "replace",
-            "markdown": VALID_CLARIFY_ARTIFACT,
-        },
-        "stage_action": None,
-        "warnings": [],
-    })
+    final = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新右侧需求分析文档，请确认。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": VALID_CLARIFY_ARTIFACT,
+            },
+            "artifact_data": VALID_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
     runtime = MagicMock()
     runtime.stream_turn.return_value = iter([final])
     mock_build_runtime.return_value = runtime
     persistence = FakePersistence()
-    request = AgentRunStreamRequest.model_validate({
-        "prompt": "用户需求",
-        "systemPrompt": "你是 Lisa。",
-        "workflowId": "TEST_DESIGN",
-        "stageId": "CLARIFY",
-    })
+    request = AgentRunStreamRequest.model_validate(
+        {
+            "prompt": "用户需求",
+            "systemPrompt": "你是 Lisa。",
+            "workflowId": "TEST_DESIGN",
+            "stageId": "CLARIFY",
+        }
+    )
 
-    events = list(stream_agent_run_events(
-        request,
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-        persistence=persistence,
-    ))
+    events = list(
+        stream_agent_run_events(
+            request,
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
 
     assert events[0] == RunStartedEvent(run_id="run-123")
     assert events[-1] == AgentTurnEvent(output=final)
@@ -218,7 +250,13 @@ def test_stream_agent_run_events_records_turn_through_persistence_adapter(
         ("build_runtime_context", "run-123", "用户需求"),
         ("append_user_message", "run-123", "用户需求"),
         ("append_assistant_message", "run-123", "已更新右侧需求分析文档，请确认。"),
-        ("record_artifact_version", "run-123", "CLARIFY", VALID_CLARIFY_ARTIFACT),
+        (
+            "record_artifact_version",
+            "run-123",
+            "CLARIFY",
+            VALID_CLARIFY_ARTIFACT,
+            VALID_ARTIFACT_DATA,
+        ),
     ]
     metric = persistence.calls[-1][1]
     assert persistence.calls[-1][0] == "record_turn_metric"
@@ -242,28 +280,32 @@ def test_stream_agent_run_events_records_turn_through_persistence_adapter(
 def test_stream_agent_run_events_records_real_token_usage_when_runtime_exposes_it(
     mock_build_runtime: MagicMock,
 ) -> None:
-    final = AgentTurnOutput.model_validate({
-        "chat": "已更新右侧需求分析文档，请确认。",
-        "artifact_update": {
-            "type": "replace",
-            "markdown": VALID_CLARIFY_ARTIFACT,
-        },
-        "stage_action": None,
-        "warnings": [],
-    })
+    final = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新右侧需求分析文档，请确认。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": VALID_CLARIFY_ARTIFACT,
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
     runtime = MagicMock()
     runtime.stream_turn.return_value = iter([final])
     runtime.last_token_usage = 321
     mock_build_runtime.return_value = runtime
     persistence = FakePersistence()
 
-    events = list(stream_agent_run_events(
-        _request(),
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-        persistence=persistence,
-    ))
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
 
     assert events[-1] == AgentTurnEvent(output=final)
     metric = persistence.calls[-1][1]
@@ -276,19 +318,19 @@ def test_stream_agent_run_events_records_error_turn_metric(
     mock_build_runtime: MagicMock,
 ) -> None:
     runtime = MagicMock()
-    runtime.stream_turn.side_effect = AgentRuntimeModelError(
-        "provider API failed"
-    )
+    runtime.stream_turn.side_effect = AgentRuntimeModelError("provider API failed")
     mock_build_runtime.return_value = runtime
     persistence = FakePersistence()
 
-    events = list(stream_agent_run_events(
-        _request(),
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-        persistence=persistence,
-    ))
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
 
     assert events == [
         RunStartedEvent(run_id="run-123"),
@@ -324,13 +366,15 @@ def test_stream_agent_run_events_records_schema_retry_count_from_runtime_error(
     mock_build_runtime.return_value = runtime
     persistence = FakePersistence()
 
-    events = list(stream_agent_run_events(
-        _request(),
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-        persistence=persistence,
-    ))
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
 
     assert events == [
         RunStartedEvent(run_id="run-123"),
@@ -353,27 +397,31 @@ def test_stream_agent_run_events_records_schema_retry_count_from_runtime_error(
 def test_stream_agent_run_events_sends_persisted_context_prompt_to_runtime(
     mock_build_runtime: MagicMock,
 ) -> None:
-    final = AgentTurnOutput.model_validate({
-        "chat": "已更新右侧需求分析文档，请确认。",
-        "artifact_update": {
-            "type": "replace",
-            "markdown": VALID_CLARIFY_ARTIFACT,
-        },
-        "stage_action": None,
-        "warnings": [],
-    })
+    final = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新右侧需求分析文档，请确认。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": VALID_CLARIFY_ARTIFACT,
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
     runtime = MagicMock()
     runtime.stream_turn.return_value = iter([final])
     mock_build_runtime.return_value = runtime
     persistence = FakePersistence()
 
-    list(stream_agent_run_events(
-        _request(),
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-        persistence=persistence,
-    ))
+    list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
 
     runtime.stream_turn.assert_called_once_with(
         "服务端上下文\n\n[用户]\n用户需求",
@@ -386,28 +434,32 @@ def test_stream_agent_run_events_sends_persisted_context_prompt_to_runtime(
 def test_stream_agent_run_events_emits_context_warnings_on_run_started(
     mock_build_runtime: MagicMock,
 ) -> None:
-    final = AgentTurnOutput.model_validate({
-        "chat": "已更新右侧需求分析文档，请确认。",
-        "artifact_update": {
-            "type": "replace",
-            "markdown": VALID_CLARIFY_ARTIFACT,
-        },
-        "stage_action": None,
-        "warnings": [],
-    })
+    final = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新右侧需求分析文档，请确认。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": VALID_CLARIFY_ARTIFACT,
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
     runtime = MagicMock()
     runtime.stream_turn.return_value = iter([final])
     mock_build_runtime.return_value = runtime
     persistence = FakePersistence()
     persistence.context_warnings = ["context_truncated"]
 
-    events = list(stream_agent_run_events(
-        _request(),
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-        persistence=persistence,
-    ))
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
 
     assert events[0] == RunStartedEvent(
         run_id="run-123",
@@ -419,31 +471,35 @@ def test_stream_agent_run_events_emits_context_warnings_on_run_started(
 def test_stream_agent_run_events_yields_started_and_final_without_delta_for_single_output(
     mock_build_runtime: MagicMock,
 ) -> None:
-    final = AgentTurnOutput.model_validate({
-        "chat": "已更新右侧需求分析文档，请确认。",
-        "artifact_update": {
-            "type": "replace",
-            "markdown": VALID_CLARIFY_ARTIFACT,
-        },
-        "stage_action": None,
-        "warnings": [],
-    })
+    final = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新右侧需求分析文档，请确认。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": VALID_CLARIFY_ARTIFACT,
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
     runtime = MagicMock()
     runtime.stream_turn.return_value = iter([final])
     mock_build_runtime.return_value = runtime
 
-    events = list(stream_agent_run_events(
-        _request(),
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-    ))
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+        )
+    )
 
     assert events == [
         RunStartedEvent(),
-        AgentTurnDeltaEvent(output=AgentTurnDeltaOutput.model_validate(
-            final.model_dump(mode="json")
-        )),
+        AgentTurnDeltaEvent(
+            output=AgentTurnDeltaOutput.model_validate(final.model_dump(mode="json"))
+        ),
         AgentTurnEvent(output=final),
     ]
 
@@ -457,19 +513,23 @@ def test_stream_agent_run_events_maps_pydantic_ai_output_failure_to_error_event(
         "Exceeded maximum output retries (1)"
     )
     mock_build_runtime.return_value = runtime
-    request = AgentRunStreamRequest.model_validate({
-        "prompt": "用户需求",
-        "systemPrompt": "你是 Lisa。",
-        "workflowId": "TEST_DESIGN",
-        "stageId": "CLARIFY",
-    })
+    request = AgentRunStreamRequest.model_validate(
+        {
+            "prompt": "用户需求",
+            "systemPrompt": "你是 Lisa。",
+            "workflowId": "TEST_DESIGN",
+            "stageId": "CLARIFY",
+        }
+    )
 
-    events = list(stream_agent_run_events(
-        request,
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-    ))
+    events = list(
+        stream_agent_run_events(
+            request,
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+        )
+    )
 
     assert events == [
         RunStartedEvent(),
@@ -479,7 +539,7 @@ def test_stream_agent_run_events_maps_pydantic_ai_output_failure_to_error_event(
                 "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
                 "如果多次失败，请补充更明确的需求或阶段确认信息。"
             ),
-        )
+        ),
     ]
 
 
@@ -502,12 +562,14 @@ def test_stream_agent_run_events_maps_raw_pydantic_ai_schema_error_to_error_even
     )
     mock_build_runtime.return_value = runtime
 
-    events = list(stream_agent_run_events(
-        _request(),
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-    ))
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+        )
+    )
 
     assert events == [
         RunStartedEvent(),
@@ -517,7 +579,7 @@ def test_stream_agent_run_events_maps_raw_pydantic_ai_schema_error_to_error_even
                 "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
                 "如果多次失败，请补充更明确的需求或阶段确认信息。"
             ),
-        )
+        ),
     ]
 
 
@@ -530,36 +592,42 @@ def test_stream_agent_run_events_maps_contract_failure_to_error_event(
         "chat must not contain artifact markdown"
     )
     mock_build_runtime.return_value = runtime
-    request = AgentRunStreamRequest.model_validate({
-        "prompt": "用户需求",
-        "systemPrompt": "你是 Lisa。",
-        "workflowId": "TEST_DESIGN",
-        "stageId": "CLARIFY",
-    })
+    request = AgentRunStreamRequest.model_validate(
+        {
+            "prompt": "用户需求",
+            "systemPrompt": "你是 Lisa。",
+            "workflowId": "TEST_DESIGN",
+            "stageId": "CLARIFY",
+        }
+    )
 
-    events = list(stream_agent_run_events(
-        request,
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-    ))
+    events = list(
+        stream_agent_run_events(
+            request,
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+        )
+    )
 
     assert events == [
         RunStartedEvent(),
         ErrorEvent(
             code="CONTRACT_VALIDATION_FAILED",
             message="chat must not contain artifact markdown",
-        )
+        ),
     ]
 
 
 def _request() -> AgentRunStreamRequest:
-    return AgentRunStreamRequest.model_validate({
-        "prompt": "用户需求",
-        "systemPrompt": "你是 Lisa。",
-        "workflowId": "TEST_DESIGN",
-        "stageId": "CLARIFY",
-    })
+    return AgentRunStreamRequest.model_validate(
+        {
+            "prompt": "用户需求",
+            "systemPrompt": "你是 Lisa。",
+            "workflowId": "TEST_DESIGN",
+            "stageId": "CLARIFY",
+        }
+    )
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -568,32 +636,38 @@ def test_stream_agent_run_events_validates_workflow_stage_before_building_runtim
 ) -> None:
     requests = [
         (
-            AgentRunStreamRequest.model_validate({
-                "prompt": "用户需求",
-                "systemPrompt": "你是 Lisa。",
-                "workflowId": "UNKNOWN_WORKFLOW",
-                "stageId": "CLARIFY",
-            }),
+            AgentRunStreamRequest.model_validate(
+                {
+                    "prompt": "用户需求",
+                    "systemPrompt": "你是 Lisa。",
+                    "workflowId": "UNKNOWN_WORKFLOW",
+                    "stageId": "CLARIFY",
+                }
+            ),
             "未知 workflowId: UNKNOWN_WORKFLOW",
         ),
         (
-            AgentRunStreamRequest.model_validate({
-                "prompt": "用户需求",
-                "systemPrompt": "你是 Lisa。",
-                "workflowId": "TEST_DESIGN",
-                "stageId": "REPORT",
-            }),
+            AgentRunStreamRequest.model_validate(
+                {
+                    "prompt": "用户需求",
+                    "systemPrompt": "你是 Lisa。",
+                    "workflowId": "TEST_DESIGN",
+                    "stageId": "REPORT",
+                }
+            ),
             "workflowId 与 stageId 不匹配: TEST_DESIGN/REPORT",
         ),
     ]
 
     for request, message in requests:
-        events = list(stream_agent_run_events(
-            request,
-            api_key="test-api-key",
-            base_url="https://api.test.com/v1",
-            model_name="test-model",
-        ))
+        events = list(
+            stream_agent_run_events(
+                request,
+                api_key="test-api-key",
+                base_url="https://api.test.com/v1",
+                model_name="test-model",
+            )
+        )
 
         assert events == [
             ErrorEvent(
@@ -614,12 +688,14 @@ def test_stream_agent_run_events_maps_model_http_error_to_llm_error_event(
     )
     mock_build_runtime.return_value = runtime
 
-    events = list(stream_agent_run_events(
-        _request(),
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-    ))
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+        )
+    )
 
     assert len(events) == 2
     assert events[0] == RunStartedEvent()
@@ -635,19 +711,21 @@ def test_stream_agent_run_events_maps_model_api_error_to_llm_error_event(
     runtime.stream_turn.side_effect = AgentRuntimeModelError("provider API failed")
     mock_build_runtime.return_value = runtime
 
-    events = list(stream_agent_run_events(
-        _request(),
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-    ))
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+        )
+    )
 
     assert events == [
         RunStartedEvent(),
         ErrorEvent(
             code="LLM_ERROR",
             message="provider API failed",
-        )
+        ),
     ]
 
 
@@ -667,12 +745,14 @@ def test_stream_agent_run_events_maps_openai_auth_error_to_llm_error_event(
     )
     mock_build_runtime.return_value = runtime
 
-    events = list(stream_agent_run_events(
-        _request(),
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-    ))
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+        )
+    )
 
     assert len(events) == 2
     assert events[0] == RunStartedEvent()
@@ -696,12 +776,14 @@ def test_stream_agent_run_events_maps_openai_rate_limit_error_to_llm_error_event
     )
     mock_build_runtime.return_value = runtime
 
-    events = list(stream_agent_run_events(
-        _request(),
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-    ))
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+        )
+    )
 
     assert len(events) == 2
     assert events[0] == RunStartedEvent()
@@ -722,12 +804,14 @@ def test_stream_agent_run_events_maps_openai_api_error_to_llm_error_event(
     )
     mock_build_runtime.return_value = runtime
 
-    events = list(stream_agent_run_events(
-        _request(),
-        api_key="test-api-key",
-        base_url="https://api.test.com/v1",
-        model_name="test-model",
-    ))
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+        )
+    )
 
     assert len(events) == 2
     assert events[0] == RunStartedEvent()

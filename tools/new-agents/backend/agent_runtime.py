@@ -11,7 +11,10 @@ from agent_contracts import (
     ContractValidationError,
     validate_agent_turn,
 )
-from artifact_data_renderers import render_agent_turn_from_artifact_data
+from artifact_data_renderers import (
+    get_artifact_data_renderer_stage_keys,
+    render_agent_turn_from_artifact_data,
+)
 from llm_client import LlmClientError, stream_chat_completion_content
 from sse_schemas import AgentTurnDeltaOutput
 
@@ -702,67 +705,79 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS: dict[tuple[str, str], str] = {
+    (
+        "IDEA_BRAINSTORM",
+        "DEFINE",
+    ): IDEA_DEFINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "IDEA_BRAINSTORM",
+        "DIVERGE",
+    ): IDEA_DIVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "IDEA_BRAINSTORM",
+        "CONVERGE",
+    ): IDEA_CONVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "IDEA_BRAINSTORM",
+        "CONCEPT",
+    ): IDEA_CONCEPT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    ("TEST_DESIGN", "CLARIFY"): ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    ("TEST_DESIGN", "STRATEGY"): STRATEGY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    ("TEST_DESIGN", "CASES"): CASES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    ("TEST_DESIGN", "DELIVERY"): DELIVERY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    ("REQ_REVIEW", "REVIEW"): REQ_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "REQ_REVIEW",
+        "REPORT",
+    ): REQ_REVIEW_REPORT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "VALUE_DISCOVERY",
+        "ELEVATOR",
+    ): VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "VALUE_DISCOVERY",
+        "PERSONA",
+    ): VALUE_PERSONA_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "VALUE_DISCOVERY",
+        "JOURNEY",
+    ): VALUE_JOURNEY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "VALUE_DISCOVERY",
+        "BLUEPRINT",
+    ): VALUE_BLUEPRINT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "INCIDENT_REVIEW",
+        "TIMELINE",
+    ): INCIDENT_TIMELINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "INCIDENT_REVIEW",
+        "ROOT_CAUSE",
+    ): INCIDENT_ROOT_CAUSE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "INCIDENT_REVIEW",
+        "IMPROVEMENT",
+    ): INCIDENT_IMPROVEMENT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+}
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
-    return (workflow_id, current_stage_id) in {
-        ("IDEA_BRAINSTORM", "DEFINE"),
-        ("IDEA_BRAINSTORM", "DIVERGE"),
-        ("IDEA_BRAINSTORM", "CONVERGE"),
-        ("IDEA_BRAINSTORM", "CONCEPT"),
-        ("TEST_DESIGN", "CLARIFY"),
-        ("TEST_DESIGN", "STRATEGY"),
-        ("TEST_DESIGN", "CASES"),
-        ("TEST_DESIGN", "DELIVERY"),
-        ("REQ_REVIEW", "REVIEW"),
-        ("REQ_REVIEW", "REPORT"),
-        ("VALUE_DISCOVERY", "ELEVATOR"),
-        ("VALUE_DISCOVERY", "PERSONA"),
-        ("VALUE_DISCOVERY", "JOURNEY"),
-        ("VALUE_DISCOVERY", "BLUEPRINT"),
-        ("INCIDENT_REVIEW", "TIMELINE"),
-        ("INCIDENT_REVIEW", "ROOT_CAUSE"),
-        ("INCIDENT_REVIEW", "IMPROVEMENT"),
-    }
+    stage_key = (workflow_id, current_stage_id)
+    return (
+        stage_key in ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS
+        and stage_key in get_artifact_data_renderer_stage_keys()
+    )
 
 
 def build_structured_output_instruction(
     workflow_id: str,
     current_stage_id: str,
 ) -> str:
-    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DEFINE"):
-        return IDEA_DEFINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DIVERGE"):
-        return IDEA_DIVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONVERGE"):
-        return IDEA_CONVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONCEPT"):
-        return IDEA_CONCEPT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
-        return ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
-        return STRATEGY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CASES"):
-        return CASES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "DELIVERY"):
-        return DELIVERY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("REQ_REVIEW", "REVIEW"):
-        return REQ_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("REQ_REVIEW", "REPORT"):
-        return REQ_REVIEW_REPORT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
-        return VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "PERSONA"):
-        return VALUE_PERSONA_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "JOURNEY"):
-        return VALUE_JOURNEY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "BLUEPRINT"):
-        return VALUE_BLUEPRINT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
-        return INCIDENT_TIMELINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "ROOT_CAUSE"):
-        return INCIDENT_ROOT_CAUSE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "IMPROVEMENT"):
-        return INCIDENT_IMPROVEMENT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
+    return ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS.get(
+        (workflow_id, current_stage_id),
+        TEXT_STRUCTURED_OUTPUT_INSTRUCTION,
+    )
 
 
 def build_raw_json_retry_prompt(

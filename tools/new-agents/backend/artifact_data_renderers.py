@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Any
+from typing import Any, Callable
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -2269,79 +2269,15 @@ def render_agent_turn_from_artifact_data(
 ) -> AgentTurnOutput | None:
     if "artifact_data" not in payload:
         return None
-    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
-        artifact_data = ClarifyArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_test_design_clarify_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DEFINE"):
-        artifact_data = IdeaDefineArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_idea_brainstorm_define_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DIVERGE"):
-        artifact_data = IdeaDivergeArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_idea_brainstorm_diverge_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONVERGE"):
-        artifact_data = IdeaConvergeArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_idea_brainstorm_converge_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONCEPT"):
-        artifact_data = IdeaConceptArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_idea_brainstorm_concept_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
-        artifact_data = IncidentTimelineArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_incident_review_timeline_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "ROOT_CAUSE"):
-        artifact_data = IncidentRootCauseArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_incident_review_root_cause_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "IMPROVEMENT"):
-        artifact_data = IncidentImprovementArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_incident_review_improvement_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
-        artifact_data = StrategyArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_test_design_strategy_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "CASES"):
-        artifact_data = CasesArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_test_design_cases_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "DELIVERY"):
-        artifact_data = DeliveryArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_test_design_delivery_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("REQ_REVIEW", "REVIEW"):
-        artifact_data = ReqReviewArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_req_review_review_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("REQ_REVIEW", "REPORT"):
-        artifact_data = ReqReviewReportArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_req_review_report_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
-        artifact_data = ValueDiscoveryElevatorArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_value_discovery_elevator_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "PERSONA"):
-        artifact_data = ValueDiscoveryPersonaArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_value_discovery_persona_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "JOURNEY"):
-        artifact_data = ValueDiscoveryJourneyArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_value_discovery_journey_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "BLUEPRINT"):
-        artifact_data = ValueDiscoveryBlueprintArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_value_discovery_blueprint_markdown(artifact_data)
-    else:
+    renderer_config = ARTIFACT_DATA_RENDERERS.get((workflow_id, current_stage_id))
+    if renderer_config is None:
         raise ValueError(
             f"artifact_data renderer is not configured for {workflow_id}/{current_stage_id}"
         )
+
+    artifact_data_model, render_markdown = renderer_config
+    artifact_data = artifact_data_model.model_validate(payload["artifact_data"])
+    markdown = render_markdown(artifact_data)
 
     return AgentTurnOutput.model_validate(
         {
@@ -2350,6 +2286,7 @@ def render_agent_turn_from_artifact_data(
                 "type": "replace",
                 "markdown": markdown,
             },
+            "artifact_data": artifact_data.model_dump(mode="json"),
             "stage_action": payload.get("stage_action"),
             "warnings": payload.get("warnings", []),
         }
@@ -5945,3 +5882,84 @@ def _node_id(label: str, existing: dict[str, str]) -> str:
 
 def _escape_mermaid_label(value: str) -> str:
     return value.replace('"', "'")
+
+
+ArtifactDataRenderer = tuple[
+    type[StrictArtifactDataModel],
+    Callable[[Any], str],
+]
+
+ARTIFACT_DATA_RENDERERS: dict[tuple[str, str], ArtifactDataRenderer] = {
+    ("TEST_DESIGN", "CLARIFY"): (
+        ClarifyArtifactData,
+        render_test_design_clarify_markdown,
+    ),
+    ("TEST_DESIGN", "STRATEGY"): (
+        StrategyArtifactData,
+        render_test_design_strategy_markdown,
+    ),
+    ("TEST_DESIGN", "CASES"): (
+        CasesArtifactData,
+        render_test_design_cases_markdown,
+    ),
+    ("TEST_DESIGN", "DELIVERY"): (
+        DeliveryArtifactData,
+        render_test_design_delivery_markdown,
+    ),
+    ("REQ_REVIEW", "REVIEW"): (
+        ReqReviewArtifactData,
+        render_req_review_review_markdown,
+    ),
+    ("REQ_REVIEW", "REPORT"): (
+        ReqReviewReportArtifactData,
+        render_req_review_report_markdown,
+    ),
+    ("INCIDENT_REVIEW", "TIMELINE"): (
+        IncidentTimelineArtifactData,
+        render_incident_review_timeline_markdown,
+    ),
+    ("INCIDENT_REVIEW", "ROOT_CAUSE"): (
+        IncidentRootCauseArtifactData,
+        render_incident_review_root_cause_markdown,
+    ),
+    ("INCIDENT_REVIEW", "IMPROVEMENT"): (
+        IncidentImprovementArtifactData,
+        render_incident_review_improvement_markdown,
+    ),
+    ("IDEA_BRAINSTORM", "DEFINE"): (
+        IdeaDefineArtifactData,
+        render_idea_brainstorm_define_markdown,
+    ),
+    ("IDEA_BRAINSTORM", "DIVERGE"): (
+        IdeaDivergeArtifactData,
+        render_idea_brainstorm_diverge_markdown,
+    ),
+    ("IDEA_BRAINSTORM", "CONVERGE"): (
+        IdeaConvergeArtifactData,
+        render_idea_brainstorm_converge_markdown,
+    ),
+    ("IDEA_BRAINSTORM", "CONCEPT"): (
+        IdeaConceptArtifactData,
+        render_idea_brainstorm_concept_markdown,
+    ),
+    ("VALUE_DISCOVERY", "ELEVATOR"): (
+        ValueDiscoveryElevatorArtifactData,
+        render_value_discovery_elevator_markdown,
+    ),
+    ("VALUE_DISCOVERY", "PERSONA"): (
+        ValueDiscoveryPersonaArtifactData,
+        render_value_discovery_persona_markdown,
+    ),
+    ("VALUE_DISCOVERY", "JOURNEY"): (
+        ValueDiscoveryJourneyArtifactData,
+        render_value_discovery_journey_markdown,
+    ),
+    ("VALUE_DISCOVERY", "BLUEPRINT"): (
+        ValueDiscoveryBlueprintArtifactData,
+        render_value_discovery_blueprint_markdown,
+    ),
+}
+
+
+def get_artifact_data_renderer_stage_keys() -> tuple[tuple[str, str], ...]:
+    return tuple(sorted(ARTIFACT_DATA_RENDERERS))

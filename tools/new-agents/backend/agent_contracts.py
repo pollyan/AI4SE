@@ -4,7 +4,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-
 WORKFLOW_STAGES: dict[str, list[str]] = {
     "TEST_DESIGN": ["CLARIFY", "STRATEGY", "CASES", "DELIVERY"],
     "REQ_REVIEW": ["REVIEW", "REPORT"],
@@ -504,6 +503,7 @@ class AgentTurnOutput(BaseModel):
 
     chat: str = Field(min_length=1)
     artifact_update: ArtifactUpdate
+    artifact_data: dict[str, Any] | None = Field(default=None, exclude=True)
     stage_action: StageAction | None = None
     warnings: list[str] = Field(default_factory=list)
 
@@ -534,9 +534,7 @@ class AgentTurnOutput(BaseModel):
                 "artifact_update must be an object or JSON object string"
             ) from exc
         if not isinstance(decoded, dict):
-            raise ValueError(
-                "artifact_update must be an object or JSON object string"
-            )
+            raise ValueError("artifact_update must be an object or JSON object string")
         return decoded
 
     @model_validator(mode="after")
@@ -552,10 +550,7 @@ class AgentTurnOutput(BaseModel):
             r"(?m)^\s*flowchart\s+",
             r"(?m)^\s*graph\s+",
         ]
-        if any(
-            re.search(pattern, self.chat)
-            for pattern in artifact_markdown_patterns
-        ):
+        if any(re.search(pattern, self.chat) for pattern in artifact_markdown_patterns):
             raise ValueError(
                 "chat must not contain artifact markdown; put full Markdown "
                 "only in artifact_update.markdown"
@@ -590,8 +585,7 @@ def validate_artifact_template(
 
     if output.artifact_update.type != "replace":
         raise ContractValidationError(
-            "artifact update is required for "
-            f"{workflow_id}/{current_stage_id}"
+            "artifact update is required for " f"{workflow_id}/{current_stage_id}"
         )
 
     markdown = output.artifact_update.markdown or ""
@@ -618,8 +612,7 @@ def validate_artifact_template(
     all_missing_headings = missing_headings + missing_h1_keyword_headings
     if all_missing_headings:
         raise ContractValidationError(
-            "missing required artifact headings: "
-            + ", ".join(all_missing_headings)
+            "missing required artifact headings: " + ", ".join(all_missing_headings)
         )
 
     mermaid_blocks = extract_mermaid_code_blocks(markdown)
@@ -719,7 +712,7 @@ def has_heading_level_containing(
 ) -> bool:
     heading_prefix = "#" * level + " "
     return any(
-        heading.startswith(heading_prefix) and keyword in heading[len(heading_prefix):]
+        heading.startswith(heading_prefix) and keyword in heading[len(heading_prefix) :]
         for heading in markdown_headings
     )
 
@@ -761,9 +754,7 @@ def has_required_mermaid_diagram(
     *,
     diagram_type: str,
 ) -> bool:
-    diagram_pattern = re.compile(
-        rf"(?im)^\s*{re.escape(diagram_type)}\b"
-    )
+    diagram_pattern = re.compile(rf"(?im)^\s*{re.escape(diagram_type)}\b")
     return any(diagram_pattern.search(block) for block in mermaid_blocks)
 
 
@@ -857,15 +848,11 @@ def build_artifact_contract_prompt(
     ):
         return ""
 
-    headings = "\n".join(
-        f"- {heading}" for heading in (required_headings or [])
-    )
+    headings = "\n".join(f"- {heading}" for heading in (required_headings or []))
     h1_keyword_requirements = ""
     if required_h1_keywords:
         keywords = "、".join(required_h1_keywords)
-        h1_keyword_requirements = (
-            f"真实 H1 标题必须包含以下关键词：{keywords}。\n"
-        )
+        h1_keyword_requirements = f"真实 H1 标题必须包含以下关键词：{keywords}。\n"
     mermaid_requirements = ""
     if required_mermaid_diagrams:
         diagrams = "、".join(required_mermaid_diagrams)
@@ -882,7 +869,7 @@ def build_artifact_contract_prompt(
         )
         structured_visual_requirements = (
             "本阶段必须包含 fenced ai4se-visual 代码块，代码块内容必须是合法 JSON 对象，"
-            f'且 type 必须包含以下结构化可视化类型：{visual_types}。'
+            f"且 type 必须包含以下结构化可视化类型：{visual_types}。"
             f"{visual_schema_prompts}"
             "优先输出结构化数据并交给前端共享组件渲染，不要手写复杂 HTML；"
             "不要把 ai4se-visual 放在 chat 中。\n"
@@ -957,16 +944,12 @@ def validate_agent_turn(
     if stages is None:
         raise ContractValidationError(f"unknown workflow: {workflow_id}")
     if current_stage_id not in stages:
-        raise ContractValidationError(
-            f"unknown current stage: {current_stage_id}"
-        )
+        raise ContractValidationError(f"unknown current stage: {current_stage_id}")
 
     if output.stage_action is not None:
         current_index = stages.index(current_stage_id)
         if current_index == len(stages) - 1:
-            raise ContractValidationError(
-                "last stage cannot request next stage"
-            )
+            raise ContractValidationError("last stage cannot request next stage")
 
         expected_target = stages[current_index + 1]
         if output.stage_action.target_stage_id not in stages:

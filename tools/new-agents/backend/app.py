@@ -15,9 +15,28 @@ def init_db(app):
     """Create database tables and seed server-managed defaults."""
     with app.app_context():
         db.create_all()
+        _ensure_agent_artifact_version_columns()
         _ensure_artifact_comment_columns()
         _ensure_artifact_section_lock_columns()
         upsert_default_llm_config_from_env()
+
+
+def _ensure_agent_artifact_version_columns():
+    """Upgrade existing artifact version tables with structured data storage."""
+    inspector = inspect(db.engine)
+    if "agent_artifact_versions" not in inspector.get_table_names():
+        return
+
+    existing_columns = {
+        column["name"] for column in inspector.get_columns("agent_artifact_versions")
+    }
+    if "artifact_data_json" not in existing_columns:
+        db.session.execute(
+            text(
+                "ALTER TABLE agent_artifact_versions ADD COLUMN artifact_data_json TEXT"
+            )
+        )
+        db.session.commit()
 
 
 def _ensure_artifact_comment_columns():
@@ -27,8 +46,7 @@ def _ensure_artifact_comment_columns():
         return
 
     existing_columns = {
-        column["name"]
-        for column in inspector.get_columns("agent_artifact_comments")
+        column["name"] for column in inspector.get_columns("agent_artifact_comments")
     }
     column_migrations = {
         "anchor_text": "ALTER TABLE agent_artifact_comments ADD COLUMN anchor_text TEXT",
@@ -53,9 +71,11 @@ def _ensure_artifact_section_lock_columns():
         for column in inspector.get_columns("agent_artifact_section_locks")
     }
     if "section_anchor" not in existing_columns:
-        db.session.execute(text(
-            "ALTER TABLE agent_artifact_section_locks ADD COLUMN section_anchor TEXT"
-        ))
+        db.session.execute(
+            text(
+                "ALTER TABLE agent_artifact_section_locks ADD COLUMN section_anchor TEXT"
+            )
+        )
         db.session.commit()
 
 
@@ -67,12 +87,16 @@ def create_app(test_config=None):
     if not app.debug:
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
 
     # P0-1: CORS restricted to allowed origins only
-    cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:5173,http://localhost:18679')
-    allowed_origins = [origin.strip() for origin in cors_origins.split(',') if origin.strip()]
+    cors_origins = os.environ.get(
+        "CORS_ORIGINS", "http://localhost:5173,http://localhost:18679"
+    )
+    allowed_origins = [
+        origin.strip() for origin in cors_origins.split(",") if origin.strip()
+    ]
     CORS(app, origins=allowed_origins)
 
     if test_config is None:
@@ -81,14 +105,16 @@ def create_app(test_config=None):
         app.config.from_mapping(test_config)
 
     # Configure SQLAlchemy
-    if 'SQLALCHEMY_DATABASE_URI' not in app.config:
-        app.config['SQLALCHEMY_DATABASE_URI'] = app.config.get('DATABASE_URL', Config.DATABASE_URL)
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    if "SQLALCHEMY_DATABASE_URI" not in app.config:
+        app.config["SQLALCHEMY_DATABASE_URI"] = app.config.get(
+            "DATABASE_URL", Config.DATABASE_URL
+        )
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     db.init_app(app)
 
     # Create tables if not in testing mode (tests handle their own setup)
-    if not os.environ.get('FLASK_TESTING'):
+    if not os.environ.get("FLASK_TESTING"):
         init_db(app)
 
     # Register routes
@@ -108,31 +134,39 @@ def init_routes(app):
         app.logger.info(f"[{g.request_id}] {request.method} {request.path} - Started")
 
         # P0-2: API Key authentication for sensitive endpoints
-        proxy_api_key = os.environ.get('PROXY_API_KEY')
+        proxy_api_key = os.environ.get("PROXY_API_KEY")
         protected_paths = {
-            '/api/agent/runs/stream',
-            '/api/utils/mermaid/repair',
+            "/api/agent/runs/stream",
+            "/api/utils/mermaid/repair",
         }
-        if proxy_api_key and request.path in protected_paths and request.method == 'POST':
-            client_key = request.headers.get('X-API-Key', '')
-            gateway_marker = request.headers.get('X-AI4SE-Gateway', '')
-            is_gateway_request = gateway_marker == 'new-agents'
+        if (
+            proxy_api_key
+            and request.path in protected_paths
+            and request.method == "POST"
+        ):
+            client_key = request.headers.get("X-API-Key", "")
+            gateway_marker = request.headers.get("X-AI4SE-Gateway", "")
+            is_gateway_request = gateway_marker == "new-agents"
             if client_key != proxy_api_key and not is_gateway_request:
-                app.logger.warning(f"[{g.request_id}] Unauthorized API access attempt to {request.path}")
+                app.logger.warning(
+                    f"[{g.request_id}] Unauthorized API access attempt to {request.path}"
+                )
                 return jsonify({"error": "未授权访问，请提供有效的 API Key"}), 401
 
     @app.after_request
     def after_request(response):
         """记录请求耗时"""
-        if hasattr(g, 'start_time'):
+        if hasattr(g, "start_time"):
             elapsed = time.time() - g.start_time
-            app.logger.info(f"[{g.request_id}] {request.method} {request.path} - Completed in {elapsed:.3f}s")
+            app.logger.info(
+                f"[{g.request_id}] {request.method} {request.path} - Completed in {elapsed:.3f}s"
+            )
         return response
 
     @app.errorhandler(Exception)
     def handle_exception(e):
         # 让 Flask 处理其自身的 HTTP 错误（如 415 UnsupportedMediaType）
-        if hasattr(e, 'code') and isinstance(e.code, int) and e.code < 500:
+        if hasattr(e, "code") and isinstance(e.code, int) and e.code < 500:
             return e
         app.logger.exception(f"[{g.request_id}] Unhandled exception: {str(e)}")
         return jsonify({"error": "服务器内部错误", "request_id": g.request_id}), 500
@@ -143,5 +177,5 @@ def init_routes(app):
 # For backward compatibility and direct execution
 app = create_app()
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5002, debug=True)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5002, debug=True)

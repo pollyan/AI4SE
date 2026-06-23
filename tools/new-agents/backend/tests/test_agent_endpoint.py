@@ -19,6 +19,16 @@ from run_persistence import (
     record_turn_metric,
 )
 
+VALID_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "测试需求分析与澄清基线",
+    },
+    "stage_gate": {
+        "status": "需要用户补充",
+        "blocking": True,
+    },
+}
+
 
 VALID_CLARIFY_ARTIFACT = """# 需求分析文档
 
@@ -279,27 +289,32 @@ class FakeRuntime:
                 "current_stage_id": current_stage_id,
             }
         )
-        yield AgentTurnOutput.model_validate({
-            "chat": "正在梳理登录需求。",
-            "artifact_update": {
-                "type": "replace",
-                "markdown": VALID_CLARIFY_ARTIFACT,
-            },
-            "stage_action": None,
-            "warnings": [],
-        })
-        yield AgentTurnOutput.model_validate({
-            "chat": "已更新右侧需求分析文档。",
-            "artifact_update": {
-                "type": "replace",
-                "markdown": VALID_CLARIFY_ARTIFACT,
-            },
-            "stage_action": {
-                "type": "request_next_stage",
-                "target_stage_id": "STRATEGY",
-            },
-            "warnings": [],
-        })
+        yield AgentTurnOutput.model_validate(
+            {
+                "chat": "正在梳理登录需求。",
+                "artifact_update": {
+                    "type": "replace",
+                    "markdown": VALID_CLARIFY_ARTIFACT,
+                },
+                "stage_action": None,
+                "warnings": [],
+            }
+        )
+        yield AgentTurnOutput.model_validate(
+            {
+                "chat": "已更新右侧需求分析文档。",
+                "artifact_update": {
+                    "type": "replace",
+                    "markdown": VALID_CLARIFY_ARTIFACT,
+                },
+                "artifact_data": VALID_ARTIFACT_DATA,
+                "stage_action": {
+                    "type": "request_next_stage",
+                    "target_stage_id": "STRATEGY",
+                },
+                "warnings": [],
+            }
+        )
 
 
 class FailingRuntime:
@@ -398,8 +413,7 @@ def test_agent_runs_stream_persists_run_messages_and_final_artifact(
     assert snapshot["run"]["currentStageId"] == "CLARIFY"
     assert snapshot["run"]["model"] == "test-model"
     assert [
-        (message["role"], message["content"])
-        for message in snapshot["messages"]
+        (message["role"], message["content"]) for message in snapshot["messages"]
     ] == [
         ("user", "用户需求: 登录功能"),
         ("assistant", "已更新右侧需求分析文档。"),
@@ -409,6 +423,7 @@ def test_agent_runs_stream_persists_run_messages_and_final_artifact(
             "stageId": "CLARIFY",
             "content": VALID_CLARIFY_ARTIFACT,
             "versionNumber": 1,
+            "artifactData": VALID_ARTIFACT_DATA,
         }
     ]
 
@@ -451,8 +466,7 @@ def test_agent_runs_stream_reuses_existing_run_id(
         snapshot = get_run_snapshot(run_id)
 
     assert [
-        (message["role"], message["content"])
-        for message in snapshot["messages"]
+        (message["role"], message["content"]) for message in snapshot["messages"]
     ] == [
         ("user", "第一轮"),
         ("assistant", "已更新右侧需求分析文档。"),
@@ -505,6 +519,7 @@ def test_agent_run_snapshot_endpoint_returns_persisted_trace(
             "stageId": "CLARIFY",
             "content": VALID_CLARIFY_ARTIFACT,
             "versionNumber": 1,
+            "artifactData": VALID_ARTIFACT_DATA,
         }
     ]
 
@@ -630,7 +645,12 @@ def test_agent_run_artifact_update_endpoint_records_manual_artifact_version(
     }
 
     snapshot_response = client.get(f"/api/agent/runs/{run_id}")
-    assert snapshot_response.json["artifacts"] == [response.json]
+    assert snapshot_response.json["artifacts"] == [
+        {
+            **response.json,
+            "artifactData": None,
+        }
+    ]
     assert snapshot_response.json["artifactAuditEvents"] == [
         {
             "stageId": "STRATEGY",
@@ -698,6 +718,7 @@ def test_agent_run_artifact_update_endpoint_returns_409_for_stale_version(
             "stageId": "STRATEGY",
             "content": "# 测试策略蓝图\n\n版本 2",
             "versionNumber": 2,
+            "artifactData": None,
         },
     }
 
@@ -707,6 +728,7 @@ def test_agent_run_artifact_update_endpoint_returns_409_for_stale_version(
             "stageId": "STRATEGY",
             "content": "# 测试策略蓝图\n\n版本 2",
             "versionNumber": 2,
+            "artifactData": None,
         }
     ]
 
@@ -833,8 +855,13 @@ def test_agent_run_artifact_collaboration_endpoint_replaces_state(
     }
 
     snapshot_response = client.get(f"/api/agent/runs/{run_id}")
-    assert snapshot_response.json["artifactComments"] == response.json["artifactComments"]
-    assert snapshot_response.json["artifactSectionLocks"] == response.json["artifactSectionLocks"]
+    assert (
+        snapshot_response.json["artifactComments"] == response.json["artifactComments"]
+    )
+    assert (
+        snapshot_response.json["artifactSectionLocks"]
+        == response.json["artifactSectionLocks"]
+    )
     assert snapshot_response.json["artifactAuditEvents"] == [
         {
             "stageId": "CLARIFY",
@@ -960,7 +987,9 @@ def test_agent_runs_list_endpoint_returns_recent_runs_with_summaries(
         newer_run_id = newer_run.id
 
         db.session.get(AgentRun, older_run_id).updated_at = base_time
-        db.session.get(AgentRun, newer_run_id).updated_at = base_time + timedelta(minutes=5)
+        db.session.get(AgentRun, newer_run_id).updated_at = base_time + timedelta(
+            minutes=5
+        )
         db.session.commit()
 
     response = client.get("/api/agent/runs")
@@ -1028,8 +1057,12 @@ def test_agent_runs_list_endpoint_paginates_and_reports_more_runs(
         newest_run_id = newest_run.id
 
         db.session.get(AgentRun, oldest_run_id).updated_at = base_time
-        db.session.get(AgentRun, middle_run_id).updated_at = base_time + timedelta(minutes=5)
-        db.session.get(AgentRun, newest_run_id).updated_at = base_time + timedelta(minutes=10)
+        db.session.get(AgentRun, middle_run_id).updated_at = base_time + timedelta(
+            minutes=5
+        )
+        db.session.get(AgentRun, newest_run_id).updated_at = base_time + timedelta(
+            minutes=10
+        )
         db.session.commit()
 
     response = client.get("/api/agent/runs?workflowId=TEST_DESIGN&limit=1&offset=1")
@@ -1181,7 +1214,9 @@ def test_agent_run_test_assets_materialize_endpoint_persists_collection(
 
     assert detail_response.status_code == 200
     assert detail_response.json["id"] == collection_id
-    assert detail_response.json["testCases"][0]["versions"][0]["title"] == "用户登录成功"
+    assert (
+        detail_response.json["testCases"][0]["versions"][0]["title"] == "用户登录成功"
+    )
 
 
 def test_agent_test_assets_case_update_endpoint_creates_new_version(
@@ -1355,7 +1390,10 @@ def test_agent_test_assets_intent_tester_result_endpoint_persists_snapshot(
     detail_response = client.get(f"/api/agent/test-assets/{collection['id']}")
 
     assert detail_response.status_code == 200
-    assert detail_response.json["intentTesterMappings"][0]["latestResult"] == response.json["latestResult"]
+    assert (
+        detail_response.json["intentTesterMappings"][0]["latestResult"]
+        == response.json["latestResult"]
+    )
 
 
 def test_agent_test_assets_issue_status_update_endpoint_persists_status(
@@ -1425,7 +1463,9 @@ def test_agent_test_assets_test_point_update_endpoint_persists_calibration(
     assert detail_response.json["coverageSummary"]["coveredTestPoints"] == 0
     assert detail_response.json["coverageSummary"]["uncoveredTestPoints"] == 1
     risk = next(
-        item for item in detail_response.json["riskMatrix"] if item["risk"] == "R-LOGIN-LOCK"
+        item
+        for item in detail_response.json["riskMatrix"]
+        if item["risk"] == "R-LOGIN-LOCK"
     )
     assert risk["id"] > 0
     assert risk["isManual"] is False
@@ -1646,7 +1686,11 @@ def test_agent_run_handoffs_endpoint_exports_configured_targets(
     assert response.status_code == 200
     assert response.json["runId"] == run_id
     assert [
-        (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
+        (
+            handoff["targetWorkflowId"],
+            handoff["targetStageId"],
+            handoff["targetAgentId"],
+        )
         for handoff in response.json["handoffs"]
     ] == [
         ("TEST_DESIGN", "CLARIFY", "lisa"),
@@ -1957,7 +2001,7 @@ def test_agent_observability_endpoint_returns_runtime_turn_summary(
 def test_agent_observability_endpoint_filters_by_workflow_and_stage(
     app,
     client,
-    ):
+):
     with app.app_context():
         clarify_run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
         clarify_run_id = clarify_run.id
@@ -2105,16 +2149,13 @@ def test_agent_observability_endpoint_groups_provider_issue_codes(
     assert response.json["totals"]["providerIssueCount"] == 1
     assert response.json["totals"]["providerIssueCodes"] == {"LLM_ERROR": 1}
     clarify_stage = next(
-        stage for stage in response.json["byStage"]
-        if stage["stageId"] == "CLARIFY"
+        stage for stage in response.json["byStage"] if stage["stageId"] == "CLARIFY"
     )
     strategy_stage = next(
-        stage for stage in response.json["byStage"]
-        if stage["stageId"] == "STRATEGY"
+        stage for stage in response.json["byStage"] if stage["stageId"] == "STRATEGY"
     )
     cases_stage = next(
-        stage for stage in response.json["byStage"]
-        if stage["stageId"] == "CASES"
+        stage for stage in response.json["byStage"] if stage["stageId"] == "CASES"
     )
     assert clarify_stage["providerIssueCount"] == 1
     assert clarify_stage["providerIssueCodes"] == {"LLM_ERROR": 1}

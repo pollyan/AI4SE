@@ -112,7 +112,9 @@ def test_artifact_versions_increment_per_run_stage(app):
         assert first.version_number == 1
         assert second.version_number == 2
         assert artifact.current_version_id == second.id
-        assert AgentArtifactVersion.query.filter_by(artifact_id=artifact.id).count() == 2
+        assert (
+            AgentArtifactVersion.query.filter_by(artifact_id=artifact.id).count() == 2
+        )
 
 
 def test_run_snapshot_returns_messages_and_current_artifacts(app):
@@ -121,7 +123,20 @@ def test_run_snapshot_returns_messages_and_current_artifacts(app):
         append_run_message(run.id, "user", "输入")
         append_run_message(run.id, "assistant", "回复")
         record_artifact_version(run.id, "CLARIFY", "初版")
-        record_artifact_version(run.id, "CLARIFY", "二版")
+        record_artifact_version(
+            run.id,
+            "CLARIFY",
+            "二版",
+            artifact_data={
+                "document_info": {
+                    "artifact_name": "测试需求分析与澄清基线",
+                },
+                "stage_gate": {
+                    "status": "需要用户补充",
+                    "blocking": True,
+                },
+            },
+        )
 
         snapshot = get_run_snapshot(run.id)
 
@@ -141,10 +156,36 @@ def test_run_snapshot_returns_messages_and_current_artifacts(app):
             "stageId": "CLARIFY",
             "content": "二版",
             "versionNumber": 2,
+            "artifactData": {
+                "document_info": {
+                    "artifact_name": "测试需求分析与澄清基线",
+                },
+                "stage_gate": {
+                    "status": "需要用户补充",
+                    "blocking": True,
+                },
+            },
         }
     ]
     assert snapshot["artifactComments"] == []
     assert snapshot["artifactSectionLocks"] == []
+
+
+def test_run_snapshot_returns_null_artifact_data_for_manual_versions(app):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY", model="gpt-test")
+        record_artifact_version(run.id, "CLARIFY", "手工编辑版本")
+
+        snapshot = get_run_snapshot(run.id)
+
+    assert snapshot["artifacts"] == [
+        {
+            "stageId": "CLARIFY",
+            "content": "手工编辑版本",
+            "versionNumber": 1,
+            "artifactData": None,
+        }
+    ]
 
 
 def test_run_snapshot_returns_artifact_collaboration_state(app):
@@ -254,10 +295,10 @@ def test_run_snapshot_returns_artifact_audit_events(app):
         )
         snapshot = get_run_snapshot(run.id)
 
-    assert [
-        event["eventType"]
-        for event in snapshot["artifactAuditEvents"]
-    ] == ["artifact_saved", "collaboration_updated"]
+    assert [event["eventType"] for event in snapshot["artifactAuditEvents"]] == [
+        "artifact_saved",
+        "collaboration_updated",
+    ]
     assert snapshot["artifactAuditEvents"][0] == {
         "stageId": "CLARIFY",
         "eventType": "artifact_saved",
@@ -280,8 +321,7 @@ def test_record_artifact_version_persists_current_artifact_summary(app):
         snapshot = get_run_snapshot(run.id)
 
     summaries = {
-        summary["summaryType"]: summary
-        for summary in snapshot["contextSummaries"]
+        summary["summaryType"]: summary for summary in snapshot["contextSummaries"]
     }
     assert summaries["current_artifact"] == {
         "sourceType": "artifact",
@@ -359,8 +399,7 @@ def test_record_artifact_version_persists_decision_summary(app):
     }
     assert "覆盖登录主链路和异常链路" in summaries["stage_conclusion"]
     assert summaries["decision"] == (
-        "- 决定优先自动化登录回归\n"
-        "- P0 风险先覆盖第三方回调失败"
+        "- 决定优先自动化登录回归\n" "- P0 风险先覆盖第三方回调失败"
     )
 
 
