@@ -33,6 +33,7 @@ from test_artifact_data_renderers import (
     VALID_DELIVERY_ARTIFACT_DATA,
     VALID_REQ_REVIEW_ARTIFACT_DATA,
     VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA,
+    VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
     VALID_STRATEGY_ARTIFACT_DATA,
     VALID_VALUE_BLUEPRINT_ARTIFACT_DATA,
     VALID_VALUE_ELEVATOR_ARTIFACT_DATA,
@@ -376,6 +377,61 @@ def test_parse_agent_turn_output_text_renders_clarify_artifact_data():
     assert "flowchart TD" in output.artifact_update.markdown
     assert output.stage_action is not None
     assert output.stage_action.target_stage_id == "STRATEGY"
+
+
+def test_parse_agent_turn_output_text_renders_story_breakdown_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "我已完成需求输入盘点，请确认右侧 Story 拆解基线。",
+            "artifact_data": {
+                "analysis_summary": {
+                    "source_type": "PRD",
+                    "product_goal": "提升 AI 测试资产复用效率",
+                    "target_users": "测试负责人、产品经理和研发负责人",
+                    "scope_judgement": "可进入 Epic 拆分",
+                },
+                "source_inventory": [
+                    {
+                        "item_id": "SRC-001",
+                        "item": "测试资产生成与复用",
+                        "evidence": "PRD 描述需要从需求生成测试策略和用例",
+                        "status": "已确认",
+                    }
+                ],
+                "missing_information": [
+                    {
+                        "question": "是否需要导入已有测试用例库",
+                        "impact": "影响 Sprint 范围和依赖拆分",
+                        "blocking": "否",
+                    }
+                ],
+                "stage_gate": {
+                    "decision": "继续",
+                    "reason": "核心目标、用户和范围已足够支撑 Epic 拆分",
+                    "next_stage": "EPIC_MAPPING",
+                },
+            },
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "EPIC_MAPPING",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="INPUT_ANALYSIS",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 用户故事拆解输入盘点")
+    assert "## 需求来源与目标" in output.artifact_update.markdown
+    assert output.stage_action is not None
+    assert output.stage_action.target_stage_id == "EPIC_MAPPING"
 
 
 def test_parse_agent_turn_output_text_renders_strategy_artifact_data():
@@ -1019,6 +1075,33 @@ def test_parse_agent_turn_output_text_renders_idea_concept_artifact_data():
     assert output.stage_action is None
 
 
+def test_parse_agent_turn_output_text_renders_story_breakdown_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "已完成用户故事拆解包。",
+            "artifact_data": VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="SPRINT_PLAN",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 用户故事拆解包")
+    assert "## Epic Map" in output.artifact_update.markdown
+    assert "## User Story Backlog" in output.artifact_update.markdown
+    assert "## Sprint 切片建议" in output.artifact_update.markdown
+    assert '"type": "story-map"' in output.artifact_update.markdown
+    assert output.stage_action is None
+
+
 def test_value_persona_structured_output_instruction_requests_artifact_data_not_markdown():
     instruction = build_structured_output_instruction(
         "VALUE_DISCOVERY",
@@ -1191,6 +1274,24 @@ def test_idea_concept_structured_output_instruction_requests_artifact_data_not_m
     assert "不要输出完整 Markdown" in instruction
 
 
+def test_story_breakdown_structured_output_instruction_requests_artifact_data_not_markdown():
+    instruction = build_structured_output_instruction(
+        "STORY_BREAKDOWN",
+        "SPRINT_PLAN",
+    )
+
+    assert "artifact_data" in instruction
+    assert "artifact_update" not in instruction
+    assert "input_analysis" in instruction
+    assert "epics" in instruction
+    assert "user_stories" in instruction
+    assert "acceptance_criteria" in instruction
+    assert "sprint_slices" in instruction
+    assert "lisa_handoff_inputs" in instruction
+    assert '"stage_action": null' in instruction
+    assert "不要输出完整 Markdown" in instruction
+
+
 def test_value_persona_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
     prompt = build_raw_json_retry_prompt(
         "原始提示",
@@ -1329,6 +1430,20 @@ def test_idea_concept_retry_prompt_requests_artifact_data_fix_not_markdown_rewri
 
     assert "artifact_data" in prompt
     assert "growth_funnel" in prompt
+    assert "不要输出 Markdown 文档" in prompt
+    assert "artifact_update.type 必须为 replace" not in prompt
+
+
+def test_story_breakdown_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
+    prompt = build_raw_json_retry_prompt(
+        "请拆解用户故事",
+        ValueError("acceptance_criteria references unknown story ids"),
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="SPRINT_PLAN",
+    )
+
+    assert "artifact_data" in prompt
+    assert "acceptance_criteria references unknown story ids" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 

@@ -11,7 +11,10 @@ from agent_contracts import (
     ContractValidationError,
     validate_agent_turn,
 )
-from artifact_data_renderers import render_agent_turn_from_artifact_data
+from artifact_data_renderers import (
+    get_artifact_data_renderer_stage_keys,
+    render_agent_turn_from_artifact_data,
+)
 from llm_client import LlmClientError, stream_chat_completion_content
 from sse_schemas import AgentTurnDeltaOutput
 
@@ -702,67 +705,133 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+def _story_breakdown_artifact_data_instruction(stage_action: str) -> str:
+    return """你必须只输出一个 JSON 对象，不要输出 Markdown、解释文字或代码围栏。
+顶层字段只能包含：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮如何把输入需求拆成 Epic、User Story、验收标准、依赖风险、Sprint 切片和 Lisa Handoff 输入。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "用户故事拆解包", "workflow": "STORY_BREAKDOWN", "stage": "当前阶段 ID", "status": "草稿/待确认/可交接 Lisa"},
+    "input_analysis": {"source_type": "PRD/需求蓝图/产品想法/用户输入", "product_goal": "...", "target_users": ["..."], "constraints": ["..."], "open_questions": ["..."]},
+    "epics": [{"epic_id": "EPIC-001", "name": "...", "value_goal": "...", "scope": "...", "priority": "P0/P1/P2", "dependencies": ["..."]}],
+    "user_stories": [{"story_id": "US-001", "epic_id": "EPIC-001", "title": "...", "user_story": "作为...我想...以便...", "priority": "P0/P1/P2", "sprint": "Sprint 1", "story_points": 5, "testability": "高/中/低", "status": "待评审/已确认"}],
+    "acceptance_criteria": [{"criterion_id": "AC-001", "story_id": "US-001", "criterion": "...", "verification_method": "单元/接口/UI/人工评审/LLM judge", "status": "待验证/已验证"}],
+    "dependencies": [{"dependency_id": "DEP-001", "related_story_ids": ["US-001"], "description": "...", "risk": "...", "mitigation": "...", "owner": "产品/研发/测试/AI 工程", "status": "已识别/待确认/已解决"}],
+    "sprint_slices": [{"sprint_id": "Sprint 1", "goal": "...", "story_ids": ["US-001"], "deliverable": "...", "acceptance_focus": "..."}],
+    "lisa_handoff_inputs": [{"input_type": "用户故事/验收标准", "reference_id": "US-001", "content": "...", "usage": "Lisa 测试设计输入/Lisa 需求评审输入", "status": "可用/待补充"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": {stage_action},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；epics.epic_id、user_stories.story_id、acceptance_criteria.criterion_id、dependencies.dependency_id 和 sprint_slices.sprint_id 必须唯一；user_stories.epic_id 只能引用已存在的 epic_id；acceptance_criteria.story_id、dependencies.related_story_ids 和 sprint_slices.story_ids 只能引用已存在的 story_id；lisa_handoff_inputs 中 input_type 为“用户故事”时 reference_id 必须引用 story_id，input_type 为“验收标准”时 reference_id 必须引用 criterion_id；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 story-map JSON 代码块，后端会负责确定性渲染右侧用户故事拆解包、flowchart 和 ai4se-visual story-map。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+""".replace("{stage_action}", stage_action)
+
+
+ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS: dict[tuple[str, str], str] = {
+    (
+        "IDEA_BRAINSTORM",
+        "DEFINE",
+    ): IDEA_DEFINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "IDEA_BRAINSTORM",
+        "DIVERGE",
+    ): IDEA_DIVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "IDEA_BRAINSTORM",
+        "CONVERGE",
+    ): IDEA_CONVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "IDEA_BRAINSTORM",
+        "CONCEPT",
+    ): IDEA_CONCEPT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    ("TEST_DESIGN", "CLARIFY"): ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    ("TEST_DESIGN", "STRATEGY"): STRATEGY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    ("TEST_DESIGN", "CASES"): CASES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    ("TEST_DESIGN", "DELIVERY"): DELIVERY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    ("REQ_REVIEW", "REVIEW"): REQ_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "REQ_REVIEW",
+        "REPORT",
+    ): REQ_REVIEW_REPORT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "VALUE_DISCOVERY",
+        "ELEVATOR",
+    ): VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "VALUE_DISCOVERY",
+        "PERSONA",
+    ): VALUE_PERSONA_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "VALUE_DISCOVERY",
+        "JOURNEY",
+    ): VALUE_JOURNEY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "VALUE_DISCOVERY",
+        "BLUEPRINT",
+    ): VALUE_BLUEPRINT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "INCIDENT_REVIEW",
+        "TIMELINE",
+    ): INCIDENT_TIMELINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "INCIDENT_REVIEW",
+        "ROOT_CAUSE",
+    ): INCIDENT_ROOT_CAUSE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "INCIDENT_REVIEW",
+        "IMPROVEMENT",
+    ): INCIDENT_IMPROVEMENT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "STORY_BREAKDOWN",
+        "INPUT_ANALYSIS",
+    ): _story_breakdown_artifact_data_instruction(
+        '{"type": "request_next_stage", "target_stage_id": "EPIC_MAPPING"}'
+    ),
+    (
+        "STORY_BREAKDOWN",
+        "EPIC_MAPPING",
+    ): _story_breakdown_artifact_data_instruction(
+        '{"type": "request_next_stage", "target_stage_id": "STORY_BACKLOG"}'
+    ),
+    (
+        "STORY_BREAKDOWN",
+        "STORY_BACKLOG",
+    ): _story_breakdown_artifact_data_instruction(
+        '{"type": "request_next_stage", "target_stage_id": "SPRINT_PLAN"}'
+    ),
+    (
+        "STORY_BREAKDOWN",
+        "SPRINT_PLAN",
+    ): _story_breakdown_artifact_data_instruction("null"),
+}
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
-    return (workflow_id, current_stage_id) in {
-        ("IDEA_BRAINSTORM", "DEFINE"),
-        ("IDEA_BRAINSTORM", "DIVERGE"),
-        ("IDEA_BRAINSTORM", "CONVERGE"),
-        ("IDEA_BRAINSTORM", "CONCEPT"),
-        ("TEST_DESIGN", "CLARIFY"),
-        ("TEST_DESIGN", "STRATEGY"),
-        ("TEST_DESIGN", "CASES"),
-        ("TEST_DESIGN", "DELIVERY"),
-        ("REQ_REVIEW", "REVIEW"),
-        ("REQ_REVIEW", "REPORT"),
-        ("VALUE_DISCOVERY", "ELEVATOR"),
-        ("VALUE_DISCOVERY", "PERSONA"),
-        ("VALUE_DISCOVERY", "JOURNEY"),
-        ("VALUE_DISCOVERY", "BLUEPRINT"),
-        ("INCIDENT_REVIEW", "TIMELINE"),
-        ("INCIDENT_REVIEW", "ROOT_CAUSE"),
-        ("INCIDENT_REVIEW", "IMPROVEMENT"),
-    }
+    stage_key = (workflow_id, current_stage_id)
+    return (
+        stage_key in ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS
+        and stage_key in get_artifact_data_renderer_stage_keys()
+    )
 
 
 def build_structured_output_instruction(
     workflow_id: str,
     current_stage_id: str,
 ) -> str:
-    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DEFINE"):
-        return IDEA_DEFINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DIVERGE"):
-        return IDEA_DIVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONVERGE"):
-        return IDEA_CONVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONCEPT"):
-        return IDEA_CONCEPT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
-        return ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
-        return STRATEGY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CASES"):
-        return CASES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "DELIVERY"):
-        return DELIVERY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("REQ_REVIEW", "REVIEW"):
-        return REQ_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("REQ_REVIEW", "REPORT"):
-        return REQ_REVIEW_REPORT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
-        return VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "PERSONA"):
-        return VALUE_PERSONA_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "JOURNEY"):
-        return VALUE_JOURNEY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "BLUEPRINT"):
-        return VALUE_BLUEPRINT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
-        return INCIDENT_TIMELINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "ROOT_CAUSE"):
-        return INCIDENT_ROOT_CAUSE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "IMPROVEMENT"):
-        return INCIDENT_IMPROVEMENT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
+    return ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS.get(
+        (workflow_id, current_stage_id),
+        TEXT_STRUCTURED_OUTPUT_INSTRUCTION,
+    )
 
 
 def build_raw_json_retry_prompt(

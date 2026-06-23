@@ -76,6 +76,8 @@
 | E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | FMEA、JTBD、RICE、Kano、CAPA 等可由配置注入 prompt/template |
 | E11 | Prompt/template 版本管理 | 新增功能 | 平台扩展 | L | P2 | 每个 stage 有 prompt/template version 和回归样例 |
 | E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 | 新 workflow 缺 manifest/prompt/contract/test 任一面时 dry-run 失败 |
+| E13 | Alex 用户故事拆解 workflow | 已消化 | 专业内容 | M | P0 | 2026-06-23 已主线化：共享 workflow `STORY_BREAKDOWN`、slug `story-breakdown`、四阶段 `artifact_data` renderer、story-map visual contract、Alex 在线入口和 Lisa handoff 均已接入；验证覆盖 backend contract/runtime/renderer/sync/handoff 与 frontend workflow/prompt tests |
+| E14 | Alex PRD 质量评审与补全 workflow | 新增功能 | 专业内容 | M | P0 | 从产品经理视角评审 PRD 的业务目标、用户价值、范围边界、指标、依赖、非功能需求和验收标准，并输出补全建议 |
 
 ## Lisa 专业化方向
 
@@ -93,12 +95,14 @@
 
 - `VALUE_DISCOVERY`: 加强 JTBD、用户旅程证据、机会评分、RICE/Kano/MoSCoW、需求蓝图完整性、非功能需求和 Lisa handoff 输入质量。
 - `IDEA_BRAINSTORM`: 加强问题域证据、创意来源、ICE 评分口径、MVP 范围收敛、Pre-mortem、验证实验和决策记录。
+- `PRD_REVIEW` 候选: 从 Alex 产品经理视角做 PRD 质量评审与补全，重点检查业务目标、用户价值、范围边界、用户旅程、功能需求、异常路径、非功能需求、成功指标、依赖风险和验收标准。它与 Lisa `REQ_REVIEW` 互补: Alex 负责产品完整性和决策质量，Lisa 负责可测试性和测试风险。
 
 建议首批 Alex 切片:
 
-1. VALUE_DISCOVERY/BLUEPRINT 质量门禁和 handoff 输入强化。
-2. IDEA_BRAINSTORM/CONVERGE 评分口径和验证实验闭环。
-3. Workflow 入口 preview 中补齐 Alex workflow 的适用/不适用说明和产物示例。
+1. `PRD_REVIEW`: PRD 质量评审与补全 workflow，从产品经理视角输出缺口清单、补全建议、质量门禁和修订版 PRD 大纲。
+2. VALUE_DISCOVERY/BLUEPRINT 质量门禁和 handoff 输入强化。
+3. IDEA_BRAINSTORM/CONVERGE 评分口径和验证实验闭环。
+4. 已完成：Alex 用户故事拆解 workflow 主线化，输出 Epic Map、User Story Backlog、验收标准、Sprint 切片和 Lisa Handoff 输入。
 
 ## 推荐路线
 
@@ -106,7 +110,7 @@
 
 目标: 1-2 周内明显提升专业感和产出可信度。
 
-包含: E02、E03、E04。E01 已在 2026-06-23 workflow 入口 preview milestone 中消化。
+包含: E02、E03、E04、E14。E01 已在 2026-06-23 workflow 入口 preview milestone 中消化；E13 已在 2026-06-23 Alex 用户故事拆解 workflow milestone 中消化。
 
 暂不做:
 

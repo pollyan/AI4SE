@@ -12,7 +12,6 @@ from models import db
 from run_persistence import create_agent_run, get_run_snapshot, record_artifact_version
 from workflow_handoffs import export_run_handoffs, start_workflow_handoff
 
-
 BLUEPRINT_MARKDOWN = """# AI 测试资产管理平台需求蓝图
 
 ## 文档信息
@@ -115,6 +114,46 @@ flowchart TD
 - [x] P0 需求均具备验收标准、owner 和可测试性等级。
 """
 
+STORY_BREAKDOWN_MARKDOWN = """# 用户故事拆解包
+
+## 输入分析
+来源 PRD，目标是把测试资产生成能力拆成 Sprint 可交付切片。
+
+## Epic Map
+| Epic ID | 名称 | 价值目标 | 优先级 |
+| --- | --- | --- | --- |
+| EPIC-001 | 测试资产生成 | 减少测试设计手工整理成本 | P0 |
+
+## User Story Backlog
+| Story ID | Epic ID | 用户故事 | 优先级 | Sprint |
+| --- | --- | --- | --- | --- |
+| US-001 | EPIC-001 | 作为测试负责人，我想把需求输入转成澄清清单，以便发现遗漏。 | P0 | Sprint 1 |
+
+## 验收标准
+| AC ID | Story ID | 验收标准 | 验证方式 |
+| --- | --- | --- | --- |
+| AC-001 | US-001 | 输入需求后生成事实、边界、业务规则和待澄清问题。 | 后端 contract test |
+
+## 依赖与风险
+| 依赖 ID | 关联 Story | 风险 | 缓解 |
+| --- | --- | --- | --- |
+| DEP-001 | US-001 | 模型直写 Markdown 绕过 renderer | runtime instruction 和 renderer contract 双门禁 |
+
+## Sprint 切片建议
+| Sprint | 目标 | Story |
+| --- | --- | --- |
+| Sprint 1 | 打通需求澄清最小闭环 | US-001 |
+
+## Lisa Handoff 输入
+| 输入类型 | ID | 内容 | 给 Lisa 的用途 |
+| --- | --- | --- | --- |
+| 用户故事 | US-001 | 需求澄清基线 | 测试设计输入 |
+| 验收标准 | AC-001 | 输入需求后生成澄清问题 | 需求评审输入 |
+
+## 阶段门禁
+- [x] 所有 P0 用户故事均具备验收标准和 Sprint 切片。
+"""
+
 
 @pytest.fixture
 def app():
@@ -143,7 +182,11 @@ def test_export_run_handoffs_returns_configured_lisa_targets(app):
     assert result["runId"] == run.id
     assert result["sourceWorkflowId"] == "VALUE_DISCOVERY"
     assert [
-        (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
+        (
+            handoff["targetWorkflowId"],
+            handoff["targetStageId"],
+            handoff["targetAgentId"],
+        )
         for handoff in result["handoffs"]
     ] == [
         ("TEST_DESIGN", "CLARIFY", "lisa"),
@@ -158,6 +201,37 @@ def test_export_run_handoffs_returns_configured_lisa_targets(app):
     assert "Alex 产出的需求蓝图" not in first["prompt"]
 
 
+def test_export_story_breakdown_handoffs_returns_lisa_targets(app):
+    with app.app_context():
+        run = create_agent_run("STORY_BREAKDOWN", "alex", "SPRINT_PLAN")
+        record_artifact_version(run.id, "SPRINT_PLAN", STORY_BREAKDOWN_MARKDOWN)
+
+        result = export_run_handoffs(run.id)
+
+    assert result["runId"] == run.id
+    assert result["sourceWorkflowId"] == "STORY_BREAKDOWN"
+    assert [
+        (
+            handoff["targetWorkflowId"],
+            handoff["targetStageId"],
+            handoff["targetAgentId"],
+        )
+        for handoff in result["handoffs"]
+    ] == [
+        ("TEST_DESIGN", "CLARIFY", "lisa"),
+        ("REQ_REVIEW", "REVIEW", "lisa"),
+    ]
+    first = result["handoffs"][0]
+    assert first["sourceStageId"] == "SPRINT_PLAN"
+    assert first["sourceArtifactVersion"] == 1
+    assert "STORY_BREAKDOWN/SPRINT_PLAN" in first["prompt"]
+    assert "TEST_DESIGN/CLARIFY" in first["prompt"]
+    assert "US-001" in first["prompt"]
+    assert "AC-001" in first["prompt"]
+    assert "模型直写 Markdown 绕过 renderer" in first["prompt"]
+    assert "Alex 产出的用户故事拆解包" not in first["prompt"]
+
+
 def test_export_run_handoffs_returns_empty_without_required_artifact(app):
     with app.app_context():
         run = create_agent_run("VALUE_DISCOVERY", "alex", "JOURNEY")
@@ -165,6 +239,26 @@ def test_export_run_handoffs_returns_empty_without_required_artifact(app):
         result = export_run_handoffs(run.id)
 
     assert result["handoffs"] == []
+
+
+def test_story_breakdown_exports_lisa_handoff_targets(app):
+    with app.app_context():
+        run = create_agent_run("STORY_BREAKDOWN", "alex", "SPRINT_PLAN")
+        record_artifact_version(
+            run.id,
+            "SPRINT_PLAN",
+            "# 用户故事拆解交付包\n\n## Lisa Handoff 输入\nStory 包内容",
+        )
+
+        result = export_run_handoffs(run.id)
+
+    assert [
+        (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
+        for handoff in result["handoffs"]
+    ] == [
+        ("TEST_DESIGN", "CLARIFY", "lisa"),
+        ("REQ_REVIEW", "REVIEW", "lisa"),
+    ]
 
 
 def test_export_run_handoffs_returns_empty_for_non_source_workflow(app):

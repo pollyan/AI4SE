@@ -23,9 +23,11 @@ def _complete_markdown(required_headings: list[str]) -> str:
 
 def _complete_marked_heading_markdown(required_headings: list[str]) -> str:
     marked_headings = [
-        heading.replace(" ", " <mark>", 1) + "</mark>"
-        if heading.startswith("#")
-        else heading
+        (
+            heading.replace(" ", " <mark>", 1) + "</mark>"
+            if heading.startswith("#")
+            else heading
+        )
         for heading in required_headings
     ]
     return _complete_markdown(marked_headings)
@@ -51,9 +53,7 @@ def _minimal_structured_visual_block(visual_type: str) -> str:
 
 
 def _complete_markdown_for_stage(workflow_id: str, stage_id: str) -> str:
-    markdown = _complete_markdown(
-        REQUIRED_ARTIFACT_HEADINGS[(workflow_id, stage_id)]
-    )
+    markdown = _complete_markdown(REQUIRED_ARTIFACT_HEADINGS[(workflow_id, stage_id)])
     visual_blocks = [
         _minimal_mermaid_block(diagram_type)
         for diagram_type in REQUIRED_ARTIFACT_MERMAID_DIAGRAMS.get(
@@ -472,17 +472,15 @@ def test_required_artifact_headings_cover_every_known_workflow_stage():
 
 def test_required_mermaid_contract_covers_every_known_workflow():
     workflows_with_required_visuals = {
-        workflow_id
-        for workflow_id, _stage_id in REQUIRED_ARTIFACT_MERMAID_DIAGRAMS
+        workflow_id for workflow_id, _stage_id in REQUIRED_ARTIFACT_MERMAID_DIAGRAMS
     }
 
     assert workflows_with_required_visuals == set(WORKFLOW_STAGES)
 
 
 def test_first_stage_visual_contract_covers_every_known_workflow():
-    visual_stage_keys = (
-        set(REQUIRED_ARTIFACT_MERMAID_DIAGRAMS)
-        | set(REQUIRED_ARTIFACT_STRUCTURED_VISUALS)
+    visual_stage_keys = set(REQUIRED_ARTIFACT_MERMAID_DIAGRAMS) | set(
+        REQUIRED_ARTIFACT_STRUCTURED_VISUALS
     )
     first_stage_keys = {
         (workflow_id, stage_ids[0])
@@ -502,10 +500,34 @@ def test_later_stage_structured_visual_contracts_cover_professional_views():
         ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["cause-map"],
         ("IDEA_BRAINSTORM", "CONCEPT"): ["mvp-map"],
         ("VALUE_DISCOVERY", "BLUEPRINT"): ["roadmap"],
+        ("STORY_BREAKDOWN", "SPRINT_PLAN"): ["story-map"],
     }
 
     for stage_key, visual_types in expected_visual_contracts.items():
         assert REQUIRED_ARTIFACT_STRUCTURED_VISUALS.get(stage_key) == visual_types
+
+
+def test_story_breakdown_contracts_include_story_package_fields():
+    assert WORKFLOW_STAGES["STORY_BREAKDOWN"] == [
+        "INPUT_ANALYSIS",
+        "EPIC_MAPPING",
+        "STORY_BACKLOG",
+        "SPRINT_PLAN",
+    ]
+    story_fields = REQUIRED_ARTIFACT_HEADINGS[("STORY_BREAKDOWN", "SPRINT_PLAN")]
+
+    assert "# 用户故事拆解包" in story_fields
+    assert "## 输入分析" in story_fields
+    assert "## Epic Map" in story_fields
+    assert "## User Story Backlog" in story_fields
+    assert "## 验收标准" in story_fields
+    assert "## Lisa Handoff 输入" in story_fields
+    assert REQUIRED_ARTIFACT_MERMAID_DIAGRAMS[
+        ("STORY_BREAKDOWN", "INPUT_ANALYSIS")
+    ] == ["flowchart"]
+    assert REQUIRED_ARTIFACT_STRUCTURED_VISUALS[("STORY_BREAKDOWN", "SPRINT_PLAN")] == [
+        "story-map"
+    ]
 
 
 @pytest.mark.parametrize(
@@ -532,11 +554,14 @@ def test_validate_agent_turn_accepts_complete_required_artifact_template(
         }
     )
 
-    assert validate_agent_turn(
-        output,
-        workflow_id=workflow_id,
-        current_stage_id=stage_id,
-    ) is output
+    assert (
+        validate_agent_turn(
+            output,
+            workflow_id=workflow_id,
+            current_stage_id=stage_id,
+        )
+        is output
+    )
 
 
 def test_validate_agent_turn_accepts_required_headings_wrapped_in_mark_tags():
@@ -558,11 +583,14 @@ def test_validate_agent_turn_accepts_required_headings_wrapped_in_mark_tags():
         }
     )
 
-    assert validate_agent_turn(
-        output,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="DEFINE",
-    ) is output
+    assert (
+        validate_agent_turn(
+            output,
+            workflow_id="IDEA_BRAINSTORM",
+            current_stage_id="DEFINE",
+        )
+        is output
+    )
 
 
 def test_build_artifact_contract_prompt_includes_required_update_and_headings():
@@ -749,10 +777,13 @@ def test_validate_agent_turn_rejects_legacy_traceability_matrix_shape():
 
 
 def test_build_artifact_contract_prompt_is_empty_without_required_headings():
-    assert build_artifact_contract_prompt(
-        workflow_id="UNKNOWN",
-        current_stage_id="UNKNOWN",
-    ) == ""
+    assert (
+        build_artifact_contract_prompt(
+            workflow_id="UNKNOWN",
+            current_stage_id="UNKNOWN",
+        )
+        == ""
+    )
 
 
 @pytest.mark.parametrize(
@@ -924,9 +955,7 @@ def test_req_review_contracts_include_professional_artifact_fields():
     ]:
         assert field in review_fields
 
-    assert REQUIRED_ARTIFACT_MERMAID_DIAGRAMS[("REQ_REVIEW", "REVIEW")] == [
-        "flowchart"
-    ]
+    assert REQUIRED_ARTIFACT_MERMAID_DIAGRAMS[("REQ_REVIEW", "REVIEW")] == ["flowchart"]
 
     for field in [
         "## 优先级看板",
