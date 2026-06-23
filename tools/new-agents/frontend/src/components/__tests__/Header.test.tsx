@@ -76,6 +76,20 @@ const TEST_ASSET_COLLECTION: TestAssetCollection = {
         coverageRate: 100,
         byPriority: [],
     },
+    assetQuality: {
+        status: 'ready',
+        pendingIssues: 0,
+        confirmedIssues: 0,
+        ignoredIssues: 0,
+        openRisks: 0,
+        mitigatingRisks: 0,
+        acceptedRisks: 0,
+        closedRisks: 0,
+        uncoveredTestPoints: 0,
+        partiallyCoveredTestPoints: 0,
+        coverageRate: 100,
+        nextActions: ['测试资产质量已就绪。'],
+    },
     testCases: [
         {
             id: 'TC-001',

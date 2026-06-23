@@ -184,6 +184,23 @@ export type TestAssetCoverageSummary = {
     }>;
 };
 
+export type TestAssetQualityStatus = 'needs_action' | 'monitoring' | 'ready';
+
+export type TestAssetQuality = {
+    status: TestAssetQualityStatus;
+    pendingIssues: number;
+    confirmedIssues: number;
+    ignoredIssues: number;
+    openRisks: number;
+    mitigatingRisks: number;
+    acceptedRisks: number;
+    closedRisks: number;
+    uncoveredTestPoints: number;
+    partiallyCoveredTestPoints: number;
+    coverageRate: number;
+    nextActions: string[];
+};
+
 export type TestAssetCase = {
     id: string;
     title: string;
@@ -317,6 +334,7 @@ export type TestAssetCollection = {
     sourceStageId: string;
     sourceArtifactVersion: number;
     coverageSummary: TestAssetCoverageSummary;
+    assetQuality: TestAssetQuality;
     testCases: TestAssetCase[];
     testPoints: TestAssetPoint[];
     coverageTrace: TestAssetPoint[];

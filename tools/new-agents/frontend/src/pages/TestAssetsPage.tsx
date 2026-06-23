@@ -32,6 +32,7 @@ import type {
     TestAssetIssueStatus,
     TestAssetPoint,
     TestAssetPointPatch,
+    TestAssetQualityStatus,
     TestAssetRisk,
     TestAssetRiskCreatePatch,
     TestAssetRiskPatch,
@@ -57,6 +58,16 @@ const RISK_STATUS_LABELS: Record<TestAssetRiskStatus, string> = {
     mitigating: '缓解中',
     accepted: '已接受',
     closed: '已关闭',
+};
+const ASSET_QUALITY_STATUS_LABELS: Record<TestAssetQualityStatus, string> = {
+    needs_action: '需处理',
+    monitoring: '需关注',
+    ready: '已就绪',
+};
+const ASSET_QUALITY_STATUS_CLASSES: Record<TestAssetQualityStatus, string> = {
+    needs_action: 'border-rose-400/30 bg-rose-500/10 text-rose-100',
+    monitoring: 'border-amber-400/30 bg-amber-500/10 text-amber-100',
+    ready: 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100',
 };
 
 type SortField = typeof SORT_FIELDS[number];
@@ -634,12 +645,8 @@ export function TestAssetsPage() {
 
         try {
             const updatedIssue = await updateTestAssetIssueStatus(collection.id, issue.id, status);
-            setCollection({
-                ...collection,
-                assetIssues: collection.assetIssues.map(currentIssue => (
-                    currentIssue.id === updatedIssue.id ? updatedIssue : currentIssue
-                )),
-            });
+            const refreshedCollection = await fetchTestAssetCollection(collection.id);
+            setCollection(refreshedCollection);
             setSuccessMessage(`已更新资产问题 ${updatedIssue.id}`);
         } catch {
             setError('无法更新资产问题状态');
@@ -870,6 +877,41 @@ export function TestAssetsPage() {
                         <div className="mt-2 text-xl font-bold text-white">
                             {collection.assetIssues.length}
                         </div>
+                    </div>
+                </section>
+
+                <section className={`rounded-lg border p-4 ${ASSET_QUALITY_STATUS_CLASSES[collection.assetQuality.status]}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h2 className="text-sm font-semibold text-white">资产质量状态</h2>
+                            <p className="mt-1 text-xs text-slate-300">
+                                基于资产问题、测试点覆盖、风险处置和覆盖率派生。
+                            </p>
+                        </div>
+                        <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${ASSET_QUALITY_STATUS_CLASSES[collection.assetQuality.status]}`}>
+                            {ASSET_QUALITY_STATUS_LABELS[collection.assetQuality.status]}
+                        </span>
+                    </div>
+                    <div className="mt-4 grid gap-2 text-xs sm:grid-cols-4">
+                        <div className="rounded-md border border-white/10 bg-black/10 px-3 py-2">
+                            <span className="font-bold text-white">待处理问题 {collection.assetQuality.pendingIssues}</span>
+                        </div>
+                        <div className="rounded-md border border-white/10 bg-black/10 px-3 py-2">
+                            <span className="font-bold text-white">未覆盖测试点 {collection.assetQuality.uncoveredTestPoints}</span>
+                        </div>
+                        <div className="rounded-md border border-white/10 bg-black/10 px-3 py-2">
+                            <span className="font-bold text-white">待处置风险 {collection.assetQuality.openRisks}</span>
+                        </div>
+                        <div className="rounded-md border border-white/10 bg-black/10 px-3 py-2">
+                            <span className="font-bold text-white">质量覆盖率 {Math.round(collection.assetQuality.coverageRate)}%</span>
+                        </div>
+                    </div>
+                    <div className="mt-4 space-y-1.5">
+                        {collection.assetQuality.nextActions.map(action => (
+                            <div key={action} className="text-xs leading-relaxed text-slate-200">
+                                {action}
+                            </div>
+                        ))}
                     </div>
                 </section>
 

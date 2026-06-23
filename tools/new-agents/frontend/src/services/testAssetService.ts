@@ -13,6 +13,8 @@ import type {
     TestAssetIssueStatus,
     TestAssetPoint,
     TestAssetPointPatch,
+    TestAssetQuality,
+    TestAssetQualityStatus,
     TestAssetRisk,
     TestAssetRiskCreatePatch,
     TestAssetRiskDeleteResult,
@@ -34,6 +36,11 @@ const RISK_STATUSES = new Set<TestAssetRiskStatus>([
     'mitigating',
     'accepted',
     'closed',
+]);
+const QUALITY_STATUSES = new Set<TestAssetQualityStatus>([
+    'needs_action',
+    'monitoring',
+    'ready',
 ]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
@@ -112,6 +119,34 @@ const parseCoverageSummary = (
                 coverageRate: parseNumber(priority.coverageRate, errorMessage),
             };
         }),
+    };
+};
+
+const parseAssetQuality = (
+    value: unknown,
+    errorMessage: string,
+): TestAssetQuality => {
+    if (!isRecord(value) || !Array.isArray(value.nextActions)) {
+        throw new Error(errorMessage);
+    }
+    const status = value.status;
+    if (typeof status !== 'string' || !QUALITY_STATUSES.has(status as TestAssetQualityStatus)) {
+        throw new Error(errorMessage);
+    }
+
+    return {
+        status: status as TestAssetQualityStatus,
+        pendingIssues: parseInteger(value.pendingIssues, errorMessage),
+        confirmedIssues: parseInteger(value.confirmedIssues, errorMessage),
+        ignoredIssues: parseInteger(value.ignoredIssues, errorMessage),
+        openRisks: parseInteger(value.openRisks, errorMessage),
+        mitigatingRisks: parseInteger(value.mitigatingRisks, errorMessage),
+        acceptedRisks: parseInteger(value.acceptedRisks, errorMessage),
+        closedRisks: parseInteger(value.closedRisks, errorMessage),
+        uncoveredTestPoints: parseInteger(value.uncoveredTestPoints, errorMessage),
+        partiallyCoveredTestPoints: parseInteger(value.partiallyCoveredTestPoints, errorMessage),
+        coverageRate: parseNumber(value.coverageRate, errorMessage),
+        nextActions: parseStringArray(value.nextActions, errorMessage),
     };
 };
 
@@ -342,6 +377,7 @@ const parseCollection = (payload: unknown): TestAssetCollection => {
         sourceStageId: parseString(payload.sourceStageId, INVALID_COLLECTION_ERROR),
         sourceArtifactVersion: parseInteger(payload.sourceArtifactVersion, INVALID_COLLECTION_ERROR),
         coverageSummary: parseCoverageSummary(payload.coverageSummary, INVALID_COLLECTION_ERROR),
+        assetQuality: parseAssetQuality(payload.assetQuality, INVALID_COLLECTION_ERROR),
         testCases: payload.testCases.map(testCase => parseTestCase(testCase, INVALID_COLLECTION_ERROR)),
         testPoints: payload.testPoints.map(testPoint => parseTraceItem(testPoint, INVALID_COLLECTION_ERROR)),
         coverageTrace: payload.coverageTrace.map(trace => parseTraceItem(trace, INVALID_COLLECTION_ERROR)),

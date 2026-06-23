@@ -77,6 +77,24 @@ const TEST_ASSET_COLLECTION: TestAssetCollection = {
             },
         ],
     },
+    assetQuality: {
+        status: 'needs_action',
+        pendingIssues: 1,
+        confirmedIssues: 0,
+        ignoredIssues: 0,
+        openRisks: 1,
+        mitigatingRisks: 0,
+        acceptedRisks: 0,
+        closedRisks: 0,
+        uncoveredTestPoints: 1,
+        partiallyCoveredTestPoints: 0,
+        coverageRate: 50,
+        nextActions: [
+            '先确认或忽略 1 个待处理资产问题。',
+            '补齐 1 个未覆盖测试点的用例映射。',
+            '为 1 个待处置风险分配责任人并进入缓解、接受或关闭。',
+        ],
+    },
     testCases: [
         {
             id: 'TC-001',
@@ -439,6 +457,12 @@ describe('TestAssetsPage', () => {
 
         expect(await screen.findByText('Lisa 测试资产中心')).toBeTruthy();
         expect(fetchTestAssetCollection).toHaveBeenCalledWith(7);
+        expect(screen.getByText('资产质量状态')).toBeTruthy();
+        expect(screen.getByText('需处理')).toBeTruthy();
+        expect(screen.getByText('待处理问题 1')).toBeTruthy();
+        expect(screen.getByText('待处置风险 1')).toBeTruthy();
+        expect(screen.getByText('未覆盖测试点 1')).toBeTruthy();
+        expect(screen.getByText('先确认或忽略 1 个待处理资产问题。')).toBeTruthy();
         expect(screen.getByText('覆盖率 50%')).toBeTruthy();
         expect(screen.getByText('用户登录成功')).toBeTruthy();
         expect(screen.getByText('用户登录失败提示错误')).toBeTruthy();
@@ -745,16 +769,56 @@ describe('TestAssetsPage', () => {
     });
 
     it('triages asset issues in the asset center', async () => {
+        const readyCollection: TestAssetCollection = {
+            ...TEST_ASSET_COLLECTION,
+            assetIssues: TEST_ASSET_COLLECTION.assetIssues.map(issue => ({
+                ...issue,
+                status: 'ignored',
+            })),
+            testPoints: TEST_ASSET_COLLECTION.testPoints.map(testPoint => ({
+                ...testPoint,
+                status: '已覆盖',
+                testCases: testPoint.testCases.length > 0 ? testPoint.testCases : ['TC-002'],
+            })),
+            riskMatrix: TEST_ASSET_COLLECTION.riskMatrix.map(risk => ({
+                ...risk,
+                status: 'closed',
+            })),
+            assetQuality: {
+                status: 'ready',
+                pendingIssues: 0,
+                confirmedIssues: 0,
+                ignoredIssues: 1,
+                openRisks: 0,
+                mitigatingRisks: 0,
+                acceptedRisks: 0,
+                closedRisks: 1,
+                uncoveredTestPoints: 0,
+                partiallyCoveredTestPoints: 0,
+                coverageRate: 100,
+                nextActions: ['测试资产质量已就绪。'],
+            },
+        };
+        vi.mocked(fetchTestAssetCollection)
+            .mockResolvedValueOnce(TEST_ASSET_COLLECTION)
+            .mockResolvedValueOnce(readyCollection);
+        vi.mocked(updateTestAssetIssueStatus).mockResolvedValueOnce({
+            ...TEST_ASSET_COLLECTION.assetIssues[0],
+            status: 'ignored',
+        });
         renderPage();
 
         await screen.findByText('覆盖追溯引用了不存在的测试用例 TC-999');
-        fireEvent.click(screen.getByRole('button', { name: '确认问题' }));
+        fireEvent.click(screen.getByRole('button', { name: '忽略问题' }));
 
         await waitFor(() => {
-            expect(updateTestAssetIssueStatus).toHaveBeenCalledWith(7, 5, 'confirmed');
+            expect(updateTestAssetIssueStatus).toHaveBeenCalledWith(7, 5, 'ignored');
         });
+        expect(fetchTestAssetCollection).toHaveBeenCalledTimes(2);
         const issue = screen.getByTestId('asset-issue-5');
-        expect(within(issue).getByText('已确认')).toBeTruthy();
+        expect(within(issue).getByText('忽略')).toBeTruthy();
+        expect(await screen.findByText('已就绪')).toBeTruthy();
+        expect(screen.getByText('测试资产质量已就绪。')).toBeTruthy();
     });
 
     it('edits a test point and refreshes derived coverage and risk matrix', async () => {

@@ -347,6 +347,79 @@ def test_update_lisa_test_asset_issue_status_persists_status(app):
     assert reloaded["assetIssues"][0]["status"] == "confirmed"
 
 
+def test_materialized_collection_reports_asset_quality_status(app):
+    inconsistent_markdown = CASES_MARKDOWN.replace(
+        "TC-002 | 部分覆盖",
+        "TC-999 | 未覆盖",
+    )
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CASES")
+        record_artifact_version(run.id, "CASES", inconsistent_markdown)
+
+        collection = materialize_lisa_test_assets(run.id)
+
+    assert collection["assetQuality"] == {
+        "status": "needs_action",
+        "pendingIssues": 2,
+        "confirmedIssues": 0,
+        "ignoredIssues": 0,
+        "openRisks": 2,
+        "mitigatingRisks": 0,
+        "acceptedRisks": 0,
+        "closedRisks": 0,
+        "uncoveredTestPoints": 1,
+        "partiallyCoveredTestPoints": 0,
+        "coverageRate": 50.0,
+        "nextActions": [
+            "先确认或忽略 2 个待处理资产问题。",
+            "补齐 1 个未覆盖测试点的用例映射。",
+            "为 2 个待处置风险分配责任人并进入缓解、接受或关闭。",
+        ],
+    }
+
+
+def test_asset_quality_status_updates_after_issue_point_and_risk_triage(app):
+    inconsistent_markdown = CASES_MARKDOWN.replace(
+        "TC-002 | 部分覆盖",
+        "TC-999 | 未覆盖",
+    )
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CASES")
+        record_artifact_version(run.id, "CASES", inconsistent_markdown)
+        collection = materialize_lisa_test_assets(run.id)
+
+        for issue in collection["assetIssues"]:
+            update_lisa_test_asset_issue_status(
+                collection["id"],
+                issue["id"],
+                {"status": "ignored"},
+            )
+        update_lisa_test_point_asset(
+            collection["id"],
+            "登录错误处理",
+            {
+                "status": "已覆盖",
+                "testCases": ["TC-002"],
+                "risk": "R-LOGIN-002",
+            },
+        )
+        reloaded = get_lisa_test_asset_collection(collection["id"])
+        for risk in reloaded["riskMatrix"]:
+            update_lisa_test_asset_risk_by_id(
+                collection["id"],
+                risk["id"],
+                {"status": "closed"},
+            )
+
+        ready = get_lisa_test_asset_collection(collection["id"])
+
+    assert ready["assetQuality"]["status"] == "ready"
+    assert ready["assetQuality"]["pendingIssues"] == 0
+    assert ready["assetQuality"]["uncoveredTestPoints"] == 0
+    assert ready["assetQuality"]["openRisks"] == 0
+    assert ready["assetQuality"]["nextActions"] == ["测试资产质量已就绪。"]
+
+
 def test_update_lisa_test_asset_issue_status_rejects_invalid_status(app):
     inconsistent_markdown = CASES_MARKDOWN.replace(
         "TC-002 | 部分覆盖",

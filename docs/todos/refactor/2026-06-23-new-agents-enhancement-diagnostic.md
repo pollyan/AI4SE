@@ -67,7 +67,7 @@
 | E01 | Workflow 入口 preview | 改造现有功能 | 体验 | S | P0 | 已消化：每个在线 workflow 展示适用/不适用、输入要求、预期产物和样例输入 |
 | E02 | 阶段缺失信息清单 | 已消化 | 专业内容 | S | P0 | 2026-06-23 已主线化：当前 artifact 中的待澄清/缺失/开放问题可由共享前端纯函数抽取为缺失信息清单，`ArtifactPane` 展示完整列表、阻断统计、责任方、状态和下一步，`ChatPane` 展示当前阶段轻量提醒；不新增 backend endpoint、runtime/SSE/persistence 或 agent 专属 renderer；验证覆盖 `artifactQuality.test.ts`、`ArtifactPane.test.tsx` 与 `ChatPane.test.tsx` |
 | E03 | Artifact 质量诊断面板 | 已消化 | 可信质量 | M | P0 | 2026-06-23 已主线化：`ArtifactPane` 展示当前 stage headings、visual、stage gate、专业字段和 runtime visual diagnostics 的通过/失败/警告；诊断由共享前端纯函数 `artifactQuality.ts` 派生，不新增 backend endpoint、runtime/SSE/persistence 或 agent 专属 renderer；验证覆盖 `artifactQuality.test.ts` 与 `ArtifactPane.test.tsx` |
-| E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 测试点、风险、用例 issue 可修复、确认、追踪并影响资产质量状态 |
+| E04 | Lisa 测试资产质量闭环 | 已消化 | 专业内容 | M | P0 | 2026-06-23 已主线化：Lisa 测试资产集合 payload 增加 `assetQuality`，聚合待处理 issue、未覆盖/部分覆盖测试点、风险生命周期、覆盖率和下一步动作；`TestAssetsPage` 展示资产质量状态，并在 issue、测试点、风险处理后刷新集合质量；不新增 intent-tester 自动执行、新 runtime、SSE/API transport 或 agent 专属 renderer；验证覆盖 `test_test_assets.py`、`testAssetService.test.ts` 与 `TestAssetsPage.test.tsx` |
 | E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
 | E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 支持继续、复制为新 run、按 workflow/质量筛选、预览当前 artifact |
 | E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入 |
@@ -108,7 +108,7 @@
 
 目标: 1-2 周内明显提升专业感和产出可信度。
 
-包含: E04。E01 已在 2026-06-23 workflow 入口 preview milestone 中消化，E02 已在 2026-06-23 阶段缺失信息清单 milestone 中消化，E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化。
+包含: 首批 P0 已完成。E01 已在 2026-06-23 workflow 入口 preview milestone 中消化，E02 已在 2026-06-23 阶段缺失信息清单 milestone 中消化，E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化，E04 已在 2026-06-23 Lisa 测试资产质量闭环 milestone 中消化。
 
 暂不做:
 
@@ -182,12 +182,14 @@
 - 完成定义: 用户进入工作区前能判断 workflow 是否适合当前目标。
 - 不纳入: 自动 workflow 推荐排序。
 
-### 4. Lisa 测试资产质量闭环
+### 4. Lisa 测试资产质量闭环（已消化）
 
+- 完成日期: 2026-06-23。
 - 涉及模块: `test_assets.py`、`routes_test_assets.py`、`testAssetService.ts`、`Header.tsx`。
-- 需要同步: TEST_DESIGN/CASES artifact contract、资产 issue schema、前端资产 modal。
-- 完成定义: 测试点、风险、用例 issue 可处理并持久化质量状态。
-- 不纳入: 新增 intent-tester 联动或自动执行。
+- 实际涉及模块: `tools/new-agents/backend/test_assets.py`、`tools/new-agents/frontend/src/core/types.ts`、`tools/new-agents/frontend/src/services/testAssetService.ts`、`tools/new-agents/frontend/src/pages/TestAssetsPage.tsx`、相关 backend/frontend tests。
+- 完成定义: 测试资产集合返回 `assetQuality`，用户能在资产中心看到需处理/需关注/已就绪状态、关键阻断统计和下一步动作；确认/忽略 issue、修正测试点覆盖、处置风险后质量状态随集合刷新变化。
+- 不纳入: 新增 intent-tester 联动或自动执行、LLM judge 评分、新 runtime/SSE/API transport、agent-specific store 或 renderer。
+- 验证记录: `python3 -m pytest tools/new-agents/backend/tests/test_test_assets.py -q`；`cd tools/new-agents/frontend && npm run test -- --run src/services/__tests__/testAssetService.test.ts src/pages/__tests__/TestAssetsPage.test.tsx`；`cd tools/new-agents/frontend && npm run lint`；`git diff --check`。
 
 ### 5. 历史会话复用增强
 

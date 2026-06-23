@@ -109,6 +109,23 @@ const COLLECTION_PAYLOAD = {
             },
         },
     ],
+    assetQuality: {
+        status: 'needs_action',
+        pendingIssues: 1,
+        confirmedIssues: 0,
+        ignoredIssues: 0,
+        openRisks: 1,
+        mitigatingRisks: 0,
+        acceptedRisks: 0,
+        closedRisks: 0,
+        uncoveredTestPoints: 0,
+        partiallyCoveredTestPoints: 0,
+        coverageRate: 100,
+        nextActions: [
+            '先确认或忽略 1 个待处理资产问题。',
+            '为 1 个待处置风险分配责任人并进入缓解、接受或关闭。',
+        ],
+    },
 };
 
 const RISK_PAYLOAD = {
@@ -145,6 +162,8 @@ describe('testAssetService', () => {
         expect(collection.id).toBe(7);
         expect(collection.testCases[0].id).toBe('TC-001');
         expect(collection.coverageSummary.coverageRate).toBe(100);
+        expect(collection.assetQuality.status).toBe('needs_action');
+        expect(collection.assetQuality.nextActions[0]).toContain('待处理资产问题');
         expect(collection.intentTesterDrafts[0].sourceCaseId).toBe('TC-001');
         expect(collection.intentTesterMappings[0].intentTesterCaseId).toBe(42);
         expect(collection.intentTesterMappings[0].latestExecution?.executionId).toBe('exec-456');
@@ -517,6 +536,23 @@ describe('testAssetService', () => {
         ));
 
         await expect(materializeRunTestAssets('run-123')).rejects.toThrow(
+            'Invalid test asset collection response'
+        );
+    });
+
+    it('fails explicitly when a collection payload has malformed asset quality', async () => {
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({
+                ...COLLECTION_PAYLOAD,
+                assetQuality: {
+                    ...COLLECTION_PAYLOAD.assetQuality,
+                    status: 'blocked',
+                },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ));
+
+        await expect(fetchTestAssetCollection(7)).rejects.toThrow(
             'Invalid test asset collection response'
         );
     });

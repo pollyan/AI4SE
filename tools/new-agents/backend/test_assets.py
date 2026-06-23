@@ -778,10 +778,67 @@ def _serialize_collection(collection: AgentTestAssetCollection) -> dict:
         "testPoints": test_points,
         "coverageTrace": test_points,
         "coverageSummary": build_coverage_summary(test_cases, test_points),
+        "assetQuality": _build_asset_quality(test_cases, test_points, risk_matrix, issues),
         "assetIssues": issues,
         "riskMatrix": risk_matrix,
         "intentTesterDrafts": build_intent_tester_drafts(test_cases),
         "intentTesterMappings": intent_tester_mappings,
+    }
+
+
+def _build_asset_quality(
+    test_cases: list[dict],
+    test_points: list[dict],
+    risk_matrix: list[dict],
+    issues: list[dict],
+) -> dict:
+    coverage_summary = build_coverage_summary(test_cases, test_points)
+    pending_issues = sum(1 for issue in issues if issue["status"] == "pending")
+    confirmed_issues = sum(1 for issue in issues if issue["status"] == "confirmed")
+    ignored_issues = sum(1 for issue in issues if issue["status"] == "ignored")
+    open_risks = sum(1 for risk in risk_matrix if risk["status"] == "open")
+    mitigating_risks = sum(1 for risk in risk_matrix if risk["status"] == "mitigating")
+    accepted_risks = sum(1 for risk in risk_matrix if risk["status"] == "accepted")
+    closed_risks = sum(1 for risk in risk_matrix if risk["status"] == "closed")
+    uncovered_test_points = coverage_summary["uncoveredTestPoints"]
+    partially_covered_test_points = coverage_summary["partiallyCoveredTestPoints"]
+
+    if pending_issues or uncovered_test_points or open_risks:
+        status = "needs_action"
+    elif confirmed_issues or partially_covered_test_points or mitigating_risks:
+        status = "monitoring"
+    else:
+        status = "ready"
+
+    next_actions = []
+    if pending_issues:
+        next_actions.append(f"先确认或忽略 {pending_issues} 个待处理资产问题。")
+    if uncovered_test_points:
+        next_actions.append(f"补齐 {uncovered_test_points} 个未覆盖测试点的用例映射。")
+    if open_risks:
+        next_actions.append(
+            f"为 {open_risks} 个待处置风险分配责任人并进入缓解、接受或关闭。"
+        )
+    if partially_covered_test_points:
+        next_actions.append(f"复核 {partially_covered_test_points} 个部分覆盖测试点。")
+    if mitigating_risks:
+        next_actions.append(f"跟踪 {mitigating_risks} 个缓解中的风险。")
+    if not next_actions:
+        next_actions.append("测试资产质量已就绪。")
+
+    return {
+        "status": status,
+        "pendingIssues": pending_issues,
+        "confirmedIssues": confirmed_issues,
+        "ignoredIssues": ignored_issues,
+        "openRisks": open_risks,
+        "mitigatingRisks": mitigating_risks,
+        "acceptedRisks": accepted_risks,
+        "closedRisks": closed_risks,
+        "uncoveredTestPoints": uncovered_test_points,
+        "partiallyCoveredTestPoints": partially_covered_test_points,
+        "coverageRate": coverage_summary["coverageRate"],
+        "nextActions": next_actions[:3],
     }
 
 
