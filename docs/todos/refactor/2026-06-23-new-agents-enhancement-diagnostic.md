@@ -55,7 +55,7 @@
 | 专业可信度 | prompt/template 已有 FMEA、5 Why、ICE、roadmap 等方法 | 缺统一质量门禁、评分、证据强度、风险接受、复审闭环 | P0 |
 | Artifact 闭环 | 有版本、diff、批注、章节锁、导出、冲突合并 | 缺统一 artifact quality / contract / stage gate 诊断面板 | P0 |
 | Workflow 入口 | 有 listing、onboarding、starter prompts；2026-06-23 已补在线 workflow 入口 preview | 仍缺自动推荐排序和更深的选择决策引导 | P1 |
-| Run 复用 | 有历史列表、搜索、runId snapshot 恢复 | 缺收藏、复制为新 run、质量状态筛选、跨 run 对比 | P1 |
+| Run 复用 | 有历史列表、搜索、runId snapshot 恢复、复用状态筛选、当前 artifact 预览、继续原 run、复制为新 run | 收藏和跨 run 对比仍未做；不影响当前历史复用闭环 | P1 已部分完成 |
 | Workflow handoff | 有配置化 handoff 基础 | handoff 上下文摘要、版本解释、未确认项携带不足 | P1 |
 | 可观测性 | 有 success rate、provider、stage、recent turns | 缺面向用户的质量趋势、contract retry drilldown、失败原因行动建议 | P1 |
 | 平台扩展 | manifest 已承载核心配置 | 缺 schema 校验、dry-run、scaffold、prompt/template 版本管理 | P2 |
@@ -69,13 +69,17 @@
 | E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | P0 | 展示 headings、visual、stage gate、专业字段通过/失败/警告 |
 | E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 测试点、风险、用例 issue 可修复、确认、追踪并影响资产质量状态 |
 | E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
-| E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 支持继续、复制为新 run、按 workflow/质量筛选、预览当前 artifact |
+| E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 已消化：支持继续、复制为新 run、按 workflow/复用状态筛选、预览当前 artifact |
 | E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入 |
 | E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 | 每个 stage 有质量分、证据明细和待处理项 |
 | E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 显示 workflow/stage/provider 趋势、contract retry 原因和行动建议 |
 | E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | FMEA、JTBD、RICE、Kano、CAPA 等可由配置注入 prompt/template |
 | E11 | Prompt/template 版本管理 | 新增功能 | 平台扩展 | L | P2 | 每个 stage 有 prompt/template version 和回归样例 |
 | E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 | 新 workflow 缺 manifest/prompt/contract/test 任一面时 dry-run 失败 |
+
+## Goal Mode 消化记录
+
+- 2026-06-24: 已完成 Run 历史复用中心厚切片，消化 E06。后端 run list 返回并过滤 `reuseStatus=ready|needs_artifact|failed`，新增共享 `POST /api/agent/runs/<run_id>/clone` 复制源 run 的 messages、当前 artifacts 和 context summaries 为独立 active run；前端 service 严格解析复用状态并提供 clone API；Header 历史会话升级为可筛选、可预览当前 artifact、可继续原 run、可复制为新 run 的复用中心，并展示预览/复制失败反馈。该切片复用现有 run persistence、snapshot restore、共享 Header UI 和 workflow registry，不新增 agent 专属 runtime、API path、store 或 renderer。
 
 ## Lisa 专业化方向
 
@@ -124,7 +128,7 @@
 
 目标: 让用户从开始、生成、审阅、修订、恢复、复用形成闭环。
 
-包含: E03、E05、E06、E07、E08。
+包含: E03、E05、E06、E07、E08；其中 E06 已消化，E03/E05/E07/E08 仍可作为后续厚切片候选。
 
 暂不做:
 
@@ -204,6 +208,6 @@
 
 - Artifact 质量诊断应完全前端解析，还是后端提供只读 diagnostic endpoint。
 - 质量评分是否先做规则型 gate，再引入 LLM judge evidence。
-- 历史 run “复制为新 run”是否复制全部 messages/artifacts，还是只复制 artifact summaries 和用户可编辑上下文。
+- 历史 run “复制为新 run”已在 E06 中裁决为复制 messages、当前 artifact versions 和 context summaries；协作批注、章节锁、审计事件、turn metrics 和测试资产不自动复制。
 - Handoff prompt 是否继续使用单模板，还是在 manifest 中声明 handoff 输入字段和摘要策略。
 - 专业方法库配置是否纳入 manifest，还是先建独立 registry 后再合并。

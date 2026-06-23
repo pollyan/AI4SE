@@ -977,6 +977,7 @@ def test_agent_runs_list_endpoint_returns_recent_runs_with_summaries(
         "agentId": "alex",
         "currentStageId": "BLUEPRINT",
         "status": "active",
+        "reuseStatus": "ready",
         "model": "gpt-new",
         "createdAt": response.json["runs"][0]["createdAt"],
         "updatedAt": response.json["runs"][0]["updatedAt"],
@@ -1071,6 +1072,34 @@ def test_agent_runs_list_endpoint_searches_messages_and_artifact_summaries(
     assert [run["id"] for run in response.json["runs"]] == [artifact_run_id]
 
 
+def test_agent_runs_list_endpoint_filters_by_reuse_status(
+    app,
+    client,
+    default_config,
+):
+    with app.app_context():
+        ready_run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        record_artifact_version(ready_run.id, "CLARIFY", "# 需求分析文档\n\n可复用")
+        create_agent_run("TEST_DESIGN", "lisa", "STRATEGY")
+        ready_run_id = ready_run.id
+
+    response = client.get("/api/agent/runs?workflowId=TEST_DESIGN&reuseStatus=ready")
+
+    assert response.status_code == 200
+    assert [run["id"] for run in response.json["runs"]] == [ready_run_id]
+    assert response.json["runs"][0]["reuseStatus"] == "ready"
+
+
+def test_agent_runs_list_endpoint_rejects_unknown_reuse_status(
+    client,
+    default_config,
+):
+    response = client.get("/api/agent/runs?reuseStatus=stale")
+
+    assert response.status_code == 400
+    assert response.json == {"error": "未知 reuseStatus: stale"}
+
+
 def test_agent_runs_list_endpoint_rejects_unknown_workflow_id(
     client,
     default_config,
@@ -1079,6 +1108,40 @@ def test_agent_runs_list_endpoint_rejects_unknown_workflow_id(
 
     assert response.status_code == 400
     assert response.json == {"error": "未知 workflowId: UNKNOWN"}
+
+
+def test_agent_run_clone_endpoint_creates_independent_reusable_run(
+    app,
+    client,
+    default_config,
+):
+    with app.app_context():
+        source = create_agent_run("TEST_DESIGN", "lisa", "STRATEGY", model="gpt-test")
+        append_run_message(source.id, "user", "请评估登录需求")
+        append_run_message(source.id, "assistant", "已形成测试策略")
+        record_artifact_version(source.id, "STRATEGY", "# 测试策略蓝图\n\n覆盖登录风险")
+        source_run_id = source.id
+
+    response = client.post(f"/api/agent/runs/{source_run_id}/clone")
+
+    assert response.status_code == 200
+    assert response.json["run"]["id"] != source_run_id
+    assert response.json["run"]["workflowId"] == "TEST_DESIGN"
+    assert response.json["run"]["agentId"] == "lisa"
+    assert response.json["run"]["currentStageId"] == "STRATEGY"
+    assert response.json["run"]["status"] == "active"
+    assert response.json["run"]["model"] == "gpt-test"
+    assert [message["content"] for message in response.json["messages"]] == [
+        "请评估登录需求",
+        "已形成测试策略",
+    ]
+    assert response.json["artifacts"] == [
+        {
+            "stageId": "STRATEGY",
+            "content": "# 测试策略蓝图\n\n覆盖登录风险",
+            "versionNumber": 1,
+        }
+    ]
 
 
 def test_agent_run_test_assets_endpoint_exports_cases_artifact(
