@@ -19,7 +19,7 @@
 
 ## 当前入口
 
-- `2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 Flash 兼容的后端结构化产物数据改造记录；本地确定性 readiness 已覆盖当前全部在线 workflow stage，真实 DeepSeek smoke 仍因凭证、网络和额度作为外部可选验证保留。
+- `2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 Flash 兼容的后端结构化产物数据改造记录；本地确定性 readiness 已覆盖当前全部在线 workflow stage，并已补齐格式化输出失败分类与 `artifact_data` retry 诊断上下文；真实 DeepSeek smoke 仍因凭证、网络和额度作为外部可选验证保留。
 - `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选；已记录 2026-06-23 Alex `PRD_REVIEW` 质量评审与补全 workflow、`STORY_BREAKDOWN` 用户故事拆解 workflow、Artifact 审阅诊断中心、Lisa 测试资产质量闭环、Workflow handoff 上下文审阅和 Run 历史复用中心消化结果，下一批高价值候选为工作流质量评分、运行统计产品化和章节级重生成。
 
 2026-06-23 已复核：除上述活动候选外，其他重构类事项均已归档或转为 `docs/plans/tech-debt.md` 中的历史完成记录；不要从 `archive/` 中的过程性“待办/剩余”直接恢复实施。

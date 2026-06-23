@@ -7,6 +7,7 @@ from agent_runtime import (
     AgentRuntimeModelError,
     AgentRuntimeSchemaError,
     AgentTurnValidationDeps,
+    FormattedOutputDiagnosticError,
     PydanticAgentRuntime,
     RawStreamingConfig,
     TEXT_STRUCTURED_OUTPUT_INSTRUCTION,
@@ -2567,6 +2568,213 @@ def test_runtime_raw_json_stream_turn_retries_schema_shape_failure_with_feedback
     assert "artifact_update" in calls[1]["messages"][1]["content"]
     assert outputs[-1].chat == "已更新右侧需求分析文档。"
     assert outputs[-1].artifact_update.markdown == VALID_CLARIFY_ARTIFACT
+
+
+def test_raw_json_streaming_final_failure_classifies_json_decode_error(monkeypatch):
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield "not-json"
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是测试专家。",
+        ),
+    )
+
+    with pytest.raises(FormattedOutputDiagnosticError) as exc:
+        list(
+            runtime.stream_turn(
+                "用户需求: 登录功能",
+                workflow_id="TEST_DESIGN",
+                current_stage_id="CLARIFY",
+            )
+        )
+
+    assert len(calls) == 2
+    assert exc.value.kind == "json_decode"
+    assert exc.value.workflow_id == "TEST_DESIGN"
+    assert exc.value.stage_id == "CLARIFY"
+    assert "json_decode" in calls[1]["messages"][1]["content"]
+
+
+def test_raw_json_streaming_final_failure_classifies_artifact_data_schema_error(
+    monkeypatch,
+):
+    invalid_json = json.dumps(
+        {
+            "chat": "我已整理登录需求澄清基线。",
+            "artifact_data": {
+                **VALID_CLARIFY_ARTIFACT_DATA,
+                "requirement_facts": [],
+            },
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield invalid_json
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是测试专家。",
+        ),
+    )
+
+    with pytest.raises(FormattedOutputDiagnosticError) as exc:
+        list(
+            runtime.stream_turn(
+                "用户需求: 登录功能",
+                workflow_id="TEST_DESIGN",
+                current_stage_id="CLARIFY",
+            )
+        )
+
+    assert len(calls) == 2
+    assert exc.value.kind == "artifact_data_schema"
+    assert exc.value.path == "requirement_facts"
+    assert "artifact_data_schema" in calls[1]["messages"][1]["content"]
+    assert "requirement_facts" in calls[1]["messages"][1]["content"]
+    assert "不要输出 Markdown 文档" in calls[1]["messages"][1]["content"]
+
+
+def test_raw_json_streaming_final_failure_classifies_missing_artifact_data_renderer(
+    monkeypatch,
+):
+    payload = json.dumps(
+        {
+            "chat": "已生成结构化产物数据。",
+            "artifact_data": {"unsupported": "data"},
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    def fake_stream_chat_completion_content(**kwargs):
+        yield payload
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是测试专家。",
+        ),
+    )
+
+    with pytest.raises(FormattedOutputDiagnosticError) as exc:
+        list(
+            runtime.stream_turn(
+                "用户需求",
+                workflow_id="UNKNOWN_WORKFLOW",
+                current_stage_id="UNKNOWN_STAGE",
+            )
+        )
+
+    assert exc.value.kind == "artifact_data_renderer"
+    assert exc.value.workflow_id == "UNKNOWN_WORKFLOW"
+    assert exc.value.stage_id == "UNKNOWN_STAGE"
+
+
+def test_raw_json_streaming_final_failure_classifies_artifact_contract_error(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "我已整理登录需求澄清基线，请确认右侧文档。",
+            "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield final_json
+
+    def fake_validate_agent_turn(output, *, workflow_id, current_stage_id):
+        raise ContractValidationError("missing required artifact headings: 文档信息")
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    monkeypatch.setattr("agent_runtime.validate_agent_turn", fake_validate_agent_turn)
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是测试专家。",
+        ),
+    )
+
+    with pytest.raises(FormattedOutputDiagnosticError) as exc:
+        list(
+            runtime.stream_turn(
+                "用户需求: 登录功能",
+                workflow_id="TEST_DESIGN",
+                current_stage_id="CLARIFY",
+            )
+        )
+
+    assert len(calls) == 2
+    assert exc.value.kind == "artifact_contract"
+    assert "missing required artifact headings" in exc.value.message
+    assert "artifact_contract" in calls[1]["messages"][1]["content"]
+    assert "不要输出 Markdown 文档" in calls[1]["messages"][1]["content"]
+
+
+def test_artifact_data_retry_prompt_includes_diagnostic_context():
+    diagnostic = FormattedOutputDiagnosticError(
+        kind="artifact_data_schema",
+        workflow_id="TEST_DESIGN",
+        stage_id="CLARIFY",
+        message="requirement_facts must have at least 1 item",
+        path="requirement_facts",
+    )
+
+    prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        diagnostic,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert "artifact_data_schema" in prompt
+    assert "TEST_DESIGN/CLARIFY" in prompt
+    assert "requirement_facts" in prompt
+    assert "不要输出 Markdown 文档" in prompt
 
 
 def test_contract_output_validator_requests_model_retry_for_invalid_artifact():

@@ -49,6 +49,25 @@ class AgentRuntimeModelError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class FormattedOutputDiagnosticError(RuntimeError):
+    kind: str
+    workflow_id: str | None
+    stage_id: str | None
+    message: str
+    path: str | None = None
+
+    def __str__(self) -> str:
+        context = "/".join(part for part in (self.workflow_id, self.stage_id) if part)
+        parts = [self.kind]
+        if context:
+            parts.append(context)
+        if self.path:
+            parts.append(self.path)
+        parts.append(self.message)
+        return ": ".join(parts)
+
+
+@dataclass(frozen=True)
 class AgentTurnValidationDeps:
     workflow_id: str
     current_stage_id: str
@@ -128,6 +147,33 @@ ARTIFACT_DATA_READY_STAGES: frozenset[tuple[str, str]] = frozenset(
 
 def get_artifact_data_ready_stages() -> set[tuple[str, str]]:
     return set(ARTIFACT_DATA_READY_STAGES)
+
+
+def _validation_error_path(error: ValidationError) -> str | None:
+    errors = error.errors()
+    if not errors:
+        return None
+    loc = errors[0].get("loc")
+    if not loc:
+        return None
+    return ".".join(str(part) for part in loc)
+
+
+def _formatted_output_diagnostic(
+    kind: str,
+    error: Exception,
+    *,
+    workflow_id: str | None,
+    current_stage_id: str | None,
+    path: str | None = None,
+) -> FormattedOutputDiagnosticError:
+    return FormattedOutputDiagnosticError(
+        kind=kind,
+        workflow_id=workflow_id,
+        stage_id=current_stage_id,
+        message=str(error),
+        path=path,
+    )
 
 
 ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
@@ -876,6 +922,16 @@ def build_raw_json_retry_prompt(
     workflow_id: str | None = None,
     current_stage_id: str | None = None,
 ) -> str:
+    diagnostic_context = ""
+    if isinstance(error, FormattedOutputDiagnosticError):
+        diagnostic_context = (
+            f"诊断类别: {error.kind}\n"
+            f"诊断阶段: {error.workflow_id or 'UNKNOWN'}/{error.stage_id or 'UNKNOWN'}\n"
+        )
+        if error.path:
+            diagnostic_context += f"错误路径: {error.path}\n"
+        diagnostic_context += f"错误摘要: {error.message}\n\n"
+
     if (
         workflow_id is not None
         and current_stage_id is not None
@@ -884,6 +940,7 @@ def build_raw_json_retry_prompt(
         return (
             f"{prompt}\n\n"
             "【上一轮结构化输出未通过校验】\n"
+            f"{diagnostic_context}"
             f"{error}\n\n"
             "请立刻重新输出一个完整合法的 JSON 对象，不要输出 JSON 之外的解释。"
             "必须修正上述 artifact_data 数据问题；所有必填字段必须存在，"
@@ -893,6 +950,7 @@ def build_raw_json_retry_prompt(
     return (
         f"{prompt}\n\n"
         "【上一轮结构化输出未通过校验】\n"
+        f"{diagnostic_context}"
         f"{error}\n\n"
         "请立刻重新输出一个完整合法的 JSON 对象，不要输出 JSON 之外的解释。"
         "必须修正上述问题；如果当前阶段要求右侧产出物，"
@@ -1117,7 +1175,7 @@ class PydanticAgentRuntime:
                     workflow_id=workflow_id,
                     current_stage_id=current_stage_id,
                 )
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as exc:
                 if emitted_any_delta and (latest_chat or latest_markdown):
                     yield AgentTurnOutput.model_validate(
                         {
@@ -1133,13 +1191,50 @@ class PydanticAgentRuntime:
                         }
                     )
                     return
-                raise
-            except ValidationError as exc:
+                diagnostic = _formatted_output_diagnostic(
+                    "json_decode",
+                    exc,
+                    workflow_id=workflow_id,
+                    current_stage_id=current_stage_id,
+                )
                 if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:
-                    raise
+                    raise diagnostic from exc
                 attempt_prompt = build_raw_json_retry_prompt(
                     prompt,
+                    diagnostic,
+                    workflow_id=workflow_id,
+                    current_stage_id=current_stage_id,
+                )
+                continue
+            except ValidationError as exc:
+                diagnostic = _formatted_output_diagnostic(
+                    "artifact_data_schema",
                     exc,
+                    workflow_id=workflow_id,
+                    current_stage_id=current_stage_id,
+                    path=_validation_error_path(exc),
+                )
+                if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:
+                    raise diagnostic from exc
+                attempt_prompt = build_raw_json_retry_prompt(
+                    prompt,
+                    diagnostic,
+                    workflow_id=workflow_id,
+                    current_stage_id=current_stage_id,
+                )
+                continue
+            except ValueError as exc:
+                diagnostic = _formatted_output_diagnostic(
+                    "artifact_data_renderer",
+                    exc,
+                    workflow_id=workflow_id,
+                    current_stage_id=current_stage_id,
+                )
+                if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:
+                    raise diagnostic from exc
+                attempt_prompt = build_raw_json_retry_prompt(
+                    prompt,
+                    diagnostic,
                     workflow_id=workflow_id,
                     current_stage_id=current_stage_id,
                 )
@@ -1152,11 +1247,22 @@ class PydanticAgentRuntime:
                     current_stage_id=current_stage_id,
                 )
             except (ContractValidationError, ValidationError) as exc:
+                diagnostic = _formatted_output_diagnostic(
+                    "artifact_contract",
+                    exc,
+                    workflow_id=workflow_id,
+                    current_stage_id=current_stage_id,
+                    path=(
+                        _validation_error_path(exc)
+                        if isinstance(exc, ValidationError)
+                        else None
+                    ),
+                )
                 if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:
-                    raise
+                    raise diagnostic from exc
                 attempt_prompt = build_raw_json_retry_prompt(
                     prompt,
-                    exc,
+                    diagnostic,
                     workflow_id=workflow_id,
                     current_stage_id=current_stage_id,
                 )
