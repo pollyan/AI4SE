@@ -31,6 +31,27 @@ const COLLECTION_PAYLOAD = {
         coverageRate: 100,
         byPriority: [],
     },
+    qualitySummary: {
+        status: 'ready',
+        label: '可交付',
+        pendingIssueCount: 0,
+        confirmedIssueCount: 0,
+        ignoredIssueCount: 0,
+        uncoveredTestPointCount: 0,
+        partialTestPointCount: 0,
+        openRiskCount: 0,
+        mitigatingRiskCount: 0,
+        acceptedRiskCount: 1,
+        closedRiskCount: 0,
+        gates: [
+            {
+                id: 'asset-issues',
+                status: 'pass',
+                title: '资产问题',
+                detail: '0 个待处理，0 个已确认，0 个已忽略',
+            },
+        ],
+    },
     testCases: [
         {
             id: 'TC-001',
@@ -145,6 +166,8 @@ describe('testAssetService', () => {
         expect(collection.id).toBe(7);
         expect(collection.testCases[0].id).toBe('TC-001');
         expect(collection.coverageSummary.coverageRate).toBe(100);
+        expect(collection.qualitySummary.status).toBe('ready');
+        expect(collection.qualitySummary.gates[0].id).toBe('asset-issues');
         expect(collection.intentTesterDrafts[0].sourceCaseId).toBe('TC-001');
         expect(collection.intentTesterMappings[0].intentTesterCaseId).toBe(42);
         expect(collection.intentTesterMappings[0].latestExecution?.executionId).toBe('exec-456');
@@ -517,6 +540,35 @@ describe('testAssetService', () => {
         ));
 
         await expect(materializeRunTestAssets('run-123')).rejects.toThrow(
+            'Invalid test asset collection response'
+        );
+    });
+
+    it('fails explicitly when a collection payload is missing quality summary', async () => {
+        const { qualitySummary: _qualitySummary, ...payload } = COLLECTION_PAYLOAD;
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify(payload),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ));
+
+        await expect(fetchTestAssetCollection(7)).rejects.toThrow(
+            'Invalid test asset collection response'
+        );
+    });
+
+    it('fails explicitly when quality summary gates are malformed', async () => {
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({
+                ...COLLECTION_PAYLOAD,
+                qualitySummary: {
+                    ...COLLECTION_PAYLOAD.qualitySummary,
+                    gates: [{ id: 'asset-issues', status: 'unknown' }],
+                },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ));
+
+        await expect(fetchTestAssetCollection(7)).rejects.toThrow(
             'Invalid test asset collection response'
         );
     });

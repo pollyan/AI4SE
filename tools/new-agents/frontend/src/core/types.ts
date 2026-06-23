@@ -184,6 +184,32 @@ export type TestAssetCoverageSummary = {
     }>;
 };
 
+export type TestAssetQualityStatus = 'blocked' | 'attention' | 'ready';
+
+export type TestAssetQualityGateStatus = 'fail' | 'warn' | 'pass';
+
+export type TestAssetQualityGate = {
+    id: string;
+    status: TestAssetQualityGateStatus;
+    title: string;
+    detail: string;
+};
+
+export type TestAssetQualitySummary = {
+    status: TestAssetQualityStatus;
+    label: string;
+    pendingIssueCount: number;
+    confirmedIssueCount: number;
+    ignoredIssueCount: number;
+    uncoveredTestPointCount: number;
+    partialTestPointCount: number;
+    openRiskCount: number;
+    mitigatingRiskCount: number;
+    acceptedRiskCount: number;
+    closedRiskCount: number;
+    gates: TestAssetQualityGate[];
+};
+
 export type TestAssetCase = {
     id: string;
     title: string;
@@ -317,6 +343,7 @@ export type TestAssetCollection = {
     sourceStageId: string;
     sourceArtifactVersion: number;
     coverageSummary: TestAssetCoverageSummary;
+    qualitySummary: TestAssetQualitySummary;
     testCases: TestAssetCase[];
     testPoints: TestAssetPoint[];
     coverageTrace: TestAssetPoint[];

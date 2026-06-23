@@ -20,7 +20,7 @@
 ## 当前入口
 
 - `2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 Flash 兼容的后端结构化产物数据改造活动候选。
-- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选；本分支已记录 Artifact 审阅诊断中心消化结果，后续高优先级候选仍包括 Lisa 测试资产质量闭环、Alex 用户故事拆解 workflow 和 Alex PRD 质量评审 workflow。
+- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选；本分支已记录 Artifact 审阅诊断中心和 Lisa 测试资产质量闭环消化结果，后续高价值候选包括 Workflow handoff 上下文强化、Alex 用户故事拆解 workflow 与 Alex PRD 质量评审 workflow 的主线收敛。
 
 2026-06-23 已复核：除上述活动候选外，其他重构类事项均已归档或转为 `docs/plans/tech-debt.md` 中的历史完成记录；不要从 `archive/` 中的过程性“待办/剩余”直接恢复实施。
 
