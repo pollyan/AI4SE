@@ -6,6 +6,7 @@ import rehypeRaw from 'rehype-raw';
 import { useStore, ArtifactVersion, WORKFLOWS } from '../store';
 import type { AgentRunSnapshotArtifact, ArtifactVisualDiagnostic, ArtifactVisualDiagnosticFocusRequest } from '../core/types';
 import { buildLineDiff } from '../core/artifactDiff';
+import { buildArtifactQualityDiagnostics } from '../core/artifactDiagnostics';
 import {
   buildAutoMergedInsertionResult,
   buildConflictMergeBlockLabel,
@@ -100,6 +101,17 @@ export const ArtifactPane: React.FC = () => {
   const currentStageOpenComments = useMemo(
     () => currentStageComments.filter(comment => comment.status !== 'resolved'),
     [currentStageComments]
+  );
+  const artifactQualityDiagnostics = useMemo(
+    () => currentStageId
+      ? buildArtifactQualityDiagnostics({
+        workflowId: workflow,
+        stageId: currentStageId,
+        artifactContent,
+        visualDiagnostics: artifactVisualDiagnostics,
+      })
+      : null,
+    [artifactContent, artifactVisualDiagnostics, currentStageId, workflow]
   );
   const recentStageAuditEvents = useMemo(
     () => [...currentStageAuditEvents]
@@ -4364,6 +4376,136 @@ export const ArtifactPane: React.FC = () => {
             </button>
           </div>
           <div className="max-h-[70vh] space-y-4 overflow-auto p-4">
+            {artifactQualityDiagnostics && (
+              <section className="space-y-3 rounded-lg border border-[#1e293b] bg-[#020617] p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wide text-slate-300">审阅诊断</h4>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      基于当前阶段契约、可视化渲染和正文待补信息。
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${
+                    artifactQualityDiagnostics.status === 'fail'
+                      ? 'bg-red-400/10 text-red-200 ring-1 ring-red-300/20'
+                      : artifactQualityDiagnostics.status === 'warn'
+                        ? 'bg-amber-400/10 text-amber-200 ring-1 ring-amber-300/20'
+                        : artifactQualityDiagnostics.status === 'empty'
+                          ? 'bg-slate-400/10 text-slate-300 ring-1 ring-slate-300/20'
+                          : 'bg-emerald-400/10 text-emerald-200 ring-1 ring-emerald-300/20'
+                  }`}>
+                    {artifactQualityDiagnostics.status === 'fail'
+                      ? '需处理'
+                      : artifactQualityDiagnostics.status === 'warn'
+                        ? '有警告'
+                        : artifactQualityDiagnostics.status === 'empty'
+                          ? '待生成'
+                          : '已通过'}
+                  </span>
+                </div>
+
+                {artifactQualityDiagnostics.status === 'empty' ? (
+                  <p className="rounded-md border border-[#1e293b] bg-black/20 p-3 text-xs text-slate-500">
+                    暂无产物可诊断。
+                  </p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-4 gap-2">
+                      <div className="rounded-md border border-emerald-300/10 bg-emerald-400/5 p-2">
+                        <div className="text-sm font-bold text-emerald-200">{artifactQualityDiagnostics.summary.pass}</div>
+                        <div className="text-[10px] text-emerald-100/70">通过</div>
+                      </div>
+                      <div className="rounded-md border border-red-300/10 bg-red-400/5 p-2">
+                        <div className="text-sm font-bold text-red-200">{artifactQualityDiagnostics.summary.fail}</div>
+                        <div className="text-[10px] text-red-100/70">失败</div>
+                      </div>
+                      <div className="rounded-md border border-amber-300/10 bg-amber-400/5 p-2">
+                        <div className="text-sm font-bold text-amber-200">{artifactQualityDiagnostics.summary.warn}</div>
+                        <div className="text-[10px] text-amber-100/70">警告</div>
+                      </div>
+                      <div className="rounded-md border border-sky-300/10 bg-sky-400/5 p-2">
+                        <div className="text-sm font-bold text-sky-200">{artifactQualityDiagnostics.summary.openQuestions}</div>
+                        <div className="text-[10px] text-sky-100/70">待补信息</div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {artifactQualityDiagnostics.items.map((item) => (
+                        <article
+                          key={item.id}
+                          className={`rounded-md border p-2 ${
+                            item.status === 'fail'
+                              ? 'border-red-300/20 bg-red-400/5'
+                              : item.status === 'warn'
+                                ? 'border-amber-300/20 bg-amber-400/5'
+                                : 'border-emerald-300/10 bg-emerald-400/5'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className={`text-xs font-semibold ${
+                                item.status === 'fail'
+                                  ? 'text-red-100'
+                                  : item.status === 'warn'
+                                    ? 'text-amber-100'
+                                    : 'text-emerald-100'
+                              }`}>
+                                {item.title}
+                              </div>
+                              <p className="mt-1 break-words text-[11px] leading-relaxed text-slate-400">{item.detail}</p>
+                              <p className="mt-1 text-[11px] text-slate-500">{item.nextAction}</p>
+                            </div>
+                            <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                              item.status === 'fail'
+                                ? 'bg-red-300/10 text-red-200'
+                                : item.status === 'warn'
+                                  ? 'bg-amber-300/10 text-amber-200'
+                                  : 'bg-emerald-300/10 text-emerald-200'
+                            }`}>
+                              {item.status === 'fail' ? '失败' : item.status === 'warn' ? '警告' : '通过'}
+                            </span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+
+                    <section className="space-y-2">
+                      <h5 className="text-xs font-bold uppercase tracking-wide text-slate-400">缺失信息清单</h5>
+                      {artifactQualityDiagnostics.openQuestions.length === 0 ? (
+                        <p className="rounded-md border border-[#1e293b] bg-black/20 p-2 text-xs text-slate-500">
+                          当前 artifact 未暴露待澄清、开放或阻断信息。
+                        </p>
+                      ) : (
+                        artifactQualityDiagnostics.openQuestions.map((question) => (
+                          <article
+                            key={question.id}
+                            className={`rounded-md border p-2 ${
+                              question.blocking
+                                ? 'border-red-300/20 bg-red-400/5'
+                                : 'border-sky-300/20 bg-sky-400/5'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="break-words text-xs font-semibold text-slate-100">{question.title}</div>
+                                <p className="mt-1 break-words text-[11px] leading-relaxed text-slate-400">{question.detail}</p>
+                                <p className="mt-1 text-[11px] text-slate-500">{question.nextAction}</p>
+                              </div>
+                              {question.blocking && (
+                                <span className="shrink-0 rounded bg-red-300/10 px-1.5 py-0.5 text-[10px] font-bold text-red-200">
+                                  阻断
+                                </span>
+                              )}
+                            </div>
+                          </article>
+                        ))
+                      )}
+                    </section>
+                  </>
+                )}
+              </section>
+            )}
+
             <div className="grid grid-cols-3 gap-2">
               <div className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
                 <div className="text-lg font-bold text-amber-200">{currentStageOpenComments.length}</div>
