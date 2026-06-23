@@ -11,7 +11,7 @@ import { importIntentTesterDraft } from '../services/intentTesterImportService';
 import { checkDefaultLlmConfig } from '../services/configService';
 import { buildObservabilityAlerts } from '../core/observabilityAlerts';
 import { withTestAssetQualitySummary } from '../core/testAssetQuality';
-import type { AgentRunListItem, AgentRunSnapshot, AgentRunSnapshotContextSummary, ObservabilitySummary, RunReuseStatus, TestAssetCase, TestAssetCollection, TestAssetIssueStatus, WorkflowType } from '../store';
+import type { AgentRunListItem, AgentRunSnapshot, AgentRunSnapshotContextSummary, ObservabilityQualityStatus, ObservabilitySummary, RunReuseStatus, TestAssetCase, TestAssetCollection, TestAssetIssueStatus, WorkflowType } from '../store';
 
 const RUN_LIST_PAGE_SIZE = 20;
 const TEST_ASSET_ISSUE_STATUS_LABELS: Record<TestAssetIssueStatus, string> = {
@@ -28,6 +28,20 @@ const TEST_ASSET_QUALITY_GATE_TONE: Record<TestAssetCollection['qualitySummary']
   fail: 'bg-red-500/10 text-red-100',
   warn: 'bg-amber-500/10 text-amber-100',
   pass: 'bg-emerald-500/10 text-emerald-100',
+};
+const OBSERVABILITY_QUALITY_STATUS_LABELS: Record<ObservabilityQualityStatus, string> = {
+  ready: '可推进',
+  attention: '需关注',
+  blocked: '需处理',
+  notStarted: '待生成',
+  insufficientEvidence: '证据不足',
+};
+const OBSERVABILITY_QUALITY_STATUS_TONE: Record<ObservabilityQualityStatus, string> = {
+  ready: 'bg-emerald-500/10 text-emerald-200',
+  attention: 'bg-amber-500/10 text-amber-200',
+  blocked: 'bg-red-500/10 text-red-200',
+  notStarted: 'bg-slate-500/10 text-slate-300',
+  insufficientEvidence: 'bg-blue-500/10 text-blue-200',
 };
 const CONTEXT_SUMMARY_TYPE_LABELS: Record<string, string> = {
   user_supplement: '用户补充',
@@ -1095,6 +1109,130 @@ export const Header: React.FC = () => {
                       </div>
                     </section>
                   )}
+
+                  <section className="rounded-lg border border-[#1e293b] bg-[#0f1623] p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-semibold text-white">跨 run 质量趋势</h4>
+                        <div className="mt-2 text-xl font-bold text-white">
+                          平均质量分 {observabilitySummary.qualityTrend.averageScore}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {observabilitySummary.qualityTrend.artifactRuns} 个 artifact run / {observabilitySummary.qualityTrend.totalRuns} 个 run
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        <span className="rounded bg-emerald-500/10 px-2 py-1 font-semibold text-emerald-200">
+                          ready {observabilitySummary.qualityTrend.statusCounts.ready}
+                        </span>
+                        <span className="rounded bg-amber-500/10 px-2 py-1 font-semibold text-amber-200">
+                          attention {observabilitySummary.qualityTrend.statusCounts.attention}
+                        </span>
+                        <span className="rounded bg-red-500/10 px-2 py-1 font-semibold text-red-200">
+                          blocked {observabilitySummary.qualityTrend.statusCounts.blocked}
+                        </span>
+                        <span className="rounded bg-slate-500/10 px-2 py-1 font-semibold text-slate-300">
+                          not-started {observabilitySummary.qualityTrend.statusCounts.notStarted}
+                        </span>
+                      </div>
+                    </div>
+
+                    {observabilitySummary.qualityTrend.totalRuns === 0 ? (
+                      <div className="mt-3 rounded-lg bg-[#111827] p-3 text-sm text-slate-500">
+                        当前筛选范围暂无质量趋势证据
+                      </div>
+                    ) : (
+                      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                        <div className="rounded-lg bg-[#111827] p-3">
+                          {observabilitySummary.qualityTrend.worstStage ? (
+                            <>
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                  <div className="text-xs text-slate-500">最差阶段</div>
+                                  <div className="mt-1 text-sm font-semibold text-white">
+                                    最差阶段 {observabilitySummary.qualityTrend.worstStage.workflowId} / {observabilitySummary.qualityTrend.worstStage.stageId}
+                                  </div>
+                                </div>
+                                <span className={clsx(
+                                  "rounded px-2 py-1 text-xs font-semibold",
+                                  OBSERVABILITY_QUALITY_STATUS_TONE[observabilitySummary.qualityTrend.worstStage.status]
+                                )}>
+                                  {OBSERVABILITY_QUALITY_STATUS_LABELS[observabilitySummary.qualityTrend.worstStage.status]}
+                                </span>
+                              </div>
+                              <div className="mt-2 text-xs text-slate-500">
+                                平均 {observabilitySummary.qualityTrend.worstStage.averageScore} 分 · {observabilitySummary.qualityTrend.worstStage.runCount} 个 run · 待处理 {observabilitySummary.qualityTrend.worstStage.pendingCount}
+                              </div>
+                              <div className="mt-2 text-xs leading-relaxed text-slate-300">
+                                {observabilitySummary.qualityTrend.worstStage.action}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-sm text-slate-500">当前筛选范围没有最差阶段。</div>
+                          )}
+                        </div>
+
+                        <div className="rounded-lg bg-[#111827] p-3">
+                          <div className="text-xs text-slate-500">最近质量问题</div>
+                          <div className="mt-2 space-y-2">
+                            {observabilitySummary.qualityTrend.recentIssues.length === 0 ? (
+                              <div className="text-sm text-slate-500">暂无最近质量问题。</div>
+                            ) : (
+                              observabilitySummary.qualityTrend.recentIssues.slice(0, 3).map((issue) => (
+                                <div key={`${issue.runId}-${issue.workflowId}-${issue.stageId}-${issue.title}`} className="rounded-lg border border-[#1e293b] bg-[#0f1623] p-3">
+                                  <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <span className="text-sm font-semibold text-white">
+                                      {issue.runId} · {issue.workflowId}/{issue.stageId}
+                                    </span>
+                                    <span className={clsx(
+                                      "rounded px-2 py-1 text-xs font-semibold",
+                                      OBSERVABILITY_QUALITY_STATUS_TONE[issue.status]
+                                    )}>
+                                      {issue.score} 分
+                                    </span>
+                                  </div>
+                                  <div className="mt-2 text-xs font-semibold text-slate-200">{issue.title}</div>
+                                  <div className="mt-1 text-xs leading-relaxed text-slate-400">{issue.detail}</div>
+                                  <div className="mt-1 text-xs leading-relaxed text-slate-300">{issue.action}</div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="lg:col-span-2">
+                          <div className="grid gap-2 md:grid-cols-2">
+                            {observabilitySummary.qualityTrend.byStage.length === 0 ? (
+                              <div className="rounded-lg bg-[#111827] p-3 text-sm text-slate-500">
+                                暂无阶段质量趋势。
+                              </div>
+                            ) : (
+                              observabilitySummary.qualityTrend.byStage.slice(0, 4).map((stage) => (
+                                <div key={`${stage.workflowId}-${stage.stageId}`} className="rounded-lg bg-[#111827] p-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <span className="text-sm font-semibold text-white">{stage.workflowId} / {stage.stageId}</span>
+                                    <span className="text-xs text-slate-400">平均 {stage.averageScore} 分</span>
+                                  </div>
+                                  <div className="mt-2 text-xs text-slate-500">
+                                    {stage.artifactCount} 个 artifact / {stage.runCount} 个 run · blocked {stage.statusCounts.blocked} · attention {stage.statusCounts.attention}
+                                  </div>
+                                  {stage.topPending.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      {stage.topPending.map((pending) => (
+                                        <span key={`${pending.title}-${pending.severity}`} className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-100">
+                                          {pending.title} x{pending.count}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </section>
 
                   <div className="grid gap-3 sm:grid-cols-5">
                     <div className="rounded-lg border border-[#1e293b] bg-[#0f1623] p-4">

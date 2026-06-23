@@ -33,6 +33,11 @@ from models import (
     db,
 )
 from workflow_manifest import get_workflow_agent_id
+from workflow_contract_registry import (
+    get_required_artifact_headings,
+    get_required_artifact_mermaid_diagrams,
+    get_required_artifact_structured_visuals,
+)
 
 
 MESSAGE_ROLES = {"user", "assistant"}
@@ -79,6 +84,15 @@ FORMAT_FAILURE_KIND_METADATA = {
         ),
     },
 }
+QUALITY_BLOCKER_TERMS = ("阻断", "缺少", "失败")
+QUALITY_ATTENTION_TERMS = ("待确认", "未确认", "开放问题", "缺失信息", "需要补充")
+QUALITY_STATUS_PRIORITY = [
+    "blocked",
+    "attention",
+    "notStarted",
+    "insufficientEvidence",
+    "ready",
+]
 
 
 class ArtifactVersionConflictError(ValueError):
@@ -836,10 +850,326 @@ def get_runtime_observability_summary(
             for provider, provider_metrics in sorted(provider_index.items())
         ],
         "formatFailureDiagnostics": _format_failure_diagnostics(metrics),
+        "qualityTrend": _quality_trend_summary(
+            limit=limit,
+            workflow_id=workflow_id,
+            stage_id=stage_id,
+        ),
         "recentTurns": [
             _turn_metric_snapshot(metric)
             for metric in metrics[:limit]
         ],
+    }
+
+
+def _empty_quality_status_counts() -> dict:
+    return {
+        "ready": 0,
+        "attention": 0,
+        "blocked": 0,
+        "notStarted": 0,
+        "insufficientEvidence": 0,
+    }
+
+
+def _quality_pending_item(
+    title: str,
+    detail: str,
+    severity: str,
+    action: str,
+) -> dict:
+    return {
+        "title": title,
+        "detail": detail,
+        "severity": severity,
+        "action": action,
+    }
+
+
+def _has_structured_visual(content: str, visual_type: str) -> bool:
+    return (
+        f'"type":"{visual_type}"' in content
+        or f'"type": "{visual_type}"' in content
+    )
+
+
+def _score_artifact_quality(
+    workflow_id: str,
+    stage_id: str,
+    content: str,
+) -> dict:
+    if not content.strip():
+        return {
+            "score": 0,
+            "status": "notStarted",
+            "pending": [
+                _quality_pending_item(
+                    "暂无可评估 artifact",
+                    "该 run 当前阶段还没有持久化 artifact。",
+                    "not-started",
+                    "先生成并保存该阶段产物。",
+                )
+            ],
+        }
+
+    stage_key = (workflow_id, stage_id)
+    headings = get_required_artifact_headings().get(stage_key)
+    mermaid_diagrams = get_required_artifact_mermaid_diagrams().get(stage_key, [])
+    structured_visuals = get_required_artifact_structured_visuals().get(stage_key, [])
+    if headings is None:
+        return {
+            "score": 0,
+            "status": "insufficientEvidence",
+            "pending": [
+                _quality_pending_item(
+                    "缺少阶段质量契约",
+                    f"{workflow_id}/{stage_id} 没有可用于趋势计算的 contract。",
+                    "attention",
+                    "补齐 workflow contract 后再纳入质量趋势。",
+                )
+            ],
+        }
+
+    score = 100
+    pending: list[dict] = []
+    for heading in headings:
+        if heading not in content:
+            score -= 20
+            pending.append(_quality_pending_item(
+                "缺少必填标题",
+                f"缺少 {heading}",
+                "blocker",
+                "补齐 artifact contract 要求的标题。",
+            ))
+
+    for diagram in mermaid_diagrams:
+        if diagram not in content:
+            score -= 20
+            pending.append(_quality_pending_item(
+                "缺少 Mermaid 图表",
+                f"缺少 {diagram} Mermaid 图表。",
+                "blocker",
+                "补齐当前阶段要求的 Mermaid 可视化。",
+            ))
+
+    for visual_type in structured_visuals:
+        if not _has_structured_visual(content, visual_type):
+            score -= 20
+            pending.append(_quality_pending_item(
+                "缺少结构化可视化",
+                f"缺少 {visual_type} ai4se-visual。",
+                "blocker",
+                "补齐当前阶段要求的结构化可视化。",
+            ))
+
+    if "阶段门禁" not in content:
+        score -= 16
+        pending.append(_quality_pending_item(
+            "缺少阶段门禁",
+            "artifact 没有阶段门禁或交付检查段落。",
+            "blocker",
+            "补齐阶段门禁和下一步检查项。",
+        ))
+
+    if any(term in content for term in QUALITY_ATTENTION_TERMS):
+        score -= 8
+        pending.append(_quality_pending_item(
+            "存在未关闭问题",
+            "artifact 中仍包含待确认、开放问题或缺失信息。",
+            "attention",
+            "关闭待确认项或记录风险接受条件。",
+        ))
+    if any(term in content for term in QUALITY_BLOCKER_TERMS):
+        score -= 8
+
+    score = max(0, min(100, score))
+    severities = {item["severity"] for item in pending}
+    if "blocker" in severities:
+        status = "blocked"
+    elif pending:
+        status = "attention"
+    else:
+        status = "ready"
+    return {
+        "score": score,
+        "status": status,
+        "pending": pending,
+    }
+
+
+def _quality_stage_ids_for_run(run: AgentRun, stage_id: str | None) -> list[str]:
+    artifacts = [
+        artifact
+        for artifact in run.artifacts
+        if artifact.current_version_id is not None
+    ]
+    artifact_stage_ids = {artifact.stage_id for artifact in artifacts}
+    if stage_id is not None:
+        if stage_id == run.current_stage_id or stage_id in artifact_stage_ids:
+            return [stage_id]
+        return []
+    if artifact_stage_ids:
+        return sorted(artifact_stage_ids)
+    return [run.current_stage_id]
+
+
+def _current_artifact_for_stage(run: AgentRun, stage_id: str) -> AgentArtifact | None:
+    for artifact in run.artifacts:
+        if artifact.stage_id == stage_id and artifact.current_version_id is not None:
+            return artifact
+    return None
+
+
+def _dominant_quality_status(status_counts: dict) -> str:
+    return max(
+        QUALITY_STATUS_PRIORITY,
+        key=lambda status: (
+            status_counts.get(status, 0),
+            -QUALITY_STATUS_PRIORITY.index(status),
+        ),
+    )
+
+
+def _quality_trend_summary(
+    *,
+    limit: int,
+    workflow_id: str | None,
+    stage_id: str | None,
+) -> dict:
+    run_query = AgentRun.query
+    if workflow_id is not None:
+        run_query = run_query.filter(AgentRun.workflow_id == workflow_id)
+    runs = run_query.order_by(
+        AgentRun.updated_at.desc(),
+        AgentRun.created_at.desc(),
+        AgentRun.id.desc(),
+    ).all()
+
+    status_counts = _empty_quality_status_counts()
+    stage_index: dict[tuple[str, str], dict] = {}
+    recent_issues: list[dict] = []
+    score_total = 0
+    scored_count = 0
+    evaluated_run_ids: set[str] = set()
+    artifact_run_ids: set[str] = set()
+
+    for run in runs:
+        stage_ids = _quality_stage_ids_for_run(run, stage_id)
+        if not stage_ids:
+            continue
+        evaluated_run_ids.add(run.id)
+        for current_stage_id in stage_ids:
+            artifact = _current_artifact_for_stage(run, current_stage_id)
+            content = ""
+            created_at = _format_datetime(run.updated_at or run.created_at)
+            if artifact is not None:
+                snapshot = _artifact_snapshot(artifact)
+                content = snapshot["content"]
+                artifact_run_ids.add(run.id)
+            quality = _score_artifact_quality(
+                run.workflow_id,
+                current_stage_id,
+                content,
+            )
+            status_counts[quality["status"]] += 1
+            score_total += quality["score"]
+            scored_count += 1
+
+            key = (run.workflow_id, current_stage_id)
+            stage_item = stage_index.setdefault(key, {
+                "workflowId": run.workflow_id,
+                "stageId": current_stage_id,
+                "runCount": 0,
+                "artifactCount": 0,
+                "scoreTotal": 0,
+                "statusCounts": _empty_quality_status_counts(),
+                "pendingIndex": {},
+            })
+            stage_item["runCount"] += 1
+            stage_item["artifactCount"] += 1 if content.strip() else 0
+            stage_item["scoreTotal"] += quality["score"]
+            stage_item["statusCounts"][quality["status"]] += 1
+            for pending in quality["pending"]:
+                pending_key = (
+                    pending["title"],
+                    pending["severity"],
+                    pending["action"],
+                )
+                pending_item = stage_item["pendingIndex"].setdefault(
+                    pending_key,
+                    {
+                        "title": pending["title"],
+                        "count": 0,
+                        "severity": pending["severity"],
+                        "action": pending["action"],
+                    },
+                )
+                pending_item["count"] += 1
+                if len(recent_issues) < limit:
+                    recent_issues.append({
+                        "runId": run.id,
+                        "workflowId": run.workflow_id,
+                        "stageId": current_stage_id,
+                        "score": quality["score"],
+                        "status": quality["status"],
+                        "title": pending["title"],
+                        "detail": pending["detail"],
+                        "action": pending["action"],
+                        "createdAt": created_at,
+                    })
+
+    by_stage = []
+    for item in stage_index.values():
+        run_count = item["runCount"]
+        top_pending = sorted(
+            item["pendingIndex"].values(),
+            key=lambda pending: (-pending["count"], pending["title"]),
+        )[:3]
+        by_stage.append({
+            "workflowId": item["workflowId"],
+            "stageId": item["stageId"],
+            "runCount": run_count,
+            "artifactCount": item["artifactCount"],
+            "averageScore": (
+                round(item["scoreTotal"] / run_count)
+                if run_count else 0
+            ),
+            "statusCounts": item["statusCounts"],
+            "topPending": top_pending,
+        })
+    by_stage.sort(
+        key=lambda item: (
+            item["averageScore"],
+            item["workflowId"],
+            item["stageId"],
+        )
+    )
+
+    worst_stage = None
+    if by_stage:
+        worst = by_stage[0]
+        worst_stage = {
+            "workflowId": worst["workflowId"],
+            "stageId": worst["stageId"],
+            "averageScore": worst["averageScore"],
+            "status": _dominant_quality_status(worst["statusCounts"]),
+            "pendingCount": sum(item["count"] for item in worst["topPending"]),
+            "runCount": worst["runCount"],
+            "action": (
+                worst["topPending"][0]["action"]
+                if worst["topPending"]
+                else "当前阶段质量趋势稳定，可继续观察。"
+            ),
+        }
+
+    return {
+        "totalRuns": len(evaluated_run_ids),
+        "artifactRuns": len(artifact_run_ids),
+        "averageScore": round(score_total / scored_count) if scored_count else 0,
+        "statusCounts": status_counts,
+        "worstStage": worst_stage,
+        "byStage": by_stage,
+        "recentIssues": recent_issues,
     }
 
 

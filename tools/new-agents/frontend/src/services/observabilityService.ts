@@ -5,6 +5,13 @@ import type {
     ObservabilityFormatFailureRecent,
     ObservabilityFormatFailureStage,
     ObservabilityProviderSummary,
+    ObservabilityQualityPending,
+    ObservabilityQualityRecentIssue,
+    ObservabilityQualityStage,
+    ObservabilityQualityStatus,
+    ObservabilityQualityStatusCounts,
+    ObservabilityQualityTrend,
+    ObservabilityQualityWorstStage,
     ObservabilityStageSummary,
     ObservabilitySummary,
     ObservabilityTotals,
@@ -186,6 +193,119 @@ const parseFormatFailureDiagnostics = (value: unknown): ObservabilityFormatFailu
     };
 };
 
+const parseQualityStatus = (value: unknown): ObservabilityQualityStatus => {
+    if (
+        value === 'ready'
+        || value === 'attention'
+        || value === 'blocked'
+        || value === 'notStarted'
+        || value === 'insufficientEvidence'
+    ) {
+        return value;
+    }
+    throw new Error(INVALID_OBSERVABILITY_ERROR);
+};
+
+const parseQualityStatusCounts = (value: unknown): ObservabilityQualityStatusCounts => {
+    if (!isRecord(value)) {
+        throw new Error(INVALID_OBSERVABILITY_ERROR);
+    }
+
+    return {
+        ready: parseInteger(value.ready),
+        attention: parseInteger(value.attention),
+        blocked: parseInteger(value.blocked),
+        notStarted: parseInteger(value.notStarted),
+        insufficientEvidence: parseInteger(value.insufficientEvidence),
+    };
+};
+
+const parseQualityPending = (value: unknown): ObservabilityQualityPending => {
+    if (!isRecord(value)) {
+        throw new Error(INVALID_OBSERVABILITY_ERROR);
+    }
+
+    return {
+        title: parseString(value.title),
+        count: parseInteger(value.count),
+        severity: parseString(value.severity),
+        action: parseString(value.action),
+    };
+};
+
+const parseQualityStage = (value: unknown): ObservabilityQualityStage => {
+    if (!isRecord(value) || !Array.isArray(value.topPending)) {
+        throw new Error(INVALID_OBSERVABILITY_ERROR);
+    }
+
+    return {
+        workflowId: parseWorkflowType(value.workflowId),
+        stageId: parseString(value.stageId),
+        runCount: parseInteger(value.runCount),
+        artifactCount: parseInteger(value.artifactCount),
+        averageScore: parseNumber(value.averageScore),
+        statusCounts: parseQualityStatusCounts(value.statusCounts),
+        topPending: value.topPending.map(parseQualityPending),
+    };
+};
+
+const parseQualityWorstStage = (value: unknown): ObservabilityQualityWorstStage | null => {
+    if (value === null) {
+        return null;
+    }
+    if (!isRecord(value)) {
+        throw new Error(INVALID_OBSERVABILITY_ERROR);
+    }
+
+    return {
+        workflowId: parseWorkflowType(value.workflowId),
+        stageId: parseString(value.stageId),
+        averageScore: parseNumber(value.averageScore),
+        status: parseQualityStatus(value.status),
+        pendingCount: parseInteger(value.pendingCount),
+        runCount: parseInteger(value.runCount),
+        action: parseString(value.action),
+    };
+};
+
+const parseQualityRecentIssue = (value: unknown): ObservabilityQualityRecentIssue => {
+    if (!isRecord(value)) {
+        throw new Error(INVALID_OBSERVABILITY_ERROR);
+    }
+
+    return {
+        runId: parseString(value.runId),
+        workflowId: parseWorkflowType(value.workflowId),
+        stageId: parseString(value.stageId),
+        score: parseNumber(value.score),
+        status: parseQualityStatus(value.status),
+        title: parseString(value.title),
+        detail: parseString(value.detail),
+        action: parseString(value.action),
+        createdAt: parseNullableString(value.createdAt),
+    };
+};
+
+const parseQualityTrend = (value: unknown): ObservabilityQualityTrend => {
+    if (
+        !isRecord(value)
+        || !Array.isArray(value.byStage)
+        || !Array.isArray(value.recentIssues)
+    ) {
+        throw new Error(INVALID_OBSERVABILITY_ERROR);
+    }
+
+    return {
+        totalRuns: parseInteger(value.totalRuns),
+        artifactRuns: parseInteger(value.artifactRuns),
+        averageScore: parseNumber(value.averageScore),
+        statusCounts: parseQualityStatusCounts(value.statusCounts),
+        worstStage: parseQualityWorstStage(value.worstStage),
+        byStage: value.byStage.map(parseQualityStage),
+        recentIssues: value.recentIssues.map(parseQualityRecentIssue),
+    };
+};
+
 const parseTurn = (value: unknown): ObservabilityTurn => {
     if (!isRecord(value)) {
         throw new Error(INVALID_OBSERVABILITY_ERROR);
@@ -226,6 +346,7 @@ const parseSummary = (payload: unknown): ObservabilitySummary => {
         formatFailureDiagnostics: parseFormatFailureDiagnostics(
             payload.formatFailureDiagnostics
         ),
+        qualityTrend: parseQualityTrend(payload.qualityTrend),
         recentTurns: payload.recentTurns.map(parseTurn),
     };
 };

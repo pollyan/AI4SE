@@ -85,7 +85,7 @@ const BASE_SUMMARY: ObservabilitySummary = {
         ],
         recentFailures: [
             {
-                turnId: 'turn-format-1',
+                turnId: 12,
                 runId: 'run-format-1',
                 workflowId: 'TEST_DESIGN',
                 stageId: 'STRATEGY',
@@ -99,6 +99,21 @@ const BASE_SUMMARY: ObservabilitySummary = {
                 action: '优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 artifact_data contract。',
             },
         ],
+    },
+    qualityTrend: {
+        totalRuns: 0,
+        artifactRuns: 0,
+        averageScore: 0,
+        statusCounts: {
+            ready: 0,
+            attention: 0,
+            blocked: 0,
+            notStarted: 0,
+            insufficientEvidence: 0,
+        },
+        worstStage: null,
+        byStage: [],
+        recentIssues: [],
     },
     recentTurns: [],
 };
@@ -165,6 +180,21 @@ describe('buildObservabilityAlerts', () => {
                 byStage: [],
                 byProvider: [],
                 recentFailures: [],
+            },
+            qualityTrend: {
+                totalRuns: 0,
+                artifactRuns: 0,
+                averageScore: 0,
+                statusCounts: {
+                    ready: 0,
+                    attention: 0,
+                    blocked: 0,
+                    notStarted: 0,
+                    insufficientEvidence: 0,
+                },
+                worstStage: null,
+                byStage: [],
+                recentIssues: [],
             },
             recentTurns: [],
         });

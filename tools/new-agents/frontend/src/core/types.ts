@@ -493,11 +493,76 @@ export type ObservabilityFormatFailureDiagnostics = {
     recentFailures: ObservabilityFormatFailureRecent[];
 };
 
+export type ObservabilityQualityStatus =
+    | 'ready'
+    | 'attention'
+    | 'blocked'
+    | 'notStarted'
+    | 'insufficientEvidence';
+
+export type ObservabilityQualityStatusCounts = {
+    ready: number;
+    attention: number;
+    blocked: number;
+    notStarted: number;
+    insufficientEvidence: number;
+};
+
+export type ObservabilityQualityPending = {
+    title: string;
+    count: number;
+    severity: string;
+    action: string;
+};
+
+export type ObservabilityQualityStage = {
+    workflowId: WorkflowType;
+    stageId: string;
+    runCount: number;
+    artifactCount: number;
+    averageScore: number;
+    statusCounts: ObservabilityQualityStatusCounts;
+    topPending: ObservabilityQualityPending[];
+};
+
+export type ObservabilityQualityWorstStage = {
+    workflowId: WorkflowType;
+    stageId: string;
+    averageScore: number;
+    status: ObservabilityQualityStatus;
+    pendingCount: number;
+    runCount: number;
+    action: string;
+};
+
+export type ObservabilityQualityRecentIssue = {
+    runId: string;
+    workflowId: WorkflowType;
+    stageId: string;
+    score: number;
+    status: ObservabilityQualityStatus;
+    title: string;
+    detail: string;
+    action: string;
+    createdAt: string | null;
+};
+
+export type ObservabilityQualityTrend = {
+    totalRuns: number;
+    artifactRuns: number;
+    averageScore: number;
+    statusCounts: ObservabilityQualityStatusCounts;
+    worstStage: ObservabilityQualityWorstStage | null;
+    byStage: ObservabilityQualityStage[];
+    recentIssues: ObservabilityQualityRecentIssue[];
+};
+
 export type ObservabilitySummary = {
     totals: ObservabilityTotals;
     byStage: ObservabilityStageSummary[];
     byProvider: ObservabilityProviderSummary[];
     formatFailureDiagnostics: ObservabilityFormatFailureDiagnostics;
+    qualityTrend: ObservabilityQualityTrend;
     recentTurns: ObservabilityTurn[];
 };
 

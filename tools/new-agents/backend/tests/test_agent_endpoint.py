@@ -2207,6 +2207,92 @@ def test_agent_observability_endpoint_groups_provider_issue_codes(
     assert response.json["byProvider"][0]["providerIssueCodes"] == {"LLM_ERROR": 1}
 
 
+def test_agent_observability_endpoint_returns_quality_trend_from_persisted_artifacts(
+    app,
+    client,
+):
+    ready_artifact = "\n".join([
+        "# 测试策略蓝图",
+        "## 1. 策略摘要",
+        "## 2. 质量目标",
+        "## 3. 风险识别与 FMEA",
+        "### 3.1 风险矩阵",
+        "### 3.2 风险明细",
+        "## 4. 测试技术选型",
+        "## 5. 测试分层策略",
+        "### 5.1 测试金字塔",
+        "### 5.2 分层明细",
+        "## 6. 测试点拓扑",
+        "## 7. 资源与取舍",
+        "## 8. 阶段门禁",
+        "风险 ID 测试点 ID 覆盖建议",
+        "```mermaid",
+        "quadrantChart",
+        "```",
+        "```mermaid",
+        "block-beta",
+        "```",
+        "```ai4se-visual",
+        '{"type":"risk-board","title":"风险板","columns":[]}',
+        "```",
+    ])
+    blocked_artifact = "# 测试策略蓝图\n\n## 1. 策略摘要\n\n阻断: 缺少风险矩阵。"
+
+    with app.app_context():
+        ready_run = create_agent_run("TEST_DESIGN", "lisa", "STRATEGY")
+        record_artifact_version(ready_run.id, "STRATEGY", ready_artifact)
+        blocked_run = create_agent_run("TEST_DESIGN", "lisa", "STRATEGY")
+        blocked_run_id = blocked_run.id
+        record_artifact_version(blocked_run.id, "STRATEGY", blocked_artifact)
+        create_agent_run("TEST_DESIGN", "lisa", "CASES")
+
+    response = client.get("/api/agent/observability?workflowId=TEST_DESIGN")
+
+    assert response.status_code == 200
+    trend = response.json["qualityTrend"]
+    assert trend["totalRuns"] == 3
+    assert trend["artifactRuns"] == 2
+    assert trend["averageScore"] < 100
+    assert trend["statusCounts"]["ready"] == 1
+    assert trend["statusCounts"]["blocked"] >= 1
+    assert trend["statusCounts"]["notStarted"] >= 1
+    assert trend["worstStage"]["workflowId"] == "TEST_DESIGN"
+    assert trend["worstStage"]["stageId"] in {"STRATEGY", "CASES"}
+    strategy = next(item for item in trend["byStage"] if item["stageId"] == "STRATEGY")
+    assert strategy["runCount"] == 2
+    assert strategy["artifactCount"] == 2
+    assert strategy["statusCounts"]["ready"] == 1
+    assert any(item["title"] == "缺少必填标题" for item in strategy["topPending"])
+    assert any(issue["runId"] == blocked_run_id for issue in trend["recentIssues"])
+
+
+def test_agent_observability_endpoint_filters_quality_trend_by_workflow_and_stage(
+    app,
+    client,
+):
+    clarify_artifact = "# 需求分析文档\n\n## 8. 阶段门禁\n\n阻断: 缺少背景。"
+    blueprint_artifact = "# 需求蓝图\n\n## 1. 目标与范围\n\n## 阶段门禁"
+
+    with app.app_context():
+        clarify_run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        record_artifact_version(clarify_run.id, "CLARIFY", clarify_artifact)
+        strategy_run = create_agent_run("TEST_DESIGN", "lisa", "STRATEGY")
+        record_artifact_version(strategy_run.id, "STRATEGY", "# 测试策略蓝图")
+        value_run = create_agent_run("VALUE_DISCOVERY", "alex", "BLUEPRINT")
+        record_artifact_version(value_run.id, "BLUEPRINT", blueprint_artifact)
+
+    response = client.get(
+        "/api/agent/observability?workflowId=TEST_DESIGN&stageId=CLARIFY"
+    )
+
+    assert response.status_code == 200
+    trend = response.json["qualityTrend"]
+    assert trend["totalRuns"] == 1
+    assert trend["artifactRuns"] == 1
+    assert [item["stageId"] for item in trend["byStage"]] == ["CLARIFY"]
+    assert all(issue["stageId"] == "CLARIFY" for issue in trend["recentIssues"])
+
+
 def test_agent_observability_endpoint_groups_formatted_output_diagnostics(
     app,
     client,

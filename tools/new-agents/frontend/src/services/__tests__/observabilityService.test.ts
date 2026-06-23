@@ -96,6 +96,64 @@ const OBSERVABILITY_PAYLOAD = {
             },
         ],
     },
+    qualityTrend: {
+        totalRuns: 3,
+        artifactRuns: 2,
+        averageScore: 72,
+        statusCounts: {
+            ready: 1,
+            attention: 1,
+            blocked: 1,
+            notStarted: 0,
+            insufficientEvidence: 0,
+        },
+        worstStage: {
+            workflowId: 'TEST_DESIGN',
+            stageId: 'STRATEGY',
+            averageScore: 44,
+            status: 'blocked',
+            pendingCount: 2,
+            runCount: 2,
+            action: '补齐 artifact contract 要求的标题。',
+        },
+        byStage: [
+            {
+                workflowId: 'TEST_DESIGN',
+                stageId: 'STRATEGY',
+                runCount: 2,
+                artifactCount: 2,
+                averageScore: 44,
+                statusCounts: {
+                    ready: 1,
+                    attention: 0,
+                    blocked: 1,
+                    notStarted: 0,
+                    insufficientEvidence: 0,
+                },
+                topPending: [
+                    {
+                        title: '缺少必填标题',
+                        count: 1,
+                        severity: 'blocker',
+                        action: '补齐 artifact contract 要求的标题。',
+                    },
+                ],
+            },
+        ],
+        recentIssues: [
+            {
+                runId: 'run-quality-1',
+                workflowId: 'TEST_DESIGN',
+                stageId: 'STRATEGY',
+                score: 44,
+                status: 'blocked',
+                title: '缺少必填标题',
+                detail: '缺少 ## 2. 质量目标',
+                action: '补齐 artifact contract 要求的标题。',
+                createdAt: '2026-06-23T09:00:00',
+            },
+        ],
+    },
     recentTurns: [
         {
             id: 11,
@@ -140,6 +198,9 @@ describe('observabilityService', () => {
         expect(summary.formatFailureDiagnostics.total).toBe(2);
         expect(summary.formatFailureDiagnostics.byKind[0].kind).toBe('artifact_data_schema');
         expect(summary.formatFailureDiagnostics.byProvider[0].provider).toBe('deepseek');
+        expect(summary.qualityTrend.averageScore).toBe(72);
+        expect(summary.qualityTrend.worstStage?.stageId).toBe('STRATEGY');
+        expect(summary.qualityTrend.recentIssues[0].runId).toBe('run-quality-1');
         expect(summary.formatFailureDiagnostics.recentFailures[0]).toEqual({
             turnId: 12,
             runId: 'run-format-1',
@@ -235,6 +296,23 @@ describe('observabilityService', () => {
             JSON.stringify({
                 ...OBSERVABILITY_PAYLOAD,
                 formatFailureDiagnostics: diagnostics,
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ));
+
+        await expect(fetchObservabilitySummary({ limit: 20 })).rejects.toThrow(
+            'Invalid observability summary response'
+        );
+    });
+
+    it('fails explicitly when quality trend is malformed', async () => {
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({
+                ...OBSERVABILITY_PAYLOAD,
+                qualityTrend: {
+                    ...OBSERVABILITY_PAYLOAD.qualityTrend,
+                    averageScore: '72',
+                },
             }),
             { status: 200, headers: { 'Content-Type': 'application/json' } },
         ));

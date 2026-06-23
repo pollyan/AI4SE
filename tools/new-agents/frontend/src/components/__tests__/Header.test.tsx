@@ -327,6 +327,64 @@ const OBSERVABILITY_SUMMARY: ObservabilitySummary = {
             },
         ],
     },
+    qualityTrend: {
+        totalRuns: 3,
+        artifactRuns: 2,
+        averageScore: 72,
+        statusCounts: {
+            ready: 1,
+            attention: 1,
+            blocked: 1,
+            notStarted: 0,
+            insufficientEvidence: 0,
+        },
+        worstStage: {
+            workflowId: 'TEST_DESIGN',
+            stageId: 'STRATEGY',
+            averageScore: 44,
+            status: 'blocked',
+            pendingCount: 2,
+            runCount: 2,
+            action: '补齐 artifact contract 要求的标题。',
+        },
+        byStage: [
+            {
+                workflowId: 'TEST_DESIGN',
+                stageId: 'STRATEGY',
+                runCount: 2,
+                artifactCount: 2,
+                averageScore: 44,
+                statusCounts: {
+                    ready: 1,
+                    attention: 0,
+                    blocked: 1,
+                    notStarted: 0,
+                    insufficientEvidence: 0,
+                },
+                topPending: [
+                    {
+                        title: '缺少必填标题',
+                        count: 1,
+                        severity: 'blocker',
+                        action: '补齐 artifact contract 要求的标题。',
+                    },
+                ],
+            },
+        ],
+        recentIssues: [
+            {
+                runId: 'run-quality-1',
+                workflowId: 'TEST_DESIGN',
+                stageId: 'STRATEGY',
+                score: 44,
+                status: 'blocked',
+                title: '缺少必填标题',
+                detail: '缺少 ## 2. 质量目标',
+                action: '补齐 artifact contract 要求的标题。',
+                createdAt: '2026-06-23T09:00:00',
+            },
+        ],
+    },
     recentTurns: [
         {
             id: 11,
@@ -746,7 +804,37 @@ describe('Header Component', () => {
         expect(screen.getAllByText('api.test.com').length).toBeGreaterThan(0);
         expect(screen.getAllByText('LLM_ERROR').length).toBeGreaterThan(0);
         expect(screen.getAllByText('模型/供应商问题 x1').length).toBeGreaterThan(0);
+        expect(screen.getByText('跨 run 质量趋势')).toBeTruthy();
+        expect(screen.getByText('平均质量分 72')).toBeTruthy();
+        expect(screen.getByText('最差阶段 TEST_DESIGN / STRATEGY')).toBeTruthy();
+        expect(screen.getByText('run-quality-1 · TEST_DESIGN/STRATEGY')).toBeTruthy();
         expect(screen.getByText(/run-123/)).toBeTruthy();
+    });
+
+    it('shows an empty state when quality trend has no evidence', async () => {
+        vi.mocked(fetchObservabilitySummary).mockResolvedValue({
+            ...OBSERVABILITY_SUMMARY,
+            qualityTrend: {
+                totalRuns: 0,
+                artifactRuns: 0,
+                averageScore: 0,
+                statusCounts: {
+                    ready: 0,
+                    attention: 0,
+                    blocked: 0,
+                    notStarted: 0,
+                    insufficientEvidence: 0,
+                },
+                worstStage: null,
+                byStage: [],
+                recentIssues: [],
+            },
+        });
+
+        renderHeader();
+        clickMoreAction(/运行统计/);
+
+        expect(await screen.findByText('当前筛选范围暂无质量趋势证据')).toBeTruthy();
     });
 
     it('shows formatted output diagnostics in runtime observability summary', async () => {
@@ -757,7 +845,7 @@ describe('Header Component', () => {
 
         expect(screen.getByText('格式化失败 2 轮')).toBeTruthy();
         expect(screen.getAllByText('artifact_data schema 校验失败').length).toBeGreaterThanOrEqual(1);
-        expect(screen.getByText('TEST_DESIGN / STRATEGY')).toBeTruthy();
+        expect(screen.getAllByText('TEST_DESIGN / STRATEGY').length).toBeGreaterThan(0);
         expect(screen.getByText('deepseek')).toBeTruthy();
         expect(screen.getByText('重试 4 次')).toBeTruthy();
         expect(screen.getAllByText('检查当前 stage 的 artifact_data 必填字段、枚举值、空数组和跨字段引用。').length).toBeGreaterThan(0);

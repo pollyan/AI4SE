@@ -40,7 +40,7 @@
 | 能力域 | 当前能力 | 成熟度 | 主要限制 |
 | --- | --- | --- | --- |
 | Agent / workflow | Alex、Lisa 共 7 个在线 workflow、25 个阶段 | 中高 | persona 和专业方法还没有完整配置化；后续重点转向质量诊断、Lisa 资产闭环和 DeepSeek V4 结构化输出收口 |
-| Runtime | PydanticAI + raw JSON streaming + typed SSE | 高 | 质量治理已具备规则型 evidence gate；跨 run 趋势和 LLM judge 仍未接入 |
+| Runtime | PydanticAI + raw JSON streaming + typed SSE | 高 | 质量治理已具备规则型 evidence gate 和跨 run deterministic 趋势；LLM judge 仍未接入 |
 | Contract | required headings、Mermaid、structured visual、stage_action 校验；workflow schema dry-run 可聚合检查 manifest、前端 prompt/template、后端 contract、renderer/readiness、handoff 和打包同步 | 高 | `agent_contracts.py` 与 manifest 仍有重复同步成本；完整 scaffold/codegen 尚未实现 |
 | Persistence | run、message、artifact version、context summary、metric、comment、lock、audit | 高 | 历史中心和复用能力仍偏基础 |
 | UI | 双栏 workspace、workflow 切换、历史、设置、artifact 编辑、审阅、导出、运行统计、workflow 质量治理 | 中高 | Header/ArtifactPane 承载能力多；后续需要谨慎拆分但不能破坏共享审阅闭环 |
@@ -52,12 +52,12 @@
 
 | 维度 | 当前状态 | 缺口 | 优先级 |
 | --- | --- | --- | --- |
-| 专业可信度 | prompt/template 已有 FMEA、5 Why、ICE、roadmap 等方法；Lisa 测试资产已补质量状态闭环；Artifact 审阅已补 workflow 规则型质量治理 | 仍缺跨 run 趋势化质量门禁和 LLM judge evidence | P1 |
+| 专业可信度 | prompt/template 已有 FMEA、5 Why、ICE、roadmap 等方法；Lisa 测试资产已补质量状态闭环；Artifact 审阅已补 workflow 规则型质量治理，Header 运行统计已补跨 run deterministic 质量趋势 | 仍缺 LLM judge evidence | P1 |
 | Artifact 闭环 | 有版本、diff、批注、章节锁、导出、冲突合并 | 缺统一 artifact quality / contract / stage gate 诊断面板 | P0 |
 | Workflow 入口 | 有 listing、onboarding、starter prompts；2026-06-23 已补在线 workflow 入口 preview | 仍缺自动推荐排序和更深的选择决策引导 | P1 |
 | Run 复用 | 有历史列表、搜索、runId snapshot 恢复、复用状态筛选、当前 artifact 预览、继续原 run、复制为新 run | 跨 run 对比和收藏仍未做；不影响当前历史复用闭环 | P1 已部分完成 |
 | Workflow handoff | 有配置化 handoff 基础，已补上下文审阅卡和目标 run 输入增强 | 当前 P1 缺口已消化；后续只在新增 source/target handoff 时扩展配置 | 已完成 |
-| 可观测性 | 有 success rate、provider、stage、recent turns，且已补 DeepSeek/格式化输出失败分类 drilldown 与行动建议 | 仍缺面向用户的跨 run 质量趋势和产品质量评分趋势 | P1 已部分完成 |
+| 可观测性 | 有 success rate、provider、stage、recent turns，且已补 DeepSeek/格式化输出失败分类 drilldown、行动建议和跨 run 产品质量趋势 | 后续只缺 LLM judge 或更深的产品质量外部证据 | P1 已部分完成 |
 | 平台扩展 | manifest 已承载核心配置；workflow schema dry-run 已提供本地同步门禁 | 缺完整 scaffold/codegen 和 prompt/template 版本管理 | P2 |
 
 ## 增强机会清单
@@ -71,8 +71,8 @@
 | E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 已消化为 Artifact 定向修订闭环：用户可从章节侧栏指定未锁定章节重生成，复用共享 typed SSE runtime，客户端只合并目标章节，保留锁定章节和非目标章节，并写入 artifact/stage/history |
 | E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 已消化：支持继续、复制为新 run、按 workflow/复用状态筛选、预览当前 artifact |
 | E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | 已消化：handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入；启动目标 run 时首条上下文包含同一审阅结构 |
-| E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 已部分完成 | 已消化规则型质量治理闭环：每个 stage 有质量分、证据明细、待处理项、全局待处理队列和阶段定位；后续仅保留跨 run 趋势和 LLM judge evidence |
-| E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 已消化 DeepSeek/格式化输出失败诊断闭环：显示 workflow/stage/provider 格式化失败 drilldown、contract retry 次数和行动建议；跨 run 质量趋势可并入 E08 后续厚切片 |
+| E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 已部分完成 | 已消化规则型质量治理闭环和跨 run deterministic 质量趋势：每个 stage 有质量分、证据明细、待处理项、全局待处理队列、阶段定位，运行统计可按 workflow/stage 查看历史 run 平均质量分、状态分布、最差阶段和最近问题；后续仅保留 LLM judge evidence |
+| E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 已消化 DeepSeek/格式化输出失败诊断闭环和跨 run 质量趋势：显示 workflow/stage/provider 格式化失败 drilldown、contract retry 次数、行动建议、质量趋势和最近质量问题样本 |
 | E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | FMEA、JTBD、RICE、Kano、CAPA 等可由配置注入 prompt/template |
 | E11 | Prompt/template 版本管理 | 新增功能 | 平台扩展 | L | P2 | 每个 stage 有 prompt/template version 和回归样例 |
 | E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 已部分完成 | 已消化诊断型 dry-run 门禁：新 workflow 缺 manifest、前端 prompt/template 映射、后端 contract、artifact_data renderer/readiness、handoff 或 manifest 打包任一面时本地 dry-run 失败；完整 scaffold/codegen 保留后续 |
@@ -89,6 +89,7 @@
 - 2026-06-23: 已完成 Run 历史复用中心厚切片，消化 E06。后端 run list 返回并过滤 `reuseStatus=ready|needs_artifact|failed`，新增共享 `POST /api/agent/runs/<run_id>/clone` 复制源 run 的 messages、当前 artifacts 和 context summaries 为独立 active run；前端 service 严格解析复用状态并提供 clone API；Header 历史会话升级为可筛选、可预览当前 artifact、可继续原 run、可复制为新 run 的复用中心，并展示预览/复制失败反馈。该切片复用现有 run persistence、snapshot restore、共享 Header UI 和 workflow registry，不新增 agent 专属 runtime、API path、store 或 renderer。
 - 2026-06-23: 已完成 DeepSeek 格式化失败运行统计诊断闭环，消化 E09 当前 DeepSeek/contract retry drilldown 部分。`FormattedOutputDiagnosticError` 现在会进入共享 turn metrics，`/api/agent/observability` 返回 `formatFailureDiagnostics`，Header 运行统计展示格式化失败总数、最高频类型、受影响 workflow/stage/provider、重试次数和行动建议。该切片复用共享 Agent Runtime、typed SSE、run persistence、observability endpoint 和 Header UI，不新增 DeepSeek 专属 runtime、API path、store 或 renderer；不纳入真实 DeepSeek smoke、E08 工作流质量评分或 E05 章节级重生成。
 - 2026-06-23: 已完成 Workflow 质量治理闭环厚切片，消化 E08 规则型评分与复审部分。新增共享前端 `workflowQuality` 规则聚合，从 workflow manifest、`stageArtifacts`、当前 artifact 和 runtime visual diagnostics 派生每阶段 score/status/evidence/pending；ArtifactPane 审阅入口展示平均分、ready/attention/blocked/not-started 汇总、全局待处理队列和每阶段待处理摘要，并复用现有 `setStageIndex()` 提供阶段定位动作。该切片不新增持久化字段、API、runtime、store 或 renderer；跨 run 趋势和 LLM judge evidence 保留为后续 E08 派生候选。
+- 2026-06-23: 已完成跨 run 工作流质量趋势闭环，继续消化 E08/E09 的趋势化部分。后端在共享 `/api/agent/observability` 中追加 `qualityTrend`，基于持久化 `AgentRun`、当前 `AgentArtifactVersion` 和 workflow contract deterministic 聚合平均质量分、ready/attention/blocked/not-started 分布、最差阶段、阶段 top pending 和最近质量问题；前端 `observabilityService` 严格解析该 contract，Header 运行统计展示跨 run 质量趋势、空态和最近问题样本，并复用现有 workflow/stage 过滤。该切片不新增 agent 专属 runtime、API path、store、renderer 或 LLM 调用；LLM judge evidence 保留为后续候选。
 - 2026-06-23: 已完成 Artifact 定向修订闭环厚切片，消化 E05。ArtifactPane 章节侧栏增加未锁定章节重生成动作；`useChatService` 新增 `handleRegenerateArtifactSection()`，通过现有共享 `generateResponseStream` / `/api/agent/runs/stream` typed SSE 发起定向修订 prompt；前端共享 `artifactSections` helper 负责 H1-H3 章节 anchor、锁定匹配、锁定保护和目标章节合并。模型仍返回完整 artifact，但客户端只接收目标章节内容，非目标章节保持原样，锁定章节按锁快照恢复，成功后写入 `artifactContent`、`stageArtifacts` 和 `artifactHistory`。该切片不新增后端 runtime、API path、store 或 renderer。
 - 2026-06-23: 已完成 Workflow schema dry-run 工程信任闭环，消化 E12 的诊断门禁部分。新增 `scripts/validation/new_agents_workflow_dry_run.py`，从真实仓库事实聚合检查 shared `workflow_manifest.json`、前端 `STAGE_CONTENT_BY_TEMPLATE_ID` 与 prompt 文件、后端 `WORKFLOW_STAGES` / artifact contract、DeepSeek `artifact_data` readiness、renderer stage keys、handoff prompt 和 manifest 打包/挂载；旧 workflow contract sync 测试复用同一 loader，不再维护独立 prompt 文件硬编码表。该切片不新增 runtime、API、store、renderer 或真实 LLM 调用；完整 scaffold/codegen、prompt/template 版本管理和 LLM judge evidence 保留为后续候选。
 
@@ -123,7 +124,7 @@
 
 目标: 1-2 周内明显提升专业感和产出可信度。
 
-包含: E01/E02/E03/E04/E05/E07/E08 规则型治理闭环/E13/E14 均已在 2026-06-23 目标模式切片中消化。快速专业化路线剩余工作转入 E08 跨 run 趋势/LLM judge、E12 完整 scaffold/codegen、prompt/template 版本管理和 DeepSeek 真实 smoke 等 P1/P2 能力包；运行统计产品化当前 DeepSeek/格式化失败诊断闭环已消化。
+包含: E01/E02/E03/E04/E05/E07/E08 规则型治理闭环与跨 run deterministic 趋势/E13/E14 均已在 2026-06-23 目标模式切片中消化。快速专业化路线剩余工作转入 E08 LLM judge evidence、E12 完整 scaffold/codegen、prompt/template 版本管理和 DeepSeek 真实 smoke 等 P1/P2 能力包；运行统计产品化当前 DeepSeek/格式化失败诊断闭环已消化。
 
 暂不做:
 
@@ -141,7 +142,7 @@
 
 目标: 让用户从开始、生成、审阅、修订、恢复、复用形成闭环。
 
-包含: E03、E05、E06、E07、E08；其中 E03、E05、E06、E07、E08 规则型治理闭环已消化，后续功能闭环路线只保留 E08 跨 run 质量趋势、跨 run 对比或收藏等新厚切片候选。
+包含: E03、E05、E06、E07、E08；其中 E03、E05、E06、E07、E08 规则型治理闭环和跨 run deterministic 趋势已消化，后续功能闭环路线只保留跨 run 对比、收藏或 LLM judge evidence 等新厚切片候选。
 
 暂不做:
 
@@ -196,7 +197,7 @@
 - 需要同步: TEST_DESIGN/CASES artifact contract、资产 issue schema、前端资产 modal。
 - 完成定义: 测试点、风险、用例 issue 可处理，并通过持久化集合 `qualitySummary` 统一影响资产质量状态。
 - 不纳入: 新增 intent-tester 联动或自动执行。
-- 后续不再作为活跃候选重复选择；只在发现当前代码回归、真实 Lisa 输出 contract 失配，或需要接入跨 run 质量趋势时作为维护项处理。
+- 后续不再作为活跃候选重复选择；只在发现当前代码回归、真实 Lisa 输出 contract 失配，或需要接入 LLM judge evidence 时作为维护项处理。
 
 ### 4. 历史会话复用增强
 
@@ -205,7 +206,7 @@
 - 需要同步: run list response、snapshot restore、store reset/clone 行为。
 - 完成定义: 历史 run 可复制为新 run、继续、预览 artifact，并按 workflow/质量状态筛选。
 - 不纳入: 多用户分享权限。
-- 后续不再作为活跃候选重复选择；跨 run 对比、收藏或 E08 质量评分可作为新的独立厚切片处理。
+- 后续不再作为活跃候选重复选择；跨 run 对比、收藏或 LLM judge evidence 可作为新的独立厚切片处理。
 
 ### 5. Handoff 上下文强化
 
@@ -244,7 +245,7 @@
 ## 进入实现前需要补的设计问题
 
 - Artifact 质量诊断应完全前端解析，还是后端提供只读 diagnostic endpoint。
-- 质量评分已裁决为先做前端规则型 evidence gate；LLM judge evidence 和跨 run 趋势后续作为 E08 派生厚切片评估。
+- 质量评分已裁决为先做规则型 evidence gate，并已补跨 run deterministic 趋势；LLM judge evidence 后续作为 E08 派生厚切片评估。
 - 历史 run “复制为新 run”已在 E06 中裁决为复制 messages、当前 artifact versions 和 context summaries；协作批注、章节锁、审计事件、turn metrics 和测试资产不自动复制。
 - Handoff prompt 当前继续使用共享单模板，并由 deterministic helper 补来源版本、摘要、未确认项和目标输入；manifest 字段级摘要策略后续仅在 handoff 数量扩张时再评估。
 - 专业方法库配置是否纳入 manifest，还是先建独立 registry 后再合并。
