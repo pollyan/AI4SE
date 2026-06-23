@@ -19,6 +19,18 @@ def test_registry_derives_workflow_stages_from_manifest():
         "INCIDENT_REVIEW": ["TIMELINE", "ROOT_CAUSE", "IMPROVEMENT"],
         "IDEA_BRAINSTORM": ["DEFINE", "DIVERGE", "CONVERGE", "CONCEPT"],
         "VALUE_DISCOVERY": ["ELEVATOR", "PERSONA", "JOURNEY", "BLUEPRINT"],
+        "PRD_REVIEW": [
+            "INVENTORY",
+            "QUALITY_AUDIT",
+            "COMPLETION_PLAN",
+            "REVISION_BLUEPRINT",
+        ],
+        "STORY_BREAKDOWN": [
+            "INPUT_ANALYSIS",
+            "EPIC_MAPPING",
+            "STORY_WRITING",
+            "SPRINT_SLICING",
+        ],
     }
 
 

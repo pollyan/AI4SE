@@ -44,15 +44,6 @@ const NON_RUNTIME_AGENT_WORKFLOWS: AgentWorkflowConfig[] = [
         statusLabel: 'Plan'
     },
     {
-        id: 'story-breakdown',
-        agentId: 'alex',
-        status: 'plan',
-        name: '用户故事拆解',
-        description: '将完整需求拆解为 Sprint 可交付的用户故事，包含验收标准（AC）。',
-        icon: 'ListChecks',
-        statusLabel: 'Plan'
-    },
-    {
         id: 'competitive-analysis',
         agentId: 'alex',
         status: 'plan',

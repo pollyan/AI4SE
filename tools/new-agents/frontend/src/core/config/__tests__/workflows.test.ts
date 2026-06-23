@@ -118,6 +118,26 @@ describe('Workflow Configuration', () => {
         ]);
     });
 
+    it('should configure STORY_BREAKDOWN as an online Alex workflow without duplicate plan card', () => {
+        const workflows = getAgentWorkflows('alex');
+        const storyBreakdownCards = workflows.filter(w => w.id === 'story-breakdown');
+
+        expect(storyBreakdownCards).toHaveLength(1);
+        expect(storyBreakdownCards[0]?.status).toBe('online');
+        expect(storyBreakdownCards[0]?.name).toBe('用户故事拆解');
+        expect(storyBreakdownCards[0]?.link).toBe('/workspace/alex/story-breakdown');
+
+        const wf = WORKFLOWS.STORY_BREAKDOWN;
+        expect(wf.agentId).toBe('alex');
+        expect(wf.slug).toBe('story-breakdown');
+        expect(wf.stages.map(stage => stage.id)).toEqual([
+            'INPUT_ANALYSIS',
+            'EPIC_MAPPING',
+            'STORY_WRITING',
+            'SPRINT_SLICING',
+        ]);
+    });
+
     it('every workflow definition should configure an agentId', () => {
         for (const key of Object.keys(WORKFLOWS)) {
             const wf = WORKFLOWS[key as keyof typeof WORKFLOWS];

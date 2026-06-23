@@ -204,6 +204,42 @@ FRONTEND_PROMPT_FILES = {
         / "prd_review"
         / "revision_blueprint.ts"
     ),
+    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "story_breakdown"
+        / "input_analysis.ts"
+    ),
+    ("STORY_BREAKDOWN", "EPIC_MAPPING"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "story_breakdown"
+        / "epic_mapping.ts"
+    ),
+    ("STORY_BREAKDOWN", "STORY_WRITING"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "story_breakdown"
+        / "story_writing.ts"
+    ),
+    ("STORY_BREAKDOWN", "SPRINT_SLICING"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "story_breakdown"
+        / "sprint_slicing.ts"
+    ),
 }
 
 

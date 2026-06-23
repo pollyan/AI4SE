@@ -115,6 +115,10 @@ ARTIFACT_DATA_READY_STAGES: frozenset[tuple[str, str]] = frozenset(
         ("PRD_REVIEW", "QUALITY_AUDIT"),
         ("PRD_REVIEW", "COMPLETION_PLAN"),
         ("PRD_REVIEW", "REVISION_BLUEPRINT"),
+        ("STORY_BREAKDOWN", "INPUT_ANALYSIS"),
+        ("STORY_BREAKDOWN", "EPIC_MAPPING"),
+        ("STORY_BREAKDOWN", "STORY_WRITING"),
+        ("STORY_BREAKDOWN", "SPRINT_SLICING"),
         ("INCIDENT_REVIEW", "TIMELINE"),
         ("INCIDENT_REVIEW", "ROOT_CAUSE"),
         ("INCIDENT_REVIEW", "IMPROVEMENT"),
@@ -765,6 +769,40 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+STORY_BREAKDOWN_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮如何分析输入、拆 Epic、写用户故事与验收标准，或形成 Sprint 切片建议。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "用户故事拆解交付包", "workflow": "STORY_BREAKDOWN", "stage": "INPUT_ANALYSIS/EPIC_MAPPING/STORY_WRITING/SPRINT_SLICING", "status": "可进入下一阶段/需补充信息/暂缓"},
+    "input_insights": [{"insight_id": "IN-001", "category": "业务目标/用户场景/约束/风险/开放问题", "content": "...", "source": "用户输入/PRD/AI 推断", "status": "已确认/待确认/缺失"}],
+    "epics": [{"epic_id": "EPIC-001", "title": "...", "user_value": "...", "scope": "...", "priority": "P0/P1/P2", "risk": "...", "status": "候选/待排期/暂缓"}],
+    "stories": [{"story_id": "US-001", "epic_id": "EPIC-001", "title": "...", "as_a": "用户角色", "i_want": "能力或动作", "so_that": "业务价值", "priority": "P0/P1/P2", "testability_level": "高/中/低", "status": "待实现/待确认/暂缓"}],
+    "acceptance_criteria": [{"ac_id": "AC-001", "story_id": "US-001", "given": "...", "when": "...", "then": "...", "verification": "接口测试/UI 测试/人工验收/日志校验", "status": "待确认/已确认"}],
+    "dependencies": [{"dependency_id": "DEP-001", "source_story_id": "US-002", "target_story_id": "US-001", "dependency_type": "顺序依赖/数据依赖/接口依赖/业务确认", "description": "...", "risk": "...", "status": "待处理/已处理/接受"}],
+    "sprint_slices": [{"slice_id": "SPR-001", "name": "...", "story_ids": ["US-001"], "goal": "...", "priority": "P0/P1/P2", "capacity_note": "...", "risk_acceptance": "...", "status": "候选/推荐/暂缓"}],
+    "handoff_inputs": [{"input_id": "HI-001", "story_ids": ["US-001"], "target_workflow": "TEST_DESIGN/REQ_REVIEW/PRD_REVIEW", "content": "...", "testing_focus": "...", "status": "可交给 Lisa/需补充/暂缓"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "EPIC_MAPPING/STORY_WRITING/SPRINT_SLICING"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；epics.epic_id、stories.story_id、acceptance_criteria.ac_id 和 sprint_slices.slice_id 必须唯一；stories.epic_id 只能引用已存在的 epic_id；acceptance_criteria.story_id、dependencies.source_story_id、dependencies.target_story_id、sprint_slices.story_ids 和 handoff_inputs.story_ids 只能引用已存在的 story_id；dependencies 不能让同一个 Story 依赖自身；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 ai4se-visual，后端会负责确定性渲染右侧用户故事拆解产出物、roadmap、traceability-matrix 和 priority-board。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in ARTIFACT_DATA_READY_STAGES
 
@@ -800,6 +838,13 @@ def build_structured_output_instruction(
         "REVISION_BLUEPRINT",
     }:
         return PRD_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if workflow_id == "STORY_BREAKDOWN" and current_stage_id in {
+        "INPUT_ANALYSIS",
+        "EPIC_MAPPING",
+        "STORY_WRITING",
+        "SPRINT_SLICING",
+    }:
+        return STORY_BREAKDOWN_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
         return VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "PERSONA"):

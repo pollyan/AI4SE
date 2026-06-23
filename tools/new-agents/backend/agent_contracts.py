@@ -17,6 +17,12 @@ WORKFLOW_STAGES: dict[str, list[str]] = {
         "COMPLETION_PLAN",
         "REVISION_BLUEPRINT",
     ],
+    "STORY_BREAKDOWN": [
+        "INPUT_ANALYSIS",
+        "EPIC_MAPPING",
+        "STORY_WRITING",
+        "SPRINT_SLICING",
+    ],
 }
 
 REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
@@ -394,6 +400,54 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
         "可测试性等级",
         "状态",
     ],
+    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): [
+        "# 需求输入分析",
+        "## 文档信息",
+        "## 输入洞察",
+        "## Epic 候选",
+        "## 拆解风险",
+        "## 阶段门禁",
+        "业务目标",
+        "状态",
+    ],
+    ("STORY_BREAKDOWN", "EPIC_MAPPING"): [
+        "# Epic 映射",
+        "## 文档信息",
+        "## 输入洞察",
+        "## Epic 地图",
+        "## 依赖与风险",
+        "## 阶段门禁",
+        "Epic ID",
+        "用户价值",
+        "优先级",
+    ],
+    ("STORY_BREAKDOWN", "STORY_WRITING"): [
+        "# 用户故事与验收标准",
+        "## 文档信息",
+        "## Story Backlog",
+        "## 验收标准",
+        "## 依赖与风险",
+        "## Lisa Handoff 输入",
+        "## 阶段门禁",
+        "Story ID",
+        "Given",
+        "When",
+        "Then",
+        "可测试性等级",
+    ],
+    ("STORY_BREAKDOWN", "SPRINT_SLICING"): [
+        "# Sprint 切片计划",
+        "## 文档信息",
+        "## Story Backlog",
+        "## 验收标准",
+        "## 依赖与风险",
+        "## Sprint 切片建议",
+        "## Lisa Handoff 输入",
+        "## 阶段门禁",
+        "Sprint",
+        "风险接受",
+        "状态",
+    ],
 }
 
 REQUIRED_ARTIFACT_H1_KEYWORDS: dict[tuple[str, str], list[str]] = {
@@ -430,6 +484,9 @@ REQUIRED_ARTIFACT_STRUCTURED_VISUALS: dict[tuple[str, str], list[str]] = {
     ("PRD_REVIEW", "QUALITY_AUDIT"): ["score-matrix"],
     ("PRD_REVIEW", "COMPLETION_PLAN"): ["action-board"],
     ("PRD_REVIEW", "REVISION_BLUEPRINT"): ["roadmap"],
+    ("STORY_BREAKDOWN", "EPIC_MAPPING"): ["roadmap"],
+    ("STORY_BREAKDOWN", "STORY_WRITING"): ["traceability-matrix"],
+    ("STORY_BREAKDOWN", "SPRINT_SLICING"): ["priority-board"],
 }
 
 STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {

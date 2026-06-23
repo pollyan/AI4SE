@@ -30,6 +30,7 @@ from test_artifact_data_renderers import (
     VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
     VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
     VALID_PRD_REVIEW_ARTIFACT_DATA,
+    VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
     VALID_CASES_ARTIFACT_DATA,
     VALID_DELIVERY_ARTIFACT_DATA,
     VALID_REQ_REVIEW_ARTIFACT_DATA,
@@ -705,6 +706,44 @@ def test_prd_review_structured_output_instruction_requests_artifact_data_not_mar
     assert "artifact_data" in instruction
     assert "quality_findings" in instruction
     assert "completion_actions" in instruction
+    assert "stage_action" in instruction
+    assert "不要输出完整 Markdown" in instruction
+    assert "artifact_update.markdown" not in instruction
+
+
+def test_parse_agent_turn_output_text_renders_story_breakdown_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "我已整理 Sprint 切片计划，请确认右侧内容。",
+            "artifact_data": VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="SPRINT_SLICING",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# Sprint 切片计划")
+    assert '"type": "priority-board"' in output.artifact_update.markdown
+    assert output.stage_action is None
+
+
+def test_story_breakdown_structured_output_instruction_requests_artifact_data_not_markdown():
+    instruction = build_structured_output_instruction(
+        "STORY_BREAKDOWN",
+        "STORY_WRITING",
+    )
+
+    assert "artifact_data" in instruction
+    assert "stories" in instruction
+    assert "acceptance_criteria" in instruction
     assert "stage_action" in instruction
     assert "不要输出完整 Markdown" in instruction
     assert "artifact_update.markdown" not in instruction

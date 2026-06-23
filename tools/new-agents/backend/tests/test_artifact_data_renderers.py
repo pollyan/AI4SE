@@ -18,6 +18,7 @@ from artifact_data_renderers import (
     PrdReviewArtifactData,
     ReqReviewArtifactData,
     ReqReviewReportArtifactData,
+    StoryBreakdownArtifactData,
     StrategyArtifactData,
     ValueDiscoveryBlueprintArtifactData,
     ValueDiscoveryElevatorArtifactData,
@@ -26,6 +27,118 @@ from artifact_data_renderers import (
     render_agent_turn_from_artifact_data,
 )
 from test_asset_parsing import parse_lisa_test_asset_markdown
+
+VALID_STORY_BREAKDOWN_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "用户故事拆解交付包",
+        "workflow": "STORY_BREAKDOWN",
+        "stage": "SPRINT_SLICING",
+        "status": "可进入研发排期",
+    },
+    "input_insights": [
+        {
+            "insight_id": "IN-001",
+            "category": "业务目标",
+            "content": "提升团队成员权限配置效率并降低越权风险",
+            "source": "PRD 草案",
+            "status": "已确认",
+        }
+    ],
+    "epics": [
+        {
+            "epic_id": "EPIC-001",
+            "title": "成员权限管理",
+            "user_value": "管理员可以按角色控制成员访问范围",
+            "scope": "角色配置、权限生效、权限校验",
+            "priority": "P0",
+            "risk": "权限边界不清会导致越权访问",
+            "status": "待排期",
+        }
+    ],
+    "stories": [
+        {
+            "story_id": "US-001",
+            "epic_id": "EPIC-001",
+            "title": "设置成员只读权限",
+            "as_a": "团队管理员",
+            "i_want": "将成员设置为只读角色",
+            "so_that": "成员只能查看项目数据，不能修改关键配置",
+            "priority": "P0",
+            "testability_level": "高",
+            "status": "待实现",
+        },
+        {
+            "story_id": "US-002",
+            "epic_id": "EPIC-001",
+            "title": "拦截只读成员编辑操作",
+            "as_a": "系统",
+            "i_want": "在只读成员发起编辑时阻止请求",
+            "so_that": "权限策略能在服务端稳定生效",
+            "priority": "P0",
+            "testability_level": "高",
+            "status": "待实现",
+        },
+    ],
+    "acceptance_criteria": [
+        {
+            "ac_id": "AC-001",
+            "story_id": "US-001",
+            "given": "成员已加入团队且当前为普通成员",
+            "when": "管理员将成员角色设置为只读",
+            "then": "系统保存角色变更并展示只读状态",
+            "verification": "角色配置接口和页面状态测试",
+            "status": "待确认",
+        },
+        {
+            "ac_id": "AC-002",
+            "story_id": "US-002",
+            "given": "成员角色为只读",
+            "when": "成员提交编辑项目配置请求",
+            "then": "系统拒绝请求并返回权限不足提示",
+            "verification": "API 权限测试和 UI 错误提示测试",
+            "status": "待确认",
+        },
+    ],
+    "dependencies": [
+        {
+            "dependency_id": "DEP-001",
+            "source_story_id": "US-002",
+            "target_story_id": "US-001",
+            "dependency_type": "顺序依赖",
+            "description": "只有角色配置完成后才能验证编辑拦截",
+            "risk": "并行开发会导致测试环境权限状态不稳定",
+            "status": "待处理",
+        }
+    ],
+    "sprint_slices": [
+        {
+            "slice_id": "SPR-001",
+            "name": "权限配置 MVP",
+            "story_ids": ["US-001", "US-002"],
+            "goal": "交付只读角色配置和权限拦截闭环",
+            "priority": "P0",
+            "capacity_note": "适合 1 个 Sprint 完成",
+            "risk_acceptance": "暂不纳入复杂自定义角色",
+            "status": "候选",
+        }
+    ],
+    "handoff_inputs": [
+        {
+            "input_id": "HI-001",
+            "story_ids": ["US-001", "US-002"],
+            "target_workflow": "TEST_DESIGN",
+            "content": "成员角色配置、只读权限拦截、权限不足提示和服务端校验",
+            "testing_focus": "角色状态迁移、越权请求、页面反馈和 API 权限校验",
+            "status": "可交给 Lisa",
+        }
+    ],
+    "stage_gate": [
+        {
+            "checked": True,
+            "item": "P0 用户故事均具备验收标准、依赖和 Lisa 测试设计输入",
+        }
+    ],
+}
 
 VALID_PRD_REVIEW_ARTIFACT_DATA = {
     "document_info": {
@@ -2666,6 +2779,30 @@ def test_prd_review_artifact_data_rejects_unknown_section_reference():
         PrdReviewArtifactData.model_validate(invalid)
 
 
+def test_story_breakdown_artifact_data_rejects_unknown_epic_reference():
+    invalid = copy.deepcopy(VALID_STORY_BREAKDOWN_ARTIFACT_DATA)
+    invalid["stories"][0]["epic_id"] = "EPIC-MISSING"
+
+    with pytest.raises(ValidationError, match="unknown epic ids"):
+        StoryBreakdownArtifactData.model_validate(invalid)
+
+
+def test_story_breakdown_artifact_data_rejects_unknown_story_reference():
+    invalid = copy.deepcopy(VALID_STORY_BREAKDOWN_ARTIFACT_DATA)
+    invalid["acceptance_criteria"][0]["story_id"] = "US-MISSING"
+
+    with pytest.raises(ValidationError, match="unknown story ids"):
+        StoryBreakdownArtifactData.model_validate(invalid)
+
+
+def test_story_breakdown_artifact_data_rejects_self_dependency():
+    invalid = copy.deepcopy(VALID_STORY_BREAKDOWN_ARTIFACT_DATA)
+    invalid["dependencies"][0]["target_story_id"] = "US-002"
+
+    with pytest.raises(ValidationError, match="cannot depend on itself"):
+        StoryBreakdownArtifactData.model_validate(invalid)
+
+
 def test_idea_define_artifact_data_rejects_duplicate_evidence_id():
     invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
     invalid["evidence_items"].append(copy.deepcopy(invalid["evidence_items"][0]))
@@ -3475,6 +3612,84 @@ def test_render_prd_review_artifact_data_is_deterministic_and_contract_valid():
             current_stage_id="COMPLETION_PLAN",
         )
         == first
+    )
+
+
+def test_render_story_breakdown_artifact_data_is_deterministic_and_contract_valid():
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已整理用户故事拆解和 Sprint 切片建议，请查看右侧交付包。",
+            "artifact_data": VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="SPRINT_SLICING",
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已整理用户故事拆解和 Sprint 切片建议，请查看右侧交付包。",
+            "artifact_data": VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="SPRINT_SLICING",
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert first.artifact_update.markdown.startswith("# Sprint 切片计划")
+    assert "```ai4se-visual" in first.artifact_update.markdown
+    assert '"type": "priority-board"' in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="STORY_BREAKDOWN",
+            current_stage_id="SPRINT_SLICING",
+        )
+        == first
+    )
+
+
+@pytest.mark.parametrize(
+    ("stage_id", "expected_heading", "expected_visual"),
+    [
+        ("INPUT_ANALYSIS", "# 需求输入分析", None),
+        ("EPIC_MAPPING", "# Epic 映射", '"type": "roadmap"'),
+        ("STORY_WRITING", "# 用户故事与验收标准", '"type": "traceability-matrix"'),
+        ("SPRINT_SLICING", "# Sprint 切片计划", '"type": "priority-board"'),
+    ],
+)
+def test_render_story_breakdown_artifact_data_contract_valid_for_every_stage(
+    stage_id: str,
+    expected_heading: str,
+    expected_visual: str | None,
+):
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已整理用户故事拆解阶段产出，请查看右侧交付包。",
+            "artifact_data": VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id=stage_id,
+    )
+
+    assert output is not None
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith(expected_heading)
+    if expected_visual is not None:
+        assert expected_visual in output.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            output,
+            workflow_id="STORY_BREAKDOWN",
+            current_stage_id=stage_id,
+        )
+        == output
     )
 
 

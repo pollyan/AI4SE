@@ -19,7 +19,7 @@
 
 ## 当前入口
 
-- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选；已记录 2026-06-23 Alex `PRD_REVIEW` 质量评审与补全 workflow 消化结果。
+- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选；已记录 2026-06-23 Alex `PRD_REVIEW` 质量评审与补全 workflow、Alex `STORY_BREAKDOWN` 用户故事拆解 workflow 消化结果。
 
 ## 已归档
 

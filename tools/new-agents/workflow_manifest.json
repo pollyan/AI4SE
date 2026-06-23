@@ -929,6 +929,142 @@
         ],
         "inputPlaceholder": "粘贴 PRD、需求草案、Epic 或用户故事..."
       }
+    },
+    "STORY_BREAKDOWN": {
+      "id": "STORY_BREAKDOWN",
+      "agentId": "alex",
+      "slug": "story-breakdown",
+      "name": "用户故事拆解",
+      "description": "将 PRD、需求蓝图或业务目标拆解为 Epic、User Story、验收标准、依赖和 Sprint 切片建议。",
+      "listing": {
+        "name": "用户故事拆解",
+        "description": "把 PRD 或需求蓝图拆成可排期、可验收、可交给 Lisa 继续评审或测试设计的用户故事包。",
+        "icon": "ListChecks",
+        "preview": {
+          "suitableFor": [
+            "已有 PRD、需求蓝图或较明确的业务目标，需要拆成研发可交付故事",
+            "需要把 Epic、Story、AC、依赖和 Sprint 候选组织成同一交付包",
+            "需要为 Lisa 需求评审或测试设计准备结构化输入"
+          ],
+          "notSuitableFor": [
+            "只有早期创意，还没有明确产品方向或业务目标",
+            "只是想检查 PRD 质量，而不是进入研发切片"
+          ],
+          "requiredInputs": [
+            "PRD、需求蓝图、Epic 草案或业务目标",
+            "目标用户、核心场景、范围边界和关键约束",
+            "已有验收标准、依赖、风险或优先级线索"
+          ],
+          "expectedOutputs": [
+            "需求输入分析和 Epic 映射",
+            "User Story backlog 与 Given/When/Then 验收标准",
+            "依赖/风险清单、Sprint 切片建议和 Lisa handoff 输入"
+          ],
+          "sampleInput": "请把这份会员权限管理 PRD 拆成 Epic、用户故事、验收标准和 Sprint 切片建议。"
+        }
+      },
+      "stages": [
+        {
+          "id": "INPUT_ANALYSIS",
+          "name": "需求输入分析",
+          "promptTemplateId": "story_breakdown.input_analysis",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 需求输入分析",
+              "## 文档信息",
+              "## 输入洞察",
+              "## Epic 候选",
+              "## 拆解风险",
+              "## 阶段门禁",
+              "业务目标",
+              "状态"
+            ]
+          }
+        },
+        {
+          "id": "EPIC_MAPPING",
+          "name": "Epic 映射",
+          "promptTemplateId": "story_breakdown.epic_mapping",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# Epic 映射",
+              "## 文档信息",
+              "## 输入洞察",
+              "## Epic 地图",
+              "## 依赖与风险",
+              "## 阶段门禁",
+              "Epic ID",
+              "用户价值",
+              "优先级"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "roadmap"
+            ]
+          }
+        },
+        {
+          "id": "STORY_WRITING",
+          "name": "Story 与 AC",
+          "promptTemplateId": "story_breakdown.story_writing",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 用户故事与验收标准",
+              "## 文档信息",
+              "## Story Backlog",
+              "## 验收标准",
+              "## 依赖与风险",
+              "## Lisa Handoff 输入",
+              "## 阶段门禁",
+              "Story ID",
+              "Given",
+              "When",
+              "Then",
+              "可测试性等级"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "traceability-matrix"
+            ]
+          }
+        },
+        {
+          "id": "SPRINT_SLICING",
+          "name": "Sprint 切片",
+          "promptTemplateId": "story_breakdown.sprint_slicing",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# Sprint 切片计划",
+              "## 文档信息",
+              "## Story Backlog",
+              "## 验收标准",
+              "## 依赖与风险",
+              "## Sprint 切片建议",
+              "## Lisa Handoff 输入",
+              "## 阶段门禁",
+              "Sprint",
+              "风险接受",
+              "状态"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "priority-board"
+            ]
+          }
+        }
+      ],
+      "onboarding": {
+        "welcomeMessage": "你好！我是 Alex，用户故事拆解顾问。把 PRD、需求蓝图或业务目标发给我，我会帮你拆成 Epic、用户故事、验收标准和 Sprint 切片建议。",
+        "starterPrompts": [
+          "请把这份会员权限管理 PRD 拆成可排期的用户故事",
+          "我有一份需求蓝图，想整理成 Epic、Story 和验收标准",
+          "帮我把这些业务目标拆成一个 Sprint 可交付的故事包"
+        ],
+        "inputPlaceholder": "粘贴 PRD、需求蓝图、Epic 草案或业务目标..."
+      }
     }
   }
 }
