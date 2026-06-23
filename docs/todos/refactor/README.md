@@ -1,6 +1,6 @@
 # Refactor Todo
 
-本目录记录重构类扫描、方案和实施待办。已完成的 todo 归档到 `docs/todos/archive/`；当前没有活跃重构 todo。
+本目录记录重构类扫描、方案和实施待办。已完成的 todo 归档到 `docs/todos/archive/`；当前活跃重构候选集中在 New Agents 增强诊断。
 
 ## 使用规则
 
@@ -21,7 +21,7 @@
 
 - `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选。
 
-2026-06-23 已复核：DeepSeek V4 结构化产物数据改造已归档；除上述活动候选外，其他重构类事项均已归档或转为历史完成记录。不要从 `archive/` 中的过程性“待办/剩余”直接恢复实施。
+2026-06-23 已复核：DeepSeek V4 结构化产物数据改造已归档；Alex 用户故事拆解 workflow 已在 `2026-06-23-new-agents-enhancement-diagnostic.md` 的 E13 中消化。除上述活动候选外，其他重构类事项均已归档或转为历史完成记录。不要从 `archive/` 中的过程性“待办/剩余”直接恢复实施。
 
 ## 已归档
 

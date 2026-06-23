@@ -87,6 +87,25 @@ describe('Workflow Configuration', () => {
         expect(wf.stages[3].description.length).toBeGreaterThan(100);
     });
 
+    it('should configure STORY_BREAKDOWN as an online Alex workflow', () => {
+        const wf = WORKFLOWS.STORY_BREAKDOWN;
+        expect(wf).toBeDefined();
+        expect(wf.name).toBe('用户故事拆解');
+        expect(wf.agentId).toBe('alex');
+        expect(wf.slug).toBe('story-breakdown');
+        expect(wf.stages).toHaveLength(4);
+        expect(wf.stages[0].id).toBe('INPUT_ANALYSIS');
+        expect(wf.stages[1].id).toBe('EPIC_MAPPING');
+        expect(wf.stages[2].id).toBe('STORY_BACKLOG');
+        expect(wf.stages[3].id).toBe('SPRINT_PLAN');
+
+        const workflows = getAgentWorkflows('alex');
+        const storyBreakdown = workflows.find(w => w.id === 'story-breakdown');
+        expect(storyBreakdown).toBeDefined();
+        expect(storyBreakdown?.status).toBe('online');
+        expect(storyBreakdown?.link).toBe('/workspace/alex/story-breakdown');
+    });
+
     it('should have value-discovery workflow in Alex agent workflows as online and without prd-creation', () => {
         const workflows = getAgentWorkflows('alex');
 

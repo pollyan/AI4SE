@@ -76,6 +76,7 @@
 | E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | FMEA、JTBD、RICE、Kano、CAPA 等可由配置注入 prompt/template |
 | E11 | Prompt/template 版本管理 | 新增功能 | 平台扩展 | L | P2 | 每个 stage 有 prompt/template version 和回归样例 |
 | E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 | 新 workflow 缺 manifest/prompt/contract/test 任一面时 dry-run 失败 |
+| E13 | Alex 用户故事拆解 workflow | 已消化 | 专业内容 | M | P0 | 2026-06-23 已主线化：共享 workflow `STORY_BREAKDOWN`、slug `story-breakdown`、四阶段 `artifact_data` renderer、story-map visual contract、Alex 在线入口和 Lisa handoff 均已接入；验证覆盖 backend contract/runtime/renderer/sync/handoff 与 frontend workflow/prompt tests |
 
 ## Lisa 专业化方向
 
@@ -99,6 +100,7 @@
 1. VALUE_DISCOVERY/BLUEPRINT 质量门禁和 handoff 输入强化。
 2. IDEA_BRAINSTORM/CONVERGE 评分口径和验证实验闭环。
 3. Workflow 入口 preview 中补齐 Alex workflow 的适用/不适用说明和产物示例。
+4. 已完成：Alex 用户故事拆解 workflow 主线化，输出 Epic Map、User Story Backlog、验收标准、Sprint 切片和 Lisa Handoff 输入。
 
 ## 推荐路线
 

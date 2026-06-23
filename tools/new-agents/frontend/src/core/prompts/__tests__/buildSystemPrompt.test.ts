@@ -24,6 +24,10 @@ const migratedArtifactDataStages: Array<{
     { agentId: 'alex', workflow: 'VALUE_DISCOVERY', stageId: 'PERSONA' },
     { agentId: 'alex', workflow: 'VALUE_DISCOVERY', stageId: 'JOURNEY' },
     { agentId: 'alex', workflow: 'VALUE_DISCOVERY', stageId: 'BLUEPRINT' },
+    { agentId: 'alex', workflow: 'STORY_BREAKDOWN', stageId: 'INPUT_ANALYSIS' },
+    { agentId: 'alex', workflow: 'STORY_BREAKDOWN', stageId: 'EPIC_MAPPING' },
+    { agentId: 'alex', workflow: 'STORY_BREAKDOWN', stageId: 'STORY_BACKLOG' },
+    { agentId: 'alex', workflow: 'STORY_BREAKDOWN', stageId: 'SPRINT_PLAN' },
 ];
 
 describe('buildSystemPrompt', () => {
@@ -220,6 +224,24 @@ describe('buildSystemPrompt', () => {
             expect(prompt).toContain(WORKFLOWS[workflow].stages[stageIndex].name);
         }
     );
+
+    it('describes story breakdown work without markdown direct-write instructions', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'alex',
+            workflow: 'STORY_BREAKDOWN',
+            stageIndex: 2,
+            currentArtifact: '# 用户故事拆解包\n已有内容',
+        });
+
+        expect(prompt).toContain('用户故事拆解');
+        expect(prompt).toContain('User Story Backlog');
+        expect(prompt).toContain('验收标准');
+        expect(prompt).toContain('Sprint 切片');
+        expect(prompt).toContain('Lisa Handoff');
+        expect(prompt).toContain('结构化业务数据模式');
+        expect(prompt).not.toContain('artifact_update');
+        expect(prompt).not.toContain('必须提供完整、全部的 Markdown 文档内容');
+    });
 
     it('keeps next-stage confirmation separate from next-stage artifact generation', () => {
         const prompt = buildSystemPrompt({

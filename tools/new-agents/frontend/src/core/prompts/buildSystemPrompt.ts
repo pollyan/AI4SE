@@ -13,6 +13,7 @@ const ARTIFACT_DATA_STAGE_IDS: Record<WorkflowType, ReadonlySet<string>> = {
     INCIDENT_REVIEW: new Set(['TIMELINE', 'ROOT_CAUSE', 'IMPROVEMENT']),
     IDEA_BRAINSTORM: new Set(['DEFINE', 'DIVERGE', 'CONVERGE', 'CONCEPT']),
     VALUE_DISCOVERY: new Set(['ELEVATOR', 'PERSONA', 'JOURNEY', 'BLUEPRINT']),
+    STORY_BREAKDOWN: new Set(['INPUT_ANALYSIS', 'EPIC_MAPPING', 'STORY_BACKLOG', 'SPRINT_PLAN']),
 };
 
 const removeMarkTags = (artifact: string): string => artifact.replace(/<\/?mark>/gi, '');
