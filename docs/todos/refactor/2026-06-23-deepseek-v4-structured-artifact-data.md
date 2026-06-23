@@ -1,6 +1,6 @@
 # DeepSeek V4 兼容的后端结构化产物数据改造 Todo
 
-> 状态: 活动候选
+> 状态: 已完成，真实 DeepSeek V4 Flash smoke 按需显式触发
 > 创建日期: 2026-06-23
 > 背景: 当前主要使用 DeepSeek V4 Flash。该模型链路适合按 JSON mode 约束“合法 JSON”，但不能把它等同于 OpenAI strict Structured Outputs。长期最稳方案应减少模型直接生成完整 Markdown/Mermaid 的职责。
 
@@ -25,6 +25,7 @@
 - 2026-06-23 已完成第十七个垂直切片: `IDEA_BRAINSTORM/CONCEPT` 支持模型输出 `artifact_data`，后端校验定位声明、核心假设、Lean Canvas、MVP 功能、增长漏斗、Pre-mortem 风险、验证路线、不可做范围、决策记录、下一步行动和阶段门禁后，确定性渲染《产品概念简报》、Mermaid `pie`/`flowchart` 和 `ai4se-visual` `mvp-map`。
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
 - `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM` 四阶段已完成结构化产物数据迁移；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
+- 2026-06-23 已完成 DeepSeek V4 evidence gate: `tools/new-agents/backend/deepseek_v4_smoke_evidence.py` 可以在无 `NEW_AGENTS_SMOKE_*` 时写入 `status=skipped` 证据，在环境齐备且模型为 `deepseek-v4-*` 时运行代表性 `TEST_DESIGN/CLARIFY` live smoke，并记录 capability、thinking disabled、response format、artifact_data stage 覆盖和 artifact contract 结果。
 
 ## 目标
 
@@ -168,9 +169,24 @@ renderer 职责:
 - `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_endpoint.py -q`
 - `cd tools/new-agents/frontend && npm run test -- --run src/services/__tests__/chatService.test.ts src/components/__tests__/ChatPane.test.tsx`
 - `cd tools/new-agents/frontend && npm run lint`
+- `python3 -m pytest tools/new-agents/backend/tests/test_deepseek_v4_smoke_evidence.py -q`
+- `python3 tools/new-agents/backend/deepseek_v4_smoke_evidence.py`
+- 可选真实 DeepSeek V4 Flash smoke:
+
+```bash
+NEW_AGENTS_SMOKE_API_KEY=... \
+NEW_AGENTS_SMOKE_BASE_URL=https://api.deepseek.com \
+NEW_AGENTS_SMOKE_MODEL=deepseek-v4-flash \
+python3 tools/new-agents/backend/deepseek_v4_smoke_evidence.py
+```
 
 ## 进入实现前需要补的设计问题
 
 - `artifact_data` schema 是按 workflow/stage 手写 Pydantic model，还是先定义通用 block schema 再按 stage 组合。
 - renderer 输出是否继续保存为 Markdown，或同时持久化 `artifact_data` 便于后续重渲染和审计。
-- 真实 DeepSeek V4 Flash smoke gate 是否作为可选验证，还是每个阶段迁移都要求人工触发一次。
+- 已裁决: 真实 DeepSeek V4 Flash smoke gate 作为可选显式验证，不作为每个阶段迁移或默认本地 CI 门禁。无凭证、网络或额度时必须写入 skipped evidence，不能伪造真实通过。
+
+## 后续颗粒度约束
+
+- 17 个在线 workflow stage 的 DeepSeek V4 `artifact_data` 迁移已完成；后续恢复目标模式时不要再把该需求拆成逐阶段 Superpowers 切片。
+- 后续只按能力包推进，例如真实外部 smoke 扩展到多代表阶段、evidence 接入 CI artifact、或 `artifact_data` 持久化审计；每个包都必须有独立用户动作链或工程信任闭环。

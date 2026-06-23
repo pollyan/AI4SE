@@ -19,7 +19,9 @@
 
 ## 当前入口
 
-暂无。
+- `2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 Flash 结构化产物迁移与 evidence gate 已完成；真实外部 smoke 仅在凭证、网络和额度齐备时显式触发，不作为默认本地门禁。
+
+2026-06-23 已复核：DeepSeek V4 不再按单 stage 继续拆 Superpowers；后续只接受真实 smoke 扩展、CI evidence 接入或 artifact data 持久化审计等能力包级候选。
 
 ## 已归档
 
