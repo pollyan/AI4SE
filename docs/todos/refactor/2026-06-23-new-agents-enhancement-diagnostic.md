@@ -58,7 +58,7 @@
 | Run 复用 | 有历史列表、搜索、runId snapshot 恢复、复用状态筛选、当前 artifact 预览、继续原 run、复制为新 run | 跨 run 对比和收藏仍未做；不影响当前历史复用闭环 | P1 已部分完成 |
 | Workflow handoff | 有配置化 handoff 基础，已补上下文审阅卡和目标 run 输入增强 | 当前 P1 缺口已消化；后续只在新增 source/target handoff 时扩展配置 | 已完成 |
 | 可观测性 | 有 success rate、provider、stage、recent turns，且已补 DeepSeek/格式化输出失败分类 drilldown、行动建议和跨 run 产品质量趋势 | 后续只缺 LLM judge 或更深的产品质量外部证据 | P1 已部分完成 |
-| 平台扩展 | manifest 已承载核心配置；workflow schema dry-run 已提供本地同步门禁 | 缺完整 scaffold/codegen 和 prompt/template 版本管理 | P2 |
+| 平台扩展 | manifest 已承载核心配置；workflow schema dry-run 已提供本地同步门禁；workflow scaffold/codegen 已支持从 JSON spec 预览/生成 manifest 和 prompt skeleton，并衔接 dry-run 后续缺口报告 | 缺 prompt/template 版本管理 | P2 |
 
 ## 增强机会清单
 
@@ -75,7 +75,7 @@
 | E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 已消化 DeepSeek/格式化输出失败诊断闭环和跨 run 质量趋势：显示 workflow/stage/provider 格式化失败 drilldown、contract retry 次数、行动建议、质量趋势和最近质量问题样本 |
 | E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | FMEA、JTBD、RICE、Kano、CAPA 等可由配置注入 prompt/template |
 | E11 | Prompt/template 版本管理 | 新增功能 | 平台扩展 | L | P2 | 每个 stage 有 prompt/template version 和回归样例 |
-| E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 已部分完成 | 已消化诊断型 dry-run 门禁：新 workflow 缺 manifest、前端 prompt/template 映射、后端 contract、artifact_data renderer/readiness、handoff 或 manifest 打包任一面时本地 dry-run 失败；完整 scaffold/codegen 保留后续 |
+| E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 已完成 | 已消化诊断型 dry-run 门禁和完整 scaffold/codegen：新 workflow 可先用 JSON spec 预览或生成 manifest/prompt skeleton，非法 spec、重复 stage/template、已有 workflow 或已有 prompt 文件会明确失败；生成后继续由 dry-run 报告前端映射、后端 contract、artifact_data renderer/readiness、handoff 或 manifest 打包缺口 |
 | E13 | Alex 用户故事拆解 workflow | 新增功能 | 专业内容 | M | P0 | 已消化：`STORY_BREAKDOWN` 作为 Alex 在线 workflow 复用共享 Agent Runtime、typed SSE、workflow manifest、artifact contract、artifact_data renderer 和 handoff，覆盖输入分析、Epic 映射、Story Backlog、Sprint 切片与 Lisa handoff |
 | E14 | Alex PRD 质量评审与补全 workflow | 新增功能 | 专业内容 | M | P0 | 已消化：`PRD_REVIEW` 作为 Alex 在线 workflow 复用共享 Agent Runtime、typed SSE、workflow manifest、artifact contract 和 artifact_data renderer，覆盖输入盘点、质量评审、补全建议和修订蓝图 |
 
@@ -93,6 +93,7 @@
 - 2026-06-23: 已完成 Artifact 定向修订闭环厚切片，消化 E05。ArtifactPane 章节侧栏增加未锁定章节重生成动作；`useChatService` 新增 `handleRegenerateArtifactSection()`，通过现有共享 `generateResponseStream` / `/api/agent/runs/stream` typed SSE 发起定向修订 prompt；前端共享 `artifactSections` helper 负责 H1-H3 章节 anchor、锁定匹配、锁定保护和目标章节合并。模型仍返回完整 artifact，但客户端只接收目标章节内容，非目标章节保持原样，锁定章节按锁快照恢复，成功后写入 `artifactContent`、`stageArtifacts` 和 `artifactHistory`。该切片不新增后端 runtime、API path、store 或 renderer。
 - 2026-06-23: 已完成 Workflow schema dry-run 工程信任闭环，消化 E12 的诊断门禁部分。新增 `scripts/validation/new_agents_workflow_dry_run.py`，从真实仓库事实聚合检查 shared `workflow_manifest.json`、前端 `STAGE_CONTENT_BY_TEMPLATE_ID` 与 prompt 文件、后端 `WORKFLOW_STAGES` / artifact contract、DeepSeek `artifact_data` readiness、renderer stage keys、handoff prompt 和 manifest 打包/挂载；旧 workflow contract sync 测试复用同一 loader，不再维护独立 prompt 文件硬编码表。该切片不新增 runtime、API、store、renderer 或真实 LLM 调用；完整 scaffold/codegen、prompt/template 版本管理和 LLM judge evidence 保留为后续候选。
 - 2026-06-23: 已完成 DeepSeek 真实 smoke gate 结构化链路对齐厚切片。`test_agent_real_smoke.py` 已从旧模型直写 `artifact_update.markdown` smoke 改为验证 DeepSeek JSON object mode、thinking disabled、`artifact_data` 输出、后端 deterministic renderer、artifact contract 和 chat/artifact 分离；缺少 `NEW_AGENTS_SMOKE_*` 凭证时仍明确 skip，不把 mock 结果声明为真实外部验证。该切片不新增 DeepSeek 专属 runtime、API path、store 或 renderer；真实 DeepSeek 外部执行证据仍需要凭证、网络和额度。
+- 2026-06-23: 已完成 Workflow scaffold/codegen 工程信任闭环，消化 E12 的完整脚手架部分。新增 `scripts/validation/new_agents_workflow_scaffold.py`，维护者可从 JSON spec 预览或写入 `workflow_manifest.json` workflow block 和 prompt skeleton；工具校验 workflow/stage/template/slug、拒绝重复 stage/template、已有 workflow 和已有 prompt 文件，preview 不写文件，write 后输出后续 `new_agents_workflow_dry_run.py` 命令继续暴露前端映射、后端 contract、artifact_data renderer/readiness 等业务缺口。该切片不新增 runtime、API、store、renderer 或真实 LLM 调用；prompt/template 版本管理和 LLM judge evidence 保留为后续候选。
 
 ## Lisa 专业化方向
 
@@ -160,7 +161,7 @@
 
 目标: 让后续新增 agent/workflow 更低成本、更可靠。
 
-包含: E09、E10、E11、E12；其中 E09 当前 DeepSeek/格式化失败诊断 drilldown 已消化，E12 诊断型 workflow schema dry-run 门禁已消化，后续平台化重点转向 E12 完整 scaffold/codegen、E10 专业方法库配置和 E11 Prompt/template 版本管理。
+包含: E09、E10、E11、E12；其中 E09 当前 DeepSeek/格式化失败诊断 drilldown 已消化，E12 诊断型 workflow schema dry-run 门禁和完整 scaffold/codegen 已消化，后续平台化重点转向 E10 专业方法库配置和 E11 Prompt/template 版本管理。
 
 暂不做:
 
@@ -245,12 +246,11 @@
 
 ## 后续 Superpowers 执行颗粒度
 
-后续恢复目标模式后，剩余工作按 5 个完整能力包推进，每个能力包单独作为一次 Superpowers 流程，不再拆成单字段、单 helper、单控件、单测试或单端点轮次：
+后续恢复目标模式后，剩余工作按 4 个完整能力包推进，每个能力包单独作为一次 Superpowers 流程，不再拆成单字段、单 helper、单控件、单测试或单端点轮次：
 
 | 能力包 | Superpowers 粒度要求 | 不拆出的局部项 |
 | --- | --- | --- |
 | E08 LLM judge evidence | 一次性交付可选 judge evidence 的触发、记录、展示、失败解释、验证和 todo 更新 | 不单独拆 judge schema、单条评分 prompt、单个展示字段 |
-| E12 workflow scaffold/codegen | 一次性交付从输入到生成/补齐 workflow 骨架、dry-run 校验、失败报告和文档记录的工程信任闭环 | 不单独拆模板文件、生成脚本参数、单个 manifest 字段 |
 | Prompt/template 版本管理 | 一次性交付 stage prompt/template version、回归样例绑定、变更追踪、校验和可见诊断 | 不单独拆 version 字段、单个 registry helper、单条测试 |
 | 专业方法库配置化 | 一次性交付方法库配置、prompt/template 注入、workflow/stage 适配、缺失方法诊断和测试证据 | 不单独拆 FMEA/JTBD/RICE 的单个方法条目 |
 | DeepSeek 真实外部执行证据 | gate 已完成结构化链路对齐；后续只在具备凭证、网络和额度时执行真实 DeepSeek 调用并记录证据，失败时进入分诊 | 不用 mock smoke 替代真实 DeepSeek 调用，不把 env 检查或 skip 结果当作真实通过 |

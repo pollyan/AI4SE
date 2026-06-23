@@ -20,17 +20,18 @@
 ## 当前入口
 
 - `2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 Flash 兼容的后端结构化产物数据改造记录；本地确定性 readiness 已覆盖当前全部在线 workflow stage，并已补齐格式化输出失败分类、`artifact_data` retry 诊断上下文、运行统计 drilldown、最近失败分诊队列和真实 smoke gate 结构化链路对齐；真实 DeepSeek 外部执行证据仍因凭证、网络和额度作为可选验证保留。
-- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选；已记录 2026-06-23 Alex `PRD_REVIEW` 质量评审与补全 workflow、`STORY_BREAKDOWN` 用户故事拆解 workflow、Artifact 审阅诊断中心、Lisa 测试资产质量闭环、Workflow handoff 上下文审阅、Run 历史复用中心、DeepSeek 格式化失败运行统计诊断闭环、Workflow 质量治理闭环、Artifact 定向修订闭环、Workflow schema dry-run 门禁和跨 run 工作流质量趋势闭环、DeepSeek 真实 smoke gate 结构化链路对齐消化结果，下一批高价值候选为 E08 LLM judge evidence、E12 完整 scaffold/codegen、prompt/template 版本管理和 DeepSeek 真实外部执行证据。
+- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选；已记录 2026-06-23 Alex `PRD_REVIEW` 质量评审与补全 workflow、`STORY_BREAKDOWN` 用户故事拆解 workflow、Artifact 审阅诊断中心、Lisa 测试资产质量闭环、Workflow handoff 上下文审阅、Run 历史复用中心、DeepSeek 格式化失败运行统计诊断闭环、Workflow 质量治理闭环、Artifact 定向修订闭环、Workflow schema dry-run 门禁、完整 scaffold/codegen、跨 run 工作流质量趋势闭环和 DeepSeek 真实 smoke gate 结构化链路对齐消化结果，下一批高价值候选为 E08 LLM judge evidence、prompt/template 版本管理、专业方法库配置化和 DeepSeek 真实外部执行证据。
 
 ## 后续切片颗粒度
 
 后续恢复目标模式时，剩余工作按完整能力包执行，每个能力包单独走一次 Superpowers 流程：
 
 1. E08 LLM judge evidence。
-2. E12 workflow scaffold/codegen。
-3. Prompt/template 版本管理。
-4. 专业方法库配置化。
-5. DeepSeek 真实外部执行证据。
+2. Prompt/template 版本管理。
+3. 专业方法库配置化。
+4. DeepSeek 真实外部执行证据。
+
+2026-06-23 已完成 E12 workflow scaffold/codegen 工程信任闭环：新增 scaffold CLI 可从 JSON spec 预览或写入 workflow manifest 和 prompt skeleton，默认拒绝非法 spec、重复 stage/template、已有 workflow 和已有 prompt 文件，并输出后续 dry-run 命令继续暴露 backend contract、renderer/readiness 等剩余缺口。
 
 每个能力包都必须作为完整厚切片推进，默认包含 CGA、自问自答式头脑风暴、中文 spec、中文 implementation plan、TDD、验证、todo 更新和聚焦 commit。CGA 选定 milestone 后，必须先输出中文自问自答头脑风暴，再生成中文 spec；该头脑风暴至少回答用户意图、成功标准、边界取舍、2-3 个实现路径、推荐路径、风险和验收证据。不要把同一能力包拆成“先 schema、再 UI、再测试、再文档”的多轮小切片；同一用户意图下的后端契约、前端入口、状态承接、错误反馈、验证证据和文档记录应在同一轮交付。DeepSeek 真实外部执行证据是例外：真实 smoke gate 已完成结构化链路对齐，后续如果当轮仍缺少凭证、网络或额度，只能记录真实外部验证未完成，不能用 mock 结果替代真实 DeepSeek 调用。
 
