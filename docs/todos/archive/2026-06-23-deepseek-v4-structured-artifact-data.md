@@ -9,13 +9,14 @@
 
 本 todo 已完成并从 refactor 活动池归档。完成态边界如下:
 
-- `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM` 四阶段共 17 个在线 stage 已迁移为模型输出 `artifact_data`，后端确定性渲染 Markdown、Mermaid 和 `ai4se-visual`。
+- `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段、`IDEA_BRAINSTORM` 四阶段和 `STORY_BREAKDOWN` 四阶段共 21 个在线 stage 已迁移为模型输出 `artifact_data`，后端确定性渲染 Markdown、Mermaid 和 `ai4se-visual`。
 - DeepSeek V4 Flash capability 明确为 `json_object_only`，请求仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
 - readiness gate 已覆盖 workflow manifest 在线 stage、renderer/fixture 存在性、artifact contract、structured output instruction、fake DeepSeek raw JSON stream、response_format 和 thinking 配置。
 - 真实 DeepSeek V4 Flash smoke gate 已对齐为可选门禁: 默认无凭证时 skip；配置 `DEEPSEEK_V4_SMOKE_*` 或兼容 `NEW_AGENTS_SMOKE_*` 后验证 raw JSON streaming、`artifact_data` schema、后端 renderer 和 artifact contract。
 - prompt 边界硬化已完成: 已迁移 stage 的前端 system prompt 不再注入 `<mark>`、`artifact_update`、完整 Markdown 重写要求或 Mermaid fence 参考。
 - 2026-06-23 本轮目标模式补充了主线格式化输出防回退门禁: 共享 runtime 暴露 `ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS` stage registry，所有 manifest 在线 stage 的 structured output instruction 和 retry prompt 均要求修复 `artifact_data`，不要求模型输出或修复完整 Markdown；该 registry 与后端 renderer stage key registry 必须完全一致。
 - 2026-06-23 本轮目标模式补充了 refactor README 活动候选索引一致性测试，防止已完成归档项继续被误判为活动实现缺口。
+- 2026-06-23 本轮目标模式在 Alex `STORY_BREAKDOWN` 主线化后补齐 DeepSeek readiness fixture，确保 `INPUT_ANALYSIS`、`EPIC_MAPPING`、`STORY_BACKLOG`、`SPRINT_PLAN` 四个新增在线 stage 同样通过 fake DeepSeek raw JSON stream、`artifact_data` schema、后端 renderer 和 artifact contract。
 
 本轮收口验证:
 
@@ -45,7 +46,7 @@
 - 2026-06-23 已完成第十六个垂直切片: `IDEA_BRAINSTORM/CONVERGE` 支持模型输出 `artifact_data`，后端校验决策矩阵、ICE 评分、资源约束、敏感性分析、验证实验、合并路径和阶段门禁后，确定性渲染《收敛聚焦》和 Mermaid `quadrantChart`。
 - 2026-06-23 已完成第十七个垂直切片: `IDEA_BRAINSTORM/CONCEPT` 支持模型输出 `artifact_data`，后端校验定位声明、核心假设、Lean Canvas、MVP 功能、增长漏斗、Pre-mortem 风险、验证路线、不可做范围、决策记录、下一步行动和阶段门禁后，确定性渲染《产品概念简报》、Mermaid `pie`/`flowchart` 和 `ai4se-visual` `mvp-map`。
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
-- `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM` 四阶段已完成结构化产物数据迁移；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
+- `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段、`IDEA_BRAINSTORM` 四阶段和 `STORY_BREAKDOWN` 四阶段已完成结构化产物数据迁移；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
 
 ## 目标
 
@@ -156,6 +157,10 @@ renderer 职责:
 15. 已完成: `IDEA_BRAINSTORM/DIVERGE` 垂直切片。
 16. 已完成: `IDEA_BRAINSTORM/CONVERGE` 垂直切片。
 17. 已完成: `IDEA_BRAINSTORM/CONCEPT` 垂直切片。
+18. 已完成: `STORY_BREAKDOWN/INPUT_ANALYSIS` readiness 覆盖。
+19. 已完成: `STORY_BREAKDOWN/EPIC_MAPPING` readiness 覆盖。
+20. 已完成: `STORY_BREAKDOWN/STORY_BACKLOG` readiness 覆盖。
+21. 已完成: `STORY_BREAKDOWN/SPRINT_PLAN` readiness 覆盖。
 
 每个阶段迁移必须同步:
 
