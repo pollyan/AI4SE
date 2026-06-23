@@ -7,6 +7,41 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from agent_contracts import AgentTurnOutput
 
 
+ARTIFACT_DATA_RENDERER_STAGE_KEYS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("IDEA_BRAINSTORM", "DEFINE"),
+        ("IDEA_BRAINSTORM", "DIVERGE"),
+        ("IDEA_BRAINSTORM", "CONVERGE"),
+        ("IDEA_BRAINSTORM", "CONCEPT"),
+        ("TEST_DESIGN", "CLARIFY"),
+        ("TEST_DESIGN", "STRATEGY"),
+        ("TEST_DESIGN", "CASES"),
+        ("TEST_DESIGN", "DELIVERY"),
+        ("REQ_REVIEW", "REVIEW"),
+        ("REQ_REVIEW", "REPORT"),
+        ("VALUE_DISCOVERY", "ELEVATOR"),
+        ("VALUE_DISCOVERY", "PERSONA"),
+        ("VALUE_DISCOVERY", "JOURNEY"),
+        ("VALUE_DISCOVERY", "BLUEPRINT"),
+        ("PRD_REVIEW", "INVENTORY"),
+        ("PRD_REVIEW", "QUALITY_AUDIT"),
+        ("PRD_REVIEW", "COMPLETION_PLAN"),
+        ("PRD_REVIEW", "REVISION_BLUEPRINT"),
+        ("STORY_BREAKDOWN", "INPUT_ANALYSIS"),
+        ("STORY_BREAKDOWN", "EPIC_MAPPING"),
+        ("STORY_BREAKDOWN", "STORY_BACKLOG"),
+        ("STORY_BREAKDOWN", "SPRINT_PLAN"),
+        ("INCIDENT_REVIEW", "TIMELINE"),
+        ("INCIDENT_REVIEW", "ROOT_CAUSE"),
+        ("INCIDENT_REVIEW", "IMPROVEMENT"),
+    }
+)
+
+
+def get_artifact_data_renderer_stage_keys() -> set[tuple[str, str]]:
+    return set(ARTIFACT_DATA_RENDERER_STAGE_KEYS)
+
+
 class StrictArtifactDataModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

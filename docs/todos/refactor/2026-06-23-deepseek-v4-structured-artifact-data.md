@@ -23,8 +23,11 @@
 - 2026-06-23 已完成第十五个垂直切片: `IDEA_BRAINSTORM/DIVERGE` 支持模型输出 `artifact_data`，后端校验发散方法、创意全景、创意卡片、创意来源、搁置/排除记录和阶段门禁后，确定性渲染《创意发散》和 Mermaid `mindmap`。
 - 2026-06-23 已完成第十六个垂直切片: `IDEA_BRAINSTORM/CONVERGE` 支持模型输出 `artifact_data`，后端校验决策矩阵、ICE 评分、资源约束、敏感性分析、验证实验、合并路径和阶段门禁后，确定性渲染《收敛聚焦》和 Mermaid `quadrantChart`。
 - 2026-06-23 已完成第十七个垂直切片: `IDEA_BRAINSTORM/CONCEPT` 支持模型输出 `artifact_data`，后端校验定位声明、核心假设、Lean Canvas、MVP 功能、增长漏斗、Pre-mortem 风险、验证路线、不可做范围、决策记录、下一步行动和阶段门禁后，确定性渲染《产品概念简报》、Mermaid `pie`/`flowchart` 和 `ai4se-visual` `mvp-map`。
+- 2026-06-23 已完成第十八个垂直切片: `PRD_REVIEW` 四阶段支持模型输出 `artifact_data`，后端校验 PRD 输入盘点、质量问题、补全动作、修订章节、验收标准和 Lisa handoff 输入后，确定性渲染 PRD 质量评审与补全 artifact、`score-matrix`、`action-board` 和 `roadmap`。
+- 2026-06-23 已完成第十九个垂直切片: `STORY_BREAKDOWN` 四阶段支持模型输出 `artifact_data`，后端校验输入分析、Epic、User Story、验收标准、依赖、风险、Sprint 切片和 Lisa handoff 输入后，确定性渲染用户故事拆解包、Mermaid `flowchart` 和 `ai4se-visual` `story-map`。
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
-- `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM` 四阶段已完成结构化产物数据迁移；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
+- 2026-06-23 已完成 DeepSeek V4 全 workflow readiness 收口: 当前 `workflow_manifest.json` 中所有在线 stage 都由测试证明具备 `artifact_data` renderer、manifest/stage coverage、contract-valid fixture、DeepSeek `json_object_only` raw streaming、thinking disabled 和禁止模型直写完整 Markdown 的 instruction。
+- `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段、`IDEA_BRAINSTORM` 四阶段、`PRD_REVIEW` 四阶段和 `STORY_BREAKDOWN` 四阶段已完成结构化产物数据迁移并纳入本地确定性 readiness 门禁；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
 
 ## 目标
 
