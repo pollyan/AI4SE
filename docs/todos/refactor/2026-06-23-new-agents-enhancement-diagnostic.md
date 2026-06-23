@@ -69,7 +69,7 @@
 | E03 | Artifact 质量诊断面板 | 已消化 | 可信质量 | M | P0 | 2026-06-23 已主线化：`ArtifactPane` 展示当前 stage headings、visual、stage gate、专业字段和 runtime visual diagnostics 的通过/失败/警告；诊断由共享前端纯函数 `artifactQuality.ts` 派生，不新增 backend endpoint、runtime/SSE/persistence 或 agent 专属 renderer；验证覆盖 `artifactQuality.test.ts` 与 `ArtifactPane.test.tsx` |
 | E04 | Lisa 测试资产质量闭环 | 已消化 | 专业内容 | M | P0 | 2026-06-23 已主线化：Lisa 测试资产集合 payload 增加 `assetQuality`，聚合待处理 issue、未覆盖/部分覆盖测试点、风险生命周期、覆盖率和下一步动作；`TestAssetsPage` 展示资产质量状态，并在 issue、测试点、风险处理后刷新集合质量；不新增 intent-tester 自动执行、新 runtime、SSE/API transport 或 agent 专属 renderer；验证覆盖 `test_test_assets.py`、`testAssetService.test.ts` 与 `TestAssetsPage.test.tsx` |
 | E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
-| E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 支持继续、复制为新 run、按 workflow/质量筛选、预览当前 artifact |
+| E06 | Run 历史中心增强 | 已消化 | 功能 | M | P1 | 2026-06-23 已主线化：历史中心支持继续原 run、复制为独立新 run、按 workflow/质量状态筛选，并展示当前 artifact 摘要和预览；后端 run list 返回规则型 `qualityStatus` 与 `currentArtifact.preview`，clone 只复制 messages、artifacts 和 context summaries，不复制 comments/locks/audit/test assets；不新增 runtime、SSE/API path、agent-specific store 或 renderer；验证覆盖 `test_run_persistence.py`、`test_agent_endpoint.py`、`runSnapshotService.test.ts` 与 `Header.test.tsx` |
 | E07 | Workflow handoff 增强 | 已消化 | 平台扩展 | M | P1 | 2026-06-23 已主线化：共享 workflow handoff export/start 返回来源版本、关键摘要、未确认项和目标输入说明；handoff prompt 将同一上下文写入目标 run 首条消息；`workflowHandoffService` 严格解析新增字段，`ChatPane` 接力卡片展示来源、摘要、未确认项和目标用途；不新增 agent-specific runtime、SSE/API path、store 或 renderer；验证覆盖 `test_workflow_handoffs.py`、`test_agent_endpoint.py`、`workflowHandoffService.test.ts`、`ChatPane.test.tsx` 与 `store.test.ts` |
 | E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 | 每个 stage 有质量分、证据明细和待处理项 |
 | E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 显示 workflow/stage/provider 趋势、contract retry 原因和行动建议 |
@@ -126,7 +126,7 @@
 
 目标: 让用户从开始、生成、审阅、修订、恢复、复用形成闭环。
 
-包含: E05、E06、E08。E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化，E07 已在 2026-06-23 Workflow handoff 上下文强化 milestone 中消化。
+包含: E05、E08。E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化，E06 已在 2026-06-23 历史会话复用中心 milestone 中消化，E07 已在 2026-06-23 Workflow handoff 上下文强化 milestone 中消化。
 
 暂不做:
 
@@ -191,12 +191,14 @@
 - 不纳入: 新增 intent-tester 联动或自动执行、LLM judge 评分、新 runtime/SSE/API transport、agent-specific store 或 renderer。
 - 验证记录: `python3 -m pytest tools/new-agents/backend/tests/test_test_assets.py -q`；`cd tools/new-agents/frontend && npm run test -- --run src/services/__tests__/testAssetService.test.ts src/pages/__tests__/TestAssetsPage.test.tsx`；`cd tools/new-agents/frontend && npm run lint`；`git diff --check`。
 
-### 5. 历史会话复用增强
+### 5. 历史会话复用增强（已消化）
 
+- 完成日期: 2026-06-23。
 - 涉及模块: `run_persistence.py`、`routes.py`、`runSnapshotService.ts`、`Header.tsx`。
-- 需要同步: run list response、snapshot restore、store reset/clone 行为。
-- 完成定义: 历史 run 可复制为新 run、继续、预览 artifact，并按 workflow/质量状态筛选。
-- 不纳入: 多用户分享权限。
+- 实际涉及模块: `tools/new-agents/backend/run_persistence.py`、`tools/new-agents/backend/routes.py`、`tools/new-agents/frontend/src/core/types.ts`、`tools/new-agents/frontend/src/services/runSnapshotService.ts`、`tools/new-agents/frontend/src/components/Header.tsx`、相关 backend/frontend tests。
+- 完成定义: 历史 run 可复制为独立新 run、继续原 run、预览当前 artifact，并按 workflow/质量状态筛选；clone 复制 messages、artifacts、context summaries，不复制 comments、section locks、audit events 或 test asset materialization。
+- 不纳入: 多用户分享权限、收藏、跨 run 对比、完整质量评分、LLM judge、新 runtime/SSE/API path、agent-specific store 或 renderer。
+- 验证记录: `python3 -m pytest tools/new-agents/backend/tests/test_run_persistence.py tools/new-agents/backend/tests/test_agent_endpoint.py -q`；`cd tools/new-agents/frontend && npm run test -- --run src/services/__tests__/runSnapshotService.test.ts src/components/__tests__/Header.test.tsx`；`cd tools/new-agents/frontend && npm run lint`；`git diff --check`。
 
 ### 6. Handoff 上下文强化
 
@@ -219,6 +221,6 @@
 
 - Artifact 质量诊断应完全前端解析，还是后端提供只读 diagnostic endpoint。
 - 质量评分是否先做规则型 gate，再引入 LLM judge evidence。
-- 历史 run “复制为新 run”是否复制全部 messages/artifacts，还是只复制 artifact summaries 和用户可编辑上下文。
+- 已裁决：历史 run “复制为新 run”先复制 messages、当前 artifacts 和 context summaries，不复制 comments、section locks、audit events 或 test asset materialization。
 - Handoff prompt 是否继续使用单模板，还是在 manifest 中声明 handoff 输入字段和摘要策略。
 - 专业方法库配置是否纳入 manifest，还是先建独立 registry 后再合并。

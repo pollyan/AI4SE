@@ -7,6 +7,7 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 os.environ["FLASK_TESTING"] = "1"
 
+import run_persistence
 from app import create_app
 from models import AgentArtifact, AgentArtifactVersion, AgentMessage, AgentRun, db
 from run_persistence import (
@@ -14,6 +15,7 @@ from run_persistence import (
     create_agent_run,
     ensure_agent_run,
     get_run_snapshot,
+    list_agent_runs,
     record_artifact_version,
     replace_artifact_collaboration_state,
     update_context_summary,
@@ -169,6 +171,91 @@ def test_run_snapshot_returns_messages_and_current_artifacts(app):
     ]
     assert snapshot["artifactComments"] == []
     assert snapshot["artifactSectionLocks"] == []
+
+
+def test_run_list_reports_artifact_preview_and_quality_status(app):
+    with app.app_context():
+        ready_run = create_agent_run("TEST_DESIGN", "lisa", "STRATEGY")
+        record_artifact_version(
+            ready_run.id,
+            "STRATEGY",
+            "# 测试策略蓝图\n\n## 范围\n登录主流程已经具备测试策略。",
+        )
+        blocked_run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        append_run_message(blocked_run.id, "assistant", "仍有阻断问题需要 PM 确认")
+        record_artifact_version(
+            blocked_run.id,
+            "CLARIFY",
+            "# 需求分析文档\n\n## 待澄清问题\n- 需要确认验证码策略。",
+        )
+        ready_run_id = ready_run.id
+        blocked_run_id = blocked_run.id
+
+        result = list_agent_runs(workflow_id="TEST_DESIGN", quality_status="needs_action")
+
+    assert result["qualityStatus"] == "needs_action"
+    assert [run["id"] for run in result["runs"]] == [blocked_run_id]
+    blocked_item = result["runs"][0]
+    assert blocked_item["qualityStatus"] == "needs_action"
+    assert blocked_item["currentArtifact"]["preview"].startswith("# 需求分析文档")
+    assert ready_run_id not in [run["id"] for run in result["runs"]]
+
+
+def test_clone_agent_run_copies_reusable_context_without_mutating_source(app):
+    with app.app_context():
+        source_run = create_agent_run("VALUE_DISCOVERY", "alex", "BLUEPRINT", model="gpt-source")
+        append_run_message(source_run.id, "user", "请分析测试资产平台")
+        append_run_message(source_run.id, "assistant", "已生成蓝图")
+        record_artifact_version(
+            source_run.id,
+            "BLUEPRINT",
+            "# 需求蓝图\n\n## 1. 产品概述\n测试资产平台",
+            artifact_data={"document_info": {"artifact_name": "需求蓝图"}},
+        )
+        replace_artifact_collaboration_state(
+            source_run.id,
+            {
+                "comments": [
+                    {
+                        "id": "comment-1",
+                        "stageId": "BLUEPRINT",
+                        "content": "原 run 审阅意见",
+                        "artifactExcerpt": "测试资产平台",
+                        "anchorText": "产品概述",
+                        "createdAt": 1710000000000,
+                        "status": "open",
+                    }
+                ],
+                "sectionLocks": [
+                    {
+                        "id": "lock-1",
+                        "stageId": "BLUEPRINT",
+                        "heading": "产品概述",
+                        "sectionAnchor": "h2:产品概述:1",
+                        "content": "锁定原文",
+                        "createdAt": 1710000000000,
+                    }
+                ],
+            },
+        )
+        source_run_id = source_run.id
+
+        clone_snapshot = run_persistence.clone_agent_run(source_run.id)
+        source_snapshot = get_run_snapshot(source_run_id)
+
+    assert clone_snapshot["run"]["id"] != source_run_id
+    assert clone_snapshot["run"]["workflowId"] == "VALUE_DISCOVERY"
+    assert clone_snapshot["run"]["agentId"] == "alex"
+    assert clone_snapshot["run"]["currentStageId"] == "BLUEPRINT"
+    assert clone_snapshot["run"]["model"] == "gpt-source"
+    assert clone_snapshot["messages"] == source_snapshot["messages"]
+    assert clone_snapshot["artifacts"] == source_snapshot["artifacts"]
+    assert clone_snapshot["contextSummaries"] == source_snapshot["contextSummaries"]
+    assert clone_snapshot["artifactComments"] == []
+    assert clone_snapshot["artifactSectionLocks"] == []
+    assert clone_snapshot["artifactAuditEvents"] == []
+    assert source_snapshot["artifactComments"]
+    assert source_snapshot["artifactSectionLocks"]
 
 
 def test_run_snapshot_returns_null_artifact_data_for_manual_versions(app):

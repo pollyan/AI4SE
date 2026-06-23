@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ArtifactConflictError, createRunDecisionSummary, fetchRunList, fetchRunSnapshot, updateRunArtifact, updateRunArtifactCollaboration, updateRunContextSummary } from '../runSnapshotService';
+import { ArtifactConflictError, cloneRun, createRunDecisionSummary, fetchRunList, fetchRunSnapshot, updateRunArtifact, updateRunArtifactCollaboration, updateRunContextSummary } from '../runSnapshotService';
 
 global.fetch = vi.fn();
 
@@ -446,6 +446,7 @@ describe('runSnapshotService', () => {
                 hasMore: false,
                 nextOffset: null,
                 query: null,
+                qualityStatus: null,
                 runs: [
                     {
                         id: 'run-123',
@@ -465,7 +466,9 @@ describe('runSnapshotService', () => {
                             stageId: 'STRATEGY',
                             versionNumber: 1,
                             summary: '# 测试策略蓝图\n\n关键风险: 登录绕过',
+                            preview: '# 测试策略蓝图\n\n关键风险: 登录绕过\n\n## 风险优先级',
                         },
+                        qualityStatus: 'ready',
                     },
                 ],
             }),
@@ -484,9 +487,12 @@ describe('runSnapshotService', () => {
         expect(result.hasMore).toBe(false);
         expect(result.nextOffset).toBeNull();
         expect(result.query).toBeNull();
+        expect(result.qualityStatus).toBeNull();
         expect(result.runs[0].id).toBe('run-123');
+        expect(result.runs[0].qualityStatus).toBe('ready');
         expect(result.runs[0].lastMessage?.content).toBe('已更新测试策略。');
         expect(result.runs[0].currentArtifact?.summary).toContain('登录绕过');
+        expect(result.runs[0].currentArtifact?.preview).toContain('风险优先级');
     });
 
     it('should pass pagination and search options to the run list endpoint', async () => {
@@ -498,6 +504,7 @@ describe('runSnapshotService', () => {
                 hasMore: false,
                 nextOffset: null,
                 query: '登录 链路',
+                qualityStatus: 'needs_action',
                 runs: [],
             }),
             {
@@ -511,14 +518,56 @@ describe('runSnapshotService', () => {
             limit: 5,
             offset: 10,
             query: '登录 链路',
+            qualityStatus: 'needs_action',
         });
 
         expect(fetch).toHaveBeenCalledWith(
-            '/new-agents/api/agent/runs?workflowId=TEST_DESIGN&limit=5&offset=10&query=%E7%99%BB%E5%BD%95+%E9%93%BE%E8%B7%AF'
+            '/new-agents/api/agent/runs?workflowId=TEST_DESIGN&qualityStatus=needs_action&limit=5&offset=10&query=%E7%99%BB%E5%BD%95+%E9%93%BE%E8%B7%AF'
         );
         expect(result.offset).toBe(10);
         expect(result.total).toBe(12);
         expect(result.query).toBe('登录 链路');
+        expect(result.qualityStatus).toBe('needs_action');
+    });
+
+    it('should clone a persisted run snapshot', async () => {
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({
+                run: {
+                    id: 'clone-run-456',
+                    workflowId: 'VALUE_DISCOVERY',
+                    agentId: 'alex',
+                    currentStageId: 'BLUEPRINT',
+                    status: 'active',
+                    model: 'test-model',
+                },
+                messages: [
+                    {
+                        role: 'user',
+                        content: '请分析测试资产平台',
+                        sequenceIndex: 1,
+                    },
+                ],
+                artifacts: [],
+                contextSummaries: [],
+                artifactComments: [],
+                artifactSectionLocks: [],
+                artifactAuditEvents: [],
+            }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            },
+        ));
+
+        const snapshot = await cloneRun('source-run-123');
+
+        expect(fetch).toHaveBeenCalledWith(
+            '/new-agents/api/agent/runs/source-run-123/clone',
+            { method: 'POST' }
+        );
+        expect(snapshot.run.id).toBe('clone-run-456');
+        expect(snapshot.messages[0].content).toBe('请分析测试资产平台');
     });
 
     it('should fail explicitly when the run list payload is malformed', async () => {

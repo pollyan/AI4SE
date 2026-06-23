@@ -21,7 +21,7 @@
 
 - `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选。
 
-2026-06-23 已复核：DeepSeek V4 结构化产物数据改造已归档；Alex 用户故事拆解 workflow 已在 `2026-06-23-new-agents-enhancement-diagnostic.md` 的 E13 中消化；New Agents 的 E02 阶段缺失信息清单、E04 Lisa 测试资产质量闭环和 E07 Workflow handoff 上下文强化已主线化。除上述活动候选外，其他重构类事项均已归档或转为历史完成记录。不要从 `archive/` 中的过程性“待办/剩余”直接恢复实施。
+2026-06-23 已复核：DeepSeek V4 结构化产物数据改造已归档；Alex 用户故事拆解 workflow 已在 `2026-06-23-new-agents-enhancement-diagnostic.md` 的 E13 中消化；New Agents 的 E02 阶段缺失信息清单、E04 Lisa 测试资产质量闭环、E06 历史会话复用中心和 E07 Workflow handoff 上下文强化已主线化。除上述活动候选外，其他重构类事项均已归档或转为历史完成记录。不要从 `archive/` 中的过程性“待办/剩余”直接恢复实施。
 
 ## 已归档
 

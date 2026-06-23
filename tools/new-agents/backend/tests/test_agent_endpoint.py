@@ -1018,9 +1018,12 @@ def test_agent_runs_list_endpoint_returns_recent_runs_with_summaries(
             "stageId": "BLUEPRINT",
             "versionNumber": 1,
             "summary": response.json["runs"][0]["currentArtifact"]["summary"],
+            "preview": response.json["runs"][0]["currentArtifact"]["preview"],
         },
+        "qualityStatus": "ready",
     }
     assert "新产品" in response.json["runs"][0]["currentArtifact"]["summary"]
+    assert "新产品" in response.json["runs"][0]["currentArtifact"]["preview"]
 
 
 def test_agent_runs_list_endpoint_filters_by_workflow_id(
@@ -1104,6 +1107,40 @@ def test_agent_runs_list_endpoint_searches_messages_and_artifact_summaries(
     assert [run["id"] for run in response.json["runs"]] == [artifact_run_id]
 
 
+def test_agent_runs_list_endpoint_filters_by_quality_status(
+    app,
+    client,
+    default_config,
+):
+    with app.app_context():
+        create_agent_run("TEST_DESIGN", "lisa", "STRATEGY")
+        blocked_run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        append_run_message(blocked_run.id, "assistant", "仍有阻断问题需要 PM 确认")
+        record_artifact_version(
+            blocked_run.id,
+            "CLARIFY",
+            "# 需求分析文档\n\n## 待澄清问题\n- 需要确认验证码策略。",
+        )
+        blocked_run_id = blocked_run.id
+
+    response = client.get("/api/agent/runs?qualityStatus=needs_action")
+
+    assert response.status_code == 200
+    assert response.json["qualityStatus"] == "needs_action"
+    assert [run["id"] for run in response.json["runs"]] == [blocked_run_id]
+    assert response.json["runs"][0]["qualityStatus"] == "needs_action"
+
+
+def test_agent_runs_list_endpoint_rejects_unknown_quality_status(
+    client,
+    default_config,
+):
+    response = client.get("/api/agent/runs?qualityStatus=unknown")
+
+    assert response.status_code == 400
+    assert response.json == {"error": "未知 qualityStatus: unknown"}
+
+
 def test_agent_runs_list_endpoint_rejects_unknown_workflow_id(
     client,
     default_config,
@@ -1112,6 +1149,53 @@ def test_agent_runs_list_endpoint_rejects_unknown_workflow_id(
 
     assert response.status_code == 400
     assert response.json == {"error": "未知 workflowId: UNKNOWN"}
+
+
+def test_agent_run_clone_endpoint_creates_independent_reusable_run(
+    app,
+    client,
+    default_config,
+):
+    with app.app_context():
+        source_run = create_agent_run("VALUE_DISCOVERY", "alex", "BLUEPRINT", model="gpt-source")
+        append_run_message(source_run.id, "user", "请分析测试资产平台")
+        append_run_message(source_run.id, "assistant", "已生成蓝图")
+        record_artifact_version(
+            source_run.id,
+            "BLUEPRINT",
+            "# 需求蓝图\n\n## 1. 产品概述\n测试资产平台",
+            artifact_data={"document_info": {"artifact_name": "需求蓝图"}},
+        )
+        run_id = source_run.id
+
+    response = client.post(f"/api/agent/runs/{run_id}/clone")
+
+    assert response.status_code == 200
+    assert response.json["run"]["id"] != run_id
+    assert response.json["run"]["workflowId"] == "VALUE_DISCOVERY"
+    assert response.json["messages"] == [
+        {
+            "role": "user",
+            "content": "请分析测试资产平台",
+            "sequenceIndex": 1,
+        },
+        {
+            "role": "assistant",
+            "content": "已生成蓝图",
+            "sequenceIndex": 2,
+        },
+    ]
+    assert response.json["artifacts"] == [
+        {
+            "stageId": "BLUEPRINT",
+            "content": "# 需求蓝图\n\n## 1. 产品概述\n测试资产平台",
+            "versionNumber": 1,
+            "artifactData": {"document_info": {"artifact_name": "需求蓝图"}},
+        }
+    ]
+    assert response.json["artifactComments"] == []
+    assert response.json["artifactSectionLocks"] == []
+    assert response.json["artifactAuditEvents"] == []
 
 
 def test_agent_run_test_assets_endpoint_exports_cases_artifact(

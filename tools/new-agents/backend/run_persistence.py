@@ -42,6 +42,19 @@ SUMMARY_SOURCE_USER_INPUT = "user_input"
 DEFAULT_RUN_LIST_LIMIT = 20
 MAX_RUN_LIST_LIMIT = 100
 PROVIDER_ISSUE_ERROR_CODES = {"LLM_ERROR", DEFAULT_LLM_CONFIG_MISSING_CODE}
+RUN_QUALITY_STATUSES = {"ready", "in_progress", "needs_action"}
+RUN_QUALITY_NEEDS_ACTION_TERMS = (
+    "阻断",
+    "待确认",
+    "待澄清",
+    "缺失",
+    "失败",
+    "异常",
+    "错误",
+    "无法",
+    "需要 PM",
+)
+RUN_ARTIFACT_PREVIEW_MAX_CHARS = 600
 
 
 class ArtifactVersionConflictError(ValueError):
@@ -601,6 +614,61 @@ def get_run_snapshot(run_id: str) -> dict:
     }
 
 
+def clone_agent_run(run_id: str) -> dict:
+    source_run = _get_run(run_id)
+    cloned_run = create_agent_run(
+        source_run.workflow_id,
+        source_run.agent_id,
+        source_run.current_stage_id,
+        model=source_run.model,
+    )
+
+    messages = (
+        AgentMessage.query.filter_by(run_id=source_run.id)
+        .order_by(AgentMessage.sequence_index.asc())
+        .all()
+    )
+    for message in messages:
+        append_run_message(cloned_run.id, message.role, message.content)
+
+    artifacts = (
+        AgentArtifact.query.filter_by(run_id=source_run.id)
+        .order_by(AgentArtifact.stage_id.asc())
+        .all()
+    )
+    for artifact in artifacts:
+        version = db.session.get(AgentArtifactVersion, artifact.current_version_id)
+        if version is None:
+            continue
+        record_artifact_version(
+            cloned_run.id,
+            artifact.stage_id,
+            version.content,
+            artifact_data=(
+                json.loads(version.artifact_data_json)
+                if version.artifact_data_json
+                else None
+            ),
+        )
+
+    summaries = (
+        AgentContextSummary.query.filter_by(run_id=source_run.id)
+        .order_by(AgentContextSummary.id.asc())
+        .all()
+    )
+    for summary in summaries:
+        _upsert_context_summary(
+            cloned_run.id,
+            source_type=summary.source_type,
+            source_stage_id=summary.source_stage_id,
+            summary_type=summary.summary_type,
+            content=summary.content,
+        )
+    db.session.commit()
+
+    return get_run_snapshot(cloned_run.id)
+
+
 def record_turn_metric(
     *,
     run_id: str,
@@ -885,12 +953,15 @@ def _turn_metric_snapshot(metric: AgentRunTurnMetric) -> dict:
 def list_agent_runs(
     *,
     workflow_id: str | None = None,
+    quality_status: str | None = None,
     limit: int = DEFAULT_RUN_LIST_LIMIT,
     offset: int = 0,
     query_text: str | None = None,
 ) -> dict:
     if workflow_id is not None and workflow_id not in WORKFLOW_STAGES:
         raise ValueError(f"未知 workflowId: {workflow_id}")
+    if quality_status is not None and quality_status not in RUN_QUALITY_STATUSES:
+        raise ValueError(f"未知 qualityStatus: {quality_status}")
     if limit < 1:
         limit = DEFAULT_RUN_LIST_LIMIT
     if limit > MAX_RUN_LIST_LIMIT:
@@ -905,13 +976,20 @@ def list_agent_runs(
     if normalized_query:
         query = _apply_run_search_filter(query, normalized_query)
 
-    total = query.count()
-    runs = (
-        query.order_by(AgentRun.updated_at.desc(), AgentRun.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    ordered_runs = query.order_by(
+        AgentRun.updated_at.desc(),
+        AgentRun.created_at.desc(),
+    ).all()
+    run_items = [_run_list_item(run) for run in ordered_runs]
+    if quality_status is not None:
+        run_items = [
+            run_item
+            for run_item in run_items
+            if run_item["qualityStatus"] == quality_status
+        ]
+
+    total = len(run_items)
+    runs = run_items[offset : offset + limit]
     has_more = offset + len(runs) < total
 
     return {
@@ -921,7 +999,8 @@ def list_agent_runs(
         "hasMore": has_more,
         "nextOffset": offset + len(runs) if has_more else None,
         "query": normalized_query or None,
-        "runs": [_run_list_item(run) for run in runs],
+        "qualityStatus": quality_status,
+        "runs": runs,
     }
 
 
@@ -958,6 +1037,8 @@ def _apply_run_search_filter(query, query_text: str):
 
 
 def _run_list_item(run: AgentRun) -> dict:
+    last_message = _last_message_snapshot(run.id)
+    current_artifact = _current_artifact_summary(run.id)
     return {
         "id": run.id,
         "workflowId": run.workflow_id,
@@ -967,8 +1048,9 @@ def _run_list_item(run: AgentRun) -> dict:
         "model": run.model,
         "createdAt": _format_datetime(run.created_at),
         "updatedAt": _format_datetime(run.updated_at),
-        "lastMessage": _last_message_snapshot(run.id),
-        "currentArtifact": _current_artifact_summary(run.id),
+        "lastMessage": last_message,
+        "currentArtifact": current_artifact,
+        "qualityStatus": _run_quality_status(run, current_artifact, last_message),
     }
 
 
@@ -1020,7 +1102,51 @@ def _current_artifact_summary(run_id: str) -> dict | None:
         "stageId": summary.source_stage_id,
         "versionNumber": version_number,
         "summary": summary.content,
+        "preview": _current_artifact_preview(run_id, summary.source_stage_id),
     }
+
+
+def _current_artifact_preview(run_id: str, stage_id: str | None) -> str:
+    if stage_id is None:
+        return ""
+    artifact = AgentArtifact.query.filter_by(
+        run_id=run_id,
+        stage_id=stage_id,
+    ).first()
+    if artifact is None or artifact.current_version_id is None:
+        return ""
+    version = db.session.get(AgentArtifactVersion, artifact.current_version_id)
+    if version is None:
+        return ""
+    return _truncate_run_preview(version.content)
+
+
+def _run_quality_status(
+    run: AgentRun,
+    current_artifact: dict | None,
+    last_message: dict | None,
+) -> str:
+    quality_text = " ".join(
+        value
+        for value in (
+            current_artifact.get("summary", "") if current_artifact else "",
+            current_artifact.get("preview", "") if current_artifact else "",
+            last_message.get("content", "") if last_message else "",
+        )
+        if value
+    )
+    if any(term in quality_text for term in RUN_QUALITY_NEEDS_ACTION_TERMS):
+        return "needs_action"
+    if run.status == "completed" or current_artifact is not None:
+        return "ready"
+    return "in_progress"
+
+
+def _truncate_run_preview(content: str) -> str:
+    normalized = "\n".join(line.rstrip() for line in content.strip().splitlines())
+    if len(normalized) <= RUN_ARTIFACT_PREVIEW_MAX_CHARS:
+        return normalized
+    return normalized[: RUN_ARTIFACT_PREVIEW_MAX_CHARS - 1].rstrip() + "…"
 
 
 def _artifact_snapshot(artifact: AgentArtifact) -> dict:

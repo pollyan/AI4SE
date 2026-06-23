@@ -21,6 +21,7 @@ vi.mock('../WorkflowDropdown', () => ({
 }));
 
 vi.mock('../../services/runSnapshotService', () => ({
+    cloneRun: vi.fn(),
     createRunDecisionSummary: vi.fn(),
     fetchRunList: vi.fn(),
     updateRunContextSummary: vi.fn(),
@@ -54,12 +55,12 @@ vi.mock('lucide-react', () => {
     return mod;
 });
 
-import { createRunDecisionSummary, fetchRunList, updateRunContextSummary } from '../../services/runSnapshotService';
+import { cloneRun, createRunDecisionSummary, fetchRunList, updateRunContextSummary } from '../../services/runSnapshotService';
 import { materializeRunTestAssets, updateTestAssetCase, updateTestAssetIssueStatus } from '../../services/testAssetService';
 import { fetchObservabilitySummary } from '../../services/observabilityService';
 import { importIntentTesterDraft } from '../../services/intentTesterImportService';
 import { checkDefaultLlmConfig } from '../../services/configService';
-import type { ObservabilitySummary, TestAssetCollection } from '../../store';
+import type { AgentRunSnapshot, ObservabilitySummary, TestAssetCollection } from '../../store';
 
 const TEST_ASSET_COLLECTION: TestAssetCollection = {
     id: 7,
@@ -296,8 +297,26 @@ describe('Header Component', () => {
             hasMore: false,
             nextOffset: null,
             query: null,
+            qualityStatus: null,
             runs: [],
         });
+        vi.mocked(cloneRun).mockReset();
+        vi.mocked(cloneRun).mockResolvedValue({
+            run: {
+                id: 'cloned-run-456',
+                workflowId: 'VALUE_DISCOVERY',
+                agentId: 'alex',
+                currentStageId: 'BLUEPRINT',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [],
+            artifacts: [],
+            contextSummaries: [],
+            artifactComments: [],
+            artifactSectionLocks: [],
+            artifactAuditEvents: [],
+        } satisfies AgentRunSnapshot);
         vi.mocked(updateRunContextSummary).mockReset();
         vi.mocked(updateRunContextSummary).mockResolvedValue({
             sourceType: 'stage',
@@ -390,6 +409,7 @@ describe('Header Component', () => {
             hasMore: false,
             nextOffset: null,
             query: null,
+            qualityStatus: null,
             runs: [
                 {
                     id: 'alex-run-123',
@@ -409,7 +429,9 @@ describe('Header Component', () => {
                         stageId: 'BLUEPRINT',
                         versionNumber: 1,
                         summary: 'AI 测试设计助手需求蓝图',
+                        preview: '# 需求蓝图\n\n## 1. 产品概述\nAI 测试设计助手',
                     },
+                    qualityStatus: 'ready',
                 },
             ],
         });
@@ -420,8 +442,74 @@ describe('Header Component', () => {
         await waitFor(() => {
             expect(fetchRunList).toHaveBeenCalledWith({ limit: 20 });
         });
-        fireEvent.click(await screen.findByRole('button', { name: /价值发现/ }));
+        fireEvent.click(await screen.findByRole('button', { name: /继续 alex-run-123/ }));
 
+        expect(mockNavigate).toHaveBeenCalledWith(
+            '/workspace/alex/value-discovery?runId=alex-run-123'
+        );
+    });
+
+    it('filters, previews, continues, and clones runs from the history center', async () => {
+        vi.mocked(fetchRunList).mockResolvedValue({
+            limit: 20,
+            offset: 0,
+            total: 1,
+            hasMore: false,
+            nextOffset: null,
+            query: null,
+            qualityStatus: 'needs_action',
+            runs: [
+                {
+                    id: 'alex-run-123',
+                    workflowId: 'VALUE_DISCOVERY',
+                    agentId: 'alex',
+                    currentStageId: 'BLUEPRINT',
+                    status: 'active',
+                    model: 'test-model',
+                    createdAt: '2026-06-19T09:00:00',
+                    updatedAt: '2026-06-19T09:05:00',
+                    lastMessage: {
+                        role: 'assistant',
+                        content: '价值蓝图存在阻断项。',
+                        sequenceIndex: 2,
+                    },
+                    currentArtifact: {
+                        stageId: 'BLUEPRINT',
+                        versionNumber: 2,
+                        summary: 'AI 测试设计助手需求蓝图',
+                        preview: '# 需求蓝图\n\n## 待澄清问题\n- 需要确认 MVP 范围',
+                    },
+                    qualityStatus: 'needs_action',
+                },
+            ],
+        });
+
+        renderHeader();
+        fireEvent.click(screen.getByRole('button', { name: /历史会话/ }));
+        fireEvent.change(await screen.findByLabelText('质量状态'), {
+            target: { value: 'needs_action' },
+        });
+
+        await waitFor(() => {
+            expect(fetchRunList).toHaveBeenLastCalledWith({
+                limit: 20,
+                qualityStatus: 'needs_action',
+            });
+        });
+        await screen.findByText(/需要确认 MVP 范围/);
+        expect(screen.getAllByText('需处理').length).toBeGreaterThan(0);
+        expect(screen.getByText(/需要确认 MVP 范围/)).toBeTruthy();
+
+        fireEvent.click(screen.getByRole('button', { name: /复制 alex-run-123/ }));
+        await waitFor(() => {
+            expect(cloneRun).toHaveBeenCalledWith('alex-run-123');
+        });
+        expect(mockNavigate).toHaveBeenCalledWith(
+            '/workspace/alex/value-discovery?runId=cloned-run-456'
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: /历史会话/ }));
+        fireEvent.click(await screen.findByRole('button', { name: /继续 alex-run-123/ }));
         expect(mockNavigate).toHaveBeenCalledWith(
             '/workspace/alex/value-discovery?runId=alex-run-123'
         );
@@ -894,6 +982,7 @@ describe('Header Component', () => {
                 hasMore: false,
                 nextOffset: null,
                 query: null,
+                qualityStatus: null,
                 runs: [
                     {
                         id: 'alex-run-123',
@@ -909,7 +998,9 @@ describe('Header Component', () => {
                             stageId: 'BLUEPRINT',
                             versionNumber: 1,
                             summary: '价值发现历史',
+                            preview: '价值发现历史',
                         },
+                        qualityStatus: 'ready',
                     },
                 ],
             })
@@ -920,6 +1011,7 @@ describe('Header Component', () => {
                 hasMore: false,
                 nextOffset: null,
                 query: null,
+                qualityStatus: null,
                 runs: [
                     {
                         id: 'test-run-123',
@@ -935,7 +1027,9 @@ describe('Header Component', () => {
                             stageId: 'STRATEGY',
                             versionNumber: 1,
                             summary: '测试设计历史',
+                            preview: '测试设计历史',
                         },
+                        qualityStatus: 'ready',
                     },
                 ],
             });
@@ -965,6 +1059,7 @@ describe('Header Component', () => {
                 hasMore: false,
                 nextOffset: null,
                 query: null,
+                qualityStatus: null,
                 runs: [],
             })
             .mockResolvedValueOnce({
@@ -974,6 +1069,7 @@ describe('Header Component', () => {
                 hasMore: true,
                 nextOffset: 20,
                 query: '登录',
+                qualityStatus: null,
                 runs: [
                     {
                         id: 'run-page-1',
@@ -989,7 +1085,9 @@ describe('Header Component', () => {
                             stageId: 'STRATEGY',
                             versionNumber: 1,
                             summary: '登录第一页结果',
+                            preview: '登录第一页结果',
                         },
+                        qualityStatus: 'ready',
                     },
                 ],
             })
@@ -1000,6 +1098,7 @@ describe('Header Component', () => {
                 hasMore: false,
                 nextOffset: null,
                 query: '登录',
+                qualityStatus: null,
                 runs: [
                     {
                         id: 'run-page-2',
@@ -1015,7 +1114,9 @@ describe('Header Component', () => {
                             stageId: 'CASES',
                             versionNumber: 1,
                             summary: '登录第二页结果',
+                            preview: '登录第二页结果',
                         },
+                        qualityStatus: 'ready',
                     },
                 ],
             });

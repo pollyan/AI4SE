@@ -157,8 +157,12 @@ export type AgentRunListItem = {
         stageId: string;
         versionNumber: number | null;
         summary: string;
+        preview: string;
     } | null;
+    qualityStatus: RunQualityStatus;
 };
+
+export type RunQualityStatus = 'ready' | 'in_progress' | 'needs_action';
 
 export type AgentRunListResponse = {
     limit: number;
@@ -167,6 +171,7 @@ export type AgentRunListResponse = {
     hasMore: boolean;
     nextOffset: number | null;
     query: string | null;
+    qualityStatus: RunQualityStatus | null;
     runs: AgentRunListItem[];
 };
 
