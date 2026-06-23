@@ -15,6 +15,7 @@ from artifact_data_renderers import (
     IncidentImprovementArtifactData,
     IncidentRootCauseArtifactData,
     IncidentTimelineArtifactData,
+    PrdReviewArtifactData,
     ReqReviewArtifactData,
     ReqReviewReportArtifactData,
     StrategyArtifactData,
@@ -25,6 +26,88 @@ from artifact_data_renderers import (
     render_agent_turn_from_artifact_data,
 )
 from test_asset_parsing import parse_lisa_test_asset_markdown
+
+VALID_PRD_REVIEW_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "PRD 质量评审与补全",
+        "workflow": "PRD_REVIEW",
+        "stage": "REVISION_BLUEPRINT",
+        "status": "可进入 PRD 修订",
+    },
+    "prd_inventory": [
+        {
+            "item_id": "INV-001",
+            "category": "目标用户",
+            "content": "中小团队的产品经理需要快速补齐需求草案质量问题",
+            "source": "PRD 草案",
+            "evidence_level": "用户提供",
+            "status": "已识别",
+        }
+    ],
+    "quality_findings": [
+        {
+            "finding_id": "FIND-001",
+            "dimension": "可测试性",
+            "problem": "核心需求缺少可验证验收标准",
+            "severity": "P0",
+            "blocking": "阻断",
+            "evidence": "PRD 仅描述功能目标，未定义输入、输出和边界条件",
+            "impact": "Lisa 后续测试设计无法稳定拆分用例",
+            "recommendation": "补齐 Given/When/Then 验收标准和异常路径",
+            "status": "待修订",
+        }
+    ],
+    "completion_actions": [
+        {
+            "action_id": "ACT-001",
+            "finding_ids": ["FIND-001"],
+            "action": "为核心需求补齐验收标准、异常路径和非功能指标",
+            "priority": "P0",
+            "owner": "产品经理",
+            "verification_method": "复审 PRD 中每个 P0 需求是否包含可执行验收标准",
+            "review_condition": "P0 阻断问题关闭后再进入测试设计",
+            "status": "待开始",
+        }
+    ],
+    "revision_sections": [
+        {
+            "section_id": "SEC-001",
+            "title": "核心需求与验收标准",
+            "rewrite_goal": "把目标描述改写为可验收需求",
+            "recommended_content": "作为团队管理员，我需要配置成员权限，以便控制数据访问范围。",
+            "acceptance_note": "包含成功路径、失败路径、边界条件和权限校验",
+            "status": "待修订",
+        }
+    ],
+    "acceptance_criteria": [
+        {
+            "criterion_id": "AC-001",
+            "related_section_ids": ["SEC-001"],
+            "scenario": "管理员授予成员只读权限",
+            "given": "成员已加入团队且无管理员权限",
+            "when": "管理员将成员角色设置为只读",
+            "then": "成员只能查看项目数据，不能编辑或删除",
+            "testability_level": "高",
+            "status": "待确认",
+        }
+    ],
+    "handoff_inputs": [
+        {
+            "input_id": "HI-001",
+            "related_section_ids": ["SEC-001"],
+            "target_workflow": "TEST_DESIGN",
+            "content": "权限配置核心链路、角色边界、异常授权和验收标准",
+            "risk": "权限边界不清会导致越权访问",
+            "status": "可交给 Lisa",
+        }
+    ],
+    "stage_gate": [
+        {
+            "checked": True,
+            "item": "P0 阻断问题已映射到补全动作和复审条件",
+        }
+    ],
+}
 
 VALID_CLARIFY_ARTIFACT_DATA = {
     "document_info": {
@@ -2567,6 +2650,35 @@ def test_clarify_artifact_data_rejects_empty_required_lists():
         ClarifyArtifactData.model_validate(invalid)
 
 
+def test_prd_review_artifact_data_rejects_unknown_finding_reference():
+    invalid = copy.deepcopy(VALID_PRD_REVIEW_ARTIFACT_DATA)
+    invalid["completion_actions"][0]["finding_ids"] = ["FIND-MISSING"]
+
+    with pytest.raises(ValidationError, match="unknown finding ids"):
+        PrdReviewArtifactData.model_validate(invalid)
+
+
+def test_prd_review_artifact_data_rejects_unknown_section_reference():
+    invalid = copy.deepcopy(VALID_PRD_REVIEW_ARTIFACT_DATA)
+    invalid["acceptance_criteria"][0]["related_section_ids"] = ["SEC-MISSING"]
+
+    with pytest.raises(ValidationError, match="unknown section ids"):
+        PrdReviewArtifactData.model_validate(invalid)
+
+
+def test_prd_review_artifact_data_requires_stage_gate_checked():
+    invalid = copy.deepcopy(VALID_PRD_REVIEW_ARTIFACT_DATA)
+    invalid["stage_gate"] = [
+        {
+            "checked": False,
+            "item": "PRD 仍缺少可复审的补全动作",
+        }
+    ]
+
+    with pytest.raises(ValidationError, match="stage_gate"):
+        PrdReviewArtifactData.model_validate(invalid)
+
+
 def test_idea_define_artifact_data_rejects_duplicate_evidence_id():
     invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
     invalid["evidence_items"].append(copy.deepcopy(invalid["evidence_items"][0]))
@@ -3532,6 +3644,64 @@ def test_render_value_blueprint_artifact_data_is_deterministic_and_contract_vali
             first,
             workflow_id="VALUE_DISCOVERY",
             current_stage_id="BLUEPRINT",
+        )
+        == first
+    )
+
+
+@pytest.mark.parametrize(
+    ("stage_id", "expected_title", "expected_visual"),
+    [
+        ("INVENTORY", "# PRD 输入盘点", None),
+        ("QUALITY_AUDIT", "# PRD 质量评审", '"type": "score-matrix"'),
+        ("COMPLETION_PLAN", "# PRD 补全建议", '"type": "action-board"'),
+        ("REVISION_BLUEPRINT", "# PRD 修订蓝图", '"type": "roadmap"'),
+    ],
+)
+def test_render_prd_review_artifact_data_is_deterministic_and_contract_valid(
+    stage_id,
+    expected_title,
+    expected_visual,
+):
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已整理 PRD 质量评审与补全建议，请查看右侧补全动作。",
+            "artifact_data": VALID_PRD_REVIEW_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="PRD_REVIEW",
+        current_stage_id=stage_id,
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已整理 PRD 质量评审与补全建议，请查看右侧补全动作。",
+            "artifact_data": VALID_PRD_REVIEW_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="PRD_REVIEW",
+        current_stage_id=stage_id,
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert first.artifact_update.type == "replace"
+    assert expected_title in first.artifact_update.markdown
+    assert "## 阶段门禁" in first.artifact_update.markdown
+    if stage_id == "REVISION_BLUEPRINT":
+        assert "Given" in first.artifact_update.markdown
+        assert "When" in first.artifact_update.markdown
+        assert "Then" in first.artifact_update.markdown
+    if expected_visual is not None:
+        assert "```ai4se-visual" in first.artifact_update.markdown
+        assert expected_visual in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="PRD_REVIEW",
+            current_stage_id=stage_id,
         )
         == first
     )

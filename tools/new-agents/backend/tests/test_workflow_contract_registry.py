@@ -19,6 +19,12 @@ def test_registry_derives_workflow_stages_from_manifest():
         "INCIDENT_REVIEW": ["TIMELINE", "ROOT_CAUSE", "IMPROVEMENT"],
         "IDEA_BRAINSTORM": ["DEFINE", "DIVERGE", "CONVERGE", "CONCEPT"],
         "VALUE_DISCOVERY": ["ELEVATOR", "PERSONA", "JOURNEY", "BLUEPRINT"],
+        "PRD_REVIEW": [
+            "INVENTORY",
+            "QUALITY_AUDIT",
+            "COMPLETION_PLAN",
+            "REVISION_BLUEPRINT",
+        ],
     }
 
 
@@ -28,6 +34,9 @@ def test_registry_requires_prompt_template_id_for_every_stage():
     assert prompt_template_ids[("TEST_DESIGN", "CLARIFY")] == "test_design.clarify"
     assert prompt_template_ids[("IDEA_BRAINSTORM", "DIVERGE")] == "idea_brainstorm.diverge"
     assert prompt_template_ids[("VALUE_DISCOVERY", "PERSONA")] == "value_discovery.persona"
+    assert prompt_template_ids[("PRD_REVIEW", "COMPLETION_PLAN")] == (
+        "prd_review.completion_plan"
+    )
     assert set(prompt_template_ids) == {
         (workflow_id, stage_id)
         for workflow_id, stage_ids in get_workflow_stages().items()
