@@ -6,6 +6,14 @@ import {
     planRetryFromHistory,
     reduceAgentStreamChunk,
 } from '../core/agentCore';
+import {
+    findArtifactSection,
+    findArtifactSectionLock,
+    mergeRegeneratedArtifactSection,
+    parseArtifactMarkdownSections,
+    preserveLockedArtifactSections,
+} from '../core/artifactSections';
+import type { ArtifactSectionTarget } from '../core/artifactSections';
 
 const STAGE_CONTINUATION_PROMPT = '请继续生成当前阶段产出物';
 let messageIdSequence = 0;
@@ -14,6 +22,10 @@ type SendOptions = {
     appendUserMessage?: boolean;
     useDraftAttachments?: boolean;
     attachmentsOverride?: Attachment[];
+    sectionRegeneration?: {
+        target: ArtifactSectionTarget;
+        originalArtifact: string;
+    };
 };
 
 type ArtifactRollbackSnapshot = {
@@ -22,68 +34,66 @@ type ArtifactRollbackSnapshot = {
     stageArtifacts: ReturnType<typeof useStore.getState>['stageArtifacts'];
 };
 
-type MarkdownSection = {
-    heading: string;
-    startLine: number;
-    endLine: number;
-};
-
 function createMessageId(): string {
     messageIdSequence += 1;
     return `${Date.now()}-${messageIdSequence}`;
 }
 
-function parseMarkdownSections(markdown: string): MarkdownSection[] {
-    const lines = markdown.split(/\r?\n/);
-    const headingIndexes = lines.flatMap((line, index) => (
-        /^#{1,3}\s+/.test(line)
-            ? [{ heading: line.trim(), startLine: index }]
-            : []
-    ));
-
-    return headingIndexes.map((section, index) => ({
-        ...section,
-        endLine: headingIndexes[index + 1]?.startLine ?? lines.length,
-    }));
-}
-
-function replaceSectionContent(
-    markdown: string,
-    section: MarkdownSection,
-    replacementContent: string
-): string {
-    const lines = markdown.split(/\r?\n/);
-    const replacementLines = replacementContent.split(/\r?\n/);
-    return [
-        ...lines.slice(0, section.startLine),
-        ...replacementLines,
-        ...lines.slice(section.endLine),
-    ].join('\n');
-}
-
-function preserveLockedSections(
-    nextArtifact: string,
-    locks: ReturnType<typeof useStore.getState>['artifactSectionLocks']
-): string {
-    if (locks.length === 0) return nextArtifact;
-
-    let protectedArtifact = nextArtifact;
-    locks.forEach((lock) => {
-        const sections = parseMarkdownSections(protectedArtifact);
-        const section = sections.find(candidate => candidate.heading === lock.heading);
-        if (!section) {
-            protectedArtifact = protectedArtifact.endsWith('\n')
-                ? `${protectedArtifact}${lock.content}`
-                : `${protectedArtifact}\n\n${lock.content}`;
-            return;
-        }
-        protectedArtifact = replaceSectionContent(
-            protectedArtifact,
-            section,
+function buildArtifactSectionRegenerationPrompt({
+    workflowId,
+    stageId,
+    target,
+    targetContent,
+    artifactContent,
+    lockedSections,
+}: {
+    workflowId: string;
+    stageId: string;
+    target: ArtifactSectionTarget;
+    targetContent: string;
+    artifactContent: string;
+    lockedSections: ReturnType<typeof useStore.getState>['artifactSectionLocks'];
+}): string {
+    const lockedSectionBlocks = lockedSections.length === 0
+        ? '无'
+        : lockedSections.map((lock, index) => [
+            `### 锁定章节 ${index + 1}`,
+            `heading: ${lock.heading}`,
+            `anchor: ${lock.sectionAnchor ?? '未记录'}`,
+            '````markdown',
             lock.content,
-        );
-    });
-    return protectedArtifact;
+            '````',
+        ].join('\n')).join('\n\n');
+
+    return [
+        'Artifact 定向修订请求',
+        '',
+        `Workflow: ${workflowId}`,
+        `Stage: ${stageId}`,
+        `目标章节: ${target.displayTitle ?? target.heading.replace(/^#{1,3}\s+/, '')}`,
+        `目标 heading: ${target.heading}`,
+        `目标 anchor: ${target.sectionAnchor ?? '未记录'}`,
+        '',
+        '请基于当前完整 artifact 重生成目标章节，并返回符合当前阶段契约的完整 artifact。',
+        '硬性约束:',
+        '- 只改写目标章节的内容。',
+        '- 不要改写、删除或重排非目标章节。',
+        '- 锁定章节必须逐字保留。',
+        '- 返回仍必须是完整 artifact，而不是只返回目标章节。',
+        '',
+        '当前目标章节内容:',
+        '````markdown',
+        targetContent,
+        '````',
+        '',
+        '锁定章节:',
+        lockedSectionBlocks,
+        '',
+        '当前完整 artifact:',
+        '````markdown',
+        artifactContent,
+        '````',
+    ].join('\n');
 }
 
 function getErrorMessage(error: unknown): string {
@@ -445,10 +455,17 @@ export function useChatService() {
                     const currentStageLocks = latestState.artifactSectionLocks.filter(
                         lock => lock.stageId === decision.artifactUpdate?.stageId
                     );
-                    const protectedArtifactContent = preserveLockedSections(
-                        decision.artifactUpdate.content,
-                        currentStageLocks,
-                    );
+                    const protectedArtifactContent = options?.sectionRegeneration
+                        ? mergeRegeneratedArtifactSection({
+                            originalArtifact: options.sectionRegeneration.originalArtifact,
+                            generatedArtifact: decision.artifactUpdate.content,
+                            target: options.sectionRegeneration.target,
+                            locks: currentStageLocks,
+                        }).content
+                        : preserveLockedArtifactSections(
+                            decision.artifactUpdate.content,
+                            currentStageLocks,
+                        );
                     latestState.setStageArtifact(
                         decision.artifactUpdate.stageId,
                         protectedArtifactContent
@@ -535,6 +552,60 @@ export function useChatService() {
             }
         }
     }, [input, pendingAttachments, isGenerating, addMessage, updateLastMessage, setIsGenerating]);
+
+    const handleRegenerateArtifactSection = useCallback(async (target: ArtifactSectionTarget) => {
+        const state = useStore.getState();
+        if (state.isGenerating) return;
+
+        const currentStage = WORKFLOWS[state.workflow].stages[state.stageIndex];
+        const currentStageLocks = state.artifactSectionLocks.filter(
+            lock => lock.stageId === currentStage.id
+        );
+        const targetTitle = target.displayTitle ?? target.heading.replace(/^#{1,3}\s+/, '');
+        const currentSection = findArtifactSection(
+            parseArtifactMarkdownSections(state.artifactContent),
+            target
+        );
+        const lockedSection = findArtifactSectionLock(target, currentStageLocks);
+
+        if (lockedSection) {
+            addMessage({
+                id: createMessageId(),
+                role: 'assistant',
+                content: `**Error:** 目标章节“${targetTitle}”已锁定，请先解锁后再重生成。`,
+                timestamp: Date.now(),
+                retryable: false,
+            });
+            return;
+        }
+
+        if (!currentSection) {
+            addMessage({
+                id: createMessageId(),
+                role: 'assistant',
+                content: `**Error:** 当前产出物中没有找到目标章节“${targetTitle}”。`,
+                timestamp: Date.now(),
+                retryable: false,
+            });
+            return;
+        }
+
+        await handleSend(buildArtifactSectionRegenerationPrompt({
+            workflowId: state.workflow,
+            stageId: currentStage.id,
+            target,
+            targetContent: currentSection.content,
+            artifactContent: state.artifactContent,
+            lockedSections: currentStageLocks,
+        }), {
+            appendUserMessage: false,
+            useDraftAttachments: false,
+            sectionRegeneration: {
+                target,
+                originalArtifact: state.artifactContent,
+            },
+        });
+    }, [addMessage, handleSend]);
 
     const handleConfirmStageTransition = useCallback(async () => {
         const state = useStore.getState();
@@ -656,6 +727,7 @@ export function useChatService() {
         pendingAttachments,
         setPendingAttachments,
         handleSend,
+        handleRegenerateArtifactSection,
         handleConfirmStageTransition,
         handleRetry,
         handleRetryCurrentStageGeneration,

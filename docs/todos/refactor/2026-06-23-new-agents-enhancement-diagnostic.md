@@ -68,7 +68,7 @@
 | E02 | 阶段缺失信息清单 | 深化现有功能 | 专业内容 | S | P0 | 已消化当前 artifact 审阅侧：右侧产物审阅可展示待澄清、开放、未确认、阻断和阶段门禁待处理信息；chat 侧轻提示后续归入会话引导增强 |
 | E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | P0 | 已消化：右侧产物审阅诊断中心展示 required headings、Mermaid、structured visual、stage gate 和 runtime visual diagnostic 的通过/失败/警告，并聚合缺失信息清单 |
 | E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 已消化：测试资产集合输出统一 `qualitySummary`，资产中心和 Header 展示质量状态/gate，issue、测试点覆盖、风险生命周期动作会推动质量状态变化 |
-| E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
+| E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 已消化为 Artifact 定向修订闭环：用户可从章节侧栏指定未锁定章节重生成，复用共享 typed SSE runtime，客户端只合并目标章节，保留锁定章节和非目标章节，并写入 artifact/stage/history |
 | E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 已消化：支持继续、复制为新 run、按 workflow/复用状态筛选、预览当前 artifact |
 | E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | 已消化：handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入；启动目标 run 时首条上下文包含同一审阅结构 |
 | E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 已部分完成 | 已消化规则型质量治理闭环：每个 stage 有质量分、证据明细、待处理项、全局待处理队列和阶段定位；后续仅保留跨 run 趋势和 LLM judge evidence |
@@ -89,6 +89,7 @@
 - 2026-06-23: 已完成 Run 历史复用中心厚切片，消化 E06。后端 run list 返回并过滤 `reuseStatus=ready|needs_artifact|failed`，新增共享 `POST /api/agent/runs/<run_id>/clone` 复制源 run 的 messages、当前 artifacts 和 context summaries 为独立 active run；前端 service 严格解析复用状态并提供 clone API；Header 历史会话升级为可筛选、可预览当前 artifact、可继续原 run、可复制为新 run 的复用中心，并展示预览/复制失败反馈。该切片复用现有 run persistence、snapshot restore、共享 Header UI 和 workflow registry，不新增 agent 专属 runtime、API path、store 或 renderer。
 - 2026-06-23: 已完成 DeepSeek 格式化失败运行统计诊断闭环，消化 E09 当前 DeepSeek/contract retry drilldown 部分。`FormattedOutputDiagnosticError` 现在会进入共享 turn metrics，`/api/agent/observability` 返回 `formatFailureDiagnostics`，Header 运行统计展示格式化失败总数、最高频类型、受影响 workflow/stage/provider、重试次数和行动建议。该切片复用共享 Agent Runtime、typed SSE、run persistence、observability endpoint 和 Header UI，不新增 DeepSeek 专属 runtime、API path、store 或 renderer；不纳入真实 DeepSeek smoke、E08 工作流质量评分或 E05 章节级重生成。
 - 2026-06-23: 已完成 Workflow 质量治理闭环厚切片，消化 E08 规则型评分与复审部分。新增共享前端 `workflowQuality` 规则聚合，从 workflow manifest、`stageArtifacts`、当前 artifact 和 runtime visual diagnostics 派生每阶段 score/status/evidence/pending；ArtifactPane 审阅入口展示平均分、ready/attention/blocked/not-started 汇总、全局待处理队列和每阶段待处理摘要，并复用现有 `setStageIndex()` 提供阶段定位动作。该切片不新增持久化字段、API、runtime、store 或 renderer；跨 run 趋势和 LLM judge evidence 保留为后续 E08 派生候选。
+- 2026-06-23: 已完成 Artifact 定向修订闭环厚切片，消化 E05。ArtifactPane 章节侧栏增加未锁定章节重生成动作；`useChatService` 新增 `handleRegenerateArtifactSection()`，通过现有共享 `generateResponseStream` / `/api/agent/runs/stream` typed SSE 发起定向修订 prompt；前端共享 `artifactSections` helper 负责 H1-H3 章节 anchor、锁定匹配、锁定保护和目标章节合并。模型仍返回完整 artifact，但客户端只接收目标章节内容，非目标章节保持原样，锁定章节按锁快照恢复，成功后写入 `artifactContent`、`stageArtifacts` 和 `artifactHistory`。该切片不新增后端 runtime、API path、store 或 renderer。
 
 ## Lisa 专业化方向
 
@@ -121,7 +122,7 @@
 
 目标: 1-2 周内明显提升专业感和产出可信度。
 
-包含: E01/E02/E03/E04/E07/E08 规则型治理闭环/E13/E14 均已在 2026-06-23 目标模式切片中消化。快速专业化路线剩余工作转入章节级重生成、E08 跨 run 趋势/LLM judge 和平台 dry-run/scaffold 等 P1/P2 能力包；运行统计产品化当前 DeepSeek/格式化失败诊断闭环已消化。
+包含: E01/E02/E03/E04/E05/E07/E08 规则型治理闭环/E13/E14 均已在 2026-06-23 目标模式切片中消化。快速专业化路线剩余工作转入 E08 跨 run 趋势/LLM judge、平台 dry-run/scaffold 和 DeepSeek 真实 smoke 等 P1/P2 能力包；运行统计产品化当前 DeepSeek/格式化失败诊断闭环已消化。
 
 暂不做:
 
@@ -139,7 +140,7 @@
 
 目标: 让用户从开始、生成、审阅、修订、恢复、复用形成闭环。
 
-包含: E03、E05、E06、E07、E08；其中 E03、E06、E07、E08 规则型治理闭环已消化，E05 章节级重生成和 E08 跨 run 质量趋势仍可作为后续厚切片候选。
+包含: E03、E05、E06、E07、E08；其中 E03、E05、E06、E07、E08 规则型治理闭环已消化，后续功能闭环路线只保留 E08 跨 run 质量趋势、跨 run 对比或收藏等新厚切片候选。
 
 暂不做:
 
