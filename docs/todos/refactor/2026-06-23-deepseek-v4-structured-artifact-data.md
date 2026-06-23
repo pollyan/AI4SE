@@ -25,6 +25,7 @@
 - 2026-06-23 已完成第十七个垂直切片: `IDEA_BRAINSTORM/CONCEPT` 支持模型输出 `artifact_data`，后端校验定位声明、核心假设、Lean Canvas、MVP 功能、增长漏斗、Pre-mortem 风险、验证路线、不可做范围、决策记录、下一步行动和阶段门禁后，确定性渲染《产品概念简报》、Mermaid `pie`/`flowchart` 和 `ai4se-visual` `mvp-map`。
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
 - `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM` 四阶段已完成结构化产物数据迁移；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
+- 2026-06-23 已完成 DeepSeek V4 结构化输出证据门禁: 新增 `tools/new-agents/backend/deepseek_v4_smoke_evidence.py` 和 `tests/test_deepseek_v4_smoke_evidence.py`，本地 deterministic gate 使用 fake DeepSeek V4 stream 证明 `response_format={"type":"json_object"}`、thinking disabled、`artifact_data` instruction、后端 renderer 和 artifact contract 仍走通；真实 DeepSeek smoke 仅在显式提供 `NEW_AGENTS_DEEPSEEK_V4_SMOKE_API_KEY`、`NEW_AGENTS_DEEPSEEK_V4_SMOKE_BASE_URL`、`NEW_AGENTS_DEEPSEEK_V4_SMOKE_MODEL` 时运行，缺凭证时返回 skipped，不伪造成功。
 
 ## 目标
 
@@ -160,12 +161,14 @@ renderer 职责:
 - 至少一个完整 workflow stage 能完成: 用户输入 -> DeepSeek JSON mode -> Pydantic data schema -> backend renderer -> artifact contract -> typed SSE -> 前端展示。
 - “格式不完整 / 结构化输出生成失败”不再由 Markdown 标题缺失、Mermaid fence 不完整或表格格式错误高频触发。
 - 所有失败都能定位到 schema path、contract rule 或 renderer rule。
+- 本地 evidence gate 可在无真实 DeepSeek 凭证时运行 deterministic 验收；可选真实 smoke 必须显式凭证/网络授权，缺失时清晰 skipped。
 
 ## 建议验证命令
 
 - `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py -q`
 - `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_contracts.py -q`
 - `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_endpoint.py -q`
+- `python3 -m pytest tools/new-agents/backend/tests/test_deepseek_v4_smoke_evidence.py -q`
 - `cd tools/new-agents/frontend && npm run test -- --run src/services/__tests__/chatService.test.ts src/components/__tests__/ChatPane.test.tsx`
 - `cd tools/new-agents/frontend && npm run lint`
 
@@ -173,4 +176,4 @@ renderer 职责:
 
 - `artifact_data` schema 是按 workflow/stage 手写 Pydantic model，还是先定义通用 block schema 再按 stage 组合。
 - renderer 输出是否继续保存为 Markdown，或同时持久化 `artifact_data` 便于后续重渲染和审计。
-- 真实 DeepSeek V4 Flash smoke gate 是否作为可选验证，还是每个阶段迁移都要求人工触发一次。
+- 已裁决: 真实 DeepSeek V4 Flash smoke gate 是可选验证，只在显式凭证、网络和额度可用时触发；默认本地门禁使用 deterministic fake stream evidence，避免 CI 因缺外部凭证失败。
