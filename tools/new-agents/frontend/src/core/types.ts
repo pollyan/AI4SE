@@ -422,6 +422,17 @@ export interface WorkflowStage {
     name: string;
     description: string;
     template?: string;
+    artifactContract?: ArtifactContractConfig;
+    visualContract?: VisualContractConfig;
+}
+
+export interface ArtifactContractConfig {
+    requiredHeadings: string[];
+}
+
+export interface VisualContractConfig {
+    requiredMermaidDiagrams?: string[];
+    requiredStructuredVisuals?: string[];
 }
 
 export interface OnboardingConfig {
