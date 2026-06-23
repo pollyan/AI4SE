@@ -110,6 +110,7 @@ flowchart TD
 | --- | --- | --- | --- | --- | --- |
 | 需求 | F-001 | 自动生成测试策略和用例 | P0 需求 | 需求评审 / 测试设计 | 已确认 |
 | 验收标准 | AC-001 | 可生成策略和用例 artifact | 验收标准 | 测试断言 | 已确认 |
+| 开放问题 | Q-001 | 锁定策略是否需要纳入首轮测试设计 | 待澄清问题 | 测试范围判断 | 待确认 |
 
 ## 12. 阶段门禁
 - [x] P0 需求均具备验收标准、owner 和可测试性等级。
@@ -197,6 +198,20 @@ def test_export_run_handoffs_returns_configured_lisa_targets(app):
     first = result["handoffs"][0]
     assert first["sourceStageId"] == "BLUEPRINT"
     assert first["sourceArtifactVersion"] == 1
+    assert first["sourceSummary"].startswith("AI 测试资产管理平台需求蓝图")
+    assert "AI 测试资产管理平台" in first["sourceSummary"]
+    assert first["unconfirmedItems"] == [
+        "开放问题 Q-001: 锁定策略是否需要纳入首轮测试设计"
+    ]
+    assert first["targetInputChecklist"] == [
+        "复核来源版本 VALUE_DISCOVERY/BLUEPRINT v1",
+        "确认目标阶段 TEST_DESIGN/CLARIFY 所需的需求、验收标准和约束均已覆盖",
+        "处理 1 个未确认项后再进入目标产物生成",
+    ]
+    assert "来源版本: VALUE_DISCOVERY/BLUEPRINT v1" in first["prompt"]
+    assert "关键摘要:" in first["prompt"]
+    assert "未确认项:" in first["prompt"]
+    assert "目标工作流输入:" in first["prompt"]
     assert "VALUE_DISCOVERY/BLUEPRINT" in first["prompt"]
     assert "TEST_DESIGN/CLARIFY" in first["prompt"]
     assert "AI 测试资产管理平台" in first["prompt"]
@@ -267,6 +282,15 @@ def test_start_workflow_handoff_creates_target_run_with_handoff_prompt(app):
     assert result["targetWorkflowId"] == "TEST_DESIGN"
     assert result["targetStageId"] == "CLARIFY"
     assert result["targetAgentId"] == "lisa"
+    assert result["sourceSummary"].startswith("AI 测试资产管理平台需求蓝图")
+    assert result["unconfirmedItems"] == [
+        "开放问题 Q-001: 锁定策略是否需要纳入首轮测试设计"
+    ]
+    assert result["targetInputChecklist"] == [
+        "复核来源版本 VALUE_DISCOVERY/BLUEPRINT v1",
+        "确认目标阶段 TEST_DESIGN/CLARIFY 所需的需求、验收标准和约束均已覆盖",
+        "处理 1 个未确认项后再进入目标产物生成",
+    ]
     assert target_snapshot["run"]["workflowId"] == "TEST_DESIGN"
     assert target_snapshot["run"]["agentId"] == "lisa"
     assert target_snapshot["run"]["currentStageId"] == "CLARIFY"

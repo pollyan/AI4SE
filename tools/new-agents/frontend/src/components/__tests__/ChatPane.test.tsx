@@ -759,6 +759,12 @@ describe('ChatPane Component', () => {
                 sourceWorkflowId: 'VALUE_DISCOVERY',
                 sourceStageId: 'BLUEPRINT',
                 sourceArtifactVersion: 2,
+                sourceSummary: 'AI 测试资产管理平台需求蓝图: AI 测试资产管理平台。',
+                unconfirmedItems: ['开放问题 Q-001: 锁定策略是否需要纳入首轮测试设计'],
+                targetInputChecklist: [
+                    '复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2',
+                    '确认目标阶段 TEST_DESIGN/CLARIFY 所需的需求、验收标准和约束均已覆盖',
+                ],
                 targetWorkflowId: 'TEST_DESIGN',
                 targetStageId: 'CLARIFY',
                 targetAgentId: 'lisa',
@@ -770,6 +776,10 @@ describe('ChatPane Component', () => {
 
         expect(fetchWorkflowHandoffs).toHaveBeenCalledWith('alex-run-123');
         expect(await screen.findByText('交给 Lisa 做测试设计')).toBeDefined();
+        expect(screen.getByText('来源 VALUE_DISCOVERY/BLUEPRINT v2')).toBeDefined();
+        expect(screen.getByText('AI 测试资产管理平台需求蓝图: AI 测试资产管理平台。')).toBeDefined();
+        expect(screen.getByText('开放问题 Q-001: 锁定策略是否需要纳入首轮测试设计')).toBeDefined();
+        expect(screen.getByText('确认目标阶段 TEST_DESIGN/CLARIFY 所需的需求、验收标准和约束均已覆盖')).toBeDefined();
     });
 
     it('applies a workflow handoff from the chat pane action', async () => {
@@ -788,6 +798,12 @@ describe('ChatPane Component', () => {
                 sourceWorkflowId: 'VALUE_DISCOVERY',
                 sourceStageId: 'BLUEPRINT',
                 sourceArtifactVersion: 2,
+                sourceSummary: 'AI 测试资产管理平台需求蓝图: AI 测试资产管理平台。',
+                unconfirmedItems: ['开放问题 Q-001: 锁定策略是否需要纳入首轮测试设计'],
+                targetInputChecklist: [
+                    '复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2',
+                    '确认目标阶段 TEST_DESIGN/CLARIFY 所需的需求、验收标准和约束均已覆盖',
+                ],
                 targetWorkflowId: 'TEST_DESIGN',
                 targetStageId: 'CLARIFY',
                 targetAgentId: 'lisa',
@@ -800,6 +816,12 @@ describe('ChatPane Component', () => {
             sourceWorkflowId: 'VALUE_DISCOVERY',
             sourceStageId: 'BLUEPRINT',
             sourceArtifactVersion: 2,
+            sourceSummary: 'AI 测试资产管理平台需求蓝图: AI 测试资产管理平台。',
+            unconfirmedItems: ['开放问题 Q-001: 锁定策略是否需要纳入首轮测试设计'],
+            targetInputChecklist: [
+                '复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2',
+                '确认目标阶段 TEST_DESIGN/CLARIFY 所需的需求、验收标准和约束均已覆盖',
+            ],
             targetWorkflowId: 'TEST_DESIGN',
             targetStageId: 'CLARIFY',
             targetAgentId: 'lisa',

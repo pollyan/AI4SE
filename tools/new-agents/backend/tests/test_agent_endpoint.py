@@ -222,6 +222,7 @@ flowchart TD
 | --- | --- | --- | --- | --- | --- |
 | 需求 | F-001 | 自动生成测试策略和用例 | P0 需求 | 需求评审 / 测试设计 | 已确认 |
 | 验收标准 | AC-001 | 可生成策略和用例 artifact | 验收标准 | 测试断言 | 已确认 |
+| 开放问题 | Q-001 | 锁定策略是否需要纳入首轮测试设计 | 待澄清问题 | 测试范围判断 | 待确认 |
 
 ## 12. 阶段门禁
 - [x] P0 需求均具备验收标准、owner 和可测试性等级。
@@ -1653,6 +1654,18 @@ def test_agent_run_handoffs_endpoint_exports_configured_targets(
         ("REQ_REVIEW", "REVIEW", "lisa"),
     ]
     assert response.json["handoffs"][0]["sourceArtifactVersion"] == 1
+    assert response.json["handoffs"][0]["sourceSummary"].startswith(
+        "AI 测试资产管理平台需求蓝图"
+    )
+    assert response.json["handoffs"][0]["unconfirmedItems"] == [
+        "开放问题 Q-001: 锁定策略是否需要纳入首轮测试设计"
+    ]
+    assert response.json["handoffs"][0]["targetInputChecklist"] == [
+        "复核来源版本 VALUE_DISCOVERY/BLUEPRINT v1",
+        "确认目标阶段 TEST_DESIGN/CLARIFY 所需的需求、验收标准和约束均已覆盖",
+        "处理 1 个未确认项后再进入目标产物生成",
+    ]
+    assert "来源版本: VALUE_DISCOVERY/BLUEPRINT v1" in response.json["handoffs"][0]["prompt"]
     assert "AI 测试资产管理平台" in response.json["handoffs"][0]["prompt"]
 
 
@@ -1676,6 +1689,11 @@ def test_agent_run_handoff_start_endpoint_creates_target_run(
     assert response.json["targetWorkflowId"] == "TEST_DESIGN"
     assert response.json["targetStageId"] == "CLARIFY"
     assert response.json["targetAgentId"] == "lisa"
+    assert response.json["sourceSummary"].startswith("AI 测试资产管理平台需求蓝图")
+    assert response.json["unconfirmedItems"] == [
+        "开放问题 Q-001: 锁定策略是否需要纳入首轮测试设计"
+    ]
+    assert response.json["targetInputChecklist"][0] == "复核来源版本 VALUE_DISCOVERY/BLUEPRINT v1"
     assert "AI 测试资产管理平台" in response.json["prompt"]
 
 
