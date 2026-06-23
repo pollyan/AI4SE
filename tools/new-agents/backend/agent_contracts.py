@@ -11,7 +11,31 @@ WORKFLOW_STAGES: dict[str, list[str]] = {
     "INCIDENT_REVIEW": ["TIMELINE", "ROOT_CAUSE", "IMPROVEMENT"],
     "IDEA_BRAINSTORM": ["DEFINE", "DIVERGE", "CONVERGE", "CONCEPT"],
     "VALUE_DISCOVERY": ["ELEVATOR", "PERSONA", "JOURNEY", "BLUEPRINT"],
+    "STORY_BREAKDOWN": [
+        "INPUT_ANALYSIS",
+        "EPIC_MAPPING",
+        "STORY_BACKLOG",
+        "SPRINT_PLAN",
+    ],
 }
+
+STORY_BREAKDOWN_REQUIRED_HEADINGS = [
+    "# 用户故事拆解包",
+    "## 输入分析",
+    "## Epic Map",
+    "## User Story Backlog",
+    "## 验收标准",
+    "## 依赖与风险",
+    "## Sprint 切片建议",
+    "## Lisa Handoff 输入",
+    "## 阶段门禁",
+    "Story ID",
+    "Epic ID",
+    "AC ID",
+    "Sprint",
+    "可测试性",
+    "状态",
+]
 
 REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
     ("TEST_DESIGN", "CLARIFY"): [
@@ -333,6 +357,10 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
         "owner",
         "状态",
     ],
+    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): STORY_BREAKDOWN_REQUIRED_HEADINGS,
+    ("STORY_BREAKDOWN", "EPIC_MAPPING"): STORY_BREAKDOWN_REQUIRED_HEADINGS,
+    ("STORY_BREAKDOWN", "STORY_BACKLOG"): STORY_BREAKDOWN_REQUIRED_HEADINGS,
+    ("STORY_BREAKDOWN", "SPRINT_PLAN"): STORY_BREAKDOWN_REQUIRED_HEADINGS,
 }
 
 REQUIRED_ARTIFACT_H1_KEYWORDS: dict[tuple[str, str], list[str]] = {
@@ -352,6 +380,7 @@ REQUIRED_ARTIFACT_MERMAID_DIAGRAMS: dict[tuple[str, str], list[str]] = {
     ("IDEA_BRAINSTORM", "CONVERGE"): ["quadrantChart"],
     ("VALUE_DISCOVERY", "ELEVATOR"): ["flowchart"],
     ("VALUE_DISCOVERY", "JOURNEY"): ["journey"],
+    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): ["flowchart"],
 }
 
 REQUIRED_ARTIFACT_STRUCTURED_VISUALS: dict[tuple[str, str], list[str]] = {
@@ -366,6 +395,7 @@ REQUIRED_ARTIFACT_STRUCTURED_VISUALS: dict[tuple[str, str], list[str]] = {
     ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["cause-map"],
     ("IDEA_BRAINSTORM", "CONCEPT"): ["mvp-map"],
     ("VALUE_DISCOVERY", "BLUEPRINT"): ["roadmap"],
+    ("STORY_BREAKDOWN", "SPRINT_PLAN"): ["story-map"],
 }
 
 STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {
@@ -456,6 +486,15 @@ STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {
         "columns 必须是非空字符串数组；rows 必须是对象数组，每个对象的 key "
         "必须对应 columns 中的列名。"
     ),
+    "story-map": (
+        'story-map 必须严格使用如下 JSON 结构：{"type": '
+        '"story-map", "title": "可选标题", "columns": ["Epic", '
+        '"Story", "优先级", "Sprint", "依赖", "可测试性"], '
+        '"rows": [{"Epic": "EPIC-001 用户管理", "Story": '
+        '"US-001 创建用户", "优先级": "P0", "Sprint": "Sprint 1", '
+        '"依赖": "认证服务", "可测试性": "高"}]}。columns 必须是非空字符串数组；'
+        "rows 必须是对象数组，每个对象的 key 必须对应 columns 中的列名。"
+    ),
 }
 
 LEGACY_PROTOCOL_TAG_PATTERN = re.compile(
@@ -504,6 +543,7 @@ class AgentTurnOutput(BaseModel):
 
     chat: str = Field(min_length=1)
     artifact_update: ArtifactUpdate
+    artifact_data: dict[str, Any] | None = Field(default=None, exclude=True)
     stage_action: StageAction | None = None
     warnings: list[str] = Field(default_factory=list)
 

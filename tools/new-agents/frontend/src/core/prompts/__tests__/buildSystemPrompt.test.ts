@@ -1,6 +1,34 @@
 import { describe, it, expect } from 'vitest';
 import { buildSystemPrompt } from '../buildSystemPrompt';
-import { WORKFLOWS } from '../../../store';
+import { WorkflowType, WORKFLOWS } from '../../../store';
+
+const migratedArtifactDataStages: Array<{
+    agentId: string;
+    workflow: WorkflowType;
+    stageId: string;
+}> = [
+    { agentId: 'lisa', workflow: 'TEST_DESIGN', stageId: 'CLARIFY' },
+    { agentId: 'lisa', workflow: 'TEST_DESIGN', stageId: 'STRATEGY' },
+    { agentId: 'lisa', workflow: 'TEST_DESIGN', stageId: 'CASES' },
+    { agentId: 'lisa', workflow: 'TEST_DESIGN', stageId: 'DELIVERY' },
+    { agentId: 'lisa', workflow: 'REQ_REVIEW', stageId: 'REVIEW' },
+    { agentId: 'lisa', workflow: 'REQ_REVIEW', stageId: 'REPORT' },
+    { agentId: 'lisa', workflow: 'INCIDENT_REVIEW', stageId: 'TIMELINE' },
+    { agentId: 'lisa', workflow: 'INCIDENT_REVIEW', stageId: 'ROOT_CAUSE' },
+    { agentId: 'lisa', workflow: 'INCIDENT_REVIEW', stageId: 'IMPROVEMENT' },
+    { agentId: 'alex', workflow: 'IDEA_BRAINSTORM', stageId: 'DEFINE' },
+    { agentId: 'alex', workflow: 'IDEA_BRAINSTORM', stageId: 'DIVERGE' },
+    { agentId: 'alex', workflow: 'IDEA_BRAINSTORM', stageId: 'CONVERGE' },
+    { agentId: 'alex', workflow: 'IDEA_BRAINSTORM', stageId: 'CONCEPT' },
+    { agentId: 'alex', workflow: 'VALUE_DISCOVERY', stageId: 'ELEVATOR' },
+    { agentId: 'alex', workflow: 'VALUE_DISCOVERY', stageId: 'PERSONA' },
+    { agentId: 'alex', workflow: 'VALUE_DISCOVERY', stageId: 'JOURNEY' },
+    { agentId: 'alex', workflow: 'VALUE_DISCOVERY', stageId: 'BLUEPRINT' },
+    { agentId: 'alex', workflow: 'STORY_BREAKDOWN', stageId: 'INPUT_ANALYSIS' },
+    { agentId: 'alex', workflow: 'STORY_BREAKDOWN', stageId: 'EPIC_MAPPING' },
+    { agentId: 'alex', workflow: 'STORY_BREAKDOWN', stageId: 'STORY_BACKLOG' },
+    { agentId: 'alex', workflow: 'STORY_BREAKDOWN', stageId: 'SPRINT_PLAN' },
+];
 
 describe('buildSystemPrompt', () => {
     it('generates different prompts for different workflows', () => {
@@ -102,7 +130,7 @@ describe('buildSystemPrompt', () => {
             agentId: 'lisa',
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
-            currentArtifact: '# 需求分析文档\n已有内容',
+            currentArtifact: '# 需求分析文档\n已有内容\n\n```mermaid\nflowchart TD\nA-->B\n```',
         });
 
         expect(prompt).toContain('target_stage_id');
@@ -153,6 +181,68 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('不要只用一两句模板化提示');
     });
 
+    it('does not ask migrated artifact_data stages to format markdown artifacts', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            currentArtifact: '# 需求分析文档\n已有内容',
+        });
+
+        expect(prompt).not.toContain('<mark>');
+        expect(prompt).not.toContain('artifact_update');
+        expect(prompt).not.toContain('必须提供完整、全部的 Markdown 文档内容');
+        expect(prompt).not.toContain('```markdown');
+        expect(prompt).not.toContain('Mermaid');
+        expect(prompt).not.toContain('flowchart TD');
+        expect(prompt).toContain('当前工作流：测试设计');
+        expect(prompt).toContain('当前阶段：需求澄清');
+        expect(prompt).toContain('target_stage_id');
+    });
+
+    it.each(migratedArtifactDataStages)(
+        'keeps $workflow/$stageId in artifact_data prompt mode',
+        ({ agentId, workflow, stageId }) => {
+            const stageIndex = WORKFLOWS[workflow].stages.findIndex((stage) => stage.id === stageId);
+            expect(stageIndex).toBeGreaterThanOrEqual(0);
+
+            const prompt = buildSystemPrompt({
+                agentId,
+                workflow,
+                stageIndex,
+                currentArtifact: '# 已渲染产物\n\n```mermaid\nflowchart TD\nA-->B\n```',
+            });
+
+            expect(prompt).toContain('结构化业务数据模式');
+            expect(prompt).not.toContain('<mark>');
+            expect(prompt).not.toContain('artifact_update');
+            expect(prompt).not.toContain('必须提供完整、全部的 Markdown 文档内容');
+            expect(prompt).not.toContain('```markdown');
+            expect(prompt).not.toContain('flowchart TD');
+            expect(prompt).not.toContain('Mermaid');
+            expect(prompt).toContain(WORKFLOWS[workflow].name);
+            expect(prompt).toContain(WORKFLOWS[workflow].stages[stageIndex].name);
+        }
+    );
+
+    it('describes story breakdown work without markdown direct-write instructions', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'alex',
+            workflow: 'STORY_BREAKDOWN',
+            stageIndex: 2,
+            currentArtifact: '# 用户故事拆解包\n已有内容',
+        });
+
+        expect(prompt).toContain('用户故事拆解');
+        expect(prompt).toContain('User Story Backlog');
+        expect(prompt).toContain('验收标准');
+        expect(prompt).toContain('Sprint 切片');
+        expect(prompt).toContain('Lisa Handoff');
+        expect(prompt).toContain('结构化业务数据模式');
+        expect(prompt).not.toContain('artifact_update');
+        expect(prompt).not.toContain('必须提供完整、全部的 Markdown 文档内容');
+    });
+
     it('keeps next-stage confirmation separate from next-stage artifact generation', () => {
         const prompt = buildSystemPrompt({
             agentId: 'lisa',
@@ -161,8 +251,8 @@ describe('buildSystemPrompt', () => {
             currentArtifact: '# 需求分析文档\n已有内容',
         });
 
-        expect(prompt).toContain('不要在同一轮生成下一阶段产出物');
-        expect(prompt).toContain('继续返回当前阶段的完整产出物');
+        expect(prompt).toContain('不要在同一轮准备下一阶段业务数据');
+        expect(prompt).not.toContain('继续返回当前阶段的完整产出物');
     });
 
     it('allows the test design clarify stage to assume a scenario when the user asks for one', () => {
