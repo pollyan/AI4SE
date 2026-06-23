@@ -168,6 +168,42 @@ FRONTEND_PROMPT_FILES = {
         / "value_discovery"
         / "blueprint.ts"
     ),
+    ("PRD_REVIEW", "INVENTORY"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "prd_review"
+        / "inventory.ts"
+    ),
+    ("PRD_REVIEW", "QUALITY_AUDIT"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "prd_review"
+        / "quality_audit.ts"
+    ),
+    ("PRD_REVIEW", "COMPLETION_PLAN"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "prd_review"
+        / "completion_plan.ts"
+    ),
+    ("PRD_REVIEW", "REVISION_BLUEPRINT"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "prd_review"
+        / "revision_blueprint.ts"
+    ),
 }
 
 
