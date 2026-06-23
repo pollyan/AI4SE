@@ -17,6 +17,10 @@ import { ELEVATOR_PROMPT, ELEVATOR_TEMPLATE } from './prompts/value_discovery/el
 import { PERSONA_PROMPT, PERSONA_TEMPLATE } from './prompts/value_discovery/persona';
 import { JOURNEY_PROMPT, JOURNEY_TEMPLATE } from './prompts/value_discovery/journey';
 import { BLUEPRINT_PROMPT, BLUEPRINT_TEMPLATE } from './prompts/value_discovery/blueprint';
+import { INVENTORY_PROMPT, INVENTORY_TEMPLATE } from './prompts/prd_review/inventory';
+import { QUALITY_AUDIT_PROMPT, QUALITY_AUDIT_TEMPLATE } from './prompts/prd_review/quality_audit';
+import { COMPLETION_PLAN_PROMPT, COMPLETION_PLAN_TEMPLATE } from './prompts/prd_review/completion_plan';
+import { REVISION_BLUEPRINT_PROMPT, REVISION_BLUEPRINT_TEMPLATE } from './prompts/prd_review/revision_blueprint';
 
 type StageContent = {
     description: string;
@@ -91,6 +95,22 @@ const STAGE_CONTENT_BY_TEMPLATE_ID: Record<string, StageContent> = {
         'value_discovery.blueprint': {
             description: BLUEPRINT_PROMPT,
             template: BLUEPRINT_TEMPLATE,
+        },
+        'prd_review.inventory': {
+            description: INVENTORY_PROMPT,
+            template: INVENTORY_TEMPLATE,
+        },
+        'prd_review.quality_audit': {
+            description: QUALITY_AUDIT_PROMPT,
+            template: QUALITY_AUDIT_TEMPLATE,
+        },
+        'prd_review.completion_plan': {
+            description: COMPLETION_PLAN_PROMPT,
+            template: COMPLETION_PLAN_TEMPLATE,
+        },
+        'prd_review.revision_blueprint': {
+            description: REVISION_BLUEPRINT_PROMPT,
+            template: REVISION_BLUEPRINT_TEMPLATE,
         },
 };
 

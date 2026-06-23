@@ -111,6 +111,10 @@ ARTIFACT_DATA_READY_STAGES: frozenset[tuple[str, str]] = frozenset(
         ("VALUE_DISCOVERY", "PERSONA"),
         ("VALUE_DISCOVERY", "JOURNEY"),
         ("VALUE_DISCOVERY", "BLUEPRINT"),
+        ("PRD_REVIEW", "INVENTORY"),
+        ("PRD_REVIEW", "QUALITY_AUDIT"),
+        ("PRD_REVIEW", "COMPLETION_PLAN"),
+        ("PRD_REVIEW", "REVISION_BLUEPRINT"),
         ("INCIDENT_REVIEW", "TIMELINE"),
         ("INCIDENT_REVIEW", "ROOT_CAUSE"),
         ("INCIDENT_REVIEW", "IMPROVEMENT"),
@@ -728,6 +732,39 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
+PRD_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮如何评审 PRD、识别缺口、组织补全动作或形成修订蓝图。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "PRD 质量评审与补全", "workflow": "PRD_REVIEW", "stage": "INVENTORY/QUALITY_AUDIT/COMPLETION_PLAN/REVISION_BLUEPRINT", "status": "可进入下一阶段/需补充信息/暂缓"},
+    "prd_inventory": [{"item_id": "INV-001", "category": "目标用户/业务目标/范围/约束/验收材料", "content": "...", "source": "PRD 草案/用户输入/AI 推断", "evidence_level": "用户提供/文档证据/AI 假设", "status": "已识别/待确认/缺失"}],
+    "quality_findings": [{"finding_id": "FIND-001", "dimension": "完整性/一致性/可测试性/边界/异常路径/非功能/风险/证据强度", "problem": "...", "severity": "P0/P1/P2", "blocking": "阻断/非阻断", "evidence": "...", "impact": "...", "recommendation": "...", "status": "待修订/待确认/已关闭"}],
+    "completion_actions": [{"action_id": "ACT-001", "finding_ids": ["FIND-001"], "action": "...", "priority": "P0/P1/P2", "owner": "产品经理/业务/研发/测试/用户确认", "verification_method": "...", "review_condition": "...", "status": "待开始/进行中/已完成"}],
+    "revision_sections": [{"section_id": "SEC-001", "title": "...", "rewrite_goal": "...", "recommended_content": "...", "acceptance_note": "...", "status": "待修订/待确认/已完成"}],
+    "acceptance_criteria": [{"criterion_id": "AC-001", "related_section_ids": ["SEC-001"], "scenario": "...", "given": "...", "when": "...", "then": "...", "testability_level": "高/中/低", "status": "待确认/已确认"}],
+    "handoff_inputs": [{"input_id": "HI-001", "related_section_ids": ["SEC-001"], "target_workflow": "TEST_DESIGN/REQ_REVIEW", "content": "...", "risk": "...", "status": "可交给 Lisa/需补充/暂缓"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "QUALITY_AUDIT/COMPLETION_PLAN/REVISION_BLUEPRINT"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；quality_findings.finding_id、completion_actions.action_id 和 revision_sections.section_id 必须唯一；completion_actions.finding_ids 只能引用已存在的 finding_id；acceptance_criteria.related_section_ids 和 handoff_inputs.related_section_ids 只能引用已存在的 section_id；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 ai4se-visual，后端会负责确定性渲染右侧 PRD artifact、score-matrix、action-board 和 roadmap。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     return (workflow_id, current_stage_id) in ARTIFACT_DATA_READY_STAGES
 
@@ -756,6 +793,13 @@ def build_structured_output_instruction(
         return REQ_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("REQ_REVIEW", "REPORT"):
         return REQ_REVIEW_REPORT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if workflow_id == "PRD_REVIEW" and current_stage_id in {
+        "INVENTORY",
+        "QUALITY_AUDIT",
+        "COMPLETION_PLAN",
+        "REVISION_BLUEPRINT",
+    }:
+        return PRD_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
         return VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "PERSONA"):
