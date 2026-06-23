@@ -13,6 +13,9 @@ import type {
     TestAssetIssueStatus,
     TestAssetPoint,
     TestAssetPointPatch,
+    TestAssetQualityGateStatus,
+    TestAssetQualityStatus,
+    TestAssetQualitySummary,
     TestAssetRisk,
     TestAssetRiskCreatePatch,
     TestAssetRiskDeleteResult,
@@ -29,6 +32,8 @@ const INVALID_POINT_ERROR = 'Invalid test asset point response';
 const INVALID_RISK_ERROR = 'Invalid test asset risk response';
 const INVALID_INTENT_TESTER_MAPPING_ERROR = 'Invalid test asset intent-tester mapping response';
 const ISSUE_STATUSES = new Set<TestAssetIssueStatus>(['pending', 'confirmed', 'ignored']);
+const QUALITY_STATUSES = new Set<TestAssetQualityStatus>(['blocked', 'attention', 'ready']);
+const QUALITY_GATE_STATUSES = new Set<TestAssetQualityGateStatus>(['fail', 'warn', 'pass']);
 const RISK_STATUSES = new Set<TestAssetRiskStatus>([
     'open',
     'mitigating',
@@ -110,6 +115,60 @@ const parseCoverageSummary = (
                 partial: parseInteger(priority.partial, errorMessage),
                 uncovered: parseInteger(priority.uncovered, errorMessage),
                 coverageRate: parseNumber(priority.coverageRate, errorMessage),
+            };
+        }),
+    };
+};
+
+const parseQualityStatus = (value: unknown, errorMessage: string): TestAssetQualityStatus => {
+    if (typeof value === 'string' && QUALITY_STATUSES.has(value as TestAssetQualityStatus)) {
+        return value as TestAssetQualityStatus;
+    }
+    throw new Error(errorMessage);
+};
+
+const parseQualityGateStatus = (
+    value: unknown,
+    errorMessage: string,
+): TestAssetQualityGateStatus => {
+    if (
+        typeof value === 'string'
+        && QUALITY_GATE_STATUSES.has(value as TestAssetQualityGateStatus)
+    ) {
+        return value as TestAssetQualityGateStatus;
+    }
+    throw new Error(errorMessage);
+};
+
+const parseQualitySummary = (
+    value: unknown,
+    errorMessage: string,
+): TestAssetQualitySummary => {
+    if (!isRecord(value) || !Array.isArray(value.gates)) {
+        throw new Error(errorMessage);
+    }
+
+    return {
+        status: parseQualityStatus(value.status, errorMessage),
+        label: parseString(value.label, errorMessage),
+        pendingIssueCount: parseInteger(value.pendingIssueCount, errorMessage),
+        confirmedIssueCount: parseInteger(value.confirmedIssueCount, errorMessage),
+        ignoredIssueCount: parseInteger(value.ignoredIssueCount, errorMessage),
+        uncoveredTestPointCount: parseInteger(value.uncoveredTestPointCount, errorMessage),
+        partialTestPointCount: parseInteger(value.partialTestPointCount, errorMessage),
+        openRiskCount: parseInteger(value.openRiskCount, errorMessage),
+        mitigatingRiskCount: parseInteger(value.mitigatingRiskCount, errorMessage),
+        acceptedRiskCount: parseInteger(value.acceptedRiskCount, errorMessage),
+        closedRiskCount: parseInteger(value.closedRiskCount, errorMessage),
+        gates: value.gates.map((gate) => {
+            if (!isRecord(gate)) {
+                throw new Error(errorMessage);
+            }
+            return {
+                id: parseString(gate.id, errorMessage),
+                status: parseQualityGateStatus(gate.status, errorMessage),
+                title: parseString(gate.title, errorMessage),
+                detail: parseString(gate.detail, errorMessage),
             };
         }),
     };
@@ -342,6 +401,7 @@ const parseCollection = (payload: unknown): TestAssetCollection => {
         sourceStageId: parseString(payload.sourceStageId, INVALID_COLLECTION_ERROR),
         sourceArtifactVersion: parseInteger(payload.sourceArtifactVersion, INVALID_COLLECTION_ERROR),
         coverageSummary: parseCoverageSummary(payload.coverageSummary, INVALID_COLLECTION_ERROR),
+        qualitySummary: parseQualitySummary(payload.qualitySummary, INVALID_COLLECTION_ERROR),
         testCases: payload.testCases.map(testCase => parseTestCase(testCase, INVALID_COLLECTION_ERROR)),
         testPoints: payload.testPoints.map(testPoint => parseTraceItem(testPoint, INVALID_COLLECTION_ERROR)),
         coverageTrace: payload.coverageTrace.map(trace => parseTraceItem(trace, INVALID_COLLECTION_ERROR)),

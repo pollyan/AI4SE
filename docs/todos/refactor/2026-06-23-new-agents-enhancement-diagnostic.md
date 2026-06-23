@@ -52,7 +52,7 @@
 
 | 维度 | 当前状态 | 缺口 | 优先级 |
 | --- | --- | --- | --- |
-| 专业可信度 | prompt/template 已有 FMEA、5 Why、ICE、roadmap 等方法 | 缺统一质量门禁、评分、证据强度、风险接受、复审闭环 | P0 |
+| 专业可信度 | prompt/template 已有 FMEA、5 Why、ICE、roadmap 等方法；Lisa 测试资产已补质量状态闭环 | 仍缺跨 workflow 质量评分、证据强度、复审闭环和趋势化质量门禁 | P1 |
 | Artifact 闭环 | 有版本、diff、批注、章节锁、导出、冲突合并 | 缺统一 artifact quality / contract / stage gate 诊断面板 | P0 |
 | Workflow 入口 | 有 listing、onboarding、starter prompts；2026-06-23 已补在线 workflow 入口 preview | 仍缺自动推荐排序和更深的选择决策引导 | P1 |
 | Run 复用 | 有历史列表、搜索、runId snapshot 恢复 | 缺收藏、复制为新 run、质量状态筛选、跨 run 对比 | P1 |
@@ -67,7 +67,7 @@
 | E01 | Workflow 入口 preview | 改造现有功能 | 体验 | S | P0 | 已消化：每个在线 workflow 展示适用/不适用、输入要求、预期产物和样例输入 |
 | E02 | 阶段缺失信息清单 | 深化现有功能 | 专业内容 | S | P0 | 已消化当前 artifact 审阅侧：右侧产物审阅可展示待澄清、开放、未确认、阻断和阶段门禁待处理信息；chat 侧轻提示后续归入会话引导增强 |
 | E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | P0 | 已消化：右侧产物审阅诊断中心展示 required headings、Mermaid、structured visual、stage gate 和 runtime visual diagnostic 的通过/失败/警告，并聚合缺失信息清单 |
-| E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 测试点、风险、用例 issue 可修复、确认、追踪并影响资产质量状态 |
+| E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 已消化：测试资产集合输出统一 `qualitySummary`，资产中心和 Header 展示质量状态/gate，issue、测试点覆盖、风险生命周期动作会推动质量状态变化 |
 | E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
 | E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 支持继续、复制为新 run、按 workflow/质量筛选、预览当前 artifact |
 | E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入 |
@@ -84,6 +84,7 @@
 - 2026-06-23: 已完成 Alex `PRD_REVIEW` 质量评审与补全 workflow 主线化切片。新增 `prd-review` 在线入口、4 个阶段 prompt/template、manifest artifact/visual contract、后端 `artifact_data` schema/renderer、runtime structured output instruction 和前后端同步测试。该切片不新增 Alex 专属 runtime、API path、store 或 renderer pipeline。
 - 2026-06-23: 已完成 Alex `STORY_BREAKDOWN` 用户故事拆解 workflow 主线化切片。新增 `story-breakdown` 在线入口、4 个阶段 prompt/template、manifest artifact/visual contract、后端 `artifact_data` schema/renderer、runtime structured output instruction、Lisa handoff 和前后端同步测试。该切片不新增 Alex 专属 runtime、API path、store 或 renderer pipeline。
 - 2026-06-23: 已完成 Artifact 审阅诊断中心厚切片，合并消化 E02 当前 artifact 审阅侧缺失信息清单和 E03 Artifact 质量诊断面板。新增前端共享诊断核心，从 `workflow_manifest.json` 读取当前阶段 artifact/visual contract，结合当前 Markdown 与现有 runtime visual diagnostics，在右侧产物审阅面板展示 required headings、Mermaid、structured visual、stage gate、运行时可视化警告、待澄清/开放/未确认/阻断信息和下一步。该切片不新增 agent 专属 runtime、API path、store 或 renderer pipeline；不纳入自动修复、LLM judge、跨 run 趋势或 Lisa 测试资产闭环。
+- 2026-06-23: 已完成 Lisa 测试资产质量闭环厚切片，消化 E04。后端 `TestAssetCollection` 增加由持久化 issue 状态、测试点覆盖和风险生命周期计算的 `qualitySummary`；前端 service 严格解析该 contract；资产中心和 Header 快捷面板展示统一质量状态与 gate；确认/忽略 issue、保存测试点、保存风险会推动质量状态变化。该切片复用现有测试资产 API、持久化模型和共享 UI，不新增 Lisa 专属 runtime、API path、store 或 renderer。
 
 ## Lisa 专业化方向
 
@@ -94,7 +95,7 @@
 建议首批 Lisa 切片:
 
 1. 需求评审质量评分和复审条件。
-2. TEST_DESIGN/CASES 测试资产质量闭环。
+2. TEST_DESIGN/CASES 测试资产质量闭环已在 2026-06-23 本轮消化，后续只在发现回归或需要接入跨 run 质量趋势时维护。
 3. INCIDENT_REVIEW/IMPROVEMENT CAPA 行动项闭环。
 
 ## Alex 专业化方向
@@ -116,7 +117,7 @@
 
 目标: 1-2 周内明显提升专业感和产出可信度。
 
-包含: E04。E01 已在 2026-06-23 workflow 入口 preview milestone 中消化，E02 当前 artifact 审阅侧和 E03 已在 2026-06-23 Artifact 审阅诊断中心 milestone 中消化，E13 已在 2026-06-23 Alex Story Breakdown milestone 中消化，E14 已在 2026-06-23 Alex PRD Review milestone 中消化。
+包含: E01/E02/E03/E04/E13/E14 均已在 2026-06-23 目标模式切片中消化。快速专业化路线剩余工作转入质量评分、handoff 上下文和历史 run 复用等 P1 能力包。
 
 暂不做:
 
@@ -184,10 +185,12 @@
 
 ### 3. Lisa 测试资产质量闭环
 
+- 状态: 已在 2026-06-23 目标模式切片中消化。
 - 涉及模块: `test_assets.py`、`routes_test_assets.py`、`testAssetService.ts`、`Header.tsx`。
 - 需要同步: TEST_DESIGN/CASES artifact contract、资产 issue schema、前端资产 modal。
-- 完成定义: 测试点、风险、用例 issue 可处理并持久化质量状态。
+- 完成定义: 测试点、风险、用例 issue 可处理，并通过持久化集合 `qualitySummary` 统一影响资产质量状态。
 - 不纳入: 新增 intent-tester 联动或自动执行。
+- 后续不再作为活跃候选重复选择；只在发现当前代码回归、真实 Lisa 输出 contract 失配，或需要接入跨 run 质量趋势时作为维护项处理。
 
 ### 4. 历史会话复用增强
 
