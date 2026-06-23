@@ -2,6 +2,7 @@ import type {
     ObservabilityFormatFailureDiagnostics,
     ObservabilityFormatFailureKind,
     ObservabilityFormatFailureProvider,
+    ObservabilityFormatFailureRecent,
     ObservabilityFormatFailureStage,
     ObservabilityProviderSummary,
     ObservabilityStageSummary,
@@ -144,12 +145,34 @@ const parseFormatFailureProvider = (value: unknown): ObservabilityFormatFailureP
     };
 };
 
+const parseFormatFailureRecent = (value: unknown): ObservabilityFormatFailureRecent => {
+    if (!isRecord(value)) {
+        throw new Error(INVALID_OBSERVABILITY_ERROR);
+    }
+
+    return {
+        turnId: parseInteger(value.turnId),
+        runId: parseString(value.runId),
+        workflowId: parseWorkflowType(value.workflowId),
+        stageId: parseString(value.stageId),
+        provider: parseString(value.provider),
+        model: parseString(value.model),
+        kind: parseString(value.kind),
+        label: parseString(value.label),
+        errorCode: parseString(value.errorCode),
+        retryCount: parseInteger(value.retryCount),
+        createdAt: parseNullableString(value.createdAt),
+        action: parseString(value.action),
+    };
+};
+
 const parseFormatFailureDiagnostics = (value: unknown): ObservabilityFormatFailureDiagnostics => {
     if (
         !isRecord(value)
         || !Array.isArray(value.byKind)
         || !Array.isArray(value.byStage)
         || !Array.isArray(value.byProvider)
+        || !Array.isArray(value.recentFailures)
     ) {
         throw new Error(INVALID_OBSERVABILITY_ERROR);
     }
@@ -159,6 +182,7 @@ const parseFormatFailureDiagnostics = (value: unknown): ObservabilityFormatFailu
         byKind: value.byKind.map(parseFormatFailureKind),
         byStage: value.byStage.map(parseFormatFailureStage),
         byProvider: value.byProvider.map(parseFormatFailureProvider),
+        recentFailures: value.recentFailures.map(parseFormatFailureRecent),
     };
 };
 

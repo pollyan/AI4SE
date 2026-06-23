@@ -1060,6 +1060,39 @@ export const Header: React.FC = () => {
                           </div>
                         )}
                       </div>
+
+                      <div className="mt-4 border-t border-red-500/20 pt-3">
+                        <h5 className="text-xs font-semibold text-red-100">最近格式化失败处置</h5>
+                        <div className="mt-2 space-y-2">
+                          {observabilitySummary.formatFailureDiagnostics.recentFailures.length === 0 ? (
+                            <div className="rounded-lg bg-[#111827] p-3 text-xs text-slate-500">
+                              当前筛选范围没有最近格式化失败记录。
+                            </div>
+                          ) : (
+                            observabilitySummary.formatFailureDiagnostics.recentFailures.map((failure) => (
+                              <div key={failure.turnId} className="rounded-lg bg-[#111827] p-3">
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                  <span className="text-sm font-semibold text-white">
+                                    {failure.runId} · {failure.workflowId}/{failure.stageId}
+                                  </span>
+                                  <span className="rounded bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-200">
+                                    {failure.label}
+                                  </span>
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
+                                  <span>{failure.provider} · {failure.model}</span>
+                                  <span>{failure.errorCode}</span>
+                                  <span>重试 {failure.retryCount} 次</span>
+                                  {failure.createdAt && <span>{failure.createdAt}</span>}
+                                </div>
+                                <div className="mt-2 text-xs leading-relaxed text-red-100">
+                                  {failure.action}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
                     </section>
                   )}
 

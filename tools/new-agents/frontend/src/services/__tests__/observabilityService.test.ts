@@ -79,6 +79,22 @@ const OBSERVABILITY_PAYLOAD = {
                 action: '优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 artifact_data contract。',
             },
         ],
+        recentFailures: [
+            {
+                turnId: 12,
+                runId: 'run-format-1',
+                workflowId: 'TEST_DESIGN',
+                stageId: 'CLARIFY',
+                provider: 'deepseek',
+                model: 'deepseek-v4-flash',
+                kind: 'json_decode',
+                label: 'JSON 语法解析失败',
+                errorCode: 'FORMATTED_OUTPUT_JSON_DECODE',
+                retryCount: 1,
+                createdAt: '2026-06-19T10:01:00',
+                action: '优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 artifact_data contract。',
+            },
+        ],
     },
     recentTurns: [
         {
@@ -124,6 +140,20 @@ describe('observabilityService', () => {
         expect(summary.formatFailureDiagnostics.total).toBe(2);
         expect(summary.formatFailureDiagnostics.byKind[0].kind).toBe('artifact_data_schema');
         expect(summary.formatFailureDiagnostics.byProvider[0].provider).toBe('deepseek');
+        expect(summary.formatFailureDiagnostics.recentFailures[0]).toEqual({
+            turnId: 12,
+            runId: 'run-format-1',
+            workflowId: 'TEST_DESIGN',
+            stageId: 'CLARIFY',
+            provider: 'deepseek',
+            model: 'deepseek-v4-flash',
+            kind: 'json_decode',
+            label: 'JSON 语法解析失败',
+            errorCode: 'FORMATTED_OUTPUT_JSON_DECODE',
+            retryCount: 1,
+            createdAt: '2026-06-19T10:01:00',
+            action: '优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 artifact_data contract。',
+        });
     });
 
     it('serializes workflow and stage filters', async () => {
@@ -190,6 +220,21 @@ describe('observabilityService', () => {
                     ...OBSERVABILITY_PAYLOAD.formatFailureDiagnostics,
                     total: '2',
                 },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ));
+
+        await expect(fetchObservabilitySummary({ limit: 20 })).rejects.toThrow(
+            'Invalid observability summary response'
+        );
+    });
+
+    it('fails explicitly when recent format failures are missing', async () => {
+        const { recentFailures: _recentFailures, ...diagnostics } = OBSERVABILITY_PAYLOAD.formatFailureDiagnostics;
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({
+                ...OBSERVABILITY_PAYLOAD,
+                formatFailureDiagnostics: diagnostics,
             }),
             { status: 200, headers: { 'Content-Type': 'application/json' } },
         ));

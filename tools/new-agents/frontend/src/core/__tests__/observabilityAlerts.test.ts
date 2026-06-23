@@ -83,6 +83,22 @@ const BASE_SUMMARY: ObservabilitySummary = {
                 action: '优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 artifact_data contract。',
             },
         ],
+        recentFailures: [
+            {
+                turnId: 'turn-format-1',
+                runId: 'run-format-1',
+                workflowId: 'TEST_DESIGN',
+                stageId: 'STRATEGY',
+                provider: 'deepseek',
+                model: 'deepseek-v4-flash',
+                kind: 'artifact_data_schema',
+                label: 'artifact_data schema 校验失败',
+                errorCode: 'FORMATTED_OUTPUT_ARTIFACT_DATA_SCHEMA',
+                retryCount: 2,
+                createdAt: '2026-06-23T10:00:00Z',
+                action: '优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 artifact_data contract。',
+            },
+        ],
     },
     recentTurns: [],
 };
@@ -148,6 +164,7 @@ describe('buildObservabilityAlerts', () => {
                 byKind: [],
                 byStage: [],
                 byProvider: [],
+                recentFailures: [],
             },
             recentTurns: [],
         });
@@ -191,6 +208,7 @@ describe('buildObservabilityAlerts', () => {
                 byKind: [],
                 byStage: [],
                 byProvider: [],
+                recentFailures: [],
             },
         });
 

@@ -2213,7 +2213,7 @@ def test_agent_observability_endpoint_groups_formatted_output_diagnostics(
 ):
     with app.app_context():
         schema_run = create_agent_run("TEST_DESIGN", "lisa", "STRATEGY")
-        record_turn_metric(
+        schema_metric = record_turn_metric(
             run_id=schema_run.id,
             workflow_id="TEST_DESIGN",
             stage_id="STRATEGY",
@@ -2228,7 +2228,7 @@ def test_agent_observability_endpoint_groups_formatted_output_diagnostics(
             contract_retry_count=2,
         )
         json_run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
-        record_turn_metric(
+        json_metric = record_turn_metric(
             run_id=json_run.id,
             workflow_id="TEST_DESIGN",
             stage_id="CLARIFY",
@@ -2257,6 +2257,42 @@ def test_agent_observability_endpoint_groups_formatted_output_diagnostics(
             estimated_tokens=20,
             contract_retry_count=0,
         )
+        expected_recent_failures = [
+            {
+                "turnId": json_metric.id,
+                "runId": json_run.id,
+                "workflowId": "TEST_DESIGN",
+                "stageId": "CLARIFY",
+                "provider": "deepseek",
+                "model": "deepseek-v4-flash",
+                "kind": "json_decode",
+                "label": "JSON 语法解析失败",
+                "errorCode": "FORMATTED_OUTPUT_JSON_DECODE",
+                "retryCount": 1,
+                "createdAt": json_metric.created_at.isoformat(),
+                "action": (
+                    "优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 "
+                    "artifact_data contract。"
+                ),
+            },
+            {
+                "turnId": schema_metric.id,
+                "runId": schema_run.id,
+                "workflowId": "TEST_DESIGN",
+                "stageId": "STRATEGY",
+                "provider": "deepseek",
+                "model": "deepseek-v4-flash",
+                "kind": "artifact_data_schema",
+                "label": "artifact_data schema 校验失败",
+                "errorCode": "FORMATTED_OUTPUT_ARTIFACT_DATA_SCHEMA",
+                "retryCount": 2,
+                "createdAt": schema_metric.created_at.isoformat(),
+                "action": (
+                    "优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 "
+                    "artifact_data contract。"
+                ),
+            },
+        ]
 
     response = client.get("/api/agent/observability")
 
@@ -2314,6 +2350,86 @@ def test_agent_observability_endpoint_groups_formatted_output_diagnostics(
             "action": (
                 "优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 "
                 "artifact_data contract。"
+            ),
+        }
+    ]
+    assert diagnostics["recentFailures"] == expected_recent_failures
+
+
+def test_agent_observability_endpoint_filters_formatted_output_recent_failures(
+    app,
+    client,
+):
+    with app.app_context():
+        clarify_run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        clarify_metric = record_turn_metric(
+            run_id=clarify_run.id,
+            workflow_id="TEST_DESIGN",
+            stage_id="CLARIFY",
+            model_name="deepseek-v4-flash",
+            provider="deepseek",
+            status="error",
+            error_code="FORMATTED_OUTPUT_JSON_DECODE",
+            duration_ms=120,
+            input_chars=80,
+            output_chars=0,
+            estimated_tokens=20,
+            contract_retry_count=1,
+        )
+        strategy_run = create_agent_run("TEST_DESIGN", "lisa", "STRATEGY")
+        record_turn_metric(
+            run_id=strategy_run.id,
+            workflow_id="TEST_DESIGN",
+            stage_id="STRATEGY",
+            model_name="deepseek-v4-flash",
+            provider="deepseek",
+            status="error",
+            error_code="FORMATTED_OUTPUT_ARTIFACT_DATA_SCHEMA",
+            duration_ms=220,
+            input_chars=100,
+            output_chars=40,
+            estimated_tokens=35,
+            contract_retry_count=2,
+        )
+        expected_recent_failures = [
+            {
+                "turnId": clarify_metric.id,
+                "runId": clarify_run.id,
+                "workflowId": "TEST_DESIGN",
+                "stageId": "CLARIFY",
+                "provider": "deepseek",
+                "model": "deepseek-v4-flash",
+                "kind": "json_decode",
+                "label": "JSON 语法解析失败",
+                "errorCode": "FORMATTED_OUTPUT_JSON_DECODE",
+                "retryCount": 1,
+                "createdAt": clarify_metric.created_at.isoformat(),
+                "action": (
+                    "优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 "
+                    "artifact_data contract。"
+                ),
+            }
+        ]
+
+    response = client.get(
+        "/api/agent/observability?workflowId=TEST_DESIGN&stageId=CLARIFY"
+    )
+
+    assert response.status_code == 200
+    diagnostics = response.json["formatFailureDiagnostics"]
+    assert diagnostics["total"] == 1
+    assert diagnostics["recentFailures"] == expected_recent_failures
+    assert diagnostics["byStage"] == [
+        {
+            "workflowId": "TEST_DESIGN",
+            "stageId": "CLARIFY",
+            "count": 1,
+            "retryCount": 1,
+            "kinds": {"json_decode": 1},
+            "topKind": "json_decode",
+            "action": (
+                "检查模型是否输出合法 JSON object，避免 Markdown 代码围栏、"
+                "解释文字或截断响应。"
             ),
         }
     ]

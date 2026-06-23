@@ -967,6 +967,32 @@ def _format_failure_diagnostics(metrics: list[AgentRunTurnMetric]) -> dict:
             "action": action,
         }
 
+    def recent_failure(metric: AgentRunTurnMetric) -> dict:
+        kind = _format_failure_kind(metric.error_code)
+        assert kind is not None
+        metadata = FORMAT_FAILURE_KIND_METADATA[kind]
+        return {
+            "turnId": metric.id,
+            "runId": metric.run_id,
+            "workflowId": metric.workflow_id,
+            "stageId": metric.stage_id,
+            "provider": metric.provider,
+            "model": metric.model,
+            "kind": kind,
+            "label": metadata["label"],
+            "errorCode": metric.error_code,
+            "retryCount": metric.contract_retry_count,
+            "createdAt": _format_datetime(metric.created_at),
+            "action": (
+                (
+                    "优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 "
+                    "artifact_data contract。"
+                )
+                if metric.provider == "deepseek"
+                else metadata["action"]
+            ),
+        }
+
     return {
         "total": len(format_metrics),
         "byKind": [
@@ -990,6 +1016,7 @@ def _format_failure_diagnostics(metrics: list[AgentRunTurnMetric]) -> dict:
                 key=lambda item: (-item["count"], item["provider"]),
             )
         ],
+        "recentFailures": [recent_failure(metric) for metric in format_metrics],
     }
 
 

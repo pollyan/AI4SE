@@ -310,6 +310,22 @@ const OBSERVABILITY_SUMMARY: ObservabilitySummary = {
                 action: '优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 artifact_data contract。',
             },
         ],
+        recentFailures: [
+            {
+                turnId: 12,
+                runId: 'run-format-1',
+                workflowId: 'TEST_DESIGN',
+                stageId: 'STRATEGY',
+                provider: 'deepseek',
+                model: 'deepseek-v4-flash',
+                kind: 'artifact_data_schema',
+                label: 'artifact_data schema 校验失败',
+                errorCode: 'FORMATTED_OUTPUT_ARTIFACT_DATA_SCHEMA',
+                retryCount: 2,
+                createdAt: '2026-06-19T10:01:00',
+                action: '优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 artifact_data contract。',
+            },
+        ],
     },
     recentTurns: [
         {
@@ -740,12 +756,17 @@ describe('Header Component', () => {
         await screen.findByText('格式化输出诊断');
 
         expect(screen.getByText('格式化失败 2 轮')).toBeTruthy();
-        expect(screen.getByText('artifact_data schema 校验失败')).toBeTruthy();
+        expect(screen.getAllByText('artifact_data schema 校验失败').length).toBeGreaterThanOrEqual(1);
         expect(screen.getByText('TEST_DESIGN / STRATEGY')).toBeTruthy();
         expect(screen.getByText('deepseek')).toBeTruthy();
         expect(screen.getByText('重试 4 次')).toBeTruthy();
         expect(screen.getAllByText('检查当前 stage 的 artifact_data 必填字段、枚举值、空数组和跨字段引用。').length).toBeGreaterThan(0);
-        expect(screen.getByText('优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 artifact_data contract。')).toBeTruthy();
+        expect(screen.getAllByText('优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 artifact_data contract。').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getByText('最近格式化失败处置')).toBeTruthy();
+        expect(screen.getByText('run-format-1 · TEST_DESIGN/STRATEGY')).toBeTruthy();
+        expect(screen.getByText('deepseek · deepseek-v4-flash')).toBeTruthy();
+        expect(screen.getByText('FORMATTED_OUTPUT_ARTIFACT_DATA_SCHEMA')).toBeTruthy();
+        expect(screen.getByText('重试 2 次')).toBeTruthy();
     });
 
     it('opens context summaries and persists calibrated summary content', async () => {

@@ -470,11 +470,27 @@ export type ObservabilityFormatFailureProvider = {
     action: string;
 };
 
+export type ObservabilityFormatFailureRecent = {
+    turnId: number;
+    runId: string;
+    workflowId: WorkflowType;
+    stageId: string;
+    provider: string;
+    model: string;
+    kind: string;
+    label: string;
+    errorCode: string;
+    retryCount: number;
+    createdAt: string | null;
+    action: string;
+};
+
 export type ObservabilityFormatFailureDiagnostics = {
     total: number;
     byKind: ObservabilityFormatFailureKind[];
     byStage: ObservabilityFormatFailureStage[];
     byProvider: ObservabilityFormatFailureProvider[];
+    recentFailures: ObservabilityFormatFailureRecent[];
 };
 
 export type ObservabilitySummary = {
