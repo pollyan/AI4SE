@@ -30,6 +30,7 @@
 - 2026-06-23 已完成 DeepSeek V4 格式化输出失败诊断闭环: raw JSON streaming 连续失败时会将非法 JSON、`artifact_data` schema、renderer 配置和 artifact contract 问题分类为 `json_decode`、`artifact_data_schema`、`artifact_data_renderer`、`artifact_contract`，retry prompt 带 workflow/stage、错误摘要和 schema path，并继续要求修正 `artifact_data` 而不是重写 Markdown。
 - 2026-06-23 已完成 DeepSeek V4 格式化失败运行统计产品化闭环: stream service 会把 `FormattedOutputDiagnosticError` 记录为稳定 turn metric error code，`/api/agent/observability` 聚合 `formatFailureDiagnostics`，Header 运行统计展示失败分类、受影响 workflow/stage/provider、contract retry 次数和行动建议。
 - 2026-06-23 已完成 DeepSeek V4 格式化失败分诊闭环: `/api/agent/observability` 在 `formatFailureDiagnostics.recentFailures` 返回最近 formatted-output failure 队列，包含 run/workflow/stage/provider/model/error kind/retry/action，并与现有 workflow/stage 过滤联动；Header 运行统计可逐条查看最近失败处置建议。
+- 2026-06-23 已完成 DeepSeek V4 真实 smoke gate 结构化链路对齐: `test_agent_real_smoke.py` 不再验证旧的模型直写 `artifact_update.markdown` 协议，而是验证 DeepSeek JSON object mode、thinking disabled、`artifact_data` 输出、后端 deterministic renderer、artifact contract 和 chat/artifact 分离；无 `NEW_AGENTS_SMOKE_*` 凭证时仍明确 skip，不把 deterministic mock 结果声明为真实外部验证。
 - `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段、`IDEA_BRAINSTORM` 四阶段、`PRD_REVIEW` 四阶段和 `STORY_BREAKDOWN` 四阶段已完成结构化产物数据迁移并纳入本地确定性 readiness 门禁；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
 
 ## 目标
@@ -48,7 +49,7 @@
 - 现有 raw JSON streaming 已比纯文本标签稳定，但模型仍要把完整 Markdown 文档、Mermaid 和表格塞进 JSON 字符串，容易出现字段缺失、Markdown 结构不完整、Mermaid 格式错误或输出截断。
 - DeepSeek V4 Flash 的 JSON mode 只能要求返回合法 JSON，不能保证字段完整、枚举合法、跨字段一致或业务 contract 合格。
 - 失败时前端会看到“结构化输出生成失败”，即使 backend 已经做了校验与一次纠错重试，根因仍是模型承担了过多最终交付格式责任。
-- 2026-06-23 更新：本地失败诊断已能区分 JSON 语法、`artifact_data` schema、renderer 配置和 artifact contract，并已接入运行统计 drilldown、最近失败队列和逐条行动建议；真实 DeepSeek smoke 仍因凭证、网络和额度保留为外部可选验证。
+- 2026-06-23 更新：本地失败诊断已能区分 JSON 语法、`artifact_data` schema、renderer 配置和 artifact contract，并已接入运行统计 drilldown、最近失败队列和逐条行动建议；真实 DeepSeek smoke gate 已对齐当前 `artifact_data` 结构化链路，但真实外部执行证据仍因凭证、网络和额度保留为可选验证。
 
 ## 改造方向
 

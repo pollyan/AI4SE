@@ -92,6 +92,7 @@
 - 2026-06-23: 已完成跨 run 工作流质量趋势闭环，继续消化 E08/E09 的趋势化部分。后端在共享 `/api/agent/observability` 中追加 `qualityTrend`，基于持久化 `AgentRun`、当前 `AgentArtifactVersion` 和 workflow contract deterministic 聚合平均质量分、ready/attention/blocked/not-started 分布、最差阶段、阶段 top pending 和最近质量问题；前端 `observabilityService` 严格解析该 contract，Header 运行统计展示跨 run 质量趋势、空态和最近问题样本，并复用现有 workflow/stage 过滤。该切片不新增 agent 专属 runtime、API path、store、renderer 或 LLM 调用；LLM judge evidence 保留为后续候选。
 - 2026-06-23: 已完成 Artifact 定向修订闭环厚切片，消化 E05。ArtifactPane 章节侧栏增加未锁定章节重生成动作；`useChatService` 新增 `handleRegenerateArtifactSection()`，通过现有共享 `generateResponseStream` / `/api/agent/runs/stream` typed SSE 发起定向修订 prompt；前端共享 `artifactSections` helper 负责 H1-H3 章节 anchor、锁定匹配、锁定保护和目标章节合并。模型仍返回完整 artifact，但客户端只接收目标章节内容，非目标章节保持原样，锁定章节按锁快照恢复，成功后写入 `artifactContent`、`stageArtifacts` 和 `artifactHistory`。该切片不新增后端 runtime、API path、store 或 renderer。
 - 2026-06-23: 已完成 Workflow schema dry-run 工程信任闭环，消化 E12 的诊断门禁部分。新增 `scripts/validation/new_agents_workflow_dry_run.py`，从真实仓库事实聚合检查 shared `workflow_manifest.json`、前端 `STAGE_CONTENT_BY_TEMPLATE_ID` 与 prompt 文件、后端 `WORKFLOW_STAGES` / artifact contract、DeepSeek `artifact_data` readiness、renderer stage keys、handoff prompt 和 manifest 打包/挂载；旧 workflow contract sync 测试复用同一 loader，不再维护独立 prompt 文件硬编码表。该切片不新增 runtime、API、store、renderer 或真实 LLM 调用；完整 scaffold/codegen、prompt/template 版本管理和 LLM judge evidence 保留为后续候选。
+- 2026-06-23: 已完成 DeepSeek 真实 smoke gate 结构化链路对齐厚切片。`test_agent_real_smoke.py` 已从旧模型直写 `artifact_update.markdown` smoke 改为验证 DeepSeek JSON object mode、thinking disabled、`artifact_data` 输出、后端 deterministic renderer、artifact contract 和 chat/artifact 分离；缺少 `NEW_AGENTS_SMOKE_*` 凭证时仍明确 skip，不把 mock 结果声明为真实外部验证。该切片不新增 DeepSeek 专属 runtime、API path、store 或 renderer；真实 DeepSeek 外部执行证据仍需要凭证、网络和额度。
 
 ## Lisa 专业化方向
 
@@ -124,7 +125,7 @@
 
 目标: 1-2 周内明显提升专业感和产出可信度。
 
-包含: E01/E02/E03/E04/E05/E07/E08 规则型治理闭环与跨 run deterministic 趋势/E13/E14 均已在 2026-06-23 目标模式切片中消化。快速专业化路线剩余工作转入 E08 LLM judge evidence、E12 完整 scaffold/codegen、prompt/template 版本管理和 DeepSeek 真实 smoke 等 P1/P2 能力包；运行统计产品化当前 DeepSeek/格式化失败诊断闭环已消化。
+包含: E01/E02/E03/E04/E05/E07/E08 规则型治理闭环与跨 run deterministic 趋势/E13/E14 均已在 2026-06-23 目标模式切片中消化。快速专业化路线剩余工作转入 E08 LLM judge evidence、E12 完整 scaffold/codegen、prompt/template 版本管理和 DeepSeek 真实外部执行证据等 P1/P2 能力包；运行统计产品化当前 DeepSeek/格式化失败诊断闭环和真实 smoke gate 对齐已消化。
 
 暂不做:
 
@@ -252,7 +253,7 @@
 | E12 workflow scaffold/codegen | 一次性交付从输入到生成/补齐 workflow 骨架、dry-run 校验、失败报告和文档记录的工程信任闭环 | 不单独拆模板文件、生成脚本参数、单个 manifest 字段 |
 | Prompt/template 版本管理 | 一次性交付 stage prompt/template version、回归样例绑定、变更追踪、校验和可见诊断 | 不单独拆 version 字段、单个 registry helper、单条测试 |
 | 专业方法库配置化 | 一次性交付方法库配置、prompt/template 注入、workflow/stage 适配、缺失方法诊断和测试证据 | 不单独拆 FMEA/JTBD/RICE 的单个方法条目 |
-| DeepSeek 真实 smoke | 一次性交付真实 smoke gate、外部条件检查、证据记录、失败分诊和 todo 状态更新；缺凭证/网络/额度时只能标记真实验证未完成 | 不用 mock smoke 替代真实 DeepSeek 调用，不单独拆环境变量检查 |
+| DeepSeek 真实外部执行证据 | gate 已完成结构化链路对齐；后续只在具备凭证、网络和额度时执行真实 DeepSeek 调用并记录证据，失败时进入分诊 | 不用 mock smoke 替代真实 DeepSeek 调用，不把 env 检查或 skip 结果当作真实通过 |
 
 每轮仍必须从当前 `docs/todos/`、代码、测试、文档和 git 状态重新做 CGA。CGA 可以重新排序上述能力包，但不能把同一能力包内的后端契约、前端入口、状态承接、错误反馈、验证证据和文档记录拆成连续多轮目标模式。
 
