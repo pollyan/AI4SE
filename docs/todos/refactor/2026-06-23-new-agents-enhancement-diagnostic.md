@@ -66,16 +66,25 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | E01 | Workflow 入口 preview | 改造现有功能 | 体验 | S | P0 | 已消化：每个在线 workflow 展示适用/不适用、输入要求、预期产物和样例输入 |
 | E02 | 阶段缺失信息清单 | 深化现有功能 | 专业内容 | S | P0 | chat 和 artifact 都能标明缺失项、阻断性和用户下一步 |
-| E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | P0 | 展示 headings、visual、stage gate、专业字段通过/失败/警告 |
+| E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | P0 | 已消化：`ArtifactPane` 审阅入口展示 headings、visual、stage gate、专业字段通过/失败/警告 |
 | E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 测试点、风险、用例 issue 可修复、确认、追踪并影响资产质量状态 |
 | E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
 | E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 支持继续、复制为新 run、按 workflow/质量筛选、预览当前 artifact |
 | E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入 |
-| E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 | 每个 stage 有质量分、证据明细和待处理项 |
+| E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 | 已消化：当前 stage 有质量分、证据明细和待处理项 |
 | E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 显示 workflow/stage/provider 趋势、contract retry 原因和行动建议 |
 | E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | FMEA、JTBD、RICE、Kano、CAPA 等可由配置注入 prompt/template |
 | E11 | Prompt/template 版本管理 | 新增功能 | 平台扩展 | L | P2 | 每个 stage 有 prompt/template version 和回归样例 |
 | E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 | 新 workflow 缺 manifest/prompt/contract/test 任一面时 dry-run 失败 |
+
+### 2026-06-24 目标模式消化记录：E03/E08 Artifact/Workflow 质量治理闭环
+
+- Milestone: 在现有 `ArtifactPane` 审阅入口合并消化 E03 Artifact 质量诊断面板与 E08 工作流质量评分。
+- 能力增量: 当前 stage artifact 可显示质量分、通过/警告/失败统计、headings / visual / stage gate / visual diagnostic 证据和待处理项。
+- 实现边界: 前端确定性质量模型 `workflowQuality.ts` + `ArtifactPane` 审阅抽屉展示；不新增后端 API、runtime、SSE、持久化模型或 agent 专属 renderer。
+- 验证: `cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/workflowQuality.test.ts src/components/__tests__/ArtifactPane.test.tsx`，143 passed。
+- 验证: `cd tools/new-agents/frontend && npm run lint`，TypeScript check passed。
+- 未覆盖: LLM judge 语义评分、运行统计 retry drilldown、章节级重生成，分别保留为后续 E09/E05 或 judge evidence 能力包。
 
 ## Lisa 专业化方向
 
@@ -161,7 +170,7 @@
 
 - 涉及模块: `ArtifactPane.tsx`、`StructuredVisual.tsx`、`agent_contracts.py`、`workflow_contract_registry.py`、相关 tests。
 - 需要同步: manifest artifact/visual contract、前端诊断展示、后端 contract helper。
-- 完成定义: 当前阶段 artifact 能展示必填标题、可视化、阶段门禁、专业字段的通过/失败/警告。
+- 完成定义: 已在 2026-06-24 「Artifact/Workflow 质量治理闭环」中前端确定性消化：当前阶段 artifact 能在审阅抽屉展示必填标题、可视化、阶段门禁、专业字段的通过/失败/警告，并与 E08 质量评分合并呈现。
 - 不纳入: 自动修复全文。
 
 ### 2. Workflow 入口专业 preview

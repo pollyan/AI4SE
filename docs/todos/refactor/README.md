@@ -19,7 +19,10 @@
 
 ## 当前入口
 
-暂无。
+- `2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 Flash 兼容的后端结构化产物数据改造活动候选。
+- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选。
+
+2026-06-24 目标模式记录：本轮在 `codex/workflow-quality-governance-current` 中消化 New Agents E03/E08 合并能力包「Artifact/Workflow 质量治理闭环」，以现有 `ArtifactPane` 审阅入口展示质量分、contract/visual/stage gate 检查、证据和待处理项。
 
 ## 已归档
 
