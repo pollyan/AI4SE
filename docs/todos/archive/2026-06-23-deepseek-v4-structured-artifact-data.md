@@ -1,8 +1,17 @@
 # DeepSeek V4 兼容的后端结构化产物数据改造 Todo
 
-> 状态: 活动候选
+> 状态: 已完成 / 已归档
 > 创建日期: 2026-06-23
 > 背景: 当前主要使用 DeepSeek V4 Flash。该模型链路适合按 JSON mode 约束“合法 JSON”，但不能把它等同于 OpenAI strict Structured Outputs。长期最稳方案应减少模型直接生成完整 Markdown/Mermaid 的职责。
+
+## 归档记录
+
+- 归档日期: 2026-06-23。
+- 收口 milestone: DeepSeek V4 格式化输出主线完成闭环。
+- 完成状态: 当前 `workflow_manifest.json` 中 5 个在线 workflow、17 个 stage 均已通过 `artifact_data` schema + 后端 deterministic renderer 输出完整 Markdown/Mermaid/`ai4se-visual` artifact；DeepSeek V4 Flash 继续使用 `json_object_only` capability、`response_format={"type":"json_object"}` 和 thinking disabled。
+- 本轮新增门禁: `tools/new-agents/backend/tests/test_deepseek_v4_readiness.py` 证明所有 manifest stage 都在 artifact_data-ready 集合中，结构化输出指令要求 `artifact_data` 且不要求 `artifact_update.markdown`，未知 renderer stage 会显式失败。
+- 验证记录: `python3 -m pytest tools/new-agents/backend/tests/test_deepseek_v4_readiness.py -q`；`python3 -m pytest tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_contracts.py -q`。
+- 未运行验证: 真实 DeepSeek V4 Flash smoke 未运行，因为需要显式凭证、网络访问和额度授权，不作为默认本地门禁。
 
 ## 当前进展
 

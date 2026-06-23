@@ -95,6 +95,32 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 
 RAW_JSON_STREAMING_MAX_ATTEMPTS = 2
 
+ARTIFACT_DATA_READY_STAGES: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("IDEA_BRAINSTORM", "DEFINE"),
+        ("IDEA_BRAINSTORM", "DIVERGE"),
+        ("IDEA_BRAINSTORM", "CONVERGE"),
+        ("IDEA_BRAINSTORM", "CONCEPT"),
+        ("TEST_DESIGN", "CLARIFY"),
+        ("TEST_DESIGN", "STRATEGY"),
+        ("TEST_DESIGN", "CASES"),
+        ("TEST_DESIGN", "DELIVERY"),
+        ("REQ_REVIEW", "REVIEW"),
+        ("REQ_REVIEW", "REPORT"),
+        ("VALUE_DISCOVERY", "ELEVATOR"),
+        ("VALUE_DISCOVERY", "PERSONA"),
+        ("VALUE_DISCOVERY", "JOURNEY"),
+        ("VALUE_DISCOVERY", "BLUEPRINT"),
+        ("INCIDENT_REVIEW", "TIMELINE"),
+        ("INCIDENT_REVIEW", "ROOT_CAUSE"),
+        ("INCIDENT_REVIEW", "IMPROVEMENT"),
+    }
+)
+
+
+def get_artifact_data_ready_stages() -> set[tuple[str, str]]:
+    return set(ARTIFACT_DATA_READY_STAGES)
+
 
 ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
 
@@ -703,25 +729,7 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 
 
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
-    return (workflow_id, current_stage_id) in {
-        ("IDEA_BRAINSTORM", "DEFINE"),
-        ("IDEA_BRAINSTORM", "DIVERGE"),
-        ("IDEA_BRAINSTORM", "CONVERGE"),
-        ("IDEA_BRAINSTORM", "CONCEPT"),
-        ("TEST_DESIGN", "CLARIFY"),
-        ("TEST_DESIGN", "STRATEGY"),
-        ("TEST_DESIGN", "CASES"),
-        ("TEST_DESIGN", "DELIVERY"),
-        ("REQ_REVIEW", "REVIEW"),
-        ("REQ_REVIEW", "REPORT"),
-        ("VALUE_DISCOVERY", "ELEVATOR"),
-        ("VALUE_DISCOVERY", "PERSONA"),
-        ("VALUE_DISCOVERY", "JOURNEY"),
-        ("VALUE_DISCOVERY", "BLUEPRINT"),
-        ("INCIDENT_REVIEW", "TIMELINE"),
-        ("INCIDENT_REVIEW", "ROOT_CAUSE"),
-        ("INCIDENT_REVIEW", "IMPROVEMENT"),
-    }
+    return (workflow_id, current_stage_id) in ARTIFACT_DATA_READY_STAGES
 
 
 def build_structured_output_instruction(
