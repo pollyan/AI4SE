@@ -7,6 +7,7 @@ import { useStore, ArtifactVersion, WORKFLOWS } from '../store';
 import type { AgentRunSnapshotArtifact, ArtifactVisualDiagnostic, ArtifactVisualDiagnosticFocusRequest } from '../core/types';
 import { buildLineDiff } from '../core/artifactDiff';
 import { buildArtifactQualityDiagnostics } from '../core/artifactDiagnostics';
+import { buildWorkflowQualitySummary } from '../core/workflowQuality';
 import {
   buildAutoMergedInsertionResult,
   buildConflictMergeBlockLabel,
@@ -28,11 +29,13 @@ export const ArtifactPane: React.FC = () => {
   const workflow = useStore((state) => state.workflow);
   const stageIndex = useStore((state) => state.stageIndex);
   const artifactContent = useStore((state) => state.artifactContent);
+  const stageArtifacts = useStore((state) => state.stageArtifacts);
   const artifactHistory = useStore((state) => state.artifactHistory);
   const artifactTruncated = useStore((state) => state.artifactTruncated);
   const isGenerating = useStore((state) => state.isGenerating);
   const currentRunId = useStore((state) => state.currentRunId);
   const setArtifactContent = useStore((state) => state.setArtifactContent);
+  const setStageIndex = useStore((state) => state.setStageIndex);
   const addArtifactVersion = useStore((state) => state.addArtifactVersion);
   const artifactComments = useStore((state) => state.artifactComments);
   const addArtifactComment = useStore((state) => state.addArtifactComment);
@@ -112,6 +115,16 @@ export const ArtifactPane: React.FC = () => {
       })
       : null,
     [artifactContent, artifactVisualDiagnostics, currentStageId, workflow]
+  );
+  const workflowQualitySummary = useMemo(
+    () => buildWorkflowQualitySummary({
+      workflowId: workflow,
+      currentStageId,
+      currentArtifactContent: artifactContent,
+      stageArtifacts,
+      visualDiagnostics: artifactVisualDiagnostics,
+    }),
+    [artifactContent, artifactVisualDiagnostics, currentStageId, stageArtifacts, workflow]
   );
   const recentStageAuditEvents = useMemo(
     () => [...currentStageAuditEvents]
@@ -4376,6 +4389,146 @@ export const ArtifactPane: React.FC = () => {
             </button>
           </div>
           <div className="max-h-[70vh] space-y-4 overflow-auto p-4">
+            {workflowQualitySummary && (
+              <section className="space-y-3 rounded-lg border border-[#1e293b] bg-[#020617] p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wide text-slate-300">工作流质量治理</h4>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      基于全阶段产物契约、可视化诊断和待补信息生成。
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-sky-300/15 bg-sky-400/5 px-3 py-2 text-right">
+                    <div className="text-[10px] font-semibold text-sky-100/70">平均分</div>
+                    <div className="text-lg font-bold text-sky-100">{workflowQualitySummary.averageScore}</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="rounded-md border border-emerald-300/10 bg-emerald-400/5 p-2">
+                    <div className="text-sm font-bold text-emerald-200">{workflowQualitySummary.totals.ready}</div>
+                    <div className="text-[10px] text-emerald-100/70">可推进</div>
+                  </div>
+                  <div className="rounded-md border border-amber-300/10 bg-amber-400/5 p-2">
+                    <div className="text-sm font-bold text-amber-200">{workflowQualitySummary.totals.attention}</div>
+                    <div className="text-[10px] text-amber-100/70">需关注</div>
+                  </div>
+                  <div className="rounded-md border border-red-300/10 bg-red-400/5 p-2">
+                    <div className="text-sm font-bold text-red-200">{workflowQualitySummary.totals.blocked}</div>
+                    <div className="text-[10px] text-red-100/70">需处理</div>
+                  </div>
+                  <div className="rounded-md border border-slate-300/10 bg-slate-400/5 p-2">
+                    <div className="text-sm font-bold text-slate-200">{workflowQualitySummary.totals.notStarted}</div>
+                    <div className="text-[10px] text-slate-300/70">待生成</div>
+                  </div>
+                </div>
+
+                <section className="space-y-2">
+                  <h5 className="text-xs font-bold uppercase tracking-wide text-slate-400">全局待处理</h5>
+                  {workflowQualitySummary.pendingQueue.length === 0 ? (
+                    <p className="rounded-md border border-emerald-300/10 bg-emerald-400/5 p-2 text-xs text-emerald-100/80">
+                      当前 workflow 没有阻断或关注项。
+                    </p>
+                  ) : (
+                    workflowQualitySummary.pendingQueue.slice(0, 4).map((item) => (
+                      <article
+                        key={item.id}
+                        className={`rounded-md border p-2 ${
+                          item.severity === 'blocker'
+                            ? 'border-red-300/20 bg-red-400/5'
+                            : item.severity === 'attention'
+                              ? 'border-amber-300/20 bg-amber-400/5'
+                              : 'border-slate-300/15 bg-slate-400/5'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-semibold text-slate-500">来源：{item.stageName}</div>
+                            <div className="break-words text-xs font-semibold text-slate-100">待办：{item.title}</div>
+                            <p className="mt-1 break-words text-[11px] leading-relaxed text-slate-400">详情：{item.detail}</p>
+                            <p className="mt-1 text-[11px] text-slate-500">{item.nextAction}</p>
+                          </div>
+                          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                            item.severity === 'blocker'
+                              ? 'bg-red-300/10 text-red-200'
+                              : item.severity === 'attention'
+                                ? 'bg-amber-300/10 text-amber-200'
+                                : 'bg-slate-300/10 text-slate-300'
+                          }`}>
+                            {item.severity === 'blocker' ? '阻断' : item.severity === 'attention' ? '关注' : '待生成'}
+                          </span>
+                        </div>
+                      </article>
+                    ))
+                  )}
+                </section>
+
+                <div className="space-y-2">
+                  {workflowQualitySummary.stages.map((stage) => (
+                    <article
+                      key={stage.stageId}
+                      className={`rounded-md border p-2 ${
+                        stage.isCurrentStage
+                          ? 'border-blue-300/30 bg-blue-400/5'
+                          : 'border-[#1e293b] bg-black/20'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="break-words text-xs font-semibold text-slate-100">{stage.stageName}</span>
+                            {stage.isCurrentStage && (
+                              <span className="rounded bg-blue-300/10 px-1.5 py-0.5 text-[10px] font-bold text-blue-200">
+                                当前阶段
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            证据 {stage.evidenceItems.length} 项 / 待处理 {stage.pendingItems.length} 项
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="text-sm font-bold text-slate-100">{stage.score}</div>
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                            stage.status === 'blocked'
+                              ? 'bg-red-300/10 text-red-200'
+                              : stage.status === 'attention'
+                                ? 'bg-amber-300/10 text-amber-200'
+                                : stage.status === 'not-started'
+                                  ? 'bg-slate-300/10 text-slate-300'
+                                  : 'bg-emerald-300/10 text-emerald-200'
+                          }`}>
+                            {stage.label}
+                          </span>
+                        </div>
+                      </div>
+
+                      {stage.pendingItems.length > 0 && (
+                        <ul className="mt-2 space-y-1">
+                          {stage.pendingItems.slice(0, 2).map((item) => (
+                            <li key={item.id} className="break-words text-[11px] text-slate-400">
+                              {item.title}：{item.nextAction}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {!stage.isCurrentStage && (
+                        <button
+                          type="button"
+                          aria-label={`定位阶段：${stage.stageName}`}
+                          onClick={() => setStageIndex(stage.stageIndex)}
+                          className="mt-2 rounded border border-blue-300/20 px-2 py-1 text-[11px] font-semibold text-blue-200 hover:bg-blue-400/10"
+                        >
+                          定位阶段
+                        </button>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {artifactQualityDiagnostics && (
               <section className="space-y-3 rounded-lg border border-[#1e293b] bg-[#020617] p-3">
                 <div className="flex items-center justify-between gap-3">

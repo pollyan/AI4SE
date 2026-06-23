@@ -231,6 +231,65 @@ describe('ArtifactPane Component', () => {
         expect(screen.getByText('缺少结构化可视化')).toBeTruthy();
     });
 
+    it('shows workflow quality governance and locates pending stages from the review panel', () => {
+        const clarifyArtifact = '# 需求分析文档\n\n## 8. 阶段门禁\n\n- checked=true';
+        const strategyArtifact = [
+            '# 测试策略蓝图',
+            '## 1. 策略摘要',
+            '## 2. 质量目标',
+            '## 3. 风险识别与 FMEA',
+            '### 3.1 风险矩阵',
+            '### 3.2 风险明细',
+            '## 4. 测试技术选型',
+            '## 5. 测试分层策略',
+            '### 5.1 测试金字塔',
+            '### 5.2 分层明细',
+            '## 6. 测试点拓扑',
+            '## 7. 资源与取舍',
+            '## 8. 阶段门禁',
+            '风险 ID 测试点 ID 覆盖建议',
+            '- checked=true',
+            '```mermaid',
+            'quadrantChart',
+            '```',
+            '```mermaid',
+            'block-beta',
+            '```',
+            '```ai4se-visual',
+            '{"type":"risk-board","title":"风险板","columns":[]}',
+            '```',
+        ].join('\n');
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            artifactContent: strategyArtifact,
+            stageArtifacts: {
+                CLARIFY: clarifyArtifact,
+                STRATEGY: strategyArtifact,
+            },
+        });
+
+        render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('审阅');
+
+        expect(screen.getByText('工作流质量治理')).toBeTruthy();
+        expect(screen.getByText('平均分')).toBeTruthy();
+        expect(screen.getByText('全局待处理')).toBeTruthy();
+        expect(screen.getByText('需求澄清')).toBeTruthy();
+        expect(screen.getByText('策略制定')).toBeTruthy();
+        expect(screen.getByText('用例编写')).toBeTruthy();
+        expect(screen.getByText('可推进')).toBeTruthy();
+        expect(screen.getAllByText('需处理').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('待生成').length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/缺少必填标题/).length).toBeGreaterThan(0);
+        expect(screen.getByText('审阅诊断')).toBeTruthy();
+
+        fireEvent.click(screen.getByRole('button', { name: '定位阶段：需求澄清' }));
+
+        expect(useStore.getState().stageIndex).toBe(0);
+        expect(useStore.getState().artifactContent).toBe(clarifyArtifact);
+    });
+
     it('shows artifact review diagnostics for runtime visual failures', () => {
         useStore.setState({
             workflow: 'TEST_DESIGN',
