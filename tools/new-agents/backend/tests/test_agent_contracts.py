@@ -470,26 +470,30 @@ def test_required_artifact_headings_cover_every_known_workflow_stage():
     assert required_stage_keys == workflow_stage_keys
 
 
-def test_required_mermaid_contract_covers_every_known_workflow():
+def test_visual_contract_covers_every_known_workflow():
     workflows_with_required_visuals = {
         workflow_id
         for workflow_id, _stage_id in REQUIRED_ARTIFACT_MERMAID_DIAGRAMS
+    } | {
+        workflow_id
+        for workflow_id, _stage_id in REQUIRED_ARTIFACT_STRUCTURED_VISUALS
     }
 
     assert workflows_with_required_visuals == set(WORKFLOW_STAGES)
 
 
-def test_first_stage_visual_contract_covers_every_known_workflow():
+def test_visual_contracts_only_reference_known_workflow_stages():
     visual_stage_keys = (
         set(REQUIRED_ARTIFACT_MERMAID_DIAGRAMS)
         | set(REQUIRED_ARTIFACT_STRUCTURED_VISUALS)
     )
-    first_stage_keys = {
-        (workflow_id, stage_ids[0])
+    workflow_stage_keys = {
+        (workflow_id, stage_id)
         for workflow_id, stage_ids in WORKFLOW_STAGES.items()
+        for stage_id in stage_ids
     }
 
-    assert first_stage_keys <= visual_stage_keys
+    assert visual_stage_keys <= workflow_stage_keys
 
 
 def test_later_stage_structured_visual_contracts_cover_professional_views():

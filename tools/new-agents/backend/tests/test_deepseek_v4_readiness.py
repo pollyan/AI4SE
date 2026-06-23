@@ -39,6 +39,8 @@ from test_artifact_data_renderers import (
     VALID_VALUE_PERSONA_ARTIFACT_DATA,
 )
 
+REPO_ROOT = Path(__file__).resolve().parents[4]
+
 ARTIFACT_DATA_FIXTURES = {
     ("TEST_DESIGN", "CLARIFY"): VALID_CLARIFY_ARTIFACT_DATA,
     ("TEST_DESIGN", "STRATEGY"): VALID_STRATEGY_ARTIFACT_DATA,
@@ -75,7 +77,9 @@ class FakeAgent:
 
 def manifest_stage_keys() -> set[tuple[str, str]]:
     manifest = json.loads(
-        Path("tools/new-agents/workflow_manifest.json").read_text(encoding="utf-8")
+        (REPO_ROOT / "tools/new-agents/workflow_manifest.json").read_text(
+            encoding="utf-8"
+        )
     )
     return {
         (workflow_id, stage["id"])
