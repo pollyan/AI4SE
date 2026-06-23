@@ -19,7 +19,10 @@
 
 ## 当前入口
 
-暂无。
+- `2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 Flash 兼容的后端结构化产物数据和真实 smoke evidence 活动候选；阶段迁移已完成，后续只按证据/真实样本能力包继续。
+- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选。
+
+2026-06-23 已复核：除上述活动候选外，其他重构类事项均已归档或转为 `docs/plans/tech-debt.md` 中的历史完成记录；不要从 `archive/` 中的过程性“待办/剩余”直接恢复实施。
 
 ## 已归档
 

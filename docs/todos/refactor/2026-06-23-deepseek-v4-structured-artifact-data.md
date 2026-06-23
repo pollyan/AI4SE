@@ -25,6 +25,14 @@
 - 2026-06-23 已完成第十七个垂直切片: `IDEA_BRAINSTORM/CONCEPT` 支持模型输出 `artifact_data`，后端校验定位声明、核心假设、Lean Canvas、MVP 功能、增长漏斗、Pre-mortem 风险、验证路线、不可做范围、决策记录、下一步行动和阶段门禁后，确定性渲染《产品概念简报》、Mermaid `pie`/`flowchart` 和 `ai4se-visual` `mvp-map`。
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
 - `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM` 四阶段已完成结构化产物数据迁移；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
+- 2026-06-23 已完成 DeepSeek V4 结构化输出证据门禁: `tools/new-agents/backend/deepseek_v4_smoke_evidence.py` 可生成 readiness/skip/live smoke evidence，复用共享 Agent Runtime raw JSON streaming、`artifact_data` renderer 和 artifact contract，不新增 DeepSeek 专属 runtime/API/store/renderer。
+
+## 当前状态校准
+
+- 阶段迁移已完成，不应再把单个 workflow stage 当作后续 Superpowers 切片。
+- 默认本地验证覆盖配置诊断、DeepSeek V4 capability、17 个 `artifact_data` stage readiness、证据 JSON 写入和 fake runtime live smoke。
+- 真实 DeepSeek V4 Flash 调用只在 `NEW_AGENTS_SMOKE_API_KEY`、`NEW_AGENTS_SMOKE_BASE_URL`、`NEW_AGENTS_SMOKE_MODEL=deepseek-v4-*` 齐备时运行；缺少这些条件时，证据门禁必须写出 `status=skipped` 和具体原因。
+- 后续若继续推进 DeepSeek 相关工作，应以“真实外部 smoke 执行与证据归档”“生产失败样本诊断”“跨 workflow 真实样本集”这类能力包为单位，不再拆回单字段、单 renderer 或单阶段 schema。
 
 ## 目标
 
@@ -166,6 +174,8 @@ renderer 职责:
 - `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py -q`
 - `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_contracts.py -q`
 - `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_endpoint.py -q`
+- `python3 -m pytest tools/new-agents/backend/tests/test_deepseek_v4_smoke_evidence.py -q`
+- `python3 tools/new-agents/backend/deepseek_v4_smoke_evidence.py`
 - `cd tools/new-agents/frontend && npm run test -- --run src/services/__tests__/chatService.test.ts src/components/__tests__/ChatPane.test.tsx`
 - `cd tools/new-agents/frontend && npm run lint`
 
@@ -173,4 +183,4 @@ renderer 职责:
 
 - `artifact_data` schema 是按 workflow/stage 手写 Pydantic model，还是先定义通用 block schema 再按 stage 组合。
 - renderer 输出是否继续保存为 Markdown，或同时持久化 `artifact_data` 便于后续重渲染和审计。
-- 真实 DeepSeek V4 Flash smoke gate 是否作为可选验证，还是每个阶段迁移都要求人工触发一次。
+- 真实 DeepSeek V4 Flash smoke gate 已作为可选验证入口落地；每阶段真实调用仍需凭证、网络和额度，不作为默认本地门禁。
