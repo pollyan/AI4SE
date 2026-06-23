@@ -702,8 +702,8 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
-def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
-    return (workflow_id, current_stage_id) in {
+ARTIFACT_DATA_READY_STAGES: frozenset[tuple[str, str]] = frozenset(
+    {
         ("IDEA_BRAINSTORM", "DEFINE"),
         ("IDEA_BRAINSTORM", "DIVERGE"),
         ("IDEA_BRAINSTORM", "CONVERGE"),
@@ -722,6 +722,15 @@ def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) ->
         ("INCIDENT_REVIEW", "ROOT_CAUSE"),
         ("INCIDENT_REVIEW", "IMPROVEMENT"),
     }
+)
+
+
+def get_artifact_data_ready_stages() -> set[tuple[str, str]]:
+    return set(ARTIFACT_DATA_READY_STAGES)
+
+
+def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
+    return (workflow_id, current_stage_id) in ARTIFACT_DATA_READY_STAGES
 
 
 def build_structured_output_instruction(

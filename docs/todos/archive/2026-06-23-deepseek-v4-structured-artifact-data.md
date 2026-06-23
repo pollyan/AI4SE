@@ -1,6 +1,6 @@
 # DeepSeek V4 兼容的后端结构化产物数据改造 Todo
 
-> 状态: 活动候选
+> 状态: 已完成
 > 创建日期: 2026-06-23
 > 背景: 当前主要使用 DeepSeek V4 Flash。该模型链路适合按 JSON mode 约束“合法 JSON”，但不能把它等同于 OpenAI strict Structured Outputs。长期最稳方案应减少模型直接生成完整 Markdown/Mermaid 的职责。
 
@@ -25,6 +25,7 @@
 - 2026-06-23 已完成第十七个垂直切片: `IDEA_BRAINSTORM/CONCEPT` 支持模型输出 `artifact_data`，后端校验定位声明、核心假设、Lean Canvas、MVP 功能、增长漏斗、Pre-mortem 风险、验证路线、不可做范围、决策记录、下一步行动和阶段门禁后，确定性渲染《产品概念简报》、Mermaid `pie`/`flowchart` 和 `ai4se-visual` `mvp-map`。
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
 - `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM` 四阶段已完成结构化产物数据迁移；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
+- 2026-06-23 已完成收口门禁: 新增 `tools/new-agents/backend/tests/test_deepseek_v4_readiness.py`，确保当前 manifest 全部 stage 都进入 `artifact_data` ready set，DeepSeek V4 Flash 保持 `json_object_only` 和 thinking disabled，所有 ready stage prompt 均不要求模型输出完整 Markdown artifact。该 todo 已归档；后续新增 workflow/stage 时由 readiness gate 防止回退。
 
 ## 目标
 
