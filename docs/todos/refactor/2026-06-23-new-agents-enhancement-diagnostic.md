@@ -242,6 +242,20 @@
 - 不使用 mock、假数据、隐藏 fallback 或假成功响应掩盖能力缺口。
 - 不围绕 intent-tester 设计新增联动能力；已有测试资产导入能力只作为边界记录。
 
+## 后续 Superpowers 执行颗粒度
+
+后续恢复目标模式后，剩余工作按 5 个完整能力包推进，每个能力包单独作为一次 Superpowers 流程，不再拆成单字段、单 helper、单控件、单测试或单端点轮次：
+
+| 能力包 | Superpowers 粒度要求 | 不拆出的局部项 |
+| --- | --- | --- |
+| E08 LLM judge evidence | 一次性交付可选 judge evidence 的触发、记录、展示、失败解释、验证和 todo 更新 | 不单独拆 judge schema、单条评分 prompt、单个展示字段 |
+| E12 workflow scaffold/codegen | 一次性交付从输入到生成/补齐 workflow 骨架、dry-run 校验、失败报告和文档记录的工程信任闭环 | 不单独拆模板文件、生成脚本参数、单个 manifest 字段 |
+| Prompt/template 版本管理 | 一次性交付 stage prompt/template version、回归样例绑定、变更追踪、校验和可见诊断 | 不单独拆 version 字段、单个 registry helper、单条测试 |
+| 专业方法库配置化 | 一次性交付方法库配置、prompt/template 注入、workflow/stage 适配、缺失方法诊断和测试证据 | 不单独拆 FMEA/JTBD/RICE 的单个方法条目 |
+| DeepSeek 真实 smoke | 一次性交付真实 smoke gate、外部条件检查、证据记录、失败分诊和 todo 状态更新；缺凭证/网络/额度时只能标记真实验证未完成 | 不用 mock smoke 替代真实 DeepSeek 调用，不单独拆环境变量检查 |
+
+每轮仍必须从当前 `docs/todos/`、代码、测试、文档和 git 状态重新做 CGA。CGA 可以重新排序上述能力包，但不能把同一能力包内的后端契约、前端入口、状态承接、错误反馈、验证证据和文档记录拆成连续多轮目标模式。
+
 ## 进入实现前需要补的设计问题
 
 - Artifact 质量诊断应完全前端解析，还是后端提供只读 diagnostic endpoint。
