@@ -25,6 +25,7 @@
 - 2026-06-23 已完成第十七个垂直切片: `IDEA_BRAINSTORM/CONCEPT` 支持模型输出 `artifact_data`，后端校验定位声明、核心假设、Lean Canvas、MVP 功能、增长漏斗、Pre-mortem 风险、验证路线、不可做范围、决策记录、下一步行动和阶段门禁后，确定性渲染《产品概念简报》、Mermaid `pie`/`flowchart` 和 `ai4se-visual` `mvp-map`。
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
 - `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM` 四阶段已完成结构化产物数据迁移；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
+- 2026-06-24 已完成 DeepSeek V4 结构化输出证据门禁: 新增本地 deterministic evidence、17 stage coverage evidence、provider capability evidence 和可选真实 smoke skipped/failed/passed 结果；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度。
 
 ## 目标
 
@@ -163,9 +164,11 @@ renderer 职责:
 
 ## 建议验证命令
 
+- `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_deepseek_v4_smoke_evidence.py -q`
 - `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py -q`
 - `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_contracts.py -q`
 - `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_endpoint.py -q`
+- `.venv/bin/python tools/new-agents/backend/deepseek_v4_smoke_evidence.py`
 - `cd tools/new-agents/frontend && npm run test -- --run src/services/__tests__/chatService.test.ts src/components/__tests__/ChatPane.test.tsx`
 - `cd tools/new-agents/frontend && npm run lint`
 
@@ -173,4 +176,4 @@ renderer 职责:
 
 - `artifact_data` schema 是按 workflow/stage 手写 Pydantic model，还是先定义通用 block schema 再按 stage 组合。
 - renderer 输出是否继续保存为 Markdown，或同时持久化 `artifact_data` 便于后续重渲染和审计。
-- 真实 DeepSeek V4 Flash smoke gate 是否作为可选验证，还是每个阶段迁移都要求人工触发一次。
+- 真实 DeepSeek V4 Flash smoke gate 已收敛为可选验证；默认本地门禁只要求 deterministic evidence，真实 smoke 需要显式凭证、网络和额度。

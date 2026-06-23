@@ -19,7 +19,8 @@
 
 ## 当前入口
 
-暂无。
+- `2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 Flash 兼容的后端结构化产物数据改造和证据门禁记录。17 个在线 stage 已完成 `artifact_data` 迁移；2026-06-24 已补本地 deterministic evidence、17 stage coverage evidence、provider capability evidence 和可选真实 smoke 结果边界。后续只在真实凭证/网络可用、需要 artifact_data 持久化或发现格式化输出回归时继续进入目标模式。
+- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选。
 
 ## 已归档
 
