@@ -41,7 +41,7 @@
 | --- | --- | --- | --- |
 | Agent / workflow | Alex、Lisa 共 7 个在线 workflow、25 个阶段 | 中高 | persona 和专业方法还没有完整配置化；后续重点转向质量诊断、Lisa 资产闭环和 DeepSeek V4 结构化输出收口 |
 | Runtime | PydanticAI + raw JSON streaming + typed SSE | 高 | 质量治理已具备规则型 evidence gate；跨 run 趋势和 LLM judge 仍未接入 |
-| Contract | required headings、Mermaid、structured visual、stage_action 校验 | 高 | `agent_contracts.py` 与 manifest 仍有重复同步成本 |
+| Contract | required headings、Mermaid、structured visual、stage_action 校验；workflow schema dry-run 可聚合检查 manifest、前端 prompt/template、后端 contract、renderer/readiness、handoff 和打包同步 | 高 | `agent_contracts.py` 与 manifest 仍有重复同步成本；完整 scaffold/codegen 尚未实现 |
 | Persistence | run、message、artifact version、context summary、metric、comment、lock、audit | 高 | 历史中心和复用能力仍偏基础 |
 | UI | 双栏 workspace、workflow 切换、历史、设置、artifact 编辑、审阅、导出、运行统计、workflow 质量治理 | 中高 | Header/ArtifactPane 承载能力多；后续需要谨慎拆分但不能破坏共享审阅闭环 |
 | Handoff | VALUE_DISCOVERY/BLUEPRINT 可交给 Lisa TEST_DESIGN 或 REQ_REVIEW，且 handoff card 展示来源版本、关键摘要、未确认项和目标输入 | 中高 | 仍只有 Alex 到 Lisa 的少量 handoff；后续可扩展更多 source/target 配置 |
@@ -58,7 +58,7 @@
 | Run 复用 | 有历史列表、搜索、runId snapshot 恢复、复用状态筛选、当前 artifact 预览、继续原 run、复制为新 run | 跨 run 对比和收藏仍未做；不影响当前历史复用闭环 | P1 已部分完成 |
 | Workflow handoff | 有配置化 handoff 基础，已补上下文审阅卡和目标 run 输入增强 | 当前 P1 缺口已消化；后续只在新增 source/target handoff 时扩展配置 | 已完成 |
 | 可观测性 | 有 success rate、provider、stage、recent turns，且已补 DeepSeek/格式化输出失败分类 drilldown 与行动建议 | 仍缺面向用户的跨 run 质量趋势和产品质量评分趋势 | P1 已部分完成 |
-| 平台扩展 | manifest 已承载核心配置 | 缺 schema 校验、dry-run、scaffold、prompt/template 版本管理 | P2 |
+| 平台扩展 | manifest 已承载核心配置；workflow schema dry-run 已提供本地同步门禁 | 缺完整 scaffold/codegen 和 prompt/template 版本管理 | P2 |
 
 ## 增强机会清单
 
@@ -75,7 +75,7 @@
 | E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 已消化 DeepSeek/格式化输出失败诊断闭环：显示 workflow/stage/provider 格式化失败 drilldown、contract retry 次数和行动建议；跨 run 质量趋势可并入 E08 后续厚切片 |
 | E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | FMEA、JTBD、RICE、Kano、CAPA 等可由配置注入 prompt/template |
 | E11 | Prompt/template 版本管理 | 新增功能 | 平台扩展 | L | P2 | 每个 stage 有 prompt/template version 和回归样例 |
-| E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 | 新 workflow 缺 manifest/prompt/contract/test 任一面时 dry-run 失败 |
+| E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 已部分完成 | 已消化诊断型 dry-run 门禁：新 workflow 缺 manifest、前端 prompt/template 映射、后端 contract、artifact_data renderer/readiness、handoff 或 manifest 打包任一面时本地 dry-run 失败；完整 scaffold/codegen 保留后续 |
 | E13 | Alex 用户故事拆解 workflow | 新增功能 | 专业内容 | M | P0 | 已消化：`STORY_BREAKDOWN` 作为 Alex 在线 workflow 复用共享 Agent Runtime、typed SSE、workflow manifest、artifact contract、artifact_data renderer 和 handoff，覆盖输入分析、Epic 映射、Story Backlog、Sprint 切片与 Lisa handoff |
 | E14 | Alex PRD 质量评审与补全 workflow | 新增功能 | 专业内容 | M | P0 | 已消化：`PRD_REVIEW` 作为 Alex 在线 workflow 复用共享 Agent Runtime、typed SSE、workflow manifest、artifact contract 和 artifact_data renderer，覆盖输入盘点、质量评审、补全建议和修订蓝图 |
 
@@ -90,6 +90,7 @@
 - 2026-06-23: 已完成 DeepSeek 格式化失败运行统计诊断闭环，消化 E09 当前 DeepSeek/contract retry drilldown 部分。`FormattedOutputDiagnosticError` 现在会进入共享 turn metrics，`/api/agent/observability` 返回 `formatFailureDiagnostics`，Header 运行统计展示格式化失败总数、最高频类型、受影响 workflow/stage/provider、重试次数和行动建议。该切片复用共享 Agent Runtime、typed SSE、run persistence、observability endpoint 和 Header UI，不新增 DeepSeek 专属 runtime、API path、store 或 renderer；不纳入真实 DeepSeek smoke、E08 工作流质量评分或 E05 章节级重生成。
 - 2026-06-23: 已完成 Workflow 质量治理闭环厚切片，消化 E08 规则型评分与复审部分。新增共享前端 `workflowQuality` 规则聚合，从 workflow manifest、`stageArtifacts`、当前 artifact 和 runtime visual diagnostics 派生每阶段 score/status/evidence/pending；ArtifactPane 审阅入口展示平均分、ready/attention/blocked/not-started 汇总、全局待处理队列和每阶段待处理摘要，并复用现有 `setStageIndex()` 提供阶段定位动作。该切片不新增持久化字段、API、runtime、store 或 renderer；跨 run 趋势和 LLM judge evidence 保留为后续 E08 派生候选。
 - 2026-06-23: 已完成 Artifact 定向修订闭环厚切片，消化 E05。ArtifactPane 章节侧栏增加未锁定章节重生成动作；`useChatService` 新增 `handleRegenerateArtifactSection()`，通过现有共享 `generateResponseStream` / `/api/agent/runs/stream` typed SSE 发起定向修订 prompt；前端共享 `artifactSections` helper 负责 H1-H3 章节 anchor、锁定匹配、锁定保护和目标章节合并。模型仍返回完整 artifact，但客户端只接收目标章节内容，非目标章节保持原样，锁定章节按锁快照恢复，成功后写入 `artifactContent`、`stageArtifacts` 和 `artifactHistory`。该切片不新增后端 runtime、API path、store 或 renderer。
+- 2026-06-23: 已完成 Workflow schema dry-run 工程信任闭环，消化 E12 的诊断门禁部分。新增 `scripts/validation/new_agents_workflow_dry_run.py`，从真实仓库事实聚合检查 shared `workflow_manifest.json`、前端 `STAGE_CONTENT_BY_TEMPLATE_ID` 与 prompt 文件、后端 `WORKFLOW_STAGES` / artifact contract、DeepSeek `artifact_data` readiness、renderer stage keys、handoff prompt 和 manifest 打包/挂载；旧 workflow contract sync 测试复用同一 loader，不再维护独立 prompt 文件硬编码表。该切片不新增 runtime、API、store、renderer 或真实 LLM 调用；完整 scaffold/codegen、prompt/template 版本管理和 LLM judge evidence 保留为后续候选。
 
 ## Lisa 专业化方向
 
@@ -122,7 +123,7 @@
 
 目标: 1-2 周内明显提升专业感和产出可信度。
 
-包含: E01/E02/E03/E04/E05/E07/E08 规则型治理闭环/E13/E14 均已在 2026-06-23 目标模式切片中消化。快速专业化路线剩余工作转入 E08 跨 run 趋势/LLM judge、平台 dry-run/scaffold 和 DeepSeek 真实 smoke 等 P1/P2 能力包；运行统计产品化当前 DeepSeek/格式化失败诊断闭环已消化。
+包含: E01/E02/E03/E04/E05/E07/E08 规则型治理闭环/E13/E14 均已在 2026-06-23 目标模式切片中消化。快速专业化路线剩余工作转入 E08 跨 run 趋势/LLM judge、E12 完整 scaffold/codegen、prompt/template 版本管理和 DeepSeek 真实 smoke 等 P1/P2 能力包；运行统计产品化当前 DeepSeek/格式化失败诊断闭环已消化。
 
 暂不做:
 
@@ -157,7 +158,7 @@
 
 目标: 让后续新增 agent/workflow 更低成本、更可靠。
 
-包含: E09、E10、E11、E12；其中 E09 当前 DeepSeek/格式化失败诊断 drilldown 已消化，后续平台化重点转向 E12 workflow schema dry-run/scaffold、E10 专业方法库配置和 E11 Prompt/template 版本管理。
+包含: E09、E10、E11、E12；其中 E09 当前 DeepSeek/格式化失败诊断 drilldown 已消化，E12 诊断型 workflow schema dry-run 门禁已消化，后续平台化重点转向 E12 完整 scaffold/codegen、E10 专业方法库配置和 E11 Prompt/template 版本管理。
 
 暂不做:
 
