@@ -30,6 +30,7 @@ from test_artifact_data_renderers import (
     VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
     VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
     VALID_PRD_REVIEW_ARTIFACT_DATA,
+    VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
     VALID_CASES_ARTIFACT_DATA,
     VALID_DELIVERY_ARTIFACT_DATA,
     VALID_REQ_REVIEW_ARTIFACT_DATA,
@@ -709,6 +710,61 @@ def test_prd_review_structured_output_instruction_requests_artifact_data_not_mar
     assert "stage_action" in instruction
     assert "不要输出完整 Markdown" in instruction
     assert "artifact_update.markdown" not in instruction
+
+
+def test_parse_agent_turn_output_text_renders_story_breakdown_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "我已整理 Sprint 切片，请确认右侧内容。",
+            "artifact_data": VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="SPRINT_PLAN",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 用户故事拆解包")
+    assert "## Sprint 切片建议" in output.artifact_update.markdown
+    assert '"type": "story-map"' in output.artifact_update.markdown
+
+
+def test_story_breakdown_structured_output_instruction_requests_artifact_data_not_markdown():
+    instruction = build_structured_output_instruction(
+        "STORY_BREAKDOWN",
+        "SPRINT_PLAN",
+    )
+
+    assert "artifact_data" in instruction
+    assert "stories" in instruction
+    assert "sprint_slices" in instruction
+    assert "handoff_inputs" in instruction
+    assert "story-map" in instruction
+    assert "stage_action" in instruction
+    assert "不要输出完整 Markdown" in instruction
+    assert "artifact_update.markdown" not in instruction
+
+
+def test_story_breakdown_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
+    prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        ValueError("stories references unknown epic ids: EPIC-404"),
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="STORY_BACKLOG",
+    )
+
+    assert "artifact_data" in prompt
+    assert "unknown epic ids" in prompt
+    assert "不要输出 Markdown 文档" in prompt
+    assert "Mermaid 代码块或表格" in prompt
+    assert "artifact_update.type 必须为 replace" not in prompt
 
 
 def test_parse_agent_turn_output_text_renders_value_elevator_artifact_data():

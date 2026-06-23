@@ -115,6 +115,51 @@ flowchart TD
 - [x] P0 需求均具备验收标准、owner 和可测试性等级。
 """
 
+STORY_BREAKDOWN_MARKDOWN = """# 用户故事拆解包
+
+## 输入分析
+| 字段 | 内容 |
+| --- | --- |
+| 来源类型 | PRD |
+| 产品目标 | 把测试资产生成能力拆成可交付迭代 |
+
+## Epic Map
+| Epic ID | 名称 | 用户价值 | 优先级 |
+| --- | --- | --- | --- |
+| EPIC-001 | 测试资产生成 | 减少从需求到测试设计的手工整理成本 | P0 |
+
+## User Story Backlog
+| Story ID | Epic ID | 标题 | User Story | 优先级 | Sprint | 可测试性 |
+| --- | --- | --- | --- | --- | --- | --- |
+| US-001 | EPIC-001 | 需求澄清基线 | 作为测试负责人，我想把需求输入转成澄清清单，以便在开发前发现遗漏。 | P0 | Sprint 1 | 高 |
+| US-002 | EPIC-001 | 测试策略生成 | 作为测试负责人，我想自动获得风险、测试点和测试层级建议，以便快速组织评审。 | P0 | Sprint 1 | 高 |
+
+## 验收标准
+| AC ID | Story ID | 验收标准 | 验证方式 | 状态 |
+| --- | --- | --- | --- | --- |
+| AC-001 | US-001 | 输入需求后生成事实、边界、业务规则和待澄清问题。 | 后端 contract test + UI smoke | 待验证 |
+
+## 依赖与风险
+| 类型 | ID | 关联 Story | 内容 | 缓解措施 |
+| --- | --- | --- | --- | --- |
+| 依赖 | DEP-001 | US-001 -> US-002 | 模型输出必须使用 artifact_data 结构化数据。 | runtime instruction 和 renderer contract 双门禁 |
+| 风险 | RISK-001 | US-001, US-002 | 故事拆解缺少可测试验收标准。 | 所有 P0 故事必须绑定验收标准和 Sprint 切片 |
+
+## Sprint 切片建议
+| Sprint | 目标 | Story IDs | 交付物 |
+| --- | --- | --- | --- |
+| Sprint 1 | 打通需求澄清到策略的最小闭环 | US-001, US-002 | 可评审 artifact_data 输出和右侧 Markdown artifact |
+
+## Lisa Handoff 输入
+| 输入 ID | 目标 workflow | Story IDs | 内容 | 用途 |
+| --- | --- | --- | --- | --- |
+| HI-001 | TEST_DESIGN | US-001 | 需求澄清基线及其验收标准 | Lisa 测试设计输入 |
+| HI-002 | REQ_REVIEW | US-001, US-002 | 故事、验收标准、依赖和风险一致性评审 | Lisa 需求评审输入 |
+
+## 阶段门禁
+- [x] 所有 P0 用户故事均具备验收标准和 Sprint 切片。
+"""
+
 
 @pytest.fixture
 def app():
@@ -156,6 +201,35 @@ def test_export_run_handoffs_returns_configured_lisa_targets(app):
     assert "TEST_DESIGN/CLARIFY" in first["prompt"]
     assert "AI 测试资产管理平台" in first["prompt"]
     assert "Alex 产出的需求蓝图" not in first["prompt"]
+
+
+def test_export_story_breakdown_handoffs_returns_lisa_targets(app):
+    with app.app_context():
+        run = create_agent_run("STORY_BREAKDOWN", "alex", "SPRINT_PLAN")
+        record_artifact_version(run.id, "SPRINT_PLAN", STORY_BREAKDOWN_MARKDOWN)
+
+        result = export_run_handoffs(run.id)
+
+    assert result["runId"] == run.id
+    assert result["sourceWorkflowId"] == "STORY_BREAKDOWN"
+    assert [
+        (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
+        for handoff in result["handoffs"]
+    ] == [
+        ("TEST_DESIGN", "CLARIFY", "lisa"),
+        ("REQ_REVIEW", "REVIEW", "lisa"),
+    ]
+    test_design = result["handoffs"][0]
+    req_review = result["handoffs"][1]
+    assert test_design["sourceStageId"] == "SPRINT_PLAN"
+    assert test_design["sourceArtifactVersion"] == 1
+    assert "STORY_BREAKDOWN/SPRINT_PLAN" in test_design["prompt"]
+    assert "TEST_DESIGN/CLARIFY" in test_design["prompt"]
+    assert "User Story Backlog" in test_design["prompt"]
+    assert "AC-001" in test_design["prompt"]
+    assert "DEP-001" in test_design["prompt"]
+    assert "RISK-001" in test_design["prompt"]
+    assert "REQ_REVIEW/REVIEW" in req_review["prompt"]
 
 
 def test_export_run_handoffs_returns_empty_without_required_artifact(app):

@@ -25,6 +25,12 @@ def test_registry_derives_workflow_stages_from_manifest():
             "COMPLETION_PLAN",
             "REVISION_BLUEPRINT",
         ],
+        "STORY_BREAKDOWN": [
+            "INPUT_ANALYSIS",
+            "EPIC_MAPPING",
+            "STORY_BACKLOG",
+            "SPRINT_PLAN",
+        ],
     }
 
 
@@ -36,6 +42,9 @@ def test_registry_requires_prompt_template_id_for_every_stage():
     assert prompt_template_ids[("VALUE_DISCOVERY", "PERSONA")] == "value_discovery.persona"
     assert prompt_template_ids[("PRD_REVIEW", "COMPLETION_PLAN")] == (
         "prd_review.completion_plan"
+    )
+    assert prompt_template_ids[("STORY_BREAKDOWN", "SPRINT_PLAN")] == (
+        "story_breakdown.sprint_plan"
     )
     assert set(prompt_template_ids) == {
         (workflow_id, stage_id)
