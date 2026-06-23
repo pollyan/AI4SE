@@ -29,6 +29,7 @@ from test_artifact_data_renderers import (
     VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA,
     VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
     VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
+    VALID_PRD_REVIEW_ARTIFACT_DATA,
     VALID_CASES_ARTIFACT_DATA,
     VALID_DELIVERY_ARTIFACT_DATA,
     VALID_REQ_REVIEW_ARTIFACT_DATA,
@@ -665,6 +666,49 @@ def test_req_review_report_retry_prompt_requests_artifact_data_fix_not_markdown_
     assert "不要输出 Markdown 文档" in prompt
     assert "Mermaid 代码块或表格" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
+
+
+def test_parse_agent_turn_output_text_renders_prd_review_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "我已整理 PRD 补全建议，请确认右侧内容。",
+            "artifact_data": VALID_PRD_REVIEW_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "REVISION_BLUEPRINT",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="PRD_REVIEW",
+        current_stage_id="COMPLETION_PLAN",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# PRD 补全建议")
+    assert '"type": "action-board"' in output.artifact_update.markdown
+    assert output.stage_action is not None
+    assert output.stage_action.target_stage_id == "REVISION_BLUEPRINT"
+
+
+def test_prd_review_structured_output_instruction_requests_artifact_data_not_markdown():
+    instruction = build_structured_output_instruction(
+        "PRD_REVIEW",
+        "COMPLETION_PLAN",
+    )
+
+    assert "artifact_data" in instruction
+    assert "quality_findings" in instruction
+    assert "completion_actions" in instruction
+    assert "action-board" in instruction
+    assert "stage_action" in instruction
+    assert "不要输出完整 Markdown" in instruction
+    assert "artifact_update.markdown" not in instruction
 
 
 def test_parse_agent_turn_output_text_renders_value_elevator_artifact_data():

@@ -87,6 +87,38 @@ describe('Workflow Configuration', () => {
         expect(wf.stages[3].description.length).toBeGreaterThan(100);
     });
 
+    it('publishes Alex PRD review as an online runtime workflow', () => {
+        const workflow = WORKFLOWS.PRD_REVIEW;
+
+        expect(workflow.agentId).toBe('alex');
+        expect(workflow.slug).toBe('prd-review');
+        expect(WORKFLOW_SLUGS.PRD_REVIEW).toBe('prd-review');
+        expect(SLUG_TO_WORKFLOW['prd-review']).toBe('PRD_REVIEW');
+        expect(workflow.stages.map((stage) => stage.id)).toEqual([
+            'INVENTORY',
+            'QUALITY_AUDIT',
+            'COMPLETION_PLAN',
+            'REVISION_BLUEPRINT',
+        ]);
+        expect(workflow.listing.preview.expectedOutputs.join('\n')).toContain('质量评审问题');
+        expect(workflow.listing.preview.expectedOutputs.join('\n')).toContain('补全动作');
+        expect(workflow.listing.preview.expectedOutputs.join('\n')).toContain('PRD 修订蓝图');
+    });
+
+    it('links Alex PRD review from agent workflow listing', () => {
+        const workflows = getAgentWorkflows('alex');
+
+        expect(workflows).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    id: 'prd-review',
+                    status: 'online',
+                    link: '/workspace/alex/prd-review',
+                }),
+            ])
+        );
+    });
+
     it('should have value-discovery workflow in Alex agent workflows as online and without prd-creation', () => {
         const workflows = getAgentWorkflows('alex');
 
@@ -96,6 +128,26 @@ describe('Workflow Configuration', () => {
 
         const prdCreation = workflows.find(w => w.id === 'prd-creation');
         expect(prdCreation).toBeUndefined();
+    });
+
+    it('should configure PRD_REVIEW as an online Alex workflow', () => {
+        const workflows = getAgentWorkflows('alex');
+        const prdReview = workflows.find(w => w.id === 'prd-review');
+
+        expect(prdReview).toBeDefined();
+        expect(prdReview?.status).toBe('online');
+        expect(prdReview?.name).toBe('PRD 质量评审与补全');
+        expect(prdReview?.link).toBe('/workspace/alex/prd-review');
+
+        const wf = WORKFLOWS.PRD_REVIEW;
+        expect(wf.agentId).toBe('alex');
+        expect(wf.slug).toBe('prd-review');
+        expect(wf.stages.map(stage => stage.id)).toEqual([
+            'INVENTORY',
+            'QUALITY_AUDIT',
+            'COMPLETION_PLAN',
+            'REVISION_BLUEPRINT',
+        ]);
     });
 
     it('every workflow definition should configure an agentId', () => {

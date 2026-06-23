@@ -168,6 +168,42 @@ FRONTEND_PROMPT_FILES = {
         / "value_discovery"
         / "blueprint.ts"
     ),
+    ("PRD_REVIEW", "INVENTORY"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "prd_review"
+        / "inventory.ts"
+    ),
+    ("PRD_REVIEW", "QUALITY_AUDIT"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "prd_review"
+        / "quality_audit.ts"
+    ),
+    ("PRD_REVIEW", "COMPLETION_PLAN"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "prd_review"
+        / "completion_plan.ts"
+    ),
+    ("PRD_REVIEW", "REVISION_BLUEPRINT"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "prd_review"
+        / "revision_blueprint.ts"
+    ),
 }
 
 
@@ -189,6 +225,26 @@ def _workflow_manifest() -> dict:
 
 def test_shared_workflow_manifest_stage_order_matches_backend_contract():
     assert _workflow_manifest_stages() == WORKFLOW_STAGES
+
+
+def test_prd_review_manifest_and_backend_contract_are_synchronized():
+    manifest = _workflow_manifest()
+    workflow = manifest["workflows"]["PRD_REVIEW"]
+
+    assert workflow["agentId"] == "alex"
+    assert workflow["slug"] == "prd-review"
+    assert [stage["id"] for stage in workflow["stages"]] == [
+        "INVENTORY",
+        "QUALITY_AUDIT",
+        "COMPLETION_PLAN",
+        "REVISION_BLUEPRINT",
+    ]
+    assert WORKFLOW_STAGES["PRD_REVIEW"] == [
+        "INVENTORY",
+        "QUALITY_AUDIT",
+        "COMPLETION_PLAN",
+        "REVISION_BLUEPRINT",
+    ]
 
 
 def test_shared_workflow_manifest_stage_keys_match_required_artifact_contracts():

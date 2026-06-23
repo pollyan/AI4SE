@@ -11,6 +11,12 @@ WORKFLOW_STAGES: dict[str, list[str]] = {
     "INCIDENT_REVIEW": ["TIMELINE", "ROOT_CAUSE", "IMPROVEMENT"],
     "IDEA_BRAINSTORM": ["DEFINE", "DIVERGE", "CONVERGE", "CONCEPT"],
     "VALUE_DISCOVERY": ["ELEVATOR", "PERSONA", "JOURNEY", "BLUEPRINT"],
+    "PRD_REVIEW": [
+        "INVENTORY",
+        "QUALITY_AUDIT",
+        "COMPLETION_PLAN",
+        "REVISION_BLUEPRINT",
+    ],
 }
 
 REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
@@ -333,6 +339,61 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
         "owner",
         "状态",
     ],
+    ("PRD_REVIEW", "INVENTORY"): [
+        "# PRD 输入盘点",
+        "## 文档信息",
+        "## PRD 目标与范围",
+        "## 输入事实清单",
+        "## 用户与场景",
+        "## 现有验收材料",
+        "## 缺失信息清单",
+        "## 阶段门禁",
+        "证据等级",
+        "状态",
+    ],
+    ("PRD_REVIEW", "QUALITY_AUDIT"): [
+        "# PRD 质量评审",
+        "## 文档信息",
+        "## PRD 目标与范围",
+        "## 质量评审摘要",
+        "## 质量评分矩阵",
+        "## 问题清单",
+        "## 风险影响",
+        "## 阶段门禁",
+        "评审维度",
+        "严重级别",
+        "阻断性",
+        "证据",
+    ],
+    ("PRD_REVIEW", "COMPLETION_PLAN"): [
+        "# PRD 补全建议",
+        "## 文档信息",
+        "## PRD 目标与范围",
+        "## 质量评审摘要",
+        "## 补全任务清单",
+        "## 推荐 PRD 结构",
+        "## 验证方式与复审条件",
+        "## 阶段门禁",
+        "补全动作",
+        "优先级",
+        "负责人",
+        "复审条件",
+    ],
+    ("PRD_REVIEW", "REVISION_BLUEPRINT"): [
+        "# PRD 修订蓝图",
+        "## 文档信息",
+        "## PRD 目标与范围",
+        "## 质量评审摘要",
+        "## 补全任务清单",
+        "## 推荐 PRD 结构",
+        "## 核心需求改写",
+        "## 验收标准与可测试性",
+        "## Lisa Handoff 输入",
+        "## 复审条件",
+        "## 阶段门禁",
+        "可测试性等级",
+        "状态",
+    ],
 }
 
 REQUIRED_ARTIFACT_H1_KEYWORDS: dict[tuple[str, str], list[str]] = {
@@ -352,6 +413,7 @@ REQUIRED_ARTIFACT_MERMAID_DIAGRAMS: dict[tuple[str, str], list[str]] = {
     ("IDEA_BRAINSTORM", "CONVERGE"): ["quadrantChart"],
     ("VALUE_DISCOVERY", "ELEVATOR"): ["flowchart"],
     ("VALUE_DISCOVERY", "JOURNEY"): ["journey"],
+    ("PRD_REVIEW", "INVENTORY"): ["mindmap"],
 }
 
 REQUIRED_ARTIFACT_STRUCTURED_VISUALS: dict[tuple[str, str], list[str]] = {
@@ -366,6 +428,9 @@ REQUIRED_ARTIFACT_STRUCTURED_VISUALS: dict[tuple[str, str], list[str]] = {
     ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["cause-map"],
     ("IDEA_BRAINSTORM", "CONCEPT"): ["mvp-map"],
     ("VALUE_DISCOVERY", "BLUEPRINT"): ["roadmap"],
+    ("PRD_REVIEW", "QUALITY_AUDIT"): ["score-matrix"],
+    ("PRD_REVIEW", "COMPLETION_PLAN"): ["action-board"],
+    ("PRD_REVIEW", "REVISION_BLUEPRINT"): ["roadmap"],
 }
 
 STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {

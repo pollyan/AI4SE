@@ -1647,6 +1647,131 @@ class ReqReviewReportArtifactData(StrictArtifactDataModel):
         return self
 
 
+class PrdInventoryItem(StrictArtifactDataModel):
+    item_id: str
+    category: str
+    content: str
+    source: str
+    evidence_level: str
+    status: str
+
+
+class PrdQualityFinding(StrictArtifactDataModel):
+    finding_id: str
+    dimension: str
+    problem: str
+    severity: str
+    blocking: str
+    evidence: str
+    impact: str
+    recommendation: str
+    status: str
+
+
+class PrdCompletionAction(StrictArtifactDataModel):
+    action_id: str
+    finding_ids: list[str] = Field(min_length=1)
+    action: str
+    priority: str
+    owner: str
+    verification_method: str
+    review_condition: str
+    status: str
+
+
+class PrdRevisionSection(StrictArtifactDataModel):
+    section_id: str
+    title: str
+    rewrite_goal: str
+    recommended_content: str
+    acceptance_note: str
+    status: str
+
+
+class PrdAcceptanceCriterion(StrictArtifactDataModel):
+    criterion_id: str
+    related_section_ids: list[str] = Field(min_length=1)
+    scenario: str
+    given: str
+    when: str
+    then: str
+    testability_level: str
+    status: str
+
+
+class PrdHandoffInput(StrictArtifactDataModel):
+    input_id: str
+    related_section_ids: list[str] = Field(min_length=1)
+    target_workflow: str
+    content: str
+    risk: str
+    status: str
+
+
+class PrdReviewArtifactData(StrictArtifactDataModel):
+    document_info: DocumentInfo
+    prd_inventory: list[PrdInventoryItem] = Field(min_length=1)
+    quality_findings: list[PrdQualityFinding] = Field(min_length=1)
+    completion_actions: list[PrdCompletionAction] = Field(min_length=1)
+    revision_sections: list[PrdRevisionSection] = Field(min_length=1)
+    acceptance_criteria: list[PrdAcceptanceCriterion] = Field(min_length=1)
+    handoff_inputs: list[PrdHandoffInput] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_prd_review_consistency(self) -> "PrdReviewArtifactData":
+        finding_ids = {item.finding_id for item in self.quality_findings}
+        if len(finding_ids) != len(self.quality_findings):
+            raise ValueError("quality_findings contains duplicate finding_id")
+
+        action_ids = {item.action_id for item in self.completion_actions}
+        if len(action_ids) != len(self.completion_actions):
+            raise ValueError("completion_actions contains duplicate action_id")
+
+        section_ids = {item.section_id for item in self.revision_sections}
+        if len(section_ids) != len(self.revision_sections):
+            raise ValueError("revision_sections contains duplicate section_id")
+
+        unknown_finding_ids = sorted(
+            {
+                finding_id
+                for action in self.completion_actions
+                for finding_id in action.finding_ids
+                if finding_id not in finding_ids
+            }
+        )
+        if unknown_finding_ids:
+            raise ValueError(
+                "completion_actions references unknown finding ids: "
+                + ", ".join(unknown_finding_ids)
+            )
+
+        unknown_section_ids = sorted(
+            {
+                section_id
+                for criterion in self.acceptance_criteria
+                for section_id in criterion.related_section_ids
+                if section_id not in section_ids
+            }
+            | {
+                section_id
+                for handoff in self.handoff_inputs
+                for section_id in handoff.related_section_ids
+                if section_id not in section_ids
+            }
+        )
+        if unknown_section_ids:
+            raise ValueError(
+                "acceptance_criteria or handoff_inputs references unknown section ids: "
+                + ", ".join(unknown_section_ids)
+            )
+
+        if not any(item.checked for item in self.stage_gate):
+            raise ValueError("stage_gate must include at least one checked item")
+
+        return self
+
+
 class PositioningSummary(StrictArtifactDataModel):
     one_liner: str
     core_user: str
@@ -2318,6 +2443,14 @@ def render_agent_turn_from_artifact_data(
             payload["artifact_data"]
         )
         markdown = render_req_review_report_markdown(artifact_data)
+    elif workflow_id == "PRD_REVIEW" and current_stage_id in {
+        "INVENTORY",
+        "QUALITY_AUDIT",
+        "COMPLETION_PLAN",
+        "REVISION_BLUEPRINT",
+    }:
+        artifact_data = PrdReviewArtifactData.model_validate(payload["artifact_data"])
+        markdown = render_prd_review_markdown(artifact_data, current_stage_id)
     elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
         artifact_data = ValueDiscoveryElevatorArtifactData.model_validate(
             payload["artifact_data"]
@@ -2572,6 +2705,60 @@ def render_req_review_report_markdown(data: ReqReviewReportArtifactData) -> str:
         _render_req_review_report_signoffs(data.signoffs),
         _render_req_review_report_change_log(data.change_log),
     ]
+    return "\n\n".join(sections)
+
+
+def render_prd_review_markdown(data: PrdReviewArtifactData, stage_id: str) -> str:
+    common = [
+        _render_prd_document_info(data.document_info),
+        _render_prd_goal_scope(data.prd_inventory),
+    ]
+    if stage_id == "INVENTORY":
+        sections = [
+            "# PRD 输入盘点",
+            *common,
+            _render_prd_inventory(data.prd_inventory),
+            _render_prd_inventory_mindmap(data.prd_inventory),
+            _render_prd_users_and_scenarios(data.prd_inventory),
+            _render_prd_existing_acceptance(data.acceptance_criteria),
+            _render_prd_missing_information(data.quality_findings),
+            _render_prd_stage_gate(data.stage_gate),
+        ]
+    elif stage_id == "QUALITY_AUDIT":
+        sections = [
+            "# PRD 质量评审",
+            *common,
+            _render_prd_quality_summary(data.quality_findings),
+            _render_prd_quality_score_matrix(data.quality_findings),
+            _render_prd_findings(data.quality_findings),
+            _render_prd_risk_impact(data.quality_findings),
+            _render_prd_stage_gate(data.stage_gate),
+        ]
+    elif stage_id == "COMPLETION_PLAN":
+        sections = [
+            "# PRD 补全建议",
+            *common,
+            _render_prd_quality_summary(data.quality_findings),
+            _render_prd_completion_actions(data.completion_actions),
+            _render_prd_revision_structure(data.revision_sections),
+            _render_prd_verification_and_review(data.completion_actions),
+            _render_prd_stage_gate(data.stage_gate),
+        ]
+    elif stage_id == "REVISION_BLUEPRINT":
+        sections = [
+            "# PRD 修订蓝图",
+            *common,
+            _render_prd_quality_summary(data.quality_findings),
+            _render_prd_completion_actions(data.completion_actions),
+            _render_prd_revision_structure(data.revision_sections),
+            _render_prd_core_rewrites(data.revision_sections),
+            _render_prd_acceptance_criteria(data.acceptance_criteria),
+            _render_prd_handoff_inputs(data.handoff_inputs),
+            _render_prd_review_conditions(data.completion_actions),
+            _render_prd_stage_gate(data.stage_gate),
+        ]
+    else:
+        raise ValueError(f"unsupported PRD_REVIEW stage: {stage_id}")
     return "\n\n".join(sections)
 
 
@@ -5007,6 +5194,355 @@ def _render_req_review_report_change_log(
         ["版本", "日期", "变更内容", "变更原因", "责任方"],
         rows,
     )
+
+
+def _render_prd_document_info(info: DocumentInfo) -> str:
+    rows = [
+        ("Artifact 名称", info.artifact_name),
+        ("Workflow", info.workflow),
+        ("阶段", info.stage),
+        ("状态", info.status),
+    ]
+    return "## 文档信息\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_prd_goal_scope(items: list[PrdInventoryItem]) -> str:
+    rows = [
+        (item.category, item.content, item.source, item.evidence_level, item.status)
+        for item in items[:5]
+    ]
+    return "## PRD 目标与范围\n" + _markdown_table(
+        ["类别", "内容", "来源", "证据等级", "状态"],
+        rows,
+    )
+
+
+def _render_prd_inventory(items: list[PrdInventoryItem]) -> str:
+    rows = [
+        (
+            item.item_id,
+            item.category,
+            item.content,
+            item.source,
+            item.evidence_level,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 输入事实清单\n" + _markdown_table(
+        ["ID", "类别", "内容", "来源", "证据等级", "状态"],
+        rows,
+    )
+
+
+def _render_prd_inventory_mindmap(items: list[PrdInventoryItem]) -> str:
+    grouped: dict[str, list[PrdInventoryItem]] = {}
+    for item in items:
+        grouped.setdefault(item.category, []).append(item)
+
+    lines = [
+        "```mermaid",
+        "mindmap",
+        '  root(("PRD 输入盘点"))',
+    ]
+    for category, category_items in grouped.items():
+        lines.append(f"    {_escape_mermaid_mindmap_text(category)}")
+        for item in category_items[:4]:
+            lines.append(
+                "      "
+                + _escape_mermaid_mindmap_text(
+                    f"{item.item_id} {item.status}"
+                )
+            )
+    lines.append("```")
+    return "## PRD 输入结构图\n" + "\n".join(lines)
+
+
+def _render_prd_users_and_scenarios(items: list[PrdInventoryItem]) -> str:
+    rows = [
+        (item.category, item.content, item.status)
+        for item in items
+        if item.category in {"目标用户", "用户场景", "业务场景", "使用场景"}
+    ] or [(items[0].category, items[0].content, items[0].status)]
+    return "## 用户与场景\n" + _markdown_table(
+        ["类别", "内容", "状态"],
+        rows,
+    )
+
+
+def _render_prd_existing_acceptance(
+    criteria: list[PrdAcceptanceCriterion],
+) -> str:
+    rows = [
+        (
+            item.criterion_id,
+            item.scenario,
+            item.given,
+            item.when,
+            item.then,
+            item.testability_level,
+            item.status,
+        )
+        for item in criteria
+    ]
+    return "## 现有验收材料\n" + _markdown_table(
+        ["ID", "场景", "Given", "When", "Then", "可测试性等级", "状态"],
+        rows,
+    )
+
+
+def _render_prd_missing_information(
+    findings: list[PrdQualityFinding],
+) -> str:
+    rows = [
+        (
+            item.finding_id,
+            item.dimension,
+            item.problem,
+            item.blocking,
+            item.recommendation,
+            item.status,
+        )
+        for item in findings
+    ]
+    return "## 缺失信息清单\n" + _markdown_table(
+        ["ID", "维度", "缺失或问题", "阻断性", "建议", "状态"],
+        rows,
+    )
+
+
+def _render_prd_quality_summary(findings: list[PrdQualityFinding]) -> str:
+    p0_count = sum(1 for item in findings if item.severity == "P0")
+    p1_count = sum(1 for item in findings if item.severity == "P1")
+    blocking_count = sum(1 for item in findings if item.blocking == "阻断")
+    rows = [
+        ("问题总数", len(findings)),
+        ("P0 问题", p0_count),
+        ("P1 问题", p1_count),
+        ("阻断问题", blocking_count),
+        ("当前建议", "先关闭 P0/P1 阻断问题，再进入 Lisa 后续 workflow"),
+    ]
+    return "## 质量评审摘要\n" + _markdown_table(["指标", "内容"], rows)
+
+
+def _render_prd_quality_score_matrix(findings: list[PrdQualityFinding]) -> str:
+    rows = [
+        (item.dimension, item.severity, item.evidence, item.impact)
+        for item in findings
+    ]
+    visual = {
+        "type": "score-matrix",
+        "title": "PRD 质量评分矩阵",
+        "columns": ["维度", "评分", "依据", "风险"],
+        "rows": [
+            {
+                "维度": item.dimension,
+                "评分": item.severity,
+                "依据": item.evidence,
+                "风险": item.impact,
+            }
+            for item in findings
+        ],
+    }
+    return (
+        "## 质量评分矩阵\n"
+        + _markdown_table(["评审维度", "严重级别", "证据", "风险"], rows)
+        + "\n\n```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+
+
+def _render_prd_findings(findings: list[PrdQualityFinding]) -> str:
+    rows = [
+        (
+            item.finding_id,
+            item.dimension,
+            item.problem,
+            item.severity,
+            item.blocking,
+            item.evidence,
+            item.recommendation,
+            item.status,
+        )
+        for item in findings
+    ]
+    return "## 问题清单\n" + _markdown_table(
+        ["ID", "评审维度", "问题", "严重级别", "阻断性", "证据", "建议", "状态"],
+        rows,
+    )
+
+
+def _render_prd_risk_impact(findings: list[PrdQualityFinding]) -> str:
+    rows = [(item.finding_id, item.impact, item.recommendation) for item in findings]
+    return "## 风险影响\n" + _markdown_table(
+        ["问题 ID", "影响范围", "缓解建议"],
+        rows,
+    )
+
+
+def _render_prd_completion_actions(actions: list[PrdCompletionAction]) -> str:
+    rows = [
+        (
+            item.action_id,
+            ", ".join(item.finding_ids),
+            item.action,
+            item.priority,
+            item.owner,
+            item.verification_method,
+            item.review_condition,
+            item.status,
+        )
+        for item in actions
+    ]
+    visual = {
+        "type": "action-board",
+        "title": "PRD 补全任务清单",
+        "columns": ["行动", "对应根因", "负责人", "期限", "状态", "验证方式"],
+        "rows": [
+            {
+                "行动": item.action,
+                "对应根因": ", ".join(item.finding_ids),
+                "负责人": item.owner,
+                "期限": "进入下一阶段前",
+                "状态": item.status,
+                "验证方式": item.verification_method,
+            }
+            for item in actions
+        ],
+    }
+    return (
+        "## 补全任务清单\n"
+        + _markdown_table(
+            [
+                "ID",
+                "关联问题",
+                "补全动作",
+                "优先级",
+                "负责人",
+                "验证方式",
+                "复审条件",
+                "状态",
+            ],
+            rows,
+        )
+        + "\n\n```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+
+
+def _render_prd_revision_structure(sections: list[PrdRevisionSection]) -> str:
+    rows = [
+        (
+            item.section_id,
+            item.title,
+            item.rewrite_goal,
+            item.acceptance_note,
+            item.status,
+        )
+        for item in sections
+    ]
+    visual = {
+        "type": "roadmap",
+        "title": "PRD 修订路线",
+        "columns": ["版本", "时间", "核心功能", "目标", "成功指标"],
+        "rows": [
+            {
+                "版本": item.section_id,
+                "时间": "本次修订",
+                "核心功能": item.title,
+                "目标": item.rewrite_goal,
+                "成功指标": item.acceptance_note,
+            }
+            for item in sections
+        ],
+    }
+    return (
+        "## 推荐 PRD 结构\n"
+        + _markdown_table(["章节 ID", "章节", "改写目标", "验收说明", "状态"], rows)
+        + "\n\n```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+
+
+def _render_prd_verification_and_review(actions: list[PrdCompletionAction]) -> str:
+    rows = [
+        (item.action_id, item.verification_method, item.review_condition, item.status)
+        for item in actions
+    ]
+    return "## 验证方式与复审条件\n" + _markdown_table(
+        ["动作 ID", "验证方式", "复审条件", "状态"],
+        rows,
+    )
+
+
+def _render_prd_core_rewrites(sections: list[PrdRevisionSection]) -> str:
+    rows = [
+        (item.section_id, item.title, item.recommended_content, item.acceptance_note)
+        for item in sections
+    ]
+    return "## 核心需求改写\n" + _markdown_table(
+        ["章节 ID", "章节", "推荐内容", "验收说明"],
+        rows,
+    )
+
+
+def _render_prd_acceptance_criteria(
+    criteria: list[PrdAcceptanceCriterion],
+) -> str:
+    rows = [
+        (
+            item.criterion_id,
+            ", ".join(item.related_section_ids),
+            item.scenario,
+            item.given,
+            item.when,
+            item.then,
+            item.testability_level,
+            item.status,
+        )
+        for item in criteria
+    ]
+    return "## 验收标准与可测试性\n" + _markdown_table(
+        ["ID", "关联章节", "场景", "Given", "When", "Then", "可测试性等级", "状态"],
+        rows,
+    )
+
+
+def _render_prd_handoff_inputs(items: list[PrdHandoffInput]) -> str:
+    rows = [
+        (
+            item.input_id,
+            ", ".join(item.related_section_ids),
+            item.target_workflow,
+            item.content,
+            item.risk,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## Lisa Handoff 输入\n" + _markdown_table(
+        ["ID", "关联章节", "目标 Workflow", "内容", "风险", "状态"],
+        rows,
+    )
+
+
+def _render_prd_review_conditions(actions: list[PrdCompletionAction]) -> str:
+    rows = [
+        (item.action_id, item.review_condition, item.owner, item.status)
+        for item in actions
+    ]
+    return "## 复审条件\n" + _markdown_table(
+        ["动作 ID", "复审条件", "责任方", "状态"],
+        rows,
+    )
+
+
+def _render_prd_stage_gate(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 阶段门禁\n" + "\n".join(lines)
 
 
 def _render_value_positioning_summary(summary: PositioningSummary) -> str:
