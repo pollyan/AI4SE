@@ -22,6 +22,11 @@ import { StructuredVisual } from './StructuredVisual';
 import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../services/runSnapshotService';
 import { buildDocxPackage } from '../core/docxExport';
 import { buildPlainTextPdf as buildArtifactPdf } from '../core/artifactExport';
+import {
+  buildArtifactQualityDiagnostics,
+  type ArtifactQualityDiagnostics,
+  type ArtifactQualityStatus,
+} from '../core/artifactQuality';
 
 export const ArtifactPane: React.FC = () => {
   const workflow = useStore((state) => state.workflow);
@@ -329,6 +334,17 @@ export const ArtifactPane: React.FC = () => {
   // Content displays using the imported preprocessMarkdown utility
 
   const displayContent = preprocessMarkdown(artifactContent);
+  const artifactQualityDiagnostics = useMemo(
+    () => currentStageId
+      ? buildArtifactQualityDiagnostics({
+        workflow,
+        stageId: currentStageId,
+        artifactContent,
+        visualDiagnostics: artifactVisualDiagnostics,
+      })
+      : null,
+    [artifactContent, artifactVisualDiagnostics, currentStageId, workflow]
+  );
   type ParsedMarkdownSection = {
     heading: string;
     lines: string[];
@@ -3938,6 +3954,70 @@ export const ArtifactPane: React.FC = () => {
   );
   const readOnlyMarkdownComponents = createArtifactMarkdownComponents();
 
+  const getArtifactQualityStatusLabel = (status: ArtifactQualityStatus): string => {
+    if (status === 'fail') return '需处理';
+    if (status === 'warning') return '需关注';
+    return '达标';
+  };
+
+  const getArtifactQualityStatusClass = (status: ArtifactQualityStatus): string => {
+    if (status === 'fail') return 'border-rose-400/30 bg-rose-500/10 text-rose-100';
+    if (status === 'warning') return 'border-amber-400/30 bg-amber-500/10 text-amber-100';
+    return 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100';
+  };
+
+  const renderArtifactQualityDiagnostics = (diagnostics: ArtifactQualityDiagnostics) => (
+    <section className={`mb-6 rounded-lg border p-4 ${getArtifactQualityStatusClass(diagnostics.status)}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-white">产物质量诊断</h3>
+          <p className="mt-1 text-xs text-slate-300">
+            当前阶段 {currentStageId} 的标题、可视化、阶段门禁和运行时诊断。
+          </p>
+        </div>
+        <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${getArtifactQualityStatusClass(diagnostics.status)}`}>
+          {getArtifactQualityStatusLabel(diagnostics.status)}
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-2 text-xs text-slate-300 sm:grid-cols-3">
+        <div className="rounded-md border border-white/10 bg-black/10 px-3 py-2">
+          <span className="font-bold text-emerald-200">{diagnostics.summary.passed}</span>
+          <span className="ml-1 text-slate-400">项通过</span>
+        </div>
+        <div className="rounded-md border border-white/10 bg-black/10 px-3 py-2">
+          <span className="font-bold text-amber-200">{diagnostics.summary.warning}</span>
+          <span className="ml-1 text-slate-400">项警告</span>
+        </div>
+        <div className="rounded-md border border-white/10 bg-black/10 px-3 py-2">
+          <span className="font-bold text-rose-200">{diagnostics.summary.failed}</span>
+          <span className="ml-1 text-slate-400">项失败</span>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {diagnostics.groups.map((group) => (
+          <section key={group.id} className="rounded-md border border-white/10 bg-[#020617]/70 p-3">
+            <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">{group.title}</h4>
+            <div className="mt-2 space-y-2">
+              {group.items.map((item) => (
+                <div key={item.id} className="flex flex-wrap items-start justify-between gap-3 rounded border border-white/5 bg-white/[0.02] px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-slate-100">{item.title}</div>
+                    <div className="mt-1 text-xs leading-relaxed text-slate-400">{item.message}</div>
+                  </div>
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${getArtifactQualityStatusClass(item.status)}`}>
+                    {item.status === 'pass' ? '通过' : item.status === 'warning' ? '警告' : '失败'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </section>
+  );
+
   return (
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#0B0F17] text-gray-300 relative shadow-2xl bg-grid-pattern lg:w-[60%]">
       <style>{`
@@ -4333,13 +4413,16 @@ export const ArtifactPane: React.FC = () => {
               />
             </div>
           ) : viewMode === 'preview' ? (
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeRaw]}
-              components={editableMarkdownComponents}
-            >
-              {displayContent}
-            </ReactMarkdown>
+            <>
+              {artifactQualityDiagnostics && renderArtifactQualityDiagnostics(artifactQualityDiagnostics)}
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw]}
+                components={editableMarkdownComponents}
+              >
+                {displayContent}
+              </ReactMarkdown>
+            </>
           ) : (
             <pre className="text-sm font-mono text-slate-300 whitespace-pre-wrap break-words bg-[#0f172a] p-6 rounded-xl border border-[#1e293b]">
               {displayContent}

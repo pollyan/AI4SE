@@ -430,6 +430,82 @@ describe('ArtifactPane Component', () => {
         });
     });
 
+    it('shows artifact quality diagnostics when the current artifact misses required visuals', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: [
+                '# 需求分析',
+                '',
+                '## 核心业务规则',
+                '',
+                '## 阶段门禁',
+                '',
+                '当前阶段缺少可视化。',
+            ].join('\n'),
+        });
+
+        render(<ArtifactPane />);
+
+        expect(screen.getByText('产物质量诊断')).toBeTruthy();
+        expect(screen.getByText('需处理')).toBeTruthy();
+        expect(screen.getByText('必需可视化')).toBeTruthy();
+    });
+
+    it('shows current-stage visual diagnostics as artifact quality warnings', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: [
+                '# 需求分析',
+                '## 核心业务规则',
+                '## 待澄清问题',
+                '## 阶段门禁',
+                '```mermaid',
+                'flowchart TD',
+                'A --> B',
+                '```',
+                '```ai4se-visual',
+                JSON.stringify({
+                    type: 'traceability-matrix',
+                    title: '需求追溯矩阵',
+                    columns: ['需求', '风险'],
+                    rows: [{ 需求: 'REQ-1', 风险: 'RISK-1' }],
+                }),
+                '```',
+            ].join('\n'),
+            artifactVisualDiagnostics: [
+                {
+                    id: 'mermaid:CLARIFY:0',
+                    stageId: 'CLARIFY',
+                    kind: 'mermaid',
+                    title: 'Mermaid 图表渲染失败',
+                    message: 'JSON 缺少 title 字段。',
+                    blockIndex: 0,
+                    createdAt: Date.now(),
+                },
+            ],
+        });
+
+        render(<ArtifactPane />);
+
+        expect(screen.getByText('产物质量诊断')).toBeTruthy();
+        expect(screen.getByText('需关注')).toBeTruthy();
+        expect(screen.getByText('JSON 缺少 title 字段。')).toBeTruthy();
+    });
+
+    it('does not show artifact quality diagnostics for an empty artifact', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '',
+        });
+
+        render(<ArtifactPane />);
+
+        expect(screen.queryByText('产物质量诊断')).toBeNull();
+    });
+
     it('scrolls and highlights a focused Mermaid visual diagnostic in the current preview', async () => {
         const scrollIntoView = vi.fn();
         window.HTMLElement.prototype.scrollIntoView = scrollIntoView;

@@ -53,7 +53,7 @@
 | 维度 | 当前状态 | 缺口 | 优先级 |
 | --- | --- | --- | --- |
 | 专业可信度 | prompt/template 已有 FMEA、5 Why、ICE、roadmap 等方法 | 缺统一质量门禁、评分、证据强度、风险接受、复审闭环 | P0 |
-| Artifact 闭环 | 有版本、diff、批注、章节锁、导出、冲突合并 | 缺统一 artifact quality / contract / stage gate 诊断面板 | P0 |
+| Artifact 闭环 | 有版本、diff、批注、章节锁、导出、冲突合并；2026-06-23 已补当前产物质量诊断面板 | 后续缺自动修复、章节级重生成、跨 run 质量筛选和评分趋势 | P1 |
 | Workflow 入口 | 有 listing、onboarding、starter prompts；2026-06-23 已补在线 workflow 入口 preview | 仍缺自动推荐排序和更深的选择决策引导 | P1 |
 | Run 复用 | 有历史列表、搜索、runId snapshot 恢复 | 缺收藏、复制为新 run、质量状态筛选、跨 run 对比 | P1 |
 | Workflow handoff | 有配置化 handoff 基础 | handoff 上下文摘要、版本解释、未确认项携带不足 | P1 |
@@ -66,7 +66,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | E01 | Workflow 入口 preview | 改造现有功能 | 体验 | S | P0 | 已消化：每个在线 workflow 展示适用/不适用、输入要求、预期产物和样例输入 |
 | E02 | 阶段缺失信息清单 | 深化现有功能 | 专业内容 | S | P0 | chat 和 artifact 都能标明缺失项、阻断性和用户下一步 |
-| E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | P0 | 展示 headings、visual、stage gate、专业字段通过/失败/警告 |
+| E03 | Artifact 质量诊断面板 | 已消化 | 可信质量 | M | P0 | 2026-06-23 已主线化：`ArtifactPane` 展示当前 stage headings、visual、stage gate、专业字段和 runtime visual diagnostics 的通过/失败/警告；诊断由共享前端纯函数 `artifactQuality.ts` 派生，不新增 backend endpoint、runtime/SSE/persistence 或 agent 专属 renderer；验证覆盖 `artifactQuality.test.ts` 与 `ArtifactPane.test.tsx` |
 | E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 测试点、风险、用例 issue 可修复、确认、追踪并影响资产质量状态 |
 | E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
 | E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 支持继续、复制为新 run、按 workflow/质量筛选、预览当前 artifact |
@@ -108,7 +108,7 @@
 
 目标: 1-2 周内明显提升专业感和产出可信度。
 
-包含: E02、E03、E04。E01 已在 2026-06-23 workflow 入口 preview milestone 中消化。
+包含: E02、E04。E01 已在 2026-06-23 workflow 入口 preview milestone 中消化，E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化。
 
 暂不做:
 
@@ -126,7 +126,7 @@
 
 目标: 让用户从开始、生成、审阅、修订、恢复、复用形成闭环。
 
-包含: E03、E05、E06、E07、E08。
+包含: E05、E06、E07、E08。E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化。
 
 暂不做:
 
@@ -159,12 +159,13 @@
 
 ## 首批建议落地切片
 
-### 1. Artifact 质量诊断面板
+### 1. Artifact 质量诊断面板（已消化）
 
-- 涉及模块: `ArtifactPane.tsx`、`StructuredVisual.tsx`、`agent_contracts.py`、`workflow_contract_registry.py`、相关 tests。
-- 需要同步: manifest artifact/visual contract、前端诊断展示、后端 contract helper。
-- 完成定义: 当前阶段 artifact 能展示必填标题、可视化、阶段门禁、专业字段的通过/失败/警告。
-- 不纳入: 自动修复全文。
+- 完成日期: 2026-06-23。
+- 涉及模块: `tools/new-agents/frontend/src/core/artifactQuality.ts`、`tools/new-agents/frontend/src/components/ArtifactPane.tsx`、相关 frontend tests。
+- 完成定义: 当前阶段 artifact 能展示必填标题、可视化、阶段门禁、专业字段和 runtime visual diagnostics 的通过/失败/警告。
+- 不纳入: 自动修复全文、LLM judge 评分、backend diagnostic endpoint、runtime/SSE/persistence 变更。
+- 验证记录: `cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/artifactQuality.test.ts src/components/__tests__/ArtifactPane.test.tsx`；`cd tools/new-agents/frontend && npm run lint`；`git diff --check`。
 
 ### 2. Workflow 入口专业 preview
 
