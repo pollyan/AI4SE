@@ -17,6 +17,7 @@ from agent_runtime import (
     AgentRuntimeDependencyError,
     AgentRuntimeModelError,
     AgentRuntimeSchemaError,
+    FormattedOutputDiagnosticError,
     PYDANTIC_AI_SCHEMA_ERRORS,
     build_pydantic_agent_runtime,
 )
@@ -39,6 +40,13 @@ SCHEMA_RETRY_EXHAUSTED_MESSAGE = (
     "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
     "如果多次失败，请补充更明确的需求或阶段确认信息。"
 )
+
+FORMATTED_OUTPUT_ERROR_CODES = {
+    "json_decode": "FORMATTED_OUTPUT_JSON_DECODE",
+    "artifact_data_schema": "FORMATTED_OUTPUT_ARTIFACT_DATA_SCHEMA",
+    "artifact_data_renderer": "FORMATTED_OUTPUT_ARTIFACT_DATA_RENDERER",
+    "artifact_contract": "FORMATTED_OUTPUT_ARTIFACT_CONTRACT",
+}
 
 
 class StreamPersistence(Protocol):
@@ -91,6 +99,13 @@ def format_schema_validation_error_message(error: Exception) -> str:
     if "Exceeded maximum output retries" in message:
         return SCHEMA_RETRY_EXHAUSTED_MESSAGE
     return message
+
+
+def formatted_output_error_code(error: FormattedOutputDiagnosticError) -> str:
+    return FORMATTED_OUTPUT_ERROR_CODES.get(
+        error.kind,
+        "FORMATTED_OUTPUT_UNKNOWN",
+    )
 
 
 def extract_contract_retry_count(error: Exception) -> int:
@@ -294,6 +309,17 @@ def stream_agent_run_events(
         yield ErrorEvent(
             code="SCHEMA_VALIDATION_FAILED",
             message=format_schema_validation_error_message(e),
+        )
+    except FormattedOutputDiagnosticError as e:
+        error_code = formatted_output_error_code(e)
+        record_metric(
+            "error",
+            error_code,
+            contract_retry_count=e.retry_count,
+        )
+        yield ErrorEvent(
+            code=error_code,
+            message=str(e),
         )
     except PYDANTIC_AI_SCHEMA_ERRORS as e:
         record_metric(

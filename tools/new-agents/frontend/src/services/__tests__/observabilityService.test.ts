@@ -40,6 +40,46 @@ const OBSERVABILITY_PAYLOAD = {
             providerIssueCodes: { LLM_ERROR: 1 },
         },
     ],
+    formatFailureDiagnostics: {
+        total: 2,
+        byKind: [
+            {
+                kind: 'artifact_data_schema',
+                label: 'artifact_data schema 校验失败',
+                count: 1,
+                retryCount: 2,
+                action: '检查当前 stage 的 artifact_data 必填字段、枚举值、空数组和跨字段引用。',
+            },
+            {
+                kind: 'json_decode',
+                label: 'JSON 语法解析失败',
+                count: 1,
+                retryCount: 1,
+                action: '检查模型是否输出合法 JSON object，避免 Markdown 代码围栏、解释文字或截断响应。',
+            },
+        ],
+        byStage: [
+            {
+                workflowId: 'TEST_DESIGN',
+                stageId: 'CLARIFY',
+                count: 1,
+                retryCount: 1,
+                kinds: { json_decode: 1 },
+                topKind: 'json_decode',
+                action: '检查模型是否输出合法 JSON object，避免 Markdown 代码围栏、解释文字或截断响应。',
+            },
+        ],
+        byProvider: [
+            {
+                provider: 'deepseek',
+                count: 2,
+                retryCount: 3,
+                kinds: { artifact_data_schema: 1, json_decode: 1 },
+                topKind: 'artifact_data_schema',
+                action: '优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 artifact_data contract。',
+            },
+        ],
+    },
     recentTurns: [
         {
             id: 11,
@@ -81,6 +121,9 @@ describe('observabilityService', () => {
         expect(summary.byStage[0].providerIssueCodes).toEqual({ LLM_ERROR: 1 });
         expect(summary.byProvider[0].providerIssueCount).toBe(1);
         expect(summary.recentTurns[0].errorCode).toBe('LLM_ERROR');
+        expect(summary.formatFailureDiagnostics.total).toBe(2);
+        expect(summary.formatFailureDiagnostics.byKind[0].kind).toBe('artifact_data_schema');
+        expect(summary.formatFailureDiagnostics.byProvider[0].provider).toBe('deepseek');
     });
 
     it('serializes workflow and stage filters', async () => {
@@ -129,6 +172,23 @@ describe('observabilityService', () => {
                 totals: {
                     ...OBSERVABILITY_PAYLOAD.totals,
                     providerIssueCount: '1',
+                },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ));
+
+        await expect(fetchObservabilitySummary({ limit: 20 })).rejects.toThrow(
+            'Invalid observability summary response'
+        );
+    });
+
+    it('fails explicitly when format failure diagnostics are malformed', async () => {
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({
+                ...OBSERVABILITY_PAYLOAD,
+                formatFailureDiagnostics: {
+                    ...OBSERVABILITY_PAYLOAD.formatFailureDiagnostics,
+                    total: '2',
                 },
             }),
             { status: 200, headers: { 'Content-Type': 'application/json' } },

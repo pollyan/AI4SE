@@ -43,6 +43,42 @@ SUMMARY_SOURCE_USER_INPUT = "user_input"
 DEFAULT_RUN_LIST_LIMIT = 20
 MAX_RUN_LIST_LIMIT = 100
 PROVIDER_ISSUE_ERROR_CODES = {"LLM_ERROR", DEFAULT_LLM_CONFIG_MISSING_CODE}
+FORMAT_FAILURE_ERROR_CODES = {
+    "FORMATTED_OUTPUT_JSON_DECODE": "json_decode",
+    "FORMATTED_OUTPUT_ARTIFACT_DATA_SCHEMA": "artifact_data_schema",
+    "FORMATTED_OUTPUT_ARTIFACT_DATA_RENDERER": "artifact_data_renderer",
+    "FORMATTED_OUTPUT_ARTIFACT_CONTRACT": "artifact_contract",
+}
+FORMAT_FAILURE_KIND_METADATA = {
+    "json_decode": {
+        "label": "JSON 语法解析失败",
+        "action": (
+            "检查模型是否输出合法 JSON object，避免 Markdown 代码围栏、"
+            "解释文字或截断响应。"
+        ),
+    },
+    "artifact_data_schema": {
+        "label": "artifact_data schema 校验失败",
+        "action": (
+            "检查当前 stage 的 artifact_data 必填字段、枚举值、空数组"
+            "和跨字段引用。"
+        ),
+    },
+    "artifact_data_renderer": {
+        "label": "artifact_data renderer 失败",
+        "action": (
+            "检查 renderer registry、stage schema 和 deterministic renderer "
+            "是否匹配。"
+        ),
+    },
+    "artifact_contract": {
+        "label": "artifact contract 校验失败",
+        "action": (
+            "检查 required headings、Mermaid/structured visual 和 stage gate "
+            "是否由 renderer 稳定生成。"
+        ),
+    },
+}
 
 
 class ArtifactVersionConflictError(ValueError):
@@ -799,6 +835,7 @@ def get_runtime_observability_summary(
             _provider_observability_item(provider, provider_metrics)
             for provider, provider_metrics in sorted(provider_index.items())
         ],
+        "formatFailureDiagnostics": _format_failure_diagnostics(metrics),
         "recentTurns": [
             _turn_metric_snapshot(metric)
             for metric in metrics[:limit]
@@ -840,6 +877,120 @@ def _provider_issue_codes(metrics: list[AgentRunTurnMetric]) -> dict[str, int]:
         if metric.error_code in PROVIDER_ISSUE_ERROR_CODES:
             issue_codes[metric.error_code] = issue_codes.get(metric.error_code, 0) + 1
     return dict(sorted(issue_codes.items()))
+
+
+def _format_failure_kind(error_code: str | None) -> str | None:
+    if error_code is None:
+        return None
+    return FORMAT_FAILURE_ERROR_CODES.get(error_code)
+
+
+def _top_format_failure_kind(kinds: dict[str, int]) -> str:
+    return sorted(kinds.items(), key=lambda item: (-item[1], item[0]))[0][0]
+
+
+def _format_failure_action(kind: str) -> str:
+    return FORMAT_FAILURE_KIND_METADATA[kind]["action"]
+
+
+def _format_failure_diagnostics(metrics: list[AgentRunTurnMetric]) -> dict:
+    format_metrics = [
+        metric
+        for metric in metrics
+        if _format_failure_kind(metric.error_code) is not None
+    ]
+    by_kind: dict[str, dict[str, int]] = {}
+    by_stage: dict[tuple[str, str], dict] = {}
+    by_provider: dict[str, dict] = {}
+
+    for metric in format_metrics:
+        kind = _format_failure_kind(metric.error_code)
+        if kind is None:
+            continue
+        by_kind.setdefault(kind, {"count": 0, "retryCount": 0})
+        by_kind[kind]["count"] += 1
+        by_kind[kind]["retryCount"] += metric.contract_retry_count
+
+        stage_key = (metric.workflow_id, metric.stage_id)
+        stage_bucket = by_stage.setdefault(
+            stage_key,
+            {
+                "workflowId": metric.workflow_id,
+                "stageId": metric.stage_id,
+                "count": 0,
+                "retryCount": 0,
+                "kinds": {},
+            },
+        )
+        stage_bucket["count"] += 1
+        stage_bucket["retryCount"] += metric.contract_retry_count
+        stage_bucket["kinds"][kind] = stage_bucket["kinds"].get(kind, 0) + 1
+
+        provider_bucket = by_provider.setdefault(
+            metric.provider,
+            {
+                "provider": metric.provider,
+                "count": 0,
+                "retryCount": 0,
+                "kinds": {},
+            },
+        )
+        provider_bucket["count"] += 1
+        provider_bucket["retryCount"] += metric.contract_retry_count
+        provider_bucket["kinds"][kind] = provider_bucket["kinds"].get(kind, 0) + 1
+
+    def kind_item(kind: str, values: dict[str, int]) -> dict:
+        metadata = FORMAT_FAILURE_KIND_METADATA[kind]
+        return {
+            "kind": kind,
+            "label": metadata["label"],
+            "count": values["count"],
+            "retryCount": values["retryCount"],
+            "action": metadata["action"],
+        }
+
+    def enrich_bucket(bucket: dict, *, provider: bool = False) -> dict:
+        kinds = dict(sorted(bucket["kinds"].items()))
+        top_kind = _top_format_failure_kind(kinds)
+        action = (
+            (
+                "优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 "
+                "artifact_data contract。"
+            )
+            if provider and bucket["provider"] == "deepseek"
+            else _format_failure_action(top_kind)
+        )
+        return {
+            **bucket,
+            "kinds": kinds,
+            "topKind": top_kind,
+            "action": action,
+        }
+
+    return {
+        "total": len(format_metrics),
+        "byKind": [
+            kind_item(kind, values)
+            for kind, values in sorted(
+                by_kind.items(),
+                key=lambda item: (-item[1]["count"], item[0]),
+            )
+        ],
+        "byStage": [
+            enrich_bucket(bucket)
+            for bucket in sorted(
+                by_stage.values(),
+                key=lambda item: (-item["count"], item["workflowId"], item["stageId"]),
+            )
+        ],
+        "byProvider": [
+            enrich_bucket(bucket, provider=True)
+            for bucket in sorted(
+                by_provider.values(),
+                key=lambda item: (-item["count"], item["provider"]),
+            )
+        ],
+    }
 
 
 def _config_issue_provider_codes(

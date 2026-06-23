@@ -37,6 +37,24 @@ const formatTopProviderIssueCode = (issueCodes: Record<string, number>): string 
     return `${code} x${count}`;
 };
 
+const buildFormatFailureAlert = (
+    summary: ObservabilitySummary
+): ObservabilityAlert | null => {
+    const [topKind] = summary.formatFailureDiagnostics.byKind;
+    if (!topKind || summary.formatFailureDiagnostics.total <= 0) {
+        return null;
+    }
+    return {
+        id: 'format-failures',
+        title: '格式化输出失败集中',
+        detail: (
+            `格式化输出失败 ${summary.formatFailureDiagnostics.total} 轮，`
+            + `最高频类型：${topKind.label} x${topKind.count}。`
+            + `建议：${topKind.action}`
+        ),
+    };
+};
+
 export const buildObservabilityAlerts = (summary: ObservabilitySummary): ObservabilityAlert[] => {
     const alerts: ObservabilityAlert[] = [];
 
@@ -54,6 +72,11 @@ export const buildObservabilityAlerts = (summary: ObservabilitySummary): Observa
             title: '模型/供应商异常集中',
             detail: `最近 ${summary.totals.turns} 轮中有 ${summary.totals.providerIssueCount} 轮与模型配置、供应商额度、鉴权或网络有关。最高频错误：${formatTopProviderIssueCode(summary.totals.providerIssueCodes)}。`,
         });
+    }
+
+    const formatFailureAlert = buildFormatFailureAlert(summary);
+    if (formatFailureAlert) {
+        alerts.push(formatFailureAlert);
     }
 
     const lowestSuccessStage = sortByRisk(summary.byStage).find(stage => (

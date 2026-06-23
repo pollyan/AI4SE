@@ -2207,6 +2207,118 @@ def test_agent_observability_endpoint_groups_provider_issue_codes(
     assert response.json["byProvider"][0]["providerIssueCodes"] == {"LLM_ERROR": 1}
 
 
+def test_agent_observability_endpoint_groups_formatted_output_diagnostics(
+    app,
+    client,
+):
+    with app.app_context():
+        schema_run = create_agent_run("TEST_DESIGN", "lisa", "STRATEGY")
+        record_turn_metric(
+            run_id=schema_run.id,
+            workflow_id="TEST_DESIGN",
+            stage_id="STRATEGY",
+            model_name="deepseek-v4-flash",
+            provider="deepseek",
+            status="error",
+            error_code="FORMATTED_OUTPUT_ARTIFACT_DATA_SCHEMA",
+            duration_ms=220,
+            input_chars=100,
+            output_chars=40,
+            estimated_tokens=35,
+            contract_retry_count=2,
+        )
+        json_run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        record_turn_metric(
+            run_id=json_run.id,
+            workflow_id="TEST_DESIGN",
+            stage_id="CLARIFY",
+            model_name="deepseek-v4-flash",
+            provider="deepseek",
+            status="error",
+            error_code="FORMATTED_OUTPUT_JSON_DECODE",
+            duration_ms=120,
+            input_chars=80,
+            output_chars=0,
+            estimated_tokens=20,
+            contract_retry_count=1,
+        )
+        generic_run = create_agent_run("TEST_DESIGN", "lisa", "CASES")
+        record_turn_metric(
+            run_id=generic_run.id,
+            workflow_id="TEST_DESIGN",
+            stage_id="CASES",
+            model_name="test-model",
+            provider="api.test.com",
+            status="error",
+            error_code="SCHEMA_VALIDATION_FAILED",
+            duration_ms=100,
+            input_chars=70,
+            output_chars=10,
+            estimated_tokens=20,
+            contract_retry_count=0,
+        )
+
+    response = client.get("/api/agent/observability")
+
+    assert response.status_code == 200
+    diagnostics = response.json["formatFailureDiagnostics"]
+    assert diagnostics["total"] == 2
+    assert diagnostics["byKind"] == [
+        {
+            "kind": "artifact_data_schema",
+            "label": "artifact_data schema 校验失败",
+            "count": 1,
+            "retryCount": 2,
+            "action": (
+                "检查当前 stage 的 artifact_data 必填字段、枚举值、空数组"
+                "和跨字段引用。"
+            ),
+        },
+        {
+            "kind": "json_decode",
+            "label": "JSON 语法解析失败",
+            "count": 1,
+            "retryCount": 1,
+            "action": (
+                "检查模型是否输出合法 JSON object，避免 Markdown 代码围栏、"
+                "解释文字或截断响应。"
+            ),
+        },
+    ]
+    strategy_stage = next(
+        item for item in diagnostics["byStage"]
+        if item["workflowId"] == "TEST_DESIGN" and item["stageId"] == "STRATEGY"
+    )
+    assert strategy_stage == {
+        "workflowId": "TEST_DESIGN",
+        "stageId": "STRATEGY",
+        "count": 1,
+        "retryCount": 2,
+        "kinds": {"artifact_data_schema": 1},
+        "topKind": "artifact_data_schema",
+        "action": (
+            "检查当前 stage 的 artifact_data 必填字段、枚举值、空数组"
+            "和跨字段引用。"
+        ),
+    }
+    assert diagnostics["byProvider"] == [
+        {
+            "provider": "deepseek",
+            "count": 2,
+            "retryCount": 3,
+            "kinds": {
+                "artifact_data_schema": 1,
+                "json_decode": 1,
+            },
+            "topKind": "artifact_data_schema",
+            "action": (
+                "优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 "
+                "artifact_data contract。"
+            ),
+        }
+    ]
+
+
 def test_agent_observability_endpoint_rejects_stage_without_workflow(client):
     response = client.get("/api/agent/observability?stageId=CLARIFY")
 

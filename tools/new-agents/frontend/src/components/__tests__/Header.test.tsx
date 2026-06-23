@@ -278,6 +278,39 @@ const OBSERVABILITY_SUMMARY: ObservabilitySummary = {
             providerIssueCodes: { LLM_ERROR: 1 },
         },
     ],
+    formatFailureDiagnostics: {
+        total: 2,
+        byKind: [
+            {
+                kind: 'artifact_data_schema',
+                label: 'artifact_data schema 校验失败',
+                count: 2,
+                retryCount: 4,
+                action: '检查当前 stage 的 artifact_data 必填字段、枚举值、空数组和跨字段引用。',
+            },
+        ],
+        byStage: [
+            {
+                workflowId: 'TEST_DESIGN',
+                stageId: 'STRATEGY',
+                count: 2,
+                retryCount: 4,
+                kinds: { artifact_data_schema: 2 },
+                topKind: 'artifact_data_schema',
+                action: '检查当前 stage 的 artifact_data 必填字段、枚举值、空数组和跨字段引用。',
+            },
+        ],
+        byProvider: [
+            {
+                provider: 'deepseek',
+                count: 2,
+                retryCount: 4,
+                kinds: { artifact_data_schema: 2 },
+                topKind: 'artifact_data_schema',
+                action: '优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 artifact_data contract。',
+            },
+        ],
+    },
     recentTurns: [
         {
             id: 11,
@@ -698,6 +731,21 @@ describe('Header Component', () => {
         expect(screen.getAllByText('LLM_ERROR').length).toBeGreaterThan(0);
         expect(screen.getAllByText('模型/供应商问题 x1').length).toBeGreaterThan(0);
         expect(screen.getByText(/run-123/)).toBeTruthy();
+    });
+
+    it('shows formatted output diagnostics in runtime observability summary', async () => {
+        renderHeader();
+        clickMoreAction(/运行统计/);
+
+        await screen.findByText('格式化输出诊断');
+
+        expect(screen.getByText('格式化失败 2 轮')).toBeTruthy();
+        expect(screen.getByText('artifact_data schema 校验失败')).toBeTruthy();
+        expect(screen.getByText('TEST_DESIGN / STRATEGY')).toBeTruthy();
+        expect(screen.getByText('deepseek')).toBeTruthy();
+        expect(screen.getByText('重试 4 次')).toBeTruthy();
+        expect(screen.getAllByText('检查当前 stage 的 artifact_data 必填字段、枚举值、空数组和跨字段引用。').length).toBeGreaterThan(0);
+        expect(screen.getByText('优先检查 DeepSeek JSON mode 输出是否满足当前 stage 的 artifact_data contract。')).toBeTruthy();
     });
 
     it('opens context summaries and persists calibrated summary content', async () => {

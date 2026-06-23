@@ -28,6 +28,7 @@
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
 - 2026-06-23 已完成 DeepSeek V4 全 workflow readiness 收口: 当前 `workflow_manifest.json` 中所有在线 stage 都由测试证明具备 `artifact_data` renderer、manifest/stage coverage、contract-valid fixture、DeepSeek `json_object_only` raw streaming、thinking disabled 和禁止模型直写完整 Markdown 的 instruction。
 - 2026-06-23 已完成 DeepSeek V4 格式化输出失败诊断闭环: raw JSON streaming 连续失败时会将非法 JSON、`artifact_data` schema、renderer 配置和 artifact contract 问题分类为 `json_decode`、`artifact_data_schema`、`artifact_data_renderer`、`artifact_contract`，retry prompt 带 workflow/stage、错误摘要和 schema path，并继续要求修正 `artifact_data` 而不是重写 Markdown。
+- 2026-06-23 已完成 DeepSeek V4 格式化失败运行统计产品化闭环: stream service 会把 `FormattedOutputDiagnosticError` 记录为稳定 turn metric error code，`/api/agent/observability` 聚合 `formatFailureDiagnostics`，Header 运行统计展示失败分类、受影响 workflow/stage/provider、contract retry 次数和行动建议。
 - `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段、`IDEA_BRAINSTORM` 四阶段、`PRD_REVIEW` 四阶段和 `STORY_BREAKDOWN` 四阶段已完成结构化产物数据迁移并纳入本地确定性 readiness 门禁；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
 
 ## 目标
@@ -46,7 +47,7 @@
 - 现有 raw JSON streaming 已比纯文本标签稳定，但模型仍要把完整 Markdown 文档、Mermaid 和表格塞进 JSON 字符串，容易出现字段缺失、Markdown 结构不完整、Mermaid 格式错误或输出截断。
 - DeepSeek V4 Flash 的 JSON mode 只能要求返回合法 JSON，不能保证字段完整、枚举合法、跨字段一致或业务 contract 合格。
 - 失败时前端会看到“结构化输出生成失败”，即使 backend 已经做了校验与一次纠错重试，根因仍是模型承担了过多最终交付格式责任。
-- 2026-06-23 更新：本地失败诊断已能区分 JSON 语法、`artifact_data` schema、renderer 配置和 artifact contract；用户可见错误文案与运行统计 drilldown 仍可在后续 E09 产品化中继续接入。
+- 2026-06-23 更新：本地失败诊断已能区分 JSON 语法、`artifact_data` schema、renderer 配置和 artifact contract，并已接入运行统计 drilldown 与行动建议；真实 DeepSeek smoke 仍因凭证、网络和额度保留为外部可选验证。
 
 ## 改造方向
 
@@ -122,7 +123,7 @@ renderer 职责:
 当前状态:
 
 - 已完成 runtime 失败分类和 retry prompt 诊断上下文。
-- 尚未把分类持久化到 turn metrics 或前端统计 drilldown；该部分归入后续运行统计产品化 E09。
+- 已完成分类持久化到 turn metrics、observability API drilldown 和 Header 运行统计行动建议；后续仅在需要真实 DeepSeek smoke、跨 run 质量趋势或 E08 质量评分时继续扩展。
 
 ### P1: 分阶段迁移
 

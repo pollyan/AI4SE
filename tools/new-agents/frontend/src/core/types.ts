@@ -443,10 +443,45 @@ export type ObservabilityTurn = {
     createdAt: string | null;
 };
 
+export type ObservabilityFormatFailureKind = {
+    kind: string;
+    label: string;
+    count: number;
+    retryCount: number;
+    action: string;
+};
+
+export type ObservabilityFormatFailureStage = {
+    workflowId: WorkflowType;
+    stageId: string;
+    count: number;
+    retryCount: number;
+    kinds: Record<string, number>;
+    topKind: string;
+    action: string;
+};
+
+export type ObservabilityFormatFailureProvider = {
+    provider: string;
+    count: number;
+    retryCount: number;
+    kinds: Record<string, number>;
+    topKind: string;
+    action: string;
+};
+
+export type ObservabilityFormatFailureDiagnostics = {
+    total: number;
+    byKind: ObservabilityFormatFailureKind[];
+    byStage: ObservabilityFormatFailureStage[];
+    byProvider: ObservabilityFormatFailureProvider[];
+};
+
 export type ObservabilitySummary = {
     totals: ObservabilityTotals;
     byStage: ObservabilityStageSummary[];
     byProvider: ObservabilityProviderSummary[];
+    formatFailureDiagnostics: ObservabilityFormatFailureDiagnostics;
     recentTurns: ObservabilityTurn[];
 };
 

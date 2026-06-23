@@ -1002,6 +1002,67 @@ export const Header: React.FC = () => {
                     </section>
                   )}
 
+                  {observabilitySummary.formatFailureDiagnostics.total > 0 && (
+                    <section className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h4 className="text-sm font-semibold text-red-100">格式化输出诊断</h4>
+                          <div className="mt-2 text-xl font-bold text-white">
+                            格式化失败 {observabilitySummary.formatFailureDiagnostics.total} 轮
+                          </div>
+                        </div>
+                        {observabilitySummary.formatFailureDiagnostics.byKind[0] && (
+                          <div className="rounded-lg border border-red-500/20 bg-[#111827] px-3 py-2 text-right">
+                            <div className="text-xs text-red-200">最高频类型</div>
+                            <div className="mt-1 text-sm font-semibold text-white">
+                              {observabilitySummary.formatFailureDiagnostics.byKind[0].label}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-400">
+                              重试 {observabilitySummary.formatFailureDiagnostics.byKind[0].retryCount} 次
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {observabilitySummary.formatFailureDiagnostics.byKind[0] && (
+                        <div className="mt-3 rounded-lg border border-red-500/20 bg-[#111827] p-3 text-xs leading-relaxed text-red-100">
+                          {observabilitySummary.formatFailureDiagnostics.byKind[0].action}
+                        </div>
+                      )}
+
+                      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                        {observabilitySummary.formatFailureDiagnostics.byStage[0] && (
+                          <div className="rounded-lg bg-[#111827] p-3">
+                            <div className="text-xs text-slate-500">受影响阶段</div>
+                            <div className="mt-1 text-sm font-semibold text-white">
+                              {observabilitySummary.formatFailureDiagnostics.byStage[0].workflowId} / {observabilitySummary.formatFailureDiagnostics.byStage[0].stageId}
+                            </div>
+                            <div className="mt-2 text-xs text-slate-400">
+                              {observabilitySummary.formatFailureDiagnostics.byStage[0].count} 轮 · 重试次数 {observabilitySummary.formatFailureDiagnostics.byStage[0].retryCount}
+                            </div>
+                            <div className="mt-2 text-xs leading-relaxed text-red-100">
+                              {observabilitySummary.formatFailureDiagnostics.byStage[0].action}
+                            </div>
+                          </div>
+                        )}
+                        {observabilitySummary.formatFailureDiagnostics.byProvider[0] && (
+                          <div className="rounded-lg bg-[#111827] p-3">
+                            <div className="text-xs text-slate-500">受影响供应商</div>
+                            <div className="mt-1 text-sm font-semibold text-white">
+                              {observabilitySummary.formatFailureDiagnostics.byProvider[0].provider}
+                            </div>
+                            <div className="mt-2 text-xs text-slate-400">
+                              {observabilitySummary.formatFailureDiagnostics.byProvider[0].count} 轮 · 重试次数 {observabilitySummary.formatFailureDiagnostics.byProvider[0].retryCount}
+                            </div>
+                            <div className="mt-2 text-xs leading-relaxed text-red-100">
+                              {observabilitySummary.formatFailureDiagnostics.byProvider[0].action}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  )}
+
                   <div className="grid gap-3 sm:grid-cols-5">
                     <div className="rounded-lg border border-[#1e293b] bg-[#0f1623] p-4">
                       <div className="text-xs text-slate-500">总轮次</div>

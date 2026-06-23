@@ -55,6 +55,7 @@ class FormattedOutputDiagnosticError(RuntimeError):
     stage_id: str | None
     message: str
     path: str | None = None
+    retry_count: int = 0
 
     def __str__(self) -> str:
         context = "/".join(part for part in (self.workflow_id, self.stage_id) if part)
@@ -166,6 +167,7 @@ def _formatted_output_diagnostic(
     workflow_id: str | None,
     current_stage_id: str | None,
     path: str | None = None,
+    retry_count: int = 0,
 ) -> FormattedOutputDiagnosticError:
     return FormattedOutputDiagnosticError(
         kind=kind,
@@ -173,6 +175,7 @@ def _formatted_output_diagnostic(
         stage_id=current_stage_id,
         message=str(error),
         path=path,
+        retry_count=max(0, retry_count),
     )
 
 
@@ -1196,6 +1199,7 @@ class PydanticAgentRuntime:
                     exc,
                     workflow_id=workflow_id,
                     current_stage_id=current_stage_id,
+                    retry_count=attempt_index,
                 )
                 if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:
                     raise diagnostic from exc
@@ -1213,6 +1217,7 @@ class PydanticAgentRuntime:
                     workflow_id=workflow_id,
                     current_stage_id=current_stage_id,
                     path=_validation_error_path(exc),
+                    retry_count=attempt_index,
                 )
                 if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:
                     raise diagnostic from exc
@@ -1229,6 +1234,7 @@ class PydanticAgentRuntime:
                     exc,
                     workflow_id=workflow_id,
                     current_stage_id=current_stage_id,
+                    retry_count=attempt_index,
                 )
                 if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:
                     raise diagnostic from exc
@@ -1257,6 +1263,7 @@ class PydanticAgentRuntime:
                         if isinstance(exc, ValidationError)
                         else None
                     ),
+                    retry_count=attempt_index,
                 )
                 if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:
                     raise diagnostic from exc

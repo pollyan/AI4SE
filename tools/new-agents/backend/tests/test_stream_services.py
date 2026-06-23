@@ -3,7 +3,11 @@ from unittest.mock import MagicMock, patch
 from openai import APIError, AuthenticationError, RateLimitError
 import httpx
 from agent_contracts import AgentTurnOutput, ContractValidationError
-from agent_runtime import AgentRuntimeModelError, AgentRuntimeSchemaError
+from agent_runtime import (
+    AgentRuntimeModelError,
+    AgentRuntimeSchemaError,
+    FormattedOutputDiagnosticError,
+)
 from request_schemas import AgentRunStreamRequest
 from sse_schemas import (
     AgentTurnDeltaEvent,
@@ -347,6 +351,48 @@ def test_stream_agent_run_events_records_schema_retry_count_from_runtime_error(
     assert metric["status"] == "error"
     assert metric["error_code"] == "SCHEMA_VALIDATION_FAILED"
     assert metric["contract_retry_count"] == 3
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_records_formatted_output_diagnostic_metric(
+    mock_build_runtime: MagicMock,
+) -> None:
+    runtime = MagicMock()
+    runtime.stream_turn.side_effect = FormattedOutputDiagnosticError(
+        kind="artifact_data_schema",
+        workflow_id="TEST_DESIGN",
+        stage_id="CLARIFY",
+        message="Field required",
+        path="artifact_data.risks.0.title",
+        retry_count=2,
+    )
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    events = list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.deepseek.com/v1",
+        model_name="deepseek-v4-flash",
+        persistence=persistence,
+    ))
+
+    assert events == [
+        RunStartedEvent(run_id="run-123"),
+        ErrorEvent(
+            code="FORMATTED_OUTPUT_ARTIFACT_DATA_SCHEMA",
+            message=(
+                "artifact_data_schema: TEST_DESIGN/CLARIFY: "
+                "artifact_data.risks.0.title: Field required"
+            ),
+        ),
+    ]
+    metric = persistence.calls[-1][1]
+    assert persistence.calls[-1][0] == "record_turn_metric"
+    assert metric["provider"] == "deepseek"
+    assert metric["status"] == "error"
+    assert metric["error_code"] == "FORMATTED_OUTPUT_ARTIFACT_DATA_SCHEMA"
+    assert metric["contract_retry_count"] == 2
 
 
 @patch("stream_services.build_pydantic_agent_runtime")

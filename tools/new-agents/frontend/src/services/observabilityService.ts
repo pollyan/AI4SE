@@ -1,4 +1,8 @@
 import type {
+    ObservabilityFormatFailureDiagnostics,
+    ObservabilityFormatFailureKind,
+    ObservabilityFormatFailureProvider,
+    ObservabilityFormatFailureStage,
     ObservabilityProviderSummary,
     ObservabilityStageSummary,
     ObservabilitySummary,
@@ -95,6 +99,69 @@ const parseProviderSummary = (value: unknown): ObservabilityProviderSummary => {
     };
 };
 
+const parseFormatFailureKind = (value: unknown): ObservabilityFormatFailureKind => {
+    if (!isRecord(value)) {
+        throw new Error(INVALID_OBSERVABILITY_ERROR);
+    }
+
+    return {
+        kind: parseString(value.kind),
+        label: parseString(value.label),
+        count: parseInteger(value.count),
+        retryCount: parseInteger(value.retryCount),
+        action: parseString(value.action),
+    };
+};
+
+const parseFormatFailureStage = (value: unknown): ObservabilityFormatFailureStage => {
+    if (!isRecord(value)) {
+        throw new Error(INVALID_OBSERVABILITY_ERROR);
+    }
+
+    return {
+        workflowId: parseWorkflowType(value.workflowId),
+        stageId: parseString(value.stageId),
+        count: parseInteger(value.count),
+        retryCount: parseInteger(value.retryCount),
+        kinds: parseErrorCodes(value.kinds),
+        topKind: parseString(value.topKind),
+        action: parseString(value.action),
+    };
+};
+
+const parseFormatFailureProvider = (value: unknown): ObservabilityFormatFailureProvider => {
+    if (!isRecord(value)) {
+        throw new Error(INVALID_OBSERVABILITY_ERROR);
+    }
+
+    return {
+        provider: parseString(value.provider),
+        count: parseInteger(value.count),
+        retryCount: parseInteger(value.retryCount),
+        kinds: parseErrorCodes(value.kinds),
+        topKind: parseString(value.topKind),
+        action: parseString(value.action),
+    };
+};
+
+const parseFormatFailureDiagnostics = (value: unknown): ObservabilityFormatFailureDiagnostics => {
+    if (
+        !isRecord(value)
+        || !Array.isArray(value.byKind)
+        || !Array.isArray(value.byStage)
+        || !Array.isArray(value.byProvider)
+    ) {
+        throw new Error(INVALID_OBSERVABILITY_ERROR);
+    }
+
+    return {
+        total: parseInteger(value.total),
+        byKind: value.byKind.map(parseFormatFailureKind),
+        byStage: value.byStage.map(parseFormatFailureStage),
+        byProvider: value.byProvider.map(parseFormatFailureProvider),
+    };
+};
+
 const parseTurn = (value: unknown): ObservabilityTurn => {
     if (!isRecord(value)) {
         throw new Error(INVALID_OBSERVABILITY_ERROR);
@@ -132,6 +199,9 @@ const parseSummary = (payload: unknown): ObservabilitySummary => {
         totals: parseTotals(payload.totals),
         byStage: payload.byStage.map(parseStageSummary),
         byProvider: payload.byProvider.map(parseProviderSummary),
+        formatFailureDiagnostics: parseFormatFailureDiagnostics(
+            payload.formatFailureDiagnostics
+        ),
         recentTurns: payload.recentTurns.map(parseTurn),
     };
 };
