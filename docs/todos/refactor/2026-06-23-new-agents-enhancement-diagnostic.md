@@ -68,7 +68,7 @@
 | E02 | 阶段缺失信息清单 | 深化现有功能 | 专业内容 | S | P0 | 已消化：共享 artifact quality summary 派生缺失信息项，chat 和 artifact 审阅区都能标明缺失项、阻断性和用户下一步 |
 | E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | P0 | 已消化：共享 ArtifactPane 审阅面板展示 headings、visual、stage gate、专业字段和现有 visual diagnostic 的通过/失败/警告；2026-06-24 已合流到 workflow 质量治理基线 |
 | E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 已消化：测试资产集合输出统一 `qualitySummary`，资产中心和 Header 展示质量状态/gate，issue、测试点覆盖、风险生命周期动作会推动质量状态变化 |
-| E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
+| E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 已消化为 Artifact 定向修订闭环：用户可从章节侧栏指定未锁定章节重生成，复用共享 typed SSE runtime，客户端只合并目标章节，保留锁定章节和非目标章节，并写入 artifact/stage/history |
 | E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 已消化：支持继续、复制为新 run、按 workflow/复用状态筛选、预览当前 artifact |
 | E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | 已消化：handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入，并用同一增强 prompt 创建目标 run |
 | E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 | 已消化：当前 stage 有质量分、证据明细和待处理项 |
@@ -86,6 +86,7 @@
 - 2026-06-23: 已完成 Lisa 测试资产质量闭环厚切片，消化 E04。后端 `TestAssetCollection` 增加由持久化 issue 状态、测试点覆盖和风险生命周期计算的 `qualitySummary`；前端 service 严格解析该 contract；资产中心和 Header 快捷面板展示统一质量状态与 gate；确认/忽略 issue、保存测试点、保存风险会推动质量状态变化。该切片复用现有测试资产 API、持久化模型和共享 UI，不新增 Lisa 专属 runtime、API path、store 或 renderer。
 - 2026-06-24: 已完成 Run 历史复用中心厚切片，消化 E06。后端 run list 返回并过滤 `reuseStatus=ready|needs_artifact|failed`，新增共享 `POST /api/agent/runs/<run_id>/clone` 复制源 run 的 messages、当前 artifacts 和 context summaries 为独立 active run；前端 service 严格解析复用状态并提供 clone API；Header 历史会话升级为可筛选、可预览当前 artifact、可继续原 run、可复制为新 run 的复用中心，并展示预览/复制失败反馈。该切片复用现有 run persistence、snapshot restore、共享 Header UI 和 workflow registry，不新增 agent 专属 runtime、API path、store 或 renderer。
 - 2026-06-24: 已完成 Workflow handoff 上下文审阅闭环厚切片，消化 E07。后端 `workflow_handoffs.py` 从 source artifact 生成 `sourceSummary`、`unconfirmedItems` 和 `targetInputChecklist`，增强 prompt 并持久化为目标 run 第一条 user message；前端 service 严格解析该 contract，ChatPane 在跨智能体接力卡片展示来源版本、摘要、未确认项和目标输入检查项，store 继续复用共享 handoff 应用路径。验证命令包括后端 handoff/API pytest、前端 handoff service/ChatPane/store Vitest、前端 lint 和 `git diff --check`。
+- 2026-06-24: 已完成 Artifact 定向修订闭环厚切片，消化 E05。ArtifactPane 章节侧栏增加未锁定章节重生成动作；`useChatService` 新增 `handleRegenerateArtifactSection()`，通过现有共享 `generateResponseStream` / `/api/agent/runs/stream` typed SSE 发起定向修订 prompt；前端共享 `artifactSections` helper 负责 H1-H3 章节 anchor、锁定匹配、锁定保护和目标章节合并。模型仍返回完整 artifact，但客户端只接收目标章节内容，非目标章节保持原样，锁定章节按锁快照恢复，成功后写入 `artifactContent`、`stageArtifacts` 和 `artifactHistory`。该切片不新增后端 runtime、API path、store 或 renderer。
 
 ### 2026-06-24: E03/E08 Artifact/Workflow 质量治理闭环
 
@@ -128,7 +129,7 @@
 
 目标: 1-2 周内明显提升专业感和产出可信度。
 
-包含: 当前快速专业化路线中的 E01、E02、E03/E08、E04、E13、E14 均已消化；后续只在发现回归、需要扩展 source/target 组合，或接入跨 run 趋势/LLM judge 时恢复为维护项。
+包含: E01/E02/E03/E04/E05/E07/E08 规则型治理闭环/E13/E14 均已在 2026-06-23 目标模式切片中消化。快速专业化路线剩余工作转入 E08 跨 run 趋势/LLM judge、平台 dry-run/scaffold 和 DeepSeek 真实 smoke 等 P1/P2 能力包；运行统计产品化当前 DeepSeek/格式化失败诊断闭环已消化。
 
 暂不做:
 
@@ -146,7 +147,7 @@
 
 目标: 让用户从开始、生成、审阅、修订、恢复、复用形成闭环。
 
-包含: E05。E03/E08 已在 2026-06-24 Artifact/Workflow 质量治理闭环中合流消化，E06 已在 Run 历史复用中心增强中消化，E07 已在 Workflow handoff 上下文审阅闭环中消化。
+包含: E03、E05、E06、E07、E08；其中 E03、E05、E06、E07、E08 规则型治理闭环已消化，后续功能闭环路线只保留 E08 跨 run 质量趋势、跨 run 对比或收藏等新厚切片候选。
 
 暂不做:
 

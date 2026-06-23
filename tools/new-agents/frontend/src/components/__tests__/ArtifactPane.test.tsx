@@ -4,6 +4,8 @@ import { ArtifactPane } from '../ArtifactPane';
 import { useStore } from '../../store';
 import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../../services/runSnapshotService';
 
+const mockHandleRegenerateArtifactSection = vi.hoisted(() => vi.fn());
+
 vi.mock('../../services/runSnapshotService', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../services/runSnapshotService')>();
     return {
@@ -12,6 +14,12 @@ vi.mock('../../services/runSnapshotService', async (importOriginal) => {
         updateRunArtifactCollaboration: vi.fn(),
     };
 });
+
+vi.mock('../../services/chatService', () => ({
+    useChatService: () => ({
+        handleRegenerateArtifactSection: mockHandleRegenerateArtifactSection,
+    }),
+}));
 
 // Mock Mermaid component
 vi.mock('../Mermaid', () => ({
@@ -36,7 +44,7 @@ vi.mock('../../services/mermaidRetryService', () => ({
 
 // Mock lucide-react
 vi.mock('lucide-react', () => {
-    const icons = ['Download', 'Code', 'Eye', 'History', 'X', 'AlertTriangle', 'GitCompare', 'Edit3', 'Save', 'MessageSquare', 'Trash2', 'Lock', 'Unlock', 'MoreHorizontal'];
+    const icons = ['Download', 'Code', 'Eye', 'History', 'X', 'AlertTriangle', 'GitCompare', 'Edit3', 'Save', 'MessageSquare', 'Trash2', 'Lock', 'Unlock', 'MoreHorizontal', 'RefreshCw'];
     const mod: Record<string, React.FC> = {};
     icons.forEach(name => {
         mod[name] = () => <span>{name}</span>;
@@ -61,6 +69,7 @@ describe('ArtifactPane Component', () => {
 
     beforeEach(() => {
         vi.restoreAllMocks();
+        mockHandleRegenerateArtifactSection.mockReset();
         useStore.setState({
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
@@ -7287,5 +7296,87 @@ describe('ArtifactPane Component', () => {
 
         expect(screen.getByText('保存失败：锁定章节“验收口径 #2”已被修改，请先解锁后再保存。')).toBeTruthy();
         expect(useStore.getState().artifactContent).toContain('第二个验收口径已经确认。');
+    });
+
+    it('regenerates an unlocked artifact section from the section lock panel', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: [
+                '# 需求分析文档',
+                '',
+                '## 目标章节',
+                '',
+                '旧目标内容',
+                '',
+                '## 锁定章节',
+                '',
+                '确认内容',
+            ].join('\n'),
+            stageArtifacts: {
+                CLARIFY: [
+                    '# 需求分析文档',
+                    '',
+                    '## 目标章节',
+                    '',
+                    '旧目标内容',
+                    '',
+                    '## 锁定章节',
+                    '',
+                    '确认内容',
+                ].join('\n'),
+            },
+            artifactSectionLocks: [{
+                id: 'lock-confirmed',
+                stageId: 'CLARIFY',
+                heading: '## 锁定章节',
+                sectionAnchor: 'h2:锁定章节:1',
+                content: '## 锁定章节\n\n确认内容',
+                createdAt: 1,
+            }],
+            artifactHistory: [],
+            isGenerating: false,
+        });
+
+        render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('章节锁定');
+        fireEvent.click(screen.getByRole('button', { name: '重生成章节 目标章节' }));
+
+        expect(mockHandleRegenerateArtifactSection).toHaveBeenCalledWith({
+            heading: '## 目标章节',
+            sectionAnchor: 'h2:目标章节:1',
+            displayTitle: '目标章节',
+        });
+        const lockedRegenerateButton = screen.getByRole('button', { name: '重生成章节 锁定章节' }) as HTMLButtonElement;
+        expect(lockedRegenerateButton.disabled).toBe(true);
+        expect(lockedRegenerateButton.getAttribute('title')).toBe('章节已锁定，请先解锁后再重生成');
+    });
+
+    it('disables artifact section regeneration while generation is already running', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: [
+                '# 需求分析文档',
+                '',
+                '## 目标章节',
+                '',
+                '旧目标内容',
+            ].join('\n'),
+            stageArtifacts: {
+                CLARIFY: '# 需求分析文档\n\n## 目标章节\n\n旧目标内容',
+            },
+            artifactSectionLocks: [],
+            artifactHistory: [],
+            isGenerating: true,
+        });
+
+        render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('章节锁定');
+        const regenerateButton = screen.getByRole('button', { name: '重生成章节 目标章节' });
+
+        expect((regenerateButton as HTMLButtonElement).disabled).toBe(true);
+        fireEvent.click(regenerateButton);
+        expect(mockHandleRegenerateArtifactSection).not.toHaveBeenCalled();
     });
 });
