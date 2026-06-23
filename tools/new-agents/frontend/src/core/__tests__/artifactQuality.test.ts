@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildArtifactQualityDiagnostics } from '../artifactQuality';
+import {
+    buildArtifactQualityDiagnostics,
+    buildMissingInfoChecklist,
+} from '../artifactQuality';
 
 describe('buildArtifactQualityDiagnostics', () => {
     it('marks a complete TEST_DESIGN CLARIFY artifact as passed', () => {
@@ -82,5 +85,50 @@ describe('buildArtifactQualityDiagnostics', () => {
             artifactContent: '   ',
             visualDiagnostics: [],
         })).toBeNull();
+    });
+});
+
+describe('buildMissingInfoChecklist', () => {
+    it('extracts blocking missing information from a markdown table section', () => {
+        const result = buildMissingInfoChecklist([
+            '# 需求分析',
+            '',
+            '## 待澄清问题',
+            '',
+            '| ID | 问题 | 阻断性 | 责任方 | 状态 | 下一步 |',
+            '| --- | --- | --- | --- | --- | --- |',
+            '| Q-001 | 登录失败重试次数未确认 | 阻断 | PM | 待确认 | 补充重试规则 |',
+            '| Q-002 | 密码策略文案待确认 | 非阻断 | UX | 跟进中 | 更新提示文案 |',
+        ].join('\n'));
+
+        expect(result?.summary.total).toBe(2);
+        expect(result?.summary.blocking).toBe(1);
+        expect(result?.items[0]).toEqual(expect.objectContaining({
+            id: 'missing-info-1',
+            question: '登录失败重试次数未确认',
+            blocking: true,
+            owner: 'PM',
+            status: '待确认',
+            nextStep: '补充重试规则',
+        }));
+    });
+
+    it('extracts missing information from a list section', () => {
+        const result = buildMissingInfoChecklist([
+            '# 测试策略',
+            '',
+            '## 缺失信息',
+            '',
+            '- [阻断] 需要确认支付回调超时窗口；责任方：架构师；状态：待确认；下一步：补充超时 SLA。',
+        ].join('\n'));
+
+        expect(result?.summary.total).toBe(1);
+        expect(result?.summary.blocking).toBe(1);
+        expect(result?.items[0].question).toBe('需要确认支付回调超时窗口');
+        expect(result?.items[0].nextStep).toBe('补充超时 SLA');
+    });
+
+    it('returns null when the artifact has no missing information section', () => {
+        expect(buildMissingInfoChecklist('# 需求分析\n\n## 阶段门禁\n\n已满足。')).toBeNull();
     });
 });

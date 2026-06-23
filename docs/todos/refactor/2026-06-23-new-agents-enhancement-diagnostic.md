@@ -65,7 +65,7 @@
 | ID | 增强点 | 类型 | 类别 | 复杂度 | 优先级 | 验收标准 |
 | --- | --- | --- | --- | --- | --- | --- |
 | E01 | Workflow 入口 preview | 改造现有功能 | 体验 | S | P0 | 已消化：每个在线 workflow 展示适用/不适用、输入要求、预期产物和样例输入 |
-| E02 | 阶段缺失信息清单 | 深化现有功能 | 专业内容 | S | P0 | chat 和 artifact 都能标明缺失项、阻断性和用户下一步 |
+| E02 | 阶段缺失信息清单 | 已消化 | 专业内容 | S | P0 | 2026-06-23 已主线化：当前 artifact 中的待澄清/缺失/开放问题可由共享前端纯函数抽取为缺失信息清单，`ArtifactPane` 展示完整列表、阻断统计、责任方、状态和下一步，`ChatPane` 展示当前阶段轻量提醒；不新增 backend endpoint、runtime/SSE/persistence 或 agent 专属 renderer；验证覆盖 `artifactQuality.test.ts`、`ArtifactPane.test.tsx` 与 `ChatPane.test.tsx` |
 | E03 | Artifact 质量诊断面板 | 已消化 | 可信质量 | M | P0 | 2026-06-23 已主线化：`ArtifactPane` 展示当前 stage headings、visual、stage gate、专业字段和 runtime visual diagnostics 的通过/失败/警告；诊断由共享前端纯函数 `artifactQuality.ts` 派生，不新增 backend endpoint、runtime/SSE/persistence 或 agent 专属 renderer；验证覆盖 `artifactQuality.test.ts` 与 `ArtifactPane.test.tsx` |
 | E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 测试点、风险、用例 issue 可修复、确认、追踪并影响资产质量状态 |
 | E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
@@ -108,7 +108,7 @@
 
 目标: 1-2 周内明显提升专业感和产出可信度。
 
-包含: E02、E04。E01 已在 2026-06-23 workflow 入口 preview milestone 中消化，E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化。
+包含: E04。E01 已在 2026-06-23 workflow 入口 preview milestone 中消化，E02 已在 2026-06-23 阶段缺失信息清单 milestone 中消化，E03 已在 2026-06-23 Artifact 质量诊断面板 milestone 中消化。
 
 暂不做:
 
@@ -167,28 +167,36 @@
 - 不纳入: 自动修复全文、LLM judge 评分、backend diagnostic endpoint、runtime/SSE/persistence 变更。
 - 验证记录: `cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/artifactQuality.test.ts src/components/__tests__/ArtifactPane.test.tsx`；`cd tools/new-agents/frontend && npm run lint`；`git diff --check`。
 
-### 2. Workflow 入口专业 preview
+### 2. 阶段缺失信息清单（已消化）
+
+- 完成日期: 2026-06-23。
+- 涉及模块: `tools/new-agents/frontend/src/core/artifactQuality.ts`、`tools/new-agents/frontend/src/components/ArtifactPane.tsx`、`tools/new-agents/frontend/src/components/ChatPane.tsx`、相关 frontend tests。
+- 完成定义: 当前阶段 artifact 中的待澄清/缺失/开放问题能在 Artifact 侧形成完整清单，并在 Chat 侧形成轻量提醒，用户可看到缺失项、阻断性和下一步。
+- 不纳入: 自动追问生成、确认状态持久化、backend diagnostic endpoint、runtime/SSE/persistence 变更。
+- 验证记录: `cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/artifactQuality.test.ts src/components/__tests__/ArtifactPane.test.tsx src/components/__tests__/ChatPane.test.tsx`；`cd tools/new-agents/frontend && npm run lint`；`git diff --check`。
+
+### 3. Workflow 入口专业 preview
 
 - 涉及模块: `workflow_manifest.json`、`AgentSelect.tsx`、`WorkflowSelect.tsx`、`agentWorkflows.ts`、onboarding tests。
 - 需要同步: listing、onboarding、starter prompts、workflow slug tests。
 - 完成定义: 用户进入工作区前能判断 workflow 是否适合当前目标。
 - 不纳入: 自动 workflow 推荐排序。
 
-### 3. Lisa 测试资产质量闭环
+### 4. Lisa 测试资产质量闭环
 
 - 涉及模块: `test_assets.py`、`routes_test_assets.py`、`testAssetService.ts`、`Header.tsx`。
 - 需要同步: TEST_DESIGN/CASES artifact contract、资产 issue schema、前端资产 modal。
 - 完成定义: 测试点、风险、用例 issue 可处理并持久化质量状态。
 - 不纳入: 新增 intent-tester 联动或自动执行。
 
-### 4. 历史会话复用增强
+### 5. 历史会话复用增强
 
 - 涉及模块: `run_persistence.py`、`routes.py`、`runSnapshotService.ts`、`Header.tsx`。
 - 需要同步: run list response、snapshot restore、store reset/clone 行为。
 - 完成定义: 历史 run 可复制为新 run、继续、预览 artifact，并按 workflow/质量状态筛选。
 - 不纳入: 多用户分享权限。
 
-### 5. Handoff 上下文强化
+### 6. Handoff 上下文强化
 
 - 涉及模块: `workflow_manifest.json`、`workflow_handoffs.py`、Alex blueprint prompt/template、`ChatPane.tsx`。
 - 需要同步: handoff prompt template、target workflow/stage、context truncation policy。

@@ -24,8 +24,10 @@ import { buildDocxPackage } from '../core/docxExport';
 import { buildPlainTextPdf as buildArtifactPdf } from '../core/artifactExport';
 import {
   buildArtifactQualityDiagnostics,
+  buildMissingInfoChecklist,
   type ArtifactQualityDiagnostics,
   type ArtifactQualityStatus,
+  type MissingInfoChecklist,
 } from '../core/artifactQuality';
 
 export const ArtifactPane: React.FC = () => {
@@ -344,6 +346,10 @@ export const ArtifactPane: React.FC = () => {
       })
       : null,
     [artifactContent, artifactVisualDiagnostics, currentStageId, workflow]
+  );
+  const missingInfoChecklist = useMemo(
+    () => buildMissingInfoChecklist(artifactContent),
+    [artifactContent]
   );
   type ParsedMarkdownSection = {
     heading: string;
@@ -4018,6 +4024,51 @@ export const ArtifactPane: React.FC = () => {
     </section>
   );
 
+  const renderMissingInfoChecklist = (checklist: MissingInfoChecklist) => (
+    <section className="mb-6 rounded-lg border border-amber-400/30 bg-amber-500/10 p-4 text-amber-100">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-white">阶段缺失信息清单</h3>
+          <p className="mt-1 text-xs text-amber-100/75">
+            当前阶段仍有待澄清或待补充信息，请优先处理阻断项。
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs font-bold">
+          <span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-2.5 py-1">
+            {checklist.summary.total} 项待补充
+          </span>
+          <span className="rounded-full border border-rose-300/25 bg-rose-300/10 px-2.5 py-1 text-rose-100">
+            {checklist.summary.blocking} 项阻断
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        {checklist.items.map((item) => (
+          <div key={item.id} className="rounded-md border border-white/10 bg-[#020617]/60 px-3 py-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-amber-50">{item.question}</div>
+                <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-amber-100/75">
+                  {item.owner && <span>责任方：{item.owner}</span>}
+                  {item.status && <span>状态：{item.status}</span>}
+                  {item.nextStep && <span>下一步：<span>{item.nextStep}</span></span>}
+                </div>
+              </div>
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                item.blocking
+                  ? 'border-rose-300/30 bg-rose-300/10 text-rose-100'
+                  : 'border-amber-300/25 bg-amber-300/10 text-amber-100'
+              }`}>
+                {item.blocking ? '阻断' : '待补充'}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+
   return (
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#0B0F17] text-gray-300 relative shadow-2xl bg-grid-pattern lg:w-[60%]">
       <style>{`
@@ -4414,6 +4465,7 @@ export const ArtifactPane: React.FC = () => {
             </div>
           ) : viewMode === 'preview' ? (
             <>
+              {missingInfoChecklist && renderMissingInfoChecklist(missingInfoChecklist)}
               {artifactQualityDiagnostics && renderArtifactQualityDiagnostics(artifactQualityDiagnostics)}
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}

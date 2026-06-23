@@ -347,6 +347,42 @@ describe('ChatPane Component', () => {
         expect(screen.queryByText('策略阶段可视化错误。')).toBeNull();
     });
 
+    it('shows a lightweight missing information notice for the current artifact', () => {
+        useStore.setState({
+            chatHistory: [
+                { id: '1', role: 'assistant', content: '右侧产物已更新。', timestamp: Date.now() },
+            ],
+            artifactContent: [
+                '# 需求分析',
+                '',
+                '## 待澄清问题',
+                '',
+                '| ID | 问题 | 阻断性 | 下一步 |',
+                '| --- | --- | --- | --- |',
+                '| Q-001 | 登录失败重试次数未确认 | 阻断 | 补充重试规则 |',
+            ].join('\n'),
+        });
+
+        render(<ChatPane />);
+
+        expect(screen.getByText('当前阶段还有缺失信息')).toBeDefined();
+        expect(screen.getByText('1 项待补充，1 项阻断')).toBeDefined();
+        expect(screen.getByText('下一步：补充重试规则')).toBeDefined();
+    });
+
+    it('does not show a missing information notice for ordinary artifacts', () => {
+        useStore.setState({
+            chatHistory: [
+                { id: '1', role: 'assistant', content: '右侧产物已更新。', timestamp: Date.now() },
+            ],
+            artifactContent: '# 需求分析\n\n## 阶段门禁\n\n已满足。',
+        });
+
+        render(<ChatPane />);
+
+        expect(screen.queryByText('当前阶段还有缺失信息')).toBeNull();
+    });
+
     it('shows a provider failure recovery card with a retry action', () => {
         const mockHandleRetry = vi.fn();
         const mockHandleRetryCurrentStageGeneration = vi.fn();

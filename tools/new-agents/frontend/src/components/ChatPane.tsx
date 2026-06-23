@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, WORKFLOWS } from '../store';
 import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw, Copy, Check, ChevronRight, ArrowRight, AlertTriangle, Settings } from 'lucide-react';
@@ -12,6 +12,7 @@ import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/ma
 import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
 import { fetchWorkflowHandoffs, startWorkflowHandoff } from '../services/workflowHandoffService';
 import type { Attachment, WorkflowHandoff } from '../store';
+import { buildMissingInfoChecklist } from '../core/artifactQuality';
 
 const asRenderableAttachments = (attachments: unknown): Attachment[] => {
   if (!Array.isArray(attachments)) return [];
@@ -60,6 +61,7 @@ export const ChatPane: React.FC = () => {
   const stageIndex = useStore((state) => state.stageIndex);
   const currentRunId = useStore((state) => state.currentRunId);
   const pendingStageTransition = useStore((state) => state.pendingStageTransition);
+  const artifactContent = useStore((state) => state.artifactContent);
   const artifactVisualDiagnostics = useStore((state) => state.artifactVisualDiagnostics);
   const clearPendingStageTransition = useStore((state) => state.clearPendingStageTransition);
   const applyWorkflowHandoff = useStore((state) => state.applyWorkflowHandoff);
@@ -97,6 +99,11 @@ export const ChatPane: React.FC = () => {
   const currentArtifactVisualDiagnostic = currentStageId
     ? [...artifactVisualDiagnostics].reverse().find((diagnostic) => diagnostic.stageId === currentStageId)
     : null;
+  const missingInfoChecklist = useMemo(
+    () => buildMissingInfoChecklist(artifactContent),
+    [artifactContent]
+  );
+  const firstMissingInfoNextStep = missingInfoChecklist?.items.find(item => item.nextStep)?.nextStep;
 
   const updateMessage = useStore((state) => state.updateMessage);
 
@@ -338,6 +345,25 @@ export const ChatPane: React.FC = () => {
                   <span>查看问题位置</span>
                   <ArrowRight className="h-3 w-3" />
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {missingInfoChecklist && (
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-100 shadow-sm">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+              <div className="min-w-0">
+                <div className="text-xs font-semibold">当前阶段还有缺失信息</div>
+                <p className="mt-1 text-[11px] leading-relaxed text-amber-100/80">
+                  {missingInfoChecklist.summary.total} 项待补充，{missingInfoChecklist.summary.blocking} 项阻断
+                </p>
+                {firstMissingInfoNextStep && (
+                  <p className="mt-1 text-[11px] leading-relaxed text-amber-100/70">
+                    下一步：{firstMissingInfoNextStep}
+                  </p>
+                )}
               </div>
             </div>
           </div>

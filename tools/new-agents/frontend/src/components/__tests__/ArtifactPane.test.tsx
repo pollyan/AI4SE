@@ -494,6 +494,32 @@ describe('ArtifactPane Component', () => {
         expect(screen.getByText('JSON 缺少 title 字段。')).toBeTruthy();
     });
 
+    it('shows a missing information checklist for the current artifact', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: [
+                '# 需求分析',
+                '',
+                '## 核心业务规则',
+                '',
+                '## 待澄清问题',
+                '',
+                '| ID | 问题 | 阻断性 | 责任方 | 状态 | 下一步 |',
+                '| --- | --- | --- | --- | --- | --- |',
+                '| Q-001 | 登录失败重试次数未确认 | 阻断 | PM | 待确认 | 补充重试规则 |',
+                '| Q-002 | 密码策略文案待确认 | 非阻断 | UX | 跟进中 | 更新提示文案 |',
+            ].join('\n'),
+        });
+
+        render(<ArtifactPane />);
+
+        expect(screen.getByText('阶段缺失信息清单')).toBeTruthy();
+        expect(screen.getByText('1 项阻断')).toBeTruthy();
+        expect(screen.getAllByText('登录失败重试次数未确认').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('补充重试规则').length).toBeGreaterThan(0);
+    });
+
     it('does not show artifact quality diagnostics for an empty artifact', () => {
         useStore.setState({
             workflow: 'TEST_DESIGN',
@@ -504,6 +530,18 @@ describe('ArtifactPane Component', () => {
         render(<ArtifactPane />);
 
         expect(screen.queryByText('产物质量诊断')).toBeNull();
+    });
+
+    it('does not show a missing information checklist when the artifact has no missing information', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 需求分析\n\n## 阶段门禁\n\n已满足。',
+        });
+
+        render(<ArtifactPane />);
+
+        expect(screen.queryByText('阶段缺失信息清单')).toBeNull();
     });
 
     it('scrolls and highlights a focused Mermaid visual diagnostic in the current preview', async () => {
