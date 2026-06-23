@@ -56,7 +56,7 @@
 | Artifact 闭环 | 有版本、diff、批注、章节锁、导出、冲突合并 | 缺统一 artifact quality / contract / stage gate 诊断面板 | P0 |
 | Workflow 入口 | 有 listing、onboarding、starter prompts；2026-06-23 已补在线 workflow 入口 preview | 仍缺自动推荐排序和更深的选择决策引导 | P1 |
 | Run 复用 | 有历史列表、搜索、runId snapshot 恢复 | 缺收藏、复制为新 run、质量状态筛选、跨 run 对比 | P1 |
-| Workflow handoff | 有配置化 handoff 基础 | handoff 上下文摘要、版本解释、未确认项携带不足 | P1 |
+| Workflow handoff | 有配置化 handoff 基础，2026-06-24 已补来源版本、关键摘要、未确认项和目标输入检查项 | 后续缺口转为更多 source/target 组合和质量评分联动 | P1 |
 | 可观测性 | 有 success rate、provider、stage、recent turns | 缺面向用户的质量趋势、contract retry drilldown、失败原因行动建议 | P1 |
 | 平台扩展 | manifest 已承载核心配置 | 缺 schema 校验、dry-run、scaffold、prompt/template 版本管理 | P2 |
 
@@ -70,7 +70,7 @@
 | E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 已消化：测试资产集合输出统一 `qualitySummary`，资产中心和 Header 展示质量状态/gate，issue、测试点覆盖、风险生命周期动作会推动质量状态变化 |
 | E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
 | E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 支持继续、复制为新 run、按 workflow/质量筛选、预览当前 artifact |
-| E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入 |
+| E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | 已消化：handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入，并用同一增强 prompt 创建目标 run |
 | E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 | 每个 stage 有质量分、证据明细和待处理项 |
 | E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 显示 workflow/stage/provider 趋势、contract retry 原因和行动建议 |
 | E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | FMEA、JTBD、RICE、Kano、CAPA 等可由配置注入 prompt/template |
@@ -83,6 +83,7 @@
 
 - 2026-06-23: 已完成 Artifact 审阅诊断中心厚切片，合并消化 E02 当前 artifact 审阅侧缺失信息清单和 E03 Artifact 质量诊断面板。新增前端共享诊断核心，从 `workflow_manifest.json` 读取当前阶段 artifact/visual contract，结合当前 Markdown 与现有 runtime visual diagnostics，在右侧产物审阅面板展示 required headings、Mermaid、structured visual、stage gate、运行时可视化警告、待澄清/开放/未确认/阻断信息和下一步。该切片不新增 agent 专属 runtime、API path、store 或 renderer pipeline；不纳入自动修复、LLM judge、跨 run 趋势或 Lisa 测试资产闭环。
 - 2026-06-23: 已完成 Lisa 测试资产质量闭环厚切片，消化 E04。后端 `TestAssetCollection` 增加由持久化 issue 状态、测试点覆盖和风险生命周期计算的 `qualitySummary`；前端 service 严格解析该 contract；资产中心和 Header 快捷面板展示统一质量状态与 gate；确认/忽略 issue、保存测试点、保存风险会推动质量状态变化。该切片复用现有测试资产 API、持久化模型和共享 UI，不新增 Lisa 专属 runtime、API path、store 或 renderer。
+- 2026-06-24: 已完成 Workflow handoff 上下文审阅闭环厚切片，消化 E07。后端 `workflow_handoffs.py` 从 source artifact 生成 `sourceSummary`、`unconfirmedItems` 和 `targetInputChecklist`，增强 prompt 并持久化为目标 run 第一条 user message；前端 service 严格解析该 contract，ChatPane 在跨智能体接力卡片展示来源版本、摘要、未确认项和目标输入检查项，store 继续复用共享 handoff 应用路径。验证命令包括后端 handoff/API pytest、前端 handoff service/ChatPane/store Vitest、前端 lint 和 `git diff --check`。
 
 ## Lisa 专业化方向
 
@@ -107,7 +108,7 @@
 
 1. `STORY_BREAKDOWN`: 用户故事拆解 workflow，从需求蓝图或 PRD 输出 Epic、Story、AC、依赖和 Sprint 切片。
 2. `PRD_REVIEW`: PRD 质量评审与补全 workflow，从产品经理视角输出缺口清单、补全建议、质量门禁和修订版 PRD 大纲。
-3. VALUE_DISCOVERY/BLUEPRINT 质量门禁和 handoff 输入强化。
+3. VALUE_DISCOVERY/BLUEPRINT 质量门禁；handoff 输入强化已在 2026-06-24 本轮消化，后续只扩展到更多 source/target 组合或质量评分联动。
 4. IDEA_BRAINSTORM/CONVERGE 评分口径和验证实验闭环。
 
 ## 推荐路线
@@ -134,7 +135,7 @@
 
 目标: 让用户从开始、生成、审阅、修订、恢复、复用形成闭环。
 
-包含: E03、E05、E06、E07、E08。
+包含: E05、E06、E08。E03 已在 2026-06-23 Artifact 审阅诊断中心 milestone 中消化，E07 已在 2026-06-24 Workflow handoff 上下文审阅闭环 milestone 中消化。
 
 暂不做:
 
@@ -200,10 +201,12 @@
 
 ### 5. Handoff 上下文强化
 
+- 状态: 已在 2026-06-24 目标模式切片中消化。
 - 涉及模块: `workflow_manifest.json`、`workflow_handoffs.py`、Alex blueprint prompt/template、`ChatPane.tsx`。
 - 需要同步: handoff prompt template、target workflow/stage、context truncation policy。
-- 完成定义: handoff 明确来源版本、关键需求、验收标准、风险、未确认项和目标用途。
+- 完成定义: handoff 明确来源版本、关键摘要、未确认项、目标输入检查项和目标用途，并用同一增强 prompt 启动目标 run。
 - 不纳入: 新 runtime 分支。
+- 后续不再作为活跃候选重复选择；只在需要新增更多 workflow source/target 组合、接入质量评分或发现 handoff contract 回归时作为维护项处理。
 
 ## 架构约束
 

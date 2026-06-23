@@ -152,10 +152,38 @@ def test_export_run_handoffs_returns_configured_lisa_targets(app):
     first = result["handoffs"][0]
     assert first["sourceStageId"] == "BLUEPRINT"
     assert first["sourceArtifactVersion"] == 1
+    assert first["sourceSummary"].startswith("AI 测试资产管理平台需求蓝图")
+    assert first["unconfirmedItems"] == []
+    assert first["targetInputChecklist"] == [
+        "复核来源版本 VALUE_DISCOVERY/BLUEPRINT v1",
+        "确认目标阶段 TEST_DESIGN/CLARIFY 所需的需求、验收标准和约束均已覆盖",
+        "确认没有遗留未确认项后进入目标产物生成",
+    ]
     assert "VALUE_DISCOVERY/BLUEPRINT" in first["prompt"]
     assert "TEST_DESIGN/CLARIFY" in first["prompt"]
+    assert "来源版本: VALUE_DISCOVERY/BLUEPRINT v1" in first["prompt"]
+    assert "关键摘要:" in first["prompt"]
+    assert "未确认项:" in first["prompt"]
+    assert "目标工作流输入:" in first["prompt"]
     assert "AI 测试资产管理平台" in first["prompt"]
     assert "Alex 产出的需求蓝图" not in first["prompt"]
+
+
+def test_export_run_handoffs_extracts_unconfirmed_items_for_review(app):
+    markdown = BLUEPRINT_MARKDOWN.replace(
+        "| 需求 | F-001 | 自动生成测试策略和用例 | P0 需求 | 需求评审 / 测试设计 | 已确认 |",
+        "| 需求 | F-001 | 自动生成测试策略和用例 | P0 需求 | 需求评审 / 测试设计 | 待确认 |",
+    )
+    with app.app_context():
+        run = create_agent_run("VALUE_DISCOVERY", "alex", "BLUEPRINT")
+        record_artifact_version(run.id, "BLUEPRINT", markdown)
+
+        result = export_run_handoffs(run.id)
+
+    first = result["handoffs"][0]
+    assert first["unconfirmedItems"] == ["需求 F-001: 自动生成测试策略和用例"]
+    assert "处理 1 个未确认项后再进入目标产物生成" in first["targetInputChecklist"]
+    assert "- 需求 F-001: 自动生成测试策略和用例" in first["prompt"]
 
 
 def test_export_run_handoffs_returns_empty_without_required_artifact(app):

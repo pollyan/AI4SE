@@ -759,6 +759,9 @@ describe('ChatPane Component', () => {
                 sourceWorkflowId: 'VALUE_DISCOVERY',
                 sourceStageId: 'BLUEPRINT',
                 sourceArtifactVersion: 2,
+                sourceSummary: 'AI 测试资产管理平台需求蓝图: AI 测试资产管理平台。',
+                unconfirmedItems: ['需求 F-001: 自动生成测试策略和用例'],
+                targetInputChecklist: ['复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2'],
                 targetWorkflowId: 'TEST_DESIGN',
                 targetStageId: 'CLARIFY',
                 targetAgentId: 'lisa',
@@ -770,6 +773,10 @@ describe('ChatPane Component', () => {
 
         expect(fetchWorkflowHandoffs).toHaveBeenCalledWith('alex-run-123');
         expect(await screen.findByText('交给 Lisa 做测试设计')).toBeDefined();
+        expect(screen.getByText('来源 VALUE_DISCOVERY/BLUEPRINT v2')).toBeDefined();
+        expect(screen.getByText(/AI 测试资产管理平台需求蓝图/)).toBeDefined();
+        expect(screen.getByText('需求 F-001: 自动生成测试策略和用例')).toBeDefined();
+        expect(screen.getByText('复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2')).toBeDefined();
     });
 
     it('applies a workflow handoff from the chat pane action', async () => {
@@ -788,6 +795,9 @@ describe('ChatPane Component', () => {
                 sourceWorkflowId: 'VALUE_DISCOVERY',
                 sourceStageId: 'BLUEPRINT',
                 sourceArtifactVersion: 2,
+                sourceSummary: 'AI 测试资产管理平台需求蓝图: AI 测试资产管理平台。',
+                unconfirmedItems: ['需求 F-001: 自动生成测试策略和用例'],
+                targetInputChecklist: ['复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2'],
                 targetWorkflowId: 'TEST_DESIGN',
                 targetStageId: 'CLARIFY',
                 targetAgentId: 'lisa',
@@ -800,6 +810,9 @@ describe('ChatPane Component', () => {
             sourceWorkflowId: 'VALUE_DISCOVERY',
             sourceStageId: 'BLUEPRINT',
             sourceArtifactVersion: 2,
+            sourceSummary: 'AI 测试资产管理平台需求蓝图: AI 测试资产管理平台。',
+            unconfirmedItems: ['需求 F-001: 自动生成测试策略和用例'],
+            targetInputChecklist: ['复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2'],
             targetWorkflowId: 'TEST_DESIGN',
             targetStageId: 'CLARIFY',
             targetAgentId: 'lisa',

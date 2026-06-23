@@ -540,10 +540,13 @@ describe('Zustand Store', () => {
             sourceWorkflowId: 'VALUE_DISCOVERY',
             sourceStageId: 'BLUEPRINT',
             sourceArtifactVersion: 2,
+            sourceSummary: 'AI 测试资产管理平台需求蓝图: AI 测试资产管理平台。',
+            unconfirmedItems: ['需求 F-001: 自动生成测试策略和用例'],
+            targetInputChecklist: ['复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2'],
             targetWorkflowId: 'TEST_DESIGN',
             targetStageId: 'CLARIFY',
             targetAgentId: 'lisa',
-            prompt: '请基于 Alex 的价值蓝图设计测试策略。',
+            prompt: '来源版本: VALUE_DISCOVERY/BLUEPRINT v2\n\n关键摘要:\n- AI 测试资产管理平台需求蓝图',
         });
 
         const state = useStore.getState();
@@ -562,7 +565,7 @@ describe('Zustand Store', () => {
             expect.objectContaining({
                 id: 'handoff-handoff-1-v2',
                 role: 'user',
-                content: '请基于 Alex 的价值蓝图设计测试策略。',
+                content: '来源版本: VALUE_DISCOVERY/BLUEPRINT v2\n\n关键摘要:\n- AI 测试资产管理平台需求蓝图',
             }),
         ]);
     });
@@ -578,6 +581,9 @@ describe('Zustand Store', () => {
             sourceWorkflowId: 'VALUE_DISCOVERY',
             sourceStageId: 'BLUEPRINT',
             sourceArtifactVersion: 1,
+            sourceSummary: 'AI 测试资产管理平台需求蓝图',
+            unconfirmedItems: [],
+            targetInputChecklist: ['复核来源版本 VALUE_DISCOVERY/BLUEPRINT v1'],
             targetWorkflowId: 'TEST_DESIGN',
             targetStageId: 'CLARIFY',
             targetAgentId: 'alex',
@@ -590,6 +596,9 @@ describe('Zustand Store', () => {
             sourceWorkflowId: 'VALUE_DISCOVERY',
             sourceStageId: 'BLUEPRINT',
             sourceArtifactVersion: 1,
+            sourceSummary: 'AI 测试资产管理平台需求蓝图',
+            unconfirmedItems: [],
+            targetInputChecklist: ['复核来源版本 VALUE_DISCOVERY/BLUEPRINT v1'],
             targetWorkflowId: 'TEST_DESIGN',
             targetStageId: 'UNKNOWN_STAGE',
             targetAgentId: 'lisa',
