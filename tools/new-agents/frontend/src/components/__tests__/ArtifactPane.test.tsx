@@ -215,6 +215,70 @@ describe('ArtifactPane Component', () => {
         expect(screen.getByText('最近版本：run-123-CLARIFY-v2')).toBeTruthy();
     });
 
+    it('shows artifact review diagnostics for missing contract requirements', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            artifactContent: '# 测试策略蓝图\n\n## 1. 策略摘要\n\n## 8. 阶段门禁\n\n- checked=true',
+        });
+
+        render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('审阅');
+
+        expect(screen.getByText('审阅诊断')).toBeTruthy();
+        expect(screen.getByText('缺少必填标题')).toBeTruthy();
+        expect(screen.getByText('缺少 Mermaid 图表')).toBeTruthy();
+        expect(screen.getByText('缺少结构化可视化')).toBeTruthy();
+    });
+
+    it('shows artifact review diagnostics for runtime visual failures', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 需求分析文档\n\n## 8. 阶段门禁\n\n```mermaid\nflowchart TD\n```',
+            artifactVisualDiagnostics: [
+                {
+                    id: 'mermaid:CLARIFY:0',
+                    stageId: 'CLARIFY',
+                    kind: 'mermaid',
+                    title: 'Mermaid 图表渲染失败',
+                    message: 'syntax error',
+                    createdAt: 1,
+                },
+            ],
+        });
+
+        render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('审阅');
+
+        expect(screen.getByText('运行时可视化警告')).toBeTruthy();
+        expect(screen.getByText('syntax error')).toBeTruthy();
+    });
+
+    it('shows blocking missing information from the current artifact', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: [
+                '# 需求分析文档',
+                '## 5. 待澄清问题',
+                '- 阻断：支付失败重试次数缺失，必须由 PM 确认。',
+                '- 待确认：优惠券叠加规则需要补充样例。',
+                '## 8. 阶段门禁',
+                '- checked=false：核心异常链路未确认，无法进入策略制定。',
+            ].join('\n'),
+        });
+
+        render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('审阅');
+
+        expect(screen.getByText('缺失信息清单')).toBeTruthy();
+        expect(screen.getByText('支付失败重试次数缺失')).toBeTruthy();
+        expect(screen.getAllByText('阻断').length).toBeGreaterThan(0);
+        expect(screen.getByText('优惠券叠加规则需要补充样例')).toBeTruthy();
+        expect(screen.getAllByText('补充输入或手工修订后重新生成当前阶段产物。').length).toBeGreaterThan(0);
+    });
+
     it('resolves unresolved comments directly from the artifact review panel', () => {
         useStore.setState({
             workflow: 'TEST_DESIGN',
