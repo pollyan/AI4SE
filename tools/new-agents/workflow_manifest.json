@@ -103,12 +103,20 @@
             "requiredMermaidDiagrams": [
               "flowchart"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "test-design.clarify.baseline"
+          ]
         },
         {
           "id": "STRATEGY",
           "name": "策略制定",
           "promptTemplateId": "test_design.strategy",
+          "methodIds": [
+            "fmea",
+            "test_pyramid"
+          ],
           "artifactContract": {
             "requiredHeadings": [
               "# 测试策略蓝图",
@@ -137,7 +145,11 @@
             "requiredStructuredVisuals": [
               "risk-board"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "test-design.strategy.baseline"
+          ]
         },
         {
           "id": "CASES",
@@ -174,7 +186,11 @@
             "requiredStructuredVisuals": [
               "traceability-matrix"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "test-design.cases.baseline"
+          ]
         },
         {
           "id": "DELIVERY",
@@ -199,7 +215,11 @@
             "requiredStructuredVisuals": [
               "coverage-map"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "test-design.delivery.baseline"
+          ]
         }
       ],
       "onboarding": {
@@ -280,7 +300,11 @@
             "requiredStructuredVisuals": [
               "score-matrix"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "req-review.review.baseline"
+          ]
         },
         {
           "id": "REPORT",
@@ -313,7 +337,11 @@
             "requiredStructuredVisuals": [
               "priority-board"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "req-review.report.baseline"
+          ]
         }
       ],
       "onboarding": {
@@ -385,7 +413,11 @@
             "requiredMermaidDiagrams": [
               "timeline"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "incident-review.timeline.baseline"
+          ]
         },
         {
           "id": "ROOT_CAUSE",
@@ -414,12 +446,19 @@
             "requiredStructuredVisuals": [
               "cause-map"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "incident-review.root-cause.baseline"
+          ]
         },
         {
           "id": "IMPROVEMENT",
           "name": "改进报告",
           "promptTemplateId": "incident_review.improvement",
+          "methodIds": [
+            "capa"
+          ],
           "artifactContract": {
             "requiredHeadings": [
               "# 故障复盘报告",
@@ -461,7 +500,11 @@
             "requiredStructuredVisuals": [
               "action-board"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "incident-review.improvement.baseline"
+          ]
         }
       ],
       "onboarding": {
@@ -532,7 +575,11 @@
             "requiredMermaidDiagrams": [
               "mindmap"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "idea-brainstorm.define.baseline"
+          ]
         },
         {
           "id": "DIVERGE",
@@ -555,12 +602,19 @@
             "requiredMermaidDiagrams": [
               "mindmap"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "idea-brainstorm.diverge.baseline"
+          ]
         },
         {
           "id": "CONVERGE",
           "name": "收敛聚焦",
           "promptTemplateId": "idea_brainstorm.converge",
+          "methodIds": [
+            "ice"
+          ],
           "artifactContract": {
             "requiredHeadings": [
               "# 收敛聚焦",
@@ -588,7 +642,11 @@
             "requiredMermaidDiagrams": [
               "quadrantChart"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "idea-brainstorm.converge.baseline"
+          ]
         },
         {
           "id": "CONCEPT",
@@ -616,7 +674,11 @@
             "requiredStructuredVisuals": [
               "mvp-map"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "idea-brainstorm.concept.baseline"
+          ]
         }
       ],
       "onboarding": {
@@ -692,7 +754,11 @@
             "requiredStructuredVisuals": [
               "score-matrix"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "value-discovery.elevator.baseline"
+          ]
         },
         {
           "id": "PERSONA",
@@ -715,12 +781,21 @@
               "证据等级",
               "验证状态"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "value-discovery.persona.baseline"
+          ]
         },
         {
           "id": "JOURNEY",
           "name": "用户旅程",
           "promptTemplateId": "value_discovery.journey",
+          "methodIds": [
+            "jtbd",
+            "rice",
+            "kano"
+          ],
           "artifactContract": {
             "requiredHeadings": [
               "# 用户旅程分析",
@@ -753,7 +828,11 @@
             "requiredStructuredVisuals": [
               "journey-map"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "value-discovery.journey.baseline"
+          ]
         },
         {
           "id": "BLUEPRINT",
@@ -794,7 +873,11 @@
             "requiredStructuredVisuals": [
               "roadmap"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "value-discovery.blueprint.baseline"
+          ]
         }
       ],
       "onboarding": {
@@ -868,7 +951,11 @@
             "requiredMermaidDiagrams": [
               "flowchart"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "story-breakdown.input-analysis.baseline"
+          ]
         },
         {
           "id": "EPIC_MAPPING",
@@ -892,7 +979,11 @@
               "可测试性",
               "状态"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "story-breakdown.epic-mapping.baseline"
+          ]
         },
         {
           "id": "STORY_BACKLOG",
@@ -916,7 +1007,11 @@
               "可测试性",
               "状态"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "story-breakdown.story-backlog.baseline"
+          ]
         },
         {
           "id": "SPRINT_PLAN",
@@ -945,7 +1040,11 @@
             "requiredStructuredVisuals": [
               "story-map"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "story-breakdown.sprint-plan.baseline"
+          ]
         }
       ],
       "onboarding": {
@@ -1014,7 +1113,11 @@
             "requiredMermaidDiagrams": [
               "mindmap"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "prd-review.inventory.baseline"
+          ]
         },
         {
           "id": "QUALITY_AUDIT",
@@ -1040,7 +1143,11 @@
             "requiredStructuredVisuals": [
               "score-matrix"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "prd-review.quality-audit.baseline"
+          ]
         },
         {
           "id": "COMPLETION_PLAN",
@@ -1066,7 +1173,11 @@
             "requiredStructuredVisuals": [
               "action-board"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "prd-review.completion-plan.baseline"
+          ]
         },
         {
           "id": "REVISION_BLUEPRINT",
@@ -1093,7 +1204,11 @@
             "requiredStructuredVisuals": [
               "roadmap"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "prd-review.revision-blueprint.baseline"
+          ]
         }
       ],
       "onboarding": {

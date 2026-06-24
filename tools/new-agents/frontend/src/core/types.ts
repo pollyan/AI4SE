@@ -444,6 +444,9 @@ export interface WorkflowStage {
     name: string;
     description: string;
     template?: string;
+    methodIds?: string[];
+    promptTemplateVersion?: string;
+    regressionSampleIds?: string[];
     artifactContract?: {
         requiredHeadings?: string[];
     };

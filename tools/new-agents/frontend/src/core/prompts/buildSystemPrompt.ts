@@ -1,4 +1,5 @@
 import { WorkflowType, WORKFLOWS } from '../../store';
+import { buildProfessionalMethodPromptSection } from '../professionalMethods';
 import { LISA_PERSONA } from './personas/lisa';
 import { ALEX_PERSONA } from './personas/alex';
 
@@ -14,6 +15,7 @@ const ARTIFACT_DATA_STAGE_IDS: Record<WorkflowType, ReadonlySet<string>> = {
     IDEA_BRAINSTORM: new Set(['DEFINE', 'DIVERGE', 'CONVERGE', 'CONCEPT']),
     VALUE_DISCOVERY: new Set(['ELEVATOR', 'PERSONA', 'JOURNEY', 'BLUEPRINT']),
     STORY_BREAKDOWN: new Set(['INPUT_ANALYSIS', 'EPIC_MAPPING', 'STORY_BACKLOG', 'SPRINT_PLAN']),
+    PRD_REVIEW: new Set(['INVENTORY', 'QUALITY_AUDIT', 'COMPLETION_PLAN', 'REVISION_BLUEPRINT']),
 };
 
 const removeMarkTags = (artifact: string): string => artifact.replace(/<\/?mark>/gi, '');
@@ -44,6 +46,10 @@ export const buildSystemPrompt = (config: {
     const { agentId, workflow, stageIndex, currentArtifact, stageArtifacts } = config;
     const wf = WORKFLOWS[workflow];
     const currentStage = wf.stages[stageIndex];
+    const professionalMethodSection = buildProfessionalMethodPromptSection(currentStage.methodIds);
+    const promptTemplateVersionSection = currentStage.promptTemplateVersion
+        ? `\n【Prompt/template 版本】\n当前阶段版本：${currentStage.promptTemplateVersion}\n`
+        : '';
     const usesArtifactData = isArtifactDataStage(workflow, currentStage.id);
     const cleanArtifact = usesArtifactData
         ? removeFencedCodeBlocks(removeMarkTags(currentArtifact))
@@ -128,6 +134,8 @@ ${artifactModeInstruction}
 当前工作流：${wf.name}
 当前阶段：${currentStage.name}
 阶段目标：${stageDescription}
+${professionalMethodSection}
+${promptTemplateVersionSection}
 ${previousArtifactsContext}
 
 【语言与排版要求】：

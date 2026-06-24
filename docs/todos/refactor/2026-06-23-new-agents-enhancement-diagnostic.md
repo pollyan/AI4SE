@@ -73,8 +73,8 @@
 | E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入 |
 | E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 | 已消化：当前 stage 有质量分、证据明细和待处理项 |
 | E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 已消化：运行统计返回 contract retry 原因和确定性诊断建议，Header modal 展示行动建议 |
-| E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | FMEA、JTBD、RICE、Kano、CAPA 等可由配置注入 prompt/template |
-| E11 | Prompt/template 版本管理 | 新增功能 | 平台扩展 | L | P2 | 每个 stage 有 prompt/template version 和回归样例 |
+| E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | 已完成待合回: 专业方法库通过 `professional_methods.json` 统一配置，代表性 stage 通过 `methodIds` 引用 FMEA、测试金字塔、JTBD、RICE、Kano、CAPA、ICE，并由 prompt builder 注入系统提示；同步测试阻止未知方法引用 |
+| E11 | Prompt/template 版本管理 | 新增功能 | 平台扩展 | L | P2 | 已完成待合回: 每个 online stage 通过 `promptTemplateVersion` 记录 prompt/template 版本，并通过 `regressionSampleIds` 关联 `prompt_regression_samples.json` 中的回归样例；同步测试阻止漏版本、未知样例和样例指向错误。 |
 | E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 | 新 workflow 缺 manifest/prompt/contract/test 任一面时 dry-run 失败 |
 | E13 | Alex 用户故事拆解 workflow | 已消化 | 专业内容 | M | P0 | 2026-06-24 已在本分支主线化：共享 workflow `STORY_BREAKDOWN`、slug `story-breakdown`、四阶段 `artifact_data` renderer、story-map visual contract、Alex 在线入口和 Lisa handoff 均已接入；验证覆盖 backend contract/runtime/renderer/sync/handoff 与 frontend workflow/prompt tests |
 | E14 | Alex PRD 质量评审与补全 workflow | 已消化 | 专业内容 | M | P0 | `PRD_REVIEW` 作为 Alex 在线 workflow 复用共享 Agent Runtime、typed SSE、workflow manifest、artifact contract 和 artifact_data renderer，覆盖输入盘点、质量评审、补全建议和修订蓝图 |
@@ -248,6 +248,12 @@
 - 工作流差异优先通过 `workflow_manifest.json`、`agentId`、stage prompt/template、artifact contract、visual contract、handoff 配置和测试表达。
 - 不使用 mock、假数据、隐藏 fallback 或假成功响应掩盖能力缺口。
 - 不围绕 intent-tester 设计新增联动能力；已有测试资产导入能力只作为边界记录。
+
+## 当前剩余能力包
+
+功能能力包已清空；后续进入最终集成、主线验证、merge/push/删分支闭环。
+
+其余 E 编号如果需要恢复，必须先通过 CGA 证明当前主线集成后仍存在回归或未验收缺口。当前 E10 专业方法库配置和 E11 Prompt/template 版本管理已分别形成待合回实现。
 
 ## 进入实现前需要补的设计问题
 

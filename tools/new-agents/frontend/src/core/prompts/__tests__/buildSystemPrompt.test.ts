@@ -92,6 +92,18 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('当前阶段');
     });
 
+    it('injects the current prompt template version for the active stage', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentArtifact: '# 测试策略蓝图',
+        });
+
+        expect(prompt).toContain('【Prompt/template 版本】');
+        expect(prompt).toContain('当前阶段版本：2026.06.24.1');
+    });
+
     it('does not include legacy tag-based output protocol instructions', () => {
         const prompt = buildSystemPrompt({
             agentId: 'lisa',
@@ -413,5 +425,44 @@ describe('buildSystemPrompt', () => {
         expect(prompt).not.toContain('禁止增删章节标题');
         expect(prompt).not.toContain('## 产品核心定位');
         expect(prompt).not.toContain('## 目标用户概览');
+    });
+
+    it('injects professional method guidance for configured Lisa strategy stages', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentArtifact: '# 测试策略蓝图',
+        });
+
+        expect(prompt).toContain('【专业方法参考】');
+        expect(prompt).toContain('FMEA 失效模式与影响分析');
+        expect(prompt).toContain('测试金字塔');
+        expect(prompt).toContain('风险优先级');
+    });
+
+    it('injects product discovery methods for configured Alex journey stages', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'alex',
+            workflow: 'VALUE_DISCOVERY',
+            stageIndex: 2,
+            currentArtifact: '# 用户旅程分析',
+        });
+
+        expect(prompt).toContain('【专业方法参考】');
+        expect(prompt).toContain('JTBD 任务理论');
+        expect(prompt).toContain('RICE 优先级评分');
+        expect(prompt).toContain('Kano 需求分层');
+    });
+
+    it('does not inject an empty professional method section for stages without method ids', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            currentArtifact: '# 需求分析文档',
+        });
+
+        expect(prompt).not.toContain('【专业方法参考】');
     });
 });
