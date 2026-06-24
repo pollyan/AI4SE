@@ -21,6 +21,9 @@ export const buildSystemPrompt = (config: {
     const wf = WORKFLOWS[workflow];
     const currentStage = wf.stages[stageIndex];
     const professionalMethodSection = buildProfessionalMethodPromptSection(currentStage.methodIds);
+    const promptTemplateVersionSection = currentStage.promptTemplateVersion
+        ? `\n【Prompt/template 版本】\n当前阶段版本：${currentStage.promptTemplateVersion}\n`
+        : '';
     const cleanArtifact = removeMarkTags(currentArtifact);
     const isLastStage = stageIndex === wf.stages.length - 1;
     const nextStage = !isLastStage ? wf.stages[stageIndex + 1] : null;
@@ -83,6 +86,7 @@ export const buildSystemPrompt = (config: {
 当前阶段：${currentStage.name}
 阶段目标：${currentStage.description}
 ${professionalMethodSection}
+${promptTemplateVersionSection}
 ${previousArtifactsContext}
 
 【语言与排版要求】：

@@ -6,6 +6,8 @@ export type WorkflowManifestStage = {
     name: string;
     promptTemplateId: string;
     methodIds?: string[];
+    promptTemplateVersion?: string;
+    regressionSampleIds?: string[];
 };
 
 export type WorkflowManifestWorkflow = Omit<WorkflowDef, 'stages' | 'welcomeMessage'> & {

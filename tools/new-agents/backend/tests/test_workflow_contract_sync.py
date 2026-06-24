@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 from agent_contracts import (
@@ -14,6 +15,8 @@ NEW_AGENTS_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = Path(__file__).resolve().parents[4]
 WORKFLOW_MANIFEST = NEW_AGENTS_ROOT / "workflow_manifest.json"
 PROFESSIONAL_METHODS = NEW_AGENTS_ROOT / "professional_methods.json"
+PROMPT_REGRESSION_SAMPLES = NEW_AGENTS_ROOT / "prompt_regression_samples.json"
+PROMPT_TEMPLATE_VERSION_RE = re.compile(r"^\d{4}\.\d{2}\.\d{2}\.\d+$")
 
 FRONTEND_PROMPT_FILES = {
     ("REQ_REVIEW", "REVIEW"): (
@@ -192,6 +195,10 @@ def _professional_methods() -> dict:
     return json.loads(PROFESSIONAL_METHODS.read_text(encoding="utf-8"))
 
 
+def _prompt_regression_samples() -> dict:
+    return json.loads(PROMPT_REGRESSION_SAMPLES.read_text(encoding="utf-8"))
+
+
 def test_shared_workflow_manifest_stage_order_matches_backend_contract():
     assert _workflow_manifest_stages() == WORKFLOW_STAGES
 
@@ -266,6 +273,53 @@ def test_representative_stages_declare_professional_methods():
         assert set(stage.get("methodIds", [])) >= method_ids
 
 
+def test_workflow_manifest_declares_prompt_template_versions_for_every_stage():
+    manifest = _workflow_manifest()
+
+    for workflow_id, workflow in manifest["workflows"].items():
+        for stage in workflow["stages"]:
+            version = stage.get("promptTemplateVersion")
+            assert isinstance(version, str), (
+                f"{workflow_id}/{stage['id']} missing promptTemplateVersion"
+            )
+            assert PROMPT_TEMPLATE_VERSION_RE.match(version), (
+                f"{workflow_id}/{stage['id']} has invalid promptTemplateVersion: {version}"
+            )
+
+
+def test_workflow_manifest_declares_regression_samples_for_every_stage():
+    known_sample_ids = {
+        sample["id"]
+        for sample in _prompt_regression_samples()["samples"]
+    }
+    manifest = _workflow_manifest()
+
+    for workflow_id, workflow in manifest["workflows"].items():
+        for stage in workflow["stages"]:
+            sample_ids = stage.get("regressionSampleIds")
+            assert isinstance(sample_ids, list) and sample_ids, (
+                f"{workflow_id}/{stage['id']} missing regressionSampleIds"
+            )
+            for sample_id in sample_ids:
+                assert sample_id in known_sample_ids, (
+                    f"{workflow_id}/{stage['id']} references unknown regression sample {sample_id}"
+                )
+
+
+def test_prompt_regression_samples_reference_known_workflow_stages():
+    workflow_stages = _workflow_manifest_stages()
+    samples = _prompt_regression_samples()["samples"]
+
+    for sample in samples:
+        workflow_id = sample["workflowId"]
+        stage_id = sample["stageId"]
+        assert workflow_id in workflow_stages
+        assert stage_id in workflow_stages[workflow_id]
+        assert sample["input"].strip()
+        assert sample["expectedFocus"]
+        assert sample["acceptanceChecks"]
+
+
 def test_shared_workflow_manifest_declares_alex_to_lisa_handoffs():
     handoffs = _workflow_manifest()["handoffs"]
 
@@ -313,10 +367,13 @@ def test_backend_container_packages_shared_workflow_manifest():
 
     assert "COPY tools/new-agents/workflow_manifest.json /workflow_manifest.json" in dockerfile
     assert "COPY tools/new-agents/professional_methods.json /professional_methods.json" in dockerfile
+    assert "COPY tools/new-agents/prompt_regression_samples.json /prompt_regression_samples.json" in dockerfile
     assert "./tools/new-agents/workflow_manifest.json:/workflow_manifest.json:ro" in dev_compose
     assert "./tools/new-agents/workflow_manifest.json:/workflow_manifest.json:ro" in dev_cn_compose
     assert "./tools/new-agents/professional_methods.json:/professional_methods.json:ro" in dev_compose
     assert "./tools/new-agents/professional_methods.json:/professional_methods.json:ro" in dev_cn_compose
+    assert "./tools/new-agents/prompt_regression_samples.json:/prompt_regression_samples.json:ro" in dev_compose
+    assert "./tools/new-agents/prompt_regression_samples.json:/prompt_regression_samples.json:ro" in dev_cn_compose
 
 
 def test_frontend_container_packages_shared_workflow_manifest_for_vite_build():
@@ -324,8 +381,10 @@ def test_frontend_container_packages_shared_workflow_manifest_for_vite_build():
 
     assert "COPY tools/new-agents/workflow_manifest.json /workflow_manifest.json" in dockerfile
     assert "COPY tools/new-agents/professional_methods.json /professional_methods.json" in dockerfile
+    assert "COPY tools/new-agents/prompt_regression_samples.json /prompt_regression_samples.json" in dockerfile
     assert "COPY tools/new-agents/workflow_manifest.json ./workflow_manifest.json" in dockerfile
     assert "COPY tools/new-agents/professional_methods.json ./professional_methods.json" in dockerfile
+    assert "COPY tools/new-agents/prompt_regression_samples.json ./prompt_regression_samples.json" in dockerfile
 
 
 def test_frontend_templates_include_required_structured_visual_contract_examples():

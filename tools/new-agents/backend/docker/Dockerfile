@@ -8,6 +8,7 @@ RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
 
 COPY tools/new-agents/workflow_manifest.json /workflow_manifest.json
 COPY tools/new-agents/professional_methods.json /professional_methods.json
+COPY tools/new-agents/prompt_regression_samples.json /prompt_regression_samples.json
 COPY tools/new-agents/backend/ .
 
 EXPOSE 5002

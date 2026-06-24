@@ -83,7 +83,11 @@
             "requiredMermaidDiagrams": [
               "flowchart"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "test-design.clarify.baseline"
+          ]
         },
         {
           "id": "STRATEGY",
@@ -121,7 +125,11 @@
             "requiredStructuredVisuals": [
               "risk-board"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "test-design.strategy.baseline"
+          ]
         },
         {
           "id": "CASES",
@@ -158,7 +166,11 @@
             "requiredStructuredVisuals": [
               "traceability-matrix"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "test-design.cases.baseline"
+          ]
         },
         {
           "id": "DELIVERY",
@@ -183,7 +195,11 @@
             "requiredStructuredVisuals": [
               "coverage-map"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "test-design.delivery.baseline"
+          ]
         }
       ],
       "onboarding": {
@@ -264,7 +280,11 @@
             "requiredStructuredVisuals": [
               "score-matrix"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "req-review.review.baseline"
+          ]
         },
         {
           "id": "REPORT",
@@ -297,7 +317,11 @@
             "requiredStructuredVisuals": [
               "priority-board"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "req-review.report.baseline"
+          ]
         }
       ],
       "onboarding": {
@@ -369,7 +393,11 @@
             "requiredMermaidDiagrams": [
               "timeline"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "incident-review.timeline.baseline"
+          ]
         },
         {
           "id": "ROOT_CAUSE",
@@ -398,7 +426,11 @@
             "requiredStructuredVisuals": [
               "cause-map"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "incident-review.root-cause.baseline"
+          ]
         },
         {
           "id": "IMPROVEMENT",
@@ -448,7 +480,11 @@
             "requiredStructuredVisuals": [
               "action-board"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "incident-review.improvement.baseline"
+          ]
         }
       ],
       "onboarding": {
@@ -519,7 +555,11 @@
             "requiredMermaidDiagrams": [
               "mindmap"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "idea-brainstorm.define.baseline"
+          ]
         },
         {
           "id": "DIVERGE",
@@ -542,7 +582,11 @@
             "requiredMermaidDiagrams": [
               "mindmap"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "idea-brainstorm.diverge.baseline"
+          ]
         },
         {
           "id": "CONVERGE",
@@ -578,7 +622,11 @@
             "requiredMermaidDiagrams": [
               "quadrantChart"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "idea-brainstorm.converge.baseline"
+          ]
         },
         {
           "id": "CONCEPT",
@@ -606,7 +654,11 @@
             "requiredStructuredVisuals": [
               "mvp-map"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "idea-brainstorm.concept.baseline"
+          ]
         }
       ],
       "onboarding": {
@@ -682,7 +734,11 @@
             "requiredStructuredVisuals": [
               "score-matrix"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "value-discovery.elevator.baseline"
+          ]
         },
         {
           "id": "PERSONA",
@@ -705,7 +761,11 @@
               "证据等级",
               "验证状态"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "value-discovery.persona.baseline"
+          ]
         },
         {
           "id": "JOURNEY",
@@ -748,7 +808,11 @@
             "requiredStructuredVisuals": [
               "journey-map"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "value-discovery.journey.baseline"
+          ]
         },
         {
           "id": "BLUEPRINT",
@@ -789,7 +853,11 @@
             "requiredStructuredVisuals": [
               "roadmap"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "value-discovery.blueprint.baseline"
+          ]
         }
       ],
       "onboarding": {

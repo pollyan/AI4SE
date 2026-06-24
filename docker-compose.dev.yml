@@ -100,6 +100,7 @@ services:
       - ./tools/new-agents/backend:/app
       - ./tools/new-agents/workflow_manifest.json:/workflow_manifest.json:ro
       - ./tools/new-agents/professional_methods.json:/professional_methods.json:ro
+      - ./tools/new-agents/prompt_regression_samples.json:/prompt_regression_samples.json:ro
     depends_on:
       postgres:
         condition: service_healthy

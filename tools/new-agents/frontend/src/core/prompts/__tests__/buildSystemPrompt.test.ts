@@ -64,6 +64,18 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('当前阶段');
     });
 
+    it('injects the current prompt template version for the active stage', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentArtifact: '# 测试策略蓝图',
+        });
+
+        expect(prompt).toContain('【Prompt/template 版本】');
+        expect(prompt).toContain('当前阶段版本：2026.06.24.1');
+    });
+
     it('does not include legacy tag-based output protocol instructions', () => {
         const prompt = buildSystemPrompt({
             agentId: 'lisa',
