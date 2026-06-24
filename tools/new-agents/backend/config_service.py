@@ -97,6 +97,32 @@ def upsert_default_llm_config(
     return config
 
 
+def build_llm_config_check_candidate(
+    update: DefaultLlmConfigUpdateRequest,
+    saved_config: LlmConfig | None = None,
+) -> LlmConfig:
+    api_key = update.api_key or (saved_config.api_key if saved_config else None)
+    if not api_key:
+        raise ValueError("apiKey 不能为空")
+    return LlmConfig(
+        config_key=saved_config.config_key if saved_config else get_default_llm_config_key(),
+        api_key=api_key,
+        base_url=update.base_url,
+        model=update.model,
+        description=update.description or DEFAULT_LLM_DESCRIPTION,
+        is_active=True,
+    )
+
+
+def build_default_llm_config_check_candidate(
+    update: DefaultLlmConfigUpdateRequest,
+) -> LlmConfig:
+    return build_llm_config_check_candidate(
+        update,
+        get_active_default_llm_config(),
+    )
+
+
 def check_default_llm_config(config: LlmConfig) -> dict[str, Any]:
     try:
         response = "".join(stream_chat_completion_content(

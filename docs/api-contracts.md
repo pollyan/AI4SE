@@ -137,7 +137,7 @@
 | GET | `/api/health` | 健康检查 | 无 |
 | GET | `/api/config` | 获取默认 LLM 配置（不含 API Key） | 无 |
 | POST | `/api/config` | 创建或更新默认 LLM 配置（不返回 API Key） | 无 |
-| POST | `/api/config/check` | 检测默认 LLM 配置是否可调用当前模型 | 无 |
+| POST | `/api/config/check` | 检测默认 LLM 配置或设置表单临时 LLM 配置是否可调用当前模型 | 无 |
 | POST | `/api/agent/runs/stream` | 结构化 Agent Runtime SSE | 无 |
 | GET | `/api/agent/runs/{runId}` | 获取已持久化 run snapshot | 无 |
 | GET | `/api/agent/observability` | 获取 Agent Runtime 运行统计 | 无 |
@@ -190,7 +190,11 @@
 
 ### POST `/api/config/check` 响应
 
-使用当前默认 LLM 配置执行一次最小模型调用。缺少默认配置时返回 503；供应商不可用、鉴权失败或限流时返回 200 且 `ok: false`，由调用方展示业务状态。
+无请求体时，使用当前默认 LLM 配置执行一次最小模型调用。缺少默认配置时返回 503。
+
+带 JSON 请求体时，检测设置表单中的临时配置，不持久化配置、不回显密钥。请求体复用 `POST /api/config` 字段：`baseUrl`、`model`、`description` 和可选 `apiKey`。如果请求体未提供 `apiKey`，后端复用已保存默认配置的密钥；若没有已保存密钥则返回 400。
+
+供应商不可用、鉴权失败或限流时返回 200 且 `ok: false`，由调用方展示业务状态。
 
 ```json
 {

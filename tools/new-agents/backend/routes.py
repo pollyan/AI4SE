@@ -5,6 +5,7 @@ from werkzeug.exceptions import HTTPException
 from api_responses import DEFAULT_LLM_CONFIG_MISSING_CODE, json_error_response
 from config_service import (
     build_default_llm_config_payload,
+    build_default_llm_config_check_candidate,
     check_default_llm_config,
     get_default_llm_config_payload,
     upsert_default_llm_config,
@@ -88,6 +89,26 @@ def update_default_config():
 @api_bp.route("/config/check", methods=["POST"])
 def check_default_config():
     """Check whether the default LLM config can reach the configured model."""
+    try:
+        request_body = _read_json_body()
+    except RequestValidationError as e:
+        return json_error_response(str(e), 400)
+
+    if request_body is not None:
+        try:
+            update = parse_default_llm_config_update_request(request_body)
+            config = build_default_llm_config_check_candidate(update)
+            return jsonify(check_default_llm_config(config)), 200
+        except RequestValidationError as e:
+            return json_error_response(str(e), 400)
+        except ValueError as e:
+            return json_error_response(str(e), 400)
+        except SQLAlchemyError as e:
+            current_app.logger.error(
+                f"[{g.request_id}] Error checking temporary config: {str(e)}"
+            )
+            return json_error_response("模型检测失败", 500)
+
     config, error_response = require_default_llm_config(
         g.request_id,
         context="config check",

@@ -305,6 +305,81 @@ def test_post_config_check_returns_model_availability_result(client, app):
     assert config.api_key == 'secret-api-key'
 
 
+def test_post_config_check_uses_temporary_form_config_without_persisting(client, app):
+    with app.app_context():
+        db.session.add(LlmConfig(
+            config_key='default',
+            api_key='saved-secret',
+            base_url='https://saved.test/v1',
+            model='saved-model',
+            description='Saved config',
+        ))
+        db.session.commit()
+
+    with patch('routes.check_default_llm_config') as mock_check:
+        mock_check.return_value = {
+            'ok': True,
+            'baseUrl': 'https://current.test/v1',
+            'model': 'current-model',
+            'message': '模型配置可用',
+        }
+        response = client.post('/api/config/check', json={
+            'apiKey': 'current-secret',
+            'baseUrl': 'https://current.test/v1',
+            'model': 'current-model',
+            'description': 'Current config',
+        })
+
+    assert response.status_code == 200
+    assert response.json == {
+        'ok': True,
+        'baseUrl': 'https://current.test/v1',
+        'model': 'current-model',
+        'message': '模型配置可用',
+    }
+    config = mock_check.call_args.args[0]
+    assert config.api_key == 'current-secret'
+    assert config.base_url == 'https://current.test/v1'
+    assert config.model == 'current-model'
+
+    with app.app_context():
+        saved = LlmConfig.query.filter_by(config_key='default').one()
+        assert saved.api_key == 'saved-secret'
+        assert saved.base_url == 'https://saved.test/v1'
+        assert saved.model == 'saved-model'
+
+
+def test_post_config_check_reuses_saved_key_for_temporary_form_config(client, app):
+    with app.app_context():
+        db.session.add(LlmConfig(
+            config_key='default',
+            api_key='saved-secret',
+            base_url='https://saved.test/v1',
+            model='saved-model',
+            description='Saved config',
+        ))
+        db.session.commit()
+
+    with patch('routes.check_default_llm_config') as mock_check:
+        mock_check.return_value = {
+            'ok': True,
+            'baseUrl': 'https://current.test/v1',
+            'model': 'current-model',
+            'message': '模型配置可用',
+        }
+        response = client.post('/api/config/check', json={
+            'baseUrl': 'https://current.test/v1',
+            'model': 'current-model',
+            'description': 'Current config',
+        })
+
+    assert response.status_code == 200
+    config = mock_check.call_args.args[0]
+    assert config.api_key == 'saved-secret'
+    assert config.base_url == 'https://current.test/v1'
+    assert config.model == 'current-model'
+
+
 def test_init_db_creates_tables_and_seeds_default_config_from_env(monkeypatch):
     """Application DB initialization should support production config seeding."""
     db_fd, db_path = tempfile.mkstemp()

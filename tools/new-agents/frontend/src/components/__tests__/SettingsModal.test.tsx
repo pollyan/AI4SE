@@ -152,11 +152,30 @@ describe('SettingsModal Component', () => {
 
         render(<SettingsModal />);
 
-        fireEvent.click(await screen.findByText('检测连接'));
+        fireEvent.change(await screen.findByLabelText('Base URL'), {
+            target: { value: ' https://current.test/v1 ' },
+        });
+        fireEvent.change(screen.getByLabelText('模型名称'), {
+            target: { value: ' current-model ' },
+        });
+        fireEvent.change(screen.getByLabelText('描述'), {
+            target: { value: ' Current config ' },
+        });
+        fireEvent.change(screen.getByLabelText('新 API Key'), {
+            target: { value: ' current-secret ' },
+        });
+        fireEvent.click(screen.getByText('检测连接'));
 
         await waitFor(() => {
             expect(mockFetch).toHaveBeenLastCalledWith('/new-agents/api/config/check', {
                 method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    baseUrl: 'https://current.test/v1',
+                    model: 'current-model',
+                    description: 'Current config',
+                    apiKey: 'current-secret',
+                }),
             });
         });
         expect(await screen.findByText('模型配置可用')).toBeDefined();
@@ -191,9 +210,8 @@ describe('SettingsModal Component', () => {
 
         fireEvent.click(await screen.findByText('检测连接'));
 
-        await waitFor(() => {
-            expect(notifyDefaultLlmConfigChanged).toHaveBeenCalledTimes(1);
-        });
+        await screen.findByText('模型配置可用');
+        expect(notifyDefaultLlmConfigChanged).not.toHaveBeenCalled();
     });
 
     it('does not notify workspace when model connectivity check fails', async () => {

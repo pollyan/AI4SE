@@ -61,11 +61,12 @@ export const SettingsModal: React.FC = () => {
     };
   }, [isSettingsOpen]);
 
-  const handleSaveConfig = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setStatus('saving');
-    setStatusMessage('');
-
+  const buildConfigPayload = (): {
+    baseUrl: string;
+    model: string;
+    description: string;
+    apiKey?: string;
+  } => {
     const payload: {
       baseUrl: string;
       model: string;
@@ -79,6 +80,15 @@ export const SettingsModal: React.FC = () => {
     if (apiKey.trim()) {
       payload.apiKey = apiKey.trim();
     }
+    return payload;
+  };
+
+  const handleSaveConfig = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setStatus('saving');
+    setStatusMessage('');
+
+    const payload = buildConfigPayload();
 
     try {
       const response = await fetch('/new-agents/api/config', {
@@ -110,6 +120,8 @@ export const SettingsModal: React.FC = () => {
     try {
       const response = await fetch('/new-agents/api/config/check', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildConfigPayload()),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -117,9 +129,6 @@ export const SettingsModal: React.FC = () => {
       }
       setStatus(data.ok === true ? 'saved' : 'error');
       setStatusMessage(readString(data.message) || '模型检测完成');
-      if (data.ok === true) {
-        notifyDefaultLlmConfigChanged();
-      }
     } catch (error) {
       setStatus('error');
       setStatusMessage(error instanceof Error ? error.message : '模型检测失败');
