@@ -1,8 +1,23 @@
 # New Agents 右侧产出物流式位置提示 Todo
 
-> 状态: 活动候选
+> 状态: 已完成，待归档
 > 创建日期: 2026-06-24
 > 背景: 右侧产出物已恢复为正式 Markdown 格式的逐步渲染。当前体验可以接受“按字段/章节逐段出现”，不强求逐字 token 级渲染；新的体验缺口是下一部分内容生成期间，右侧对应位置缺少“正在渲染中”的位置提示，用户容易误以为页面卡住或流式中断。
+
+## 完成记录
+
+- 完成日期: 2026-06-25
+- 目标模式产物:
+  - `docs/superpowers/specs/2026-06-25-new-agents-artifact-streaming-position-indicator-design.md`
+  - `docs/superpowers/plans/2026-06-25-new-agents-artifact-streaming-position-indicator.md`
+- 实现摘要:
+  - `ArtifactPane` 在 `isGenerating=true` 且已有正式 `artifactContent` 时，在正文流末尾显示 UI-only indicator。
+  - 首个 artifact delta 到达前仍使用顶部生成状态；已有正文后不再显示顶部全局生成卡片。
+  - indicator 使用独立 JSX 节点和 `data-artifact-ephemeral="true"`，不拼入 Markdown 源文本。
+  - Markdown 下载、源码视图和 store 中的 `artifactContent` 均不包含 indicator 文案。
+- 验证:
+  - `npm run test -- src/components/__tests__/ArtifactPane.test.tsx` in `tools/new-agents/frontend`
+  - `npm run test` in `tools/new-agents/frontend`
 
 ## 当前状态
 

@@ -329,6 +329,12 @@ export const ArtifactPane: React.FC = () => {
   // Content displays using the imported preprocessMarkdown utility
 
   const displayContent = preprocessMarkdown(artifactContent);
+  const hasArtifactContent = artifactContent.trim().length > 0;
+  const showArtifactStreamingPositionIndicator = (
+    isGenerating
+    && hasArtifactContent
+    && !isEditing
+  );
   type ParsedMarkdownSection = {
     heading: string;
     lines: string[];
@@ -4106,7 +4112,7 @@ export const ArtifactPane: React.FC = () => {
             <span>产出物内容可能因流式响应中断而不完整，请检查文档完整性。</span>
           </div>
         )}
-        {isGenerating && (
+        {isGenerating && !hasArtifactContent && (
           <div className="max-w-4xl mx-auto mb-4 overflow-hidden rounded-lg border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sky-100 shadow-[0_0_24px_rgba(14,165,233,0.08)]">
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
@@ -4332,18 +4338,36 @@ export const ArtifactPane: React.FC = () => {
                 spellCheck={false}
               />
             </div>
-          ) : viewMode === 'preview' ? (
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeRaw]}
-              components={editableMarkdownComponents}
-            >
-              {displayContent}
-            </ReactMarkdown>
           ) : (
-            <pre className="text-sm font-mono text-slate-300 whitespace-pre-wrap break-words bg-[#0f172a] p-6 rounded-xl border border-[#1e293b]">
-              {displayContent}
-            </pre>
+            <>
+              {viewMode === 'preview' ? (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeRaw]}
+                  components={editableMarkdownComponents}
+                >
+                  {displayContent}
+                </ReactMarkdown>
+              ) : (
+                <pre className="text-sm font-mono text-slate-300 whitespace-pre-wrap break-words bg-[#0f172a] p-6 rounded-xl border border-[#1e293b]">
+                  {displayContent}
+                </pre>
+              )}
+              {showArtifactStreamingPositionIndicator && (
+                <div
+                  className="mt-6 flex select-none items-center gap-3 rounded-lg border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sm text-sky-100"
+                  data-artifact-ephemeral="true"
+                  data-testid="artifact-streaming-position-indicator"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-400/10">
+                    <span className="h-2 w-2 rounded-full bg-sky-300 animate-pulse" />
+                  </span>
+                  <span className="font-medium">正在生成后续章节</span>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

@@ -19,7 +19,6 @@
 
 ## 当前入口
 
-- `2026-06-24-new-agents-artifact-streaming-position-indicator.md`：右侧产出物流式位置提示体验候选。
 - `2026-06-24-new-agents-llm-config-check-false-negative.md`：模型配置窗口测试失败但保存后 workflow 可正常调用的自检假失败 Bug。
 - `2026-06-24-new-agents-stage-action-choice-persistence.md`：阶段推进选择控件历史保留候选。
 - `2026-06-24-new-agents-stage-transition-readiness-gate.md`：阶段推进成熟度门禁候选。
@@ -44,3 +43,4 @@
 - `../archive/2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 Flash 兼容的后端结构化产物数据改造记录。
 - `../archive/2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线诊断。
 - `../archive/2026-06-25-new-agents-artifact-streaming-not-working-p0.md`：右侧 Artifact 真实流式渲染 P0 修复记录。
+- `../archive/2026-06-24-new-agents-artifact-streaming-position-indicator.md`：右侧 Artifact 流式位置提示体验修复记录。

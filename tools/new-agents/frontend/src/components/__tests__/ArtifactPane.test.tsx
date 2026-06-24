@@ -103,7 +103,7 @@ describe('ArtifactPane Component', () => {
 
     it('shows a friendly animated artifact generation state while generating', () => {
         useStore.setState({
-            artifactContent: '# 需求分析文档\n\n初始内容',
+            artifactContent: '',
             isGenerating: true,
         });
 
@@ -112,7 +112,48 @@ describe('ArtifactPane Component', () => {
         expect(screen.getByText('正在构建产出物')).toBeTruthy();
         expect(screen.getByText('正在构建右侧产出物')).toBeTruthy();
         expect(screen.getByTestId('artifact-generation-animation')).toBeTruthy();
+        expect(screen.queryByTestId('artifact-streaming-position-indicator')).toBeNull();
         expect(container.querySelector('.mt-3.h-1')).toBeNull();
+    });
+
+    it('shows a body-position streaming indicator after rendered content while generating', () => {
+        useStore.setState({
+            artifactContent: '# 需求分析文档\n\n## 已完成章节\n\n正式内容',
+            isGenerating: true,
+        });
+
+        render(<ArtifactPane />);
+
+        expect(screen.getByText('已完成章节')).toBeTruthy();
+        expect(screen.getByTestId('artifact-streaming-position-indicator')).toBeTruthy();
+        expect(screen.getByText('正在生成后续章节')).toBeTruthy();
+    });
+
+    it('keeps the body-position streaming indicator outside source markdown text', () => {
+        useStore.setState({
+            artifactContent: '# 需求分析文档\n\n## 已完成章节\n\n正式内容',
+            isGenerating: true,
+        });
+
+        const { container } = render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('代码'));
+
+        const sourceBlock = container.querySelector('pre');
+        expect(sourceBlock?.textContent).toContain('已完成章节');
+        expect(sourceBlock?.textContent).not.toContain('正在生成后续章节');
+        expect(screen.getByTestId('artifact-streaming-position-indicator').getAttribute('data-artifact-ephemeral')).toBe('true');
+    });
+
+    it('hides the body-position streaming indicator after generation completes', () => {
+        useStore.setState({
+            artifactContent: '# 需求分析文档\n\n## 已完成章节\n\n正式内容',
+            isGenerating: false,
+        });
+
+        render(<ArtifactPane />);
+
+        expect(screen.getByText('已完成章节')).toBeTruthy();
+        expect(screen.queryByTestId('artifact-streaming-position-indicator')).toBeNull();
     });
 
     it('keeps secondary artifact actions behind the artifact toolbar menu', () => {
@@ -645,7 +686,7 @@ describe('ArtifactPane Component', () => {
     it('downloads artifact markdown with a workflow-specific filename', async () => {
         const createdAnchors: HTMLAnchorElement[] = [];
         const click = vi.fn();
-        vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:artifact');
+        const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:artifact');
         vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
         vi.spyOn(document, 'createElement').mockImplementation((tagName, options) => {
             const element = originalCreateElement(tagName, options);
@@ -661,6 +702,7 @@ describe('ArtifactPane Component', () => {
         useStore.setState({
             workflow: 'REQ_REVIEW',
             artifactContent: '# 需求评审报告',
+            isGenerating: true,
         });
 
         render(<ArtifactPane />);
@@ -669,6 +711,10 @@ describe('ArtifactPane Component', () => {
         expect(createdAnchors).toHaveLength(1);
         expect(createdAnchors[0].download).toBe('req_review_artifact.md');
         expect(createdAnchors[0].download).not.toBe('lisa_artifact.md');
+        const blob = createObjectURL.mock.calls[0][0] as Blob;
+        const content = await blob.text();
+        expect(content).toBe('# 需求评审报告');
+        expect(content).not.toContain('正在生成后续章节');
         expect(click).toHaveBeenCalledTimes(1);
     });
 
