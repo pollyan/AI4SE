@@ -2261,6 +2261,133 @@ class ValueDiscoveryBlueprintArtifactData(StrictArtifactDataModel):
         return self
 
 
+class PrdInventoryItem(StrictArtifactDataModel):
+    item_id: str
+    category: str
+    content: str
+    source: str
+    evidence_level: str
+    status: str
+
+
+class PrdQualityFinding(StrictArtifactDataModel):
+    finding_id: str
+    dimension: str
+    problem: str
+    severity: str
+    blocking: str
+    evidence: str
+    impact: str
+    recommendation: str
+    status: str
+
+
+class PrdCompletionAction(StrictArtifactDataModel):
+    action_id: str
+    finding_ids: list[str] = Field(min_length=1)
+    action: str
+    priority: str
+    owner: str
+    verification_method: str
+    review_condition: str
+    status: str
+
+
+class PrdRevisionSection(StrictArtifactDataModel):
+    section_id: str
+    title: str
+    rewrite_goal: str
+    recommended_content: str
+    acceptance_note: str
+    status: str
+
+
+class PrdAcceptanceCriterion(StrictArtifactDataModel):
+    criterion_id: str
+    related_section_ids: list[str] = Field(min_length=1)
+    scenario: str
+    given: str
+    when: str
+    then: str
+    testability_level: str
+    status: str
+
+
+class PrdHandoffInput(StrictArtifactDataModel):
+    input_id: str
+    related_section_ids: list[str] = Field(min_length=1)
+    target_workflow: str
+    content: str
+    risk: str
+    status: str
+
+
+class PrdReviewArtifactData(StrictArtifactDataModel):
+    document_info: DocumentInfo
+    prd_inventory: list[PrdInventoryItem] = Field(min_length=1)
+    quality_findings: list[PrdQualityFinding] = Field(min_length=1)
+    completion_actions: list[PrdCompletionAction] = Field(min_length=1)
+    revision_sections: list[PrdRevisionSection] = Field(min_length=1)
+    acceptance_criteria: list[PrdAcceptanceCriterion] = Field(min_length=1)
+    handoff_inputs: list[PrdHandoffInput] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_prd_review_consistency(self) -> "PrdReviewArtifactData":
+        finding_ids = {item.finding_id for item in self.quality_findings}
+        if len(finding_ids) != len(self.quality_findings):
+            raise ValueError("quality_findings contains duplicate finding_id")
+
+        action_ids = {item.action_id for item in self.completion_actions}
+        if len(action_ids) != len(self.completion_actions):
+            raise ValueError("completion_actions contains duplicate action_id")
+
+        section_ids = {item.section_id for item in self.revision_sections}
+        if len(section_ids) != len(self.revision_sections):
+            raise ValueError("revision_sections contains duplicate section_id")
+
+        unknown_finding_ids = sorted(
+            {
+                finding_id
+                for action in self.completion_actions
+                for finding_id in action.finding_ids
+                if finding_id not in finding_ids
+            }
+        )
+        if unknown_finding_ids:
+            raise ValueError(
+                "completion_actions references unknown finding ids: "
+                + ", ".join(unknown_finding_ids)
+            )
+
+        unknown_section_ids = sorted(
+            {
+                section_id
+                for criterion in self.acceptance_criteria
+                for section_id in criterion.related_section_ids
+                if section_id not in section_ids
+            }
+            | {
+                section_id
+                for handoff in self.handoff_inputs
+                for section_id in handoff.related_section_ids
+                if section_id not in section_ids
+            }
+        )
+        if unknown_section_ids:
+            raise ValueError(
+                "acceptance_criteria or handoff_inputs references unknown section ids: "
+                + ", ".join(unknown_section_ids)
+            )
+
+        if not any(item.checked for item in self.stage_gate):
+            raise ValueError("stage_gate must include at least one checked item")
+
+        return self
+
+
+
+
 class StoryBreakdownInputAnalysis(StrictArtifactDataModel):
     source_type: str
     product_goal: str
@@ -2756,6 +2883,62 @@ def render_value_discovery_blueprint_markdown(
         _render_blueprint_stage_gate(data.stage_gate),
     ]
     return "\n\n".join(sections)
+
+
+def render_prd_review_markdown(data: PrdReviewArtifactData, stage_id: str) -> str:
+    common = [
+        _render_prd_document_info(data.document_info),
+        _render_prd_goal_scope(data.prd_inventory),
+    ]
+    if stage_id == "INVENTORY":
+        sections = [
+            "# PRD 输入盘点",
+            *common,
+            _render_prd_inventory(data.prd_inventory),
+            _render_prd_inventory_mindmap(data.prd_inventory),
+            _render_prd_users_and_scenarios(data.prd_inventory),
+            _render_prd_existing_acceptance(data.acceptance_criteria),
+            _render_prd_missing_information(data.quality_findings),
+            _render_prd_stage_gate(data.stage_gate),
+        ]
+    elif stage_id == "QUALITY_AUDIT":
+        sections = [
+            "# PRD 质量评审",
+            *common,
+            _render_prd_quality_summary(data.quality_findings),
+            _render_prd_quality_score_matrix(data.quality_findings),
+            _render_prd_findings(data.quality_findings),
+            _render_prd_risk_impact(data.quality_findings),
+            _render_prd_stage_gate(data.stage_gate),
+        ]
+    elif stage_id == "COMPLETION_PLAN":
+        sections = [
+            "# PRD 补全建议",
+            *common,
+            _render_prd_quality_summary(data.quality_findings),
+            _render_prd_completion_actions(data.completion_actions),
+            _render_prd_revision_structure(data.revision_sections),
+            _render_prd_verification_and_review(data.completion_actions),
+            _render_prd_stage_gate(data.stage_gate),
+        ]
+    elif stage_id == "REVISION_BLUEPRINT":
+        sections = [
+            "# PRD 修订蓝图",
+            *common,
+            _render_prd_quality_summary(data.quality_findings),
+            _render_prd_completion_actions(data.completion_actions),
+            _render_prd_revision_structure(data.revision_sections),
+            _render_prd_core_rewrites(data.revision_sections),
+            _render_prd_acceptance_criteria(data.acceptance_criteria),
+            _render_prd_handoff_inputs(data.handoff_inputs),
+            _render_prd_review_conditions(data.completion_actions),
+            _render_prd_stage_gate(data.stage_gate),
+        ]
+    else:
+        raise ValueError(f"unsupported PRD_REVIEW stage: {stage_id}")
+    return "\n\n".join(sections)
+
+
 
 
 def render_story_breakdown_markdown(data: StoryBreakdownArtifactData) -> str:
@@ -6245,6 +6428,1281 @@ def _node_id(label: str, existing: dict[str, str]) -> str:
     return candidate
 
 
+def _render_prd_goal_scope(items: list[PrdInventoryItem]) -> str:
+    rows = [
+        (item.category, item.content, item.source, item.evidence_level, item.status)
+        for item in items[:5]
+    ]
+    return "## PRD 目标与范围\n" + _markdown_table(
+        ["类别", "内容", "来源", "证据等级", "状态"],
+        rows,
+    )
+
+
+def _render_prd_inventory(items: list[PrdInventoryItem]) -> str:
+    rows = [
+        (
+            item.item_id,
+            item.category,
+            item.content,
+            item.source,
+            item.evidence_level,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 输入事实清单\n" + _markdown_table(
+        ["ID", "类别", "内容", "来源", "证据等级", "状态"],
+        rows,
+    )
+
+
+def _render_prd_inventory_mindmap(items: list[PrdInventoryItem]) -> str:
+    grouped: dict[str, list[PrdInventoryItem]] = {}
+    for item in items:
+        grouped.setdefault(item.category, []).append(item)
+
+    lines = [
+        "```mermaid",
+        "mindmap",
+        '  root(("PRD 输入盘点"))',
+    ]
+    for category, category_items in grouped.items():
+        lines.append(f"    {_escape_mermaid_mindmap_text(category)}")
+        for item in category_items[:4]:
+            lines.append(
+                "      "
+                + _escape_mermaid_mindmap_text(
+                    f"{item.item_id} {item.status}"
+                )
+            )
+    lines.append("```")
+    return "## PRD 输入结构图\n" + "\n".join(lines)
+
+
+def _render_prd_users_and_scenarios(items: list[PrdInventoryItem]) -> str:
+    rows = [
+        (item.category, item.content, item.status)
+        for item in items
+        if item.category in {"目标用户", "用户场景", "业务场景", "使用场景"}
+    ] or [(items[0].category, items[0].content, items[0].status)]
+    return "## 用户与场景\n" + _markdown_table(
+        ["类别", "内容", "状态"],
+        rows,
+    )
+
+
+def _render_prd_existing_acceptance(
+    criteria: list[PrdAcceptanceCriterion],
+) -> str:
+    rows = [
+        (
+            item.criterion_id,
+            item.scenario,
+            item.given,
+            item.when,
+            item.then,
+            item.testability_level,
+            item.status,
+        )
+        for item in criteria
+    ]
+    return "## 现有验收材料\n" + _markdown_table(
+        ["ID", "场景", "Given", "When", "Then", "可测试性等级", "状态"],
+        rows,
+    )
+
+
+def _render_prd_missing_information(
+    findings: list[PrdQualityFinding],
+) -> str:
+    rows = [
+        (
+            item.finding_id,
+            item.dimension,
+            item.problem,
+            item.blocking,
+            item.recommendation,
+            item.status,
+        )
+        for item in findings
+    ]
+    return "## 缺失信息清单\n" + _markdown_table(
+        ["ID", "维度", "缺失或问题", "阻断性", "建议", "状态"],
+        rows,
+    )
+
+
+def _render_prd_quality_summary(findings: list[PrdQualityFinding]) -> str:
+    p0_count = sum(1 for item in findings if item.severity == "P0")
+    p1_count = sum(1 for item in findings if item.severity == "P1")
+    blocking_count = sum(1 for item in findings if item.blocking == "阻断")
+    rows = [
+        ("问题总数", len(findings)),
+        ("P0 问题", p0_count),
+        ("P1 问题", p1_count),
+        ("阻断问题", blocking_count),
+        ("当前建议", "先关闭 P0/P1 阻断问题，再进入 Lisa 后续 workflow"),
+    ]
+    return "## 质量评审摘要\n" + _markdown_table(["指标", "内容"], rows)
+
+
+def _render_prd_quality_score_matrix(findings: list[PrdQualityFinding]) -> str:
+    rows = [
+        (item.dimension, item.severity, item.evidence, item.impact)
+        for item in findings
+    ]
+    visual = {
+        "type": "score-matrix",
+        "title": "PRD 质量评分矩阵",
+        "columns": ["维度", "评分", "依据", "风险"],
+        "rows": [
+            {
+                "维度": item.dimension,
+                "评分": item.severity,
+                "依据": item.evidence,
+                "风险": item.impact,
+            }
+            for item in findings
+        ],
+    }
+    return (
+        "## 质量评分矩阵\n"
+        + _markdown_table(["评审维度", "严重级别", "证据", "风险"], rows)
+        + "\n\n```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+
+
+def _render_prd_findings(findings: list[PrdQualityFinding]) -> str:
+    rows = [
+        (
+            item.finding_id,
+            item.dimension,
+            item.problem,
+            item.severity,
+            item.blocking,
+            item.evidence,
+            item.recommendation,
+            item.status,
+        )
+        for item in findings
+    ]
+    return "## 问题清单\n" + _markdown_table(
+        ["ID", "评审维度", "问题", "严重级别", "阻断性", "证据", "建议", "状态"],
+        rows,
+    )
+
+
+def _render_prd_risk_impact(findings: list[PrdQualityFinding]) -> str:
+    rows = [(item.finding_id, item.impact, item.recommendation) for item in findings]
+    return "## 风险影响\n" + _markdown_table(
+        ["问题 ID", "影响范围", "缓解建议"],
+        rows,
+    )
+
+
+def _render_prd_completion_actions(actions: list[PrdCompletionAction]) -> str:
+    rows = [
+        (
+            item.action_id,
+            ", ".join(item.finding_ids),
+            item.action,
+            item.priority,
+            item.owner,
+            item.verification_method,
+            item.review_condition,
+            item.status,
+        )
+        for item in actions
+    ]
+    visual = {
+        "type": "action-board",
+        "title": "PRD 补全任务清单",
+        "columns": ["行动", "对应根因", "负责人", "期限", "状态", "验证方式"],
+        "rows": [
+            {
+                "行动": item.action,
+                "对应根因": ", ".join(item.finding_ids),
+                "负责人": item.owner,
+                "期限": "进入下一阶段前",
+                "状态": item.status,
+                "验证方式": item.verification_method,
+            }
+            for item in actions
+        ],
+    }
+    return (
+        "## 补全任务清单\n"
+        + _markdown_table(
+            [
+                "ID",
+                "关联问题",
+                "补全动作",
+                "优先级",
+                "负责人",
+                "验证方式",
+                "复审条件",
+                "状态",
+            ],
+            rows,
+        )
+        + "\n\n```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+
+
+def _render_prd_revision_structure(sections: list[PrdRevisionSection]) -> str:
+    rows = [
+        (
+            item.section_id,
+            item.title,
+            item.rewrite_goal,
+            item.acceptance_note,
+            item.status,
+        )
+        for item in sections
+    ]
+    visual = {
+        "type": "roadmap",
+        "title": "PRD 修订路线",
+        "columns": ["版本", "时间", "核心功能", "目标", "成功指标"],
+        "rows": [
+            {
+                "版本": item.section_id,
+                "时间": "本次修订",
+                "核心功能": item.title,
+                "目标": item.rewrite_goal,
+                "成功指标": item.acceptance_note,
+            }
+            for item in sections
+        ],
+    }
+    return (
+        "## 推荐 PRD 结构\n"
+        + _markdown_table(["章节 ID", "章节", "改写目标", "验收说明", "状态"], rows)
+        + "\n\n```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+
+
+def _render_prd_verification_and_review(actions: list[PrdCompletionAction]) -> str:
+    rows = [
+        (item.action_id, item.verification_method, item.review_condition, item.status)
+        for item in actions
+    ]
+    return "## 验证方式与复审条件\n" + _markdown_table(
+        ["动作 ID", "验证方式", "复审条件", "状态"],
+        rows,
+    )
+
+
+def _render_prd_core_rewrites(sections: list[PrdRevisionSection]) -> str:
+    rows = [
+        (item.section_id, item.title, item.recommended_content, item.acceptance_note)
+        for item in sections
+    ]
+    return "## 核心需求改写\n" + _markdown_table(
+        ["章节 ID", "章节", "推荐内容", "验收说明"],
+        rows,
+    )
+
+
+def _render_prd_acceptance_criteria(
+    criteria: list[PrdAcceptanceCriterion],
+) -> str:
+    rows = [
+        (
+            item.criterion_id,
+            ", ".join(item.related_section_ids),
+            item.scenario,
+            item.given,
+            item.when,
+            item.then,
+            item.testability_level,
+            item.status,
+        )
+        for item in criteria
+    ]
+    return "## 验收标准与可测试性\n" + _markdown_table(
+        ["ID", "关联章节", "场景", "Given", "When", "Then", "可测试性等级", "状态"],
+        rows,
+    )
+
+
+def _render_prd_handoff_inputs(items: list[PrdHandoffInput]) -> str:
+    rows = [
+        (
+            item.input_id,
+            ", ".join(item.related_section_ids),
+            item.target_workflow,
+            item.content,
+            item.risk,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## Lisa Handoff 输入\n" + _markdown_table(
+        ["ID", "关联章节", "目标 Workflow", "内容", "风险", "状态"],
+        rows,
+    )
+
+
+def _render_prd_review_conditions(actions: list[PrdCompletionAction]) -> str:
+    rows = [
+        (item.action_id, item.review_condition, item.owner, item.status)
+        for item in actions
+    ]
+    return "## 复审条件\n" + _markdown_table(
+        ["动作 ID", "复审条件", "责任方", "状态"],
+        rows,
+    )
+
+
+def _render_prd_stage_gate(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 阶段门禁\n" + "\n".join(lines)
+
+
+def _render_value_positioning_summary(summary: PositioningSummary) -> str:
+    rows = [
+        ("Artifact 名称", "价值定位诊断报告"),
+        ("一句话定位", summary.one_liner),
+        ("核心用户", summary.core_user),
+        ("核心痛点", summary.core_pain),
+        ("独特价值", summary.unique_value),
+        ("当前判断", summary.current_judgement),
+    ]
+    return "## 定位摘要\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_value_flow(flow: ValueFlow) -> str:
+    node_lookup = {node.node_id: node for node in flow.nodes}
+    safe_ids: dict[str, str] = {}
+    rendered_ids = {
+        node.node_id: _node_id(node.node_id, safe_ids) for node in flow.nodes
+    }
+    lines = ["```mermaid", "flowchart TD"]
+    for node in flow.nodes:
+        lines.append(
+            f'    {rendered_ids[node.node_id]}["{_escape_mermaid_label(node.label)}<br/>'
+            f'{_escape_mermaid_label(node.description)}"]'
+        )
+    for link in flow.links:
+        lines.append(
+            f"    {rendered_ids[link.from_node]} -->|"
+            f'"{_escape_mermaid_label(link.label)}"| '
+            f"{rendered_ids[link.to_node]}"
+        )
+    lines.append("```")
+
+    rows = [
+        (node.node_id, node.label, node.description) for node in node_lookup.values()
+    ]
+    return (
+        "## 价值结构图\n"
+        + "\n".join(lines)
+        + "\n\n"
+        + _markdown_table(["节点 ID", "节点", "说明"], rows)
+    )
+
+
+def _render_target_scenarios(items: list[TargetScenario]) -> str:
+    rows = [
+        (item.dimension, item.description, item.evidence_level, item.status)
+        for item in items
+    ]
+    return "## 目标用户与场景\n" + _markdown_table(
+        ["维度", "描述", "证据等级", "状态"],
+        rows,
+    )
+
+
+def _render_pain_evidence(items: list[PainEvidence]) -> str:
+    rows = [
+        (
+            item.pain_id,
+            item.description,
+            item.scene,
+            item.impact,
+            item.evidence_level,
+            item.validation_action,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 痛点证据\n" + _markdown_table(
+        ["痛点 ID", "痛点描述", "发生场景", "影响程度", "证据等级", "验证动作", "状态"],
+        rows,
+    )
+
+
+def _render_differentiators(items: list[Differentiator]) -> str:
+    rows = [
+        (
+            item.dimension,
+            item.our_value,
+            item.existing_solution,
+            item.evidence,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 差异化价值\n" + _markdown_table(
+        ["维度", "我们", "现有方案/竞品", "差异化证据", "状态"],
+        rows,
+    )
+
+
+def _render_business_feasibility(items: list[BusinessFeasibility]) -> str:
+    rows = [
+        (
+            item.dimension,
+            item.judgement,
+            item.basis,
+            item.validation_action,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 商业可行性\n" + _markdown_table(
+        ["维度", "判断", "依据", "验证动作", "状态"],
+        rows,
+    )
+
+
+def _render_value_score_matrix(
+    items: list[ValueScore],
+    summary: ValueScoreSummary,
+) -> str:
+    rows = [
+        (item.dimension, item.score, item.basis, item.next_validation) for item in items
+    ]
+    visual = {
+        "type": "score-matrix",
+        "title": "价值主张初筛评分矩阵",
+        "columns": ["评估维度", "评分", "依据", "下一步验证"],
+        "rows": [
+            {
+                "评估维度": item.dimension,
+                "评分": item.score,
+                "依据": item.basis,
+                "下一步验证": item.next_validation,
+            }
+            for item in items
+        ],
+    }
+    return (
+        "## 价值主张评分\n"
+        + _markdown_table(["评估维度", "评分", "依据", "下一步验证"], rows)
+        + "\n\n"
+        + "```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+        + "\n\n"
+        + f"> **评分结论**：总分 {summary.total_score}，平均分 "
+        + f"{summary.average_score:.2f}。{summary.judgement}"
+    )
+
+
+def _render_value_assumptions(items: list[ValueAssumption]) -> str:
+    rows = [
+        (
+            item.assumption_id,
+            item.content,
+            item.impact,
+            item.validation_action,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 未验证假设\n" + _markdown_table(
+        ["假设 ID", "假设内容", "影响范围", "验证动作", "责任方/验证人", "状态"],
+        rows,
+    )
+
+
+def _render_elevator_pitch(pitch: str) -> str:
+    return "## 60 秒电梯演讲\n\n> " + pitch
+
+
+def _render_value_stage_gate(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 阶段门禁\n" + "\n".join(lines)
+
+
+def _persona_names(personas: list[PersonaProfile]) -> dict[str, str]:
+    return {persona.persona_id: persona.name for persona in personas}
+
+
+def _render_persona_summary(summary: PersonaSummary) -> str:
+    rows = [
+        ("Artifact 名称", summary.artifact_name),
+        ("核心用户判断", summary.core_user_judgement),
+        ("主要痛点", summary.primary_pain),
+        ("验证状态", summary.validation_status),
+        ("进入旅程阶段判断", summary.journey_readiness),
+    ]
+    return "## 画像摘要\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_persona_profiles(personas: list[PersonaProfile]) -> str:
+    sections = ["## 主要用户画像"]
+    for index, persona in enumerate(personas, start=1):
+        basic_rows = [
+            (
+                item.dimension,
+                item.description,
+                item.evidence_level,
+                item.validation_status,
+            )
+            for item in persona.basic_features
+        ]
+        behavior_rows = [
+            (
+                item.dimension,
+                item.description,
+                item.trigger,
+                item.evidence_level,
+                item.validation_status,
+            )
+            for item in persona.behavior_features
+        ]
+        sections.append(
+            f"### 画像 {index}\n\n"
+            f"**用户类型名称**：{persona.name}（{persona.priority}）\n\n"
+            f"> {persona.summary}\n\n"
+            "#### 基础特征\n"
+            + _markdown_table(
+                ["维度", "描述", "证据等级", "验证状态"],
+                basic_rows,
+            )
+            + "\n\n"
+            + "#### 行为特征\n"
+            + _markdown_table(
+                ["维度", "描述", "场景触发", "证据等级", "验证状态"],
+                behavior_rows,
+            )
+        )
+    return "\n\n".join(sections)
+
+
+def _render_persona_behavior_scenarios(
+    items: list[PersonaBehaviorScenario],
+    personas: list[PersonaProfile],
+) -> str:
+    persona_names = _persona_names(personas)
+    rows = [
+        (
+            item.scenario_id,
+            persona_names[item.persona_id],
+            item.scenario,
+            item.trigger,
+            item.user_goal,
+            item.current_solution,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 行为与场景\n" + _markdown_table(
+        ["场景 ID", "用户类型", "场景描述", "触发条件", "用户目标", "当前做法", "状态"],
+        rows,
+    )
+
+
+def _render_persona_decision_chain(
+    items: list[PersonaDecisionRole],
+    personas: list[PersonaProfile],
+) -> str:
+    persona_names = _persona_names(personas)
+    rows = [
+        (
+            item.role,
+            persona_names[item.persona_id],
+            item.concern,
+            item.influence,
+            item.payment_relation,
+            item.evidence_level,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 决策链\n" + _markdown_table(
+        [
+            "决策角色",
+            "用户类型/岗位",
+            "关注点",
+            "影响力",
+            "付费/采购关系",
+            "证据等级",
+            "验证状态",
+        ],
+        rows,
+    )
+
+
+def _render_persona_pain_evidence(
+    items: list[PersonaPainEvidence],
+    personas: list[PersonaProfile],
+) -> str:
+    persona_names = _persona_names(personas)
+    rows = [
+        (
+            item.pain_id,
+            persona_names[item.persona_id],
+            item.pain,
+            item.frequency,
+            item.impact,
+            item.existing_solution_gap,
+            item.evidence_level,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 痛点证据\n" + _markdown_table(
+        [
+            "痛点 ID",
+            "用户类型",
+            "痛点",
+            "频率",
+            "影响程度",
+            "现有方案不足",
+            "证据等级",
+            "验证状态",
+        ],
+        rows,
+    )
+
+
+def _render_anti_personas(items: list[AntiPersona]) -> str:
+    rows = [
+        (item.name, item.reason, item.boundary, item.risk, item.status)
+        for item in items
+    ]
+    return "## 反画像\n" + _markdown_table(
+        ["非目标用户", "为什么不是当前核心用户", "不服务的边界", "风险", "状态"],
+        rows,
+    )
+
+
+def _render_persona_priority_ranking(
+    items: list[PersonaPriorityRanking],
+    personas: list[PersonaProfile],
+) -> str:
+    persona_names = _persona_names(personas)
+    rows = [
+        (
+            item.priority,
+            persona_names[item.persona_id],
+            item.reason,
+            item.related_pain,
+            item.evidence_level,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 用户优先级排序\n" + _markdown_table(
+        ["优先级", "用户类型", "理由", "关联痛点", "证据等级", "验证状态"],
+        rows,
+    )
+
+
+def _render_journey_map(stages: list[JourneyStage]) -> str:
+    lines = [
+        "```mermaid",
+        "journey",
+        "    title 核心用户旅程",
+    ]
+    for stage in stages:
+        lines.append(f"    section {_escape_journey_text(stage.stage_name)}")
+        lines.append(
+            f"        {_escape_journey_text(stage.user_task)}: "
+            f"{stage.emotion_score}: 用户"
+        )
+    lines.append("```")
+    return (
+        "## 用户旅程地图\n"
+        + "\n".join(lines)
+        + "\n\n> 数字为情绪评分：1=非常沮丧，5=非常满意"
+    )
+
+
+def _render_journey_map_visual(stages: list[JourneyStage]) -> str:
+    visual = {
+        "type": "journey-map",
+        "title": "用户旅程结构化地图",
+        "columns": [
+            "阶段",
+            "用户任务",
+            "触点",
+            "情绪评分",
+            "关键痛点",
+            "机会假设",
+            "成功指标",
+            "验证状态",
+        ],
+        "rows": [
+            {
+                "阶段": item.stage_name,
+                "用户任务": item.user_task,
+                "触点": item.touchpoint,
+                "情绪评分": item.emotion_score,
+                "关键痛点": item.key_pain,
+                "机会假设": item.opportunity_hypothesis,
+                "成功指标": item.success_metric,
+                "验证状态": item.validation_status,
+            }
+            for item in stages
+        ],
+    }
+    return (
+        "## 结构化旅程地图\n"
+        "```ai4se-visual\n" + json.dumps(visual, ensure_ascii=False, indent=2) + "\n```"
+    )
+
+
+def _render_journey_stage_details(stages: list[JourneyStage]) -> str:
+    sections = ["## 关键阶段详细分析"]
+    for index, stage in enumerate(stages, start=1):
+        rows = [
+            ("旅程阶段", f"{stage.stage_id} {stage.stage_name}"),
+            ("触点渠道", stage.touchpoint),
+            ("用户任务", stage.user_task),
+            ("用户目标", stage.user_goal),
+            ("用户行为", stage.user_behavior),
+            ("情绪评分", f"{stage.emotion_score} 分：{stage.emotion_reason}"),
+            ("关键痛点", f"{stage.pain_id} {stage.key_pain}"),
+            ("现有方案不足", stage.existing_solution_gap),
+            ("机会假设", f"{stage.opportunity_id} {stage.opportunity_hypothesis}"),
+            ("成功指标", stage.success_metric),
+            ("验证状态", stage.validation_status),
+        ]
+        sections.append(
+            f"### 阶段 {index}：{stage.stage_name}\n"
+            + _markdown_table(["维度", "描述"], rows)
+        )
+    return "\n\n".join(sections)
+
+
+def _render_journey_pain_priorities(
+    items: list[JourneyPainPriority],
+    stages: list[JourneyStage],
+) -> str:
+    stage_names = {stage.stage_id: stage.stage_name for stage in stages}
+    sections = ["## 痛点优先级排序"]
+    priority_levels = ["高优先级痛点", "中等优先级痛点", "低优先级痛点"]
+    headers = ["痛点 ID", "痛点", "影响阶段", "影响程度", "发生频率", "现有方案不足"]
+    for level in priority_levels:
+        rows = [
+            (
+                item.pain_id,
+                item.pain,
+                stage_names[item.stage_id],
+                item.impact,
+                item.frequency,
+                item.existing_solution_gap,
+            )
+            for item in items
+            if item.priority_level == level
+        ]
+        if not rows:
+            rows = [("无", "本轮未识别", "无", "无", "无", "无")]
+        sections.append(f"### {level}\n" + _markdown_table(headers, rows))
+    return "\n\n".join(sections)
+
+
+def _render_journey_opportunity_scores(
+    items: list[JourneyOpportunityScore],
+) -> str:
+    rows = [
+        (
+            item.opportunity_id,
+            item.opportunity,
+            item.pain_id,
+            item.value_potential,
+            item.competition_strength,
+            item.feasibility,
+            item.success_metric,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 机会评分\n" + _markdown_table(
+        [
+            "机会 ID",
+            "机会",
+            "对应痛点",
+            "价值潜力",
+            "竞争强度",
+            "实现可行性",
+            "成功指标",
+            "验证状态",
+        ],
+        rows,
+    )
+
+
+def _render_journey_entry_strategy(items: list[JourneyEntryStrategy]) -> str:
+    rows = [
+        (
+            item.strategy_item,
+            item.content,
+            item.related_opportunity,
+            item.tradeoff_reason,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 产品切入策略\n" + _markdown_table(
+        ["策略项", "内容", "关联机会", "取舍理由", "状态"],
+        rows,
+    )
+
+
+def _render_journey_validation_experiments(
+    items: list[JourneyValidationExperiment],
+) -> str:
+    rows = [
+        (
+            item.experiment_id,
+            item.hypothesis,
+            item.opportunity_id,
+            item.method,
+            item.success_metric,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 验证实验\n" + _markdown_table(
+        ["实验 ID", "验证假设", "关联机会", "实验方式", "成功指标", "责任方", "状态"],
+        rows,
+    )
+
+
+def _render_journey_summary(summary: JourneySummary) -> str:
+    rows = [
+        ("核心用户", summary.core_persona),
+        ("核心痛点", summary.core_pain),
+        ("产品切入策略", summary.entry_strategy),
+        ("需求蓝图就绪判断", summary.blueprint_readiness),
+    ]
+    return "## 旅程摘要\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _escape_journey_text(value: str) -> str:
+    return value.replace("\n", " ").replace(":", "：").replace("|", "｜")
+
+
+def _escape_mermaid_time(value: str) -> str:
+    return value.replace("\n", " ").replace(":", "：")
+
+
+def _escape_mermaid_timeline_text(value: str) -> str:
+    return value.replace("\n", " ").replace(":", "：").replace("|", "｜")
+
+
+def _escape_mermaid_mindmap_text(value: str) -> str:
+    return (
+        value.replace("\n", " ").replace(":", "：").replace("|", "｜").replace('"', "'")
+    )
+
+
+def _render_blueprint_document_info(info: BlueprintDocumentInfo) -> str:
+    rows = [
+        ("文档版本", info.version),
+        ("创建日期", info.created_at),
+        ("产品方向", info.product_direction),
+        ("Artifact 名称", info.artifact_name),
+        ("蓝图状态", info.blueprint_status),
+    ]
+    return "## 文档信息\n" + _markdown_table(["维度", "内容"], rows)
+
+
+def _render_blueprint_product_overview(overview: BlueprintProductOverview) -> str:
+    core_value_rows = [
+        ("用户价值", overview.user_value),
+        ("商业价值", overview.business_value),
+        ("商业模式", overview.business_model),
+    ]
+    return (
+        "## 1. 产品概述\n\n"
+        "### 1.1 产品愿景\n"
+        f"> {overview.vision}\n\n"
+        "### 1.2 定位声明\n"
+        f"**For** {overview.positioning_for} **who** {overview.positioning_who},\n"
+        f"**the** {overview.positioning_product} **is a** "
+        f"{overview.positioning_category}\n"
+        f"**that** {overview.positioning_value}. **Unlike** "
+        f"{overview.positioning_unlike},\n"
+        f"**our product** {overview.positioning_differentiator}.\n\n"
+        "### 1.3 核心价值\n" + _markdown_table(["维度", "描述"], core_value_rows)
+    )
+
+
+def _render_blueprint_target_users(items: list[BlueprintTargetUser]) -> str:
+    rows = [(item.user_type, item.core_pain, item.priority) for item in items]
+    return "## 2. 目标用户（摘要）\n" + _markdown_table(
+        ["用户类型", "核心痛点", "优先级"], rows
+    )
+
+
+def _render_blueprint_requirements(
+    modules: list[BlueprintFeatureModule],
+    requirements: list[BlueprintRequirement],
+) -> str:
+    sections = [
+        "## 3. 核心需求",
+        "### 功能架构\n" + _render_blueprint_feature_mindmap(modules),
+    ]
+    headings = [
+        ("P0", "### P0 需求（核心功能，必须实现）"),
+        ("P1", "### P1 需求（重要功能，应该实现）"),
+        ("P2", "### P2 需求（增值功能，可以实现）"),
+    ]
+    headers = [
+        "ID",
+        "需求名称",
+        "用户故事",
+        "对应痛点",
+        "范围边界",
+        "依赖",
+        "验收标准",
+        "可测试性等级",
+        "owner",
+        "状态",
+    ]
+    for priority, heading in headings:
+        rows = [
+            (
+                item.requirement_id,
+                item.name,
+                item.user_story,
+                item.related_pain,
+                item.scope,
+                item.dependency,
+                item.acceptance,
+                item.testability_level,
+                item.owner,
+                item.status,
+            )
+            for item in requirements
+            if item.priority == priority
+        ]
+        if not rows:
+            rows = [
+                ("无", "本轮未规划", "无", "无", "无", "无", "无", "无", "无", "无")
+            ]
+        sections.append(heading + "\n" + _markdown_table(headers, rows))
+    return "\n\n".join(sections)
+
+
+def _render_blueprint_feature_mindmap(modules: list[BlueprintFeatureModule]) -> str:
+    lines = ["```mermaid", "mindmap", '    root(("产品名称"))']
+    for module in modules:
+        lines.append(f'        ("{_escape_mermaid_label(module.module_name)}")')
+        for feature in module.features:
+            lines.append(
+                f'            ["{_escape_mermaid_label(feature.feature_name)}"]'
+            )
+    lines.append("```")
+    return "\n".join(lines)
+
+
+def _render_blueprint_main_flow(flow: BlueprintMainFlow) -> str:
+    node_lookup = {node.node_id: node for node in flow.nodes}
+    existing_ids: dict[str, str] = {}
+    safe_ids = {
+        node.node_id: _node_id(node.node_id, existing_ids) for node in flow.nodes
+    }
+    lines = ["```mermaid", "flowchart TD"]
+    for node in flow.nodes:
+        lines.append(
+            f'    {safe_ids[node.node_id]}["{_escape_mermaid_label(node.label)}"]'
+        )
+    for link in flow.links:
+        lines.append(
+            f"    {safe_ids[link.from_node]} -->|"
+            f'"{_escape_mermaid_label(link.label)}"| {safe_ids[link.to_node]}'
+        )
+    lines.append("```")
+    rows = [
+        (
+            link.from_node,
+            node_lookup[link.from_node].label,
+            link.label,
+            link.to_node,
+            node_lookup[link.to_node].label,
+        )
+        for link in flow.links
+    ]
+    return "## 4. 核心流程\n\n" "### 主流程图\n" + "\n".join(
+        lines
+    ) + "\n\n" + _markdown_table(["起点 ID", "起点", "动作", "终点 ID", "终点"], rows)
+
+
+def _render_blueprint_success_metrics(
+    items: list[BlueprintSuccessMetric],
+) -> str:
+    rows = [
+        (item.metric_type, item.metric_name, item.target, item.measurement)
+        for item in items
+    ]
+    return "## 5. 成功指标\n" + _markdown_table(
+        ["指标类型", "指标名称", "目标值", "衡量方式"],
+        rows,
+    )
+
+
+def _render_blueprint_mvp_plan(plan: BlueprintMvpPlan) -> str:
+    feature_lines = [
+        f"- [{'x' if item.included else ' '}] {item.requirement_id}: "
+        f"{item.feature_name} — {item.release}"
+        for item in plan.included_features
+    ]
+    iteration_rows = [
+        (item.version, item.time, item.core_features, item.goal)
+        for item in plan.iterations
+    ]
+    return (
+        "## 6. MVP 范围与计划\n"
+        "### MVP 包含功能\n" + "\n".join(feature_lines) + "\n\n"
+        "### 迭代路线\n"
+        + _markdown_table(["版本", "时间", "核心功能", "目标"], iteration_rows)
+    )
+
+
+def _render_blueprint_non_functional_requirements(
+    items: list[BlueprintNonFunctionalRequirement],
+) -> str:
+    rows = [
+        (
+            item.type,
+            item.description,
+            item.metric_or_constraint,
+            item.verification,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 7. 非功能需求\n" + _markdown_table(
+        ["类型", "需求描述", "指标/约束", "验证方式", "owner", "状态"],
+        rows,
+    )
+
+
+def _render_blueprint_acceptance_criteria(
+    items: list[BlueprintAcceptanceCriterion],
+) -> str:
+    rows = [
+        (
+            item.acceptance_id,
+            item.requirement_id,
+            item.criterion,
+            item.verification,
+            item.testability_level,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 8. 验收标准\n" + _markdown_table(
+        [
+            "验收 ID",
+            "关联需求",
+            "验收标准",
+            "验证方式",
+            "可测试性等级",
+            "owner",
+            "状态",
+        ],
+        rows,
+    )
+
+
+def _render_blueprint_roadmap(items: list[BlueprintRoadmapItem]) -> str:
+    visual = {
+        "type": "roadmap",
+        "title": "产品迭代路线图",
+        "columns": ["版本", "时间", "核心功能", "目标", "成功指标"],
+        "rows": [
+            {
+                "版本": item.version,
+                "时间": item.time,
+                "核心功能": item.core_features,
+                "目标": item.goal,
+                "成功指标": item.success_metric,
+            }
+            for item in items
+        ],
+    }
+    return (
+        "## 9. 路线图\n"
+        "```ai4se-visual\n" + json.dumps(visual, ensure_ascii=False, indent=2) + "\n```"
+    )
+
+
+def _render_blueprint_risks(items: list[BlueprintRisk]) -> str:
+    rows = [
+        (
+            item.risk_type,
+            item.description,
+            item.probability,
+            item.impact,
+            item.mitigation,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 10. 风险评估\n" + _markdown_table(
+        ["风险类型", "风险描述", "可能性", "影响", "缓解措施", "owner", "状态"],
+        rows,
+    )
+
+
+def _render_blueprint_lisa_handoff_inputs(
+    items: list[BlueprintLisaHandoffInput],
+) -> str:
+    rows = [
+        (
+            item.input_type,
+            item.reference_id,
+            item.content,
+            item.source,
+            item.usage,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 11. Lisa Handoff 输入\n" + _markdown_table(
+        ["输入类型", "ID", "内容", "来源", "给 Lisa 的用途", "状态"],
+        rows,
+    )
+
+
+def _render_blueprint_stage_gate(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 12. 阶段门禁\n" + "\n".join(lines)
+
+
+def _render_flow_links(links: list[FlowLink]) -> str:
+    node_ids: dict[str, str] = {}
+    lines = ["```mermaid", "flowchart TD"]
+    for link in links:
+        from_id = _node_id(link.from_node, node_ids)
+        to_id = _node_id(link.to_node, node_ids)
+        lines.append(
+            f'    {from_id}["{_escape_mermaid_label(link.from_node)}"] '
+            f'-->|"{_escape_mermaid_label(link.label)}"| '
+            f'{to_id}["{_escape_mermaid_label(link.to_node)}"]'
+        )
+    lines.append("```")
+    return "## 4. 核心链路与异常链路\n" + "\n".join(lines)
+
+
+def _render_clarification_questions(
+    questions: list[ClarificationQuestion],
+) -> str:
+    rows = [
+        (
+            item.question_id,
+            item.question,
+            item.priority,
+            item.blocking,
+            item.impact,
+            item.assumption,
+            item.owner,
+            item.status,
+        )
+        for item in questions
+    ]
+    return "## 5. 待澄清问题\n" + _markdown_table(
+        [
+            "问题 ID",
+            "问题描述",
+            "优先级",
+            "阻断性",
+            "影响范围",
+            "当前假设",
+            "责任方",
+            "状态",
+        ],
+        rows,
+    )
+
+
+def _render_quality_requirements(
+    requirements: list[QualityRequirement],
+) -> str:
+    rows = [
+        (
+            item.dimension,
+            item.requirement_or_assumption,
+            item.metric,
+            item.risk,
+            item.status,
+        )
+        for item in requirements
+    ]
+    return "## 6. 隐式质量需求\n" + _markdown_table(
+        ["质量维度", "需求或假设", "可验证指标", "风险", "状态"],
+        rows,
+    )
+
+
+def _render_downstream_inputs(inputs: list[DownstreamInput]) -> str:
+    rows = [
+        (item.input_type, item.input_id, item.content, item.source, item.usage)
+        for item in inputs
+    ]
+    return "## 7. 后续测试设计输入\n" + _markdown_table(
+        ["输入类型", "ID", "内容", "来源", "后续用途"],
+        rows,
+    )
+
+
+def _render_stage_gate(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 8. 阶段门禁\n" + "\n".join(lines)
+
+
+def _markdown_table(headers: list[str], rows: list[tuple[Any, ...]]) -> str:
+    header = "| " + " | ".join(headers) + " |"
+    separator = "| " + " | ".join("---" for _ in headers) + " |"
+    body = [
+        "| " + " | ".join(_escape_table_cell(cell) for cell in row) + " |"
+        for row in rows
+    ]
+    return "\n".join([header, separator, *body])
+
+
+def _escape_table_cell(value: Any) -> str:
+    return str(value).replace("|", "\\|").replace("\n", "<br>")
+
+
+def _node_id(label: str, existing: dict[str, str]) -> str:
+    if label in existing:
+        return existing[label]
+    base = re.sub(r"[^0-9A-Za-z_]+", "_", label).strip("_")
+    if not base or base[0].isdigit():
+        base = f"N_{base}" if base else "N"
+    candidate = base
+    suffix = 2
+    while candidate in existing.values():
+        candidate = f"{base}_{suffix}"
+        suffix += 1
+    existing[label] = candidate
+    return candidate
+
+
+
+
 def _escape_mermaid_label(value: str) -> str:
     return value.replace('"', "'")
 
@@ -6338,6 +7796,22 @@ ARTIFACT_DATA_RENDERERS: dict[tuple[str, str], ArtifactDataRenderer] = {
     ("STORY_BREAKDOWN", "SPRINT_PLAN"): (
         StoryBreakdownArtifactData,
         render_story_breakdown_markdown,
+    ),
+    ("PRD_REVIEW", "INVENTORY"): (
+        PrdReviewArtifactData,
+        lambda data: render_prd_review_markdown(data, "INVENTORY"),
+    ),
+    ("PRD_REVIEW", "QUALITY_AUDIT"): (
+        PrdReviewArtifactData,
+        lambda data: render_prd_review_markdown(data, "QUALITY_AUDIT"),
+    ),
+    ("PRD_REVIEW", "COMPLETION_PLAN"): (
+        PrdReviewArtifactData,
+        lambda data: render_prd_review_markdown(data, "COMPLETION_PLAN"),
+    ),
+    ("PRD_REVIEW", "REVISION_BLUEPRINT"): (
+        PrdReviewArtifactData,
+        lambda data: render_prd_review_markdown(data, "REVISION_BLUEPRINT"),
     ),
 }
 

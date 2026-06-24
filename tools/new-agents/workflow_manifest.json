@@ -957,6 +957,154 @@
         ],
         "inputPlaceholder": "粘贴 PRD、需求蓝图或产品想法..."
       }
+    },
+    "PRD_REVIEW": {
+      "id": "PRD_REVIEW",
+      "agentId": "alex",
+      "slug": "prd-review",
+      "name": "PRD 质量评审与补全",
+      "description": "帮助产品经理评审已有 PRD 或需求草案，识别质量问题、补齐缺口，并输出可复审的修订蓝图。",
+      "listing": {
+        "name": "PRD 质量评审与补全",
+        "description": "评审已有 PRD 的完整性、一致性、可测试性和风险缺口，输出补全动作与修订蓝图。",
+        "icon": "ClipboardCheck",
+        "preview": {
+          "suitableFor": [
+            "已有 PRD、Epic 或需求草案，需要系统化质量评审",
+            "需要把需求缺口转成可执行补全任务和复审条件",
+            "需要为后续 Lisa 需求评审或测试设计准备高质量输入"
+          ],
+          "notSuitableFor": [
+            "只有早期产品想法，还没有形成需求草案",
+            "需要从零发散产品方向或价值定位"
+          ],
+          "requiredInputs": [
+            "PRD、需求草案、Epic 或用户故事文本",
+            "业务目标、目标用户、范围和关键约束",
+            "已有验收标准、风险、非功能要求或待确认问题"
+          ],
+          "expectedOutputs": [
+            "PRD 输入盘点和缺失信息清单",
+            "质量评审问题、补全动作和复审条件",
+            "PRD 修订蓝图与 Lisa handoff 输入"
+          ],
+          "sampleInput": "这是我们会员权限管理 PRD 草案，请帮我评审质量问题并给出补全和修订蓝图。"
+        }
+      },
+      "stages": [
+        {
+          "id": "INVENTORY",
+          "name": "输入盘点",
+          "promptTemplateId": "prd_review.inventory",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# PRD 输入盘点",
+              "## 文档信息",
+              "## PRD 目标与范围",
+              "## 输入事实清单",
+              "## 用户与场景",
+              "## 现有验收材料",
+              "## 缺失信息清单",
+              "## 阶段门禁",
+              "证据等级",
+              "状态"
+            ]
+          },
+          "visualContract": {
+            "requiredMermaidDiagrams": [
+              "mindmap"
+            ]
+          }
+        },
+        {
+          "id": "QUALITY_AUDIT",
+          "name": "质量评审",
+          "promptTemplateId": "prd_review.quality_audit",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# PRD 质量评审",
+              "## 文档信息",
+              "## PRD 目标与范围",
+              "## 质量评审摘要",
+              "## 质量评分矩阵",
+              "## 问题清单",
+              "## 风险影响",
+              "## 阶段门禁",
+              "评审维度",
+              "严重级别",
+              "阻断性",
+              "证据"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "score-matrix"
+            ]
+          }
+        },
+        {
+          "id": "COMPLETION_PLAN",
+          "name": "补全建议",
+          "promptTemplateId": "prd_review.completion_plan",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# PRD 补全建议",
+              "## 文档信息",
+              "## PRD 目标与范围",
+              "## 质量评审摘要",
+              "## 补全任务清单",
+              "## 推荐 PRD 结构",
+              "## 验证方式与复审条件",
+              "## 阶段门禁",
+              "补全动作",
+              "优先级",
+              "负责人",
+              "复审条件"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "action-board"
+            ]
+          }
+        },
+        {
+          "id": "REVISION_BLUEPRINT",
+          "name": "修订蓝图",
+          "promptTemplateId": "prd_review.revision_blueprint",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# PRD 修订蓝图",
+              "## 文档信息",
+              "## PRD 目标与范围",
+              "## 质量评审摘要",
+              "## 补全任务清单",
+              "## 推荐 PRD 结构",
+              "## 核心需求改写",
+              "## 验收标准与可测试性",
+              "## Lisa Handoff 输入",
+              "## 复审条件",
+              "## 阶段门禁",
+              "可测试性等级",
+              "状态"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "roadmap"
+            ]
+          }
+        }
+      ],
+      "onboarding": {
+        "welcomeMessage": "你好！我是 Alex，PRD 质量评审顾问。把你的 PRD 或需求草案发给我，我会帮你识别质量问题、补齐缺口，并整理成可复审的修订蓝图。",
+        "starterPrompts": [
+          "这是我们的会员权限管理 PRD 草案，请帮我评审并补全",
+          "我有一组用户故事和验收标准，想检查是否足够可测试",
+          "请帮我把这份需求草案整理成可交给 Lisa 做测试设计的版本"
+        ],
+        "inputPlaceholder": "粘贴 PRD、需求草案、Epic 或用户故事..."
+      }
     }
   }
 }

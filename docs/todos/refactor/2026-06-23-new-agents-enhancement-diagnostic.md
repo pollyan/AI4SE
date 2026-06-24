@@ -9,7 +9,7 @@
 当前 New Agents 是一个配置化多智能体工作台:
 
 - Lisa: 测试专家，在线 workflow 包括 `TEST_DESIGN`、`REQ_REVIEW`、`INCIDENT_REVIEW`。
-- Alex: 业务需求分析师 / 创新顾问，在线 workflow 包括 `IDEA_BRAINSTORM`、`VALUE_DISCOVERY`。
+- Alex: 业务需求分析师 / 创新顾问，在线 workflow 包括 `IDEA_BRAINSTORM`、`VALUE_DISCOVERY`、`PRD_REVIEW`。
 - 所有在线 workflow 通过共享 `/api/agent/runs/stream`、typed SSE、共享 store、共享 artifact renderer 和共享 run persistence 工作。
 
 最大增强机会不是新增一批孤立 agent，而是把已有能力从“能生成 artifact”深化为“能诊断、能审阅、能修订、能恢复、能复用、能验收”的专业闭环。
@@ -39,7 +39,7 @@
 
 | 能力域 | 当前能力 | 成熟度 | 主要限制 |
 | --- | --- | --- | --- |
-| Agent / workflow | Alex、Lisa 共 5 个在线 workflow、17 个阶段 | 中高 | persona 和专业方法还没有完整配置化 |
+| Agent / workflow | Alex、Lisa 共 6 个在线 workflow、21 个阶段 | 中高 | persona 和专业方法还没有完整配置化；`STORY_BREAKDOWN` 仍是下一批候选 |
 | Runtime | PydanticAI + raw JSON streaming + typed SSE | 高 | 质量诊断偏 schema/contract 错误，不是产品质量评分 |
 | Contract | required headings、Mermaid、structured visual、stage_action 校验 | 高 | `agent_contracts.py` 与 manifest 仍有重复同步成本 |
 | Persistence | run、message、artifact version、context summary、metric、comment、lock、audit | 高 | 历史中心和复用能力仍偏基础 |
@@ -77,10 +77,11 @@
 | E11 | Prompt/template 版本管理 | 新增功能 | 平台扩展 | L | P2 | 每个 stage 有 prompt/template version 和回归样例 |
 | E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 | 新 workflow 缺 manifest/prompt/contract/test 任一面时 dry-run 失败 |
 | E13 | Alex 用户故事拆解 workflow | 已消化 | 专业内容 | M | P0 | 2026-06-24 已在本分支主线化：共享 workflow `STORY_BREAKDOWN`、slug `story-breakdown`、四阶段 `artifact_data` renderer、story-map visual contract、Alex 在线入口和 Lisa handoff 均已接入；验证覆盖 backend contract/runtime/renderer/sync/handoff 与 frontend workflow/prompt tests |
-| E14 | Alex PRD 质量评审与补全 workflow | 新增功能 | 专业内容 | M | P0 | 从产品经理视角评审 PRD 的业务目标、用户价值、范围边界、指标、依赖、非功能需求和验收标准，并输出补全建议 |
+| E14 | Alex PRD 质量评审与补全 workflow | 已消化 | 专业内容 | M | P0 | `PRD_REVIEW` 作为 Alex 在线 workflow 复用共享 Agent Runtime、typed SSE、workflow manifest、artifact contract 和 artifact_data renderer，覆盖输入盘点、质量评审、补全建议和修订蓝图 |
 
 ## Goal Mode 消化记录
 
+- 2026-06-23: 已完成 Alex `PRD_REVIEW` 质量评审与补全 workflow 主线化切片。新增 `prd-review` 在线入口、4 个阶段 prompt/template、manifest artifact/visual contract、后端 `artifact_data` schema/renderer、runtime structured output instruction 和前后端同步测试。该切片不新增 Alex 专属 runtime、API path、store 或 renderer pipeline。
 - 2026-06-24: 已完成 Run 历史复用中心厚切片，消化 E06。后端 run list 返回并过滤 `reuseStatus=ready|needs_artifact|failed`，新增共享 `POST /api/agent/runs/<run_id>/clone` 复制源 run 的 messages、当前 artifacts 和 context summaries 为独立 active run；前端 service 严格解析复用状态并提供 clone API；Header 历史会话升级为可筛选、可预览当前 artifact、可继续原 run、可复制为新 run 的复用中心，并展示预览/复制失败反馈。该切片复用现有 run persistence、snapshot restore、共享 Header UI 和 workflow registry，不新增 agent 专属 runtime、API path、store 或 renderer。
 
 ### 2026-06-24: E03/E08 Artifact/Workflow 质量治理闭环
@@ -108,14 +109,15 @@
 
 - `VALUE_DISCOVERY`: 加强 JTBD、用户旅程证据、机会评分、RICE/Kano/MoSCoW、需求蓝图完整性、非功能需求和 Lisa handoff 输入质量。
 - `IDEA_BRAINSTORM`: 加强问题域证据、创意来源、ICE 评分口径、MVP 范围收敛、Pre-mortem、验证实验和决策记录。
-- `PRD_REVIEW` 候选: 从 Alex 产品经理视角做 PRD 质量评审与补全，重点检查业务目标、用户价值、范围边界、用户旅程、功能需求、异常路径、非功能需求、成功指标、依赖风险和验收标准。它与 Lisa `REQ_REVIEW` 互补: Alex 负责产品完整性和决策质量，Lisa 负责可测试性和测试风险。
+- `PRD_REVIEW`: 已消化为 Alex 在线 workflow；后续可作为 `STORY_BREAKDOWN` 或 Lisa `REQ_REVIEW` 的上游输入。
+- `STORY_BREAKDOWN`: 已消化为 Alex 在线 workflow；后续可作为 Lisa `TEST_DESIGN` 或 `REQ_REVIEW` 的上游输入。
 
 建议首批 Alex 切片:
 
-1. `PRD_REVIEW`: PRD 质量评审与补全 workflow，从产品经理视角输出缺口清单、补全建议、质量门禁和修订版 PRD 大纲。
-2. VALUE_DISCOVERY/BLUEPRINT 质量门禁和 handoff 输入强化。
-3. IDEA_BRAINSTORM/CONVERGE 评分口径和验证实验闭环。
-4. 已完成：Alex 用户故事拆解 workflow 主线化，输出 Epic Map、User Story Backlog、验收标准、Sprint 切片和 Lisa Handoff 输入。
+1. 已完成：`PRD_REVIEW` PRD 质量评审与补全 workflow。
+2. 已完成：`STORY_BREAKDOWN` 用户故事拆解 workflow。
+3. VALUE_DISCOVERY/BLUEPRINT 质量门禁和 handoff 输入强化。
+4. IDEA_BRAINSTORM/CONVERGE 评分口径和验证实验闭环。
 
 ## 推荐路线
 
@@ -123,7 +125,7 @@
 
 目标: 1-2 周内明显提升专业感和产出可信度。
 
-包含: E02、E03、E04、E14。E01 已在 2026-06-23 workflow 入口 preview milestone 中消化；E13 已在 2026-06-24 Alex 用户故事拆解 workflow milestone 中消化。
+包含: E02、E03、E04。E01 已在 2026-06-23 workflow 入口 preview milestone 中消化；E13 已在 2026-06-24 Alex 用户故事拆解 workflow milestone 中消化；E14 已在 2026-06-23 Alex PRD Review milestone 中消化。
 
 暂不做:
 
@@ -223,6 +225,21 @@
 - 计划与 spec:
   - `docs/superpowers/specs/2026-06-24-runtime-observability-actions-design.md`
   - `docs/superpowers/plans/2026-06-24-runtime-observability-actions.md`
+
+### 6. Alex 用户故事拆解 workflow
+
+- 涉及模块: `workflow_manifest.json`、`frontend/src/core/workflows.ts`、`frontend/src/core/config/agentWorkflows.ts`、`frontend/src/core/prompts/`、`backend/agent_contracts.py`、`backend/artifact_data_renderers.py`、相关前后端测试。
+- 需要同步: workflow slug `story-breakdown`、Alex workflow listing、stage prompts、artifact required headings、structured visual contract、backend stage contract、frontend route/workflow tests。
+- 建议阶段: 需求输入解析、Epic 拆分、User Story 与验收标准、Sprint 切片与交付包。
+- 产出物: Epic map、User Story backlog、AC 表、依赖/风险清单、Sprint 切片建议、Lisa handoff 输入。
+- 完成定义: 用户输入需求蓝图或 PRD 后，可通过共享 `/api/agent/runs/stream` 生成可进入研发评审的用户故事包，并能继续交给 Lisa 做测试设计或需求评审。
+- 不纳入: Jira/禅道等外部项目管理工具写入。
+
+### 7. Alex PRD 质量评审与补全 workflow
+
+- 状态: 已在 2026-06-23 目标模式切片中消化。
+- 完成定义: Alex 能明确区分“产品完整性问题”和“测试可测性问题”，输出可被 PM 修订 PRD 的补全建议，并保留可交给 Lisa `REQ_REVIEW` 或后续 `STORY_BREAKDOWN` 的结构化输入。
+- 后续不再作为活跃候选重复选择；只在发现当前代码回归或 contract 失配时作为维护项处理。
 
 ## 架构约束
 

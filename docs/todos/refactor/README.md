@@ -20,7 +20,7 @@
 ## 当前入口
 
 - `2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 Flash 兼容的后端结构化产物数据改造已完成本地确定性 readiness gate；除非 CGA 发现新回归、真实 smoke 失败或新增 workflow/stage，否则不要继续按逐 stage 迁移恢复为活跃候选。真实 DeepSeek smoke 仍需要显式凭证、网络和额度。
-- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点与增强诊断 todo；已消化 E01 Workflow 入口 preview、E03/E08 Artifact/Workflow 质量治理闭环、E06 Run 历史复用中心、E09 运行统计产品化诊断建议、E13 Alex 用户故事拆解 workflow。
+- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点与增强诊断 todo；已消化 E01 Workflow 入口 preview、E03/E08 Artifact/Workflow 质量治理闭环、E06 Run 历史复用中心、E09 运行统计产品化诊断建议、E13 Alex 用户故事拆解 workflow、E14 Alex PRD Review workflow。
   - 后续候选能力包: E05 章节级重生成、E10 专业方法库配置、E11 Prompt/template 版本管理、E12 Workflow schema dry-run/scaffold。
   - 恢复目标模式时继续按 `docs/strategy/goal-mode-playbook.md` 执行中文 CGA、Superpowers 头脑风暴、中文 spec、中文 implementation plan 和 TDD，不机械按 ID 顺序推进。
 

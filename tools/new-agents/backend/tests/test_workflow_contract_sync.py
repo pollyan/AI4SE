@@ -203,6 +203,42 @@ FRONTEND_PROMPT_FILES = {
         / "story_breakdown"
         / "sprint_plan.ts"
     ),
+    ("PRD_REVIEW", "INVENTORY"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "prd_review"
+        / "inventory.ts"
+    ),
+    ("PRD_REVIEW", "QUALITY_AUDIT"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "prd_review"
+        / "quality_audit.ts"
+    ),
+    ("PRD_REVIEW", "COMPLETION_PLAN"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "prd_review"
+        / "completion_plan.ts"
+    ),
+    ("PRD_REVIEW", "REVISION_BLUEPRINT"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "prd_review"
+        / "revision_blueprint.ts"
+    ),
 }
 
 
@@ -234,6 +270,26 @@ def test_story_breakdown_is_declared_as_shared_runtime_workflow():
         "EPIC_MAPPING",
         "STORY_BACKLOG",
         "SPRINT_PLAN",
+    ]
+
+
+def test_prd_review_manifest_and_backend_contract_are_synchronized():
+    manifest = _workflow_manifest()
+    workflow = manifest["workflows"]["PRD_REVIEW"]
+
+    assert workflow["agentId"] == "alex"
+    assert workflow["slug"] == "prd-review"
+    assert WORKFLOW_STAGES["PRD_REVIEW"] == [
+        "INVENTORY",
+        "QUALITY_AUDIT",
+        "COMPLETION_PLAN",
+        "REVISION_BLUEPRINT",
+    ]
+    assert [stage["id"] for stage in workflow["stages"]] == [
+        "INVENTORY",
+        "QUALITY_AUDIT",
+        "COMPLETION_PLAN",
+        "REVISION_BLUEPRINT",
     ]
 
 

@@ -106,6 +106,33 @@ describe('Workflow Configuration', () => {
         expect(storyBreakdown?.link).toBe('/workspace/alex/story-breakdown');
     });
 
+    it('publishes Alex PRD review as an online runtime workflow', () => {
+        const workflow = WORKFLOWS.PRD_REVIEW;
+
+        expect(workflow.agentId).toBe('alex');
+        expect(workflow.slug).toBe('prd-review');
+        expect(workflow.stages.map(stage => stage.id)).toEqual([
+            'INVENTORY',
+            'QUALITY_AUDIT',
+            'COMPLETION_PLAN',
+            'REVISION_BLUEPRINT',
+        ]);
+        for (const stage of workflow.stages) {
+            expect(stage.description.length).toBeGreaterThan(100);
+            expect(stage.template?.length).toBeGreaterThan(100);
+        }
+
+        expect(getAgentWorkflows('alex')).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    id: 'prd-review',
+                    status: 'online',
+                    link: '/workspace/alex/prd-review',
+                }),
+            ])
+        );
+    });
+
     it('should have value-discovery workflow in Alex agent workflows as online and without prd-creation', () => {
         const workflows = getAgentWorkflows('alex');
 
@@ -133,6 +160,25 @@ describe('Workflow Configuration', () => {
             'EPIC_MAPPING',
             'STORY_BACKLOG',
             'SPRINT_PLAN',
+        ]);
+    });
+
+    it('should configure PRD_REVIEW as an online Alex workflow', () => {
+        const workflows = getAgentWorkflows('alex');
+        const prdReview = workflows.find(w => w.id === 'prd-review');
+
+        expect(prdReview).toBeDefined();
+        expect(prdReview?.status).toBe('online');
+        expect(prdReview?.link).toBe('/workspace/alex/prd-review');
+
+        const wf = WORKFLOWS.PRD_REVIEW;
+        expect(wf.agentId).toBe('alex');
+        expect(wf.slug).toBe('prd-review');
+        expect(wf.stages.map(stage => stage.id)).toEqual([
+            'INVENTORY',
+            'QUALITY_AUDIT',
+            'COMPLETION_PLAN',
+            'REVISION_BLUEPRINT',
         ]);
     });
 

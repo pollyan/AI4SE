@@ -21,6 +21,10 @@ import { INPUT_ANALYSIS_PROMPT, INPUT_ANALYSIS_TEMPLATE } from './prompts/story_
 import { EPIC_MAPPING_PROMPT, EPIC_MAPPING_TEMPLATE } from './prompts/story_breakdown/epic_mapping';
 import { STORY_BACKLOG_PROMPT, STORY_BACKLOG_TEMPLATE } from './prompts/story_breakdown/story_backlog';
 import { SPRINT_PLAN_PROMPT, SPRINT_PLAN_TEMPLATE } from './prompts/story_breakdown/sprint_plan';
+import { INVENTORY_PROMPT, INVENTORY_TEMPLATE } from './prompts/prd_review/inventory';
+import { QUALITY_AUDIT_PROMPT, QUALITY_AUDIT_TEMPLATE } from './prompts/prd_review/quality_audit';
+import { COMPLETION_PLAN_PROMPT, COMPLETION_PLAN_TEMPLATE } from './prompts/prd_review/completion_plan';
+import { REVISION_BLUEPRINT_PROMPT, REVISION_BLUEPRINT_TEMPLATE } from './prompts/prd_review/revision_blueprint';
 
 type StageContent = {
     description: string;
@@ -111,6 +115,22 @@ const STAGE_CONTENT_BY_TEMPLATE_ID: Record<string, StageContent> = {
         'story_breakdown.sprint_plan': {
             description: SPRINT_PLAN_PROMPT,
             template: SPRINT_PLAN_TEMPLATE,
+        },
+        'prd_review.inventory': {
+            description: INVENTORY_PROMPT,
+            template: INVENTORY_TEMPLATE,
+        },
+        'prd_review.quality_audit': {
+            description: QUALITY_AUDIT_PROMPT,
+            template: QUALITY_AUDIT_TEMPLATE,
+        },
+        'prd_review.completion_plan': {
+            description: COMPLETION_PLAN_PROMPT,
+            template: COMPLETION_PLAN_TEMPLATE,
+        },
+        'prd_review.revision_blueprint': {
+            description: REVISION_BLUEPRINT_PROMPT,
+            template: REVISION_BLUEPRINT_TEMPLATE,
         },
 };
 
