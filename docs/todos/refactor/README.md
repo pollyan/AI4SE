@@ -1,6 +1,6 @@
 # Refactor Todo
 
-本目录记录重构类扫描、方案和实施待办。已完成的 todo 归档到 `docs/todos/archive/`；当前没有活跃重构 todo。
+本目录记录重构类扫描、方案和实施待办。已完成的 todo 归档到 `docs/todos/archive/`；当前活跃重构 todo 以 New Agents 增强诊断为主。
 
 ## 使用规则
 
@@ -19,7 +19,10 @@
 
 ## 当前入口
 
-暂无。
+- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线活动候选。
+- `2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 Flash 兼容的后端结构化产物数据改造已完成本地确定性 readiness gate；除非 CGA 发现新回归、真实 smoke 失败或新增 workflow/stage，否则不要继续按逐 stage 迁移恢复为活跃候选。
+
+2026-06-24 已复核：DeepSeek V4 格式化输出需求已由 17 个在线 stage 的 `artifact_data` schema、后端 deterministic renderer、DeepSeek `json_object_only` adapter、数据纠错 retry 和 readiness gate 收口。真实 DeepSeek V4 Flash smoke 仍需显式凭证、网络和额度，不属于默认本地门禁。
 
 ## 已归档
 
