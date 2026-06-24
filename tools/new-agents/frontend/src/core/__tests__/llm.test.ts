@@ -1022,6 +1022,42 @@ describe('llm.ts', () => {
             });
         });
 
+        it('agent_turn 带阶段成熟度阻断警告时不应从聊天文案推断确认控件', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: '# 需求分析文档\n\n初始内容',
+                stageArtifacts: { CLARIFY: '# 需求分析文档\n\n初始内容' },
+            });
+            const artifact = '# 需求分析文档\n\n## 5. 待澄清问题\n| 问题 ID | 优先级 | 阻断性 | 状态 |\n|---|---|---|---|\n| Q-001 | P0 | 阻断 | 待确认 |';
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentTurnEvent({
+                        chat: '已更新需求分析文档。确认无误后可以进入下一阶段（策略制定）。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: artifact,
+                        },
+                        stage_action: null,
+                        warnings: ['stage_readiness_blocked'],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('帮我设计登录功能测试用例')
+            );
+
+            expect(results.at(-1)).toEqual({
+                chatResponse: '已更新需求分析文档。确认无误后可以进入下一阶段（策略制定）。',
+                newArtifact: artifact,
+                action: '',
+                hasArtifactUpdate: true,
+            });
+        });
+
         it('TEST_DESIGN/STRATEGY 也应走结构化 Agent Runtime', async () => {
             resetStore({
                 workflow: 'TEST_DESIGN',

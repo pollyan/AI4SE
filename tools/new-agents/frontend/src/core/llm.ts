@@ -552,6 +552,11 @@ const hasContextTruncationWarning = (warnings?: string[]): boolean => {
   return warnings.some(warning => warning.trim().toLowerCase() === 'context_truncated');
 };
 
+const hasStageReadinessBlockedWarning = (warnings?: string[]): boolean => {
+  if (!warnings) return false;
+  return warnings.some(warning => warning.trim().toLowerCase() === 'stage_readiness_blocked');
+};
+
 const hasRenderableArtifactDelta = (output: AgentTurnDeltaOutput): boolean => {
   if (output.artifact_update?.type !== 'replace') return false;
 
@@ -587,6 +592,7 @@ const getAgentTurnAction = (
   expectedNextStageId: string | undefined
 ): string => {
   if (hasArtifactTruncationWarning(output.warnings)) return '';
+  if (hasStageReadinessBlockedWarning(output.warnings)) return '';
   if (output.stage_action) return 'NEXT_STAGE';
   return shouldInferNextStageActionFromChat(output.chat, expectedNextStageId)
     ? 'NEXT_STAGE'

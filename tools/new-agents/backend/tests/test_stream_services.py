@@ -67,6 +67,48 @@ flowchart TD
 - [x] 测试范围和不测范围已明确。"""
 
 
+CLARIFY_ARTIFACT_WITH_BLOCKING_OPEN_QUESTION = """# 需求分析文档
+
+## 1. 需求事实清单
+| 事实 ID | 需求事实 | 来源 | 证据等级 | 状态 |
+|---|---|---|---|---|
+| F-001 | 用户需要登录功能测试 | 用户描述 | 用户陈述 | 已确认 |
+
+## 2. 被测系统与边界
+| 类型 | 具体内容 | 测试含义 | 状态 |
+|---|---|---|---|
+| 测试范围 | 登录功能 | 覆盖主登录链路 | AI 假设 |
+
+## 3. 业务规则与数据状态
+| 规则 ID | 业务规则 | 触发条件 | 边界值/状态流转 | 异常处理 | 验收口径 | 状态 |
+|---|---|---|---|---|---|---|
+| BR-001 | 账号锁定策略待确认 | 连续登录失败 | 未确认 | 未确认 | 待确认 | 待确认 |
+
+## 4. 核心链路与异常链路
+```mermaid
+flowchart TD
+    User["用户"] --> Login["登录页"]
+```
+
+## 5. 待澄清问题
+| 问题 ID | 问题描述 | 优先级 | 阻断性 | 影响范围 | 当前假设 | 责任方 | 状态 |
+|---|---|---|---|---|---|---|---|
+| Q-001 | 账号锁定和验证码触发策略未确认 | P0 | 阻断 | 策略优先级和风险判断 | 暂按常见登录风控处理 | 产品 | 待确认 |
+
+## 6. 隐式质量需求
+| 质量维度 | 需求或假设 | 可验证指标 | 风险 | 状态 |
+|---|---|---|---|---|
+| 安全 | 防止暴力破解 | 锁定策略生效 | 高风险 | 待确认 |
+
+## 7. 后续测试设计输入
+| 输入类型 | ID | 内容 | 来源 | 后续用途 |
+|---|---|---|---|---|
+| 风险种子 | R-SEED-001 | 账号锁定策略未确认 | Q-001 | 策略阶段 FMEA |
+
+## 8. 阶段门禁
+- [ ] P0 阻断问题已确认。"""
+
+
 class FakePersistence:
     def __init__(self) -> None:
         self.calls = []
@@ -446,6 +488,45 @@ def test_stream_agent_run_events_yields_started_and_final_without_delta_for_sing
         )),
         AgentTurnEvent(output=final),
     ]
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_blocks_next_stage_when_clarify_is_not_ready(
+    mock_build_runtime: MagicMock,
+) -> None:
+    final = AgentTurnOutput.model_validate({
+        "chat": "已更新需求分析文档，确认无误后可以进入下一阶段（策略制定）。",
+        "artifact_update": {
+            "type": "replace",
+            "markdown": CLARIFY_ARTIFACT_WITH_BLOCKING_OPEN_QUESTION,
+        },
+        "stage_action": {
+            "type": "request_next_stage",
+            "target_stage_id": "STRATEGY",
+        },
+        "warnings": [],
+    })
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter([final])
+    mock_build_runtime.return_value = runtime
+
+    events = list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+    ))
+
+    delta_output = events[1].output
+    final_output = events[-1].output
+    assert isinstance(events[1], AgentTurnDeltaEvent)
+    assert isinstance(events[-1], AgentTurnEvent)
+    assert delta_output.stage_action is None
+    assert final_output.stage_action is None
+    assert "stage_readiness_blocked" in delta_output.warnings
+    assert "stage_readiness_blocked" in final_output.warnings
+    assert "还不能进入下一阶段" in final_output.chat
+    assert "Q-001" in final_output.chat
 
 
 @patch("stream_services.build_pydantic_agent_runtime")

@@ -25,6 +25,7 @@ from request_schemas import (
     RequestValidationError,
     parse_agent_run_stream_request,
 )
+from stage_readiness import apply_stage_readiness_gate
 from sse_schemas import (
     AgentTurnDeltaEvent,
     AgentTurnDeltaOutput,
@@ -236,6 +237,11 @@ def stream_agent_run_events(
             current_stage_id=agent_request.stage_id,
         ):
             if isinstance(output, AgentTurnOutput):
+                output = apply_stage_readiness_gate(
+                    output,
+                    workflow_id=agent_request.workflow_id,
+                    current_stage_id=agent_request.stage_id,
+                )
                 yield AgentTurnDeltaEvent(
                     output=AgentTurnDeltaOutput.model_validate(
                         output.model_dump(mode="json")

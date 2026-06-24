@@ -4,6 +4,22 @@
 创建日期：2026-06-24  
 相关模块：`tools/new-agents/`
 
+完成日期：2026-06-25  
+完成记录：
+
+- 已实现第一条共享阶段成熟度门禁切片：`TEST_DESIGN/CLARIFY` 存在 P0/P1 阻断且待确认的澄清问题时，后端在 typed SSE 出口取消 `stage_action`。
+- 已通过 `stage_readiness_blocked` warning 复用现有 typed SSE schema，避免新增 workflow 专属 API、store 或 renderer。
+- 已让阻断 turn 的 chat 追加“还不能进入下一阶段”的缺口说明，列出阻断问题 ID 和状态。
+- 已补前端 warning 兜底：收到 `stage_readiness_blocked` 时，即使 chat 有进入下一阶段语义，也不推断 `NEXT_STAGE`。
+- 强制推进 UI、风险接受审计字段和全 workflow 成熟度规则未在本切片实现，后续应作为独立用户故事推进。
+
+验证：
+
+- `cd tools/new-agents/backend && ../../../.venv/bin/python -m pytest tests/test_stage_readiness.py tests/test_stream_services.py -q`
+- `cd tools/new-agents/backend && ../../../.venv/bin/python -m pytest tests/test_stage_readiness.py tests/test_stream_services.py tests/test_sse_encoder.py tests/test_agent_contracts.py tests/test_agent_runtime.py -q`
+- `cd tools/new-agents/frontend && npm run test -- src/core/__tests__/llm.test.ts`
+- `cd tools/new-agents/frontend && npm run test -- src/core/__tests__/llm.test.ts src/services/__tests__/chatService.test.ts src/core/config/__tests__/workflows.test.ts`
+
 ## 背景
 
 在测试用例设计工作流中，用户选择类似“帮我设计一份登录功能的测试用例”的提示语后，右侧会生成需求澄清阶段产出物。当前产出物中仍可能包含大量待确认内容，例如系统边界、关键业务规则、需求实施清单、待澄清问题等。
