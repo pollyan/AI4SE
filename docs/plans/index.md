@@ -3,6 +3,7 @@
 ## 当前工作列表
 
 - [技术债与重构工作列表](./tech-debt.md)
+- [New Agents 智能体框架深化阶段 1-2 路线图](./2026-06-25-new-agents-agent-framework-phase1-phase2.md)
 
 ## 历史与专项计划
 

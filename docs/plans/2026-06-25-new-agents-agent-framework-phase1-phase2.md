@@ -1,8 +1,13 @@
-# New Agents 智能体框架深化阶段 1-2 Todo
+# New Agents 智能体框架深化阶段 1-2 路线图
 
-> 状态: 活动候选
+> 状态: 正式路线图
 > 创建日期: 2026-06-25
+> 收束日期: 2026-06-25
 > 背景: 当前 New Agents 已经使用 Pydantic AI 作为结构化 Agent Runtime 的一部分，但上下文压缩、工具调用、运行恢复、框架能力收口和质量观测仍主要由项目自研逻辑承担。下一步不应切换到 LangGraph、AutoGen 或 CrewAI 这类全量替换式框架，而应在保留共享 `/api/agent/runs/stream`、typed SSE、workflow manifest、artifact contract、run persistence 和共享 UI 的前提下，分阶段深化 Pydantic AI 内核能力。
+
+## 收束记录
+
+该文件已从 `docs/todos/refactor/` 活跃候选升格为 `docs/plans/` 正式路线图。后续执行时，不从本文件直接进入编码；应选择其中一个 Story，按 `docs/strategy/goal-mode-playbook.md` 单独生成 Current State Gap Analysis、spec、plan 和验证记录。
 
 ## 核心判断
 
