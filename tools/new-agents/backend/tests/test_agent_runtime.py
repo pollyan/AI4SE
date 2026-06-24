@@ -2,7 +2,13 @@ import json
 
 import pytest
 
-from agent_contracts import AgentTurnOutput, ContractValidationError
+from agent_contracts import (
+    WORKFLOW_STAGES,
+    AgentTurnOutput,
+    ContractValidationError,
+    validate_agent_turn,
+)
+from artifact_data_renderers import render_agent_turn_from_artifact_data
 from agent_runtime import (
     AgentRuntimeModelError,
     AgentRuntimeSchemaError,
@@ -19,6 +25,7 @@ from agent_runtime import (
     parse_agent_turn_output_text,
     register_contract_output_validator,
     resolve_structured_output_capability,
+    supports_artifact_data_rendering,
 )
 from sse_schemas import AgentTurnDeltaOutput
 from test_artifact_data_renderers import (
@@ -174,6 +181,96 @@ VALID_CLARIFY_ARTIFACT_DATA = {
         }
     ],
 }
+
+DEEPSEEK_FORMAT_STAGE_FIXTURES = {
+    ("TEST_DESIGN", "CLARIFY"): VALID_CLARIFY_ARTIFACT_DATA,
+    ("TEST_DESIGN", "STRATEGY"): VALID_STRATEGY_ARTIFACT_DATA,
+    ("TEST_DESIGN", "CASES"): VALID_CASES_ARTIFACT_DATA,
+    ("TEST_DESIGN", "DELIVERY"): VALID_DELIVERY_ARTIFACT_DATA,
+    ("REQ_REVIEW", "REVIEW"): VALID_REQ_REVIEW_ARTIFACT_DATA,
+    ("REQ_REVIEW", "REPORT"): VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA,
+    ("VALUE_DISCOVERY", "ELEVATOR"): VALID_VALUE_ELEVATOR_ARTIFACT_DATA,
+    ("VALUE_DISCOVERY", "PERSONA"): VALID_VALUE_PERSONA_ARTIFACT_DATA,
+    ("VALUE_DISCOVERY", "JOURNEY"): VALID_VALUE_JOURNEY_ARTIFACT_DATA,
+    ("VALUE_DISCOVERY", "BLUEPRINT"): VALID_VALUE_BLUEPRINT_ARTIFACT_DATA,
+    ("INCIDENT_REVIEW", "TIMELINE"): VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
+    ("INCIDENT_REVIEW", "ROOT_CAUSE"): VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
+    ("INCIDENT_REVIEW", "IMPROVEMENT"): VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA,
+    ("IDEA_BRAINSTORM", "DEFINE"): VALID_IDEA_DEFINE_ARTIFACT_DATA,
+    ("IDEA_BRAINSTORM", "DIVERGE"): VALID_IDEA_DIVERGE_ARTIFACT_DATA,
+    ("IDEA_BRAINSTORM", "CONVERGE"): VALID_IDEA_CONVERGE_ARTIFACT_DATA,
+    ("IDEA_BRAINSTORM", "CONCEPT"): VALID_IDEA_CONCEPT_ARTIFACT_DATA,
+}
+
+DEEPSEEK_FORMAT_STAGE_CASES = [
+    (workflow_id, stage_id, artifact_data)
+    for (workflow_id, stage_id), artifact_data in sorted(
+        DEEPSEEK_FORMAT_STAGE_FIXTURES.items()
+    )
+]
+
+
+def test_deepseek_format_readiness_covers_every_online_stage():
+    online_stages = {
+        (workflow_id, stage_id)
+        for workflow_id, stages in WORKFLOW_STAGES.items()
+        for stage_id in stages
+    }
+
+    assert set(DEEPSEEK_FORMAT_STAGE_FIXTURES) == online_stages
+
+
+@pytest.mark.parametrize(
+    ("workflow_id", "stage_id", "artifact_data"),
+    DEEPSEEK_FORMAT_STAGE_CASES,
+)
+def test_deepseek_format_readiness_uses_artifact_data_instructions(
+    workflow_id,
+    stage_id,
+    artifact_data,
+):
+    instruction = build_structured_output_instruction(workflow_id, stage_id)
+    retry_prompt = build_raw_json_retry_prompt(
+        "请生成当前阶段产出物",
+        ValueError("artifact_data.document_info 缺失"),
+        workflow_id=workflow_id,
+        current_stage_id=stage_id,
+    )
+
+    assert artifact_data
+    assert supports_artifact_data_rendering(workflow_id, stage_id)
+    assert "artifact_data" in instruction
+    assert "artifact_update.markdown" not in instruction
+    assert "不要输出完整 Markdown" in instruction
+    assert "后端会负责确定性渲染" in instruction
+    assert "必须修正上述 artifact_data 数据问题" in retry_prompt
+    assert "后端会根据 artifact_data 渲染右侧产出物" in retry_prompt
+    assert "artifact_update.type 必须为 replace" not in retry_prompt
+
+
+@pytest.mark.parametrize(
+    ("workflow_id", "stage_id", "artifact_data"),
+    DEEPSEEK_FORMAT_STAGE_CASES,
+)
+def test_deepseek_format_readiness_renderers_pass_artifact_contract(
+    workflow_id,
+    stage_id,
+    artifact_data,
+):
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已按结构化数据生成当前阶段产出物，请查看右侧文档。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id=workflow_id,
+        current_stage_id=stage_id,
+    )
+
+    assert output is not None
+    assert output.artifact_update.type == "replace"
+    validate_agent_turn(output, workflow_id=workflow_id, current_stage_id=stage_id)
 
 
 class FakeRunResult:

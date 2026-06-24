@@ -19,7 +19,7 @@
 
 ## 当前入口
 
-- `2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 Flash 兼容的后端结构化产物数据改造活动候选；本地确定性 readiness 已覆盖当前在线 workflow stage，真实 DeepSeek smoke 仍需要显式凭证、网络和额度。
+- `2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 Flash 兼容的后端结构化产物数据改造已完成本地确定性 readiness gate；除非 CGA 发现新回归、真实 smoke 失败或新增 workflow/stage，否则不要继续按逐 stage 迁移恢复为活跃候选。真实 DeepSeek smoke 仍需要显式凭证、网络和额度。
 - `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点与增强诊断 todo；已消化 E01 Workflow 入口 preview、E03/E08 Artifact/Workflow 质量治理闭环、E06 Run 历史复用中心、E09 运行统计产品化诊断建议。
   - 后续候选能力包: E05 章节级重生成、E10 专业方法库配置、E11 Prompt/template 版本管理、E12 Workflow schema dry-run/scaffold。
   - 恢复目标模式时继续按 `docs/strategy/goal-mode-playbook.md` 执行中文 CGA、Superpowers 头脑风暴、中文 spec、中文 implementation plan 和 TDD，不机械按 ID 顺序推进。
@@ -27,6 +27,8 @@
 2026-06-24 已复核：除上述活动候选外，其他重构类事项均已归档或转为历史完成记录；不要从 `archive/` 中的过程性“待办/剩余”直接恢复实施。
 
 2026-06-24 目标模式记录：本轮在 `codex/workflow-quality-governance-current` 中消化 New Agents E03/E08 合并能力包「Artifact/Workflow 质量治理闭环」，以现有 `ArtifactPane` 审阅入口展示质量分、contract/visual/stage gate 检查、证据和待处理项。
+
+2026-06-24 已复核：DeepSeek V4 格式化输出需求已由 17 个在线 stage 的 `artifact_data` schema、后端 deterministic renderer、DeepSeek `json_object_only` adapter、数据纠错 retry 和 readiness gate 收口。真实 DeepSeek V4 Flash smoke 仍需显式凭证、网络和额度，不属于默认本地门禁。
 
 ## 已归档
 
