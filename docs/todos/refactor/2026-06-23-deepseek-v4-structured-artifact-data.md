@@ -1,6 +1,6 @@
 # DeepSeek V4 兼容的后端结构化产物数据改造 Todo
 
-> 状态: 本地确定性改造已完成；真实 DeepSeek V4 Flash smoke 仍需显式凭证、网络和额度
+> 状态: 本地确定性改造已完成，待最终合回；真实 DeepSeek V4 Flash smoke 仍需显式凭证、网络和额度
 > 创建日期: 2026-06-23
 > 背景: 当前主要使用 DeepSeek V4 Flash。该模型链路适合按 JSON mode 约束“合法 JSON”，但不能把它等同于 OpenAI strict Structured Outputs。长期最稳方案应减少模型直接生成完整 Markdown/Mermaid 的职责。
 
@@ -43,6 +43,7 @@
   - `docs/superpowers/specs/2026-06-24-deepseek-v4-format-output-readiness-design.md`
   - `docs/superpowers/plans/2026-06-24-deepseek-v4-format-output-readiness.md`
 - 外部验证边界: 真实 DeepSeek V4 Flash smoke 仍依赖 API key、网络和额度；没有这些条件时不作为默认本地门禁，也不能把本地 fixture 测试表述为真实模型验证。
+- 2026-06-24 已完成格式化输出 readiness gate，提交证据为 `50f444f7`；当前状态与后续恢复规则见 `2026-06-24-goal-mode-milestone-ledger.md`。
 
 ## 目标
 
