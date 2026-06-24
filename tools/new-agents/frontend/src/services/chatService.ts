@@ -540,15 +540,37 @@ export function useChatService() {
         const state = useStore.getState();
         if (!state.pendingStageTransition || state.isGenerating) return;
 
+        const pendingTransition = state.pendingStageTransition;
+        if (
+            state.stageIndex !== pendingTransition.fromStageIndex
+            || pendingTransition.toStageIndex !== pendingTransition.fromStageIndex + 1
+        ) {
+            useStore.getState().clearPendingStageTransition();
+            return;
+        }
+
         const targetStageIndex = state.pendingStageTransition.toStageIndex;
-        state.confirmStageTransition();
+        const targetStage = WORKFLOWS[state.workflow].stages[targetStageIndex];
+        if (!targetStage) {
+            useStore.getState().clearPendingStageTransition();
+            return;
+        }
+
+        const confirmationMessage = `已确认进入${targetStage.name}`;
+        addMessage({
+            id: createMessageId(),
+            role: 'user',
+            content: confirmationMessage,
+            timestamp: Date.now(),
+        });
+        useStore.getState().confirmStageTransition();
         if (useStore.getState().stageIndex !== targetStageIndex) return;
 
-        await handleSend(STAGE_CONTINUATION_PROMPT, {
+        await handleSend(confirmationMessage, {
             appendUserMessage: false,
             useDraftAttachments: false,
         });
-    }, [handleSend]);
+    }, [addMessage, handleSend]);
 
     const handleRetry = useCallback(() => {
         const currentState = useStore.getState();

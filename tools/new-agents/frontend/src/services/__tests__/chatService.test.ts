@@ -667,13 +667,17 @@ describe('useChatService', () => {
         expect(state.stageArtifacts['STRATEGY']).toBe('# 测试策略蓝图\n内容');
         expect(state.chatHistory).toEqual([
             expect.objectContaining({
+                role: 'user',
+                content: '已确认进入策略制定',
+            }),
+            expect.objectContaining({
                 role: 'assistant',
                 content: '继续生成策略内容',
                 retryable: false,
             }),
         ]);
         expect(generateResponseStream).toHaveBeenCalledWith(
-            '请继续生成当前阶段产出物',
+            '已确认进入策略制定',
             [],
             expect.any(AbortSignal)
         );
@@ -713,8 +717,12 @@ describe('useChatService', () => {
         });
 
         const historyAfterContinuation = useStore.getState().chatHistory;
-        expect(historyAfterContinuation).toHaveLength(3);
+        expect(historyAfterContinuation).toHaveLength(4);
         expect(historyAfterContinuation[2]).toEqual(expect.objectContaining({
+            role: 'user',
+            content: '已确认进入策略制定',
+        }));
+        expect(historyAfterContinuation[3]).toEqual(expect.objectContaining({
             role: 'assistant',
             content: '继续生成策略内容',
             retryable: false,
@@ -921,7 +929,7 @@ describe('useChatService', () => {
         });
 
         expect(generateResponseStream).toHaveBeenCalledWith(
-            '请继续生成当前阶段产出物',
+            '已确认进入策略制定',
             [],
             expect.any(AbortSignal)
         );

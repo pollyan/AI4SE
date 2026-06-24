@@ -19,7 +19,6 @@
 
 ## 当前入口
 
-- `2026-06-24-new-agents-stage-action-choice-persistence.md`：阶段推进选择控件历史保留候选。
 - `2026-06-24-new-agents-stage-transition-readiness-gate.md`：阶段推进成熟度门禁候选。
 - `2026-06-24-new-agents-test-strategy-artifact-format-streaming-bug.md`：测试策略阶段产物格式与流式渲染 Bug。
 - `2026-06-25-new-agents-artifact-document-info-density.md`：产出物首段文档信息密度和位置优化候选。
@@ -44,3 +43,4 @@
 - `../archive/2026-06-24-new-agents-artifact-streaming-position-indicator.md`：右侧 Artifact 流式位置提示体验修复记录。
 - `../archive/2026-06-24-new-agents-llm-config-check-false-negative.md`：模型配置窗口检测当前表单配置修复记录。
 - `../archive/2026-06-25-new-agents-artifact-comment-create-500.md`：Artifact 批注保存失败诊断和回滚修复记录。
+- `../archive/2026-06-24-new-agents-stage-action-choice-persistence.md`：阶段推进确认历史保留修复记录。

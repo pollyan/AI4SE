@@ -1,8 +1,28 @@
 # New Agents 阶段推进选择控件历史保留 Todo
 
-状态：活跃候选  
+状态：已归档
 创建日期：2026-06-24  
+完成日期：2026-06-25
 相关模块：`tools/new-agents/`
+
+## 完成记录
+
+2026-06-25 已修复：用户点击阶段推进确认控件后，`chatService` 会在切换阶段前追加普通用户历史消息 `已确认进入{目标阶段名}`，再以同一确认文本触发下一阶段生成。生成调用继续使用 `appendUserMessage: false` 和非重试 assistant 响应，避免重复追加用户消息；`请继续生成当前阶段产出物` 仅保留给“重试当前阶段生成”的内部续写路径。
+
+验证覆盖：
+
+- 确认阶段推进后，chatHistory 中保留用户确认事件。
+- 新阶段 assistant 响应追加在确认事件之后。
+- stale pending transition 会被清理，但不会生成确认事件或续写。
+- pending 卡片消失后，聊天历史仍可显示用户确认进入目标阶段的记录。
+
+验证记录：
+
+- `npm run test -- src/services/__tests__/chatService.test.ts src/components/__tests__/ChatPane.test.tsx`：2 个测试文件、93 个测试通过。
+- `npm run test`（`tools/new-agents/frontend`）：43 个测试文件、662 个测试通过；保留既有 `ArtifactPane` act warning。
+- `git diff --check`：通过。
+- `./scripts/test/test-local.sh all`：在当前环境开启可选 LLM judge 时失败于 `test_alex_final_artifact_passes_optional_llm_judge`，原因为外部 judge 返回非严格 JSON；该失败不属于本用户故事 deterministic 覆盖面。
+- `NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all`：通过；Browser E2E 为 3 passed / 3 skipped。
 
 ## 背景
 

@@ -928,4 +928,21 @@ describe('ChatPane Component', () => {
 
         expect(mockHandleConfirmStageTransition).toHaveBeenCalledOnce();
     });
+
+    it('keeps a confirmed stage transition as chat history after pending state clears', () => {
+        useStore.setState({
+            pendingStageTransition: null,
+            chatHistory: [
+                { id: '1', role: 'assistant', content: '当前阶段产出物已更新。', timestamp: Date.now() },
+                { id: '2', role: 'user', content: '已确认进入策略制定', timestamp: Date.now() + 1000 },
+                { id: '3', role: 'assistant', content: '继续生成策略内容', timestamp: Date.now() + 2000, retryable: false },
+            ],
+        });
+
+        render(<ChatPane />);
+
+        expect(screen.queryByText(/AI 建议进入下一阶段/)).toBeNull();
+        expect(screen.getByText('已确认进入策略制定')).toBeDefined();
+        expect(screen.getByText('继续生成策略内容')).toBeDefined();
+    });
 });
