@@ -49,6 +49,7 @@ const MAX_SYNTHETIC_STREAM_STEPS = 12;
 const SYNTHETIC_STREAM_DELAY_MS = 20;
 
 const LEGACY_PROTOCOL_TAG_PATTERN = /<\s*\/?\s*(?:CHART|ARTIFACT|CHAT)\b[^>]*>/i;
+const ARTIFACT_PROGRESS_PLACEHOLDER_PATTERN = /^#\s*产出物生成中(?:\s|$)/m;
 
 /** 将 base64 编码的文本安全解码为 UTF-8 字符串 */
 const decodeBase64Text = (base64: string): string | null => {
@@ -551,6 +552,16 @@ const hasContextTruncationWarning = (warnings?: string[]): boolean => {
   return warnings.some(warning => warning.trim().toLowerCase() === 'context_truncated');
 };
 
+const hasRenderableArtifactDelta = (output: AgentTurnDeltaOutput): boolean => {
+  if (output.artifact_update?.type !== 'replace') return false;
+
+  const markdown = output.artifact_update.markdown?.trim();
+  return Boolean(
+    markdown
+    && !ARTIFACT_PROGRESS_PLACEHOLDER_PATTERN.test(markdown)
+  );
+};
+
 const shouldInferNextStageActionFromChat = (
   chat: string,
   expectedNextStageId: string | undefined
@@ -700,6 +711,55 @@ const mapAgentTurnToFinalChunk = async function* (
   };
 };
 
+const mapAgentTurnToArtifactRevealChunks = async function* (
+  output: AgentTurnOutput,
+  currentArtifact: string,
+  expectedNextStageId: string | undefined
+): AsyncGenerator<StreamChunk, void, unknown> {
+  const hasArtifactUpdate = output.artifact_update.type === 'replace';
+  const newArtifact = hasArtifactUpdate
+    ? output.artifact_update.markdown || ''
+    : currentArtifact;
+  const artifactTruncated = hasArtifactTruncationWarning(output.warnings);
+
+  if (
+    output.stage_action
+    && output.stage_action.target_stage_id !== expectedNextStageId
+  ) {
+    throw new Error('结构化智能体 SSE 阶段动作目标错误');
+  }
+
+  if (hasArtifactUpdate) {
+    await validateMermaidBlocks(newArtifact);
+  }
+
+  const artifactUnits = hasArtifactUpdate
+    ? splitArtifactForStreaming(newArtifact, MAX_SYNTHETIC_STREAM_STEPS)
+    : [currentArtifact];
+  const frameCount = Math.max(artifactUnits.length, 1);
+
+  for (let index = 0; index < frameCount; index += 1) {
+    const isFinalChunk = index === frameCount - 1;
+    const artifactFrame = hasArtifactUpdate
+      ? artifactUnits[Math.min(index, artifactUnits.length - 1)]
+      : currentArtifact;
+
+    yield {
+      chatResponse: output.chat,
+      newArtifact: isFinalChunk ? newArtifact : artifactFrame,
+      action: isFinalChunk
+        ? getAgentTurnAction(output, expectedNextStageId)
+        : '',
+      hasArtifactUpdate,
+      ...(artifactTruncated ? { artifactTruncated: true } : {}),
+    };
+
+    if (!isFinalChunk) {
+      await waitForSyntheticStreamFrame();
+    }
+  }
+};
+
 const getStableAgentDeltaChat = (
   output: AgentTurnDeltaOutput,
   previousChat: string
@@ -716,7 +776,7 @@ const mapAgentDeltaToStreamChunks = async function* (
   chat: string,
   previousChat: string
 ): AsyncGenerator<StreamChunk, void, unknown> {
-  const hasArtifactUpdate = output.artifact_update?.type === 'replace';
+  const hasArtifactUpdate = hasRenderableArtifactDelta(output);
   const artifactTruncated = hasArtifactTruncationWarning(output.warnings);
   const newArtifact = hasArtifactUpdate
     ? output.artifact_update?.markdown || ''
@@ -786,6 +846,7 @@ async function* generateResponseStreamViaAgentRuntime(
   let shouldStop = false;
   let pendingDataLines: string[] = [];
   let receivedAgentDelta = false;
+  let receivedRenderableArtifactDelta = false;
   let previousAgentDeltaChat = '';
 
   const processSsePayload = async function* (
@@ -818,6 +879,9 @@ async function* generateResponseStreamViaAgentRuntime(
     }
     if (event.type === 'agent_delta') {
       receivedAgentDelta = true;
+      if (hasRenderableArtifactDelta(event.output)) {
+        receivedRenderableArtifactDelta = true;
+      }
       const stableChat = getStableAgentDeltaChat(
         event.output,
         previousAgentDeltaChat
@@ -834,12 +898,18 @@ async function* generateResponseStreamViaAgentRuntime(
       return;
     }
     if (event.type === 'agent_turn') {
-      const chunkSource = receivedAgentDelta
+      const chunkSource = receivedRenderableArtifactDelta
         ? mapAgentTurnToFinalChunk(
           event.output,
           currentArtifact,
           expectedNextStageId
         )
+        : receivedAgentDelta
+          ? mapAgentTurnToArtifactRevealChunks(
+            event.output,
+            currentArtifact,
+            expectedNextStageId
+          )
         : mapAgentTurnToStreamChunks(
           event.output,
           currentArtifact,

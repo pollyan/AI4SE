@@ -227,7 +227,7 @@ data: [DONE]
 
 当服务端上下文构建器因为历史过长裁剪了较早对话时，`run_started` 可携带 `warnings:["context_truncated"]`；前端应在左侧对话首帧提示用户本轮模型只看到了最近上下文。这不同于 artifact 输出截断。
 
-`artifact_update.type="replace"` 表示右侧 artifact 被完整 Markdown 文档替换；有必需 artifact contract 的阶段必须使用 `replace` 并包含当前阶段必需标题、字段和可视化契约。`artifact_update.type="none"` 仅用于本轮不更新右侧 artifact 的合法场景，不能用来跳过必需产出物阶段。
+`artifact_update.type="replace"` 表示右侧 artifact 被正式 Markdown 文档替换；有必需 artifact contract 的阶段必须使用 `replace` 并包含当前阶段必需标题、字段和可视化契约。`replace.markdown` 只能承载正式产物或经过正式 renderer 生成的局部正式产物，不能承载调试式进度占位，例如 `# 产出物生成中`、字符数、已识别字段名或裸 `artifact_data` 解析状态。`artifact_update.type="none"` 仅用于本轮不更新右侧 artifact 的合法场景，不能用来跳过必需产出物阶段。
 
 错误时：
 ```text

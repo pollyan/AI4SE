@@ -2375,6 +2375,64 @@ def test_runtime_raw_json_stream_turn_keeps_latest_delta_when_final_json_is_trun
     assert outputs[-1].warnings == ["artifact_truncated"]
 
 
+def test_runtime_raw_json_stream_turn_does_not_emit_progress_artifact_for_partial_artifact_data(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "正在生成结构化产物。",
+            "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    chunks = [
+        final_json[: final_json.index('"artifact_data"')],
+        final_json[
+            final_json.index('"artifact_data"') : final_json.index('"stage_action"')
+        ],
+        final_json[final_json.index('"stage_action"') :],
+    ]
+
+    def fake_stream_chat_completion_content(**kwargs):
+        yield from chunks
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            system_prompt="system prompt",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "用户需求",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    )
+
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert partial_markdowns == []
+    assert outputs[-1].artifact_update.markdown.startswith("# 需求分析文档")
+
+
 def test_runtime_raw_json_stream_turn_retries_contract_failure_with_feedback(
     monkeypatch,
 ):

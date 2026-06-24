@@ -487,6 +487,95 @@ describe('llm.ts', () => {
             });
         });
 
+        it('agent_delta 只有聊天或进度占位时最终正式产物仍应渐进揭示', async () => {
+            resetStore({
+                workflow: 'REQ_REVIEW',
+                stageIndex: 0,
+                artifactContent: '# 需求评审问题清单\n\n初始内容',
+                stageArtifacts: { REVIEW: '# 需求评审问题清单\n\n初始内容' },
+            });
+            const progressPlaceholder = [
+                '# 产出物生成中',
+                '',
+                '正在生成结构化产物数据。',
+                '',
+                '## 流式进度',
+                '- 已识别字段: artifact_data',
+            ].join('\n');
+            const finalArtifact = [
+                '# 需求评审问题清单',
+                '',
+                '## 评审信息',
+                '登录需求评审。',
+                '',
+                '## 评审范围与不评审范围',
+                '覆盖账号密码登录主链路。',
+                '',
+                '## 需求质量总览',
+                '验收标准仍需补充。',
+                '',
+                '## 需求质量结构图',
+                '```mermaid',
+                'flowchart TD',
+                '    Req["登录需求"] --> Issues["问题清单"]',
+                '```',
+                '',
+                '## 问题统计',
+                'P1 问题 1 个。',
+                '',
+                '## 按维度问题清单',
+                'Q-001 验收标准不足。',
+                '',
+                '## 修订建议',
+                '补充成功与失败判定。',
+                '',
+                '## 阶段门禁',
+                '- [ ] 高优先级问题已确认',
+            ].join('\n');
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"run_started"}',
+                    createAgentDeltaEvent({
+                        chat: '正在评审需求。',
+                    }),
+                    createAgentDeltaEvent({
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: progressPlaceholder,
+                        },
+                    }),
+                    createAgentTurnEvent({
+                        chat: '已完成需求评审问题清单。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: finalArtifact,
+                        },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('请帮我评审登录需求')
+            );
+            const finalArtifactFrames = results.filter(result => (
+                result.hasArtifactUpdate
+                && result.newArtifact.includes('# 需求评审问题清单')
+            ));
+
+            expect(results.map(result => result.newArtifact).join('\n')).not.toContain(
+                '# 产出物生成中'
+            );
+            expect(finalArtifactFrames.length).toBeGreaterThan(1);
+            expect(finalArtifactFrames[0].newArtifact.length).toBeLessThan(
+                finalArtifact.length
+            );
+            expect(finalArtifactFrames.at(-1)?.newArtifact).toBe(finalArtifact);
+        });
+
         it('应保存 run_started 返回的 runId', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
