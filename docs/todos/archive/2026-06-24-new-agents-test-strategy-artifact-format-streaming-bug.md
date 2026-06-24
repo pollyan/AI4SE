@@ -4,6 +4,23 @@
 创建日期：2026-06-24  
 相关模块：`tools/new-agents/`
 
+完成日期：2026-06-25  
+完成记录：
+
+- 已确认后端 STRATEGY `artifact_data` 结构化渲染和 raw JSON 流式路径已有覆盖，剩余缺口是提示词输出形态冲突与前端 STRATEGY delta 覆盖不足。
+- 已将通用系统提示从强制“完整 Markdown”收敛为“完整产出物数据”，并声明后端结构化契约要求 `artifact_data` 时以 `artifact_data` 为准。
+- 已更新 STRATEGY 阶段提示，避免在 `artifact_data` 模式下要求模型手写 Mermaid/risk-board。
+- 已补后端 Markdown 契约说明，明确 `artifact_update.markdown` 契约只适用于 Markdown 输出形态，运行时 `artifact_data` 指令优先。
+- 已补前端 STRATEGY `agent_delta` 草稿帧测试，验证草稿 artifact 先更新、最终 artifact 收敛。
+
+验证：
+
+- `cd tools/new-agents/frontend && npm run test -- src/core/prompts/__tests__/buildSystemPrompt.test.ts src/core/__tests__/llm.test.ts`
+- `cd tools/new-agents/backend && ../../../.venv/bin/python -m pytest tests/test_agent_contracts.py tests/test_agent_runtime.py -q`
+- `cd tools/new-agents/backend && ../../../.venv/bin/python -m pytest tests/test_workflow_contract_sync.py tests/test_agent_contracts.py tests/test_agent_runtime.py -q`
+- `cd tools/new-agents/frontend && npm run test -- src/core/prompts/__tests__/buildSystemPrompt.test.ts src/core/__tests__/llm.test.ts src/core/config/__tests__/workflows.test.ts`
+- `NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all` 已执行；Intent Tester API、flake8 严重错误检查、Common Frontend lint/build、New Agents Frontend、New Agents Backend 均通过。MidScene Proxy 与 New Agents Browser E2E 在当前沙箱中分别因 `listen EPERM: operation not permitted 0.0.0.0:3002` 和 Chromium `bootstrap_check_in ... Permission denied` 阻塞，未作为本故事代码失败处理。
+
 ## 背景
 
 在用户称为 visa 的测试用例生成流程中，第二步“测试策略制定”阶段的右侧产出物存在固定复现的格式错误。用户观察到该阶段几乎每次生成都会出现格式异常。

@@ -1060,6 +1060,93 @@ describe('llm.ts', () => {
             });
         });
 
+        it('TEST_DESIGN/STRATEGY 应解析 agent_delta 草稿并在最终帧收敛', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 1,
+                artifactContent: '# 测试策略蓝图\n\n初始内容',
+                stageArtifacts: {
+                    CLARIFY: '# 需求分析文档\n\n已确认登录链路、验证码和账号锁定边界。',
+                    STRATEGY: '# 测试策略蓝图\n\n初始内容',
+                },
+            });
+            const draftArtifact = [
+                '# 测试策略蓝图',
+                '',
+                '## 1. 策略摘要',
+                '基于登录链路风险制定风险优先策略。',
+            ].join('\n');
+            const finalArtifact = [
+                '# 测试策略蓝图',
+                '',
+                '## 1. 策略摘要',
+                '基于登录链路风险制定风险优先策略。',
+                '',
+                '## 3. 风险识别与 FMEA',
+                '```mermaid',
+                'quadrantChart',
+                '    title 风险优先级矩阵',
+                '    x-axis "低发生度" --> "高发生度"',
+                '    y-axis "低严重度" --> "高严重度"',
+                '    quadrant-1 "紧急处理"',
+                '    quadrant-2 "重点关注"',
+                '    quadrant-3 "观察监控"',
+                '    quadrant-4 "常规覆盖"',
+                '    "验证码绕过": [0.7, 0.8]',
+                '```',
+                '',
+                '```ai4se-visual',
+                '{"type":"risk-board","columns":["风险","S","O","D","RPN","缓解策略","覆盖建议"],"rows":[{"风险":"验证码绕过","S":5,"O":3,"D":4,"RPN":60,"缓解策略":"加强服务端校验","覆盖建议":"覆盖验证码失败与重放"}]}',
+                '```',
+            ].join('\n');
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"run_started"}',
+                    createAgentDeltaEvent({
+                        chat: '正在制定测试策略。',
+                    }),
+                    createAgentDeltaEvent({
+                        chat: '正在制定测试策略。\n\n已生成策略蓝图草稿。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: draftArtifact,
+                        },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    createAgentTurnEvent({
+                        chat: '已更新测试策略蓝图，详细内容已在右侧产出物中展示。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: finalArtifact,
+                        },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('继续制定测试策略')
+            );
+            const artifactFrames = results.filter(result => result.hasArtifactUpdate);
+
+            expect(artifactFrames[0]).toMatchObject({
+                chatResponse: '正在制定测试策略。\n\n已生成策略蓝图草稿。',
+                newArtifact: draftArtifact,
+                hasArtifactUpdate: true,
+            });
+            expect(artifactFrames.at(-1)).toMatchObject({
+                chatResponse: '已更新测试策略蓝图，详细内容已在右侧产出物中展示。',
+                newArtifact: finalArtifact,
+                hasArtifactUpdate: true,
+            });
+            expect(artifactFrames.at(-1)?.newArtifact).toContain('quadrantChart');
+            expect(artifactFrames.at(-1)?.newArtifact).toContain('"type":"risk-board"');
+        });
+
         it('REQ_REVIEW/REVIEW 应走结构化 Agent Runtime', async () => {
             const artifact = [
                 '# 需求评审问题清单',

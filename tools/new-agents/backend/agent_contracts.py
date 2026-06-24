@@ -893,6 +893,9 @@ def build_artifact_contract_prompt(
     )
     return (
         "\n\n【结构化产出物契约】\n"
+        "本段仅适用于 artifact_update.markdown 输出形态；"
+        "如果运行时追加 artifact_data 结构化输出要求，"
+        "以 artifact_data 要求为准，后端会根据 artifact_data 渲染右侧 Markdown。\n"
         "chat 只允许返回给用户看的自然工作对话，禁止包含 Markdown 标题、"
         "表格、代码块、Mermaid 图、完整文档正文或 <CHART>/<ARTIFACT>/"
         "<CHAT> 旧标签协议。\n"

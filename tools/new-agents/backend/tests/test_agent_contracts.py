@@ -578,6 +578,17 @@ def test_build_artifact_contract_prompt_includes_required_update_and_headings():
     assert "## 8. 阶段门禁" in prompt
 
 
+def test_build_artifact_contract_prompt_declares_artifact_data_precedence():
+    prompt = build_artifact_contract_prompt(
+        workflow_id="TEST_DESIGN",
+        current_stage_id="STRATEGY",
+    )
+
+    assert "仅适用于 artifact_update.markdown" in prompt
+    assert "如果运行时追加 artifact_data 结构化输出要求" in prompt
+    assert "以 artifact_data 要求为准" in prompt
+
+
 def test_test_design_contracts_include_professional_artifact_fields():
     clarify_fields = REQUIRED_ARTIFACT_HEADINGS[("TEST_DESIGN", "CLARIFY")]
     strategy_fields = REQUIRED_ARTIFACT_HEADINGS[("TEST_DESIGN", "STRATEGY")]

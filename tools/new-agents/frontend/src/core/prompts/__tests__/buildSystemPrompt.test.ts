@@ -165,6 +165,23 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('继续返回当前阶段的完整产出物');
     });
 
+    it('keeps artifact_data contract precedence for structured artifact stages', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentArtifact: '# 测试策略蓝图\n\n初始内容',
+            stageArtifacts: {
+                CLARIFY: '# 需求分析文档\n\n已确认登录链路',
+            },
+        });
+
+        expect(prompt).toContain('后端结构化契约要求 artifact_data');
+        expect(prompt).toContain('后端会根据 artifact_data 确定性渲染右侧产出物');
+        expect(prompt).toContain('如果契约要求 artifact_update.markdown');
+        expect(prompt).not.toContain('必须提供完整、全部的 Markdown 文档内容');
+    });
+
     it('allows the test design clarify stage to assume a scenario when the user asks for one', () => {
         const prompt = buildSystemPrompt({
             agentId: 'lisa',

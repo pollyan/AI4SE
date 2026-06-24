@@ -26,7 +26,7 @@ export const buildSystemPrompt = (config: {
         ? `当你判断当前阶段产出物已经完整、可以建议进入下一阶段时，必须在同一轮返回 stage_action: {"type":"request_next_stage","target_stage_id":"${nextStage.id}"}，用于让前端显示确认控件。target_stage_id 只能填写内部阶段 ID "${nextStage.id}"，不要填写阶段中文名称“${nextStage.name}”。`
         : '当前已经是最后阶段，结构化输出的 stage_action 必须为 null。';
     const nextStageGenerationInstruction = nextStage
-        ? `stage_action 只表示“请求用户确认进入下一阶段”，不会自动切换阶段；不要在同一轮生成下一阶段产出物，artifact_update 继续返回当前阶段的完整产出物。用户点击前端确认控件后，系统才会切换阶段并自动触发下一阶段生成。`
+        ? `stage_action 只表示“请求用户确认进入下一阶段”，不会自动切换阶段；不要在同一轮生成下一阶段产出物，继续返回当前阶段的完整产出物数据。用户点击前端确认控件后，系统才会切换阶段并自动触发下一阶段生成。`
         : '当前已经是最后阶段，不存在下一阶段产出物生成。';
 
     const persona = PERSONAS[agentId];
@@ -96,7 +96,7 @@ ${previousArtifactsContext}
 2. **触发阶段确认控件**：当你已经在 chat 中建议用户进入下一阶段时，必须同一轮返回 stage_action，让前端显示确认控件；不要让用户再手动回复“确认”后才显示控件。
    - ${stageActionInstruction}
 3. **生成新阶段产出物**：${nextStageGenerationInstruction}
-4. **产出物更新原则**：如果本轮需要更新右侧产出物，必须提供完整、全部的 Markdown 文档内容（包含未修改的部分），绝对不能只输出修改片段，也不能用“...保持不变”省略已有内容。
+4. **产出物更新原则**：如果本轮需要更新右侧产出物，必须返回完整、全部的当前阶段产出物数据，绝对不能只输出修改片段，也不能用“...保持不变”省略已有内容。如果后端结构化契约要求 artifact_data，请返回完整 artifact_data JSON 数据，不要手写 Markdown、Mermaid 或 ai4se-visual 代码块；后端会根据 artifact_data 确定性渲染右侧产出物。如果契约要求 artifact_update.markdown，则返回完整 Markdown 文档。
 
 当前右侧产出物内容（已有内容，若需更新必须返回全量）：
 \`\`\`markdown
