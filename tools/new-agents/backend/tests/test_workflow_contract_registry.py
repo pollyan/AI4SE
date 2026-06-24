@@ -25,6 +25,12 @@ def test_registry_derives_workflow_stages_from_manifest():
             "COMPLETION_PLAN",
             "REVISION_BLUEPRINT",
         ],
+        "STORY_BREAKDOWN": [
+            "INPUT_ANALYSIS",
+            "EPIC_MAPPING",
+            "STORY_BACKLOG",
+            "SPRINT_PLAN",
+        ],
     }
 
 

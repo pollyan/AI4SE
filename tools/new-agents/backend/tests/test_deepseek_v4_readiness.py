@@ -64,6 +64,8 @@ ARTIFACT_DATA_FIXTURES = {
     ("STORY_BREAKDOWN", "SPRINT_PLAN"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
 }
 
+REPO_ROOT = Path(__file__).resolve().parents[4]
+
 
 class FakeAgent:
     def run_sync(self, prompt, *, deps=None, model_settings=None):
@@ -72,7 +74,9 @@ class FakeAgent:
 
 def manifest_stage_keys():
     manifest = json.loads(
-        Path("tools/new-agents/workflow_manifest.json").read_text(encoding="utf-8")
+        (REPO_ROOT / "tools/new-agents/workflow_manifest.json").read_text(
+            encoding="utf-8"
+        )
     )
     return {
         (workflow_id, stage["id"])

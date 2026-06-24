@@ -22,6 +22,7 @@ vi.mock('../../services/chatService', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
             handleRetryCurrentStageGeneration: vi.fn(),
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -108,6 +109,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
             handleRetryCurrentStageGeneration: vi.fn(),
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -170,6 +172,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: mockHandleRetry,
             handleRetryCurrentStageGeneration: mockHandleRetryCurrentStageGeneration,
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -239,6 +242,7 @@ describe('ChatPane Component', () => {
                 handleConfirmStageTransition: vi.fn(),
                 handleRetry: mockHandleRetry,
                 handleRetryCurrentStageGeneration: vi.fn(),
+                handleRegenerateArtifactSection: vi.fn(),
                 handleStop: vi.fn(),
                 handleFileChange: vi.fn(),
                 removeAttachment: vi.fn()
@@ -380,6 +384,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: mockHandleRetry,
             handleRetryCurrentStageGeneration: mockHandleRetryCurrentStageGeneration,
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -644,6 +649,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
             handleRetryCurrentStageGeneration: vi.fn(),
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -668,6 +674,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
             handleRetryCurrentStageGeneration: vi.fn(),
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -693,6 +700,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
             handleRetryCurrentStageGeneration: vi.fn(),
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -718,6 +726,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
             handleRetryCurrentStageGeneration: vi.fn(),
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: mockHandleStop,
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -945,6 +954,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: mockHandleConfirmStageTransition,
             handleRetry: vi.fn(),
             handleRetryCurrentStageGeneration: vi.fn(),
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
