@@ -92,6 +92,22 @@ describe('ChatPane Component', () => {
         expect(screen.getByText('你可以试试这样问：')).toBeDefined();
     });
 
+    it('does not show current-stage missing information before the first conversation turn', () => {
+        useStore.setState({
+            chatHistory: [],
+            workflow: 'STORY_BREAKDOWN' as WorkflowType,
+            stageIndex: 0,
+            artifactContent: '# 欢迎使用 Alex 创新顾问\n\n请在左侧告诉我们的初步想法。',
+            artifactVisualDiagnostics: [],
+        });
+
+        render(<ChatPane />);
+
+        expect(screen.getByText('你可以试试这样问：')).toBeDefined();
+        expect(screen.queryByText('当前阶段缺失信息')).toBeNull();
+        expect(screen.queryByText('右侧产物还没有满足当前阶段合同，请先处理缺失项再继续推进。')).toBeNull();
+    });
+
     it('sends starter prompts without consuming draft attachments', () => {
         const mockHandleSend = vi.fn();
         vi.mocked(useChatService).mockReturnValue({

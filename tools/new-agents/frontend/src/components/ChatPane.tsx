@@ -122,6 +122,7 @@ export const ChatPane: React.FC = () => {
     return [...leadingBlockingItems, ...leadingWarningItems];
   }, [artifactQualitySummary.missingInfoItems]);
   const hiddenMissingInfoCount = Math.max(0, artifactQualitySummary.missingInfoItems.length - visibleMissingInfoItems.length);
+  const hasConversationStarted = chatHistory.length > 0;
 
   const updateMessage = useStore((state) => state.updateMessage);
 
@@ -406,7 +407,7 @@ export const ChatPane: React.FC = () => {
           </div>
         )}
 
-        {!isGenerating && visibleMissingInfoItems.length > 0 && (
+        {hasConversationStarted && !isGenerating && visibleMissingInfoItems.length > 0 && (
           <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-rose-100 shadow-sm">
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" />
