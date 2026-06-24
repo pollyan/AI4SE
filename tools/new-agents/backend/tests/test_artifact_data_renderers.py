@@ -2959,8 +2959,12 @@ def test_render_clarify_artifact_data_is_deterministic_and_contract_valid():
     assert first == second
     assert first is not None
     assert first.artifact_update.markdown is not None
+    clarify_markdown = first.artifact_update.markdown
     assert "# 需求分析文档" in first.artifact_update.markdown
     assert "## 8. 阶段门禁" in first.artifact_update.markdown
+    assert clarify_markdown.index("## 1. 需求事实清单") < clarify_markdown.index(
+        "## 附录：文档信息"
+    )
     assert "flowchart TD" in first.artifact_update.markdown
     assert (
         validate_agent_turn(
@@ -3237,8 +3241,12 @@ def test_render_delivery_artifact_data_is_deterministic_and_contract_valid():
     assert first == second
     assert first is not None
     assert first.artifact_update.markdown is not None
+    delivery_markdown = first.artifact_update.markdown
     assert "# 测试设计文档" in first.artifact_update.markdown
-    assert "## 10. 变更记录" in first.artifact_update.markdown
+    assert "## 9. 变更记录" in delivery_markdown
+    assert delivery_markdown.index("## 1. 执行摘要") < delivery_markdown.index(
+        "## 附录：文档信息"
+    )
     assert "```ai4se-visual" in first.artifact_update.markdown
     assert '"type": "coverage-map"' in first.artifact_update.markdown
     assert (
@@ -3282,7 +3290,11 @@ def test_render_req_review_artifact_data_is_deterministic_and_contract_valid():
     assert first == second
     assert first is not None
     assert first.artifact_update.markdown is not None
+    review_markdown = first.artifact_update.markdown
     assert "# 需求评审问题清单" in first.artifact_update.markdown
+    assert review_markdown.index("## 需求质量总览") < review_markdown.index(
+        "## 附录：评审信息"
+    )
     assert "flowchart TD" in first.artifact_update.markdown
     assert "```ai4se-visual" in first.artifact_update.markdown
     assert '"type": "score-matrix"' in first.artifact_update.markdown
@@ -3513,10 +3525,13 @@ def test_render_value_blueprint_artifact_data_is_deterministic_and_contract_vali
     assert first == second
     assert first is not None
     assert first.artifact_update.markdown is not None
+    blueprint_markdown = first.artifact_update.markdown
     assert first.artifact_update.type == "replace"
     assert first.stage_action is None
     assert "# AI4SE 测试设计助手 需求蓝图" in first.artifact_update.markdown
-    assert "## 文档信息" in first.artifact_update.markdown
+    assert blueprint_markdown.index("## 1. 产品概述") < blueprint_markdown.index(
+        "## 附录：文档信息"
+    )
     assert "### 功能架构" in first.artifact_update.markdown
     assert "mindmap" in first.artifact_update.markdown
     assert "### 主流程图" in first.artifact_update.markdown

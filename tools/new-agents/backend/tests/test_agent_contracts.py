@@ -613,11 +613,12 @@ def test_test_design_contracts_include_professional_artifact_fields():
     ]:
         assert field in cases_fields
     for field in [
-        "## 2. 执行摘要",
-        "## 6. 覆盖地图",
-        "## 7. 开放风险",
-        "## 9. 签署确认",
-        "## 10. 变更记录",
+        "## 1. 执行摘要",
+        "## 5. 覆盖地图",
+        "## 6. 开放风险",
+        "## 8. 签署确认",
+        "## 9. 变更记录",
+        "## 附录：文档信息",
     ]:
         assert field in delivery_fields
 
@@ -912,12 +913,12 @@ def test_req_review_contracts_include_professional_artifact_fields():
     report_fields = REQUIRED_ARTIFACT_HEADINGS[("REQ_REVIEW", "REPORT")]
 
     for field in [
-        "## 评审信息",
         "## 评审范围与不评审范围",
         "## 需求质量总览",
         "## 需求质量结构图",
         "## 修订建议",
         "## 阶段门禁",
+        "## 附录：评审信息",
         "评审维度",
         "阻断性",
         "状态",
@@ -1377,7 +1378,6 @@ def test_validate_agent_turn_rejects_blueprint_without_h1_heading():
                 "markdown": "\n\n".join(
                     [
                         "这是一份需求蓝图正文说明，但不是 Markdown H1 标题。",
-                        "## 文档信息\n内容",
                         "## 1. 产品概述\n内容",
                         "### 1.1 产品愿景\n内容",
                         "### 1.2 定位声明\n内容",
@@ -1394,7 +1394,14 @@ def test_validate_agent_turn_rejects_blueprint_without_h1_heading():
                         "## 6. MVP 范围与计划\n内容",
                         "### MVP 包含功能\n内容",
                         "### 迭代路线\n内容",
-                        "## 7. 风险评估\n内容",
+                        "## 7. 非功能需求\n内容",
+                        "## 8. 验收标准\n内容",
+                        "## 9. 路线图\n内容",
+                        "## 10. 风险评估\n内容",
+                        "## 11. Lisa Handoff 输入\n内容",
+                        "## 12. 阶段门禁\n内容",
+                        "## 附录：文档信息\n内容",
+                        "可测试性等级\nowner\n状态",
                     ]
                 ),
             },

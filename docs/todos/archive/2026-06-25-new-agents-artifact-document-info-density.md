@@ -1,8 +1,26 @@
 # New Agents 产出物文档信息密度优化 Todo
 
-状态：活跃候选  
+状态：已归档  
 创建日期：2026-06-25  
+完成日期：2026-06-25  
 相关模块：`tools/new-agents/`
+
+## 完成记录
+
+2026-06-25 已修复：`TEST_DESIGN / CLARIFY`、`TEST_DESIGN / DELIVERY`、`REQ_REVIEW / REVIEW`、`VALUE_DISCOVERY / BLUEPRINT` 不再把低价值文档或评审元信息表作为首段正文。必要元信息保留在文末附录：
+
+- `## 附录：文档信息`
+- `## 附录：评审信息`
+
+同步更新了 workflow manifest、后端 artifact contract、前端 prompt template 和后端 deterministic artifact_data renderer；未新增 workflow 专属 runtime、API、store 或 renderer。
+
+验证记录：
+
+- `cd tools/new-agents/backend && ../../../.venv/bin/python -m pytest tests/test_artifact_data_renderers.py -q`：75 passed。
+- `cd tools/new-agents/backend && ../../../.venv/bin/python -m pytest tests/test_agent_contracts.py tests/test_agent_runtime.py -q`：172 passed。
+- `cd tools/new-agents/backend && ../../../.venv/bin/python -m pytest tests/test_workflow_contract_sync.py -q`：10 passed。
+- `cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts`：35 passed。
+- `NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all`：通过；Browser E2E 为 3 passed / 3 skipped。
 
 ## 背景
 

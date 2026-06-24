@@ -2359,7 +2359,6 @@ def render_agent_turn_from_artifact_data(
 def render_test_design_clarify_markdown(data: ClarifyArtifactData) -> str:
     sections = [
         "# 需求分析文档",
-        _render_document_info(data.document_info),
         _render_requirement_facts(data.requirement_facts),
         _render_system_boundaries(data.system_boundaries),
         _render_business_rules(data.business_rules),
@@ -2368,6 +2367,7 @@ def render_test_design_clarify_markdown(data: ClarifyArtifactData) -> str:
         _render_quality_requirements(data.quality_requirements),
         _render_downstream_inputs(data.downstream_inputs),
         _render_stage_gate(data.stage_gate),
+        _render_document_info(data.document_info),
     ]
     return "\n\n".join(sections)
 
@@ -2529,7 +2529,6 @@ def render_test_design_cases_markdown(data: CasesArtifactData) -> str:
 def render_test_design_delivery_markdown(data: DeliveryArtifactData) -> str:
     sections = [
         "# 测试设计文档",
-        _render_delivery_document_info(data.document_info, data.delivery_metrics),
         _render_delivery_executive_summary(data.executive_summary),
         _render_delivery_requirement_summary(data.requirement_summary),
         _render_delivery_strategy_summary(data.strategy_summary_items),
@@ -2539,6 +2538,7 @@ def render_test_design_delivery_markdown(data: DeliveryArtifactData) -> str:
         _render_delivery_acceptance_checklist(data.acceptance_checklist),
         _render_delivery_signoffs(data.signoffs),
         _render_delivery_change_log(data.change_log),
+        _render_delivery_document_info(data.document_info, data.delivery_metrics),
     ]
     return "\n\n".join(sections)
 
@@ -2546,7 +2546,6 @@ def render_test_design_delivery_markdown(data: DeliveryArtifactData) -> str:
 def render_req_review_review_markdown(data: ReqReviewArtifactData) -> str:
     sections = [
         "# 需求评审问题清单",
-        _render_req_review_info(data.review_info),
         _render_req_review_scope(data.scope_items),
         _render_req_review_quality_overview(data.quality_overview),
         _render_req_review_quality_flowchart(),
@@ -2556,6 +2555,7 @@ def render_req_review_review_markdown(data: ReqReviewArtifactData) -> str:
         _render_req_review_issue_groups(data.issue_groups),
         _render_req_review_revision_suggestions(data.revision_suggestions),
         _render_req_review_stage_gate(data.stage_gate),
+        _render_req_review_info(data.review_info),
     ]
     return "\n\n".join(sections)
 
@@ -2634,7 +2634,6 @@ def render_value_discovery_blueprint_markdown(
 ) -> str:
     sections = [
         f"# {data.document_info.product_name} 需求蓝图",
-        _render_blueprint_document_info(data.document_info),
         _render_blueprint_product_overview(data.product_overview),
         _render_blueprint_target_users(data.target_users),
         _render_blueprint_requirements(data.feature_modules, data.requirements),
@@ -2647,6 +2646,7 @@ def render_value_discovery_blueprint_markdown(
         _render_blueprint_risks(data.risks),
         _render_blueprint_lisa_handoff_inputs(data.lisa_handoff_inputs),
         _render_blueprint_stage_gate(data.stage_gate),
+        _render_blueprint_document_info(data.document_info),
     ]
     return "\n\n".join(sections)
 
@@ -2658,7 +2658,7 @@ def _render_document_info(info: DocumentInfo) -> str:
         ("Stage", info.stage),
         ("状态", info.status),
     ]
-    return "## 文档信息\n" + _markdown_table(["字段", "内容"], rows)
+    return "## 附录：文档信息\n" + _markdown_table(["字段", "内容"], rows)
 
 
 def _render_incident_summary(summary: IncidentSummary) -> str:
@@ -4478,7 +4478,7 @@ def _render_delivery_document_info(
         ("高风险项", metrics.high_risk_count),
         ("状态", info.status),
     ]
-    return "## 1. 文档信息\n" + _markdown_table(["字段", "内容"], rows)
+    return "## 附录：文档信息\n" + _markdown_table(["字段", "内容"], rows)
 
 
 def _render_delivery_executive_summary(
@@ -4488,7 +4488,7 @@ def _render_delivery_executive_summary(
         (item.summary_item, item.conclusion, item.evidence_source, item.status)
         for item in items
     ]
-    return "## 2. 执行摘要\n" + _markdown_table(
+    return "## 1. 执行摘要\n" + _markdown_table(
         ["摘要项", "结论", "证据来源", "状态"],
         rows,
     )
@@ -4501,7 +4501,7 @@ def _render_delivery_requirement_summary(
         (item.content_type, item.reference, item.conclusion, item.open_status)
         for item in items
     ]
-    return "## 3. 需求分析摘要\n" + _markdown_table(
+    return "## 2. 需求分析摘要\n" + _markdown_table(
         ["内容类型", "ID/范围", "核心结论", "开放状态"],
         rows,
     )
@@ -4514,7 +4514,7 @@ def _render_delivery_strategy_summary(
         (item.strategy_item, item.conclusion, item.related, item.coverage_status)
         for item in items
     ]
-    return "## 4. 测试策略摘要\n" + _markdown_table(
+    return "## 3. 测试策略摘要\n" + _markdown_table(
         ["策略项", "结论", "关联风险/目标", "覆盖状态"],
         rows,
     )
@@ -4533,7 +4533,7 @@ def _render_delivery_case_summary(items: list[DeliveryCaseSummaryItem]) -> str:
         )
         for item in items
     ]
-    return "## 5. 测试用例摘要\n" + _markdown_table(
+    return "## 4. 测试用例摘要\n" + _markdown_table(
         ["维度", "用例数", "P0", "P1", "P2", "自动化候选", "不可执行/需补环境"],
         rows,
     )
@@ -4551,7 +4551,7 @@ def _render_delivery_coverage_map(items: list[DeliveryCoverageMapItem]) -> str:
         for item in items
     ]
     return (
-        "## 6. 覆盖地图\n"
+        "## 5. 覆盖地图\n"
         + _markdown_table(
             ["需求", "风险", "测试点", "用例", "验收状态"],
             rows,
@@ -4596,7 +4596,7 @@ def _render_delivery_open_risks(items: list[DeliveryOpenRisk]) -> str:
         )
         for item in items
     ]
-    return "## 7. 开放风险\n" + _markdown_table(
+    return "## 6. 开放风险\n" + _markdown_table(
         [
             "风险/问题 ID",
             "类型",
@@ -4613,12 +4613,12 @@ def _render_delivery_open_risks(items: list[DeliveryOpenRisk]) -> str:
 
 def _render_delivery_acceptance_checklist(checks: list[StageGateCheck]) -> str:
     lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
-    return "## 8. 交付验收清单\n" + "\n".join(lines)
+    return "## 7. 交付验收清单\n" + "\n".join(lines)
 
 
 def _render_delivery_signoffs(items: list[DeliverySignoff]) -> str:
     rows = [(item.role, item.owner, item.opinion, item.status) for item in items]
-    return "## 9. 签署确认\n" + _markdown_table(
+    return "## 8. 签署确认\n" + _markdown_table(
         ["角色", "姓名/责任方", "签署意见", "状态"],
         rows,
     )
@@ -4629,7 +4629,7 @@ def _render_delivery_change_log(items: list[DeliveryChangeLogItem]) -> str:
         (item.version, item.date, item.change, item.reason, item.owner)
         for item in items
     ]
-    return "## 10. 变更记录\n" + _markdown_table(
+    return "## 9. 变更记录\n" + _markdown_table(
         ["版本", "日期", "变更内容", "变更原因", "责任方"],
         rows,
     )
@@ -4643,7 +4643,7 @@ def _render_req_review_info(info: ReqReviewInfo) -> str:
         ("需求概述", info.requirement_summary),
         ("评审结论倾向", info.conclusion),
     ]
-    return "## 评审信息\n" + _markdown_table(["字段", "内容"], rows)
+    return "## 附录：评审信息\n" + _markdown_table(["字段", "内容"], rows)
 
 
 def _render_req_review_scope(items: list[ReqReviewScopeItem]) -> str:
@@ -5562,7 +5562,7 @@ def _render_blueprint_document_info(info: BlueprintDocumentInfo) -> str:
         ("Artifact 名称", info.artifact_name),
         ("蓝图状态", info.blueprint_status),
     ]
-    return "## 文档信息\n" + _markdown_table(["维度", "内容"], rows)
+    return "## 附录：文档信息\n" + _markdown_table(["维度", "内容"], rows)
 
 
 def _render_blueprint_product_overview(overview: BlueprintProductOverview) -> str:

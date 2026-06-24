@@ -21,7 +21,6 @@
 
 - `2026-06-24-new-agents-stage-transition-readiness-gate.md`：阶段推进成熟度门禁候选。
 - `2026-06-24-new-agents-test-strategy-artifact-format-streaming-bug.md`：测试策略阶段产物格式与流式渲染 Bug。
-- `2026-06-25-new-agents-artifact-document-info-density.md`：产出物首段文档信息密度和位置优化候选。
 - `2026-06-25-new-agents-agent-framework-phase1-phase2.md`：New Agents 智能体框架深化阶段 1-2 技术用户故事拆分活动候选。
 
 2026-06-25 已复核：6/23 的结构化产物改造和功能盘点诊断已归档；不要从 `archive/` 中的过程性“待办/剩余”直接恢复实施。
@@ -44,3 +43,4 @@
 - `../archive/2026-06-24-new-agents-llm-config-check-false-negative.md`：模型配置窗口检测当前表单配置修复记录。
 - `../archive/2026-06-25-new-agents-artifact-comment-create-500.md`：Artifact 批注保存失败诊断和回滚修复记录。
 - `../archive/2026-06-24-new-agents-stage-action-choice-persistence.md`：阶段推进确认历史保留修复记录。
+- `../archive/2026-06-25-new-agents-artifact-document-info-density.md`：产出物文档 / 评审元信息后置附录优化记录。

@@ -42,11 +42,6 @@ from test_artifact_data_renderers import (
 
 VALID_CLARIFY_ARTIFACT = """# 需求分析文档
 
-## 文档信息
-| 字段 | 内容 |
-|---|---|
-| Artifact 名称 | 测试需求分析与澄清基线 |
-
 ## 1. 需求事实清单
 | 事实 ID | 需求事实 | 来源 | 证据等级 | 状态 |
 |---|---|---|---|---|
@@ -89,7 +84,12 @@ flowchart TD
 | 风险种子 | R-SEED-001 | 凭证校验失败处理 | BR-001 | 策略阶段 FMEA |
 
 ## 8. 阶段门禁
-- [x] 测试范围和不测范围已明确。"""
+- [x] 测试范围和不测范围已明确。
+
+## 附录：文档信息
+| 字段 | 内容 |
+|---|---|
+| Artifact 名称 | 测试需求分析与澄清基线 |"""
 
 VALID_CLARIFY_ARTIFACT_JSON = json.dumps(
     VALID_CLARIFY_ARTIFACT,
