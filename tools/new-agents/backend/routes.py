@@ -11,6 +11,7 @@ from config_service import (
     upsert_default_llm_config,
 )
 from mermaid_repair_service import MermaidRepairError, repair_mermaid_code
+from models import db
 from route_guards import require_default_llm_config
 from run_persistence import (
     AgentRunPersistence,
@@ -265,6 +266,13 @@ def agent_run_artifact_collaboration_update(run_id: str):
         message = str(e)
         status_code = 404 if message.startswith("未知 runId:") else 400
         return json_error_response(message, status_code)
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(
+            f"[{g.request_id}] Error updating artifact collaboration "
+            f"for run {run_id}: {str(e)}"
+        )
+        return json_error_response("协作状态保存失败", 500)
 
 
 @api_bp.route("/agent/runs/<run_id>/context-summaries/decisions", methods=["POST"])

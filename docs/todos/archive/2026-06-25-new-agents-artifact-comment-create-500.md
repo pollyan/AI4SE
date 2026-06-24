@@ -1,8 +1,21 @@
 # New Agents Artifact 批注新增 500 Bug Todo
 
-状态：活跃 Bug  
+状态：已归档
 创建日期：2026-06-25  
+完成日期：2026-06-25
 相关模块：`tools/new-agents/`
+
+## 完成记录
+
+2026-06-25 已修复：Artifact 批注继续通过共享 `/api/agent/runs/{runId}/artifact-collaboration` 整体协作状态接口保存，不新增单条批注或 workflow 专属 API。后端现在要求非空批注/章节锁引用的 stage 已有持久化 artifact version；缺失 artifact 返回明确 400，数据库保存异常会 rollback 并返回 `{ "error": "协作状态保存失败" }`，避免默认 Flask 500 HTML。前端 service 会透出后端错误消息，`ArtifactPane` 在协作状态同步失败时回滚本次 optimistic comments / sectionLocks 更新，避免本地显示未成功保存的批注。
+
+验证覆盖：
+
+- 有效 collaboration payload 保存和 run snapshot 恢复仍通过。
+- 缺失 artifact version 的批注保存返回明确 400。
+- 数据库异常返回统一 JSON 诊断。
+- 前端非 2xx 响应展示后端错误消息。
+- 前端新增批注同步失败后不保留本地假批注。
 
 ## 背景
 

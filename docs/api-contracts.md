@@ -140,6 +140,8 @@
 | POST | `/api/config/check` | 检测默认 LLM 配置或设置表单临时 LLM 配置是否可调用当前模型 | 无 |
 | POST | `/api/agent/runs/stream` | 结构化 Agent Runtime SSE | 无 |
 | GET | `/api/agent/runs/{runId}` | 获取已持久化 run snapshot | 无 |
+| POST | `/api/agent/runs/{runId}/artifacts` | 保存人工校准后的当前阶段 artifact 版本 | 无 |
+| PUT | `/api/agent/runs/{runId}/artifact-collaboration` | 替换 run 的 artifact 批注与章节锁协作状态 | 无 |
 | GET | `/api/agent/observability` | 获取 Agent Runtime 运行统计 | 无 |
 | GET | `/api/agent/runs/{runId}/test-assets` | 只读导出 Lisa 测试资产 | 无 |
 | POST | `/api/agent/runs/{runId}/test-assets/materialize` | 将 Lisa CASES artifact 实体化为可编辑测试资产集 | 无 |
@@ -228,6 +230,29 @@ data: [DONE]
 ```
 
 `runId` 为空时，后端会为本轮创建服务端 run 并通过 `run_started.runId` 返回；后续请求带回同一个 `runId` 时，会复用该 run 并追加消息与产物版本。
+
+### PUT `/api/agent/runs/{runId}/artifact-collaboration` 请求
+
+替换指定 run 的 Artifact 协作状态，包括批注和章节锁。非空 `comments` / `sectionLocks` 引用的 `stageId` 必须已有持久化 artifact version；缺失 run 返回 404，缺失目标 artifact 返回 400，数据库保存异常返回 500 且响应 `{ "error": "协作状态保存失败" }`。
+
+```json
+{
+  "comments": [
+    {
+      "id": "comment-1",
+      "stageId": "CLARIFY",
+      "content": "这里需要业务确认登录边界。",
+      "artifactExcerpt": "登录边界",
+      "anchorText": "登录边界",
+      "createdAt": 1710000000000,
+      "status": "open",
+      "resolvedAt": null,
+      "replies": []
+    }
+  ],
+  "sectionLocks": []
+}
+```
 
 当服务端上下文构建器因为历史过长裁剪了较早对话时，`run_started` 可携带 `warnings:["context_truncated"]`；前端应在左侧对话首帧提示用户本轮模型只看到了最近上下文。这不同于 artifact 输出截断。
 

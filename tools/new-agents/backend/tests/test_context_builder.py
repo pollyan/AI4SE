@@ -126,6 +126,7 @@ def test_build_run_context_prompt_includes_current_artifact_summaries(app):
 def test_build_run_context_prompt_includes_locked_artifact_sections(app):
     with app.app_context():
         run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        record_artifact_version(run.id, "CLARIFY", "# 需求分析文档\n\n登录边界")
         replace_artifact_collaboration_state(
             run.id,
             {

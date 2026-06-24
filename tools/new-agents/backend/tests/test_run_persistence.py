@@ -150,6 +150,7 @@ def test_run_snapshot_returns_messages_and_current_artifacts(app):
 def test_run_snapshot_returns_artifact_collaboration_state(app):
     with app.app_context():
         run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY", model="gpt-test")
+        record_artifact_version(run.id, "CLARIFY", "# 需求分析文档\n\n登录边界")
 
         saved = replace_artifact_collaboration_state(
             run.id,

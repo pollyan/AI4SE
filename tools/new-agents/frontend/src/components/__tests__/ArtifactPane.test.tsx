@@ -6846,10 +6846,10 @@ describe('ArtifactPane Component', () => {
     });
 
     it('rebinds stale comment anchor to selected artifact text and syncs it', async () => {
-        vi.mocked(updateRunArtifactCollaboration).mockResolvedValue({
-            artifactComments: [],
-            artifactSectionLocks: [],
-        });
+        vi.mocked(updateRunArtifactCollaboration).mockImplementation(async (_runId, comments, sectionLocks) => ({
+            artifactComments: comments,
+            artifactSectionLocks: sectionLocks,
+        }));
         useStore.setState({
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
@@ -6943,10 +6943,10 @@ describe('ArtifactPane Component', () => {
     });
 
     it('syncs artifact comments to the current server run', async () => {
-        vi.mocked(updateRunArtifactCollaboration).mockResolvedValue({
-            artifactComments: [],
-            artifactSectionLocks: [],
-        });
+        vi.mocked(updateRunArtifactCollaboration).mockImplementation(async (_runId, comments, sectionLocks) => ({
+            artifactComments: comments,
+            artifactSectionLocks: sectionLocks,
+        }));
         useStore.setState({
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
@@ -6988,11 +6988,36 @@ describe('ArtifactPane Component', () => {
         });
     });
 
-    it('adds replies and toggles resolved state for artifact comments', async () => {
-        vi.mocked(updateRunArtifactCollaboration).mockResolvedValue({
+    it('rolls back a new artifact comment when collaboration sync fails', async () => {
+        vi.mocked(updateRunArtifactCollaboration).mockRejectedValue(
+            new Error('协作状态保存失败')
+        );
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            currentRunId: 'run-123',
+            artifactContent: '# 需求分析文档\n\n登录边界需要确认。',
             artifactComments: [],
             artifactSectionLocks: [],
         });
+
+        render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('批注');
+        fireEvent.change(screen.getByLabelText('新增批注'), {
+            target: { value: '这里需要业务确认登录边界。' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '添加批注' }));
+
+        await screen.findByText('协作状态保存失败：协作状态保存失败');
+        expect(useStore.getState().artifactComments).toEqual([]);
+        expect(screen.queryByText('这里需要业务确认登录边界。')).toBeNull();
+    });
+
+    it('adds replies and toggles resolved state for artifact comments', async () => {
+        vi.mocked(updateRunArtifactCollaboration).mockImplementation(async (_runId, comments, sectionLocks) => ({
+            artifactComments: comments,
+            artifactSectionLocks: sectionLocks,
+        }));
         useStore.setState({
             workflow: 'TEST_DESIGN',
             stageIndex: 0,

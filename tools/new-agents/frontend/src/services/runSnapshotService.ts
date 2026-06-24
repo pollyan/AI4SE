@@ -458,7 +458,20 @@ export const updateRunArtifactCollaboration = async (
     );
 
     if (!response.ok) {
-        throw new Error(`Failed to update artifact collaboration state: ${response.status}`);
+        let diagnostic = `${response.status}`;
+        try {
+            const payload = await response.json();
+            if (
+                isRecord(payload)
+                && typeof payload.error === 'string'
+                && payload.error.trim()
+            ) {
+                diagnostic = payload.error.trim();
+            }
+        } catch {
+            diagnostic = `${response.status}`;
+        }
+        throw new Error(`Failed to update artifact collaboration state: ${diagnostic}`);
     }
 
     return parseArtifactCollaborationState(await response.json());

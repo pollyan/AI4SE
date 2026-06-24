@@ -234,6 +234,8 @@ App (BrowserRouter, basename="/new-agents")
 | POST | `/api/config/check` | 检测默认 LLM 配置或设置表单临时配置是否可调用当前模型 |
 | POST | `/api/agent/runs/stream` | 结构化 Agent Runtime SSE |
 | GET | `/api/agent/runs/{runId}` | 已持久化 run snapshot |
+| POST | `/api/agent/runs/{runId}/artifacts` | 保存人工校准后的 artifact 版本 |
+| PUT | `/api/agent/runs/{runId}/artifact-collaboration` | 替换 Artifact 批注与章节锁协作状态 |
 | GET | `/api/agent/observability` | Agent Runtime 运行统计 |
 | POST | `/api/agent/runs/{runId}/test-assets/materialize` | Lisa 测试资产实体化 |
 | PATCH | `/api/agent/test-assets/{collectionId}/test-cases/{caseId}` | 追加更新单条测试用例版本 |
@@ -246,6 +248,7 @@ App (BrowserRouter, basename="/new-agents")
 - `POST /api/config` 支持默认 LLM 配置更新和密钥轮换；已有配置时前端留空 API Key 会保留当前密钥
 - 默认 LLM 配置 key 默认为 `default`，可通过 `NEW_AGENTS_DEFAULT_LLM_CONFIG_KEY` 在不同部署环境选择不同配置行和模型
 - `POST /api/config/check` 无请求体时检测当前默认配置；带设置表单 JSON 时检测临时配置且不持久化，API Key 留空时复用已保存密钥；响应返回业务态 `ok` 和诊断消息，不回显密钥
+- `PUT /api/agent/runs/{runId}/artifact-collaboration` 复用共享 run persistence；非空批注/章节锁必须引用已有 artifact version，保存失败返回可诊断 JSON 错误，前端失败时回滚 optimistic 协作状态
 - 前端获取 `hasDefault` 标志判断是否可用代理模式，并在设置弹层提供默认配置维护和可用性检测入口
 
 ---

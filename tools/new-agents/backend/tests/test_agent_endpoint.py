@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from pydantic_ai.exceptions import UnexpectedModelBehavior
+from sqlalchemy.exc import SQLAlchemyError
 
 from agent_contracts import AgentTurnOutput
 from agent_runtime import AgentRuntimeDependencyError
@@ -762,6 +763,11 @@ def test_agent_run_artifact_collaboration_endpoint_replaces_state(
 ):
     with app.app_context():
         run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        record_artifact_version(
+            run.id,
+            "CLARIFY",
+            "# 需求分析文档\n\n登录边界需要确认。",
+        )
         run_id = run.id
 
     response = client.put(
@@ -873,6 +879,66 @@ def test_agent_run_artifact_collaboration_endpoint_replaces_state(
             "createdAt": 1710000000200,
         }
     ]
+
+
+def test_agent_run_artifact_collaboration_endpoint_rejects_missing_artifact(
+    app,
+    client,
+    default_config,
+):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        run_id = run.id
+
+    response = client.put(
+        f"/api/agent/runs/{run_id}/artifact-collaboration",
+        json={
+            "comments": [
+                {
+                    "id": "comment-1",
+                    "stageId": "CLARIFY",
+                    "content": "这里需要业务确认登录边界。",
+                    "artifactExcerpt": "登录边界",
+                    "anchorText": "登录边界",
+                    "createdAt": 1710000000000,
+                    "status": "open",
+                    "resolvedAt": None,
+                    "replies": [],
+                }
+            ],
+            "sectionLocks": [],
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json == {
+        "error": "CLARIFY 阶段产出物不存在，无法保存协作状态"
+    }
+
+
+def test_agent_run_artifact_collaboration_endpoint_returns_diagnostic_on_db_error(
+    app,
+    client,
+    default_config,
+):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        run_id = run.id
+
+    with patch(
+        "routes.replace_artifact_collaboration_state",
+        side_effect=SQLAlchemyError("database is unavailable"),
+    ):
+        response = client.put(
+            f"/api/agent/runs/{run_id}/artifact-collaboration",
+            json={
+                "comments": [],
+                "sectionLocks": [],
+            },
+        )
+
+    assert response.status_code == 500
+    assert response.json == {"error": "协作状态保存失败"}
 
 
 def test_agent_run_decision_summary_create_endpoint_persists_decision(

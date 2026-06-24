@@ -4,7 +4,7 @@ import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { useStore, ArtifactVersion, WORKFLOWS } from '../store';
-import type { AgentRunSnapshotArtifact, ArtifactVisualDiagnostic, ArtifactVisualDiagnosticFocusRequest } from '../core/types';
+import type { AgentRunSnapshotArtifact, ArtifactComment, ArtifactSectionLock, ArtifactVisualDiagnostic, ArtifactVisualDiagnosticFocusRequest } from '../core/types';
 import { buildLineDiff } from '../core/artifactDiff';
 import {
   buildAutoMergedInsertionResult,
@@ -22,6 +22,19 @@ import { StructuredVisual } from './StructuredVisual';
 import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../services/runSnapshotService';
 import { buildDocxPackage } from '../core/docxExport';
 import { buildPlainTextPdf as buildArtifactPdf } from '../core/artifactExport';
+
+type CollaborationStateSnapshot = {
+  artifactComments: ArtifactComment[];
+  artifactSectionLocks: ArtifactSectionLock[];
+};
+
+const captureCollaborationState = (): CollaborationStateSnapshot => {
+  const state = useStore.getState();
+  return {
+    artifactComments: state.artifactComments,
+    artifactSectionLocks: state.artifactSectionLocks,
+  };
+};
 
 export const ArtifactPane: React.FC = () => {
   const workflow = useStore((state) => state.workflow);
@@ -109,15 +122,26 @@ export const ArtifactPane: React.FC = () => {
   );
   const latestStageArtifactVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1] ?? null;
 
-  const syncArtifactCollaborationState = useCallback(() => {
+  const syncArtifactCollaborationState = useCallback((
+    nextState?: CollaborationStateSnapshot,
+    rollbackState?: CollaborationStateSnapshot,
+  ) => {
     if (!currentRunId) return;
-    const state = useStore.getState();
+    const state = nextState ?? captureCollaborationState();
     setCollaborationSyncError(null);
     void updateRunArtifactCollaboration(
       currentRunId,
       state.artifactComments,
       state.artifactSectionLocks,
-    ).catch((error: unknown) => {
+    ).then((savedState) => {
+      useStore.setState({
+        artifactComments: savedState.artifactComments,
+        artifactSectionLocks: savedState.artifactSectionLocks,
+      });
+    }).catch((error: unknown) => {
+      if (rollbackState) {
+        useStore.setState(rollbackState);
+      }
       const message = error instanceof Error ? error.message : '未知错误';
       setCollaborationSyncError(`协作状态保存失败：${message}`);
     });
@@ -3576,6 +3600,7 @@ export const ArtifactPane: React.FC = () => {
     if (!currentStageId) return;
     const content = commentDraft.trim();
     if (!content) return;
+    const previousState = captureCollaborationState();
     const anchorText = captureSelectedArtifactText() ?? selectedArtifactText;
     const artifactExcerpt = anchorText ?? buildCommentExcerpt(artifactContent);
     addArtifactComment({
@@ -3584,20 +3609,22 @@ export const ArtifactPane: React.FC = () => {
       artifactExcerpt,
       anchorText,
     });
-    syncArtifactCollaborationState();
+    syncArtifactCollaborationState(captureCollaborationState(), previousState);
     setCommentDraft('');
   };
 
   const removeCurrentStageComment = (commentId: string) => {
+    const previousState = captureCollaborationState();
     removeArtifactComment(commentId);
-    syncArtifactCollaborationState();
+    syncArtifactCollaborationState(captureCollaborationState(), previousState);
   };
 
   const addCurrentStageCommentReply = (commentId: string) => {
     const content = commentReplyDrafts[commentId]?.trim() ?? '';
     if (!content) return;
+    const previousState = captureCollaborationState();
     addArtifactCommentReply(commentId, content);
-    syncArtifactCollaborationState();
+    syncArtifactCollaborationState(captureCollaborationState(), previousState);
     setCommentReplyDrafts((drafts) => ({
       ...drafts,
       [commentId]: '',
@@ -3608,13 +3635,15 @@ export const ArtifactPane: React.FC = () => {
     commentId: string,
     currentStatus: 'open' | 'resolved'
   ) => {
+    const previousState = captureCollaborationState();
     setArtifactCommentStatus(commentId, currentStatus === 'resolved' ? 'open' : 'resolved');
-    syncArtifactCollaborationState();
+    syncArtifactCollaborationState(captureCollaborationState(), previousState);
   };
 
   const resolveCommentFromReview = (commentId: string) => {
+    const previousState = captureCollaborationState();
     setArtifactCommentStatus(commentId, 'resolved');
-    syncArtifactCollaborationState();
+    syncArtifactCollaborationState(captureCollaborationState(), previousState);
   };
 
   const openCommentsFromReview = () => {
@@ -3644,8 +3673,9 @@ export const ArtifactPane: React.FC = () => {
       return;
     }
 
+    const previousState = captureCollaborationState();
     updateArtifactCommentAnchor(commentId, anchorText);
-    syncArtifactCollaborationState();
+    syncArtifactCollaborationState(captureCollaborationState(), previousState);
     setCommentAnchorRebindErrors((errors) => {
       const nextErrors = { ...errors };
       delete nextErrors[commentId];
@@ -3722,18 +3752,20 @@ export const ArtifactPane: React.FC = () => {
 
   const lockSection = (section: ArtifactSection) => {
     if (!currentStageId) return;
+    const previousState = captureCollaborationState();
     addArtifactSectionLock({
       stageId: currentStageId,
       heading: section.heading,
       sectionAnchor: section.anchor,
       content: section.content,
     });
-    syncArtifactCollaborationState();
+    syncArtifactCollaborationState(captureCollaborationState(), previousState);
   };
 
   const unlockSection = (lockId: string) => {
+    const previousState = captureCollaborationState();
     removeArtifactSectionLock(lockId);
-    syncArtifactCollaborationState();
+    syncArtifactCollaborationState(captureCollaborationState(), previousState);
   };
 
   const getSectionLock = (section: ArtifactSection) => (

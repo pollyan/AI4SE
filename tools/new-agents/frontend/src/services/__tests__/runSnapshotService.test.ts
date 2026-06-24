@@ -437,6 +437,20 @@ describe('runSnapshotService', () => {
         expect(updated.artifactSectionLocks).toHaveLength(1);
     });
 
+    it('should expose artifact collaboration error responses', async () => {
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({ error: '协作状态保存失败' }),
+            {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' },
+            },
+        ));
+
+        await expect(updateRunArtifactCollaboration('run-123', [], []))
+            .rejects
+            .toThrow('协作状态保存失败');
+    });
+
     it('should fetch recent run list summaries', async () => {
         vi.mocked(fetch).mockResolvedValue(new Response(
             JSON.stringify({

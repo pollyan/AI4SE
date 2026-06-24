@@ -464,6 +464,16 @@ def replace_artifact_collaboration_state(run_id: str, patch: dict) -> dict:
         patch=patch,
         created_at_ms=int(time.time() * 1000),
     )
+    _require_collaboration_artifacts(
+        run_id,
+        {
+            item.stage_id
+            for item in [
+                *collaboration_state.comments,
+                *collaboration_state.section_locks,
+            ]
+        },
+    )
 
     AgentArtifactComment.query.filter_by(run_id=run_id).delete()
     AgentArtifactSectionLock.query.filter_by(run_id=run_id).delete()
@@ -481,6 +491,34 @@ def replace_artifact_collaboration_state(run_id: str, patch: dict) -> dict:
             for lock in collaboration_state.section_locks
         ],
     }
+
+
+def _require_collaboration_artifacts(run_id: str, stage_ids: set[str]) -> None:
+    if not stage_ids:
+        return
+
+    existing_stage_ids = {
+        stage_id
+        for (stage_id,) in (
+            db.session.query(AgentArtifact.stage_id)
+            .filter(
+                AgentArtifact.run_id == run_id,
+                AgentArtifact.stage_id.in_(stage_ids),
+                AgentArtifact.current_version_id.isnot(None),
+            )
+            .all()
+        )
+    }
+    missing_stage_ids = sorted(stage_ids - existing_stage_ids)
+    if missing_stage_ids:
+        if len(missing_stage_ids) == 1:
+            raise ValueError(
+                f"{missing_stage_ids[0]} 阶段产出物不存在，无法保存协作状态"
+            )
+        raise ValueError(
+            "以下阶段产出物不存在，无法保存协作状态: "
+            + ", ".join(missing_stage_ids)
+        )
 
 
 def upsert_manual_decision_summary(run_id: str, patch: dict) -> dict:
