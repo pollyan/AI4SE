@@ -64,18 +64,20 @@
 
 | ID | 增强点 | 类型 | 类别 | 复杂度 | 优先级 | 验收标准 |
 | --- | --- | --- | --- | --- | --- | --- |
-| E01 | Workflow 入口 preview | 改造现有功能 | 体验 | S | P0 | 已消化：每个在线 workflow 展示适用/不适用、输入要求、预期产物和样例输入 |
-| E02 | 阶段缺失信息清单 | 深化现有功能 | 专业内容 | S | P0 | chat 和 artifact 都能标明缺失项、阻断性和用户下一步 |
-| E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | P0 | 展示 headings、visual、stage gate、专业字段通过/失败/警告 |
-| E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 测试点、风险、用例 issue 可修复、确认、追踪并影响资产质量状态 |
-| E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
-| E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 支持继续、复制为新 run、按 workflow/质量筛选、预览当前 artifact |
-| E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入 |
-| E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 | 每个 stage 有质量分、证据明细和待处理项 |
-| E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 显示 workflow/stage/provider 趋势、contract retry 原因和行动建议 |
+| E01 | Workflow 入口 preview | 改造现有功能 | 体验 | S | P0 | 已完成待合回: `8072a866` 每个在线 workflow 展示适用/不适用、输入要求、预期产物和样例输入 |
+| E02 | 阶段缺失信息清单 | 深化现有功能 | 专业内容 | S | P0 | 已完成待合回: `0ab900f2` chat 和 artifact 标明缺失项、阻断性和用户下一步 |
+| E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | P0 | 已完成待合回: `dfa2b1b6` 展示 headings、visual、stage gate、专业字段通过/失败/警告 |
+| E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 已完成待合回: `eb957d55` 测试点、风险、用例 issue 可修复、确认、追踪并影响资产质量状态 |
+| E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 已完成待合回: `fdcc3887` 用户可指定章节重写，保留锁定章节，仍输出完整 artifact |
+| E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 已完成待合回: `c265ae4a` 支持继续、复制为新 run、按 workflow/质量筛选、预览当前 artifact |
+| E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | 已完成待合回: `32bffcbc` handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入 |
+| E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 | 已完成待合回: `dfa2b1b6` 每个 stage 有质量分、证据明细和待处理项 |
+| E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 已完成待合回: `9739fc27` 显示 workflow/stage/provider 趋势、contract retry 原因和行动建议 |
 | E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | FMEA、JTBD、RICE、Kano、CAPA 等可由配置注入 prompt/template |
 | E11 | Prompt/template 版本管理 | 新增功能 | 平台扩展 | L | P2 | 每个 stage 有 prompt/template version 和回归样例 |
-| E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 | 新 workflow 缺 manifest/prompt/contract/test 任一面时 dry-run 失败 |
+| E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 | 已完成待合回: `43cfe0bc` 新 workflow 缺 manifest/prompt/contract/test 任一面时 dry-run 失败 |
+| E13 | Alex 用户故事拆解 workflow | 新增功能 | 专业内容 | M | P0 | 已完成待合回: `1782001b` 从需求蓝图或 PRD 拆出 Epic、User Story、验收标准、依赖、Sprint 切片，并可作为 Lisa 测试设计输入 |
+| E14 | Alex PRD 质量评审与补全 workflow | 新增功能 | 专业内容 | M | P0 | 已完成待合回: `f088cf91` 从产品经理视角评审 PRD 的业务目标、用户价值、范围边界、指标、依赖、非功能需求和验收标准，并输出补全建议 |
 
 ## Lisa 专业化方向
 
@@ -191,6 +193,13 @@
 - 需要同步: handoff prompt template、target workflow/stage、context truncation policy。
 - 完成定义: handoff 明确来源版本、关键需求、验收标准、风险、未确认项和目标用途。
 - 不纳入: 新 runtime 分支。
+
+## 当前剩余能力包
+
+- E10 专业方法库配置。
+- E11 Prompt/template 版本管理。
+
+其余 E 编号如果需要恢复，必须先通过 CGA 证明当前主线集成后仍存在回归或未验收缺口。当前已完成待合回状态以 `2026-06-24-goal-mode-milestone-ledger.md` 为准。
 
 ## 架构约束
 

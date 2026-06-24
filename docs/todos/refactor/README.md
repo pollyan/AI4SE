@@ -1,6 +1,6 @@
 # Refactor Todo
 
-本目录记录重构类扫描、方案和实施待办。已完成的 todo 归档到 `docs/todos/archive/`；当前没有活跃重构 todo。
+本目录记录重构类扫描、方案和实施待办。已完成的 todo 归档到 `docs/todos/archive/`；当前目标模式恢复入口以 milestone 状态账本为准。
 
 ## 使用规则
 
@@ -19,7 +19,11 @@
 
 ## 当前入口
 
-暂无。
+- `2026-06-24-goal-mode-milestone-ledger.md`：目标模式当前事实源；先读它，再决定下一轮是否做 E10、E11 或最终集成。
+- `2026-06-23-new-agents-enhancement-diagnostic.md`：剩余活跃能力包保留 E10、E11；其他 E 编号见账本的 completed_pending_merge。
+- `2026-06-23-deepseek-v4-structured-artifact-data.md`：本地确定性改造已完成，待最终合回；除非 CGA 发现回归或真实 smoke 失败，不恢复为逐 stage 活动候选。
+
+2026-06-24 已复核：DeepSeek V4 格式化输出、E01/E02/E03/E04/E05/E06/E07/E08/E09/E12/E13/E14 均有独立提交证据，但大多尚未合回 `master`。最终 merge/push/删分支只能在账本中的剩余能力包清空、integration branch 验证通过且主工作区未提交改动已处理后执行。
 
 ## 已归档
 
