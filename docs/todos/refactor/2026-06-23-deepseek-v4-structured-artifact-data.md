@@ -26,6 +26,11 @@
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
 - `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM` 四阶段已完成结构化产物数据迁移；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
 - 2026-06-24 已补齐 DeepSeek V4 格式化输出 readiness gate: 全部 17 个在线 stage 均由测试矩阵证明支持 `artifact_data`、使用数据型 structured instruction、进入 artifact_data 纠错 prompt，并由后端 renderer 输出通过现有 artifact contract。
+- 2026-06-23 已完成本地 readiness gate: 从 `workflow_manifest.json` 枚举全部 17 个在线 stage，验证每个 stage 都有 `artifact_data` renderer、有效 fixture、artifact contract 通过、structured output instruction 要求 `artifact_data` 且不要求 `artifact_update.markdown`，并用 fake DeepSeek raw JSON stream 验证 `response_format={"type":"json_object"}` 与 thinking disabled。
+- 2026-06-23 已完成结构化产物数据持久化闭环: renderer 返回的 validated `artifact_data` 会随 artifact version 保存，并在 run snapshot 当前 artifact 的 `artifactData` 中暴露；旧版本和手工编辑版本明确返回 `artifactData: null`，继续只依赖 Markdown 内容。
+- 2026-06-23 已完成真实 DeepSeek V4 Flash smoke gate 对齐: `test_agent_real_smoke.py` 默认无凭证时 skip，配置 `DEEPSEEK_V4_SMOKE_*` 或兼容的 `NEW_AGENTS_SMOKE_*` 后走 raw JSON streaming、`artifact_data` schema、后端 renderer 和 artifact contract，不再要求模型直接输出完整 Markdown。
+- 2026-06-23 已完成信任闭环整合: `codex/deepseek-confidence-consolidation` 以 cherry-pick 方式汇总 readiness gate、`artifact_data` persistence 和真实 smoke gate 三条已验证分支，作为后续 DeepSeek V4 格式化输出需求的主线基础。
+- 2026-06-23 已完成 prompt 边界去格式化闭环: 已迁移 `artifact_data` stage 的前端 system prompt 不再注入 `<mark>`、`artifact_update`、完整 Markdown 重写要求或 Mermaid fence 参考，避免与后端 DeepSeek `artifact_data` 指令冲突。
 
 ## 完成记录
 
@@ -177,6 +182,8 @@ renderer 职责:
 
 - DeepSeek V4 Flash 下，模型只输出 JSON 数据，后端负责产物格式。
 - 至少一个完整 workflow stage 能完成: 用户输入 -> DeepSeek JSON mode -> Pydantic data schema -> backend renderer -> artifact contract -> typed SSE -> 前端展示。
+- validated `artifact_data` 与 renderer 输出的 Markdown 一起进入 artifact version persistence，run snapshot 可审计当前 artifact 的结构化业务数据来源。
+- 真实 DeepSeek V4 Flash smoke gate 可选执行，验证目标是 `artifact_data -> backend renderer -> artifact contract`，不是模型直写 Markdown。
 - “格式不完整 / 结构化输出生成失败”不再由 Markdown 标题缺失、Mermaid fence 不完整或表格格式错误高频触发。
 - 所有失败都能定位到 schema path、contract rule 或 renderer rule。
 
@@ -191,5 +198,5 @@ renderer 职责:
 ## 已裁决的设计问题
 
 - `artifact_data` schema 当前按 workflow/stage 手写 Pydantic model，保持专业字段和跨字段校验的可读性；后续如做 E10/E11 再评估通用 block schema 或 prompt/template version registry。
-- renderer 输出继续保存为现有 Markdown artifact，保持 typed SSE、前端展示、artifact contract 和 run persistence 兼容；是否同时持久化 `artifact_data` 留给后续审计/重渲染切片。
+- renderer 输出继续保存为现有 Markdown artifact，同时持久化 validated `artifact_data`，便于后续重渲染、审计和质量诊断，并保持 typed SSE、前端展示、artifact contract 和 run persistence 兼容。
 - 真实 DeepSeek V4 Flash smoke 是显式凭证、网络和额度条件下的可选外部验证，不作为目标模式默认本地门禁。

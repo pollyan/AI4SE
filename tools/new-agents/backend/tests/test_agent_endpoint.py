@@ -20,6 +20,17 @@ from run_persistence import (
 )
 
 
+VALID_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "测试需求分析与澄清基线",
+    },
+    "stage_gate": {
+        "status": "需要用户补充",
+        "blocking": True,
+    },
+}
+
+
 VALID_CLARIFY_ARTIFACT = """# 需求分析文档
 
 ## 文档信息
@@ -294,6 +305,7 @@ class FakeRuntime:
                 "type": "replace",
                 "markdown": VALID_CLARIFY_ARTIFACT,
             },
+            "artifact_data": VALID_ARTIFACT_DATA,
             "stage_action": {
                 "type": "request_next_stage",
                 "target_stage_id": "STRATEGY",
@@ -409,6 +421,7 @@ def test_agent_runs_stream_persists_run_messages_and_final_artifact(
             "stageId": "CLARIFY",
             "content": VALID_CLARIFY_ARTIFACT,
             "versionNumber": 1,
+            "artifactData": VALID_ARTIFACT_DATA,
         }
     ]
 
@@ -505,6 +518,7 @@ def test_agent_run_snapshot_endpoint_returns_persisted_trace(
             "stageId": "CLARIFY",
             "content": VALID_CLARIFY_ARTIFACT,
             "versionNumber": 1,
+            "artifactData": VALID_ARTIFACT_DATA,
         }
     ]
 
@@ -630,7 +644,12 @@ def test_agent_run_artifact_update_endpoint_records_manual_artifact_version(
     }
 
     snapshot_response = client.get(f"/api/agent/runs/{run_id}")
-    assert snapshot_response.json["artifacts"] == [response.json]
+    assert snapshot_response.json["artifacts"] == [
+        {
+            **response.json,
+            "artifactData": None,
+        }
+    ]
     assert snapshot_response.json["artifactAuditEvents"] == [
         {
             "stageId": "STRATEGY",
@@ -698,6 +717,7 @@ def test_agent_run_artifact_update_endpoint_returns_409_for_stale_version(
             "stageId": "STRATEGY",
             "content": "# 测试策略蓝图\n\n版本 2",
             "versionNumber": 2,
+            "artifactData": None,
         },
     }
 
@@ -707,6 +727,7 @@ def test_agent_run_artifact_update_endpoint_returns_409_for_stale_version(
             "stageId": "STRATEGY",
             "content": "# 测试策略蓝图\n\n版本 2",
             "versionNumber": 2,
+            "artifactData": None,
         }
     ]
 

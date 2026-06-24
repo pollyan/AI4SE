@@ -439,6 +439,15 @@ export type ObservabilitySummary = {
     recentTurns: ObservabilityTurn[];
 };
 
+export interface ArtifactContract {
+    requiredHeadings: string[];
+}
+
+export interface VisualContract {
+    requiredMermaidDiagrams?: string[];
+    requiredStructuredVisuals?: string[];
+}
+
 export interface WorkflowStage {
     id: string;
     name: string;
@@ -447,13 +456,8 @@ export interface WorkflowStage {
     methodIds?: string[];
     promptTemplateVersion?: string;
     regressionSampleIds?: string[];
-    artifactContract?: {
-        requiredHeadings?: string[];
-    };
-    visualContract?: {
-        requiredMermaidDiagrams?: string[];
-        requiredStructuredVisuals?: string[];
-    };
+    artifactContract?: ArtifactContract;
+    visualContract?: VisualContract;
 }
 
 export interface OnboardingConfig {

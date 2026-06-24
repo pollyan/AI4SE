@@ -28,6 +28,10 @@ const migratedArtifactDataStages: Array<{
     { agentId: 'alex', workflow: 'STORY_BREAKDOWN', stageId: 'EPIC_MAPPING' },
     { agentId: 'alex', workflow: 'STORY_BREAKDOWN', stageId: 'STORY_BACKLOG' },
     { agentId: 'alex', workflow: 'STORY_BREAKDOWN', stageId: 'SPRINT_PLAN' },
+    { agentId: 'alex', workflow: 'PRD_REVIEW', stageId: 'INVENTORY' },
+    { agentId: 'alex', workflow: 'PRD_REVIEW', stageId: 'QUALITY_AUDIT' },
+    { agentId: 'alex', workflow: 'PRD_REVIEW', stageId: 'COMPLETION_PLAN' },
+    { agentId: 'alex', workflow: 'PRD_REVIEW', stageId: 'REVISION_BLUEPRINT' },
 ];
 
 describe('buildSystemPrompt', () => {

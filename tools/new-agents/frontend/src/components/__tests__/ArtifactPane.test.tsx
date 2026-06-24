@@ -457,6 +457,67 @@ describe('ArtifactPane Component', () => {
         });
     });
 
+    it('shows artifact quality diagnostics in the review panel', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 草稿\n\n## 8. 阶段门禁\n\n等待确认',
+        });
+
+        render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('审阅');
+
+        expect(screen.getByText('质量诊断')).toBeTruthy();
+        expect(screen.getByText('缺失项：缺少标题：# 需求分析文档')).toBeTruthy();
+        expect(screen.getByText('缺少专业字段：事实 ID')).toBeTruthy();
+        expect(screen.getByText('缺少 Mermaid 图：flowchart')).toBeTruthy();
+        expect(screen.getByText('阶段门禁缺少决策项')).toBeTruthy();
+    });
+
+    it('shows missing information checklist with blocking state and next actions in the review panel', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 草稿\n\n## 8. 阶段门禁\n\n等待确认',
+        });
+
+        render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('审阅');
+
+        expect(screen.getByText('缺失信息清单')).toBeTruthy();
+        expect(screen.getAllByText('阻断').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('提醒').length).toBeGreaterThan(0);
+        expect(screen.getByText('缺失项：缺少标题：# 需求分析文档')).toBeTruthy();
+        expect(screen.getAllByText('补充缺失内容后重新生成或手动完善当前阶段产物。').length).toBeGreaterThan(0);
+        expect(screen.getByText('确认阶段门禁决策项，明确是否可以进入下一阶段。')).toBeTruthy();
+    });
+
+    it('focuses a visual diagnostic from the artifact quality panel', async () => {
+        const scrollIntoView = vi.fn();
+        window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: [
+                '```ai4se-visual',
+                '{ broken',
+                '```',
+            ].join('\n'),
+            artifactVisualDiagnostics: [],
+        });
+
+        const { container } = render(<ArtifactPane />);
+        await waitFor(() => {
+            expect(screen.getByText('结构化可视化格式错误')).toBeTruthy();
+        });
+
+        clickArtifactToolbarMenuItem('审阅');
+        fireEvent.click(screen.getByRole('button', { name: '定位质量诊断：结构化可视化格式错误' }));
+
+        await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+        expect(container.querySelector('[data-artifact-visual-focused="true"]')).toBeTruthy();
+    });
+
     it('scrolls and highlights a focused Mermaid visual diagnostic in the current preview', async () => {
         const scrollIntoView = vi.fn();
         window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
