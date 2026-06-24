@@ -865,10 +865,10 @@ describe('Header Component', () => {
             expect(fetchObservabilitySummary).toHaveBeenCalledWith({ limit: 20 });
         });
 
-        fireEvent.change(screen.getByLabelText('统计工作流'), {
+        fireEvent.change(await screen.findByLabelText('统计工作流'), {
             target: { value: 'TEST_DESIGN' },
         });
-        fireEvent.change(screen.getByLabelText('统计阶段'), {
+        fireEvent.change(await screen.findByLabelText('统计阶段'), {
             target: { value: 'CLARIFY' },
         });
         fireEvent.click(screen.getByRole('button', { name: /应用筛选/ }));
@@ -890,13 +890,13 @@ describe('Header Component', () => {
             expect(fetchObservabilitySummary).toHaveBeenCalledWith({ limit: 20 });
         });
 
-        fireEvent.change(screen.getByLabelText('统计工作流'), {
+        fireEvent.change(await screen.findByLabelText('统计工作流'), {
             target: { value: 'TEST_DESIGN' },
         });
-        fireEvent.change(screen.getByLabelText('统计阶段'), {
+        fireEvent.change(await screen.findByLabelText('统计阶段'), {
             target: { value: 'CLARIFY' },
         });
-        const autoRefreshToggle = screen.getByLabelText('自动刷新');
+        const autoRefreshToggle = await screen.findByLabelText('自动刷新');
 
         vi.useFakeTimers();
         fireEvent.click(autoRefreshToggle);
