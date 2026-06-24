@@ -1322,34 +1322,178 @@ def build_partial_agent_delta(text: str) -> AgentTurnDeltaOutput | None:
 
 
 def build_artifact_data_progress_markdown(text: str) -> str:
-    received_chars = max(0, len(text))
-    received_sections = [
-        key
-        for key in (
-            "document_info",
-            "review_info",
-            "report_info",
-            "artifact_data",
-            "stage_gate",
-        )
-        if re.search(rf'"{re.escape(key)}"\s*:', text)
-    ]
-    sections_line = (
-        "、".join(received_sections)
-        if received_sections
-        else "等待结构化字段"
+    preview_items = extract_artifact_data_preview_items(text)
+    preview_lines = (
+        [
+            f"- **{format_artifact_data_preview_key(key)}**: {value}"
+            for key, value in preview_items
+        ]
+        if preview_items
+        else ["- 正在等待模型输出具体内容字段..."]
     )
     return "\n".join(
         [
             "# 产出物生成中",
             "",
-            "正在生成结构化产物数据。右侧会先显示生成进度，待后端完成契约校验后自动替换为完整产出物。",
+            "正在实时渲染模型已经生成的结构化内容。完整契约校验通过后会自动替换为正式产出物。",
             "",
-            "## 流式进度",
-            f"- 已接收字符数: {received_chars}",
-            f"- 已识别字段: {sections_line}",
+            "## 已生成内容预览",
+            *preview_lines,
         ]
     )
+
+
+ARTIFACT_DATA_PREVIEW_LABELS = {
+    "artifact_name": "Artifact 名称",
+    "requirement_name": "需求名称",
+    "fact": "需求事实",
+    "content": "内容",
+    "testing_meaning": "测试含义",
+    "rule": "业务规则",
+    "trigger": "触发条件",
+    "acceptance": "验收口径",
+    "question": "待确认问题",
+    "impact": "影响范围",
+    "assumption": "当前假设",
+    "requirement_or_assumption": "质量需求",
+    "risk": "风险",
+    "usage": "后续用途",
+    "item": "检查项",
+    "conclusion": "结论",
+    "basis": "依据",
+    "goal": "质量目标",
+    "name": "名称",
+    "failure_mode": "失效模式",
+    "mitigation": "缓解措施",
+    "coverage": "覆盖策略",
+    "target": "目标",
+    "technique": "测试技术",
+    "reason": "原因",
+    "scope": "范围",
+    "entry_condition": "准入条件",
+    "point": "测试点",
+    "decision": "决策",
+    "description": "描述",
+    "suggestion": "建议",
+    "expected_result": "预期结果",
+    "assertion": "断言",
+    "title": "标题",
+    "summary_item": "摘要项",
+    "evidence": "证据",
+}
+
+ARTIFACT_DATA_PREVIEW_SKIP_KEYS = {
+    "workflow",
+    "stage",
+    "status",
+    "fact_id",
+    "rule_id",
+    "question_id",
+    "input_id",
+    "goal_id",
+    "risk_id",
+    "technique_id",
+    "candidate_id",
+    "suggestion_id",
+    "issue_id",
+    "summary_item",
+    "checked",
+    "priority",
+    "blocking",
+    "owner",
+    "source",
+    "evidence_level",
+    "input_type",
+    "type",
+    "category",
+    "layer",
+    "ratio",
+}
+
+
+def format_artifact_data_preview_key(key: str) -> str:
+    return ARTIFACT_DATA_PREVIEW_LABELS.get(key, key.replace("_", " "))
+
+
+def truncate_artifact_data_preview_value(value: str) -> str:
+    normalized = re.sub(r"\s+", " ", value).strip()
+    if len(normalized) <= 140:
+        return normalized
+    return normalized[:137].rstrip() + "..."
+
+
+def extract_json_string_value_at(text: str, colon_end_index: int) -> str | None:
+    index = colon_end_index
+    while index < len(text) and text[index].isspace():
+        index += 1
+    if index >= len(text) or text[index] != '"':
+        return None
+    index += 1
+    chars: list[str] = []
+    while index < len(text):
+        char = text[index]
+        if char == '"':
+            break
+        if char != "\\":
+            chars.append(char)
+            index += 1
+            continue
+
+        index += 1
+        if index >= len(text):
+            break
+        escape = text[index]
+        if escape == "n":
+            chars.append("\n")
+        elif escape == "r":
+            chars.append("\r")
+        elif escape == "t":
+            chars.append("\t")
+        elif escape == "b":
+            chars.append("\b")
+        elif escape == "f":
+            chars.append("\f")
+        elif escape in {'"', "\\", "/"}:
+            chars.append(escape)
+        elif escape == "u":
+            hex_value = text[index + 1 : index + 5]
+            if len(hex_value) < 4 or not re.fullmatch(r"[0-9a-fA-F]{4}", hex_value):
+                break
+            chars.append(chr(int(hex_value, 16)))
+            index += 4
+        else:
+            chars.append(escape)
+        index += 1
+    return "".join(chars) if chars else None
+
+
+def extract_artifact_data_preview_items(
+    text: str,
+    *,
+    max_items: int = 12,
+) -> list[tuple[str, str]]:
+    artifact_data_match = re.search(r'"artifact_data"\s*:', text)
+    if artifact_data_match is None:
+        return []
+
+    segment = text[artifact_data_match.end() :]
+    items: list[tuple[str, str]] = []
+    seen_values: set[str] = set()
+    for key_match in re.finditer(r'"([A-Za-z_][A-Za-z0-9_]*)"\s*:', segment):
+        key = key_match.group(1)
+        if key in ARTIFACT_DATA_PREVIEW_SKIP_KEYS:
+            continue
+        value = extract_json_string_value_at(segment, key_match.end())
+        if value is None:
+            continue
+        normalized = truncate_artifact_data_preview_value(value)
+        if not normalized or normalized in seen_values:
+            continue
+        items.append((key, normalized))
+        seen_values.add(normalized)
+        if len(items) >= max_items:
+            break
+    return items
 
 
 def should_emit_partial_delta(

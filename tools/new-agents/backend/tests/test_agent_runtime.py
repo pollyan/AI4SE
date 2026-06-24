@@ -2667,7 +2667,10 @@ def test_runtime_raw_json_stream_turn_streams_artifact_progress_for_artifact_dat
     ]
 
     assert progress_deltas
-    assert "正在生成" in progress_deltas[0].artifact_update.markdown
+    assert "产出物生成中" in progress_deltas[0].artifact_update.markdown
+    assert "用户需要登录功能" in progress_deltas[0].artifact_update.markdown
+    assert "登录页面和登录 API" in progress_deltas[0].artifact_update.markdown
+    assert "已接收字符数" not in progress_deltas[0].artifact_update.markdown
     assert outputs[-1].artifact_update.markdown.startswith("# 需求分析文档")
 
 
