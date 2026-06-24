@@ -20,22 +20,6 @@ const ICONS: Record<string, LucideIcon> = {
     ShieldAlert: ShieldAlert
 };
 
-function PreviewList({ title, items }: { title: string; items: string[] }) {
-    return (
-        <div>
-            <div className="text-[11px] font-semibold text-slate-300 mb-1">{title}</div>
-            <ul className="space-y-1">
-                {items.map((item) => (
-                    <li key={item} className="text-xs leading-5 text-slate-400 flex gap-2">
-                        <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-blue-400/70" />
-                        <span>{item}</span>
-                    </li>
-                ))}
-            </ul>
-        </div>
-    );
-}
-
 export function WorkflowSelect() {
     const navigate = useNavigate();
     const { agentId } = useParams();
@@ -130,23 +114,6 @@ export function WorkflowSelect() {
                                 <p className={clsx("text-sm mb-6 flex-1 min-h-[40px]", isOnline ? "text-slate-400" : "text-slate-500")}>
                                     {workflow.description}
                                 </p>
-
-                                {isOnline && workflow.preview && (
-                                    <div className="mb-6 space-y-4 border-t border-slate-700/60 pt-5">
-                                        <div className="grid grid-cols-1 gap-4">
-                                            <PreviewList title="适合" items={workflow.preview.suitableFor} />
-                                            <PreviewList title="不适合" items={workflow.preview.notSuitableFor} />
-                                            <PreviewList title="准备输入" items={workflow.preview.requiredInputs} />
-                                            <PreviewList title="产出" items={workflow.preview.expectedOutputs} />
-                                        </div>
-                                        <div>
-                                            <div className="text-[11px] font-semibold text-slate-300 mb-1">样例输入</div>
-                                            <p className="text-xs leading-5 text-slate-400">
-                                                {workflow.preview.sampleInput}
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
 
                                 <div className={clsx(
                                     "flex items-center text-sm font-medium mt-auto",
