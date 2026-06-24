@@ -1105,7 +1105,11 @@ class PydanticAgentRuntime:
                 ),
             ):
                 accumulated += text_chunk
-                delta = build_partial_agent_delta(accumulated)
+                delta = build_partial_agent_delta(
+                    accumulated,
+                    workflow_id=workflow_id,
+                    current_stage_id=current_stage_id,
+                )
                 if delta is None:
                     continue
                 next_chat = delta.chat or latest_chat
@@ -1306,11 +1310,20 @@ def extract_json_string_prefix(text: str, key: str) -> str | None:
     return "".join(chars) if chars else None
 
 
-def build_partial_agent_delta(text: str) -> AgentTurnDeltaOutput | None:
+def build_partial_agent_delta(
+    text: str,
+    *,
+    workflow_id: str | None = None,
+    current_stage_id: str | None = None,
+) -> AgentTurnDeltaOutput | None:
     chat = extract_json_string_prefix(text, "chat")
     markdown = extract_json_string_prefix(text, "markdown")
     if not markdown and re.search(r'"artifact_data"\s*:', text):
-        markdown = build_artifact_data_progress_markdown(text)
+        markdown = build_artifact_data_progress_markdown(
+            text,
+            workflow_id=workflow_id,
+            current_stage_id=current_stage_id,
+        )
     if not chat and not markdown:
         return None
     return AgentTurnDeltaOutput(
@@ -1321,179 +1334,66 @@ def build_partial_agent_delta(text: str) -> AgentTurnDeltaOutput | None:
     )
 
 
-def build_artifact_data_progress_markdown(text: str) -> str:
-    preview_items = extract_artifact_data_preview_items(text)
-    preview_lines = (
-        [
-            f"- **{format_artifact_data_preview_key(key)}**: {value}"
-            for key, value in preview_items
-        ]
-        if preview_items
-        else ["- 正在等待模型输出具体内容字段..."]
-    )
-    return "\n".join(
-        [
-            "# 产出物生成中",
-            "",
-            "正在实时渲染模型已经生成的结构化内容。完整契约校验通过后会自动替换为正式产出物。",
-            "",
-            "## 已生成内容预览",
-            *preview_lines,
-        ]
-    )
-
-
-ARTIFACT_DATA_PREVIEW_LABELS = {
-    "artifact_name": "Artifact 名称",
-    "requirement_name": "需求名称",
-    "fact": "需求事实",
-    "content": "内容",
-    "testing_meaning": "测试含义",
-    "rule": "业务规则",
-    "trigger": "触发条件",
-    "acceptance": "验收口径",
-    "question": "待确认问题",
-    "impact": "影响范围",
-    "assumption": "当前假设",
-    "requirement_or_assumption": "质量需求",
-    "risk": "风险",
-    "usage": "后续用途",
-    "item": "检查项",
-    "conclusion": "结论",
-    "basis": "依据",
-    "goal": "质量目标",
-    "name": "名称",
-    "failure_mode": "失效模式",
-    "mitigation": "缓解措施",
-    "coverage": "覆盖策略",
-    "target": "目标",
-    "technique": "测试技术",
-    "reason": "原因",
-    "scope": "范围",
-    "entry_condition": "准入条件",
-    "point": "测试点",
-    "decision": "决策",
-    "description": "描述",
-    "suggestion": "建议",
-    "expected_result": "预期结果",
-    "assertion": "断言",
-    "title": "标题",
-    "summary_item": "摘要项",
-    "evidence": "证据",
-}
-
-ARTIFACT_DATA_PREVIEW_SKIP_KEYS = {
-    "workflow",
-    "stage",
-    "status",
-    "fact_id",
-    "rule_id",
-    "question_id",
-    "input_id",
-    "goal_id",
-    "risk_id",
-    "technique_id",
-    "candidate_id",
-    "suggestion_id",
-    "issue_id",
-    "summary_item",
-    "checked",
-    "priority",
-    "blocking",
-    "owner",
-    "source",
-    "evidence_level",
-    "input_type",
-    "type",
-    "category",
-    "layer",
-    "ratio",
-}
-
-
-def format_artifact_data_preview_key(key: str) -> str:
-    return ARTIFACT_DATA_PREVIEW_LABELS.get(key, key.replace("_", " "))
-
-
-def truncate_artifact_data_preview_value(value: str) -> str:
-    normalized = re.sub(r"\s+", " ", value).strip()
-    if len(normalized) <= 140:
-        return normalized
-    return normalized[:137].rstrip() + "..."
-
-
-def extract_json_string_value_at(text: str, colon_end_index: int) -> str | None:
-    index = colon_end_index
-    while index < len(text) and text[index].isspace():
-        index += 1
-    if index >= len(text) or text[index] != '"':
-        return None
-    index += 1
-    chars: list[str] = []
-    while index < len(text):
-        char = text[index]
-        if char == '"':
-            break
-        if char != "\\":
-            chars.append(char)
-            index += 1
-            continue
-
-        index += 1
-        if index >= len(text):
-            break
-        escape = text[index]
-        if escape == "n":
-            chars.append("\n")
-        elif escape == "r":
-            chars.append("\r")
-        elif escape == "t":
-            chars.append("\t")
-        elif escape == "b":
-            chars.append("\b")
-        elif escape == "f":
-            chars.append("\f")
-        elif escape in {'"', "\\", "/"}:
-            chars.append(escape)
-        elif escape == "u":
-            hex_value = text[index + 1 : index + 5]
-            if len(hex_value) < 4 or not re.fullmatch(r"[0-9a-fA-F]{4}", hex_value):
-                break
-            chars.append(chr(int(hex_value, 16)))
-            index += 4
-        else:
-            chars.append(escape)
-        index += 1
-    return "".join(chars) if chars else None
-
-
-def extract_artifact_data_preview_items(
+def build_artifact_data_progress_markdown(
     text: str,
     *,
-    max_items: int = 12,
-) -> list[tuple[str, str]]:
-    artifact_data_match = re.search(r'"artifact_data"\s*:', text)
-    if artifact_data_match is None:
-        return []
+    workflow_id: str | None = None,
+    current_stage_id: str | None = None,
+) -> str | None:
+    return render_complete_streamed_artifact_data_markdown(
+        text,
+        workflow_id=workflow_id,
+        current_stage_id=current_stage_id,
+    )
 
-    segment = text[artifact_data_match.end() :]
-    items: list[tuple[str, str]] = []
-    seen_values: set[str] = set()
-    for key_match in re.finditer(r'"([A-Za-z_][A-Za-z0-9_]*)"\s*:', segment):
-        key = key_match.group(1)
-        if key in ARTIFACT_DATA_PREVIEW_SKIP_KEYS:
-            continue
-        value = extract_json_string_value_at(segment, key_match.end())
-        if value is None:
-            continue
-        normalized = truncate_artifact_data_preview_value(value)
-        if not normalized or normalized in seen_values:
-            continue
-        items.append((key, normalized))
-        seen_values.add(normalized)
-        if len(items) >= max_items:
-            break
-    return items
+
+def extract_complete_json_value_after_key(text: str, key: str) -> Any | None:
+    key_match = re.search(rf'"{re.escape(key)}"\s*:', text)
+    if key_match is None:
+        return None
+    index = key_match.end()
+    while index < len(text) and text[index].isspace():
+        index += 1
+    try:
+        value, _ = json.JSONDecoder().raw_decode(text[index:])
+    except json.JSONDecodeError:
+        return None
+    return value
+
+
+def render_complete_streamed_artifact_data_markdown(
+    text: str,
+    *,
+    workflow_id: str | None,
+    current_stage_id: str | None,
+) -> str | None:
+    if workflow_id is None or current_stage_id is None:
+        return None
+    artifact_data = extract_complete_json_value_after_key(text, "artifact_data")
+    if artifact_data is None:
+        return None
+    try:
+        rendered = render_agent_turn_from_artifact_data(
+            {
+                "chat": (
+                    extract_json_string_prefix(text, "chat")
+                    or "正在生成右侧产出物。"
+                ),
+                "artifact_data": artifact_data,
+                "stage_action": None,
+                "warnings": [],
+            },
+            workflow_id=workflow_id,
+            current_stage_id=current_stage_id,
+        )
+    except (ValidationError, ValueError):
+        return None
+    if rendered is None:
+        return None
+    artifact_update = rendered.artifact_update
+    if artifact_update.type != "replace" or not artifact_update.markdown:
+        return None
+    return artifact_update.markdown
 
 
 def should_emit_partial_delta(

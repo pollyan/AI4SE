@@ -2667,10 +2667,13 @@ def test_runtime_raw_json_stream_turn_streams_artifact_progress_for_artifact_dat
     ]
 
     assert progress_deltas
-    assert "产出物生成中" in progress_deltas[0].artifact_update.markdown
-    assert "用户需要登录功能" in progress_deltas[0].artifact_update.markdown
-    assert "登录页面和登录 API" in progress_deltas[0].artifact_update.markdown
-    assert "已接收字符数" not in progress_deltas[0].artifact_update.markdown
+    progress_markdown = progress_deltas[0].artifact_update.markdown
+    assert progress_markdown.startswith("# 需求分析文档")
+    assert "## 文档信息" in progress_markdown
+    assert "| F-001 | 用户需要登录功能 | 用户描述 | 用户陈述 | 已确认 |" in progress_markdown
+    assert "| 测试范围 | 登录页面和登录 API | 验证登录主链路 | 已确认 |" in progress_markdown
+    assert "```mermaid" in progress_markdown
+    assert "# 产出物生成中" not in progress_markdown
     assert outputs[-1].artifact_update.markdown.startswith("# 需求分析文档")
 
 
