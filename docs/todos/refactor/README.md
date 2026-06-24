@@ -1,6 +1,6 @@
 # Refactor Todo
 
-本目录记录重构类扫描、方案和实施待办。已完成的 todo 归档到 `docs/todos/archive/`；当前没有活跃重构 todo。
+本目录记录重构类扫描、方案和实施待办。已完成的 todo 归档到 `docs/todos/archive/`；当前活跃重构 todo 以 New Agents 增强诊断为主。
 
 ## 使用规则
 
@@ -19,7 +19,10 @@
 
 ## 当前入口
 
-暂无。
+- `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点与增强诊断 todo。
+  - 已消化: E01 Workflow 入口 preview、E09 运行统计产品化诊断建议。
+  - 后续候选能力包: E05 章节级重生成、E10 专业方法库配置、E11 Prompt/template 版本管理、E12 Workflow schema dry-run/scaffold。
+  - 恢复目标模式时继续按 `docs/strategy/goal-mode-playbook.md` 执行中文 CGA、Superpowers 头脑风暴、中文 spec、中文 implementation plan 和 TDD，不机械按 ID 顺序推进。
 
 ## 已归档
 

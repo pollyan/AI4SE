@@ -2124,6 +2124,19 @@ def test_agent_observability_endpoint_groups_provider_issue_codes(
     assert cases_stage["providerIssueCodes"] == {}
     assert response.json["byProvider"][0]["providerIssueCount"] == 1
     assert response.json["byProvider"][0]["providerIssueCodes"] == {"LLM_ERROR": 1}
+    assert response.json["contractRetryReasons"] == {
+        "STRUCTURED_OUTPUT_CONTRACT_RETRY": 3,
+    }
+    diagnostic_titles = [item["title"] for item in response.json["diagnostics"]]
+    assert "模型/供应商配置异常" in diagnostic_titles
+    assert "结构化输出重试偏高" in diagnostic_titles
+    contract_retry_diagnostic = next(
+        item for item in response.json["diagnostics"]
+        if item["id"] == "contract-retry"
+    )
+    assert contract_retry_diagnostic["severity"] == "warning"
+    assert "TEST_DESIGN / STRATEGY" in contract_retry_diagnostic["detail"]
+    assert "prompt、artifact contract" in contract_retry_diagnostic["action"]
 
 
 def test_agent_observability_endpoint_rejects_stage_without_workflow(client):

@@ -52,6 +52,8 @@ const BASE_SUMMARY: ObservabilitySummary = {
         },
     ],
     recentTurns: [],
+    contractRetryReasons: {},
+    diagnostics: [],
 };
 
 describe('buildObservabilityAlerts', () => {
@@ -109,6 +111,8 @@ describe('buildObservabilityAlerts', () => {
                 },
             ],
             recentTurns: [],
+            contractRetryReasons: {},
+            diagnostics: [],
         });
 
         expect(alerts).toEqual([]);

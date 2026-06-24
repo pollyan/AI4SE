@@ -206,6 +206,16 @@ const TEST_ASSET_COLLECTION_WITH_TEST_POINTS: TestAssetCollection = {
 };
 
 const OBSERVABILITY_SUMMARY: ObservabilitySummary = {
+    contractRetryReasons: { STRUCTURED_OUTPUT_CONTRACT_RETRY: 2 },
+    diagnostics: [
+        {
+            id: 'contract-retry',
+            severity: 'warning',
+            title: '结构化输出重试偏高',
+            detail: '最近运行中有 2 次 contract retry。',
+            action: '检查该阶段 prompt、artifact contract 和 renderer 输出是否同步。',
+        },
+    ],
     totals: {
         turns: 3,
         failedTurns: 1,
@@ -561,6 +571,16 @@ describe('Header Component', () => {
         expect(screen.getByText('阶段成功率偏低')).toBeTruthy();
         expect(screen.getByText('供应商成功率偏低')).toBeTruthy();
         expect(screen.getByText('模型/供应商异常集中')).toBeTruthy();
+    });
+
+    it('shows actionable runtime diagnostics and contract retry reasons', async () => {
+        renderHeader();
+        clickMoreAction(/运行统计/);
+
+        expect(await screen.findByText('诊断建议')).toBeTruthy();
+        expect(screen.getByText('结构化输出重试偏高')).toBeTruthy();
+        expect(screen.getByText(/检查该阶段 prompt、artifact contract/)).toBeTruthy();
+        expect(screen.getByText('STRUCTURED_OUTPUT_CONTRACT_RETRY x2')).toBeTruthy();
     });
 
     it('opens settings from provider issue observability alert', async () => {

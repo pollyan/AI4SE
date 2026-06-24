@@ -4,6 +4,16 @@ import { fetchObservabilitySummary } from '../observabilityService';
 global.fetch = vi.fn();
 
 const OBSERVABILITY_PAYLOAD = {
+    contractRetryReasons: { STRUCTURED_OUTPUT_CONTRACT_RETRY: 2 },
+    diagnostics: [
+        {
+            id: 'contract-retry',
+            severity: 'warning',
+            title: '结构化输出重试偏高',
+            detail: '最近运行中有 2 次 contract retry。',
+            action: '检查该阶段 prompt、artifact contract 和 renderer 输出是否同步。',
+        },
+    ],
     totals: {
         turns: 3,
         failedTurns: 1,
@@ -81,6 +91,8 @@ describe('observabilityService', () => {
         expect(summary.byStage[0].providerIssueCodes).toEqual({ LLM_ERROR: 1 });
         expect(summary.byProvider[0].providerIssueCount).toBe(1);
         expect(summary.recentTurns[0].errorCode).toBe('LLM_ERROR');
+        expect(summary.contractRetryReasons).toEqual({ STRUCTURED_OUTPUT_CONTRACT_RETRY: 2 });
+        expect(summary.diagnostics[0].title).toBe('结构化输出重试偏高');
     });
 
     it('serializes workflow and stage filters', async () => {
@@ -130,6 +142,20 @@ describe('observabilityService', () => {
                     ...OBSERVABILITY_PAYLOAD.totals,
                     providerIssueCount: '1',
                 },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ));
+
+        await expect(fetchObservabilitySummary({ limit: 20 })).rejects.toThrow(
+            'Invalid observability summary response'
+        );
+    });
+
+    it('fails explicitly when diagnostics are malformed', async () => {
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({
+                ...OBSERVABILITY_PAYLOAD,
+                diagnostics: [{ id: 'bad', severity: 'unknown' }],
             }),
             { status: 200, headers: { 'Content-Type': 'application/json' } },
         ));

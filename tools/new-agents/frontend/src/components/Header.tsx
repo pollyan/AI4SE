@@ -24,6 +24,23 @@ const CONTEXT_SUMMARY_TYPE_LABELS: Record<string, string> = {
   decision: '关键决策',
   current_artifact: '产物摘要',
 };
+const OBSERVABILITY_DIAGNOSTIC_STYLES = {
+  info: {
+    border: 'border-blue-500/30',
+    background: 'bg-blue-500/10',
+    label: 'text-blue-100',
+  },
+  warning: {
+    border: 'border-amber-500/30',
+    background: 'bg-amber-500/10',
+    label: 'text-amber-100',
+  },
+  critical: {
+    border: 'border-red-500/30',
+    background: 'bg-red-500/10',
+    label: 'text-red-100',
+  },
+} as const;
 type ProviderConfigCheckState = {
   status: 'idle' | 'checking' | 'success' | 'error';
   message: string | null;
@@ -515,6 +532,9 @@ export const Header: React.FC = () => {
   const observabilityAlerts = observabilitySummary
     ? buildObservabilityAlerts(observabilitySummary)
     : [];
+  const observabilityContractRetryReasons = observabilitySummary
+    ? Object.entries(observabilitySummary.contractRetryReasons)
+    : [];
   const pendingIssueCount = testAssetCollection
     ? testAssetCollection.assetIssues.filter((issue, index) => (
       (issueStatuses[getIssueKey(issue, index)] || issue.status) === 'pending'
@@ -906,6 +926,51 @@ export const Header: React.FC = () => {
                             )}
                           </div>
                         ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {observabilitySummary.diagnostics.length > 0 && (
+                    <section className="rounded-lg border border-[#1e293b] bg-[#0f1623] p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <h4 className="text-sm font-semibold text-white">诊断建议</h4>
+                        {observabilityContractRetryReasons.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {observabilityContractRetryReasons.map(([reason, count]) => (
+                              <span
+                                key={reason}
+                                className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-100"
+                              >
+                                {reason} x{count}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                        {observabilitySummary.diagnostics.map((diagnostic) => {
+                          const style = OBSERVABILITY_DIAGNOSTIC_STYLES[diagnostic.severity];
+                          return (
+                            <article
+                              key={diagnostic.id}
+                              className={clsx(
+                                'rounded-lg border p-3',
+                                style.border,
+                                style.background,
+                              )}
+                            >
+                              <div className={clsx('text-sm font-semibold', style.label)}>
+                                {diagnostic.title}
+                              </div>
+                              <div className="mt-2 text-xs leading-relaxed text-slate-200">
+                                {diagnostic.detail}
+                              </div>
+                              <div className="mt-3 rounded-lg border border-white/10 bg-[#111827] px-3 py-2 text-xs leading-relaxed text-slate-100">
+                                {diagnostic.action}
+                              </div>
+                            </article>
+                          );
+                        })}
                       </div>
                     </section>
                   )}
