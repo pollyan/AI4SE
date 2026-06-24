@@ -385,6 +385,16 @@ export type ObservabilityTotals = {
     providerIssueCodes: Record<string, number>;
 };
 
+export type ObservabilityDiagnosticSeverity = 'info' | 'warning' | 'critical';
+
+export type ObservabilityDiagnostic = {
+    id: string;
+    severity: ObservabilityDiagnosticSeverity;
+    title: string;
+    detail: string;
+    action: string;
+};
+
 export type ObservabilityStageSummary = ObservabilityTotals & {
     workflowId: WorkflowType;
     stageId: string;
@@ -414,6 +424,8 @@ export type ObservabilityTurn = {
 };
 
 export type ObservabilitySummary = {
+    contractRetryReasons: Record<string, number>;
+    diagnostics: ObservabilityDiagnostic[];
     totals: ObservabilityTotals;
     byStage: ObservabilityStageSummary[];
     byProvider: ObservabilityProviderSummary[];

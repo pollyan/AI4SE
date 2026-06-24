@@ -43,6 +43,8 @@ SUMMARY_SOURCE_USER_INPUT = "user_input"
 DEFAULT_RUN_LIST_LIMIT = 20
 MAX_RUN_LIST_LIMIT = 100
 PROVIDER_ISSUE_ERROR_CODES = {"LLM_ERROR", DEFAULT_LLM_CONFIG_MISSING_CODE}
+LOW_OBSERVABILITY_SUCCESS_RATE_THRESHOLD = 80.0
+CONTRACT_RETRY_REASON = "STRUCTURED_OUTPUT_CONTRACT_RETRY"
 
 
 class ArtifactVersionConflictError(ValueError):
@@ -773,6 +775,26 @@ def get_runtime_observability_summary(
         ).append(issue)
     stage_keys = sorted(set(stage_index) | set(stage_config_issue_index))
 
+    contract_retry_reasons = _contract_retry_reasons(metrics)
+    diagnostics = _runtime_diagnostics(
+        total_turns=total_turns,
+        failed_turns=failed_turns,
+        success_rate=_success_rate(total_turns, failed_turns),
+        provider_issue_codes=provider_issue_codes,
+        metrics=metrics,
+        config_issues=config_issues,
+        stage_items=[
+            _stage_observability_item(
+                workflow_id,
+                stage_id,
+                stage_index.get((workflow_id, stage_id), []),
+                stage_config_issue_index.get((workflow_id, stage_id), []),
+            )
+            for workflow_id, stage_id in stage_keys
+        ],
+        contract_retry_reasons=contract_retry_reasons,
+    )
+
     return {
         "totals": {
             "turns": total_turns,
@@ -803,7 +825,119 @@ def get_runtime_observability_summary(
             _turn_metric_snapshot(metric)
             for metric in metrics[:limit]
         ],
+        "contractRetryReasons": contract_retry_reasons,
+        "diagnostics": diagnostics,
     }
+
+
+def _contract_retry_reasons(metrics: list[AgentRunTurnMetric]) -> dict[str, int]:
+    retry_count = sum(metric.contract_retry_count for metric in metrics)
+    if retry_count <= 0:
+        return {}
+    return {CONTRACT_RETRY_REASON: retry_count}
+
+
+def _top_contract_retry_stage(
+    metrics: list[AgentRunTurnMetric],
+) -> tuple[str, str, int] | None:
+    retry_by_stage: dict[tuple[str, str], int] = {}
+    for metric in metrics:
+        if metric.contract_retry_count <= 0:
+            continue
+        key = (metric.workflow_id, metric.stage_id)
+        retry_by_stage[key] = retry_by_stage.get(key, 0) + metric.contract_retry_count
+    if not retry_by_stage:
+        return None
+    (workflow_id, stage_id), retry_count = sorted(
+        retry_by_stage.items(),
+        key=lambda item: (-item[1], item[0][0], item[0][1]),
+    )[0]
+    return workflow_id, stage_id, retry_count
+
+
+def _runtime_diagnostics(
+    *,
+    total_turns: int,
+    failed_turns: int,
+    success_rate: float,
+    provider_issue_codes: dict[str, int],
+    metrics: list[AgentRunTurnMetric],
+    config_issues: list[AgentRuntimeConfigIssue],
+    stage_items: list[dict],
+    contract_retry_reasons: dict[str, int],
+) -> list[dict]:
+    diagnostics: list[dict] = []
+    provider_issue_count = sum(provider_issue_codes.values())
+    if provider_issue_count > 0:
+        top_issue_code = sorted(
+            provider_issue_codes.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[0][0]
+        diagnostics.append({
+            "id": "provider-config",
+            "severity": "critical" if config_issues else "warning",
+            "title": "模型/供应商配置异常",
+            "detail": (
+                f"最近运行中有 {provider_issue_count} 轮与模型配置、"
+                f"供应商额度、鉴权或网络有关；最高频错误为 {top_issue_code}。"
+            ),
+            "action": "打开模型设置并检测连接，确认 API Key、Base URL、模型名和额度状态。",
+        })
+
+    if failed_turns > 0 and success_rate < LOW_OBSERVABILITY_SUCCESS_RATE_THRESHOLD:
+        diagnostics.append({
+            "id": "runtime-failures",
+            "severity": "warning",
+            "title": "运行失败率偏高",
+            "detail": (
+                f"最近 {total_turns} 轮中有 {failed_turns} 轮失败，"
+                f"成功率 {success_rate}%。"
+            ),
+            "action": "优先查看失败集中的 workflow/stage 和最近运行错误码，再重试修复后的阶段。",
+        })
+
+    risky_stage = sorted(
+        (
+            stage for stage in stage_items
+            if stage["failedTurns"] > 0
+            and stage["successRate"] < LOW_OBSERVABILITY_SUCCESS_RATE_THRESHOLD
+        ),
+        key=lambda stage: (
+            stage["successRate"],
+            -stage["failedTurns"],
+            stage["workflowId"],
+            stage["stageId"],
+        ),
+    )
+    if risky_stage:
+        stage = risky_stage[0]
+        diagnostics.append({
+            "id": "stage-failures",
+            "severity": "warning",
+            "title": "阶段失败集中",
+            "detail": (
+                f"{stage['workflowId']} / {stage['stageId']} 成功率 "
+                f"{stage['successRate']}%，失败 {stage['failedTurns']}/{stage['turns']} 轮。"
+            ),
+            "action": "检查该阶段输入上下文、stage prompt、artifact contract 和重试后的错误码。",
+        })
+
+    retry_count = contract_retry_reasons.get(CONTRACT_RETRY_REASON, 0)
+    if retry_count > 0:
+        top_stage = _top_contract_retry_stage(metrics)
+        stage_detail = ""
+        if top_stage:
+            workflow_id, stage_id, stage_retry_count = top_stage
+            stage_detail = f"，集中在 {workflow_id} / {stage_id}（{stage_retry_count} 次）"
+        diagnostics.append({
+            "id": "contract-retry",
+            "severity": "warning",
+            "title": "结构化输出重试偏高",
+            "detail": f"最近运行中有 {retry_count} 次 contract retry{stage_detail}。",
+            "action": "检查该阶段 prompt、artifact contract 和 renderer 输出是否同步。",
+        })
+
+    return diagnostics
 
 
 def _success_rate(total_turns: int, failed_turns: int) -> float:

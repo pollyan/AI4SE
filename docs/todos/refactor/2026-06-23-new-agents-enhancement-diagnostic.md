@@ -72,7 +72,7 @@
 | E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 已消化：支持继续、复制为新 run、按 workflow/复用状态筛选、预览当前 artifact |
 | E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入 |
 | E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 | 已消化：当前 stage 有质量分、证据明细和待处理项 |
-| E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 显示 workflow/stage/provider 趋势、contract retry 原因和行动建议 |
+| E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 已消化：运行统计返回 contract retry 原因和确定性诊断建议，Header modal 展示行动建议 |
 | E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | FMEA、JTBD、RICE、Kano、CAPA 等可由配置注入 prompt/template |
 | E11 | Prompt/template 版本管理 | 新增功能 | 平台扩展 | L | P2 | 每个 stage 有 prompt/template version 和回归样例 |
 | E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 | 新 workflow 缺 manifest/prompt/contract/test 任一面时 dry-run 失败 |
@@ -204,6 +204,21 @@
 - 需要同步: handoff prompt template、target workflow/stage、context truncation policy。
 - 完成定义: handoff 明确来源版本、关键需求、验收标准、风险、未确认项和目标用途。
 - 不纳入: 新 runtime 分支。
+
+## 已消化记录
+
+### 2026-06-24 E09 运行统计产品化诊断建议
+
+- Milestone: 运行统计产品化诊断闭环。
+- 消化范围: E09「运行统计产品化」中的 contract retry 原因、provider/config 问题、低成功率和 stage 集中失败行动建议。
+- 代码结果:
+  - 后端 `/api/agent/observability` 继续复用现有 run metric persistence，新增 `contractRetryReasons` 和 `diagnostics` 字段。
+  - 前端 observability service 严格解析新增字段，malformed diagnostics 明确失败。
+  - Header「运行统计」modal 展示“诊断建议”、每条 action 和 contract retry reason badge。
+- 非目标: 不新增 observability API path，不改 Agent Runtime、typed SSE、run/artifact 持久化模型，不做真实模型 smoke。
+- 计划与 spec:
+  - `docs/superpowers/specs/2026-06-24-runtime-observability-actions-design.md`
+  - `docs/superpowers/plans/2026-06-24-runtime-observability-actions.md`
 
 ## 架构约束
 

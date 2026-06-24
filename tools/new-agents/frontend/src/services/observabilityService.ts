@@ -1,4 +1,6 @@
 import type {
+    ObservabilityDiagnostic,
+    ObservabilityDiagnosticSeverity,
     ObservabilityProviderSummary,
     ObservabilityStageSummary,
     ObservabilitySummary,
@@ -52,6 +54,27 @@ const parseErrorCodes = (value: unknown): Record<string, number> => {
     return Object.fromEntries(
         Object.entries(value).map(([code, count]) => [code, parseInteger(count)])
     );
+};
+
+const parseDiagnosticSeverity = (value: unknown): ObservabilityDiagnosticSeverity => {
+    if (value === 'info' || value === 'warning' || value === 'critical') {
+        return value;
+    }
+    throw new Error(INVALID_OBSERVABILITY_ERROR);
+};
+
+const parseDiagnostic = (value: unknown): ObservabilityDiagnostic => {
+    if (!isRecord(value)) {
+        throw new Error(INVALID_OBSERVABILITY_ERROR);
+    }
+
+    return {
+        id: parseString(value.id),
+        severity: parseDiagnosticSeverity(value.severity),
+        title: parseString(value.title),
+        detail: parseString(value.detail),
+        action: parseString(value.action),
+    };
 };
 
 const parseTotals = (value: unknown): ObservabilityTotals => {
@@ -121,6 +144,7 @@ const parseTurn = (value: unknown): ObservabilityTurn => {
 const parseSummary = (payload: unknown): ObservabilitySummary => {
     if (
         !isRecord(payload)
+        || !Array.isArray(payload.diagnostics)
         || !Array.isArray(payload.byStage)
         || !Array.isArray(payload.byProvider)
         || !Array.isArray(payload.recentTurns)
@@ -129,6 +153,8 @@ const parseSummary = (payload: unknown): ObservabilitySummary => {
     }
 
     return {
+        contractRetryReasons: parseErrorCodes(payload.contractRetryReasons),
+        diagnostics: payload.diagnostics.map(parseDiagnostic),
         totals: parseTotals(payload.totals),
         byStage: payload.byStage.map(parseStageSummary),
         byProvider: payload.byProvider.map(parseProviderSummary),
