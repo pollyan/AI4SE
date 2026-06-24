@@ -1,4 +1,5 @@
 import { WorkflowType, WORKFLOWS } from '../../store';
+import { buildProfessionalMethodPromptSection } from '../professionalMethods';
 import { LISA_PERSONA } from './personas/lisa';
 import { ALEX_PERSONA } from './personas/alex';
 
@@ -19,6 +20,7 @@ export const buildSystemPrompt = (config: {
     const { agentId, workflow, stageIndex, currentArtifact, stageArtifacts } = config;
     const wf = WORKFLOWS[workflow];
     const currentStage = wf.stages[stageIndex];
+    const professionalMethodSection = buildProfessionalMethodPromptSection(currentStage.methodIds);
     const cleanArtifact = removeMarkTags(currentArtifact);
     const isLastStage = stageIndex === wf.stages.length - 1;
     const nextStage = !isLastStage ? wf.stages[stageIndex + 1] : null;
@@ -80,6 +82,7 @@ export const buildSystemPrompt = (config: {
 当前工作流：${wf.name}
 当前阶段：${currentStage.name}
 阶段目标：${currentStage.description}
+${professionalMethodSection}
 ${previousArtifactsContext}
 
 【语言与排版要求】：

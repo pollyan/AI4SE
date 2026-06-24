@@ -89,6 +89,10 @@
           "id": "STRATEGY",
           "name": "策略制定",
           "promptTemplateId": "test_design.strategy",
+          "methodIds": [
+            "fmea",
+            "test_pyramid"
+          ],
           "artifactContract": {
             "requiredHeadings": [
               "# 测试策略蓝图",
@@ -400,6 +404,9 @@
           "id": "IMPROVEMENT",
           "name": "改进报告",
           "promptTemplateId": "incident_review.improvement",
+          "methodIds": [
+            "capa"
+          ],
           "artifactContract": {
             "requiredHeadings": [
               "# 故障复盘报告",
@@ -541,6 +548,9 @@
           "id": "CONVERGE",
           "name": "收敛聚焦",
           "promptTemplateId": "idea_brainstorm.converge",
+          "methodIds": [
+            "ice"
+          ],
           "artifactContract": {
             "requiredHeadings": [
               "# 收敛聚焦",
@@ -701,6 +711,11 @@
           "id": "JOURNEY",
           "name": "用户旅程",
           "promptTemplateId": "value_discovery.journey",
+          "methodIds": [
+            "jtbd",
+            "rice",
+            "kano"
+          ],
           "artifactContract": {
             "requiredHeadings": [
               "# 用户旅程分析",

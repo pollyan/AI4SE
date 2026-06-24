@@ -10,7 +10,10 @@ RUN npm config set registry https://registry.npmmirror.com/ && npm ci
 
 # 复制源码并构建
 COPY tools/new-agents/frontend/ ./
+COPY tools/new-agents/workflow_manifest.json ./workflow_manifest.json
 COPY tools/new-agents/workflow_manifest.json /workflow_manifest.json
+COPY tools/new-agents/professional_methods.json ./professional_methods.json
+COPY tools/new-agents/professional_methods.json /professional_methods.json
 RUN npm run build
 
 # === 阶段二：运行 ===
