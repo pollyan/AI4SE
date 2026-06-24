@@ -63,15 +63,26 @@ describe('WorkflowSelect Page', () => {
             expect(screen.getByText('线上故障复盘')).toBeTruthy();
         });
 
-        it('renders professional preview details for online workflows', () => {
+        it('keeps lisa workflow cards compact by hiding preview details', () => {
             renderComponent('lisa');
 
-            expect(screen.getAllByText('适合').length).toBeGreaterThanOrEqual(1);
-            expect(screen.getAllByText('不适合').length).toBeGreaterThanOrEqual(1);
-            expect(screen.getAllByText('准备输入').length).toBeGreaterThanOrEqual(1);
-            expect(screen.getAllByText('产出').length).toBeGreaterThanOrEqual(1);
-            expect(screen.getAllByText('样例输入').length).toBeGreaterThanOrEqual(1);
-            expect(screen.getByText(/支付功能上线前/)).toBeTruthy();
+            expect(screen.queryByText('适合')).toBeNull();
+            expect(screen.queryByText('不适合')).toBeNull();
+            expect(screen.queryByText('准备输入')).toBeNull();
+            expect(screen.queryByText('产出')).toBeNull();
+            expect(screen.queryByText('样例输入')).toBeNull();
+            expect(screen.queryByText(/支付功能上线前/)).toBeNull();
+        });
+
+        it('keeps alex workflow cards compact by hiding preview details', () => {
+            renderComponent('alex');
+
+            expect(screen.queryByText('适合')).toBeNull();
+            expect(screen.queryByText('不适合')).toBeNull();
+            expect(screen.queryByText('准备输入')).toBeNull();
+            expect(screen.queryByText('产出')).toBeNull();
+            expect(screen.queryByText('样例输入')).toBeNull();
+            expect(screen.queryByText(/目标用户、痛点或机会假设/)).toBeNull();
         });
 
         it('shows dev and plan status labels', () => {
