@@ -1309,6 +1309,8 @@ def extract_json_string_prefix(text: str, key: str) -> str | None:
 def build_partial_agent_delta(text: str) -> AgentTurnDeltaOutput | None:
     chat = extract_json_string_prefix(text, "chat")
     markdown = extract_json_string_prefix(text, "markdown")
+    if not markdown and re.search(r'"artifact_data"\s*:', text):
+        markdown = build_artifact_data_progress_markdown(text)
     if not chat and not markdown:
         return None
     return AgentTurnDeltaOutput(
@@ -1316,6 +1318,37 @@ def build_partial_agent_delta(text: str) -> AgentTurnDeltaOutput | None:
         artifact_update=(
             {"type": "replace", "markdown": markdown} if markdown else None
         ),
+    )
+
+
+def build_artifact_data_progress_markdown(text: str) -> str:
+    received_chars = max(0, len(text))
+    received_sections = [
+        key
+        for key in (
+            "document_info",
+            "review_info",
+            "report_info",
+            "artifact_data",
+            "stage_gate",
+        )
+        if re.search(rf'"{re.escape(key)}"\s*:', text)
+    ]
+    sections_line = (
+        "、".join(received_sections)
+        if received_sections
+        else "等待结构化字段"
+    )
+    return "\n".join(
+        [
+            "# 产出物生成中",
+            "",
+            "正在生成结构化产物数据。右侧会先显示生成进度，待后端完成契约校验后自动替换为完整产出物。",
+            "",
+            "## 流式进度",
+            f"- 已接收字符数: {received_chars}",
+            f"- 已识别字段: {sections_line}",
+        ]
     )
 
 
