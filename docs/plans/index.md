@@ -3,7 +3,6 @@
 ## 当前工作列表
 
 - [技术债与重构工作列表](./tech-debt.md)
-- [Codex 目标模式技术债消化规则](./goal-mode-tech-debt-rules.md)
 
 ## 历史与专项计划
 

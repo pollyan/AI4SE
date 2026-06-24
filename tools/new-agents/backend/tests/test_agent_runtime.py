@@ -333,6 +333,16 @@ def test_build_partial_agent_delta_extracts_chat_and_artifact_markdown():
     )
 
 
+def test_build_partial_agent_delta_does_not_emit_progress_artifact_for_incomplete_artifact_data():
+    delta = build_partial_agent_delta(
+        '{"chat":"正在生成结构化产物。","artifact_data":{"document_info":',
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert delta == AgentTurnDeltaOutput(chat="正在生成结构化产物。")
+
+
 def test_parse_agent_turn_output_text_accepts_plain_json_or_fenced_json():
     json_text = """{
       "chat": "已更新右侧需求分析文档。",
@@ -1403,9 +1413,17 @@ def test_runtime_raw_json_stream_turn_renders_artifact_data_before_final_output(
     )
     calls = []
 
+    chunks = [
+        final_json[: final_json.index('"artifact_data"')],
+        final_json[
+            final_json.index('"artifact_data"') : final_json.index('"stage_action"')
+        ],
+        final_json[final_json.index('"stage_action"') :],
+    ]
+
     def fake_stream_chat_completion_content(**kwargs):
         calls.append(kwargs)
-        yield final_json
+        yield from chunks
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",
@@ -1429,6 +1447,18 @@ def test_runtime_raw_json_stream_turn_renders_artifact_data_before_final_output(
         )
     )
 
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert partial_markdowns
+    assert partial_markdowns[0].startswith("# 需求分析文档")
+    assert "flowchart TD" in partial_markdowns[0]
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
     assert outputs[-1].artifact_update.markdown.startswith("# 需求分析文档")
@@ -1441,6 +1471,66 @@ def test_runtime_raw_json_stream_turn_renders_artifact_data_before_final_output(
         "CLARIFY",
     )
     assert "结构化输出格式要求" in calls[0]["messages"][0]["content"]
+
+
+def test_runtime_raw_json_stream_turn_renders_strategy_artifact_data_before_final_output(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "我已形成风险驱动测试策略，请确认右侧蓝图。",
+            "artifact_data": VALID_STRATEGY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    chunks = [
+        final_json[: final_json.index('"artifact_data"')],
+        final_json[
+            final_json.index('"artifact_data"') : final_json.index('"stage_action"')
+        ],
+        final_json[final_json.index('"stage_action"') :],
+    ]
+
+    def fake_stream_chat_completion_content(**kwargs):
+        yield from chunks
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是测试专家。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "请制定测试策略",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="STRATEGY",
+        )
+    )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert partial_markdowns
+    assert partial_markdowns[0].startswith("# 测试策略蓝图")
+    assert "quadrantChart" in partial_markdowns[0]
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert outputs[-1].artifact_update.markdown.startswith("# 测试策略蓝图")
 
 
 def test_runtime_raw_json_stream_turn_renders_delivery_artifact_data_before_final_output(
@@ -2373,64 +2463,6 @@ def test_runtime_raw_json_stream_turn_keeps_latest_delta_when_final_json_is_trun
     )
     assert outputs[-1].stage_action is None
     assert outputs[-1].warnings == ["artifact_truncated"]
-
-
-def test_runtime_raw_json_stream_turn_does_not_emit_progress_artifact_for_partial_artifact_data(
-    monkeypatch,
-):
-    final_json = json.dumps(
-        {
-            "chat": "正在生成结构化产物。",
-            "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
-            "stage_action": None,
-            "warnings": [],
-        },
-        ensure_ascii=False,
-    )
-    chunks = [
-        final_json[: final_json.index('"artifact_data"')],
-        final_json[
-            final_json.index('"artifact_data"') : final_json.index('"stage_action"')
-        ],
-        final_json[final_json.index('"stage_action"') :],
-    ]
-
-    def fake_stream_chat_completion_content(**kwargs):
-        yield from chunks
-
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
-    runtime = PydanticAgentRuntime(
-        FakeAgent({}),
-        raw_streaming_config=RawStreamingConfig(
-            api_key="test-api-key",
-            base_url="https://api.test.com/v1",
-            model_name="test-model",
-            system_prompt="system prompt",
-        ),
-    )
-
-    outputs = list(
-        runtime.stream_turn(
-            "用户需求",
-            workflow_id="TEST_DESIGN",
-            current_stage_id="CLARIFY",
-        )
-    )
-
-    partial_markdowns = [
-        output.artifact_update.markdown
-        for output in outputs[:-1]
-        if isinstance(output, AgentTurnDeltaOutput)
-        and output.artifact_update is not None
-        and output.artifact_update.type == "replace"
-        and output.artifact_update.markdown is not None
-    ]
-
-    assert partial_markdowns == []
-    assert outputs[-1].artifact_update.markdown.startswith("# 需求分析文档")
 
 
 def test_runtime_raw_json_stream_turn_retries_contract_failure_with_feedback(

@@ -81,18 +81,18 @@ flake8 --select=E9,F63,F7,F82 .
 
 ### 迭代计划（已完成）
 
-- [2026-02-28 New Agents 测试实施](./plans/completed/2026-02-28-new-agents-tests-implementation.md)
-- [2026-02-28 New Agents 测试设计](./plans/completed/2026-02-28-new-agents-tests-design.md)
-- [2026-02-27 New Agents 后端代理](./plans/completed/2026-02-27-new-agents-backend-proxy.md)
-- [2026-02-27 归档旧 Agents](./plans/completed/2026-02-27-archive-old-agents.md)
-- [2026-02-27 Lisa Agent 路由](./plans/completed/2026-02-27-lisa-agent-routing.md)
-- [2026-02-27 Lisa Agent 路由设计](./plans/completed/2026-02-27-lisa-agent-routing-design.md)
-- [2026-02-21 冒烟测试 Artifact 语义验证](./plans/completed/2026-02-21-smoke-test-artifact-semantic-validation.md)
-- [2026-02-21 Artifact Hint 状态同步](./plans/completed/2026-02-21-artifact-hint-status-sync.md)
-- [2026-02-21 P1 冒烟测试用例](./plans/completed/2026-02-21-p1-smoke-test-cases.md)
-- [2026-02-11 Artifact 内联差异设计](./plans/completed/2026-02-11-artifact-inline-diff-design.md)
-- [2026-02-10 需求 Artifact 重构](./plans/completed/2026-02-10-requirement-artifact-refactor.md)
-- [2026-02-09 结构化增量更新](./plans/completed/2026-02-09-structured-incremental-update.md)
+- [2026-02-28 New Agents 测试实施](./plans/archive/2026-02-28-new-agents-tests-implementation.md)
+- [2026-02-28 New Agents 测试设计](./plans/archive/2026-02-28-new-agents-tests-design.md)
+- [2026-02-27 New Agents 后端代理](./plans/archive/2026-02-27-new-agents-backend-proxy.md)
+- [2026-02-27 归档旧 Agents](./plans/archive/2026-02-27-archive-old-agents.md)
+- [2026-02-27 Lisa Agent 路由](./plans/archive/2026-02-27-lisa-agent-routing.md)
+- [2026-02-27 Lisa Agent 路由设计](./plans/archive/2026-02-27-lisa-agent-routing-design.md)
+- [2026-02-21 冒烟测试 Artifact 语义验证](./plans/archive/2026-02-21-smoke-test-artifact-semantic-validation.md)
+- [2026-02-21 Artifact Hint 状态同步](./plans/archive/2026-02-21-artifact-hint-status-sync.md)
+- [2026-02-21 P1 冒烟测试用例](./plans/archive/2026-02-21-p1-smoke-test-cases.md)
+- [2026-02-11 Artifact 内联差异设计](./plans/archive/2026-02-11-artifact-inline-diff-design.md)
+- [2026-02-10 需求 Artifact 重构](./plans/archive/2026-02-10-requirement-artifact-refactor.md)
+- [2026-02-09 结构化增量更新](./plans/archive/2026-02-09-structured-incremental-update.md)
 
 ### 测试需求文档
 

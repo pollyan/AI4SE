@@ -1,6 +1,6 @@
 # Refactor Todo
 
-本目录记录重构类扫描、方案和实施待办。已完成的 todo 归档到 `docs/todos/archive/`；当前没有活跃重构 todo。
+本目录记录重构类扫描、方案和实施待办。已完成的 todo 归档到 `docs/todos/archive/`；当前仅保留近期未消化的活跃候选和 Bug。
 
 ## 使用规则
 
@@ -19,7 +19,16 @@
 
 ## 当前入口
 
-暂无。
+- `2026-06-24-new-agents-artifact-streaming-position-indicator.md`：右侧产出物流式位置提示体验候选。
+- `2026-06-24-new-agents-llm-config-check-false-negative.md`：模型配置窗口测试失败但保存后 workflow 可正常调用的自检假失败 Bug。
+- `2026-06-24-new-agents-stage-action-choice-persistence.md`：阶段推进选择控件历史保留候选。
+- `2026-06-24-new-agents-stage-transition-readiness-gate.md`：阶段推进成熟度门禁候选。
+- `2026-06-24-new-agents-test-strategy-artifact-format-streaming-bug.md`：测试策略阶段产物格式与流式渲染 Bug。
+- `2026-06-25-new-agents-artifact-comment-create-500.md`：Artifact 新增批注返回 500 的保存失败 Bug。
+- `2026-06-25-new-agents-artifact-document-info-density.md`：产出物首段文档信息密度和位置优化候选。
+- `2026-06-25-new-agents-agent-framework-phase1-phase2.md`：New Agents 智能体框架深化阶段 1-2 技术用户故事拆分活动候选。
+
+2026-06-25 已复核：6/23 的结构化产物改造和功能盘点诊断已归档；不要从 `archive/` 中的过程性“待办/剩余”直接恢复实施。
 
 ## 已归档
 
@@ -32,3 +41,6 @@
 - `../archive/2026-06-21-new-agents-refactor-phase5-remaining-plan.md`：New Agents 智能体重构阶段 5 剩余路线与前端 ArtifactPane 拆分计划。
 - `../archive/2026-06-22-new-agents-artifact-professionalization-target.md`：New Agents 全 workflow 产出物专业化目标状态与目标模式输入提示词。
 - `../archive/2026-06-22-new-agents-artifact-professionalization-design.md`：New Agents 全 workflow 产出物专业化目标状态设计。
+- `../archive/2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 Flash 兼容的后端结构化产物数据改造记录。
+- `../archive/2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点、差距分析和增强路线诊断。
+- `../archive/2026-06-25-new-agents-artifact-streaming-not-working-p0.md`：右侧 Artifact 真实流式渲染 P0 修复记录。

@@ -1,6 +1,14 @@
 # 技术债与重构工作列表
 
-> 更新日期: 2026-06-18
+> 更新日期: 2026-06-25
+
+## 当前清理结论
+
+- `docs/todos/archive/2026-06-23-deepseek-v4-structured-artifact-data.md` 和 `docs/todos/archive/2026-06-23-new-agents-enhancement-diagnostic.md` 已归档，不再作为当前活动入口。
+- `docs/todos/refactor/` 当前只保留 2026-06-24 至 2026-06-25 新建的活跃 Bug、体验候选和框架深化候选；具体入口以 `docs/todos/refactor/README.md` 为准。
+- `docs/todos/archive/` 中保留的“待办”“剩余”“未完成”属于历史过程记录，不作为当前活动 todo 直接进入实现。
+- 本文件下方 `New Agents 智能体重构完成记录` 仅作为已完成重构路线的证据索引；其中历史优先级不再表示当前未完成事项。
+- 后续新增技术债时，应在对应条目补充现象、影响、验证入口和收束状态；已完成条目保留验证证据，但不要再作为活动入口使用。
 
 ## 2026-06-18 CI 与部署可信度加固
 
@@ -105,7 +113,7 @@
 - 验证: `cd tools/new-agents/frontend && npm run test -- src/core/prompts/__tests__/buildSystemPrompt.test.ts -t "removes mark tags from previous stage artifacts while preserving marked text"`，1 passed。
 - 验证: `cd tools/new-agents/frontend && npm run test -- src/core/prompts/__tests__/buildSystemPrompt.test.ts`，15 passed。
 - 验证: `cd tools/new-agents/frontend && npm run lint`，TypeScript check passed。
-- 验证: `git diff --check -- tools/new-agents/frontend/src/core/prompts/buildSystemPrompt.ts tools/new-agents/frontend/src/core/prompts/__tests__/buildSystemPrompt.test.ts docs/plans/tech-debt.md AGENTS.md docs/strategy/goal-mode-playbook.md docs/plans/goal-mode-tech-debt-rules.md`，通过。
+- 验证: `git diff --check -- tools/new-agents/frontend/src/core/prompts/buildSystemPrompt.ts tools/new-agents/frontend/src/core/prompts/__tests__/buildSystemPrompt.test.ts docs/plans/tech-debt.md AGENTS.md docs/strategy/goal-mode-playbook.md`，通过。
 
 ### P1: Legacy 阶段切换会把来源产物复制到目标阶段
 
@@ -1026,10 +1034,11 @@
 
 - 2026-06-18: `docs/strategy/goal-mode-playbook.md` 明确满足默认触发点时应分发子智能体，跳过时必须记录原因；同时声明 AI4SE 仓库规则覆盖技能示例中的自动 commit 行为，worker 不得创建 commit，除非用户本轮明确要求提交。
 - 2026-06-18: `docs/strategy/goal-mode-playbook.md` 增加共享文件保护和无子智能体能力时的降级规则。
-- 2026-06-18: `docs/plans/goal-mode-tech-debt-rules.md` 增加 worker 不创建 commit 的专项约束，并要求子智能体统一返回 `status: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED`、读取/修改文件、验证结果和残余风险。
+- 2026-06-18: 旧技术债专项规则曾增加 worker 不创建 commit 的专项约束，并要求子智能体统一返回 `status: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED`、读取/修改文件、验证结果和残余风险。
+- 2026-06-25: 技术债专项规则已退役；子智能体调度、worker commit 边界、统一返回状态和验收规则统一收敛到 `docs/strategy/goal-mode-subagents.md`。
 - 2026-06-18: `AGENTS.md` 增加 Codex goal mode 下子智能体分发、审查、验证和记录规则的交叉引用。
-- 验证: `rg -n "worker 不得创建 commit|统一状态|Codex goal mode|满足下列默认触发点|不得同时修改 worker" AGENTS.md docs/strategy/goal-mode-playbook.md docs/plans/goal-mode-tech-debt-rules.md`，命中新增规则。
-- 验证: `git diff --check -- AGENTS.md docs/strategy/goal-mode-playbook.md docs/plans/goal-mode-tech-debt-rules.md`，通过。
+- 验证: `rg -n "worker 不得创建 commit|统一状态|Codex goal mode|满足下列默认触发点|不得同时修改 worker" AGENTS.md docs/strategy/goal-mode-playbook.md docs/strategy/goal-mode-subagents.md`，命中新增规则。
+- 验证: `git diff --check -- AGENTS.md docs/strategy/goal-mode-playbook.md docs/strategy/goal-mode-subagents.md`，通过。
 
 ### P1: Artifact 模板标题校验会误接受正文或代码块中的标题文本
 
@@ -1661,7 +1670,7 @@
 - 验证: `cd tools/new-agents/frontend && npm test`，26 files / 291 tests passed。
 - 验证: `cd tools/new-agents/frontend && npm run lint`，TypeScript check passed。
 - 验证: `cd tools/new-agents/frontend && npm run build`，Vite build passed；主入口 chunk 336.99 kB，Mermaid runtime 498.23 kB lazy chunk。
-- 验证: `git diff --check -- AGENTS.md docs/strategy/goal-mode-playbook.md docs/plans/goal-mode-tech-debt-rules.md docs/plans/tech-debt.md tools/new-agents/frontend/src/services/chatService.ts tools/new-agents/frontend/src/services/__tests__/chatService.test.ts`，通过。
+- 验证: `git diff --check -- AGENTS.md docs/strategy/goal-mode-playbook.md docs/plans/tech-debt.md tools/new-agents/frontend/src/services/chatService.ts tools/new-agents/frontend/src/services/__tests__/chatService.test.ts`，通过。
 - 2026-06-18: 收尾修复 `artifactTruncated` 刷新后丢失的问题。store 持久化白名单加入 `artifactTruncated`，hydrate 时仅在存在有效当前 artifact 内容且 persisted 标记为 `true` 时恢复截断状态，避免刷新后把不完整产物展示成正常产物。
 - RED 验证: `cd tools/new-agents/frontend && npm test -- --run src/__tests__/store.test.ts -t "should persist and restore artifact truncation state"`，修复前失败，`artifactTruncated` 从 persisted `true` 恢复为 `false`。
 - 验证: `cd tools/new-agents/frontend && npm test -- --run src/__tests__/store.test.ts -t "should persist and restore artifact truncation state"`，1 passed。
@@ -1794,9 +1803,9 @@
 - 验证: `cd tools/new-agents/frontend && npm run lint`，TypeScript check passed。
 - 验证: `cd tools/new-agents/frontend && npm run build`，Vite build passed，large chunk warning 消失；主入口 chunk 降到 334.41 kB，Mermaid runtime 独立为 498.23 kB lazy chunk。
 
-## New Agents 智能体重构优先级
+## New Agents 智能体重构完成记录
 
-### P0: 引入 PydanticAI 约束智能体输出结构
+### 已完成 P0: 引入 PydanticAI 约束智能体输出结构
 
 **目标**: 解决当前大模型输出不稳定导致前端解析、Artifact 渲染、Mermaid 渲染失败的问题。
 
@@ -1903,7 +1912,7 @@
   - `docs/architecture.md` 与 `docs/ARCHITECTURE.md` 的服务拓扑表已标明后端使用 OpenAI SDK + PydanticAI。
   - `docs/TESTING.md` 的 New Agents 后端测试目录已从单一 `test_api.py` 更新为当前分层测试结构。
   - `docs/project-overview.md` 与 `docs/source-tree-analysis.md` 不再描述前端直连/双模式、`llmParser` 或前端 OpenAI SDK。
-  - `docs/plans/goal-mode-tech-debt-rules.md` 的 P0 专用规则已改为当前事实: 旧 `/api/chat/stream` 已删除，后续不得恢复旧文本代理端点或旧标签协议作为兼容层。
+  - 旧技术债专项规则当时已改为当前事实: 旧 `/api/chat/stream` 已删除，后续不得恢复旧文本代理端点或旧标签协议作为兼容层；该专项规则已于 2026-06-25 退役，目标模式规则统一收敛到 `docs/strategy/`。
   - `docs/integration-architecture.md`、`docs/project-parts.json`、`docs/project-scan-report.json` 和架构文档标题不再把 New Agents 后端命名为旧式 LLM 代理后端，统一为结构化 Agent Runtime 后端。
 - 验证证据:
   - `cd tools/new-agents/backend && python3 -m pytest tests/test_request_schemas.py tests/test_mermaid_repair_service.py tests/test_mermaid_repair_endpoint.py tests/test_routes_blueprint.py`: 22 passed。
@@ -1931,7 +1940,7 @@
   - `cd tools/new-agents/frontend && npm ls openai`: 依赖树为空，前端 package/lock 不再依赖 OpenAI SDK。
   - `rg 'from ['"'"'\"'"'"']openai['"'"'\"'"'"']|new OpenAI|OpenAI SDK|前端直连|直连模式|用户 API Key 前端|llmParser|parseLlmStreamChunk|detectArtifactTruncation|/new-agents/api/chat/stream|/api/chat/stream|ChatStreamRequest|ChatDeltaEvent|stream_chat_events|parse_chat_stream_request' tools/new-agents/frontend/src tools/new-agents/frontend/package.json tools/new-agents/frontend/package-lock.json docs/architecture.md docs/ARCHITECTURE.md docs/integration-architecture.md docs/component-inventory.md docs/api-contracts.md docs/project-parts.json`: 只剩防回归测试规则和后端当前 OpenAI SDK 说明，前端主链路无旧直连/旧协议残留。
   - `rg 'React 19 \+ Zustand \+ OpenAI SDK|Flask \+ SQLAlchemy \+ OpenAI \+ Gunicorn|Flask \+ OpenAI \+ Gunicorn|└── test_api\.py|/api/chat/stream|/new-agents/api/chat/stream' docs/index.md docs/TESTING.md docs/architecture.md docs/ARCHITECTURE.md docs/api-contracts.md docs/integration-architecture.md docs/component-inventory.md docs/project-parts.json`: 无输出，入口文档无旧前端 SDK、旧后端技术栈、旧测试布局或旧 chat stream 当前契约残留。
-  - `rg '双模式|前端直连|后端代理 SSE|llmParser|先保留现有' docs/project-overview.md docs/source-tree-analysis.md docs/plans/goal-mode-tech-debt-rules.md`: 无输出，非归档概览/源码树/目标规则无旧双模式和旧端点保留指令残留；旧 `/api/chat/stream` 只在目标规则中以“已删除、不得恢复”的约束形式出现。
+  - `rg '双模式|前端直连|后端代理 SSE|llmParser|先保留现有' docs/project-overview.md docs/source-tree-analysis.md docs/strategy`: 无输出，非归档概览/源码树/目标规则无旧双模式和旧端点保留指令残留；旧 `/api/chat/stream` 只在目标规则中以“已删除、不得恢复”的约束形式出现。
   - `rg 'LLM 代理|SSE 流式代理|双模式|前端直连|OpenAI SDK 6|OpenAI Python/JS SDK|llmParser|所有路由集中|app\.py.*路由' docs -g '!docs/plans/archive/**' -g '!docs/plans/completed/**' -g '!docs/plans/2026-03-07-new-agents-refactor.md' -g '!docs/plans/tech-debt.md'`: 无输出，非归档当前文档无旧 New Agents 代理命名和旧前端直连结构描述残留。
   - `python3 -m json.tool docs/project-parts.json` 与 `python3 -m json.tool docs/project-scan-report.json`: 通过，结构化元数据仍为合法 JSON。
   - `cd tools/new-agents/backend && python3 -m pytest tests/test_agent_real_smoke.py -q`: 1 skipped，原因是当前环境缺少真实模型环境变量。
@@ -1958,7 +1967,7 @@
 - 收束状态:
   - P0 当前明确范围已完成: 主链路不再依赖旧标签解析，非法输出不会进入 Artifact 渲染链路，`TEST_DESIGN/CLARIFY` 真实模型 smoke 已通过。
 
-### P1: 暂缓引入 LangGraph，保留轻量阶段工作流
+### 已决策 P1: 暂缓引入 LangGraph，保留轻量阶段工作流
 
 **决策**: 当前不把 LangGraph 作为第一阶段重构主线。
 
@@ -1974,7 +1983,7 @@
 - 如果后续出现跨阶段回跳、并行子任务、长任务恢复、复杂人工审批、可回放执行历史等需求，再评估 LangGraph。
 - 如果 Deep Agents 作为长任务能力接入，由于其底层依赖 LangGraph，可在特定新工作流内局部使用，而不是重写全部 Lisa/Alex 主链路。
 
-### P1: 抽出 Agent Core 纯逻辑层
+### 已完成 P1: 抽出 Agent Core 纯逻辑层
 
 **目标**: 把当前散落在 Store、Hook、组件里的业务状态机集中到可测试的纯逻辑模块。
 
@@ -2019,7 +2028,7 @@
 - 收束状态:
   - P1 Agent Core 当前明确范围已完成，无本优先级内待处理的本地技术债切片。
 
-### P2: 收敛 Prompt 职责
+### 已完成 P2: 收敛 Prompt 职责
 
 **目标**: Prompt 只描述任务目标、判断标准和上下文，不继续承担字符级输出协议和渲染格式修复职责。
 
@@ -2070,7 +2079,7 @@
 - 收束状态:
   - P2 Prompt 职责收敛当前明确范围已完成，无本小节内待处理的本地技术债切片。
 
-### P2: 清理前端类型与渲染债务
+### 已完成 P2: 清理前端类型与渲染债务
 
 范围:
 
@@ -2146,7 +2155,7 @@
 - 收束状态:
   - P2 前端类型与渲染债务当前明确范围已完成，无本小节内待处理的本地技术债切片。
 
-### P3: 后端 LLM Gateway 分层
+### 已完成 P3: 后端 LLM Gateway 分层
 
 原范围:
 

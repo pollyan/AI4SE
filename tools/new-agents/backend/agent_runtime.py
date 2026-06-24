@@ -986,7 +986,11 @@ class PydanticAgentRuntime:
                 ),
             ):
                 accumulated += text_chunk
-                delta = build_partial_agent_delta(accumulated)
+                delta = build_partial_agent_delta(
+                    accumulated,
+                    workflow_id=workflow_id,
+                    current_stage_id=current_stage_id,
+                )
                 if delta is None:
                     continue
                 next_chat = delta.chat or latest_chat
@@ -1187,9 +1191,53 @@ def extract_json_string_prefix(text: str, key: str) -> str | None:
     return "".join(chars) if chars else None
 
 
-def build_partial_agent_delta(text: str) -> AgentTurnDeltaOutput | None:
+def extract_json_object_prefix(text: str, key: str) -> dict[str, Any] | None:
+    key_match = re.search(rf'"{re.escape(key)}"\s*:', text)
+    if not key_match:
+        return None
+    index = key_match.end()
+    while index < len(text) and text[index].isspace():
+        index += 1
+    if index >= len(text) or text[index] != "{":
+        return None
+    try:
+        value, _ = json.JSONDecoder().raw_decode(text[index:])
+    except json.JSONDecodeError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def build_partial_agent_delta(
+    text: str,
+    *,
+    workflow_id: str | None = None,
+    current_stage_id: str | None = None,
+) -> AgentTurnDeltaOutput | None:
     chat = extract_json_string_prefix(text, "chat")
     markdown = extract_json_string_prefix(text, "markdown")
+    if (
+        not markdown
+        and workflow_id is not None
+        and current_stage_id is not None
+        and supports_artifact_data_rendering(workflow_id, current_stage_id)
+    ):
+        artifact_data = extract_json_object_prefix(text, "artifact_data")
+        if artifact_data is not None:
+            try:
+                rendered = render_agent_turn_from_artifact_data(
+                    {
+                        "chat": chat or "正在生成右侧产出物。",
+                        "artifact_data": artifact_data,
+                        "stage_action": None,
+                        "warnings": [],
+                    },
+                    workflow_id=workflow_id,
+                    current_stage_id=current_stage_id,
+                )
+            except (ValueError, ValidationError):
+                rendered = None
+            if rendered is not None:
+                markdown = rendered.artifact_update.markdown
     if not chat and not markdown:
         return None
     return AgentTurnDeltaOutput(

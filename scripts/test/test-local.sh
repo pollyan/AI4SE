@@ -352,7 +352,7 @@ case "$TEST_TYPE" in
         ;;
     all)
         run_api_tests || FAILED=1
-        run_lint || true  # lint 失败不中断
+        run_lint || FAILED=1
         run_proxy_tests || FAILED=1
         run_common_frontend_tests || FAILED=1
         run_new_agents_frontend_tests || FAILED=1
