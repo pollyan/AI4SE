@@ -16,6 +16,7 @@ from agent_runtime import (
     PydanticAgentRuntime,
     RawStreamingConfig,
     TEXT_STRUCTURED_OUTPUT_INSTRUCTION,
+    build_artifact_data_progress_markdown,
     build_partial_agent_delta,
     build_agent_retries,
     build_model_settings,
@@ -2675,6 +2676,37 @@ def test_runtime_raw_json_stream_turn_streams_artifact_progress_for_artifact_dat
     assert "```mermaid" in progress_markdown
     assert "# 产出物生成中" not in progress_markdown
     assert outputs[-1].artifact_update.markdown.startswith("# 需求分析文档")
+
+
+def test_runtime_raw_json_stream_turn_streams_partial_artifact_data_in_final_format():
+    final_json = json.dumps(
+        {
+            "chat": "正在生成结构化产物。",
+            "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    artifact_start = final_json.index('"artifact_data"')
+    business_rules_start = final_json.index(',"business_rules"')
+    partial_text = final_json[:business_rules_start]
+
+    progress_markdown = build_artifact_data_progress_markdown(
+        partial_text,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert progress_markdown is not None
+    assert progress_markdown.startswith("# 需求分析文档")
+    assert "## 文档信息" in progress_markdown
+    assert "| F-001 | 用户需要登录功能 | 用户描述 | 用户陈述 | 已确认 |" in progress_markdown
+    assert "| 测试范围 | 登录页面和登录 API | 验证登录主链路 | 已确认 |" in progress_markdown
+    assert "## 3. 业务规则与数据状态" not in progress_markdown
+    assert "# 产出物生成中" not in progress_markdown
+    assert "已接收字符数" not in progress_markdown
 
 
 def test_runtime_raw_json_stream_turn_retries_contract_failure_with_feedback(

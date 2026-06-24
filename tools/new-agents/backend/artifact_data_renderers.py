@@ -2,7 +2,14 @@ import json
 import re
 from typing import Any, Callable
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from agent_contracts import AgentTurnOutput
 
@@ -2603,6 +2610,112 @@ def render_test_design_clarify_markdown(data: ClarifyArtifactData) -> str:
         _render_downstream_inputs(data.downstream_inputs),
         _render_stage_gate(data.stage_gate),
     ]
+    return "\n\n".join(sections)
+
+
+def render_partial_artifact_data_markdown(
+    artifact_data: dict[str, Any],
+    *,
+    workflow_id: str,
+    current_stage_id: str,
+) -> str | None:
+    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
+        return _render_partial_test_design_clarify_markdown(artifact_data)
+    return None
+
+
+def _validate_partial_model(
+    model: type[StrictArtifactDataModel],
+    value: Any,
+) -> StrictArtifactDataModel | None:
+    try:
+        return model.model_validate(value)
+    except (TypeError, ValidationError, ValueError):
+        return None
+
+
+def _validate_partial_model_list(
+    model: type[StrictArtifactDataModel],
+    value: Any,
+) -> list[StrictArtifactDataModel] | None:
+    if not isinstance(value, list) or not value:
+        return None
+    try:
+        return [model.model_validate(item) for item in value]
+    except (TypeError, ValidationError, ValueError):
+        return None
+
+
+def _render_partial_test_design_clarify_markdown(
+    artifact_data: dict[str, Any],
+) -> str | None:
+    sections = ["# 需求分析文档"]
+
+    document_info = _validate_partial_model(
+        DocumentInfo,
+        artifact_data.get("document_info"),
+    )
+    if document_info is not None:
+        sections.append(_render_document_info(document_info))
+
+    requirement_facts = _validate_partial_model_list(
+        RequirementFact,
+        artifact_data.get("requirement_facts"),
+    )
+    if requirement_facts is not None:
+        sections.append(_render_requirement_facts(requirement_facts))
+
+    system_boundaries = _validate_partial_model_list(
+        SystemBoundary,
+        artifact_data.get("system_boundaries"),
+    )
+    if system_boundaries is not None:
+        sections.append(_render_system_boundaries(system_boundaries))
+
+    business_rules = _validate_partial_model_list(
+        BusinessRule,
+        artifact_data.get("business_rules"),
+    )
+    if business_rules is not None:
+        sections.append(_render_business_rules(business_rules))
+
+    flow_links = _validate_partial_model_list(
+        FlowLink,
+        artifact_data.get("flow_links"),
+    )
+    if flow_links is not None:
+        sections.append(_render_flow_links(flow_links))
+
+    clarification_questions = _validate_partial_model_list(
+        ClarificationQuestion,
+        artifact_data.get("clarification_questions"),
+    )
+    if clarification_questions is not None:
+        sections.append(_render_clarification_questions(clarification_questions))
+
+    quality_requirements = _validate_partial_model_list(
+        QualityRequirement,
+        artifact_data.get("quality_requirements"),
+    )
+    if quality_requirements is not None:
+        sections.append(_render_quality_requirements(quality_requirements))
+
+    downstream_inputs = _validate_partial_model_list(
+        DownstreamInput,
+        artifact_data.get("downstream_inputs"),
+    )
+    if downstream_inputs is not None:
+        sections.append(_render_downstream_inputs(downstream_inputs))
+
+    stage_gate = _validate_partial_model_list(
+        StageGateCheck,
+        artifact_data.get("stage_gate"),
+    )
+    if stage_gate is not None:
+        sections.append(_render_stage_gate(stage_gate))
+
+    if len(sections) == 1:
+        return None
     return "\n\n".join(sections)
 
 

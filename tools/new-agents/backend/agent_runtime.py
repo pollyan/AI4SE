@@ -14,6 +14,7 @@ from agent_contracts import (
 from artifact_data_renderers import (
     get_artifact_data_renderer_stage_keys,
     render_agent_turn_from_artifact_data,
+    render_partial_artifact_data_markdown,
 )
 from llm_client import LlmClientError, stream_chat_completion_content
 from sse_schemas import AgentTurnDeltaOutput
@@ -1340,7 +1341,14 @@ def build_artifact_data_progress_markdown(
     workflow_id: str | None = None,
     current_stage_id: str | None = None,
 ) -> str | None:
-    return render_complete_streamed_artifact_data_markdown(
+    complete_markdown = render_complete_streamed_artifact_data_markdown(
+        text,
+        workflow_id=workflow_id,
+        current_stage_id=current_stage_id,
+    )
+    if complete_markdown:
+        return complete_markdown
+    return render_partial_streamed_artifact_data_markdown(
         text,
         workflow_id=workflow_id,
         current_stage_id=current_stage_id,
@@ -1359,6 +1367,56 @@ def extract_complete_json_value_after_key(text: str, key: str) -> Any | None:
     except json.JSONDecodeError:
         return None
     return value
+
+
+def extract_partial_json_object_after_key(text: str, key: str) -> dict[str, Any] | None:
+    key_match = re.search(rf'"{re.escape(key)}"\s*:', text)
+    if key_match is None:
+        return None
+    index = key_match.end()
+    while index < len(text) and text[index].isspace():
+        index += 1
+    if index >= len(text) or text[index] != "{":
+        return None
+
+    decoder = json.JSONDecoder()
+    index += 1
+    partial: dict[str, Any] = {}
+    while index < len(text):
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index < len(text) and text[index] == ",":
+            index += 1
+            continue
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index >= len(text) or text[index] == "}":
+            break
+
+        try:
+            field_name, next_index = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            break
+        if not isinstance(field_name, str):
+            break
+        index += next_index
+
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index >= len(text) or text[index] != ":":
+            break
+        index += 1
+        while index < len(text) and text[index].isspace():
+            index += 1
+
+        try:
+            field_value, next_index = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            break
+        partial[field_name] = field_value
+        index += next_index
+
+    return partial or None
 
 
 def render_complete_streamed_artifact_data_markdown(
@@ -1394,6 +1452,24 @@ def render_complete_streamed_artifact_data_markdown(
     if artifact_update.type != "replace" or not artifact_update.markdown:
         return None
     return artifact_update.markdown
+
+
+def render_partial_streamed_artifact_data_markdown(
+    text: str,
+    *,
+    workflow_id: str | None,
+    current_stage_id: str | None,
+) -> str | None:
+    if workflow_id is None or current_stage_id is None:
+        return None
+    artifact_data = extract_partial_json_object_after_key(text, "artifact_data")
+    if artifact_data is None:
+        return None
+    return render_partial_artifact_data_markdown(
+        artifact_data,
+        workflow_id=workflow_id,
+        current_stage_id=current_stage_id,
+    )
 
 
 def should_emit_partial_delta(
