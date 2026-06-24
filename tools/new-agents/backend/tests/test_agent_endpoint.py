@@ -1161,6 +1161,7 @@ def test_agent_run_clone_endpoint_creates_independent_reusable_run(
             "stageId": "STRATEGY",
             "content": "# 测试策略蓝图\n\n覆盖登录风险",
             "versionNumber": 1,
+            "artifactData": None,
         }
     ]
 

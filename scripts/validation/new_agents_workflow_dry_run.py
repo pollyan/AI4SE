@@ -114,7 +114,7 @@ def load_workflow_dry_run_inputs(repo_root: Path) -> WorkflowDryRunInputs:
             for key, value in REQUIRED_ARTIFACT_STRUCTURED_VISUALS.items()
         },
         artifact_data_ready_stage_keys=get_artifact_data_ready_stages(),
-        artifact_data_renderer_stage_keys=get_artifact_data_renderer_stage_keys(),
+        artifact_data_renderer_stage_keys=set(get_artifact_data_renderer_stage_keys()),
         handoff_template_ids=set(HANDOFF_PROMPT_TEMPLATES),
         packaging_files={
             "backend Dockerfile": (

@@ -6428,6 +6428,16 @@ def _node_id(label: str, existing: dict[str, str]) -> str:
     return candidate
 
 
+def _render_prd_document_info(info: DocumentInfo) -> str:
+    rows = [
+        ("Artifact 名称", info.artifact_name),
+        ("Workflow", info.workflow),
+        ("阶段", info.stage),
+        ("状态", info.status),
+    ]
+    return "## 文档信息\n" + _markdown_table(["字段", "内容"], rows)
+
+
 def _render_prd_goal_scope(items: list[PrdInventoryItem]) -> str:
     rows = [
         (item.category, item.content, item.source, item.evidence_level, item.status)

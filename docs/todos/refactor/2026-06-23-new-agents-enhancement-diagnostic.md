@@ -271,7 +271,7 @@
 
 功能能力包已清空；后续进入最终集成、主线验证、merge/push/删分支闭环。
 
-其余 E 编号如果需要恢复，必须先通过 CGA 证明当前主线集成后仍存在回归或未验收缺口。当前 E10 专业方法库配置和 E11 Prompt/template 版本管理已分别形成待合回实现。
+其余 E 编号如果需要恢复，必须先通过 CGA 证明当前主线集成后仍存在回归或未验收缺口。当前 E01-E14 已合入 `codex/goal-final-integration`，后续只围绕验证回归、CI 失败、完整 scaffold/codegen、跨 run 质量趋势或 LLM judge evidence 继续演进。
 
 ## 进入实现前需要补的设计问题
 

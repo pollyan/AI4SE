@@ -2,16 +2,16 @@
 
 > 状态: 活动事实源
 > 更新日期: 2026-06-24
-> 用途: 记录目标模式已验证 milestone、待最终合回提交、剩余能力包和最终集成条件。
+> 用途: 记录目标模式已验证 milestone、最终集成状态、剩余能力包和合回条件。
 
 ## 当前结论
 
-- DeepSeek V4 结构化产物数据改造: 本地确定性完成，待最终合回。
-- New Agents 增强诊断: E01、E02、E03、E04、E05、E06、E07、E08、E09、E12、E13、E14 已有提交证据，待最终合回或主线复核。
-- 当前功能能力包已清空；后续进入最终集成、主线验证、merge/push/删分支闭环。
-- 最终 merge/push/删分支: 仅在所有活跃能力包完成、主线脏文件处理完、integration branch 验证通过后执行。
+- DeepSeek V4 结构化产物数据改造: 本地确定性完成，已合入 `codex/goal-final-integration`。
+- New Agents 增强诊断: E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14 已合入 `codex/goal-final-integration`。
+- 当前功能能力包已清空；后续进入主线验证、merge/push/删分支闭环。
+- 最终 merge/push/删分支: 仅在 integration branch 验证通过后执行；主工作区仍有受保护未提交改动，最终合回优先通过隔离 worktree 或远端 ref 更新避免覆盖。
 
-## completed_pending_merge
+## integrated_in_goal_final_branch
 
 | Capability | Todo | Commit | Branch | Evidence |
 | --- | --- | --- | --- | --- |
@@ -34,12 +34,12 @@
 
 无。功能能力包已清空；恢复目标模式时应先从当前代码、测试、文档和 git 状态做 CGA，确认是否只剩最终集成风险或 CI/验证回归。
 
-## final_integration_pending
+## final_integration_status
 
-- 当前账本只证明存在已验证的独立 milestone commit，不证明这些 commits 已在 `master` 可用。
-- 最终合回前应创建 integration branch，按依赖和冲突风险逐项 cherry-pick 或手工移植 `completed_pending_merge` 中的 commits。
-- 每合入一个跨 runtime / workflow manifest / frontend 主路径的 commit，都应运行对应聚焦验证；全部合入后运行 New Agents 后端 contract/runtime/API、前端 lint/test 和 `git diff --check`。
-- 用户要求的删除当前分支、merge 回主干并 push GitHub，只能在 integration branch 验证通过、主工作区受保护改动已处理或隔离后执行。
+- Integration branch: `codex/goal-final-integration`。
+- 当前状态: 所有已验证独立 milestone 已合入 integration branch，等待最终验证。
+- 最终验证应覆盖 New Agents 后端 contract/runtime/API、前端 workflow/prompt/component tests、frontend build 和 `git diff --check`。
+- 用户要求的删除当前分支、merge 回主干并 push GitHub，只能在 integration branch 验证通过后执行。
 
 ## protected_main_worktree_changes
 
@@ -54,6 +54,6 @@
 ## recovery_rules
 
 - 目标模式恢复时先读本账本，再读具体 todo。
-- 不要从 `completed_pending_merge` 中的 E 编号重新启动功能实现，除非 CGA 证明主线集成后仍存在回归、缺失验证或用户重新定义范围。
+- 不要从 `integrated_in_goal_final_branch` 中的 E 编号重新启动功能实现，除非 CGA 证明主线集成后仍存在回归、缺失验证或用户重新定义范围。
 - 选择下一轮工作时，默认从最终集成前置闭环、CI 失败复盘或主线验证回归开始；不要重新启动已完成的功能能力包，除非 CGA 证明当前主线仍有缺口。
 - 如果远端 CI、真实 DeepSeek smoke 或 integration branch 暴露失败，优先按目标模式 playbook 的 CI 失败复盘规则处理。

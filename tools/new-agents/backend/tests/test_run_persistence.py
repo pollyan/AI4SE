@@ -318,11 +318,13 @@ def test_clone_agent_run_copies_reusable_context_without_mutating_source(app):
             "stageId": "CLARIFY",
             "content": "# 需求分析文档\n\n登录边界",
             "versionNumber": 1,
+            "artifactData": None,
         },
         {
             "stageId": "STRATEGY",
             "content": "# 测试策略蓝图\n\n覆盖登录风险",
             "versionNumber": 1,
+            "artifactData": None,
         },
     ]
     assert cloned_snapshot["contextSummaries"] == source_snapshot["contextSummaries"]

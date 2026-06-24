@@ -862,6 +862,10 @@ ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS: dict[tuple[str, str], str] = {
 }
 
 
+def get_artifact_data_ready_stages() -> set[tuple[str, str]]:
+    return set(ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS)
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
     stage_key = (workflow_id, current_stage_id)
     return (
