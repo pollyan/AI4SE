@@ -24,6 +24,8 @@
 
 2026-06-24 已复核：除上述活动候选外，其他重构类事项均已归档或转为历史完成记录；不要从 `archive/` 中的过程性“待办/剩余”直接恢复实施。
 
+2026-06-24 目标模式记录：本轮在 `codex/workflow-quality-governance-current` 中消化 New Agents E03/E08 合并能力包「Artifact/Workflow 质量治理闭环」，以现有 `ArtifactPane` 审阅入口展示质量分、contract/visual/stage gate 检查、证据和待处理项。
+
 ## 已归档
 
 - `../archive/2026-06-21-new-agents-refactor-scan.md`：第一轮 New Agents 智能体重构扫描报告。

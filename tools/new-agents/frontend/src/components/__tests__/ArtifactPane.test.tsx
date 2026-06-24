@@ -215,6 +215,33 @@ describe('ArtifactPane Component', () => {
         expect(screen.getByText('最近版本：run-123-CLARIFY-v2')).toBeTruthy();
     });
 
+    it('shows workflow quality governance in the artifact review panel', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            artifactContent: '# 测试策略蓝图\n\n## 1. 策略摘要\n\n## 8. 阶段门禁',
+            artifactVisualDiagnostics: [
+                {
+                    id: 'structured-visual:STRATEGY:0',
+                    stageId: 'STRATEGY',
+                    kind: 'structured-visual',
+                    title: '结构化可视化无效',
+                    message: 'risk-board JSON 缺 items',
+                    createdAt: 1,
+                },
+            ],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByRole('button', { name: '更多产物操作' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: '审阅' }));
+
+        expect(screen.getByText('质量治理')).toBeTruthy();
+        expect(screen.getByText(/质量分/)).toBeTruthy();
+        expect(screen.getByText(/补齐必需章节/)).toBeTruthy();
+        expect(screen.getByText(/修复当前阶段可视化渲染问题/)).toBeTruthy();
+    });
+
     it('resolves unresolved comments directly from the artifact review panel', () => {
         useStore.setState({
             workflow: 'TEST_DESIGN',

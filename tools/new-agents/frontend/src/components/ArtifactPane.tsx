@@ -22,6 +22,7 @@ import { StructuredVisual } from './StructuredVisual';
 import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../services/runSnapshotService';
 import { buildDocxPackage } from '../core/docxExport';
 import { buildPlainTextPdf as buildArtifactPdf } from '../core/artifactExport';
+import { buildWorkflowQualitySummary } from '../core/workflowQuality';
 
 export const ArtifactPane: React.FC = () => {
   const workflow = useStore((state) => state.workflow);
@@ -108,6 +109,15 @@ export const ArtifactPane: React.FC = () => {
     [currentStageAuditEvents]
   );
   const latestStageArtifactVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1] ?? null;
+  const workflowQualitySummary = useMemo(
+    () => buildWorkflowQualitySummary({
+      workflow: WORKFLOWS[workflow],
+      stageId: currentStageId,
+      artifactMarkdown: artifactContent,
+      visualDiagnostics: artifactVisualDiagnostics,
+    }),
+    [artifactContent, artifactVisualDiagnostics, currentStageId, workflow]
+  );
 
   const syncArtifactCollaborationState = useCallback(() => {
     if (!currentRunId) return;
@@ -4364,6 +4374,54 @@ export const ArtifactPane: React.FC = () => {
             </button>
           </div>
           <div className="max-h-[70vh] space-y-4 overflow-auto p-4">
+            <section className="space-y-3 rounded-lg border border-[#1e293b] bg-[#020617] p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">质量治理</h4>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">{workflowQualitySummary.summary}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="text-lg font-bold text-slate-100">质量分 {workflowQualitySummary.score}</div>
+                  <div className="text-[10px] font-semibold text-slate-500">{workflowQualitySummary.statusLabel}</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded border border-emerald-400/20 bg-emerald-400/5 p-2 text-center text-xs text-emerald-200">
+                  通过 {workflowQualitySummary.passedCount}
+                </div>
+                <div className="rounded border border-amber-400/20 bg-amber-400/5 p-2 text-center text-xs text-amber-200">
+                  警告 {workflowQualitySummary.warningCount}
+                </div>
+                <div className="rounded border border-red-400/20 bg-red-400/5 p-2 text-center text-xs text-red-200">
+                  失败 {workflowQualitySummary.failedCount}
+                </div>
+              </div>
+              <div className="space-y-2">
+                {workflowQualitySummary.checks.slice(0, 6).map((check) => (
+                  <article key={check.id} className="rounded border border-[#1e293b] bg-black/10 p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-200">{check.label}</span>
+                      <span className="text-[10px] font-bold text-slate-500">{check.statusLabel}</span>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{check.evidence}</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{check.impact}</p>
+                  </article>
+                ))}
+              </div>
+              <div className="rounded border border-[#1e293b] bg-black/10 p-2">
+                <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">待处理项</div>
+                {workflowQualitySummary.actionItems.length === 0 ? (
+                  <p className="mt-1 text-xs text-slate-500">当前没有阻断项。</p>
+                ) : (
+                  <ul className="mt-2 space-y-1">
+                    {workflowQualitySummary.actionItems.map((item) => (
+                      <li key={item} className="text-xs leading-relaxed text-slate-300">- {item}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </section>
+
             <div className="grid grid-cols-3 gap-2">
               <div className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
                 <div className="text-lg font-bold text-amber-200">{currentStageOpenComments.length}</div>
