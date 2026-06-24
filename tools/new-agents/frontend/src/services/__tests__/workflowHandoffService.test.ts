@@ -20,6 +20,9 @@ describe('workflowHandoffService', () => {
                         sourceWorkflowId: 'VALUE_DISCOVERY',
                         sourceStageId: 'BLUEPRINT',
                         sourceArtifactVersion: 2,
+                        sourceSummary: 'AI 测试资产管理平台需求蓝图: AI 测试资产管理平台。',
+                        unconfirmedItems: ['需求 F-001: 自动生成测试策略和用例'],
+                        targetInputChecklist: ['复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2'],
                         targetWorkflowId: 'TEST_DESIGN',
                         targetStageId: 'CLARIFY',
                         targetAgentId: 'lisa',
@@ -41,6 +44,9 @@ describe('workflowHandoffService', () => {
                 id: 'handoff-1',
                 targetWorkflowId: 'TEST_DESIGN',
                 targetStageId: 'CLARIFY',
+                sourceSummary: 'AI 测试资产管理平台需求蓝图: AI 测试资产管理平台。',
+                unconfirmedItems: ['需求 F-001: 自动生成测试策略和用例'],
+                targetInputChecklist: ['复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2'],
                 prompt: '请基于 Alex 的价值蓝图设计测试策略。',
             }),
         ]);
@@ -68,6 +74,38 @@ describe('workflowHandoffService', () => {
         );
     });
 
+    it('should fail explicitly when the handoff context is missing', async () => {
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({
+                runId: 'alex-run-123',
+                sourceWorkflowId: 'VALUE_DISCOVERY',
+                handoffs: [
+                    {
+                        id: 'handoff-1',
+                        label: '交给 Lisa 做测试设计',
+                        sourceWorkflowId: 'VALUE_DISCOVERY',
+                        sourceStageId: 'BLUEPRINT',
+                        sourceArtifactVersion: 2,
+                        unconfirmedItems: [],
+                        targetInputChecklist: ['复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2'],
+                        targetWorkflowId: 'TEST_DESIGN',
+                        targetStageId: 'CLARIFY',
+                        targetAgentId: 'lisa',
+                        prompt: '请基于 Alex 的价值蓝图设计测试策略。',
+                    },
+                ],
+            }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            },
+        ));
+
+        await expect(fetchWorkflowHandoffs('alex-run-123')).rejects.toThrow(
+            'Invalid workflow handoff response'
+        );
+    });
+
     it('should start a handoff target run', async () => {
         vi.mocked(fetch).mockResolvedValue(new Response(
             JSON.stringify({
@@ -77,6 +115,9 @@ describe('workflowHandoffService', () => {
                 sourceWorkflowId: 'VALUE_DISCOVERY',
                 sourceStageId: 'BLUEPRINT',
                 sourceArtifactVersion: 2,
+                sourceSummary: 'AI 测试资产管理平台需求蓝图: AI 测试资产管理平台。',
+                unconfirmedItems: ['需求 F-001: 自动生成测试策略和用例'],
+                targetInputChecklist: ['复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2'],
                 targetRunId: 'lisa-run-456',
                 targetWorkflowId: 'TEST_DESIGN',
                 targetStageId: 'CLARIFY',
@@ -97,5 +138,8 @@ describe('workflowHandoffService', () => {
         );
         expect(handoff.targetRunId).toBe('lisa-run-456');
         expect(handoff.targetWorkflowId).toBe('TEST_DESIGN');
+        expect(handoff.sourceSummary).toContain('AI 测试资产管理平台需求蓝图');
+        expect(handoff.unconfirmedItems).toEqual(['需求 F-001: 自动生成测试策略和用例']);
+        expect(handoff.targetInputChecklist).toEqual(['复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2']);
     });
 });

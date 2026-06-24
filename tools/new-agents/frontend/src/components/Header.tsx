@@ -10,6 +10,7 @@ import { fetchObservabilitySummary } from '../services/observabilityService';
 import { importIntentTesterDraft } from '../services/intentTesterImportService';
 import { checkDefaultLlmConfig } from '../services/configService';
 import { buildObservabilityAlerts } from '../core/observabilityAlerts';
+import { withTestAssetQualitySummary } from '../core/testAssetQuality';
 import type { AgentRunListItem, AgentRunSnapshot, AgentRunSnapshotContextSummary, ObservabilitySummary, RunReuseStatus, TestAssetCase, TestAssetCollection, TestAssetIssueStatus, WorkflowType } from '../store';
 
 const RUN_LIST_PAGE_SIZE = 20;
@@ -17,6 +18,16 @@ const TEST_ASSET_ISSUE_STATUS_LABELS: Record<TestAssetIssueStatus, string> = {
   pending: '待处理',
   confirmed: '已确认',
   ignored: '忽略',
+};
+const TEST_ASSET_QUALITY_STATUS_TONE: Record<TestAssetCollection['qualitySummary']['status'], string> = {
+  blocked: 'border-red-500/30 bg-red-500/10 text-red-100',
+  attention: 'border-amber-500/30 bg-amber-500/10 text-amber-100',
+  ready: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100',
+};
+const TEST_ASSET_QUALITY_GATE_TONE: Record<TestAssetCollection['qualitySummary']['gates'][number]['status'], string> = {
+  fail: 'bg-red-500/10 text-red-100',
+  warn: 'bg-amber-500/10 text-amber-100',
+  pass: 'bg-emerald-500/10 text-emerald-100',
 };
 const CONTEXT_SUMMARY_TYPE_LABELS: Record<string, string> = {
   user_supplement: '用户补充',
@@ -459,12 +470,12 @@ export const Header: React.FC = () => {
         issue.id,
         status,
       );
-      setTestAssetCollection({
+      setTestAssetCollection(withTestAssetQualitySummary({
         ...testAssetCollection,
         assetIssues: testAssetCollection.assetIssues.map(currentIssue => (
           currentIssue.id === updatedIssue.id ? updatedIssue : currentIssue
         )),
-      });
+      }));
       setIssueStatuses(current => ({
         ...current,
         [getIssueKey(updatedIssue, index)]: updatedIssue.status,
@@ -1235,6 +1246,35 @@ export const Header: React.FC = () => {
               )}
               {!isLoadingTestAssets && testAssetCollection && (
                 <div className="space-y-5">
+                  <div className={clsx(
+                    "rounded-lg border p-4",
+                    TEST_ASSET_QUALITY_STATUS_TONE[testAssetCollection.qualitySummary.status],
+                  )}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-semibold text-slate-300">质量状态</div>
+                        <div className="mt-2 text-xl font-bold text-white">
+                          {testAssetCollection.qualitySummary.label}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {testAssetCollection.qualitySummary.gates.map(gate => (
+                          <div
+                            key={gate.id}
+                            className={clsx(
+                              "rounded px-3 py-2 text-xs font-semibold",
+                              TEST_ASSET_QUALITY_GATE_TONE[gate.status],
+                            )}
+                          >
+                            <div>{gate.title}</div>
+                            <div className="mt-1 font-medium text-slate-200">
+                              {gate.detail}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div className="rounded-lg border border-[#1e293b] bg-[#0f1623] p-4">
                       <div className="text-xs text-slate-500">覆盖率</div>

@@ -20,6 +20,7 @@ import {
     fetchIntentTesterExecutionDetail,
     fetchLatestIntentTesterExecution,
 } from '../services/intentTesterExecutionService';
+import { withTestAssetQualitySummary } from '../core/testAssetQuality';
 import type {
     IntentTesterDraft,
     IntentTesterExecutionDetail,
@@ -57,6 +58,16 @@ const RISK_STATUS_LABELS: Record<TestAssetRiskStatus, string> = {
     mitigating: '缓解中',
     accepted: '已接受',
     closed: '已关闭',
+};
+const QUALITY_STATUS_TONE: Record<TestAssetCollection['qualitySummary']['status'], string> = {
+    blocked: 'border-red-500/30 bg-red-500/10 text-red-100',
+    attention: 'border-amber-500/30 bg-amber-500/10 text-amber-100',
+    ready: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100',
+};
+const QUALITY_GATE_TONE: Record<TestAssetCollection['qualitySummary']['gates'][number]['status'], string> = {
+    fail: 'bg-red-500/10 text-red-100',
+    warn: 'bg-amber-500/10 text-amber-100',
+    pass: 'bg-emerald-500/10 text-emerald-100',
 };
 
 type SortField = typeof SORT_FIELDS[number];
@@ -586,10 +597,10 @@ export function TestAssetsPage() {
 
         try {
             const createdRisk = await createTestAssetRisk(collection.id, riskCreateDraft);
-            setCollection({
+            setCollection(withTestAssetQualitySummary({
                 ...collection,
                 riskMatrix: [...collection.riskMatrix, createdRisk],
-            });
+            }));
             setRiskCreateDraft({ risk: '', status: 'open', owner: '', note: '' });
             setSuccessMessage(`已新增风险 ${createdRisk.risk}`);
         } catch {
@@ -607,10 +618,10 @@ export function TestAssetsPage() {
 
         try {
             await deleteTestAssetRisk(collection.id, risk.id);
-            setCollection({
+            setCollection(withTestAssetQualitySummary({
                 ...collection,
                 riskMatrix: collection.riskMatrix.filter(currentRisk => currentRisk.id !== risk.id),
-            });
+            }));
             if (editingRisk?.id === risk.id) {
                 setEditingRisk(null);
                 setRiskDraft({});
@@ -634,12 +645,12 @@ export function TestAssetsPage() {
 
         try {
             const updatedIssue = await updateTestAssetIssueStatus(collection.id, issue.id, status);
-            setCollection({
+            setCollection(withTestAssetQualitySummary({
                 ...collection,
                 assetIssues: collection.assetIssues.map(currentIssue => (
                     currentIssue.id === updatedIssue.id ? updatedIssue : currentIssue
                 )),
-            });
+            }));
             setSuccessMessage(`已更新资产问题 ${updatedIssue.id}`);
         } catch {
             setError('无法更新资产问题状态');
@@ -844,6 +855,35 @@ export function TestAssetsPage() {
                 )}
 
                 <section className="grid gap-3 md:grid-cols-4">
+                    <div className={clsx(
+                        "rounded-lg border p-4 md:col-span-4",
+                        QUALITY_STATUS_TONE[collection.qualitySummary.status],
+                    )}>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <div className="text-xs font-semibold text-slate-300">质量状态</div>
+                                <div className="mt-2 text-xl font-bold text-white">
+                                    {collection.qualitySummary.label}
+                                </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {collection.qualitySummary.gates.map(gate => (
+                                    <div
+                                        key={gate.id}
+                                        className={clsx(
+                                            "rounded px-3 py-2 text-xs font-semibold",
+                                            QUALITY_GATE_TONE[gate.status],
+                                        )}
+                                    >
+                                        <div>{gate.title}</div>
+                                        <div className="mt-1 font-medium text-slate-200">
+                                            {gate.detail}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
                     <div className="rounded-lg border border-[#1e293b] bg-[#111827] p-4">
                         <div className="text-xs text-slate-500">覆盖率</div>
                         <div className="mt-2 text-xl font-bold text-white">

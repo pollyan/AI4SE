@@ -104,6 +104,9 @@ export type WorkflowHandoff = {
     sourceWorkflowId: WorkflowType;
     sourceStageId: string;
     sourceArtifactVersion: number;
+    sourceSummary: string;
+    unconfirmedItems: string[];
+    targetInputChecklist: string[];
     targetRunId?: string;
     targetWorkflowId: WorkflowType;
     targetStageId: string;
@@ -192,6 +195,32 @@ export type TestAssetCoverageSummary = {
         uncovered: number;
         coverageRate: number;
     }>;
+};
+
+export type TestAssetQualityStatus = 'blocked' | 'attention' | 'ready';
+
+export type TestAssetQualityGateStatus = 'fail' | 'warn' | 'pass';
+
+export type TestAssetQualityGate = {
+    id: string;
+    status: TestAssetQualityGateStatus;
+    title: string;
+    detail: string;
+};
+
+export type TestAssetQualitySummary = {
+    status: TestAssetQualityStatus;
+    label: string;
+    pendingIssueCount: number;
+    confirmedIssueCount: number;
+    ignoredIssueCount: number;
+    uncoveredTestPointCount: number;
+    partialTestPointCount: number;
+    openRiskCount: number;
+    mitigatingRiskCount: number;
+    acceptedRiskCount: number;
+    closedRiskCount: number;
+    gates: TestAssetQualityGate[];
 };
 
 export type TestAssetCase = {
@@ -327,6 +356,7 @@ export type TestAssetCollection = {
     sourceStageId: string;
     sourceArtifactVersion: number;
     coverageSummary: TestAssetCoverageSummary;
+    qualitySummary: TestAssetQualitySummary;
     testCases: TestAssetCase[];
     testPoints: TestAssetPoint[];
     coverageTrace: TestAssetPoint[];
@@ -447,6 +477,9 @@ export interface VisualContract {
     requiredMermaidDiagrams?: string[];
     requiredStructuredVisuals?: string[];
 }
+
+export type ArtifactContractConfig = ArtifactContract;
+export type VisualContractConfig = VisualContract;
 
 export interface WorkflowStage {
     id: string;

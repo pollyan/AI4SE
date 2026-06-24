@@ -319,26 +319,64 @@ export const ChatPane: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
         {workflowHandoffs.length > 0 && !isGenerating && (
           <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
+            <div className="mb-3 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-cyan-100">跨智能体接力</p>
                 <p className="mt-0.5 truncate text-[11px] text-cyan-200/70">
                   当前产出物可以作为下游工作流输入
                 </p>
               </div>
-              <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                {workflowHandoffs.map((handoff) => (
-                  <button
-                    key={handoff.id}
-                    onClick={() => handleApplyWorkflowHandoff(handoff)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition-colors hover:border-cyan-300/40 hover:bg-cyan-400/20"
-                    title={handoff.label}
-                  >
-                    <span>{handoff.label}</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </button>
-                ))}
-              </div>
+            </div>
+            <div className="space-y-2">
+              {workflowHandoffs.map((handoff) => (
+                <div
+                  key={handoff.id}
+                  className="rounded-lg border border-cyan-400/15 bg-slate-950/30 p-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-cyan-50">
+                        目标 {handoff.targetWorkflowId}/{handoff.targetStageId}
+                      </p>
+                      <p className="mt-1 text-[11px] text-cyan-200/75">
+                        {`来源 ${handoff.sourceWorkflowId}/${handoff.sourceStageId} v${handoff.sourceArtifactVersion}`}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleApplyWorkflowHandoff(handoff)}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition-colors hover:border-cyan-300/40 hover:bg-cyan-400/20"
+                      title={handoff.label}
+                    >
+                      <span>{handoff.label}</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-cyan-50/85">
+                    {handoff.sourceSummary}
+                  </p>
+                  {handoff.unconfirmedItems.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-[10px] font-semibold uppercase text-amber-200/80">未确认项</p>
+                      <ul className="mt-1 space-y-1 text-[11px] leading-relaxed text-amber-50/85">
+                        {handoff.unconfirmedItems.slice(0, 3).map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {handoff.unconfirmedItems.length === 0 && (
+                    <p className="mt-2 text-[11px] text-cyan-50/70">未确认项: 无</p>
+                  )}
+                  <div className="mt-2">
+                    <p className="text-[10px] font-semibold uppercase text-cyan-200/80">目标输入</p>
+                    <ul className="mt-1 space-y-1 text-[11px] leading-relaxed text-cyan-50/80">
+                      {handoff.targetInputChecklist.slice(0, 3).map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}

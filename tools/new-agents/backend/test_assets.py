@@ -778,10 +778,108 @@ def _serialize_collection(collection: AgentTestAssetCollection) -> dict:
         "testPoints": test_points,
         "coverageTrace": test_points,
         "coverageSummary": build_coverage_summary(test_cases, test_points),
+        "qualitySummary": _build_quality_summary(issues, test_points, risk_matrix),
         "assetIssues": issues,
         "riskMatrix": risk_matrix,
         "intentTesterDrafts": build_intent_tester_drafts(test_cases),
         "intentTesterMappings": intent_tester_mappings,
+    }
+
+
+def _build_quality_summary(
+    issues: list[dict],
+    test_points: list[dict],
+    risk_matrix: list[dict],
+) -> dict:
+    pending_issue_count = sum(1 for issue in issues if issue["status"] == "pending")
+    confirmed_issue_count = sum(1 for issue in issues if issue["status"] == "confirmed")
+    ignored_issue_count = sum(1 for issue in issues if issue["status"] == "ignored")
+    uncovered_test_point_count = sum(
+        1 for test_point in test_points if test_point["status"] == "未覆盖"
+    )
+    partial_test_point_count = sum(
+        1 for test_point in test_points if test_point["status"] == "部分覆盖"
+    )
+    open_risk_count = sum(1 for risk in risk_matrix if risk["status"] == "open")
+    mitigating_risk_count = sum(
+        1 for risk in risk_matrix if risk["status"] == "mitigating"
+    )
+    accepted_risk_count = sum(
+        1 for risk in risk_matrix if risk["status"] == "accepted"
+    )
+    closed_risk_count = sum(1 for risk in risk_matrix if risk["status"] == "closed")
+
+    gates = [
+        {
+            "id": "asset-issues",
+            "status": (
+                "fail"
+                if pending_issue_count > 0
+                else "warn"
+                if confirmed_issue_count > 0
+                else "pass"
+            ),
+            "title": "资产问题",
+            "detail": (
+                f"{pending_issue_count} 个待处理，"
+                f"{confirmed_issue_count} 个已确认，"
+                f"{ignored_issue_count} 个已忽略"
+            ),
+        },
+        {
+            "id": "test-point-coverage",
+            "status": (
+                "fail"
+                if uncovered_test_point_count > 0
+                else "warn"
+                if partial_test_point_count > 0
+                else "pass"
+            ),
+            "title": "测试点覆盖",
+            "detail": (
+                f"{uncovered_test_point_count} 个未覆盖，"
+                f"{partial_test_point_count} 个部分覆盖"
+            ),
+        },
+        {
+            "id": "risk-lifecycle",
+            "status": (
+                "warn"
+                if open_risk_count > 0 or mitigating_risk_count > 0
+                else "pass"
+            ),
+            "title": "风险处置",
+            "detail": (
+                f"{open_risk_count} 个待处置，"
+                f"{mitigating_risk_count} 个缓解中，"
+                f"{accepted_risk_count} 个已接受，"
+                f"{closed_risk_count} 个已关闭"
+            ),
+        },
+    ]
+    if any(gate["status"] == "fail" for gate in gates):
+        status = "blocked"
+        label = "存在阻断"
+    elif any(gate["status"] == "warn" for gate in gates):
+        status = "attention"
+        label = "需要关注"
+    else:
+        status = "ready"
+        label = "可交付"
+
+    return {
+        "status": status,
+        "label": label,
+        "pendingIssueCount": pending_issue_count,
+        "confirmedIssueCount": confirmed_issue_count,
+        "ignoredIssueCount": ignored_issue_count,
+        "uncoveredTestPointCount": uncovered_test_point_count,
+        "partialTestPointCount": partial_test_point_count,
+        "openRiskCount": open_risk_count,
+        "mitigatingRiskCount": mitigating_risk_count,
+        "acceptedRiskCount": accepted_risk_count,
+        "closedRiskCount": closed_risk_count,
+        "gates": gates,
     }
 
 

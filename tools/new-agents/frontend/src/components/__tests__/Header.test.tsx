@@ -61,6 +61,7 @@ import { materializeRunTestAssets, updateTestAssetCase, updateTestAssetIssueStat
 import { fetchObservabilitySummary } from '../../services/observabilityService';
 import { importIntentTesterDraft } from '../../services/intentTesterImportService';
 import { checkDefaultLlmConfig } from '../../services/configService';
+import { withTestAssetQualitySummary } from '../../core/testAssetQuality';
 import type { ObservabilitySummary, TestAssetCollection } from '../../store';
 
 const TEST_ASSET_COLLECTION: TestAssetCollection = {
@@ -77,6 +78,39 @@ const TEST_ASSET_COLLECTION: TestAssetCollection = {
         uncoveredTestPoints: 0,
         coverageRate: 100,
         byPriority: [],
+    },
+    qualitySummary: {
+        status: 'ready',
+        label: '可交付',
+        pendingIssueCount: 0,
+        confirmedIssueCount: 0,
+        ignoredIssueCount: 0,
+        uncoveredTestPointCount: 0,
+        partialTestPointCount: 0,
+        openRiskCount: 0,
+        mitigatingRiskCount: 0,
+        acceptedRiskCount: 0,
+        closedRiskCount: 0,
+        gates: [
+            {
+                id: 'asset-issues',
+                status: 'pass',
+                title: '资产问题',
+                detail: '0 个待处理，0 个已确认，0 个已忽略',
+            },
+            {
+                id: 'test-point-coverage',
+                status: 'pass',
+                title: '测试点覆盖',
+                detail: '0 个未覆盖，0 个部分覆盖',
+            },
+            {
+                id: 'risk-lifecycle',
+                status: 'pass',
+                title: '风险处置',
+                detail: '0 个待处置，0 个缓解中，0 个已接受，0 个已关闭',
+            },
+        ],
     },
     testCases: [
         {
@@ -161,7 +195,7 @@ const TEST_ASSET_COLLECTION_WITH_TWO_DRAFTS: TestAssetCollection = {
     ],
 };
 
-const TEST_ASSET_COLLECTION_WITH_ISSUES: TestAssetCollection = {
+const TEST_ASSET_COLLECTION_WITH_ISSUES: TestAssetCollection = withTestAssetQualitySummary({
     ...TEST_ASSET_COLLECTION,
     assetIssues: [
         {
@@ -173,9 +207,9 @@ const TEST_ASSET_COLLECTION_WITH_ISSUES: TestAssetCollection = {
             status: 'pending',
         },
     ],
-};
+});
 
-const TEST_ASSET_COLLECTION_WITH_RISK_MATRIX: TestAssetCollection = {
+const TEST_ASSET_COLLECTION_WITH_RISK_MATRIX: TestAssetCollection = withTestAssetQualitySummary({
     ...TEST_ASSET_COLLECTION,
     riskMatrix: [
         {
@@ -192,9 +226,9 @@ const TEST_ASSET_COLLECTION_WITH_RISK_MATRIX: TestAssetCollection = {
             note: '',
         },
     ],
-};
+});
 
-const TEST_ASSET_COLLECTION_WITH_TEST_POINTS: TestAssetCollection = {
+const TEST_ASSET_COLLECTION_WITH_TEST_POINTS: TestAssetCollection = withTestAssetQualitySummary({
     ...TEST_ASSET_COLLECTION,
     testPoints: [
         {
@@ -205,7 +239,7 @@ const TEST_ASSET_COLLECTION_WITH_TEST_POINTS: TestAssetCollection = {
             status: '未覆盖',
         },
     ],
-};
+});
 
 const OBSERVABILITY_SUMMARY: ObservabilitySummary = {
     contractRetryReasons: { STRUCTURED_OUTPUT_CONTRACT_RETRY: 2 },
@@ -927,7 +961,10 @@ describe('Header Component', () => {
         renderHeader();
         clickMoreAction(/测试资产/);
 
-        expect(await screen.findByText('资产问题')).toBeTruthy();
+        expect((await screen.findAllByText('资产问题')).length).toBeGreaterThan(0);
+        expect(screen.getByText('质量状态')).toBeTruthy();
+        expect(screen.getByText('存在阻断')).toBeTruthy();
+        expect(screen.getByText('1 个待处理，0 个已确认，0 个已忽略')).toBeTruthy();
         expect(screen.getByText('1 个问题 · 1 待处理')).toBeTruthy();
         expect(screen.getByText('覆盖追溯引用了不存在的测试用例 TC-999')).toBeTruthy();
         expect(screen.getByText('TC-999')).toBeTruthy();
@@ -944,7 +981,7 @@ describe('Header Component', () => {
         renderHeader();
         clickMoreAction(/测试资产/);
 
-        expect(await screen.findByText('资产问题')).toBeTruthy();
+        expect((await screen.findAllByText('资产问题')).length).toBeGreaterThan(0);
         expect(screen.getByText('1 个问题 · 1 待处理')).toBeTruthy();
         expect(screen.getByText('待处理')).toBeTruthy();
 
@@ -955,6 +992,7 @@ describe('Header Component', () => {
         });
         expect(screen.getByText('1 个问题 · 0 待处理')).toBeTruthy();
         expect(screen.getByText('已确认')).toBeTruthy();
+        expect(screen.getByText('0 个待处理，1 个已确认，0 个已忽略')).toBeTruthy();
 
         vi.mocked(updateTestAssetIssueStatus).mockResolvedValueOnce({
             ...TEST_ASSET_COLLECTION_WITH_ISSUES.assetIssues[0],
@@ -967,6 +1005,7 @@ describe('Header Component', () => {
         });
         expect(screen.getByText('忽略')).toBeTruthy();
         expect(screen.getByText('1 个问题 · 0 待处理')).toBeTruthy();
+        expect(screen.getByText('0 个待处理，0 个已确认，1 个已忽略')).toBeTruthy();
     });
 
     it('shows Lisa test asset risk matrix', async () => {
@@ -997,7 +1036,7 @@ describe('Header Component', () => {
         renderHeader();
         clickMoreAction(/测试资产/);
 
-        expect(await screen.findByText('测试点覆盖')).toBeTruthy();
+        expect((await screen.findAllByText('测试点覆盖')).length).toBeGreaterThan(0);
         expect(screen.getByText('支付异常链路')).toBeTruthy();
         expect(screen.getByText('未覆盖')).toBeTruthy();
         expect(screen.getAllByText('P1').length).toBeGreaterThan(0);

@@ -240,6 +240,8 @@ describe('ArtifactPane Component', () => {
         expect(screen.getByText(/质量分/)).toBeTruthy();
         expect(screen.getByText(/补齐必需章节/)).toBeTruthy();
         expect(screen.getByText(/修复当前阶段可视化渲染问题/)).toBeTruthy();
+        expect(screen.getByText('缺失信息清单')).toBeTruthy();
+        expect(screen.getByText(/缺少标题/)).toBeTruthy();
     });
 
     it('resolves unresolved comments directly from the artifact review panel', () => {
