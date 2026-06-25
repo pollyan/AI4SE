@@ -153,6 +153,22 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('不要只用一两句模板化提示');
     });
 
+    it('keeps chat readable without forcing fixed bullet or label templates', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            currentArtifact: '# 需求分析文档\n已有内容',
+        });
+
+        expect(prompt).toContain('按内容复杂度');
+        expect(prompt).toContain('简单同步可以使用自然短段落');
+        expect(prompt).toContain('不要要求每轮固定 bullet 数量');
+        expect(prompt).toContain('不要要求每条以固定标签开头');
+        expect(prompt).not.toContain('每次必须输出固定数量 bullet');
+        expect(prompt).not.toContain('每条必须以固定标签开头');
+    });
+
     it('keeps next-stage confirmation separate from next-stage artifact generation', () => {
         const prompt = buildSystemPrompt({
             agentId: 'lisa',

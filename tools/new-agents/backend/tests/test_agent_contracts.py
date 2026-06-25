@@ -1,5 +1,6 @@
 import pytest
 
+from agent_runtime import build_structured_output_instruction
 from agent_contracts import (
     AgentTurnOutput,
     ArtifactUpdate,
@@ -152,8 +153,21 @@ def test_artifact_contract_prompt_requires_left_right_chat_bridge():
     assert "适度使用 bullet" in prompt
     assert "少量重点加粗" in prompt
     assert "固定栏目" in prompt
+    assert "固定字段模板" in prompt
+    assert "固定 bullet 数量" in prompt
     assert "本轮总结" not in prompt
     assert "右侧产出物" in prompt
+
+
+def test_structured_output_instruction_avoids_fixed_chat_length_template():
+    instruction = build_structured_output_instruction("TEST_DESIGN", "CLARIFY")
+
+    assert "自然的工作对话" in instruction
+    assert "简单同步可以使用自然短段落" in instruction
+    assert "信息较多、存在风险或需要用户确认时" in instruction
+    assert "不要每轮套用固定 bullet 数量" in instruction
+    assert "固定标签" in instruction
+    assert "2 到 4 个短段落或短列表" not in instruction
 
 
 def test_artifact_contract_prompt_keeps_stage_transition_artifact_current():
