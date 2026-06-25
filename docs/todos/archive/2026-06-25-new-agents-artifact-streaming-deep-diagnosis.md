@@ -1,7 +1,8 @@
 # New Agents 右侧产物流式渲染缺失深度诊断 Todo
 
-状态：已完成确定性修复，待本地真实模型 smoke 复核
+状态：已完成
 创建日期：2026-06-25
+完成日期：2026-06-25
 相关模块：`tools/new-agents/`
 
 ## 背景
@@ -53,6 +54,50 @@
 - 本轮没有调用外部真实模型 provider，也没有捕获用户现场的完整 SSE payload；本地真实模型 smoke 需要在部署后由具备 provider 配置的环境复核。
 - 本轮只把段落级 partial renderer 落到 `TEST_DESIGN/STRATEGY` 主痛点；其他 artifact_data 阶段仍会沿用“完整对象闭合后生成 artifact delta”的旧行为，后续应按用户故事逐步扩展。
 - 如果真实 provider 输出顺序不按 prompt 中的字段顺序，局部 renderer 会等待已知章节字段闭合；最终完整输出仍可收敛，但中途段落级帧数可能减少。
+
+## 2026-06-25 本地真实模型 smoke 复核
+
+目标模式后续轮次已补齐部署后真实 SSE smoke，不再只依赖 mock E2E、runtime 直连测试或确定性单元测试。
+
+### 部署与健康检查
+
+- `./scripts/dev/deploy-dev.sh`：通过。脚本完成前端构建、proxy package 生成、Docker 镜像重建、Nginx 重启和部署后健康检查。
+- 健康检查覆盖：容器状态、PostgreSQL、Common Frontend 页面、Intent Tester 页面和核心 API、New Agents Backend health。
+- New Agents URL：`http://localhost/new-agents`
+- New Agents API health：`http://localhost/new-agents/api/health` 返回 `{"service":"new-agents-backend","status":"ok"}`。
+
+### SSE 复核结果
+
+1. `TEST_DESIGN/CLARIFY`
+   - runId：`2c150676-7897-44bb-8412-32709651999b`
+   - SSE：HTTP 200，`text/event-stream`，无 `error` event。
+   - chat delta 在约 9.1s 开始连续出现。
+   - final 前 artifact delta：2 个，长度均为 4288。
+   - 结论：CLARIFY 真实 provider 和 SSE 通路可用，但该阶段本轮没有证明段落级递增长度；该阶段不是本轮 partial renderer 主目标。
+
+2. `TEST_DESIGN/STRATEGY`，复用上一步 runId
+   - SSE：HTTP 200，`text/event-stream`，无 `error` event。
+   - final 前 artifact delta：9 个。
+   - artifact 长度序列：`330 -> 843 -> 3243 -> 4028 -> 4807 -> 5823 -> 6060 -> 6183 -> 6183`。
+   - 章节逐步出现：先出现 `# 测试策略蓝图` / `## 1. 策略摘要`，随后出现 `## 2. 质量目标`，再出现 `## 3. 风险识别与 FMEA` 等后续章节。
+   - final artifact 长度：6183。
+
+3. 独立 `TEST_DESIGN/STRATEGY`
+   - runId：`ec9abf49-702e-42cd-a2de-debfe15095fc`
+   - SSE：HTTP 200，`text/event-stream`，无 `error` event。
+   - final 前 artifact delta：9 个。
+   - artifact 长度序列：`197 -> 644 -> 2857 -> 3375 -> 4082 -> 4833 -> 5012 -> 5117 -> 5117`。
+   - final artifact 长度：5117。
+
+### 结论
+
+当前本地部署和默认真实 provider 配置下，`TEST_DESIGN/STRATEGY` 已表现为段落级 / 章节级真实增量：final `agent_turn` 前存在多次 `agent_delta.output.artifact_update.replace.markdown`，且 Markdown 长度多次递增。该结果满足本 todo 对“不是最终一次性替换，也不是逐字打字机效果”的核心验收要求。
+
+### 仍需注意
+
+- 本轮没有用浏览器录屏逐帧记录 UI，但 SSE 层、run persistence 和最终 snapshot 已证明右侧产物数据在 final 前多次可用；若用户视觉层仍感知不到递增，应新建前端 UI/浏览器层 todo，聚焦 React batch、滚动位置、ArtifactPane 渲染开销或占位提示。
+- CLARIFY 阶段仍接近完整对象闭合后才给 artifact delta；本轮主修复和复核对象是 `TEST_DESIGN/STRATEGY`。其他 artifact_data 阶段如需段落级增量，应按独立用户故事扩展 partial renderer。
+- 如果未来 provider 不支持有效 streaming 或输出字段顺序异常，可能减少中途 delta 数量；这种情况应记录 provider/model/base_url 和原始 SSE。
 
 ## 目标能力包
 
@@ -109,7 +154,7 @@
 - 不用假进度替代真实数据增量。
 - 不在缺少端到端证据时只改 prompt 或 parser 后归档。
 
-## 待补充证据
+## 复发时必须补充的证据
 
 - 当前本地部署的具体模型/provider。
 - 复现输入和工作流阶段。

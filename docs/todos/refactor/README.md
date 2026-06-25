@@ -19,8 +19,7 @@
 
 ## 当前入口
 
-- `2026-06-25-new-agents-test-strategy-artifact-format-regression.md`：测试用例生成第二阶段“测试策略制定”产出物格式错误回归 Bug。
-- `2026-06-25-new-agents-artifact-streaming-deep-diagnosis.md`：右侧产出物真实流式渲染缺失深度诊断 P0。
+暂无活跃 refactor todo。
 
 New Agents 智能体框架深化阶段 1-2 已升格为计划路线图：`../../plans/2026-06-25-new-agents-agent-framework-phase1-phase2.md`。
 
@@ -46,6 +45,8 @@ New Agents 智能体框架深化阶段 1-2 已升格为计划路线图：`../../
 - `../archive/2026-06-24-new-agents-stage-action-choice-persistence.md`：阶段推进确认历史保留修复记录。
 - `../archive/2026-06-25-new-agents-artifact-document-info-density.md`：产出物文档 / 评审元信息后置附录优化记录。
 - `../archive/2026-06-25-new-agents-error-message-placement-ux.md`：错误信息低占用时间线展示修复记录。
+- `../archive/2026-06-25-new-agents-test-strategy-artifact-format-regression.md`：测试策略阶段产物格式错误当前版本真实部署复核记录。
+- `../archive/2026-06-25-new-agents-artifact-streaming-deep-diagnosis.md`：右侧产物段落级流式渲染真实部署复核记录。
 - `../archive/2026-06-24-new-agents-test-strategy-artifact-format-streaming-bug.md`：测试策略阶段产物格式与结构化流式契约收敛记录。
 - `../archive/2026-06-24-new-agents-stage-transition-readiness-gate.md`：阶段推进成熟度门禁第一切片实现记录。
 
