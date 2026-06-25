@@ -1,4 +1,5 @@
 import type {
+    ArtifactSectionPatch,
     ArtifactVersion,
     Attachment,
     Message,
@@ -12,6 +13,7 @@ export type AgentStreamChunk = {
     action: string;
     hasArtifactUpdate: boolean;
     artifactTruncated?: boolean;
+    artifactPatch?: ArtifactSectionPatch;
 };
 
 export type AgentStreamContext = {
@@ -24,6 +26,7 @@ export type AgentStreamContext = {
 export type AgentArtifactUpdateDecision = {
     stageId: string;
     content: string;
+    patch?: ArtifactSectionPatch;
 };
 
 export type AgentStreamDecision = {
@@ -87,6 +90,7 @@ export function reduceAgentStreamChunk(
                 ? {
                     stageId: context.currentStageId,
                     content: chunk.newArtifact,
+                    ...(chunk.artifactPatch ? { patch: chunk.artifactPatch } : {}),
                 }
                 : undefined,
             pendingStageTransition: {
@@ -105,6 +109,7 @@ export function reduceAgentStreamChunk(
             ? {
                 stageId: context.currentStageId,
                 content: chunk.newArtifact,
+                ...(chunk.artifactPatch ? { patch: chunk.artifactPatch } : {}),
             }
             : undefined,
         hasTransitioned: context.hasTransitioned,

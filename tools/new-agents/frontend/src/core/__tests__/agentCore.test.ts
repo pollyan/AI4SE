@@ -100,6 +100,37 @@ describe('reduceAgentStreamChunk', () => {
             shouldStopStream: false,
         });
     });
+
+    it('preserves artifact patches on artifact update decisions', () => {
+        const patch = {
+            operation: 'replace' as const,
+            sectionAnchor: 'h2:范围:1',
+            replacementMarkdown: '## 范围\n\n新范围',
+            baseContent: '# 文档\n\n## 范围\n\n旧范围',
+        };
+
+        const decision = reduceAgentStreamChunk(
+            {
+                chatResponse: '已局部更新。',
+                newArtifact: '# 文档\n\n## 范围\n\n新范围',
+                action: '',
+                hasArtifactUpdate: true,
+                artifactPatch: patch,
+            },
+            {
+                stageIndex: 0,
+                stageCount: 4,
+                currentStageId: 'CLARIFY',
+                hasTransitioned: false,
+            }
+        );
+
+        expect(decision.artifactUpdate).toEqual({
+            stageId: 'CLARIFY',
+            content: '# 文档\n\n## 范围\n\n新范围',
+            patch,
+        });
+    });
 });
 
 describe('planRetryFromHistory', () => {

@@ -6,6 +6,7 @@ import {
     planRetryFromHistory,
     reduceAgentStreamChunk,
 } from '../core/agentCore';
+import { applyArtifactSectionPatch as previewArtifactSectionPatch } from '../core/artifactSections';
 
 const STAGE_CONTINUATION_PROMPT = '请继续生成当前阶段产出物';
 let messageIdSequence = 0;
@@ -473,13 +474,26 @@ export function useChatService() {
                         decision.artifactUpdate.content,
                         currentStageLocks,
                     );
-                    latestState.setStageArtifact(
-                        decision.artifactUpdate.stageId,
-                        protectedArtifactContent
+                    const patch = decision.artifactUpdate.patch;
+                    const patchPreview = patch && currentStageLocks.length === 0
+                        ? previewArtifactSectionPatch(latestState.artifactContent, patch)
+                        : null;
+                    const shouldApplyPatch = Boolean(
+                        patchPreview?.applied
+                        && patchPreview.content === protectedArtifactContent
                     );
-                    latestState.setArtifactContent(
-                        protectedArtifactContent
-                    );
+                    const didApplyPatch = shouldApplyPatch && patch
+                        ? latestState.applyArtifactSectionPatch(patch).applied
+                        : false;
+                    if (!didApplyPatch) {
+                        latestState.setStageArtifact(
+                            decision.artifactUpdate.stageId,
+                            protectedArtifactContent
+                        );
+                        latestState.setArtifactContent(
+                            protectedArtifactContent
+                        );
+                    }
                     if (!decision.artifactTruncated) {
                         latestState.setArtifactTruncated(false);
                     }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useStore, type Attachment, type ChatState } from '../../store';
+import { useStore, type ArtifactSectionPatch, type Attachment, type ChatState } from '../../store';
 import agentRuntimeEventFixtures from '../../../../contract-fixtures/agent-runtime-events.json';
 
 type TestStreamChunk = {
@@ -8,6 +8,7 @@ type TestStreamChunk = {
     action: string;
     hasArtifactUpdate: boolean;
     artifactTruncated?: boolean;
+    artifactPatch?: ArtifactSectionPatch;
 };
 
 // ------------------------------------------------------------------
@@ -109,6 +110,7 @@ type AgentTestOutput = {
         target_stage_id: string;
     };
     warnings: string[];
+    artifact_patch?: ArtifactSectionPatch | null;
 };
 
 function createAgentTurnEvent(output: AgentTestOutput): string {
@@ -268,6 +270,66 @@ describe('llm.ts', () => {
                 action: '',
                 hasArtifactUpdate: true,
             });
+        });
+
+        it('passes artifact_patch through the final structured runtime chunk with full markdown fallback', async () => {
+            const base = '# 需求分析文档\n\n## 范围\n\n旧范围';
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: base,
+                stageArtifacts: { CLARIFY: base },
+            });
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentTurnEvent({
+                        chat: '已局部更新需求分析文档。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: '# 需求分析文档\n\n## 范围\n\n新范围',
+                        },
+                        artifact_patch: {
+                            operation: 'replace',
+                            sectionAnchor: 'h2:范围:1',
+                            replacementMarkdown: '## 范围\n\n新范围',
+                            baseContent: base,
+                        },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(generateResponseStream('更新范围'));
+
+            expect(results.at(-1)).toEqual({
+                chatResponse: '已局部更新需求分析文档。',
+                newArtifact: '# 需求分析文档\n\n## 范围\n\n新范围',
+                action: '',
+                hasArtifactUpdate: true,
+                artifactPatch: {
+                    operation: 'replace',
+                    sectionAnchor: 'h2:范围:1',
+                    replacementMarkdown: '## 范围\n\n新范围',
+                    baseContent: base,
+                },
+            });
+        });
+
+        it('rejects malformed artifact_patch payloads in structured runtime events', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"ok","artifact_update":{"type":"replace","markdown":"# 文档"},"artifact_patch":{"operation":"replace","sectionAnchor":"","replacementMarkdown":"## 空"},"stage_action":null,"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(collectStream(generateResponseStream('hi')))
+                .rejects
+                .toThrow('结构化智能体 SSE 事件格式错误');
         });
 
         it('结构化 Agent Runtime warnings 包含 artifact_truncated 时应标记产出物截断', async () => {

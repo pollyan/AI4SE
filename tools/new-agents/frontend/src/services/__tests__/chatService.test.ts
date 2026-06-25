@@ -16,6 +16,7 @@ describe('useChatService', () => {
         useStore.setState({
             chatHistory: [],
             artifactContent: 'initial artifact',
+            artifactChangeIndex: [],
             artifactHistory: [],
             artifactComments: [],
             artifactSectionLocks: [],
@@ -103,6 +104,79 @@ describe('useChatService', () => {
 
         expect(result.current.input).toBe('');
         expect(state.artifactContent).toBe('new artifact content');
+    });
+
+    it('applies matching artifact patches from the stream before falling back to full replacement', async () => {
+        const base = '# 文档\n\n## 范围\n\n旧范围\n\n## 风险\n\n保持不变';
+        useStore.setState({
+            artifactContent: base,
+            stageArtifacts: { CLARIFY: base },
+        });
+        const patch = {
+            operation: 'replace' as const,
+            sectionAnchor: 'h2:范围:1',
+            replacementMarkdown: '## 范围\n\n新范围',
+            baseContent: base,
+        };
+        const patchSpy = vi.spyOn(useStore.getState(), 'applyArtifactSectionPatch');
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            yield {
+                chatResponse: '已局部更新',
+                newArtifact: '# 文档\n\n## 范围\n\n新范围\n\n## 风险\n\n保持不变',
+                action: '',
+                hasArtifactUpdate: true,
+                artifactPatch: patch,
+            };
+        });
+
+        const { result } = renderHook(() => useChatService());
+        act(() => result.current.setInput('更新范围'));
+
+        await act(async () => {
+            await result.current.handleSend();
+        });
+
+        expect(patchSpy).toHaveBeenCalledWith(patch);
+        expect(useStore.getState().artifactContent).toBe('# 文档\n\n## 范围\n\n新范围\n\n## 风险\n\n保持不变');
+        expect(useStore.getState().artifactChangeIndex).toEqual([
+            expect.objectContaining({ anchor: 'h2:范围:1' }),
+        ]);
+        patchSpy.mockRestore();
+    });
+
+    it('falls back to full markdown when artifact patch result does not match the full artifact', async () => {
+        const base = '# 文档\n\n## 范围\n\n旧范围\n\n## 风险\n\n旧风险';
+        const fullFallback = '# 文档\n\n## 范围\n\n旧范围\n\n## 风险\n\n完整替换结果';
+        useStore.setState({
+            artifactContent: base,
+            stageArtifacts: { CLARIFY: base },
+        });
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            yield {
+                chatResponse: '已更新',
+                newArtifact: fullFallback,
+                action: '',
+                hasArtifactUpdate: true,
+                artifactPatch: {
+                    operation: 'replace',
+                    sectionAnchor: 'h2:范围:1',
+                    replacementMarkdown: '## 范围\n\n局部结果',
+                    baseContent: base,
+                },
+            };
+        });
+
+        const { result } = renderHook(() => useChatService());
+        act(() => result.current.setInput('更新范围'));
+
+        await act(async () => {
+            await result.current.handleSend();
+        });
+
+        expect(useStore.getState().artifactContent).toBe(fullFallback);
+        expect(useStore.getState().artifactChangeIndex).toEqual([
+            expect.objectContaining({ anchor: 'h2:风险:1' }),
+        ]);
     });
 
     it('should update assistant message and artifact as soon as the first stream chunk arrives', async () => {

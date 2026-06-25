@@ -1,6 +1,6 @@
 import { buildSystemPrompt } from './prompts/buildSystemPrompt';
 import { sanitizeMermaidCode } from './utils/mermaidSanitizer';
-import { useStore, WORKFLOWS, WorkflowType, Attachment, Message } from '../store';
+import { useStore, WORKFLOWS, WorkflowType, Attachment, Message, type ArtifactSectionPatch } from '../store';
 
 type StreamChunk = {
   chatResponse: string;
@@ -8,6 +8,7 @@ type StreamChunk = {
   action: string;
   hasArtifactUpdate: boolean;
   artifactTruncated?: boolean;
+  artifactPatch?: ArtifactSectionPatch;
 };
 
 type AgentArtifactUpdate = {
@@ -23,6 +24,7 @@ type AgentStageAction = {
 type AgentTurnOutput = {
   chat: string;
   artifact_update: AgentArtifactUpdate;
+  artifact_patch?: ArtifactSectionPatch | null;
   stage_action?: AgentStageAction | null;
   warnings?: string[];
 };
@@ -30,6 +32,7 @@ type AgentTurnOutput = {
 type AgentTurnDeltaOutput = {
   chat?: string | null;
   artifact_update?: AgentArtifactUpdate | null;
+  artifact_patch?: ArtifactSectionPatch | null;
   stage_action?: AgentStageAction | null;
   warnings?: string[];
 };
@@ -77,6 +80,35 @@ const TEXT_ATTACHMENT_EXTENSIONS = [
 const isAttachmentRecord = (attachment: unknown): attachment is AttachmentLike => (
   typeof attachment === 'object' && attachment !== null
 );
+
+const normalizeArtifactPatch = (value: unknown): ArtifactSectionPatch | null => {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'object') {
+    throw new Error('结构化智能体 SSE 事件格式错误');
+  }
+
+  const patch = value as Partial<ArtifactSectionPatch>;
+  if (
+    patch.operation !== 'replace'
+    || typeof patch.sectionAnchor !== 'string'
+    || !patch.sectionAnchor.trim()
+    || typeof patch.replacementMarkdown !== 'string'
+    || !patch.replacementMarkdown.trim()
+    || (
+      patch.baseContent !== undefined
+      && typeof patch.baseContent !== 'string'
+    )
+  ) {
+    throw new Error('结构化智能体 SSE 事件格式错误');
+  }
+
+  return {
+    operation: 'replace',
+    sectionAnchor: patch.sectionAnchor,
+    replacementMarkdown: patch.replacementMarkdown,
+    ...(patch.baseContent !== undefined ? { baseContent: patch.baseContent } : {}),
+  };
+};
 
 const normalizeAttachmentList = (attachments: unknown): AttachmentListState => {
   if (attachments === undefined || attachments === null) {
@@ -350,6 +382,10 @@ const parseAgentRuntimeEvent = (payload: string): AgentRuntimeEvent | null => {
         throw new Error('结构化智能体 SSE 事件格式错误');
       }
     }
+    const artifactPatch = normalizeArtifactPatch(output.artifact_patch);
+    if (artifactPatch && output.artifact_update?.type !== 'replace') {
+      throw new Error('结构化智能体 SSE 事件格式错误');
+    }
     if (
       output.warnings !== undefined
       && (
@@ -415,6 +451,10 @@ const parseAgentRuntimeEvent = (payload: string): AgentRuntimeEvent | null => {
         || output.artifact_update.markdown.trim()
       )
     ) {
+      throw new Error('结构化智能体 SSE 事件格式错误');
+    }
+    const artifactPatch = normalizeArtifactPatch(output.artifact_patch);
+    if (artifactPatch && output.artifact_update.type !== 'replace') {
       throw new Error('结构化智能体 SSE 事件格式错误');
     }
     if (
@@ -681,6 +721,7 @@ const mapAgentTurnToStreamChunks = async function* (
         : '',
       hasArtifactUpdate,
       ...(artifactTruncated ? { artifactTruncated: true } : {}),
+      ...(isFinalChunk && output.artifact_patch ? { artifactPatch: output.artifact_patch } : {}),
     };
 
     if (!isFinalChunk) {
@@ -717,6 +758,7 @@ const mapAgentTurnToFinalChunk = async function* (
     action: getAgentTurnAction(output, expectedNextStageId),
     hasArtifactUpdate,
     ...(artifactTruncated ? { artifactTruncated: true } : {}),
+    ...(output.artifact_patch ? { artifactPatch: output.artifact_patch } : {}),
   };
 };
 
@@ -761,6 +803,7 @@ const mapAgentTurnToArtifactRevealChunks = async function* (
         : '',
       hasArtifactUpdate,
       ...(artifactTruncated ? { artifactTruncated: true } : {}),
+      ...(isFinalChunk && output.artifact_patch ? { artifactPatch: output.artifact_patch } : {}),
     };
 
     if (!isFinalChunk) {

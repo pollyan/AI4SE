@@ -92,3 +92,17 @@
   - `cd tools/new-agents/frontend && npm run lint` 通过。
   - `cd tools/new-agents/frontend && npm run test` 通过，44 个测试文件、685 个测试通过；ArtifactPane 既有 act warning 仍存在。
   - `./scripts/test/test-local.sh all` 未在本切片重复执行；同一目标模式轮次中上一切片提交前已执行并确认失败点为 Intent Tester proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 New Agents Browser E2E Chromium `bootstrap_check_in ... Permission denied (1100)`，当前切片已用 owning package test/lint 覆盖变更范围。
+
+## 2026-06-25 进展：前端 typed SSE patch 流消费
+
+- 已扩展前端 typed Agent Runtime SSE 解析：`agent_turn` / `agent_delta` 可携带可选 `artifact_patch`，parser 会校验 patch 结构，并要求 patch 与完整 `artifact_update.markdown` fallback 同时存在。
+- 已让 `StreamChunk`、`AgentStreamChunk` 和 `AgentArtifactUpdateDecision` 传递 `artifactPatch` / `patch`，保持共享 `/api/agent/runs/stream` typed Agent Runtime，不新增 workflow 或 agent 专属通道。
+- 已在 `chatService.ts` 消费 patch：无章节锁且 patch 结果与完整 markdown 一致时调用 store 局部 patch action；patch 失败、结果不一致或存在章节锁时，显式降级为完整 markdown 替换。
+- 本切片仍未新增后端 `artifact_patch` / `changed_sections` 生成，也未拆分 `ReactMarkdown` 为 memoized section rendering；这些仍属于本 todo 后续能力包。
+- 验证：
+  - `cd tools/new-agents/frontend && npm run test -- src/services/__tests__/chatService.test.ts -t "artifact patches|artifact patch result"` 先红后绿，最终 2 个相关测试通过。
+  - `cd tools/new-agents/frontend && npm run test -- src/core/__tests__/llm.test.ts src/core/__tests__/agentCore.test.ts src/services/__tests__/chatService.test.ts -t "artifact_patch|artifact patches|artifact patch result"` 通过，3 个测试文件内 5 个相关测试通过。
+  - `cd tools/new-agents/frontend && npm run test -- src/core/__tests__/llm.test.ts src/core/__tests__/agentCore.test.ts src/services/__tests__/chatService.test.ts` 通过，3 个测试文件、155 个测试通过。
+  - `cd tools/new-agents/frontend && npm run lint` 通过。
+  - `cd tools/new-agents/frontend && npm run test` 通过，44 个测试文件、690 个测试通过；ArtifactPane 既有 act warning 仍存在。
+  - `./scripts/test/test-local.sh all` 未在本切片重复执行；同一目标模式轮次中上一切片提交前已执行并确认失败点为 Intent Tester proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 New Agents Browser E2E Chromium `bootstrap_check_in ... Permission denied (1100)`，当前切片已用 owning package test/lint 覆盖变更范围。
