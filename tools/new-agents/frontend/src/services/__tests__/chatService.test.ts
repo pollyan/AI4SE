@@ -639,7 +639,7 @@ describe('useChatService', () => {
         expect(confirmedState.stageArtifacts['CLARIFY']).toBe('# 需求分析文档\n最终版');
     });
 
-    it('should confirm pending stage transition through the service and continue generation', async () => {
+    it('should confirm pending stage transition through the service and continue generation with a stable prompt', async () => {
         vi.mocked(generateResponseStream).mockImplementation(async function* () {
             yield {
                 chatResponse: '继续生成策略内容',
@@ -677,7 +677,7 @@ describe('useChatService', () => {
             }),
         ]);
         expect(generateResponseStream).toHaveBeenCalledWith(
-            '已确认进入策略制定',
+            '请继续生成当前阶段产出物',
             [],
             expect.any(AbortSignal)
         );
@@ -929,7 +929,7 @@ describe('useChatService', () => {
         });
 
         expect(generateResponseStream).toHaveBeenCalledWith(
-            '已确认进入策略制定',
+            '请继续生成当前阶段产出物',
             [],
             expect.any(AbortSignal)
         );

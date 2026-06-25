@@ -2371,10 +2371,14 @@ def render_partial_agent_turn_from_artifact_data(
 ) -> AgentTurnOutput | None:
     if "artifact_data" not in payload:
         return None
-    if (workflow_id, current_stage_id) != ("TEST_DESIGN", "STRATEGY"):
+    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
+        markdown = render_partial_test_design_clarify_markdown(
+            payload["artifact_data"]
+        )
+    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
+        markdown = render_partial_test_design_strategy_markdown(payload["artifact_data"])
+    else:
         return None
-
-    markdown = render_partial_test_design_strategy_markdown(payload["artifact_data"])
     if markdown is None:
         return None
     return AgentTurnOutput.model_validate(
@@ -2398,6 +2402,92 @@ def _validate_partial_list(value: Any, model_type: type[StrictArtifactDataModel]
 
 def _join_partial_sections(sections: list[str]) -> str | None:
     return "\n\n".join(sections) if len(sections) > 1 else None
+
+
+def render_partial_test_design_clarify_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "document_info" not in data:
+        return None
+    try:
+        document_info = DocumentInfo.model_validate(data["document_info"])
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = ["# 需求分析文档"]
+    try:
+        if "requirement_facts" not in data:
+            return None
+        sections.append(
+            _render_requirement_facts(
+                _validate_partial_list(data["requirement_facts"], RequirementFact)
+            )
+        )
+
+        if "system_boundaries" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_system_boundaries(
+                _validate_partial_list(data["system_boundaries"], SystemBoundary)
+            )
+        )
+
+        if "business_rules" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_business_rules(
+                _validate_partial_list(data["business_rules"], BusinessRule)
+            )
+        )
+
+        if "flow_links" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_flow_links(
+                _validate_partial_list(data["flow_links"], FlowLink)
+            )
+        )
+
+        if "clarification_questions" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_clarification_questions(
+                _validate_partial_list(
+                    data["clarification_questions"],
+                    ClarificationQuestion,
+                )
+            )
+        )
+
+        if "quality_requirements" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_quality_requirements(
+                _validate_partial_list(
+                    data["quality_requirements"],
+                    QualityRequirement,
+                )
+            )
+        )
+
+        if "downstream_inputs" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_downstream_inputs(
+                _validate_partial_list(data["downstream_inputs"], DownstreamInput)
+            )
+        )
+
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck)
+            )
+        )
+        sections.append(_render_document_info(document_info))
+    except (TypeError, ValueError, ValidationError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
 
 
 def render_partial_test_design_strategy_markdown(data: Any) -> str | None:

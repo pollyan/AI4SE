@@ -594,7 +594,7 @@ export function useChatService() {
         useStore.getState().confirmStageTransition();
         if (useStore.getState().stageIndex !== targetStageIndex) return;
 
-        await handleSend(confirmationMessage, {
+        await handleSend(STAGE_CONTINUATION_PROMPT, {
             appendUserMessage: false,
             useDraftAttachments: false,
         });
