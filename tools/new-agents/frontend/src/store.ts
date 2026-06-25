@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { WORKFLOWS } from './core/workflows';
-import { AgentRunSnapshot, AgentRunSnapshotContextSummary, ArtifactAuditEvent, ArtifactComment, ArtifactSectionLock, ArtifactVisualDiagnosticInput, ChatState as AppState, ArtifactVersion, Message, WorkflowHandoff, WorkflowType } from './core/types';
+import { AgentRunSnapshot, AgentRunSnapshotContextSummary, ArtifactAuditEvent, ArtifactComment, ArtifactSectionLock, ArtifactVisualDiagnosticInput, ChatState as AppState, ArtifactVersion, Message, MessageErrorDiagnostic, WorkflowHandoff, WorkflowType } from './core/types';
 import { getAgentById } from './core/config/agents';
 import { planStageTransitionConfirmation } from './core/agentCore';
 import {
@@ -70,8 +70,41 @@ const sanitizeChatHistory = (chatHistory: unknown): Message[] => {
     if (typeof message.retryable === 'boolean') {
       sanitizedMessage.retryable = message.retryable;
     }
+    const errorDiagnostic = sanitizeMessageErrorDiagnostic(message.errorDiagnostic);
+    if (errorDiagnostic) {
+      sanitizedMessage.errorDiagnostic = errorDiagnostic;
+    }
     return [sanitizedMessage];
   });
+};
+
+const sanitizeMessageErrorDiagnostic = (diagnostic: unknown): MessageErrorDiagnostic | null => {
+  if (!isRecord(diagnostic)) return null;
+  if (!['structured', 'provider', 'generic'].includes(String(diagnostic.kind))) {
+    return null;
+  }
+  if (typeof diagnostic.summary !== 'string' || !diagnostic.summary.trim()) {
+    return null;
+  }
+  if (typeof diagnostic.rawMessage !== 'string' || !diagnostic.rawMessage.trim()) {
+    return null;
+  }
+
+  const sanitized: MessageErrorDiagnostic = {
+    kind: diagnostic.kind as MessageErrorDiagnostic['kind'],
+    summary: diagnostic.summary,
+    rawMessage: diagnostic.rawMessage,
+  };
+  if (typeof diagnostic.reason === 'string' && diagnostic.reason.trim()) {
+    sanitized.reason = diagnostic.reason;
+  }
+  if (typeof diagnostic.action === 'string' && diagnostic.action.trim()) {
+    sanitized.action = diagnostic.action;
+  }
+  if (typeof diagnostic.code === 'string' && diagnostic.code.trim()) {
+    sanitized.code = diagnostic.code;
+  }
+  return sanitized;
 };
 
 const sanitizeArtifactHistory = (artifactHistory: unknown): ArtifactVersion[] => {
@@ -327,13 +360,23 @@ export const useStore = create<AppState>()(
         };
       }),
       addMessage: (msg) => set((state) => ({ chatHistory: [...state.chatHistory, msg] })),
-      updateLastMessage: (content) => set((state) => {
+      updateLastMessage: (content, errorDiagnostic) => set((state) => {
         const lastMessage = state.chatHistory[state.chatHistory.length - 1];
-        if (!lastMessage || lastMessage.content === content) {
+        if (
+          !lastMessage
+          || (
+            lastMessage.content === content
+            && errorDiagnostic === undefined
+          )
+        ) {
           return state;
         }
         const newHistory = [...state.chatHistory];
-        newHistory[newHistory.length - 1] = { ...lastMessage, content };
+        newHistory[newHistory.length - 1] = {
+          ...lastMessage,
+          content,
+          ...(errorDiagnostic ? { errorDiagnostic } : {}),
+        };
         return { chatHistory: newHistory };
       }),
       updateMessage: (id, content) => set((state) => {

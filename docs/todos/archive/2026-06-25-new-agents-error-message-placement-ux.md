@@ -1,7 +1,8 @@
 # New Agents 错误信息展示位置与占用空间 UX Todo
 
-状态：活跃 UX 候选
+状态：已完成
 创建日期：2026-06-25
+完成日期：2026-06-25
 相关模块：`tools/new-agents/`
 
 ## 背景
@@ -50,3 +51,30 @@
 - 不隐藏所有错误细节。
 - 不把错误伪装成成功回复。
 - 不为单个 workflow 或 agent 做专属错误 UI。
+
+## 2026-06-25 处理记录
+
+本轮目标模式将该 UX 候选作为一个完整用户故事完成，覆盖两条此前混在一起的错误展示链路：
+
+1. Agent Runtime / 前端 SSE 失败：`chatService` 不再把原始错误详情写成大段 assistant Markdown，而是写入 `Message.errorDiagnostic` 元数据。对话内容只保留短摘要；`ChatPane` 默认折叠详情，用户点击后可查看 `reason`、`action`、`code` 和 `rawMessage`。
+2. 右侧产物可视化诊断：原先 `currentArtifactVisualDiagnostic` notice 在 `chatHistory.map(...)` 之前渲染，因此总出现在对话区域顶部。本轮将它移动到消息流之后，作为最新诊断反馈展示，并默认折叠详细诊断文本。
+
+同时保留了既有处理动作：
+
+- 结构化输出失败仍可重试本阶段；连续失败时仍提供“补充信息后再试”。
+- provider / 模型配置失败仍可打开模型设置、检测连接、重试本阶段。
+- 停止生成、partial artifact truncation、pending stage transition 行为不变。
+- 旧版本地历史中的 `**Error:**`、`⚠️ **模型配置或供应商异常**`、`⚠️ **结构化输出生成失败**` 等控制反馈仍会被 prompt builder 过滤。
+
+## 已运行验证
+
+- 红测：新增测试先失败于缺少 `Message.errorDiagnostic`、provider 原始错误仍进入 `content`、右侧产物诊断 notice 位于消息顶部、旧错误摘要未被 prompt 过滤。
+- 聚焦前端：`cd tools/new-agents/frontend && npm run test -- src/services/__tests__/chatService.test.ts src/components/__tests__/ChatPane.test.tsx src/__tests__/store.test.ts src/core/__tests__/llm.test.ts`，210 passed。
+- New Agents 前端全量：`cd tools/new-agents/frontend && npm run test`，43 files / 668 tests passed。仍有既有 `ArtifactPane` React `act(...)` warning，退出码为 0。
+- TypeScript / lint：`cd tools/new-agents/frontend && npm run lint`，通过。
+- 全量确定性本地自动化：`NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all`，通过。覆盖 Intent Tester API 294 passed、MidScene Proxy 17 passed、Common Frontend lint/build、New Agents Frontend 668 passed、New Agents Backend 505 passed，以及 New Agents Browser E2E 3 passed / 3 skipped / 9 deselected。
+
+## 残余风险
+
+- `ArtifactPane` 相关测试仍有既有 React `act(...)` warning，本轮未处理。
+- 本轮未改变后端 `context_builder.py` 的文本过滤规则，因为后端当前不会持久化前端失败消息；如后续把前端错误元数据同步到服务端消息，需要同步服务端按语义字段排除 prompt。

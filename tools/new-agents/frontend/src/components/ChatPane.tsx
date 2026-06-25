@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, WORKFLOWS } from '../store';
-import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw, Copy, Check, ChevronRight, ArrowRight, AlertTriangle, Settings } from 'lucide-react';
+import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw, Copy, Check, ChevronRight, ChevronDown, ArrowRight, AlertTriangle, Settings } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -11,7 +11,7 @@ import { getAgentById } from '../core/config/agents';
 import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/markdownUtils';
 import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
 import { fetchWorkflowHandoffs, startWorkflowHandoff } from '../services/workflowHandoffService';
-import type { Attachment, WorkflowHandoff } from '../store';
+import type { Attachment, Message, MessageErrorDiagnosticKind, WorkflowHandoff } from '../store';
 
 const asRenderableAttachments = (attachments: unknown): Attachment[] => {
   if (!Array.isArray(attachments)) return [];
@@ -39,7 +39,67 @@ const isStructuredOutputFailureContent = (content: string | undefined): boolean 
 );
 
 const isProviderFailureContent = (content: string | undefined): boolean => (
-  Boolean(content?.includes('模型配置或供应商异常'))
+  Boolean(content?.includes('模型配置或供应商异常') || content?.includes('模型调用未完成'))
+);
+
+const isStructuredOutputFailureMessage = (message: Message | undefined): boolean => (
+  Boolean(
+    message?.role === 'assistant'
+    && (
+      message.errorDiagnostic?.kind === 'structured'
+      || isStructuredOutputFailureContent(message.content)
+    )
+  )
+);
+
+const isProviderFailureMessage = (message: Message | undefined): boolean => (
+  Boolean(
+    message?.role === 'assistant'
+    && (
+      message.errorDiagnostic?.kind === 'provider'
+      || isProviderFailureContent(message.content)
+    )
+  )
+);
+
+const getMessageContentWithoutDiagnosticSummary = (message: Message): string => {
+  if (!message.errorDiagnostic) return message.content;
+
+  const summaryLine = `⚠️ ${message.errorDiagnostic.summary}`;
+  if (!message.content.endsWith(summaryLine)) return message.content;
+  return message.content.slice(0, -summaryLine.length).trim();
+};
+
+const ERROR_CARD_STYLE = {
+  structured: {
+    container: 'border-amber-500/25 bg-amber-500/10 text-amber-100',
+    icon: 'text-amber-300',
+    detail: 'border-amber-300/20 bg-amber-950/25 text-amber-50/85',
+    secondaryButton: 'border-amber-300/30 bg-amber-300/10 text-amber-100 hover:bg-amber-300/20',
+    primaryButton: 'bg-amber-500 text-slate-950 hover:bg-amber-400',
+  },
+  provider: {
+    container: 'border-rose-500/25 bg-rose-500/10 text-rose-100',
+    icon: 'text-rose-300',
+    detail: 'border-rose-300/20 bg-rose-950/25 text-rose-50/85',
+    secondaryButton: 'border-rose-300/30 bg-rose-300/10 text-rose-100 hover:bg-rose-300/20',
+    primaryButton: 'bg-rose-500 text-white hover:bg-rose-400',
+  },
+  generic: {
+    container: 'border-sky-500/25 bg-sky-500/10 text-sky-100',
+    icon: 'text-sky-300',
+    detail: 'border-sky-300/20 bg-sky-950/25 text-sky-50/85',
+    secondaryButton: 'border-sky-300/30 bg-sky-300/10 text-sky-100 hover:bg-sky-300/20',
+    primaryButton: 'bg-sky-500 text-white hover:bg-sky-400',
+  },
+} as const;
+
+const getDiagnosticTitle = (kind: MessageErrorDiagnosticKind): string => (
+  kind === 'structured'
+    ? '结构化结果未更新'
+    : kind === 'provider'
+      ? '模型调用未完成'
+      : '本轮生成失败'
 );
 
 const STRUCTURED_FAILURE_SUPPLEMENT_PROMPT = '请补充更明确的需求或阶段确认信息，我会基于补充内容重新生成当前阶段产出物。';
@@ -77,21 +137,15 @@ export const ChatPane: React.FC = () => {
     ? workflowStages[pendingStageTransition.toStageIndex]
     : null;
   const latestMessage = chatHistory[chatHistory.length - 1];
-  const isLatestStructuredOutputFailure = (
-    latestMessage?.role === 'assistant'
-    && isStructuredOutputFailureContent(latestMessage.content)
-  );
-  const isLatestProviderFailure = (
-    latestMessage?.role === 'assistant'
-    && isProviderFailureContent(latestMessage.content)
-  );
+  const isLatestStructuredOutputFailure = isStructuredOutputFailureMessage(latestMessage);
+  const isLatestProviderFailure = isProviderFailureMessage(latestMessage);
   const latestAssistantMessages = chatHistory
     .filter((message) => message.role === 'assistant')
     .slice(-2);
   const hasRepeatedStructuredOutputFailures = (
     latestAssistantMessages.length === 2
     && latestAssistantMessages.every((message) => (
-      isStructuredOutputFailureContent(message.content)
+      isStructuredOutputFailureMessage(message)
     ))
   );
   const currentArtifactVisualDiagnostic = currentStageId
@@ -108,6 +162,15 @@ export const ChatPane: React.FC = () => {
   const [toast, setToast] = useState<string | null>(null);
   const [workflowHandoffs, setWorkflowHandoffs] = useState<WorkflowHandoff[]>([]);
   const [providerCheckByMessageId, setProviderCheckByMessageId] = useState<ProviderCheckStateByMessage>({});
+  const [expandedErrorDetails, setExpandedErrorDetails] = useState<Record<string, boolean>>({});
+  const [isVisualDiagnosticExpanded, setIsVisualDiagnosticExpanded] = useState(false);
+
+  const toggleErrorDetail = (messageId: string) => {
+    setExpandedErrorDetails(current => ({
+      ...current,
+      [messageId]: !current[messageId],
+    }));
+  };
 
   const handleCopy = async (content: string, msgId: string) => {
     if (copyFeedbackTimeoutRef.current) {
@@ -318,31 +381,6 @@ export const ChatPane: React.FC = () => {
           </div>
         )}
 
-        {currentArtifactVisualDiagnostic && (
-          <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-amber-100 shadow-sm">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-              <div className="min-w-0">
-                <div className="text-xs font-semibold">右侧产物有可视化需要处理</div>
-                <p className="mt-1 text-[11px] leading-relaxed text-amber-100/80">
-                  {currentArtifactVisualDiagnostic.message}
-                </p>
-                <p className="mt-1 text-[11px] leading-relaxed text-amber-100/70">
-                  请在右侧产物中查看对应图表或结构化可视化块，必要时使用重新生成图表。
-                </p>
-                <button
-                  type="button"
-                  onClick={() => focusArtifactVisualDiagnostic(currentArtifactVisualDiagnostic.id)}
-                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-[11px] font-semibold text-amber-50 transition-colors hover:border-amber-200/40 hover:bg-amber-300/15"
-                >
-                  <span>查看问题位置</span>
-                  <ArrowRight className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {chatHistory.length === 0 && (
           <div className="flex flex-col h-full items-center justify-center space-y-8 animate-fade-in-up pb-10">
             <div className="text-center space-y-4 max-w-xl px-4 flex flex-col items-center">
@@ -388,19 +426,19 @@ export const ChatPane: React.FC = () => {
             return null;
           }
           const messageAttachments = asRenderableAttachments(msg.attachments);
-          const isStructuredOutputFailure = (
-            msg.role === 'assistant'
-            && isStructuredOutputFailureContent(msg.content)
-          );
-          const isProviderFailure = (
-            msg.role === 'assistant'
-            && isProviderFailureContent(msg.content)
-          );
+          const isStructuredOutputFailure = isStructuredOutputFailureMessage(msg);
+          const isProviderFailure = isProviderFailureMessage(msg);
+          const isDiagnosticFailure = Boolean(msg.errorDiagnostic);
           const shouldShowSupplementStructuredFailure = (
             isStructuredOutputFailure
             && hasRepeatedStructuredOutputFailures
             && msg.id === latestMessage?.id
           );
+          const visibleMessageContent = getMessageContentWithoutDiagnosticSummary(msg);
+          const isErrorDetailExpanded = expandedErrorDetails[msg.id] === true;
+          const diagnosticStyle = msg.errorDiagnostic
+            ? ERROR_CARD_STYLE[msg.errorDiagnostic.kind]
+            : null;
           const providerCheck = providerCheckByMessageId[msg.id] || {
             status: 'idle',
             message: null,
@@ -488,15 +526,126 @@ export const ChatPane: React.FC = () => {
                       ))}
                     </div>
                   )}
-                  {msg.content && (
+                  {visibleMessageContent && (
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={messageMarkdownComponents}
                     >
-                      {preprocessMarkdown(msg.content)}
+                      {preprocessMarkdown(visibleMessageContent)}
                     </ReactMarkdown>
                   )}
-                  {isStructuredOutputFailure && (
+                  {msg.errorDiagnostic && diagnosticStyle && (
+                    <div className={clsx(
+                      'mt-3 rounded-xl border p-3 shadow-sm',
+                      diagnosticStyle.container
+                    )}>
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className={clsx('mt-0.5 h-4 w-4 shrink-0', diagnosticStyle.icon)} />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold">{getDiagnosticTitle(msg.errorDiagnostic.kind)}</div>
+                          <p className="mt-1 text-xs leading-relaxed opacity-85">
+                            {msg.errorDiagnostic.summary}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => toggleErrorDetail(msg.id)}
+                          className={clsx(
+                            'inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold transition-colors',
+                            diagnosticStyle.secondaryButton
+                          )}
+                          aria-expanded={isErrorDetailExpanded}
+                        >
+                          {isErrorDetailExpanded ? '收起详情' : '查看详情'}
+                          {isErrorDetailExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                        </button>
+                      </div>
+                      {isErrorDetailExpanded && (
+                        <div className={clsx('mt-3 rounded-lg border px-3 py-2 text-xs leading-relaxed', diagnosticStyle.detail)}>
+                          {msg.errorDiagnostic.reason && (
+                            <p><span className="font-semibold">可能原因：</span>{msg.errorDiagnostic.reason}</p>
+                          )}
+                          {msg.errorDiagnostic.action && (
+                            <p className="mt-1"><span className="font-semibold">建议处理：</span>{msg.errorDiagnostic.action}</p>
+                          )}
+                          {msg.errorDiagnostic.code && (
+                            <p className="mt-1"><span className="font-semibold">错误代码：</span>{msg.errorDiagnostic.code}</p>
+                          )}
+                          <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap rounded-md bg-black/25 p-2 font-mono text-[11px] leading-relaxed">
+                            {msg.errorDiagnostic.rawMessage}
+                          </pre>
+                        </div>
+                      )}
+                      {msg.errorDiagnostic.kind === 'provider' && providerCheck.status !== 'idle' && (
+                        <div className={clsx(
+                          "mt-3 rounded-lg border px-3 py-2 text-xs leading-relaxed",
+                          providerCheck.status === 'success'
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                            : providerCheck.status === 'checking'
+                              ? "border-rose-300/20 bg-rose-400/10 text-rose-100/80"
+                              : "border-rose-400/40 bg-rose-400/10 text-rose-100"
+                        )}>
+                          {providerCheck.message}
+                        </div>
+                      )}
+                      <div className="mt-3 flex flex-wrap justify-end gap-2">
+                        {msg.errorDiagnostic.kind === 'structured' && shouldShowSupplementStructuredFailure && (
+                          <button
+                            type="button"
+                            onClick={handleSupplementStructuredFailure}
+                            className={clsx(
+                              'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors',
+                              diagnosticStyle.secondaryButton
+                            )}
+                          >
+                            补充信息后再试
+                          </button>
+                        )}
+                        {msg.errorDiagnostic.kind === 'provider' && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setSettingsOpen(true)}
+                              className={clsx(
+                                'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors',
+                                diagnosticStyle.secondaryButton
+                              )}
+                            >
+                              <Settings className="h-3.5 w-3.5" />
+                              打开模型设置
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleProviderConfigCheck(msg.id)}
+                              disabled={providerCheck.status === 'checking'}
+                              className={clsx(
+                                'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                                diagnosticStyle.secondaryButton
+                              )}
+                            >
+                              <RefreshCw className={clsx(
+                                "h-3.5 w-3.5",
+                                providerCheck.status === 'checking' && "animate-spin"
+                              )} />
+                              {providerCheck.status === 'checking' ? '正在检测...' : '检测连接'}
+                            </button>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => void handleRetryCurrentStageGeneration()}
+                          className={clsx(
+                            'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors',
+                            diagnosticStyle.primaryButton
+                          )}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          重试本阶段生成
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {!msg.errorDiagnostic && isStructuredOutputFailure && (
                     <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-100">
                       <div className="flex items-start gap-2">
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
@@ -531,7 +680,7 @@ export const ChatPane: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  {isProviderFailure && (
+                  {!msg.errorDiagnostic && isProviderFailure && (
                     <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-rose-100">
                       <div className="flex items-start gap-2">
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" />
@@ -601,7 +750,7 @@ export const ChatPane: React.FC = () => {
                       {copiedId === msg.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedId === msg.id ? '已复制' : '复制'}</span>
                     </button>
-                    {msg.role === 'assistant' && msg.retryable !== false && !isGenerating && msg.id === chatHistory[chatHistory.length - 1]?.id && !isStructuredOutputFailure && !isProviderFailure && (
+                    {msg.role === 'assistant' && msg.retryable !== false && !isGenerating && msg.id === chatHistory[chatHistory.length - 1]?.id && !isStructuredOutputFailure && !isProviderFailure && !isDiagnosticFailure && (
                       <button
                         onClick={handleRetry}
                         className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-blue-400 transition-colors"
@@ -617,6 +766,54 @@ export const ChatPane: React.FC = () => {
             </div>
           );
         })}
+
+        {currentArtifactVisualDiagnostic && (
+          <div className="flex items-start gap-4 animate-fade-in-up">
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 mt-1 border border-amber-500/20 bg-amber-500/10 text-amber-300">
+              <AlertTriangle className="h-4 w-4" />
+            </div>
+            <div className="flex flex-col gap-2 max-w-[90%] items-start">
+              <span className="text-slate-500 text-[10px] font-mono px-1">{agentName} • 产物诊断</span>
+              <div className="rounded-2xl rounded-tl-none border border-amber-500/25 bg-amber-500/10 p-3 text-amber-100 shadow-sm">
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold">右侧产物有可视化需要处理</div>
+                    <p className="mt-1 text-[11px] leading-relaxed text-amber-100/75">
+                      图表或结构化可视化未能稳定渲染，右侧产物已保留诊断入口。
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsVisualDiagnosticExpanded(current => !current)}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-300/25 bg-amber-300/10 px-2 py-1 text-[11px] font-semibold text-amber-50 transition-colors hover:border-amber-200/40 hover:bg-amber-300/15"
+                    aria-expanded={isVisualDiagnosticExpanded}
+                  >
+                    {isVisualDiagnosticExpanded ? '收起诊断详情' : '查看诊断详情'}
+                    {isVisualDiagnosticExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                  </button>
+                </div>
+                {isVisualDiagnosticExpanded && (
+                  <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-950/25 px-3 py-2 text-[11px] leading-relaxed text-amber-50/85">
+                    <p>{currentArtifactVisualDiagnostic.message}</p>
+                    <p className="mt-1 text-amber-100/70">
+                      请在右侧产物中查看对应图表或结构化可视化块，必要时重新生成图表。
+                    </p>
+                  </div>
+                )}
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => focusArtifactVisualDiagnostic(currentArtifactVisualDiagnostic.id)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-[11px] font-semibold text-amber-50 transition-colors hover:border-amber-200/40 hover:bg-amber-300/15"
+                  >
+                    <span>查看问题位置</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {pendingStageTransition && pendingNextStage && !isGenerating && !isLatestStructuredOutputFailure && !isLatestProviderFailure && (
           <div className="flex items-start gap-4 animate-fade-in-up">

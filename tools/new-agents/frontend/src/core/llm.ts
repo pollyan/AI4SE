@@ -190,8 +190,11 @@ const historyWithoutCurrentUserTurn = (
 
 const isAssistantControlFeedback = (message: Message): boolean => (
   message.role === 'assistant'
-  && /(^|\n)\s*(\*\*Error:\*\*|\*\(已停止生成\)\*|⚠️\s*\*\*模型额度或限流异常\*\*)/.test(
+  && (
+    Boolean(message.errorDiagnostic)
+    || /(^|\n)\s*(\*\*Error:\*\*|\*\(已停止生成\)\*|⚠️\s*(?:\*\*(?:模型额度或限流异常|模型配置或供应商异常|结构化输出生成失败)\*\*|本轮生成失败|模型调用未完成|结构化输出生成失败))/.test(
     message.content
+  )
   )
 );
 

@@ -275,7 +275,7 @@ describe('ChatPane Component', () => {
         expect(mockHandleSend).not.toHaveBeenCalled();
     });
 
-    it('shows a lightweight notice for current-stage artifact visual diagnostics', () => {
+    it('shows a compact notice for current-stage artifact visual diagnostics with details collapsed', () => {
         useStore.setState({
             chatHistory: [
                 { id: '1', role: 'assistant', content: '右侧产物已更新。', timestamp: Date.now() },
@@ -295,7 +295,36 @@ describe('ChatPane Component', () => {
         render(<ChatPane />);
 
         expect(screen.getByText('右侧产物有可视化需要处理')).toBeDefined();
+        expect(screen.queryByText('结构化可视化必须是合法 JSON。')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: '查看诊断详情' }));
         expect(screen.getByText('结构化可视化必须是合法 JSON。')).toBeDefined();
+    });
+
+    it('renders artifact visual diagnostics after chat messages instead of the top of the conversation', () => {
+        useStore.setState({
+            chatHistory: [
+                { id: '1', role: 'assistant', content: '右侧产物已更新。', timestamp: Date.now() },
+            ],
+            artifactVisualDiagnostics: [
+                {
+                    id: 'structured-visual:CLARIFY:0',
+                    stageId: 'CLARIFY',
+                    kind: 'structured-visual',
+                    title: '结构化可视化格式错误',
+                    message: '结构化可视化必须是合法 JSON。',
+                    createdAt: Date.now(),
+                },
+            ],
+        });
+
+        render(<ChatPane />);
+
+        const message = screen.getByText('右侧产物已更新。');
+        const notice = screen.getByText('右侧产物有可视化需要处理');
+        expect(
+            message.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy();
     });
 
     it('focuses the current-stage artifact visual diagnostic from the notice action', () => {
@@ -369,16 +398,15 @@ describe('ChatPane Component', () => {
                 {
                     id: '2',
                     role: 'assistant',
-                    content: [
-                        '⚠️ **模型配置或供应商异常**',
-                        '',
-                        '**可能原因**：密钥或权限异常',
-                        '',
-                        '**建议处理**：请检查 API Key、Base URL、模型名称和供应商权限。',
-                        '',
-                        '右侧产出物已保持不变。',
-                    ].join('\n'),
+                    content: '⚠️ 模型调用未完成：密钥或权限异常，右侧产出物已保持不变。',
                     timestamp: Date.now() + 1000,
+                    errorDiagnostic: {
+                        kind: 'provider',
+                        summary: '模型调用未完成：密钥或权限异常，右侧产出物已保持不变。',
+                        reason: '密钥或权限异常',
+                        action: '请检查 API Key、Base URL、模型名称和供应商权限。',
+                        rawMessage: '401 invalid api key',
+                    },
                 },
             ],
         });
@@ -387,12 +415,50 @@ describe('ChatPane Component', () => {
         fireEvent.click(screen.getByRole('button', { name: '重试本阶段生成' }));
 
         expect(screen.getByText('模型调用未完成')).toBeDefined();
-        expect(screen.getByText('右侧产出物已保持不变')).toBeDefined();
-        expect(screen.getByText('请先检查模型配置、供应商额度或网络连通性，确认恢复后再重试。')).toBeDefined();
+        expect(screen.getByText(/右侧产出物已保持不变/)).toBeDefined();
+        expect(screen.queryByText('请检查 API Key、Base URL、模型名称和供应商权限。')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: '查看详情' }));
+        expect(screen.getByText(/请检查 API Key、Base URL、模型名称和供应商权限/)).toBeDefined();
         expect(screen.getByRole('button', { name: '打开模型设置' })).toBeDefined();
         expect(screen.getByRole('button', { name: '检测连接' })).toBeDefined();
         expect(mockHandleRetry).not.toHaveBeenCalled();
         expect(mockHandleRetryCurrentStageGeneration).toHaveBeenCalledOnce();
+    });
+
+    it('keeps error details collapsed inside the latest assistant message until requested', () => {
+        const diagnosticMessage = Object.assign(
+            {
+                id: '2',
+                role: 'assistant' as const,
+                content: '⚠️ 本轮生成失败：请查看错误详情后重试。',
+                timestamp: Date.now() + 1000,
+            },
+            {
+                errorDiagnostic: {
+                    kind: 'generic',
+                    summary: '本轮生成失败：请查看错误详情后重试。',
+                    rawMessage: 'LLM_ERROR: raw backend detail that should be hidden by default',
+                },
+            }
+        );
+        useStore.setState({
+            chatHistory: [
+                { id: '1', role: 'user', content: '触发失败', timestamp: Date.now() },
+                diagnosticMessage,
+            ],
+        });
+
+        render(<ChatPane />);
+
+        expect(screen.getByText('本轮生成失败：请查看错误详情后重试。')).toBeDefined();
+        expect(screen.getByRole('button', { name: '查看详情' })).toBeDefined();
+        expect(screen.queryByText(/raw backend detail/)).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: '查看详情' }));
+        expect(screen.getByText(/LLM_ERROR: raw backend detail/)).toBeDefined();
+
+        fireEvent.click(screen.getByRole('button', { name: '收起详情' }));
+        expect(screen.queryByText(/raw backend detail/)).toBeNull();
     });
 
     it('opens settings from the provider failure recovery card', () => {
@@ -401,8 +467,15 @@ describe('ChatPane Component', () => {
                 {
                     id: '1',
                     role: 'assistant',
-                    content: '⚠️ **模型配置或供应商异常**\n\n右侧产出物已保持不变。',
+                    content: '⚠️ 模型调用未完成：模型配置缺失，右侧产出物已保持不变。',
                     timestamp: Date.now(),
+                    errorDiagnostic: {
+                        kind: 'provider',
+                        summary: '模型调用未完成：模型配置缺失，右侧产出物已保持不变。',
+                        reason: '模型配置缺失',
+                        action: '请先到设置中维护后端默认 LLM 配置。',
+                        rawMessage: '系统未配置默认 LLM',
+                    },
                 },
             ],
             isSettingsOpen: false,
@@ -427,8 +500,15 @@ describe('ChatPane Component', () => {
                 {
                     id: '1',
                     role: 'assistant',
-                    content: '⚠️ **模型配置或供应商异常**\n\n右侧产出物已保持不变。',
+                    content: '⚠️ 模型调用未完成：模型配置缺失，右侧产出物已保持不变。',
                     timestamp: Date.now(),
+                    errorDiagnostic: {
+                        kind: 'provider',
+                        summary: '模型调用未完成：模型配置缺失，右侧产出物已保持不变。',
+                        reason: '模型配置缺失',
+                        action: '请先到设置中维护后端默认 LLM 配置。',
+                        rawMessage: '系统未配置默认 LLM',
+                    },
                 },
             ],
         });
@@ -456,8 +536,15 @@ describe('ChatPane Component', () => {
                 {
                     id: '1',
                     role: 'assistant',
-                    content: '⚠️ **模型配置或供应商异常**\n\n右侧产出物已保持不变。',
+                    content: '⚠️ 模型调用未完成：模型配置缺失，右侧产出物已保持不变。',
                     timestamp: Date.now(),
+                    errorDiagnostic: {
+                        kind: 'provider',
+                        summary: '模型调用未完成：模型配置缺失，右侧产出物已保持不变。',
+                        reason: '模型配置缺失',
+                        action: '请先到设置中维护后端默认 LLM 配置。',
+                        rawMessage: '系统未配置默认 LLM',
+                    },
                 },
             ],
         });
@@ -480,8 +567,15 @@ describe('ChatPane Component', () => {
                 {
                     id: '1',
                     role: 'assistant',
-                    content: '⚠️ **模型配置或供应商异常**\n\n右侧产出物已保持不变。',
+                    content: '⚠️ 模型调用未完成：模型配置缺失，右侧产出物已保持不变。',
                     timestamp: Date.now(),
+                    errorDiagnostic: {
+                        kind: 'provider',
+                        summary: '模型调用未完成：模型配置缺失，右侧产出物已保持不变。',
+                        reason: '模型配置缺失',
+                        action: '请先到设置中维护后端默认 LLM 配置。',
+                        rawMessage: '系统未配置默认 LLM',
+                    },
                 },
             ],
         });
@@ -505,14 +599,28 @@ describe('ChatPane Component', () => {
                 {
                     id: '1',
                     role: 'assistant',
-                    content: '⚠️ **模型配置或供应商异常**\n\n第一次失败。',
+                    content: '⚠️ 模型调用未完成：第一次失败。',
                     timestamp: Date.now(),
+                    errorDiagnostic: {
+                        kind: 'provider',
+                        summary: '模型调用未完成：第一次失败。',
+                        reason: '模型配置缺失',
+                        action: '请先到设置中维护后端默认 LLM 配置。',
+                        rawMessage: '第一次失败。',
+                    },
                 },
                 {
                     id: '2',
                     role: 'assistant',
-                    content: '⚠️ **模型配置或供应商异常**\n\n第二次失败。',
+                    content: '⚠️ 模型调用未完成：第二次失败。',
                     timestamp: Date.now() + 1000,
+                    errorDiagnostic: {
+                        kind: 'provider',
+                        summary: '模型调用未完成：第二次失败。',
+                        reason: '模型配置缺失',
+                        action: '请先到设置中维护后端默认 LLM 配置。',
+                        rawMessage: '第二次失败。',
+                    },
                 },
             ],
         });
@@ -537,8 +645,15 @@ describe('ChatPane Component', () => {
                 {
                     id: '2',
                     role: 'assistant',
-                    content: '⚠️ **模型配置或供应商异常**\n\n右侧产出物已保持不变。',
+                    content: '⚠️ 模型调用未完成：模型配置缺失，右侧产出物已保持不变。',
                     timestamp: Date.now() + 1000,
+                    errorDiagnostic: {
+                        kind: 'provider',
+                        summary: '模型调用未完成：模型配置缺失，右侧产出物已保持不变。',
+                        reason: '模型配置缺失',
+                        action: '请先到设置中维护后端默认 LLM 配置。',
+                        rawMessage: '系统未配置默认 LLM',
+                    },
                 },
             ],
         });

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useStore, Attachment, getWelcomeMessage, WORKFLOWS } from '../store';
+import { useStore, Attachment, getWelcomeMessage, WORKFLOWS, type MessageErrorDiagnostic } from '../store';
 import { generateResponseStream } from '../core/llm';
 import {
     planArtifactVersionUpdate,
@@ -95,6 +95,11 @@ type ProviderErrorDiagnostic = {
     action: string;
 };
 
+type AssistantErrorFeedback = {
+    content: string;
+    errorDiagnostic: MessageErrorDiagnostic;
+};
+
 function diagnoseProviderError(errorMessage: string): ProviderErrorDiagnostic | null {
     const normalized = errorMessage.toLowerCase();
 
@@ -155,25 +160,30 @@ function diagnoseProviderError(errorMessage: string): ProviderErrorDiagnostic | 
     return null;
 }
 
-function formatProviderErrorContent(errorMessage: string, diagnostic: ProviderErrorDiagnostic): string {
-    return [
-        '⚠️ **模型配置或供应商异常**',
-        '',
-        `**可能原因**：${diagnostic.reason}`,
-        '',
-        `**建议处理**：${diagnostic.action}`,
-        '',
-        '右侧产出物已保持不变。处理配置或供应商问题后，可以直接重试本阶段生成。',
-        '',
-        '---',
-        '*原始错误附录：*',
-        '```text',
-        errorMessage,
-        '```',
-    ].join('\n');
+function extractErrorCode(errorMessage: string): string | undefined {
+    const match = /^([A-Z][A-Z0-9_]{2,})(?::|\s|$)/.exec(errorMessage.trim());
+    return match?.[1];
 }
 
-function formatAssistantErrorContent(errorMessage: string): string {
+function formatProviderErrorFeedback(
+    errorMessage: string,
+    diagnostic: ProviderErrorDiagnostic
+): AssistantErrorFeedback {
+    const summary = `模型调用未完成：${diagnostic.reason}，右侧产出物已保持不变。`;
+    return {
+        content: `⚠️ ${summary}`,
+        errorDiagnostic: {
+            kind: 'provider',
+            summary,
+            reason: diagnostic.reason,
+            action: diagnostic.action,
+            rawMessage: errorMessage,
+            ...(extractErrorCode(errorMessage) ? { code: extractErrorCode(errorMessage) } : {}),
+        },
+    };
+}
+
+function formatAssistantErrorFeedback(errorMessage: string): AssistantErrorFeedback {
     if (
         errorMessage.includes('SCHEMA_VALIDATION_FAILED')
         || errorMessage.includes('Exceeded maximum output retries')
@@ -181,19 +191,33 @@ function formatAssistantErrorContent(errorMessage: string): string {
         || errorMessage.includes('Artifact validation failed')
         || errorMessage.includes('Mermaid parse failed')
     ) {
-        return [
-            '⚠️ **结构化输出生成失败**',
-            '',
-            '模型本轮没有生成符合工作流契约的结果，右侧产出物已保持不变。可以直接重试；如果连续失败，请补充更明确的需求或阶段确认信息。',
-        ].join('\n');
+        const summary = '结构化输出生成失败：右侧产出物已保持不变，可以直接重试。';
+        return {
+            content: `⚠️ ${summary}`,
+            errorDiagnostic: {
+                kind: 'structured',
+                summary,
+                rawMessage: errorMessage,
+                ...(extractErrorCode(errorMessage) ? { code: extractErrorCode(errorMessage) } : {}),
+            },
+        };
     }
 
     const providerDiagnostic = diagnoseProviderError(errorMessage);
     if (providerDiagnostic) {
-        return formatProviderErrorContent(errorMessage, providerDiagnostic);
+        return formatProviderErrorFeedback(errorMessage, providerDiagnostic);
     }
 
-    return `**Error:** ${errorMessage}`;
+    const summary = '本轮生成失败：请查看错误详情后重试。';
+    return {
+        content: `⚠️ ${summary}`,
+        errorDiagnostic: {
+            kind: 'generic',
+            summary,
+            rawMessage: errorMessage,
+            ...(extractErrorCode(errorMessage) ? { code: extractErrorCode(errorMessage) } : {}),
+        },
+    };
 }
 
 function isAbortError(error: unknown): boolean {
@@ -499,17 +523,21 @@ export function useChatService() {
                 if (didUpdateArtifact) {
                     useStore.getState().setArtifactTruncated(true);
                 }
-                const errorContent = formatAssistantErrorContent(errorMessage);
+                const errorFeedback = formatAssistantErrorFeedback(errorMessage);
 
                 if (isMidstream) {
-                    updateLastMessage((history[history.length - 1]?.content || '') + '\n\n' + errorContent);
+                    updateLastMessage(
+                        (history[history.length - 1]?.content || '') + '\n\n' + errorFeedback.content,
+                        errorFeedback.errorDiagnostic
+                    );
                 } else {
                     addMessage({
                         id: createMessageId(),
                         role: 'assistant',
-                        content: errorContent,
+                        content: errorFeedback.content,
                         timestamp: Date.now(),
                         retryable: assistantRetryable,
+                        errorDiagnostic: errorFeedback.errorDiagnostic,
                     });
                 }
             }

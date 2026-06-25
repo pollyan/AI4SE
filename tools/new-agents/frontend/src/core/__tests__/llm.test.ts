@@ -2067,6 +2067,10 @@ describe('llm.ts', () => {
                     { id: '5', role: 'assistant', content: '正在生成...\n\n**Error:** LLM_ERROR\n流式中途失败', timestamp: 5 },
                     { id: '6', role: 'assistant', content: '正在生成...\n\n*(已停止生成)*', timestamp: 6 },
                     { id: '7', role: 'assistant', content: '正在生成...\n\n⚠️ **模型额度或限流异常**\n请稍后重试。', timestamp: 7 },
+                    { id: '8', role: 'assistant', content: '⚠️ 本轮生成失败：请查看错误详情后重试。', timestamp: 8 },
+                    { id: '9', role: 'assistant', content: '⚠️ 模型调用未完成：密钥或权限异常，右侧产出物已保持不变。', timestamp: 9 },
+                    { id: '10', role: 'assistant', content: '⚠️ **模型配置或供应商异常**\n\n原始错误附录。', timestamp: 10 },
+                    { id: '11', role: 'assistant', content: '⚠️ **结构化输出生成失败**\n\n右侧产出物已保持不变。', timestamp: 11 },
                 ],
             });
 
@@ -2087,6 +2091,10 @@ describe('llm.ts', () => {
             expect(body.prompt).not.toContain('流式中途失败');
             expect(body.prompt).not.toContain('已停止生成');
             expect(body.prompt).not.toContain('模型额度或限流异常');
+            expect(body.prompt).not.toContain('本轮生成失败');
+            expect(body.prompt).not.toContain('模型调用未完成');
+            expect(body.prompt).not.toContain('模型配置或供应商异常');
+            expect(body.prompt).not.toContain('结构化输出生成失败');
         });
 
         it('应将附件的 base64 内容解码并拼接到消息文本前', async () => {

@@ -1031,6 +1031,49 @@ describe('Zustand Store', () => {
         expect(message.retryable).toBe(false);
     });
 
+    it('should preserve valid assistant error diagnostics when hydrating persisted chat history', async () => {
+        localStorage.setItem(
+            'agent-workspace-storage',
+            JSON.stringify({
+                state: {
+                    workflow: 'TEST_DESIGN',
+                    stageIndex: 1,
+                    chatHistory: [
+                        {
+                            id: '1',
+                            role: 'assistant',
+                            content: '⚠️ 本轮生成失败：请查看错误详情后重试。',
+                            timestamp: 123,
+                            errorDiagnostic: {
+                                kind: 'generic',
+                                summary: '本轮生成失败：请查看错误详情后重试。',
+                                rawMessage: 'LLM_ERROR: raw detail',
+                            },
+                        },
+                    ],
+                    artifactContent: '# Persisted',
+                    artifactHistory: [],
+                    stageArtifacts: {
+                        CLARIFY: '# Clarify',
+                        STRATEGY: '# Persisted',
+                    },
+                },
+                version: 0,
+            })
+        );
+
+        await useStore.persist.rehydrate();
+
+        const [message] = useStore.getState().chatHistory;
+        expect(message).toMatchObject({
+            errorDiagnostic: {
+                kind: 'generic',
+                summary: '本轮生成失败：请查看错误详情后重试。',
+                rawMessage: 'LLM_ERROR: raw detail',
+            },
+        });
+    });
+
     it('should fall back to default workflow when hydrating an unknown workflow', async () => {
         localStorage.setItem(
             'agent-workspace-storage',

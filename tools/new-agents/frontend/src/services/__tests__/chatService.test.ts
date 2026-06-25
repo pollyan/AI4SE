@@ -1990,8 +1990,13 @@ describe('useChatService', () => {
         expect(state.chatHistory).toHaveLength(2);
         expect(state.chatHistory[1]).toMatchObject({
             role: 'assistant',
+            errorDiagnostic: {
+                kind: 'structured',
+                rawMessage: 'SCHEMA_VALIDATION_FAILED',
+            },
         });
         expect(state.chatHistory[1].content).toContain('结构化输出生成失败');
+        expect(state.chatHistory[1].content).not.toContain('SCHEMA_VALIDATION_FAILED');
         expect(state.artifactContent).toBe('initial artifact');
         expect(state.artifactHistory).toEqual([]);
         expect(state.isGenerating).toBe(false);
@@ -2016,6 +2021,12 @@ describe('useChatService', () => {
         expect(state.chatHistory[1].content).toContain('结构化输出生成失败');
         expect(state.chatHistory[1].content).toContain('可以直接重试');
         expect(state.chatHistory[1].content).not.toContain('Exceeded maximum output retries');
+        expect(state.chatHistory[1]).toMatchObject({
+            errorDiagnostic: {
+                kind: 'structured',
+                rawMessage: 'SCHEMA_VALIDATION_FAILED: Exceeded maximum output retries (3)',
+            },
+        });
         expect(state.artifactContent).toBe('initial artifact');
         expect(state.artifactHistory).toEqual([]);
     });
@@ -2046,6 +2057,12 @@ describe('useChatService', () => {
         });
         expect(state.chatHistory[1].content).toContain('结构化输出生成失败');
         expect(state.chatHistory[1].content).not.toContain('**Error:**');
+        expect(state.chatHistory[1]).toMatchObject({
+            errorDiagnostic: {
+                kind: 'structured',
+                rawMessage: errorMessage,
+            },
+        });
         expect(state.artifactContent).toBe('initial artifact');
         expect(state.artifactHistory).toEqual([]);
     });
@@ -2073,9 +2090,15 @@ describe('useChatService', () => {
 
         const state = useStore.getState();
         expect(state.chatHistory).toHaveLength(2);
-        expect(state.chatHistory[1].content).toBe(
-            '正在分析...\n\n**Error:** LLM_ERROR'
-        );
+        expect(state.chatHistory[1].content).toContain('正在分析...');
+        expect(state.chatHistory[1].content).toContain('本轮生成失败');
+        expect(state.chatHistory[1].content).not.toContain('LLM_ERROR');
+        expect(state.chatHistory[1]).toMatchObject({
+            errorDiagnostic: {
+                kind: 'generic',
+                rawMessage: 'LLM_ERROR',
+            },
+        });
         expect(state.artifactContent).toBe('initial artifact');
         expect(state.artifactHistory).toEqual([]);
     });
@@ -2102,9 +2125,15 @@ describe('useChatService', () => {
         });
 
         const state = useStore.getState();
-        expect(state.chatHistory[1].content).toBe(
-            '正在生成部分产物...\n\n**Error:** LLM_ERROR_AFTER_ARTIFACT'
-        );
+        expect(state.chatHistory[1].content).toContain('正在生成部分产物...');
+        expect(state.chatHistory[1].content).toContain('本轮生成失败');
+        expect(state.chatHistory[1].content).not.toContain('LLM_ERROR_AFTER_ARTIFACT');
+        expect(state.chatHistory[1]).toMatchObject({
+            errorDiagnostic: {
+                kind: 'generic',
+                rawMessage: 'LLM_ERROR_AFTER_ARTIFACT',
+            },
+        });
         expect(state.artifactContent).toBe('# Partial artifact from failed stream');
         expect(state.stageArtifacts.CLARIFY).toBe('# Partial artifact from failed stream');
         expect(state.artifactTruncated).toBe(true);
@@ -2253,7 +2282,14 @@ describe('useChatService', () => {
 
         const state = useStore.getState();
         expect(state.chatHistory[1].content).toContain('模型额度或限流异常');
-        expect(state.chatHistory[1].content).toContain('429 quota exceeded');
+        expect(state.chatHistory[1].content).not.toContain('429 quota exceeded');
+        expect(state.chatHistory[1]).toMatchObject({
+            errorDiagnostic: {
+                kind: 'provider',
+                reason: '模型额度或限流异常',
+                rawMessage: '429 quota exceeded',
+            },
+        });
         expect(state.artifactHistory).toEqual([]);
     });
 
@@ -2293,11 +2329,19 @@ describe('useChatService', () => {
         });
 
         const state = useStore.getState();
-        expect(state.chatHistory[1].content).toContain('模型配置或供应商异常');
+        expect(state.chatHistory[1].content).toContain('模型调用未完成');
         expect(state.chatHistory[1].content).toContain(expectedReason);
-        expect(state.chatHistory[1].content).toContain(expectedAction);
-        expect(state.chatHistory[1].content).toContain(rawError);
+        expect(state.chatHistory[1].content).not.toContain(expectedAction);
+        expect(state.chatHistory[1].content).not.toContain(rawError);
         expect(state.chatHistory[1].content).not.toContain('**Error:**');
+        expect(state.chatHistory[1]).toMatchObject({
+            errorDiagnostic: {
+                kind: 'provider',
+                reason: expectedReason,
+                action: expect.stringContaining(expectedAction),
+                rawMessage: rawError,
+            },
+        });
         expect(state.artifactHistory).toEqual([]);
     });
 });

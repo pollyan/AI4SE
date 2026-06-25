@@ -86,6 +86,18 @@ export type Message = {
     timestamp: number;
     attachments?: Attachment[];
     retryable?: boolean;
+    errorDiagnostic?: MessageErrorDiagnostic;
+};
+
+export type MessageErrorDiagnosticKind = 'structured' | 'provider' | 'generic';
+
+export type MessageErrorDiagnostic = {
+    kind: MessageErrorDiagnosticKind;
+    summary: string;
+    rawMessage: string;
+    reason?: string;
+    action?: string;
+    code?: string;
 };
 
 // 已实现的工作流类型（仅包含 online 状态）
@@ -484,7 +496,7 @@ export interface ChatState {
     setStageIndex: (index: number) => void;
     transitionToNextStage: (initialStageId: string, initialArtifact: string) => void;
     addMessage: (msg: Message) => void;
-    updateLastMessage: (content: string) => void;
+    updateLastMessage: (content: string, errorDiagnostic?: MessageErrorDiagnostic) => void;
     updateMessage: (id: string, content: string) => void;
     removeLastMessage: () => void;
     setArtifactContent: (content: string) => void;
