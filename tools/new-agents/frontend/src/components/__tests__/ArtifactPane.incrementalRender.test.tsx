@@ -1,0 +1,103 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { ReactElement } from 'react';
+import { act, render } from '@testing-library/react';
+import { ArtifactPane } from '../ArtifactPane';
+import { useStore } from '../../store';
+
+const { markdownRenderCounts } = vi.hoisted(() => ({
+    markdownRenderCounts: new Map<string, number>(),
+}));
+
+vi.mock('react-markdown', () => ({
+    default: ({ children }: { children: unknown }) => {
+        const content = String(children);
+        markdownRenderCounts.set(content, (markdownRenderCounts.get(content) ?? 0) + 1);
+        return <div data-testid="mock-react-markdown">{content}</div>;
+    },
+}));
+
+vi.mock('../../services/runSnapshotService', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../../services/runSnapshotService')>();
+    return {
+        ...actual,
+        updateRunArtifact: vi.fn(),
+        updateRunArtifactCollaboration: vi.fn(),
+    };
+});
+
+vi.mock('../Mermaid', () => ({
+    Mermaid: ({ chart }: { chart: string }) => <div data-testid="mermaid">{chart}</div>,
+}));
+
+vi.mock('../../services/mermaidRetryService', () => ({
+    retryMermaidGeneration: vi.fn(),
+}));
+
+vi.mock('lucide-react', () => {
+    const icons = [
+        'Download',
+        'Code',
+        'Eye',
+        'History',
+        'X',
+        'AlertTriangle',
+        'GitCompare',
+        'Edit3',
+        'Save',
+        'MessageSquare',
+        'Trash2',
+        'Lock',
+        'Unlock',
+        'MoreHorizontal',
+    ];
+    const mod: Record<string, () => ReactElement> = {};
+    icons.forEach((name) => {
+        mod[name] = () => <span>{name}</span>;
+    });
+    return mod;
+});
+
+describe('ArtifactPane incremental section rendering', () => {
+    beforeEach(() => {
+        markdownRenderCounts.clear();
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '',
+            artifactChangeIndex: [],
+            artifactHistory: [],
+            stageArtifacts: {},
+            artifactTruncated: false,
+            artifactVisualDiagnostics: [],
+            currentRunId: null,
+            isGenerating: false,
+        });
+    });
+
+    it('does not rerender unchanged markdown sections when another section changes', () => {
+        const stableSection = '## 范围\n\n旧范围';
+        const initialChangingSection = '## 风险\n\n旧风险';
+        const nextChangingSection = '## 风险\n\n新风险';
+        useStore.setState({
+            artifactContent: `# 文档\n\n${stableSection}\n\n${initialChangingSection}`,
+            stageArtifacts: {
+                CLARIFY: `# 文档\n\n${stableSection}\n\n${initialChangingSection}`,
+            },
+        });
+
+        render(<ArtifactPane />);
+
+        expect(markdownRenderCounts.get(stableSection)).toBe(1);
+        expect(markdownRenderCounts.get(initialChangingSection)).toBe(1);
+
+        act(() => {
+            useStore.getState().setArtifactContent(
+                `# 文档\n\n${stableSection}\n\n${nextChangingSection}`,
+            );
+        });
+
+        expect(markdownRenderCounts.get(stableSection)).toBe(1);
+        expect(markdownRenderCounts.get(initialChangingSection)).toBe(1);
+        expect(markdownRenderCounts.get(nextChangingSection)).toBe(1);
+    });
+});

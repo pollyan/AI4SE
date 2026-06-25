@@ -1,6 +1,6 @@
 # New Agents 右侧产出物增量更新与局部渲染 Todo
 
-状态：待处理
+状态：已处理（浏览器 E2E 受本地权限阻塞，见验证记录）
 创建日期：2026-06-25
 相关模块：`tools/new-agents/`
 用户反馈来源：本地 UI 使用反馈，右侧 ArtifactPane 产出物生成与更新体验
@@ -121,4 +121,17 @@
   - `cd tools/new-agents/frontend && npm run lint` 通过。
   - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -p no:cacheprovider tools/new-agents/backend/tests -q` 通过，510 个测试通过、1 个跳过。
   - `cd tools/new-agents/frontend && npm run test` 通过，44 个测试文件、695 个测试通过；ArtifactPane 既有 act warning 仍存在。
+  - `./scripts/test/test-local.sh all` 未在本切片重复执行；同一目标模式轮次中上一切片提交前已执行并确认失败点为 Intent Tester proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 New Agents Browser E2E Chromium `bootstrap_check_in ... Permission denied (1100)`，当前切片已用 owning package test/lint 覆盖变更范围。
+
+## 2026-06-25 进展：ArtifactPane 章节级 memoized rendering
+
+- 已将右侧 ArtifactPane 主预览从单个整篇 `ReactMarkdown` 拆为按 Markdown heading section 构造的 memoized render blocks；未变化 section 在其他 section 更新时不会重新执行 markdown renderer。
+- 已为每个 section 计算 Mermaid 与 `ai4se-visual` blockIndex offset，保持视觉诊断、重试和 focus anchor 的全篇 blockIndex 语义。
+- 历史版本预览、diff、代码视图、编辑 textarea、导出、批注、锁定与保存路径仍使用完整 `artifactContent`，没有新增 workflow / agent 专属渲染通道。
+- 已新增独立 mocked `react-markdown` 组件测试，证明更新第二个章节时，第一个章节 render count 保持不变。
+- 验证：
+  - `cd tools/new-agents/frontend && npm run test -- src/components/__tests__/ArtifactPane.incrementalRender.test.tsx` 先红后绿，最终 1 个测试通过。
+  - `cd tools/new-agents/frontend && npm run test -- src/components/__tests__/ArtifactPane.test.tsx src/components/__tests__/ArtifactPane.incrementalRender.test.tsx` 通过，2 个测试文件、148 个测试通过；ArtifactPane 既有 act warning 仍存在。
+  - `cd tools/new-agents/frontend && npm run lint` 通过。
+  - `cd tools/new-agents/frontend && npm run test` 通过，45 个测试文件、696 个测试通过；ArtifactPane 既有 act warning 仍存在。
   - `./scripts/test/test-local.sh all` 未在本切片重复执行；同一目标模式轮次中上一切片提交前已执行并确认失败点为 Intent Tester proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 New Agents Browser E2E Chromium `bootstrap_check_in ... Permission denied (1100)`，当前切片已用 owning package test/lint 覆盖变更范围。

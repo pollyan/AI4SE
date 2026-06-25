@@ -6,6 +6,7 @@ import rehypeRaw from 'rehype-raw';
 import { useStore, ArtifactVersion, WORKFLOWS } from '../store';
 import type { AgentRunSnapshotArtifact, ArtifactComment, ArtifactSectionLock, ArtifactVisualDiagnostic, ArtifactVisualDiagnosticFocusRequest } from '../core/types';
 import { buildLineDiff } from '../core/artifactDiff';
+import { extractArtifactSections } from '../core/artifactSections';
 import {
   buildAutoMergedInsertionResult,
   buildConflictMergeBlockLabel,
@@ -28,6 +29,31 @@ type CollaborationStateSnapshot = {
   artifactSectionLocks: ArtifactSectionLock[];
 };
 
+type MarkdownVisualBlockCounts = {
+  mermaid: number;
+  structuredVisual: number;
+};
+
+type ArtifactMarkdownRenderBlock = {
+  key: string;
+  anchor?: string;
+  content: string;
+  mermaidBlockOffset: number;
+  structuredVisualBlockOffset: number;
+};
+
+type MermaidRetryHandler = Parameters<typeof createMarkdownCodeRenderer>[0]['onMermaidRetry'];
+
+type ArtifactMarkdownComponentsFactory = (
+  onMermaidRetry?: MermaidRetryHandler,
+  activeAnchorText?: string | null,
+  reportVisualDiagnostics?: boolean,
+  attachVisualDiagnosticAnchors?: boolean,
+  deferMermaidRender?: boolean,
+  mermaidBlockOffset?: number,
+  structuredVisualBlockOffset?: number,
+) => Components;
+
 const captureCollaborationState = (): CollaborationStateSnapshot => {
   const state = useStore.getState();
   return {
@@ -35,6 +61,119 @@ const captureCollaborationState = (): CollaborationStateSnapshot => {
     artifactSectionLocks: state.artifactSectionLocks,
   };
 };
+
+const countMarkdownVisualBlocks = (content: string): MarkdownVisualBlockCounts => {
+  const counts: MarkdownVisualBlockCounts = {
+    mermaid: 0,
+    structuredVisual: 0,
+  };
+  const fencePattern = /```([^\s\n]*)[^\n]*\n[\s\S]*?```/g;
+  let match = fencePattern.exec(content);
+  while (match) {
+    const language = match[1]?.trim();
+    if (language === 'mermaid') counts.mermaid += 1;
+    if (language === 'ai4se-visual') counts.structuredVisual += 1;
+    match = fencePattern.exec(content);
+  }
+  return counts;
+};
+
+const buildArtifactMarkdownRenderBlocks = (content: string): ArtifactMarkdownRenderBlock[] => {
+  const sections = extractArtifactSections(content);
+  if (sections.length === 0) {
+    return [{
+      key: 'full-document',
+      content,
+      mermaidBlockOffset: 0,
+      structuredVisualBlockOffset: 0,
+    }];
+  }
+
+  const lines = content.replace(/\r\n/g, '\n').split('\n');
+  const blocks: ArtifactMarkdownRenderBlock[] = [];
+  let mermaidBlockOffset = 0;
+  let structuredVisualBlockOffset = 0;
+
+  const pushBlock = (key: string, blockContent: string, anchor?: string) => {
+    if (!blockContent.trim()) return;
+    blocks.push({
+      key,
+      anchor,
+      content: blockContent.trim(),
+      mermaidBlockOffset,
+      structuredVisualBlockOffset,
+    });
+    const counts = countMarkdownVisualBlocks(blockContent);
+    mermaidBlockOffset += counts.mermaid;
+    structuredVisualBlockOffset += counts.structuredVisual;
+  };
+
+  if (sections[0].startLine > 0) {
+    pushBlock('preamble', lines.slice(0, sections[0].startLine).join('\n'));
+  }
+
+  sections.forEach((section) => {
+    pushBlock(section.anchor, section.content, section.anchor);
+  });
+
+  return blocks;
+};
+
+type MemoizedArtifactMarkdownSectionProps = {
+  block: ArtifactMarkdownRenderBlock;
+  createComponents: ArtifactMarkdownComponentsFactory;
+  onMermaidRetry?: MermaidRetryHandler;
+  activeAnchorText?: string | null;
+  reportVisualDiagnostics: boolean;
+  attachVisualDiagnosticAnchors: boolean;
+  deferMermaidRender: boolean;
+};
+
+const MemoizedArtifactMarkdownSection = React.memo(function MemoizedArtifactMarkdownSection({
+  block,
+  createComponents,
+  onMermaidRetry,
+  activeAnchorText,
+  reportVisualDiagnostics,
+  attachVisualDiagnosticAnchors,
+  deferMermaidRender,
+}: MemoizedArtifactMarkdownSectionProps) {
+  const components = createComponents(
+    onMermaidRetry,
+    activeAnchorText,
+    reportVisualDiagnostics,
+    attachVisualDiagnosticAnchors,
+    deferMermaidRender,
+    block.mermaidBlockOffset,
+    block.structuredVisualBlockOffset,
+  );
+
+  return (
+    <div
+      data-testid="artifact-render-section"
+      data-artifact-section-anchor={block.anchor}
+    >
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
+        components={components}
+      >
+        {block.content}
+      </ReactMarkdown>
+    </div>
+  );
+}, (previous, next) => (
+  previous.block.key === next.block.key
+  && previous.block.content === next.block.content
+  && previous.block.mermaidBlockOffset === next.block.mermaidBlockOffset
+  && previous.block.structuredVisualBlockOffset === next.block.structuredVisualBlockOffset
+  && previous.createComponents === next.createComponents
+  && previous.onMermaidRetry === next.onMermaidRetry
+  && previous.activeAnchorText === next.activeAnchorText
+  && previous.reportVisualDiagnostics === next.reportVisualDiagnostics
+  && previous.attachVisualDiagnosticAnchors === next.attachVisualDiagnosticAnchors
+  && previous.deferMermaidRender === next.deferMermaidRender
+));
 
 export const ArtifactPane: React.FC = () => {
   const workflow = useStore((state) => state.workflow);
@@ -397,6 +536,10 @@ export const ArtifactPane: React.FC = () => {
   // Content displays using the imported preprocessMarkdown utility
 
   const displayContent = preprocessMarkdown(artifactContent);
+  const artifactMarkdownRenderBlocks = useMemo(
+    () => buildArtifactMarkdownRenderBlocks(displayContent),
+    [displayContent]
+  );
   const hasArtifactContent = artifactContent.trim().length > 0;
   const showArtifactStreamingPositionIndicator = (
     isGenerating
@@ -3862,15 +4005,17 @@ export const ArtifactPane: React.FC = () => {
     clearArtifactVisualDiagnostic(buildVisualDiagnosticId('structured-visual', blockIndex));
   }, [clearArtifactVisualDiagnostic, currentStageId]);
 
-  const createArtifactMarkdownComponents = (
+  const createArtifactMarkdownComponents = useCallback((
     onMermaidRetry?: Parameters<typeof createMarkdownCodeRenderer>[0]['onMermaidRetry'],
     activeAnchorText?: string | null,
     reportVisualDiagnostics = false,
     attachVisualDiagnosticAnchors = false,
-    deferMermaidRender = false
+    deferMermaidRender = false,
+    mermaidBlockOffset = 0,
+    structuredVisualBlockOffset = 0
   ): Components => {
-    let mermaidBlockCounter = 0;
-    let structuredVisualBlockCounter = 0;
+    let mermaidBlockCounter = mermaidBlockOffset;
+    let structuredVisualBlockCounter = structuredVisualBlockOffset;
     let anchorHighlighted = false;
     const normalizedActiveAnchorText = activeAnchorText?.trim() || null;
     const highlightAnchorInChildren = (children: React.ReactNode): React.ReactNode => {
@@ -4009,15 +4154,15 @@ export const ArtifactPane: React.FC = () => {
       ),
     }),
     };
-  };
+  }, [
+    activeVisualDiagnosticId,
+    currentStageId,
+    handleMermaidRenderError,
+    handleMermaidRenderSuccess,
+    handleStructuredVisualValidationError,
+    handleStructuredVisualValidationSuccess,
+  ]);
 
-  const editableMarkdownComponents = createArtifactMarkdownComponents(
-    handleMermaidRetry,
-    activeCommentAnchorText,
-    true,
-    true,
-    isGenerating
-  );
   const readOnlyMarkdownComponents = createArtifactMarkdownComponents();
 
   return (
@@ -4469,13 +4614,22 @@ export const ArtifactPane: React.FC = () => {
                   })}
                 </div>
               ) : viewMode === 'preview' ? (
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeRaw]}
-                  components={editableMarkdownComponents}
+                <div
+                  data-testid="artifact-section-renderer"
                 >
-                  {displayContent}
-                </ReactMarkdown>
+                  {artifactMarkdownRenderBlocks.map((block) => (
+                    <MemoizedArtifactMarkdownSection
+                      key={block.key}
+                      block={block}
+                      createComponents={createArtifactMarkdownComponents}
+                      onMermaidRetry={handleMermaidRetry}
+                      activeAnchorText={activeCommentAnchorText}
+                      reportVisualDiagnostics
+                      attachVisualDiagnosticAnchors
+                      deferMermaidRender={isGenerating}
+                    />
+                  ))}
+                </div>
               ) : (
                 <pre className="text-sm font-mono text-slate-300 whitespace-pre-wrap break-words bg-[#0f172a] p-6 rounded-xl border border-[#1e293b]">
                   {displayContent}
