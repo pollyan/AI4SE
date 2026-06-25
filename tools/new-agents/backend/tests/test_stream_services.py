@@ -222,6 +222,44 @@ def test_stream_agent_run_events_yields_started_delta_and_final_events(
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_preserves_artifact_patch_metadata(
+    mock_build_runtime: MagicMock,
+) -> None:
+    base = "# 文档\n\n## 范围\n\n旧范围"
+    final = AgentTurnOutput.model_validate({
+        "chat": "已追加风险章节。",
+        "artifact_update": {
+            "type": "replace",
+            "markdown": f"{base}\n\n## 风险\n\n新风险",
+        },
+        "artifact_patch": {
+            "operation": "add_after",
+            "sectionAnchor": "h2:风险:1",
+            "afterSectionAnchor": "h2:范围:1",
+            "replacementMarkdown": "## 风险\n\n新风险",
+            "baseContent": base,
+        },
+        "stage_action": None,
+        "warnings": [],
+    })
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter([final])
+    mock_build_runtime.return_value = runtime
+
+    events = list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+    ))
+
+    assert isinstance(events[1], AgentTurnDeltaEvent)
+    assert events[1].output.artifact_patch == final.artifact_patch
+    assert events[-1] == AgentTurnEvent(output=final)
+    assert events[-1].output.artifact_patch == final.artifact_patch
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
 def test_stream_agent_run_events_records_turn_through_persistence_adapter(
     mock_build_runtime: MagicMock,
 ) -> None:

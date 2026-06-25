@@ -2372,15 +2372,43 @@ def render_partial_agent_turn_from_artifact_data(
     if "artifact_data" not in payload:
         return None
     if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
+        field_order = [
+            "requirement_facts",
+            "system_boundaries",
+            "business_rules",
+            "flow_links",
+            "clarification_questions",
+            "quality_requirements",
+            "downstream_inputs",
+            "stage_gate",
+        ]
+        renderer = render_partial_test_design_clarify_markdown
         markdown = render_partial_test_design_clarify_markdown(
             payload["artifact_data"]
         )
     elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
+        field_order = [
+            "strategy_summary",
+            "quality_goals",
+            "risks",
+            "test_techniques",
+            "test_layers",
+            "test_points",
+            "tradeoffs",
+            "stage_gate",
+        ]
+        renderer = render_partial_test_design_strategy_markdown
         markdown = render_partial_test_design_strategy_markdown(payload["artifact_data"])
     else:
         return None
     if markdown is None:
         return None
+    artifact_patch = _build_partial_add_after_patch(
+        payload["artifact_data"],
+        markdown,
+        field_order=field_order,
+        renderer=renderer,
+    )
     return AgentTurnOutput.model_validate(
         {
             "chat": payload.get("chat") or "正在生成右侧产出物。",
@@ -2388,6 +2416,7 @@ def render_partial_agent_turn_from_artifact_data(
                 "type": "replace",
                 "markdown": markdown,
             },
+            "artifact_patch": artifact_patch,
             "stage_action": payload.get("stage_action"),
             "warnings": payload.get("warnings", []),
         }
@@ -2402,6 +2431,108 @@ def _validate_partial_list(value: Any, model_type: type[StrictArtifactDataModel]
 
 def _join_partial_sections(sections: list[str]) -> str | None:
     return "\n\n".join(sections) if len(sections) > 1 else None
+
+
+_ARTIFACT_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+
+
+def _extract_artifact_sections(markdown: str) -> list[dict[str, Any]]:
+    lines = markdown.replace("\r\n", "\n").split("\n")
+    raw_sections: list[dict[str, Any]] = []
+    in_fence = False
+    current_start = -1
+    current_level = 0
+    current_heading = ""
+    current_title = ""
+
+    for index, line in enumerate(lines):
+        if re.match(r"^\s*```", line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        match = _ARTIFACT_HEADING_PATTERN.match(line)
+        if not match:
+            continue
+        if current_start >= 0:
+            raw_sections.append({
+                "level": current_level,
+                "heading": current_heading,
+                "title": current_title,
+                "content": "\n".join(lines[current_start:index]).strip(),
+            })
+        current_start = index
+        current_level = len(match.group(1))
+        current_heading = line.strip()
+        current_title = match.group(2).strip()
+
+    if current_start >= 0:
+        raw_sections.append({
+            "level": current_level,
+            "heading": current_heading,
+            "title": current_title,
+            "content": "\n".join(lines[current_start:]).strip(),
+        })
+
+    duplicate_counts: dict[str, int] = {}
+    for section in raw_sections:
+        title = section["title"]
+        duplicate_counts[title] = duplicate_counts.get(title, 0) + 1
+
+    occurrence_counts: dict[str, int] = {}
+    sections: list[dict[str, Any]] = []
+    for section in raw_sections:
+        title = section["title"]
+        occurrence = occurrence_counts.get(title, 0) + 1
+        occurrence_counts[title] = occurrence
+        sections.append({
+            **section,
+            "anchor": f"h{section['level']}:{title}:{occurrence}",
+        })
+    return sections
+
+
+def _build_partial_add_after_patch(
+    data: Any,
+    markdown: str,
+    *,
+    field_order: list[str],
+    renderer: Any,
+) -> dict[str, str] | None:
+    if not isinstance(data, dict):
+        return None
+    completed_fields = [field for field in field_order if field in data]
+    if len(completed_fields) < 2:
+        return None
+
+    previous_data = dict(data)
+    previous_data.pop(completed_fields[-1], None)
+    previous_markdown = renderer(previous_data)
+    if not previous_markdown:
+        return None
+    if not markdown.startswith(f"{previous_markdown}\n\n"):
+        return None
+
+    previous_sections = _extract_artifact_sections(previous_markdown)
+    current_sections = _extract_artifact_sections(markdown)
+    if (
+        not previous_sections
+        or len(current_sections) != len(previous_sections) + 1
+    ):
+        return None
+
+    added_section = current_sections[-1]
+    replacement_markdown = markdown[len(previous_markdown) + 2 :].strip()
+    if replacement_markdown != added_section["content"]:
+        return None
+
+    return {
+        "operation": "add_after",
+        "sectionAnchor": added_section["anchor"],
+        "afterSectionAnchor": previous_sections[-1]["anchor"],
+        "replacementMarkdown": replacement_markdown,
+        "baseContent": previous_markdown,
+    }
 
 
 def render_partial_test_design_clarify_markdown(data: Any) -> str | None:

@@ -84,6 +84,46 @@ describe('artifactSections', () => {
     ]);
   });
 
+  it('applies an add_after patch after an existing section', () => {
+    const base = '# 文档\n\n## 范围\n\n旧范围';
+    const result = applyArtifactSectionPatch(base, {
+      operation: 'add_after',
+      sectionAnchor: 'h2:风险:1',
+      afterSectionAnchor: 'h2:范围:1',
+      replacementMarkdown: '## 风险\n\n| 风险 | 状态 |\n| --- | --- |\n| R1 | 待处理 |',
+      baseContent: base,
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      applied: true,
+      content: '# 文档\n\n## 范围\n\n旧范围\n\n## 风险\n\n| 风险 | 状态 |\n| --- | --- |\n| R1 | 待处理 |',
+    }));
+    expect(result.changes).toEqual([
+      expect.objectContaining({
+        kind: 'added',
+        anchor: 'h2:风险:1',
+      }),
+    ]);
+  });
+
+  it('rejects add_after patches without an insertion anchor', () => {
+    const base = '# 文档\n\n## 范围\n\n旧范围';
+
+    const result = applyArtifactSectionPatch(base, {
+      operation: 'add_after',
+      sectionAnchor: 'h2:风险:1',
+      replacementMarkdown: '## 风险\n\n新风险',
+      baseContent: base,
+    });
+
+    expect(result).toEqual({
+      applied: false,
+      content: base,
+      changes: [],
+      fallbackReason: 'invalid_patch',
+    });
+  });
+
   it('rejects section patches when the current content no longer matches the base', () => {
     const base = '# 文档\n\n## 范围\n\n旧范围';
     const current = '# 文档\n\n## 范围\n\n用户已手动修改';

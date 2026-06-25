@@ -1552,6 +1552,12 @@ def test_runtime_raw_json_stream_turn_renders_paragraph_level_clarify_artifact_d
         and output.artifact_update.type == "replace"
         and output.artifact_update.markdown is not None
     ]
+    partial_patches = [
+        output.artifact_patch
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_patch is not None
+    ]
 
     assert len(partial_markdowns) >= 2
     assert partial_markdowns[0].startswith("# 需求分析文档")
@@ -1559,6 +1565,12 @@ def test_runtime_raw_json_stream_turn_renders_paragraph_level_clarify_artifact_d
     assert "## 2. 被测系统与边界" not in partial_markdowns[0]
     assert "## 2. 被测系统与边界" in partial_markdowns[1]
     assert "## 3. 业务规则与数据状态" not in partial_markdowns[1]
+    assert partial_patches
+    assert partial_patches[0].operation == "add_after"
+    assert partial_patches[0].section_anchor == "h2:2. 被测系统与边界:1"
+    assert partial_patches[0].after_section_anchor == "h2:1. 需求事实清单:1"
+    assert partial_patches[0].base_content == partial_markdowns[0]
+    assert "## 2. 被测系统与边界" in partial_patches[0].replacement_markdown
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert "## 3. 业务规则与数据状态" in outputs[-1].artifact_update.markdown
 

@@ -88,12 +88,27 @@ const normalizeArtifactPatch = (value: unknown): ArtifactSectionPatch | null => 
   }
 
   const patch = value as Partial<ArtifactSectionPatch>;
+  const operation = patch.operation;
+  if (operation !== 'replace' && operation !== 'add_after') {
+    throw new Error('结构化智能体 SSE 事件格式错误');
+  }
   if (
-    patch.operation !== 'replace'
-    || typeof patch.sectionAnchor !== 'string'
+    typeof patch.sectionAnchor !== 'string'
     || !patch.sectionAnchor.trim()
     || typeof patch.replacementMarkdown !== 'string'
     || !patch.replacementMarkdown.trim()
+    || (
+      operation === 'add_after'
+      && (
+        typeof patch.afterSectionAnchor !== 'string'
+        || !patch.afterSectionAnchor.trim()
+      )
+    )
+    || (
+      operation === 'replace'
+      && patch.afterSectionAnchor !== undefined
+      && typeof patch.afterSectionAnchor !== 'string'
+    )
     || (
       patch.baseContent !== undefined
       && typeof patch.baseContent !== 'string'
@@ -103,8 +118,9 @@ const normalizeArtifactPatch = (value: unknown): ArtifactSectionPatch | null => 
   }
 
   return {
-    operation: 'replace',
+    operation,
     sectionAnchor: patch.sectionAnchor,
+    ...(operation === 'add_after' ? { afterSectionAnchor: patch.afterSectionAnchor } : {}),
     replacementMarkdown: patch.replacementMarkdown,
     ...(patch.baseContent !== undefined ? { baseContent: patch.baseContent } : {}),
   };

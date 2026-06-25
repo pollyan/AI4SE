@@ -166,9 +166,13 @@ export const applyArtifactSectionPatch = (
   patch: ArtifactSectionPatch,
 ): ArtifactSectionPatchResult => {
   if (
-    patch.operation !== 'replace'
+    !['replace', 'add_after'].includes(patch.operation)
     || !patch.sectionAnchor.trim()
     || !patch.replacementMarkdown.trim()
+    || (
+      patch.operation === 'add_after'
+      && !patch.afterSectionAnchor?.trim()
+    )
   ) {
     return buildFallback(currentContent, 'invalid_patch');
   }
@@ -177,14 +181,48 @@ export const applyArtifactSectionPatch = (
   }
 
   const sections = extractArtifactSections(currentContent);
-  const targetSection = sections.find(section => section.anchor === patch.sectionAnchor);
-  if (!targetSection) {
-    return buildFallback(currentContent, 'section_not_found');
-  }
-
   const replacementSections = extractArtifactSections(patch.replacementMarkdown);
   if (replacementSections.length !== 1) {
     return buildFallback(currentContent, 'invalid_patch');
+  }
+  if (replacementSections[0].anchor !== patch.sectionAnchor) {
+    return buildFallback(currentContent, 'invalid_patch');
+  }
+
+  if (patch.operation === 'add_after') {
+    if (sections.some(section => section.anchor === patch.sectionAnchor)) {
+      return buildFallback(currentContent, 'invalid_patch');
+    }
+
+    const afterSection = sections.find(section => (
+      section.anchor === patch.afterSectionAnchor
+    ));
+    if (!afterSection) {
+      return buildFallback(currentContent, 'section_not_found');
+    }
+
+    const lines = normalizeMarkdown(currentContent).split('\n');
+    const replacementLines = normalizeMarkdown(patch.replacementMarkdown).split('\n');
+    const linesBefore = lines.slice(0, afterSection.endLine);
+    const linesAfter = lines.slice(afterSection.endLine);
+    const content = [
+      ...linesBefore,
+      ...(linesBefore[linesBefore.length - 1]?.trim() === '' ? [] : ['']),
+      ...replacementLines,
+      ...(linesAfter.length > 0 && linesAfter[0]?.trim() !== '' ? [''] : []),
+      ...linesAfter,
+    ].join('\n');
+
+    return {
+      applied: true,
+      content,
+      changes: buildArtifactSectionChangeIndex(currentContent, content),
+    };
+  }
+
+  const targetSection = sections.find(section => section.anchor === patch.sectionAnchor);
+  if (!targetSection) {
+    return buildFallback(currentContent, 'section_not_found');
   }
   if (
     getArtifactSectionUnsafeReason(targetSection.content)

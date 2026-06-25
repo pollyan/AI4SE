@@ -485,6 +485,41 @@ class ArtifactUpdate(BaseModel):
         return self
 
 
+class ArtifactPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    operation: Literal["replace", "add_after"]
+    section_anchor: str = Field(alias="sectionAnchor", min_length=1)
+    replacement_markdown: str = Field(alias="replacementMarkdown", min_length=1)
+    base_content: str | None = Field(default=None, alias="baseContent")
+    after_section_anchor: str | None = Field(
+        default=None,
+        alias="afterSectionAnchor",
+    )
+
+    @field_validator(
+        "section_anchor",
+        "replacement_markdown",
+        "after_section_anchor",
+        mode="before",
+    )
+    @classmethod
+    def validate_optional_strings_not_blank(cls, value: Any) -> Any:
+        if value is None:
+            return value
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("artifact patch string fields cannot be blank")
+        return value
+
+    @model_validator(mode="after")
+    def validate_operation_fields(self) -> "ArtifactPatch":
+        if self.operation == "add_after" and not self.after_section_anchor:
+            raise ValueError("add_after artifact patch requires afterSectionAnchor")
+        if self.operation == "replace" and self.after_section_anchor is not None:
+            raise ValueError("replace artifact patch cannot include afterSectionAnchor")
+        return self
+
+
 class StageAction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -504,6 +539,7 @@ class AgentTurnOutput(BaseModel):
 
     chat: str = Field(min_length=1)
     artifact_update: ArtifactUpdate
+    artifact_patch: ArtifactPatch | None = None
     stage_action: StageAction | None = None
     warnings: list[str] = Field(default_factory=list)
 
@@ -541,6 +577,8 @@ class AgentTurnOutput(BaseModel):
 
     @model_validator(mode="after")
     def validate_chat_artifact_separation(self) -> "AgentTurnOutput":
+        if self.artifact_patch is not None and self.artifact_update.type != "replace":
+            raise ValueError("artifact_patch requires replace artifact_update")
         if self.artifact_update.type != "replace":
             return self
 

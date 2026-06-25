@@ -48,6 +48,11 @@ def apply_stage_readiness_gate(
             blocking_findings,
         ),
         "artifact_update": output.artifact_update.model_dump(mode="json"),
+        "artifact_patch": (
+            output.artifact_patch.model_dump(mode="json")
+            if output.artifact_patch is not None
+            else None
+        ),
         "stage_action": None,
         "warnings": warnings,
     })

@@ -106,3 +106,19 @@
   - `cd tools/new-agents/frontend && npm run lint` 通过。
   - `cd tools/new-agents/frontend && npm run test` 通过，44 个测试文件、690 个测试通过；ArtifactPane 既有 act warning 仍存在。
   - `./scripts/test/test-local.sh all` 未在本切片重复执行；同一目标模式轮次中上一切片提交前已执行并确认失败点为 Intent Tester proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 New Agents Browser E2E Chromium `bootstrap_check_in ... Permission denied (1100)`，当前切片已用 owning package test/lint 覆盖变更范围。
+
+## 2026-06-25 进展：后端 partial add_after patch 元数据
+
+- 已扩展共享 artifact patch 契约：前端 `ArtifactSectionPatch` 与后端 Pydantic `ArtifactPatch` 支持 `replace | add_after`，对外 SSE 字段保持 `sectionAnchor`、`afterSectionAnchor`、`replacementMarkdown`、`baseContent`。
+- 已让前端 `applyArtifactSectionPatch(...)` 支持 `add_after`：当 base 匹配、插入锚点存在、目标章节不存在且 replacement 是单个完整章节时，局部插入新增章节；否则继续显式降级到完整 markdown。
+- 已让后端 `AgentTurnOutput` / `AgentTurnDeltaOutput` 承载可选 `artifact_patch`，`stream_services` 保留 delta 与 final event 的 patch 元数据，stage readiness 重建输出时不丢 patch。
+- 已让后端 TEST_DESIGN/CLARIFY 与 TEST_DESIGN/STRATEGY partial artifact_data renderer 在“相对上一帧只追加一个章节”时生成 `add_after` patch；多章节追加、非 partial renderer、base 不可推导时仍只发送完整 `artifact_update.markdown`。
+- 本切片仍未拆分 `ReactMarkdown` 为 memoized section rendering；视觉层只具备变更索引与局部 patch 应用，未完成“未变化章节不重新 mount”的组件级验收。
+- 验证：
+  - `cd tools/new-agents/frontend && npm run test -- src/core/__tests__/artifactSections.test.ts src/core/__tests__/llm.test.ts -t "add_after|artifact_patch"` 先红后绿，最终 6 个相关测试通过。
+  - `cd tools/new-agents/frontend && npm run test -- src/core/__tests__/artifactSections.test.ts src/core/__tests__/llm.test.ts src/services/__tests__/chatService.test.ts` 通过，3 个测试文件、149 个测试通过。
+  - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -p no:cacheprovider tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_stream_services.py tools/new-agents/backend/tests/test_sse_encoder.py -q` 通过，118 个测试通过。
+  - `cd tools/new-agents/frontend && npm run lint` 通过。
+  - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -p no:cacheprovider tools/new-agents/backend/tests -q` 通过，510 个测试通过、1 个跳过。
+  - `cd tools/new-agents/frontend && npm run test` 通过，44 个测试文件、695 个测试通过；ArtifactPane 既有 act warning 仍存在。
+  - `./scripts/test/test-local.sh all` 未在本切片重复执行；同一目标模式轮次中上一切片提交前已执行并确认失败点为 Intent Tester proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 New Agents Browser E2E Chromium `bootstrap_check_in ... Permission denied (1100)`，当前切片已用 owning package test/lint 覆盖变更范围。

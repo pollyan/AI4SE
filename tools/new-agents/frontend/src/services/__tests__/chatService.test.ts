@@ -144,6 +144,45 @@ describe('useChatService', () => {
         patchSpy.mockRestore();
     });
 
+    it('applies add_after artifact patches from the stream', async () => {
+        const base = '# 文档\n\n## 范围\n\n旧范围';
+        const fullArtifact = '# 文档\n\n## 范围\n\n旧范围\n\n## 风险\n\n| 风险 | 状态 |\n| --- | --- |\n| R1 | 待处理 |';
+        useStore.setState({
+            artifactContent: base,
+            stageArtifacts: { CLARIFY: base },
+        });
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            yield {
+                chatResponse: '已追加风险章节',
+                newArtifact: fullArtifact,
+                action: '',
+                hasArtifactUpdate: true,
+                artifactPatch: {
+                    operation: 'add_after',
+                    sectionAnchor: 'h2:风险:1',
+                    afterSectionAnchor: 'h2:范围:1',
+                    replacementMarkdown: '## 风险\n\n| 风险 | 状态 |\n| --- | --- |\n| R1 | 待处理 |',
+                    baseContent: base,
+                },
+            };
+        });
+
+        const { result } = renderHook(() => useChatService());
+        act(() => result.current.setInput('追加风险'));
+
+        await act(async () => {
+            await result.current.handleSend();
+        });
+
+        expect(useStore.getState().artifactContent).toBe(fullArtifact);
+        expect(useStore.getState().artifactChangeIndex).toEqual([
+            expect.objectContaining({
+                kind: 'added',
+                anchor: 'h2:风险:1',
+            }),
+        ]);
+    });
+
     it('falls back to full markdown when artifact patch result does not match the full artifact', async () => {
         const base = '# 文档\n\n## 范围\n\n旧范围\n\n## 风险\n\n旧风险';
         const fullFallback = '# 文档\n\n## 范围\n\n旧范围\n\n## 风险\n\n完整替换结果';

@@ -88,6 +88,52 @@ def test_agent_turn_event_rejects_unknown_top_level_fields():
         })
 
 
+def test_agent_turn_event_serializes_artifact_patch_with_camel_case_fields():
+    event = AgentTurnEvent.model_validate({
+        "output": {
+            "chat": "已追加系统边界。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": "# 文档\n\n## 范围\n\n旧范围\n\n## 风险\n\n新风险",
+            },
+            "artifact_patch": {
+                "operation": "add_after",
+                "sectionAnchor": "h2:风险:1",
+                "afterSectionAnchor": "h2:范围:1",
+                "replacementMarkdown": "## 风险\n\n新风险",
+                "baseContent": "# 文档\n\n## 范围\n\n旧范围",
+            },
+            "stage_action": None,
+            "warnings": [],
+        },
+    })
+
+    payload = json.loads(encode_sse_event(event).removeprefix("data: ").strip())
+
+    assert payload["output"]["artifact_patch"] == {
+        "operation": "add_after",
+        "sectionAnchor": "h2:风险:1",
+        "afterSectionAnchor": "h2:范围:1",
+        "replacementMarkdown": "## 风险\n\n新风险",
+        "baseContent": "# 文档\n\n## 范围\n\n旧范围",
+    }
+
+
+def test_agent_delta_event_rejects_patch_without_replace_artifact_update():
+    with pytest.raises(ValueError, match="artifact_patch requires replace"):
+        AgentTurnDeltaEvent.model_validate({
+            "output": {
+                "chat": "正在追加章节。",
+                "artifact_patch": {
+                    "operation": "add_after",
+                    "sectionAnchor": "h2:风险:1",
+                    "afterSectionAnchor": "h2:范围:1",
+                    "replacementMarkdown": "## 风险\n\n新风险",
+                },
+            },
+        })
+
+
 def test_agent_runtime_event_fixture_matches_backend_sse_schema():
     fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 

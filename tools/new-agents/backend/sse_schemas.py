@@ -1,8 +1,8 @@
 from typing import Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from agent_contracts import AgentTurnOutput, ArtifactUpdate, StageAction
+from agent_contracts import ArtifactPatch, AgentTurnOutput, ArtifactUpdate, StageAction
 
 
 class AgentTurnEvent(BaseModel):
@@ -25,8 +25,21 @@ class AgentTurnDeltaOutput(BaseModel):
 
     chat: str | None = None
     artifact_update: ArtifactUpdate | None = None
+    artifact_patch: ArtifactPatch | None = None
     stage_action: StageAction | None = None
     warnings: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_patch_requires_replace_update(self) -> "AgentTurnDeltaOutput":
+        if (
+            self.artifact_patch is not None
+            and (
+                self.artifact_update is None
+                or self.artifact_update.type != "replace"
+            )
+        ):
+            raise ValueError("artifact_patch requires replace artifact_update")
+        return self
 
 
 class AgentTurnDeltaEvent(BaseModel):

@@ -24,7 +24,7 @@ export type ArtifactSectionChange = {
     unsafeReason?: 'fenced_block' | 'markdown_table' | 'markdown_list' | 'structured_visual';
 };
 
-export type ArtifactSectionPatchOperation = 'replace';
+export type ArtifactSectionPatchOperation = 'replace' | 'add_after';
 
 export type ArtifactSectionPatchFallbackReason =
     | 'base_mismatch'
@@ -35,6 +35,7 @@ export type ArtifactSectionPatchFallbackReason =
 export type ArtifactSectionPatch = {
     operation: ArtifactSectionPatchOperation;
     sectionAnchor: string;
+    afterSectionAnchor?: string;
     replacementMarkdown: string;
     baseContent?: string;
 };

@@ -318,11 +318,73 @@ describe('llm.ts', () => {
             });
         });
 
+        it('passes add_after artifact_patch through the final structured runtime chunk', async () => {
+            const base = '# 需求分析文档\n\n## 1. 需求事实清单\n\n已有事实';
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: base,
+                stageArtifacts: { CLARIFY: base },
+            });
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentTurnEvent({
+                        chat: '已追加系统边界。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: `${base}\n\n## 2. 被测系统与边界\n\n| 类型 | 内容 |\n| --- | --- |\n| 范围 | 登录 |`,
+                        },
+                        artifact_patch: {
+                            operation: 'add_after',
+                            sectionAnchor: 'h2:2. 被测系统与边界:1',
+                            afterSectionAnchor: 'h2:1. 需求事实清单:1',
+                            replacementMarkdown: '## 2. 被测系统与边界\n\n| 类型 | 内容 |\n| --- | --- |\n| 范围 | 登录 |',
+                            baseContent: base,
+                        },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(generateResponseStream('追加边界'));
+
+            expect(results.at(-1)).toMatchObject({
+                chatResponse: '已追加系统边界。',
+                newArtifact: expect.stringContaining('## 2. 被测系统与边界'),
+                action: '',
+                hasArtifactUpdate: true,
+                artifactPatch: {
+                    operation: 'add_after',
+                    sectionAnchor: 'h2:2. 被测系统与边界:1',
+                    afterSectionAnchor: 'h2:1. 需求事实清单:1',
+                    replacementMarkdown: expect.stringContaining('## 2. 被测系统与边界'),
+                    baseContent: base,
+                },
+            });
+        });
+
         it('rejects malformed artifact_patch payloads in structured runtime events', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
                 body: createSSEStream([
                     'data: {"type":"agent_turn","output":{"chat":"ok","artifact_update":{"type":"replace","markdown":"# 文档"},"artifact_patch":{"operation":"replace","sectionAnchor":"","replacementMarkdown":"## 空"},"stage_action":null,"warnings":[]}}',
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(collectStream(generateResponseStream('hi')))
+                .rejects
+                .toThrow('结构化智能体 SSE 事件格式错误');
+        });
+
+        it('rejects add_after artifact_patch payloads without afterSectionAnchor', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"agent_turn","output":{"chat":"ok","artifact_update":{"type":"replace","markdown":"# 文档\\n\\n## 风险\\n内容"},"artifact_patch":{"operation":"add_after","sectionAnchor":"h2:风险:1","replacementMarkdown":"## 风险\\n内容"},"stage_action":null,"warnings":[]}}',
                     'data: [DONE]',
                 ]),
             });

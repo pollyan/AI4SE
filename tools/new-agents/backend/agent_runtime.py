@@ -1281,6 +1281,7 @@ def build_partial_agent_delta(
 ) -> AgentTurnDeltaOutput | None:
     chat = extract_json_string_prefix(text, "chat")
     markdown = extract_json_string_prefix(text, "markdown")
+    artifact_patch = None
     if (
         not markdown
         and workflow_id is not None
@@ -1304,6 +1305,7 @@ def build_partial_agent_delta(
                 rendered = None
             if rendered is not None:
                 markdown = rendered.artifact_update.markdown
+                artifact_patch = rendered.artifact_patch
         else:
             partial_artifact_data = extract_completed_json_object_members(
                 text,
@@ -1325,6 +1327,7 @@ def build_partial_agent_delta(
                     rendered = None
                 if rendered is not None:
                     markdown = rendered.artifact_update.markdown
+                    artifact_patch = rendered.artifact_patch
     if not chat and not markdown:
         return None
     return AgentTurnDeltaOutput(
@@ -1332,6 +1335,7 @@ def build_partial_agent_delta(
         artifact_update=(
             {"type": "replace", "markdown": markdown} if markdown else None
         ),
+        artifact_patch=artifact_patch,
     )
 
 
