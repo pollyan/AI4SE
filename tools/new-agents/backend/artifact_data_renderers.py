@@ -1132,7 +1132,7 @@ class StrategyRisk(StrictArtifactDataModel):
     severity: int = Field(ge=1, le=5)
     occurrence: int = Field(ge=1, le=5)
     detection: int = Field(ge=1, le=5)
-    rpn: int = Field(ge=1, le=125)
+    rpn: int | None = Field(default=None, ge=1, le=125)
     mitigation: str
     coverage: str
     status: str
@@ -1140,7 +1140,9 @@ class StrategyRisk(StrictArtifactDataModel):
     @model_validator(mode="after")
     def validate_rpn(self) -> "StrategyRisk":
         expected = self.severity * self.occurrence * self.detection
-        if self.rpn != expected:
+        if self.rpn is None:
+            self.rpn = expected
+        elif self.rpn != expected:
             raise ValueError(
                 "rpn must equal severity * occurrence * detection " f"({expected})"
             )
@@ -4454,7 +4456,7 @@ def _render_risk_detail_table(risks: list[StrategyRisk]) -> str:
             item.severity,
             item.occurrence,
             item.detection,
-            item.rpn,
+            _strategy_risk_rpn(item),
             item.mitigation,
             item.coverage,
             item.status,
@@ -4491,7 +4493,7 @@ def _render_risk_board_visual(risks: list[StrategyRisk]) -> str:
                 "S": item.severity,
                 "O": item.occurrence,
                 "D": item.detection,
-                "RPN": item.rpn,
+                "RPN": _strategy_risk_rpn(item),
                 "缓解策略": item.mitigation,
                 "覆盖建议": item.coverage,
             }
@@ -4500,6 +4502,14 @@ def _render_risk_board_visual(risks: list[StrategyRisk]) -> str:
     }
     return (
         "```ai4se-visual\n" + json.dumps(visual, ensure_ascii=False, indent=2) + "\n```"
+    )
+
+
+def _strategy_risk_rpn(risk: StrategyRisk) -> int:
+    return (
+        risk.rpn
+        if risk.rpn is not None
+        else risk.severity * risk.occurrence * risk.detection
     )
 
 
@@ -6318,4 +6328,5 @@ def _node_id(label: str, existing: dict[str, str]) -> str:
 
 
 def _escape_mermaid_label(value: str) -> str:
-    return value.replace('"', "'")
+    normalized = re.sub(r"\s+", " ", str(value)).strip()
+    return normalized.replace("\\", "\\\\").replace('"', '\\"')

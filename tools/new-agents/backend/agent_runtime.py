@@ -149,7 +149,7 @@ JSON 对象结构：
     "document_info": {"artifact_name": "...", "workflow": "TEST_DESIGN", "stage": "STRATEGY", "status": "..."},
     "strategy_summary": {"conclusion": "...", "basis": "F-001 / BR-001 / R-SEED-001", "case_stage_readiness": "可进入/暂缓进入/需补充策略输入"},
     "quality_goals": [{"goal_id": "QG-001", "goal": "...", "metric": "...", "source": "...", "priority": "P0", "status": "..."}],
-    "risks": [{"risk_id": "R-001", "name": "...", "failure_mode": "...", "impact": "...", "source": "...", "severity": 5, "occurrence": 3, "detection": 4, "rpn": 60, "mitigation": "...", "coverage": "...", "status": "待覆盖/已覆盖/风险接受"}],
+    "risks": [{"risk_id": "R-001", "name": "...", "failure_mode": "...", "impact": "...", "source": "...", "severity": 5, "occurrence": 3, "detection": 4, "mitigation": "...", "coverage": "...", "status": "待覆盖/已覆盖/风险接受"}],
     "test_techniques": [{"technique_id": "TS-001", "target": "QG-001 / R-001", "category": "...", "technique": "...", "reason": "...", "applies_to": "R-001 / TP-001"}],
     "test_layers": [{"layer": "单元测试/集成测试/E2E 测试", "ratio": "40%", "scope": "...", "related": "R-001 / TP-001", "tools": "...", "entry_condition": "..."}],
     "test_points": [{"point_id": "TP-001", "point": "...", "priority": "P0", "quality_goal": "QG-001", "risk": "R-001", "technique": "TS-001", "layer": "单元/集成/E2E", "estimated_cases": 6, "coverage": "...", "status": "待生成用例"}],
@@ -160,7 +160,7 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；severity、occurrence、detection 必须是 1 到 5 的整数；rpn 必须等于 severity * occurrence * detection。不要输出完整 Markdown、Mermaid 代码块、risk-board JSON 代码块或表格，后端会负责确定性渲染右侧测试策略蓝图、quadrantChart、block-beta 和 ai4se-visual risk-board。
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；severity、occurrence、detection 必须是 1 到 5 的整数；RPN 由后端根据 severity * occurrence * detection 计算，不需要在 risks 中输出 rpn。不要输出完整 Markdown、Mermaid 代码块、risk-board JSON 代码块或表格，后端会负责确定性渲染右侧测试策略蓝图、quadrantChart、block-beta 和 ai4se-visual risk-board。
 chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """

@@ -1,3 +1,4 @@
+import copy
 import json
 
 import pytest
@@ -418,6 +419,32 @@ def test_parse_agent_turn_output_text_renders_strategy_artifact_data():
     assert output.stage_action.target_stage_id == "CASES"
 
 
+def test_parse_agent_turn_output_text_renders_strategy_artifact_data_without_model_rpn():
+    artifact_data = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
+    artifact_data["risks"][0].pop("rpn")
+    json_text = json.dumps(
+        {
+            "chat": "我已形成风险驱动测试策略，请确认右侧蓝图。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="STRATEGY",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 测试策略蓝图")
+    assert "| 5 | 3 | 4 | 60 |" in output.artifact_update.markdown
+    assert '"RPN": 60' in output.artifact_update.markdown
+
+
 def test_strategy_structured_output_instruction_requests_artifact_data_not_markdown():
     instruction = build_structured_output_instruction(
         "TEST_DESIGN",
@@ -431,6 +458,9 @@ def test_strategy_structured_output_instruction_requests_artifact_data_not_markd
     assert "stage_action" in instruction
     assert '"target_stage_id": "CASES"' in instruction
     assert "不要输出完整 Markdown" in instruction
+    assert '"rpn": 60' not in instruction
+    assert "RPN 由后端根据 severity * occurrence * detection 计算" in instruction
+    assert "rpn 必须等于" not in instruction
     assert "artifact_update.markdown" not in instruction
 
 
@@ -1578,10 +1608,12 @@ def test_runtime_raw_json_stream_turn_renders_paragraph_level_clarify_artifact_d
 def test_runtime_raw_json_stream_turn_renders_strategy_artifact_data_before_final_output(
     monkeypatch,
 ):
+    artifact_data = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
+    artifact_data["risks"][0].pop("rpn")
     final_json = json.dumps(
         {
             "chat": "我已形成风险驱动测试策略，请确认右侧蓝图。",
-            "artifact_data": VALID_STRATEGY_ARTIFACT_DATA,
+            "artifact_data": artifact_data,
             "stage_action": None,
             "warnings": [],
         },

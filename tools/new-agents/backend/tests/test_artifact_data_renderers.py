@@ -26,6 +26,15 @@ from artifact_data_renderers import (
 )
 from test_asset_parsing import parse_lisa_test_asset_markdown
 
+
+def _extract_mermaid_block(markdown: str, marker: str) -> str:
+    for chunk in markdown.split("```mermaid\n")[1:]:
+        block = chunk.split("\n```", 1)[0]
+        if marker in block:
+            return block
+    raise AssertionError(f"Mermaid block not found: {marker}")
+
+
 VALID_CLARIFY_ARTIFACT_DATA = {
     "document_info": {
         "artifact_name": "测试需求分析与澄清基线",
@@ -2991,6 +3000,80 @@ def test_strategy_artifact_data_rejects_inconsistent_rpn():
 
     with pytest.raises(ValidationError, match="rpn"):
         StrategyArtifactData.model_validate(invalid)
+
+
+def test_strategy_artifact_data_computes_missing_rpn_for_generated_visuals():
+    data = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
+    data["risks"][0].pop("rpn")
+
+    artifact = StrategyArtifactData.model_validate(data)
+    assert artifact.risks[0].rpn == 60
+
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已形成风险驱动测试策略，请确认右侧蓝图。",
+            "artifact_data": data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="TEST_DESIGN",
+        current_stage_id="STRATEGY",
+    )
+
+    assert output is not None
+    assert output.artifact_update.markdown is not None
+    strategy_markdown = output.artifact_update.markdown
+    assert "| R-001 | 错误凭证绕过认证 |" in strategy_markdown
+    assert "| 5 | 3 | 4 | 60 |" in strategy_markdown
+    assert '"RPN": 60' in strategy_markdown
+    assert (
+        validate_agent_turn(
+            output,
+            workflow_id="TEST_DESIGN",
+            current_stage_id="STRATEGY",
+        )
+        == output
+    )
+
+
+def test_strategy_mermaid_labels_are_normalized_for_special_characters():
+    data = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
+    data["risks"][0]["name"] = '认证 "绕过" \\ 高风险\n二行'
+    data["test_layers"][0]["layer"] = '单元 "核心" \\ 层\nBeta'
+    data["test_layers"][0]["scope"] = '认证 "规则"\n锁定 \\ 状态'
+
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已形成风险驱动测试策略，请确认右侧蓝图。",
+            "artifact_data": data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="TEST_DESIGN",
+        current_stage_id="STRATEGY",
+    )
+
+    assert output is not None
+    assert output.artifact_update.markdown is not None
+    strategy_markdown = output.artifact_update.markdown
+    risk_block = _extract_mermaid_block(strategy_markdown, "quadrantChart")
+    pyramid_block = _extract_mermaid_block(strategy_markdown, "block-beta")
+
+    assert '"认证 \\"绕过\\" \\\\ 高风险 二行": [0.60, 1.00]' in risk_block
+    assert "\n二行" not in risk_block
+    assert (
+        '单元 \\"核心\\" \\\\ 层 Beta (40%) - '
+        '认证 \\"规则\\" 锁定 \\\\ 状态'
+    ) in pyramid_block
+    assert "\n锁定" not in pyramid_block
+    assert (
+        validate_agent_turn(
+            output,
+            workflow_id="TEST_DESIGN",
+            current_stage_id="STRATEGY",
+        )
+        == output
+    )
 
 
 def test_render_strategy_artifact_data_is_deterministic_and_contract_valid():
