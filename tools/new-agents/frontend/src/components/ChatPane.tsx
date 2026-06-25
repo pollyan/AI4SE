@@ -120,11 +120,9 @@ export const ChatPane: React.FC = () => {
   const stageIndex = useStore((state) => state.stageIndex);
   const currentRunId = useStore((state) => state.currentRunId);
   const pendingStageTransition = useStore((state) => state.pendingStageTransition);
-  const artifactVisualDiagnostics = useStore((state) => state.artifactVisualDiagnostics);
   const clearPendingStageTransition = useStore((state) => state.clearPendingStageTransition);
   const applyWorkflowHandoff = useStore((state) => state.applyWorkflowHandoff);
   const setSettingsOpen = useStore((state) => state.setSettingsOpen);
-  const focusArtifactVisualDiagnostic = useStore((state) => state.focusArtifactVisualDiagnostic);
   
   const onboardingConfig = WORKFLOWS[workflow].onboarding;
   const workflowStages = WORKFLOWS[workflow].stages;
@@ -148,10 +146,6 @@ export const ChatPane: React.FC = () => {
       isStructuredOutputFailureMessage(message)
     ))
   );
-  const currentArtifactVisualDiagnostic = currentStageId
-    ? [...artifactVisualDiagnostics].reverse().find((diagnostic) => diagnostic.stageId === currentStageId)
-    : null;
-
   const updateMessage = useStore((state) => state.updateMessage);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -163,7 +157,6 @@ export const ChatPane: React.FC = () => {
   const [workflowHandoffs, setWorkflowHandoffs] = useState<WorkflowHandoff[]>([]);
   const [providerCheckByMessageId, setProviderCheckByMessageId] = useState<ProviderCheckStateByMessage>({});
   const [expandedErrorDetails, setExpandedErrorDetails] = useState<Record<string, boolean>>({});
-  const [isVisualDiagnosticExpanded, setIsVisualDiagnosticExpanded] = useState(false);
 
   const toggleErrorDetail = (messageId: string) => {
     setExpandedErrorDetails(current => ({
@@ -766,54 +759,6 @@ export const ChatPane: React.FC = () => {
             </div>
           );
         })}
-
-        {currentArtifactVisualDiagnostic && (
-          <div className="flex items-start gap-4 animate-fade-in-up">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 mt-1 border border-amber-500/20 bg-amber-500/10 text-amber-300">
-              <AlertTriangle className="h-4 w-4" />
-            </div>
-            <div className="flex flex-col gap-2 max-w-[90%] items-start">
-              <span className="text-slate-500 text-[10px] font-mono px-1">{agentName} • 产物诊断</span>
-              <div className="rounded-2xl rounded-tl-none border border-amber-500/25 bg-amber-500/10 p-3 text-amber-100 shadow-sm">
-                <div className="flex items-start gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-semibold">右侧产物有可视化需要处理</div>
-                    <p className="mt-1 text-[11px] leading-relaxed text-amber-100/75">
-                      图表或结构化可视化未能稳定渲染，右侧产物已保留诊断入口。
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsVisualDiagnosticExpanded(current => !current)}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-300/25 bg-amber-300/10 px-2 py-1 text-[11px] font-semibold text-amber-50 transition-colors hover:border-amber-200/40 hover:bg-amber-300/15"
-                    aria-expanded={isVisualDiagnosticExpanded}
-                  >
-                    {isVisualDiagnosticExpanded ? '收起诊断详情' : '查看诊断详情'}
-                    {isVisualDiagnosticExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                  </button>
-                </div>
-                {isVisualDiagnosticExpanded && (
-                  <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-950/25 px-3 py-2 text-[11px] leading-relaxed text-amber-50/85">
-                    <p>{currentArtifactVisualDiagnostic.message}</p>
-                    <p className="mt-1 text-amber-100/70">
-                      请在右侧产物中查看对应图表或结构化可视化块，必要时重新生成图表。
-                    </p>
-                  </div>
-                )}
-                <div className="mt-3 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => focusArtifactVisualDiagnostic(currentArtifactVisualDiagnostic.id)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-[11px] font-semibold text-amber-50 transition-colors hover:border-amber-200/40 hover:bg-amber-300/15"
-                  >
-                    <span>查看问题位置</span>
-                    <ArrowRight className="h-3 w-3" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {pendingStageTransition && pendingNextStage && !isGenerating && !isLatestStructuredOutputFailure && !isLatestProviderFailure && (
           <div className="flex items-start gap-4 animate-fade-in-up">

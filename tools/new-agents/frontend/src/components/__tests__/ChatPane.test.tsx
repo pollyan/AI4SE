@@ -275,7 +275,7 @@ describe('ChatPane Component', () => {
         expect(mockHandleSend).not.toHaveBeenCalled();
     });
 
-    it('shows a compact notice for current-stage artifact visual diagnostics with details collapsed', () => {
+    it('does not duplicate current-stage artifact visual diagnostics in the chat pane', () => {
         useStore.setState({
             chatHistory: [
                 { id: '1', role: 'assistant', content: '右侧产物已更新。', timestamp: Date.now() },
@@ -294,63 +294,11 @@ describe('ChatPane Component', () => {
 
         render(<ChatPane />);
 
-        expect(screen.getByText('右侧产物有可视化需要处理')).toBeDefined();
+        expect(screen.getByText('右侧产物已更新。')).toBeDefined();
+        expect(screen.queryByText('右侧产物有可视化需要处理')).toBeNull();
         expect(screen.queryByText('结构化可视化必须是合法 JSON。')).toBeNull();
-
-        fireEvent.click(screen.getByRole('button', { name: '查看诊断详情' }));
-        expect(screen.getByText('结构化可视化必须是合法 JSON。')).toBeDefined();
-    });
-
-    it('renders artifact visual diagnostics after chat messages instead of the top of the conversation', () => {
-        useStore.setState({
-            chatHistory: [
-                { id: '1', role: 'assistant', content: '右侧产物已更新。', timestamp: Date.now() },
-            ],
-            artifactVisualDiagnostics: [
-                {
-                    id: 'structured-visual:CLARIFY:0',
-                    stageId: 'CLARIFY',
-                    kind: 'structured-visual',
-                    title: '结构化可视化格式错误',
-                    message: '结构化可视化必须是合法 JSON。',
-                    createdAt: Date.now(),
-                },
-            ],
-        });
-
-        render(<ChatPane />);
-
-        const message = screen.getByText('右侧产物已更新。');
-        const notice = screen.getByText('右侧产物有可视化需要处理');
-        expect(
-            message.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING
-        ).toBeTruthy();
-    });
-
-    it('focuses the current-stage artifact visual diagnostic from the notice action', () => {
-        useStore.setState({
-            chatHistory: [
-                { id: '1', role: 'assistant', content: '右侧产物已更新。', timestamp: Date.now() },
-            ],
-            artifactVisualDiagnostics: [
-                {
-                    id: 'structured-visual:CLARIFY:0',
-                    stageId: 'CLARIFY',
-                    kind: 'structured-visual',
-                    title: '结构化可视化格式错误',
-                    message: '结构化可视化必须是合法 JSON。',
-                    createdAt: Date.now(),
-                },
-            ],
-        });
-
-        render(<ChatPane />);
-        fireEvent.click(screen.getByRole('button', { name: '查看问题位置' }));
-
-        expect(useStore.getState().artifactVisualDiagnosticFocusRequest).toEqual({
-            id: 'structured-visual:CLARIFY:0',
-            seq: expect.any(Number),
-        });
+        expect(screen.queryByRole('button', { name: '查看诊断详情' })).toBeNull();
+        expect(screen.queryByRole('button', { name: '查看问题位置' })).toBeNull();
     });
 
     it('does not show visual diagnostics from another stage', () => {
