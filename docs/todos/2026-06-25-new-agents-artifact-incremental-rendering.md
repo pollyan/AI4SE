@@ -79,3 +79,16 @@
   - `cd tools/new-agents/frontend && npm run lint` 通过。
   - `cd tools/new-agents/frontend && npm run test` 通过，44 个测试文件、679 个测试通过；ArtifactPane 既有 act warning 仍存在。
   - `./scripts/test/test-local.sh all` 已尝试：Intent Tester API、flake8、Common frontend build、New Agents frontend、New Agents backend 通过；Intent Tester proxy 因 `listen EPERM: operation not permitted 0.0.0.0:3002` 失败，New Agents Browser E2E 因 Chromium `bootstrap_check_in ... Permission denied (1100)` 失败，属于本地权限/沙箱阻塞，未作为本切片代码失败处理。
+
+## 2026-06-25 进展：前端章节 patch 应用与显式降级
+
+- 已新增前端 section patch 契约：`applyArtifactSectionPatch(...)` 可在同 base 前提下替换单个安全 Markdown 章节，并返回完整新 artifact 与章节变更索引。
+- 已在 store 中暴露 `applyArtifactSectionPatch(...)` action；patch 成功时同步 `artifactContent`、当前 `stageArtifacts` 和 `artifactChangeIndex`，失败时不修改状态。
+- 已显式返回 `base_mismatch`、`section_not_found`、`unsafe_section`、`invalid_patch` 等降级原因，避免把锚点缺失或结构化块 patch 伪装成局部更新成功。
+- 本切片仍未新增后端 `artifact_patch` / `changed_sections` SSE 契约，也未接入 `chatService.ts` 的真实 patch 流式解析；这些仍属于本 todo 的后续工作。
+- 验证：
+  - `cd tools/new-agents/frontend && npm run test -- src/core/__tests__/artifactSections.test.ts src/__tests__/store.test.ts -t "section patch|section replace patch"` 通过，2 个测试文件内 6 个相关测试通过。
+  - `cd tools/new-agents/frontend && npm run test -- src/core/__tests__/artifactSections.test.ts src/__tests__/store.test.ts` 通过，2 个测试文件内 55 个测试通过。
+  - `cd tools/new-agents/frontend && npm run lint` 通过。
+  - `cd tools/new-agents/frontend && npm run test` 通过，44 个测试文件、685 个测试通过；ArtifactPane 既有 act warning 仍存在。
+  - `./scripts/test/test-local.sh all` 未在本切片重复执行；同一目标模式轮次中上一切片提交前已执行并确认失败点为 Intent Tester proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 New Agents Browser E2E Chromium `bootstrap_check_in ... Permission denied (1100)`，当前切片已用 owning package test/lint 覆盖变更范围。

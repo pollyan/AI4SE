@@ -1227,4 +1227,47 @@ describe('Zustand Store', () => {
         useStore.getState().clearHistory();
         expect(useStore.getState().artifactChangeIndex).toEqual([]);
     });
+
+    it('applies artifact section patches to the active stage artifact', () => {
+        const base = '# 文档\n\n## 范围\n\n旧范围\n\n## 风险\n\n保持不变';
+        useStore.getState().setArtifactContent(base);
+
+        const result = useStore.getState().applyArtifactSectionPatch({
+            operation: 'replace',
+            sectionAnchor: 'h2:范围:1',
+            replacementMarkdown: '## 范围\n\n新范围',
+            baseContent: base,
+        });
+
+        expect(result.applied).toBe(true);
+        expect(useStore.getState().artifactContent).toBe('# 文档\n\n## 范围\n\n新范围\n\n## 风险\n\n保持不变');
+        expect(useStore.getState().stageArtifacts.CLARIFY).toBe(useStore.getState().artifactContent);
+        expect(useStore.getState().artifactChangeIndex).toEqual([
+            expect.objectContaining({
+                kind: 'modified',
+                anchor: 'h2:范围:1',
+            }),
+        ]);
+    });
+
+    it('does not mutate artifact state when section patch application falls back', () => {
+        const base = '# 文档\n\n## 范围\n\n旧范围';
+        useStore.getState().setArtifactContent(base);
+
+        const result = useStore.getState().applyArtifactSectionPatch({
+            operation: 'replace',
+            sectionAnchor: 'h2:不存在:1',
+            replacementMarkdown: '## 不存在\n\n新范围',
+            baseContent: base,
+        });
+
+        expect(result).toEqual({
+            applied: false,
+            content: base,
+            changes: [],
+            fallbackReason: 'section_not_found',
+        });
+        expect(useStore.getState().artifactContent).toBe(base);
+        expect(useStore.getState().stageArtifacts.CLARIFY).toBe(base);
+    });
 });

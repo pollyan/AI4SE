@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyArtifactSectionPatch,
   buildArtifactSectionChangeIndex,
   extractArtifactSections,
 } from '../artifactSections';
@@ -60,5 +61,77 @@ describe('artifactSections', () => {
         unsafeReason: 'markdown_table',
       }),
     ]);
+  });
+
+  it('applies a same-base section replace patch and reports the changed section', () => {
+    const base = '# 文档\n\n## 范围\n\n旧范围\n\n## 风险\n\n保持不变';
+    const result = applyArtifactSectionPatch(base, {
+      operation: 'replace',
+      sectionAnchor: 'h2:范围:1',
+      replacementMarkdown: '## 范围\n\n新范围',
+      baseContent: base,
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      applied: true,
+      content: '# 文档\n\n## 范围\n\n新范围\n\n## 风险\n\n保持不变',
+    }));
+    expect(result.changes).toEqual([
+      expect.objectContaining({
+        kind: 'modified',
+        anchor: 'h2:范围:1',
+      }),
+    ]);
+  });
+
+  it('rejects section patches when the current content no longer matches the base', () => {
+    const base = '# 文档\n\n## 范围\n\n旧范围';
+    const current = '# 文档\n\n## 范围\n\n用户已手动修改';
+
+    const result = applyArtifactSectionPatch(current, {
+      operation: 'replace',
+      sectionAnchor: 'h2:范围:1',
+      replacementMarkdown: '## 范围\n\n新范围',
+      baseContent: base,
+    });
+
+    expect(result).toEqual({
+      applied: false,
+      content: current,
+      changes: [],
+      fallbackReason: 'base_mismatch',
+    });
+  });
+
+  it('rejects section patches when the anchor cannot be found', () => {
+    const current = '# 文档\n\n## 范围\n\n旧范围';
+
+    const result = applyArtifactSectionPatch(current, {
+      operation: 'replace',
+      sectionAnchor: 'h2:不存在:1',
+      replacementMarkdown: '## 不存在\n\n新范围',
+      baseContent: current,
+    });
+
+    expect(result.fallbackReason).toBe('section_not_found');
+    expect(result.content).toBe(current);
+  });
+
+  it('rejects section patches for unsafe structured markdown sections', () => {
+    const current = '# 文档\n\n## 表格\n\n| 字段 | 内容 |\n| --- | --- |\n| A | 旧值 |';
+
+    const result = applyArtifactSectionPatch(current, {
+      operation: 'replace',
+      sectionAnchor: 'h2:表格:1',
+      replacementMarkdown: '## 表格\n\n| 字段 | 内容 |\n| --- | --- |\n| A | 新值 |',
+      baseContent: current,
+    });
+
+    expect(result).toEqual({
+      applied: false,
+      content: current,
+      changes: [],
+      fallbackReason: 'unsafe_section',
+    });
   });
 });

@@ -24,6 +24,28 @@ export type ArtifactSectionChange = {
     unsafeReason?: 'fenced_block' | 'markdown_table' | 'markdown_list' | 'structured_visual';
 };
 
+export type ArtifactSectionPatchOperation = 'replace';
+
+export type ArtifactSectionPatchFallbackReason =
+    | 'base_mismatch'
+    | 'section_not_found'
+    | 'unsafe_section'
+    | 'invalid_patch';
+
+export type ArtifactSectionPatch = {
+    operation: ArtifactSectionPatchOperation;
+    sectionAnchor: string;
+    replacementMarkdown: string;
+    baseContent?: string;
+};
+
+export type ArtifactSectionPatchResult = {
+    applied: boolean;
+    content: string;
+    changes: ArtifactSectionChange[];
+    fallbackReason?: ArtifactSectionPatchFallbackReason;
+};
+
 export type ArtifactCommentStatus = 'open' | 'resolved';
 
 export type ArtifactCommentReply = {
@@ -512,6 +534,7 @@ export interface ChatState {
     updateMessage: (id: string, content: string) => void;
     removeLastMessage: () => void;
     setArtifactContent: (content: string) => void;
+    applyArtifactSectionPatch: (patch: ArtifactSectionPatch) => ArtifactSectionPatchResult;
     addArtifactVersion: (version: ArtifactVersionInput) => void;
     addArtifactComment: (comment: ArtifactCommentInput) => void;
     addArtifactCommentReply: (commentId: string, content: string) => void;

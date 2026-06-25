@@ -4,7 +4,10 @@ import { WORKFLOWS } from './core/workflows';
 import { AgentRunSnapshot, AgentRunSnapshotContextSummary, ArtifactAuditEvent, ArtifactComment, ArtifactSectionLock, ArtifactVisualDiagnosticInput, ChatState as AppState, ArtifactVersion, Message, MessageErrorDiagnostic, WorkflowHandoff, WorkflowType } from './core/types';
 import { getAgentById } from './core/config/agents';
 import { planStageTransitionConfirmation } from './core/agentCore';
-import { buildArtifactSectionChangeIndex } from './core/artifactSections';
+import {
+  applyArtifactSectionPatch as applyArtifactSectionPatchToContent,
+  buildArtifactSectionChangeIndex,
+} from './core/artifactSections';
 import {
   isRecord,
   isWorkflowType,
@@ -411,6 +414,28 @@ export const useStore = create<AppState>()(
           artifactVisualDiagnosticFocusRequest: null,
         };
       }),
+      applyArtifactSectionPatch: (patch) => {
+        const result = applyArtifactSectionPatchToContent(
+          useStore.getState().artifactContent,
+          patch
+        );
+        if (!result.applied) return result;
+
+        set((state) => {
+          const currentStageId = WORKFLOWS[state.workflow].stages[state.stageIndex].id;
+          return {
+            artifactContent: result.content,
+            artifactChangeIndex: result.changes,
+            stageArtifacts: {
+              ...state.stageArtifacts,
+              [currentStageId]: result.content,
+            },
+            artifactVisualDiagnostics: [],
+            artifactVisualDiagnosticFocusRequest: null,
+          };
+        });
+        return result;
+      },
       setStageArtifact: (stageId, content) => set((state) => {
         const workflowStageIds = new Set(
           WORKFLOWS[state.workflow].stages.map(stage => stage.id)

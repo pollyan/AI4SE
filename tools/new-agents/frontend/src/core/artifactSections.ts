@@ -1,4 +1,10 @@
-import type { ArtifactSectionChange, ArtifactSectionChangeKind } from './types';
+import type {
+  ArtifactSectionChange,
+  ArtifactSectionChangeKind,
+  ArtifactSectionPatch,
+  ArtifactSectionPatchFallbackReason,
+  ArtifactSectionPatchResult,
+} from './types';
 
 export type ArtifactMarkdownSection = {
   level: number;
@@ -7,6 +13,8 @@ export type ArtifactMarkdownSection = {
   displayTitle: string;
   anchor: string;
   content: string;
+  startLine: number;
+  endLine: number;
 };
 
 type UnsafeReason = NonNullable<ArtifactSectionChange['unsafeReason']>;
@@ -17,7 +25,7 @@ const isFenceBoundary = (line: string): boolean => /^\s*```/.test(line);
 
 const headingPattern = /^(#{1,6})\s+(.+?)\s*$/;
 
-const detectUnsafeReason = (content: string): UnsafeReason | undefined => {
+export const getArtifactSectionUnsafeReason = (content: string): UnsafeReason | undefined => {
   const lines = content.split('\n');
   if (lines.some(line => /```\s*ai4se-visual\b/.test(line))) return 'structured_visual';
   if (lines.some(isFenceBoundary)) return 'fenced_block';
@@ -28,7 +36,7 @@ const detectUnsafeReason = (content: string): UnsafeReason | undefined => {
 
 export const extractArtifactSections = (content: string): ArtifactMarkdownSection[] => {
   const lines = normalizeMarkdown(content).split('\n');
-  const rawSections: Array<Omit<ArtifactMarkdownSection, 'displayTitle' | 'anchor'> & { start: number }> = [];
+  const rawSections: Array<Omit<ArtifactMarkdownSection, 'displayTitle' | 'anchor'>> = [];
   let inFence = false;
   let currentStart = -1;
   let currentHeading = '';
@@ -47,11 +55,12 @@ export const extractArtifactSections = (content: string): ArtifactMarkdownSectio
 
     if (currentStart >= 0) {
       rawSections.push({
-        start: currentStart,
         level: currentLevel,
         heading: currentHeading,
         title: currentTitle,
         content: lines.slice(currentStart, index).join('\n').trim(),
+        startLine: currentStart,
+        endLine: index,
       });
     }
 
@@ -63,11 +72,12 @@ export const extractArtifactSections = (content: string): ArtifactMarkdownSectio
 
   if (currentStart >= 0) {
     rawSections.push({
-      start: currentStart,
       level: currentLevel,
       heading: currentHeading,
       title: currentTitle,
       content: lines.slice(currentStart).join('\n').trim(),
+      startLine: currentStart,
+      endLine: lines.length,
     });
   }
 
@@ -88,6 +98,8 @@ export const extractArtifactSections = (content: string): ArtifactMarkdownSectio
       displayTitle: isDuplicateTitle ? `${section.title} #${occurrence}` : section.title,
       anchor: `h${section.level}:${section.title}:${occurrence}`,
       content: section.content,
+      startLine: section.startLine,
+      endLine: section.endLine,
     };
   });
 };
@@ -96,7 +108,7 @@ const buildChange = (
   kind: ArtifactSectionChangeKind,
   section: ArtifactMarkdownSection,
 ): ArtifactSectionChange => {
-  const unsafeReason = detectUnsafeReason(section.content);
+  const unsafeReason = getArtifactSectionUnsafeReason(section.content);
   return {
     kind,
     anchor: section.anchor,
@@ -137,4 +149,68 @@ export const buildArtifactSectionChangeIndex = (
   });
 
   return changes;
+};
+
+const buildFallback = (
+  content: string,
+  fallbackReason: ArtifactSectionPatchFallbackReason,
+): ArtifactSectionPatchResult => ({
+  applied: false,
+  content,
+  changes: [],
+  fallbackReason,
+});
+
+export const applyArtifactSectionPatch = (
+  currentContent: string,
+  patch: ArtifactSectionPatch,
+): ArtifactSectionPatchResult => {
+  if (
+    patch.operation !== 'replace'
+    || !patch.sectionAnchor.trim()
+    || !patch.replacementMarkdown.trim()
+  ) {
+    return buildFallback(currentContent, 'invalid_patch');
+  }
+  if (patch.baseContent !== undefined && patch.baseContent !== currentContent) {
+    return buildFallback(currentContent, 'base_mismatch');
+  }
+
+  const sections = extractArtifactSections(currentContent);
+  const targetSection = sections.find(section => section.anchor === patch.sectionAnchor);
+  if (!targetSection) {
+    return buildFallback(currentContent, 'section_not_found');
+  }
+
+  const replacementSections = extractArtifactSections(patch.replacementMarkdown);
+  if (replacementSections.length !== 1) {
+    return buildFallback(currentContent, 'invalid_patch');
+  }
+  if (
+    getArtifactSectionUnsafeReason(targetSection.content)
+    || getArtifactSectionUnsafeReason(replacementSections[0].content)
+  ) {
+    return buildFallback(currentContent, 'unsafe_section');
+  }
+
+  const lines = normalizeMarkdown(currentContent).split('\n');
+  const replacementLines = normalizeMarkdown(patch.replacementMarkdown).split('\n');
+  const targetHadTrailingBlankLine = lines[targetSection.endLine - 1]?.trim() === '';
+  const normalizedReplacementLines = (
+    targetHadTrailingBlankLine
+    && replacementLines[replacementLines.length - 1]?.trim() !== ''
+  )
+    ? [...replacementLines, '']
+    : replacementLines;
+  const content = [
+    ...lines.slice(0, targetSection.startLine),
+    ...normalizedReplacementLines,
+    ...lines.slice(targetSection.endLine),
+  ].join('\n');
+
+  return {
+    applied: true,
+    content,
+    changes: buildArtifactSectionChangeIndex(currentContent, content),
+  };
 };
