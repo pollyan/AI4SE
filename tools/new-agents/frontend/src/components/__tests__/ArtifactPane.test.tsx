@@ -1369,9 +1369,147 @@ describe('ArtifactPane Component', () => {
         fireEvent.click(screen.getByRole('button', { name: '差异' }));
 
         expect(screen.getByText('与当前产出物对比')).toBeTruthy();
-        expect(screen.getByText('- 旧结论')).toBeTruthy();
-        expect(screen.getByText('+ 新结论')).toBeTruthy();
-        expect(screen.getByText('保留内容')).toBeTruthy();
+        expect(screen.getAllByText('- 旧结论').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('+ 新结论').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('保留内容').length).toBeGreaterThan(0);
+    });
+
+    it('shows the current artifact change diff in the main preview by default', async () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 当前产物\n\n新结论\n保留内容',
+            stageArtifacts: {
+                CLARIFY: '# 当前产物\n\n新结论\n保留内容',
+            },
+            artifactHistory: [
+                {
+                    id: 'version-before',
+                    timestamp: 123,
+                    content: '# 当前产物\n\n旧结论\n保留内容',
+                    stageId: 'CLARIFY',
+                },
+                {
+                    id: 'version-after',
+                    timestamp: 124,
+                    content: '# 当前产物\n\n新结论\n保留内容',
+                    stageId: 'CLARIFY',
+                },
+            ],
+        });
+
+        render(<ArtifactPane />);
+
+        const diff = await screen.findByTestId('current-artifact-diff');
+        expect(diff.textContent).toContain('- 旧结论');
+        expect(diff.textContent).toContain('+ 新结论');
+        expect(screen.getByTestId('current-artifact-diff-added-line').className).toContain('text-emerald-200');
+        expect(screen.getByTestId('current-artifact-diff-removed-line').className).toContain('line-through');
+    });
+
+    it('hides the current artifact change diff and returns to clean preview', async () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 当前产物\n\n新结论\n保留内容',
+            stageArtifacts: {
+                CLARIFY: '# 当前产物\n\n新结论\n保留内容',
+            },
+            artifactHistory: [
+                {
+                    id: 'version-before',
+                    timestamp: 123,
+                    content: '# 当前产物\n\n旧结论\n保留内容',
+                    stageId: 'CLARIFY',
+                },
+                {
+                    id: 'version-after',
+                    timestamp: 124,
+                    content: '# 当前产物\n\n新结论\n保留内容',
+                    stageId: 'CLARIFY',
+                },
+            ],
+        });
+
+        const { container } = render(<ArtifactPane />);
+
+        await screen.findByTestId('current-artifact-diff');
+        fireEvent.click(screen.getAllByRole('button', { name: '隐藏本轮变更' })[0]);
+
+        expect(screen.queryByTestId('current-artifact-diff')).toBeNull();
+        expect(screen.getByRole('heading', { name: '当前产物' })).toBeTruthy();
+        expect(container.textContent).toContain('新结论');
+        expect(screen.queryByText('- 旧结论')).toBeNull();
+    });
+
+    it('downloads clean markdown while the current artifact change diff is visible', async () => {
+        const createdAnchors: HTMLAnchorElement[] = [];
+        const click = vi.fn();
+        const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:artifact-clean-diff');
+        vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+        vi.spyOn(document, 'createElement').mockImplementation((tagName, options) => {
+            const element = originalCreateElement(tagName, options);
+            if (tagName.toLowerCase() === 'a') {
+                Object.defineProperty(element, 'click', {
+                    configurable: true,
+                    value: click,
+                });
+                createdAnchors.push(element as HTMLAnchorElement);
+            }
+            return element;
+        });
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 当前产物\n\n新结论\n保留内容',
+            artifactHistory: [
+                {
+                    id: 'version-before',
+                    timestamp: 123,
+                    content: '# 当前产物\n\n旧结论\n保留内容',
+                    stageId: 'CLARIFY',
+                },
+                {
+                    id: 'version-after',
+                    timestamp: 124,
+                    content: '# 当前产物\n\n新结论\n保留内容',
+                    stageId: 'CLARIFY',
+                },
+            ],
+        });
+
+        render(<ArtifactPane />);
+        await screen.findByTestId('current-artifact-diff');
+        downloadArtifactAs('Markdown');
+
+        expect(createdAnchors).toHaveLength(1);
+        const blob = createObjectURL.mock.calls[0][0] as Blob;
+        const content = await blob.text();
+        expect(content).toBe('# 当前产物\n\n新结论\n保留内容');
+        expect(content).not.toContain('旧结论');
+        expect(content).not.toContain('+ 新结论');
+        expect(click).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not show current artifact change diff when no previous baseline exists', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 当前产物\n\n首版内容',
+            artifactHistory: [
+                {
+                    id: 'version-first',
+                    timestamp: 123,
+                    content: '# 当前产物\n\n首版内容',
+                    stageId: 'CLARIFY',
+                },
+            ],
+        });
+
+        render(<ArtifactPane />);
+
+        expect(screen.queryByTestId('current-artifact-diff')).toBeNull();
+        expect(screen.queryByRole('button', { name: '显示本轮变更' })).toBeNull();
     });
 
     it('restores the selected history version and keeps the previous current artifact in history', () => {

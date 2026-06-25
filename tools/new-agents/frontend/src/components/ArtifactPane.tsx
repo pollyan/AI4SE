@@ -62,6 +62,7 @@ export const ArtifactPane: React.FC = () => {
   const artifactVisualDiagnostics = useStore((state) => state.artifactVisualDiagnostics);
   const artifactVisualDiagnosticFocusRequest = useStore((state) => state.artifactVisualDiagnosticFocusRequest);
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
+  const [showCurrentChangeDiff, setShowCurrentChangeDiff] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showArtifactActionsMenu, setShowArtifactActionsMenu] = useState(false);
   const [showReviewPanel, setShowReviewPanel] = useState(false);
@@ -85,6 +86,7 @@ export const ArtifactPane: React.FC = () => {
   const [activeVisualDiagnosticId, setActiveVisualDiagnosticId] = useState<string | null>(null);
   const artifactPreviewRef = useRef<HTMLDivElement | null>(null);
   const handledVisualDiagnosticFocusSeqRef = useRef<number | null>(null);
+  const lastCurrentChangeDiffKeyRef = useRef<string | null>(null);
   const currentStageId = WORKFLOWS[workflow].stages[stageIndex]?.id;
   const currentStageArtifactHistory = useMemo(
     () => currentStageId
@@ -121,6 +123,28 @@ export const ArtifactPane: React.FC = () => {
     [currentStageAuditEvents]
   );
   const latestStageArtifactVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1] ?? null;
+  const currentChangeBaselineVersion = useMemo(() => {
+    if (currentStageArtifactHistory.length === 0) return null;
+    const latestVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1];
+    if (latestVersion.content === artifactContent) {
+      return currentStageArtifactHistory[currentStageArtifactHistory.length - 2] ?? null;
+    }
+    return latestVersion;
+  }, [artifactContent, currentStageArtifactHistory]);
+  const currentChangeDiff = useMemo(
+    () => currentChangeBaselineVersion
+      ? buildLineDiff(currentChangeBaselineVersion.content, artifactContent)
+      : [],
+    [artifactContent, currentChangeBaselineVersion]
+  );
+  const hasCurrentChangeDiff = Boolean(
+    currentChangeBaselineVersion
+    && currentChangeBaselineVersion.content !== artifactContent
+    && currentChangeDiff.some(entry => entry.type !== 'unchanged')
+  );
+  const currentChangeDiffKey = hasCurrentChangeDiff
+    ? `${currentChangeBaselineVersion?.id}->${latestStageArtifactVersion?.content === artifactContent ? latestStageArtifactVersion.id : 'working'}`
+    : null;
 
   const syncArtifactCollaborationState = useCallback((
     nextState?: CollaborationStateSnapshot,
@@ -349,6 +373,17 @@ export const ArtifactPane: React.FC = () => {
         : null
     );
   }, [currentStageArtifactHistory, selectedVersion, showHistory]);
+
+  useEffect(() => {
+    if (!currentChangeDiffKey) {
+      lastCurrentChangeDiffKeyRef.current = null;
+      setShowCurrentChangeDiff(false);
+      return;
+    }
+    if (lastCurrentChangeDiffKeyRef.current === currentChangeDiffKey) return;
+    lastCurrentChangeDiffKeyRef.current = currentChangeDiffKey;
+    setShowCurrentChangeDiff(true);
+  }, [currentChangeDiffKey]);
 
   // Content displays using the imported preprocessMarkdown utility
 
@@ -4020,6 +4055,17 @@ export const ArtifactPane: React.FC = () => {
           <button onClick={() => setViewMode('code')} className={`p-1.5 rounded transition-colors ${viewMode === 'code' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`} title="代码">
             <Code className="w-4 h-4" />
           </button>
+          {hasCurrentChangeDiff && (
+            <button
+              type="button"
+              onClick={() => setShowCurrentChangeDiff((current) => !current)}
+              className={`p-1.5 rounded transition-colors ${showCurrentChangeDiff ? 'bg-emerald-500/10 text-emerald-200' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+              title={showCurrentChangeDiff ? '隐藏本轮变更' : '显示本轮变更'}
+              aria-label={showCurrentChangeDiff ? '隐藏本轮变更' : '显示本轮变更'}
+            >
+              <GitCompare className="w-4 h-4" />
+            </button>
+          )}
           <div className="w-px h-4 bg-[#1e293b] mx-1"></div>
           <button onClick={openHistory} className="p-1.5 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors" title="历史版本">
             <History className="w-4 h-4" />
@@ -4372,7 +4418,40 @@ export const ArtifactPane: React.FC = () => {
             </div>
           ) : (
             <>
-              {viewMode === 'preview' ? (
+              {viewMode === 'preview' && showCurrentChangeDiff && hasCurrentChangeDiff ? (
+                <div
+                  data-testid="current-artifact-diff"
+                  className="overflow-hidden rounded-lg border border-[#1e293b] bg-[#0f172a] font-mono text-xs"
+                >
+                  <div className="flex items-center justify-between border-b border-[#1e293b] px-4 py-2 text-[11px] font-semibold text-slate-400">
+                    <span>本轮变更</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentChangeDiff(false)}
+                      className="rounded px-2 py-1 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                      aria-label="隐藏本轮变更"
+                    >
+                      隐藏本轮变更
+                    </button>
+                  </div>
+                  {currentChangeDiff.map((entry, index) => {
+                    const prefix = entry.type === 'added' ? '+ ' : entry.type === 'removed' ? '- ' : '  ';
+                    return (
+                      <div
+                        key={`${entry.type}-${index}-${entry.content}`}
+                        data-testid={entry.type === 'added'
+                          ? 'current-artifact-diff-added-line'
+                          : entry.type === 'removed'
+                            ? 'current-artifact-diff-removed-line'
+                            : undefined}
+                        className={`whitespace-pre-wrap px-4 py-1.5 ${entry.type === 'added' ? 'bg-emerald-500/10 text-emerald-200' : entry.type === 'removed' ? 'bg-red-500/10 text-red-200 line-through decoration-red-300/70' : 'text-slate-400'}`}
+                      >
+                        {prefix}{entry.content || ' '}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : viewMode === 'preview' ? (
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeRaw]}
