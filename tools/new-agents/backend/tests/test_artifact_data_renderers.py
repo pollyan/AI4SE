@@ -2965,6 +2965,8 @@ def test_render_clarify_artifact_data_is_deterministic_and_contract_valid():
     assert clarify_markdown.index("## 1. 需求事实清单") < clarify_markdown.index(
         "## 附录：文档信息"
     )
+    assert "| 字段 | 内容 |" not in clarify_markdown
+    assert "- **Artifact 名称**：测试需求分析与澄清基线" in clarify_markdown
     assert "flowchart TD" in first.artifact_update.markdown
     assert (
         validate_agent_turn(
@@ -3027,6 +3029,10 @@ def test_render_strategy_artifact_data_is_deterministic_and_contract_valid():
     assert "block-beta" in first.artifact_update.markdown
     assert "```ai4se-visual" in first.artifact_update.markdown
     assert '"type": "risk-board"' in first.artifact_update.markdown
+    strategy_markdown = first.artifact_update.markdown
+    assert "| 字段 | 内容 |" not in strategy_markdown
+    assert "- **策略结论**：" in strategy_markdown
+    assert "| 风险 ID | 风险名称 |" in strategy_markdown
     assert (
         validate_agent_turn(
             first,

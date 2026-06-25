@@ -6128,6 +6128,15 @@ def _render_stage_gate(checks: list[StageGateCheck]) -> str:
 
 
 def _markdown_table(headers: list[str], rows: list[tuple[Any, ...]]) -> str:
+    explanatory_headers = {
+        ("字段", "内容"),
+        ("维度", "内容"),
+        ("格子", "内容"),
+        ("属性", "详情"),
+    }
+    if len(headers) == 2 and tuple(headers) in explanatory_headers:
+        return _definition_list(rows)
+
     header = "| " + " | ".join(headers) + " |"
     separator = "| " + " | ".join("---" for _ in headers) + " |"
     body = [
@@ -6135,6 +6144,27 @@ def _markdown_table(headers: list[str], rows: list[tuple[Any, ...]]) -> str:
         for row in rows
     ]
     return "\n".join([header, separator, *body])
+
+
+def _definition_list(rows: list[tuple[Any, ...]]) -> str:
+    lines = []
+    for row in rows:
+        if len(row) != 2:
+            lines.append(
+                "- "
+                + "：".join(_format_definition_value(cell) for cell in row)
+            )
+            continue
+        label, value = row
+        lines.append(
+            f"- **{_format_definition_value(label)}**："
+            f"{_format_definition_value(value)}"
+        )
+    return "\n".join(lines)
+
+
+def _format_definition_value(value: Any) -> str:
+    return str(value).replace("\n", "；")
 
 
 def _escape_table_cell(value: Any) -> str:
