@@ -1375,40 +1375,72 @@ describe('ArtifactPane Component', () => {
         expect(screen.getAllByText('保留内容').length).toBeGreaterThan(0);
     });
 
-    it('shows the current artifact change diff in the main preview by default', async () => {
+    it('renders current artifact changes as formal preview annotations instead of raw line diff', async () => {
+        const previousArtifact = [
+            '# 当前产物',
+            '',
+            '## 2. 被测系统与边界',
+            '',
+            '| 类型 | 具体内容 | 测试含义 | 状态 |',
+            '| --- | --- | --- | --- |',
+            '| 用户入口 | 登录页面（Web/移动端） | 覆盖不同终端和浏览器 | 待确认 |',
+            '| 成功反馈 | 跳转至首页并设置登录态（Token/Cookie） | 验证登录态正确生成 | 待确认 |',
+        ].join('\n');
+        const currentArtifact = [
+            '# 当前产物',
+            '',
+            '## 2. 被测系统与边界',
+            '',
+            '| 类型 | 具体内容 | 测试含义 | 状态 |',
+            '| --- | --- | --- | --- |',
+            '| 用户入口 | 登录页面（Web 端） | 覆盖 Chrome、Firefox、Edge、Safari | 待确认 |',
+            '| 成功反馈 | 跳转至首页并设置 JWT Token | 验证 Token 正确生成并存储 | 待确认 |',
+        ].join('\n');
         useStore.setState({
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
-            artifactContent: '# 当前产物\n\n新结论\n保留内容',
+            artifactContent: currentArtifact,
             stageArtifacts: {
-                CLARIFY: '# 当前产物\n\n新结论\n保留内容',
+                CLARIFY: currentArtifact,
             },
             artifactHistory: [
                 {
                     id: 'version-before',
                     timestamp: 123,
-                    content: '# 当前产物\n\n旧结论\n保留内容',
+                    content: previousArtifact,
                     stageId: 'CLARIFY',
                 },
                 {
                     id: 'version-after',
                     timestamp: 124,
-                    content: '# 当前产物\n\n新结论\n保留内容',
+                    content: currentArtifact,
                     stageId: 'CLARIFY',
+                },
+            ],
+            artifactChangeIndex: [
+                {
+                    kind: 'modified',
+                    anchor: 'h2:2. 被测系统与边界:1',
+                    title: '2. 被测系统与边界',
+                    displayTitle: '2. 被测系统与边界',
+                    safeForPatch: false,
+                    unsafeReason: 'markdown_table',
                 },
             ],
         });
 
         render(<ArtifactPane />);
 
-        const diff = await screen.findByTestId('current-artifact-diff');
-        expect(diff.textContent).toContain('- 旧结论');
-        expect(diff.textContent).toContain('+ 新结论');
-        expect(screen.getByTestId('current-artifact-diff-added-line').className).toContain('text-emerald-200');
-        expect(screen.getByTestId('current-artifact-diff-removed-line').className).toContain('line-through');
+        expect(await screen.findByTestId('current-artifact-change-summary')).toBeTruthy();
+        expect(screen.queryByTestId('current-artifact-diff')).toBeNull();
+        expect(screen.getByRole('table')).toBeTruthy();
+        expect(screen.getAllByTestId('artifact-change-modified-row')).toHaveLength(2);
+        expect(screen.getByText(/原：.*登录页面（Web\/移动端）/)).toBeTruthy();
+        expect(screen.getByText(/原：.*登录态（Token\/Cookie）/)).toBeTruthy();
+        expect(screen.queryByText('- | 用户入口 | 登录页面（Web/移动端） | 覆盖不同终端和浏览器 | 待确认 |')).toBeNull();
     });
 
-    it('shows changed section summary inside current artifact change diff', async () => {
+    it('shows changed section summary inside current artifact change summary', async () => {
         useStore.setState({
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
@@ -1443,11 +1475,13 @@ describe('ArtifactPane Component', () => {
 
         render(<ArtifactPane />);
 
-        const summary = await screen.findByTestId('current-artifact-diff-section-summary');
-        expect(summary.textContent).toContain('变更章节：修改 范围');
+        const summary = await screen.findByTestId('current-artifact-change-summary');
+        expect(summary.textContent).toContain('修改 1 行');
+        expect(summary.textContent).toContain('修改 范围');
+        expect(screen.queryByTestId('current-artifact-diff-section-summary')).toBeNull();
     });
 
-    it('does not show changed section summary when current artifact change index is empty', async () => {
+    it('does not show section chips when current artifact change index is empty', async () => {
         useStore.setState({
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
@@ -1471,11 +1505,13 @@ describe('ArtifactPane Component', () => {
 
         render(<ArtifactPane />);
 
-        await screen.findByTestId('current-artifact-diff');
+        const summary = await screen.findByTestId('current-artifact-change-summary');
+        expect(summary.textContent).toContain('修改 1 行');
+        expect(summary.textContent).not.toContain('修改 范围');
         expect(screen.queryByTestId('current-artifact-diff-section-summary')).toBeNull();
     });
 
-    it('hides the current artifact change diff and returns to clean preview', async () => {
+    it('hides current artifact change annotations and returns to clean preview', async () => {
         useStore.setState({
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
@@ -1501,16 +1537,18 @@ describe('ArtifactPane Component', () => {
 
         const { container } = render(<ArtifactPane />);
 
-        await screen.findByTestId('current-artifact-diff');
+        await screen.findByTestId('current-artifact-change-summary');
         fireEvent.click(screen.getAllByRole('button', { name: '隐藏本轮变更' })[0]);
 
+        expect(screen.queryByTestId('current-artifact-change-summary')).toBeNull();
         expect(screen.queryByTestId('current-artifact-diff')).toBeNull();
+        expect(screen.queryByTestId('artifact-change-previous-value')).toBeNull();
         expect(screen.getByRole('heading', { name: '当前产物' })).toBeTruthy();
         expect(container.textContent).toContain('新结论');
         expect(screen.queryByText('- 旧结论')).toBeNull();
     });
 
-    it('downloads clean markdown while the current artifact change diff is visible', async () => {
+    it('downloads clean markdown while current artifact change annotations are visible', async () => {
         const createdAnchors: HTMLAnchorElement[] = [];
         const click = vi.fn();
         const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:artifact-clean-diff');
@@ -1547,7 +1585,7 @@ describe('ArtifactPane Component', () => {
         });
 
         render(<ArtifactPane />);
-        await screen.findByTestId('current-artifact-diff');
+        await screen.findByTestId('current-artifact-change-summary');
         downloadArtifactAs('Markdown');
 
         expect(createdAnchors).toHaveLength(1);
@@ -1556,6 +1594,7 @@ describe('ArtifactPane Component', () => {
         expect(content).toBe('# 当前产物\n\n新结论\n保留内容');
         expect(content).not.toContain('旧结论');
         expect(content).not.toContain('+ 新结论');
+        expect(content).not.toContain('原：');
         expect(click).toHaveBeenCalledTimes(1);
     });
 

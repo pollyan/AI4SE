@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { useStore, ArtifactVersion, WORKFLOWS } from '../store';
 import type { AgentRunSnapshotArtifact, ArtifactComment, ArtifactSectionLock, ArtifactVisualDiagnostic, ArtifactVisualDiagnosticFocusRequest } from '../core/types';
-import { buildLineDiff } from '../core/artifactDiff';
+import { buildLineDiff, type LineDiffEntry } from '../core/artifactDiff';
 import { extractArtifactSections } from '../core/artifactSections';
 import {
   buildAutoMergedInsertionResult,
@@ -38,8 +38,27 @@ type ArtifactMarkdownRenderBlock = {
   key: string;
   anchor?: string;
   content: string;
+  startLine: number;
   mermaidBlockOffset: number;
   structuredVisualBlockOffset: number;
+};
+
+type RenderedChangeKind = 'added' | 'modified';
+
+type RenderedLineChange = {
+  kind: RenderedChangeKind;
+  previousContent?: string;
+};
+
+type RenderedChangeSummary = {
+  added: number;
+  modified: number;
+  removed: number;
+};
+
+type RenderedChangeAnnotations = {
+  lineChanges: Map<number, RenderedLineChange>;
+  summary: RenderedChangeSummary;
 };
 
 type MermaidRetryHandler = Parameters<typeof createMarkdownCodeRenderer>[0]['onMermaidRetry'];
@@ -52,6 +71,9 @@ type ArtifactMarkdownComponentsFactory = (
   deferMermaidRender?: boolean,
   mermaidBlockOffset?: number,
   structuredVisualBlockOffset?: number,
+  renderedLineChanges?: Map<number, RenderedLineChange>,
+  showRenderedChanges?: boolean,
+  lineNumberOffset?: number,
 ) => Components;
 
 const captureCollaborationState = (): CollaborationStateSnapshot => {
@@ -84,6 +106,7 @@ const buildArtifactMarkdownRenderBlocks = (content: string): ArtifactMarkdownRen
     return [{
       key: 'full-document',
       content,
+      startLine: 0,
       mermaidBlockOffset: 0,
       structuredVisualBlockOffset: 0,
     }];
@@ -94,12 +117,13 @@ const buildArtifactMarkdownRenderBlocks = (content: string): ArtifactMarkdownRen
   let mermaidBlockOffset = 0;
   let structuredVisualBlockOffset = 0;
 
-  const pushBlock = (key: string, blockContent: string, anchor?: string) => {
+  const pushBlock = (key: string, blockContent: string, startLine: number, anchor?: string) => {
     if (!blockContent.trim()) return;
     blocks.push({
       key,
       anchor,
       content: blockContent.trim(),
+      startLine,
       mermaidBlockOffset,
       structuredVisualBlockOffset,
     });
@@ -109,15 +133,119 @@ const buildArtifactMarkdownRenderBlocks = (content: string): ArtifactMarkdownRen
   };
 
   if (sections[0].startLine > 0) {
-    pushBlock('preamble', lines.slice(0, sections[0].startLine).join('\n'));
+    pushBlock('preamble', lines.slice(0, sections[0].startLine).join('\n'), 0);
   }
 
   sections.forEach((section) => {
-    pushBlock(section.anchor, section.content, section.anchor);
+    pushBlock(section.anchor, section.content, section.startLine, section.anchor);
   });
 
   return blocks;
 };
+
+const buildRenderedChangeAnnotations = (diff: LineDiffEntry[]): RenderedChangeAnnotations => {
+  const lineChanges = new Map<number, RenderedLineChange>();
+  const summary: RenderedChangeSummary = {
+    added: 0,
+    modified: 0,
+    removed: 0,
+  };
+  let currentLineNumber = 0;
+  let index = 0;
+
+  while (index < diff.length) {
+    const entry = diff[index];
+    if (entry.type === 'unchanged') {
+      currentLineNumber += 1;
+      index += 1;
+      continue;
+    }
+
+    if (entry.type === 'added') {
+      currentLineNumber += 1;
+      lineChanges.set(currentLineNumber, { kind: 'added' });
+      summary.added += 1;
+      index += 1;
+      continue;
+    }
+
+    const removedEntries: LineDiffEntry[] = [];
+    while (index < diff.length && diff[index].type === 'removed') {
+      removedEntries.push(diff[index]);
+      index += 1;
+    }
+
+    const addedEntries: Array<LineDiffEntry & { lineNumber: number }> = [];
+    while (index < diff.length && diff[index].type === 'added') {
+      currentLineNumber += 1;
+      addedEntries.push({ ...diff[index], lineNumber: currentLineNumber });
+      index += 1;
+    }
+
+    if (addedEntries.length === 0) {
+      summary.removed += removedEntries.length;
+      continue;
+    }
+
+    const modifiedCount = Math.min(removedEntries.length, addedEntries.length);
+    for (let pairIndex = 0; pairIndex < modifiedCount; pairIndex += 1) {
+      const addedEntry = addedEntries[pairIndex];
+      lineChanges.set(addedEntry.lineNumber, {
+        kind: 'modified',
+        previousContent: removedEntries[pairIndex].content,
+      });
+      summary.modified += 1;
+    }
+
+    for (let addedIndex = modifiedCount; addedIndex < addedEntries.length; addedIndex += 1) {
+      lineChanges.set(addedEntries[addedIndex].lineNumber, { kind: 'added' });
+      summary.added += 1;
+    }
+
+    if (removedEntries.length > modifiedCount) {
+      summary.removed += removedEntries.length - modifiedCount;
+    }
+  }
+
+  return { lineChanges, summary };
+};
+
+const getMarkdownNodeStartLine = (node: unknown, lineNumberOffset: number): number | null => {
+  const position = (node as { position?: { start?: { line?: unknown } } } | undefined)?.position;
+  const line = position?.start?.line;
+  return typeof line === 'number' ? lineNumberOffset + line : null;
+};
+
+const getRenderedLineChange = (
+  node: unknown,
+  renderedLineChanges: Map<number, RenderedLineChange> | undefined,
+  showRenderedChanges: boolean | undefined,
+  lineNumberOffset: number,
+): RenderedLineChange | undefined => {
+  if (!showRenderedChanges || !renderedLineChanges) return undefined;
+  const startLine = getMarkdownNodeStartLine(node, lineNumberOffset);
+  return startLine === null ? undefined : renderedLineChanges.get(startLine);
+};
+
+const getRenderedChangeClass = (annotation: RenderedLineChange | undefined): string => {
+  if (!annotation) return '';
+  return annotation.kind === 'added'
+    ? ' border-l-4 border-emerald-400/70 bg-emerald-500/10'
+    : ' border-l-4 border-amber-300/80 bg-amber-400/10';
+};
+
+const renderPreviousValue = (annotation: RenderedLineChange | undefined): React.ReactNode => (
+  annotation?.kind === 'modified' && annotation.previousContent
+    ? (
+      <span
+        data-testid="artifact-change-previous-value"
+        className="mt-1 inline-block max-w-full rounded-md border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs font-medium text-rose-100"
+      >
+        原：{annotation.previousContent}
+      </span>
+    )
+    : null
+);
 
 type MemoizedArtifactMarkdownSectionProps = {
   block: ArtifactMarkdownRenderBlock;
@@ -127,6 +255,8 @@ type MemoizedArtifactMarkdownSectionProps = {
   reportVisualDiagnostics: boolean;
   attachVisualDiagnosticAnchors: boolean;
   deferMermaidRender: boolean;
+  renderedLineChanges?: Map<number, RenderedLineChange>;
+  showRenderedChanges?: boolean;
 };
 
 const MemoizedArtifactMarkdownSection = React.memo(function MemoizedArtifactMarkdownSection({
@@ -137,6 +267,8 @@ const MemoizedArtifactMarkdownSection = React.memo(function MemoizedArtifactMark
   reportVisualDiagnostics,
   attachVisualDiagnosticAnchors,
   deferMermaidRender,
+  renderedLineChanges,
+  showRenderedChanges,
 }: MemoizedArtifactMarkdownSectionProps) {
   const components = createComponents(
     onMermaidRetry,
@@ -146,6 +278,9 @@ const MemoizedArtifactMarkdownSection = React.memo(function MemoizedArtifactMark
     deferMermaidRender,
     block.mermaidBlockOffset,
     block.structuredVisualBlockOffset,
+    renderedLineChanges,
+    showRenderedChanges,
+    block.startLine,
   );
 
   return (
@@ -173,6 +308,8 @@ const MemoizedArtifactMarkdownSection = React.memo(function MemoizedArtifactMark
   && previous.reportVisualDiagnostics === next.reportVisualDiagnostics
   && previous.attachVisualDiagnosticAnchors === next.attachVisualDiagnosticAnchors
   && previous.deferMermaidRender === next.deferMermaidRender
+  && previous.renderedLineChanges === next.renderedLineChanges
+  && previous.showRenderedChanges === next.showRenderedChanges
 ));
 
 export const ArtifactPane: React.FC = () => {
@@ -277,6 +414,10 @@ export const ArtifactPane: React.FC = () => {
       : [],
     [artifactContent, currentChangeBaselineVersion]
   );
+  const renderedChangeAnnotations = useMemo(
+    () => buildRenderedChangeAnnotations(currentChangeDiff),
+    [currentChangeDiff]
+  );
   const hasCurrentChangeDiff = Boolean(
     currentChangeBaselineVersion
     && currentChangeBaselineVersion.content !== artifactContent
@@ -293,6 +434,14 @@ export const ArtifactPane: React.FC = () => {
     } as const;
     return artifactChangeIndex.map(change => `${labels[change.kind]} ${change.displayTitle}`);
   }, [artifactChangeIndex]);
+  const currentArtifactRenderedChangeSummary = useMemo(() => {
+    const summary = renderedChangeAnnotations.summary;
+    const entries: string[] = [];
+    if (summary.added > 0) entries.push(`新增 ${summary.added} 行`);
+    if (summary.modified > 0) entries.push(`修改 ${summary.modified} 行`);
+    if (summary.removed > 0) entries.push(`删除 ${summary.removed} 行`);
+    return entries;
+  }, [renderedChangeAnnotations]);
 
   const syncArtifactCollaborationState = useCallback((
     nextState?: CollaborationStateSnapshot,
@@ -4012,7 +4161,10 @@ export const ArtifactPane: React.FC = () => {
     attachVisualDiagnosticAnchors = false,
     deferMermaidRender = false,
     mermaidBlockOffset = 0,
-    structuredVisualBlockOffset = 0
+    structuredVisualBlockOffset = 0,
+    renderedLineChanges?: Map<number, RenderedLineChange>,
+    showRenderedChanges = false,
+    lineNumberOffset = 0
   ): Components => {
     let mermaidBlockCounter = mermaidBlockOffset;
     let structuredVisualBlockCounter = structuredVisualBlockOffset;
@@ -4051,20 +4203,107 @@ export const ArtifactPane: React.FC = () => {
       return visitNode(children);
     };
 
+    const lineChangeFor = (node: unknown): RenderedLineChange | undefined => (
+      getRenderedLineChange(node, renderedLineChanges, showRenderedChanges, lineNumberOffset)
+    );
+
     return {
-    h1: ({ node, children, ...props }) => <h1 className="text-3xl font-bold text-white mb-6 pb-2 border-b border-[#1e293b]" {...props}>{highlightAnchorInChildren(children)}</h1>,
-    h2: ({ node, children, ...props }) => <h2 className="text-2xl font-bold text-white mt-8 mb-4 before:content-['#'] before:text-blue-500 before:opacity-50 before:mr-2" {...props}>{highlightAnchorInChildren(children)}</h2>,
-    h3: ({ node, children, ...props }) => <h3 className="text-xl font-semibold text-slate-200 mt-6 mb-3" {...props}>{highlightAnchorInChildren(children)}</h3>,
-    p: ({ node, children, ...props }) => <p className="mb-4 leading-relaxed text-slate-400" {...props}>{highlightAnchorInChildren(children)}</p>,
+    h1: ({ node, children, ...props }) => {
+      const annotation = lineChangeFor(node);
+      return (
+        <h1
+          {...props}
+          data-testid={annotation ? `artifact-change-${annotation.kind}-block` : undefined}
+          className={`text-3xl font-bold text-white mb-6 pb-2 border-b border-[#1e293b]${annotation ? ` rounded-md px-2 ${getRenderedChangeClass(annotation)}` : ''}`}
+        >
+          {highlightAnchorInChildren(children)}
+          {renderPreviousValue(annotation)}
+        </h1>
+      );
+    },
+    h2: ({ node, children, ...props }) => {
+      const annotation = lineChangeFor(node);
+      return (
+        <h2
+          {...props}
+          data-testid={annotation ? `artifact-change-${annotation.kind}-block` : undefined}
+          className={`text-2xl font-bold text-white mt-8 mb-4 before:content-['#'] before:text-blue-500 before:opacity-50 before:mr-2${annotation ? ` rounded-md px-2 ${getRenderedChangeClass(annotation)}` : ''}`}
+        >
+          {highlightAnchorInChildren(children)}
+          {renderPreviousValue(annotation)}
+        </h2>
+      );
+    },
+    h3: ({ node, children, ...props }) => {
+      const annotation = lineChangeFor(node);
+      return (
+        <h3
+          {...props}
+          data-testid={annotation ? `artifact-change-${annotation.kind}-block` : undefined}
+          className={`text-xl font-semibold text-slate-200 mt-6 mb-3${annotation ? ` rounded-md px-2 ${getRenderedChangeClass(annotation)}` : ''}`}
+        >
+          {highlightAnchorInChildren(children)}
+          {renderPreviousValue(annotation)}
+        </h3>
+      );
+    },
+    p: ({ node, children, ...props }) => {
+      const annotation = lineChangeFor(node);
+      return (
+        <p
+          {...props}
+          data-testid={annotation ? `artifact-change-${annotation.kind}-block` : undefined}
+          className={`mb-4 leading-relaxed text-slate-400${annotation ? ` rounded-md px-2 py-1 ${getRenderedChangeClass(annotation)}` : ''}`}
+        >
+          {highlightAnchorInChildren(children)}
+          {renderPreviousValue(annotation)}
+        </p>
+      );
+    },
     ul: ({ node, ...props }) => <ul className="list-disc pl-6 mb-4 space-y-2 text-slate-400" {...props} />,
     ol: ({ node, ...props }) => <ol className="list-decimal pl-6 mb-4 space-y-2 text-slate-400" {...props} />,
-    li: ({ node, children, ...props }) => <li className="leading-relaxed" {...props}>{highlightAnchorInChildren(children)}</li>,
+    li: ({ node, children, ...props }) => {
+      const annotation = lineChangeFor(node);
+      return (
+        <li
+          {...props}
+          data-testid={annotation ? `artifact-change-${annotation.kind}-item` : undefined}
+          className={`leading-relaxed${annotation ? ` rounded-md px-2 py-1 ${getRenderedChangeClass(annotation)}` : ''}`}
+        >
+          {highlightAnchorInChildren(children)}
+          {renderPreviousValue(annotation)}
+        </li>
+      );
+    },
     strong: ({ node, children, ...props }) => <strong className="font-bold text-white" {...props}>{highlightAnchorInChildren(children)}</strong>,
     blockquote: ({ node, children, ...props }) => <blockquote className="border-l-4 border-blue-500 pl-4 py-2 my-4 bg-blue-500/5 rounded-r text-slate-400 italic" {...props}>{highlightAnchorInChildren(children)}</blockquote>,
     table: ({ node, ...props }) => <div className="overflow-x-auto mb-6"><table className="w-full border-collapse text-sm" {...props} /></div>,
     th: ({ node, children, ...props }) => <th className="bg-[#1e293b] text-slate-200 font-semibold text-left p-3 border-b border-[#334155]" {...props}>{highlightAnchorInChildren(children)}</th>,
     td: ({ node, children, ...props }) => <td className="p-3 border-b border-[#1e293b] text-slate-400 group-hover:bg-white/5" {...props}>{highlightAnchorInChildren(children)}</td>,
-    tr: ({ node, ...props }) => <tr className="hover:bg-white/[0.02] transition-colors group" {...props} />,
+    tr: ({ node, children, ...props }) => {
+      const annotation = lineChangeFor(node);
+      return (
+        <>
+          <tr
+            {...props}
+            data-testid={annotation ? `artifact-change-${annotation.kind}-row` : undefined}
+            className={`hover:bg-white/[0.02] transition-colors group ${getRenderedChangeClass(annotation)}`}
+          >
+            {children}
+          </tr>
+          {annotation?.kind === 'modified' && annotation.previousContent && (
+            <tr data-testid="artifact-change-previous-row">
+              <td
+                colSpan={99}
+                className="border-b border-[#1e293b] bg-rose-500/5 px-3 py-2 text-xs text-rose-100"
+              >
+                {renderPreviousValue(annotation)}
+              </td>
+            </tr>
+          )}
+        </>
+      );
+    },
     mark: ({ node, ...props }) => <mark className="bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded font-medium shadow-[0_0_8px_rgba(16,185,129,0.1)] box-decoration-clone" {...props} />,
     pre: ({ node, children }) => <>{children}</>,
     code: createMarkdownCodeRenderer({
@@ -4572,51 +4811,49 @@ export const ArtifactPane: React.FC = () => {
             </div>
           ) : (
             <>
-              {viewMode === 'preview' && showCurrentChangeDiff && hasCurrentChangeDiff ? (
-                <div
-                  data-testid="current-artifact-diff"
-                  className="overflow-hidden rounded-lg border border-[#1e293b] bg-[#0f172a] font-mono text-xs"
-                >
-                  <div className="flex items-center justify-between border-b border-[#1e293b] px-4 py-2 text-[11px] font-semibold text-slate-400">
-                    <span>本轮变更</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowCurrentChangeDiff(false)}
-                      className="rounded px-2 py-1 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
-                      aria-label="隐藏本轮变更"
-                    >
-                      隐藏本轮变更
-                    </button>
-                  </div>
-                  {currentArtifactSectionChangeSummary.length > 0 && (
+              {viewMode === 'preview' ? (
+                <>
+                  {showCurrentChangeDiff && hasCurrentChangeDiff && (
                     <div
-                      data-testid="current-artifact-diff-section-summary"
-                      className="border-b border-[#1e293b] px-4 py-2 text-[11px] font-semibold text-sky-100"
+                      data-testid="current-artifact-change-summary"
+                      className="mb-4 rounded-lg border border-emerald-400/20 bg-[#0f172a]/90 px-4 py-3 text-xs text-slate-300 shadow-xl"
                     >
-                      变更章节：{currentArtifactSectionChangeSummary.join('、')}
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="font-semibold text-slate-100">本轮变更</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowCurrentChangeDiff(false)}
+                          className="rounded px-2 py-1 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                          aria-label="隐藏本轮变更"
+                        >
+                          隐藏本轮变更
+                        </button>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {currentArtifactRenderedChangeSummary.map(item => (
+                          <span
+                            key={item}
+                            className="rounded-full border border-emerald-300/20 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-100"
+                          >
+                            {item}
+                          </span>
+                        ))}
+                        {currentArtifactSectionChangeSummary.map(item => (
+                          <span
+                            key={item}
+                            className="rounded-full border border-sky-300/20 bg-sky-500/10 px-2 py-1 text-[11px] font-semibold text-sky-100"
+                          >
+                            {item}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
-                  {currentChangeDiff.map((entry, index) => {
-                    const prefix = entry.type === 'added' ? '+ ' : entry.type === 'removed' ? '- ' : '  ';
-                    return (
-                      <div
-                        key={`${entry.type}-${index}-${entry.content}`}
-                        data-testid={entry.type === 'added'
-                          ? 'current-artifact-diff-added-line'
-                          : entry.type === 'removed'
-                            ? 'current-artifact-diff-removed-line'
-                            : undefined}
-                        className={`whitespace-pre-wrap px-4 py-1.5 ${entry.type === 'added' ? 'bg-emerald-500/10 text-emerald-200' : entry.type === 'removed' ? 'bg-red-500/10 text-red-200 line-through decoration-red-300/70' : 'text-slate-400'}`}
-                      >
-                        {prefix}{entry.content || ' '}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : viewMode === 'preview' ? (
-                <div
-                  data-testid="artifact-section-renderer"
-                >
+                  <div
+                    data-testid="artifact-section-renderer"
+                  >
                   {artifactMarkdownRenderBlocks.map((block) => (
                     <MemoizedArtifactMarkdownSection
                       key={block.key}
@@ -4627,9 +4864,16 @@ export const ArtifactPane: React.FC = () => {
                       reportVisualDiagnostics
                       attachVisualDiagnosticAnchors
                       deferMermaidRender={isGenerating}
+                      renderedLineChanges={
+                        showCurrentChangeDiff && hasCurrentChangeDiff
+                          ? renderedChangeAnnotations.lineChanges
+                          : undefined
+                      }
+                      showRenderedChanges={showCurrentChangeDiff && hasCurrentChangeDiff}
                     />
                   ))}
-                </div>
+                  </div>
+                </>
               ) : (
                 <pre className="text-sm font-mono text-slate-300 whitespace-pre-wrap break-words bg-[#0f172a] p-6 rounded-xl border border-[#1e293b]">
                   {displayContent}
