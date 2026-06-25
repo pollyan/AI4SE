@@ -1533,6 +1533,96 @@ def test_runtime_raw_json_stream_turn_renders_strategy_artifact_data_before_fina
     assert outputs[-1].artifact_update.markdown.startswith("# 测试策略蓝图")
 
 
+def test_runtime_raw_json_stream_turn_renders_paragraph_level_strategy_artifact_data(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "我正在逐段形成风险驱动测试策略。",
+            "artifact_data": VALID_STRATEGY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    def prefix_after_artifact_data_member(member_name: str) -> str:
+        decoder = json.JSONDecoder()
+        artifact_key_index = final_json.index('"artifact_data"')
+        index = final_json.index("{", artifact_key_index) + 1
+        while index < len(final_json):
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            key, key_end = decoder.raw_decode(final_json[index:])
+            assert isinstance(key, str)
+            index += key_end
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            assert final_json[index] == ":"
+            index += 1
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            _, value_end = decoder.raw_decode(final_json[index:])
+            index += value_end
+            if key == member_name:
+                return final_json[:index]
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            if index < len(final_json) and final_json[index] == ",":
+                index += 1
+        raise AssertionError(f"artifact_data member not found: {member_name}")
+
+    summary_prefix = prefix_after_artifact_data_member("strategy_summary")
+    goals_prefix = prefix_after_artifact_data_member("quality_goals")
+    chunks = [
+        summary_prefix,
+        goals_prefix[len(summary_prefix) :],
+        final_json[len(goals_prefix) :],
+    ]
+
+    def fake_stream_chat_completion_content(**kwargs):
+        yield from chunks
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是测试专家。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "请制定测试策略",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="STRATEGY",
+        )
+    )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert len(partial_markdowns) >= 2
+    assert partial_markdowns[0].startswith("# 测试策略蓝图")
+    assert "## 1. 策略摘要" in partial_markdowns[0]
+    assert "## 2. 质量目标" not in partial_markdowns[0]
+    assert "## 2. 质量目标" in partial_markdowns[1]
+    assert "## 3. 风险识别与 FMEA" not in partial_markdowns[1]
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert "## 3. 风险识别与 FMEA" in outputs[-1].artifact_update.markdown
+
+
 def test_runtime_raw_json_stream_turn_renders_delivery_artifact_data_before_final_output(
     monkeypatch,
 ):

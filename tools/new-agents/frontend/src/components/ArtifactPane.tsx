@@ -4396,7 +4396,7 @@ export const ArtifactPane: React.FC = () => {
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-400/10">
                     <span className="h-2 w-2 rounded-full bg-sky-300 animate-pulse" />
                   </span>
-                  <span className="font-medium">正在生成后续章节</span>
+                  <span className="font-medium">正在生成下一段...</span>
                 </div>
               )}
             </>

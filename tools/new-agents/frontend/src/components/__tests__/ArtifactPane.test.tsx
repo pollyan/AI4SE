@@ -126,7 +126,7 @@ describe('ArtifactPane Component', () => {
 
         expect(screen.getByText('已完成章节')).toBeTruthy();
         expect(screen.getByTestId('artifact-streaming-position-indicator')).toBeTruthy();
-        expect(screen.getByText('正在生成后续章节')).toBeTruthy();
+        expect(screen.getByText('正在生成下一段...')).toBeTruthy();
     });
 
     it('keeps the body-position streaming indicator outside source markdown text', () => {
@@ -140,7 +140,7 @@ describe('ArtifactPane Component', () => {
 
         const sourceBlock = container.querySelector('pre');
         expect(sourceBlock?.textContent).toContain('已完成章节');
-        expect(sourceBlock?.textContent).not.toContain('正在生成后续章节');
+        expect(sourceBlock?.textContent).not.toContain('正在生成下一段...');
         expect(screen.getByTestId('artifact-streaming-position-indicator').getAttribute('data-artifact-ephemeral')).toBe('true');
     });
 
@@ -714,7 +714,7 @@ describe('ArtifactPane Component', () => {
         const blob = createObjectURL.mock.calls[0][0] as Blob;
         const content = await blob.text();
         expect(content).toBe('# 需求评审报告');
-        expect(content).not.toContain('正在生成后续章节');
+        expect(content).not.toContain('正在生成下一段...');
         expect(click).toHaveBeenCalledTimes(1);
     });
 

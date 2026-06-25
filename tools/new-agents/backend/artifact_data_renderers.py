@@ -2,7 +2,14 @@ import json
 import re
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from agent_contracts import AgentTurnOutput
 
@@ -2354,6 +2361,122 @@ def render_agent_turn_from_artifact_data(
             "warnings": payload.get("warnings", []),
         }
     )
+
+
+def render_partial_agent_turn_from_artifact_data(
+    payload: dict[str, Any],
+    *,
+    workflow_id: str,
+    current_stage_id: str,
+) -> AgentTurnOutput | None:
+    if "artifact_data" not in payload:
+        return None
+    if (workflow_id, current_stage_id) != ("TEST_DESIGN", "STRATEGY"):
+        return None
+
+    markdown = render_partial_test_design_strategy_markdown(payload["artifact_data"])
+    if markdown is None:
+        return None
+    return AgentTurnOutput.model_validate(
+        {
+            "chat": payload.get("chat") or "正在生成右侧产出物。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": markdown,
+            },
+            "stage_action": payload.get("stage_action"),
+            "warnings": payload.get("warnings", []),
+        }
+    )
+
+
+def _validate_partial_list(value: Any, model_type: type[StrictArtifactDataModel]):
+    if not isinstance(value, list) or len(value) == 0:
+        raise ValueError("partial artifact list must be non-empty")
+    return [model_type.model_validate(item) for item in value]
+
+
+def _join_partial_sections(sections: list[str]) -> str | None:
+    return "\n\n".join(sections) if len(sections) > 1 else None
+
+
+def render_partial_test_design_strategy_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "document_info" not in data:
+        return None
+    try:
+        DocumentInfo.model_validate(data["document_info"])
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = ["# 测试策略蓝图"]
+    try:
+        if "strategy_summary" not in data:
+            return None
+        sections.append(
+            _render_strategy_summary(
+                StrategySummary.model_validate(data["strategy_summary"])
+            )
+        )
+
+        if "quality_goals" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_quality_goals(
+                _validate_partial_list(data["quality_goals"], QualityGoal)
+            )
+        )
+
+        if "risks" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_strategy_risks(
+                _validate_partial_list(data["risks"], StrategyRisk)
+            )
+        )
+
+        if "test_techniques" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_test_techniques(
+                _validate_partial_list(data["test_techniques"], TestTechnique)
+            )
+        )
+
+        if "test_layers" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_test_layers(
+                _validate_partial_list(data["test_layers"], TestLayer)
+            )
+        )
+
+        if "test_points" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_test_points(
+                _validate_partial_list(data["test_points"], TestPoint)
+            )
+        )
+
+        if "tradeoffs" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_tradeoffs(
+                _validate_partial_list(data["tradeoffs"], Tradeoff)
+            )
+        )
+
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck)
+            )
+        )
+    except (TypeError, ValueError, ValidationError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
 
 
 def render_test_design_clarify_markdown(data: ClarifyArtifactData) -> str:

@@ -19,7 +19,11 @@
 
 ## 当前入口
 
-当前无未消化的活跃 refactor todo。New Agents 智能体框架深化阶段 1-2 已升格为计划路线图：`../../plans/2026-06-25-new-agents-agent-framework-phase1-phase2.md`。
+- `2026-06-25-new-agents-test-strategy-artifact-format-regression.md`：测试用例生成第二阶段“测试策略制定”产出物格式错误回归 Bug。
+- `2026-06-25-new-agents-error-message-placement-ux.md`：错误信息展示位置与占用空间 UX 候选。
+- `2026-06-25-new-agents-artifact-streaming-deep-diagnosis.md`：右侧产出物真实流式渲染缺失深度诊断 P0。
+
+New Agents 智能体框架深化阶段 1-2 已升格为计划路线图：`../../plans/2026-06-25-new-agents-agent-framework-phase1-phase2.md`。
 
 2026-06-25 已复核：6/23 的结构化产物改造和功能盘点诊断已归档；不要从 `archive/` 中的过程性“待办/剩余”直接恢复实施。
 

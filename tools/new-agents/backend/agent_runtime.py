@@ -11,7 +11,10 @@ from agent_contracts import (
     ContractValidationError,
     validate_agent_turn,
 )
-from artifact_data_renderers import render_agent_turn_from_artifact_data
+from artifact_data_renderers import (
+    render_agent_turn_from_artifact_data,
+    render_partial_agent_turn_from_artifact_data,
+)
 from llm_client import LlmClientError, stream_chat_completion_content
 from sse_schemas import AgentTurnDeltaOutput
 
@@ -1207,6 +1210,69 @@ def extract_json_object_prefix(text: str, key: str) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
+def extract_completed_json_object_members(text: str, key: str) -> dict[str, Any]:
+    key_match = re.search(rf'"{re.escape(key)}"\s*:', text)
+    if not key_match:
+        return {}
+    index = key_match.end()
+    while index < len(text) and text[index].isspace():
+        index += 1
+    if index >= len(text) or text[index] != "{":
+        return {}
+
+    index += 1
+    members: dict[str, Any] = {}
+    decoder = json.JSONDecoder()
+    while index < len(text):
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index >= len(text):
+            return members
+        if text[index] == "}":
+            return members
+        if text[index] == ",":
+            index += 1
+            continue
+        if text[index] != '"':
+            return members
+
+        try:
+            member_key, key_end = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            return members
+        if not isinstance(member_key, str):
+            return members
+        index += key_end
+
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index >= len(text) or text[index] != ":":
+            return members
+        index += 1
+
+        while index < len(text) and text[index].isspace():
+            index += 1
+        try:
+            value, value_end = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            return members
+        members[member_key] = value
+        index += value_end
+
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index >= len(text):
+            return members
+        if text[index] == ",":
+            index += 1
+            continue
+        if text[index] == "}":
+            return members
+        return members
+
+    return members
+
+
 def build_partial_agent_delta(
     text: str,
     *,
@@ -1238,6 +1304,27 @@ def build_partial_agent_delta(
                 rendered = None
             if rendered is not None:
                 markdown = rendered.artifact_update.markdown
+        else:
+            partial_artifact_data = extract_completed_json_object_members(
+                text,
+                "artifact_data",
+            )
+            if partial_artifact_data:
+                try:
+                    rendered = render_partial_agent_turn_from_artifact_data(
+                        {
+                            "chat": chat or "正在生成右侧产出物。",
+                            "artifact_data": partial_artifact_data,
+                            "stage_action": None,
+                            "warnings": [],
+                        },
+                        workflow_id=workflow_id,
+                        current_stage_id=current_stage_id,
+                    )
+                except (ValueError, ValidationError):
+                    rendered = None
+                if rendered is not None:
+                    markdown = rendered.artifact_update.markdown
     if not chat and not markdown:
         return None
     return AgentTurnDeltaOutput(
