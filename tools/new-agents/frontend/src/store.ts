@@ -4,6 +4,7 @@ import { WORKFLOWS } from './core/workflows';
 import { AgentRunSnapshot, AgentRunSnapshotContextSummary, ArtifactAuditEvent, ArtifactComment, ArtifactSectionLock, ArtifactVisualDiagnosticInput, ChatState as AppState, ArtifactVersion, Message, MessageErrorDiagnostic, WorkflowHandoff, WorkflowType } from './core/types';
 import { getAgentById } from './core/config/agents';
 import { planStageTransitionConfirmation } from './core/agentCore';
+import { buildArtifactSectionChangeIndex } from './core/artifactSections';
 import {
   isRecord,
   isWorkflowType,
@@ -224,6 +225,7 @@ const sanitizePersistedWorkspaceState = (
     stageIndex,
     chatHistory: sanitizeChatHistory(persistedState.chatHistory),
     artifactContent,
+    artifactChangeIndex: [],
     artifactHistory: sanitizeArtifactHistory(persistedState.artifactHistory),
     artifactComments: sanitizeArtifactComments(persistedState.artifactComments, workflow),
     artifactSectionLocks: sanitizeArtifactSectionLocks(persistedState.artifactSectionLocks, workflow),
@@ -266,6 +268,7 @@ export const useStore = create<AppState>()(
       stageIndex: 0,
       chatHistory: [],
       artifactContent: getWelcomeMessage(DEFAULT_WORKFLOW),
+      artifactChangeIndex: [],
       artifactHistory: [],
       artifactComments: [],
       artifactSectionLocks: [],
@@ -290,6 +293,7 @@ export const useStore = create<AppState>()(
         stageIndex: 0,
         chatHistory: [],
         artifactHistory: [],
+        artifactChangeIndex: [],
         artifactComments: [],
         artifactSectionLocks: [],
         artifactAuditEvents: [],
@@ -322,6 +326,7 @@ export const useStore = create<AppState>()(
           stageIndex: index,
           stageArtifacts: newStageArtifacts,
           artifactContent: newStageArtifacts[targetStageId] || `# ${targetStage.name}\n\n暂无产出物。`,
+          artifactChangeIndex: [],
           artifactTruncated: false,
           artifactVisualDiagnostics: [],
           artifactVisualDiagnosticFocusRequest: null,
@@ -352,6 +357,7 @@ export const useStore = create<AppState>()(
           stageIndex: nextStage,
           stageArtifacts: newStageArtifacts,
           artifactContent: nextArtifactContent,
+          artifactChangeIndex: [],
           pendingStageTransition: null,
           artifactTruncated: false,
           artifactVisualDiagnostics: [],
@@ -396,6 +402,10 @@ export const useStore = create<AppState>()(
         newStageArtifacts[currentStageId] = artifactContent;
         return {
           artifactContent,
+          artifactChangeIndex: buildArtifactSectionChangeIndex(
+            state.artifactContent,
+            artifactContent
+          ),
           stageArtifacts: newStageArtifacts,
           artifactVisualDiagnostics: [],
           artifactVisualDiagnosticFocusRequest: null,
@@ -688,6 +698,7 @@ export const useStore = create<AppState>()(
           stageIndex: targetStageIndex,
           chatHistory: [buildHandoffMessage(handoff)],
           artifactContent,
+          artifactChangeIndex: [],
           artifactHistory: [],
           artifactComments: [],
           artifactSectionLocks: [],
@@ -739,6 +750,7 @@ export const useStore = create<AppState>()(
           stageIndex,
           chatHistory: buildSnapshotMessages(snapshot),
           artifactContent,
+          artifactChangeIndex: [],
           artifactHistory: buildSnapshotArtifactHistory(snapshot, validStageIds),
           artifactComments: sanitizeArtifactComments(snapshot.artifactComments, workflow),
           artifactSectionLocks: sanitizeArtifactSectionLocks(snapshot.artifactSectionLocks, workflow),
@@ -767,6 +779,7 @@ export const useStore = create<AppState>()(
         artifactVisualDiagnostics: [],
         artifactVisualDiagnosticFocusRequest: null,
         artifactContent: getWelcomeMessage(state.workflow),
+        artifactChangeIndex: [],
         stageArtifacts: {
           [WORKFLOWS[state.workflow].stages[0].id]: getWelcomeMessage(state.workflow)
         },
@@ -783,13 +796,19 @@ export const useStore = create<AppState>()(
       setPendingStageTransition: (pending) => set({ pendingStageTransition: pending }),
       clearPendingStageTransition: () => set({ pendingStageTransition: null }),
       confirmStageTransition: () => set((state) => {
-        return planStageTransitionConfirmation({
+        const transitionPlan = planStageTransitionConfirmation({
           pendingTransition: state.pendingStageTransition,
           stageIndex: state.stageIndex,
           stages: WORKFLOWS[state.workflow].stages,
           artifactContent: state.artifactContent,
           stageArtifacts: state.stageArtifacts,
-        }) || {};
+        });
+        return transitionPlan
+          ? {
+            ...transitionPlan,
+            artifactChangeIndex: [],
+          }
+          : {};
       }),
       updateContextSummaryContent: (summary, content) => set((state) => ({
         contextSummaries: state.contextSummaries.map((currentSummary) => (

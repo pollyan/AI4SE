@@ -13,6 +13,17 @@ export type ArtifactVersion = {
 
 export type ArtifactVersionInput = ArtifactVersion | Omit<ArtifactVersion, 'stageId'>;
 
+export type ArtifactSectionChangeKind = 'added' | 'removed' | 'modified';
+
+export type ArtifactSectionChange = {
+    kind: ArtifactSectionChangeKind;
+    anchor: string;
+    title: string;
+    displayTitle: string;
+    safeForPatch: boolean;
+    unsafeReason?: 'fenced_block' | 'markdown_table' | 'markdown_list' | 'structured_visual';
+};
+
 export type ArtifactCommentStatus = 'open' | 'resolved';
 
 export type ArtifactCommentReply = {
@@ -474,6 +485,7 @@ export interface ChatState {
     stageIndex: number;
     chatHistory: Message[];
     artifactContent: string;
+    artifactChangeIndex: ArtifactSectionChange[];
     artifactHistory: ArtifactVersion[];
     artifactComments: ArtifactComment[];
     artifactSectionLocks: ArtifactSectionLock[];

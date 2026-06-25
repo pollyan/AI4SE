@@ -1197,4 +1197,34 @@ describe('Zustand Store', () => {
         expect(state.artifactContent).toBe('# 截断产物\n\n内容因为模型输出限制被截断');
         expect(state.artifactTruncated).toBe(true);
     });
+
+    it('records artifact section changes when current artifact content is replaced', () => {
+        useStore.getState().setArtifactContent('# 文档\n\n## 范围\n\n旧范围\n\n## 风险\n\n保持不变');
+
+        useStore.getState().setArtifactContent('# 文档\n\n## 范围\n\n新范围\n\n## 风险\n\n保持不变');
+
+        expect(useStore.getState().artifactChangeIndex).toEqual([
+            expect.objectContaining({
+                kind: 'modified',
+                title: '范围',
+                anchor: 'h2:范围:1',
+            }),
+        ]);
+    });
+
+    it('clears artifact section changes when switching stage and clearing history', () => {
+        useStore.getState().setArtifactContent('# 文档\n\n## 范围\n\n旧范围');
+        useStore.getState().setArtifactContent('# 文档\n\n## 范围\n\n新范围');
+        expect(useStore.getState().artifactChangeIndex).toHaveLength(1);
+
+        useStore.getState().setStageIndex(1);
+        expect(useStore.getState().artifactChangeIndex).toEqual([]);
+
+        useStore.getState().setArtifactContent('# 策略\n\n## 方向\n\n旧方向');
+        useStore.getState().setArtifactContent('# 策略\n\n## 方向\n\n新方向');
+        expect(useStore.getState().artifactChangeIndex).toHaveLength(1);
+
+        useStore.getState().clearHistory();
+        expect(useStore.getState().artifactChangeIndex).toEqual([]);
+    });
 });

@@ -65,6 +65,7 @@ describe('ArtifactPane Component', () => {
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
             artifactContent: '',
+            artifactChangeIndex: [],
             artifactHistory: [],
             stageArtifacts: {},
             artifactTruncated: false,
@@ -1405,6 +1406,73 @@ describe('ArtifactPane Component', () => {
         expect(diff.textContent).toContain('+ 新结论');
         expect(screen.getByTestId('current-artifact-diff-added-line').className).toContain('text-emerald-200');
         expect(screen.getByTestId('current-artifact-diff-removed-line').className).toContain('line-through');
+    });
+
+    it('shows changed section summary inside current artifact change diff', async () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 当前产物\n\n## 范围\n\n新范围\n\n## 风险\n\n保持不变',
+            stageArtifacts: {
+                CLARIFY: '# 当前产物\n\n## 范围\n\n新范围\n\n## 风险\n\n保持不变',
+            },
+            artifactHistory: [
+                {
+                    id: 'version-before',
+                    timestamp: 123,
+                    content: '# 当前产物\n\n## 范围\n\n旧范围\n\n## 风险\n\n保持不变',
+                    stageId: 'CLARIFY',
+                },
+                {
+                    id: 'version-after',
+                    timestamp: 124,
+                    content: '# 当前产物\n\n## 范围\n\n新范围\n\n## 风险\n\n保持不变',
+                    stageId: 'CLARIFY',
+                },
+            ],
+            artifactChangeIndex: [
+                {
+                    kind: 'modified',
+                    anchor: 'h2:范围:1',
+                    title: '范围',
+                    displayTitle: '范围',
+                    safeForPatch: true,
+                },
+            ],
+        });
+
+        render(<ArtifactPane />);
+
+        const summary = await screen.findByTestId('current-artifact-diff-section-summary');
+        expect(summary.textContent).toContain('变更章节：修改 范围');
+    });
+
+    it('does not show changed section summary when current artifact change index is empty', async () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 当前产物\n\n新结论',
+            artifactHistory: [
+                {
+                    id: 'version-before',
+                    timestamp: 123,
+                    content: '# 当前产物\n\n旧结论',
+                    stageId: 'CLARIFY',
+                },
+                {
+                    id: 'version-after',
+                    timestamp: 124,
+                    content: '# 当前产物\n\n新结论',
+                    stageId: 'CLARIFY',
+                },
+            ],
+            artifactChangeIndex: [],
+        });
+
+        render(<ArtifactPane />);
+
+        await screen.findByTestId('current-artifact-diff');
+        expect(screen.queryByTestId('current-artifact-diff-section-summary')).toBeNull();
     });
 
     it('hides the current artifact change diff and returns to clean preview', async () => {

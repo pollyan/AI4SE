@@ -66,3 +66,16 @@
 - 已收束 `TEST_DESIGN/CLARIFY` 的 `artifact_data` partial renderer：当 `requirement_facts`、`system_boundaries` 等顶层字段在 raw JSON stream 中完整闭合时，后端可在 final 前发出正式 Markdown 增量。
 - 已保留完整 `artifact_update.markdown` 作为事实源；这次进展不是完整 `artifact_patch` / `changed_sections` 协议，长文档局部 patch、块级 memoized rendering、协作状态与导出回归仍保留在本 todo 后续能力包中。
 - 验证：`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -p no:cacheprovider tools/new-agents/backend/tests/test_agent_runtime.py -k "paragraph_level_clarify_artifact_data or paragraph_level_strategy_artifact_data or artifact_data_before_final_output" -q` 通过，`cd tools/new-agents/frontend && npm run test -- src/services/__tests__/chatService.test.ts` 通过。
+
+## 2026-06-25 进展：前端章节变更索引
+
+- 已新增 `artifactSections` 纯函数，前端可基于完整 Markdown 提取稳定章节 anchor，并比较本轮 Artifact 内容变化影响的章节。
+- 已在 Zustand store 中维护非持久化 `artifactChangeIndex`，`setArtifactContent(...)` 记录同阶段 Artifact 更新范围，stage / workflow / snapshot / history reset 路径清空索引。
+- 已在右侧 ArtifactPane 的“本轮变更”视图显示章节摘要，便于用户先从章节层面审阅长文档更新。
+- 本切片仍未新增后端 `artifact_patch` / `changed_sections` SSE 契约，也未拆分 ReactMarkdown 为 memoized section rendering；这些仍属于本 todo 的后续工作。
+- 验证：
+  - `cd tools/new-agents/frontend && npm run test -- src/core/__tests__/artifactSections.test.ts src/__tests__/store.test.ts src/components/__tests__/ArtifactPane.test.tsx -t "artifactSections|artifact section changes|changed section summary"` 通过，3 个测试文件内 8 个相关测试通过。
+  - `cd tools/new-agents/frontend && npm run test -- src/core/__tests__/artifactSections.test.ts src/__tests__/store.test.ts src/components/__tests__/ArtifactPane.test.tsx` 通过，3 个测试文件内 196 个测试通过；ArtifactPane 既有 act warning 仍存在。
+  - `cd tools/new-agents/frontend && npm run lint` 通过。
+  - `cd tools/new-agents/frontend && npm run test` 通过，44 个测试文件、679 个测试通过；ArtifactPane 既有 act warning 仍存在。
+  - `./scripts/test/test-local.sh all` 已尝试：Intent Tester API、flake8、Common frontend build、New Agents frontend、New Agents backend 通过；Intent Tester proxy 因 `listen EPERM: operation not permitted 0.0.0.0:3002` 失败，New Agents Browser E2E 因 Chromium `bootstrap_check_in ... Permission denied (1100)` 失败，属于本地权限/沙箱阻塞，未作为本切片代码失败处理。

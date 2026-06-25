@@ -40,6 +40,7 @@ export const ArtifactPane: React.FC = () => {
   const workflow = useStore((state) => state.workflow);
   const stageIndex = useStore((state) => state.stageIndex);
   const artifactContent = useStore((state) => state.artifactContent);
+  const artifactChangeIndex = useStore((state) => state.artifactChangeIndex);
   const artifactHistory = useStore((state) => state.artifactHistory);
   const artifactTruncated = useStore((state) => state.artifactTruncated);
   const isGenerating = useStore((state) => state.isGenerating);
@@ -145,6 +146,14 @@ export const ArtifactPane: React.FC = () => {
   const currentChangeDiffKey = hasCurrentChangeDiff
     ? `${currentChangeBaselineVersion?.id}->${latestStageArtifactVersion?.content === artifactContent ? latestStageArtifactVersion.id : 'working'}`
     : null;
+  const currentArtifactSectionChangeSummary = useMemo(() => {
+    const labels = {
+      added: '新增',
+      removed: '删除',
+      modified: '修改',
+    } as const;
+    return artifactChangeIndex.map(change => `${labels[change.kind]} ${change.displayTitle}`);
+  }, [artifactChangeIndex]);
 
   const syncArtifactCollaborationState = useCallback((
     nextState?: CollaborationStateSnapshot,
@@ -4434,6 +4443,14 @@ export const ArtifactPane: React.FC = () => {
                       隐藏本轮变更
                     </button>
                   </div>
+                  {currentArtifactSectionChangeSummary.length > 0 && (
+                    <div
+                      data-testid="current-artifact-diff-section-summary"
+                      className="border-b border-[#1e293b] px-4 py-2 text-[11px] font-semibold text-sky-100"
+                    >
+                      变更章节：{currentArtifactSectionChangeSummary.join('、')}
+                    </div>
+                  )}
                   {currentChangeDiff.map((entry, index) => {
                     const prefix = entry.type === 'added' ? '+ ' : entry.type === 'removed' ? '- ' : '  ';
                     return (
