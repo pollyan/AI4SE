@@ -10,7 +10,11 @@ import { useChatService } from '../services/chatService';
 import { getAgentById } from '../core/config/agents';
 import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/markdownUtils';
 import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
-import { fetchWorkflowHandoffs, startWorkflowHandoff } from '../services/workflowHandoffService';
+import {
+  fetchTargetWorkflowHandoffCandidates,
+  fetchWorkflowHandoffs,
+  startWorkflowHandoff,
+} from '../services/workflowHandoffService';
 import type { Attachment, Message, MessageErrorDiagnosticKind, WorkflowHandoff } from '../store';
 
 const asRenderableAttachments = (attachments: unknown): Attachment[] => {
@@ -155,6 +159,9 @@ export const ChatPane: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [workflowHandoffs, setWorkflowHandoffs] = useState<WorkflowHandoff[]>([]);
+  const [targetWorkflowHandoffs, setTargetWorkflowHandoffs] = useState<WorkflowHandoff[]>([]);
+  const [targetHandoffStatus, setTargetHandoffStatus] = useState<'idle' | 'loading' | 'ready' | 'empty' | 'error'>('idle');
+  const [targetHandoffPanelDismissed, setTargetHandoffPanelDismissed] = useState(false);
   const [providerCheckByMessageId, setProviderCheckByMessageId] = useState<ProviderCheckStateByMessage>({});
   const [expandedErrorDetails, setExpandedErrorDetails] = useState<Record<string, boolean>>({});
 
@@ -261,12 +268,59 @@ export const ChatPane: React.FC = () => {
     };
   }, [currentRunId, chatHistory.length]);
 
+  useEffect(() => {
+    setTargetHandoffPanelDismissed(false);
+  }, [workflow, currentStageId]);
+
+  const shouldOfferTargetStartupHandoff = (
+    workflow === 'VALUE_DISCOVERY'
+    && currentStageId === 'ELEVATOR'
+    && !currentRunId
+    && chatHistory.length === 0
+  );
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!shouldOfferTargetStartupHandoff || !currentStageId || targetHandoffPanelDismissed) {
+      setTargetWorkflowHandoffs([]);
+      setTargetHandoffStatus('idle');
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    setTargetHandoffStatus('loading');
+    fetchTargetWorkflowHandoffCandidates(workflow, currentStageId)
+      .then((handoffs) => {
+        if (!isCurrent) return;
+        setTargetWorkflowHandoffs(handoffs);
+        setTargetHandoffStatus(handoffs.length > 0 ? 'ready' : 'empty');
+      })
+      .catch(() => {
+        if (!isCurrent) return;
+        setTargetWorkflowHandoffs([]);
+        setTargetHandoffStatus('error');
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [chatHistory.length, currentRunId, currentStageId, shouldOfferTargetStartupHandoff, targetHandoffPanelDismissed, workflow]);
+
   const handleApplyWorkflowHandoff = async (handoff: WorkflowHandoff) => {
-    const startedHandoff = currentRunId
-      ? await startWorkflowHandoff(currentRunId, handoff.id)
+    const sourceRunId = currentRunId ?? handoff.sourceRunId;
+    if (!sourceRunId) {
+      setToast('无法启动接力：缺少上游 run');
+      return;
+    }
+    const startedHandoff = sourceRunId
+      ? await startWorkflowHandoff(sourceRunId, handoff.id)
       : handoff;
     applyWorkflowHandoff(startedHandoff);
     setWorkflowHandoffs([]);
+    setTargetWorkflowHandoffs([]);
+    setTargetHandoffPanelDismissed(true);
     const targetWorkflow = WORKFLOWS[startedHandoff.targetWorkflowId];
     const targetRunQuery = startedHandoff.targetRunId
       ? `?runId=${encodeURIComponent(startedHandoff.targetRunId)}`
@@ -394,6 +448,65 @@ export const ChatPane: React.FC = () => {
                 </ReactMarkdown>
               </div>
             </div>
+
+            {shouldOfferTargetStartupHandoff && !targetHandoffPanelDismissed && (
+              <div className="w-full max-w-xl px-4">
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-cyan-100">选择需求蓝图起点</p>
+                      <p className="mt-1 text-xs leading-relaxed text-cyan-100/70">
+                        可以从空白话题开始，也可以继承已有产品概念简报继续梳理。
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setTargetHandoffPanelDismissed(true)}
+                      className="shrink-0 rounded-lg border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-xs font-semibold text-cyan-50 transition-colors hover:bg-cyan-300/20"
+                    >
+                      开启新话题
+                    </button>
+                  </div>
+
+                  {targetHandoffStatus === 'loading' && (
+                    <p className="mt-3 text-xs text-cyan-100/70">正在查找可继承的产品概念简报...</p>
+                  )}
+
+                  {targetHandoffStatus === 'error' && (
+                    <p className="mt-3 text-xs text-amber-100">暂时无法读取上游内容，可以直接开启新话题。</p>
+                  )}
+
+                  {targetHandoffStatus === 'empty' && (
+                    <p className="mt-3 text-xs text-cyan-100/70">暂无可继承的产品概念简报，可以直接开启新话题</p>
+                  )}
+
+                  {targetWorkflowHandoffs.length > 0 && (
+                    <div className="mt-3 grid grid-cols-1 gap-2">
+                      {targetWorkflowHandoffs.map((handoff) => (
+                        <button
+                          key={`${handoff.sourceRunId ?? 'source'}-${handoff.id}-v${handoff.sourceArtifactVersion}`}
+                          onClick={() => handleApplyWorkflowHandoff(handoff)}
+                          className="text-left rounded-lg border border-cyan-300/20 bg-[#0f1623]/80 p-3 text-cyan-50 transition-colors hover:border-cyan-200/40 hover:bg-cyan-400/10"
+                          title={handoff.sourceArtifactDigest}
+                        >
+                          <span className="flex items-center justify-between gap-2 text-sm font-semibold">
+                            <span>{handoff.label}</span>
+                            <ArrowRight className="h-4 w-4 shrink-0" />
+                          </span>
+                          <span className="mt-1 block text-[11px] text-cyan-100/60">
+                            {handoff.sourceWorkflowId}/{handoff.sourceStageId} · v{handoff.sourceArtifactVersion}
+                          </span>
+                          {handoff.sourceArtifactSummary && (
+                            <span className="mt-1.5 block line-clamp-2 text-xs leading-relaxed text-slate-300">
+                              {handoff.sourceArtifactSummary}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-col gap-3 w-full max-w-xl px-4">
               <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold px-2 mb-1">你可以试试这样问：</p>
@@ -563,6 +676,27 @@ export const ChatPane: React.FC = () => {
                           )}
                           {msg.errorDiagnostic.code && (
                             <p className="mt-1"><span className="font-semibold">错误代码：</span>{msg.errorDiagnostic.code}</p>
+                          )}
+                          {(msg.errorDiagnostic.workflowId || msg.errorDiagnostic.stageId) && (
+                            <p className="mt-1">
+                              <span className="font-semibold">工作流阶段：</span>
+                              {[msg.errorDiagnostic.workflowId, msg.errorDiagnostic.stageId].filter(Boolean).join(' / ')}
+                            </p>
+                          )}
+                          {msg.errorDiagnostic.phase && (
+                            <p className="mt-1"><span className="font-semibold">失败阶段：</span>{msg.errorDiagnostic.phase}</p>
+                          )}
+                          {msg.errorDiagnostic.fieldPath && (
+                            <p className="mt-1"><span className="font-semibold">字段路径：</span>{msg.errorDiagnostic.fieldPath}</p>
+                          )}
+                          {msg.errorDiagnostic.validator && (
+                            <p className="mt-1"><span className="font-semibold">校验器：</span>{msg.errorDiagnostic.validator}</p>
+                          )}
+                          {typeof msg.errorDiagnostic.retryable === 'boolean' && (
+                            <p className="mt-1">
+                              <span className="font-semibold">重试建议：</span>
+                              {msg.errorDiagnostic.retryable ? '可重试' : '需要先处理原因'}
+                            </p>
                           )}
                           <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap rounded-md bg-black/25 p-2 font-mono text-[11px] leading-relaxed">
                             {msg.errorDiagnostic.rawMessage}

@@ -2144,6 +2144,53 @@ describe('useChatService', () => {
         expect(state.artifactHistory).toEqual([]);
     });
 
+    it('should preserve backend structured diagnostic details in the assistant error card', async () => {
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            throw Object.assign(
+                new Error('SCHEMA_VALIDATION_FAILED: 模型连续生成的结构化结果未通过校验。'),
+                {
+                    code: 'SCHEMA_VALIDATION_FAILED',
+                    diagnostic: {
+                        phase: 'structured_output',
+                        workflowId: 'TEST_DESIGN',
+                        stageId: 'CLARIFY',
+                        fieldPath: 'artifact_data.requirement_facts.0.fact',
+                        validator: 'string_too_short',
+                        retryable: true,
+                        publicReason: '模型输出的结构化字段未通过校验，右侧产出物已保持不变。',
+                    },
+                }
+            );
+        });
+
+        const { result } = renderHook(() => useChatService());
+
+        act(() => {
+            result.current.setInput('触发结构化诊断');
+        });
+
+        await act(async () => {
+            await result.current.handleSend();
+        });
+
+        const state = useStore.getState();
+        expect(state.chatHistory[1]).toMatchObject({
+            errorDiagnostic: {
+                kind: 'structured',
+                code: 'SCHEMA_VALIDATION_FAILED',
+                phase: 'structured_output',
+                workflowId: 'TEST_DESIGN',
+                stageId: 'CLARIFY',
+                fieldPath: 'artifact_data.requirement_facts.0.fact',
+                validator: 'string_too_short',
+                retryable: true,
+            },
+        });
+        expect(state.chatHistory[1].content).toContain('右侧产出物已保持不变');
+        expect(state.artifactContent).toBe('initial artifact');
+        expect(state.artifactHistory).toEqual([]);
+    });
+
     it.each([
         'Artifact Mermaid parse failed: Parse error on line 3',
         'Artifact validation failed: missing required section',

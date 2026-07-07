@@ -2401,6 +2401,240 @@ def render_partial_agent_turn_from_artifact_data(
         ]
         renderer = render_partial_test_design_strategy_markdown
         markdown = render_partial_test_design_strategy_markdown(payload["artifact_data"])
+    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "CASES"):
+        field_order = [
+            "case_statistics",
+            "design_bases",
+            "case_groups",
+            "test_data_environments",
+            "automation_candidates",
+            "coverage_trace",
+            "open_questions",
+            "stage_gate",
+        ]
+        renderer = render_partial_test_design_cases_markdown
+        markdown = render_partial_test_design_cases_markdown(payload["artifact_data"])
+    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "DELIVERY"):
+        field_order = [
+            "executive_summary",
+            "requirement_summary",
+            "strategy_summary_items",
+            "case_summary_items",
+            "coverage_map",
+            "open_risks",
+            "acceptance_checklist",
+            "signoffs",
+            "change_log",
+        ]
+        renderer = render_partial_test_design_delivery_markdown
+        markdown = render_partial_test_design_delivery_markdown(
+            payload["artifact_data"]
+        )
+    elif (workflow_id, current_stage_id) == ("REQ_REVIEW", "REVIEW"):
+        field_order = [
+            "scope_items",
+            "quality_overview",
+            "issue_statistics",
+            "issue_groups",
+            "revision_suggestions",
+            "stage_gate",
+        ]
+        renderer = render_partial_req_review_review_markdown
+        markdown = render_partial_req_review_review_markdown(payload["artifact_data"])
+    elif (workflow_id, current_stage_id) == ("REQ_REVIEW", "REPORT"):
+        field_order = [
+            "conclusion",
+            "review_info",
+            "issue_statistics",
+            "issue_closures",
+            "review_conditions",
+            "signoffs",
+            "change_log",
+        ]
+        renderer = render_partial_req_review_report_markdown
+        markdown = render_partial_req_review_report_markdown(payload["artifact_data"])
+    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
+        field_order = [
+            "incident_summary",
+            "impact_metrics",
+            "fact_sources",
+            "timeline_events",
+            "fact_separation",
+            "fact_summary",
+            "participants",
+            "missing_information",
+            "stage_gate",
+        ]
+        renderer = render_partial_incident_review_timeline_markdown
+        markdown = render_partial_incident_review_timeline_markdown(
+            payload["artifact_data"]
+        )
+    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "ROOT_CAUSE"):
+        field_order = [
+            "analysis_context",
+            "why_chain",
+            "cause_evidence",
+            "fishbone_categories",
+            "root_cause_conclusions",
+            "excluded_causes",
+            "unverified_causes",
+            "stage_gate",
+        ]
+        renderer = render_partial_incident_review_root_cause_markdown
+        markdown = render_partial_incident_review_root_cause_markdown(
+            payload["artifact_data"]
+        )
+    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "IMPROVEMENT"):
+        field_order = [
+            "report_info",
+            "timeline_summary",
+            "root_cause_summary",
+            "priority_distribution",
+            "improvement_actions",
+            "root_cause_coverage",
+            "prevention_checklist",
+            "review_plan",
+            "residual_risks",
+            "lessons_learned",
+            "organizational_learning",
+            "signoffs",
+            "stage_gate",
+        ]
+        renderer = render_partial_incident_review_improvement_markdown
+        markdown = render_partial_incident_review_improvement_markdown(
+            payload["artifact_data"]
+        )
+    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DEFINE"):
+        field_order = [
+            "problem_statement",
+            "target_users",
+            "problem_landscape",
+            "evidence_items",
+            "problem_user_fit",
+            "constraints_boundaries",
+            "reverse_validation",
+            "stage_gate",
+        ]
+        renderer = render_partial_idea_brainstorm_define_markdown
+        markdown = render_partial_idea_brainstorm_define_markdown(
+            payload["artifact_data"]
+        )
+    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DIVERGE"):
+        field_order = [
+            "divergence_method",
+            "idea_landscape",
+            "idea_cards",
+            "idea_sources",
+            "parked_or_excluded",
+            "stage_gate",
+        ]
+        renderer = render_partial_idea_brainstorm_diverge_markdown
+        markdown = render_partial_idea_brainstorm_diverge_markdown(
+            payload["artifact_data"]
+        )
+    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONVERGE"):
+        field_order = [
+            "decision_matrix",
+            "ice_evaluations",
+            "resource_constraints",
+            "sensitivity_analysis",
+            "validation_experiments",
+            "merge_paths",
+            "stage_gate",
+        ]
+        renderer = render_partial_idea_brainstorm_converge_markdown
+        markdown = render_partial_idea_brainstorm_converge_markdown(
+            payload["artifact_data"]
+        )
+    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONCEPT"):
+        field_order = [
+            "positioning_statement",
+            "core_assumptions",
+            "lean_canvas",
+            "mvp_features",
+            "growth_funnel",
+            "premortem_risks",
+            "validation_roadmap",
+            "out_of_scope",
+            "decision_records",
+            "next_actions",
+            "stage_gate",
+        ]
+        renderer = render_partial_idea_brainstorm_concept_markdown
+        markdown = render_partial_idea_brainstorm_concept_markdown(
+            payload["artifact_data"]
+        )
+    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
+        field_order = [
+            "document_info",
+            "positioning_summary",
+            "value_flow",
+            "target_scenarios",
+            "pain_evidence",
+            "differentiators",
+            "business_feasibility",
+            "score_matrix",
+            "score_summary",
+            "assumptions",
+            "elevator_pitch",
+            "stage_gate",
+        ]
+        renderer = render_partial_value_discovery_elevator_markdown
+        markdown = render_partial_value_discovery_elevator_markdown(
+            payload["artifact_data"]
+        )
+    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "PERSONA"):
+        field_order = [
+            "document_info",
+            "persona_summary",
+            "personas",
+            "behavior_scenarios",
+            "decision_chain",
+            "pain_evidence",
+            "anti_personas",
+            "priority_ranking",
+            "stage_gate",
+        ]
+        renderer = render_partial_value_discovery_persona_markdown
+        markdown = render_partial_value_discovery_persona_markdown(
+            payload["artifact_data"]
+        )
+    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "JOURNEY"):
+        field_order = [
+            "document_info",
+            "journey_summary",
+            "journey_stages",
+            "pain_priorities",
+            "opportunity_scores",
+            "entry_strategy",
+            "validation_experiments",
+            "stage_gate",
+        ]
+        renderer = render_partial_value_discovery_journey_markdown
+        markdown = render_partial_value_discovery_journey_markdown(
+            payload["artifact_data"]
+        )
+    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "BLUEPRINT"):
+        field_order = [
+            "document_info",
+            "product_overview",
+            "target_users",
+            "feature_modules",
+            "requirements",
+            "main_flow",
+            "success_metrics",
+            "mvp_plan",
+            "non_functional_requirements",
+            "acceptance_criteria",
+            "roadmap",
+            "risks",
+            "lisa_handoff_inputs",
+            "stage_gate",
+        ]
+        renderer = render_partial_value_discovery_blueprint_markdown
+        markdown = render_partial_value_discovery_blueprint_markdown(
+            payload["artifact_data"]
+        )
     else:
         return None
     if markdown is None:
@@ -2429,6 +2663,14 @@ def _validate_partial_list(value: Any, model_type: type[StrictArtifactDataModel]
     if not isinstance(value, list) or len(value) == 0:
         raise ValueError("partial artifact list must be non-empty")
     return [model_type.model_validate(item) for item in value]
+
+
+def _validate_partial_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list) or len(value) == 0:
+        raise ValueError("partial artifact string list must be non-empty")
+    if not all(isinstance(item, str) and item.strip() for item in value):
+        raise ValueError("partial artifact string list must contain non-empty strings")
+    return value
 
 
 def _join_partial_sections(sections: list[str]) -> str | None:
@@ -2535,6 +2777,1385 @@ def _build_partial_add_after_patch(
         "replacementMarkdown": replacement_markdown,
         "baseContent": previous_markdown,
     }
+
+
+def render_partial_test_design_cases_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "document_info" not in data:
+        return None
+    try:
+        DocumentInfo.model_validate(data["document_info"])
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = ["# 测试用例集"]
+    try:
+        if "case_statistics" not in data:
+            return None
+        sections.append(
+            _render_case_statistics(
+                CaseStatistics.model_validate(data["case_statistics"])
+            )
+        )
+
+        if "design_bases" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_design_bases(
+                _validate_partial_list(data["design_bases"], DesignBasis)
+            )
+        )
+
+        if "case_groups" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_case_groups(_validate_partial_list(data["case_groups"], CaseGroup))
+        )
+
+        if "test_data_environments" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_test_data_environments(
+                _validate_partial_list(
+                    data["test_data_environments"],
+                    TestDataEnvironment,
+                )
+            )
+        )
+
+        if "automation_candidates" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_automation_candidates(
+                _validate_partial_list(
+                    data["automation_candidates"],
+                    AutomationCandidate,
+                )
+            )
+        )
+
+        if "coverage_trace" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_coverage_trace(
+                _validate_partial_list(data["coverage_trace"], CoverageTraceItem)
+            )
+        )
+
+        if "open_questions" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_open_questions(
+                _validate_partial_list(data["open_questions"], OpenQuestion)
+            )
+        )
+
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck)
+            )
+        )
+    except (TypeError, ValueError, ValidationError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
+
+
+def render_partial_test_design_delivery_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "document_info" not in data:
+        return None
+    try:
+        document_info = DocumentInfo.model_validate(data["document_info"])
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = ["# 测试设计文档"]
+    try:
+        if "executive_summary" not in data:
+            return None
+        sections.append(
+            _render_delivery_executive_summary(
+                _validate_partial_list(
+                    data["executive_summary"],
+                    DeliveryExecutiveSummaryItem,
+                )
+            )
+        )
+
+        if "requirement_summary" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_delivery_requirement_summary(
+                _validate_partial_list(
+                    data["requirement_summary"],
+                    DeliveryRequirementSummaryItem,
+                )
+            )
+        )
+
+        if "strategy_summary_items" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_delivery_strategy_summary(
+                _validate_partial_list(
+                    data["strategy_summary_items"],
+                    DeliveryStrategySummaryItem,
+                )
+            )
+        )
+
+        if "case_summary_items" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_delivery_case_summary(
+                _validate_partial_list(
+                    data["case_summary_items"],
+                    DeliveryCaseSummaryItem,
+                )
+            )
+        )
+
+        if "coverage_map" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_delivery_coverage_map(
+                _validate_partial_list(
+                    data["coverage_map"],
+                    DeliveryCoverageMapItem,
+                )
+            )
+        )
+
+        if "open_risks" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_delivery_open_risks(
+                _validate_partial_list(data["open_risks"], DeliveryOpenRisk)
+            )
+        )
+
+        if "acceptance_checklist" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_delivery_acceptance_checklist(
+                _validate_partial_list(data["acceptance_checklist"], StageGateCheck)
+            )
+        )
+
+        if "signoffs" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_delivery_signoffs(
+                _validate_partial_list(data["signoffs"], DeliverySignoff)
+            )
+        )
+
+        if "change_log" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_delivery_change_log(
+                _validate_partial_list(data["change_log"], DeliveryChangeLogItem)
+            )
+        )
+
+        if "delivery_metrics" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_delivery_document_info(
+                document_info,
+                DeliveryMetrics.model_validate(data["delivery_metrics"]),
+            )
+        )
+    except (TypeError, ValueError, ValidationError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
+
+
+def render_partial_req_review_review_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "review_info" not in data:
+        return None
+    try:
+        review_info = ReqReviewInfo.model_validate(data["review_info"])
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = ["# 需求评审问题清单"]
+    try:
+        if "scope_items" not in data:
+            return None
+        sections.append(
+            _render_req_review_scope(
+                _validate_partial_list(data["scope_items"], ReqReviewScopeItem)
+            )
+        )
+
+        if "quality_overview" not in data:
+            return _join_partial_sections(sections)
+        quality_overview = _validate_partial_list(
+            data["quality_overview"],
+            ReqReviewQualityOverviewItem,
+        )
+        sections.append(_render_req_review_quality_overview(quality_overview))
+        sections.append(_render_req_review_quality_flowchart())
+
+        if "issue_statistics" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_req_review_issue_statistics(
+                ReqReviewIssueStatistics.model_validate(data["issue_statistics"]),
+                quality_overview,
+            )
+        )
+
+        if "issue_groups" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_req_review_issue_groups(
+                _validate_partial_list(data["issue_groups"], ReqReviewIssueGroup)
+            )
+        )
+
+        if "revision_suggestions" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_req_review_revision_suggestions(
+                _validate_partial_list(
+                    data["revision_suggestions"],
+                    ReqReviewRevisionSuggestion,
+                )
+            )
+        )
+
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_req_review_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck)
+            )
+        )
+        sections.append(_render_req_review_info(review_info))
+    except (TypeError, ValueError, ValidationError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
+
+
+def render_partial_req_review_report_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict):
+        return None
+
+    sections = ["# 需求评审报告"]
+    try:
+        if "conclusion" not in data:
+            return None
+        sections.append(
+            _render_req_review_report_conclusion(
+                ReqReviewReportConclusion.model_validate(data["conclusion"])
+            )
+        )
+
+        if "review_info" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_req_review_report_info(
+                ReqReviewReportInfo.model_validate(data["review_info"])
+            )
+        )
+
+        if "issue_statistics" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_req_review_report_statistics(
+                ReqReviewReportIssueStatistics.model_validate(
+                    data["issue_statistics"]
+                )
+            )
+        )
+
+        if "issue_closures" not in data:
+            return _join_partial_sections(sections)
+        issue_closures = _validate_partial_list(
+            data["issue_closures"],
+            ReqReviewReportIssueClosure,
+        )
+        sections.append(_render_req_review_report_priority_board(issue_closures))
+        sections.append(_render_req_review_report_issue_closures(issue_closures))
+
+        if "review_conditions" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_req_review_report_conditions(
+                _validate_partial_list(
+                    data["review_conditions"],
+                    ReqReviewReportCondition,
+                )
+            )
+        )
+
+        if "signoffs" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_req_review_report_signoffs(
+                _validate_partial_list(data["signoffs"], ReqReviewReportSignoff)
+            )
+        )
+
+        if "change_log" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_req_review_report_change_log(
+                _validate_partial_list(
+                    data["change_log"],
+                    ReqReviewReportChangeLogItem,
+                )
+            )
+        )
+    except (TypeError, ValueError, ValidationError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
+
+
+def render_partial_incident_review_timeline_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "incident_summary" not in data:
+        return None
+    try:
+        incident_summary = IncidentSummary.model_validate(data["incident_summary"])
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = ["# 故障复盘报告"]
+    try:
+        sections.append(_render_incident_summary(incident_summary))
+
+        if "impact_metrics" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_impact_metrics(
+                _validate_partial_list(
+                    data["impact_metrics"],
+                    IncidentImpactMetric,
+                )
+            )
+        )
+
+        if "fact_sources" not in data:
+            return _join_partial_sections(sections)
+        _validate_partial_list(data["fact_sources"], IncidentFactSource)
+        sections.append(
+            _render_incident_fact_sources(
+                _validate_partial_list(data["fact_sources"], IncidentFactSource)
+            )
+        )
+
+        if "timeline_events" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_timeline(
+                incident_summary,
+                _validate_partial_list(
+                    data["timeline_events"],
+                    IncidentTimelineEvent,
+                ),
+            )
+        )
+
+        if "fact_separation" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_fact_separation(
+                _validate_partial_list(
+                    data["fact_separation"],
+                    IncidentFactSeparationItem,
+                )
+            )
+        )
+
+        if "fact_summary" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_fact_summary(
+                _validate_partial_string_list(data["fact_summary"])
+            )
+        )
+
+        if "participants" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_participants(
+                _validate_partial_list(data["participants"], IncidentParticipant)
+            )
+        )
+
+        if "missing_information" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_missing_information(
+                _validate_partial_list(
+                    data["missing_information"],
+                    IncidentMissingInformation,
+                )
+            )
+        )
+
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck)
+            )
+        )
+    except (TypeError, ValueError, ValidationError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
+
+
+def render_partial_incident_review_root_cause_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "analysis_context" not in data:
+        return None
+    try:
+        analysis_context = IncidentRootCauseContext.model_validate(
+            data["analysis_context"]
+        )
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = ["# 故障复盘报告"]
+    try:
+        sections.append(_render_incident_root_cause_context(analysis_context))
+
+        if "why_chain" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_why_chain(
+                _validate_partial_list(data["why_chain"], IncidentWhyChainItem)
+            )
+        )
+
+        if "cause_evidence" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_cause_evidence(
+                _validate_partial_list(data["cause_evidence"], IncidentCauseEvidence)
+            )
+        )
+
+        if "fishbone_categories" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_fishbone(
+                analysis_context,
+                _validate_partial_list(
+                    data["fishbone_categories"],
+                    IncidentFishboneCategory,
+                ),
+            )
+        )
+
+        if "root_cause_conclusions" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_root_cause_conclusions(
+                _validate_partial_list(
+                    data["root_cause_conclusions"],
+                    IncidentRootCauseConclusion,
+                )
+            )
+        )
+
+        if "excluded_causes" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_excluded_causes(
+                _validate_partial_list(data["excluded_causes"], IncidentExcludedCause)
+            )
+        )
+
+        if "unverified_causes" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_unverified_causes(
+                _validate_partial_list(
+                    data["unverified_causes"],
+                    IncidentUnverifiedCause,
+                )
+            )
+        )
+
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_root_cause_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck)
+            )
+        )
+    except (TypeError, ValueError, ValidationError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
+
+
+def render_partial_incident_review_improvement_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "report_info" not in data:
+        return None
+    try:
+        IncidentImprovementReportInfo.model_validate(data["report_info"])
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = ["# 故障复盘报告"]
+    try:
+        sections.append(
+            _render_incident_improvement_report_info(
+                IncidentImprovementReportInfo.model_validate(data["report_info"])
+            )
+        )
+
+        if "timeline_summary" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_improvement_timeline_summary(
+                IncidentImprovementTimelineSummary.model_validate(
+                    data["timeline_summary"]
+                )
+            )
+        )
+
+        if "root_cause_summary" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_improvement_root_cause_summary(
+                IncidentImprovementRootCauseSummary.model_validate(
+                    data["root_cause_summary"]
+                )
+            )
+        )
+
+        if (
+            "priority_distribution" not in data
+            and "improvement_actions" not in data
+        ):
+            return _join_partial_sections(sections)
+        sections.append("## 第三部分：改进措施")
+        sections.append("### 7. 改进措施")
+
+        if "priority_distribution" in data:
+            sections.append(
+                _render_incident_improvement_priority_distribution(
+                    IncidentImprovementPriorityDistribution.model_validate(
+                        data["priority_distribution"]
+                    )
+                )
+            )
+
+        if "improvement_actions" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_improvement_actions(
+                _validate_partial_list(
+                    data["improvement_actions"],
+                    IncidentImprovementAction,
+                )
+            )
+        )
+
+        if "root_cause_coverage" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_improvement_root_cause_coverage(
+                _validate_partial_list(
+                    data["root_cause_coverage"],
+                    IncidentRootCauseCoverage,
+                )
+            )
+        )
+
+        if "prevention_checklist" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_improvement_prevention_checklist(
+                _validate_partial_list(
+                    data["prevention_checklist"],
+                    IncidentPreventionCheckItem,
+                )
+            )
+        )
+
+        if "review_plan" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_improvement_review_plan(
+                _validate_partial_list(data["review_plan"], IncidentReviewPlanItem)
+            )
+        )
+
+        if "residual_risks" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_improvement_residual_risks(
+                _validate_partial_list(data["residual_risks"], IncidentResidualRisk)
+            )
+        )
+
+        if "lessons_learned" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_improvement_lessons(
+                _validate_partial_list(data["lessons_learned"], IncidentLessonLearned)
+            )
+        )
+
+        if "organizational_learning" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_improvement_organizational_learning(
+                _validate_partial_list(
+                    data["organizational_learning"],
+                    IncidentOrganizationalLearning,
+                )
+            )
+        )
+
+        if "signoffs" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_improvement_signoffs(
+                _validate_partial_list(data["signoffs"], IncidentSignoff)
+            )
+        )
+
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_incident_improvement_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck)
+            )
+        )
+    except (TypeError, ValueError, ValidationError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
+
+
+def render_partial_idea_brainstorm_define_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "problem_statement" not in data:
+        return None
+    try:
+        problem_statement = IdeaProblemStatement.model_validate(
+            data["problem_statement"]
+        )
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = ["# 问题域分析"]
+    try:
+        sections.append(_render_idea_problem_statement(problem_statement))
+
+        if "target_users" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_target_users(
+                _validate_partial_list(data["target_users"], IdeaTargetUser)
+            )
+        )
+
+        if "problem_landscape" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_problem_landscape(
+                IdeaProblemLandscape.model_validate(data["problem_landscape"])
+            )
+        )
+
+        if "evidence_items" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_evidence_items(
+                _validate_partial_list(data["evidence_items"], IdeaEvidenceItem)
+            )
+        )
+
+        if "problem_user_fit" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_problem_user_fit(
+                _validate_partial_list(
+                    data["problem_user_fit"],
+                    IdeaProblemUserFit,
+                )
+            )
+        )
+
+        if "constraints_boundaries" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_constraints_boundaries(
+                _validate_partial_list(
+                    data["constraints_boundaries"],
+                    IdeaConstraintBoundary,
+                )
+            )
+        )
+
+        if "reverse_validation" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_reverse_validation(
+                _validate_partial_list(
+                    data["reverse_validation"],
+                    IdeaReverseValidation,
+                )
+            )
+        )
+
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck)
+            )
+        )
+    except (TypeError, ValueError, ValidationError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
+
+
+def render_partial_idea_brainstorm_diverge_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "divergence_method" not in data:
+        return None
+    try:
+        divergence_method = IdeaDivergenceMethod.model_validate(
+            data["divergence_method"]
+        )
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = ["# 创意发散"]
+    try:
+        sections.append(_render_idea_divergence_method(divergence_method))
+
+        if "idea_landscape" not in data or "idea_cards" not in data:
+            return _join_partial_sections(sections)
+        idea_cards = _validate_partial_list(data["idea_cards"], IdeaCard)
+        sections.append(
+            _render_idea_diverge_landscape(
+                IdeaDivergeLandscape.model_validate(data["idea_landscape"]),
+                idea_cards,
+            )
+        )
+        sections.append(_render_idea_cards(idea_cards))
+
+        if "idea_sources" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_sources(
+                _validate_partial_list(data["idea_sources"], IdeaSource)
+            )
+        )
+
+        if "parked_or_excluded" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_parked_or_excluded(
+                _validate_partial_list(
+                    data["parked_or_excluded"],
+                    IdeaParkedOrExcludedRecord,
+                )
+            )
+        )
+
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck)
+            )
+        )
+    except (TypeError, ValueError, ValidationError, KeyError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
+
+
+def render_partial_idea_brainstorm_converge_markdown(data: Any) -> str | None:
+    if (
+        not isinstance(data, dict)
+        or "decision_matrix" not in data
+        or "ice_evaluations" not in data
+    ):
+        return None
+    try:
+        decision_matrix = IdeaDecisionMatrix.model_validate(data["decision_matrix"])
+        ice_evaluations = _validate_partial_list(
+            data["ice_evaluations"],
+            IdeaIceEvaluation,
+        )
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = ["# 收敛聚焦"]
+    try:
+        sections.append(
+            _render_idea_converge_decision_matrix(
+                decision_matrix,
+                ice_evaluations,
+            )
+        )
+        sections.append(_render_idea_ice_evaluations(ice_evaluations))
+
+        if "resource_constraints" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_resource_constraints(
+                _validate_partial_list(
+                    data["resource_constraints"],
+                    IdeaResourceConstraint,
+                )
+            )
+        )
+
+        if "sensitivity_analysis" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_sensitivity_analysis(
+                _validate_partial_list(
+                    data["sensitivity_analysis"],
+                    IdeaSensitivityItem,
+                )
+            )
+        )
+
+        if "validation_experiments" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_validation_experiments(
+                _validate_partial_list(
+                    data["validation_experiments"],
+                    IdeaValidationExperiment,
+                )
+            )
+        )
+
+        if "merge_paths" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_merge_paths(
+                _validate_partial_list(data["merge_paths"], IdeaMergePath)
+            )
+        )
+
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck)
+            )
+        )
+    except (TypeError, ValueError, ValidationError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
+
+
+def render_partial_idea_brainstorm_concept_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "positioning_statement" not in data:
+        return None
+    try:
+        positioning_statement = IdeaPositioningStatement.model_validate(
+            data["positioning_statement"]
+        )
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = ["# 产品概念简报"]
+    try:
+        sections.append(_render_idea_concept_positioning(positioning_statement))
+
+        if "core_assumptions" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_concept_core_assumptions(
+                _validate_partial_list(
+                    data["core_assumptions"],
+                    IdeaCoreAssumption,
+                )
+            )
+        )
+
+        if "lean_canvas" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_concept_lean_canvas(
+                _validate_partial_list(data["lean_canvas"], IdeaLeanCanvasCell)
+            )
+        )
+
+        if "mvp_features" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_concept_mvp_features(
+                _validate_partial_list(data["mvp_features"], IdeaMvpFeature)
+            )
+        )
+
+        if "growth_funnel" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_concept_growth_funnel(
+                _validate_partial_list(
+                    data["growth_funnel"],
+                    IdeaGrowthFunnelStage,
+                )
+            )
+        )
+
+        if "premortem_risks" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_concept_premortem_risks(
+                _validate_partial_list(
+                    data["premortem_risks"],
+                    IdeaPremortemRisk,
+                )
+            )
+        )
+
+        if "validation_roadmap" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_concept_validation_roadmap(
+                _validate_partial_list(
+                    data["validation_roadmap"],
+                    IdeaValidationRoadmapItem,
+                )
+            )
+        )
+
+        if "out_of_scope" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_concept_out_of_scope(
+                _validate_partial_list(data["out_of_scope"], IdeaOutOfScopeItem)
+            )
+        )
+
+        if "decision_records" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_concept_decision_records(
+                _validate_partial_list(
+                    data["decision_records"],
+                    IdeaDecisionRecord,
+                )
+            )
+        )
+
+        if "next_actions" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_concept_next_actions(
+                _validate_partial_list(data["next_actions"], IdeaNextAction)
+            )
+        )
+
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_idea_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck)
+            )
+        )
+    except (TypeError, ValueError, ValidationError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
+
+
+def render_partial_value_discovery_elevator_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "positioning_summary" not in data:
+        return None
+    try:
+        if "document_info" in data:
+            DocumentInfo.model_validate(data["document_info"])
+        positioning_summary = PositioningSummary.model_validate(
+            data["positioning_summary"]
+        )
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = ["# 价值定位分析"]
+    try:
+        sections.append(_render_value_positioning_summary(positioning_summary))
+
+        if "value_flow" not in data:
+            return _join_partial_sections(sections)
+        sections.append(_render_value_flow(ValueFlow.model_validate(data["value_flow"])))
+
+        if "target_scenarios" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_target_scenarios(
+                _validate_partial_list(data["target_scenarios"], TargetScenario)
+            )
+        )
+
+        if "pain_evidence" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_pain_evidence(
+                _validate_partial_list(data["pain_evidence"], PainEvidence)
+            )
+        )
+
+        if "differentiators" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_differentiators(
+                _validate_partial_list(data["differentiators"], Differentiator)
+            )
+        )
+
+        if "business_feasibility" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_business_feasibility(
+                _validate_partial_list(
+                    data["business_feasibility"],
+                    BusinessFeasibility,
+                )
+            )
+        )
+
+        if "score_matrix" not in data or "score_summary" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_value_score_matrix(
+                _validate_partial_list(data["score_matrix"], ValueScore),
+                ValueScoreSummary.model_validate(data["score_summary"]),
+            )
+        )
+
+        if "assumptions" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_value_assumptions(
+                _validate_partial_list(data["assumptions"], ValueAssumption)
+            )
+        )
+
+        if "elevator_pitch" not in data:
+            return _join_partial_sections(sections)
+        if not isinstance(data["elevator_pitch"], str) or not data[
+            "elevator_pitch"
+        ].strip():
+            raise ValueError("elevator_pitch must be a non-empty string")
+        sections.append(_render_elevator_pitch(data["elevator_pitch"]))
+
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_value_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck)
+            )
+        )
+    except (TypeError, ValueError, ValidationError, KeyError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
+
+
+def render_partial_value_discovery_persona_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "persona_summary" not in data:
+        return None
+    try:
+        if "document_info" in data:
+            DocumentInfo.model_validate(data["document_info"])
+        persona_summary = PersonaSummary.model_validate(data["persona_summary"])
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = ["# 用户画像分析"]
+    try:
+        sections.append(_render_persona_summary(persona_summary))
+
+        if "personas" not in data:
+            return _join_partial_sections(sections)
+        personas = _validate_partial_list(data["personas"], PersonaProfile)
+        sections.append(_render_persona_profiles(personas))
+
+        if "behavior_scenarios" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_persona_behavior_scenarios(
+                _validate_partial_list(
+                    data["behavior_scenarios"],
+                    PersonaBehaviorScenario,
+                ),
+                personas,
+            )
+        )
+
+        if "decision_chain" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_persona_decision_chain(
+                _validate_partial_list(data["decision_chain"], PersonaDecisionRole),
+                personas,
+            )
+        )
+
+        if "pain_evidence" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_persona_pain_evidence(
+                _validate_partial_list(data["pain_evidence"], PersonaPainEvidence),
+                personas,
+            )
+        )
+
+        if "anti_personas" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_anti_personas(
+                _validate_partial_list(data["anti_personas"], AntiPersona)
+            )
+        )
+
+        if "priority_ranking" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_persona_priority_ranking(
+                _validate_partial_list(
+                    data["priority_ranking"],
+                    PersonaPriorityRanking,
+                ),
+                personas,
+            )
+        )
+
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_value_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck)
+            )
+        )
+    except (TypeError, ValueError, ValidationError, KeyError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
+
+
+def render_partial_value_discovery_journey_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "journey_stages" not in data:
+        return None
+    try:
+        if "document_info" in data:
+            DocumentInfo.model_validate(data["document_info"])
+        journey_stages = _validate_partial_list(data["journey_stages"], JourneyStage)
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = ["# 用户旅程分析"]
+    try:
+        sections.append(_render_journey_map(journey_stages))
+        sections.append(_render_journey_map_visual(journey_stages))
+        sections.append(_render_journey_stage_details(journey_stages))
+
+        if "pain_priorities" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_journey_pain_priorities(
+                _validate_partial_list(
+                    data["pain_priorities"],
+                    JourneyPainPriority,
+                ),
+                journey_stages,
+            )
+        )
+
+        if "opportunity_scores" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_journey_opportunity_scores(
+                _validate_partial_list(
+                    data["opportunity_scores"],
+                    JourneyOpportunityScore,
+                )
+            )
+        )
+
+        if "entry_strategy" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_journey_entry_strategy(
+                _validate_partial_list(data["entry_strategy"], JourneyEntryStrategy)
+            )
+        )
+
+        if "validation_experiments" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_journey_validation_experiments(
+                _validate_partial_list(
+                    data["validation_experiments"],
+                    JourneyValidationExperiment,
+                )
+            )
+        )
+
+        if "journey_summary" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_journey_summary(
+                JourneySummary.model_validate(data["journey_summary"])
+            )
+        )
+
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_value_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck)
+            )
+        )
+    except (TypeError, ValueError, ValidationError, KeyError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
+
+
+def render_partial_value_discovery_blueprint_markdown(data: Any) -> str | None:
+    if (
+        not isinstance(data, dict)
+        or "document_info" not in data
+        or "product_overview" not in data
+    ):
+        return None
+    try:
+        document_info = BlueprintDocumentInfo.model_validate(data["document_info"])
+        product_overview = BlueprintProductOverview.model_validate(
+            data["product_overview"]
+        )
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    sections = [f"# {document_info.product_name} 需求蓝图"]
+    try:
+        sections.append(_render_blueprint_product_overview(product_overview))
+
+        if "target_users" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_blueprint_target_users(
+                _validate_partial_list(data["target_users"], BlueprintTargetUser)
+            )
+        )
+
+        if "feature_modules" not in data or "requirements" not in data:
+            return _join_partial_sections(sections)
+        feature_modules = _validate_partial_list(
+            data["feature_modules"],
+            BlueprintFeatureModule,
+        )
+        requirements = _validate_partial_list(
+            data["requirements"],
+            BlueprintRequirement,
+        )
+        sections.append(_render_blueprint_requirements(feature_modules, requirements))
+
+        if "main_flow" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_blueprint_main_flow(
+                BlueprintMainFlow.model_validate(data["main_flow"])
+            )
+        )
+
+        if "success_metrics" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_blueprint_success_metrics(
+                _validate_partial_list(
+                    data["success_metrics"],
+                    BlueprintSuccessMetric,
+                )
+            )
+        )
+
+        if "mvp_plan" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_blueprint_mvp_plan(
+                BlueprintMvpPlan.model_validate(data["mvp_plan"])
+            )
+        )
+
+        if "non_functional_requirements" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_blueprint_non_functional_requirements(
+                _validate_partial_list(
+                    data["non_functional_requirements"],
+                    BlueprintNonFunctionalRequirement,
+                )
+            )
+        )
+
+        if "acceptance_criteria" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_blueprint_acceptance_criteria(
+                _validate_partial_list(
+                    data["acceptance_criteria"],
+                    BlueprintAcceptanceCriterion,
+                )
+            )
+        )
+
+        if "roadmap" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_blueprint_roadmap(
+                _validate_partial_list(data["roadmap"], BlueprintRoadmapItem)
+            )
+        )
+
+        if "risks" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_blueprint_risks(
+                _validate_partial_list(data["risks"], BlueprintRisk)
+            )
+        )
+
+        if "lisa_handoff_inputs" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_blueprint_lisa_handoff_inputs(
+                _validate_partial_list(
+                    data["lisa_handoff_inputs"],
+                    BlueprintLisaHandoffInput,
+                )
+            )
+        )
+
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_blueprint_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck)
+            )
+        )
+        sections.append(_render_blueprint_document_info(document_info))
+    except (TypeError, ValueError, ValidationError, KeyError):
+        return _join_partial_sections(sections)
+
+    return _join_partial_sections(sections)
 
 
 def render_partial_test_design_clarify_markdown(data: Any) -> str | None:
@@ -4912,6 +6533,8 @@ def _render_delivery_coverage_map(items: list[DeliveryCoverageMapItem]) -> str:
         )
         + "\n\n"
         + _render_coverage_map_visual(items)
+        + "\n\n### 5.1 需求/风险/测试点追溯矩阵\n"
+        + _render_delivery_traceability_matrix_visual(items)
     )
 
 
@@ -4926,6 +6549,29 @@ def _render_coverage_map_visual(items: list[DeliveryCoverageMapItem]) -> str:
                 "风险": item.risk,
                 "测试点": item.test_point,
                 "用例": ", ".join(item.case_ids),
+                "验收状态": item.acceptance_status,
+            }
+            for item in items
+        ],
+    }
+    return (
+        "```ai4se-visual\n" + json.dumps(visual, ensure_ascii=False, indent=2) + "\n```"
+    )
+
+
+def _render_delivery_traceability_matrix_visual(
+    items: list[DeliveryCoverageMapItem],
+) -> str:
+    visual = {
+        "type": "traceability-matrix",
+        "title": "需求-风险-测试点-用例追溯矩阵",
+        "columns": ["需求", "风险", "测试点", "覆盖用例", "验收状态"],
+        "rows": [
+            {
+                "需求": item.requirement,
+                "风险": item.risk,
+                "测试点": item.test_point,
+                "覆盖用例": ", ".join(item.case_ids),
                 "验收状态": item.acceptance_status,
             }
             for item in items

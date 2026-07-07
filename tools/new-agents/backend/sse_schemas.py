@@ -49,12 +49,32 @@ class AgentTurnDeltaEvent(BaseModel):
     output: AgentTurnDeltaOutput
 
 
+class ErrorDiagnostic(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    phase: str = Field(min_length=1)
+    workflow_id: str = Field(min_length=1, alias="workflowId")
+    stage_id: str = Field(min_length=1, alias="stageId")
+    field_path: str = Field(min_length=1, alias="fieldPath")
+    validator: str = Field(min_length=1)
+    retryable: bool
+    public_reason: str = Field(min_length=1, alias="publicReason")
+
+    @field_validator("phase")
+    @classmethod
+    def validate_phase_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("diagnostic phase cannot be blank")
+        return value
+
+
 class ErrorEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["error"] = "error"
     code: str = Field(min_length=1)
     message: str = Field(min_length=1)
+    diagnostic: ErrorDiagnostic | None = None
 
     @field_validator("code")
     @classmethod

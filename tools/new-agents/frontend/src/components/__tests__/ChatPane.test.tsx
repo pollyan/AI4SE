@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect, beforeEach, beforeAll, afterEach, vi } from 'vitest';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChatPane } from '../ChatPane';
-import { useStore, WORKFLOWS, WorkflowType, type Attachment } from '../../store';
+import { useStore, WORKFLOWS, WorkflowType, type Attachment, type Message } from '../../store';
 
 const mockNavigate = vi.hoisted(() => vi.fn());
 
@@ -30,12 +30,17 @@ vi.mock('../../services/chatService', () => {
 });
 
 vi.mock('../../services/workflowHandoffService', () => ({
+    fetchTargetWorkflowHandoffCandidates: vi.fn(),
     fetchWorkflowHandoffs: vi.fn(),
     startWorkflowHandoff: vi.fn(),
 }));
 
 import { useChatService } from '../../services/chatService';
-import { fetchWorkflowHandoffs, startWorkflowHandoff } from '../../services/workflowHandoffService';
+import {
+    fetchTargetWorkflowHandoffCandidates,
+    fetchWorkflowHandoffs,
+    startWorkflowHandoff,
+} from '../../services/workflowHandoffService';
 
 // Mock Mermaid and ReactMarkdown to simplify component testing
 vi.mock('react-markdown', () => ({
@@ -72,6 +77,7 @@ describe('ChatPane Component', () => {
         });
         global.fetch = mockFetch;
         mockFetch.mockReset();
+        vi.mocked(fetchTargetWorkflowHandoffCandidates).mockResolvedValue([]);
         vi.mocked(fetchWorkflowHandoffs).mockResolvedValue([]);
         vi.mocked(startWorkflowHandoff).mockReset();
         vi.clearAllMocks();
@@ -409,6 +415,43 @@ describe('ChatPane Component', () => {
         expect(screen.queryByText(/raw backend detail/)).toBeNull();
     });
 
+    it('shows backend diagnostic metadata after expanding error details', () => {
+        const diagnosticMessage: Message = {
+            id: '2',
+            role: 'assistant',
+            content: '⚠️ 结构化输出生成失败：右侧产出物已保持不变。',
+            timestamp: Date.now() + 1000,
+            errorDiagnostic: {
+                kind: 'structured',
+                summary: '结构化输出生成失败：右侧产出物已保持不变。',
+                rawMessage: 'SCHEMA_VALIDATION_FAILED: 模型连续生成的结构化结果未通过校验。',
+                code: 'SCHEMA_VALIDATION_FAILED',
+                phase: 'structured_output',
+                workflowId: 'TEST_DESIGN',
+                stageId: 'CLARIFY',
+                fieldPath: 'artifact_data.requirement_facts.0.fact',
+                validator: 'string_too_short',
+                retryable: true,
+            },
+        };
+        useStore.setState({
+            chatHistory: [
+                { id: '1', role: 'user', content: '触发失败', timestamp: Date.now() },
+                diagnosticMessage,
+            ],
+        });
+
+        render(<ChatPane />);
+
+        expect(screen.queryByText(/artifact_data.requirement_facts/)).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: '查看详情' }));
+
+        expect(screen.getByText(/TEST_DESIGN \/ CLARIFY/)).toBeDefined();
+        expect(screen.getByText(/artifact_data.requirement_facts.0.fact/)).toBeDefined();
+        expect(screen.getByText(/string_too_short/)).toBeDefined();
+        expect(screen.getByText(/可重试/)).toBeDefined();
+    });
+
     it('opens settings from the provider failure recovery card', () => {
         useStore.setState({
             chatHistory: [
@@ -623,7 +666,7 @@ describe('ChatPane Component', () => {
 
         render(<ChatPane />);
 
-        expect(screen.getByRole('heading', { name: '价值发现' })).toBeDefined();
+        expect(screen.getByRole('heading', { name: '需求蓝图梳理' })).toBeDefined();
         expect(screen.queryByRole('heading', { name: '智能需求分析' })).toBeNull();
     });
 
@@ -804,6 +847,114 @@ describe('ChatPane Component', () => {
         expect(screen.getByText(/AI 建议进入下一阶段：策略制定/)).toBeDefined();
         expect(screen.getByText('暂不进入')).toBeDefined();
         expect(screen.getByText('确认进入 策略制定')).toBeDefined();
+    });
+
+    it('loads target-side handoff choices when value discovery starts without a run', async () => {
+        useStore.setState({
+            workflow: 'VALUE_DISCOVERY' as WorkflowType,
+            stageIndex: 0,
+            currentRunId: null,
+            chatHistory: [],
+        });
+        vi.mocked(fetchTargetWorkflowHandoffCandidates).mockResolvedValue([
+            {
+                id: 'idea-brainstorm-concept-to-value-discovery',
+                label: '从产品概念简报继续梳理需求蓝图',
+                sourceRunId: 'idea-run-123',
+                sourceWorkflowId: 'IDEA_BRAINSTORM',
+                sourceStageId: 'CONCEPT',
+                sourceArtifactVersion: 1,
+                sourceArtifactDigest: 'sha256:abc123',
+                sourceArtifactSummary: '# 产品概念简报 AI 测试资产管理平台',
+                targetWorkflowId: 'VALUE_DISCOVERY',
+                targetStageId: 'ELEVATOR',
+                targetAgentId: 'alex',
+                prompt: '请基于产品概念简报继续梳理需求蓝图。',
+            },
+        ]);
+
+        render(<ChatPane />);
+
+        await waitFor(() => {
+            expect(fetchTargetWorkflowHandoffCandidates).toHaveBeenCalledWith('VALUE_DISCOVERY', 'ELEVATOR');
+        });
+        expect(await screen.findByText('开启新话题')).toBeDefined();
+        expect(screen.getByText('从产品概念简报继续梳理需求蓝图')).toBeDefined();
+        expect(screen.getByText(/# 产品概念简报 AI 测试资产管理平台/)).toBeDefined();
+    });
+
+    it('applies a target-side handoff choice from the value discovery empty state', async () => {
+        useStore.setState({
+            workflow: 'VALUE_DISCOVERY' as WorkflowType,
+            stageIndex: 0,
+            currentRunId: null,
+            chatHistory: [],
+        });
+        vi.mocked(fetchTargetWorkflowHandoffCandidates).mockResolvedValue([
+            {
+                id: 'idea-brainstorm-concept-to-value-discovery',
+                label: '从产品概念简报继续梳理需求蓝图',
+                sourceRunId: 'idea-run-123',
+                sourceWorkflowId: 'IDEA_BRAINSTORM',
+                sourceStageId: 'CONCEPT',
+                sourceArtifactVersion: 1,
+                sourceArtifactDigest: 'sha256:abc123',
+                sourceArtifactSummary: '# 产品概念简报 AI 测试资产管理平台',
+                targetWorkflowId: 'VALUE_DISCOVERY',
+                targetStageId: 'ELEVATOR',
+                targetAgentId: 'alex',
+                prompt: '请基于产品概念简报继续梳理需求蓝图。',
+            },
+        ]);
+        vi.mocked(startWorkflowHandoff).mockResolvedValue({
+            id: 'idea-brainstorm-concept-to-value-discovery',
+            label: '从产品概念简报继续梳理需求蓝图',
+            sourceRunId: 'idea-run-123',
+            sourceWorkflowId: 'IDEA_BRAINSTORM',
+            sourceStageId: 'CONCEPT',
+            sourceArtifactVersion: 1,
+            sourceArtifactDigest: 'sha256:abc123',
+            sourceArtifactSummary: '# 产品概念简报 AI 测试资产管理平台',
+            targetRunId: 'value-run-456',
+            targetWorkflowId: 'VALUE_DISCOVERY',
+            targetStageId: 'ELEVATOR',
+            targetAgentId: 'alex',
+            prompt: '请基于产品概念简报继续梳理需求蓝图。',
+        });
+
+        render(<ChatPane />);
+        fireEvent.click(await screen.findByText('从产品概念简报继续梳理需求蓝图'));
+
+        await waitFor(() => {
+            expect(startWorkflowHandoff).toHaveBeenCalledWith(
+                'idea-run-123',
+                'idea-brainstorm-concept-to-value-discovery'
+            );
+        });
+        expect(useStore.getState().workflow).toBe('VALUE_DISCOVERY');
+        expect(useStore.getState().stageIndex).toBe(0);
+        expect(useStore.getState().currentRunId).toBe('value-run-456');
+        expect(useStore.getState().chatHistory[0]).toEqual(expect.objectContaining({
+            role: 'user',
+            content: '请基于产品概念简报继续梳理需求蓝图。',
+        }));
+        expect(mockNavigate).toHaveBeenCalledWith('/workspace/alex/value-discovery?runId=value-run-456');
+    });
+
+    it('shows a new-topic path when value discovery has no upstream candidates', async () => {
+        useStore.setState({
+            workflow: 'VALUE_DISCOVERY' as WorkflowType,
+            stageIndex: 0,
+            currentRunId: null,
+            chatHistory: [],
+        });
+        vi.mocked(fetchTargetWorkflowHandoffCandidates).mockResolvedValue([]);
+
+        render(<ChatPane />);
+
+        expect(await screen.findByText('暂无可继承的产品概念简报，可以直接开启新话题')).toBeDefined();
+        expect(screen.getByText('开启新话题')).toBeDefined();
+        expect(screen.getByText('你可以试试这样问：')).toBeDefined();
     });
 
     it('loads workflow handoff actions for the current persisted run', async () => {

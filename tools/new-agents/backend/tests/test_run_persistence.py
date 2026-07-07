@@ -13,8 +13,10 @@ from run_persistence import (
     append_run_message,
     create_agent_run,
     ensure_agent_run,
+    get_runtime_observability_summary,
     get_run_snapshot,
     record_artifact_version,
+    record_turn_metric,
     replace_artifact_collaboration_state,
     update_context_summary,
     update_run_artifact,
@@ -270,6 +272,43 @@ def test_run_snapshot_returns_artifact_audit_events(app):
         "eventType": "collaboration_updated",
         "summary": "更新了 CLARIFY 阶段协作状态：1 条批注，0 个章节锁",
         "createdAt": snapshot["artifactAuditEvents"][1]["createdAt"],
+    }
+
+
+def test_observability_recent_turns_include_sanitized_error_diagnostic(app):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        record_turn_metric(
+            run_id=run.id,
+            workflow_id="TEST_DESIGN",
+            stage_id="CLARIFY",
+            model_name="deepseek-chat",
+            provider="deepseek",
+            status="error",
+            error_code="SCHEMA_VALIDATION_FAILED",
+            duration_ms=1200,
+            input_chars=80,
+            output_chars=0,
+            estimated_tokens=20,
+            contract_retry_count=2,
+            diagnostic={
+                "phase": "structured_output",
+                "fieldPath": "artifact_data.requirement_facts.0.fact",
+                "validator": "string_too_short",
+                "publicReason": "模型输出的结构化字段未通过校验，右侧产出物已保持不变。",
+                "retryable": True,
+            },
+        )
+
+        summary = get_runtime_observability_summary(limit=5)
+
+    turn = summary["recentTurns"][0]
+    assert turn["diagnostic"] == {
+        "phase": "structured_output",
+        "fieldPath": "artifact_data.requirement_facts.0.fact",
+        "validator": "string_too_short",
+        "publicReason": "模型输出的结构化字段未通过校验，右侧产出物已保持不变。",
+        "retryable": True,
     }
 
 

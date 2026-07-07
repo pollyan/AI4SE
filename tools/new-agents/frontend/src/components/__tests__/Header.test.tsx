@@ -257,6 +257,13 @@ const OBSERVABILITY_SUMMARY: ObservabilitySummary = {
             outputChars: 600,
             estimatedTokens: 225,
             contractRetryCount: 0,
+            diagnostic: {
+                phase: 'structured_output',
+                fieldPath: 'artifact_data.requirement_facts.0.fact',
+                validator: 'string_too_short',
+                publicReason: '模型输出的结构化字段未通过校验，右侧产出物已保持不变。',
+                retryable: true,
+            },
             createdAt: '2026-06-19T10:00:00',
         },
     ],
@@ -406,7 +413,7 @@ describe('Header Component', () => {
         await waitFor(() => {
             expect(fetchRunList).toHaveBeenCalledWith({ limit: 20 });
         });
-        fireEvent.click(await screen.findByRole('button', { name: /价值发现/ }));
+        fireEvent.click(await screen.findByRole('button', { name: /需求蓝图梳理/ }));
 
         expect(mockNavigate).toHaveBeenCalledWith(
             '/workspace/alex/value-discovery?runId=alex-run-123'
@@ -475,6 +482,9 @@ describe('Header Component', () => {
         expect(screen.getAllByText('api.test.com').length).toBeGreaterThan(0);
         expect(screen.getAllByText('LLM_ERROR').length).toBeGreaterThan(0);
         expect(screen.getAllByText('模型/供应商问题 x1').length).toBeGreaterThan(0);
+        expect(screen.getByText('模型输出的结构化字段未通过校验，右侧产出物已保持不变。')).toBeTruthy();
+        expect(screen.getByText('artifact_data.requirement_facts.0.fact')).toBeTruthy();
+        expect(screen.getByText('string_too_short')).toBeTruthy();
         expect(screen.getByText(/run-123/)).toBeTruthy();
     });
 

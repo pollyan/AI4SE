@@ -40,6 +40,34 @@ def test_encode_error_event_uses_typed_message_contract():
     assert "error" not in payload
 
 
+def test_encode_error_event_includes_optional_diagnostic_contract():
+    encoded = encode_sse_event(ErrorEvent.model_validate({
+        "code": "SCHEMA_VALIDATION_FAILED",
+        "message": "artifact_data.requirement_facts.0.fact must be non-empty",
+        "diagnostic": {
+            "phase": "structured_output",
+            "workflowId": "TEST_DESIGN",
+            "stageId": "CLARIFY",
+            "fieldPath": "artifact_data.requirement_facts.0.fact",
+            "validator": "string_too_short",
+            "retryable": True,
+            "publicReason": "模型输出的结构化字段未通过校验，右侧产出物已保持不变。",
+        },
+    }))
+
+    payload = json.loads(encoded.removeprefix("data: ").strip())
+
+    assert payload["diagnostic"] == {
+        "phase": "structured_output",
+        "workflowId": "TEST_DESIGN",
+        "stageId": "CLARIFY",
+        "fieldPath": "artifact_data.requirement_facts.0.fact",
+        "validator": "string_too_short",
+        "retryable": True,
+        "publicReason": "模型输出的结构化字段未通过校验，右侧产出物已保持不变。",
+    }
+
+
 def test_encode_sse_done_keeps_done_sentinel():
     assert encode_sse_done() == "data: [DONE]\n\n"
 
@@ -64,6 +92,23 @@ def test_encode_run_started_event_uses_run_id_alias():
 def test_error_event_rejects_blank_code_or_message(payload, message):
     with pytest.raises(ValueError, match=message):
         ErrorEvent.model_validate(payload)
+
+
+def test_error_event_rejects_invalid_diagnostic_contract():
+    with pytest.raises(ValueError, match="diagnostic phase cannot be blank"):
+        ErrorEvent.model_validate({
+            "code": "SCHEMA_VALIDATION_FAILED",
+            "message": "failed",
+            "diagnostic": {
+                "phase": " ",
+                "workflowId": "TEST_DESIGN",
+                "stageId": "CLARIFY",
+                "fieldPath": "artifact_data",
+                "validator": "structured_output",
+                "retryable": True,
+                "publicReason": "结构化输出未通过校验。",
+            },
+        })
 
 
 def test_error_event_rejects_unknown_fields():

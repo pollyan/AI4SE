@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useStore, Attachment, getWelcomeMessage, WORKFLOWS, type MessageErrorDiagnostic } from '../store';
-import { generateResponseStream } from '../core/llm';
+import { generateResponseStream, type AgentRuntimeErrorDiagnostic } from '../core/llm';
 import {
     planArtifactVersionUpdate,
     planRetryFromHistory,
@@ -101,6 +101,112 @@ type AssistantErrorFeedback = {
     errorDiagnostic: MessageErrorDiagnostic;
 };
 
+type AgentRuntimeErrorLike = Error & {
+    code?: unknown;
+    diagnostic?: unknown;
+};
+
+function isRuntimeErrorDiagnostic(value: unknown): value is AgentRuntimeErrorDiagnostic {
+    if (!value || typeof value !== 'object') return false;
+    const diagnostic = value as Partial<AgentRuntimeErrorDiagnostic>;
+    return (
+        typeof diagnostic.phase === 'string'
+        && Boolean(diagnostic.phase.trim())
+        && typeof diagnostic.workflowId === 'string'
+        && Boolean(diagnostic.workflowId.trim())
+        && typeof diagnostic.stageId === 'string'
+        && Boolean(diagnostic.stageId.trim())
+        && typeof diagnostic.fieldPath === 'string'
+        && Boolean(diagnostic.fieldPath.trim())
+        && typeof diagnostic.validator === 'string'
+        && Boolean(diagnostic.validator.trim())
+        && typeof diagnostic.retryable === 'boolean'
+        && typeof diagnostic.publicReason === 'string'
+        && Boolean(diagnostic.publicReason.trim())
+    );
+}
+
+function getRuntimeErrorDiagnostic(error: unknown): AgentRuntimeErrorDiagnostic | null {
+    if (!(error instanceof Error)) return null;
+    const diagnostic = (error as AgentRuntimeErrorLike).diagnostic;
+    return isRuntimeErrorDiagnostic(diagnostic) ? diagnostic : null;
+}
+
+function getRuntimeErrorCode(error: unknown, errorMessage: string): string | undefined {
+    if (error instanceof Error) {
+        const code = (error as AgentRuntimeErrorLike).code;
+        if (typeof code === 'string' && code.trim()) return code;
+    }
+    return extractErrorCode(errorMessage);
+}
+
+function getRuntimeDiagnosticKind(
+    diagnostic: AgentRuntimeErrorDiagnostic
+): MessageErrorDiagnostic['kind'] {
+    if (diagnostic.phase === 'provider') return 'provider';
+    if (
+        diagnostic.phase === 'structured_output'
+        || diagnostic.phase === 'contract_validation'
+    ) {
+        return 'structured';
+    }
+    return 'generic';
+}
+
+function getRuntimeDiagnosticSummaryPrefix(
+    kind: MessageErrorDiagnostic['kind']
+): string {
+    if (kind === 'provider') return '模型调用未完成';
+    if (kind === 'structured') return '结构化输出生成失败';
+    return '本轮生成失败';
+}
+
+function getRuntimeDiagnosticAction(
+    diagnostic: AgentRuntimeErrorDiagnostic
+): string {
+    if (diagnostic.phase === 'provider') {
+        if (diagnostic.validator === 'provider_authentication') {
+            return '请检查 API Key、Base URL、模型名称和供应商权限。';
+        }
+        if (diagnostic.validator === 'provider_rate_limit') {
+            return '请检查供应商额度、并发限制和账户状态；如果是临时限流，可以稍后重试本阶段生成。';
+        }
+        if (diagnostic.validator === 'provider_connection') {
+            return '请检查 Base URL、网络连通性或供应商服务状态；如果服务恢复，可以重试本阶段生成。';
+        }
+    }
+    if (diagnostic.retryable) {
+        return '可以直接重试本阶段生成；如果多次失败，请补充更明确的需求或阶段确认信息。';
+    }
+    return '请根据详情修正输入或配置后再重试。';
+}
+
+function formatRuntimeDiagnosticFeedback(
+    errorMessage: string,
+    code: string | undefined,
+    diagnostic: AgentRuntimeErrorDiagnostic
+): AssistantErrorFeedback {
+    const kind = getRuntimeDiagnosticKind(diagnostic);
+    const summary = `${getRuntimeDiagnosticSummaryPrefix(kind)}：${diagnostic.publicReason}`;
+    return {
+        content: `⚠️ ${summary}`,
+        errorDiagnostic: {
+            kind,
+            summary,
+            reason: diagnostic.publicReason,
+            action: getRuntimeDiagnosticAction(diagnostic),
+            rawMessage: errorMessage,
+            ...(code ? { code } : {}),
+            phase: diagnostic.phase,
+            workflowId: diagnostic.workflowId,
+            stageId: diagnostic.stageId,
+            fieldPath: diagnostic.fieldPath,
+            validator: diagnostic.validator,
+            retryable: diagnostic.retryable,
+        },
+    };
+}
+
 function diagnoseProviderError(errorMessage: string): ProviderErrorDiagnostic | null {
     const normalized = errorMessage.toLowerCase();
 
@@ -184,7 +290,17 @@ function formatProviderErrorFeedback(
     };
 }
 
-function formatAssistantErrorFeedback(errorMessage: string): AssistantErrorFeedback {
+function formatAssistantErrorFeedback(error: unknown): AssistantErrorFeedback {
+    const errorMessage = getErrorMessage(error);
+    const runtimeDiagnostic = getRuntimeErrorDiagnostic(error);
+    if (runtimeDiagnostic) {
+        return formatRuntimeDiagnosticFeedback(
+            errorMessage,
+            getRuntimeErrorCode(error, errorMessage),
+            runtimeDiagnostic
+        );
+    }
+
     if (
         errorMessage.includes('SCHEMA_VALIDATION_FAILED')
         || errorMessage.includes('Exceeded maximum output retries')
@@ -537,7 +653,7 @@ export function useChatService() {
                 if (didUpdateArtifact) {
                     useStore.getState().setArtifactTruncated(true);
                 }
-                const errorFeedback = formatAssistantErrorFeedback(errorMessage);
+                const errorFeedback = formatAssistantErrorFeedback(error);
 
                 if (isMidstream) {
                     updateLastMessage(

@@ -2,7 +2,7 @@ import { FENCE } from '../../utils/constants';
 
 export const DELIVERY_PROMPT = `整合需求澄清、策略制定、用例编写三个阶段的所有产出物，形成完整的《测试设计交付文档》。
 【重要警告】：终稿不能只是简单拼接前序产出物，必须形成可评审、可签署的测试设计交付文档。关键结论必须摘要化，关键证据必须可追溯；如引用前序阶段内容，必须保留核心 Mermaid 图表（风险矩阵、测试金字塔、用例饼图）和关键表格。
-终稿必须包含 ai4se-visual coverage-map，用于展示需求、风险、测试点、用例和验收状态的最终覆盖关系。
+终稿必须包含 ai4se-visual coverage-map 和 traceability-matrix：coverage-map 展示需求、风险、测试点、用例和验收状态的最终覆盖关系；traceability-matrix 展示需求/风险/测试点到用例的可追溯链路。
 `;
 
 export const DELIVERY_TEMPLATE = `# 测试设计文档
@@ -67,6 +67,25 @@ ${FENCE}ai4se-visual
 }
 ${FENCE}
 
+### 5.1 需求/风险/测试点追溯矩阵
+
+${FENCE}ai4se-visual
+{
+  "type": "traceability-matrix",
+  "title": "需求-风险-测试点-用例追溯矩阵",
+  "columns": ["需求", "风险", "测试点", "覆盖用例", "验收状态"],
+  "rows": [
+    {
+      "需求": "REQ-1",
+      "风险": "RISK-1",
+      "测试点": "TP-1",
+      "覆盖用例": "TC-001",
+      "验收状态": "已覆盖"
+    }
+  ]
+}
+${FENCE}
+
 ## 6. 开放风险
 
 | 风险/问题 ID | 类型 | 描述 | 影响 | 是否可接受 | 责任方 | 后续处理 | 状态 |
@@ -78,6 +97,7 @@ ${FENCE}
 - [ ] 所有 P0 风险均有用例覆盖或风险接受结论。
 - [ ] 所有 P0 用例具备前置条件、测试数据、预期结果和断言。
 - [ ] coverage-map 中需求、风险、测试点、用例、验收状态可追溯。
+- [ ] traceability-matrix 中需求/风险/测试点到用例链路与正文一致。
 - [ ] 开放风险均有责任方和处理结论。
 - [ ] 产品、研发、测试对交付状态达成一致。
 

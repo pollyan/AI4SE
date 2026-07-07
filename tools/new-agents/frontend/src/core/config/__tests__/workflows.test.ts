@@ -76,7 +76,7 @@ describe('Workflow Configuration', () => {
     it('should have VALUE_DISCOVERY workflow defined with correct agentId and stages', () => {
         const wf = WORKFLOWS.VALUE_DISCOVERY;
         expect(wf).toBeDefined();
-        expect(wf.name).toBe('价值发现');
+        expect(wf.name).toBe('需求蓝图梳理');
         expect(wf.agentId).toBe('alex');
         expect(wf.stages).toHaveLength(4);
         expect(wf.stages[0].id).toBe('ELEVATOR');

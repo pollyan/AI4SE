@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchWorkflowHandoffs, startWorkflowHandoff } from '../workflowHandoffService';
+import {
+    fetchTargetWorkflowHandoffCandidates,
+    fetchWorkflowHandoffs,
+    startWorkflowHandoff,
+} from '../workflowHandoffService';
 
 global.fetch = vi.fn();
 
@@ -46,6 +50,51 @@ describe('workflowHandoffService', () => {
         ]);
     });
 
+    it('should fetch target-side handoff candidates for a workflow start', async () => {
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({
+                targetWorkflowId: 'VALUE_DISCOVERY',
+                targetStageId: 'ELEVATOR',
+                handoffs: [
+                    {
+                        id: 'idea-brainstorm-concept-to-value-discovery',
+                        label: '从产品概念简报继续梳理需求蓝图',
+                        sourceRunId: 'idea-run-123',
+                        sourceWorkflowId: 'IDEA_BRAINSTORM',
+                        sourceStageId: 'CONCEPT',
+                        sourceArtifactVersion: 1,
+                        sourceArtifactDigest: 'sha256:abc123',
+                        sourceArtifactSummary: '# 产品概念简报 AI 测试资产管理平台',
+                        targetWorkflowId: 'VALUE_DISCOVERY',
+                        targetStageId: 'ELEVATOR',
+                        targetAgentId: 'alex',
+                        prompt: '请基于产品概念简报继续梳理需求蓝图。',
+                    },
+                ],
+            }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            },
+        ));
+
+        const handoffs = await fetchTargetWorkflowHandoffCandidates('VALUE_DISCOVERY', 'ELEVATOR');
+
+        expect(fetch).toHaveBeenCalledWith(
+            '/new-agents/api/agent/workflow-handoff-candidates?targetWorkflowId=VALUE_DISCOVERY&targetStageId=ELEVATOR'
+        );
+        expect(handoffs).toEqual([
+            expect.objectContaining({
+                id: 'idea-brainstorm-concept-to-value-discovery',
+                sourceRunId: 'idea-run-123',
+                sourceArtifactDigest: 'sha256:abc123',
+                sourceArtifactSummary: '# 产品概念简报 AI 测试资产管理平台',
+                targetWorkflowId: 'VALUE_DISCOVERY',
+                targetStageId: 'ELEVATOR',
+            }),
+        ]);
+    });
+
     it('should fail explicitly when the handoff payload is malformed', async () => {
         vi.mocked(fetch).mockResolvedValue(new Response(
             JSON.stringify({
@@ -66,6 +115,37 @@ describe('workflowHandoffService', () => {
         await expect(fetchWorkflowHandoffs('alex-run-123')).rejects.toThrow(
             'Invalid workflow handoff response'
         );
+    });
+
+    it('should fail explicitly when target-side source metadata is malformed', async () => {
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({
+                targetWorkflowId: 'VALUE_DISCOVERY',
+                targetStageId: 'ELEVATOR',
+                handoffs: [
+                    {
+                        id: 'idea-brainstorm-concept-to-value-discovery',
+                        label: '从产品概念简报继续梳理需求蓝图',
+                        sourceRunId: 123,
+                        sourceWorkflowId: 'IDEA_BRAINSTORM',
+                        sourceStageId: 'CONCEPT',
+                        sourceArtifactVersion: 1,
+                        targetWorkflowId: 'VALUE_DISCOVERY',
+                        targetStageId: 'ELEVATOR',
+                        targetAgentId: 'alex',
+                        prompt: '请基于产品概念简报继续梳理需求蓝图。',
+                    },
+                ],
+            }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            },
+        ));
+
+        await expect(
+            fetchTargetWorkflowHandoffCandidates('VALUE_DISCOVERY', 'ELEVATOR')
+        ).rejects.toThrow('Invalid workflow handoff response');
     });
 
     it('should start a handoff target run', async () => {

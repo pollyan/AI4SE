@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from .llm_judge import assert_llm_judges_artifact_quality, is_llm_judge_enabled
+from .sse_mock import STAGE_PAYLOADS
 from .workflow_runner import (
     StageExpectation,
     WorkflowScenario,
@@ -101,6 +102,32 @@ def test_lisa_test_design_workflow_completes_all_stages(new_agents_page):
         and "确认进入策略制定" in event.content
         for event in run_result.conversation_events
     )
+
+
+def test_lisa_test_design_mock_fixture_covers_judge_feedback_gaps():
+    cases = STAGE_PAYLOADS[("TEST_DESIGN", "CASES")].markdown
+    delivery = STAGE_PAYLOADS[("TEST_DESIGN", "DELIVERY")].markdown
+    combined = cases + "\n" + delivery
+
+    for required_text in (
+        "空值",
+        "边界值",
+        "降级",
+        "并发登录",
+        "安全审计",
+        "性能",
+        "可观测性",
+        "第三方登录",
+        "弱网",
+        "traceability-matrix",
+        "coverage-map",
+    ):
+        assert required_text in combined
+
+    assert "TC-010" in combined
+    assert "TC-011" in combined
+    assert "TC-012" in combined
+    assert "需求/风险/测试点" in delivery
 
 
 def test_lisa_final_artifact_passes_optional_llm_judge(new_agents_page):

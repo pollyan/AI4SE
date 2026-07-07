@@ -358,7 +358,7 @@ REQUIRED_ARTIFACT_STRUCTURED_VISUALS: dict[tuple[str, str], list[str]] = {
     ("REQ_REVIEW", "REVIEW"): ["score-matrix"],
     ("TEST_DESIGN", "STRATEGY"): ["risk-board"],
     ("TEST_DESIGN", "CASES"): ["traceability-matrix"],
-    ("TEST_DESIGN", "DELIVERY"): ["coverage-map"],
+    ("TEST_DESIGN", "DELIVERY"): ["coverage-map", "traceability-matrix"],
     ("INCIDENT_REVIEW", "IMPROVEMENT"): ["action-board"],
     ("VALUE_DISCOVERY", "ELEVATOR"): ["score-matrix"],
     ("VALUE_DISCOVERY", "JOURNEY"): ["journey-map"],

@@ -34,7 +34,7 @@ describe('WorkflowSelect Page', () => {
         it('renders alex workflows', () => {
             renderComponent('alex');
             expect(screen.getByText('创意头脑风暴')).toBeTruthy();
-            expect(screen.getByText('价值发现')).toBeTruthy();
+            expect(screen.getByText('需求蓝图梳理')).toBeTruthy();
         });
 
         it('shows status labels for plan workflows', () => {

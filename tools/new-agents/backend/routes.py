@@ -36,7 +36,11 @@ from request_schemas import (
 from sse_response import build_sse_response
 from stream_services import stream_agent_run_events
 from routes_test_assets import register_test_asset_routes
-from workflow_handoffs import export_run_handoffs, start_workflow_handoff
+from workflow_handoffs import (
+    export_run_handoffs,
+    export_target_workflow_handoffs,
+    start_workflow_handoff,
+)
 
 
 api_bp = Blueprint("new_agents_api", __name__, url_prefix="/api")
@@ -296,6 +300,25 @@ def agent_run_handoffs(run_id: str):
         return jsonify(export_run_handoffs(run_id)), 200
     except ValueError as e:
         return json_error_response(str(e), 404)
+
+
+@api_bp.route("/agent/workflow-handoff-candidates", methods=["GET"])
+def agent_workflow_handoff_candidates():
+    """Return persisted upstream handoff candidates for a target workflow."""
+    target_workflow_id = (request.args.get("targetWorkflowId") or "").strip()
+    target_stage_id = (request.args.get("targetStageId") or "").strip() or None
+    if not target_workflow_id:
+        return json_error_response("targetWorkflowId 不能为空", 400)
+
+    try:
+        return jsonify(
+            export_target_workflow_handoffs(
+                target_workflow_id,
+                target_stage_id,
+            )
+        ), 200
+    except ValueError as e:
+        return json_error_response(str(e), 400)
 
 
 @api_bp.route(

@@ -1,4 +1,5 @@
 import time
+from typing import Any
 from uuid import uuid4
 
 from api_responses import DEFAULT_LLM_CONFIG_MISSING_CODE
@@ -645,6 +646,7 @@ def record_turn_metric(
     output_chars: int,
     estimated_tokens: int,
     contract_retry_count: int,
+    diagnostic: dict | None = None,
 ) -> AgentRunTurnMetric:
     _get_run(run_id)
     metric = AgentRunTurnMetric(
@@ -660,10 +662,42 @@ def record_turn_metric(
         output_chars=max(0, output_chars),
         estimated_tokens=max(0, estimated_tokens),
         contract_retry_count=max(0, contract_retry_count),
+        diagnostic_phase=_diagnostic_string(diagnostic, "phase"),
+        diagnostic_field_path=_diagnostic_string(
+            diagnostic,
+            "fieldPath",
+            "field_path",
+        ),
+        diagnostic_validator=_diagnostic_string(diagnostic, "validator"),
+        diagnostic_public_reason=_diagnostic_string(
+            diagnostic,
+            "publicReason",
+            "public_reason",
+        ),
+        diagnostic_retryable=_diagnostic_bool(diagnostic, "retryable"),
     )
     db.session.add(metric)
     db.session.commit()
     return metric
+
+
+def _diagnostic_string(diagnostic: dict | None, *keys: str) -> str | None:
+    if not isinstance(diagnostic, dict):
+        return None
+    for key in keys:
+        value = diagnostic.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _diagnostic_bool(diagnostic: dict | None, key: str) -> bool | None:
+    if not isinstance(diagnostic, dict):
+        return None
+    value = diagnostic.get(key)
+    if isinstance(value, bool):
+        return value
+    return None
 
 
 def record_runtime_config_issue(
@@ -913,8 +947,24 @@ def _turn_metric_snapshot(metric: AgentRunTurnMetric) -> dict:
         "outputChars": metric.output_chars,
         "estimatedTokens": metric.estimated_tokens,
         "contractRetryCount": metric.contract_retry_count,
+        "diagnostic": _turn_metric_diagnostic_snapshot(metric),
         "createdAt": _format_datetime(metric.created_at),
     }
+
+
+def _turn_metric_diagnostic_snapshot(metric: AgentRunTurnMetric) -> dict | None:
+    diagnostic: dict[str, Any] = {}
+    if metric.diagnostic_phase:
+        diagnostic["phase"] = metric.diagnostic_phase
+    if metric.diagnostic_field_path:
+        diagnostic["fieldPath"] = metric.diagnostic_field_path
+    if metric.diagnostic_validator:
+        diagnostic["validator"] = metric.diagnostic_validator
+    if metric.diagnostic_public_reason:
+        diagnostic["publicReason"] = metric.diagnostic_public_reason
+    if metric.diagnostic_retryable is not None:
+        diagnostic["retryable"] = bool(metric.diagnostic_retryable)
+    return diagnostic or None
 
 
 def list_agent_runs(

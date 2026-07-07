@@ -1038,6 +1038,17 @@ export const Header: React.FC = () => {
                             <span>{turn.estimatedTokens} tokens</span>
                             {turn.errorCode && <span className="text-red-200">{turn.errorCode}</span>}
                           </div>
+                          {turn.diagnostic && (
+                            <div className="mt-2 rounded-md border border-amber-400/20 bg-amber-400/10 px-2 py-1.5 text-xs leading-relaxed text-amber-100">
+                              <div>{turn.diagnostic.publicReason}</div>
+                              <div className="mt-1 flex flex-wrap gap-2 text-amber-100/75">
+                                <span>{turn.diagnostic.phase}</span>
+                                <span>{turn.diagnostic.fieldPath}</span>
+                                <span>{turn.diagnostic.validator}</span>
+                                <span>{turn.diagnostic.retryable ? '可重试' : '需处理后重试'}</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

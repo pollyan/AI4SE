@@ -143,6 +143,7 @@
 | POST | `/api/agent/runs/{runId}/artifacts` | 保存人工校准后的当前阶段 artifact 版本 | 无 |
 | PUT | `/api/agent/runs/{runId}/artifact-collaboration` | 替换 run 的 artifact 批注与章节锁协作状态 | 无 |
 | GET | `/api/agent/observability` | 获取 Agent Runtime 运行统计 | 无 |
+| GET | `/api/agent/workflow-handoff-candidates` | 按目标 workflow/stage 查询可继承的上游产物 | 无 |
 | GET | `/api/agent/runs/{runId}/test-assets` | 只读导出 Lisa 测试资产 | 无 |
 | POST | `/api/agent/runs/{runId}/test-assets/materialize` | 将 Lisa CASES artifact 实体化为可编辑测试资产集 | 无 |
 | GET | `/api/agent/test-assets/{collectionId}` | 读取已实体化测试资产集 | 无 |
@@ -224,12 +225,26 @@
 ```text
 data: {"type": "run_started", "runId": "0c6d6d3f-9e0c-4f9b-b0d5-1a8e8c8c8c8c"}
 
-data: {"type": "agent_turn", "output": {"chat": "已更新右侧文档，请查看关键风险和待确认问题。", "artifact_update": {"type": "replace", "markdown": "# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能\n\n## 2. 系统交互与核心链路\n待补充\n\n## 3. 待澄清与阻断性问题\n- 待确认异常路径\n\n## 4. 隐式需求与非功能性考量\n- 安全与性能待确认"}, "stage_action": null, "warnings": []}}
+data: {"type": "agent_delta", "output": {"chat": "正在生成右侧产出物。", "artifact_update": {"type": "replace", "markdown": "# 需求分析文档\n\n## 1. 需求事实清单\n| 事实 ID | 需求事实 |\n|---|---|\n| F-001 | 用户需要登录功能 |"}, "artifact_patch": null, "stage_action": null, "warnings": []}}
+
+data: {"type": "agent_delta", "output": {"chat": null, "artifact_update": {"type": "replace", "markdown": "# 需求分析文档\n\n## 1. 需求事实清单\n| 事实 ID | 需求事实 |\n|---|---|\n| F-001 | 用户需要登录功能 |\n\n## 2. 被测系统与边界\n| 类型 | 具体内容 |\n|---|---|\n| 测试范围 | 登录页面和登录 API |"}, "artifact_patch": {"operation": "add_after", "sectionAnchor": "h2:2. 被测系统与边界:1", "afterSectionAnchor": "h2:1. 需求事实清单:1", "replacementMarkdown": "## 2. 被测系统与边界\n| 类型 | 具体内容 |\n|---|---|\n| 测试范围 | 登录页面和登录 API |", "baseContent": "# 需求分析文档\n\n## 1. 需求事实清单\n| 事实 ID | 需求事实 |\n|---|---|\n| F-001 | 用户需要登录功能 |"}, "stage_action": null, "warnings": []}}
+
+data: {"type": "agent_turn", "output": {"chat": "已更新右侧文档，请查看关键风险和待确认问题。", "artifact_update": {"type": "replace", "markdown": "# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能覆盖 Web 登录页和登录 API。\n\n## 2. 系统交互与核心链路\n用户提交凭证后，认证服务校验用户库并返回会话状态。\n\n## 3. 待澄清与阻断性问题\n- 待确认异常路径的锁定策略和错误提示。\n\n## 4. 隐式需求与非功能性考量\n- 安全与性能需要进入后续测试策略。"}, "stage_action": null, "warnings": []}}
 
 data: [DONE]
 ```
 
 `runId` 为空时，后端会为本轮创建服务端 run 并通过 `run_started.runId` 返回；后续请求带回同一个 `runId` 时，会复用该 run 并追加消息与产物版本。
+
+`agent_delta` 可以在最终 `agent_turn` 前出现多次，用于左侧 chat 增量和右侧 artifact 正式局部产物增量。`agent_delta.output` 结构为 `AgentTurnDeltaOutput`，字段包括：
+
+- `chat`：可选，承载左侧对话的渐进文本。
+- `artifact_update`：可选，结构与最终 `agent_turn.output.artifact_update` 相同。`type="replace"` 时，`markdown` 必须是正式 renderer 生成的完整或局部 Markdown。
+- `artifact_patch`：可选，描述本次 `replace.markdown` 相对上一版的局部应用元数据。
+- `stage_action`：可选，通常由最终 `agent_turn` 承载；partial delta 不应提前推进阶段。
+- `warnings`：可选，承载本次 delta 相关警告。
+
+`artifact_patch` 的 JSON 字段为 `operation`、`sectionAnchor`、`replacementMarkdown`、可选 `baseContent` 和可选 `afterSectionAnchor`。`operation="add_after"` 表示 `replacementMarkdown` 是一个新增章节，客户端可在 `afterSectionAnchor` 后追加；`operation="replace"` 表示替换 `sectionAnchor` 指向的章节，且不能携带 `afterSectionAnchor`。任何 `artifact_patch` 都必须伴随 `artifact_update.type="replace"`；缺少 `artifact_patch` 不代表流式失败，模型字段一次新增多个标题或依赖多个顶层字段时，客户端应以完整 `replace.markdown` 更新右侧 artifact。
 
 ### PUT `/api/agent/runs/{runId}/artifact-collaboration` 请求
 
@@ -256,12 +271,14 @@ data: [DONE]
 
 当服务端上下文构建器因为历史过长裁剪了较早对话时，`run_started` 可携带 `warnings:["context_truncated"]`；前端应在左侧对话首帧提示用户本轮模型只看到了最近上下文。这不同于 artifact 输出截断。
 
-`artifact_update.type="replace"` 表示右侧 artifact 被正式 Markdown 文档替换；有必需 artifact contract 的阶段必须使用 `replace` 并包含当前阶段必需标题、字段和可视化契约。`replace.markdown` 只能承载正式产物或经过正式 renderer 生成的局部正式产物，不能承载调试式进度占位，例如 `# 产出物生成中`、字符数、已识别字段名或裸 `artifact_data` 解析状态。`artifact_update.type="none"` 仅用于本轮不更新右侧 artifact 的合法场景，不能用来跳过必需产出物阶段。
+`artifact_update.type="replace"` 表示右侧 artifact 被正式 Markdown 文档替换；有必需 artifact contract 的阶段必须使用 `replace` 并包含当前阶段必需标题、字段和可视化契约。`replace.markdown` 只能承载正式产物或经过正式 renderer 生成的局部正式产物，不能承载调试式进度占位，例如 `# 产出物生成中`、字符数、已识别字段名或裸 `artifact_data` 解析状态。`artifact_update.type="none"` 仅用于本轮不更新右侧 artifact 的合法场景，不能用来跳过必需产出物阶段。最终 `agent_turn` 仍必须通过完整 workflow artifact contract、持久化和下游消费校验；partial delta 不能替代 final contract。
 
 错误时：
 ```text
-data: {"type": "error", "code": "CONTRACT_VALIDATION_FAILED", "message": "Artifact 缺少必备章节"}
+data: {"type": "error", "code": "SCHEMA_VALIDATION_FAILED", "message": "模型连续生成的结构化结果未通过校验。", "diagnostic": {"phase": "structured_output", "workflowId": "TEST_DESIGN", "stageId": "CLARIFY", "fieldPath": "artifact_data.requirement_facts.0.fact", "validator": "string_too_short", "retryable": true, "publicReason": "模型输出的结构化字段未通过校验，右侧产出物已保持不变。"}}
 ```
+
+`diagnostic` 为可选字段。存在时只包含可公开诊断信息，用于前端错误卡片和运行统计排查；不得包含 API Key、完整用户输入、完整 prompt 或完整模型输出。`phase` 表示失败发生位置，常见值包括 `structured_output`、`contract_validation`、`request_validation`、`runtime`、`provider`。`fieldPath` 和 `validator` 用于定位结构化字段或供应商错误分类；错误仍然是显式失败，不得持久化为正式 artifact，也不得自动推进阶段。
 
 ### GET `/api/agent/runs/{runId}` 响应
 
@@ -364,11 +381,20 @@ data: {"type": "error", "code": "CONTRACT_VALIDATION_FAILED", "message": "Artifa
       "outputChars": 600,
       "estimatedTokens": 225,
       "contractRetryCount": 0,
+      "diagnostic": {
+        "phase": "structured_output",
+        "fieldPath": "artifact_data.requirement_facts.0.fact",
+        "validator": "string_too_short",
+        "publicReason": "模型输出的结构化字段未通过校验，右侧产出物已保持不变。",
+        "retryable": true
+      },
       "createdAt": "2026-06-19T10:00:00"
     }
   ]
 }
 ```
+
+`recentTurns[].diagnostic` 为可选对象或 `null`，仅记录脱敏后的失败定位信息。workflow、stage、provider、model 和 error code 已在 turn 顶层字段中提供，因此 diagnostic 内不重复记录完整异常文本。
 
 ### GET `/api/agent/runs/{runId}/test-assets` 响应
 
@@ -581,7 +607,7 @@ data: {"type": "error", "code": "CONTRACT_VALIDATION_FAILED", "message": "Artifa
 
 ### GET `/api/agent/runs/{runId}/handoffs` 响应
 
-该端点只读返回当前 run 可用的配置化 workflow handoff。当前首批覆盖 Alex `VALUE_DISCOVERY/BLUEPRINT` 到 Lisa `TEST_DESIGN/CLARIFY` 与 `REQ_REVIEW/REVIEW`。端点不会自动创建目标 run，也不改变 `/api/agent/runs/stream` 主链路。
+该端点只读返回当前 source run 可用的配置化 workflow handoff。当前覆盖 Alex `IDEA_BRAINSTORM/CONCEPT` 到 `VALUE_DISCOVERY/ELEVATOR`，以及 Alex `VALUE_DISCOVERY/BLUEPRINT` 到 Lisa `TEST_DESIGN/CLARIFY` 与 `REQ_REVIEW/REVIEW`。端点不会自动创建目标 run，也不改变 `/api/agent/runs/stream` 主链路。
 
 ```json
 {
@@ -591,9 +617,11 @@ data: {"type": "error", "code": "CONTRACT_VALIDATION_FAILED", "message": "Artifa
     {
       "id": "value-discovery-blueprint-to-test-design",
       "label": "交给 Lisa 做测试设计",
+      "sourceRunId": "0c6d6d3f-9e0c-4f9b-b0d5-1a8e8c8c8c8c",
       "sourceWorkflowId": "VALUE_DISCOVERY",
       "sourceStageId": "BLUEPRINT",
       "sourceArtifactVersion": 1,
+      "sourceArtifactDigest": "sha256:3f4b...",
       "targetWorkflowId": "TEST_DESIGN",
       "targetStageId": "CLARIFY",
       "targetAgentId": "lisa",
@@ -602,6 +630,43 @@ data: {"type": "error", "code": "CONTRACT_VALIDATION_FAILED", "message": "Artifa
   ]
 }
 ```
+
+### GET `/api/agent/workflow-handoff-candidates` 响应
+
+该端点只读返回某个目标 workflow/stage 可以继承的上游产物，用于目标工作流空会话启动时展示“开启新话题 / 基于已有内容继续”。当前系统没有用户概念，因此候选只按已持久化 run、workflow、stage 和 artifact 当前版本筛选，不做权限或 owner 过滤。
+
+请求示例：
+
+```text
+GET /api/agent/workflow-handoff-candidates?targetWorkflowId=VALUE_DISCOVERY&targetStageId=ELEVATOR
+```
+
+响应示例：
+
+```json
+{
+  "targetWorkflowId": "VALUE_DISCOVERY",
+  "targetStageId": "ELEVATOR",
+  "handoffs": [
+    {
+      "id": "idea-brainstorm-concept-to-value-discovery",
+      "label": "从产品概念简报继续梳理需求蓝图",
+      "sourceRunId": "idea-run-123",
+      "sourceWorkflowId": "IDEA_BRAINSTORM",
+      "sourceStageId": "CONCEPT",
+      "sourceArtifactVersion": 1,
+      "sourceArtifactDigest": "sha256:3f4b...",
+      "sourceArtifactSummary": "# 产品概念简报 AI 测试资产管理平台...",
+      "targetWorkflowId": "VALUE_DISCOVERY",
+      "targetStageId": "ELEVATOR",
+      "targetAgentId": "alex",
+      "prompt": "请基于以下上游产物继续工作..."
+    }
+  ]
+}
+```
+
+未知 `targetWorkflowId` 或与 workflow 不匹配的 `targetStageId` 返回 JSON 400。没有可用上游 artifact 时返回 200 和空 `handoffs` 数组。
 
 ### POST `/api/utils/mermaid/repair` 请求
 

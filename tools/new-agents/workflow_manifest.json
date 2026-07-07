@@ -1,6 +1,16 @@
 {
   "handoffs": [
     {
+      "id": "idea-brainstorm-concept-to-value-discovery",
+      "sourceWorkflowId": "IDEA_BRAINSTORM",
+      "sourceStageId": "CONCEPT",
+      "targetWorkflowId": "VALUE_DISCOVERY",
+      "targetStageId": "ELEVATOR",
+      "targetAgentId": "alex",
+      "promptTemplateId": "source-artifact-handoff",
+      "label": "从产品概念简报继续梳理需求蓝图"
+    },
+    {
       "id": "value-discovery-blueprint-to-test-design",
       "sourceWorkflowId": "VALUE_DISCOVERY",
       "sourceStageId": "BLUEPRINT",
@@ -177,7 +187,8 @@
           },
           "visualContract": {
             "requiredStructuredVisuals": [
-              "coverage-map"
+              "coverage-map",
+              "traceability-matrix"
             ]
           }
         }
@@ -613,17 +624,17 @@
       "id": "VALUE_DISCOVERY",
       "agentId": "alex",
       "slug": "value-discovery",
-      "name": "价值发现",
-      "description": "帮助用户将已有的产品方向系统化梳理，通过价值定位、用户画像、旅程分析，输出结构化需求蓝图。",
+      "name": "需求蓝图梳理",
+      "description": "帮助用户将已有产品方向梳理成清晰的需求蓝图，明确价值定位、目标用户、核心场景和可验证需求。",
       "listing": {
-        "name": "价值发现",
-        "description": "系统化梳理产品方向的价值定位、目标用户和核心场景，输出结构化需求蓝图。",
+        "name": "需求蓝图梳理",
+        "description": "从已有产品方向出发，梳理价值定位、目标用户、核心场景和可交接需求蓝图。",
         "icon": "Compass",
         "preview": {
           "suitableFor": [
             "已有产品方向但价值、用户和场景还不清晰",
             "需要把机会梳理成需求蓝图",
-            "需要为后续 Lisa 测试设计或需求评审准备输入"
+            "需要为后续用户故事拆解或评审准备输入"
           ],
           "notSuitableFor": [
             "只是早期发散创意，还没有明确方向",
@@ -637,7 +648,7 @@
           "expectedOutputs": [
             "价值定位和目标用户画像",
             "用户旅程、机会评分和验证实验",
-            "结构化需求蓝图与 Lisa handoff 输入"
+            "结构化需求蓝图与后续工作流输入"
           ],
           "sampleInput": "我们想做 AI 测试用例生成工具，请帮我梳理价值定位和需求蓝图。"
         }
@@ -645,7 +656,7 @@
       "stages": [
         {
           "id": "ELEVATOR",
-          "name": "价值定位",
+          "name": "明确价值定位",
           "promptTemplateId": "value_discovery.elevator",
           "artifactContract": {
             "requiredHeadings": [
@@ -676,7 +687,7 @@
         },
         {
           "id": "PERSONA",
-          "name": "用户画像",
+          "name": "梳理目标用户",
           "promptTemplateId": "value_discovery.persona",
           "artifactContract": {
             "requiredHeadings": [
@@ -699,7 +710,7 @@
         },
         {
           "id": "JOURNEY",
-          "name": "用户旅程",
+          "name": "梳理用户旅程",
           "promptTemplateId": "value_discovery.journey",
           "artifactContract": {
             "requiredHeadings": [
@@ -737,7 +748,7 @@
         },
         {
           "id": "BLUEPRINT",
-          "name": "需求蓝图",
+          "name": "生成需求蓝图",
           "promptTemplateId": "value_discovery.blueprint",
           "artifactContract": {
             "requiredHeadings": [
@@ -778,7 +789,7 @@
         }
       ],
       "onboarding": {
-        "welcomeMessage": "你好！我是 Alex，产品价值发现顾问。告诉我你想做的产品方向，我会用系统化的方法帮你梳理清楚它的场景、用户和核心价值。",
+        "welcomeMessage": "你好！我是 Alex，需求蓝图梳理顾问。告诉我你已有的产品方向，我会帮你把目标用户、核心场景、价值定位和需求蓝图梳理清楚。",
         "starterPrompts": [
           "我们团队想做一个面向中小企业的智能客户管理系统，初步方向已确定，但还没想清楚核心场景",
           "我们计划用 AI 帮测试工程师自动生成测试用例，想验证一下这个方向的价值",

@@ -232,6 +232,11 @@ class AgentRunTurnMetric(db.Model):
     output_chars = db.Column(db.Integer, nullable=False, default=0)
     estimated_tokens = db.Column(db.Integer, nullable=False, default=0)
     contract_retry_count = db.Column(db.Integer, nullable=False, default=0)
+    diagnostic_phase = db.Column(db.String(64))
+    diagnostic_field_path = db.Column(db.Text)
+    diagnostic_validator = db.Column(db.String(128))
+    diagnostic_public_reason = db.Column(db.Text)
+    diagnostic_retryable = db.Column(db.Boolean)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
     run = db.relationship("AgentRun", back_populates="turn_metrics")

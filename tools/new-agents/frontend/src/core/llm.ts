@@ -11,6 +11,32 @@ type StreamChunk = {
   artifactPatch?: ArtifactSectionPatch;
 };
 
+export type AgentRuntimeErrorDiagnostic = {
+  phase: string;
+  workflowId: string;
+  stageId: string;
+  fieldPath: string;
+  validator: string;
+  retryable: boolean;
+  publicReason: string;
+};
+
+export class AgentRuntimeStreamError extends Error {
+  code: string;
+  diagnostic?: AgentRuntimeErrorDiagnostic;
+
+  constructor(
+    code: string,
+    message: string,
+    diagnostic?: AgentRuntimeErrorDiagnostic
+  ) {
+    super(`${code}: ${message}`);
+    this.name = 'AgentRuntimeStreamError';
+    this.code = code;
+    this.diagnostic = diagnostic;
+  }
+}
+
 type AgentArtifactUpdate = {
   type: 'replace' | 'none';
   markdown?: string | null;
@@ -41,7 +67,12 @@ type AgentRuntimeEvent =
   | { type: 'run_started'; runId?: string | null; warnings?: string[] }
   | { type: 'agent_delta'; output: AgentTurnDeltaOutput }
   | { type: 'agent_turn'; output: AgentTurnOutput }
-  | { type: 'error'; code: string; message: string };
+  | {
+    type: 'error';
+    code: string;
+    message: string;
+    diagnostic?: AgentRuntimeErrorDiagnostic;
+  };
 
 type AttachmentLike = Partial<Attachment>;
 type AttachmentListState =
@@ -300,6 +331,56 @@ const getStructuredRuntimeStageId = (
   return stage.id;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+  typeof value === 'object' && value !== null
+);
+
+const readNonBlankString = (
+  record: Record<string, unknown>,
+  field: string
+): string | null => {
+  const value = record[field];
+  if (typeof value !== 'string' || !value.trim()) return null;
+  return value;
+};
+
+const normalizeAgentRuntimeErrorDiagnostic = (
+  value: unknown
+): AgentRuntimeErrorDiagnostic | undefined => {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value)) {
+    throw new Error('结构化智能体 SSE 事件格式错误');
+  }
+
+  const phase = readNonBlankString(value, 'phase');
+  const workflowId = readNonBlankString(value, 'workflowId');
+  const stageId = readNonBlankString(value, 'stageId');
+  const fieldPath = readNonBlankString(value, 'fieldPath');
+  const validator = readNonBlankString(value, 'validator');
+  const publicReason = readNonBlankString(value, 'publicReason');
+  if (
+    !phase
+    || !workflowId
+    || !stageId
+    || !fieldPath
+    || !validator
+    || !publicReason
+    || typeof value.retryable !== 'boolean'
+  ) {
+    throw new Error('结构化智能体 SSE 事件格式错误');
+  }
+
+  return {
+    phase,
+    workflowId,
+    stageId,
+    fieldPath,
+    validator,
+    retryable: value.retryable,
+    publicReason,
+  };
+};
+
 const parseAgentRuntimeEvent = (payload: string): AgentRuntimeEvent | null => {
   let parsed: unknown;
   try {
@@ -324,7 +405,15 @@ const parseAgentRuntimeEvent = (payload: string): AgentRuntimeEvent | null => {
     ) {
       throw new Error('结构化智能体 SSE 事件格式错误');
     }
-    return event as AgentRuntimeEvent;
+    const diagnostic = normalizeAgentRuntimeErrorDiagnostic(
+      (event as { diagnostic?: unknown }).diagnostic
+    );
+    return {
+      type: 'error',
+      code: event.code,
+      message: event.message,
+      ...(diagnostic ? { diagnostic } : {}),
+    };
   }
 
   if (event.type === 'run_started') {
@@ -929,7 +1018,11 @@ async function* generateResponseStreamViaAgentRuntime(
     const event = parseAgentRuntimeEvent(trimmedPayload);
     if (!event) return;
     if (event.type === 'error') {
-      throw new Error(`${event.code}: ${event.message}`);
+      throw new AgentRuntimeStreamError(
+        event.code,
+        event.message,
+        event.diagnostic
+      );
     }
     if (event.type === 'run_started') {
       if (event.runId) {

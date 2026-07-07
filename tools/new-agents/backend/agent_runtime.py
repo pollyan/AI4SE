@@ -229,7 +229,7 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；case_summary_items 中每项 case_count 必须等于 p0_count + p1_count + p2_count；delivery_metrics.total_cases 必须等于所有 case_summary_items.case_count 之和；coverage_map.case_ids 必须至少包含一个用例 ID。不要输出完整 Markdown、Mermaid 代码块、coverage-map JSON 代码块或表格，后端会负责确定性渲染右侧测试设计交付文档和 ai4se-visual coverage-map。
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；case_summary_items 中每项 case_count 必须等于 p0_count + p1_count + p2_count；delivery_metrics.total_cases 必须等于所有 case_summary_items.case_count 之和；coverage_map.case_ids 必须至少包含一个用例 ID。coverage_map 必须覆盖需求、风险、测试点、用例和验收状态，后端会同时渲染 ai4se-visual coverage-map 与 traceability-matrix。不要输出完整 Markdown、Mermaid 代码块、coverage-map / traceability-matrix JSON 代码块或表格。
 chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
@@ -600,7 +600,7 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；evidence_items.evidence_id 必须唯一；problem_landscape.subproblems.problem_id 必须唯一；problem_user_fit.evidence_ids 只能引用已存在的 evidence_id；problem_landscape.root_problem 必须被至少一个 evidence_items 或 problem_user_fit 条目覆盖；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 mindmap，后端会负责确定性渲染右侧问题域分析和 Mermaid mindmap。
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；evidence_items.evidence_id 必须唯一；problem_landscape.subproblems.problem_id 必须唯一；problem_user_fit.evidence_ids 只能引用已存在的 evidence_id；problem_landscape.root_problem 必须被至少一个 evidence_items 或 problem_user_fit 条目覆盖；为稳定通过校验，至少一个 evidence_items.related_problem 必须原样包含 problem_landscape.root_problem，且至少一个 problem_user_fit.evidence_or_assumption 必须原样包含 problem_landscape.root_problem；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 mindmap，后端会负责确定性渲染右侧问题域分析和 Mermaid mindmap。
 chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
@@ -727,44 +727,74 @@ def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) ->
     }
 
 
+def prioritize_artifact_data_for_visible_streaming(instruction: str) -> str:
+    """Move artifact_data before chat so right-pane output can stream first."""
+    instruction = instruction.replace(
+        '1. "chat"\n2. "artifact_data"',
+        '1. "artifact_data"\n2. "chat"',
+        1,
+    )
+    match = re.search(
+        r'(JSON 对象结构：\n\{\n)  "chat": ([^\n]+),\n  "artifact_data":',
+        instruction,
+    )
+    if not match:
+        return instruction
+    chat_value = match.group(2)
+    instruction = (
+        instruction[: match.start()]
+        + match.group(1)
+        + '  "artifact_data":'
+        + instruction[match.end() :]
+    )
+    return instruction.replace(
+        '\n  },\n  "stage_action"',
+        f'\n  }},\n  "chat": {chat_value},\n  "stage_action"',
+        1,
+    )
+
+
 def build_structured_output_instruction(
     workflow_id: str,
     current_stage_id: str,
 ) -> str:
+    artifact_data_instruction = None
     if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DEFINE"):
-        return IDEA_DEFINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DIVERGE"):
-        return IDEA_DIVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONVERGE"):
-        return IDEA_CONVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONCEPT"):
-        return IDEA_CONCEPT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
-        return ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
-        return STRATEGY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CASES"):
-        return CASES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "DELIVERY"):
-        return DELIVERY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("REQ_REVIEW", "REVIEW"):
-        return REQ_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("REQ_REVIEW", "REPORT"):
-        return REQ_REVIEW_REPORT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
-        return VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "PERSONA"):
-        return VALUE_PERSONA_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "JOURNEY"):
-        return VALUE_JOURNEY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "BLUEPRINT"):
-        return VALUE_BLUEPRINT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
-        return INCIDENT_TIMELINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "ROOT_CAUSE"):
-        return INCIDENT_ROOT_CAUSE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "IMPROVEMENT"):
-        return INCIDENT_IMPROVEMENT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+        artifact_data_instruction = IDEA_DEFINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DIVERGE"):
+        artifact_data_instruction = IDEA_DIVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONVERGE"):
+        artifact_data_instruction = IDEA_CONVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONCEPT"):
+        artifact_data_instruction = IDEA_CONCEPT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
+        artifact_data_instruction = ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
+        artifact_data_instruction = STRATEGY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "CASES"):
+        artifact_data_instruction = CASES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "DELIVERY"):
+        artifact_data_instruction = DELIVERY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("REQ_REVIEW", "REVIEW"):
+        artifact_data_instruction = REQ_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("REQ_REVIEW", "REPORT"):
+        artifact_data_instruction = REQ_REVIEW_REPORT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
+        artifact_data_instruction = VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "PERSONA"):
+        artifact_data_instruction = VALUE_PERSONA_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "JOURNEY"):
+        artifact_data_instruction = VALUE_JOURNEY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "BLUEPRINT"):
+        artifact_data_instruction = VALUE_BLUEPRINT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
+        artifact_data_instruction = INCIDENT_TIMELINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "ROOT_CAUSE"):
+        artifact_data_instruction = INCIDENT_ROOT_CAUSE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "IMPROVEMENT"):
+        artifact_data_instruction = INCIDENT_IMPROVEMENT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    if artifact_data_instruction is not None:
+        return prioritize_artifact_data_for_visible_streaming(artifact_data_instruction)
     return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
 
 
@@ -1021,21 +1051,6 @@ class PydanticAgentRuntime:
                     current_stage_id=current_stage_id,
                 )
             except json.JSONDecodeError:
-                if emitted_any_delta and (latest_chat or latest_markdown):
-                    yield AgentTurnOutput.model_validate(
-                        {
-                            "chat": latest_chat
-                            or "本轮响应已中断，右侧产出物可能不完整。",
-                            "artifact_update": (
-                                {"type": "replace", "markdown": latest_markdown}
-                                if latest_markdown
-                                else {"type": "none"}
-                            ),
-                            "stage_action": None,
-                            "warnings": ["artifact_truncated"],
-                        }
-                    )
-                    return
                 raise
             except ValidationError as exc:
                 if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:

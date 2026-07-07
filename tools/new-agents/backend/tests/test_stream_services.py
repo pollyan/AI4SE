@@ -370,13 +370,14 @@ def test_stream_agent_run_events_records_error_turn_metric(
         persistence=persistence,
     ))
 
-    assert events == [
-        RunStartedEvent(run_id="run-123"),
-        ErrorEvent(
-            code="LLM_ERROR",
-            message="provider API failed",
-        ),
-    ]
+    assert events[0] == RunStartedEvent(run_id="run-123")
+    error = events[1]
+    assert isinstance(error, ErrorEvent)
+    assert error.code == "LLM_ERROR"
+    assert error.message == "provider API failed"
+    assert error.diagnostic is not None
+    assert error.diagnostic.phase == "provider"
+    assert error.diagnostic.validator == "provider_error"
     metric = persistence.calls[-1][1]
     assert persistence.calls[-1][0] == "record_turn_metric"
     assert metric["run_id"] == "run-123"
@@ -391,6 +392,7 @@ def test_stream_agent_run_events_records_error_turn_metric(
     assert metric["estimated_tokens"] >= 1
     assert metric["duration_ms"] >= 0
     assert metric["contract_retry_count"] == 0
+    assert metric["diagnostic"]["validator"] == "provider_error"
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -412,21 +414,93 @@ def test_stream_agent_run_events_records_schema_retry_count_from_runtime_error(
         persistence=persistence,
     ))
 
-    assert events == [
-        RunStartedEvent(run_id="run-123"),
-        ErrorEvent(
-            code="SCHEMA_VALIDATION_FAILED",
-            message=(
-                "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
-                "如果多次失败，请补充更明确的需求或阶段确认信息。"
-            ),
-        ),
-    ]
+    assert events[0] == RunStartedEvent(run_id="run-123")
+    error = events[1]
+    assert isinstance(error, ErrorEvent)
+    assert error.code == "SCHEMA_VALIDATION_FAILED"
+    assert error.message == (
+        "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
+        "如果多次失败，请补充更明确的需求或阶段确认信息。"
+    )
+    assert error.diagnostic is not None
+    assert error.diagnostic.phase == "structured_output"
+    assert error.diagnostic.validator == "pydantic_ai_output_retry"
     metric = persistence.calls[-1][1]
     assert persistence.calls[-1][0] == "record_turn_metric"
     assert metric["status"] == "error"
     assert metric["error_code"] == "SCHEMA_VALIDATION_FAILED"
     assert metric["contract_retry_count"] == 3
+    assert metric["diagnostic"]["validator"] == "pydantic_ai_output_retry"
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_returns_typed_schema_diagnostic_and_metric(
+    mock_build_runtime: MagicMock,
+) -> None:
+    runtime = MagicMock()
+    runtime.stream_turn.side_effect = AgentRuntimeSchemaError(
+        "Exceeded maximum output retries (2): "
+        "artifact_data.requirement_facts.0.fact"
+    )
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    events = list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.deepseek.com/v1",
+        model_name="deepseek-chat",
+        persistence=persistence,
+    ))
+
+    error = events[-1]
+    assert isinstance(error, ErrorEvent)
+    assert error.code == "SCHEMA_VALIDATION_FAILED"
+    assert error.diagnostic is not None
+    assert error.diagnostic.phase == "structured_output"
+    assert error.diagnostic.workflow_id == "TEST_DESIGN"
+    assert error.diagnostic.stage_id == "CLARIFY"
+    assert error.diagnostic.field_path == "artifact_data"
+    assert error.diagnostic.validator == "pydantic_ai_output_retry"
+    assert error.diagnostic.retryable is True
+    assert "右侧产出物已保持不变" in error.diagnostic.public_reason
+    metric = persistence.calls[-1][1]
+    assert persistence.calls[-1][0] == "record_turn_metric"
+    assert metric["diagnostic"] == {
+        "phase": "structured_output",
+        "workflowId": "TEST_DESIGN",
+        "stageId": "CLARIFY",
+        "fieldPath": "artifact_data",
+        "validator": "pydantic_ai_output_retry",
+        "retryable": True,
+        "publicReason": error.diagnostic.public_reason,
+    }
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_returns_typed_provider_diagnostic(
+    mock_build_runtime: MagicMock,
+) -> None:
+    runtime = MagicMock()
+    runtime.stream_turn.side_effect = AgentRuntimeModelError("401 invalid api key")
+    mock_build_runtime.return_value = runtime
+
+    events = list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.example.com/v1",
+        model_name="test-model",
+    ))
+
+    error = events[-1]
+    assert isinstance(error, ErrorEvent)
+    assert error.code == "LLM_ERROR"
+    assert error.diagnostic is not None
+    assert error.diagnostic.phase == "provider"
+    assert error.diagnostic.field_path == "provider"
+    assert error.diagnostic.validator == "provider_authentication"
+    assert error.diagnostic.retryable is False
+    assert "模型供应商鉴权失败" in error.diagnostic.public_reason
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -590,16 +664,16 @@ def test_stream_agent_run_events_maps_pydantic_ai_output_failure_to_error_event(
         model_name="test-model",
     ))
 
-    assert events == [
-        RunStartedEvent(),
-        ErrorEvent(
-            code="SCHEMA_VALIDATION_FAILED",
-            message=(
-                "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
-                "如果多次失败，请补充更明确的需求或阶段确认信息。"
-            ),
-        )
-    ]
+    assert events[0] == RunStartedEvent()
+    error = events[1]
+    assert isinstance(error, ErrorEvent)
+    assert error.code == "SCHEMA_VALIDATION_FAILED"
+    assert error.message == (
+        "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
+        "如果多次失败，请补充更明确的需求或阶段确认信息。"
+    )
+    assert error.diagnostic is not None
+    assert error.diagnostic.phase == "structured_output"
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -628,16 +702,16 @@ def test_stream_agent_run_events_maps_raw_pydantic_ai_schema_error_to_error_even
         model_name="test-model",
     ))
 
-    assert events == [
-        RunStartedEvent(),
-        ErrorEvent(
-            code="SCHEMA_VALIDATION_FAILED",
-            message=(
-                "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
-                "如果多次失败，请补充更明确的需求或阶段确认信息。"
-            ),
-        )
-    ]
+    assert events[0] == RunStartedEvent()
+    error = events[1]
+    assert isinstance(error, ErrorEvent)
+    assert error.code == "SCHEMA_VALIDATION_FAILED"
+    assert error.message == (
+        "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
+        "如果多次失败，请补充更明确的需求或阶段确认信息。"
+    )
+    assert error.diagnostic is not None
+    assert error.diagnostic.validator == "pydantic_ai_output_retry"
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -663,13 +737,14 @@ def test_stream_agent_run_events_maps_contract_failure_to_error_event(
         model_name="test-model",
     ))
 
-    assert events == [
-        RunStartedEvent(),
-        ErrorEvent(
-            code="CONTRACT_VALIDATION_FAILED",
-            message="chat must not contain artifact markdown",
-        )
-    ]
+    assert events[0] == RunStartedEvent()
+    error = events[1]
+    assert isinstance(error, ErrorEvent)
+    assert error.code == "CONTRACT_VALIDATION_FAILED"
+    assert error.message == "chat must not contain artifact markdown"
+    assert error.diagnostic is not None
+    assert error.diagnostic.phase == "contract_validation"
+    assert error.diagnostic.validator == "workflow_contract"
 
 
 def _request() -> AgentRunStreamRequest:
@@ -679,6 +754,54 @@ def _request() -> AgentRunStreamRequest:
         "workflowId": "TEST_DESIGN",
         "stageId": "CLARIFY",
     })
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_errors_after_partial_delta_without_persisting_artifact(
+    mock_build_runtime: MagicMock,
+) -> None:
+    runtime = MagicMock()
+
+    def broken_stream_turn(*args, **kwargs):
+        yield AgentTurnDeltaOutput.model_validate({
+            "chat": "已更新需求文档。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": "# 需求分析文档\n\n## 1. 被测系统与边界\n内容",
+            },
+            "stage_action": None,
+            "warnings": [],
+        })
+        raise AgentRuntimeSchemaError("Unterminated string in raw JSON stream")
+
+    runtime.stream_turn.side_effect = broken_stream_turn
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    events = list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.deepseek.com/v1",
+        model_name="deepseek-chat",
+        persistence=persistence,
+    ))
+
+    assert isinstance(events[0], RunStartedEvent)
+    assert isinstance(events[1], AgentTurnDeltaEvent)
+    assert isinstance(events[2], ErrorEvent)
+    assert len(events) == 3
+    assert events[2].code == "SCHEMA_VALIDATION_FAILED"
+    assert events[2].diagnostic is not None
+    assert events[2].diagnostic.phase == "structured_output"
+
+    call_names = [call[0] for call in persistence.calls]
+    assert "append_assistant_message" not in call_names
+    assert "record_artifact_version" not in call_names
+    assert persistence.calls[-1][0] == "record_turn_metric"
+    metric = persistence.calls[-1][1]
+    assert metric["status"] == "error"
+    assert metric["error_code"] == "SCHEMA_VALIDATION_FAILED"
+    assert metric["diagnostic"]["phase"] == "structured_output"
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -714,12 +837,13 @@ def test_stream_agent_run_events_validates_workflow_stage_before_building_runtim
             model_name="test-model",
         ))
 
-        assert events == [
-            ErrorEvent(
-                code="REQUEST_VALIDATION_FAILED",
-                message=message,
-            )
-        ]
+        assert len(events) == 1
+        error = events[0]
+        assert isinstance(error, ErrorEvent)
+        assert error.code == "REQUEST_VALIDATION_FAILED"
+        assert error.message == message
+        assert error.diagnostic is not None
+        assert error.diagnostic.phase == "request_validation"
     mock_build_runtime.assert_not_called()
 
 
@@ -761,13 +885,14 @@ def test_stream_agent_run_events_maps_model_api_error_to_llm_error_event(
         model_name="test-model",
     ))
 
-    assert events == [
-        RunStartedEvent(),
-        ErrorEvent(
-            code="LLM_ERROR",
-            message="provider API failed",
-        )
-    ]
+    assert events[0] == RunStartedEvent()
+    error = events[1]
+    assert isinstance(error, ErrorEvent)
+    assert error.code == "LLM_ERROR"
+    assert error.message == "provider API failed"
+    assert error.diagnostic is not None
+    assert error.diagnostic.phase == "provider"
+    assert error.diagnostic.validator == "provider_error"
 
 
 @patch("stream_services.build_pydantic_agent_runtime")

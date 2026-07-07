@@ -25,6 +25,7 @@ class JudgeResult:
     recommendations: list[str]
 
 
+MIN_LLM_JUDGE_SCORE = 80
 MIN_VISUALIZATION_QUALITY_SCORE = 70
 VISUALIZATION_DIMENSION_KEYWORDS = ("可视化", "visual")
 
@@ -370,7 +371,7 @@ def assert_llm_judges_artifact_quality(
     assert result.passed, (
         f"LLM judge failed with score {result.score}: {result.issues}"
     )
-    assert result.score >= 70, (
+    assert result.score >= MIN_LLM_JUDGE_SCORE, (
         f"LLM judge score too low: {result.score}, issues: {result.issues}"
     )
     assert_visualization_quality_dimension(result)
@@ -428,7 +429,7 @@ def assert_llm_judges_handoff_quality(
     assert result.passed, (
         f"LLM handoff judge failed with score {result.score}: {result.issues}"
     )
-    assert result.score >= 75, (
+    assert result.score >= MIN_LLM_JUDGE_SCORE, (
         f"LLM handoff judge score too low: {result.score}, issues: {result.issues}"
     )
     assert_visualization_quality_dimension(result)

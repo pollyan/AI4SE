@@ -17,6 +17,7 @@ def init_db(app):
         db.create_all()
         _ensure_artifact_comment_columns()
         _ensure_artifact_section_lock_columns()
+        _ensure_turn_metric_diagnostic_columns()
         upsert_default_llm_config_from_env()
 
 
@@ -57,6 +58,44 @@ def _ensure_artifact_section_lock_columns():
             "ALTER TABLE agent_artifact_section_locks ADD COLUMN section_anchor TEXT"
         ))
         db.session.commit()
+
+
+def _ensure_turn_metric_diagnostic_columns():
+    """Upgrade existing turn metric tables created before error diagnostics."""
+    inspector = inspect(db.engine)
+    if "agent_run_turn_metrics" not in inspector.get_table_names():
+        return
+
+    existing_columns = {
+        column["name"]
+        for column in inspector.get_columns("agent_run_turn_metrics")
+    }
+    column_migrations = {
+        "diagnostic_phase": (
+            "ALTER TABLE agent_run_turn_metrics "
+            "ADD COLUMN diagnostic_phase VARCHAR(64)"
+        ),
+        "diagnostic_field_path": (
+            "ALTER TABLE agent_run_turn_metrics "
+            "ADD COLUMN diagnostic_field_path TEXT"
+        ),
+        "diagnostic_validator": (
+            "ALTER TABLE agent_run_turn_metrics "
+            "ADD COLUMN diagnostic_validator VARCHAR(128)"
+        ),
+        "diagnostic_public_reason": (
+            "ALTER TABLE agent_run_turn_metrics "
+            "ADD COLUMN diagnostic_public_reason TEXT"
+        ),
+        "diagnostic_retryable": (
+            "ALTER TABLE agent_run_turn_metrics "
+            "ADD COLUMN diagnostic_retryable BOOLEAN"
+        ),
+    }
+    for column_name, statement in column_migrations.items():
+        if column_name not in existing_columns:
+            db.session.execute(text(statement))
+    db.session.commit()
 
 
 def create_app(test_config=None):

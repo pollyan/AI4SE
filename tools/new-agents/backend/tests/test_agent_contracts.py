@@ -511,7 +511,7 @@ def test_later_stage_structured_visual_contracts_cover_professional_views():
         ("TEST_DESIGN", "STRATEGY"): ["risk-board"],
         ("INCIDENT_REVIEW", "IMPROVEMENT"): ["action-board"],
         ("VALUE_DISCOVERY", "JOURNEY"): ["journey-map"],
-        ("TEST_DESIGN", "DELIVERY"): ["coverage-map"],
+        ("TEST_DESIGN", "DELIVERY"): ["coverage-map", "traceability-matrix"],
         ("REQ_REVIEW", "REPORT"): ["priority-board"],
         ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["cause-map"],
         ("IDEA_BRAINSTORM", "CONCEPT"): ["mvp-map"],
@@ -682,6 +682,18 @@ def test_build_artifact_contract_prompt_includes_required_structured_visual_cont
     assert "fenced:ai4se-visual" in prompt
     assert "data.requirements" in prompt
     assert "复杂 HTML" in prompt
+
+
+def test_build_artifact_contract_prompt_requires_delivery_coverage_and_traceability_visuals():
+    prompt = build_artifact_contract_prompt(
+        workflow_id="TEST_DESIGN",
+        current_stage_id="DELIVERY",
+    )
+
+    assert "coverage-map" in prompt
+    assert "traceability-matrix" in prompt
+    assert '"columns"' in prompt
+    assert '"rows"' in prompt
 
 
 def test_validate_agent_turn_rejects_missing_required_mermaid_contract():

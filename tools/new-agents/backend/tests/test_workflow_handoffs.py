@@ -7,6 +7,7 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 os.environ["FLASK_TESTING"] = "1"
 
+import workflow_handoffs as handoff_service
 from app import create_app
 from models import db
 from run_persistence import create_agent_run, get_run_snapshot, record_artifact_version
@@ -116,6 +117,50 @@ flowchart TD
 """
 
 
+CONCEPT_MARKDOWN = """# 产品概念简报
+
+## 定位声明
+面向测试负责人，解决测试资产分散、复用困难的问题，提供 AI 测试资产管理平台。
+
+## 核心假设
+| 假设 | 验证方式 | 状态 |
+| --- | --- | --- |
+| 测试负责人愿意用 AI 生成初版测试策略和用例 | 访谈与原型试用 | 待验证 |
+
+## Lean Canvas 产品画布
+| 模块 | 内容 |
+| --- | --- |
+| 问题 | 测试资产分散，重复设计成本高 |
+| 解决方案 | 基于需求生成可评审测试资产 |
+
+## MVP 功能分布
+- 自动生成测试策略
+- 自动生成核心测试用例
+
+## 核心增长漏斗
+试用 -> 生成资产 -> 团队复用 -> 持续沉淀
+
+## Pre-mortem 风险分析
+- 输出质量不稳定
+- 用户不信任自动生成结果
+
+## 验证路线
+- 找 3 个测试负责人试用
+
+## 不可做范围
+- 不直接执行测试脚本
+
+## 决策记录
+- 先围绕测试资产生成做 MVP
+
+## 下一步行动
+- 进入需求蓝图梳理，明确 P0 需求和验收标准
+
+## 阶段门禁
+- [x] 已形成可继续梳理需求蓝图的产品概念。
+"""
+
+
 @pytest.fixture
 def app():
     db_fd, db_path = tempfile.mkstemp()
@@ -156,6 +201,89 @@ def test_export_run_handoffs_returns_configured_lisa_targets(app):
     assert "TEST_DESIGN/CLARIFY" in first["prompt"]
     assert "AI 测试资产管理平台" in first["prompt"]
     assert "Alex 产出的需求蓝图" not in first["prompt"]
+
+
+def test_export_run_handoffs_returns_alex_value_discovery_target_for_product_concept(app):
+    with app.app_context():
+        run = create_agent_run("IDEA_BRAINSTORM", "alex", "CONCEPT")
+        record_artifact_version(run.id, "CONCEPT", CONCEPT_MARKDOWN)
+
+        result = export_run_handoffs(run.id)
+
+    assert result["runId"] == run.id
+    assert result["sourceWorkflowId"] == "IDEA_BRAINSTORM"
+    assert [
+        (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
+        for handoff in result["handoffs"]
+    ] == [
+        ("VALUE_DISCOVERY", "ELEVATOR", "alex"),
+    ]
+    handoff = result["handoffs"][0]
+    assert handoff["id"] == "idea-brainstorm-concept-to-value-discovery"
+    assert handoff["label"] == "从产品概念简报继续梳理需求蓝图"
+    assert handoff["sourceStageId"] == "CONCEPT"
+    assert handoff["sourceArtifactVersion"] == 1
+    assert "IDEA_BRAINSTORM/CONCEPT" in handoff["prompt"]
+    assert "VALUE_DISCOVERY/ELEVATOR" in handoff["prompt"]
+    assert "产品概念简报" in handoff["prompt"]
+
+
+def test_export_target_workflow_handoffs_returns_upstream_product_concepts(app):
+    with app.app_context():
+        source_run = create_agent_run("IDEA_BRAINSTORM", "alex", "CONCEPT")
+        record_artifact_version(source_run.id, "CONCEPT", CONCEPT_MARKDOWN)
+        source_run_id = source_run.id
+
+        result = handoff_service.export_target_workflow_handoffs(
+            "VALUE_DISCOVERY",
+            "ELEVATOR",
+        )
+
+    assert result["targetWorkflowId"] == "VALUE_DISCOVERY"
+    assert result["targetStageId"] == "ELEVATOR"
+    assert len(result["handoffs"]) == 1
+    handoff = result["handoffs"][0]
+    assert handoff["id"] == "idea-brainstorm-concept-to-value-discovery"
+    assert handoff["label"] == "从产品概念简报继续梳理需求蓝图"
+    assert handoff["sourceRunId"] == source_run_id
+    assert handoff["sourceWorkflowId"] == "IDEA_BRAINSTORM"
+    assert handoff["sourceStageId"] == "CONCEPT"
+    assert handoff["sourceArtifactVersion"] == 1
+    assert handoff["sourceArtifactDigest"].startswith("sha256:")
+    assert len(handoff["sourceArtifactDigest"]) == len("sha256:") + 64
+    assert "产品概念简报" in handoff["sourceArtifactSummary"]
+    assert handoff["targetWorkflowId"] == "VALUE_DISCOVERY"
+    assert handoff["targetStageId"] == "ELEVATOR"
+    assert handoff["targetAgentId"] == "alex"
+    assert "IDEA_BRAINSTORM/CONCEPT" in handoff["prompt"]
+    assert "VALUE_DISCOVERY/ELEVATOR" in handoff["prompt"]
+
+
+def test_export_target_workflow_handoffs_excludes_runs_without_source_artifact(app):
+    with app.app_context():
+        create_agent_run("IDEA_BRAINSTORM", "alex", "DIVERGE")
+
+        result = handoff_service.export_target_workflow_handoffs(
+            "VALUE_DISCOVERY",
+            "ELEVATOR",
+        )
+
+    assert result["handoffs"] == []
+
+
+def test_export_target_workflow_handoffs_returns_empty_without_inbound_handoff(app):
+    with app.app_context():
+        source_run = create_agent_run("IDEA_BRAINSTORM", "alex", "CONCEPT")
+        record_artifact_version(source_run.id, "CONCEPT", CONCEPT_MARKDOWN)
+
+        result = handoff_service.export_target_workflow_handoffs(
+            "INCIDENT_REVIEW",
+            "TIMELINE",
+        )
+
+    assert result["targetWorkflowId"] == "INCIDENT_REVIEW"
+    assert result["targetStageId"] == "TIMELINE"
+    assert result["handoffs"] == []
 
 
 def test_export_run_handoffs_returns_empty_without_required_artifact(app):
@@ -203,6 +331,31 @@ def test_start_workflow_handoff_creates_target_run_with_handoff_prompt(app):
             "sequenceIndex": 1,
         }
     ]
+
+
+def test_start_alex_workflow_handoff_persists_source_trace_in_target_message(app):
+    with app.app_context():
+        source_run = create_agent_run("IDEA_BRAINSTORM", "alex", "CONCEPT")
+        record_artifact_version(source_run.id, "CONCEPT", CONCEPT_MARKDOWN)
+        source_run_id = source_run.id
+
+        result = start_workflow_handoff(
+            source_run.id,
+            "idea-brainstorm-concept-to-value-discovery",
+        )
+        target_snapshot = get_run_snapshot(result["targetRunId"])
+
+    assert result["sourceRunId"] == source_run_id
+    assert result["targetWorkflowId"] == "VALUE_DISCOVERY"
+    assert result["targetStageId"] == "ELEVATOR"
+    assert result["targetAgentId"] == "alex"
+    assert result["sourceArtifactDigest"].startswith("sha256:")
+    target_message = target_snapshot["messages"][0]["content"]
+    assert f"源 run: {source_run_id}" in target_message
+    assert "源 artifact version: 1" in target_message
+    assert f"源 artifact digest: {result['sourceArtifactDigest']}" in target_message
+    assert "IDEA_BRAINSTORM/CONCEPT" in target_message
+    assert "VALUE_DISCOVERY/ELEVATOR" in target_message
 
 
 def test_start_workflow_handoff_rejects_unknown_candidate(app):

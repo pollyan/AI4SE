@@ -228,6 +228,33 @@ flowchart TD
 - [x] P0 需求均具备验收标准、owner 和可测试性等级。
 """
 
+VALID_CONCEPT_ARTIFACT = """# 产品概念简报
+
+## 定位声明
+面向测试负责人，解决测试资产分散、复用困难的问题，提供 AI 测试资产管理平台。
+
+## 核心假设
+| 假设 | 验证方式 | 状态 |
+| --- | --- | --- |
+| 测试负责人愿意用 AI 生成初版测试策略和用例 | 访谈与原型试用 | 待验证 |
+
+## Lean Canvas 产品画布
+| 模块 | 内容 |
+| --- | --- |
+| 问题 | 测试资产分散，重复设计成本高 |
+| 解决方案 | 基于需求生成可评审测试资产 |
+
+## MVP 功能分布
+- 自动生成测试策略
+- 自动生成核心测试用例
+
+## 下一步行动
+- 进入需求蓝图梳理，明确 P0 需求和验收标准
+
+## 阶段门禁
+- [x] 已形成可继续梳理需求蓝图的产品概念。
+"""
+
 
 @pytest.fixture
 def app():
@@ -1745,6 +1772,74 @@ def test_agent_run_handoff_start_endpoint_creates_target_run(
     assert "AI 测试资产管理平台" in response.json["prompt"]
 
 
+def test_agent_workflow_handoff_candidates_endpoint_returns_target_side_candidates(
+    app,
+    client,
+    default_config,
+):
+    with app.app_context():
+        source_run = create_agent_run("IDEA_BRAINSTORM", "alex", "CONCEPT")
+        record_artifact_version(source_run.id, "CONCEPT", VALID_CONCEPT_ARTIFACT)
+        source_run_id = source_run.id
+
+    response = client.get(
+        "/api/agent/workflow-handoff-candidates"
+        "?targetWorkflowId=VALUE_DISCOVERY&targetStageId=ELEVATOR"
+    )
+
+    assert response.status_code == 200
+    assert response.json["targetWorkflowId"] == "VALUE_DISCOVERY"
+    assert response.json["targetStageId"] == "ELEVATOR"
+    assert len(response.json["handoffs"]) == 1
+    handoff = response.json["handoffs"][0]
+    assert handoff["id"] == "idea-brainstorm-concept-to-value-discovery"
+    assert handoff["sourceRunId"] == source_run_id
+    assert handoff["sourceWorkflowId"] == "IDEA_BRAINSTORM"
+    assert handoff["sourceStageId"] == "CONCEPT"
+    assert handoff["sourceArtifactVersion"] == 1
+    assert handoff["sourceArtifactDigest"].startswith("sha256:")
+    assert "产品概念简报" in handoff["sourceArtifactSummary"]
+    assert handoff["targetWorkflowId"] == "VALUE_DISCOVERY"
+    assert handoff["targetStageId"] == "ELEVATOR"
+    assert handoff["targetAgentId"] == "alex"
+
+
+def test_agent_workflow_handoff_candidates_endpoint_returns_empty_without_source_artifact(
+    app,
+    client,
+    default_config,
+):
+    with app.app_context():
+        create_agent_run("IDEA_BRAINSTORM", "alex", "CONVERGE")
+
+    response = client.get(
+        "/api/agent/workflow-handoff-candidates"
+        "?targetWorkflowId=VALUE_DISCOVERY&targetStageId=ELEVATOR"
+    )
+
+    assert response.status_code == 200
+    assert response.json == {
+        "targetWorkflowId": "VALUE_DISCOVERY",
+        "targetStageId": "ELEVATOR",
+        "handoffs": [],
+    }
+
+
+def test_agent_workflow_handoff_candidates_endpoint_rejects_mismatched_target_stage(
+    client,
+    default_config,
+):
+    response = client.get(
+        "/api/agent/workflow-handoff-candidates"
+        "?targetWorkflowId=VALUE_DISCOVERY&targetStageId=CLARIFY"
+    )
+
+    assert response.status_code == 400
+    assert response.json == {
+        "error": "workflowId 与 stageId 不匹配: VALUE_DISCOVERY/CLARIFY"
+    }
+
+
 def test_agent_runs_stream_rejects_missing_prompt(client, default_config):
     response = client.post(
         "/api/agent/runs/stream",
@@ -1900,11 +1995,21 @@ def test_agent_runs_stream_returns_typed_error_when_runtime_dependency_missing(
     assert response.status_code == 200
     assert response.mimetype == "text/event-stream"
     assert response.get_data(as_text=True).strip().endswith("data: [DONE]")
-    assert _parse_sse_event_payloads(response) == [
+    payloads = _parse_sse_event_payloads(response)
+    assert payloads == [
         {
             "type": "error",
             "code": "AGENT_RUNTIME_UNAVAILABLE",
             "message": "pydantic-ai runtime unavailable",
+            "diagnostic": {
+                "phase": "runtime",
+                "workflowId": "TEST_DESIGN",
+                "stageId": "CLARIFY",
+                "fieldPath": "runtime",
+                "validator": "runtime_dependency",
+                "retryable": False,
+                "publicReason": "智能体运行时依赖不可用，本轮生成未开始。",
+            },
         }
     ]
 
@@ -1943,6 +2048,15 @@ def test_agent_runs_stream_returns_typed_error_when_model_output_exceeds_retries
                 "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
                 "如果多次失败，请补充更明确的需求或阶段确认信息。"
             ),
+            "diagnostic": {
+                "phase": "structured_output",
+                "workflowId": "TEST_DESIGN",
+                "stageId": "CLARIFY",
+                "fieldPath": "artifact_data",
+                "validator": "pydantic_ai_output_retry",
+                "retryable": True,
+                "publicReason": "模型输出的结构化字段未通过校验，右侧产出物已保持不变。",
+            },
         }
     ]
 
@@ -2109,6 +2223,7 @@ def test_agent_observability_endpoint_filters_by_workflow_and_stage(
             "outputChars": 200,
             "estimatedTokens": 75,
             "contractRetryCount": 0,
+            "diagnostic": None,
             "createdAt": response.json["recentTurns"][0]["createdAt"],
         }
     ]

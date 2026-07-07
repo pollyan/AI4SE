@@ -55,6 +55,13 @@ const OBSERVABILITY_PAYLOAD = {
             outputChars: 600,
             estimatedTokens: 225,
             contractRetryCount: 0,
+            diagnostic: {
+                phase: 'structured_output',
+                fieldPath: 'artifact_data.requirement_facts.0.fact',
+                validator: 'string_too_short',
+                publicReason: '模型输出的结构化字段未通过校验，右侧产出物已保持不变。',
+                retryable: true,
+            },
             createdAt: '2026-06-19T10:00:00',
         },
     ],
@@ -81,6 +88,13 @@ describe('observabilityService', () => {
         expect(summary.byStage[0].providerIssueCodes).toEqual({ LLM_ERROR: 1 });
         expect(summary.byProvider[0].providerIssueCount).toBe(1);
         expect(summary.recentTurns[0].errorCode).toBe('LLM_ERROR');
+        expect(summary.recentTurns[0].diagnostic).toEqual({
+            phase: 'structured_output',
+            fieldPath: 'artifact_data.requirement_facts.0.fact',
+            validator: 'string_too_short',
+            publicReason: '模型输出的结构化字段未通过校验，右侧产出物已保持不变。',
+            retryable: true,
+        });
     });
 
     it('serializes workflow and stage filters', async () => {
@@ -130,6 +144,31 @@ describe('observabilityService', () => {
                     ...OBSERVABILITY_PAYLOAD.totals,
                     providerIssueCount: '1',
                 },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ));
+
+        await expect(fetchObservabilitySummary({ limit: 20 })).rejects.toThrow(
+            'Invalid observability summary response'
+        );
+    });
+
+    it('fails explicitly when recent turn diagnostics are malformed', async () => {
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({
+                ...OBSERVABILITY_PAYLOAD,
+                recentTurns: [
+                    {
+                        ...OBSERVABILITY_PAYLOAD.recentTurns[0],
+                        diagnostic: {
+                            phase: 'structured_output',
+                            fieldPath: 'artifact_data',
+                            validator: 'string_too_short',
+                            publicReason: '模型输出的结构化字段未通过校验。',
+                            retryable: 'true',
+                        },
+                    },
+                ],
             }),
             { status: 200, headers: { 'Content-Type': 'application/json' } },
         ));

@@ -1763,6 +1763,43 @@ describe('llm.ts', () => {
             ).rejects.toThrow('CONTRACT_VALIDATION_FAILED: missing heading');
         });
 
+        it('应在 SSE error 抛错中保留结构化 diagnostic', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    `data: ${JSON.stringify({
+                        type: 'error',
+                        code: 'SCHEMA_VALIDATION_FAILED',
+                        message: '模型连续生成的结构化结果未通过校验。',
+                        diagnostic: {
+                            phase: 'structured_output',
+                            workflowId: 'TEST_DESIGN',
+                            stageId: 'CLARIFY',
+                            fieldPath: 'artifact_data.requirement_facts.0.fact',
+                            validator: 'string_too_short',
+                            retryable: true,
+                            publicReason: '模型输出的结构化字段未通过校验，右侧产出物已保持不变。',
+                        },
+                    })}`,
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toMatchObject({
+                code: 'SCHEMA_VALIDATION_FAILED',
+                diagnostic: {
+                    phase: 'structured_output',
+                    workflowId: 'TEST_DESIGN',
+                    stageId: 'CLARIFY',
+                    fieldPath: 'artifact_data.requirement_facts.0.fact',
+                    validator: 'string_too_short',
+                    retryable: true,
+                    publicReason: '模型输出的结构化字段未通过校验，右侧产出物已保持不变。',
+                },
+            });
+        });
+
         it('应在 SSE 遇到 [DONE] 标记时正常结束流', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,

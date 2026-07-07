@@ -41,6 +41,85 @@ from test_artifact_data_renderers import (
     VALID_VALUE_PERSONA_ARTIFACT_DATA,
 )
 
+
+ARTIFACT_DATA_STREAMING_STAGES = [
+    ("TEST_DESIGN", "CLARIFY"),
+    ("TEST_DESIGN", "STRATEGY"),
+    ("TEST_DESIGN", "CASES"),
+    ("TEST_DESIGN", "DELIVERY"),
+    ("REQ_REVIEW", "REVIEW"),
+    ("REQ_REVIEW", "REPORT"),
+    ("INCIDENT_REVIEW", "TIMELINE"),
+    ("INCIDENT_REVIEW", "ROOT_CAUSE"),
+    ("INCIDENT_REVIEW", "IMPROVEMENT"),
+    ("IDEA_BRAINSTORM", "DEFINE"),
+    ("IDEA_BRAINSTORM", "DIVERGE"),
+    ("IDEA_BRAINSTORM", "CONVERGE"),
+    ("IDEA_BRAINSTORM", "CONCEPT"),
+    ("VALUE_DISCOVERY", "ELEVATOR"),
+    ("VALUE_DISCOVERY", "PERSONA"),
+    ("VALUE_DISCOVERY", "JOURNEY"),
+    ("VALUE_DISCOVERY", "BLUEPRINT"),
+]
+
+
+@pytest.mark.parametrize(("workflow_id", "stage_id"), ARTIFACT_DATA_STREAMING_STAGES)
+def test_artifact_data_structured_output_instruction_puts_artifact_data_before_chat_for_visible_streaming(
+    workflow_id: str,
+    stage_id: str,
+):
+    instruction = build_structured_output_instruction(workflow_id, stage_id)
+
+    assert '1. "artifact_data"' in instruction
+    assert '2. "chat"' in instruction
+    assert instruction.index('1. "artifact_data"') < instruction.index('2. "chat"')
+    assert instruction.index('{\n  "artifact_data"') < instruction.index('\n  "chat"')
+
+
+def _raw_json_chunks_after_artifact_data_members(
+    final_json: str,
+    member_names: list[str],
+) -> list[str]:
+    decoder = json.JSONDecoder()
+    artifact_key_index = final_json.index('"artifact_data"')
+    index = final_json.index("{", artifact_key_index) + 1
+    prefixes: dict[str, str] = {}
+    while index < len(final_json):
+        while index < len(final_json) and final_json[index].isspace():
+            index += 1
+        if index < len(final_json) and final_json[index] == "}":
+            break
+        key, key_end = decoder.raw_decode(final_json[index:])
+        assert isinstance(key, str)
+        index += key_end
+        while index < len(final_json) and final_json[index].isspace():
+            index += 1
+        assert final_json[index] == ":"
+        index += 1
+        while index < len(final_json) and final_json[index].isspace():
+            index += 1
+        _, value_end = decoder.raw_decode(final_json[index:])
+        index += value_end
+        if key in member_names:
+            prefixes[key] = final_json[:index]
+        while index < len(final_json) and final_json[index].isspace():
+            index += 1
+        if index < len(final_json) and final_json[index] == ",":
+            index += 1
+
+    missing = [name for name in member_names if name not in prefixes]
+    assert not missing, f"artifact_data members not found: {missing}"
+
+    ordered_prefixes = [prefixes[name] for name in member_names]
+    chunks = [ordered_prefixes[0]]
+    chunks.extend(
+        ordered_prefixes[index][len(ordered_prefixes[index - 1]) :]
+        for index in range(1, len(ordered_prefixes))
+    )
+    chunks.append(final_json[len(ordered_prefixes[-1]) :])
+    return chunks
+
+
 VALID_CLARIFY_ARTIFACT = """# 需求分析文档
 
 ## 1. 需求事实清单
@@ -1176,6 +1255,16 @@ def test_idea_define_structured_output_instruction_requests_artifact_data_not_ma
     assert "不要输出完整 Markdown" in instruction
 
 
+def test_idea_define_structured_output_instruction_explains_root_problem_coverage():
+    instruction = build_structured_output_instruction(
+        "IDEA_BRAINSTORM",
+        "DEFINE",
+    )
+
+    assert "evidence_items.related_problem 必须原样包含 problem_landscape.root_problem" in instruction
+    assert "problem_user_fit.evidence_or_assumption 必须原样包含 problem_landscape.root_problem" in instruction
+
+
 def test_idea_diverge_structured_output_instruction_requests_artifact_data_not_markdown():
     instruction = build_structured_output_instruction(
         "IDEA_BRAINSTORM",
@@ -1757,6 +1846,107 @@ def test_runtime_raw_json_stream_turn_renders_paragraph_level_strategy_artifact_
     assert "## 3. 风险识别与 FMEA" in outputs[-1].artifact_update.markdown
 
 
+def test_runtime_raw_json_stream_turn_renders_paragraph_level_cases_artifact_data(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "我正在逐段形成测试用例集。",
+            "artifact_data": VALID_CASES_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    def prefix_after_artifact_data_member(member_name: str) -> str:
+        decoder = json.JSONDecoder()
+        artifact_key_index = final_json.index('"artifact_data"')
+        index = final_json.index("{", artifact_key_index) + 1
+        while index < len(final_json):
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            key, key_end = decoder.raw_decode(final_json[index:])
+            assert isinstance(key, str)
+            index += key_end
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            assert final_json[index] == ":"
+            index += 1
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            _, value_end = decoder.raw_decode(final_json[index:])
+            index += value_end
+            if key == member_name:
+                return final_json[:index]
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            if index < len(final_json) and final_json[index] == ",":
+                index += 1
+        raise AssertionError(f"artifact_data member not found: {member_name}")
+
+    statistics_prefix = prefix_after_artifact_data_member("case_statistics")
+    bases_prefix = prefix_after_artifact_data_member("design_bases")
+    chunks = [
+        statistics_prefix,
+        bases_prefix[len(statistics_prefix) :],
+        final_json[len(bases_prefix) :],
+    ]
+
+    def fake_stream_chat_completion_content(**kwargs):
+        yield from chunks
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是测试专家。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "请生成测试用例集",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CASES",
+        )
+    )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+    partial_patches = [
+        output.artifact_patch
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_patch is not None
+    ]
+
+    assert len(partial_markdowns) >= 2
+    assert partial_markdowns[0].startswith("# 测试用例集")
+    assert "## 1. 用例统计" in partial_markdowns[0]
+    assert "## 2. 用例设计依据" not in partial_markdowns[0]
+    assert "## 2. 用例设计依据" in partial_markdowns[1]
+    assert "## 3. 按维度分组的用例清单" not in partial_markdowns[1]
+    assert partial_patches
+    assert partial_patches[0].operation == "add_after"
+    assert partial_patches[0].section_anchor == "h2:2. 用例设计依据:1"
+    assert partial_patches[0].after_section_anchor == "h2:1. 用例统计:1"
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert "## 3. 按维度分组的用例清单" in (outputs[-1].artifact_update.markdown)
+    assert '"type": "traceability-matrix"' in outputs[-1].artifact_update.markdown
+
+
 def test_runtime_raw_json_stream_turn_renders_delivery_artifact_data_before_final_output(
     monkeypatch,
 ):
@@ -1771,9 +1961,43 @@ def test_runtime_raw_json_stream_turn_renders_delivery_artifact_data_before_fina
     )
     calls = []
 
+    def prefix_after_artifact_data_member(member_name: str) -> str:
+        decoder = json.JSONDecoder()
+        artifact_key_index = final_json.index('"artifact_data"')
+        index = final_json.index("{", artifact_key_index) + 1
+        while index < len(final_json):
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            key, key_end = decoder.raw_decode(final_json[index:])
+            assert isinstance(key, str)
+            index += key_end
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            assert final_json[index] == ":"
+            index += 1
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            _, value_end = decoder.raw_decode(final_json[index:])
+            index += value_end
+            if key == member_name:
+                return final_json[:index]
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            if index < len(final_json) and final_json[index] == ",":
+                index += 1
+        raise AssertionError(f"artifact_data member not found: {member_name}")
+
+    summary_prefix = prefix_after_artifact_data_member("executive_summary")
+    requirement_prefix = prefix_after_artifact_data_member("requirement_summary")
+    chunks = [
+        summary_prefix,
+        requirement_prefix[len(summary_prefix) :],
+        final_json[len(requirement_prefix) :],
+    ]
+
     def fake_stream_chat_completion_content(**kwargs):
         calls.append(kwargs)
-        yield final_json
+        yield from chunks
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",
@@ -1796,10 +2020,35 @@ def test_runtime_raw_json_stream_turn_renders_delivery_artifact_data_before_fina
             current_stage_id="DELIVERY",
         )
     )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+    partial_patches = [
+        output.artifact_patch
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_patch is not None
+    ]
 
+    assert len(partial_markdowns) >= 2
+    assert partial_markdowns[0].startswith("# 测试设计文档")
+    assert "## 1. 执行摘要" in partial_markdowns[0]
+    assert "## 2. 需求分析摘要" not in partial_markdowns[0]
+    assert "## 2. 需求分析摘要" in partial_markdowns[1]
+    assert "## 3. 测试策略摘要" not in partial_markdowns[1]
+    assert partial_patches
+    assert partial_patches[0].operation == "add_after"
+    assert partial_patches[0].section_anchor == "h2:2. 需求分析摘要:1"
+    assert partial_patches[0].after_section_anchor == "h2:1. 执行摘要:1"
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
     assert outputs[-1].artifact_update.markdown.startswith("# 测试设计文档")
+    assert "## 3. 测试策略摘要" in outputs[-1].artifact_update.markdown
     assert '"type": "coverage-map"' in outputs[-1].artifact_update.markdown
     assert calls[0]["response_format"] == {"type": "json_object"}
     assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
@@ -1828,9 +2077,43 @@ def test_runtime_raw_json_stream_turn_renders_req_review_artifact_data_before_fi
     )
     calls = []
 
+    def prefix_after_artifact_data_member(member_name: str) -> str:
+        decoder = json.JSONDecoder()
+        artifact_key_index = final_json.index('"artifact_data"')
+        index = final_json.index("{", artifact_key_index) + 1
+        while index < len(final_json):
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            key, key_end = decoder.raw_decode(final_json[index:])
+            assert isinstance(key, str)
+            index += key_end
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            assert final_json[index] == ":"
+            index += 1
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            _, value_end = decoder.raw_decode(final_json[index:])
+            index += value_end
+            if key == member_name:
+                return final_json[:index]
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            if index < len(final_json) and final_json[index] == ",":
+                index += 1
+        raise AssertionError(f"artifact_data member not found: {member_name}")
+
+    scope_prefix = prefix_after_artifact_data_member("scope_items")
+    statistics_prefix = prefix_after_artifact_data_member("issue_statistics")
+    chunks = [
+        scope_prefix,
+        statistics_prefix[len(scope_prefix) :],
+        final_json[len(statistics_prefix) :],
+    ]
+
     def fake_stream_chat_completion_content(**kwargs):
         calls.append(kwargs)
-        yield final_json
+        yield from chunks
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",
@@ -1853,7 +2136,31 @@ def test_runtime_raw_json_stream_turn_renders_req_review_artifact_data_before_fi
             current_stage_id="REVIEW",
         )
     )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+    partial_patches = [
+        output.artifact_patch
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_patch is not None
+    ]
 
+    assert len(partial_markdowns) >= 2
+    assert partial_markdowns[0].startswith("# 需求评审问题清单")
+    assert "## 评审范围与不评审范围" in partial_markdowns[0]
+    assert "## 需求质量总览" not in partial_markdowns[0]
+    assert "## 问题统计" in partial_markdowns[1]
+    assert "## 按维度问题清单" not in partial_markdowns[1]
+    assert partial_patches
+    assert partial_patches[0].operation == "add_after"
+    assert partial_patches[0].section_anchor == "h2:问题统计:1"
+    assert partial_patches[0].after_section_anchor == "h2:需求质量结构图:1"
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
     assert outputs[-1].artifact_update.markdown.startswith("# 需求评审问题清单")
@@ -1882,9 +2189,43 @@ def test_runtime_raw_json_stream_turn_renders_req_review_report_artifact_data_be
     )
     calls = []
 
+    def prefix_after_artifact_data_member(member_name: str) -> str:
+        decoder = json.JSONDecoder()
+        artifact_key_index = final_json.index('"artifact_data"')
+        index = final_json.index("{", artifact_key_index) + 1
+        while index < len(final_json):
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            key, key_end = decoder.raw_decode(final_json[index:])
+            assert isinstance(key, str)
+            index += key_end
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            assert final_json[index] == ":"
+            index += 1
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            _, value_end = decoder.raw_decode(final_json[index:])
+            index += value_end
+            if key == member_name:
+                return final_json[:index]
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            if index < len(final_json) and final_json[index] == ",":
+                index += 1
+        raise AssertionError(f"artifact_data member not found: {member_name}")
+
+    conclusion_prefix = prefix_after_artifact_data_member("conclusion")
+    statistics_prefix = prefix_after_artifact_data_member("issue_statistics")
+    chunks = [
+        conclusion_prefix,
+        statistics_prefix[len(conclusion_prefix) :],
+        final_json[len(statistics_prefix) :],
+    ]
+
     def fake_stream_chat_completion_content(**kwargs):
         calls.append(kwargs)
-        yield final_json
+        yield from chunks
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",
@@ -1907,7 +2248,31 @@ def test_runtime_raw_json_stream_turn_renders_req_review_report_artifact_data_be
             current_stage_id="REPORT",
         )
     )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+    partial_patches = [
+        output.artifact_patch
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_patch is not None
+    ]
 
+    assert len(partial_markdowns) >= 2
+    assert partial_markdowns[0].startswith("# 需求评审报告")
+    assert "## 评审结论" in partial_markdowns[0]
+    assert "## 评审信息" not in partial_markdowns[0]
+    assert "## 问题统计" in partial_markdowns[1]
+    assert "## 优先级看板" not in partial_markdowns[1]
+    assert partial_patches
+    assert partial_patches[0].operation == "add_after"
+    assert partial_patches[0].section_anchor == "h2:问题统计:1"
+    assert partial_patches[0].after_section_anchor == "h2:评审信息:1"
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
     assert outputs[-1].artifact_update.markdown.startswith("# 需求评审报告")
@@ -1938,10 +2303,19 @@ def test_runtime_raw_json_stream_turn_renders_value_elevator_artifact_data_befor
         ensure_ascii=False,
     )
     calls = []
+    chunks = _raw_json_chunks_after_artifact_data_members(
+        final_json,
+        [
+            "positioning_summary",
+            "value_flow",
+            "target_scenarios",
+            "score_summary",
+        ],
+    )
 
     def fake_stream_chat_completion_content(**kwargs):
         calls.append(kwargs)
-        yield final_json
+        yield from chunks
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",
@@ -1964,6 +2338,26 @@ def test_runtime_raw_json_stream_turn_renders_value_elevator_artifact_data_befor
             current_stage_id="ELEVATOR",
         )
     )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert len(partial_markdowns) >= 4
+    assert partial_markdowns[0].startswith("# 价值定位分析")
+    assert "## 定位摘要" in partial_markdowns[0]
+    assert "## 价值结构图" not in partial_markdowns[0]
+    assert "## 价值结构图" in partial_markdowns[1]
+    assert "flowchart TD" in partial_markdowns[1]
+    assert "## 目标用户与场景" not in partial_markdowns[1]
+    assert "## 目标用户与场景" in partial_markdowns[2]
+    assert "## 痛点证据" not in partial_markdowns[2]
+    assert "## 价值主张评分" in partial_markdowns[3]
+    assert '"type": "score-matrix"' in partial_markdowns[3]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -1999,10 +2393,19 @@ def test_runtime_raw_json_stream_turn_renders_value_persona_artifact_data_before
         ensure_ascii=False,
     )
     calls = []
+    chunks = _raw_json_chunks_after_artifact_data_members(
+        final_json,
+        [
+            "persona_summary",
+            "personas",
+            "behavior_scenarios",
+            "decision_chain",
+        ],
+    )
 
     def fake_stream_chat_completion_content(**kwargs):
         calls.append(kwargs)
-        yield final_json
+        yield from chunks
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",
@@ -2025,6 +2428,25 @@ def test_runtime_raw_json_stream_turn_renders_value_persona_artifact_data_before
             current_stage_id="PERSONA",
         )
     )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert len(partial_markdowns) >= 4
+    assert partial_markdowns[0].startswith("# 用户画像分析")
+    assert "## 画像摘要" in partial_markdowns[0]
+    assert "## 主要用户画像" not in partial_markdowns[0]
+    assert "## 主要用户画像" in partial_markdowns[1]
+    assert "### 画像 1" in partial_markdowns[1]
+    assert "## 行为与场景" not in partial_markdowns[1]
+    assert "## 行为与场景" in partial_markdowns[2]
+    assert "## 决策链" not in partial_markdowns[2]
+    assert "## 决策链" in partial_markdowns[3]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -2061,10 +2483,18 @@ def test_runtime_raw_json_stream_turn_renders_value_journey_artifact_data_before
         ensure_ascii=False,
     )
     calls = []
+    chunks = _raw_json_chunks_after_artifact_data_members(
+        final_json,
+        [
+            "journey_stages",
+            "pain_priorities",
+            "opportunity_scores",
+        ],
+    )
 
     def fake_stream_chat_completion_content(**kwargs):
         calls.append(kwargs)
-        yield final_json
+        yield from chunks
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",
@@ -2087,6 +2517,24 @@ def test_runtime_raw_json_stream_turn_renders_value_journey_artifact_data_before
             current_stage_id="JOURNEY",
         )
     )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert len(partial_markdowns) >= 3
+    assert partial_markdowns[0].startswith("# 用户旅程分析")
+    assert "## 用户旅程地图" in partial_markdowns[0]
+    assert "journey\n    title 核心用户旅程" in partial_markdowns[0]
+    assert '"type": "journey-map"' in partial_markdowns[0]
+    assert "## 痛点优先级排序" not in partial_markdowns[0]
+    assert "## 痛点优先级排序" in partial_markdowns[1]
+    assert "## 机会评分" not in partial_markdowns[1]
+    assert "## 机会评分" in partial_markdowns[2]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -2119,10 +2567,21 @@ def test_runtime_raw_json_stream_turn_renders_value_blueprint_artifact_data_befo
         ensure_ascii=False,
     )
     calls = []
+    chunks = _raw_json_chunks_after_artifact_data_members(
+        final_json,
+        [
+            "product_overview",
+            "target_users",
+            "requirements",
+            "main_flow",
+            "roadmap",
+            "lisa_handoff_inputs",
+        ],
+    )
 
     def fake_stream_chat_completion_content(**kwargs):
         calls.append(kwargs)
-        yield final_json
+        yield from chunks
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",
@@ -2145,6 +2604,28 @@ def test_runtime_raw_json_stream_turn_renders_value_blueprint_artifact_data_befo
             current_stage_id="BLUEPRINT",
         )
     )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert len(partial_markdowns) >= 6
+    assert partial_markdowns[0].startswith("# AI4SE 测试设计助手 需求蓝图")
+    assert "## 1. 产品概述" in partial_markdowns[0]
+    assert "## 2. 目标用户（摘要）" not in partial_markdowns[0]
+    assert "## 2. 目标用户（摘要）" in partial_markdowns[1]
+    assert "## 3. 核心需求" not in partial_markdowns[1]
+    assert "## 3. 核心需求" in partial_markdowns[2]
+    assert "mindmap" in partial_markdowns[2]
+    assert "## 4. 核心流程" not in partial_markdowns[2]
+    assert "## 4. 核心流程" in partial_markdowns[3]
+    assert "flowchart TD" in partial_markdowns[3]
+    assert '"type": "roadmap"' in partial_markdowns[4]
+    assert "## 11. Lisa Handoff 输入" in partial_markdowns[5]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -2184,9 +2665,45 @@ def test_runtime_raw_json_stream_turn_renders_incident_timeline_artifact_data_be
     )
     calls = []
 
+    def prefix_after_artifact_data_member(member_name: str) -> str:
+        decoder = json.JSONDecoder()
+        artifact_key_index = final_json.index('"artifact_data"')
+        index = final_json.index("{", artifact_key_index) + 1
+        while index < len(final_json):
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            key, key_end = decoder.raw_decode(final_json[index:])
+            assert isinstance(key, str)
+            index += key_end
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            assert final_json[index] == ":"
+            index += 1
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            _, value_end = decoder.raw_decode(final_json[index:])
+            index += value_end
+            if key == member_name:
+                return final_json[:index]
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            if index < len(final_json) and final_json[index] == ",":
+                index += 1
+        raise AssertionError(f"artifact_data member not found: {member_name}")
+
+    summary_prefix = prefix_after_artifact_data_member("incident_summary")
+    facts_prefix = prefix_after_artifact_data_member("fact_sources")
+    timeline_prefix = prefix_after_artifact_data_member("timeline_events")
+    chunks = [
+        summary_prefix,
+        facts_prefix[len(summary_prefix) :],
+        timeline_prefix[len(facts_prefix) :],
+        final_json[len(timeline_prefix) :],
+    ]
+
     def fake_stream_chat_completion_content(**kwargs):
         calls.append(kwargs)
-        yield final_json
+        yield from chunks
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",
@@ -2208,6 +2725,25 @@ def test_runtime_raw_json_stream_turn_renders_incident_timeline_artifact_data_be
             workflow_id="INCIDENT_REVIEW",
             current_stage_id="TIMELINE",
         )
+    )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert len(partial_markdowns) >= 3
+    assert partial_markdowns[0].startswith("# 故障复盘报告")
+    assert "## 1. 事件概要" in partial_markdowns[0]
+    assert "## 2. 影响量化" not in partial_markdowns[0]
+    assert "## 3. 事实来源" in partial_markdowns[1]
+    assert "## 4. 事件时间线" not in partial_markdowns[1]
+    assert "## 4. 事件时间线" in partial_markdowns[2]
+    assert "timeline\n    title 支付回调失败导致订单状态延迟 事件时间线" in (
+        partial_markdowns[2]
     )
 
     assert isinstance(outputs[-1], AgentTurnOutput)
@@ -2247,9 +2783,45 @@ def test_runtime_raw_json_stream_turn_renders_incident_root_cause_artifact_data_
     )
     calls = []
 
+    def prefix_after_artifact_data_member(member_name: str) -> str:
+        decoder = json.JSONDecoder()
+        artifact_key_index = final_json.index('"artifact_data"')
+        index = final_json.index("{", artifact_key_index) + 1
+        while index < len(final_json):
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            key, key_end = decoder.raw_decode(final_json[index:])
+            assert isinstance(key, str)
+            index += key_end
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            assert final_json[index] == ":"
+            index += 1
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            _, value_end = decoder.raw_decode(final_json[index:])
+            index += value_end
+            if key == member_name:
+                return final_json[:index]
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            if index < len(final_json) and final_json[index] == ",":
+                index += 1
+        raise AssertionError(f"artifact_data member not found: {member_name}")
+
+    context_prefix = prefix_after_artifact_data_member("analysis_context")
+    why_prefix = prefix_after_artifact_data_member("why_chain")
+    fishbone_prefix = prefix_after_artifact_data_member("fishbone_categories")
+    chunks = [
+        context_prefix,
+        why_prefix[len(context_prefix) :],
+        fishbone_prefix[len(why_prefix) :],
+        final_json[len(fishbone_prefix) :],
+    ]
+
     def fake_stream_chat_completion_content(**kwargs):
         calls.append(kwargs)
-        yield final_json
+        yield from chunks
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",
@@ -2272,6 +2844,23 @@ def test_runtime_raw_json_stream_turn_renders_incident_root_cause_artifact_data_
             current_stage_id="ROOT_CAUSE",
         )
     )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert len(partial_markdowns) >= 3
+    assert partial_markdowns[0].startswith("# 故障复盘报告")
+    assert "## 6. 根因分析" in partial_markdowns[0]
+    assert "### 6.1 5-Why 分析链" not in partial_markdowns[0]
+    assert "### 6.1 5-Why 分析链" in partial_markdowns[1]
+    assert '"type": "cause-map"' in partial_markdowns[1]
+    assert "### 6.3 原因鱼骨图" in partial_markdowns[2]
+    assert "mindmap" in partial_markdowns[2]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -2307,9 +2896,45 @@ def test_runtime_raw_json_stream_turn_renders_incident_improvement_artifact_data
     )
     calls = []
 
+    def prefix_after_artifact_data_member(member_name: str) -> str:
+        decoder = json.JSONDecoder()
+        artifact_key_index = final_json.index('"artifact_data"')
+        index = final_json.index("{", artifact_key_index) + 1
+        while index < len(final_json):
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            key, key_end = decoder.raw_decode(final_json[index:])
+            assert isinstance(key, str)
+            index += key_end
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            assert final_json[index] == ":"
+            index += 1
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            _, value_end = decoder.raw_decode(final_json[index:])
+            index += value_end
+            if key == member_name:
+                return final_json[:index]
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            if index < len(final_json) and final_json[index] == ",":
+                index += 1
+        raise AssertionError(f"artifact_data member not found: {member_name}")
+
+    report_prefix = prefix_after_artifact_data_member("report_info")
+    root_cause_prefix = prefix_after_artifact_data_member("root_cause_summary")
+    actions_prefix = prefix_after_artifact_data_member("improvement_actions")
+    chunks = [
+        report_prefix,
+        root_cause_prefix[len(report_prefix) :],
+        actions_prefix[len(root_cause_prefix) :],
+        final_json[len(actions_prefix) :],
+    ]
+
     def fake_stream_chat_completion_content(**kwargs):
         calls.append(kwargs)
-        yield final_json
+        yield from chunks
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",
@@ -2332,6 +2957,24 @@ def test_runtime_raw_json_stream_turn_renders_incident_improvement_artifact_data
             current_stage_id="IMPROVEMENT",
         )
     )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert len(partial_markdowns) >= 3
+    assert partial_markdowns[0].startswith("# 故障复盘报告")
+    assert "## 报告信息" in partial_markdowns[0]
+    assert "## 第一部分：事件还原" not in partial_markdowns[0]
+    assert "## 第二部分：根因分析" in partial_markdowns[1]
+    assert "## 第三部分：改进措施" not in partial_markdowns[1]
+    assert "## 第三部分：改进措施" in partial_markdowns[2]
+    assert "pie title 改进措施优先级分布" in partial_markdowns[2]
+    assert '"type": "action-board"' in partial_markdowns[2]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -2369,9 +3012,45 @@ def test_runtime_raw_json_stream_turn_renders_idea_define_artifact_data_before_f
     )
     calls = []
 
+    def prefix_after_artifact_data_member(member_name: str) -> str:
+        decoder = json.JSONDecoder()
+        artifact_key_index = final_json.index('"artifact_data"')
+        index = final_json.index("{", artifact_key_index) + 1
+        while index < len(final_json):
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            key, key_end = decoder.raw_decode(final_json[index:])
+            assert isinstance(key, str)
+            index += key_end
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            assert final_json[index] == ":"
+            index += 1
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            _, value_end = decoder.raw_decode(final_json[index:])
+            index += value_end
+            if key == member_name:
+                return final_json[:index]
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            if index < len(final_json) and final_json[index] == ",":
+                index += 1
+        raise AssertionError(f"artifact_data member not found: {member_name}")
+
+    statement_prefix = prefix_after_artifact_data_member("problem_statement")
+    users_prefix = prefix_after_artifact_data_member("target_users")
+    landscape_prefix = prefix_after_artifact_data_member("problem_landscape")
+    chunks = [
+        statement_prefix,
+        users_prefix[len(statement_prefix) :],
+        landscape_prefix[len(users_prefix) :],
+        final_json[len(landscape_prefix) :],
+    ]
+
     def fake_stream_chat_completion_content(**kwargs):
         calls.append(kwargs)
-        yield final_json
+        yield from chunks
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",
@@ -2394,6 +3073,23 @@ def test_runtime_raw_json_stream_turn_renders_idea_define_artifact_data_before_f
             current_stage_id="DEFINE",
         )
     )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert len(partial_markdowns) >= 3
+    assert partial_markdowns[0].startswith("# 问题域分析")
+    assert "## 问题假设陈述" in partial_markdowns[0]
+    assert "## 目标用户画像" not in partial_markdowns[0]
+    assert "## 目标用户画像" in partial_markdowns[1]
+    assert "## 问题域全景" not in partial_markdowns[1]
+    assert "## 问题域全景" in partial_markdowns[2]
+    assert "mindmap" in partial_markdowns[2]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -2432,9 +3128,45 @@ def test_runtime_raw_json_stream_turn_renders_idea_diverge_artifact_data_before_
     )
     calls = []
 
+    def prefix_after_artifact_data_member(member_name: str) -> str:
+        decoder = json.JSONDecoder()
+        artifact_key_index = final_json.index('"artifact_data"')
+        index = final_json.index("{", artifact_key_index) + 1
+        while index < len(final_json):
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            key, key_end = decoder.raw_decode(final_json[index:])
+            assert isinstance(key, str)
+            index += key_end
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            assert final_json[index] == ":"
+            index += 1
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            _, value_end = decoder.raw_decode(final_json[index:])
+            index += value_end
+            if key == member_name:
+                return final_json[:index]
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            if index < len(final_json) and final_json[index] == ",":
+                index += 1
+        raise AssertionError(f"artifact_data member not found: {member_name}")
+
+    method_prefix = prefix_after_artifact_data_member("divergence_method")
+    cards_prefix = prefix_after_artifact_data_member("idea_cards")
+    sources_prefix = prefix_after_artifact_data_member("idea_sources")
+    chunks = [
+        method_prefix,
+        cards_prefix[len(method_prefix) :],
+        sources_prefix[len(cards_prefix) :],
+        final_json[len(sources_prefix) :],
+    ]
+
     def fake_stream_chat_completion_content(**kwargs):
         calls.append(kwargs)
-        yield final_json
+        yield from chunks
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",
@@ -2457,6 +3189,24 @@ def test_runtime_raw_json_stream_turn_renders_idea_diverge_artifact_data_before_
             current_stage_id="DIVERGE",
         )
     )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert len(partial_markdowns) >= 3
+    assert partial_markdowns[0].startswith("# 创意发散")
+    assert "## 发散方法说明" in partial_markdowns[0]
+    assert "## 发散全景图" not in partial_markdowns[0]
+    assert "## 发散全景图" in partial_markdowns[1]
+    assert "mindmap" in partial_markdowns[1]
+    assert "## 创意卡片库" in partial_markdowns[1]
+    assert "## 创意来源与假设" not in partial_markdowns[1]
+    assert "## 创意来源与假设" in partial_markdowns[2]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -2497,9 +3247,45 @@ def test_runtime_raw_json_stream_turn_renders_idea_converge_artifact_data_before
     )
     calls = []
 
+    def prefix_after_artifact_data_member(member_name: str) -> str:
+        decoder = json.JSONDecoder()
+        artifact_key_index = final_json.index('"artifact_data"')
+        index = final_json.index("{", artifact_key_index) + 1
+        while index < len(final_json):
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            key, key_end = decoder.raw_decode(final_json[index:])
+            assert isinstance(key, str)
+            index += key_end
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            assert final_json[index] == ":"
+            index += 1
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            _, value_end = decoder.raw_decode(final_json[index:])
+            index += value_end
+            if key == member_name:
+                return final_json[:index]
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            if index < len(final_json) and final_json[index] == ",":
+                index += 1
+        raise AssertionError(f"artifact_data member not found: {member_name}")
+
+    evaluations_prefix = prefix_after_artifact_data_member("ice_evaluations")
+    resources_prefix = prefix_after_artifact_data_member("resource_constraints")
+    experiments_prefix = prefix_after_artifact_data_member("validation_experiments")
+    chunks = [
+        evaluations_prefix,
+        resources_prefix[len(evaluations_prefix) :],
+        experiments_prefix[len(resources_prefix) :],
+        final_json[len(experiments_prefix) :],
+    ]
+
     def fake_stream_chat_completion_content(**kwargs):
         calls.append(kwargs)
-        yield final_json
+        yield from chunks
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",
@@ -2522,6 +3308,24 @@ def test_runtime_raw_json_stream_turn_renders_idea_converge_artifact_data_before
             current_stage_id="CONVERGE",
         )
     )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert len(partial_markdowns) >= 3
+    assert partial_markdowns[0].startswith("# 收敛聚焦")
+    assert "## 决策矩阵" in partial_markdowns[0]
+    assert "quadrantChart" in partial_markdowns[0]
+    assert "## ICE 评估表" in partial_markdowns[0]
+    assert "## 资源约束" not in partial_markdowns[0]
+    assert "## 资源约束" in partial_markdowns[1]
+    assert "## 验证实验" not in partial_markdowns[1]
+    assert "## 验证实验" in partial_markdowns[2]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -2559,9 +3363,45 @@ def test_runtime_raw_json_stream_turn_renders_idea_concept_artifact_data_before_
     )
     calls = []
 
+    def prefix_after_artifact_data_member(member_name: str) -> str:
+        decoder = json.JSONDecoder()
+        artifact_key_index = final_json.index('"artifact_data"')
+        index = final_json.index("{", artifact_key_index) + 1
+        while index < len(final_json):
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            key, key_end = decoder.raw_decode(final_json[index:])
+            assert isinstance(key, str)
+            index += key_end
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            assert final_json[index] == ":"
+            index += 1
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            _, value_end = decoder.raw_decode(final_json[index:])
+            index += value_end
+            if key == member_name:
+                return final_json[:index]
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            if index < len(final_json) and final_json[index] == ",":
+                index += 1
+        raise AssertionError(f"artifact_data member not found: {member_name}")
+
+    positioning_prefix = prefix_after_artifact_data_member("positioning_statement")
+    assumptions_prefix = prefix_after_artifact_data_member("core_assumptions")
+    mvp_prefix = prefix_after_artifact_data_member("mvp_features")
+    chunks = [
+        positioning_prefix,
+        assumptions_prefix[len(positioning_prefix) :],
+        mvp_prefix[len(assumptions_prefix) :],
+        final_json[len(mvp_prefix) :],
+    ]
+
     def fake_stream_chat_completion_content(**kwargs):
         calls.append(kwargs)
-        yield final_json
+        yield from chunks
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",
@@ -2584,6 +3424,25 @@ def test_runtime_raw_json_stream_turn_renders_idea_concept_artifact_data_before_
             current_stage_id="CONCEPT",
         )
     )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert len(partial_markdowns) >= 3
+    assert partial_markdowns[0].startswith("# 产品概念简报")
+    assert "## 定位声明" in partial_markdowns[0]
+    assert "## 核心假设" not in partial_markdowns[0]
+    assert "## 核心假设" in partial_markdowns[1]
+    assert "## MVP 功能分布" not in partial_markdowns[1]
+    assert "## Lean Canvas 产品画布" in partial_markdowns[2]
+    assert "## MVP 功能分布" in partial_markdowns[2]
+    assert "pie title MVP 功能组成" in partial_markdowns[2]
+    assert '"type": "mvp-map"' in partial_markdowns[2]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -2646,14 +3505,22 @@ def test_raw_streaming_runtime_records_stream_usage(monkeypatch):
     assert runtime.last_token_usage == 123
 
 
-def test_runtime_raw_json_stream_turn_keeps_latest_delta_when_final_json_is_truncated(
+def test_runtime_raw_json_stream_turn_fails_final_json_truncation_after_partial_delta(
     monkeypatch,
 ):
-    chunks = [
-        '{"chat":"已更新需求文档。",',
-        '"artifact_update":{"type":"replace","markdown":"# 需求分析文档\\n\\n'
-        "## 1. 被测系统与边界\\n内容",
-    ]
+    final_json = json.dumps(
+        {
+            "chat": "已更新需求文档。",
+            "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    chunks = _raw_json_chunks_after_artifact_data_members(
+        final_json,
+        ["document_info", "requirement_facts"],
+    )[:2]
 
     def fake_stream_chat_completion_content(**kwargs):
         yield from chunks
@@ -2672,21 +3539,26 @@ def test_runtime_raw_json_stream_turn_keeps_latest_delta_when_final_json_is_trun
         ),
     )
 
-    outputs = list(
-        runtime.stream_turn(
-            "用户需求",
-            workflow_id="TEST_DESIGN",
-            current_stage_id="CLARIFY",
-        )
+    stream = runtime.stream_turn(
+        "用户需求",
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
     )
 
-    assert isinstance(outputs[0], AgentTurnDeltaOutput)
-    assert outputs[-1].chat == "已更新需求文档。"
-    assert outputs[-1].artifact_update.markdown == (
-        "# 需求分析文档\n\n## 1. 被测系统与边界\n内容"
-    )
-    assert outputs[-1].stage_action is None
-    assert outputs[-1].warnings == ["artifact_truncated"]
+    artifact_delta = None
+    for output in stream:
+        assert isinstance(output, AgentTurnDeltaOutput)
+        if output.artifact_update is not None:
+            artifact_delta = output
+            break
+
+    assert artifact_delta is not None
+    assert artifact_delta.chat == "已更新需求文档。"
+    assert artifact_delta.artifact_update.markdown.startswith("# 需求分析文档")
+    assert "## 1. 需求事实清单" in artifact_delta.artifact_update.markdown
+
+    with pytest.raises(AgentRuntimeSchemaError):
+        next(stream)
 
 
 def test_runtime_raw_json_stream_turn_retries_contract_failure_with_feedback(

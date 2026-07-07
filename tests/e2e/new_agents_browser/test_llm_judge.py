@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from .llm_judge import (
+    assert_llm_judges_artifact_quality,
     assert_visualization_quality_dimension,
     build_handoff_judge_prompt,
     build_judge_prompt,
@@ -224,6 +227,52 @@ def test_assert_visualization_quality_dimension_rejects_low_score() -> None:
 
     with pytest.raises(AssertionError, match="Visualization quality score too low"):
         assert_visualization_quality_dimension(result)
+
+
+def test_assert_llm_judges_artifact_quality_requires_80_score(monkeypatch) -> None:
+    monkeypatch.setenv("NEW_AGENTS_E2E_LLM_JUDGE", "1")
+    monkeypatch.setenv("NEW_AGENTS_E2E_JUDGE_API_KEY", "test-key")
+    monkeypatch.setenv("NEW_AGENTS_E2E_JUDGE_BASE_URL", "https://judge.example")
+    monkeypatch.setenv("NEW_AGENTS_E2E_JUDGE_MODEL", "judge-model")
+
+    class JudgeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "pass": True,
+                                    "score": 79,
+                                    "dimension_scores": {
+                                        "测试专业性": 79,
+                                        "可视化质量": 82,
+                                    },
+                                    "issues": ["仍有质量缺口"],
+                                    "evidence": ["有结构化产物"],
+                                    "recommendations": ["补齐质量缺口后重跑"],
+                                },
+                                ensure_ascii=False,
+                            )
+                        }
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(
+        "tests.e2e.new_agents_browser.llm_judge.requests.post",
+        lambda *args, **kwargs: JudgeResponse(),
+    )
+
+    with pytest.raises(AssertionError, match="LLM judge score too low: 79"):
+        assert_llm_judges_artifact_quality(
+            "Lisa 测试策略与用例设计",
+            _sample_run_result(),
+        )
 
 
 def test_parse_judge_result_rejects_missing_required_field() -> None:

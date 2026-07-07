@@ -132,6 +132,12 @@ export type MessageErrorDiagnostic = {
     reason?: string;
     action?: string;
     code?: string;
+    phase?: string;
+    workflowId?: string;
+    stageId?: string;
+    fieldPath?: string;
+    validator?: string;
+    retryable?: boolean;
 };
 
 // 已实现的工作流类型（仅包含 online 状态）
@@ -140,9 +146,12 @@ export type WorkflowType = 'TEST_DESIGN' | 'REQ_REVIEW' | 'INCIDENT_REVIEW' | 'I
 export type WorkflowHandoff = {
     id: string;
     label: string;
+    sourceRunId?: string;
     sourceWorkflowId: WorkflowType;
     sourceStageId: string;
     sourceArtifactVersion: number;
+    sourceArtifactDigest?: string;
+    sourceArtifactSummary?: string;
     targetRunId?: string;
     targetWorkflowId: WorkflowType;
     targetStageId: string;
@@ -439,6 +448,14 @@ export type ObservabilityProviderSummary = ObservabilityTotals & {
     errorCodes: Record<string, number>;
 };
 
+export type ObservabilityTurnDiagnostic = {
+    phase: string;
+    fieldPath: string;
+    validator: string;
+    publicReason: string;
+    retryable: boolean;
+};
+
 export type ObservabilityTurn = {
     id: number;
     runId: string;
@@ -453,6 +470,7 @@ export type ObservabilityTurn = {
     outputChars: number;
     estimatedTokens: number;
     contractRetryCount: number;
+    diagnostic?: ObservabilityTurnDiagnostic | null;
     createdAt: string | null;
 };
 
