@@ -237,9 +237,9 @@ cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.tes
 - `start_workflow_handoff` 必须创建目标 run，并把 source run、source workflow/stage、artifact version 和 digest 写入目标 run 第一条 user message，形成可恢复追溯。
 - 无上游 artifact 时返回空候选，不伪造 prompt 或目标 run。
 - 未知 workflow、stage mismatch 或未知 handoff 必须显式 JSON 失败。
-- 前端进入 Alex `VALUE_DISCOVERY/ELEVATOR` 空会话时必须展示“开启新话题 / 从产品概念简报继续”选择；无候选时仍允许开启新话题。
+- 前端进入 Alex `VALUE_DISCOVERY/ELEVATOR` 或 `USER_STORY_BREAKDOWN/SCOPE` 空会话时必须展示“开启新话题 / 基于已有内容继续”选择；无候选时仍允许开启新话题。
 - 选择候选后必须通过既有 `POST /api/agent/runs/{sourceRunId}/handoffs/{handoffId}/start` 创建目标 run，并继续使用共享 `/api/agent/runs/stream`。
-- 修改共享 handoff 能力时，必须回归 Alex `IDEA_BRAINSTORM/CONCEPT -> VALUE_DISCOVERY/ELEVATOR` 和既有 `VALUE_DISCOVERY/BLUEPRINT -> Lisa` 两条路径。
+- 修改共享 handoff 能力时，必须回归 Alex `IDEA_BRAINSTORM/CONCEPT -> VALUE_DISCOVERY/ELEVATOR`、Alex `VALUE_DISCOVERY/BLUEPRINT -> USER_STORY_BREAKDOWN/SCOPE` 和既有 `VALUE_DISCOVERY/BLUEPRINT -> Lisa` 路径。
 
 典型测试文件：
 - `tools/new-agents/backend/tests/test_workflow_handoffs.py`
@@ -247,6 +247,7 @@ cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.tes
 - `tools/new-agents/frontend/src/services/__tests__/workflowHandoffService.test.ts`
 - `tools/new-agents/frontend/src/components/__tests__/ChatPane.test.tsx`
 - `tools/new-agents/frontend/src/__tests__/store.test.ts`
+- `tests/e2e/new_agents_browser/test_alex_user_story_breakdown_workflow.py`
 
 ### 后端上下文构建层：`context_builder.py`
 

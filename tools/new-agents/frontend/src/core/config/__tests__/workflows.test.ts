@@ -49,11 +49,12 @@ describe('Workflow Configuration', () => {
         expect(wf.stages[1].description.length).toBeGreaterThan(100);
     });
 
-    it('should return at least two core workflows for Alex', () => {
+    it('should return core workflows for Alex', () => {
         const workflows = getAgentWorkflows('alex');
         const ids = workflows.map(w => w.id);
         expect(ids).toContain('idea-brainstorm');
         expect(ids).toContain('value-discovery');
+        expect(ids).toContain('user-story-breakdown');
     });
 
     it('should configure IDEA_BRAINSTORM as online for Alex', () => {
@@ -87,6 +88,19 @@ describe('Workflow Configuration', () => {
         expect(wf.stages[3].description.length).toBeGreaterThan(100);
     });
 
+    it('should have USER_STORY_BREAKDOWN workflow defined with correct agentId and stages', () => {
+        const wf = WORKFLOWS.USER_STORY_BREAKDOWN;
+        expect(wf).toBeDefined();
+        expect(wf.name).toBe('用户故事拆解');
+        expect(wf.agentId).toBe('alex');
+        expect(wf.slug).toBe('user-story-breakdown');
+        expect(wf.stages.map(stage => stage.id)).toEqual(['SCOPE', 'STORY_MAP', 'STORIES', 'HANDOFF']);
+        for (const stage of wf.stages) {
+            expect(stage.description.length).toBeGreaterThan(100);
+            expect(stage.template.length).toBeGreaterThan(100);
+        }
+    });
+
     it('should have value-discovery workflow in Alex agent workflows as online and without prd-creation', () => {
         const workflows = getAgentWorkflows('alex');
 
@@ -96,6 +110,16 @@ describe('Workflow Configuration', () => {
 
         const prdCreation = workflows.find(w => w.id === 'prd-creation');
         expect(prdCreation).toBeUndefined();
+    });
+
+    it('should expose user-story-breakdown as online instead of plan for Alex', () => {
+        const workflows = getAgentWorkflows('alex');
+
+        const storyBreakdown = workflows.find(w => w.id === 'user-story-breakdown');
+        expect(storyBreakdown).toBeDefined();
+        expect(storyBreakdown?.status).toBe('online');
+        expect(storyBreakdown?.link).toBe('/workspace/alex/user-story-breakdown');
+        expect(workflows.find(w => w.id === 'story-breakdown')).toBeUndefined();
     });
 
     it('every workflow definition should configure an agentId', () => {

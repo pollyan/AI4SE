@@ -11,6 +11,16 @@
       "label": "从产品概念简报继续梳理需求蓝图"
     },
     {
+      "id": "value-discovery-blueprint-to-user-story-breakdown",
+      "sourceWorkflowId": "VALUE_DISCOVERY",
+      "sourceStageId": "BLUEPRINT",
+      "targetWorkflowId": "USER_STORY_BREAKDOWN",
+      "targetStageId": "SCOPE",
+      "targetAgentId": "alex",
+      "promptTemplateId": "source-artifact-handoff",
+      "label": "从需求蓝图继续拆用户故事"
+    },
+    {
       "id": "value-discovery-blueprint-to-test-design",
       "sourceWorkflowId": "VALUE_DISCOVERY",
       "sourceStageId": "BLUEPRINT",
@@ -796,6 +806,143 @@
           "我有个想法：做一款帮产品经理自动整理用户反馈的工具，想系统梳理一下"
         ],
         "inputPlaceholder": "描述你已有的产品方向或想法..."
+      }
+    },
+    "USER_STORY_BREAKDOWN": {
+      "id": "USER_STORY_BREAKDOWN",
+      "agentId": "alex",
+      "slug": "user-story-breakdown",
+      "name": "用户故事拆解",
+      "description": "把需求蓝图拆成用户故事地图、MVP 切片、用户故事卡片和可交接故事清单。",
+      "listing": {
+        "name": "用户故事拆解",
+        "description": "从需求蓝图或新话题出发，拆出可独立交付给后续 AI Coding 的用户故事卡片。",
+        "icon": "ListChecks",
+        "preview": {
+          "suitableFor": [
+            "已经有需求蓝图，需要拆成用户故事",
+            "需要识别 MVP slice 和后续 release slice",
+            "需要准备可交给 AI Coding 的单故事需求输入"
+          ],
+          "notSuitableFor": [
+            "只有模糊想法，还没有产品方向或需求蓝图",
+            "需要直接生成开发任务、代码结构或实现计划"
+          ],
+          "requiredInputs": [
+            "需求蓝图、核心需求或产品范围说明",
+            "目标用户、关键场景和业务规则",
+            "MVP 约束、优先级或交付边界"
+          ],
+          "expectedOutputs": [
+            "拆分范围和需求追溯索引",
+            "用户故事地图与 MVP slice",
+            "Ready / Not ready 用户故事卡片和 handoff 清单"
+          ],
+          "sampleInput": "基于这份需求蓝图，帮我拆成用户故事地图和可交给 AI Coding 的故事卡。"
+        }
+      },
+      "stages": [
+        {
+          "id": "SCOPE",
+          "name": "校准拆分范围",
+          "promptTemplateId": "user_story_breakdown.scope",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 用户故事拆解文档",
+              "## 1. 拆分范围",
+              "## 2. 需求追溯索引",
+              "## 3. 不拆范围",
+              "## 4. 阻塞问题",
+              "## 5. 阶段门禁",
+              "需求 ID",
+              "优先级",
+              "状态"
+            ]
+          },
+          "visualContract": {
+            "requiredMermaidDiagrams": [
+              "flowchart"
+            ]
+          }
+        },
+        {
+          "id": "STORY_MAP",
+          "name": "绘制故事地图",
+          "promptTemplateId": "user_story_breakdown.story_map",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 用户故事拆解文档",
+              "## 1. 用户活动主干",
+              "## 2. 用户任务流",
+              "## 3. 用户故事地图",
+              "## 4. MVP Slice",
+              "## 5. Release Slice",
+              "## 6. 阶段门禁",
+              "活动 ID",
+              "任务 ID",
+              "Story ID",
+              "MVP"
+            ]
+          },
+          "visualContract": {
+            "requiredMermaidDiagrams": [
+              "flowchart"
+            ]
+          }
+        },
+        {
+          "id": "STORIES",
+          "name": "编写故事卡片",
+          "promptTemplateId": "user_story_breakdown.stories",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 用户故事拆解文档",
+              "## 1. 故事拆分原则",
+              "## 2. 用户故事卡片",
+              "## 3. Ready Stories",
+              "## 4. Not Ready Stories",
+              "## 5. 开放问题",
+              "## 6. 阶段门禁",
+              "Story ID",
+              "作为",
+              "我想要",
+              "以便",
+              "验收标准",
+              "来源需求",
+              "状态"
+            ]
+          }
+        },
+        {
+          "id": "HANDOFF",
+          "name": "准备故事交接",
+          "promptTemplateId": "user_story_breakdown.handoff",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 单故事 Handoff 清单",
+              "## 1. Ready Story 总览",
+              "## 2. 单故事需求包",
+              "## 3. 上游追溯",
+              "## 4. Not Ready 阻塞项",
+              "## 5. AI Coding 输入边界",
+              "## 6. 阶段门禁",
+              "storyId",
+              "requirementId",
+              "acceptanceCriteria",
+              "businessRules",
+              "openQuestions"
+            ]
+          }
+        }
+      ],
+      "onboarding": {
+        "welcomeMessage": "你好！我是 Alex，用户故事拆解顾问。你可以直接描述需求范围，也可以从已有需求蓝图继续，我会帮你拆出用户故事地图、MVP 切片和可交接的故事卡片。",
+        "starterPrompts": [
+          "我有一份 AI 测试设计助手需求蓝图，帮我拆成用户故事",
+          "请把会员权益需求拆成 MVP 用户故事和后续版本故事",
+          "我想把客户反馈整理工具的需求拆成能交给 AI Coding 的故事卡"
+        ],
+        "inputPlaceholder": "粘贴需求蓝图、核心需求或产品范围..."
       }
     }
   }

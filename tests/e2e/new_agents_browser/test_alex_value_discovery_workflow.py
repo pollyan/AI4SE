@@ -23,16 +23,16 @@ pytestmark = pytest.mark.e2e
 def _alex_scenario() -> WorkflowScenario:
     return WorkflowScenario(
         agent_name="Alex",
-        workflow_name="价值发现",
-        initial_heading="价值发现",
+        workflow_name="需求蓝图梳理",
+        initial_heading="需求蓝图梳理",
         prompt=(
             "我们计划做一个 AI 测试设计助手，帮助测试负责人从需求生成测试策略"
             "和测试用例。"
         ),
         stages=(
             StageExpectation(
-                stage_tab="价值定位",
-                transition_label="确认进入 用户画像",
+                stage_tab="明确价值定位",
+                transition_label="确认进入 梳理目标用户",
                 artifact_headings=(
                     "# 价值定位分析",
                     "## 产品核心定位",
@@ -45,8 +45,8 @@ def _alex_scenario() -> WorkflowScenario:
                 ),
             ),
             StageExpectation(
-                stage_tab="用户画像",
-                transition_label="确认进入 用户旅程",
+                stage_tab="梳理目标用户",
+                transition_label="确认进入 梳理用户旅程",
                 artifact_headings=(
                     "# 用户画像分析",
                     "## 主要用户画像",
@@ -58,8 +58,8 @@ def _alex_scenario() -> WorkflowScenario:
                 ),
             ),
             StageExpectation(
-                stage_tab="用户旅程",
-                transition_label="确认进入 需求蓝图",
+                stage_tab="梳理用户旅程",
+                transition_label="确认进入 生成需求蓝图",
                 artifact_headings=(
                     "# 用户旅程分析",
                     "## 用户旅程地图",
@@ -72,7 +72,7 @@ def _alex_scenario() -> WorkflowScenario:
                 ),
             ),
             StageExpectation(
-                stage_tab="需求蓝图",
+                stage_tab="生成需求蓝图",
                 transition_label=None,
                 artifact_headings=(
                     "需求蓝图",
@@ -90,10 +90,10 @@ def test_alex_value_discovery_workflow_completes_all_stages(new_agents_page):
 
     assert "AI 测试设计助手需求蓝图" in run_result.final_artifact
     assert [snapshot.stage_name for snapshot in run_result.stage_artifacts] == [
-        "价值定位",
-        "用户画像",
-        "用户旅程",
-        "需求蓝图",
+        "明确价值定位",
+        "梳理目标用户",
+        "梳理用户旅程",
+        "生成需求蓝图",
     ]
     assert len(run_result.stage_transitions) >= 3
     assert any(
@@ -140,7 +140,7 @@ def test_alex_final_artifact_passes_optional_llm_judge(new_agents_page):
 
     run_result = run_complete_workflow(new_agents_page, _alex_scenario())
 
-    assert_llm_judges_artifact_quality("Alex 价值发现", run_result)
+    assert_llm_judges_artifact_quality("Alex 需求蓝图梳理", run_result)
 
 
 def test_alex_to_lisa_handoff_passes_optional_llm_judge(new_agents_page):
@@ -210,7 +210,7 @@ def test_alex_to_lisa_handoff_passes_optional_llm_judge(new_agents_page):
     )
 
     assert_llm_judges_handoff_quality(
-        "Alex 价值发现 -> Lisa 测试设计",
+        "Alex 需求蓝图梳理 -> Lisa 测试设计",
         alex_result,
         lisa_result,
     )

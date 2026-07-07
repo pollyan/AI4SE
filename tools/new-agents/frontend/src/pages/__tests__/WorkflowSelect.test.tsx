@@ -35,6 +35,7 @@ describe('WorkflowSelect Page', () => {
             renderComponent('alex');
             expect(screen.getByText('创意头脑风暴')).toBeTruthy();
             expect(screen.getByText('需求蓝图梳理')).toBeTruthy();
+            expect(screen.getByText('用户故事拆解')).toBeTruthy();
         });
 
         it('shows status labels for plan workflows', () => {
@@ -47,6 +48,13 @@ describe('WorkflowSelect Page', () => {
             const card = screen.getByText('创意头脑风暴').closest('[class*="rounded-2xl"]')!;
             fireEvent.click(card);
             expect(mockNavigate).toHaveBeenCalledWith('/workspace/alex/idea-brainstorm');
+        });
+
+        it('navigates to user story breakdown workflow', () => {
+            renderComponent('alex');
+            const card = screen.getByText('用户故事拆解').closest('[class*="rounded-2xl"]')!;
+            fireEvent.click(card);
+            expect(mockNavigate).toHaveBeenCalledWith('/workspace/alex/user-story-breakdown');
         });
     });
 

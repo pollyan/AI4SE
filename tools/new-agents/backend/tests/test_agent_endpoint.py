@@ -1738,15 +1738,24 @@ def test_agent_run_handoffs_endpoint_exports_configured_targets(
 
     assert response.status_code == 200
     assert response.json["runId"] == run_id
-    assert [
+    targets = [
         (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
         for handoff in response.json["handoffs"]
+    ]
+    assert ("USER_STORY_BREAKDOWN", "SCOPE", "alex") in targets
+    assert [
+        target for target in targets
+        if target[2] == "lisa"
     ] == [
         ("TEST_DESIGN", "CLARIFY", "lisa"),
         ("REQ_REVIEW", "REVIEW", "lisa"),
     ]
-    assert response.json["handoffs"][0]["sourceArtifactVersion"] == 1
-    assert "AI 测试资产管理平台" in response.json["handoffs"][0]["prompt"]
+    test_design_handoff = next(
+        handoff for handoff in response.json["handoffs"]
+        if handoff["targetWorkflowId"] == "TEST_DESIGN"
+    )
+    assert test_design_handoff["sourceArtifactVersion"] == 1
+    assert "AI 测试资产管理平台" in test_design_handoff["prompt"]
 
 
 def test_agent_run_handoff_start_endpoint_creates_target_run(

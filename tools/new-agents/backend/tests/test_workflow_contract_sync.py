@@ -168,6 +168,42 @@ FRONTEND_PROMPT_FILES = {
         / "value_discovery"
         / "blueprint.ts"
     ),
+    ("USER_STORY_BREAKDOWN", "SCOPE"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "user_story_breakdown"
+        / "scope.ts"
+    ),
+    ("USER_STORY_BREAKDOWN", "STORY_MAP"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "user_story_breakdown"
+        / "story_map.ts"
+    ),
+    ("USER_STORY_BREAKDOWN", "STORIES"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "user_story_breakdown"
+        / "stories.ts"
+    ),
+    ("USER_STORY_BREAKDOWN", "HANDOFF"): (
+        NEW_AGENTS_ROOT
+        / "frontend"
+        / "src"
+        / "core"
+        / "prompts"
+        / "user_story_breakdown"
+        / "handoff.ts"
+    ),
 }
 
 
@@ -211,7 +247,7 @@ def test_shared_workflow_manifest_stage_keys_match_frontend_prompt_templates():
     assert manifest_stage_keys == set(FRONTEND_PROMPT_FILES)
 
 
-def test_shared_workflow_manifest_declares_alex_to_lisa_handoffs():
+def test_shared_workflow_manifest_declares_required_handoffs():
     handoffs = _workflow_manifest()["handoffs"]
 
     assert {
@@ -223,6 +259,7 @@ def test_shared_workflow_manifest_declares_alex_to_lisa_handoffs():
         )
         for handoff in handoffs
     } >= {
+        ("VALUE_DISCOVERY", "BLUEPRINT", "USER_STORY_BREAKDOWN", "SCOPE"),
         ("VALUE_DISCOVERY", "BLUEPRINT", "TEST_DESIGN", "CLARIFY"),
         ("VALUE_DISCOVERY", "BLUEPRINT", "REQ_REVIEW", "REVIEW"),
     }

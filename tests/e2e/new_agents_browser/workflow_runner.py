@@ -113,6 +113,15 @@ def _select_workflow(page: Page, workflow_name: str) -> None:
     page.locator("h2").filter(has_text=workflow_name).click()
 
 
+def _dismiss_startup_handoff_panel_if_present(page: Page) -> None:
+    new_topic_button = page.get_by_role("button", name="开启新话题")
+    try:
+        expect(new_topic_button).to_be_visible(timeout=1000)
+    except AssertionError:
+        return
+    new_topic_button.click()
+
+
 def _send_message(page: Page, message: str) -> None:
     page.locator("textarea").fill(message)
     page.locator("#send-button").click()
@@ -157,6 +166,7 @@ def run_complete_workflow(
             timeout=10000
         )
         _select_workflow(page, scenario.workflow_name)
+        _dismiss_startup_handoff_panel_if_present(page)
     expect(page.locator("textarea")).to_be_visible(timeout=10000)
 
     page.get_by_title("代码").click()

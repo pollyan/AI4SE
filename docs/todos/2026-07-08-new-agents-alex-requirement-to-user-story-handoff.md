@@ -1,6 +1,6 @@
 # New Agents Alex 需求蓝图到用户故事 Handoff 路线
 
-- 状态：执行中（第 1 轮已完成；第 2 轮待启动）
+- 状态：执行中（第 1、2 轮已完成；第 3 轮待启动）
 - 创建日期：2026-07-08
 - 来源：用户要求先聚焦 Alex 需求梳理到后续 AI Coding 工作流的需求输入，不纳入 Lisa/Alex 之间的 handoff
 - 优先级：P0
@@ -113,18 +113,17 @@ handoff 给 AI Coding 的基本单位是单张 ready 用户故事卡片。ready 
 
 关键缺口：
 
-- 没有 `USER_STORY_BREAKDOWN` 工作流。
-- 没有从 `VALUE_DISCOVERY/BLUEPRINT` 到用户故事拆解的 Alex 内部 handoff。
-- 目标工作流启动时选择“新话题 / 基于已有内容继续”的入口当前只覆盖 `VALUE_DISCOVERY/ELEVATOR`；后续 `USER_STORY_BREAKDOWN` 仍需同类入口。
-- Alex 用户可见命名已完成第 1 轮入口收敛；后续用户故事拆解工作流仍需继续遵守直白任务命名。
+- `USER_STORY_BREAKDOWN` 已上线为 Alex 在线工作流，但用户故事卡片仍是 Markdown contract，尚未进入结构化 `artifact_data`。
+- `VALUE_DISCOVERY/BLUEPRINT -> USER_STORY_BREAKDOWN/SCOPE` handoff 已接入，目标侧启动入口已覆盖 `VALUE_DISCOVERY/ELEVATOR` 和 `USER_STORY_BREAKDOWN/SCOPE`；后续仍需把 handoff 关系升级为更强的一等持久化对象。
+- Alex 用户可见命名已完成第 1、2 轮入口收敛；后续结构化故事卡和单故事 packet 仍需继续遵守直白任务命名。
 - handoff 关系本身不是一等持久化对象；当前目标 run 只能通过第一条 user message 间接看到上游内容。
 - handoff packet 还不是结构化数据；当前主要使用截断 Markdown prompt。
 - 结构化 `artifact_data` 尚未作为可恢复的原始需求数据被 handoff 链路稳定消费。
-- 没有需求 ID、用户故事 ID、slice ID 的稳定命名与追溯规则。
+- 需求 ID、用户故事 ID、slice ID 已在 `USER_STORY_BREAKDOWN` Markdown contract 中引入；后续仍需后端结构化校验和重复 ID 拦截。
 - 没有上游 artifact 更新后的版本过期或 stale 提示。
-- 没有用户故事卡片结构化契约、renderer、ready / not ready 分类和单故事 handoff 清单。
+- 没有用户故事卡片结构化契约、renderer、严格 ready / not ready 质量校验和持久化单故事 handoff packet。
 - 没有防止故事拆分技术任务化的质量校验口径。
-- 没有端到端 E2E 证明“需求蓝图 -> 用户故事 -> 单故事需求包”链路。
+- 已有浏览器级 mock E2E 证明 `USER_STORY_BREAKDOWN` 四阶段可推进；仍缺持久化单故事 packet 后的全链路 E2E。
 - 修改 Alex handoff 底层能力时，需要保证 Lisa 现有 handoff 不回归。
 
 ## 目标轮数声明
@@ -273,3 +272,96 @@ cd tools/new-agents/frontend && npm run lint
 
 - 第 2 轮应新增 `USER_STORY_BREAKDOWN` 工作流，并从 `VALUE_DISCOVERY/BLUEPRINT` handoff 到 `SCOPE -> STORY_MAP -> STORIES -> HANDOFF`。
 - 第 2 轮开始前如无新 P0/P1 改道条件，可使用目标承接检查，不必重新做完整候选排序型 CGA。
+
+### 2026-07-08 第 2 轮：用户故事拆解工作流端到端
+
+已完成：
+
+- `workflow_manifest.json` 新增 `value-discovery-blueprint-to-user-story-breakdown`，声明 `VALUE_DISCOVERY/BLUEPRINT -> USER_STORY_BREAKDOWN/SCOPE` handoff；既有 Lisa handoff 保留。
+- 新增 Alex 在线工作流 `USER_STORY_BREAKDOWN`，用户可见名为“用户故事拆解”，阶段为 `SCOPE -> STORY_MAP -> STORIES -> HANDOFF`。
+- 后端 `WORKFLOW_STAGES`、artifact required headings 和 Mermaid contract 已同步新增用户故事拆解四阶段；`SCOPE` 和 `STORY_MAP` 要求 Mermaid `flowchart`。
+- 新增用户故事拆解四个 prompt / template，要求稳定需求 ID、Story ID、MVP / Release slice、Ready / Not Ready 分类，并禁止输出工程任务清单。
+- 前端 `WorkflowType`、`WORKFLOWS`、slug 映射和 Alex workflow cards 已从 manifest 派生出 `user-story-breakdown`；原同名 Plan 卡已移除。
+- `ChatPane` 目标侧 handoff 启动入口已从写死 `VALUE_DISCOVERY/ELEVATOR` 扩展为配置化 copy，支持 `USER_STORY_BREAKDOWN/SCOPE` 空会话选择“开启新话题 / 从需求蓝图继续拆用户故事”。
+- 后端 handoff 测试覆盖 `VALUE_DISCOVERY/BLUEPRINT` 出站新增 Alex 目标、目标侧候选查询和 start handoff 的 source trace 写入；旧 Lisa 目标回归仍通过。
+- 新增浏览器级 mock E2E 覆盖“用户故事拆解”完整四阶段推进，并断言最终产物包含单故事 Handoff 清单和业务垂直切片证据。
+- 浏览器级 E2E runner 已覆盖目标侧“开启新话题”入口；既有 Alex 需求蓝图梳理 E2E 已同步新的用户可见名称和阶段名。
+- Lisa mock 交付物补齐短信验证码限流、登录态过期、银行卡绑卡状态异常和准入标准，确保启用可选 LLM judge 时 Lisa 质量门不因 Alex 本轮改动被误判回归。
+- 第 2 轮设计与执行计划已记录在：
+  - `docs/superpowers/specs/2026-07-08-new-agents-user-story-breakdown-workflow-design.md`
+  - `docs/superpowers/plans/2026-07-08-new-agents-user-story-breakdown-workflow.md`
+
+RED 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_workflow_handoffs.py -q
+```
+
+结果：修复前 `5 failed, 18 passed`，失败原因是 `USER_STORY_BREAKDOWN` workflow / handoff / stage / prompt 尚未接入。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/pages/__tests__/WorkflowSelect.test.tsx src/components/__tests__/ChatPane.test.tsx
+```
+
+结果：修复前 `7 failed, 61 passed`，失败原因是 Alex 在线 workflow 缺少 `user-story-breakdown`，ChatPane 无法读取该 workflow onboarding。
+
+已验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_workflow_handoffs.py -q
+```
+
+结果：`23 passed`
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/pages/__tests__/WorkflowSelect.test.tsx src/components/__tests__/ChatPane.test.tsx
+```
+
+结果：`68 passed`
+
+```bash
+.venv/bin/python -m pytest tests/e2e/new_agents_browser/test_alex_user_story_breakdown_workflow.py -q
+```
+
+结果：`2 passed`。运行中出现 coverage `no-data-collected` warning，但未导致测试失败。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_workflow_handoffs.py tools/new-agents/backend/tests/test_agent_contracts.py tools/new-agents/backend/tests/test_agent_endpoint.py -q
+```
+
+结果：`171 passed`
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_registry.py -q
+```
+
+结果：`4 passed`
+
+```bash
+cd tools/new-agents/frontend && npm run lint
+```
+
+结果：TypeScript `tsc --noEmit` 通过。
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：New Agents 前端 `712 passed`；New Agents 后端 `569 passed, 1 deselected`。运行中仍出现既有 `ArtifactPane.test.tsx` React `act(...)` warning，但未导致测试失败。
+
+```bash
+.venv/bin/python -m pytest tests/e2e/new_agents_browser -q
+```
+
+结果：`19 passed`。当前环境启用了可选 LLM judge，Alex 需求蓝图梳理、Alex 到 Lisa handoff、Lisa 测试设计和用户故事拆解浏览器级证据均通过；运行中出现 coverage `no-data-collected` warning，但未导致测试失败。
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：首次在默认 sandbox 下失败，失败点为 MidScene proxy 端口绑定 `EPERM` 和 Playwright Chromium Mach port `Permission denied`。按运行规则提权重跑后通过：Intent Tester API `294 passed`；MidScene proxy `17 passed`；Common Frontend lint/build 通过；New Agents 前端 `712 passed`；New Agents 后端 `569 passed, 1 deselected`；New Agents Browser E2E `9 passed, 10 deselected`。
+
+下一轮承接：
+
+- 第 3 轮应把用户故事卡片从 Markdown contract 升级为结构化 `artifact_data` 或等价严格 contract，补后端确定性 renderer 和质量校验。
+- 第 3 轮开始前如无新 P0/P1 改道条件，可使用目标承接检查，不必重新做完整候选排序型 CGA。

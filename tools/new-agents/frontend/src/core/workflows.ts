@@ -17,6 +17,10 @@ import { ELEVATOR_PROMPT, ELEVATOR_TEMPLATE } from './prompts/value_discovery/el
 import { PERSONA_PROMPT, PERSONA_TEMPLATE } from './prompts/value_discovery/persona';
 import { JOURNEY_PROMPT, JOURNEY_TEMPLATE } from './prompts/value_discovery/journey';
 import { BLUEPRINT_PROMPT, BLUEPRINT_TEMPLATE } from './prompts/value_discovery/blueprint';
+import { SCOPE_PROMPT, SCOPE_TEMPLATE } from './prompts/user_story_breakdown/scope';
+import { STORY_MAP_PROMPT, STORY_MAP_TEMPLATE } from './prompts/user_story_breakdown/story_map';
+import { STORIES_PROMPT, STORIES_TEMPLATE } from './prompts/user_story_breakdown/stories';
+import { HANDOFF_PROMPT, HANDOFF_TEMPLATE } from './prompts/user_story_breakdown/handoff';
 
 type StageContent = {
     description: string;
@@ -91,6 +95,22 @@ const STAGE_CONTENT_BY_TEMPLATE_ID: Record<string, StageContent> = {
         'value_discovery.blueprint': {
             description: BLUEPRINT_PROMPT,
             template: BLUEPRINT_TEMPLATE,
+        },
+        'user_story_breakdown.scope': {
+            description: SCOPE_PROMPT,
+            template: SCOPE_TEMPLATE,
+        },
+        'user_story_breakdown.story_map': {
+            description: STORY_MAP_PROMPT,
+            template: STORY_MAP_TEMPLATE,
+        },
+        'user_story_breakdown.stories': {
+            description: STORIES_PROMPT,
+            template: STORIES_TEMPLATE,
+        },
+        'user_story_breakdown.handoff': {
+            description: HANDOFF_PROMPT,
+            template: HANDOFF_TEMPLATE,
         },
 };
 

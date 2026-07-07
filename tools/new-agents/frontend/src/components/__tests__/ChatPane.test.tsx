@@ -941,6 +941,110 @@ describe('ChatPane Component', () => {
         expect(mockNavigate).toHaveBeenCalledWith('/workspace/alex/value-discovery?runId=value-run-456');
     });
 
+    it('loads target-side handoff choices when user story breakdown starts without a run', async () => {
+        useStore.setState({
+            workflow: 'USER_STORY_BREAKDOWN' as WorkflowType,
+            stageIndex: 0,
+            currentRunId: null,
+            chatHistory: [],
+        });
+        vi.mocked(fetchTargetWorkflowHandoffCandidates).mockResolvedValue([
+            {
+                id: 'value-discovery-blueprint-to-user-story-breakdown',
+                label: '从需求蓝图继续拆用户故事',
+                sourceRunId: 'value-run-123',
+                sourceWorkflowId: 'VALUE_DISCOVERY',
+                sourceStageId: 'BLUEPRINT',
+                sourceArtifactVersion: 1,
+                sourceArtifactDigest: 'sha256:def456',
+                sourceArtifactSummary: '# AI 测试设计助手需求蓝图',
+                targetWorkflowId: 'USER_STORY_BREAKDOWN',
+                targetStageId: 'SCOPE',
+                targetAgentId: 'alex',
+                prompt: '请基于需求蓝图继续拆用户故事。',
+            },
+        ]);
+
+        render(<ChatPane />);
+
+        await waitFor(() => {
+            expect(fetchTargetWorkflowHandoffCandidates).toHaveBeenCalledWith('USER_STORY_BREAKDOWN', 'SCOPE');
+        });
+        expect(await screen.findByText('选择用户故事拆解起点')).toBeDefined();
+        expect(screen.getByText('开启新话题')).toBeDefined();
+        expect(screen.getByText('从需求蓝图继续拆用户故事')).toBeDefined();
+        expect(screen.getByText(/# AI 测试设计助手需求蓝图/)).toBeDefined();
+    });
+
+    it('applies a target-side handoff choice from the user story breakdown empty state', async () => {
+        useStore.setState({
+            workflow: 'USER_STORY_BREAKDOWN' as WorkflowType,
+            stageIndex: 0,
+            currentRunId: null,
+            chatHistory: [],
+        });
+        vi.mocked(fetchTargetWorkflowHandoffCandidates).mockResolvedValue([
+            {
+                id: 'value-discovery-blueprint-to-user-story-breakdown',
+                label: '从需求蓝图继续拆用户故事',
+                sourceRunId: 'value-run-123',
+                sourceWorkflowId: 'VALUE_DISCOVERY',
+                sourceStageId: 'BLUEPRINT',
+                sourceArtifactVersion: 1,
+                sourceArtifactDigest: 'sha256:def456',
+                sourceArtifactSummary: '# AI 测试设计助手需求蓝图',
+                targetWorkflowId: 'USER_STORY_BREAKDOWN',
+                targetStageId: 'SCOPE',
+                targetAgentId: 'alex',
+                prompt: '请基于需求蓝图继续拆用户故事。',
+            },
+        ]);
+        vi.mocked(startWorkflowHandoff).mockResolvedValue({
+            id: 'value-discovery-blueprint-to-user-story-breakdown',
+            label: '从需求蓝图继续拆用户故事',
+            sourceRunId: 'value-run-123',
+            sourceWorkflowId: 'VALUE_DISCOVERY',
+            sourceStageId: 'BLUEPRINT',
+            sourceArtifactVersion: 1,
+            sourceArtifactDigest: 'sha256:def456',
+            sourceArtifactSummary: '# AI 测试设计助手需求蓝图',
+            targetRunId: 'story-run-456',
+            targetWorkflowId: 'USER_STORY_BREAKDOWN',
+            targetStageId: 'SCOPE',
+            targetAgentId: 'alex',
+            prompt: '请基于需求蓝图继续拆用户故事。',
+        });
+
+        render(<ChatPane />);
+        fireEvent.click(await screen.findByText('从需求蓝图继续拆用户故事'));
+
+        await waitFor(() => {
+            expect(startWorkflowHandoff).toHaveBeenCalledWith(
+                'value-run-123',
+                'value-discovery-blueprint-to-user-story-breakdown'
+            );
+        });
+        expect(useStore.getState().workflow).toBe('USER_STORY_BREAKDOWN');
+        expect(useStore.getState().stageIndex).toBe(0);
+        expect(useStore.getState().currentRunId).toBe('story-run-456');
+        expect(mockNavigate).toHaveBeenCalledWith('/workspace/alex/user-story-breakdown?runId=story-run-456');
+    });
+
+    it('shows a new-topic path when user story breakdown has no upstream candidates', async () => {
+        useStore.setState({
+            workflow: 'USER_STORY_BREAKDOWN' as WorkflowType,
+            stageIndex: 0,
+            currentRunId: null,
+            chatHistory: [],
+        });
+        vi.mocked(fetchTargetWorkflowHandoffCandidates).mockResolvedValue([]);
+
+        render(<ChatPane />);
+
+        expect(await screen.findByText('暂无可继承的需求蓝图，可以直接开启新话题')).toBeDefined();
+        expect(screen.getByText('开启新话题')).toBeDefined();
+    });
+
     it('shows a new-topic path when value discovery has no upstream candidates', async () => {
         useStore.setState({
             workflow: 'VALUE_DISCOVERY' as WorkflowType,

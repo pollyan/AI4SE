@@ -141,7 +141,13 @@ export type MessageErrorDiagnostic = {
 };
 
 // 已实现的工作流类型（仅包含 online 状态）
-export type WorkflowType = 'TEST_DESIGN' | 'REQ_REVIEW' | 'INCIDENT_REVIEW' | 'IDEA_BRAINSTORM' | 'VALUE_DISCOVERY';
+export type WorkflowType =
+    | 'TEST_DESIGN'
+    | 'REQ_REVIEW'
+    | 'INCIDENT_REVIEW'
+    | 'IDEA_BRAINSTORM'
+    | 'VALUE_DISCOVERY'
+    | 'USER_STORY_BREAKDOWN';
 
 export type WorkflowHandoff = {
     id: string;

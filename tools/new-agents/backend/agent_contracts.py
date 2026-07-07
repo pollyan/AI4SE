@@ -11,6 +11,7 @@ WORKFLOW_STAGES: dict[str, list[str]] = {
     "INCIDENT_REVIEW": ["TIMELINE", "ROOT_CAUSE", "IMPROVEMENT"],
     "IDEA_BRAINSTORM": ["DEFINE", "DIVERGE", "CONVERGE", "CONCEPT"],
     "VALUE_DISCOVERY": ["ELEVATOR", "PERSONA", "JOURNEY", "BLUEPRINT"],
+    "USER_STORY_BREAKDOWN": ["SCOPE", "STORY_MAP", "STORIES", "HANDOFF"],
 }
 
 REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
@@ -333,6 +334,60 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
         "owner",
         "状态",
     ],
+    ("USER_STORY_BREAKDOWN", "SCOPE"): [
+        "# 用户故事拆解文档",
+        "## 1. 拆分范围",
+        "## 2. 需求追溯索引",
+        "## 3. 不拆范围",
+        "## 4. 阻塞问题",
+        "## 5. 阶段门禁",
+        "需求 ID",
+        "优先级",
+        "状态",
+    ],
+    ("USER_STORY_BREAKDOWN", "STORY_MAP"): [
+        "# 用户故事拆解文档",
+        "## 1. 用户活动主干",
+        "## 2. 用户任务流",
+        "## 3. 用户故事地图",
+        "## 4. MVP Slice",
+        "## 5. Release Slice",
+        "## 6. 阶段门禁",
+        "活动 ID",
+        "任务 ID",
+        "Story ID",
+        "MVP",
+    ],
+    ("USER_STORY_BREAKDOWN", "STORIES"): [
+        "# 用户故事拆解文档",
+        "## 1. 故事拆分原则",
+        "## 2. 用户故事卡片",
+        "## 3. Ready Stories",
+        "## 4. Not Ready Stories",
+        "## 5. 开放问题",
+        "## 6. 阶段门禁",
+        "Story ID",
+        "作为",
+        "我想要",
+        "以便",
+        "验收标准",
+        "来源需求",
+        "状态",
+    ],
+    ("USER_STORY_BREAKDOWN", "HANDOFF"): [
+        "# 单故事 Handoff 清单",
+        "## 1. Ready Story 总览",
+        "## 2. 单故事需求包",
+        "## 3. 上游追溯",
+        "## 4. Not Ready 阻塞项",
+        "## 5. AI Coding 输入边界",
+        "## 6. 阶段门禁",
+        "storyId",
+        "requirementId",
+        "acceptanceCriteria",
+        "businessRules",
+        "openQuestions",
+    ],
 }
 
 REQUIRED_ARTIFACT_H1_KEYWORDS: dict[tuple[str, str], list[str]] = {
@@ -352,6 +407,8 @@ REQUIRED_ARTIFACT_MERMAID_DIAGRAMS: dict[tuple[str, str], list[str]] = {
     ("IDEA_BRAINSTORM", "CONVERGE"): ["quadrantChart"],
     ("VALUE_DISCOVERY", "ELEVATOR"): ["flowchart"],
     ("VALUE_DISCOVERY", "JOURNEY"): ["journey"],
+    ("USER_STORY_BREAKDOWN", "SCOPE"): ["flowchart"],
+    ("USER_STORY_BREAKDOWN", "STORY_MAP"): ["flowchart"],
 }
 
 REQUIRED_ARTIFACT_STRUCTURED_VISUALS: dict[tuple[str, str], list[str]] = {

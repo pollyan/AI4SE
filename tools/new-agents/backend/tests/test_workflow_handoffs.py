@@ -187,20 +187,47 @@ def test_export_run_handoffs_returns_configured_lisa_targets(app):
 
     assert result["runId"] == run.id
     assert result["sourceWorkflowId"] == "VALUE_DISCOVERY"
-    assert [
+    lisa_targets = [
         (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
         for handoff in result["handoffs"]
-    ] == [
+        if handoff["targetAgentId"] == "lisa"
+    ]
+    assert lisa_targets == [
         ("TEST_DESIGN", "CLARIFY", "lisa"),
         ("REQ_REVIEW", "REVIEW", "lisa"),
     ]
-    first = result["handoffs"][0]
+    first = next(
+        handoff for handoff in result["handoffs"]
+        if handoff["targetWorkflowId"] == "TEST_DESIGN"
+    )
     assert first["sourceStageId"] == "BLUEPRINT"
     assert first["sourceArtifactVersion"] == 1
     assert "VALUE_DISCOVERY/BLUEPRINT" in first["prompt"]
     assert "TEST_DESIGN/CLARIFY" in first["prompt"]
     assert "AI 测试资产管理平台" in first["prompt"]
     assert "Alex 产出的需求蓝图" not in first["prompt"]
+
+
+def test_export_run_handoffs_includes_alex_user_story_breakdown_target(app):
+    with app.app_context():
+        run = create_agent_run("VALUE_DISCOVERY", "alex", "BLUEPRINT")
+        record_artifact_version(run.id, "BLUEPRINT", BLUEPRINT_MARKDOWN)
+
+        result = export_run_handoffs(run.id)
+
+    targets = [
+        (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
+        for handoff in result["handoffs"]
+    ]
+    assert ("USER_STORY_BREAKDOWN", "SCOPE", "alex") in targets
+    handoff = next(
+        item for item in result["handoffs"]
+        if item["targetWorkflowId"] == "USER_STORY_BREAKDOWN"
+    )
+    assert handoff["id"] == "value-discovery-blueprint-to-user-story-breakdown"
+    assert handoff["label"] == "从需求蓝图继续拆用户故事"
+    assert "VALUE_DISCOVERY/BLUEPRINT" in handoff["prompt"]
+    assert "USER_STORY_BREAKDOWN/SCOPE" in handoff["prompt"]
 
 
 def test_export_run_handoffs_returns_alex_value_discovery_target_for_product_concept(app):
@@ -226,6 +253,32 @@ def test_export_run_handoffs_returns_alex_value_discovery_target_for_product_con
     assert "IDEA_BRAINSTORM/CONCEPT" in handoff["prompt"]
     assert "VALUE_DISCOVERY/ELEVATOR" in handoff["prompt"]
     assert "产品概念简报" in handoff["prompt"]
+
+
+def test_export_target_workflow_handoffs_returns_upstream_requirement_blueprints(app):
+    with app.app_context():
+        source_run = create_agent_run("VALUE_DISCOVERY", "alex", "BLUEPRINT")
+        record_artifact_version(source_run.id, "BLUEPRINT", BLUEPRINT_MARKDOWN)
+        source_run_id = source_run.id
+
+        result = handoff_service.export_target_workflow_handoffs(
+            "USER_STORY_BREAKDOWN",
+            "SCOPE",
+        )
+
+    assert result["targetWorkflowId"] == "USER_STORY_BREAKDOWN"
+    assert result["targetStageId"] == "SCOPE"
+    assert len(result["handoffs"]) == 1
+    handoff = result["handoffs"][0]
+    assert handoff["id"] == "value-discovery-blueprint-to-user-story-breakdown"
+    assert handoff["label"] == "从需求蓝图继续拆用户故事"
+    assert handoff["sourceRunId"] == source_run_id
+    assert handoff["sourceWorkflowId"] == "VALUE_DISCOVERY"
+    assert handoff["sourceStageId"] == "BLUEPRINT"
+    assert handoff["targetWorkflowId"] == "USER_STORY_BREAKDOWN"
+    assert handoff["targetStageId"] == "SCOPE"
+    assert handoff["targetAgentId"] == "alex"
+    assert "需求蓝图" in handoff["sourceArtifactSummary"]
 
 
 def test_export_target_workflow_handoffs_returns_upstream_product_concepts(app):
@@ -356,6 +409,31 @@ def test_start_alex_workflow_handoff_persists_source_trace_in_target_message(app
     assert f"源 artifact digest: {result['sourceArtifactDigest']}" in target_message
     assert "IDEA_BRAINSTORM/CONCEPT" in target_message
     assert "VALUE_DISCOVERY/ELEVATOR" in target_message
+
+
+def test_start_user_story_breakdown_handoff_persists_source_trace_in_target_message(app):
+    with app.app_context():
+        source_run = create_agent_run("VALUE_DISCOVERY", "alex", "BLUEPRINT")
+        record_artifact_version(source_run.id, "BLUEPRINT", BLUEPRINT_MARKDOWN)
+        source_run_id = source_run.id
+
+        result = start_workflow_handoff(
+            source_run.id,
+            "value-discovery-blueprint-to-user-story-breakdown",
+        )
+        target_snapshot = get_run_snapshot(result["targetRunId"])
+
+    assert result["sourceRunId"] == source_run_id
+    assert result["targetWorkflowId"] == "USER_STORY_BREAKDOWN"
+    assert result["targetStageId"] == "SCOPE"
+    assert result["targetAgentId"] == "alex"
+    assert result["sourceArtifactDigest"].startswith("sha256:")
+    target_message = target_snapshot["messages"][0]["content"]
+    assert f"源 run: {source_run_id}" in target_message
+    assert "源 artifact version: 1" in target_message
+    assert f"源 artifact digest: {result['sourceArtifactDigest']}" in target_message
+    assert "VALUE_DISCOVERY/BLUEPRINT" in target_message
+    assert "USER_STORY_BREAKDOWN/SCOPE" in target_message
 
 
 def test_start_workflow_handoff_rejects_unknown_candidate(app):

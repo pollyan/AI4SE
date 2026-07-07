@@ -15,7 +15,7 @@ import {
   fetchWorkflowHandoffs,
   startWorkflowHandoff,
 } from '../services/workflowHandoffService';
-import type { Attachment, Message, MessageErrorDiagnosticKind, WorkflowHandoff } from '../store';
+import type { Attachment, Message, MessageErrorDiagnosticKind, WorkflowHandoff, WorkflowType } from '../store';
 
 const asRenderableAttachments = (attachments: unknown): Attachment[] => {
   if (!Array.isArray(attachments)) return [];
@@ -107,6 +107,26 @@ const getDiagnosticTitle = (kind: MessageErrorDiagnosticKind): string => (
 );
 
 const STRUCTURED_FAILURE_SUPPLEMENT_PROMPT = '请补充更明确的需求或阶段确认信息，我会基于补充内容重新生成当前阶段产出物。';
+
+const TARGET_STARTUP_HANDOFF_COPY: Partial<Record<WorkflowType, {
+  title: string;
+  description: string;
+  loading: string;
+  empty: string;
+}>> = {
+  VALUE_DISCOVERY: {
+    title: '选择需求蓝图起点',
+    description: '可以从空白话题开始，也可以继承已有产品概念简报继续梳理。',
+    loading: '正在查找可继承的产品概念简报...',
+    empty: '暂无可继承的产品概念简报，可以直接开启新话题',
+  },
+  USER_STORY_BREAKDOWN: {
+    title: '选择用户故事拆解起点',
+    description: '可以从空白话题开始，也可以继承已有需求蓝图继续拆分。',
+    loading: '正在查找可继承的需求蓝图...',
+    empty: '暂无可继承的需求蓝图，可以直接开启新话题',
+  },
+};
 
 type ProviderCheckState = {
   status: 'idle' | 'checking' | 'success' | 'error';
@@ -272,9 +292,10 @@ export const ChatPane: React.FC = () => {
     setTargetHandoffPanelDismissed(false);
   }, [workflow, currentStageId]);
 
-  const shouldOfferTargetStartupHandoff = (
-    workflow === 'VALUE_DISCOVERY'
-    && currentStageId === 'ELEVATOR'
+  const targetStartupHandoffCopy = TARGET_STARTUP_HANDOFF_COPY[workflow];
+  const shouldOfferTargetStartupHandoff = Boolean(
+    targetStartupHandoffCopy
+    && currentStageId === WORKFLOWS[workflow].stages[0]?.id
     && !currentRunId
     && chatHistory.length === 0
   );
@@ -454,9 +475,9 @@ export const ChatPane: React.FC = () => {
                 <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-cyan-100">选择需求蓝图起点</p>
+                      <p className="text-sm font-semibold text-cyan-100">{targetStartupHandoffCopy?.title}</p>
                       <p className="mt-1 text-xs leading-relaxed text-cyan-100/70">
-                        可以从空白话题开始，也可以继承已有产品概念简报继续梳理。
+                        {targetStartupHandoffCopy?.description}
                       </p>
                     </div>
                     <button
@@ -468,7 +489,7 @@ export const ChatPane: React.FC = () => {
                   </div>
 
                   {targetHandoffStatus === 'loading' && (
-                    <p className="mt-3 text-xs text-cyan-100/70">正在查找可继承的产品概念简报...</p>
+                    <p className="mt-3 text-xs text-cyan-100/70">{targetStartupHandoffCopy?.loading}</p>
                   )}
 
                   {targetHandoffStatus === 'error' && (
@@ -476,7 +497,7 @@ export const ChatPane: React.FC = () => {
                   )}
 
                   {targetHandoffStatus === 'empty' && (
-                    <p className="mt-3 text-xs text-cyan-100/70">暂无可继承的产品概念简报，可以直接开启新话题</p>
+                    <p className="mt-3 text-xs text-cyan-100/70">{targetStartupHandoffCopy?.empty}</p>
                   )}
 
                   {targetWorkflowHandoffs.length > 0 && (
