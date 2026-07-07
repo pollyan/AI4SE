@@ -468,6 +468,136 @@ chat 字段必须像一次自然的工作对话；简单同步可以使用自然
 """
 
 
+USER_STORY_SCOPE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明本轮已经校准哪些需求范围、哪些需求暂不拆、哪些阻塞问题需要补充。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "用户故事拆解文档", "workflow": "USER_STORY_BREAKDOWN", "stage": "SCOPE", "status": "..."},
+    "in_scope_requirements": [{"requirement_id": "REQ-001", "name": "...", "user_value": "...", "priority": "P0/P1/P2", "split_decision": "进入拆分", "status": "已确认/待确认"}],
+    "traceability_index": [{"requirement_id": "REQ-001", "source": "需求蓝图章节或用户输入", "target_user": "...", "scenario": "...", "acceptance_hint": "...", "status": "已确认/待确认"}],
+    "out_of_scope_items": [{"requirement_id": "REQ-101", "item": "...", "reason": "...", "reentry_condition": "...", "status": "已记录/待确认"}],
+    "blocking_questions": [{"question_id": "Q-001", "requirement_id": "REQ-101", "question": "...", "impact": "...", "owner": "产品/业务/用户", "status": "开放/已确认"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "STORY_MAP"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；in_scope_requirements.requirement_id 必须唯一；traceability_index 只能引用进入拆分的 requirement_id；blocking_questions 只能引用已知 requirement_id。不要输出完整 Markdown、Mermaid 代码块或表格，后端会负责确定性渲染拆分范围和需求追溯图。
+chat 字段必须像一次自然的工作对话；不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
+USER_STORY_MAP_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明本轮已经形成哪些用户活动、任务、故事地图和 MVP / Release Slice。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "用户故事拆解文档", "workflow": "USER_STORY_BREAKDOWN", "stage": "STORY_MAP", "status": "..."},
+    "requirements": [{"requirement_id": "REQ-001", "name": "...", "priority": "P0/P1/P2", "status": "已确认/待确认"}],
+    "activities": [{"activity_id": "ACT-001", "activity": "...", "user_goal": "...", "requirement_ids": ["REQ-001"], "priority": "P0"}],
+    "tasks": [{"task_id": "TASK-001", "activity_id": "ACT-001", "task": "...", "success_result": "...", "requirement_ids": ["REQ-001"], "status": "已确认/待确认"}],
+    "story_map_items": [{"story_id": "US-001", "activity_id": "ACT-001", "task_id": "TASK-001", "title": "...", "requirement_ids": ["REQ-001"], "slice_id": "MVP-001", "status": "候选/待确认"}],
+    "mvp_slices": [{"slice_id": "MVP-001", "story_ids": ["US-001"], "business_outcome": "...", "excluded_items": ["..."], "acceptance": "..."}],
+    "release_slices": [{"slice_id": "REL-001", "story_ids": ["US-101"], "release_goal": "...", "dependencies": ["..."], "status": "待排期/待确认"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "STORIES"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；activity_id、task_id、story_id、slice_id 必须唯一；所有 activity/task/story/slice 引用必须存在；故事必须保持垂直业务切片，不能拆成技术任务。不要输出完整 Markdown、Mermaid 代码块或表格，后端会负责确定性渲染用户故事地图。
+chat 字段必须像一次自然的工作对话；不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
+USER_STORIES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明本轮已经生成哪些 Ready / Not Ready 用户故事、哪些故事还缺什么信息。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "用户故事拆解文档", "workflow": "USER_STORY_BREAKDOWN", "stage": "STORIES", "status": "..."},
+    "requirements": [{"requirement_id": "REQ-001", "name": "...", "priority": "P0/P1/P2", "status": "已确认/待确认"}],
+    "split_principles": [{"principle": "垂直业务切片", "applied": "...", "anti_pattern": "不按工程层拆分"}],
+    "story_cards": [{"story_id": "US-001", "title": "...", "user_role": "...", "user_goal": "...", "benefit": "...", "requirement_ids": ["REQ-001"], "activity_id": "ACT-001", "task_id": "TASK-001", "business_rules": ["..."], "acceptance_criteria": ["..."], "non_functional_notes": ["..."], "out_of_scope": ["..."], "dependencies": ["..."], "open_questions": ["..."], "status": "ready"}],
+    "ready_story_summaries": [{"story_id": "US-001", "ready_reason": "...", "handoff_summary": "...", "acceptance_criteria_count": 3, "concerns": "..."}],
+    "not_ready_stories": [{"story_id": "US-101", "requirement_ids": ["REQ-101"], "blocker_reason": "...", "questions": ["..."], "suggested_next_step": "...", "status": "not_ready"}],
+    "open_questions": [{"question_id": "Q-001", "story_id": "US-101", "question": "...", "decision_impact": "...", "owner": "产品/业务/用户", "status": "开放/已确认"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "HANDOFF"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；story_cards.story_id 必须唯一；story_cards.requirement_ids 只能引用 requirements 中已存在的 requirement_id；status 只能是 ready 或 not_ready。ready story 必须包含用户故事正文、acceptance_criteria、business_rules 或明确 N/A、不做范围、依赖和 ready 状态；not_ready story 必须包含 blocker_reason、questions 和 not_ready 状态。不要输出技术任务、文件路径、实现计划、测试命令、完整 Markdown 或表格，后端会负责确定性渲染故事卡片。
+chat 字段必须像一次自然的工作对话；不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
+USER_STORY_HANDOFF_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明哪些 Ready story 可以形成需求包、哪些 Not Ready story 仍被阻塞。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "单故事 Handoff 清单", "workflow": "USER_STORY_BREAKDOWN", "stage": "HANDOFF", "status": "..."},
+    "requirements": [{"requirement_id": "REQ-001", "name": "...", "priority": "P0/P1/P2", "status": "已确认/待确认"}],
+    "ready_story_overview": [{"story_id": "US-001", "title": "...", "requirement_ids": ["REQ-001"], "user_value": "...", "ready_reason": "...", "status": "ready"}],
+    "single_story_packets": [{"story_id": "US-001", "requirement_ids": ["REQ-001"], "user_story": "作为...我想要...以便...", "acceptance_criteria": ["..."], "business_rules": ["..."], "non_functional_notes": ["..."], "out_of_scope": ["..."], "dependencies": ["..."], "open_questions": ["..."]}],
+    "upstream_traceability": [{"story_id": "US-001", "source_workflow": "VALUE_DISCOVERY", "source_stage": "BLUEPRINT", "source_requirements": ["REQ-001"], "source_slice": "MVP-001", "trace_note": "..."}],
+    "not_ready_blockers": [{"story_id": "US-101", "requirement_ids": ["REQ-101"], "blocker_reason": "...", "questions": ["..."], "suggested_next_step": "..."}],
+    "ai_coding_input_boundary": {"allowed": ["用户故事正文", "来源需求", "业务规则", "验收标准", "不做范围", "依赖", "开放问题"], "forbidden": ["工程实施内容", "代码层设计", "开发任务拆分", "执行类指令"]},
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null,
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；single_story_packets 只能引用 ready_story_overview 中的 story_id；所有 requirement_ids 必须存在；handoff 清单只能包含需求信息和上游追溯，不得包含实现计划、文件路径、代码任务或测试命令。不要输出完整 Markdown 或表格，后端会负责确定性渲染单故事 Handoff 清单。
+chat 字段必须像一次自然的工作对话；不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
 INCIDENT_TIMELINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
 
 【结构化输出格式要求】
@@ -721,6 +851,10 @@ def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) ->
         ("VALUE_DISCOVERY", "PERSONA"),
         ("VALUE_DISCOVERY", "JOURNEY"),
         ("VALUE_DISCOVERY", "BLUEPRINT"),
+        ("USER_STORY_BREAKDOWN", "SCOPE"),
+        ("USER_STORY_BREAKDOWN", "STORY_MAP"),
+        ("USER_STORY_BREAKDOWN", "STORIES"),
+        ("USER_STORY_BREAKDOWN", "HANDOFF"),
         ("INCIDENT_REVIEW", "TIMELINE"),
         ("INCIDENT_REVIEW", "ROOT_CAUSE"),
         ("INCIDENT_REVIEW", "IMPROVEMENT"),
@@ -787,6 +921,14 @@ def build_structured_output_instruction(
         artifact_data_instruction = VALUE_JOURNEY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "BLUEPRINT"):
         artifact_data_instruction = VALUE_BLUEPRINT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "SCOPE"):
+        artifact_data_instruction = USER_STORY_SCOPE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "STORY_MAP"):
+        artifact_data_instruction = USER_STORY_MAP_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "STORIES"):
+        artifact_data_instruction = USER_STORIES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
+    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "HANDOFF"):
+        artifact_data_instruction = USER_STORY_HANDOFF_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
         artifact_data_instruction = INCIDENT_TIMELINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
     elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "ROOT_CAUSE"):

@@ -35,6 +35,10 @@ from test_artifact_data_renderers import (
     VALID_REQ_REVIEW_ARTIFACT_DATA,
     VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA,
     VALID_STRATEGY_ARTIFACT_DATA,
+    VALID_USER_STORY_HANDOFF_ARTIFACT_DATA,
+    VALID_USER_STORY_MAP_ARTIFACT_DATA,
+    VALID_USER_STORY_SCOPE_ARTIFACT_DATA,
+    VALID_USER_STORIES_ARTIFACT_DATA,
     VALID_VALUE_BLUEPRINT_ARTIFACT_DATA,
     VALID_VALUE_ELEVATOR_ARTIFACT_DATA,
     VALID_VALUE_JOURNEY_ARTIFACT_DATA,
@@ -60,6 +64,10 @@ ARTIFACT_DATA_STREAMING_STAGES = [
     ("VALUE_DISCOVERY", "PERSONA"),
     ("VALUE_DISCOVERY", "JOURNEY"),
     ("VALUE_DISCOVERY", "BLUEPRINT"),
+    ("USER_STORY_BREAKDOWN", "SCOPE"),
+    ("USER_STORY_BREAKDOWN", "STORY_MAP"),
+    ("USER_STORY_BREAKDOWN", "STORIES"),
+    ("USER_STORY_BREAKDOWN", "HANDOFF"),
 ]
 
 
@@ -3464,6 +3472,199 @@ def test_runtime_raw_json_stream_turn_renders_idea_concept_artifact_data_before_
     assert "artifact_update.markdown" not in build_structured_output_instruction(
         "IDEA_BRAINSTORM",
         "CONCEPT",
+    )
+
+
+def test_runtime_raw_json_stream_turn_renders_user_story_breakdown_artifact_data_before_final_output(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "我已完成用户故事卡片，请确认进入故事交接准备。",
+            "artifact_data": VALID_USER_STORIES_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "HANDOFF",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    chunks = _raw_json_chunks_after_artifact_data_members(
+        final_json,
+        ["split_principles", "story_cards"],
+    )
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield from chunks
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是 Alex 用户故事拆解顾问。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "请把需求蓝图拆成用户故事卡片",
+            workflow_id="USER_STORY_BREAKDOWN",
+            current_stage_id="STORIES",
+        )
+    )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+    partial_patches = [
+        output.artifact_patch
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_patch is not None
+    ]
+
+    assert len(partial_markdowns) >= 2
+    assert partial_markdowns[0].startswith("# 用户故事拆解文档")
+    assert "## 1. 故事拆分原则" in partial_markdowns[0]
+    assert "## 2. 用户故事卡片" not in partial_markdowns[0]
+    assert "## 2. 用户故事卡片" in partial_markdowns[1]
+    assert "## 3. Ready Stories" not in partial_markdowns[1]
+    assert partial_patches
+    assert partial_patches[0].operation == "add_after"
+    assert partial_patches[0].section_anchor == "h2:2. 用户故事卡片:1"
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert outputs[-1].stage_action is not None
+    assert outputs[-1].stage_action.target_stage_id == "HANDOFF"
+    assert outputs[-1].artifact_update.markdown is not None
+    assert "## 3. Ready Stories" in outputs[-1].artifact_update.markdown
+    assert "## 4. Not Ready Stories" in outputs[-1].artifact_update.markdown
+    assert calls[0]["response_format"] == {"type": "json_object"}
+    assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert "artifact_data" in calls[0]["messages"][0]["content"]
+    assert "story_cards" in calls[0]["messages"][0]["content"]
+    assert "artifact_update.markdown" not in build_structured_output_instruction(
+        "USER_STORY_BREAKDOWN",
+        "STORIES",
+    )
+
+
+@pytest.mark.parametrize(
+    (
+        "stage_id",
+        "artifact_data",
+        "member_names",
+        "expected_markers",
+        "stage_action",
+    ),
+    [
+        (
+            "SCOPE",
+            VALID_USER_STORY_SCOPE_ARTIFACT_DATA,
+            ["in_scope_requirements", "traceability_index"],
+            ["# 用户故事拆解文档", "## 1. 拆分范围", "flowchart TD"],
+            {"type": "request_next_stage", "target_stage_id": "STORY_MAP"},
+        ),
+        (
+            "STORY_MAP",
+            VALID_USER_STORY_MAP_ARTIFACT_DATA,
+            ["activities", "tasks", "story_map_items"],
+            ["## 3. 用户故事地图", "## 4. MVP Slice", "flowchart TD"],
+            {"type": "request_next_stage", "target_stage_id": "STORIES"},
+        ),
+        (
+            "STORIES",
+            VALID_USER_STORIES_ARTIFACT_DATA,
+            ["split_principles", "story_cards"],
+            ["## 2. 用户故事卡片", "## 3. Ready Stories", "US-001"],
+            {"type": "request_next_stage", "target_stage_id": "HANDOFF"},
+        ),
+        (
+            "HANDOFF",
+            VALID_USER_STORY_HANDOFF_ARTIFACT_DATA,
+            ["ready_story_overview", "single_story_packets"],
+            ["# 单故事 Handoff 清单", "## 2. 单故事需求包", "acceptanceCriteria"],
+            None,
+        ),
+    ],
+)
+def test_runtime_raw_json_stream_turn_renders_all_user_story_breakdown_stages_from_artifact_data(
+    monkeypatch,
+    stage_id,
+    artifact_data,
+    member_names,
+    expected_markers,
+    stage_action,
+):
+    final_json = json.dumps(
+        {
+            "chat": "我已完成用户故事拆解产物，请查看右侧文档。",
+            "artifact_data": artifact_data,
+            "stage_action": stage_action,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    chunks = _raw_json_chunks_after_artifact_data_members(final_json, member_names)
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield from chunks
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是 Alex 用户故事拆解顾问。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "请把需求蓝图拆成用户故事",
+            workflow_id="USER_STORY_BREAKDOWN",
+            current_stage_id=stage_id,
+        )
+    )
+
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert outputs[-1].artifact_update.markdown is not None
+    for marker in expected_markers:
+        assert marker in outputs[-1].artifact_update.markdown
+    if stage_action is None:
+        assert outputs[-1].stage_action is None
+    else:
+        assert outputs[-1].stage_action is not None
+        assert outputs[-1].stage_action.target_stage_id == stage_action[
+            "target_stage_id"
+        ]
+    assert calls[0]["response_format"] == {"type": "json_object"}
+    assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert "artifact_data" in calls[0]["messages"][0]["content"]
+    for member_name in member_names:
+        assert member_name in calls[0]["messages"][0]["content"]
+    assert "artifact_update.markdown" not in build_structured_output_instruction(
+        "USER_STORY_BREAKDOWN",
+        stage_id,
     )
 
 

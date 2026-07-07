@@ -117,6 +117,43 @@ def test_artifact_versions_increment_per_run_stage(app):
         assert AgentArtifactVersion.query.filter_by(artifact_id=artifact.id).count() == 2
 
 
+def test_record_artifact_version_persists_artifact_data_in_current_snapshot(app):
+    with app.app_context():
+        run = create_agent_run("USER_STORY_BREAKDOWN", "alex", "STORIES")
+        artifact_data = {
+            "document_info": {
+                "artifact_name": "用户故事卡片",
+                "workflow": "USER_STORY_BREAKDOWN",
+                "stage": "STORIES",
+            },
+            "story_cards": [
+                {
+                    "storyId": "US-001",
+                    "title": "短信验证码登录",
+                }
+            ],
+        }
+
+        version = record_artifact_version(
+            run.id,
+            "STORIES",
+            "# 用户故事卡片\n\nUS-001",
+            artifact_data=artifact_data,
+        )
+
+        assert version.artifact_data == artifact_data
+        snapshot = get_run_snapshot(run.id)
+
+    assert snapshot["artifacts"] == [
+        {
+            "stageId": "STORIES",
+            "content": "# 用户故事卡片\n\nUS-001",
+            "versionNumber": 1,
+            "artifactData": artifact_data,
+        }
+    ]
+
+
 def test_run_snapshot_returns_messages_and_current_artifacts(app):
     with app.app_context():
         run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY", model="gpt-test")

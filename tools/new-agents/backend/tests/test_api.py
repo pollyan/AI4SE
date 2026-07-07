@@ -116,6 +116,42 @@ def test_init_db_upgrades_existing_artifact_section_lock_table():
         os.unlink(db_path)
 
 
+def test_init_db_upgrades_existing_artifact_version_table_with_artifact_data():
+    db_fd, db_path = tempfile.mkstemp()
+    app = create_app({
+        'TESTING': True,
+        'SQLALCHEMY_DATABASE_URI': f'sqlite:///{db_path}',
+        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+    })
+
+    try:
+        with app.app_context():
+            db.session.execute(text("""
+                CREATE TABLE agent_artifact_versions (
+                    id INTEGER PRIMARY KEY,
+                    artifact_id INTEGER NOT NULL,
+                    version_number INTEGER NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at DATETIME
+                )
+            """))
+            db.session.commit()
+
+            init_db(app)
+
+            columns = {
+                row[1]
+                for row in db.session.execute(
+                    text("PRAGMA table_info(agent_artifact_versions)")
+                )
+            }
+
+        assert "artifact_data" in columns
+    finally:
+        os.close(db_fd)
+        os.unlink(db_path)
+
+
 def test_health_endpoint(client):
     response = client.get('/api/health')
     assert response.status_code == 200

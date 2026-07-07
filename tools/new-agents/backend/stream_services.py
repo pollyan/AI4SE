@@ -95,6 +95,8 @@ class StreamPersistence(Protocol):
         run_id: str,
         stage_id: str,
         content: str,
+        *,
+        artifact_data: dict | None = None,
     ) -> None:
         ...
 
@@ -426,6 +428,7 @@ def stream_agent_run_events(
                         run_id,
                         agent_request.stage_id,
                         artifact_update.markdown,
+                        artifact_data=final_output.artifact_data,
                     )
                     output_chars = len(final_output.chat) + len(
                         artifact_update.markdown

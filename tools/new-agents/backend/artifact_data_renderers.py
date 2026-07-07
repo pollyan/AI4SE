@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -2270,6 +2270,540 @@ class ValueDiscoveryBlueprintArtifactData(StrictArtifactDataModel):
         return self
 
 
+class UserStoryRequirementRef(StrictArtifactDataModel):
+    requirement_id: str
+    name: str
+    priority: str
+    status: str
+
+
+class UserStoryScopeRequirement(StrictArtifactDataModel):
+    requirement_id: str
+    name: str
+    user_value: str
+    priority: str
+    split_decision: str
+    status: str
+
+
+class UserStoryScopeTrace(StrictArtifactDataModel):
+    requirement_id: str
+    source: str
+    target_user: str
+    scenario: str
+    acceptance_hint: str
+    status: str
+
+
+class UserStoryOutOfScopeItem(StrictArtifactDataModel):
+    requirement_id: str
+    item: str
+    reason: str
+    reentry_condition: str
+    status: str
+
+
+class UserStoryBlockingQuestion(StrictArtifactDataModel):
+    question_id: str
+    requirement_id: str
+    question: str
+    impact: str
+    owner: str
+    status: str
+
+
+class UserStoryScopeArtifactData(StrictArtifactDataModel):
+    document_info: DocumentInfo
+    in_scope_requirements: list[UserStoryScopeRequirement] = Field(min_length=1)
+    traceability_index: list[UserStoryScopeTrace] = Field(min_length=1)
+    out_of_scope_items: list[UserStoryOutOfScopeItem] = Field(min_length=1)
+    blocking_questions: list[UserStoryBlockingQuestion] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_scope_consistency(self) -> "UserStoryScopeArtifactData":
+        in_scope_ids = _unique_ids(
+            [item.requirement_id for item in self.in_scope_requirements],
+            "in_scope_requirements",
+            "requirement_id",
+        )
+        out_scope_ids = _unique_ids(
+            [item.requirement_id for item in self.out_of_scope_items],
+            "out_of_scope_items",
+            "requirement_id",
+        )
+        trace_ids = _unique_ids(
+            [item.requirement_id for item in self.traceability_index],
+            "traceability_index",
+            "requirement_id",
+        )
+        unknown_trace_ids = sorted(trace_ids - in_scope_ids)
+        if unknown_trace_ids:
+            raise ValueError(
+                "traceability_index references unknown requirement ids: "
+                + ", ".join(unknown_trace_ids)
+            )
+        known_requirement_ids = in_scope_ids | out_scope_ids
+        unknown_question_ids = sorted(
+            {
+                item.requirement_id
+                for item in self.blocking_questions
+                if item.requirement_id not in known_requirement_ids
+            }
+        )
+        if unknown_question_ids:
+            raise ValueError(
+                "blocking_questions references unknown requirement ids: "
+                + ", ".join(unknown_question_ids)
+            )
+        _unique_ids(
+            [item.question_id for item in self.blocking_questions],
+            "blocking_questions",
+            "question_id",
+        )
+        return self
+
+
+class UserStoryActivity(StrictArtifactDataModel):
+    activity_id: str
+    activity: str
+    user_goal: str
+    requirement_ids: list[str] = Field(min_length=1)
+    priority: str
+
+
+class UserStoryTask(StrictArtifactDataModel):
+    task_id: str
+    activity_id: str
+    task: str
+    success_result: str
+    requirement_ids: list[str] = Field(min_length=1)
+    status: str
+
+
+class UserStoryMapItem(StrictArtifactDataModel):
+    story_id: str
+    activity_id: str
+    task_id: str
+    title: str
+    requirement_ids: list[str] = Field(min_length=1)
+    slice_id: str
+    status: str
+
+
+class UserStoryMvpSlice(StrictArtifactDataModel):
+    slice_id: str
+    story_ids: list[str] = Field(min_length=1)
+    business_outcome: str
+    excluded_items: list[str] = Field(min_length=1)
+    acceptance: str
+
+
+class UserStoryReleaseSlice(StrictArtifactDataModel):
+    slice_id: str
+    story_ids: list[str] = Field(min_length=1)
+    release_goal: str
+    dependencies: list[str] = Field(min_length=1)
+    status: str
+
+
+class UserStoryMapArtifactData(StrictArtifactDataModel):
+    document_info: DocumentInfo
+    requirements: list[UserStoryRequirementRef] = Field(min_length=1)
+    activities: list[UserStoryActivity] = Field(min_length=1)
+    tasks: list[UserStoryTask] = Field(min_length=1)
+    story_map_items: list[UserStoryMapItem] = Field(min_length=1)
+    mvp_slices: list[UserStoryMvpSlice] = Field(min_length=1)
+    release_slices: list[UserStoryReleaseSlice] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_story_map_consistency(self) -> "UserStoryMapArtifactData":
+        requirement_ids = _unique_ids(
+            [item.requirement_id for item in self.requirements],
+            "requirements",
+            "requirement_id",
+        )
+        activity_ids = _unique_ids(
+            [item.activity_id for item in self.activities],
+            "activities",
+            "activity_id",
+        )
+        task_ids = _unique_ids(
+            [item.task_id for item in self.tasks],
+            "tasks",
+            "task_id",
+        )
+        story_ids = _unique_ids(
+            [item.story_id for item in self.story_map_items],
+            "story_map_items",
+            "story_id",
+        )
+        slice_ids = _unique_ids(
+            [item.slice_id for item in self.mvp_slices + self.release_slices],
+            "slices",
+            "slice_id",
+        )
+        _validate_known_ids(
+            {
+                requirement_id
+                for item in self.activities
+                for requirement_id in item.requirement_ids
+            },
+            requirement_ids,
+            "activities references unknown requirement ids",
+        )
+        _validate_known_ids(
+            {item.activity_id for item in self.tasks},
+            activity_ids,
+            "tasks references unknown activity ids",
+        )
+        _validate_known_ids(
+            {
+                requirement_id
+                for item in self.tasks
+                for requirement_id in item.requirement_ids
+            },
+            requirement_ids,
+            "tasks references unknown requirement ids",
+        )
+        _validate_known_ids(
+            {item.activity_id for item in self.story_map_items},
+            activity_ids,
+            "story_map_items references unknown activity ids",
+        )
+        _validate_known_ids(
+            {item.task_id for item in self.story_map_items},
+            task_ids,
+            "story_map_items references unknown task ids",
+        )
+        _validate_known_ids(
+            {
+                requirement_id
+                for item in self.story_map_items
+                for requirement_id in item.requirement_ids
+            },
+            requirement_ids,
+            "story_map_items references unknown requirement ids",
+        )
+        _validate_known_ids(
+            {item.slice_id for item in self.story_map_items},
+            slice_ids,
+            "story_map_items references unknown slice ids",
+        )
+        _validate_known_ids(
+            {
+                story_id
+                for item in self.mvp_slices + self.release_slices
+                for story_id in item.story_ids
+            },
+            story_ids,
+            "slices reference unknown story ids",
+        )
+        return self
+
+
+class UserStorySplitPrinciple(StrictArtifactDataModel):
+    principle: str
+    applied: str
+    anti_pattern: str
+
+
+class UserStoryCard(StrictArtifactDataModel):
+    story_id: str
+    title: str
+    user_role: str
+    user_goal: str
+    benefit: str
+    requirement_ids: list[str] = Field(min_length=1)
+    activity_id: str
+    task_id: str
+    business_rules: list[str] = Field(default_factory=list)
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    non_functional_notes: list[str] = Field(default_factory=list)
+    out_of_scope: list[str] = Field(default_factory=list)
+    dependencies: list[str] = Field(default_factory=list)
+    open_questions: list[str] = Field(default_factory=list)
+    status: Literal["ready", "not_ready"]
+    blocker_reason: str | None = None
+
+
+class UserStoryReadySummary(StrictArtifactDataModel):
+    story_id: str
+    ready_reason: str
+    handoff_summary: str
+    acceptance_criteria_count: int = Field(ge=1)
+    concerns: str
+
+
+class UserStoryNotReadySummary(StrictArtifactDataModel):
+    story_id: str
+    requirement_ids: list[str] = Field(min_length=1)
+    blocker_reason: str
+    questions: list[str] = Field(min_length=1)
+    suggested_next_step: str
+    status: Literal["not_ready"]
+
+
+class UserStoryOpenQuestion(StrictArtifactDataModel):
+    question_id: str
+    story_id: str
+    question: str
+    decision_impact: str
+    owner: str
+    status: str
+
+
+class UserStoriesArtifactData(StrictArtifactDataModel):
+    document_info: DocumentInfo
+    requirements: list[UserStoryRequirementRef] = Field(min_length=1)
+    split_principles: list[UserStorySplitPrinciple] = Field(min_length=1)
+    story_cards: list[UserStoryCard] = Field(min_length=1)
+    ready_story_summaries: list[UserStoryReadySummary] = Field(min_length=1)
+    not_ready_stories: list[UserStoryNotReadySummary] = Field(min_length=1)
+    open_questions: list[UserStoryOpenQuestion] = Field(min_length=1)
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_story_cards_consistency(self) -> "UserStoriesArtifactData":
+        requirement_ids = _unique_ids(
+            [item.requirement_id for item in self.requirements],
+            "requirements",
+            "requirement_id",
+        )
+        story_ids = _unique_ids(
+            [item.story_id for item in self.story_cards],
+            "story_cards",
+            "story_id",
+        )
+        story_by_id = {item.story_id: item for item in self.story_cards}
+        _validate_known_ids(
+            {
+                requirement_id
+                for item in self.story_cards
+                for requirement_id in item.requirement_ids
+            },
+            requirement_ids,
+            "story_cards references unknown requirement ids",
+        )
+
+        for story in self.story_cards:
+            if story.status == "ready":
+                if not story.acceptance_criteria:
+                    raise ValueError(
+                        f"ready story {story.story_id} must include acceptance criteria"
+                    )
+                if not story.business_rules:
+                    raise ValueError(
+                        f"ready story {story.story_id} must include business rules or N/A"
+                    )
+                if not story.out_of_scope:
+                    raise ValueError(
+                        f"ready story {story.story_id} must include out of scope"
+                    )
+                if not story.dependencies:
+                    raise ValueError(
+                        f"ready story {story.story_id} must include dependencies"
+                    )
+            else:
+                if not story.blocker_reason:
+                    raise ValueError(
+                        f"not_ready story {story.story_id} must include blocker reason"
+                    )
+                if not story.open_questions:
+                    raise ValueError(
+                        f"not_ready story {story.story_id} must include questions"
+                    )
+
+        ready_summary_ids = _unique_ids(
+            [item.story_id for item in self.ready_story_summaries],
+            "ready_story_summaries",
+            "story_id",
+        )
+        _validate_known_ids(
+            ready_summary_ids,
+            story_ids,
+            "ready_story_summaries references unknown story ids",
+        )
+        not_ready_summary_ids = _unique_ids(
+            [item.story_id for item in self.not_ready_stories],
+            "not_ready_stories",
+            "story_id",
+        )
+        _validate_known_ids(
+            not_ready_summary_ids,
+            story_ids,
+            "not_ready_stories references unknown story ids",
+        )
+        for story_id in ready_summary_ids:
+            if story_by_id[story_id].status != "ready":
+                raise ValueError(
+                    "ready_story_summaries can only reference ready stories: "
+                    + story_id
+                )
+        for item in self.ready_story_summaries:
+            if item.acceptance_criteria_count != len(
+                story_by_id[item.story_id].acceptance_criteria
+            ):
+                raise ValueError(
+                    "ready_story_summaries acceptance_criteria_count mismatch: "
+                    + item.story_id
+                )
+        for story_id in not_ready_summary_ids:
+            if story_by_id[story_id].status != "not_ready":
+                raise ValueError(
+                    "not_ready_stories can only reference not_ready stories: "
+                    + story_id
+                )
+        _validate_known_ids(
+            {item.story_id for item in self.open_questions},
+            story_ids,
+            "open_questions references unknown story ids",
+        )
+        _unique_ids(
+            [item.question_id for item in self.open_questions],
+            "open_questions",
+            "question_id",
+        )
+        return self
+
+
+class UserStoryReadyOverview(StrictArtifactDataModel):
+    story_id: str
+    title: str
+    requirement_ids: list[str] = Field(min_length=1)
+    user_value: str
+    ready_reason: str
+    status: Literal["ready"]
+
+
+class UserStoryPacket(StrictArtifactDataModel):
+    story_id: str
+    requirement_ids: list[str] = Field(min_length=1)
+    user_story: str
+    acceptance_criteria: list[str] = Field(min_length=1)
+    business_rules: list[str] = Field(min_length=1)
+    non_functional_notes: list[str] = Field(min_length=1)
+    out_of_scope: list[str] = Field(min_length=1)
+    dependencies: list[str] = Field(min_length=1)
+    open_questions: list[str] = Field(min_length=1)
+
+
+class UserStoryUpstreamTrace(StrictArtifactDataModel):
+    story_id: str
+    source_workflow: str
+    source_stage: str
+    source_requirements: list[str] = Field(min_length=1)
+    source_slice: str
+    trace_note: str
+
+
+class UserStoryNotReadyBlocker(StrictArtifactDataModel):
+    story_id: str
+    requirement_ids: list[str] = Field(min_length=1)
+    blocker_reason: str
+    questions: list[str] = Field(min_length=1)
+    suggested_next_step: str
+
+
+class AiCodingInputBoundary(StrictArtifactDataModel):
+    allowed: list[str] = Field(min_length=1)
+    forbidden: list[str] = Field(min_length=1)
+
+
+class UserStoryHandoffArtifactData(StrictArtifactDataModel):
+    document_info: DocumentInfo
+    requirements: list[UserStoryRequirementRef] = Field(min_length=1)
+    ready_story_overview: list[UserStoryReadyOverview] = Field(min_length=1)
+    single_story_packets: list[UserStoryPacket] = Field(min_length=1)
+    upstream_traceability: list[UserStoryUpstreamTrace] = Field(min_length=1)
+    not_ready_blockers: list[UserStoryNotReadyBlocker] = Field(min_length=1)
+    ai_coding_input_boundary: AiCodingInputBoundary
+    stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_handoff_consistency(self) -> "UserStoryHandoffArtifactData":
+        requirement_ids = _unique_ids(
+            [item.requirement_id for item in self.requirements],
+            "requirements",
+            "requirement_id",
+        )
+        ready_story_ids = _unique_ids(
+            [item.story_id for item in self.ready_story_overview],
+            "ready_story_overview",
+            "story_id",
+        )
+        packet_story_ids = _unique_ids(
+            [item.story_id for item in self.single_story_packets],
+            "single_story_packets",
+            "story_id",
+        )
+        _validate_known_ids(
+            packet_story_ids,
+            ready_story_ids,
+            "single_story_packets references non-ready story ids",
+        )
+        _validate_known_ids(
+            {
+                requirement_id
+                for item in self.ready_story_overview
+                for requirement_id in item.requirement_ids
+            },
+            requirement_ids,
+            "ready_story_overview references unknown requirement ids",
+        )
+        _validate_known_ids(
+            {
+                requirement_id
+                for item in self.single_story_packets
+                for requirement_id in item.requirement_ids
+            },
+            requirement_ids,
+            "single_story_packets references unknown requirement ids",
+        )
+        _validate_known_ids(
+            {item.story_id for item in self.upstream_traceability},
+            ready_story_ids,
+            "upstream_traceability references unknown ready story ids",
+        )
+        _validate_known_ids(
+            {
+                requirement_id
+                for item in self.upstream_traceability
+                for requirement_id in item.source_requirements
+            },
+            requirement_ids,
+            "upstream_traceability references unknown requirement ids",
+        )
+        _validate_known_ids(
+            {
+                requirement_id
+                for item in self.not_ready_blockers
+                for requirement_id in item.requirement_ids
+            },
+            requirement_ids,
+            "not_ready_blockers references unknown requirement ids",
+        )
+        return self
+
+
+def _unique_ids(values: list[str], collection: str, field_name: str) -> set[str]:
+    unique = set(values)
+    if len(unique) != len(values):
+        raise ValueError(f"{collection} contains duplicate {field_name}")
+    return unique
+
+
+def _validate_known_ids(
+    referenced_ids: set[str],
+    known_ids: set[str],
+    message: str,
+) -> None:
+    unknown_ids = sorted(referenced_ids - known_ids)
+    if unknown_ids:
+        raise ValueError(f"{message}: " + ", ".join(unknown_ids))
+
+
 def render_agent_turn_from_artifact_data(
     payload: dict[str, Any],
     *,
@@ -2347,6 +2881,26 @@ def render_agent_turn_from_artifact_data(
             payload["artifact_data"]
         )
         markdown = render_value_discovery_blueprint_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "SCOPE"):
+        artifact_data = UserStoryScopeArtifactData.model_validate(
+            payload["artifact_data"]
+        )
+        markdown = render_user_story_scope_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "STORY_MAP"):
+        artifact_data = UserStoryMapArtifactData.model_validate(
+            payload["artifact_data"]
+        )
+        markdown = render_user_story_map_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "STORIES"):
+        artifact_data = UserStoriesArtifactData.model_validate(
+            payload["artifact_data"]
+        )
+        markdown = render_user_stories_markdown(artifact_data)
+    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "HANDOFF"):
+        artifact_data = UserStoryHandoffArtifactData.model_validate(
+            payload["artifact_data"]
+        )
+        markdown = render_user_story_handoff_markdown(artifact_data)
     else:
         raise ValueError(
             f"artifact_data renderer is not configured for {workflow_id}/{current_stage_id}"
@@ -2359,6 +2913,7 @@ def render_agent_turn_from_artifact_data(
                 "type": "replace",
                 "markdown": markdown,
             },
+            "artifact_data": artifact_data.model_dump(mode="json", exclude_none=True),
             "stage_action": payload.get("stage_action"),
             "warnings": payload.get("warnings", []),
         }
@@ -2635,6 +3190,56 @@ def render_partial_agent_turn_from_artifact_data(
         markdown = render_partial_value_discovery_blueprint_markdown(
             payload["artifact_data"]
         )
+    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "SCOPE"):
+        field_order = [
+            "document_info",
+            "in_scope_requirements",
+            "traceability_index",
+            "out_of_scope_items",
+            "blocking_questions",
+            "stage_gate",
+        ]
+        renderer = render_partial_user_story_scope_markdown
+        markdown = render_partial_user_story_scope_markdown(payload["artifact_data"])
+    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "STORY_MAP"):
+        field_order = [
+            "document_info",
+            "requirements",
+            "activities",
+            "tasks",
+            "story_map_items",
+            "mvp_slices",
+            "release_slices",
+            "stage_gate",
+        ]
+        renderer = render_partial_user_story_map_markdown
+        markdown = render_partial_user_story_map_markdown(payload["artifact_data"])
+    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "STORIES"):
+        field_order = [
+            "document_info",
+            "requirements",
+            "split_principles",
+            "story_cards",
+            "ready_story_summaries",
+            "not_ready_stories",
+            "open_questions",
+            "stage_gate",
+        ]
+        renderer = render_partial_user_stories_markdown
+        markdown = render_partial_user_stories_markdown(payload["artifact_data"])
+    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "HANDOFF"):
+        field_order = [
+            "document_info",
+            "requirements",
+            "ready_story_overview",
+            "single_story_packets",
+            "upstream_traceability",
+            "not_ready_blockers",
+            "ai_coding_input_boundary",
+            "stage_gate",
+        ]
+        renderer = render_partial_user_story_handoff_markdown
+        markdown = render_partial_user_story_handoff_markdown(payload["artifact_data"])
     else:
         return None
     if markdown is None:
@@ -4158,6 +4763,267 @@ def render_partial_value_discovery_blueprint_markdown(data: Any) -> str | None:
     return _join_partial_sections(sections)
 
 
+def render_partial_user_story_scope_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "document_info" not in data:
+        return None
+    try:
+        DocumentInfo.model_validate(data["document_info"])
+    except (TypeError, ValueError, ValidationError):
+        return None
+    sections = ["# 用户故事拆解文档"]
+    try:
+        if "in_scope_requirements" not in data:
+            return None
+        sections.append(
+            _render_user_story_scope_requirements(
+                _validate_partial_list(
+                    data["in_scope_requirements"],
+                    UserStoryScopeRequirement,
+                )
+            )
+        )
+        if "traceability_index" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_traceability_index(
+                _validate_partial_list(
+                    data["traceability_index"],
+                    UserStoryScopeTrace,
+                )
+            )
+        )
+        if "out_of_scope_items" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_out_of_scope(
+                _validate_partial_list(
+                    data["out_of_scope_items"],
+                    UserStoryOutOfScopeItem,
+                )
+            )
+        )
+        if "blocking_questions" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_blocking_questions(
+                _validate_partial_list(
+                    data["blocking_questions"],
+                    UserStoryBlockingQuestion,
+                )
+            )
+        )
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck),
+                heading_number=5,
+            )
+        )
+    except (TypeError, ValueError, ValidationError):
+        return _join_partial_sections(sections)
+    return _join_partial_sections(sections)
+
+
+def render_partial_user_story_map_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "document_info" not in data:
+        return None
+    try:
+        DocumentInfo.model_validate(data["document_info"])
+    except (TypeError, ValueError, ValidationError):
+        return None
+    sections = ["# 用户故事拆解文档"]
+    try:
+        if "activities" not in data:
+            return None
+        activities = _validate_partial_list(data["activities"], UserStoryActivity)
+        sections.append(_render_user_story_activities(activities))
+        if "tasks" not in data:
+            return _join_partial_sections(sections)
+        tasks = _validate_partial_list(data["tasks"], UserStoryTask)
+        sections.append(_render_user_story_tasks(tasks))
+        if "story_map_items" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_map(
+                _validate_partial_list(
+                    data["story_map_items"],
+                    UserStoryMapItem,
+                ),
+                activities,
+                tasks,
+            )
+        )
+        if "mvp_slices" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_mvp_slices(
+                _validate_partial_list(data["mvp_slices"], UserStoryMvpSlice)
+            )
+        )
+        if "release_slices" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_release_slices(
+                _validate_partial_list(
+                    data["release_slices"],
+                    UserStoryReleaseSlice,
+                )
+            )
+        )
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck),
+                heading_number=6,
+            )
+        )
+    except (TypeError, ValueError, ValidationError, KeyError):
+        return _join_partial_sections(sections)
+    return _join_partial_sections(sections)
+
+
+def render_partial_user_stories_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "document_info" not in data:
+        return None
+    try:
+        DocumentInfo.model_validate(data["document_info"])
+    except (TypeError, ValueError, ValidationError):
+        return None
+    sections = ["# 用户故事拆解文档"]
+    try:
+        if "split_principles" not in data:
+            return None
+        sections.append(
+            _render_user_story_split_principles(
+                _validate_partial_list(
+                    data["split_principles"],
+                    UserStorySplitPrinciple,
+                )
+            )
+        )
+        if "story_cards" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_cards(
+                _validate_partial_list(data["story_cards"], UserStoryCard)
+            )
+        )
+        if "ready_story_summaries" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_ready_summaries(
+                _validate_partial_list(
+                    data["ready_story_summaries"],
+                    UserStoryReadySummary,
+                )
+            )
+        )
+        if "not_ready_stories" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_not_ready(
+                _validate_partial_list(
+                    data["not_ready_stories"],
+                    UserStoryNotReadySummary,
+                )
+            )
+        )
+        if "open_questions" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_open_questions(
+                _validate_partial_list(
+                    data["open_questions"],
+                    UserStoryOpenQuestion,
+                )
+            )
+        )
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck),
+                heading_number=6,
+            )
+        )
+    except (TypeError, ValueError, ValidationError):
+        return _join_partial_sections(sections)
+    return _join_partial_sections(sections)
+
+
+def render_partial_user_story_handoff_markdown(data: Any) -> str | None:
+    if not isinstance(data, dict) or "document_info" not in data:
+        return None
+    try:
+        DocumentInfo.model_validate(data["document_info"])
+    except (TypeError, ValueError, ValidationError):
+        return None
+    sections = ["# 单故事 Handoff 清单"]
+    try:
+        if "ready_story_overview" not in data:
+            return None
+        sections.append(
+            _render_user_story_ready_overview(
+                _validate_partial_list(
+                    data["ready_story_overview"],
+                    UserStoryReadyOverview,
+                )
+            )
+        )
+        if "single_story_packets" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_packets(
+                _validate_partial_list(
+                    data["single_story_packets"],
+                    UserStoryPacket,
+                )
+            )
+        )
+        if "upstream_traceability" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_upstream_traceability(
+                _validate_partial_list(
+                    data["upstream_traceability"],
+                    UserStoryUpstreamTrace,
+                )
+            )
+        )
+        if "not_ready_blockers" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_not_ready_blockers(
+                _validate_partial_list(
+                    data["not_ready_blockers"],
+                    UserStoryNotReadyBlocker,
+                )
+            )
+        )
+        if "ai_coding_input_boundary" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_ai_coding_boundary(
+                AiCodingInputBoundary.model_validate(
+                    data["ai_coding_input_boundary"]
+                )
+            )
+        )
+        if "stage_gate" not in data:
+            return _join_partial_sections(sections)
+        sections.append(
+            _render_user_story_stage_gate(
+                _validate_partial_list(data["stage_gate"], StageGateCheck),
+                heading_number=6,
+            )
+        )
+    except (TypeError, ValueError, ValidationError):
+        return _join_partial_sections(sections)
+    return _join_partial_sections(sections)
+
+
 def render_partial_test_design_clarify_markdown(data: Any) -> str | None:
     if not isinstance(data, dict) or "document_info" not in data:
         return None
@@ -4616,6 +5482,486 @@ def render_value_discovery_blueprint_markdown(
         _render_blueprint_document_info(data.document_info),
     ]
     return "\n\n".join(sections)
+
+
+def render_user_story_scope_markdown(data: UserStoryScopeArtifactData) -> str:
+    sections = [
+        "# 用户故事拆解文档",
+        _render_user_story_scope_requirements(data.in_scope_requirements),
+        _render_user_story_traceability_index(data.traceability_index),
+        _render_user_story_out_of_scope(data.out_of_scope_items),
+        _render_user_story_blocking_questions(data.blocking_questions),
+        _render_user_story_stage_gate(data.stage_gate, heading_number=5),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_user_story_map_markdown(data: UserStoryMapArtifactData) -> str:
+    sections = [
+        "# 用户故事拆解文档",
+        _render_user_story_activities(data.activities),
+        _render_user_story_tasks(data.tasks),
+        _render_user_story_map(data.story_map_items, data.activities, data.tasks),
+        _render_user_story_mvp_slices(data.mvp_slices),
+        _render_user_story_release_slices(data.release_slices),
+        _render_user_story_stage_gate(data.stage_gate, heading_number=6),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_user_stories_markdown(data: UserStoriesArtifactData) -> str:
+    sections = [
+        "# 用户故事拆解文档",
+        _render_user_story_split_principles(data.split_principles),
+        _render_user_story_cards(data.story_cards),
+        _render_user_story_ready_summaries(data.ready_story_summaries),
+        _render_user_story_not_ready(data.not_ready_stories),
+        _render_user_story_open_questions(data.open_questions),
+        _render_user_story_stage_gate(data.stage_gate, heading_number=6),
+    ]
+    return "\n\n".join(sections)
+
+
+def render_user_story_handoff_markdown(
+    data: UserStoryHandoffArtifactData,
+) -> str:
+    sections = [
+        "# 单故事 Handoff 清单",
+        _render_user_story_ready_overview(data.ready_story_overview),
+        _render_user_story_packets(data.single_story_packets),
+        _render_user_story_upstream_traceability(data.upstream_traceability),
+        _render_user_story_not_ready_blockers(data.not_ready_blockers),
+        _render_user_story_ai_coding_boundary(data.ai_coding_input_boundary),
+        _render_user_story_stage_gate(data.stage_gate, heading_number=6),
+    ]
+    return "\n\n".join(sections)
+
+
+def _render_user_story_scope_requirements(
+    items: list[UserStoryScopeRequirement],
+) -> str:
+    rows = [
+        (
+            item.requirement_id,
+            item.name,
+            item.user_value,
+            item.priority,
+            item.split_decision,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 1. 拆分范围\n" + _markdown_table(
+        ["需求 ID", "需求名称", "用户价值", "优先级", "是否进入拆分", "状态"],
+        rows,
+    )
+
+
+def _render_user_story_traceability_index(
+    items: list[UserStoryScopeTrace],
+) -> str:
+    rows = [
+        (
+            item.requirement_id,
+            item.source,
+            item.target_user,
+            item.scenario,
+            item.acceptance_hint,
+            item.status,
+        )
+        for item in items
+    ]
+    return (
+        "## 2. 需求追溯索引\n"
+        + _markdown_table(
+            ["需求 ID", "来源章节 / 上游依据", "目标用户", "关键场景", "验收线索", "状态"],
+            rows,
+        )
+        + "\n\n"
+        + _render_user_story_scope_flowchart(items)
+    )
+
+
+def _render_user_story_scope_flowchart(items: list[UserStoryScopeTrace]) -> str:
+    lines = [
+        "```mermaid",
+        "flowchart TD",
+        '    Blueprint["需求蓝图"] --> InScope["进入拆分范围"]',
+    ]
+    for item in items:
+        label = _escape_mermaid_label(f"{item.requirement_id} {item.scenario}")
+        lines.append(f'    InScope --> {item.requirement_id.replace("-", "")}["{label}"]')
+    lines.append("```")
+    return "\n".join(lines)
+
+
+def _render_user_story_out_of_scope(
+    items: list[UserStoryOutOfScopeItem],
+) -> str:
+    rows = [
+        (
+            item.requirement_id,
+            item.item,
+            item.reason,
+            item.reentry_condition,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 3. 不拆范围\n" + _markdown_table(
+        ["需求 ID", "范围项", "不拆原因", "重新进入条件", "状态"],
+        rows,
+    )
+
+
+def _render_user_story_blocking_questions(
+    items: list[UserStoryBlockingQuestion],
+) -> str:
+    rows = [
+        (
+            item.question_id,
+            item.requirement_id,
+            item.question,
+            item.impact,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 4. 阻塞问题\n" + _markdown_table(
+        ["问题 ID", "关联需求 ID", "问题", "对拆分的影响", "需要谁确认", "状态"],
+        rows,
+    )
+
+
+def _render_user_story_activities(items: list[UserStoryActivity]) -> str:
+    rows = [
+        (
+            item.activity_id,
+            item.activity,
+            item.user_goal,
+            _join_inline(item.requirement_ids),
+            item.priority,
+        )
+        for item in items
+    ]
+    return "## 1. 用户活动主干\n" + _markdown_table(
+        ["活动 ID", "用户活动", "用户目标", "关联需求 ID", "优先级"],
+        rows,
+    )
+
+
+def _render_user_story_tasks(items: list[UserStoryTask]) -> str:
+    rows = [
+        (
+            item.task_id,
+            item.activity_id,
+            item.task,
+            item.success_result,
+            _join_inline(item.requirement_ids),
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 2. 用户任务流\n" + _markdown_table(
+        ["任务 ID", "活动 ID", "用户任务", "成功结果", "关联需求 ID", "状态"],
+        rows,
+    )
+
+
+def _render_user_story_map(
+    items: list[UserStoryMapItem],
+    activities: list[UserStoryActivity],
+    tasks: list[UserStoryTask],
+) -> str:
+    rows = [
+        (
+            item.story_id,
+            item.activity_id,
+            item.task_id,
+            item.title,
+            _join_inline(item.requirement_ids),
+            item.slice_id,
+            item.status,
+        )
+        for item in items
+    ]
+    return (
+        "## 3. 用户故事地图\n"
+        + _render_user_story_map_flowchart(items, activities, tasks)
+        + "\n\n"
+        + _markdown_table(
+            ["Story ID", "活动 ID", "任务 ID", "故事标题", "来源需求", "Slice", "状态"],
+            rows,
+        )
+    )
+
+
+def _render_user_story_map_flowchart(
+    items: list[UserStoryMapItem],
+    activities: list[UserStoryActivity],
+    tasks: list[UserStoryTask],
+) -> str:
+    activity_lookup = {item.activity_id: item for item in activities}
+    task_lookup = {item.task_id: item for item in tasks}
+    lines = ["```mermaid", "flowchart TD"]
+    for item in items:
+        activity = activity_lookup[item.activity_id]
+        task = task_lookup[item.task_id]
+        activity_node = _safe_mermaid_node_id(activity.activity_id)
+        task_node = _safe_mermaid_node_id(task.task_id)
+        story_node = _safe_mermaid_node_id(item.story_id)
+        slice_node = _safe_mermaid_node_id(item.slice_id)
+        lines.extend([
+            f'    {activity_node}["{_escape_mermaid_label(activity.activity_id + " " + activity.activity)}"] --> {task_node}["{_escape_mermaid_label(task.task_id + " " + task.task)}"]',
+            f'    {task_node} --> {story_node}["{_escape_mermaid_label(item.story_id + " " + item.title)}"]',
+            f'    {story_node} --> {slice_node}["{_escape_mermaid_label(item.slice_id)}"]',
+        ])
+    lines.append("```")
+    return "\n".join(lines)
+
+
+def _render_user_story_mvp_slices(items: list[UserStoryMvpSlice]) -> str:
+    rows = [
+        (
+            item.slice_id,
+            _join_inline(item.story_ids),
+            item.business_outcome,
+            _join_inline(item.excluded_items),
+            item.acceptance,
+        )
+        for item in items
+    ]
+    return "## 4. MVP Slice\n" + _markdown_table(
+        ["Slice ID", "包含 Story ID", "可验证业务闭环", "排除项", "验收口径"],
+        rows,
+    )
+
+
+def _render_user_story_release_slices(items: list[UserStoryReleaseSlice]) -> str:
+    rows = [
+        (
+            item.slice_id,
+            _join_inline(item.story_ids),
+            item.release_goal,
+            _join_inline(item.dependencies),
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 5. Release Slice\n" + _markdown_table(
+        ["Slice ID", "包含 Story ID", "发布目标", "依赖", "状态"],
+        rows,
+    )
+
+
+def _render_user_story_split_principles(
+    items: list[UserStorySplitPrinciple],
+) -> str:
+    rows = [
+        (item.principle, item.applied, item.anti_pattern)
+        for item in items
+    ]
+    return "## 1. 故事拆分原则\n" + _markdown_table(
+        ["原则", "本轮采用方式", "反例拦截"],
+        rows,
+    )
+
+
+def _render_user_story_cards(items: list[UserStoryCard]) -> str:
+    rows = [
+        (
+            item.story_id,
+            item.title,
+            item.user_role,
+            item.user_goal,
+            item.benefit,
+            _join_inline(item.requirement_ids),
+            f"{item.activity_id} / {item.task_id}",
+            _join_inline(item.business_rules),
+            _join_inline(item.acceptance_criteria),
+            _join_inline(item.out_of_scope),
+            _join_inline(item.dependencies),
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 2. 用户故事卡片\n" + _markdown_table(
+        [
+            "Story ID",
+            "标题",
+            "作为",
+            "我想要",
+            "以便",
+            "来源需求",
+            "用户活动 / 任务",
+            "业务规则",
+            "验收标准",
+            "不包含范围",
+            "依赖",
+            "状态",
+        ],
+        rows,
+    )
+
+
+def _render_user_story_ready_summaries(
+    items: list[UserStoryReadySummary],
+) -> str:
+    rows = [
+        (
+            item.story_id,
+            item.ready_reason,
+            item.handoff_summary,
+            item.acceptance_criteria_count,
+            item.concerns,
+        )
+        for item in items
+    ]
+    return "## 3. Ready Stories\n" + _markdown_table(
+        ["Story ID", "Ready 理由", "可交接需求摘要", "验收标准数量", "仍需关注"],
+        rows,
+    )
+
+
+def _render_user_story_not_ready(items: list[UserStoryNotReadySummary]) -> str:
+    rows = [
+        (
+            item.story_id,
+            _join_inline(item.requirement_ids),
+            item.blocker_reason,
+            _join_inline(item.questions),
+            item.suggested_next_step,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 4. Not Ready Stories\n" + _markdown_table(
+        ["Story ID", "来源需求", "阻塞原因", "需要补充的问题", "建议下一步", "状态"],
+        rows,
+    )
+
+
+def _render_user_story_open_questions(items: list[UserStoryOpenQuestion]) -> str:
+    rows = [
+        (
+            item.question_id,
+            item.story_id,
+            item.question,
+            item.decision_impact,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 5. 开放问题\n" + _markdown_table(
+        ["问题 ID", "关联 Story ID", "问题", "决策影响", "责任方", "状态"],
+        rows,
+    )
+
+
+def _render_user_story_ready_overview(
+    items: list[UserStoryReadyOverview],
+) -> str:
+    rows = [
+        (
+            item.story_id,
+            item.title,
+            _join_inline(item.requirement_ids),
+            item.user_value,
+            item.ready_reason,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 1. Ready Story 总览\n" + _markdown_table(
+        ["storyId", "标题", "requirementId", "用户价值", "Ready 理由", "状态"],
+        rows,
+    )
+
+
+def _render_user_story_packets(items: list[UserStoryPacket]) -> str:
+    sections = ["## 2. 单故事需求包"]
+    for item in items:
+        rows = [
+            ("storyId", item.story_id),
+            ("requirementId", _join_inline(item.requirement_ids)),
+            ("userStory", item.user_story),
+            ("acceptanceCriteria", _join_inline(item.acceptance_criteria)),
+            ("businessRules", _join_inline(item.business_rules)),
+            ("nonFunctionalNotes", _join_inline(item.non_functional_notes)),
+            ("outOfScope", _join_inline(item.out_of_scope)),
+            ("dependencies", _join_inline(item.dependencies)),
+            ("openQuestions", _join_inline(item.open_questions)),
+        ]
+        sections.append(
+            f"### {item.story_id}\n" + _markdown_table(["字段", "内容"], rows)
+        )
+    return "\n\n".join(sections)
+
+
+def _render_user_story_upstream_traceability(
+    items: list[UserStoryUpstreamTrace],
+) -> str:
+    rows = [
+        (
+            item.story_id,
+            item.source_workflow,
+            item.source_stage,
+            _join_inline(item.source_requirements),
+            item.source_slice,
+            item.trace_note,
+        )
+        for item in items
+    ]
+    return "## 3. 上游追溯\n" + _markdown_table(
+        ["storyId", "sourceWorkflow", "sourceStage", "sourceRequirement", "sourceSlice", "追溯说明"],
+        rows,
+    )
+
+
+def _render_user_story_not_ready_blockers(
+    items: list[UserStoryNotReadyBlocker],
+) -> str:
+    rows = [
+        (
+            item.story_id,
+            _join_inline(item.requirement_ids),
+            item.blocker_reason,
+            _join_inline(item.questions),
+            item.suggested_next_step,
+        )
+        for item in items
+    ]
+    return "## 4. Not Ready 阻塞项\n" + _markdown_table(
+        ["storyId", "requirementId", "阻塞原因", "需要补充的问题", "建议处理"],
+        rows,
+    )
+
+
+def _render_user_story_ai_coding_boundary(boundary: AiCodingInputBoundary) -> str:
+    rows = [(_join_inline(boundary.allowed), _join_inline(boundary.forbidden))]
+    return "## 5. AI Coding 输入边界\n" + _markdown_table(
+        ["可以交接", "不在本清单中交接"],
+        rows,
+    )
+
+
+def _render_user_story_stage_gate(
+    checks: list[StageGateCheck],
+    *,
+    heading_number: int,
+) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return f"## {heading_number}. 阶段门禁\n" + "\n".join(lines)
+
+
+def _join_inline(items: list[str]) -> str:
+    return "；".join(items) if items else "无"
+
+
+def _safe_mermaid_node_id(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_]", "", value) or "Node"
 
 
 def _render_document_info(info: DocumentInfo) -> str:

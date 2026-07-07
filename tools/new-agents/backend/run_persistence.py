@@ -173,8 +173,15 @@ class AgentRunPersistence:
         run_id: str,
         stage_id: str,
         content: str,
+        *,
+        artifact_data: dict[str, Any] | None = None,
     ) -> None:
-        record_artifact_version(run_id, stage_id, content)
+        record_artifact_version(
+            run_id,
+            stage_id,
+            content,
+            artifact_data=artifact_data,
+        )
 
     def record_turn_metric(self, **kwargs) -> None:
         record_turn_metric(**kwargs)
@@ -202,6 +209,8 @@ def record_artifact_version(
     run_id: str,
     stage_id: str,
     content: str,
+    *,
+    artifact_data: dict[str, Any] | None = None,
 ) -> AgentArtifactVersion:
     run = _get_run(run_id)
     _validate_workflow_stage(run.workflow_id, stage_id)
@@ -219,6 +228,7 @@ def record_artifact_version(
         artifact_id=artifact.id,
         version_number=_next_artifact_version(artifact.id),
         content=content,
+        artifact_data=artifact_data,
     )
     db.session.add(version)
     db.session.flush()
@@ -1112,8 +1122,11 @@ def _artifact_snapshot(artifact: AgentArtifact) -> dict:
     version = db.session.get(AgentArtifactVersion, artifact.current_version_id)
     if version is None:
         raise ValueError(f"artifact 当前版本不存在: {artifact.id}")
-    return {
+    snapshot = {
         "stageId": artifact.stage_id,
         "content": version.content,
         "versionNumber": version.version_number,
     }
+    if version.artifact_data is not None:
+        snapshot["artifactData"] = version.artifact_data
+    return snapshot

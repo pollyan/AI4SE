@@ -2968,6 +2968,7 @@ def test_render_clarify_artifact_data_is_deterministic_and_contract_valid():
 
     assert first == second
     assert first is not None
+    assert first.artifact_data == VALID_CLARIFY_ARTIFACT_DATA
     assert first.artifact_update.markdown is not None
     clarify_markdown = first.artifact_update.markdown
     assert "# 需求分析文档" in first.artifact_update.markdown
@@ -3107,6 +3108,7 @@ def test_render_strategy_artifact_data_is_deterministic_and_contract_valid():
 
     assert first == second
     assert first is not None
+    assert first.artifact_data == VALID_STRATEGY_ARTIFACT_DATA
     assert first.artifact_update.markdown is not None
     assert "# 测试策略蓝图" in first.artifact_update.markdown
     assert "quadrantChart" in first.artifact_update.markdown
@@ -5084,3 +5086,554 @@ def test_render_idea_concept_artifact_data_is_deterministic_and_contract_valid()
         )
         == first
     )
+
+
+VALID_USER_STORY_SCOPE_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "用户故事拆解文档",
+        "workflow": "USER_STORY_BREAKDOWN",
+        "stage": "SCOPE",
+        "status": "可进入用户故事地图",
+    },
+    "in_scope_requirements": [
+        {
+            "requirement_id": "REQ-001",
+            "name": "需求澄清与风险识别",
+            "user_value": "测试负责人能在设计前发现缺失业务规则",
+            "priority": "P0",
+            "split_decision": "进入拆分",
+            "status": "已确认",
+        },
+        {
+            "requirement_id": "REQ-002",
+            "name": "生成测试策略",
+            "user_value": "测试负责人能获得可评审的质量方案",
+            "priority": "P0",
+            "split_decision": "进入拆分",
+            "status": "已确认",
+        },
+    ],
+    "traceability_index": [
+        {
+            "requirement_id": "REQ-001",
+            "source": "需求蓝图 P0 需求",
+            "target_user": "测试负责人",
+            "scenario": "输入需求后识别风险和缺口",
+            "acceptance_hint": "输出待澄清问题和 P0 风险清单",
+            "status": "已确认",
+        },
+        {
+            "requirement_id": "REQ-002",
+            "source": "需求蓝图 P0 需求",
+            "target_user": "测试负责人",
+            "scenario": "确认边界后生成策略",
+            "acceptance_hint": "包含质量目标、风险矩阵和分层策略",
+            "status": "已确认",
+        },
+    ],
+    "out_of_scope_items": [
+        {
+            "requirement_id": "REQ-101",
+            "item": "团队模板适配",
+            "reason": "不属于 MVP 第一条业务闭环",
+            "reentry_condition": "试点团队确认模板格式后进入 Release Slice",
+            "status": "已记录",
+        }
+    ],
+    "blocking_questions": [
+        {
+            "question_id": "Q-001",
+            "requirement_id": "REQ-101",
+            "question": "团队模板字段和导出格式未确认",
+            "impact": "暂不能写 Ready Story",
+            "owner": "试点团队负责人",
+            "status": "开放",
+        }
+    ],
+    "stage_gate": [
+        {"checked": True, "item": "进入拆分的需求都有稳定需求 ID"}
+    ],
+}
+
+
+VALID_USER_STORY_MAP_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "用户故事拆解文档",
+        "workflow": "USER_STORY_BREAKDOWN",
+        "stage": "STORY_MAP",
+        "status": "可进入故事卡片编写",
+    },
+    "requirements": [
+        {
+            "requirement_id": "REQ-001",
+            "name": "需求澄清与风险识别",
+            "priority": "P0",
+            "status": "已确认",
+        },
+        {
+            "requirement_id": "REQ-002",
+            "name": "生成测试策略",
+            "priority": "P0",
+            "status": "已确认",
+        },
+        {
+            "requirement_id": "REQ-101",
+            "name": "团队模板适配",
+            "priority": "P1",
+            "status": "待确认",
+        },
+    ],
+    "activities": [
+        {
+            "activity_id": "ACT-001",
+            "activity": "输入需求",
+            "user_goal": "让系统理解需求背景和边界",
+            "requirement_ids": ["REQ-001"],
+            "priority": "P0",
+        },
+        {
+            "activity_id": "ACT-002",
+            "activity": "确认风险",
+            "user_goal": "在设计前发现缺失规则和高风险路径",
+            "requirement_ids": ["REQ-001", "REQ-002"],
+            "priority": "P0",
+        },
+    ],
+    "tasks": [
+        {
+            "task_id": "TASK-001",
+            "activity_id": "ACT-001",
+            "task": "粘贴需求并补充业务规则",
+            "success_result": "系统形成需求事实和缺口清单",
+            "requirement_ids": ["REQ-001"],
+            "status": "已确认",
+        },
+        {
+            "task_id": "TASK-002",
+            "activity_id": "ACT-002",
+            "task": "确认风险优先级和准出目标",
+            "success_result": "系统形成可评审策略输入",
+            "requirement_ids": ["REQ-002"],
+            "status": "已确认",
+        },
+    ],
+    "story_map_items": [
+        {
+            "story_id": "US-001",
+            "activity_id": "ACT-001",
+            "task_id": "TASK-001",
+            "title": "从需求输入生成澄清问题",
+            "requirement_ids": ["REQ-001"],
+            "slice_id": "MVP-001",
+            "status": "候选",
+        },
+        {
+            "story_id": "US-002",
+            "activity_id": "ACT-002",
+            "task_id": "TASK-002",
+            "title": "从确认边界生成测试策略",
+            "requirement_ids": ["REQ-002"],
+            "slice_id": "MVP-001",
+            "status": "候选",
+        },
+        {
+            "story_id": "US-101",
+            "activity_id": "ACT-002",
+            "task_id": "TASK-002",
+            "title": "按团队模板导出交付材料",
+            "requirement_ids": ["REQ-101"],
+            "slice_id": "REL-001",
+            "status": "待确认",
+        },
+    ],
+    "mvp_slices": [
+        {
+            "slice_id": "MVP-001",
+            "story_ids": ["US-001", "US-002"],
+            "business_outcome": "测试负责人输入需求后得到澄清问题和策略蓝图",
+            "excluded_items": ["团队模板适配"],
+            "acceptance": "一条需求能完成澄清和策略生成",
+        }
+    ],
+    "release_slices": [
+        {
+            "slice_id": "REL-001",
+            "story_ids": ["US-101"],
+            "release_goal": "适配团队交付模板",
+            "dependencies": ["试点团队确认模板字段"],
+            "status": "待排期",
+        }
+    ],
+    "stage_gate": [
+        {"checked": True, "item": "所有 Story ID 都能追溯到需求 ID"}
+    ],
+}
+
+
+VALID_USER_STORIES_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "用户故事拆解文档",
+        "workflow": "USER_STORY_BREAKDOWN",
+        "stage": "STORIES",
+        "status": "可进入故事交接准备",
+    },
+    "requirements": VALID_USER_STORY_MAP_ARTIFACT_DATA["requirements"],
+    "split_principles": [
+        {
+            "principle": "垂直业务切片",
+            "applied": "每张故事都让用户获得一个可验收结果",
+            "anti_pattern": "不按工程层拆分",
+        },
+        {
+            "principle": "可追溯",
+            "applied": "每张故事引用来源需求 ID",
+            "anti_pattern": "不生成无来源需求的故事",
+        },
+    ],
+    "story_cards": [
+        {
+            "story_id": "US-001",
+            "title": "生成澄清问题",
+            "user_role": "测试负责人",
+            "user_goal": "输入需求后看到待澄清问题和隐式风险",
+            "benefit": "在测试设计前补齐缺失业务规则",
+            "requirement_ids": ["REQ-001"],
+            "activity_id": "ACT-001",
+            "task_id": "TASK-001",
+            "business_rules": ["问题必须标注阻断性、责任方和状态"],
+            "acceptance_criteria": [
+                "输出需求事实清单",
+                "输出阻断性待澄清问题",
+                "输出 P0 风险线索",
+            ],
+            "non_functional_notes": ["输出内容需要可追溯、可评审"],
+            "out_of_scope": ["不直接生成用例"],
+            "dependencies": ["用户提供需求文本"],
+            "open_questions": ["问题分类口径可在试点中继续校准"],
+            "status": "ready",
+        },
+        {
+            "story_id": "US-002",
+            "title": "生成测试策略",
+            "user_role": "测试负责人",
+            "user_goal": "在确认边界后生成质量目标、风险矩阵和分层策略",
+            "benefit": "快速形成可评审测试方案",
+            "requirement_ids": ["REQ-002"],
+            "activity_id": "ACT-002",
+            "task_id": "TASK-002",
+            "business_rules": ["P0 风险必须进入策略摘要"],
+            "acceptance_criteria": [
+                "输出质量目标",
+                "输出风险矩阵",
+                "输出分层策略和准出条件",
+            ],
+            "non_functional_notes": ["策略内容需要可评审"],
+            "out_of_scope": ["不执行测试"],
+            "dependencies": ["US-001 ready"],
+            "open_questions": ["风险矩阵口径可继续校准"],
+            "status": "ready",
+        },
+        {
+            "story_id": "US-101",
+            "title": "团队模板导出",
+            "user_role": "测试负责人",
+            "user_goal": "按团队模板导出交付材料",
+            "benefit": "减少评审格式调整成本",
+            "requirement_ids": ["REQ-101"],
+            "activity_id": "ACT-002",
+            "task_id": "TASK-002",
+            "business_rules": [],
+            "acceptance_criteria": [],
+            "non_functional_notes": [],
+            "out_of_scope": ["不影响 MVP"],
+            "dependencies": ["模板字段确认"],
+            "open_questions": ["模板需要哪些章节和表格字段"],
+            "status": "not_ready",
+            "blocker_reason": "团队模板字段未确认",
+        },
+    ],
+    "ready_story_summaries": [
+        {
+            "story_id": "US-001",
+            "ready_reason": "用户、场景、业务规则和验收标准明确",
+            "handoff_summary": "输入需求后生成澄清问题和风险线索",
+            "acceptance_criteria_count": 3,
+            "concerns": "问题分类口径",
+        },
+        {
+            "story_id": "US-002",
+            "ready_reason": "上游边界明确且策略产出可验收",
+            "handoff_summary": "生成测试策略蓝图",
+            "acceptance_criteria_count": 3,
+            "concerns": "风险矩阵口径",
+        },
+    ],
+    "not_ready_stories": [
+        {
+            "story_id": "US-101",
+            "requirement_ids": ["REQ-101"],
+            "blocker_reason": "团队模板字段未确认",
+            "questions": ["模板需要哪些章节和表格字段"],
+            "suggested_next_step": "先找试点团队确认模板",
+            "status": "not_ready",
+        }
+    ],
+    "open_questions": [
+        {
+            "question_id": "Q-001",
+            "story_id": "US-101",
+            "question": "模板字段和导出格式未确认",
+            "decision_impact": "影响 Release Slice 排期",
+            "owner": "试点团队负责人",
+            "status": "开放",
+        }
+    ],
+    "stage_gate": [
+        {"checked": True, "item": "每张故事都有 Story ID、来源需求和状态"}
+    ],
+}
+
+
+VALID_USER_STORY_HANDOFF_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "单故事 Handoff 清单",
+        "workflow": "USER_STORY_BREAKDOWN",
+        "stage": "HANDOFF",
+        "status": "可生成单故事需求包",
+    },
+    "requirements": VALID_USER_STORY_MAP_ARTIFACT_DATA["requirements"],
+    "ready_story_overview": [
+        {
+            "story_id": "US-001",
+            "title": "生成澄清问题",
+            "requirement_ids": ["REQ-001"],
+            "user_value": "测试负责人能在设计前发现缺失业务规则",
+            "ready_reason": "验收标准和业务规则已明确",
+            "status": "ready",
+        },
+        {
+            "story_id": "US-002",
+            "title": "生成测试策略",
+            "requirement_ids": ["REQ-002"],
+            "user_value": "测试负责人能快速形成可评审测试方案",
+            "ready_reason": "输入、输出和准出条件明确",
+            "status": "ready",
+        },
+    ],
+    "single_story_packets": [
+        {
+            "story_id": "US-001",
+            "requirement_ids": ["REQ-001"],
+            "user_story": "作为测试负责人，我想要输入需求后看到待澄清问题和隐式风险，以便在测试设计前补齐缺失业务规则",
+            "acceptance_criteria": [
+                "输出需求事实清单",
+                "输出阻断性待澄清问题",
+                "输出 P0 风险线索",
+            ],
+            "business_rules": ["问题必须标注阻断性、责任方和状态"],
+            "non_functional_notes": ["输出内容需要可追溯、可评审"],
+            "out_of_scope": ["不直接生成用例"],
+            "dependencies": ["用户提供需求文本"],
+            "open_questions": ["问题分类口径可在试点中继续校准"],
+        }
+    ],
+    "upstream_traceability": [
+        {
+            "story_id": "US-001",
+            "source_workflow": "VALUE_DISCOVERY",
+            "source_stage": "BLUEPRINT",
+            "source_requirements": ["REQ-001"],
+            "source_slice": "MVP-001",
+            "trace_note": "来源于需求蓝图中的需求澄清与风险识别",
+        }
+    ],
+    "not_ready_blockers": [
+        {
+            "story_id": "US-101",
+            "requirement_ids": ["REQ-101"],
+            "blocker_reason": "团队模板字段未确认",
+            "questions": ["模板需要哪些章节和表格字段"],
+            "suggested_next_step": "先完成试点团队访谈",
+        }
+    ],
+    "ai_coding_input_boundary": {
+        "allowed": [
+            "用户故事正文",
+            "来源需求",
+            "业务规则",
+            "验收标准",
+            "不做范围",
+            "依赖",
+            "开放问题",
+        ],
+        "forbidden": [
+            "工程实施内容",
+            "代码层设计",
+            "开发任务拆分",
+            "执行类指令",
+        ],
+    },
+    "stage_gate": [
+        {"checked": True, "item": "每个 ready story 都有 storyId 和 requirementId"}
+    ],
+}
+
+
+@pytest.mark.parametrize(
+    ("workflow_id", "stage_id", "artifact_data", "expected_markers"),
+    [
+        (
+            "USER_STORY_BREAKDOWN",
+            "SCOPE",
+            VALID_USER_STORY_SCOPE_ARTIFACT_DATA,
+            ["# 用户故事拆解文档", "## 1. 拆分范围", "flowchart TD"],
+        ),
+        (
+            "USER_STORY_BREAKDOWN",
+            "STORY_MAP",
+            VALID_USER_STORY_MAP_ARTIFACT_DATA,
+            ["## 3. 用户故事地图", "## 4. MVP Slice", "flowchart TD"],
+        ),
+        (
+            "USER_STORY_BREAKDOWN",
+            "STORIES",
+            VALID_USER_STORIES_ARTIFACT_DATA,
+            ["## 2. 用户故事卡片", "## 3. Ready Stories", "US-001"],
+        ),
+        (
+            "USER_STORY_BREAKDOWN",
+            "HANDOFF",
+            VALID_USER_STORY_HANDOFF_ARTIFACT_DATA,
+            ["# 单故事 Handoff 清单", "## 2. 单故事需求包", "acceptanceCriteria"],
+        ),
+    ],
+)
+def test_render_user_story_breakdown_artifact_data_is_deterministic_and_contract_valid(
+    workflow_id,
+    stage_id,
+    artifact_data,
+    expected_markers,
+):
+    payload = {
+        "chat": "已生成用户故事拆解产物，请查看右侧文档。",
+        "artifact_data": artifact_data,
+        "stage_action": None,
+        "warnings": [],
+    }
+    first = render_agent_turn_from_artifact_data(
+        payload,
+        workflow_id=workflow_id,
+        current_stage_id=stage_id,
+    )
+    second = render_agent_turn_from_artifact_data(
+        payload,
+        workflow_id=workflow_id,
+        current_stage_id=stage_id,
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_data == artifact_data
+    assert first.artifact_update.markdown is not None
+    for marker in expected_markers:
+        assert marker in first.artifact_update.markdown
+    assert validate_agent_turn(
+        first,
+        workflow_id=workflow_id,
+        current_stage_id=stage_id,
+    ) == first
+
+
+def test_render_partial_user_story_breakdown_stories_artifact_data_builds_formal_incremental_markdown_and_patch():
+    principles_payload = {
+        "chat": "正在生成用户故事卡片。",
+        "artifact_data": {
+            "document_info": VALID_USER_STORIES_ARTIFACT_DATA["document_info"],
+            "requirements": VALID_USER_STORIES_ARTIFACT_DATA["requirements"],
+            "split_principles": VALID_USER_STORIES_ARTIFACT_DATA[
+                "split_principles"
+            ],
+        },
+        "stage_action": None,
+        "warnings": [],
+    }
+    principles_output = render_partial_agent_turn_from_artifact_data(
+        principles_payload,
+        workflow_id="USER_STORY_BREAKDOWN",
+        current_stage_id="STORIES",
+    )
+
+    assert principles_output is not None
+    assert "## 1. 故事拆分原则" in principles_output.artifact_update.markdown
+    assert "## 2. 用户故事卡片" not in principles_output.artifact_update.markdown
+
+    cards_payload = {
+        **principles_payload,
+        "artifact_data": {
+            **principles_payload["artifact_data"],
+            "story_cards": VALID_USER_STORIES_ARTIFACT_DATA["story_cards"],
+        },
+    }
+    cards_output = render_partial_agent_turn_from_artifact_data(
+        cards_payload,
+        workflow_id="USER_STORY_BREAKDOWN",
+        current_stage_id="STORIES",
+    )
+
+    assert cards_output is not None
+    assert "## 2. 用户故事卡片" in cards_output.artifact_update.markdown
+    assert "## 3. Ready Stories" not in cards_output.artifact_update.markdown
+    assert cards_output.artifact_patch is not None
+    assert cards_output.artifact_patch.section_anchor == "h2:2. 用户故事卡片:1"
+
+
+@pytest.mark.parametrize(
+    ("mutate", "expected_message"),
+    [
+        (
+            lambda data: data["story_cards"][0].update(
+                {"requirement_ids": ["REQ-404"]}
+            ),
+            "unknown requirement ids",
+        ),
+        (
+            lambda data: data["story_cards"][0].update({"acceptance_criteria": []}),
+            "ready story US-001 must include acceptance criteria",
+        ),
+        (
+            lambda data: data["story_cards"][0].update({"status": "Ready"}),
+            "Input should be",
+        ),
+        (
+            lambda data: data["story_cards"][1].update({"story_id": "US-001"}),
+            "duplicate story_id",
+        ),
+        (
+            lambda data: data["story_cards"][2].pop("blocker_reason"),
+            "not_ready story US-101 must include blocker reason",
+        ),
+    ],
+)
+def test_user_story_breakdown_story_cards_reject_invalid_ready_story_quality(
+    mutate,
+    expected_message,
+):
+    invalid_data = copy.deepcopy(VALID_USER_STORIES_ARTIFACT_DATA)
+    mutate(invalid_data)
+
+    with pytest.raises(ValidationError) as exc_info:
+        render_agent_turn_from_artifact_data(
+            {
+                "chat": "已生成用户故事卡片。",
+                "artifact_data": invalid_data,
+                "stage_action": {
+                    "type": "request_next_stage",
+                    "target_stage_id": "HANDOFF",
+                },
+                "warnings": [],
+            },
+            workflow_id="USER_STORY_BREAKDOWN",
+            current_stage_id="STORIES",
+        )
+
+    assert expected_message in str(exc_info.value)

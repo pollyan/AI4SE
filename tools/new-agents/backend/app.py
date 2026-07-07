@@ -15,6 +15,7 @@ def init_db(app):
     """Create database tables and seed server-managed defaults."""
     with app.app_context():
         db.create_all()
+        _ensure_artifact_version_artifact_data_column()
         _ensure_artifact_comment_columns()
         _ensure_artifact_section_lock_columns()
         _ensure_turn_metric_diagnostic_columns()
@@ -41,6 +42,23 @@ def _ensure_artifact_comment_columns():
         if column_name not in existing_columns:
             db.session.execute(text(statement))
     db.session.commit()
+
+
+def _ensure_artifact_version_artifact_data_column():
+    """Upgrade existing artifact version tables created before artifact_data."""
+    inspector = inspect(db.engine)
+    if "agent_artifact_versions" not in inspector.get_table_names():
+        return
+
+    existing_columns = {
+        column["name"]
+        for column in inspector.get_columns("agent_artifact_versions")
+    }
+    if "artifact_data" not in existing_columns:
+        db.session.execute(text(
+            "ALTER TABLE agent_artifact_versions ADD COLUMN artifact_data JSON"
+        ))
+        db.session.commit()
 
 
 def _ensure_artifact_section_lock_columns():

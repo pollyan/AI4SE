@@ -1,6 +1,6 @@
 # New Agents Alex 需求蓝图到用户故事 Handoff 路线
 
-- 状态：执行中（第 1、2 轮已完成；第 3 轮待启动）
+- 状态：执行中（第 1、2、3 轮已完成；第 4 轮待启动）
 - 创建日期：2026-07-08
 - 来源：用户要求先聚焦 Alex 需求梳理到后续 AI Coding 工作流的需求输入，不纳入 Lisa/Alex 之间的 handoff
 - 优先级：P0
@@ -113,16 +113,16 @@ handoff 给 AI Coding 的基本单位是单张 ready 用户故事卡片。ready 
 
 关键缺口：
 
-- `USER_STORY_BREAKDOWN` 已上线为 Alex 在线工作流，但用户故事卡片仍是 Markdown contract，尚未进入结构化 `artifact_data`。
+- `USER_STORY_BREAKDOWN` 已上线为 Alex 在线工作流，四个阶段已进入结构化 `artifact_data` contract，后端负责确定性渲染 Markdown / Mermaid。
 - `VALUE_DISCOVERY/BLUEPRINT -> USER_STORY_BREAKDOWN/SCOPE` handoff 已接入，目标侧启动入口已覆盖 `VALUE_DISCOVERY/ELEVATOR` 和 `USER_STORY_BREAKDOWN/SCOPE`；后续仍需把 handoff 关系升级为更强的一等持久化对象。
 - Alex 用户可见命名已完成第 1、2 轮入口收敛；后续结构化故事卡和单故事 packet 仍需继续遵守直白任务命名。
 - handoff 关系本身不是一等持久化对象；当前目标 run 只能通过第一条 user message 间接看到上游内容。
 - handoff packet 还不是结构化数据；当前主要使用截断 Markdown prompt。
-- 结构化 `artifact_data` 尚未作为可恢复的原始需求数据被 handoff 链路稳定消费。
-- 需求 ID、用户故事 ID、slice ID 已在 `USER_STORY_BREAKDOWN` Markdown contract 中引入；后续仍需后端结构化校验和重复 ID 拦截。
+- 结构化 `artifact_data` 已作为可恢复的原始需求数据写入 artifact version snapshot；后续单故事 packet 仍需在第 4 轮读取并消费该数据。
+- 需求 ID、用户故事 ID、slice ID 已有后端结构化校验；重复 storyId、非法 Ready 状态、缺少来源需求、缺少验收标准等失败会显式拒绝。
 - 没有上游 artifact 更新后的版本过期或 stale 提示。
-- 没有用户故事卡片结构化契约、renderer、严格 ready / not ready 质量校验和持久化单故事 handoff packet。
-- 没有防止故事拆分技术任务化的质量校验口径。
+- 没有持久化单故事 handoff packet。
+- 防止故事拆分技术任务化的质量口径已进入 prompt / artifact_data contract；后续第 4、5 轮仍需在 packet 和 E2E 证据中继续回归。
 - 已有浏览器级 mock E2E 证明 `USER_STORY_BREAKDOWN` 四阶段可推进；仍缺持久化单故事 packet 后的全链路 E2E。
 - 修改 Alex handoff 底层能力时，需要保证 Lisa 现有 handoff 不回归。
 
@@ -361,7 +361,73 @@ cd tools/new-agents/frontend && npm run lint
 
 结果：首次在默认 sandbox 下失败，失败点为 MidScene proxy 端口绑定 `EPERM` 和 Playwright Chromium Mach port `Permission denied`。按运行规则提权重跑后通过：Intent Tester API `294 passed`；MidScene proxy `17 passed`；Common Frontend lint/build 通过；New Agents 前端 `712 passed`；New Agents 后端 `569 passed, 1 deselected`；New Agents Browser E2E `9 passed, 10 deselected`。
 
+承接记录：
+
+- 第 3 轮已在下方完成记录，用户故事卡片和四阶段产物已升级为结构化 `artifact_data` contract、确定性 renderer 和质量校验。
+
+### 2026-07-08 第 3 轮：用户故事结构化契约与质量校验
+
+已完成：
+
+- `USER_STORY_BREAKDOWN/SCOPE`、`STORY_MAP`、`STORIES`、`HANDOFF` 已接入共享 `artifact_data` structured output 指令，模型必须先输出结构化需求数据，再输出 `chat`、`stage_action` 和 `warnings`。
+- 后端 `artifact_data_renderers.py` 新增用户故事拆解四阶段 Pydantic 模型、业务不变量校验、确定性 Markdown / Mermaid renderer 和 partial renderer；没有新增 Alex 专属 runtime、API、store 或渲染管线。
+- `SCOPE` 和 `STORY_MAP` 由结构化 requirement / activity / task / slice 数据确定性生成 Mermaid `flowchart`；`STORIES` 和 `HANDOFF` 由结构化故事卡、Ready / Not Ready 清单和单故事需求包数据确定性生成表格与 JSON 摘要。
+- Ready story 必须包含用户故事正文、来源需求、验收标准、业务规则或明确不适用说明、不做范围、依赖和 `ready` 状态；Not ready story 必须包含阻塞原因、需要补充的问题和 `not_ready` 状态。
+- 后端显式拒绝缺少来源需求、缺少验收标准、非法 Ready 状态、重复 storyId、not_ready 缺阻塞原因、未知 requirement / activity / task 引用等失败路径。
+- `AgentTurnOutput` 新增内部可选 `artifact_data` 字段，SSE 输出仍不暴露该字段；`stream_services.py` 会把验证后的结构化 payload 传给共享 persistence。
+- `agent_artifact_versions` 新增可选 `artifact_data` JSON 字段；`init_db()` 沿用现有轻量补列策略升级旧表；`get_run_snapshot()` 会在当前版本存在结构化 payload 时返回 `artifactData`，为第 4 轮 packet 生成提供稳定数据源，避免 Markdown 反解析。
+- `docs/TESTING.md` 已把 partial artifact streaming / raw JSON streaming 矩阵从 17 个 artifact-data 阶段更新为 21 个阶段，并补充 artifactData 持久化测试责任。
+- 第 3 轮设计与执行计划已记录在：
+  - `docs/superpowers/specs/2026-07-08-new-agents-user-story-structured-contract-design.md`
+  - `docs/superpowers/plans/2026-07-08-new-agents-user-story-structured-contract.md`
+
+RED 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_user_story_breakdown_artifact_data_is_deterministic_and_contract_valid tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_user_story_breakdown_stories_artifact_data_builds_formal_incremental_markdown_and_patch tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_user_story_breakdown_story_cards_reject_invalid_ready_story_quality tools/new-agents/backend/tests/test_agent_runtime.py::test_artifact_data_structured_output_instruction_puts_artifact_data_before_chat_for_visible_streaming tools/new-agents/backend/tests/test_agent_runtime.py::test_runtime_raw_json_stream_turn_renders_user_story_breakdown_artifact_data_before_final_output -q
+```
+
+结果：修复前失败，失败原因是 `USER_STORY_BREAKDOWN` 尚未配置 artifact-data renderer / structured output instruction。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_stream_services.py::test_stream_agent_run_events_records_artifact_data_through_persistence_adapter tools/new-agents/backend/tests/test_run_persistence.py::test_record_artifact_version_persists_artifact_data_in_current_snapshot tools/new-agents/backend/tests/test_api.py::test_init_db_upgrades_existing_artifact_version_table_with_artifact_data -q
+```
+
+结果：修复前失败，失败原因是 `AgentTurnOutput` 不接受 `artifact_data`、`record_artifact_version` 不支持结构化 payload、旧表 upgrade 不补 `artifact_data` 列。
+
+已验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py::test_runtime_raw_json_stream_turn_renders_user_story_breakdown_artifact_data_before_final_output tools/new-agents/backend/tests/test_agent_runtime.py::test_runtime_raw_json_stream_turn_renders_all_user_story_breakdown_stages_from_artifact_data -q
+```
+
+结果：`5 passed`
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_stream_services.py tools/new-agents/backend/tests/test_run_persistence.py tools/new-agents/backend/tests/test_api.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_contracts.py -q
+```
+
+结果：`386 passed`
+
+```bash
+.venv/bin/python -m pytest tests/e2e/new_agents_browser/test_alex_user_story_breakdown_workflow.py -q
+```
+
+结果：`2 passed`。运行中出现 coverage `no-data-collected` warning，但未导致测试失败。
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：New Agents 前端 `712 passed`；New Agents 后端 `591 passed, 1 deselected`。运行中仍出现既有 `ArtifactPane.test.tsx` React `act(...)` warning，但未导致测试失败。
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：默认 sandbox 下失败，失败点为 MidScene proxy 端口绑定 `EPERM` 和 Playwright Chromium Mach port `Permission denied`；在同一命令提权重跑时，Codex 平台因 usage limit 拒绝执行。该失败不是本轮代码断言失败，但本轮无法取得完整 `all` 绿灯；提交时需作为环境验证例外记录。
+
 下一轮承接：
 
-- 第 3 轮应把用户故事卡片从 Markdown contract 升级为结构化 `artifact_data` 或等价严格 contract，补后端确定性 renderer 和质量校验。
-- 第 3 轮开始前如无新 P0/P1 改道条件，可使用目标承接检查，不必重新做完整候选排序型 CGA。
+- 第 4 轮应基于 `artifactData` 读取单张 ready story，生成并持久化单故事 handoff packet，记录 source run / workflow / stage / artifact version / digest / storyId / requirementId 追溯。
+- 第 4 轮需要处理上游 artifact version 或 digest 变化后的 stale 提示；仍不实现真实 AI Coding workflow，也不生成实现计划、文件路径、测试命令或架构方案。

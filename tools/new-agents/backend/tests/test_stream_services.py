@@ -135,8 +135,16 @@ class FakePersistence:
         run_id: str,
         stage_id: str,
         content: str,
+        *,
+        artifact_data=None,
     ) -> None:
-        self.calls.append(("record_artifact_version", run_id, stage_id, content))
+        self.calls.append((
+            "record_artifact_version",
+            run_id,
+            stage_id,
+            content,
+            artifact_data,
+        ))
 
     def build_runtime_prompt(self, run_id: str, current_prompt: str) -> str:
         self.calls.append(("build_runtime_prompt", run_id, current_prompt))
@@ -298,7 +306,13 @@ def test_stream_agent_run_events_records_turn_through_persistence_adapter(
         ("build_runtime_context", "run-123", "用户需求"),
         ("append_user_message", "run-123", "用户需求"),
         ("append_assistant_message", "run-123", "已更新右侧需求分析文档，请确认。"),
-        ("record_artifact_version", "run-123", "CLARIFY", VALID_CLARIFY_ARTIFACT),
+        (
+            "record_artifact_version",
+            "run-123",
+            "CLARIFY",
+            VALID_CLARIFY_ARTIFACT,
+            None,
+        ),
     ]
     metric = persistence.calls[-1][1]
     assert persistence.calls[-1][0] == "record_turn_metric"
@@ -316,6 +330,63 @@ def test_stream_agent_run_events_records_turn_through_persistence_adapter(
     assert metric["estimated_tokens"] >= 1
     assert metric["duration_ms"] >= 0
     assert metric["contract_retry_count"] == 0
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_records_artifact_data_through_persistence_adapter(
+    mock_build_runtime: MagicMock,
+) -> None:
+    artifact_data = {
+        "document_info": {
+            "artifact_name": "用户故事卡片",
+            "workflow": "USER_STORY_BREAKDOWN",
+            "stage": "STORIES",
+        },
+        "story_cards": [
+            {
+                "story_id": "US-001",
+                "title": "短信验证码登录",
+            }
+        ],
+    }
+    final = AgentTurnOutput.model_validate({
+        "chat": "已更新右侧用户故事卡片，请确认。",
+        "artifact_update": {
+            "type": "replace",
+            "markdown": VALID_CLARIFY_ARTIFACT,
+        },
+        "artifact_data": artifact_data,
+        "stage_action": None,
+        "warnings": [],
+    })
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter([final])
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+    request = AgentRunStreamRequest.model_validate({
+        "prompt": "用户需求",
+        "systemPrompt": "你是 Alex。",
+        "workflowId": "TEST_DESIGN",
+        "stageId": "CLARIFY",
+    })
+
+    events = list(stream_agent_run_events(
+        request,
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+        persistence=persistence,
+    ))
+
+    assert events[-1] == AgentTurnEvent(output=final)
+    assert (
+        "record_artifact_version",
+        "run-123",
+        "CLARIFY",
+        VALID_CLARIFY_ARTIFACT,
+        artifact_data,
+    ) in persistence.calls
+    assert "artifact_data" not in events[-1].model_dump(mode="json")["output"]
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
