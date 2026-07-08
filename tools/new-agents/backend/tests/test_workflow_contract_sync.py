@@ -228,6 +228,20 @@ def _workflow_manifest() -> dict:
     return json.loads(WORKFLOW_MANIFEST.read_text(encoding="utf-8"))
 
 
+def _workflow_manifest_visual_contracts(
+    field_name: str,
+) -> dict[tuple[str, str], list[str]]:
+    manifest = _workflow_manifest()
+    result: dict[tuple[str, str], list[str]] = {}
+    for workflow_id, workflow in manifest["workflows"].items():
+        for stage in workflow["stages"]:
+            visual_contract = stage.get("visualContract") or {}
+            values = visual_contract.get(field_name) or []
+            if values:
+                result[(workflow_id, stage["id"])] = values
+    return result
+
+
 def test_shared_workflow_manifest_stage_order_matches_backend_contract():
     assert _workflow_manifest_stages() == WORKFLOW_STAGES
 
@@ -240,6 +254,17 @@ def test_shared_workflow_manifest_stage_keys_match_required_artifact_contracts()
     }
 
     assert manifest_stage_keys == set(REQUIRED_ARTIFACT_HEADINGS)
+
+
+def test_shared_workflow_manifest_visual_contract_matches_backend_required_visuals():
+    assert (
+        _workflow_manifest_visual_contracts("requiredMermaidDiagrams")
+        == REQUIRED_ARTIFACT_MERMAID_DIAGRAMS
+    )
+    assert (
+        _workflow_manifest_visual_contracts("requiredStructuredVisuals")
+        == REQUIRED_ARTIFACT_STRUCTURED_VISUALS
+    )
 
 
 def test_shared_workflow_manifest_stage_keys_match_frontend_prompt_templates():

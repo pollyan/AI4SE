@@ -4,7 +4,8 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from agent_contracts import validate_agent_turn
+from agent_contracts import WORKFLOW_STAGES, validate_agent_turn
+from agent_runtime import supports_artifact_data_rendering
 from artifact_data_renderers import (
     CasesArtifactData,
     ClarifyArtifactData,
@@ -6025,6 +6026,125 @@ VALID_USER_STORY_HANDOFF_ARTIFACT_DATA = {
         {"checked": True, "item": "每个 ready story 都有 storyId 和 requirementId"}
     ],
 }
+
+
+ARTIFACT_DATA_STAGE_FIXTURES = {
+    ("TEST_DESIGN", "CLARIFY"): {
+        "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
+    },
+    ("TEST_DESIGN", "STRATEGY"): {
+        "artifact_data": VALID_STRATEGY_ARTIFACT_DATA,
+    },
+    ("TEST_DESIGN", "CASES"): {
+        "artifact_data": VALID_CASES_ARTIFACT_DATA,
+    },
+    ("TEST_DESIGN", "DELIVERY"): {
+        "artifact_data": VALID_DELIVERY_ARTIFACT_DATA,
+    },
+    ("REQ_REVIEW", "REVIEW"): {
+        "artifact_data": VALID_REQ_REVIEW_ARTIFACT_DATA,
+    },
+    ("REQ_REVIEW", "REPORT"): {
+        "artifact_data": VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA,
+    },
+    ("INCIDENT_REVIEW", "TIMELINE"): {
+        "artifact_data": VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
+    },
+    ("INCIDENT_REVIEW", "ROOT_CAUSE"): {
+        "artifact_data": VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
+    },
+    ("INCIDENT_REVIEW", "IMPROVEMENT"): {
+        "artifact_data": VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA,
+    },
+    ("IDEA_BRAINSTORM", "DEFINE"): {
+        "artifact_data": VALID_IDEA_DEFINE_ARTIFACT_DATA,
+    },
+    ("IDEA_BRAINSTORM", "DIVERGE"): {
+        "artifact_data": VALID_IDEA_DIVERGE_ARTIFACT_DATA,
+    },
+    ("IDEA_BRAINSTORM", "CONVERGE"): {
+        "artifact_data": VALID_IDEA_CONVERGE_ARTIFACT_DATA,
+    },
+    ("IDEA_BRAINSTORM", "CONCEPT"): {
+        "artifact_data": VALID_IDEA_CONCEPT_ARTIFACT_DATA,
+    },
+    ("VALUE_DISCOVERY", "ELEVATOR"): {
+        "artifact_data": VALID_VALUE_ELEVATOR_ARTIFACT_DATA,
+    },
+    ("VALUE_DISCOVERY", "PERSONA"): {
+        "artifact_data": VALID_VALUE_PERSONA_ARTIFACT_DATA,
+    },
+    ("VALUE_DISCOVERY", "JOURNEY"): {
+        "artifact_data": VALID_VALUE_JOURNEY_ARTIFACT_DATA,
+    },
+    ("VALUE_DISCOVERY", "BLUEPRINT"): {
+        "artifact_data": VALID_VALUE_BLUEPRINT_ARTIFACT_DATA,
+    },
+    ("USER_STORY_BREAKDOWN", "SCOPE"): {
+        "artifact_data": VALID_USER_STORY_SCOPE_ARTIFACT_DATA,
+    },
+    ("USER_STORY_BREAKDOWN", "STORY_MAP"): {
+        "artifact_data": VALID_USER_STORY_MAP_ARTIFACT_DATA,
+    },
+    ("USER_STORY_BREAKDOWN", "STORIES"): {
+        "artifact_data": VALID_USER_STORIES_ARTIFACT_DATA,
+    },
+    ("USER_STORY_BREAKDOWN", "HANDOFF"): {
+        "artifact_data": VALID_USER_STORY_HANDOFF_ARTIFACT_DATA,
+    },
+}
+
+
+def _runtime_supported_artifact_data_stage_keys() -> set[tuple[str, str]]:
+    return {
+        (workflow_id, stage_id)
+        for workflow_id, stage_ids in WORKFLOW_STAGES.items()
+        for stage_id in stage_ids
+        if supports_artifact_data_rendering(workflow_id, stage_id)
+    }
+
+
+def test_artifact_data_stage_fixture_registry_covers_runtime_supported_stages():
+    fixture_stage_keys = set(ARTIFACT_DATA_STAGE_FIXTURES)
+    runtime_stage_keys = _runtime_supported_artifact_data_stage_keys()
+
+    assert fixture_stage_keys == runtime_stage_keys
+
+
+@pytest.mark.parametrize(
+    ("workflow_id", "stage_id", "artifact_data"),
+    [
+        (workflow_id, stage_id, fixture["artifact_data"])
+        for (workflow_id, stage_id), fixture in sorted(
+            ARTIFACT_DATA_STAGE_FIXTURES.items()
+        )
+    ],
+)
+def test_artifact_data_stage_fixture_registry_renders_contract_valid_outputs(
+    workflow_id,
+    stage_id,
+    artifact_data,
+):
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已生成当前阶段产出物，请查看右侧文档。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id=workflow_id,
+        current_stage_id=stage_id,
+    )
+
+    assert output is not None
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown
+    assert output.artifact_data == artifact_data
+    assert validate_agent_turn(
+        output,
+        workflow_id=workflow_id,
+        current_stage_id=stage_id,
+    ) == output
 
 
 @pytest.mark.parametrize(

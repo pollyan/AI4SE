@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成；前端正式 / partial artifact `ai4se-visual` 写入前校验已完成并全量验证通过）
+- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成；前端正式 / partial artifact `ai4se-visual` 写入前校验已完成并全量验证通过；第 8A 轮 `artifact_data` 全阶段 fixture registry 回归门禁已完成并全量验证通过）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -117,6 +117,7 @@
 - [ ] 增加结构化失败回归门禁。（第 8 轮）
   - 目标：高失败阶段必须有固定 fixture / raw JSON stream / renderer contract 测试，确保不会再次因为已知不变量触发 `SCHEMA_VALIDATION_FAILED`。
   - 验收：纳入 `./scripts/test/test-local.sh new-agents` 或明确的 New Agents backend regression suite。
+  - 进展：第 8A 轮已建立 `ARTIFACT_DATA_STAGE_FIXTURES` 全阶段测试登记表，覆盖全部 `supports_artifact_data_rendering()` 支持的 21 个在线阶段；每个 registry fixture 都必须通过 deterministic renderer 和 `validate_agent_turn()`。`test_agent_runtime.py` 的 artifact-data instruction 顺序矩阵已改为从 registry 派生，避免新增阶段时漏掉 raw JSON visible streaming 门禁。`test_workflow_contract_sync.py` 已反向校验 `workflow_manifest.json` 的 `visualContract` 与后端 required Mermaid / structured visual maps 完全一致。
 
 - [ ] 建立视觉产物协议分层。（第 7 轮）
   - 目标：明确哪些视觉类型必须走 `ai4se-visual` JSON，哪些 Mermaid 类型允许由后端 deterministic renderer 生成，哪些 DSL 禁止模型直接输出。
@@ -1053,6 +1054,82 @@ cd tools/new-agents/frontend && npm run lint
 - 本轮补齐前端写入前 `ai4se-visual` gate，不改变后端 `validate_agent_turn()` 的正式 contract。
 - Backend 仍不执行 Mermaid JS parse；Mermaid parse gate 仍由前端 Mermaid runtime 承担。
 - `mmdc` / 浏览器渲染级 CI 门禁仍属于后续第 7 / 第 8 轮候选，不在本切片内声明完成。
+
+### 2026-07-08 第 8A 轮：artifact_data 全阶段 fixture registry 回归门禁
+
+已完成：
+
+- `test_artifact_data_renderers.py` 新增 `ARTIFACT_DATA_STAGE_FIXTURES`，覆盖所有 `supports_artifact_data_rendering()` 支持的 21 个在线 workflow/stage；每个 fixture 都必须能通过 deterministic renderer 和 `validate_agent_turn()`。
+- `test_agent_runtime.py` 的 `ARTIFACT_DATA_STREAMING_STAGES` 从 fixture registry 派生，避免手写 21 阶段矩阵和 runtime 支持范围漂移。
+- `test_workflow_contract_sync.py` 新增 manifest `visualContract` 反向同步测试，要求 `workflow_manifest.json` 中的 `requiredMermaidDiagrams` / `requiredStructuredVisuals` 与后端 required visual maps 完全一致。
+- `docs/TESTING.md` 记录第 8 轮全工作流回归门禁入口，明确 fixture registry、runtime instruction matrix 和 visual contract sync 的覆盖边界。
+- 只读 explorer `Dirac` 已审查当前门禁缺口，确认本切片应优先收口全阶段 fixture registry、自派生 runtime matrix 和 manifest visualContract reverse sync。
+
+RED 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_artifact_data_stage_fixture_registry_covers_runtime_supported_stages tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_artifact_data_stage_fixture_registry_renders_contract_valid_outputs -q
+```
+
+结果：修复前 collection 失败，退出码 `4`，失败原因为 `NameError: name 'ARTIFACT_DATA_STAGE_FIXTURES' is not defined`，证明 registry 尚未建立。
+
+GREEN 与聚焦回归：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_artifact_data_stage_fixture_registry_covers_runtime_supported_stages tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_artifact_data_stage_fixture_registry_renders_contract_valid_outputs -q
+```
+
+结果：`22 passed`
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py::test_artifact_data_structured_output_instruction_puts_artifact_data_before_chat_for_visible_streaming -q
+```
+
+结果：`21 passed`
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py::test_shared_workflow_manifest_visual_contract_matches_backend_required_visuals -q
+```
+
+结果：`1 passed`
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_artifact_data_stage_fixture_registry_covers_runtime_supported_stages tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_artifact_data_stage_fixture_registry_renders_contract_valid_outputs tools/new-agents/backend/tests/test_agent_runtime.py::test_artifact_data_structured_output_instruction_puts_artifact_data_before_chat_for_visible_streaming tools/new-agents/backend/tests/test_workflow_contract_sync.py::test_shared_workflow_manifest_visual_contract_matches_backend_required_visuals -q
+```
+
+结果：`44 passed`
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_agent_contracts.py tools/new-agents/backend/tests/test_workflow_contract_sync.py -q
+```
+
+结果：`375 passed`
+
+批量与全量验证：
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：通过。New Agents Frontend `736 passed`，New Agents Backend `657 passed, 1 deselected`。
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：默认沙箱失败，失败点为 MidScene proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 Playwright Chromium `bootstrap_check_in ... Permission denied (1100)`，属于端口 / 浏览器权限限制；脚本被中断前已完成 Intent Tester API、代码质量、Common Frontend、New Agents Frontend / Backend，Browser E2E 因 Chromium 权限失败。
+
+```bash
+/bin/zsh -lc './scripts/test/test-local.sh all > /private/tmp/ai4se-artifact-data-registry-full-all.log 2>&1; rc=$?; tail -180 /private/tmp/ai4se-artifact-data-registry-full-all.log; echo EXIT_STATUS:$rc; exit $rc'
+```
+
+结果：非沙箱全量通过，退出码 `0`。关键结果包括 Intent Tester API `294 passed`、MidScene proxy `17 passed`、Common Frontend lint/build 通过、New Agents Frontend `736 passed`、New Agents Backend `657 passed, 1 deselected`、New Agents Browser E2E `11 passed, 10 deselected`。
+
+残余风险：
+
+- 本轮不迁移 20 个阶段的 `artifactDataContract` 到 manifest。
+- 本轮不增加 backend Mermaid JS parse 或 `mmdc` 渲染门禁。
+- 模型输出字段 / 后端派生字段 / 视觉协议来源的完整全阶段矩阵仍属第 8 轮后续文档收口候选。
 
 ## 每轮验收口径
 

@@ -23,6 +23,7 @@ from agent_runtime import (
 )
 from sse_schemas import AgentTurnDeltaOutput
 from test_artifact_data_renderers import (
+    ARTIFACT_DATA_STAGE_FIXTURES,
     VALID_IDEA_CONCEPT_ARTIFACT_DATA,
     VALID_IDEA_CONVERGE_ARTIFACT_DATA,
     VALID_IDEA_DEFINE_ARTIFACT_DATA,
@@ -46,29 +47,7 @@ from test_artifact_data_renderers import (
 )
 
 
-ARTIFACT_DATA_STREAMING_STAGES = [
-    ("TEST_DESIGN", "CLARIFY"),
-    ("TEST_DESIGN", "STRATEGY"),
-    ("TEST_DESIGN", "CASES"),
-    ("TEST_DESIGN", "DELIVERY"),
-    ("REQ_REVIEW", "REVIEW"),
-    ("REQ_REVIEW", "REPORT"),
-    ("INCIDENT_REVIEW", "TIMELINE"),
-    ("INCIDENT_REVIEW", "ROOT_CAUSE"),
-    ("INCIDENT_REVIEW", "IMPROVEMENT"),
-    ("IDEA_BRAINSTORM", "DEFINE"),
-    ("IDEA_BRAINSTORM", "DIVERGE"),
-    ("IDEA_BRAINSTORM", "CONVERGE"),
-    ("IDEA_BRAINSTORM", "CONCEPT"),
-    ("VALUE_DISCOVERY", "ELEVATOR"),
-    ("VALUE_DISCOVERY", "PERSONA"),
-    ("VALUE_DISCOVERY", "JOURNEY"),
-    ("VALUE_DISCOVERY", "BLUEPRINT"),
-    ("USER_STORY_BREAKDOWN", "SCOPE"),
-    ("USER_STORY_BREAKDOWN", "STORY_MAP"),
-    ("USER_STORY_BREAKDOWN", "STORIES"),
-    ("USER_STORY_BREAKDOWN", "HANDOFF"),
-]
+ARTIFACT_DATA_STREAMING_STAGES = sorted(ARTIFACT_DATA_STAGE_FIXTURES)
 
 
 @pytest.mark.parametrize(("workflow_id", "stage_id"), ARTIFACT_DATA_STREAMING_STAGES)
