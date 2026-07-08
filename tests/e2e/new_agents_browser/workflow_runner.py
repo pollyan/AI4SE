@@ -119,7 +119,7 @@ def _dismiss_startup_handoff_panel_if_present(page: Page) -> None:
         expect(new_topic_button).to_be_visible(timeout=1000)
     except AssertionError:
         return
-    new_topic_button.click()
+    new_topic_button.evaluate("element => element.click()")
 
 
 def _send_message(page: Page, message: str) -> None:

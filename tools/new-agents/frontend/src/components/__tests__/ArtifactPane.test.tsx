@@ -5,6 +5,9 @@ import { useStore } from '../../store';
 import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../../services/runSnapshotService';
 
 const mockHandleRegenerateArtifactSection = vi.hoisted(() => vi.fn());
+const mockFetchStoryHandoffCandidates = vi.hoisted(() => vi.fn());
+const mockFetchStoryHandoffPackets = vi.hoisted(() => vi.fn());
+const mockCreateStoryHandoffPacket = vi.hoisted(() => vi.fn());
 
 vi.mock('../../services/runSnapshotService', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../services/runSnapshotService')>();
@@ -19,6 +22,12 @@ vi.mock('../../services/chatService', () => ({
     useChatService: () => ({
         handleRegenerateArtifactSection: mockHandleRegenerateArtifactSection,
     }),
+}));
+
+vi.mock('../../services/storyHandoffPacketService', () => ({
+    fetchStoryHandoffCandidates: mockFetchStoryHandoffCandidates,
+    fetchStoryHandoffPackets: mockFetchStoryHandoffPackets,
+    createStoryHandoffPacket: mockCreateStoryHandoffPacket,
 }));
 
 // Mock Mermaid component
@@ -70,6 +79,9 @@ describe('ArtifactPane Component', () => {
     beforeEach(() => {
         vi.restoreAllMocks();
         mockHandleRegenerateArtifactSection.mockReset();
+        mockFetchStoryHandoffCandidates.mockReset();
+        mockFetchStoryHandoffPackets.mockReset();
+        mockCreateStoryHandoffPacket.mockReset();
         useStore.setState({
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
@@ -7379,5 +7391,98 @@ describe('ArtifactPane Component', () => {
         expect((regenerateButton as HTMLButtonElement).disabled).toBe(true);
         fireEvent.click(regenerateButton);
         expect(mockHandleRegenerateArtifactSection).not.toHaveBeenCalled();
+    });
+
+    it('generates and copies a story handoff packet from the story breakdown sprint plan', async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.assign(navigator, {
+            clipboard: { writeText },
+        });
+        const packet = {
+            sourceRunId: 'run-123',
+            sourceWorkflowId: 'STORY_BREAKDOWN',
+            sourceStageId: 'SPRINT_PLAN',
+            sourceArtifactVersion: 1,
+            sourceArtifactDigest: 'sha256:story',
+            createdAt: 1710000000000,
+            storyId: 'US-001',
+            requirementIds: ['REQ-001'],
+            userStory: '作为测试负责人，我想生成单故事需求包，以便交给 AI Coding。',
+            acceptanceCriteria: ['Given ready story When 生成 packet Then 可复制 JSON'],
+            businessRules: ['不得包含实现计划'],
+            nonFunctionalNotes: ['可追溯'],
+            outOfScope: ['代码任务'],
+            dependencies: [],
+            openQuestions: [],
+        };
+        mockFetchStoryHandoffCandidates.mockResolvedValue({
+            runId: 'run-123',
+            workflowId: 'STORY_BREAKDOWN',
+            stageId: 'SPRINT_PLAN',
+            sourceArtifactVersion: 1,
+            sourceArtifactDigest: 'sha256:story',
+            candidates: [{
+                storyId: 'US-001',
+                title: '生成需求包',
+                requirementIds: ['REQ-001'],
+                userValue: '交给 AI Coding 前保留需求追溯。',
+                readyReason: '验收标准和业务规则已明确',
+            }],
+        });
+        mockFetchStoryHandoffPackets
+            .mockResolvedValueOnce({
+                runId: 'run-123',
+                workflowId: 'STORY_BREAKDOWN',
+                stageId: 'SPRINT_PLAN',
+                sourceArtifactVersion: 1,
+                sourceArtifactDigest: 'sha256:story',
+                packets: [],
+            })
+            .mockResolvedValueOnce({
+                runId: 'run-123',
+                workflowId: 'STORY_BREAKDOWN',
+                stageId: 'SPRINT_PLAN',
+                sourceArtifactVersion: 1,
+                sourceArtifactDigest: 'sha256:story',
+                packets: [{
+                    id: 'packet-1',
+                    storyId: 'US-001',
+                    createdAt: 1710000000000,
+                    isStale: false,
+                    currentSourceArtifactVersion: 1,
+                    currentSourceArtifactDigest: 'sha256:story',
+                    packet,
+                }],
+            });
+        mockCreateStoryHandoffPacket.mockResolvedValue(packet);
+        useStore.setState({
+            workflow: 'STORY_BREAKDOWN',
+            stageIndex: 3,
+            currentRunId: 'run-123',
+            artifactContent: '# 用户故事拆解包\n\n## Sprint 与需求包',
+        });
+
+        render(<ArtifactPane />);
+
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: '生成 US-001 需求包' })).toBeTruthy();
+        });
+        fireEvent.click(screen.getByRole('button', { name: '生成 US-001 需求包' }));
+
+        await waitFor(() => {
+            expect(mockCreateStoryHandoffPacket).toHaveBeenCalledWith(
+                'run-123',
+                'SPRINT_PLAN',
+                'US-001',
+            );
+            expect(screen.getByText('US-001 · v1')).toBeTruthy();
+            expect(screen.getByRole('button', { name: '复制 US-001 需求包' })).toBeTruthy();
+        });
+        fireEvent.click(screen.getByRole('button', { name: '复制 US-001 需求包' }));
+
+        await waitFor(() => {
+            expect(writeText).toHaveBeenCalledWith(expect.stringContaining('"storyId": "US-001"'));
+            expect(screen.getByText('已复制 US-001')).toBeTruthy();
+        });
     });
 });

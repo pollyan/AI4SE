@@ -116,7 +116,7 @@ def test_init_db_upgrades_existing_artifact_section_lock_table():
         os.unlink(db_path)
 
 
-def test_init_db_upgrades_existing_artifact_version_table_with_artifact_data():
+def test_init_db_upgrades_existing_artifact_version_table_with_artifact_data_json():
     db_fd, db_path = tempfile.mkstemp()
     app = create_app({
         'TESTING': True,
@@ -146,7 +146,52 @@ def test_init_db_upgrades_existing_artifact_version_table_with_artifact_data():
                 )
             }
 
-        assert "artifact_data" in columns
+        assert "artifact_data_json" in columns
+    finally:
+        os.close(db_fd)
+        os.unlink(db_path)
+
+
+def test_init_db_upgrades_existing_turn_metric_table_with_diagnostic_json():
+    db_fd, db_path = tempfile.mkstemp()
+    app = create_app({
+        'TESTING': True,
+        'SQLALCHEMY_DATABASE_URI': f'sqlite:///{db_path}',
+        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+    })
+
+    try:
+        with app.app_context():
+            db.session.execute(text("""
+                CREATE TABLE agent_run_turn_metrics (
+                    id INTEGER PRIMARY KEY,
+                    run_id VARCHAR(36) NOT NULL,
+                    workflow_id VARCHAR(64) NOT NULL,
+                    stage_id VARCHAR(64) NOT NULL,
+                    model VARCHAR(128) NOT NULL,
+                    provider VARCHAR(128) NOT NULL,
+                    status VARCHAR(32) NOT NULL,
+                    error_code VARCHAR(64),
+                    duration_ms INTEGER NOT NULL,
+                    input_chars INTEGER NOT NULL DEFAULT 0,
+                    output_chars INTEGER NOT NULL DEFAULT 0,
+                    estimated_tokens INTEGER NOT NULL DEFAULT 0,
+                    contract_retry_count INTEGER NOT NULL DEFAULT 0,
+                    created_at DATETIME
+                )
+            """))
+            db.session.commit()
+
+            init_db(app)
+
+            columns = {
+                row[1]
+                for row in db.session.execute(
+                    text("PRAGMA table_info(agent_run_turn_metrics)")
+                )
+            }
+
+        assert "diagnostic_json" in columns
     finally:
         os.close(db_fd)
         os.unlink(db_path)

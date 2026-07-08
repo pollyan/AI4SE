@@ -680,6 +680,7 @@ def record_turn_metric(
     output_chars: int,
     estimated_tokens: int,
     contract_retry_count: int,
+    diagnostic: dict | None = None,
 ) -> AgentRunTurnMetric:
     _get_run(run_id)
     metric = AgentRunTurnMetric(
@@ -695,6 +696,7 @@ def record_turn_metric(
         output_chars=max(0, output_chars),
         estimated_tokens=max(0, estimated_tokens),
         contract_retry_count=max(0, contract_retry_count),
+        diagnostic=_sanitize_error_diagnostic(diagnostic),
     )
     db.session.add(metric)
     db.session.commit()
@@ -1066,7 +1068,7 @@ def _provider_observability_item(
 
 
 def _turn_metric_snapshot(metric: AgentRunTurnMetric) -> dict:
-    return {
+    snapshot = {
         "id": metric.id,
         "runId": metric.run_id,
         "workflowId": metric.workflow_id,
@@ -1082,6 +1084,31 @@ def _turn_metric_snapshot(metric: AgentRunTurnMetric) -> dict:
         "contractRetryCount": metric.contract_retry_count,
         "createdAt": _format_datetime(metric.created_at),
     }
+    if metric.diagnostic is not None:
+        snapshot["diagnostic"] = metric.diagnostic
+    return snapshot
+
+
+def _sanitize_error_diagnostic(value: dict | None) -> dict | None:
+    if not isinstance(value, dict):
+        return None
+    allowed_fields = (
+        "phase",
+        "workflowId",
+        "stageId",
+        "fieldPath",
+        "validator",
+        "publicReason",
+        "retryable",
+    )
+    sanitized: dict = {}
+    for field in allowed_fields:
+        field_value = value.get(field)
+        if isinstance(field_value, str):
+            sanitized[field] = field_value[:500]
+        elif field == "retryable" and isinstance(field_value, bool):
+            sanitized[field] = field_value
+    return sanitized or None
 
 
 def list_agent_runs(

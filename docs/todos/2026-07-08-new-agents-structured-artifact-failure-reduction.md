@@ -108,7 +108,7 @@
   - 目标：Pydantic validators、structured output instruction、workflow manifest visual contract、frontend prompt 不再各写一套约束。
   - 验收：新增 contract sync 测试，证明关键不变量在 prompt 和后端 validator 中同时存在。
   - 进展：已完成 `IDEA_BRAINSTORM/CONVERGE` 首个 `artifactDataContract` 同步纵切。CONVERGE 的关键 artifact_data 不变量已进入 `workflow_manifest.json`，后端 structured output instruction 和前端 stage prompt 均从 manifest 生成同步约束，并由 backend / frontend 同步测试保护。
-  - 进展：第 8C 轮已完成 `TEST_DESIGN/CASES` `artifactDataContract` manifest 同步。CASES 的 `case_statistics` 后端派生、case_id 唯一性、`automation_candidates.case_id` / `coverage_trace.covered_cases` 引用门禁、禁止模型输出 renderer-owned Markdown / `ai4se-visual` 产物等关键约束已进入 manifest，并由 backend instruction sync、runtime instruction 和 frontend prompt tests 保护。其余 19 个 artifact-data 阶段尚未迁移。
+  - 进展：第 8C 轮已完成 `TEST_DESIGN/CASES` `artifactDataContract` manifest 同步。CASES 的 `case_statistics` 后端派生、case_id 唯一性、`automation_candidates.case_id` / `coverage_trace.covered_cases` 引用门禁、禁止模型输出 renderer-owned Markdown / `ai4se-visual` 产物等关键约束已进入 manifest，并由 backend instruction sync、runtime instruction 和 frontend prompt tests 保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES` 外，其余 23 个阶段尚未迁移。
 
 - [ ] 针对高失败阶段做纵切专项修复。（第 4-6 轮）
   - 优先顺序：`IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY`、`IDEA_BRAINSTORM/DIVERGE`。
@@ -118,8 +118,8 @@
 - [ ] 增加结构化失败回归门禁。（第 8 轮）
   - 目标：高失败阶段必须有固定 fixture / raw JSON stream / renderer contract 测试，确保不会再次因为已知不变量触发 `SCHEMA_VALIDATION_FAILED`。
   - 验收：纳入 `./scripts/test/test-local.sh new-agents` 或明确的 New Agents backend regression suite。
-  - 进展：第 8A 轮已建立 `ARTIFACT_DATA_STAGE_FIXTURES` 全阶段测试登记表，覆盖全部 `supports_artifact_data_rendering()` 支持的 21 个在线阶段；每个 registry fixture 都必须通过 deterministic renderer 和 `validate_agent_turn()`。`test_agent_runtime.py` 的 artifact-data instruction 顺序矩阵已改为从 registry 派生，避免新增阶段时漏掉 raw JSON visible streaming 门禁。`test_workflow_contract_sync.py` 已反向校验 `workflow_manifest.json` 的 `visualContract` 与后端 required Mermaid / structured visual maps 完全一致。
-  - 进展：第 8B 轮已在 `docs/TESTING.md` 补齐 21 个在线阶段的模型输出字段 / 后端派生字段 / 视觉协议来源矩阵，明确 validation-only 与 backend-derived 的边界，并记录 `IDEA_BRAINSTORM/CONVERGE` 是当前唯一完成 `artifactDataContract` manifest 同步迁移的阶段。
+  - 进展：第 8A 轮已建立 `ARTIFACT_DATA_STAGE_FIXTURES` 全阶段测试登记表，当前覆盖全部 `supports_artifact_data_rendering()` 支持的 25 个在线阶段；每个 registry fixture 都必须通过 deterministic renderer 和 `validate_agent_turn()`。`test_agent_runtime.py` 的 artifact-data instruction 顺序矩阵已改为从 registry 派生，避免新增阶段时漏掉 raw JSON visible streaming 门禁。`test_workflow_contract_sync.py` 已反向校验 `workflow_manifest.json` 的 `visualContract` 与后端 required Mermaid / structured visual maps 完全一致。
+  - 进展：第 8B 轮已在 `docs/TESTING.md` 补齐 25 个在线阶段的模型输出字段 / 后端派生字段 / 视觉协议来源矩阵，明确 validation-only 与 backend-derived 的边界，并记录当前已完成 `artifactDataContract` manifest 同步迁移的阶段为 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES`。
   - 进展：第 8C 轮已新增 `TEST_DESIGN/CASES` 的 backend manifest contract sync、runtime instruction source 和 frontend prompt sync 回归测试；相关 CASES renderer / 引用门禁测试继续通过。
 
 - [ ] 建立视觉产物协议分层。（第 7 轮）
@@ -1039,7 +1039,7 @@ cd tools/new-agents/frontend && npm run lint
 
 已完成：
 
-- `test_artifact_data_renderers.py` 新增 `ARTIFACT_DATA_STAGE_FIXTURES`，覆盖所有 `supports_artifact_data_rendering()` 支持的 21 个在线 workflow/stage；每个 fixture 都必须能通过 deterministic renderer 和 `validate_agent_turn()`。
+- `test_artifact_data_renderers.py` 新增 `ARTIFACT_DATA_STAGE_FIXTURES`，当前覆盖所有 `supports_artifact_data_rendering()` 支持的 25 个在线 workflow/stage；每个 fixture 都必须能通过 deterministic renderer 和 `validate_agent_turn()`。
 - `test_agent_runtime.py` 的 `ARTIFACT_DATA_STREAMING_STAGES` 从 fixture registry 派生，避免手写 21 阶段矩阵和 runtime 支持范围漂移。
 - `test_workflow_contract_sync.py` 新增 manifest `visualContract` 反向同步测试，要求 `workflow_manifest.json` 中的 `requiredMermaidDiagrams` / `requiredStructuredVisuals` 与后端 required visual maps 完全一致。
 - `docs/TESTING.md` 记录第 8 轮全工作流回归门禁入口，明确 fixture registry、runtime instruction matrix 和 visual contract sync 的覆盖边界。
@@ -1107,7 +1107,7 @@ GREEN 与聚焦回归：
 
 残余风险：
 
-- 本轮不迁移 20 个阶段的 `artifactDataContract` 到 manifest。
+- 本轮不迁移其余阶段的 `artifactDataContract` 到 manifest；当前 registry 为 25 个阶段，除 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES` 外仍有 23 个待迁移。
 - 本轮不增加 backend Mermaid JS parse 或 `mmdc` 渲染门禁。
 - 模型输出字段 / 后端派生字段 / 视觉协议来源的完整全阶段矩阵仍属第 8 轮后续文档收口候选。
 
@@ -1115,9 +1115,9 @@ GREEN 与聚焦回归：
 
 已完成：
 
-- `docs/TESTING.md` 新增 21 个在线 `artifact_data` 阶段的字段来源矩阵，列出模型负责的语义字段、后端派生 / 归一化字段、视觉来源和现有证据。
+- `docs/TESTING.md` 新增并维护 25 个在线 `artifact_data` 阶段的字段来源矩阵，列出模型负责的语义字段、后端派生 / 归一化字段、视觉来源和现有证据。
 - 矩阵明确区分 backend-derived 与 validation-only：`STRATEGY.risks[].rpn`、`CASES.case_statistics`、`VALUE_DISCOVERY/ELEVATOR.score_summary.total_score/average_score` 属于可后端补齐或归一化；`delivery_metrics`、`issue_statistics`、`priority_distribution`、`ice_score`、`acceptance_criteria_count` 等仍是模型输入后的校验，不声明后端补齐。
-- 矩阵明确 `IDEA_BRAINSTORM/CONVERGE` 是当前唯一完成 `artifactDataContract` manifest 同步迁移的阶段；其余 20 个阶段仍主要由 Pydantic model、renderer tests、runtime instruction 和 artifact contract tests 共同保护。
+- 矩阵明确当前已完成 `artifactDataContract` manifest 同步迁移的阶段为 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES`；其余 23 个阶段仍主要由 Pydantic model、renderer tests、runtime instruction 和 artifact contract tests 共同保护。
 - 矩阵明确 Mermaid 仍是后端 deterministic renderer 的编译目标，并区分 manifest required visual 与 renderer 额外输出：例如 `IDEA_BRAINSTORM/CONCEPT` 和 `VALUE_DISCOVERY/BLUEPRINT` 仍会额外生成 Mermaid，但 manifest 当前只要求其 `ai4se-visual`。
 - 只读 explorer `Jason` 已审查 `workflow_manifest.json`、`agent_runtime.py`、`artifact_data_renderers.py` 和相关 backend tests，返回的事实清单已并入矩阵；本轮未改生产 runtime、schema、manifest、prompt、测试代码或前端运行时。
 
@@ -1129,11 +1129,11 @@ GREEN 与聚焦回归：
 rg -n "模型负责的 artifact_data|后端派生 / 归一化|视觉来源|第 8B" docs/TESTING.md docs/todos/2026-07-08-new-agents-structured-artifact-failure-reduction.md
 ```
 
-结果：通过，`docs/TESTING.md` 和本 todo 均包含第 8B 矩阵入口；`docs/TESTING.md:155-175` 覆盖 21 个在线阶段。
+结果：通过，`docs/TESTING.md` 和本 todo 均包含第 8B 矩阵入口；当前 `docs/TESTING.md` 覆盖 25 个在线阶段。
 
 残余风险：
 
-- 本轮只补齐字段来源与视觉协议文档矩阵，不迁移 20 个阶段的 `artifactDataContract` 到 manifest。
+- 本轮只补齐字段来源与视觉协议文档矩阵，不迁移其余阶段的 `artifactDataContract` 到 manifest；当前仍有 23 个 artifact-data 阶段待迁移。
 - 本轮不增加 backend Mermaid JS parse 或 `mmdc` 渲染门禁。
 - 矩阵是人工维护的文档事实源，后续 schema / renderer / manifest 变化时仍必须同步更新；第 8A 的 fixture registry 和 manifest visualContract sync test 仍是可执行门禁。
 
@@ -1217,7 +1217,7 @@ cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workfl
 
 残余风险：
 
-- 本轮只迁移 `TEST_DESIGN/CASES`，当前已完成 `artifactDataContract` manifest 同步迁移的阶段为 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES`；其余 19 个 artifact-data 阶段仍待后续纵切迁移。
+- 本轮只迁移 `TEST_DESIGN/CASES`，当前已完成 `artifactDataContract` manifest 同步迁移的阶段为 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES`；其余 23 个 artifact-data 阶段仍待后续纵切迁移。
 - 本轮不改变 CASES Pydantic schema、renderer、SSE runtime 或 ArtifactPane。
 - 本轮不增加 backend Mermaid JS parse 或 `mmdc` 渲染门禁。
 

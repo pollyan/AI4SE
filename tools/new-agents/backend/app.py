@@ -16,6 +16,7 @@ def init_db(app):
     with app.app_context():
         db.create_all()
         _ensure_agent_artifact_version_columns()
+        _ensure_agent_run_turn_metric_columns()
         _ensure_artifact_comment_columns()
         _ensure_artifact_section_lock_columns()
         upsert_default_llm_config_from_env()
@@ -34,6 +35,23 @@ def _ensure_agent_artifact_version_columns():
     if "artifact_data_json" not in existing_columns:
         db.session.execute(text(
             "ALTER TABLE agent_artifact_versions ADD COLUMN artifact_data_json TEXT"
+        ))
+        db.session.commit()
+
+
+def _ensure_agent_run_turn_metric_columns():
+    """Upgrade existing turn metric tables with sanitized diagnostics storage."""
+    inspector = inspect(db.engine)
+    if "agent_run_turn_metrics" not in inspector.get_table_names():
+        return
+
+    existing_columns = {
+        column["name"]
+        for column in inspector.get_columns("agent_run_turn_metrics")
+    }
+    if "diagnostic_json" not in existing_columns:
+        db.session.execute(text(
+            "ALTER TABLE agent_run_turn_metrics ADD COLUMN diagnostic_json TEXT"
         ))
         db.session.commit()
 

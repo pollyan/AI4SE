@@ -100,10 +100,6 @@ flake8 --select=E9,F63,F7,F82 .
 - [登录功能](./test_requirements/login.md)
 - [优惠券 API](./test_requirements/requirements_coupon_api.md)
 
-### 证据归档
-
-- [2026-07-07 New Agents partial artifact streaming 证据归档](./evidence/2026-07-07-new-agents-partial-artifact-streaming.md)
-
 ---
 
 ## 快速上手

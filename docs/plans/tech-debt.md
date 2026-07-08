@@ -1036,10 +1036,10 @@
 - 2026-06-18: `docs/strategy/goal-mode-playbook.md` 明确满足默认触发点时应分发子智能体，跳过时必须记录原因；同时声明 AI4SE 仓库规则覆盖技能示例中的自动 commit 行为，worker 不得创建 commit，除非用户本轮明确要求提交。
 - 2026-06-18: `docs/strategy/goal-mode-playbook.md` 增加共享文件保护和无子智能体能力时的降级规则。
 - 2026-06-18: 旧技术债专项规则曾增加 worker 不创建 commit 的专项约束，并要求子智能体统一返回 `status: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED`、读取/修改文件、验证结果和残余风险。
-- 2026-06-25: 技术债专项规则已退役；子智能体调度、worker commit 边界、统一返回状态和验收规则统一收敛到 `docs/strategy/goal-mode-subagents.md`。
+- 2026-06-25: 技术债专项规则已退役；子智能体调度、worker commit 边界、统一返回状态和验收规则统一收敛到 `docs/strategy/goal-mode-playbook.md`。
 - 2026-06-18: `AGENTS.md` 增加 Codex goal mode 下子智能体分发、审查、验证和记录规则的交叉引用。
-- 验证: `rg -n "worker 不得创建 commit|统一状态|Codex goal mode|满足下列默认触发点|不得同时修改 worker" AGENTS.md docs/strategy/goal-mode-playbook.md docs/strategy/goal-mode-subagents.md`，命中新增规则。
-- 验证: `git diff --check -- AGENTS.md docs/strategy/goal-mode-playbook.md docs/strategy/goal-mode-subagents.md`，通过。
+- 验证: `rg -n "worker 不得创建 commit|统一状态|Codex goal mode|满足下列默认触发点|不得同时修改 worker" AGENTS.md docs/strategy/goal-mode-playbook.md`，命中新增规则。
+- 验证: `git diff --check -- AGENTS.md docs/strategy/goal-mode-playbook.md`，通过。
 
 ### P1: Artifact 模板标题校验会误接受正文或代码块中的标题文本
 

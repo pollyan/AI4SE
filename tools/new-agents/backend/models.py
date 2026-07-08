@@ -258,9 +258,24 @@ class AgentRunTurnMetric(db.Model):
     output_chars = db.Column(db.Integer, nullable=False, default=0)
     estimated_tokens = db.Column(db.Integer, nullable=False, default=0)
     contract_retry_count = db.Column(db.Integer, nullable=False, default=0)
+    diagnostic_json = db.Column(db.Text)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
     run = db.relationship("AgentRun", back_populates="turn_metrics")
+
+    @property
+    def diagnostic(self):
+        if not self.diagnostic_json:
+            return None
+        return json.loads(self.diagnostic_json)
+
+    @diagnostic.setter
+    def diagnostic(self, value):
+        self.diagnostic_json = (
+            json.dumps(value, ensure_ascii=False)
+            if value is not None
+            else None
+        )
 
 
 class AgentRuntimeConfigIssue(db.Model):

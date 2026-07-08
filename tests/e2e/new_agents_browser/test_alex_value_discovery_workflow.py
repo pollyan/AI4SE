@@ -31,8 +31,8 @@ def _alex_scenario() -> WorkflowScenario:
         ),
         stages=(
             StageExpectation(
-                stage_tab="明确价值定位",
-                transition_label="确认进入 梳理目标用户",
+                stage_tab="价值定位",
+                transition_label="确认进入 用户画像",
                 artifact_headings=(
                     "# 价值定位分析",
                     "## 产品核心定位",
@@ -45,8 +45,8 @@ def _alex_scenario() -> WorkflowScenario:
                 ),
             ),
             StageExpectation(
-                stage_tab="梳理目标用户",
-                transition_label="确认进入 梳理用户旅程",
+                stage_tab="用户画像",
+                transition_label="确认进入 用户旅程",
                 artifact_headings=(
                     "# 用户画像分析",
                     "## 主要用户画像",
@@ -58,8 +58,8 @@ def _alex_scenario() -> WorkflowScenario:
                 ),
             ),
             StageExpectation(
-                stage_tab="梳理用户旅程",
-                transition_label="确认进入 生成需求蓝图",
+                stage_tab="用户旅程",
+                transition_label="确认进入 需求蓝图",
                 artifact_headings=(
                     "# 用户旅程分析",
                     "## 用户旅程地图",
@@ -72,7 +72,7 @@ def _alex_scenario() -> WorkflowScenario:
                 ),
             ),
             StageExpectation(
-                stage_tab="生成需求蓝图",
+                stage_tab="需求蓝图",
                 transition_label=None,
                 artifact_headings=(
                     "需求蓝图",
@@ -90,10 +90,10 @@ def test_alex_value_discovery_workflow_completes_all_stages(new_agents_page):
 
     assert "AI 测试设计助手需求蓝图" in run_result.final_artifact
     assert [snapshot.stage_name for snapshot in run_result.stage_artifacts] == [
-        "明确价值定位",
-        "梳理目标用户",
-        "梳理用户旅程",
-        "生成需求蓝图",
+        "价值定位",
+        "用户画像",
+        "用户旅程",
+        "需求蓝图",
     ]
     assert len(run_result.stage_transitions) >= 3
     assert any(

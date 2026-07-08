@@ -4,7 +4,14 @@ import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { useStore, ArtifactVersion, WORKFLOWS } from '../store';
-import type { AgentRunSnapshotArtifact, ArtifactVisualDiagnostic, ArtifactVisualDiagnosticFocusRequest } from '../core/types';
+import type {
+  AgentRunSnapshotArtifact,
+  ArtifactVisualDiagnostic,
+  ArtifactVisualDiagnosticFocusRequest,
+  StoryHandoffCandidate,
+  StoryHandoffPacket,
+  StoryHandoffPacketListItem,
+} from '../core/types';
 import { buildLineDiff } from '../core/artifactDiff';
 import {
   parseArtifactMarkdownSections,
@@ -25,6 +32,11 @@ import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
 import { StructuredVisual } from './StructuredVisual';
 import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../services/runSnapshotService';
 import { useChatService } from '../services/chatService';
+import {
+  createStoryHandoffPacket,
+  fetchStoryHandoffCandidates,
+  fetchStoryHandoffPackets,
+} from '../services/storyHandoffPacketService';
 import { buildDocxPackage } from '../core/docxExport';
 import { buildPlainTextPdf as buildArtifactPdf } from '../core/artifactExport';
 import { buildArtifactQualitySummary } from '../core/artifactQuality';
@@ -155,6 +167,12 @@ export const ArtifactPane: React.FC = () => {
   const [selectedArtifactText, setSelectedArtifactText] = useState<string | null>(null);
   const [activeCommentAnchorText, setActiveCommentAnchorText] = useState<string | null>(null);
   const [activeVisualDiagnosticId, setActiveVisualDiagnosticId] = useState<string | null>(null);
+  const [storyHandoffCandidates, setStoryHandoffCandidates] = useState<StoryHandoffCandidate[]>([]);
+  const [storyHandoffPackets, setStoryHandoffPackets] = useState<StoryHandoffPacketListItem[]>([]);
+  const [isLoadingStoryHandoff, setIsLoadingStoryHandoff] = useState(false);
+  const [storyHandoffError, setStoryHandoffError] = useState<string | null>(null);
+  const [creatingStoryPacketId, setCreatingStoryPacketId] = useState<string | null>(null);
+  const [copiedStoryPacketId, setCopiedStoryPacketId] = useState<string | null>(null);
   const artifactPreviewRef = useRef<HTMLDivElement | null>(null);
   const handledVisualDiagnosticFocusSeqRef = useRef<number | null>(null);
   const currentStage = WORKFLOWS[workflow].stages[stageIndex];
@@ -217,6 +235,52 @@ export const ArtifactPane: React.FC = () => {
     }),
     [artifactContent, artifactVisualDiagnostics, currentStageId, workflow]
   );
+  const isStoryHandoffPacketStage = (
+    workflow === 'STORY_BREAKDOWN'
+    && currentStageId === 'SPRINT_PLAN'
+    && currentRunId !== null
+  );
+  const storyHandoffPacketByStoryId = useMemo(
+    () => new Map(storyHandoffPackets.map(packet => [packet.storyId, packet])),
+    [storyHandoffPackets]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!isStoryHandoffPacketStage || !currentRunId || !currentStageId) {
+      setStoryHandoffCandidates([]);
+      setStoryHandoffPackets([]);
+      setStoryHandoffError(null);
+      setIsLoadingStoryHandoff(false);
+      return undefined;
+    }
+
+    setIsLoadingStoryHandoff(true);
+    setStoryHandoffError(null);
+    Promise.all([
+      fetchStoryHandoffCandidates(currentRunId, currentStageId),
+      fetchStoryHandoffPackets(currentRunId, currentStageId),
+    ])
+      .then(([candidateResponse, packetResponse]) => {
+        if (cancelled) return;
+        setStoryHandoffCandidates(candidateResponse.candidates);
+        setStoryHandoffPackets(packetResponse.packets);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : '未知错误';
+        setStoryHandoffCandidates([]);
+        setStoryHandoffPackets([]);
+        setStoryHandoffError(`单故事需求包加载失败：${message}`);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingStoryHandoff(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentRunId, currentStageId, isStoryHandoffPacketStage]);
 
   const syncArtifactCollaborationState = useCallback(() => {
     if (!currentRunId) return;
@@ -355,6 +419,45 @@ export const ArtifactPane: React.FC = () => {
       new Blob([artifactContent], { type: 'text/markdown' }),
       `${workflow.toLowerCase()}_artifact.md`
     );
+  };
+
+  const refreshStoryHandoffPackets = async () => {
+    if (!currentRunId || !currentStageId) return;
+    const packetResponse = await fetchStoryHandoffPackets(currentRunId, currentStageId);
+    setStoryHandoffPackets(packetResponse.packets);
+  };
+
+  const handleCreateStoryHandoffPacket = async (storyId: string) => {
+    if (!currentRunId || !currentStageId) return;
+    setCreatingStoryPacketId(storyId);
+    setStoryHandoffError(null);
+    try {
+      await createStoryHandoffPacket(currentRunId, currentStageId, storyId);
+      await refreshStoryHandoffPackets();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误';
+      setStoryHandoffError(`单故事需求包生成失败：${message}`);
+    } finally {
+      setCreatingStoryPacketId(null);
+    }
+  };
+
+  const handleCopyStoryHandoffPacket = async (
+    storyId: string,
+    packet: StoryHandoffPacket,
+  ) => {
+    setStoryHandoffError(null);
+    if (!navigator.clipboard?.writeText) {
+      setStoryHandoffError('当前浏览器不支持复制单故事需求包。');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(packet, null, 2));
+      setCopiedStoryPacketId(storyId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误';
+      setStoryHandoffError(`单故事需求包复制失败：${message}`);
+    }
   };
 
   const openHistory = () => {
@@ -4188,6 +4291,100 @@ export const ArtifactPane: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+        {isStoryHandoffPacketStage && (
+          <section
+            className="mx-auto mb-5 max-w-4xl rounded-lg border border-[#1e293b] bg-[#0f172a] p-4 shadow-xl"
+            aria-label="单故事需求包"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-100">单故事需求包</h3>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                  从当前 ready story 生成可复制的 AI Coding 需求输入。
+                </p>
+              </div>
+              {isLoadingStoryHandoff && (
+                <span className="rounded-md border border-sky-400/20 bg-sky-400/10 px-2 py-1 text-[11px] font-semibold text-sky-100">
+                  加载中
+                </span>
+              )}
+            </div>
+            {storyHandoffError && (
+              <div className="mt-3 rounded-md border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-100">
+                {storyHandoffError}
+              </div>
+            )}
+            {!isLoadingStoryHandoff && !storyHandoffError && storyHandoffCandidates.length === 0 && (
+              <p className="mt-3 text-xs text-slate-500">
+                当前阶段还没有可生成需求包的 ready story。
+              </p>
+            )}
+            {storyHandoffCandidates.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {storyHandoffCandidates.map((candidate) => {
+                  const packet = storyHandoffPacketByStoryId.get(candidate.storyId);
+                  const isCreating = creatingStoryPacketId === candidate.storyId;
+                  return (
+                    <div
+                      key={candidate.storyId}
+                      className="rounded-md border border-[#1e293b] bg-[#020617] px-3 py-3"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-bold text-blue-200">{candidate.storyId}</span>
+                            {packet && (
+                              <span className="rounded-md border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-100">
+                                {candidate.storyId} · v{packet.packet.sourceArtifactVersion}
+                              </span>
+                            )}
+                            <span className="text-sm font-semibold text-slate-100">{candidate.title}</span>
+                          </div>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                            {candidate.userValue}
+                          </p>
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            {candidate.readyReason}
+                          </p>
+                          {packet?.isStale && (
+                            <p className="mt-2 text-[11px] font-medium text-amber-200">
+                              该需求包可能基于旧版需求，请重新生成后再交给 AI Coding。
+                            </p>
+                          )}
+                          {copiedStoryPacketId === candidate.storyId && (
+                            <p className="mt-2 text-[11px] font-semibold text-emerald-200">
+                              已复制 {candidate.storyId}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {packet ? (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyStoryHandoffPacket(candidate.storyId, packet.packet)}
+                              className="rounded-md border border-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition-colors hover:bg-emerald-400/10"
+                            >
+                              复制 {candidate.storyId} 需求包
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleCreateStoryHandoffPacket(candidate.storyId)}
+                              disabled={isCreating}
+                              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {isCreating ? `生成 ${candidate.storyId} 中` : `生成 ${candidate.storyId} 需求包`}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
         )}
         <div
           ref={artifactPreviewRef}

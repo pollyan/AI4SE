@@ -9,10 +9,18 @@ from sse_schemas import (
     AgentTurnDeltaEvent,
     AgentTurnDeltaOutput,
     AgentTurnEvent,
+    ErrorDiagnostic,
     ErrorEvent,
     RunStartedEvent,
 )
-from stream_services import stream_agent_run_events
+from stream_services import (
+    CONTRACT_VALIDATION_PUBLIC_REASON,
+    PROVIDER_ERROR_PUBLIC_REASON,
+    REQUEST_VALIDATION_PUBLIC_REASON,
+    SCHEMA_RETRY_EXHAUSTED_MESSAGE,
+    STRUCTURED_OUTPUT_PUBLIC_REASON,
+    stream_agent_run_events,
+)
 
 
 VALID_ARTIFACT_DATA = {
@@ -76,6 +84,27 @@ flowchart TD
 
 ## 8. 阶段门禁
 - [x] 测试范围和不测范围已明确。"""
+
+
+def _diagnostic(
+    *,
+    phase: str,
+    field_path: str,
+    validator: str,
+    retryable: bool,
+    public_reason: str,
+    workflow_id: str = "TEST_DESIGN",
+    stage_id: str = "CLARIFY",
+) -> ErrorDiagnostic:
+    return ErrorDiagnostic(
+        phase=phase,
+        workflowId=workflow_id,
+        stageId=stage_id,
+        fieldPath=field_path,
+        validator=validator,
+        retryable=retryable,
+        publicReason=public_reason,
+    )
 
 
 class FakePersistence:
@@ -317,11 +346,19 @@ def test_stream_agent_run_events_records_error_turn_metric(
         persistence=persistence,
     ))
 
+    diagnostic = _diagnostic(
+        phase="provider",
+        field_path="provider",
+        validator="provider_error",
+        retryable=True,
+        public_reason=PROVIDER_ERROR_PUBLIC_REASON,
+    )
     assert events == [
         RunStartedEvent(run_id="run-123"),
         ErrorEvent(
             code="LLM_ERROR",
             message="provider API failed",
+            diagnostic=diagnostic,
         ),
     ]
     metric = persistence.calls[-1][1]
@@ -338,6 +375,7 @@ def test_stream_agent_run_events_records_error_turn_metric(
     assert metric["estimated_tokens"] >= 1
     assert metric["duration_ms"] >= 0
     assert metric["contract_retry_count"] == 0
+    assert metric["diagnostic"] == diagnostic.model_dump(mode="json", by_alias=True)
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -359,14 +397,19 @@ def test_stream_agent_run_events_records_schema_retry_count_from_runtime_error(
         persistence=persistence,
     ))
 
+    diagnostic = _diagnostic(
+        phase="structured_output",
+        field_path="artifact_data",
+        validator="pydantic_ai_output_retry",
+        retryable=True,
+        public_reason=STRUCTURED_OUTPUT_PUBLIC_REASON,
+    )
     assert events == [
         RunStartedEvent(run_id="run-123"),
         ErrorEvent(
             code="SCHEMA_VALIDATION_FAILED",
-            message=(
-                "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
-                "如果多次失败，请补充更明确的需求或阶段确认信息。"
-            ),
+            message=SCHEMA_RETRY_EXHAUSTED_MESSAGE,
+            diagnostic=diagnostic,
         ),
     ]
     metric = persistence.calls[-1][1]
@@ -374,6 +417,7 @@ def test_stream_agent_run_events_records_schema_retry_count_from_runtime_error(
     assert metric["status"] == "error"
     assert metric["error_code"] == "SCHEMA_VALIDATION_FAILED"
     assert metric["contract_retry_count"] == 3
+    assert metric["diagnostic"] == diagnostic.model_dump(mode="json", by_alias=True)
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -502,9 +546,13 @@ def test_stream_agent_run_events_maps_pydantic_ai_output_failure_to_error_event(
         RunStartedEvent(),
         ErrorEvent(
             code="SCHEMA_VALIDATION_FAILED",
-            message=(
-                "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
-                "如果多次失败，请补充更明确的需求或阶段确认信息。"
+            message=SCHEMA_RETRY_EXHAUSTED_MESSAGE,
+            diagnostic=_diagnostic(
+                phase="structured_output",
+                field_path="artifact_data",
+                validator="pydantic_ai_output_retry",
+                retryable=True,
+                public_reason=STRUCTURED_OUTPUT_PUBLIC_REASON,
             ),
         )
     ]
@@ -540,9 +588,13 @@ def test_stream_agent_run_events_maps_raw_pydantic_ai_schema_error_to_error_even
         RunStartedEvent(),
         ErrorEvent(
             code="SCHEMA_VALIDATION_FAILED",
-            message=(
-                "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
-                "如果多次失败，请补充更明确的需求或阶段确认信息。"
+            message=SCHEMA_RETRY_EXHAUSTED_MESSAGE,
+            diagnostic=_diagnostic(
+                phase="structured_output",
+                field_path="artifact_data",
+                validator="pydantic_ai_output_retry",
+                retryable=True,
+                public_reason=STRUCTURED_OUTPUT_PUBLIC_REASON,
             ),
         )
     ]
@@ -576,6 +628,13 @@ def test_stream_agent_run_events_maps_contract_failure_to_error_event(
         ErrorEvent(
             code="CONTRACT_VALIDATION_FAILED",
             message="chat must not contain artifact markdown",
+            diagnostic=_diagnostic(
+                phase="contract_validation",
+                field_path="artifact_contract",
+                validator="workflow_contract",
+                retryable=False,
+                public_reason=CONTRACT_VALIDATION_PUBLIC_REASON,
+            ),
         )
     ]
 
@@ -602,6 +661,15 @@ def test_stream_agent_run_events_validates_workflow_stage_before_building_runtim
                 "stageId": "CLARIFY",
             }),
             "未知 workflowId: UNKNOWN_WORKFLOW",
+            _diagnostic(
+                phase="request_validation",
+                workflow_id="UNKNOWN_WORKFLOW",
+                stage_id="CLARIFY",
+                field_path="request",
+                validator="request_schema",
+                retryable=False,
+                public_reason=REQUEST_VALIDATION_PUBLIC_REASON,
+            ),
         ),
         (
             AgentRunStreamRequest.model_validate({
@@ -611,10 +679,19 @@ def test_stream_agent_run_events_validates_workflow_stage_before_building_runtim
                 "stageId": "REPORT",
             }),
             "workflowId 与 stageId 不匹配: TEST_DESIGN/REPORT",
+            _diagnostic(
+                phase="request_validation",
+                workflow_id="TEST_DESIGN",
+                stage_id="REPORT",
+                field_path="request",
+                validator="request_schema",
+                retryable=False,
+                public_reason=REQUEST_VALIDATION_PUBLIC_REASON,
+            ),
         ),
     ]
 
-    for request, message in requests:
+    for request, message, diagnostic in requests:
         events = list(stream_agent_run_events(
             request,
             api_key="test-api-key",
@@ -626,6 +703,7 @@ def test_stream_agent_run_events_validates_workflow_stage_before_building_runtim
             ErrorEvent(
                 code="REQUEST_VALIDATION_FAILED",
                 message=message,
+                diagnostic=diagnostic,
             )
         ]
     mock_build_runtime.assert_not_called()
@@ -674,6 +752,13 @@ def test_stream_agent_run_events_maps_model_api_error_to_llm_error_event(
         ErrorEvent(
             code="LLM_ERROR",
             message="provider API failed",
+            diagnostic=_diagnostic(
+                phase="provider",
+                field_path="provider",
+                validator="provider_error",
+                retryable=True,
+                public_reason=PROVIDER_ERROR_PUBLIC_REASON,
+            ),
         )
     ]
 
