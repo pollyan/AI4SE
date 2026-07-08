@@ -74,6 +74,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+export function extractStructuredVisualBlocks(markdown: string): string[] {
+    const blocks: string[] = [];
+    const visualBlockPattern = /```ai4se-visual(?:[ \t].*)?\n([\s\S]*?)```/gi;
+    let match = visualBlockPattern.exec(markdown);
+    while (match) {
+        const source = match[1].trim();
+        if (source) blocks.push(source);
+        match = visualBlockPattern.exec(markdown);
+    }
+    return blocks;
+}
+
+export function validateStructuredVisualBlocks(markdown: string): void {
+    for (const block of extractStructuredVisualBlocks(markdown)) {
+        const result = parseStructuredVisual(block);
+        if (result.valid === false) {
+            throw new Error(`Artifact structured visual validation failed: ${result.message}`);
+        }
+    }
+}
+
 function asNonEmptyStringArray(value: unknown): string[] | null {
     if (!Array.isArray(value)) return null;
     const strings = value.filter((entry): entry is string => (

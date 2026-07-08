@@ -880,6 +880,77 @@ describe('llm.ts', () => {
             );
         });
 
+        it('typed final artifact 包含坏 ai4se-visual 时应拒绝更新', async () => {
+            resetStore({
+                workflow: 'VALUE_DISCOVERY',
+                stageIndex: 0,
+                artifactContent: '# 价值定位分析\n\n初始内容',
+                stageArtifacts: { ELEVATOR: '# 价值定位分析\n\n初始内容' },
+            });
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    `data: ${JSON.stringify({
+                        type: 'agent_turn',
+                        output: {
+                            chat: '已更新价值定位。',
+                            artifact_update: {
+                                type: 'replace',
+                                markdown: [
+                                    '# 价值定位分析',
+                                    '```ai4se-visual',
+                                    '{ broken',
+                                    '```',
+                                ].join('\n'),
+                            },
+                            stage_action: null,
+                            warnings: [],
+                        },
+                    })}`,
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('继续'))
+            ).rejects.toThrow(
+                'Artifact structured visual validation failed: 结构化可视化必须是合法 JSON。'
+            );
+        });
+
+        it('typed partial artifact 包含坏 ai4se-visual 时应拒绝更新', async () => {
+            resetStore({
+                workflow: 'VALUE_DISCOVERY',
+                stageIndex: 0,
+                artifactContent: '# 价值定位分析\n\n初始内容',
+                stageArtifacts: { ELEVATOR: '# 价值定位分析\n\n初始内容' },
+            });
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"run_started"}',
+                    createAgentDeltaEvent({
+                        chat: '正在生成价值定位。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: [
+                                '# 价值定位分析',
+                                '```ai4se-visual',
+                                '{"type":"cause-map","nodes":[{"id":"Why-1","label":"Why-1","title":"直接原因"}],"edges":[{"source":"Why-1","target":"Why-404"}]}',
+                                '```',
+                            ].join('\n'),
+                        },
+                    }),
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('继续'))
+            ).rejects.toThrow(
+                'Artifact structured visual validation failed: cause-map edge 引用了不存在的节点：Why-1 -> Why-404。'
+            );
+        });
+
         it('TEST_DESIGN/STRATEGY typed artifact 应先修正常见 Mermaid 变体再预校验', async () => {
             resetStore({
                 workflow: 'TEST_DESIGN',

@@ -306,6 +306,7 @@ function formatAssistantErrorFeedback(error: unknown): AssistantErrorFeedback {
         || errorMessage.includes('Exceeded maximum output retries')
         || errorMessage.includes('Artifact Mermaid parse failed')
         || errorMessage.includes('Artifact validation failed')
+        || errorMessage.includes('Artifact structured visual validation failed')
         || errorMessage.includes('Mermaid parse failed')
     ) {
         const summary = '结构化输出生成失败：右侧产出物已保持不变，可以直接重试。';

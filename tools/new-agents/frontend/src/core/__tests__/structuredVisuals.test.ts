@@ -1,8 +1,78 @@
 import { describe, expect, it } from 'vitest';
-import { parseStructuredVisual } from '../structuredVisuals';
+import {
+    extractStructuredVisualBlocks,
+    parseStructuredVisual,
+    validateStructuredVisualBlocks,
+} from '../structuredVisuals';
 import { ROOT_CAUSE_TEMPLATE } from '../prompts/incident_review/root_cause';
 
 describe('parseStructuredVisual', () => {
+    it('extracts fenced ai4se-visual blocks from markdown', () => {
+        const blocks = extractStructuredVisualBlocks([
+            '# 文档',
+            '```ai4se-visual',
+            '{"type":"score-matrix","columns":["维度"],"rows":[{"维度":"价值"}]}',
+            '```',
+            '```json',
+            '{"type":"not-visual"}',
+            '```',
+            '```ai4se-visual',
+            '{"type":"roadmap","columns":["版本"],"rows":[{"版本":"MVP"}]}',
+            '```',
+        ].join('\n'));
+
+        expect(blocks).toHaveLength(2);
+        expect(blocks[0]).toContain('"score-matrix"');
+        expect(blocks[1]).toContain('"roadmap"');
+    });
+
+    it('validates all fenced ai4se-visual blocks in markdown', () => {
+        expect(() => validateStructuredVisualBlocks([
+            '```ai4se-visual',
+            '{"type":"score-matrix","columns":["维度"],"rows":[{"维度":"价值"}]}',
+            '```',
+            '',
+            '```ai4se-visual',
+            '{"type":"cause-map","nodes":[{"id":"Why-1","label":"Why-1","title":"直接原因"}],"edges":[]}',
+            '```',
+        ].join('\n'))).not.toThrow();
+    });
+
+    it('rejects malformed ai4se-visual blocks before artifact write', () => {
+        expect(() => validateStructuredVisualBlocks([
+            '```ai4se-visual',
+            '{ broken',
+            '```',
+        ].join('\n'))).toThrow(
+            'Artifact structured visual validation failed: 结构化可视化必须是合法 JSON。'
+        );
+    });
+
+    it('rejects cause-map blocks with missing edge targets before artifact write', () => {
+        expect(() => validateStructuredVisualBlocks([
+            '```ai4se-visual',
+            '{"type":"cause-map","nodes":[{"id":"Why-1","label":"Why-1","title":"直接原因"}],"edges":[{"source":"Why-1","target":"Why-404"}]}',
+            '```',
+        ].join('\n'))).toThrow(
+            'Artifact structured visual validation failed: cause-map edge 引用了不存在的节点：Why-1 -> Why-404。'
+        );
+    });
+
+    it('rejects matrix visual rows that are arrays instead of column keyed objects', () => {
+        const result = parseStructuredVisual(JSON.stringify({
+            type: 'risk-board',
+            columns: ['风险', '等级', '策略'],
+            rows: [
+                ['登录绕过', 'P0', '安全专项'],
+            ],
+        }));
+
+        expect(result).toEqual({
+            valid: false,
+            message: 'risk-board 必须包含 rows 对象数组。',
+        });
+    });
+
     it('parses a traceability matrix visual block', () => {
         const result = parseStructuredVisual(JSON.stringify({
             type: 'traceability-matrix',

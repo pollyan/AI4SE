@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成）
+- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成；前端正式 / partial artifact `ai4se-visual` 写入前校验已完成并全量验证通过）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -134,6 +134,7 @@
   - Mermaid 校验：允许的 Mermaid block 必须通过 `mermaid.parse` 或等价校验；CI 或回归套件可增加 `mmdc` 渲染 SVG 门禁，覆盖浏览器能 parse 但导出失败的情况。
   - `ai4se-visual` 校验：JSON 必须合法，`type` 必须受支持，columns / rows / nodes / edges / events 等结构必须完整，引用目标必须存在。
   - 验收：新增测试证明视觉校验失败会显式报错，不产生成功 `agent_turn`、不持久化 artifact、不推进 stage。
+  - 进展：已完成前端写入前视觉 gate。`llm.ts` 在 final `agent_turn`、合成 artifact reveal 和真实 `agent_delta` partial 写出 chunk 前统一校验 Mermaid 与 `ai4se-visual`；`structuredVisuals.ts` 复用共享 parser 校验所有 fenced `ai4se-visual` block；`chatService.ts` 将结构化视觉校验失败归类为结构化输出生成失败并保持右侧产物不变。后续仍可补 CI / `mmdc` 渲染门禁和更广泛的 backend 运行时 Mermaid parse。
 
 - [x] 收紧 Mermaid repair 的架构边界。（第 7 轮）
   - 目标：`/api/utils/mermaid/repair` 和前端 retry 只能作为用户显式触发的修复辅助，不能自动替换正式 artifact、不能绕过 contract、不能让失败状态变成成功。
@@ -967,6 +968,91 @@ New Agents 批量验证：
 - 本轮只收紧用户显式触发的 Mermaid repair 边界，不迁移其他复杂视觉类型到 `ai4se-visual`。
 - Backend 仍不执行 Mermaid JS parse；parse gate 由前端 Mermaid runtime 承担，artifact contract gate 由后端承担。
 - 更广泛的正式 artifact 视觉运行时门禁和 CI / `mmdc` 渲染门禁仍属于第 7 轮后续视觉稳定化候选。
+
+### 2026-07-08 第 7 轮补充：artifact `ai4se-visual` 写入前校验
+
+已完成：
+
+- `structuredVisuals.ts` 新增 `extractStructuredVisualBlocks()` 与 `validateStructuredVisualBlocks()`，提取 Markdown 中所有 fenced `ai4se-visual` block，并复用 `parseStructuredVisual()` 校验 JSON、受支持类型、矩阵 `columns/rows`、`cause-map` `nodes/edges` 与边引用。
+- `llm.ts` 将 artifact 视觉校验收敛为 `validateArtifactVisualBlocks()`，final `agent_turn`、有 `agent_delta` 后的 artifact reveal 和真实 `agent_delta` partial 都会在 yield chunk 前校验 `ai4se-visual` 与 Mermaid。
+- `chatService.ts` 已将 `Artifact structured visual validation failed` 归类为结构化输出生成失败。失败时左侧显示恢复消息，右侧产物保持不变；无效 partial 不会写入 ArtifactPane / store。
+- E2E SSE mock 中历史遗留的数组行 `rows: [[...]]` 已改为当前 `ai4se-visual` 矩阵协议要求的列名对象行 `rows: [{"列名": "..."}]`，避免强校验启用后被测试数据中的弱契约阻断。
+- 本轮继续复用共享 typed Agent Runtime、`llm.ts`、`chatService`、Zustand store、ArtifactPane 和 `StructuredVisual` parser；未新增 Lisa/Alex/workflow 专属 runtime、API、store 或渲染管线。
+- 只读 explorer `Sagan` 已审查前端路径，确认旧实现只在渲染 / 导出时解析 `ai4se-visual`，没有写入前 gate；本轮已据此补齐 final 与 partial 写入前校验。
+
+RED 验证：
+
+```bash
+cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/structuredVisuals.test.ts
+```
+
+结果：修复前 `4 failed, 14 passed`。失败证明 `extractStructuredVisualBlocks()` / `validateStructuredVisualBlocks()` 尚不存在。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.test.ts -t "ai4se-visual"
+```
+
+结果：修复前 `2 failed, 77 skipped`。失败证明 final `agent_turn` 和真实 `agent_delta` partial 都会把无效 `ai4se-visual` 作为 artifact chunk yield。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- --run src/services/__tests__/chatService.test.ts -t "artifact validation fails"
+```
+
+结果：修复前 `1 failed, 3 passed, 61 skipped`。失败证明 `Artifact structured visual validation failed` 尚未归类为结构化输出失败。
+
+GREEN 与聚焦回归：
+
+```bash
+cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/structuredVisuals.test.ts
+```
+
+结果：`19 passed`
+
+```bash
+cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.test.ts -t "ai4se-visual"
+```
+
+结果：`2 passed, 77 skipped`
+
+```bash
+cd tools/new-agents/frontend && npm run test -- --run src/services/__tests__/chatService.test.ts -t "artifact validation fails"
+```
+
+结果：`4 passed, 61 skipped`
+
+```bash
+cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/structuredVisuals.test.ts src/core/__tests__/llm.test.ts src/services/__tests__/chatService.test.ts src/components/__tests__/StructuredVisual.test.tsx src/core/__tests__/artifactExport.test.ts src/core/__tests__/docxExport.test.ts
+```
+
+结果：`182 passed`
+
+```bash
+cd tools/new-agents/frontend && npm run lint
+```
+
+结果：TypeScript `tsc --noEmit` 通过。
+
+浏览器 E2E 回归：
+
+```bash
+.venv/bin/python -m pytest tests/e2e/new_agents_browser -q
+```
+
+结果：`21 passed`。本轮曾先在全量验证中暴露 7 个浏览器 E2E 失败，失败根因是 E2E mock 中部分 `ai4se-visual` `rows` 使用数组行，启用写入前强校验后被正确拒绝；修正 mock 为列名对象行后完整浏览器 E2E 通过。
+
+全量验证：
+
+```bash
+/bin/zsh -lc './scripts/test/test-local.sh all > /private/tmp/ai4se-visual-validation-full-all-rerun.log 2>&1; rc=$?; tail -180 /private/tmp/ai4se-visual-validation-full-all-rerun.log; echo EXIT_STATUS:$rc; exit $rc'
+```
+
+结果：通过，退出码 `0`。关键结果包括 MidScene proxy `17 passed`、Common Frontend lint/build 通过、New Agents Frontend `736 passed`、New Agents Backend `634 passed, 1 deselected`、New Agents Browser E2E `11 passed, 10 deselected`。
+
+残余风险：
+
+- 本轮补齐前端写入前 `ai4se-visual` gate，不改变后端 `validate_agent_turn()` 的正式 contract。
+- Backend 仍不执行 Mermaid JS parse；Mermaid parse gate 仍由前端 Mermaid runtime 承担。
+- `mmdc` / 浏览器渲染级 CI 门禁仍属于后续第 7 / 第 8 轮候选，不在本切片内声明完成。
 
 ## 每轮验收口径
 

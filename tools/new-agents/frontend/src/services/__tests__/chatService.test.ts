@@ -2194,6 +2194,7 @@ describe('useChatService', () => {
     it.each([
         'Artifact Mermaid parse failed: Parse error on line 3',
         'Artifact validation failed: missing required section',
+        'Artifact structured visual validation failed: 结构化可视化必须是合法 JSON。',
         'Mermaid parse failed: invalid edge syntax',
     ])('should show structured recovery when artifact validation fails without changing artifact: %s', async (errorMessage) => {
         vi.mocked(generateResponseStream).mockImplementation(async function* () {

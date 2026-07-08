@@ -1,4 +1,5 @@
 import { buildSystemPrompt } from './prompts/buildSystemPrompt';
+import { validateStructuredVisualBlocks } from './structuredVisuals';
 import { sanitizeMermaidCode } from './utils/mermaidSanitizer';
 import { useStore, WORKFLOWS, WorkflowType, Attachment, Message, type ArtifactSectionPatch } from '../store';
 
@@ -624,6 +625,11 @@ const validateMermaidBlocks = async (markdown: string): Promise<void> => {
   }
 };
 
+const validateArtifactVisualBlocks = async (markdown: string): Promise<void> => {
+  validateStructuredVisualBlocks(markdown);
+  await validateMermaidBlocks(markdown);
+};
+
 const splitChatForStreaming = (chat: string): string[] => {
   const trimmed = chat.trim();
   if (!trimmed) return [chat];
@@ -794,7 +800,7 @@ const mapAgentTurnToStreamChunks = async function* (
   }
 
   if (hasArtifactUpdate) {
-    await validateMermaidBlocks(newArtifact);
+    await validateArtifactVisualBlocks(newArtifact);
   }
 
   const chatUnits = splitChatForStreaming(output.chat);
@@ -854,7 +860,7 @@ const mapAgentTurnToFinalChunk = async function* (
   }
 
   if (hasArtifactUpdate) {
-    await validateMermaidBlocks(newArtifact);
+    await validateArtifactVisualBlocks(newArtifact);
   }
 
   yield {
@@ -886,7 +892,7 @@ const mapAgentTurnToArtifactRevealChunks = async function* (
   }
 
   if (hasArtifactUpdate) {
-    await validateMermaidBlocks(newArtifact);
+    await validateArtifactVisualBlocks(newArtifact);
   }
 
   const artifactUnits = hasArtifactUpdate
@@ -941,6 +947,10 @@ const mapAgentDeltaToStreamChunks = async function* (
   const chatUnits = previousChat ? [chat] : splitChatForStreaming(chat);
   const frameCount = Math.max(chatUnits.length, 1);
   let accumulatedChat = '';
+
+  if (hasArtifactUpdate) {
+    await validateArtifactVisualBlocks(newArtifact);
+  }
 
   for (let index = 0; index < frameCount; index += 1) {
     const isFinalChunk = index === frameCount - 1;
