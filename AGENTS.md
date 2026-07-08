@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-AI4SE is a modular monorepo with Docker Compose as the primary runtime. Core documentation lives in `docs/`; start with `docs/index.md`, then use focused references such as `docs/architecture.md`, `docs/api-contracts.md`, and `docs/TESTING.md`.
+AI4SE is a modular monorepo with Docker Compose as the primary runtime. Core documentation lives in `docs/`; start with `docs/index.md`, then use focused references such as `docs/ARCHITECTURE.md`, `docs/api-contracts.md`, and `docs/TESTING.md`.
 
 Main code areas:
 
@@ -17,7 +17,7 @@ Main code areas:
 
 For `tools/new-agents`, all agents must share one common runtime, transport, state, and UI infrastructure. Different agents and workflows should be expressed through configuration: `tools/new-agents/workflow_manifest.json`, `agentId`, workflow definitions, stage prompts, artifact templates, backend contract requirements, and visualization contract requirements. Do not create agent-specific runtime branches, duplicate SSE/API paths, separate stores, or bespoke rendering pipelines for Lisa, Alex, or future agents unless the user explicitly approves a documented architecture change.
 
-When adding or changing a workflow, keep the configuration surfaces synchronized: shared `workflow_manifest.json`, frontend `WORKFLOWS` / workflow slugs / agent workflow listings, backend `WORKFLOW_STAGES`, artifact contract headings, Mermaid visualization contract, prompt/template files, and tests that prove the workflow uses the shared `/api/agent/runs/stream` typed Agent Runtime. If behavior differs by workflow, encode the difference as data or prompt/template/contract configuration rather than branching infrastructure code. If the change affects workflow quality, update or run the relevant E2E LLM judge evidence.
+When adding or changing a workflow, keep the configuration surfaces synchronized: shared `workflow_manifest.json`, manifest-derived frontend `WORKFLOWS` / workflow slugs / agent workflow listings, backend `WORKFLOW_STAGES`, artifact contract headings, Mermaid visualization contract, prompt/template files, and tests that prove the workflow uses the shared `/api/agent/runs/stream` typed Agent Runtime. If behavior differs by workflow, encode the difference as data or prompt/template/contract configuration rather than branching infrastructure code. If the change affects workflow quality, update or run the relevant E2E LLM judge evidence.
 
 ## Build, Test, and Development Commands
 

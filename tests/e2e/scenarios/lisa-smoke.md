@@ -6,8 +6,8 @@
 
 ## 前置条件
 
-- [ ] Docker 环境已启动 (`docker ps | grep ai4se-agents`)
-- [ ] 服务健康 (http://localhost/ai-agents 可访问)
+- [ ] Docker 环境已启动 (`docker ps | grep ai4se-new-agents`)
+- [ ] 服务健康 (http://localhost/new-agents 可访问)
 - [ ] Chrome DevTools MCP 已连接
 
 ---
@@ -21,7 +21,7 @@
 ### 测试步骤
 
 1. **打开智能体页面**
-   - 导航到 `http://localhost/ai-agents`
+   - 导航到 `http://localhost/new-agents`
    - 等待页面加载完成
 
 2. **选择 Lisa 智能体**
@@ -77,7 +77,7 @@
 - 检查 nginx 网关: `curl http://localhost/health`
 
 ### 发送消息后无响应
-- 检查后端服务: `docker logs ai4se-agents --tail 50`
+- 检查后端服务: `docker logs ai4se-new-agents-backend --tail 50`
 - 检查 LLM API Key 配置
 
 ### 超时

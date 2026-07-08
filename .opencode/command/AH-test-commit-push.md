@@ -1,6 +1,5 @@
 ---
 description: commit&push
-model: "google/antigravity-gemini-3-pro"
 ---
 
 1. 本地执行所有测试，测试通过再执行下一步。

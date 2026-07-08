@@ -1,0 +1,1428 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Artifact 增量渲染效果原型</title>
+  <style>
+    :root {
+      --bg: #080c14;
+      --panel: #111827;
+      --panel-2: #151d2c;
+      --panel-3: #0f1724;
+      --line: #263247;
+      --line-strong: #344258;
+      --text: #e7edf7;
+      --muted: #94a3b8;
+      --soft: #c6d3e2;
+      --blue: #2f6df6;
+      --teal: #10b981;
+      --teal-bg: rgba(16, 185, 129, 0.12);
+      --amber: #f59e0b;
+      --amber-bg: rgba(245, 158, 11, 0.14);
+      --rose: #f87171;
+      --rose-bg: rgba(248, 113, 113, 0.14);
+      --violet: #8b5cf6;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(rgba(38, 50, 71, 0.22) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(38, 50, 71, 0.18) 1px, transparent 1px),
+        radial-gradient(circle at 20% 0%, rgba(47, 109, 246, 0.16), transparent 32%),
+        var(--bg);
+      background-size: 48px 48px, 48px 48px, auto, auto;
+      color: var(--text);
+      min-height: 100vh;
+      letter-spacing: 0;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: 72px 1fr;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(8, 12, 20, 0.88);
+      backdrop-filter: blur(18px);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: #dbeafe;
+      background: linear-gradient(135deg, rgba(47, 109, 246, 0.9), rgba(139, 92, 246, 0.72));
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+      font-weight: 800;
+    }
+
+    .brand-title {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .brand-title strong {
+      font-size: 15px;
+      color: #f8fafc;
+    }
+
+    .brand-title span {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .stage-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 6px;
+      width: min(740px, 48vw);
+      padding: 7px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(17, 24, 39, 0.74);
+    }
+
+    .stage {
+      height: 38px;
+      border: 0;
+      border-radius: 8px;
+      color: #64748b;
+      background: transparent;
+      font-weight: 700;
+      cursor: default;
+    }
+
+    .stage.active {
+      color: #fff;
+      background: var(--blue);
+      box-shadow: 0 12px 32px rgba(47, 109, 246, 0.28);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .primary-action,
+    .ghost-action {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      height: 38px;
+      padding: 0 14px;
+      color: #dbeafe;
+      background: var(--panel-2);
+      font-weight: 700;
+    }
+
+    .primary-action {
+      border-color: transparent;
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .main {
+      display: grid;
+      grid-template-columns: minmax(360px, 39vw) minmax(680px, 1fr);
+      min-height: 0;
+    }
+
+    .chat {
+      border-right: 1px solid var(--line);
+      background: rgba(9, 14, 24, 0.86);
+      min-height: calc(100vh - 72px);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    .chat-head {
+      padding: 24px 28px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .chat-head h1 {
+      margin: 0;
+      font-size: 20px;
+      color: #f8fafc;
+    }
+
+    .chat-head p {
+      margin: 8px 0 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .chat-feed {
+      padding: 28px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    .message {
+      max-width: 88%;
+      border-radius: 12px;
+      padding: 18px 20px;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--soft);
+      line-height: 1.72;
+      font-size: 14px;
+    }
+
+    .message.user {
+      margin-left: auto;
+      background: #1d63f3;
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .stage-card {
+      width: min(420px, 92%);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 12px;
+      padding: 18px;
+      background: rgba(16, 185, 129, 0.10);
+      color: #bfdbd2;
+      line-height: 1.6;
+    }
+
+    .stage-card strong {
+      display: block;
+      color: #d1fae5;
+      margin-bottom: 6px;
+    }
+
+    .stage-card .buttons {
+      margin-top: 18px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .stage-card button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #d1fae5;
+      background: rgba(255, 255, 255, 0.08);
+      font-weight: 700;
+    }
+
+    .stage-card button:last-child {
+      background: #10b981;
+      color: #062017;
+    }
+
+    .composer {
+      padding: 18px;
+      border-top: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: 1fr 42px;
+      gap: 10px;
+      background: #0b1220;
+    }
+
+    .composer input {
+      height: 42px;
+      border: 1px solid #2d74ff;
+      border-radius: 8px;
+      background: #0e1728;
+      color: var(--text);
+      padding: 0 14px;
+      outline: 0;
+    }
+
+    .composer button {
+      border: 0;
+      border-radius: 8px;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 800;
+    }
+
+    .artifact {
+      min-width: 0;
+      min-height: calc(100vh - 72px);
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .artifact-head {
+      height: 74px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 0 28px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(8, 12, 20, 0.72);
+    }
+
+    .file-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .file-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: rgba(139, 92, 246, 0.2);
+      color: #c4b5fd;
+      font-weight: 900;
+    }
+
+    .file-meta strong {
+      display: block;
+      font-size: 15px;
+    }
+
+    .file-meta span {
+      display: block;
+      margin-top: 2px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .view-switch {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 5px;
+      background: rgba(17, 24, 39, 0.8);
+    }
+
+    .view-switch button {
+      min-width: 92px;
+      height: 34px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .view-switch button.active {
+      background: #1d63f3;
+      color: #fff;
+    }
+
+    .artifact-body {
+      min-height: 0;
+      overflow: auto;
+      padding: 38px clamp(24px, 5vw, 72px) 80px;
+    }
+
+    .canvas {
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    .change-strip {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: center;
+      margin-bottom: 20px;
+      padding: 16px 18px;
+      border: 1px solid rgba(47, 109, 246, 0.28);
+      border-radius: 10px;
+      background: rgba(17, 24, 39, 0.82);
+      box-shadow: var(--shadow);
+    }
+
+    .change-strip h2 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      color: #dbeafe;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 26px;
+      padding: 0 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      border: 1px solid var(--line);
+      color: var(--soft);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .chip.added {
+      color: #a7f3d0;
+      border-color: rgba(16, 185, 129, 0.42);
+      background: var(--teal-bg);
+    }
+
+    .chip.modified {
+      color: #fde68a;
+      border-color: rgba(245, 158, 11, 0.45);
+      background: var(--amber-bg);
+    }
+
+    .chip.deleted {
+      color: #fecaca;
+      border-color: rgba(248, 113, 113, 0.46);
+      background: var(--rose-bg);
+    }
+
+    .toggle-highlight {
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 12px;
+      color: #dbeafe;
+      background: rgba(255, 255, 255, 0.05);
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    .layout {
+      display: block;
+    }
+
+    .document {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(15, 23, 36, 0.94);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      max-width: 1060px;
+      margin: 0 auto;
+    }
+
+    .doc-toolbar {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .doc-content {
+      padding: clamp(26px, 4vw, 46px);
+    }
+
+    .doc-content h1,
+    .doc-content h2,
+    .doc-content h3 {
+      letter-spacing: 0;
+    }
+
+    .doc-content h1 {
+      margin: 0 0 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--line);
+      color: #f8fafc;
+      font-size: 30px;
+      line-height: 1.2;
+    }
+
+    .doc-content h2 {
+      margin: 34px 0 16px;
+      color: #f8fafc;
+      font-size: 21px;
+      line-height: 1.3;
+    }
+
+    .doc-content h3 {
+      margin: 24px 0 12px;
+      color: #dbeafe;
+      font-size: 17px;
+    }
+
+    .doc-content p,
+    .doc-content li {
+      color: #cbd5e1;
+      line-height: 1.78;
+      font-size: 14px;
+    }
+
+    .doc-content ul,
+    .doc-content ol {
+      padding-left: 22px;
+      margin: 10px 0 18px;
+    }
+
+    .doc-content strong {
+      color: #fff;
+    }
+
+    .section {
+      position: relative;
+      padding: 4px 0 10px;
+      margin: 18px 0 26px;
+    }
+
+    .section-badge {
+      display: inline-flex;
+      vertical-align: middle;
+      align-items: center;
+      margin-left: 10px;
+      min-height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .section-badge.added {
+      color: #052e22;
+      background: #34d399;
+    }
+
+    .section-badge.modified {
+      color: #2b1800;
+      background: #fbbf24;
+    }
+
+    .change-tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 0 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .change-tag.added {
+      color: #052e22;
+      background: #34d399;
+    }
+
+    .change-tag.modified {
+      color: #2b1800;
+      background: #fbbf24;
+    }
+
+    .value-change {
+      display: grid;
+      gap: 5px;
+    }
+
+    .new-value {
+      color: #f8fafc;
+      font-weight: 800;
+    }
+
+    .previous-value {
+      display: block;
+      width: fit-content;
+      max-width: 100%;
+      padding: 4px 7px;
+      border: 1px solid rgba(248, 113, 113, 0.32);
+      border-radius: 7px;
+      color: #fecaca;
+      background: rgba(248, 113, 113, 0.08);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .previous-value del {
+      text-decoration-color: rgba(248, 113, 113, 0.78);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0 10px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.035);
+      padding: 14px;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .metric strong {
+      font-size: 22px;
+      color: #fff;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      margin: 14px 0 20px;
+      background: rgba(8, 12, 20, 0.45);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 12px 13px;
+      border-bottom: 1px solid var(--line);
+      color: #cbd5e1;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: rgba(31, 41, 55, 0.86);
+      color: #e2e8f0;
+      font-weight: 800;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .show-highlights tr.row-added td {
+      background: rgba(16, 185, 129, 0.10);
+      color: #d1fae5;
+    }
+
+    .show-highlights tr.row-modified td {
+      background: rgba(245, 158, 11, 0.09);
+      color: #fdecc8;
+    }
+
+    tr.row-added td:first-child {
+      box-shadow: inset 4px 0 0 var(--teal);
+    }
+
+    tr.row-modified td:first-child {
+      box-shadow: inset 4px 0 0 var(--amber);
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      background: rgba(148, 163, 184, 0.14);
+      color: #cbd5e1;
+      white-space: nowrap;
+    }
+
+    .status.risk {
+      color: #fed7aa;
+      background: rgba(245, 158, 11, 0.16);
+    }
+
+    .status.ok {
+      color: #a7f3d0;
+      background: rgba(16, 185, 129, 0.16);
+    }
+
+    .callout {
+      margin: 18px 0;
+      padding: 16px 18px;
+      border-left: 4px solid #2f6df6;
+      border-radius: 8px;
+      background: rgba(47, 109, 246, 0.09);
+      color: #dbeafe;
+      line-height: 1.7;
+    }
+
+    .list-added,
+    .list-modified {
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin: 4px 0;
+    }
+
+    .show-highlights .list-added {
+      background: rgba(16, 185, 129, 0.09);
+      box-shadow: inset 4px 0 0 var(--teal);
+    }
+
+    .show-highlights .list-modified {
+      background: rgba(245, 158, 11, 0.09);
+      box-shadow: inset 4px 0 0 var(--amber);
+    }
+
+    .flow-card {
+      margin: 18px 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(8, 12, 20, 0.58);
+      padding: 18px;
+    }
+
+    .flow-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      color: #dbeafe;
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 18px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(94px, 1fr));
+      align-items: center;
+      gap: 10px;
+    }
+
+    .node {
+      min-height: 70px;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: #e2e8f0;
+      background: rgba(21, 29, 44, 0.95);
+      padding: 10px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .node.added {
+      border-color: rgba(16, 185, 129, 0.55);
+      background: rgba(16, 185, 129, 0.12);
+      color: #d1fae5;
+    }
+
+    .arrow {
+      color: #64748b;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .visual-board {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin: 18px 0;
+    }
+
+    .visual-card {
+      min-height: 132px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.035);
+      padding: 16px;
+    }
+
+    .show-highlights .visual-card.added {
+      border-color: rgba(16, 185, 129, 0.44);
+      background: rgba(16, 185, 129, 0.08);
+    }
+
+    .visual-card h3 {
+      margin-top: 0;
+    }
+
+    .progress-bar {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.18);
+      overflow: hidden;
+      margin: 14px 0 8px;
+    }
+
+    .progress-bar span {
+      display: block;
+      height: 100%;
+      width: 72%;
+      background: linear-gradient(90deg, #10b981, #2f6df6);
+    }
+
+    .check-list {
+      display: grid;
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+
+    .check {
+      width: 18px;
+      height: 18px;
+      border-radius: 5px;
+      display: inline-grid;
+      place-items: center;
+      margin-top: 2px;
+      background: rgba(16, 185, 129, 0.18);
+      color: #86efac;
+      font-size: 12px;
+      font-weight: 900;
+      flex: 0 0 auto;
+    }
+
+    .comment {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      color: #cbd5e1;
+      background: rgba(255, 255, 255, 0.035);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .lock-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: #cbd5e1;
+      font-size: 13px;
+    }
+
+    .source-diff,
+    .change-review {
+      display: none;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(15, 23, 36, 0.95);
+      box-shadow: var(--shadow);
+    }
+
+    .source-diff.active,
+    .change-review.active,
+    .preview.active {
+      display: block;
+    }
+
+    .preview {
+      display: none;
+    }
+
+    .diff-line {
+      margin: 0;
+      padding: 7px 18px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      border-bottom: 1px solid rgba(38, 50, 71, 0.45);
+      color: #cbd5e1;
+    }
+
+    .diff-line.added {
+      background: rgba(16, 185, 129, 0.12);
+      color: #bbf7d0;
+    }
+
+    .diff-line.removed {
+      background: rgba(248, 113, 113, 0.12);
+      color: #fecaca;
+      text-decoration: line-through;
+      text-decoration-color: rgba(248, 113, 113, 0.72);
+    }
+
+    .diff-line.context {
+      color: #94a3b8;
+    }
+
+    .review-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      padding: 22px;
+    }
+
+    .review-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.035);
+      padding: 16px;
+    }
+
+    .review-card h2 {
+      margin: 0 0 12px;
+      font-size: 16px;
+    }
+
+    .review-card.added {
+      border-color: rgba(16, 185, 129, 0.45);
+    }
+
+    .review-card.modified {
+      border-color: rgba(245, 158, 11, 0.45);
+    }
+
+    body.hide-highlights .show-highlights tr.row-added td,
+    body.hide-highlights .show-highlights tr.row-modified td {
+      background: transparent;
+      color: #cbd5e1;
+    }
+
+    body.hide-highlights tr.row-added td:first-child,
+    body.hide-highlights tr.row-modified td:first-child,
+    body.hide-highlights .show-highlights .list-added,
+    body.hide-highlights .show-highlights .list-modified {
+      box-shadow: none;
+      background: transparent;
+    }
+
+    body.hide-highlights .show-highlights .node.added,
+    body.hide-highlights .show-highlights .visual-card.added {
+      border-color: var(--line-strong);
+      background: rgba(21, 29, 44, 0.95);
+      color: #e2e8f0;
+    }
+
+    body.hide-highlights .section-badge {
+      display: none;
+    }
+
+    @media (max-width: 1200px) {
+      .main {
+        grid-template-columns: 1fr;
+      }
+
+      .chat {
+        display: none;
+      }
+
+      .stage-tabs {
+        display: none;
+      }
+
+      .layout {
+        display: block;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .topbar {
+        padding: 0 16px;
+      }
+
+      .top-actions {
+        display: none;
+      }
+
+      .artifact-head {
+        height: auto;
+        padding: 16px;
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .view-switch {
+        overflow-x: auto;
+      }
+
+      .view-switch button {
+        min-width: 104px;
+      }
+
+      .artifact-body {
+        padding: 20px 14px 48px;
+      }
+
+      .change-strip,
+      .summary-grid,
+      .review-grid,
+      .visual-board,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .arrow {
+        transform: rotate(90deg);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">AI</div>
+        <div class="brand-title">
+          <strong>LISA AI 专家 · 测试设计</strong>
+          <span>增量渲染交互原型，不接真实数据</span>
+        </div>
+      </div>
+      <nav class="stage-tabs" aria-label="阶段">
+        <button class="stage active">01 需求澄清</button>
+        <button class="stage">02 策略制定</button>
+        <button class="stage">03 用例编写</button>
+        <button class="stage">04 文档交付</button>
+      </nav>
+      <div class="top-actions">
+        <button class="primary-action">新会话</button>
+        <button class="ghost-action">历史会话</button>
+        <button class="ghost-action">更多</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <aside class="chat" aria-label="聊天区模拟">
+        <div class="chat-head">
+          <h1>测试设计</h1>
+          <p>左侧保持对话节奏，右侧默认显示正式渲染产出物。</p>
+        </div>
+        <div class="chat-feed">
+          <div class="message user">帮我假定一个场景，我当前在测试这个工作。</div>
+          <div class="message">
+            好的，我已基于登录功能补充需求澄清基线。右侧产出物以正式文档形式更新，变化章节已经用视觉提示标记。
+          </div>
+          <div class="stage-card">
+            <strong>AI 建议进入下一阶段：策略制定</strong>
+            确认后会进入该阶段，并继续生成对应的右侧产出物。
+            <div class="buttons">
+              <button>暂不进入</button>
+              <button>确认进入</button>
+            </div>
+          </div>
+        </div>
+        <div class="composer">
+          <input value="描述你想测试的功能，或粘贴需求文档..." aria-label="输入框">
+          <button aria-label="发送">➤</button>
+        </div>
+      </aside>
+
+      <section class="artifact" aria-label="产出物原型">
+        <header class="artifact-head">
+          <div class="file-meta">
+            <div class="file-icon">MD</div>
+            <div>
+              <strong>当前产出物.md</strong>
+              <span>默认正式渲染 · 本轮有 3 个新增、2 个修改、1 个删除</span>
+            </div>
+          </div>
+          <div class="view-switch" role="tablist" aria-label="视图切换">
+            <button class="active" data-view="preview" type="button">正式渲染</button>
+            <button data-view="review" type="button">变更审阅</button>
+            <button data-view="source" type="button">源码差异</button>
+          </div>
+        </header>
+
+        <div class="artifact-body">
+          <div class="canvas">
+            <div class="change-strip">
+              <div>
+                <h2>本轮变更摘要</h2>
+                <div class="chips">
+                  <span class="chip added">新增 需求事实 3 条</span>
+                  <span class="chip modified">修改 被测系统与边界</span>
+                  <span class="chip added">新增 业务规则</span>
+                  <span class="chip modified">修改 核心链路</span>
+                  <span class="chip deleted">删除 旧移动端边界</span>
+                </div>
+              </div>
+              <button class="toggle-highlight" type="button" id="toggleHighlights">隐藏高亮</button>
+            </div>
+
+            <section class="preview active" data-panel="preview">
+              <div class="layout">
+                <article class="document show-highlights">
+                  <div class="doc-toolbar">
+                    <span>正式产出物预览</span>
+                    <span>右侧只叠加变更提示，不显示 Markdown 源码</span>
+                  </div>
+                  <div class="doc-content">
+                    <h1>需求分析文档</h1>
+                    <p>
+                      本文档基于当前登录功能假设整理需求事实、系统边界、业务规则、核心链路与阶段门禁。
+                      正文始终保持正式渲染形态；新增或修改落在具体行、列表项、单元格或流程节点上，修改项会直接展示原值。
+                    </p>
+
+                    <div class="summary-grid">
+                      <div class="metric">
+                        <span>已确认事实</span>
+                        <strong>6</strong>
+                      </div>
+                      <div class="metric">
+                        <span>待澄清问题</span>
+                        <strong>2</strong>
+                      </div>
+                      <div class="metric">
+                        <span>当前阶段判断</span>
+                        <strong>可确认</strong>
+                      </div>
+                    </div>
+
+                    <section class="section">
+                      <h2>1. 需求事实清单 <span class="section-badge added">新增 3 行</span></h2>
+                      <div class="table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>事实 ID</th>
+                              <th>需求事实</th>
+                              <th>来源</th>
+                              <th>证据等级</th>
+                              <th>状态</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td>F-001</td>
+                              <td>用户通过输入用户名和密码进行登录</td>
+                              <td>用户需求描述</td>
+                              <td>假设</td>
+                              <td><span class="status">待确认</span></td>
+                            </tr>
+                            <tr>
+                              <td>F-002</td>
+                              <td>登录成功后跳转到系统首页</td>
+                              <td>常见场景假设</td>
+                              <td>假设</td>
+                              <td><span class="status">待确认</span></td>
+                            </tr>
+                            <tr class="row-added">
+                              <td>F-004</td>
+                              <td>登录页面包含图形验证码</td>
+                              <td>AI 合理假设</td>
+                              <td>假设</td>
+                              <td><span class="status risk">待确认</span> <span class="change-tag added">新增</span></td>
+                            </tr>
+                            <tr class="row-added">
+                              <td>F-005</td>
+                              <td>密码错误 5 次后账号锁定 15 分钟</td>
+                              <td>AI 合理假设</td>
+                              <td>假设</td>
+                              <td><span class="status risk">待确认</span> <span class="change-tag added">新增</span></td>
+                            </tr>
+                            <tr class="row-added">
+                              <td>F-006</td>
+                              <td>登录成功返回 JWT Token</td>
+                              <td>AI 合理假设</td>
+                              <td>假设</td>
+                              <td><span class="status risk">待确认</span> <span class="change-tag added">新增</span></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+
+                    <section class="section">
+                      <h2>2. 被测系统与边界 <span class="section-badge modified">修改 2 行</span></h2>
+                      <p>
+                        下方只标记被修改的行，并在被改动的单元格里显示原始值，避免用户必须记住上一版内容。
+                      </p>
+                      <div class="table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>类型</th>
+                              <th>具体内容</th>
+                              <th>测试含义</th>
+                              <th>状态</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr class="row-modified">
+                              <td>用户入口</td>
+                              <td>
+                                <span class="value-change">
+                                  <span class="new-value">登录页面（Web 端）</span>
+                                  <span class="previous-value">原：<del>登录页面（Web/移动端）</del></span>
+                                </span>
+                              </td>
+                              <td>
+                                <span class="value-change">
+                                  <span class="new-value">覆盖 Chrome、Firefox、Edge、Safari</span>
+                                  <span class="previous-value">原：<del>覆盖不同终端和浏览器</del></span>
+                                </span>
+                              </td>
+                              <td><span class="status risk">待确认</span> <span class="change-tag modified">修改</span></td>
+                            </tr>
+                            <tr>
+                              <td>核心服务</td>
+                              <td>认证服务（用户名、密码、验证码）</td>
+                              <td>测试认证逻辑、验证码校验、锁定策略</td>
+                              <td><span class="status risk">待确认</span></td>
+                            </tr>
+                            <tr class="row-modified">
+                              <td>成功反馈</td>
+                              <td>
+                                <span class="value-change">
+                                  <span class="new-value">跳转至首页并设置 JWT Token</span>
+                                  <span class="previous-value">原：<del>跳转至首页并设置登录态（Token/Cookie）</del></span>
+                                </span>
+                              </td>
+                              <td>
+                                <span class="value-change">
+                                  <span class="new-value">验证 Token 正确生成并存储</span>
+                                  <span class="previous-value">原：<del>验证登录态正确生成</del></span>
+                                </span>
+                              </td>
+                              <td><span class="status risk">待确认</span> <span class="change-tag modified">修改</span></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+
+                    <section class="section">
+                      <h2>3. 业务规则与数据状态 <span class="section-badge added">新增 4 项</span></h2>
+                      <ol>
+                        <li class="list-added"><strong>凭证校验：</strong>用户名、密码、验证码三者均正确时允许登录。 <span class="change-tag added">新增</span></li>
+                        <li class="list-added"><strong>失败计数：</strong>同一账号连续密码错误 5 次后进入锁定状态。 <span class="change-tag added">新增</span></li>
+                        <li class="list-added"><strong>锁定解除：</strong>账号锁定 15 分钟后自动解除，管理员可手动解锁。 <span class="change-tag added">新增</span></li>
+                        <li class="list-added"><strong>Token 生命周期：</strong>登录成功后生成 JWT Token，过期后要求重新登录。 <span class="change-tag added">新增</span></li>
+                      </ol>
+                      <div class="callout">
+                        列表类内容只标记当前条目；如果是修改项，也会像表格单元格一样显示原值。
+                      </div>
+                    </section>
+
+                    <section class="section">
+                      <h2>4. 核心链路与异常链路 <span class="section-badge modified">修改节点</span></h2>
+                      <div class="flow-card">
+                        <div class="flow-title">
+                          <span>登录主链路</span>
+                          <span>仅标记本轮新增或修改的节点</span>
+                        </div>
+                        <div class="flow">
+                          <div class="node">用户打开登录页</div>
+                          <div class="arrow">→</div>
+                          <div class="node added">输入验证码<br><span class="change-tag added">新增节点</span></div>
+                          <div class="arrow">→</div>
+                          <div class="node">认证服务校验</div>
+                          <div class="arrow">→</div>
+                          <div class="node">生成 JWT</div>
+                          <div class="arrow">→</div>
+                          <div class="node">跳转首页</div>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="section">
+                      <h2>5. 待澄清问题</h2>
+                      <div class="table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>问题 ID</th>
+                              <th>问题描述</th>
+                              <th>优先级</th>
+                              <th>阻断性</th>
+                              <th>责任方</th>
+                              <th>状态</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td>Q-001</td>
+                              <td>登录方式是否支持手机号、邮箱、第三方登录？</td>
+                              <td>P1</td>
+                              <td>阻断</td>
+                              <td>产品</td>
+                              <td><span class="status risk">待确认</span></td>
+                            </tr>
+                            <tr>
+                              <td>Q-002</td>
+                              <td>验证码是图形验证码还是短信验证码？</td>
+                              <td>P1</td>
+                              <td>阻断</td>
+                              <td>产品</td>
+                              <td><span class="status risk">待确认</span></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+
+                    <section class="section">
+                      <h2>6. 隐式质量需求 <span class="section-badge added">新增卡片</span></h2>
+                      <div class="visual-board">
+                        <div class="visual-card added">
+                          <h3>安全性</h3>
+                          <p>覆盖暴力破解、验证码绕过、Token 泄漏、锁定策略绕过。</p>
+                          <div class="progress-bar"><span></span></div>
+                          <p>风险覆盖度 72% <span class="change-tag added">新增</span></p>
+                        </div>
+                        <div class="visual-card added">
+                          <h3>兼容性</h3>
+                          <p>覆盖主流桌面浏览器和常见窗口尺寸，移动端暂不进入本阶段范围。</p>
+                          <div class="progress-bar"><span style="width:58%"></span></div>
+                          <p>兼容覆盖度 58% <span class="change-tag added">新增</span></p>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="section">
+                      <h2>7. 后续测试设计输入</h2>
+                      <div class="check-list">
+                        <div class="check-item"><span class="check">✓</span><span>风险种子 R-001：验证码生成与校验一致性。</span></div>
+                        <div class="check-item"><span class="check">✓</span><span>风险种子 R-002：账号锁定策略边界值。</span></div>
+                        <div class="check-item"><span class="check">✓</span><span>风险种子 R-003：JWT Token 生成、存储、过期和刷新。</span></div>
+                      </div>
+                    </section>
+
+                    <section class="section">
+                      <h2>8. 阶段门禁</h2>
+                      <div class="check-list">
+                        <div class="check-item"><span class="check">✓</span><span>测试范围和不测范围已经具备初版边界。</span></div>
+                        <div class="check-item"><span class="check">✓</span><span>阻断问题已显式列出，用户可确认后进入策略制定。</span></div>
+                      </div>
+                    </section>
+                  </div>
+                </article>
+
+              </div>
+            </section>
+
+            <section class="change-review" data-panel="review" aria-label="变更审阅">
+              <div class="doc-toolbar">
+                <span>变更审阅 · 仍然尽量保持正式渲染</span>
+                <span>适合产品核对变化点</span>
+              </div>
+              <div class="review-grid">
+                <div class="review-card added">
+                  <h2>新增事实</h2>
+                  <p>新增图形验证码、账号锁定、JWT Token 三条事实。这里直接展示正式文本，不展示 Markdown 表格源码。</p>
+                  <div class="table-wrap">
+                    <table>
+                      <thead><tr><th>ID</th><th>事实</th><th>状态</th></tr></thead>
+                      <tbody>
+                        <tr class="row-added"><td>F-004</td><td>登录页面包含图形验证码</td><td>待确认</td></tr>
+                        <tr class="row-added"><td>F-005</td><td>密码错误 5 次后锁定 15 分钟</td><td>待确认</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="review-card modified">
+                  <h2>修改前后对照</h2>
+                  <p>如果业务用户想知道“它原来是什么”，在审阅视图里直接看字段级对照。</p>
+                  <div class="table-wrap">
+                    <table>
+                      <thead><tr><th>位置</th><th>修改前</th><th>修改后</th></tr></thead>
+                      <tbody>
+                        <tr class="row-modified">
+                          <td>用户入口</td>
+                          <td><span class="previous-value">登录页面（Web/移动端）</span></td>
+                          <td>登录页面（Web 端）</td>
+                        </tr>
+                        <tr class="row-modified">
+                          <td>成功反馈</td>
+                          <td><span class="previous-value">登录态（Token/Cookie）</span></td>
+                          <td>JWT Token</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="review-card added">
+                  <h2>新增规则与视觉信息</h2>
+                  <p>新增业务规则、质量需求卡片和验证码节点，审阅页只汇总新增类型，不重复展示删除清单。</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="source-diff" data-panel="source" aria-label="源码差异">
+              <div class="doc-toolbar">
+                <span>源码差异 · 开发/审计视图</span>
+                <span>默认不展示给业务阅读</span>
+              </div>
+              <pre class="diff-line context"># 需求分析文档</pre>
+              <pre class="diff-line context">## 1. 需求事实清单</pre>
+              <pre class="diff-line added">+ | F-004 | 登录页面包含图形验证码 | AI 合理假设 | 假设 | 待确认 |</pre>
+              <pre class="diff-line added">+ | F-005 | 密码错误5次后账号锁定15分钟 | AI 合理假设 | 假设 | 待确认 |</pre>
+              <pre class="diff-line context">## 2. 被测系统与边界</pre>
+              <pre class="diff-line removed">- | 用户入口 | 登录页面（Web/移动端） | 需覆盖不同终端和浏览器 | 待确认 |</pre>
+              <pre class="diff-line added">+ | 用户入口 | 登录页面（Web 端） | 需覆盖 Chrome、Firefox、Edge、Safari | 待确认 |</pre>
+              <pre class="diff-line removed">- | 成功反馈 | 跳转至首页并设置登录态（Token/Cookie） | 需验证登录态正确生成 | 待确认 |</pre>
+              <pre class="diff-line added">+ | 成功反馈 | 跳转至首页并设置 JWT Token | 需验证 Token 正确生成并存储 | 待确认 |</pre>
+              <pre class="diff-line context">## 3. 业务规则与数据状态</pre>
+              <pre class="diff-line added">+ 1. 凭证校验：用户名、密码、验证码三者均正确时允许登录。</pre>
+              <pre class="diff-line added">+ 2. 失败计数：同一账号连续密码错误 5 次后进入锁定状态。</pre>
+              <pre class="diff-line added">+ 3. Token 生命周期：登录成功后生成 JWT Token。</pre>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const buttons = document.querySelectorAll('.view-switch button');
+    const panels = document.querySelectorAll('[data-panel]');
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        buttons.forEach((item) => item.classList.remove('active'));
+        button.classList.add('active');
+        panels.forEach((panel) => {
+          panel.classList.toggle('active', panel.getAttribute('data-panel') === button.dataset.view);
+        });
+      });
+    });
+
+    const toggle = document.getElementById('toggleHighlights');
+    toggle.addEventListener('click', () => {
+      document.body.classList.toggle('hide-highlights');
+      toggle.textContent = document.body.classList.contains('hide-highlights')
+        ? '显示高亮'
+        : '隐藏高亮';
+    });
+  </script>
+</body>
+</html>

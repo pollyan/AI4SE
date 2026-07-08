@@ -6,8 +6,8 @@
 
 ## 前置条件
 
-- [ ] Docker 环境已启动 (`docker ps | grep ai4se-agents`)
-- [ ] 服务健康 (http://localhost/ai-agents 可访问)
+- [ ] Docker 环境已启动 (`docker ps | grep ai4se-new-agents`)
+- [ ] 服务健康 (http://localhost/new-agents 可访问)
 - [ ] Chrome DevTools MCP 已连接
 - [ ] 已完成 lisa-smoke.md 冒烟测试
 
@@ -22,7 +22,7 @@
 ### 测试步骤
 
 1. **打开智能体页面**
-   - 导航到 `http://localhost/ai-agents`
+   - 导航到 `http://localhost/new-agents`
    - 点击 Lisa 智能体进入对话
 
 2. **触发测试设计工作流**
@@ -281,7 +281,7 @@
 
 ### 产出物内容为空
 
-- 检查后端日志 `docker logs ai4se-agents --tail 50`
+- 检查后端日志 `docker logs ai4se-new-agents-backend --tail 50`
 - 可能 LLM 响应未触发 artifact 更新
 - 继续对话可能会触发更新
 
