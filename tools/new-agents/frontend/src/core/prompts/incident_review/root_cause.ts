@@ -71,17 +71,33 @@ ${FENCE}ai4se-visual
 {
   "type": "cause-map",
   "title": "5-Why 根因链路图",
-  "columns": ["层级", "问题", "回答", "原因类型", "证据", "证据强度", "置信度", "可行动性"],
-  "rows": [
+  "nodes": [
     {
-      "层级": "Why-2",
-      "问题": "为什么缺陷未被拦截？",
-      "回答": "发布前缺少关键路径回归门禁",
-      "原因类型": "流程",
-      "证据": "发布记录与测试记录",
-      "证据强度": "高",
-      "置信度": "高",
-      "可行动性": "可行动"
+      "id": "Why-1",
+      "label": "Why-1",
+      "title": "直接原因",
+      "description": "为什么会出现这个现象？",
+      "category": "技术 / 流程 / 人员 / 环境 / 度量 / 管理",
+      "evidence": "发布记录与测试记录",
+      "confidence": "高",
+      "status": "已确认"
+    },
+    {
+      "id": "Why-2",
+      "label": "Why-2",
+      "title": "深层原因",
+      "description": "为什么直接原因未被提前拦截？",
+      "category": "流程",
+      "evidence": "评审记录与测试记录",
+      "confidence": "中",
+      "status": "待验证"
+    }
+  ],
+  "edges": [
+    {
+      "source": "Why-1",
+      "target": "Why-2",
+      "label": "继续追问"
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseStructuredVisual } from '../structuredVisuals';
+import { ROOT_CAUSE_TEMPLATE } from '../prompts/incident_review/root_cause';
 
 describe('parseStructuredVisual', () => {
     it('parses a traceability matrix visual block', () => {
@@ -19,6 +20,8 @@ describe('parseStructuredVisual', () => {
 
         expect(result.valid).toBe(true);
         if (result.valid === false) throw new Error(result.message);
+        expect(result.visual.kind).toBe('matrix');
+        if (result.visual.kind !== 'matrix') throw new Error('expected matrix visual');
         expect(result.visual.title).toBe('需求-风险-用例追溯矩阵');
         expect(result.visual.columns).toEqual(['需求', '风险', '用例', '覆盖状态']);
         expect(result.visual.rows[0].cells).toEqual(['REQ-1', 'RISK-1', 'TC-1', '已覆盖']);
@@ -40,6 +43,8 @@ describe('parseStructuredVisual', () => {
 
         expect(result.valid).toBe(true);
         if (result.valid === false) throw new Error(result.message);
+        expect(result.visual.kind).toBe('matrix');
+        if (result.visual.kind !== 'matrix') throw new Error('expected matrix visual');
         expect(result.visual.type).toBe('score-matrix');
         expect(result.visual.title).toBe('价值主张评分矩阵');
         expect(result.visual.columns).toEqual(['维度', '评分', '依据']);
@@ -52,7 +57,6 @@ describe('parseStructuredVisual', () => {
         ['journey-map', '用户旅程地图'],
         ['coverage-map', '交付覆盖地图'],
         ['priority-board', '问题优先级看板'],
-        ['cause-map', '根因链路图'],
         ['mvp-map', 'MVP 功能地图'],
         ['roadmap', '产品路线图'],
     ])('parses %s visual blocks through the shared table shape', (type, title) => {
@@ -71,9 +75,74 @@ describe('parseStructuredVisual', () => {
 
         expect(result.valid).toBe(true);
         if (result.valid === false) throw new Error(result.message);
+        expect(result.visual.kind).toBe('matrix');
+        if (result.visual.kind !== 'matrix') throw new Error('expected matrix visual');
         expect(result.visual.type).toBe(type);
         expect(result.visual.title).toBe(title);
         expect(result.visual.rows[0].cells).toEqual(['关键项', '已识别', '来自阶段产出物']);
+    });
+
+    it('parses cause-map visual blocks as node-edge graphs', () => {
+        const result = parseStructuredVisual(JSON.stringify({
+            type: 'cause-map',
+            title: '5-Why 根因链路图',
+            nodes: [
+                {
+                    id: 'Why-1',
+                    label: 'Why-1',
+                    title: '直接原因',
+                    description: '发布前缺少关键路径回归门禁',
+                    category: '流程',
+                    evidence: '发布记录与测试记录',
+                    confidence: '高',
+                    status: '已确认',
+                },
+                {
+                    id: 'Why-2',
+                    label: 'Why-2',
+                    title: '深层原因',
+                    description: '回归策略没有覆盖高风险链路',
+                },
+            ],
+            edges: [
+                { source: 'Why-1', target: 'Why-2', label: '继续追问' },
+            ],
+        }));
+
+        expect(result.valid).toBe(true);
+        if (result.valid === false) throw new Error(result.message);
+        expect(result.visual.kind).toBe('node-edge');
+        if (result.visual.kind !== 'node-edge') throw new Error('expected node-edge visual');
+        expect(result.visual.nodes.map(node => node.id)).toEqual(['Why-1', 'Why-2']);
+        expect(result.visual.edges[0]).toEqual({
+            source: 'Why-1',
+            target: 'Why-2',
+            label: '继续追问',
+        });
+    });
+
+    it('rejects cause-map edges that reference missing nodes', () => {
+        const result = parseStructuredVisual(JSON.stringify({
+            type: 'cause-map',
+            nodes: [
+                { id: 'Why-1', label: 'Why-1', title: '直接原因' },
+            ],
+            edges: [
+                { source: 'Why-1', target: 'Why-404', label: '继续追问' },
+            ],
+        }));
+
+        expect(result).toEqual({
+            valid: false,
+            message: 'cause-map edge 引用了不存在的节点：Why-1 -> Why-404。',
+        });
+    });
+
+    it('keeps ROOT_CAUSE cause-map template on the node-edge protocol', () => {
+        expect(ROOT_CAUSE_TEMPLATE).toContain('"type": "cause-map"');
+        expect(ROOT_CAUSE_TEMPLATE).toContain('"nodes"');
+        expect(ROOT_CAUSE_TEMPLATE).toContain('"edges"');
+        expect(ROOT_CAUSE_TEMPLATE).not.toContain('"columns": ["层级", "问题", "回答"');
     });
 
     it('returns an invalid result for malformed JSON', () => {

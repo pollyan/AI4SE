@@ -1,4 +1,4 @@
-import { parseStructuredVisual } from './structuredVisuals';
+import { parseStructuredVisual, type NodeEdgeStructuredVisual } from './structuredVisuals';
 
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -99,6 +99,26 @@ const table = (rows: string[][]): string => (
     + rows.map(tableRow).join('')
     + '</w:tbl>'
 );
+
+const nodeEdgeVisualParagraphs = (visual: NodeEdgeStructuredVisual): string[] => {
+    const lines: string[] = [`结构化可视化：${visual.title || visual.type}`, '节点：'];
+    visual.nodes.forEach((node) => {
+        lines.push(`${node.label} ${node.title}${node.description ? `：${node.description}` : ''}`);
+        if (node.category) lines.push(`类型：${node.category}`);
+        if (node.evidence) lines.push(`证据：${node.evidence}`);
+        if (node.confidence) lines.push(`置信度：${node.confidence}`);
+        if (node.status) lines.push(`状态：${node.status}`);
+    });
+    lines.push('连接：');
+    if (!visual.edges.length) {
+        lines.push('无');
+    } else {
+        visual.edges.forEach((edge) => {
+            lines.push(`${edge.source} -> ${edge.target}${edge.label ? `：${edge.label}` : ''}`);
+        });
+    }
+    return lines.map(line => paragraph(line));
+};
 
 type MermaidDocxNode = {
     id: string;
@@ -718,6 +738,10 @@ const projectStructuredVisualToWordParagraphs = (source: string): string[] => {
     }
 
     const { visual } = result;
+    if (visual.kind === 'node-edge') {
+        return nodeEdgeVisualParagraphs(visual);
+    }
+
     return [
         paragraph(`结构化可视化：${visual.title || visual.type}`),
         table([

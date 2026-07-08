@@ -140,6 +140,46 @@ describe('docxExport', () => {
         expect(documentXml).not.toContain('Consolas');
     });
 
+    it('projects cause-map node-edge visuals into readable DOCX content', async () => {
+        const blob = buildDocxPackage([
+            '# 根因链路',
+            '',
+            '```ai4se-visual',
+            JSON.stringify({
+                type: 'cause-map',
+                title: '5-Why 根因链路图',
+                nodes: [
+                    {
+                        id: 'Why-1',
+                        label: 'Why-1',
+                        title: '直接原因',
+                        description: '发布前缺少关键路径回归门禁',
+                    },
+                    {
+                        id: 'Why-2',
+                        label: 'Why-2',
+                        title: '深层原因',
+                        description: '回归策略没有覆盖高风险链路',
+                    },
+                ],
+                edges: [
+                    { source: 'Why-1', target: 'Why-2', label: '继续追问' },
+                ],
+            }, null, 2),
+            '```',
+        ].join('\n'));
+
+        const entries = await readStoredZipEntries(blob);
+        const documentXml = entries['word/document.xml'];
+
+        expect(documentXml).toContain('结构化可视化：5-Why 根因链路图');
+        expect(documentXml).toContain('节点：');
+        expect(documentXml).toContain('Why-1 直接原因：发布前缺少关键路径回归门禁');
+        expect(documentXml).toContain('Why-1 -&gt; Why-2：继续追问');
+        expect(documentXml).not.toContain('&quot;nodes&quot;');
+        expect(documentXml).not.toContain('```ai4se-visual');
+    });
+
     it('embeds supported Mermaid flowcharts as SVG media in DOCX packages', async () => {
         const blob = buildDocxPackage([
             '# 系统边界图',

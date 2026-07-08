@@ -24,6 +24,7 @@ const SUPPORTED_VISUAL_TYPES: StructuredVisualType[] = [
 ];
 
 export interface MatrixStructuredVisual {
+    kind: 'matrix';
     type: StructuredVisualType;
     title?: string;
     columns: string[];
@@ -32,7 +33,32 @@ export interface MatrixStructuredVisual {
     }>;
 }
 
-export type StructuredVisual = MatrixStructuredVisual;
+export interface NodeEdgeStructuredVisualNode {
+    id: string;
+    label: string;
+    title: string;
+    description?: string;
+    category?: string;
+    evidence?: string;
+    confidence?: string;
+    status?: string;
+}
+
+export interface NodeEdgeStructuredVisualEdge {
+    source: string;
+    target: string;
+    label?: string;
+}
+
+export interface NodeEdgeStructuredVisual {
+    kind: 'node-edge';
+    type: Extract<StructuredVisualType, 'cause-map'>;
+    title?: string;
+    nodes: NodeEdgeStructuredVisualNode[];
+    edges: NodeEdgeStructuredVisualEdge[];
+}
+
+export type StructuredVisual = MatrixStructuredVisual | NodeEdgeStructuredVisual;
 
 export type StructuredVisualResult =
     | {
@@ -61,6 +87,99 @@ function stringifyCell(value: unknown): string {
     if (typeof value === 'string') return value;
     if (typeof value === 'number' || typeof value === 'boolean') return String(value);
     return JSON.stringify(value);
+}
+
+function requiredNonEmptyString(value: unknown): string | null {
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function optionalNonEmptyString(value: unknown): string | undefined {
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function parseNodeEdgeVisual(
+    parsed: Record<string, unknown>,
+    visualType: Extract<StructuredVisualType, 'cause-map'>,
+    title: string | undefined
+): StructuredVisualResult {
+    if (!Array.isArray(parsed.nodes) || !parsed.nodes.every(isRecord) || !parsed.nodes.length) {
+        return {
+            valid: false,
+            message: `${visualType} 必须包含非空 nodes 节点数组。`,
+        };
+    }
+
+    const nodeIds = new Set<string>();
+    const nodes: NodeEdgeStructuredVisualNode[] = [];
+    for (const node of parsed.nodes) {
+        const id = requiredNonEmptyString(node.id);
+        const label = requiredNonEmptyString(node.label);
+        const nodeTitle = requiredNonEmptyString(node.title);
+        if (!id || !label || !nodeTitle) {
+            return {
+                valid: false,
+                message: `${visualType} node 必须包含非空 id、label 和 title。`,
+            };
+        }
+        if (nodeIds.has(id)) {
+            return {
+                valid: false,
+                message: `${visualType} 包含重复 node id：${id}。`,
+            };
+        }
+        nodeIds.add(id);
+        nodes.push({
+            id,
+            label,
+            title: nodeTitle,
+            description: optionalNonEmptyString(node.description),
+            category: optionalNonEmptyString(node.category),
+            evidence: optionalNonEmptyString(node.evidence),
+            confidence: optionalNonEmptyString(node.confidence),
+            status: optionalNonEmptyString(node.status),
+        });
+    }
+
+    if (!Array.isArray(parsed.edges) || !parsed.edges.every(isRecord)) {
+        return {
+            valid: false,
+            message: `${visualType} 必须包含 edges 对象数组。`,
+        };
+    }
+
+    const edges: NodeEdgeStructuredVisualEdge[] = [];
+    for (const edge of parsed.edges) {
+        const source = requiredNonEmptyString(edge.source);
+        const target = requiredNonEmptyString(edge.target);
+        if (!source || !target) {
+            return {
+                valid: false,
+                message: `${visualType} edge 必须包含非空 source 和 target。`,
+            };
+        }
+        if (!nodeIds.has(source) || !nodeIds.has(target)) {
+            return {
+                valid: false,
+                message: `${visualType} edge 引用了不存在的节点：${source} -> ${target}。`,
+            };
+        }
+        edges.push({
+            source,
+            target,
+            label: optionalNonEmptyString(edge.label),
+        });
+    }
+
+    return {
+        valid: true,
+        visual: {
+            kind: 'node-edge',
+            type: visualType,
+            title,
+            nodes,
+            edges,
+        },
+    };
 }
 
 export function parseStructuredVisual(source: string): StructuredVisualResult {
@@ -93,6 +212,14 @@ export function parseStructuredVisual(source: string): StructuredVisualResult {
     }
     const visualType = parsed.type as StructuredVisualType;
 
+    const title = typeof parsed.title === 'string' && parsed.title.trim().length > 0
+        ? parsed.title
+        : undefined;
+
+    if (visualType === 'cause-map') {
+        return parseNodeEdgeVisual(parsed, visualType, title);
+    }
+
     const columns = asNonEmptyStringArray(parsed.columns);
     if (!columns) {
         return {
@@ -108,13 +235,10 @@ export function parseStructuredVisual(source: string): StructuredVisualResult {
         };
     }
 
-    const title = typeof parsed.title === 'string' && parsed.title.trim().length > 0
-        ? parsed.title
-        : undefined;
-
     return {
         valid: true,
         visual: {
+            kind: 'matrix',
             type: visualType,
             title,
             columns,

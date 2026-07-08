@@ -320,8 +320,13 @@ def test_frontend_templates_include_required_structured_visual_contract_examples
                 or "${FENCE}ai4se-visual" in template
             )
             assert f'"type": "{visual_type}"' in template
-            assert '"columns"' in template
-            assert '"rows"' in template
+            if visual_type == "cause-map":
+                assert '"nodes"' in template
+                assert '"edges"' in template
+                assert '"columns": ["层级", "问题", "回答"' not in template
+            else:
+                assert '"columns"' in template
+                assert '"rows"' in template
             assert "fenced:ai4se-visual" not in rendered_template_section
             assert '"data"' not in rendered_template_section
             assert '"matrix"' not in rendered_template_section

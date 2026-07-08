@@ -1,4 +1,5 @@
 import copy
+import json
 
 import pytest
 from pydantic import ValidationError
@@ -34,6 +35,15 @@ def _extract_mermaid_block(markdown: str, marker: str) -> str:
         if marker in block:
             return block
     raise AssertionError(f"Mermaid block not found: {marker}")
+
+
+def _extract_ai4se_visual_block(markdown: str, visual_type: str) -> dict:
+    for chunk in markdown.split("```ai4se-visual\n")[1:]:
+        block = chunk.split("\n```", 1)[0]
+        visual = json.loads(block)
+        if visual.get("type") == visual_type:
+            return visual
+    raise AssertionError(f"ai4se-visual block not found: {visual_type}")
 
 
 VALID_CLARIFY_ARTIFACT_DATA = {
@@ -3927,6 +3937,20 @@ def test_render_partial_incident_root_cause_artifact_data_builds_formal_incremen
     assert why_output is not None
     assert "### 6.1 5-Why 分析链" in why_output.artifact_update.markdown
     assert '"type": "cause-map"' in why_output.artifact_update.markdown
+    cause_map = _extract_ai4se_visual_block(
+        why_output.artifact_update.markdown,
+        "cause-map",
+    )
+    assert "columns" not in cause_map
+    assert "rows" not in cause_map
+    assert [node["id"] for node in cause_map["nodes"]] == [
+        item["level"] for item in VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA["why_chain"]
+    ]
+    assert cause_map["edges"] == [
+        {"source": "现象", "target": "Why-1", "label": "继续追问"},
+        {"source": "Why-1", "target": "Why-2", "label": "继续追问"},
+        {"source": "Why-2", "target": "Why-3", "label": "继续追问"},
+    ]
     assert "### 6.2 根因证据表" not in why_output.artifact_update.markdown
     assert why_output.artifact_patch is not None
     assert why_output.artifact_patch.operation == "add_after"

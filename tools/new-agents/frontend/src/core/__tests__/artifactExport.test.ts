@@ -42,4 +42,39 @@ describe('artifactExport', () => {
         expect(pdf).toContain('0.18 0.55 0.95 RG');
         expect(pdf).toContain('0.23 0.38 0.62 RG');
     });
+
+    it('projects cause-map node-edge visuals into readable PDF text', () => {
+        const pdf = buildPlainTextPdf([
+            '# 根因链路',
+            '',
+            '```ai4se-visual',
+            JSON.stringify({
+                type: 'cause-map',
+                title: '5-Why 根因链路图',
+                nodes: [
+                    {
+                        id: 'Why-1',
+                        label: 'Why-1',
+                        title: '直接原因',
+                        description: '发布前缺少关键路径回归门禁',
+                    },
+                    {
+                        id: 'Why-2',
+                        label: 'Why-2',
+                        title: '深层原因',
+                        description: '回归策略没有覆盖高风险链路',
+                    },
+                ],
+                edges: [
+                    { source: 'Why-1', target: 'Why-2', label: '继续追问' },
+                ],
+            }, null, 2),
+            '```',
+        ].join('\n'));
+
+        expect(pdf).toContain(toUtf16BeHex('结构化可视化：5-Why 根因链路图'));
+        expect(pdf).toContain(toUtf16BeHex('Why-1 直接原因：发布前缺少关键路径回归门禁'));
+        expect(pdf).toContain(toUtf16BeHex('Why-1 -> Why-2：继续追问'));
+        expect(pdf).not.toContain(toUtf16BeHex('"nodes"'));
+    });
 });

@@ -37,6 +37,22 @@ def _minimal_mermaid_block(diagram_type: str) -> str:
 
 
 def _minimal_structured_visual_block(visual_type: str) -> str:
+    if visual_type == "cause-map":
+        return (
+            "```ai4se-visual\n"
+            "{\n"
+            '  "type": "cause-map",\n'
+            '  "title": "5-Why 根因链路图",\n'
+            '  "nodes": [\n'
+            '    {"id": "Why-1", "label": "Why-1", "title": "直接原因"},\n'
+            '    {"id": "Why-2", "label": "Why-2", "title": "深层原因"}\n'
+            "  ],\n"
+            '  "edges": [\n'
+            '    {"source": "Why-1", "target": "Why-2", "label": "继续追问"}\n'
+            "  ]\n"
+            "}\n"
+            "```\n"
+        )
     return (
         "```ai4se-visual\n"
         "{\n"
@@ -783,6 +799,49 @@ def test_validate_agent_turn_rejects_legacy_traceability_matrix_shape():
             output,
             workflow_id="TEST_DESIGN",
             current_stage_id="CASES",
+        )
+
+
+def test_validate_agent_turn_rejects_cause_map_with_missing_node_reference():
+    output = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新根因分析。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": (
+                    _complete_markdown(
+                        REQUIRED_ARTIFACT_HEADINGS[
+                            ("INCIDENT_REVIEW", "ROOT_CAUSE")
+                        ]
+                    )
+                    + "\n\n"
+                    + _minimal_mermaid_block("mindmap")
+                    + "\n\n```ai4se-visual\n"
+                    + "{\n"
+                    + '  "type": "cause-map",\n'
+                    + '  "nodes": [\n'
+                    + '    {"id": "Why-1", "label": "Why-1", "title": "直接原因"}\n'
+                    + "  ],\n"
+                    + '  "edges": [\n'
+                    + '    {"source": "Why-1", "target": "Why-404", "label": "继续追问"}\n'
+                    + "  ]\n"
+                    + "}\n"
+                    + "```\n"
+                ),
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+
+    with pytest.raises(
+        ContractValidationError,
+        match="cause-map 必须使用 nodes 和 edges",
+    ):
+        validate_agent_turn(
+            output,
+            workflow_id="INCIDENT_REVIEW",
+            current_stage_id="ROOT_CAUSE",
         )
 
 

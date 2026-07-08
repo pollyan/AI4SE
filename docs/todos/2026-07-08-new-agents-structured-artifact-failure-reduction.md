@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成）
+- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -127,6 +127,7 @@
   - 目标：在现有 `score-matrix`、`coverage-map`、`journey-map` 等表格类视觉之外，补齐 `flow-map`、`timeline-map`、`mindmap`、`sequence-flow`、`distribution-chart` 等数据结构，使复杂图不再依赖模型手写 Mermaid。
   - 约束：每个 visual 类型必须有严格 schema、引用完整性校验、前端渲染组件、导出降级文本和失败诊断。
   - 验收：至少选一个 Mermaid 失败高风险阶段完成纵切迁移，并证明最终 artifact 不含模型手写 Mermaid。
+  - 进展：已完成首个复杂图纵切 `INCIDENT_REVIEW/ROOT_CAUSE.cause-map`。该 visual type 已从 `columns/rows` 表格协议迁移为 `nodes/edges`，并覆盖后端 deterministic renderer、后端 contract 校验、前端 parser、前端组件、PDF/DOCX 导出降级和模板同步测试。更广泛的 `flow-map`、`timeline-map`、`mindmap`、`sequence-flow` 等类型仍未迁移。
 
 - [ ] 建立视觉渲染强校验门禁。（第 7 轮）
   - 目标：正式 artifact 被呈现为成功、持久化和阶段推进前，必须通过 Mermaid / `ai4se-visual` 视觉校验；若运行时校验暂不能放在 backend，则必须先以 CI / renderer fixture / frontend parse 形成可执行门禁，并在运行时失败时显式诊断。
@@ -738,6 +739,83 @@ New Agents 验证：
 - 本轮只迁移 CONVERGE 的 artifactDataContract，不代表所有 artifact_data stage 已完成 schema / prompt / contract 单源同步。
 - manifest 中的 contract 是模型提示和同步测试的配置源，不能替代 Pydantic validators；后端 validators 仍是最终门禁。
 - 本轮不处理第 7 轮视觉协议稳定化，不改变 Mermaid / `ai4se-visual` 的运行时校验策略。
+
+### 2026-07-08 第 7 轮首个纵切：INCIDENT_REVIEW ROOT_CAUSE cause-map 结构化视觉
+
+已完成 `INCIDENT_REVIEW/ROOT_CAUSE` 的 `cause-map` 节点 / 边结构化视觉纵切：
+
+- 后端 `_render_incident_why_chain()` 继续从结构化 `artifact_data.why_chain` 确定性生成视觉数据，但 `cause-map` block 已从 `columns/rows` 改为 `nodes/edges`。
+- 后端 `agent_contracts.py` 对 `cause-map` 使用节点 / 边 contract 校验，拒绝缺失节点引用；其他 `ai4se-visual` 类型继续沿用矩阵 `columns/rows` 校验。
+- 前端 `parseStructuredVisual()` 支持 `matrix` 与 `node-edge` 两种 shape，`StructuredVisual` 对 `cause-map` 渲染为非表格节点链路视图。
+- PDF / DOCX 导出层按 `visual.kind` 分流，`cause-map` 导出为可读节点和连接文本，不再假设所有结构化视觉都有 `columns/rows`。
+- `ROOT_CAUSE_TEMPLATE` 和后端模板同步测试已改为要求 `cause-map` 使用 `nodes/edges` 协议。
+- 本轮设计与执行计划已记录在：
+  - `docs/superpowers/specs/2026-07-08-new-agents-cause-map-structured-visual-design.md`
+  - `docs/superpowers/plans/2026-07-08-new-agents-cause-map-structured-visual.md`
+
+RED 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_incident_root_cause_artifact_data_builds_formal_incremental_markdown_and_patch -q
+```
+
+结果：旧 renderer 仍输出 `columns/rows`，新增 `nodes/edges` 断言失败。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/__tests__/structuredVisuals.test.ts src/components/__tests__/StructuredVisual.test.tsx -t "cause-map|ROOT_CAUSE"
+```
+
+结果：旧 parser 要求 `cause-map` 使用 `columns/rows`，新增节点 / 边解析和模板协议测试失败。
+
+GREEN 与聚焦回归：
+
+```bash
+npm run lint
+```
+
+结果：`tsc --noEmit` 通过。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_incident_root_cause_artifact_data_builds_formal_incremental_markdown_and_patch tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_incident_root_cause_artifact_data_is_deterministic_and_contract_valid tools/new-agents/backend/tests/test_agent_runtime.py::test_parse_agent_turn_output_text_renders_incident_root_cause_artifact_data tools/new-agents/backend/tests/test_agent_runtime.py::test_incident_root_cause_structured_output_instruction_requests_artifact_data_not_markdown tools/new-agents/backend/tests/test_agent_runtime.py::test_runtime_raw_json_stream_turn_renders_incident_root_cause_artifact_data_before_final_output tools/new-agents/backend/tests/test_agent_contracts.py tools/new-agents/backend/tests/test_workflow_contract_sync.py::test_frontend_templates_include_required_structured_visual_contract_examples -q
+```
+
+结果：`99 passed`
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/__tests__/structuredVisuals.test.ts src/components/__tests__/StructuredVisual.test.tsx src/components/__tests__/ArtifactPane.test.tsx src/core/__tests__/artifactExport.test.ts src/core/__tests__/docxExport.test.ts
+```
+
+结果：`182 passed`。运行中仍出现既有 React `ArtifactPane.test.tsx` `act(...)` warning，但未导致测试失败。
+
+New Agents 验证：
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：New Agents Frontend `724 passed`；New Agents Backend `627 passed, 1 deselected`。运行中仍出现既有 React `ArtifactPane.test.tsx` `act(...)` warning，但未导致测试失败。
+
+全量验证：
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：默认沙箱失败，失败点为 MidScene proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 Playwright Chromium `bootstrap_check_in ... Permission denied (1100)`，属于端口 / 浏览器权限环境限制。
+
+非沙箱重跑：
+
+```bash
+/bin/zsh -lc './scripts/test/test-local.sh all > /private/tmp/ai4se-cause-map-full-all.log 2>&1; rc=$?; tail -120 /private/tmp/ai4se-cause-map-full-all.log; echo EXIT_STATUS:$rc; exit $rc'
+```
+
+结果：通过，退出码 `0`。关键结果包括 Intent Tester API `294 passed`、MidScene proxy `17 passed`、Common Frontend lint/build 通过、New Agents Frontend `724 passed`、New Agents Backend `627 passed, 1 deselected`、New Agents Browser E2E `11 passed, 10 deselected`。
+
+残余风险：
+
+- 本轮只迁移 `cause-map` 一个复杂视觉类型，不代表 `flow-map`、`timeline-map`、`mindmap`、`sequence-flow` 等复杂图协议已经完成。
+- ROOT_CAUSE 的鱼骨图 Mermaid mindmap 本轮仍保留为后端 deterministic renderer 输出；未迁移为新的结构化 `mindmap` visual。
+- 本轮建立的是前后端 contract / renderer / 导出回归门禁；正式 artifact 持久化前的运行时视觉 parse 门禁仍需后续第 7 轮继续收紧。
 
 ## 每轮验收口径
 

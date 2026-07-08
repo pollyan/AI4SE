@@ -98,6 +98,45 @@ describe('StructuredVisual', () => {
         expect(screen.getByText('验证主价值')).toBeTruthy();
     });
 
+    it('renders cause-map node-edge JSON as a graph view instead of a table', () => {
+        render(
+            <StructuredVisual
+                source={JSON.stringify({
+                    type: 'cause-map',
+                    title: '5-Why 根因链路图',
+                    nodes: [
+                        {
+                            id: 'Why-1',
+                            label: 'Why-1',
+                            title: '直接原因',
+                            description: '发布前缺少关键路径回归门禁',
+                            category: '流程',
+                            evidence: '发布记录与测试记录',
+                            confidence: '高',
+                            status: '已确认',
+                        },
+                        {
+                            id: 'Why-2',
+                            label: 'Why-2',
+                            title: '深层原因',
+                            description: '回归策略没有覆盖高风险链路',
+                        },
+                    ],
+                    edges: [
+                        { source: 'Why-1', target: 'Why-2', label: '继续追问' },
+                    ],
+                })}
+            />
+        );
+
+        expect(screen.queryByRole('table')).toBeNull();
+        expect(screen.getByRole('group', { name: '5-Why 根因链路图' })).toBeTruthy();
+        expect(screen.getByText('Why-1')).toBeTruthy();
+        expect(screen.getByText('发布前缺少关键路径回归门禁')).toBeTruthy();
+        expect(screen.getByText('继续追问')).toBeTruthy();
+        expect(screen.getByText('Why-1 -> Why-2')).toBeTruthy();
+    });
+
     it('renders an explicit error panel for invalid visual JSON', () => {
         render(<StructuredVisual source="{ broken" />);
 

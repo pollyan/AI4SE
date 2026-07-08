@@ -1,4 +1,4 @@
-import { parseStructuredVisual } from './structuredVisuals';
+import { parseStructuredVisual, type NodeEdgeStructuredVisual } from './structuredVisuals';
 
 const PDF_LINES_PER_PAGE = 42;
 
@@ -78,6 +78,27 @@ function isTableSeparator(line: string): boolean {
 
 function formatPdfTableRows(rows: string[][]): string[] {
     return rows.map(row => row.join('    ').trimEnd());
+}
+
+function formatPdfNodeEdgeVisualLines(visual: NodeEdgeStructuredVisual): string[] {
+    const lines: string[] = [`结构化可视化：${visual.title || visual.type}`, '节点：'];
+    visual.nodes.forEach((node) => {
+        lines.push(`${node.label} ${node.title}${node.description ? `：${node.description}` : ''}`);
+        if (node.category) lines.push(`类型：${node.category}`);
+        if (node.evidence) lines.push(`证据：${node.evidence}`);
+        if (node.confidence) lines.push(`置信度：${node.confidence}`);
+        if (node.status) lines.push(`状态：${node.status}`);
+    });
+
+    lines.push('连接：');
+    if (!visual.edges.length) {
+        lines.push('无');
+        return lines;
+    }
+    visual.edges.forEach((edge) => {
+        lines.push(`${edge.source} -> ${edge.target}${edge.label ? `：${edge.label}` : ''}`);
+    });
+    return lines;
 }
 
 function cleanMermaidLabel(source: string): string {
@@ -303,6 +324,10 @@ function projectMarkdownToPdfDocument(content: string): PdfProjectedDocument {
                 }
                 const { visual } = visualResult;
                 const startLineIndex = pdfLines.length;
+                if (visual.kind === 'node-edge') {
+                    pdfLines.push(...formatPdfNodeEdgeVisualLines(visual));
+                    continue;
+                }
                 const rows = visual.rows.map(row => row.cells);
                 pdfLines.push(
                     `结构化可视化：${visual.title || visual.type}`,

@@ -47,6 +47,69 @@ export const StructuredVisual: React.FC<StructuredVisualProps> = ({
     const visual = result.visual;
     const title = visual.title || DEFAULT_TITLES[visual.type];
 
+    if (visual.kind === 'node-edge') {
+        return (
+            <div
+                role="group"
+                aria-label={title}
+                className="my-6 overflow-hidden rounded-lg border border-[#1e293b] bg-[#0f172a] shadow-sm"
+            >
+                <div className="border-b border-[#1e293b] bg-[#111827] px-4 py-3">
+                    <h3 className="text-sm font-semibold text-slate-100">{title}</h3>
+                    <p className="mt-1 text-xs text-slate-500">ai4se-visual · {visual.type}</p>
+                </div>
+                <div className="space-y-3 p-4">
+                    {visual.nodes.map((node) => (
+                        <div
+                            key={node.id}
+                            className="rounded-md border border-[#334155] bg-[#111827] p-3"
+                        >
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded bg-cyan-500/15 px-2 py-0.5 text-xs font-semibold text-cyan-200">
+                                    {node.label}
+                                </span>
+                                <span className="text-sm font-semibold text-slate-100">
+                                    {node.title}
+                                </span>
+                            </div>
+                            {node.description && (
+                                <p className="mt-2 text-sm text-slate-300">{node.description}</p>
+                            )}
+                            <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
+                                {node.category && <span>类型：{node.category}</span>}
+                                {node.evidence && <span>证据：{node.evidence}</span>}
+                                {node.confidence && <span>置信度：{node.confidence}</span>}
+                                {node.status && <span>状态：{node.status}</span>}
+                            </div>
+                        </div>
+                    ))}
+                    {visual.edges.length > 0 && (
+                        <div className="border-t border-[#1e293b] pt-3">
+                            <div className="text-xs font-semibold text-slate-500">因果连接</div>
+                            <div className="mt-2 space-y-2">
+                                {visual.edges.map((edge) => (
+                                    <div
+                                        key={`${edge.source}-${edge.target}-${edge.label || ''}`}
+                                        className="flex flex-wrap items-center gap-2 text-sm text-slate-300"
+                                    >
+                                        <span className="font-mono text-cyan-200">
+                                            {edge.source} -&gt; {edge.target}
+                                        </span>
+                                        {edge.label && (
+                                            <span className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                                                {edge.label}
+                                            </span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="my-6 overflow-hidden rounded-lg border border-[#1e293b] bg-[#0f172a] shadow-sm">
             <div className="border-b border-[#1e293b] bg-[#111827] px-4 py-3">

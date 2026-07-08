@@ -755,6 +755,12 @@ def validate_artifact_template(
         ]
         if invalid_required_blocks:
             invalid_type = str(invalid_required_blocks[0].get("type"))
+            if invalid_type == "cause-map":
+                raise ContractValidationError(
+                    "cause-map 必须使用 nodes 和 edges 结构；"
+                    "nodes 必须是非空对象数组且 id 唯一，"
+                    "edges 必须引用已存在节点。"
+                )
             raise ContractValidationError(
                 f"{invalid_type} 必须使用 columns 和 rows 结构；"
                 "columns 必须是非空字符串数组，rows 必须是对象数组。"
@@ -918,6 +924,12 @@ def is_valid_structured_visual_block(
 ) -> bool:
     if block.get("type") != visual_type:
         return False
+    if visual_type == "cause-map":
+        return is_valid_node_edge_structured_visual_block(block)
+    return is_valid_matrix_structured_visual_block(block)
+
+
+def is_valid_matrix_structured_visual_block(block: dict[str, Any]) -> bool:
     columns = block.get("columns")
     rows = block.get("rows")
     return (
@@ -927,6 +939,53 @@ def is_valid_structured_visual_block(
         and isinstance(rows, list)
         and all(isinstance(row, dict) for row in rows)
     )
+
+
+def is_valid_node_edge_structured_visual_block(block: dict[str, Any]) -> bool:
+    nodes = block.get("nodes")
+    edges = block.get("edges")
+    if (
+        not isinstance(nodes, list)
+        or not nodes
+        or not all(isinstance(node, dict) for node in nodes)
+        or not isinstance(edges, list)
+        or not all(isinstance(edge, dict) for edge in edges)
+    ):
+        return False
+
+    node_ids: set[str] = set()
+    for node in nodes:
+        node_id = node.get("id")
+        label = node.get("label")
+        title = node.get("title")
+        if (
+            not isinstance(node_id, str)
+            or not node_id.strip()
+            or node_id in node_ids
+            or not isinstance(label, str)
+            or not label.strip()
+            or not isinstance(title, str)
+            or not title.strip()
+        ):
+            return False
+        node_ids.add(node_id)
+
+    for edge in edges:
+        source = edge.get("source")
+        target = edge.get("target")
+        if (
+            not isinstance(source, str)
+            or not source.strip()
+            or not isinstance(target, str)
+            or not target.strip()
+            or source not in node_ids
+            or target not in node_ids
+        ):
+            return False
+        label = edge.get("label")
+        if label is not None and (not isinstance(label, str) or not label.strip()):
+            return False
+    return True
 
 
 def build_artifact_contract_prompt(

@@ -7144,28 +7144,26 @@ def _render_incident_why_chain(items: list[IncidentWhyChainItem]) -> str:
     visual = {
         "type": "cause-map",
         "title": "5-Why 根因链路图",
-        "columns": [
-            "层级",
-            "问题",
-            "回答",
-            "原因类型",
-            "证据",
-            "证据强度",
-            "置信度",
-            "可行动性",
-        ],
-        "rows": [
+        "nodes": [
             {
-                "层级": item.level,
-                "问题": item.question,
-                "回答": item.answer,
-                "原因类型": item.cause_type,
-                "证据": item.evidence,
-                "证据强度": item.evidence_strength,
-                "置信度": item.confidence,
-                "可行动性": item.actionability,
+                "id": item.level,
+                "label": item.level,
+                "title": item.answer,
+                "description": item.question,
+                "category": item.cause_type,
+                "evidence": item.evidence,
+                "confidence": item.confidence,
+                "status": item.verification_status,
             }
             for item in items
+        ],
+        "edges": [
+            {
+                "source": previous.level,
+                "target": current.level,
+                "label": "继续追问",
+            }
+            for previous, current in zip(items, items[1:])
         ],
     }
     return (
