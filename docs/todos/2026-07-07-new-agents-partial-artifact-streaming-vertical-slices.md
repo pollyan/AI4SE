@@ -121,8 +121,7 @@
 ### 第 1 轮：Lisa 测试用例集真实 partial streaming 闭环
 
 - 状态：已完成确定性验证；后续质量门修复已关闭 Lisa 可选 LLM judge 64 分失败。
-- Spec：`docs/superpowers/specs/2026-07-07-new-agents-cases-partial-streaming-design.md`
-- Plan：`docs/superpowers/plans/2026-07-07-new-agents-cases-partial-streaming.md`
+- 设计与执行要点：已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 - 覆盖阶段：`TEST_DESIGN/CASES`
 - 交付：后端可基于已闭合 `artifact_data` 顶层字段生成正式《测试用例集》partial artifact delta，包含用例统计、用例设计依据等递增章节；最终 artifact 仍通过完整 contract，并可解析为 Lisa 测试资产。
 - 聚焦验证：
@@ -141,8 +140,7 @@
 ### 第 2 轮：Lisa 测试设计交付文档真实 partial streaming 闭环
 
 - 状态：已完成确定性验证。
-- Spec：`docs/superpowers/specs/2026-07-07-new-agents-delivery-partial-streaming-design.md`
-- Plan：`docs/superpowers/plans/2026-07-07-new-agents-delivery-partial-streaming.md`
+- 设计与执行要点：已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 - 覆盖阶段：`TEST_DESIGN/DELIVERY`
 - 交付：后端可基于已闭合 `artifact_data` 顶层字段生成正式《测试设计文档》partial artifact delta，包含执行摘要、需求分析摘要、测试策略摘要等递增章节；最终 artifact 仍通过完整 DELIVERY contract，并保留 `coverage-map`。
 - 聚焦验证：
@@ -186,8 +184,7 @@
 ### 第 3 轮：需求评审 workflow 真实 partial streaming 闭环
 
 - 状态：已完成确定性验证。
-- Spec：`docs/superpowers/specs/2026-07-07-new-agents-req-review-partial-streaming-design.md`
-- Plan：`docs/superpowers/plans/2026-07-07-new-agents-req-review-partial-streaming.md`
+- 设计与执行要点：已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 - 覆盖阶段：`REQ_REVIEW/REVIEW`、`REQ_REVIEW/REPORT`
 - 交付：
   - `REQ_REVIEW/REVIEW` 在 raw JSON streaming 期间可基于已闭合 `scope_items`、`quality_overview`、`issue_statistics` 等字段逐步生成正式《需求评审问题清单》artifact delta。
@@ -200,8 +197,6 @@
   - `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_stream_services.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_test_assets.py -q`：229 passed。
   - `cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.test.ts src/services/__tests__/chatService.test.ts src/components/__tests__/ArtifactPane.incrementalRender.test.tsx`：140 passed。
 - 文档与全量验证：
-  - `git diff --check -- docs/strategy/goal-mode-playbook.md docs/strategy/goal-mode-cga-template.md docs/todos/2026-07-07-new-agents-partial-artifact-streaming-vertical-slices.md docs/superpowers/specs/2026-07-07-new-agents-cases-partial-streaming-design.md docs/superpowers/plans/2026-07-07-new-agents-cases-partial-streaming.md docs/superpowers/specs/2026-07-07-new-agents-delivery-partial-streaming-design.md docs/superpowers/plans/2026-07-07-new-agents-delivery-partial-streaming.md docs/superpowers/specs/2026-07-07-new-agents-req-review-partial-streaming-design.md docs/superpowers/plans/2026-07-07-new-agents-req-review-partial-streaming.md tools/new-agents/backend/artifact_data_renderers.py tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_runtime.py`：无输出。
-  - `rg -n "T[B]D|implement[ ]later|<填[入]|待[补]" docs/strategy/goal-mode-playbook.md docs/strategy/goal-mode-cga-template.md docs/todos/2026-07-07-new-agents-partial-artifact-streaming-vertical-slices.md docs/superpowers/specs/2026-07-07-new-agents-cases-partial-streaming-design.md docs/superpowers/plans/2026-07-07-new-agents-cases-partial-streaming.md docs/superpowers/specs/2026-07-07-new-agents-delivery-partial-streaming-design.md docs/superpowers/plans/2026-07-07-new-agents-delivery-partial-streaming.md docs/superpowers/specs/2026-07-07-new-agents-req-review-partial-streaming-design.md docs/superpowers/plans/2026-07-07-new-agents-req-review-partial-streaming.md`：仅命中 `docs/strategy/goal-mode-playbook.md` 中关于占位符检查的规则文本。
   - `NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all`：通过。关键结果包括 Intent Tester API 294 passed、MidScene Proxy 17 passed、Common Frontend lint/build 通过、New Agents Frontend 697 passed、New Agents Backend 519 passed / 1 deselected、New Agents Browser E2E 4 passed / 3 skipped / 10 deselected。
 - LLM judge：本轮未启用或引用新的 REQ_REVIEW LLM judge 质量门；不能据此声称 REQ_REVIEW 真实模型质量评分。若后续为需求评审增加 judge，默认门槛仍为 80 分。
 - 残余风险：本轮证明 REQ_REVIEW 确定性 partial streaming 链路，不证明真实模型输出质量或外部 judge 质量；真实模型 smoke 仍取决于本地模型配置、网络和额度。
@@ -210,8 +205,7 @@
 ### 第 4 轮：故障复盘 workflow 真实 partial streaming 闭环
 
 - 状态：已完成确定性验证。
-- Spec：`docs/superpowers/specs/2026-07-07-new-agents-incident-review-partial-streaming-design.md`
-- Plan：`docs/superpowers/plans/2026-07-07-new-agents-incident-review-partial-streaming.md`
+- 设计与执行要点：已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 - 覆盖阶段：`INCIDENT_REVIEW/TIMELINE`、`INCIDENT_REVIEW/ROOT_CAUSE`、`INCIDENT_REVIEW/IMPROVEMENT`
 - 交付：
   - `INCIDENT_REVIEW/TIMELINE` 在 raw JSON streaming 期间可基于已闭合 `incident_summary`、`impact_metrics`、`fact_sources`、`timeline_events` 等字段逐步生成正式《故障复盘报告》事件还原 artifact delta，并保留 Mermaid timeline。
@@ -225,8 +219,6 @@
   - `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_stream_services.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_contracts.py -q`：292 passed。
   - `cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.test.ts src/services/__tests__/chatService.test.ts src/components/__tests__/ArtifactPane.incrementalRender.test.tsx`：140 passed。
 - 文档与全量验证：
-  - `git diff --check -- docs/todos/2026-07-07-new-agents-partial-artifact-streaming-vertical-slices.md docs/superpowers/specs/2026-07-07-new-agents-incident-review-partial-streaming-design.md docs/superpowers/plans/2026-07-07-new-agents-incident-review-partial-streaming.md tools/new-agents/backend/artifact_data_renderers.py tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_runtime.py`：无输出。
-  - `rg -n "T[B]D|implement[ ]later|<填[入]|待[补]" docs/todos/2026-07-07-new-agents-partial-artifact-streaming-vertical-slices.md docs/superpowers/specs/2026-07-07-new-agents-incident-review-partial-streaming-design.md docs/superpowers/plans/2026-07-07-new-agents-incident-review-partial-streaming.md`：无输出。
   - `NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all`：通过。关键结果包括 Intent Tester API 294 passed、MidScene Proxy 17 passed、Common Frontend lint/build 通过、New Agents Frontend 697 passed、New Agents Backend 522 passed / 1 deselected、New Agents Browser E2E 4 passed / 3 skipped / 10 deselected。
 - LLM judge：本轮未启用或引用新的 INCIDENT_REVIEW LLM judge 质量门；不能据此声称故障复盘真实模型质量评分。若后续为故障复盘增加 judge，默认门槛仍为 80 分。
 - 残余风险：本轮当前证据为确定性 mock raw JSON streaming 与前端 typed SSE 回归；真实模型 smoke 仍取决于本地模型配置、网络和额度。
@@ -236,8 +228,7 @@
 ### 第 5 轮：创意脑暴 workflow 真实 partial streaming 闭环
 
 - 状态：已完成确定性验证。
-- Spec：`docs/superpowers/specs/2026-07-07-new-agents-idea-brainstorm-partial-streaming-design.md`
-- Plan：`docs/superpowers/plans/2026-07-07-new-agents-idea-brainstorm-partial-streaming.md`
+- 设计与执行要点：已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 - 覆盖阶段：`IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`
 - 子智能体 / 旁路审查：
   - 已派发只读 explorer 复核 IDEA contract、final renderer/helper、runtime tests 和拆分风险；结论为四个阶段可作为同一 IDEA 纵切轮完成，主要风险是 `DIVERGE` 与 `CONVERGE` 的首个可视化增量依赖多个字段闭合，可能没有单 section `artifact_patch`，但不阻断 `artifact_update.replace.markdown` streaming。
@@ -256,8 +247,6 @@
   - `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_stream_services.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_contracts.py -q`：296 passed。
   - `cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.test.ts src/services/__tests__/chatService.test.ts src/components/__tests__/ArtifactPane.incrementalRender.test.tsx`：140 passed。
 - 文档与全量验证：
-  - `git diff --check -- docs/todos/2026-07-07-new-agents-partial-artifact-streaming-vertical-slices.md docs/superpowers/specs/2026-07-07-new-agents-idea-brainstorm-partial-streaming-design.md docs/superpowers/plans/2026-07-07-new-agents-idea-brainstorm-partial-streaming.md tools/new-agents/backend/artifact_data_renderers.py tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_runtime.py`：无输出。
-  - `rg -n "T[B]D|implement[ ]later|<填[入]|待[补]" docs/todos/2026-07-07-new-agents-partial-artifact-streaming-vertical-slices.md docs/superpowers/specs/2026-07-07-new-agents-idea-brainstorm-partial-streaming-design.md docs/superpowers/plans/2026-07-07-new-agents-idea-brainstorm-partial-streaming.md`：无输出。
   - `NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all`：沙箱内失败，失败点为 MidScene proxy 端口绑定 `EPERM`、Playwright 缓存目录写入 `EPERM` 和 Chromium `bootstrap_check_in ... Permission denied`。
   - `NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all` 非沙箱重跑：通过。关键结果包括 Intent Tester API 294 passed、MidScene Proxy 17 passed、Common Frontend lint/build 通过、New Agents Frontend 697 passed、New Agents Backend 526 passed / 1 deselected、New Agents Browser E2E 4 passed / 3 skipped / 10 deselected。
 - LLM judge：本轮未启用或引用新的 IDEA_BRAINSTORM LLM judge 质量门；不能据此声称创意脑暴真实模型质量评分。若后续为创意脑暴增加 judge，默认门槛仍为 80 分。
@@ -267,8 +256,7 @@
 ### 第 6 轮：价值发现 workflow 真实 partial streaming 闭环
 
 - 状态：已完成确定性验证。
-- Spec：`docs/superpowers/specs/2026-07-07-new-agents-value-discovery-partial-streaming-design.md`
-- Plan：`docs/superpowers/plans/2026-07-07-new-agents-value-discovery-partial-streaming.md`
+- 设计与执行要点：已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 - 覆盖阶段：`VALUE_DISCOVERY/ELEVATOR`、`VALUE_DISCOVERY/PERSONA`、`VALUE_DISCOVERY/JOURNEY`、`VALUE_DISCOVERY/BLUEPRINT`
 - 运行中反馈处理：
   - 用户指出 playbook 需要补规则以避免再次出现 LLM judge 低分未修复、子智能体漏用或运行中反馈未改道的问题。
@@ -290,8 +278,6 @@
   - `.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_stream_services.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_contracts.py -q`：300 passed。
   - `cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.test.ts src/services/__tests__/chatService.test.ts src/components/__tests__/ArtifactPane.incrementalRender.test.tsx`：3 files passed / 140 tests passed。
 - 文档与全量验证：
-  - `git diff --check -- docs/strategy/goal-mode-playbook.md docs/strategy/goal-mode-cga-template.md docs/strategy/goal-mode-subagents.md docs/todos/2026-07-07-new-agents-partial-artifact-streaming-vertical-slices.md docs/superpowers/specs/2026-07-07-new-agents-value-discovery-partial-streaming-design.md docs/superpowers/plans/2026-07-07-new-agents-value-discovery-partial-streaming.md tools/new-agents/backend/artifact_data_renderers.py tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_runtime.py`：无输出。
-  - `rg -n "T[B]D|implement[ ]later|<填[入]|待[补]" docs/strategy/goal-mode-playbook.md docs/strategy/goal-mode-cga-template.md docs/strategy/goal-mode-subagents.md docs/todos/2026-07-07-new-agents-partial-artifact-streaming-vertical-slices.md docs/superpowers/specs/2026-07-07-new-agents-value-discovery-partial-streaming-design.md docs/superpowers/plans/2026-07-07-new-agents-value-discovery-partial-streaming.md`：无输出。
   - `NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all` 非沙箱运行：通过。关键结果包括 Intent Tester API 294 passed、critical flake8 0、MidScene Proxy 17 passed、Common Frontend lint/build 通过、New Agents Frontend 697 passed、New Agents Backend 530 passed / 1 deselected、New Agents Browser E2E 4 passed / 3 skipped / 10 deselected。
 - LLM judge：本轮未启用或引用新的 VALUE_DISCOVERY LLM judge 质量门；不能据此声称价值发现真实模型质量评分。若后续运行或引用 VALUE judge，默认门槛为 80 分，低于 80 分必须作为当前 P0 修复。
 - 残余风险：本轮当前证据为确定性 mock raw JSON streaming 与前端 typed SSE 回归；真实模型 smoke 仍取决于本地模型配置、网络和额度。部分 VALUE 阶段会因多字段依赖一次新增多个 section，因此对应 delta 可没有 `artifact_patch`，但 `artifact_update.replace.markdown` 仍为正式产物。
@@ -300,8 +286,7 @@
 ### 第 7 轮：全工作流 streaming 契约收口与证据归档
 
 - 状态：已完成文档收口。
-- Spec：`docs/superpowers/specs/2026-07-07-new-agents-partial-streaming-contract-evidence-design.md`
-- Plan：`docs/superpowers/plans/2026-07-07-new-agents-partial-streaming-contract-evidence.md`
+- 设计与执行要点：已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 - 覆盖阶段：17 个在线阶段。
 - 子智能体 / 旁路审查：
   - 已派发只读 explorer Arendt 复核 `docs/api-contracts.md`、`docs/TESTING.md`、`docs/index.md`、`docs/component-inventory.md` 和相关 schema / 测试。
@@ -313,8 +298,6 @@
   - `docs/evidence/2026-07-07-new-agents-partial-artifact-streaming.md`：归档第 1-6 轮实现证据、最终聚焦验证、全量本地自动化、Lisa judge 64 分修复闭环和风险边界。
   - `docs/index.md`：新增证据归档入口。
 - 文档验证：
-  - `git diff --check -- docs/api-contracts.md docs/TESTING.md docs/index.md docs/evidence/2026-07-07-new-agents-partial-artifact-streaming.md docs/todos/2026-07-07-new-agents-partial-artifact-streaming-vertical-slices.md docs/superpowers/specs/2026-07-07-new-agents-partial-streaming-contract-evidence-design.md docs/superpowers/plans/2026-07-07-new-agents-partial-streaming-contract-evidence.md`：无输出。
-  - `rg -n "T[B]D|implement[ ]later|<填[入]|待[补]" docs/api-contracts.md docs/TESTING.md docs/index.md docs/evidence/2026-07-07-new-agents-partial-artifact-streaming.md docs/todos/2026-07-07-new-agents-partial-artifact-streaming-vertical-slices.md docs/superpowers/specs/2026-07-07-new-agents-partial-streaming-contract-evidence-design.md docs/superpowers/plans/2026-07-07-new-agents-partial-streaming-contract-evidence.md`：无输出。
 - 代码测试决策：本轮纯文档收口，不新增 runtime 行为；代码证据引用第 6 轮已完成的 17 partial runtime tests、backend focused suite 300 passed、frontend shared stream regression 140 passed、full local automation passed。
 - LLM judge：本轮未启用或引用新的 LLM judge；文档已稳定声明启用 / 要求 / 引用 judge 时默认 `score >= 80`，低于 80 必须作为质量门失败修复。
 - 残余风险：真实模型 smoke 仍取决于本地模型配置、网络和额度；当前收口证明稳定契约和确定性证据齐备，不声称所有真实模型运行质量。

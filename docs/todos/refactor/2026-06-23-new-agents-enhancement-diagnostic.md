@@ -259,24 +259,6 @@
 - 完成定义: Alex 能明确区分“产品完整性问题”和“测试可测性问题”，输出可被 PM 修订 PRD 的补全建议，并保留可交给 Lisa `REQ_REVIEW` 或后续 `STORY_BREAKDOWN` 的结构化输入。
 - 后续不再作为活跃候选重复选择；只在发现当前代码回归或 contract 失配时作为维护项处理。
 
-### 6. Alex 用户故事拆解 workflow
-
-- 涉及模块: `workflow_manifest.json`、`frontend/src/core/workflows.ts`、`frontend/src/core/config/agentWorkflows.ts`、`frontend/src/core/prompts/`、`backend/agent_contracts.py` 或 manifest-derived contract registry、相关前后端测试。
-- 需要同步: workflow slug `story-breakdown`、Alex workflow listing、stage prompts、artifact required headings、structured visual contract、onboarding starter prompts、backend stage contract、frontend route/workflow tests。
-- 建议阶段: 需求输入解析、Epic 拆分、User Story 与验收标准、Sprint 切片与交付包。
-- 产出物: Epic map、User Story backlog、AC 表、依赖/风险清单、Sprint 切片建议、Lisa handoff 输入。
-- 完成定义: 用户输入需求蓝图或 PRD 后，可通过共享 `/api/agent/runs/stream` 生成可进入研发评审的用户故事包，并能继续交给 Lisa 做测试设计或需求评审。
-- 不纳入: Jira/禅道等外部项目管理工具写入。
-
-### 7. Alex PRD 质量评审与补全 workflow
-
-- 涉及模块: `workflow_manifest.json`、Alex prompt/template、artifact contract、structured visual renderer、`WorkflowSelect`/`AgentSelect` 文案、backend/frontend config sync tests。
-- 需要同步: 新 workflow id 候选 `PRD_REVIEW`、slug `prd-review`、stage list、artifact headings、visual contract、onboarding、starter prompts、backend contract tests。
-- 建议阶段: PRD 输入盘点、质量评审、补全建议、修订蓝图。
-- 产出物: PRD 质量评分矩阵、缺口清单、业务目标/用户价值/范围边界补全、非功能需求补全、验收标准补全、风险与依赖、修订版 PRD 大纲。
-- 完成定义: Alex 能明确区分“产品完整性问题”和“测试可测性问题”，输出可被 PM 修订 PRD 的补全建议，并能将可测试性相关内容交给 Lisa `REQ_REVIEW`。
-- 不纳入: 替代 Lisa 的测试视角需求评审；不新增 Alex 专属 runtime 或 API。
-
 ## 架构约束
 
 - 必须继续复用共享 Agent Runtime、typed SSE、workflow manifest、artifact contract、run persistence 和共享 UI 基础设施。

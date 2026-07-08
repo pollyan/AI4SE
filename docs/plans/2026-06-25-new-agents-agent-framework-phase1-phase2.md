@@ -40,14 +40,14 @@ New Agents 不是“尚未引入智能体框架”的空白系统。当前后端
 
 ## Superpowers 执行要求
 
-每一个 Story 后续都必须作为独立工作项走完一套完整 superpowers 流程，不能从本 todo 直接进入编码。
+每一个 Story 后续都必须作为独立工作项走完一套完整目标模式流程，不能从本路线图直接进入编码。
 
 每个 Story 的标准流转:
 
 1. 使用 `brainstorming` 重新进入该 Story 的 Current State Gap Analysis，确认当前代码事实、约束、风险和成功标准。
-2. 形成该 Story 独立 design/spec，并保存到 `docs/superpowers/specs/YYYY-MM-DD-<story-topic>-design.md`。
+2. 形成该 Story 独立 design/spec，并压缩记录到对应 `docs/todos/*.md` 本轮记录或稳定 `docs/plans/*.md` 中。
 3. spec 自检通过后，默认由 Agent 按 `docs/strategy/goal-mode-playbook.md` 的目标模式授权做自问自答式裁决，并在 spec 中记录取舍；只有涉及架构变更、外部权限、凭证、用户明确要求等待确认或无法自行裁决时，才停下来请求用户确认。
-4. 使用 `writing-plans` 为该 Story 编写独立实施计划，保存到 `docs/superpowers/plans/YYYY-MM-DD-<story-topic>.md`。
+4. 使用 `writing-plans` 为该 Story 编写独立实施计划，并与验证记录一起保留在同一稳定入口中。
 5. 执行时使用 `subagent-driven-development` 或 `executing-plans`，按计划任务推进，并保持 TDD、频繁验证和 review checkpoint。
 6. 完成前使用 `verification-before-completion`，用该 Story plan 中声明的 backend/frontend/e2e 命令验证。
 7. 如 Story 涉及较大 runtime、上下文或工具调用边界变更，完成后使用 `requesting-code-review` 做一次独立审查，再进入下一 Story。
@@ -61,7 +61,7 @@ New Agents 不是“尚未引入智能体框架”的空白系统。当前后端
 - typed SSE、artifact contract、run persistence、共享 UI 是否受影响。
 - 本 Story 不做什么。
 
-一个 Story 未完成上述流程前，不应合并到下一 Story 执行；确需并行时，必须说明无共享写入冲突，并分别保留独立 spec、plan 和验证记录。
+一个 Story 未完成上述流程前，不应合并到下一 Story 执行；确需并行时，必须说明无共享写入冲突，并分别保留可追溯的 spec、plan 和验证记录。
 
 ---
 

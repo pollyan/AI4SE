@@ -15,7 +15,7 @@
 - `docs/strategy/goal-mode-ci-verification.md`：CI 等价验证、远端失败复盘和提交前验证表。
 - `docs/todos/`：长期演进 todo，记录跨目标模式持续消化的高优先级产品、工程、测试和评判事项。
 - `docs/plans/`：专项计划和专项目标模式规则。只有当本轮目标指向对应主题时，才展开相关计划。
-- `docs/superpowers/specs/` 与 `docs/superpowers/plans/`：近期目标模式 spec / plan 产物。
+- 本轮 spec / plan / 验证记录默认压缩写入相关 `docs/todos/*.md` 或正式 `docs/plans/*.md`，避免长期保留大量过程文件。
 
 提示词应保持短小，只引用稳定文件，不重复本手册、`AGENTS.md` 或深层需求文档中的细则。
 
@@ -27,7 +27,7 @@
 
 如果用户指定了本轮主要目标，也必须快速扫描 `docs/todos/` 中的 P0/P1 条目。若存在与当前目标同向、低冲突、可形成纵向切片的高优先级 todo，应在 CGA 中纳入候选；若本轮不消化，必须说明暂缓原因和后续去向。
 
-如果用户已经确认了目标轮次、阶段顺序和验收边界，并且这些内容已经写入 `docs/todos/`、专项计划或上一轮 spec / plan，后续轮次不需要重复完整候选排序型 CGA。此时使用轻量“目标承接检查”：确认当前轮次仍是已声明顺序中的下一项、没有新的 P0/P1 冲突或失败证据需要改道、工作区安全、切片边界和验收证据仍清楚，然后直接承接进入 spec / plan / TDD。若出现目标变更、新高优先级冲突、代码事实与计划冲突、需要拆分或合并轮次、或用户要求重新评估，则恢复完整 CGA。
+如果用户已经确认了目标轮次、阶段顺序和验收边界，并且这些内容已经写入 `docs/todos/`、专项计划或上一轮执行记录，后续轮次不需要重复完整候选排序型 CGA。此时使用轻量“目标承接检查”：确认当前轮次仍是已声明顺序中的下一项、没有新的 P0/P1 冲突或失败证据需要改道、工作区安全、切片边界和验收证据仍清楚，然后直接承接进入需求细化、实施计划和 TDD。若出现目标变更、新高优先级冲突、代码事实与计划冲突、需要拆分或合并轮次、或用户要求重新评估，则恢复完整 CGA。
 
 目标承接检查不是继续推进的豁免。若上一轮或当前验证留下未关闭的质量门失败、LLM judge 低于 80 分、阻断测试失败、用户明确指出的未处理缺陷或安全 / 契约风险，该事项自动成为当前轮 P0 改道条件。除非阻塞原因是权限、凭证、额度、外部服务或环境不可用并已记录暂缓风险，否则不得进入后续目标轮次，也不得把它降级为普通残余风险。
 
@@ -116,7 +116,7 @@
 9. `docs/integration-architecture.md`
 10. `docs/component-inventory.md`
 11. `docs/todos/`
-12. 与本轮相关的 `docs/todos/refactor/README.md` 当前入口、`docs/plans/`、`docs/superpowers/specs/`、`docs/superpowers/plans/`、测试需求、当前代码、测试、脚本和 git 历史。
+12. 与本轮相关的 `docs/todos/refactor/README.md` 当前入口、`docs/plans/`、测试需求、当前代码、测试、脚本和 git 历史。
 
 如果某一轮只涉及特定模块，可以按需缩小读取范围，但必须在 CGA 中说明实际读取了哪些关键文件，以及哪些事实源因无关而未展开。
 
@@ -342,11 +342,9 @@ TDD 的具体执行方式由 `AGENTS.md` 和 Superpowers `test-driven-developmen
 
 建议产物位置：
 
-- 本轮设计：`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
-- 本轮计划：`docs/superpowers/plans/YYYY-MM-DD-<topic>.md`
-- 长期 todo：`docs/todos/*.md`
-- 专项计划或状态：`docs/plans/*.md`
-- 通用目标模式规则：`docs/strategy/*.md`
+- 本轮设计、计划和验证记录：优先压缩写入相关 `docs/todos/*.md` 的本轮记录。
+- 长期路线图、专项计划或稳定执行规则：`docs/plans/*.md`。
+- 通用目标模式规则：`docs/strategy/*.md`。
 
 如果本轮改动改变了用户主路径、部署方式、API 契约、测试门禁或 Agent 工作流，必须判断是否同步 `docs/index.md`、`docs/ARCHITECTURE.md`、`docs/api-contracts.md`、`docs/TESTING.md`、`docs/component-inventory.md`、`docs/deployment-guide.md`、`docs/todos/` 或相关 `docs/plans/*.md`。如果决定不更新，收尾说明中要写原因。
 

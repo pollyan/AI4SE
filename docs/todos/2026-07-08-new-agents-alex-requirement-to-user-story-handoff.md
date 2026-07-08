@@ -287,9 +287,7 @@ cd tools/new-agents/frontend && npm run lint
 - 新增浏览器级 mock E2E 覆盖“用户故事拆解”完整四阶段推进，并断言最终产物包含单故事 Handoff 清单和业务垂直切片证据。
 - 浏览器级 E2E runner 已覆盖目标侧“开启新话题”入口；既有 Alex 需求蓝图梳理 E2E 已同步新的用户可见名称和阶段名。
 - Lisa mock 交付物补齐短信验证码限流、登录态过期、银行卡绑卡状态异常和准入标准，确保启用可选 LLM judge 时 Lisa 质量门不因 Alex 本轮改动被误判回归。
-- 第 2 轮设计与执行计划已记录在：
-  - `docs/superpowers/specs/2026-07-08-new-agents-user-story-breakdown-workflow-design.md`
-  - `docs/superpowers/plans/2026-07-08-new-agents-user-story-breakdown-workflow.md`
+- 本轮设计与执行要点已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 
 RED 验证：
 
@@ -377,9 +375,7 @@ cd tools/new-agents/frontend && npm run lint
 - `AgentTurnOutput` 新增内部可选 `artifact_data` 字段，SSE 输出仍不暴露该字段；`stream_services.py` 会把验证后的结构化 payload 传给共享 persistence。
 - `agent_artifact_versions` 新增可选 `artifact_data` JSON 字段；`init_db()` 沿用现有轻量补列策略升级旧表；`get_run_snapshot()` 会在当前版本存在结构化 payload 时返回 `artifactData`，为第 4 轮 packet 生成提供稳定数据源，避免 Markdown 反解析。
 - `docs/TESTING.md` 已把 partial artifact streaming / raw JSON streaming 矩阵从 17 个 artifact-data 阶段更新为 21 个阶段，并补充 artifactData 持久化测试责任。
-- 第 3 轮设计与执行计划已记录在：
-  - `docs/superpowers/specs/2026-07-08-new-agents-user-story-structured-contract-design.md`
-  - `docs/superpowers/plans/2026-07-08-new-agents-user-story-structured-contract.md`
+- 本轮设计与执行要点已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 
 RED 验证：
 
@@ -444,9 +440,7 @@ RED 验证：
 - `ArtifactPane` 在 `USER_STORY_BREAKDOWN/HANDOFF` 预览态展示“单故事需求包”，用户可对 ready story 生成持久化需求包、看到 stale 提示，并复制结构化 JSON。
 - 浏览器级 mock E2E 已覆盖用户完成 `USER_STORY_BREAKDOWN` 四阶段后生成并复制 `US-001` 单故事需求包，且断言复制内容不包含实现计划。
 - API 与 TESTING 文档已补充单故事需求包端点、payload 边界、stale 提示和测试层责任。
-- 第 4 轮设计与执行计划已记录在：
-  - `docs/superpowers/specs/2026-07-08-new-agents-user-story-handoff-packet-design.md`
-  - `docs/superpowers/plans/2026-07-08-new-agents-user-story-handoff-packet.md`
+- 本轮设计与执行要点已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 
 RED 验证：
 
@@ -534,9 +528,7 @@ cd tools/new-agents/frontend && npm run lint
 - 复制内容断言包含 `storyId` 和 `acceptanceCriteria`，且不包含 `implementationPlan`、`filePaths`、`testCommands`。
 - 第 5 轮把 Lisa handoff 回归纳入同一聚焦浏览器验证，确保 Alex 新链路没有破坏 `VALUE_DISCOVERY/BLUEPRINT -> Lisa`。
 - `docs/TESTING.md` 已同步记录 workflow handoff 与 story packet 的浏览器级全链路测试责任。
-- 第 5 轮设计与执行计划已记录在：
-  - `docs/superpowers/specs/2026-07-08-new-agents-alex-requirement-to-story-packet-evidence-design.md`
-  - `docs/superpowers/plans/2026-07-08-new-agents-alex-requirement-to-story-packet-evidence.md`
+- 本轮设计与执行要点已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 
 RED 验证：
 

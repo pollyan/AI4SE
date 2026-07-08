@@ -215,9 +215,7 @@ cd tools/new-agents/frontend && npm run lint
 - raw JSON streaming 期间仍允许已闭合 `artifact_data` 字段生成正式 partial artifact delta，用于右侧流式预览。
 - 最终 accumulated JSON 无效、未闭合或被截断时，runtime 抛出 `AgentRuntimeSchemaError`；`stream_services.py` 输出 `SCHEMA_VALIDATION_FAILED` typed error，并记录失败 metric。
 - 已新增回归测试证明 partial artifact delta 可以先出现，但最终无效 JSON 不会产生 `agent_turn` 成功帧，不会 append assistant message，不会 record artifact version。
-- 第 2 轮设计与执行计划已记录在：
-  - `docs/superpowers/specs/2026-07-08-new-agents-strict-structured-failure-closure-design.md`
-  - `docs/superpowers/plans/2026-07-08-new-agents-strict-structured-failure-closure.md`
+- 本轮设计与执行要点已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 
 RED 验证：
 
@@ -261,10 +259,7 @@ RED 验证：
 - 显式错误的 `score_summary.total_score` 或 `score_summary.average_score` 仍触发 `ValidationError`，不生成假成功 artifact。
 - `VALUE_DISCOVERY/ELEVATOR` structured output instruction 示例不再要求模型输出总分和平均分，只要求输出 `score_summary.judgement`。
 - partial renderer 复用同一套评分汇总 normalizer，raw JSON streaming 期间只要 `score_matrix` 与 `score_summary.judgement` 闭合即可输出正式评分章节。
-- 本轮设计与执行计划已记录在：
-  - `docs/superpowers/specs/2026-07-08-new-agents-value-elevator-derived-score-summary-design.md`
-  - `docs/superpowers/plans/2026-07-08-new-agents-value-elevator-derived-score-summary.md`
-
+- 本轮设计与执行要点已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 RED 验证：
 
 ```bash
@@ -319,10 +314,7 @@ New Agents 验证：
 - 未知 problem id、缺少 root coverage、problem-user-fit 未引用 root evidence、未知 evidence id、重复 ID 和无 checked stage gate 仍显式 `ValidationError`，不生成假成功 artifact。
 - DEFINE Markdown deterministic renderer 在问题域表中展示 root problem 行，并在证据表中展示“关联问题 ID”；partial renderer 在 evidence 引用未知 problem id 时停在上一段，不预览已知错误的证据章节。
 - `IDEA_DEFINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION` 已同步 `root_problem_id` / `related_problem_ids`，删除“原样包含 `problem_landscape.root_problem`”的脆弱要求。
-- 本轮设计与执行计划已记录在：
-  - `docs/superpowers/specs/2026-07-08-new-agents-idea-define-evidence-reference-design.md`
-  - `docs/superpowers/plans/2026-07-08-new-agents-idea-define-evidence-reference.md`
-
+- 本轮设计与执行要点已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 RED 验证：
 
 ```bash
@@ -401,10 +393,7 @@ New Agents 验证：
 - 官方 streaming chunk 示例和 schema 未明确展示 `delta.tool_calls` 或 streaming tool arguments；只看到 stream delta 文本增量和 `finish_reason=tool_calls`。缺少真实 `DEEPSEEK_API_KEY`，本轮不声明 DeepSeek V4 Flash 已稳定支持 streaming tool arguments。
 - 当前本地 `llm_client.py` 只消费 `delta.content`，且 `stream_chat_completion_content()` 不传 `tools` / `tool_choice`；`agent_runtime.py` 对 `deepseek-v4-*` 仍应保持 `json_object_only` 能力。
 - 本轮结论：不把 tool calls 接入正式 workflow 主链路。若未来启用，必须先实现 shared provider capability registry、独立 tool-call stream event parser、mock fixture、toy live smoke 和 typed error 显式失败路径。
-- 本轮设计与执行计划已记录在：
-  - `docs/superpowers/specs/2026-07-08-new-agents-deepseek-tool-calling-capability-spike-design.md`
-  - `docs/superpowers/plans/2026-07-08-new-agents-deepseek-tool-calling-capability-spike.md`
-
+- 本轮设计与执行要点已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 已验证：
 
 ```bash
@@ -445,10 +434,7 @@ if [ -n "$DEEPSEEK_API_KEY" ]; then echo present; else echo missing; fi
 - DIVERGE partial 在 `idea_sources.idea_ids` 引用未知 idea 时停在“创意卡片库”，不再预览“创意来源与假设”。
 - CONVERGE partial 在 `recommended_idea_id` 未知或 ICE score 不一致时直接不生成 partial；在 validation experiment 或 merge path 引用未知 idea 时停在上一段可信章节。
 - 最终 artifact schema 和 validator 严格性不降低，错误仍通过 final validation 显式暴露。
-- 本轮设计与执行计划已记录在：
-  - `docs/superpowers/specs/2026-07-08-new-agents-idea-converge-partial-reference-gate-design.md`
-  - `docs/superpowers/plans/2026-07-08-new-agents-idea-converge-partial-reference-gate.md`
-
+- 本轮设计与执行要点已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 RED 验证：
 
 ```bash
@@ -512,10 +498,7 @@ New Agents 验证：
 - CASES partial renderer 不再把 `case_statistics` 当作首个流式章节；只有 `design_bases + case_groups` 到齐后才输出后端派生统计、设计依据和用例清单。
 - CASES partial renderer 在自动化候选或覆盖追溯引用未知用例时停在上一段可信章节，不预览最终 validator 会拒绝的章节。
 - `CASES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION` 与前端 CASES prompt 已同步：模型不需要输出用例统计数量，后端根据用例清单计算。
-- 本轮设计与执行计划已记录在：
-  - `docs/superpowers/specs/2026-07-08-new-agents-cases-derived-statistics-reference-gate-design.md`
-  - `docs/superpowers/plans/2026-07-08-new-agents-cases-derived-statistics-reference-gate.md`
-
+- 本轮设计与执行要点已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 RED 验证：
 
 ```bash
@@ -589,10 +572,7 @@ Browser E2E 复跑：
 - 当章节 4-6 出现未知引用时，partial renderer 停在上一段可信章节，不预览最终 validator 会拒绝的内容。
 - STRATEGY 后端 structured output instruction 与前端 prompt 已同步：模型必须复用当前策略蓝图中已经定义的 `QG/R/TS/TP` ID。
 - 现有 STRATEGY 测试 fixture 已补齐 `TP-002`、`TP-003`，修复历史 fixture 中分层策略引用未定义测试点的问题。
-- 本轮设计与执行计划已记录在：
-  - `docs/superpowers/specs/2026-07-08-new-agents-strategy-reference-gate-design.md`
-  - `docs/superpowers/plans/2026-07-08-new-agents-strategy-reference-gate.md`
-
+- 本轮设计与执行要点已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 RED 验证：
 
 ```bash
@@ -755,10 +735,7 @@ New Agents 验证：
 - 前端 `parseStructuredVisual()` 支持 `matrix` 与 `node-edge` 两种 shape，`StructuredVisual` 对 `cause-map` 渲染为非表格节点链路视图。
 - PDF / DOCX 导出层按 `visual.kind` 分流，`cause-map` 导出为可读节点和连接文本，不再假设所有结构化视觉都有 `columns/rows`。
 - `ROOT_CAUSE_TEMPLATE` 和后端模板同步测试已改为要求 `cause-map` 使用 `nodes/edges` 协议。
-- 本轮设计与执行计划已记录在：
-  - `docs/superpowers/specs/2026-07-08-new-agents-cause-map-structured-visual-design.md`
-  - `docs/superpowers/plans/2026-07-08-new-agents-cause-map-structured-visual.md`
-
+- 本轮设计与执行要点已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 RED 验证：
 
 ```bash
@@ -1146,17 +1123,7 @@ GREEN 与聚焦回归：
 
 文档验证：
 
-```bash
-git diff --check -- docs/TESTING.md docs/todos/2026-07-08-new-agents-structured-artifact-failure-reduction.md docs/superpowers/specs/2026-07-08-new-agents-artifact-data-source-matrix-design.md docs/superpowers/plans/2026-07-08-new-agents-artifact-data-source-matrix.md
-```
-
-结果：通过，无输出。
-
-```bash
-rg -n "T[B]D|T[O]DO|implement[ ]later|<填[入]|待[补]" docs/TESTING.md docs/todos/2026-07-08-new-agents-structured-artifact-failure-reduction.md docs/superpowers/specs/2026-07-08-new-agents-artifact-data-source-matrix-design.md docs/superpowers/plans/2026-07-08-new-agents-artifact-data-source-matrix.md
-```
-
-结果：通过，退出码 `1`，无匹配。
+清理后不再保留指向独立过程 spec / plan 文件的历史文档验证命令；本轮稳定文档和代码路径的验证结果仍保留在上方记录中。
 
 ```bash
 rg -n "模型负责的 artifact_data|后端派生 / 归一化|视觉来源|第 8B" docs/TESTING.md docs/todos/2026-07-08-new-agents-structured-artifact-failure-reduction.md

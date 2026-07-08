@@ -4,7 +4,7 @@
 
 ## 当前清理结论
 
-- `docs/todos/archive/2026-06-23-deepseek-v4-structured-artifact-data.md` 和 `docs/todos/archive/2026-06-23-new-agents-enhancement-diagnostic.md` 已归档，不再作为当前活动入口。
+- `docs/todos/refactor/2026-06-23-deepseek-v4-structured-artifact-data.md` 和 `docs/todos/refactor/2026-06-23-new-agents-enhancement-diagnostic.md` 保留为历史诊断记录，不再作为当前活动入口。
 - `docs/todos/refactor/` 当前不保留未消化活跃候选；具体入口以 `docs/todos/refactor/README.md` 为准。
 - `docs/plans/2026-06-25-new-agents-agent-framework-phase1-phase2.md` 已作为 New Agents 智能体框架深化阶段 1-2 的正式路线图；后续只按其中单个 Story 启动独立目标模式工作。
 - `docs/todos/archive/` 中保留的“待办”“剩余”“未完成”属于历史过程记录，不作为当前活动 todo 直接进入实现。

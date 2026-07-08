@@ -29,8 +29,7 @@
 
 ## 本轮记录
 
-- Spec：`docs/superpowers/specs/2026-06-25-new-agents-strategy-chart-generator-schema-hardening-design.md`
-- Plan：`docs/superpowers/plans/2026-06-25-new-agents-strategy-chart-generator-schema-hardening.md`
+- 设计与执行要点：已压缩保留在本文件的本轮记录中；独立过程 spec/plan 文件已清理。
 
 ## 完成记录
 
