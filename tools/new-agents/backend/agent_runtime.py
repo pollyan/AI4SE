@@ -324,7 +324,7 @@ JSON 对象结构：
     "differentiators": [{"dimension": "核心优势/用户获益/差异化壁垒", "our_value": "...", "existing_solution": "...", "evidence": "...", "status": "已确认/AI 假设/待验证"}],
     "business_feasibility": [{"dimension": "用户付费意愿/商业模式方向/市场规模感知", "judgement": "...", "basis": "...", "validation_action": "...", "status": "已确认/AI 假设/待验证"}],
     "score_matrix": [{"dimension": "痛点强度", "score": 4, "basis": "...", "next_validation": "..."}, {"dimension": "证据强度", "score": 2, "basis": "...", "next_validation": "..."}],
-    "score_summary": {"total_score": 6, "average_score": 3.0, "judgement": "..."},
+    "score_summary": {"judgement": "..."},
     "assumptions": [{"assumption_id": "H-001", "content": "...", "impact": "...", "validation_action": "...", "owner": "产品/业务/用户研究", "status": "待验证/已验证/否定"}],
     "elevator_pitch": "60 秒内能讲完、让外行听懂、能引起兴趣的完整电梯演讲稿。",
     "stage_gate": [{"checked": true, "item": "..."}]
@@ -333,7 +333,7 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；value_flow.links 只能引用 value_flow.nodes 中已存在的 node_id；score_matrix.score 必须是 1 到 5 的整数；score_summary.total_score 必须等于 score_matrix.score 总和；score_summary.average_score 必须等于平均分。不要输出完整 Markdown、Mermaid 代码块、score-matrix JSON 代码块或表格，后端会负责确定性渲染右侧价值定位分析、flowchart 和 ai4se-visual score-matrix。
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；value_flow.links 只能引用 value_flow.nodes 中已存在的 node_id；score_matrix.score 必须是 1 到 5 的整数；score_summary 只需要输出 judgement，总分和平均分由后端根据 score_matrix.score 计算。不要输出完整 Markdown、Mermaid 代码块、score-matrix JSON 代码块或表格，后端会负责确定性渲染右侧价值定位分析、flowchart 和 ai4se-visual score-matrix。
 chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """

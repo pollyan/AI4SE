@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（第 1、2 轮已完成；第 0 轮能力 spike 尚未执行；第 3 轮待启动）
+- 状态：执行中（第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 0 轮能力 spike 尚未执行）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -93,7 +93,7 @@
   - 目标：`agent_run_turn_metrics` 或相邻观测表记录 validation path、错误类别、attempt、模型、provider、stage 和最后一次失败原因。
   - 约束：不得记录 API key、完整用户私密输入或完整模型输出。
 
-- [ ] 把可计算字段从模型输出中移除，改为后端确定性生成。（第 3 轮）
+- [ ] 把可计算字段从模型输出中移除，改为后端确定性生成。（第 3 轮；首个 `VALUE_DISCOVERY/ELEVATOR` 评分汇总纵切已完成）
   - 候选字段：`total_score`、`average_score`、`case_count`、P0/P1/P2 汇总、`high_risk_count`、覆盖统计、RPN 等派生值。
   - 目标：模型只输出语义内容和原子事实，后端负责确定性计算、排序和汇总。
 
@@ -240,6 +240,63 @@ RED 验证：
 ```
 
 结果：New Agents 前端 `706 passed`；New Agents 后端 `562 passed, 1 deselected`。运行中出现既有 React `ArtifactPane.test.tsx` `act(...)` warning，但未导致测试失败。
+
+### 2026-07-08 第 3 轮首个纵切：VALUE_DISCOVERY/ELEVATOR 评分汇总后端化
+
+已完成首个可计算字段后端化纵切：
+
+- `ValueScoreSummary.total_score` 和 `average_score` 改为可选输入；模型缺省时由后端根据 `score_matrix[].score` 确定性计算。
+- 显式错误的 `score_summary.total_score` 或 `score_summary.average_score` 仍触发 `ValidationError`，不生成假成功 artifact。
+- `VALUE_DISCOVERY/ELEVATOR` structured output instruction 示例不再要求模型输出总分和平均分，只要求输出 `score_summary.judgement`。
+- partial renderer 复用同一套评分汇总 normalizer，raw JSON streaming 期间只要 `score_matrix` 与 `score_summary.judgement` 闭合即可输出正式评分章节。
+- 本轮设计与执行计划已记录在：
+  - `docs/superpowers/specs/2026-07-08-new-agents-value-elevator-derived-score-summary-design.md`
+  - `docs/superpowers/plans/2026-07-08-new-agents-value-elevator-derived-score-summary.md`
+
+RED 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_value_elevator_artifact_data_computes_missing_score_summary_fields tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_value_elevator_artifact_data_computes_score_summary_fields tools/new-agents/backend/tests/test_agent_runtime.py::test_parse_agent_turn_output_text_renders_value_elevator_without_model_score_totals tools/new-agents/backend/tests/test_agent_runtime.py::test_value_elevator_structured_output_instruction_requests_artifact_data_not_markdown -q
+```
+
+结果：`4 failed`，失败点为 `score_summary.total_score` / `average_score` 仍是 required、partial renderer 未输出评分章节、prompt 仍包含旧示例。
+
+GREEN 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_value_elevator_artifact_data_computes_missing_score_summary_fields tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_value_elevator_artifact_data_computes_score_summary_fields tools/new-agents/backend/tests/test_agent_runtime.py::test_parse_agent_turn_output_text_renders_value_elevator_without_model_score_totals tools/new-agents/backend/tests/test_agent_runtime.py::test_value_elevator_structured_output_instruction_requests_artifact_data_not_markdown -q
+```
+
+结果：`4 passed`
+
+聚焦回归：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_stream_services.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_contracts.py -q
+```
+
+结果：`348 passed`
+
+New Agents 验证：
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：New Agents 前端 `718 passed`；New Agents 后端 `601 passed, 1 deselected`。运行中出现既有 React `ArtifactPane.test.tsx` `act(...)` warning，但未导致测试失败。
+
+全量验证：
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：默认沙箱失败，失败点为 MidScene proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 和 Playwright Chromium `bootstrap_check_in ... Permission denied (1100)`；非沙箱重跑通过，关键结果包括 Intent Tester API `294 passed`、MidScene proxy `17 passed`、Common Frontend lint/build 通过、New Agents Frontend `718 passed`、New Agents Backend `601 passed, 1 deselected`、New Agents Browser E2E `11 passed, 10 deselected`。
+
+残余风险：
+
+- 本轮只完成 `VALUE_DISCOVERY/ELEVATOR` 的评分汇总后端化，`TEST_DESIGN/CASES` 的用例统计、DELIVERY 的汇总和后续 ID / 引用一致性仍按第 4-8 轮推进。
+- 本轮没有启用真实外部模型 smoke 或 LLM judge；该改动由确定性 schema / renderer / runtime / E2E 回归覆盖，不证明 DeepSeek 真实样本成功率已经提升到某个数值。
 
 ## 每轮验收口径
 

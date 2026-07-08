@@ -3206,6 +3206,17 @@ def test_value_elevator_artifact_data_rejects_inconsistent_score_summary():
         ValueDiscoveryElevatorArtifactData.model_validate(invalid)
 
 
+def test_value_elevator_artifact_data_computes_missing_score_summary_fields():
+    data = copy.deepcopy(VALID_VALUE_ELEVATOR_ARTIFACT_DATA)
+    data["score_summary"].pop("total_score")
+    data["score_summary"].pop("average_score")
+
+    artifact = ValueDiscoveryElevatorArtifactData.model_validate(data)
+
+    assert artifact.score_summary.total_score == 16
+    assert artifact.score_summary.average_score == 3.2
+
+
 def test_value_elevator_artifact_data_rejects_unknown_value_flow_reference():
     invalid = copy.deepcopy(VALID_VALUE_ELEVATOR_ARTIFACT_DATA)
     invalid["value_flow"]["links"][0]["to_node"] = "UNKNOWN"
@@ -4103,6 +4114,46 @@ def test_render_partial_value_elevator_artifact_data_builds_formal_incremental_m
     assert "## 未验证假设" not in score_output.artifact_update.markdown
     assert score_output.artifact_patch is not None
     assert score_output.artifact_patch.section_anchor == "h2:价值主张评分:1"
+
+
+def test_render_partial_value_elevator_artifact_data_computes_score_summary_fields():
+    score_payload = {
+        "chat": "我正在生成价值定位分析。",
+        "artifact_data": {
+            "document_info": VALID_VALUE_ELEVATOR_ARTIFACT_DATA["document_info"],
+            "positioning_summary": VALID_VALUE_ELEVATOR_ARTIFACT_DATA[
+                "positioning_summary"
+            ],
+            "value_flow": VALID_VALUE_ELEVATOR_ARTIFACT_DATA["value_flow"],
+            "target_scenarios": VALID_VALUE_ELEVATOR_ARTIFACT_DATA[
+                "target_scenarios"
+            ],
+            "pain_evidence": VALID_VALUE_ELEVATOR_ARTIFACT_DATA["pain_evidence"],
+            "differentiators": VALID_VALUE_ELEVATOR_ARTIFACT_DATA[
+                "differentiators"
+            ],
+            "business_feasibility": VALID_VALUE_ELEVATOR_ARTIFACT_DATA[
+                "business_feasibility"
+            ],
+            "score_matrix": VALID_VALUE_ELEVATOR_ARTIFACT_DATA["score_matrix"],
+            "score_summary": {
+                "judgement": VALID_VALUE_ELEVATOR_ARTIFACT_DATA["score_summary"][
+                    "judgement"
+                ],
+            },
+        },
+        "stage_action": None,
+        "warnings": [],
+    }
+
+    output = render_partial_agent_turn_from_artifact_data(
+        score_payload,
+        workflow_id="VALUE_DISCOVERY",
+        current_stage_id="ELEVATOR",
+    )
+
+    assert output is not None
+    assert "总分 16，平均分 3.20" in output.artifact_update.markdown
 
 
 def test_render_partial_value_persona_artifact_data_builds_formal_incremental_markdown_and_patch():

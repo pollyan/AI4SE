@@ -1722,9 +1722,30 @@ class ValueScore(StrictArtifactDataModel):
 
 
 class ValueScoreSummary(StrictArtifactDataModel):
-    total_score: int = Field(ge=1)
-    average_score: float = Field(ge=1, le=5)
+    total_score: int | None = Field(default=None, ge=1)
+    average_score: float | None = Field(default=None, ge=1, le=5)
     judgement: str
+
+
+def _normalize_value_score_summary(
+    score_items: list[ValueScore],
+    summary: ValueScoreSummary,
+) -> ValueScoreSummary:
+    total_score = sum(item.score for item in score_items)
+    if summary.total_score is None:
+        summary.total_score = total_score
+    elif summary.total_score != total_score:
+        raise ValueError("score_summary.total_score must equal score_matrix score sum")
+
+    expected_average = round(total_score / len(score_items), 2)
+    if summary.average_score is None:
+        summary.average_score = expected_average
+    elif abs(summary.average_score - expected_average) > 0.001:
+        raise ValueError(
+            "score_summary.average_score must equal score_matrix average score "
+            f"({expected_average})"
+        )
+    return summary
 
 
 class ValueAssumption(StrictArtifactDataModel):
@@ -1770,18 +1791,7 @@ class ValueDiscoveryElevatorArtifactData(StrictArtifactDataModel):
                 + ", ".join(unknown_references)
             )
 
-        total_score = sum(item.score for item in self.score_matrix)
-        if self.score_summary.total_score != total_score:
-            raise ValueError(
-                "score_summary.total_score must equal score_matrix score sum"
-            )
-
-        expected_average = round(total_score / len(self.score_matrix), 2)
-        if abs(self.score_summary.average_score - expected_average) > 0.001:
-            raise ValueError(
-                "score_summary.average_score must equal score_matrix average score "
-                f"({expected_average})"
-            )
+        _normalize_value_score_summary(self.score_matrix, self.score_summary)
         return self
 
 
@@ -4437,10 +4447,15 @@ def render_partial_value_discovery_elevator_markdown(data: Any) -> str | None:
 
         if "score_matrix" not in data or "score_summary" not in data:
             return _join_partial_sections(sections)
+        score_items = _validate_partial_list(data["score_matrix"], ValueScore)
+        score_summary = _normalize_value_score_summary(
+            score_items,
+            ValueScoreSummary.model_validate(data["score_summary"]),
+        )
         sections.append(
             _render_value_score_matrix(
-                _validate_partial_list(data["score_matrix"], ValueScore),
-                ValueScoreSummary.model_validate(data["score_summary"]),
+                score_items,
+                score_summary,
             )
         )
 

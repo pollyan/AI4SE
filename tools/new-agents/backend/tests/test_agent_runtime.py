@@ -823,6 +823,35 @@ def test_parse_agent_turn_output_text_renders_value_elevator_artifact_data():
     assert output.stage_action.target_stage_id == "PERSONA"
 
 
+def test_parse_agent_turn_output_text_renders_value_elevator_without_model_score_totals():
+    artifact_data = copy.deepcopy(VALID_VALUE_ELEVATOR_ARTIFACT_DATA)
+    artifact_data["score_summary"].pop("total_score")
+    artifact_data["score_summary"].pop("average_score")
+
+    output = parse_agent_turn_output_text(
+        json.dumps(
+            {
+                "chat": "已生成价值定位分析。",
+                "artifact_data": artifact_data,
+                "stage_action": {
+                    "type": "request_next_stage",
+                    "target_stage_id": "PERSONA",
+                },
+                "warnings": [],
+            },
+            ensure_ascii=False,
+        ),
+        workflow_id="VALUE_DISCOVERY",
+        current_stage_id="ELEVATOR",
+    )
+
+    assert output.artifact_update.markdown is not None
+    assert "总分 16，平均分 3.20" in output.artifact_update.markdown
+    assert output.artifact_data is not None
+    assert output.artifact_data["score_summary"]["total_score"] == 16
+    assert output.artifact_data["score_summary"]["average_score"] == 3.2
+
+
 def test_value_elevator_structured_output_instruction_requests_artifact_data_not_markdown():
     instruction = build_structured_output_instruction(
         "VALUE_DISCOVERY",
@@ -833,6 +862,10 @@ def test_value_elevator_structured_output_instruction_requests_artifact_data_not
     assert "artifact_update" not in instruction
     assert "value_flow" in instruction
     assert "score_matrix" in instruction
+    assert '"score_summary": {"judgement": "..."}' in instruction
+    assert '"total_score"' not in instruction
+    assert "average_score" not in instruction
+    assert "总分和平均分由后端根据 score_matrix.score 计算" in instruction
     assert '"target_stage_id": "PERSONA"' in instruction
     assert "不要输出完整 Markdown" in instruction
     assert "score-matrix" in instruction
