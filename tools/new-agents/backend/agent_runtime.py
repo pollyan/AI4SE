@@ -94,7 +94,7 @@ JSON 对象结构：
   "warnings": []
 }
 
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -130,7 +130,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；不要输出完整 Markdown、Mermaid 代码块或表格，后端会负责确定性渲染右侧产出物。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -163,7 +163,7 @@ JSON 对象结构：
 }
 
 """ + format_artifact_data_contract_instruction("TEST_DESIGN", "STRATEGY") + """
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -195,7 +195,7 @@ JSON 对象结构：
 }
 
 __ARTIFACT_DATA_CONTRACT_INSTRUCTION__
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """.replace(
     "__ARTIFACT_DATA_CONTRACT_INSTRUCTION__",
@@ -234,7 +234,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；case_summary_items 中每项 case_count 必须等于 p0_count + p1_count + p2_count；delivery_metrics.total_cases 必须等于所有 case_summary_items.case_count 之和；coverage_map.case_ids 必须至少包含一个用例 ID。不要输出完整 Markdown、Mermaid 代码块、coverage-map JSON 代码块或表格，后端会负责确定性渲染右侧测试设计交付文档和 ai4se-visual coverage-map。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -266,7 +266,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；quality_overview.severity_score 必须是 1 到 5 的整数；issue_statistics 的 P0/P1/P2 数量必须与 issue_groups 中的问题优先级计数一致；revision_suggestions.related_issues 只能引用已存在的 issue_id。不要输出完整 Markdown、Mermaid 代码块、score-matrix JSON 代码块或表格，后端会负责确定性渲染右侧需求评审问题清单、flowchart 和 ai4se-visual score-matrix。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -298,7 +298,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；issue_statistics 的 P0/P1/P2 数量必须与 issue_closures 中的问题优先级计数一致；review_conditions.related_issues 只能引用已存在的 issue_id；存在未关闭 P0/P1 问题时 review_result 不能为“通过”。不要输出完整 Markdown、Mermaid 代码块、priority-board JSON 代码块或表格，后端会负责确定性渲染右侧需求评审报告、pie 和 ai4se-visual priority-board。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -338,7 +338,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；value_flow.links 只能引用 value_flow.nodes 中已存在的 node_id；score_matrix.score 必须是 1 到 5 的整数；总分和平均分由后端根据 score_matrix.score 计算，模型不要输出总分或平均分字段；如果模型显式输出则必须与后端计算一致。不要输出完整 Markdown、Mermaid 代码块、score-matrix JSON 代码块或表格，后端会负责确定性渲染右侧价值定位分析、flowchart 和 ai4se-visual score-matrix。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -379,7 +379,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；personas.persona_id 必须唯一；behavior_scenarios、decision_chain、pain_evidence、priority_ranking 中的 persona_id 只能引用 personas 中已存在的 persona_id；priority_ranking 中同一个 persona_id 只能出现一次。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或解释文字，后端会负责确定性渲染右侧用户画像分析。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -428,7 +428,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；journey_stages.stage_id、pain_id、opportunity_id 必须分别唯一；emotion_score 必须是 1 到 5 的整数；pain_priorities.stage_id 只能引用 journey_stages 中已存在的 stage_id；pain_priorities.pain_id 和 opportunity_scores.pain_id 只能引用 journey_stages 中已存在的 pain_id；opportunity_scores.opportunity_id、entry_strategy.related_opportunity、validation_experiments.opportunity_id 只能引用 journey_stages 中已存在的 opportunity_id。不要输出完整 Markdown 文档、Markdown 表格、Mermaid journey 代码块或 journey-map JSON 代码块，后端会负责确定性渲染右侧用户旅程分析、Mermaid journey 和 ai4se-visual journey-map。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -467,7 +467,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；requirements.requirement_id 必须唯一；feature_modules.features.requirement_id、mvp_plan.included_features.requirement_id、acceptance_criteria.requirement_id 和 input_type 为“需求”的 lisa_handoff_inputs.reference_id 只能引用 requirements 中已存在的 requirement_id；input_type 为“验收标准”的 lisa_handoff_inputs.reference_id 只能引用 acceptance_criteria 中已存在的 acceptance_id；main_flow.links 只能引用 main_flow.nodes 中已存在的 node_id。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 roadmap JSON 代码块，后端会负责确定性渲染右侧需求蓝图、功能架构、主流程图和 ai4se-visual roadmap。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -501,7 +501,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；fact_sources.fact_id 必须唯一；timeline_events.fact_ids 只能引用已存在的 fact_id。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或解释文字，后端会负责确定性渲染右侧故障复盘报告和 Mermaid timeline，并会处理时间线标签中的半角冒号。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -534,7 +534,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；why_chain 至少包含 3 层 Why；cause_evidence.cause_id 必须唯一；fishbone_categories 至少包含 2 个分类；fishbone_categories.cause_ids 和 root_cause_conclusions.related_cause_id 只能引用已存在的 cause_id；root_cause_conclusions 必须包含“根本原因”。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块、mindmap 或 cause-map JSON 代码块，后端会负责确定性渲染右侧根因分析、Mermaid mindmap 和 ai4se-visual cause-map。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -572,7 +572,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；report_info.action_count 必须等于 improvement_actions 数量；improvement_actions.action_id 必须唯一；priority_distribution 必须与 improvement_actions.priority 计数一致；root_cause_coverage.action_ids 只能引用已存在的 action_id；improvement_actions.root_cause_id 必须能在 root_cause_coverage.cause_id 中找到。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块、pie 或 action-board JSON 代码块，后端会负责确定性渲染右侧最终故障复盘报告、Mermaid pie 和 ai4se-visual action-board。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -605,7 +605,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；evidence_items.evidence_id 必须唯一；problem_landscape.subproblems.problem_id 必须唯一；problem_user_fit.evidence_ids 只能引用已存在的 evidence_id；problem_landscape.root_problem 必须被至少一个 evidence_items 或 problem_user_fit 条目覆盖；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 mindmap，后端会负责确定性渲染右侧问题域分析和 Mermaid mindmap。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -636,7 +636,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；idea_cards.idea_id 必须唯一；idea_sources.source_id 必须唯一；parked_or_excluded.record_id 必须唯一；idea_landscape.groups.idea_ids 和 idea_sources.idea_ids 只能引用已存在的 idea_id；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 mindmap，后端会负责确定性渲染右侧创意发散产物和 Mermaid mindmap。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -668,7 +668,7 @@ JSON 对象结构：
 }
 
 __ARTIFACT_DATA_CONTRACT_INSTRUCTION__
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """.replace(
     "__ARTIFACT_DATA_CONTRACT_INSTRUCTION__",
@@ -707,7 +707,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；core_assumptions.assumption_id、validation_roadmap.validation_id 和 next_actions.action_id 必须唯一；lean_canvas 必须覆盖问题、用户群体、独特价值主张、解决方案、渠道、收入来源、成本结构、关键指标和竞争壁垒；growth_funnel 必须覆盖 Acquisition、Activation、Retention、Revenue 和 Referral；mvp_features.assumption_ids 和 validation_roadmap.assumption_ids 只能引用已存在的 assumption_id；next_actions.related_ids 只能引用已存在的 assumption_id、validation_id 或 risk_id；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块、pie、flowchart 或 ai4se-visual mvp-map，后端会负责确定性渲染右侧产品概念简报、Mermaid 图和 mvp-map。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -739,7 +739,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；epics.epic_id、user_stories.story_id、acceptance_criteria.criterion_id、dependencies.dependency_id 和 sprint_slices.sprint_id 必须唯一；user_stories.epic_id 只能引用已存在的 epic_id；acceptance_criteria.story_id、dependencies.related_story_ids 和 sprint_slices.story_ids 只能引用已存在的 story_id；lisa_handoff_inputs 中 input_type 为“用户故事”时 reference_id 必须引用 story_id，input_type 为“验收标准”时 reference_id 必须引用 criterion_id；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 story-map JSON 代码块，后端会负责确定性渲染右侧用户故事拆解包、flowchart 和 ai4se-visual story-map。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """.replace("{stage_action}", stage_action)
 
@@ -772,7 +772,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；quality_findings.finding_id、completion_actions.action_id 和 revision_sections.section_id 必须唯一；completion_actions.finding_ids 只能引用已存在的 finding_id；acceptance_criteria.related_section_ids 和 handoff_inputs.related_section_ids 只能引用已存在的 section_id；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 ai4se-visual，后端会负责确定性渲染右侧 PRD artifact、score-matrix、action-board 和 roadmap。
-chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -1216,21 +1216,6 @@ class PydanticAgentRuntime:
                     current_stage_id=current_stage_id,
                 )
             except json.JSONDecodeError:
-                if emitted_any_delta and (latest_chat or latest_markdown):
-                    yield AgentTurnOutput.model_validate(
-                        {
-                            "chat": latest_chat
-                            or "本轮响应已中断，右侧产出物可能不完整。",
-                            "artifact_update": (
-                                {"type": "replace", "markdown": latest_markdown}
-                                if latest_markdown
-                                else {"type": "none"}
-                            ),
-                            "stage_action": None,
-                            "warnings": ["artifact_truncated"],
-                        }
-                    )
-                    return
                 raise
             except ValidationError as exc:
                 if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:

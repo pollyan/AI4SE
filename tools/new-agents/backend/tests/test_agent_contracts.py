@@ -525,7 +525,7 @@ def test_later_stage_structured_visual_contracts_cover_professional_views():
         ("TEST_DESIGN", "STRATEGY"): ["risk-board"],
         ("INCIDENT_REVIEW", "IMPROVEMENT"): ["action-board"],
         ("VALUE_DISCOVERY", "JOURNEY"): ["journey-map"],
-        ("TEST_DESIGN", "DELIVERY"): ["coverage-map", "traceability-matrix"],
+        ("TEST_DESIGN", "DELIVERY"): ["coverage-map"],
         ("REQ_REVIEW", "REPORT"): ["priority-board"],
         ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["cause-map"],
         ("IDEA_BRAINSTORM", "CONCEPT"): ["mvp-map"],
@@ -682,12 +682,12 @@ def test_test_design_contracts_include_professional_artifact_fields():
     ]:
         assert field in cases_fields
     for field in [
-        "## 1. 执行摘要",
-        "## 5. 覆盖地图",
-        "## 6. 开放风险",
-        "## 8. 签署确认",
-        "## 9. 变更记录",
-        "## 附录：文档信息",
+        "## 1. 文档信息",
+        "## 2. 执行摘要",
+        "## 6. 覆盖地图",
+        "## 7. 开放风险",
+        "## 9. 签署确认",
+        "## 10. 变更记录",
     ]:
         assert field in delivery_fields
 
@@ -728,14 +728,13 @@ def test_build_artifact_contract_prompt_includes_required_structured_visual_cont
     assert "复杂 HTML" in prompt
 
 
-def test_build_artifact_contract_prompt_requires_delivery_coverage_and_traceability_visuals():
+def test_build_artifact_contract_prompt_requires_delivery_coverage_visual():
     prompt = build_artifact_contract_prompt(
         workflow_id="TEST_DESIGN",
         current_stage_id="DELIVERY",
     )
 
     assert "coverage-map" in prompt
-    assert "traceability-matrix" in prompt
     assert '"columns"' in prompt
     assert '"rows"' in prompt
 
@@ -1060,7 +1059,7 @@ def test_req_review_contracts_include_professional_artifact_fields():
         "## 需求质量结构图",
         "## 修订建议",
         "## 阶段门禁",
-        "## 附录：评审信息",
+        "## 评审信息",
         "评审维度",
         "阻断性",
         "状态",

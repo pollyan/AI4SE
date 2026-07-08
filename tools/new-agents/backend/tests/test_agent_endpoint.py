@@ -1734,6 +1734,7 @@ def test_agent_run_handoffs_endpoint_exports_configured_targets(
         (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
         for handoff in response.json["handoffs"]
     ] == [
+        ("STORY_BREAKDOWN", "INPUT_ANALYSIS", "alex"),
         ("TEST_DESIGN", "CLARIFY", "lisa"),
         ("REQ_REVIEW", "REVIEW", "lisa"),
     ]
@@ -1933,6 +1934,15 @@ def test_agent_runs_stream_returns_typed_error_when_runtime_dependency_missing(
             "type": "error",
             "code": "AGENT_RUNTIME_UNAVAILABLE",
             "message": "pydantic-ai runtime unavailable",
+            "diagnostic": {
+                "phase": "runtime",
+                "workflowId": "TEST_DESIGN",
+                "stageId": "CLARIFY",
+                "fieldPath": "runtime",
+                "validator": "runtime_dependency",
+                "retryable": False,
+                "publicReason": "智能体运行时依赖不可用，本轮生成未开始。",
+            },
         }
     ]
 
@@ -1971,6 +1981,15 @@ def test_agent_runs_stream_returns_typed_error_when_model_output_exceeds_retries
                 "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
                 "如果多次失败，请补充更明确的需求或阶段确认信息。"
             ),
+            "diagnostic": {
+                "phase": "structured_output",
+                "workflowId": "TEST_DESIGN",
+                "stageId": "CLARIFY",
+                "fieldPath": "artifact_data",
+                "validator": "pydantic_ai_output_retry",
+                "retryable": True,
+                "publicReason": "模型输出的结构化字段未通过校验，右侧产出物已保持不变。",
+            },
         }
     ]
 

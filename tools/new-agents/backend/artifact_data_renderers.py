@@ -1381,7 +1381,7 @@ class OpenQuestion(StrictArtifactDataModel):
 
 class CasesArtifactData(StrictArtifactDataModel):
     document_info: DocumentInfo
-    case_statistics: CaseStatistics
+    case_statistics: CaseStatistics | None = None
     design_bases: list[DesignBasis] = Field(min_length=1)
     case_groups: list[CaseGroup] = Field(min_length=1)
     test_data_environments: list[TestDataEnvironment] = Field(min_length=1)
@@ -1402,11 +1402,20 @@ class CasesArtifactData(StrictArtifactDataModel):
             "P1": sum(1 for case in cases if case.priority == "P1"),
             "P2": sum(1 for case in cases if case.priority == "P2"),
         }
+        expected_statistics = CaseStatistics(
+            total=len(cases),
+            p0_count=priority_counts["P0"],
+            p1_count=priority_counts["P1"],
+            p2_count=priority_counts["P2"],
+        )
+        if self.case_statistics is None:
+            self.case_statistics = expected_statistics
+        assert self.case_statistics is not None
         if (
-            self.case_statistics.total != len(cases)
-            or self.case_statistics.p0_count != priority_counts["P0"]
-            or self.case_statistics.p1_count != priority_counts["P1"]
-            or self.case_statistics.p2_count != priority_counts["P2"]
+            self.case_statistics.total != expected_statistics.total
+            or self.case_statistics.p0_count != expected_statistics.p0_count
+            or self.case_statistics.p1_count != expected_statistics.p1_count
+            or self.case_statistics.p2_count != expected_statistics.p2_count
         ):
             raise ValueError(
                 "case_statistics must match case_groups totals and P0/P1/P2 counts"

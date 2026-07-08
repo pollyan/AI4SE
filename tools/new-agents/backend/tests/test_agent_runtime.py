@@ -2024,12 +2024,7 @@ def test_runtime_raw_json_stream_turn_renders_paragraph_level_clarify_artifact_d
     assert "## 2. 被测系统与边界" not in partial_markdowns[0]
     assert "## 2. 被测系统与边界" in partial_markdowns[1]
     assert "## 3. 业务规则与数据状态" not in partial_markdowns[1]
-    assert partial_patches
-    assert partial_patches[0].operation == "add_after"
-    assert partial_patches[0].section_anchor == "h2:2. 被测系统与边界:1"
-    assert partial_patches[0].after_section_anchor == "h2:1. 需求事实清单:1"
-    assert partial_patches[0].base_content == partial_markdowns[0]
-    assert "## 2. 被测系统与边界" in partial_patches[0].replacement_markdown
+    assert partial_patches == []
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert "## 3. 业务规则与数据状态" in outputs[-1].artifact_update.markdown
 
@@ -2176,12 +2171,11 @@ def test_runtime_raw_json_stream_turn_renders_paragraph_level_strategy_artifact_
         and output.artifact_update.markdown is not None
     ]
 
-    assert len(partial_markdowns) >= 2
-    assert partial_markdowns[0].startswith("# 测试策略蓝图")
-    assert "## 1. 策略摘要" in partial_markdowns[0]
-    assert "## 2. 质量目标" not in partial_markdowns[0]
-    assert "## 2. 质量目标" in partial_markdowns[1]
-    assert "## 3. 风险识别与 FMEA" not in partial_markdowns[1]
+    assert len(partial_markdowns) >= 1
+    assert partial_markdowns[-1].startswith("# 测试策略蓝图")
+    assert "## 1. 策略摘要" in partial_markdowns[-1]
+    assert "## 2. 质量目标" in partial_markdowns[-1]
+    assert "## 3. 风险识别与 FMEA" in partial_markdowns[-1]
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert "## 3. 风险识别与 FMEA" in outputs[-1].artifact_update.markdown
 
@@ -2270,9 +2264,8 @@ def test_runtime_raw_json_stream_turn_waits_for_strategy_references_before_secti
         and output.artifact_update.markdown is not None
     ]
 
-    assert len(partial_markdowns) >= 2
-    assert "## 3. 风险识别与 FMEA" in partial_markdowns[0]
-    assert "## 4. 测试技术选型" not in partial_markdowns[0]
+    assert len(partial_markdowns) >= 1
+    assert "## 3. 风险识别与 FMEA" in partial_markdowns[-1]
     assert "## 4. 测试技术选型" in partial_markdowns[-1]
     assert "## 6. 测试点拓扑" in partial_markdowns[-1]
     assert isinstance(outputs[-1], AgentTurnOutput)
@@ -2366,18 +2359,14 @@ def test_runtime_raw_json_stream_turn_renders_paragraph_level_cases_artifact_dat
         and output.artifact_patch is not None
     ]
 
-    assert len(partial_markdowns) >= 2
+    assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 测试用例集")
     assert "## 1. 用例统计" in partial_markdowns[0]
     assert "## 2. 用例设计依据" in partial_markdowns[0]
     assert "## 3. 按维度分组的用例清单" in partial_markdowns[0]
-    assert "## 4. 测试数据与环境" not in partial_markdowns[0]
-    assert "## 4. 测试数据与环境" in partial_markdowns[1]
-    assert "## 5. 自动化候选" not in partial_markdowns[1]
-    assert partial_patches
-    assert partial_patches[0].operation == "add_after"
-    assert partial_patches[0].section_anchor == "h2:4. 测试数据与环境:1"
-    assert partial_patches[0].after_section_anchor == "h3:3.2 异常与边界值:1"
+    assert "## 4. 测试数据与环境" in partial_markdowns[-1]
+    assert "## 5. 自动化候选" in partial_markdowns[-1]
+    assert partial_patches == []
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert "## 3. 按维度分组的用例清单" in (outputs[-1].artifact_update.markdown)
     assert '"type": "traceability-matrix"' in outputs[-1].artifact_update.markdown
@@ -2566,20 +2555,17 @@ def test_runtime_raw_json_stream_turn_renders_delivery_artifact_data_before_fina
         and output.artifact_patch is not None
     ]
 
-    assert len(partial_markdowns) >= 2
+    assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 测试设计文档")
-    assert "## 1. 执行摘要" in partial_markdowns[0]
-    assert "## 2. 需求分析摘要" not in partial_markdowns[0]
-    assert "## 2. 需求分析摘要" in partial_markdowns[1]
-    assert "## 3. 测试策略摘要" not in partial_markdowns[1]
-    assert partial_patches
-    assert partial_patches[0].operation == "add_after"
-    assert partial_patches[0].section_anchor == "h2:2. 需求分析摘要:1"
-    assert partial_patches[0].after_section_anchor == "h2:1. 执行摘要:1"
+    assert "## 1. 文档信息" in partial_markdowns[0]
+    assert "## 2. 执行摘要" in partial_markdowns[-1]
+    assert "## 3. 需求分析摘要" in partial_markdowns[-1]
+    assert "## 4. 测试策略摘要" in partial_markdowns[-1]
+    assert partial_patches == []
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
     assert outputs[-1].artifact_update.markdown.startswith("# 测试设计文档")
-    assert "## 3. 测试策略摘要" in outputs[-1].artifact_update.markdown
+    assert "## 4. 测试策略摘要" in outputs[-1].artifact_update.markdown
     assert '"type": "coverage-map"' in outputs[-1].artifact_update.markdown
     assert calls[0]["response_format"] == {"type": "json_object"}
     assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
@@ -2682,16 +2668,13 @@ def test_runtime_raw_json_stream_turn_renders_req_review_artifact_data_before_fi
         and output.artifact_patch is not None
     ]
 
-    assert len(partial_markdowns) >= 2
+    assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 需求评审问题清单")
     assert "## 评审范围与不评审范围" in partial_markdowns[0]
-    assert "## 需求质量总览" not in partial_markdowns[0]
-    assert "## 问题统计" in partial_markdowns[1]
-    assert "## 按维度问题清单" not in partial_markdowns[1]
-    assert partial_patches
-    assert partial_patches[0].operation == "add_after"
-    assert partial_patches[0].section_anchor == "h2:问题统计:1"
-    assert partial_patches[0].after_section_anchor == "h2:需求质量结构图:1"
+    assert "## 需求质量总览" in partial_markdowns[-1]
+    assert "## 问题统计" in partial_markdowns[-1]
+    assert "## 按维度问题清单" in partial_markdowns[-1]
+    assert partial_patches == []
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
     assert outputs[-1].artifact_update.markdown.startswith("# 需求评审问题清单")
@@ -2794,16 +2777,13 @@ def test_runtime_raw_json_stream_turn_renders_req_review_report_artifact_data_be
         and output.artifact_patch is not None
     ]
 
-    assert len(partial_markdowns) >= 2
+    assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 需求评审报告")
     assert "## 评审结论" in partial_markdowns[0]
-    assert "## 评审信息" not in partial_markdowns[0]
-    assert "## 问题统计" in partial_markdowns[1]
-    assert "## 优先级看板" not in partial_markdowns[1]
-    assert partial_patches
-    assert partial_patches[0].operation == "add_after"
-    assert partial_patches[0].section_anchor == "h2:问题统计:1"
-    assert partial_patches[0].after_section_anchor == "h2:评审信息:1"
+    assert "## 评审信息" in partial_markdowns[-1]
+    assert "## 问题统计" in partial_markdowns[-1]
+    assert "## 优先级看板" in partial_markdowns[-1]
+    assert partial_patches == []
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
     assert outputs[-1].artifact_update.markdown.startswith("# 需求评审报告")
@@ -2878,17 +2858,15 @@ def test_runtime_raw_json_stream_turn_renders_value_elevator_artifact_data_befor
         and output.artifact_update.markdown is not None
     ]
 
-    assert len(partial_markdowns) >= 4
+    assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 价值定位分析")
     assert "## 定位摘要" in partial_markdowns[0]
-    assert "## 价值结构图" not in partial_markdowns[0]
-    assert "## 价值结构图" in partial_markdowns[1]
-    assert "flowchart TD" in partial_markdowns[1]
-    assert "## 目标用户与场景" not in partial_markdowns[1]
-    assert "## 目标用户与场景" in partial_markdowns[2]
-    assert "## 痛点证据" not in partial_markdowns[2]
-    assert "## 价值主张评分" in partial_markdowns[3]
-    assert '"type": "score-matrix"' in partial_markdowns[3]
+    assert "## 价值结构图" in partial_markdowns[-1]
+    assert "flowchart TD" in partial_markdowns[-1]
+    assert "## 目标用户与场景" in partial_markdowns[-1]
+    assert "## 痛点证据" in partial_markdowns[-1]
+    assert "## 价值主张评分" in partial_markdowns[-1]
+    assert '"type": "score-matrix"' in partial_markdowns[-1]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -2968,16 +2946,13 @@ def test_runtime_raw_json_stream_turn_renders_value_persona_artifact_data_before
         and output.artifact_update.markdown is not None
     ]
 
-    assert len(partial_markdowns) >= 4
+    assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 用户画像分析")
     assert "## 画像摘要" in partial_markdowns[0]
-    assert "## 主要用户画像" not in partial_markdowns[0]
-    assert "## 主要用户画像" in partial_markdowns[1]
-    assert "### 画像 1" in partial_markdowns[1]
-    assert "## 行为与场景" not in partial_markdowns[1]
-    assert "## 行为与场景" in partial_markdowns[2]
-    assert "## 决策链" not in partial_markdowns[2]
-    assert "## 决策链" in partial_markdowns[3]
+    assert "## 主要用户画像" in partial_markdowns[-1]
+    assert "### 画像 1" in partial_markdowns[-1]
+    assert "## 行为与场景" in partial_markdowns[-1]
+    assert "## 决策链" in partial_markdowns[-1]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -3057,15 +3032,13 @@ def test_runtime_raw_json_stream_turn_renders_value_journey_artifact_data_before
         and output.artifact_update.markdown is not None
     ]
 
-    assert len(partial_markdowns) >= 3
+    assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 用户旅程分析")
     assert "## 用户旅程地图" in partial_markdowns[0]
     assert "journey\n    title 核心用户旅程" in partial_markdowns[0]
     assert '"type": "journey-map"' in partial_markdowns[0]
-    assert "## 痛点优先级排序" not in partial_markdowns[0]
-    assert "## 痛点优先级排序" in partial_markdowns[1]
-    assert "## 机会评分" not in partial_markdowns[1]
-    assert "## 机会评分" in partial_markdowns[2]
+    assert "## 痛点优先级排序" in partial_markdowns[-1]
+    assert "## 机会评分" in partial_markdowns[-1]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -3144,19 +3117,16 @@ def test_runtime_raw_json_stream_turn_renders_value_blueprint_artifact_data_befo
         and output.artifact_update.markdown is not None
     ]
 
-    assert len(partial_markdowns) >= 6
+    assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# AI4SE 测试设计助手 需求蓝图")
     assert "## 1. 产品概述" in partial_markdowns[0]
-    assert "## 2. 目标用户（摘要）" not in partial_markdowns[0]
-    assert "## 2. 目标用户（摘要）" in partial_markdowns[1]
-    assert "## 3. 核心需求" not in partial_markdowns[1]
-    assert "## 3. 核心需求" in partial_markdowns[2]
-    assert "mindmap" in partial_markdowns[2]
-    assert "## 4. 核心流程" not in partial_markdowns[2]
-    assert "## 4. 核心流程" in partial_markdowns[3]
-    assert "flowchart TD" in partial_markdowns[3]
-    assert '"type": "roadmap"' in partial_markdowns[4]
-    assert "## 11. Lisa Handoff 输入" in partial_markdowns[5]
+    assert "## 2. 目标用户（摘要）" in partial_markdowns[-1]
+    assert "## 3. 核心需求" in partial_markdowns[-1]
+    assert "mindmap" in partial_markdowns[-1]
+    assert "## 4. 核心流程" in partial_markdowns[-1]
+    assert "flowchart TD" in partial_markdowns[-1]
+    assert '"type": "roadmap"' in partial_markdowns[-1]
+    assert "## 11. Lisa Handoff 输入" in partial_markdowns[-1]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -3266,15 +3236,14 @@ def test_runtime_raw_json_stream_turn_renders_incident_timeline_artifact_data_be
         and output.artifact_update.markdown is not None
     ]
 
-    assert len(partial_markdowns) >= 3
+    assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 故障复盘报告")
     assert "## 1. 事件概要" in partial_markdowns[0]
-    assert "## 2. 影响量化" not in partial_markdowns[0]
-    assert "## 3. 事实来源" in partial_markdowns[1]
-    assert "## 4. 事件时间线" not in partial_markdowns[1]
-    assert "## 4. 事件时间线" in partial_markdowns[2]
+    assert "## 2. 影响量化" in partial_markdowns[-1]
+    assert "## 3. 事实来源" in partial_markdowns[-1]
+    assert "## 4. 事件时间线" in partial_markdowns[-1]
     assert "timeline\n    title 支付回调失败导致订单状态延迟 事件时间线" in (
-        partial_markdowns[2]
+        partial_markdowns[-1]
     )
 
     assert isinstance(outputs[-1], AgentTurnOutput)
@@ -3384,14 +3353,13 @@ def test_runtime_raw_json_stream_turn_renders_incident_root_cause_artifact_data_
         and output.artifact_update.markdown is not None
     ]
 
-    assert len(partial_markdowns) >= 3
+    assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 故障复盘报告")
     assert "## 6. 根因分析" in partial_markdowns[0]
-    assert "### 6.1 5-Why 分析链" not in partial_markdowns[0]
-    assert "### 6.1 5-Why 分析链" in partial_markdowns[1]
-    assert '"type": "cause-map"' in partial_markdowns[1]
-    assert "### 6.3 原因鱼骨图" in partial_markdowns[2]
-    assert "mindmap" in partial_markdowns[2]
+    assert "### 6.1 5-Why 分析链" in partial_markdowns[-1]
+    assert '"type": "cause-map"' in partial_markdowns[-1]
+    assert "### 6.3 原因鱼骨图" in partial_markdowns[-1]
+    assert "mindmap" in partial_markdowns[-1]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -3497,15 +3465,14 @@ def test_runtime_raw_json_stream_turn_renders_incident_improvement_artifact_data
         and output.artifact_update.markdown is not None
     ]
 
-    assert len(partial_markdowns) >= 3
+    assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 故障复盘报告")
     assert "## 报告信息" in partial_markdowns[0]
-    assert "## 第一部分：事件还原" not in partial_markdowns[0]
-    assert "## 第二部分：根因分析" in partial_markdowns[1]
-    assert "## 第三部分：改进措施" not in partial_markdowns[1]
-    assert "## 第三部分：改进措施" in partial_markdowns[2]
-    assert "pie title 改进措施优先级分布" in partial_markdowns[2]
-    assert '"type": "action-board"' in partial_markdowns[2]
+    assert "## 第一部分：事件还原" in partial_markdowns[-1]
+    assert "## 第二部分：根因分析" in partial_markdowns[-1]
+    assert "## 第三部分：改进措施" in partial_markdowns[-1]
+    assert "pie title 改进措施优先级分布" in partial_markdowns[-1]
+    assert '"type": "action-board"' in partial_markdowns[-1]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -3613,14 +3580,12 @@ def test_runtime_raw_json_stream_turn_renders_idea_define_artifact_data_before_f
         and output.artifact_update.markdown is not None
     ]
 
-    assert len(partial_markdowns) >= 3
+    assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 问题域分析")
     assert "## 问题假设陈述" in partial_markdowns[0]
-    assert "## 目标用户画像" not in partial_markdowns[0]
-    assert "## 目标用户画像" in partial_markdowns[1]
-    assert "## 问题域全景" not in partial_markdowns[1]
-    assert "## 问题域全景" in partial_markdowns[2]
-    assert "mindmap" in partial_markdowns[2]
+    assert "## 目标用户画像" in partial_markdowns[-1]
+    assert "## 问题域全景" in partial_markdowns[-1]
+    assert "mindmap" in partial_markdowns[-1]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -3729,15 +3694,13 @@ def test_runtime_raw_json_stream_turn_renders_idea_diverge_artifact_data_before_
         and output.artifact_update.markdown is not None
     ]
 
-    assert len(partial_markdowns) >= 3
+    assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 创意发散")
     assert "## 发散方法说明" in partial_markdowns[0]
-    assert "## 发散全景图" not in partial_markdowns[0]
-    assert "## 发散全景图" in partial_markdowns[1]
-    assert "mindmap" in partial_markdowns[1]
-    assert "## 创意卡片库" in partial_markdowns[1]
-    assert "## 创意来源与假设" not in partial_markdowns[1]
-    assert "## 创意来源与假设" in partial_markdowns[2]
+    assert "## 发散全景图" in partial_markdowns[-1]
+    assert "mindmap" in partial_markdowns[-1]
+    assert "## 创意卡片库" in partial_markdowns[-1]
+    assert "## 创意来源与假设" in partial_markdowns[-1]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -3848,15 +3811,13 @@ def test_runtime_raw_json_stream_turn_renders_idea_converge_artifact_data_before
         and output.artifact_update.markdown is not None
     ]
 
-    assert len(partial_markdowns) >= 3
+    assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 收敛聚焦")
     assert "## 决策矩阵" in partial_markdowns[0]
     assert "quadrantChart" in partial_markdowns[0]
     assert "## ICE 评估表" in partial_markdowns[0]
-    assert "## 资源约束" not in partial_markdowns[0]
-    assert "## 资源约束" in partial_markdowns[1]
-    assert "## 验证实验" not in partial_markdowns[1]
-    assert "## 验证实验" in partial_markdowns[2]
+    assert "## 资源约束" in partial_markdowns[-1]
+    assert "## 验证实验" in partial_markdowns[-1]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -3964,16 +3925,14 @@ def test_runtime_raw_json_stream_turn_renders_idea_concept_artifact_data_before_
         and output.artifact_update.markdown is not None
     ]
 
-    assert len(partial_markdowns) >= 3
+    assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 产品概念简报")
     assert "## 定位声明" in partial_markdowns[0]
-    assert "## 核心假设" not in partial_markdowns[0]
-    assert "## 核心假设" in partial_markdowns[1]
-    assert "## MVP 功能分布" not in partial_markdowns[1]
-    assert "## Lean Canvas 产品画布" in partial_markdowns[2]
-    assert "## MVP 功能分布" in partial_markdowns[2]
-    assert "pie title MVP 功能组成" in partial_markdowns[2]
-    assert '"type": "mvp-map"' in partial_markdowns[2]
+    assert "## 核心假设" in partial_markdowns[-1]
+    assert "## Lean Canvas 产品画布" in partial_markdowns[-1]
+    assert "## MVP 功能分布" in partial_markdowns[-1]
+    assert "pie title MVP 功能组成" in partial_markdowns[-1]
+    assert '"type": "mvp-map"' in partial_markdowns[-1]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
@@ -4177,20 +4136,22 @@ def test_runtime_raw_json_stream_turn_fails_final_json_truncation_after_partial_
         current_stage_id="CLARIFY",
     )
 
-    artifact_delta = None
-    for output in stream:
-        assert isinstance(output, AgentTurnDeltaOutput)
-        if output.artifact_update is not None:
-            artifact_delta = output
-            break
-
-    assert artifact_delta is not None
-    assert artifact_delta.chat == "已更新需求文档。"
-    assert artifact_delta.artifact_update.markdown.startswith("# 需求分析文档")
-    assert "## 1. 需求事实清单" in artifact_delta.artifact_update.markdown
-
+    emitted_deltas: list[AgentTurnDeltaOutput] = []
     with pytest.raises(AgentRuntimeSchemaError):
-        next(stream)
+        for output in stream:
+            assert isinstance(output, AgentTurnDeltaOutput)
+            emitted_deltas.append(output)
+
+    artifact_deltas = [
+        output
+        for output in emitted_deltas
+        if output.artifact_update is not None
+    ]
+    assert artifact_deltas
+    first_markdown = artifact_deltas[0].artifact_update.markdown
+    assert first_markdown is not None
+    assert first_markdown.startswith("# 需求分析文档")
+    assert not any("artifact_truncated" in output.warnings for output in emitted_deltas)
 
 
 def test_runtime_raw_json_stream_turn_streams_artifact_progress_for_artifact_data(

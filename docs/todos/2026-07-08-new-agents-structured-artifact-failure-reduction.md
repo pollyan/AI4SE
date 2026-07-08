@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成；前端正式 / partial artifact `ai4se-visual` 写入前校验已完成并全量验证通过；第 8A 轮 `artifact_data` 全阶段 fixture registry 回归门禁已完成并全量验证通过；第 8B 轮 `artifact_data` 字段来源与视觉协议矩阵已完成；第 8C 轮 `TEST_DESIGN/CASES` artifactDataContract manifest 同步已完成；第 8D 轮 `TEST_DESIGN/STRATEGY` artifactDataContract manifest 同步已完成）
+- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成；前端正式 / partial artifact `ai4se-visual` 写入前校验已完成并全量验证通过；第 8A 轮 `artifact_data` 全阶段 fixture registry 回归门禁已完成并全量验证通过；第 8B 轮 `artifact_data` 字段来源与视觉协议矩阵已完成；第 8C 轮 `TEST_DESIGN/CASES` artifactDataContract manifest 同步已完成；第 8D 轮 `TEST_DESIGN/STRATEGY` artifactDataContract manifest 同步已完成；第 8E 轮 raw JSON strict failure closure 与 before-final delta 门禁收口已完成）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -123,6 +123,7 @@
   - 进展：第 8B 轮已在 `docs/TESTING.md` 补齐 25 个在线阶段的模型输出字段 / 后端派生字段 / 视觉协议来源矩阵，明确 validation-only 与 backend-derived 的边界，并记录当前已完成 `artifactDataContract` manifest 同步迁移的阶段为 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES`。
   - 进展：第 8C 轮已新增 `TEST_DESIGN/CASES` 的 backend manifest contract sync、runtime instruction source 和 frontend prompt sync 回归测试；相关 CASES renderer / 引用门禁测试继续通过。
   - 进展：第 8D 轮已新增 `TEST_DESIGN/STRATEGY` 的 backend manifest contract sync、runtime instruction source、frontend prompt 单点注入和 renderer validator 回归测试；相关 STRATEGY RPN 派生、ID 唯一性、引用门禁和 stage_gate 测试继续通过。
+  - 进展：第 8E 轮已移除 raw JSON 截断后的 `artifact_truncated` 伪成功最终输出，恢复最终 JSON 无效时的 `AgentRuntimeSchemaError` strict failure closure；同时把 raw streaming 强门禁明确为“final 前至少一个正式 before-final artifact delta + final contract 通过”，字段级多段 partial renderer 当前仅声明 `TEST_DESIGN/CLARIFY` 已实现，`artifact_patch` 不作为全阶段强门禁。
 
 - [ ] 建立视觉产物协议分层。（第 7 轮）
   - 目标：明确哪些视觉类型必须走 `ai4se-visual` JSON，哪些 Mermaid 类型允许由后端 deterministic renderer 生成，哪些 DSL 禁止模型直接输出。
@@ -1268,6 +1269,73 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -p no:cacheprovider 
 
 - 本轮只迁移 `TEST_DESIGN/STRATEGY`，当前已完成 `artifactDataContract` manifest 同步迁移的阶段为 `IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY`；其余 22 个 artifact-data 阶段仍待后续纵切迁移。
 - 本轮不处理 raw JSON partial streaming 多段预览门禁和 `artifact_truncated` 旧路径；这两项应另起纵切，避免混进 STRATEGY contract 同步。
+- 本轮不增加 backend Mermaid JS parse 或 `mmdc` 渲染门禁。
+
+### 2026-07-09 第 8E 轮：raw JSON strict failure closure 与 before-final delta 门禁收口
+
+触发原因：
+
+- 第 8D 宽回归已暴露 `test_agent_runtime.py` 中 raw JSON partial streaming 多段预览断言仍与当前实现不一致。
+- 只读 explorer `Volta` 复核后确认：当前 runtime 不应恢复 `artifact_truncated` 伪最终输出；多阶段字段级 partial renderer 与 `artifact_patch` 是未来能力，不是当前全阶段强门禁。
+
+已完成：
+
+- `agent_runtime.py` 删除 JSONDecodeError 后返回 `AgentTurnOutput(warnings=["artifact_truncated"])` 的伪成功路径；已发出的流式 delta 可继续作为预览，但最终 accumulated JSON 无效时必须抛出 `AgentRuntimeSchemaError`。
+- `TEST_DESIGN/CASES.case_statistics` 支持缺省输入并由后端根据 `case_groups` 确定性派生；模型显式输出错误统计时仍触发 validation failure。
+- `test_agent_runtime.py` 的 raw JSON streaming 门禁调整为：所有 artifact-data 阶段 final 前至少产生一个正式 `artifact_delta.output.artifact_update.replace.markdown`，最终 `AgentTurnOutput` 仍必须通过 contract；不再把全阶段多段字段级 partial 或 `artifact_patch` 当作当前已实现能力。
+- structured-output chat 指令统一改为“自然短段落 / 按需短列表”，移除固定 `2 到 4 个短段落或短列表` 模板；artifact contract prompt 同步强调不要固定 bullet 数量，并补充 `artifact_update.markdown` 与 `artifact_data` 优先级关系。
+- 后端 contract / endpoint 测试对齐当前 manifest 与 typed runtime：`VALUE_DISCOVERY/BLUEPRINT` handoff 目标包含 `STORY_BREAKDOWN/INPUT_ANALYSIS`，SSE error payload 精确断言 typed diagnostic，`TEST_DESIGN/DELIVERY` 视觉契约按 manifest 保持 `coverage-map`。
+- `docs/TESTING.md` 明确字段级 partial renderer 当前仅覆盖 `TEST_DESIGN/CLARIFY`；其他阶段在完整顶层 `artifact_data` 对象可解析后生成 before-final delta。若后续要升级某阶段字段级 partial，必须补对应 partial renderer、子模型校验和聚焦测试。
+
+RED / GREEN 证据：
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -p no:cacheprovider tools/new-agents/backend/tests/test_agent_runtime.py::test_runtime_raw_json_stream_turn_fails_final_json_truncation_after_partial_delta -q
+```
+
+结果：修复前返回带 `artifact_truncated` warning 的成功最终输出；修复后通过，`1 passed`。
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -p no:cacheprovider tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_cases_artifact_data_derives_statistics_when_missing tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_cases_artifact_data_rejects_inconsistent_statistics tools/new-agents/backend/tests/test_agent_runtime.py::test_runtime_raw_json_stream_turn_renders_cases_after_case_groups_without_model_statistics -q
+```
+
+结果：`3 passed`。
+
+宽回归：
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -p no:cacheprovider tools/new-agents/backend/tests/test_agent_runtime.py -q
+```
+
+结果：`188 passed`。
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -p no:cacheprovider tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_runtime.py -q
+```
+
+结果：`298 passed`。
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -p no:cacheprovider tools/new-agents/backend/tests/test_agent_contracts.py tools/new-agents/backend/tests/test_agent_endpoint.py -q
+```
+
+结果：`153 passed`。
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：New Agents Frontend `786 passed`；New Agents Backend `755 passed, 4 deselected`。
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：默认沙箱失败，失败点为 MidScene proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 Playwright Chromium `bootstrap_check_in ... Permission denied (1100)`；非沙箱重跑通过。关键结果包括 Intent Tester API `294 passed`、flake8 严重错误检查通过、MidScene proxy `17 passed`、Common Frontend lint/build 通过、New Agents Frontend `786 passed`、New Agents Backend `755 passed, 4 deselected`、New Agents Browser E2E `11 passed, 10 deselected`。
+
+残余风险：
+
+- 本轮不实现多阶段字段级 partial renderer，也不恢复 `artifact_patch` 全阶段断言；这属于后续 UX 增强，不影响当前 strict failure closure。
 - 本轮不增加 backend Mermaid JS parse 或 `mmdc` 渲染门禁。
 
 ### 2026-07-09 补充质量门修复：artifact_data 输出顺序与 ArtifactPane section memo

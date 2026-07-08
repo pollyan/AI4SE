@@ -3412,6 +3412,31 @@ def test_cases_artifact_data_rejects_inconsistent_statistics():
         CasesArtifactData.model_validate(invalid)
 
 
+def test_cases_artifact_data_derives_statistics_when_missing():
+    artifact_data = copy.deepcopy(VALID_CASES_ARTIFACT_DATA)
+    artifact_data.pop("case_statistics")
+
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已生成测试用例集，请查看右侧产物。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CASES",
+    )
+
+    assert output is not None
+    assert output.artifact_data["case_statistics"] == {
+        "total": 2,
+        "p0_count": 1,
+        "p1_count": 1,
+        "p2_count": 0,
+    }
+    assert "| 用例总数 | 2 |" in output.artifact_update.markdown
+
+
 def test_cases_artifact_data_rejects_unknown_coverage_case_reference():
     invalid = {
         **VALID_CASES_ARTIFACT_DATA,
