@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 import pytest
 from pydantic_ai.exceptions import UnexpectedModelBehavior
-from sqlalchemy.exc import SQLAlchemyError
 
 from agent_contracts import AgentTurnOutput
 from agent_runtime import AgentRuntimeDependencyError
@@ -19,6 +18,17 @@ from run_persistence import (
     record_artifact_version,
     record_turn_metric,
 )
+
+
+VALID_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "测试需求分析与澄清基线",
+    },
+    "stage_gate": {
+        "status": "需要用户补充",
+        "blocking": True,
+    },
+}
 
 
 VALID_CLARIFY_ARTIFACT = """# 需求分析文档
@@ -228,33 +238,6 @@ flowchart TD
 - [x] P0 需求均具备验收标准、owner 和可测试性等级。
 """
 
-VALID_CONCEPT_ARTIFACT = """# 产品概念简报
-
-## 定位声明
-面向测试负责人，解决测试资产分散、复用困难的问题，提供 AI 测试资产管理平台。
-
-## 核心假设
-| 假设 | 验证方式 | 状态 |
-| --- | --- | --- |
-| 测试负责人愿意用 AI 生成初版测试策略和用例 | 访谈与原型试用 | 待验证 |
-
-## Lean Canvas 产品画布
-| 模块 | 内容 |
-| --- | --- |
-| 问题 | 测试资产分散，重复设计成本高 |
-| 解决方案 | 基于需求生成可评审测试资产 |
-
-## MVP 功能分布
-- 自动生成测试策略
-- 自动生成核心测试用例
-
-## 下一步行动
-- 进入需求蓝图梳理，明确 P0 需求和验收标准
-
-## 阶段门禁
-- [x] 已形成可继续梳理需求蓝图的产品概念。
-"""
-
 
 @pytest.fixture
 def app():
@@ -322,6 +305,7 @@ class FakeRuntime:
                 "type": "replace",
                 "markdown": VALID_CLARIFY_ARTIFACT,
             },
+            "artifact_data": VALID_ARTIFACT_DATA,
             "stage_action": {
                 "type": "request_next_stage",
                 "target_stage_id": "STRATEGY",
@@ -437,6 +421,7 @@ def test_agent_runs_stream_persists_run_messages_and_final_artifact(
             "stageId": "CLARIFY",
             "content": VALID_CLARIFY_ARTIFACT,
             "versionNumber": 1,
+            "artifactData": VALID_ARTIFACT_DATA,
         }
     ]
 
@@ -533,6 +518,7 @@ def test_agent_run_snapshot_endpoint_returns_persisted_trace(
             "stageId": "CLARIFY",
             "content": VALID_CLARIFY_ARTIFACT,
             "versionNumber": 1,
+            "artifactData": VALID_ARTIFACT_DATA,
         }
     ]
 
@@ -658,7 +644,12 @@ def test_agent_run_artifact_update_endpoint_records_manual_artifact_version(
     }
 
     snapshot_response = client.get(f"/api/agent/runs/{run_id}")
-    assert snapshot_response.json["artifacts"] == [response.json]
+    assert snapshot_response.json["artifacts"] == [
+        {
+            **response.json,
+            "artifactData": None,
+        }
+    ]
     assert snapshot_response.json["artifactAuditEvents"] == [
         {
             "stageId": "STRATEGY",
@@ -726,6 +717,7 @@ def test_agent_run_artifact_update_endpoint_returns_409_for_stale_version(
             "stageId": "STRATEGY",
             "content": "# 测试策略蓝图\n\n版本 2",
             "versionNumber": 2,
+            "artifactData": None,
         },
     }
 
@@ -735,6 +727,7 @@ def test_agent_run_artifact_update_endpoint_returns_409_for_stale_version(
             "stageId": "STRATEGY",
             "content": "# 测试策略蓝图\n\n版本 2",
             "versionNumber": 2,
+            "artifactData": None,
         }
     ]
 
@@ -790,11 +783,6 @@ def test_agent_run_artifact_collaboration_endpoint_replaces_state(
 ):
     with app.app_context():
         run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
-        record_artifact_version(
-            run.id,
-            "CLARIFY",
-            "# 需求分析文档\n\n登录边界需要确认。",
-        )
         run_id = run.id
 
     response = client.put(
@@ -908,66 +896,6 @@ def test_agent_run_artifact_collaboration_endpoint_replaces_state(
     ]
 
 
-def test_agent_run_artifact_collaboration_endpoint_rejects_missing_artifact(
-    app,
-    client,
-    default_config,
-):
-    with app.app_context():
-        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
-        run_id = run.id
-
-    response = client.put(
-        f"/api/agent/runs/{run_id}/artifact-collaboration",
-        json={
-            "comments": [
-                {
-                    "id": "comment-1",
-                    "stageId": "CLARIFY",
-                    "content": "这里需要业务确认登录边界。",
-                    "artifactExcerpt": "登录边界",
-                    "anchorText": "登录边界",
-                    "createdAt": 1710000000000,
-                    "status": "open",
-                    "resolvedAt": None,
-                    "replies": [],
-                }
-            ],
-            "sectionLocks": [],
-        },
-    )
-
-    assert response.status_code == 400
-    assert response.json == {
-        "error": "CLARIFY 阶段产出物不存在，无法保存协作状态"
-    }
-
-
-def test_agent_run_artifact_collaboration_endpoint_returns_diagnostic_on_db_error(
-    app,
-    client,
-    default_config,
-):
-    with app.app_context():
-        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
-        run_id = run.id
-
-    with patch(
-        "routes.replace_artifact_collaboration_state",
-        side_effect=SQLAlchemyError("database is unavailable"),
-    ):
-        response = client.put(
-            f"/api/agent/runs/{run_id}/artifact-collaboration",
-            json={
-                "comments": [],
-                "sectionLocks": [],
-            },
-        )
-
-    assert response.status_code == 500
-    assert response.json == {"error": "协作状态保存失败"}
-
-
 def test_agent_run_decision_summary_create_endpoint_persists_decision(
     app,
     client,
@@ -1070,6 +998,7 @@ def test_agent_runs_list_endpoint_returns_recent_runs_with_summaries(
         "agentId": "alex",
         "currentStageId": "BLUEPRINT",
         "status": "active",
+        "reuseStatus": "ready",
         "model": "gpt-new",
         "createdAt": response.json["runs"][0]["createdAt"],
         "updatedAt": response.json["runs"][0]["updatedAt"],
@@ -1164,6 +1093,34 @@ def test_agent_runs_list_endpoint_searches_messages_and_artifact_summaries(
     assert [run["id"] for run in response.json["runs"]] == [artifact_run_id]
 
 
+def test_agent_runs_list_endpoint_filters_by_reuse_status(
+    app,
+    client,
+    default_config,
+):
+    with app.app_context():
+        ready_run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        record_artifact_version(ready_run.id, "CLARIFY", "# 需求分析文档\n\n可复用")
+        create_agent_run("TEST_DESIGN", "lisa", "STRATEGY")
+        ready_run_id = ready_run.id
+
+    response = client.get("/api/agent/runs?workflowId=TEST_DESIGN&reuseStatus=ready")
+
+    assert response.status_code == 200
+    assert [run["id"] for run in response.json["runs"]] == [ready_run_id]
+    assert response.json["runs"][0]["reuseStatus"] == "ready"
+
+
+def test_agent_runs_list_endpoint_rejects_unknown_reuse_status(
+    client,
+    default_config,
+):
+    response = client.get("/api/agent/runs?reuseStatus=stale")
+
+    assert response.status_code == 400
+    assert response.json == {"error": "未知 reuseStatus: stale"}
+
+
 def test_agent_runs_list_endpoint_rejects_unknown_workflow_id(
     client,
     default_config,
@@ -1172,6 +1129,41 @@ def test_agent_runs_list_endpoint_rejects_unknown_workflow_id(
 
     assert response.status_code == 400
     assert response.json == {"error": "未知 workflowId: UNKNOWN"}
+
+
+def test_agent_run_clone_endpoint_creates_independent_reusable_run(
+    app,
+    client,
+    default_config,
+):
+    with app.app_context():
+        source = create_agent_run("TEST_DESIGN", "lisa", "STRATEGY", model="gpt-test")
+        append_run_message(source.id, "user", "请评估登录需求")
+        append_run_message(source.id, "assistant", "已形成测试策略")
+        record_artifact_version(source.id, "STRATEGY", "# 测试策略蓝图\n\n覆盖登录风险")
+        source_run_id = source.id
+
+    response = client.post(f"/api/agent/runs/{source_run_id}/clone")
+
+    assert response.status_code == 200
+    assert response.json["run"]["id"] != source_run_id
+    assert response.json["run"]["workflowId"] == "TEST_DESIGN"
+    assert response.json["run"]["agentId"] == "lisa"
+    assert response.json["run"]["currentStageId"] == "STRATEGY"
+    assert response.json["run"]["status"] == "active"
+    assert response.json["run"]["model"] == "gpt-test"
+    assert [message["content"] for message in response.json["messages"]] == [
+        "请评估登录需求",
+        "已形成测试策略",
+    ]
+    assert response.json["artifacts"] == [
+        {
+            "stageId": "STRATEGY",
+            "content": "# 测试策略蓝图\n\n覆盖登录风险",
+            "versionNumber": 1,
+            "artifactData": None,
+        }
+    ]
 
 
 def test_agent_run_test_assets_endpoint_exports_cases_artifact(
@@ -1738,24 +1730,20 @@ def test_agent_run_handoffs_endpoint_exports_configured_targets(
 
     assert response.status_code == 200
     assert response.json["runId"] == run_id
-    targets = [
+    assert [
         (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
         for handoff in response.json["handoffs"]
-    ]
-    assert ("USER_STORY_BREAKDOWN", "SCOPE", "alex") in targets
-    assert [
-        target for target in targets
-        if target[2] == "lisa"
     ] == [
         ("TEST_DESIGN", "CLARIFY", "lisa"),
         ("REQ_REVIEW", "REVIEW", "lisa"),
     ]
-    test_design_handoff = next(
-        handoff for handoff in response.json["handoffs"]
-        if handoff["targetWorkflowId"] == "TEST_DESIGN"
-    )
-    assert test_design_handoff["sourceArtifactVersion"] == 1
-    assert "AI 测试资产管理平台" in test_design_handoff["prompt"]
+    handoff = response.json["handoffs"][0]
+    assert handoff["sourceArtifactVersion"] == 1
+    assert handoff["sourceSummary"]
+    assert isinstance(handoff["unconfirmedItems"], list)
+    assert handoff["targetInputChecklist"]
+    assert "来源版本: VALUE_DISCOVERY/BLUEPRINT v1" in handoff["prompt"]
+    assert "AI 测试资产管理平台" in handoff["prompt"]
 
 
 def test_agent_run_handoff_start_endpoint_creates_target_run(
@@ -1778,75 +1766,11 @@ def test_agent_run_handoff_start_endpoint_creates_target_run(
     assert response.json["targetWorkflowId"] == "TEST_DESIGN"
     assert response.json["targetStageId"] == "CLARIFY"
     assert response.json["targetAgentId"] == "lisa"
+    assert response.json["sourceSummary"]
+    assert isinstance(response.json["unconfirmedItems"], list)
+    assert response.json["targetInputChecklist"]
+    assert "来源版本: VALUE_DISCOVERY/BLUEPRINT v1" in response.json["prompt"]
     assert "AI 测试资产管理平台" in response.json["prompt"]
-
-
-def test_agent_workflow_handoff_candidates_endpoint_returns_target_side_candidates(
-    app,
-    client,
-    default_config,
-):
-    with app.app_context():
-        source_run = create_agent_run("IDEA_BRAINSTORM", "alex", "CONCEPT")
-        record_artifact_version(source_run.id, "CONCEPT", VALID_CONCEPT_ARTIFACT)
-        source_run_id = source_run.id
-
-    response = client.get(
-        "/api/agent/workflow-handoff-candidates"
-        "?targetWorkflowId=VALUE_DISCOVERY&targetStageId=ELEVATOR"
-    )
-
-    assert response.status_code == 200
-    assert response.json["targetWorkflowId"] == "VALUE_DISCOVERY"
-    assert response.json["targetStageId"] == "ELEVATOR"
-    assert len(response.json["handoffs"]) == 1
-    handoff = response.json["handoffs"][0]
-    assert handoff["id"] == "idea-brainstorm-concept-to-value-discovery"
-    assert handoff["sourceRunId"] == source_run_id
-    assert handoff["sourceWorkflowId"] == "IDEA_BRAINSTORM"
-    assert handoff["sourceStageId"] == "CONCEPT"
-    assert handoff["sourceArtifactVersion"] == 1
-    assert handoff["sourceArtifactDigest"].startswith("sha256:")
-    assert "产品概念简报" in handoff["sourceArtifactSummary"]
-    assert handoff["targetWorkflowId"] == "VALUE_DISCOVERY"
-    assert handoff["targetStageId"] == "ELEVATOR"
-    assert handoff["targetAgentId"] == "alex"
-
-
-def test_agent_workflow_handoff_candidates_endpoint_returns_empty_without_source_artifact(
-    app,
-    client,
-    default_config,
-):
-    with app.app_context():
-        create_agent_run("IDEA_BRAINSTORM", "alex", "CONVERGE")
-
-    response = client.get(
-        "/api/agent/workflow-handoff-candidates"
-        "?targetWorkflowId=VALUE_DISCOVERY&targetStageId=ELEVATOR"
-    )
-
-    assert response.status_code == 200
-    assert response.json == {
-        "targetWorkflowId": "VALUE_DISCOVERY",
-        "targetStageId": "ELEVATOR",
-        "handoffs": [],
-    }
-
-
-def test_agent_workflow_handoff_candidates_endpoint_rejects_mismatched_target_stage(
-    client,
-    default_config,
-):
-    response = client.get(
-        "/api/agent/workflow-handoff-candidates"
-        "?targetWorkflowId=VALUE_DISCOVERY&targetStageId=CLARIFY"
-    )
-
-    assert response.status_code == 400
-    assert response.json == {
-        "error": "workflowId 与 stageId 不匹配: VALUE_DISCOVERY/CLARIFY"
-    }
 
 
 def test_agent_runs_stream_rejects_missing_prompt(client, default_config):
@@ -2004,21 +1928,11 @@ def test_agent_runs_stream_returns_typed_error_when_runtime_dependency_missing(
     assert response.status_code == 200
     assert response.mimetype == "text/event-stream"
     assert response.get_data(as_text=True).strip().endswith("data: [DONE]")
-    payloads = _parse_sse_event_payloads(response)
-    assert payloads == [
+    assert _parse_sse_event_payloads(response) == [
         {
             "type": "error",
             "code": "AGENT_RUNTIME_UNAVAILABLE",
             "message": "pydantic-ai runtime unavailable",
-            "diagnostic": {
-                "phase": "runtime",
-                "workflowId": "TEST_DESIGN",
-                "stageId": "CLARIFY",
-                "fieldPath": "runtime",
-                "validator": "runtime_dependency",
-                "retryable": False,
-                "publicReason": "智能体运行时依赖不可用，本轮生成未开始。",
-            },
         }
     ]
 
@@ -2057,15 +1971,6 @@ def test_agent_runs_stream_returns_typed_error_when_model_output_exceeds_retries
                 "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
                 "如果多次失败，请补充更明确的需求或阶段确认信息。"
             ),
-            "diagnostic": {
-                "phase": "structured_output",
-                "workflowId": "TEST_DESIGN",
-                "stageId": "CLARIFY",
-                "fieldPath": "artifact_data",
-                "validator": "pydantic_ai_output_retry",
-                "retryable": True,
-                "publicReason": "模型输出的结构化字段未通过校验，右侧产出物已保持不变。",
-            },
         }
     ]
 
@@ -2232,7 +2137,6 @@ def test_agent_observability_endpoint_filters_by_workflow_and_stage(
             "outputChars": 200,
             "estimatedTokens": 75,
             "contractRetryCount": 0,
-            "diagnostic": None,
             "createdAt": response.json["recentTurns"][0]["createdAt"],
         }
     ]
@@ -2314,6 +2218,19 @@ def test_agent_observability_endpoint_groups_provider_issue_codes(
     assert cases_stage["providerIssueCodes"] == {}
     assert response.json["byProvider"][0]["providerIssueCount"] == 1
     assert response.json["byProvider"][0]["providerIssueCodes"] == {"LLM_ERROR": 1}
+    assert response.json["contractRetryReasons"] == {
+        "STRUCTURED_OUTPUT_CONTRACT_RETRY": 3,
+    }
+    diagnostic_titles = [item["title"] for item in response.json["diagnostics"]]
+    assert "模型/供应商配置异常" in diagnostic_titles
+    assert "结构化输出重试偏高" in diagnostic_titles
+    contract_retry_diagnostic = next(
+        item for item in response.json["diagnostics"]
+        if item["id"] == "contract-retry"
+    )
+    assert contract_retry_diagnostic["severity"] == "warning"
+    assert "TEST_DESIGN / STRATEGY" in contract_retry_diagnostic["detail"]
+    assert "prompt、artifact contract" in contract_retry_diagnostic["action"]
 
 
 def test_agent_observability_endpoint_rejects_stage_without_workflow(client):

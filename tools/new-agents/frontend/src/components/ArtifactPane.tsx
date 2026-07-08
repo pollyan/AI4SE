@@ -4,9 +4,12 @@ import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { useStore, ArtifactVersion, WORKFLOWS } from '../store';
-import type { AgentRunSnapshotArtifact, ArtifactComment, ArtifactSectionLock, ArtifactVisualDiagnostic, ArtifactVisualDiagnosticFocusRequest } from '../core/types';
-import { buildLineDiff, type LineDiffEntry } from '../core/artifactDiff';
-import { extractArtifactSections } from '../core/artifactSections';
+import type { AgentRunSnapshotArtifact, ArtifactVisualDiagnostic, ArtifactVisualDiagnosticFocusRequest } from '../core/types';
+import { buildLineDiff } from '../core/artifactDiff';
+import {
+  parseArtifactMarkdownSections,
+  type ArtifactMarkdownSection,
+} from '../core/artifactSections';
 import {
   buildAutoMergedInsertionResult,
   buildConflictMergeBlockLabel,
@@ -17,308 +20,20 @@ import {
 } from '../core/artifactMerge';
 import type { AutoMergedConflictResult } from '../core/artifactMerge';
 import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/markdownUtils';
-import { Download, Code, Eye, History, X, AlertTriangle, GitCompare, Edit3, Save, MessageSquare, Trash2, Lock, Unlock, MoreHorizontal, Copy } from 'lucide-react';
+import { Download, Code, Eye, History, X, AlertTriangle, GitCompare, Edit3, Save, MessageSquare, Trash2, Lock, Unlock, MoreHorizontal, RefreshCw } from 'lucide-react';
 import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
 import { StructuredVisual } from './StructuredVisual';
 import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../services/runSnapshotService';
-import { createStoryHandoffPacket, fetchStoryHandoffCandidates, fetchStoryHandoffPackets } from '../services/storyHandoffPacketService';
+import { useChatService } from '../services/chatService';
 import { buildDocxPackage } from '../core/docxExport';
 import { buildPlainTextPdf as buildArtifactPdf } from '../core/artifactExport';
-import type { StoryHandoffCandidate, StoryHandoffPacketListItem } from '../core/types';
-
-type CollaborationStateSnapshot = {
-  artifactComments: ArtifactComment[];
-  artifactSectionLocks: ArtifactSectionLock[];
-};
-
-type MarkdownVisualBlockCounts = {
-  mermaid: number;
-  structuredVisual: number;
-};
-
-type ArtifactMarkdownRenderBlock = {
-  key: string;
-  anchor?: string;
-  content: string;
-  startLine: number;
-  mermaidBlockOffset: number;
-  structuredVisualBlockOffset: number;
-};
-
-type RenderedChangeKind = 'added' | 'modified';
-
-type RenderedLineChange = {
-  kind: RenderedChangeKind;
-  previousContent?: string;
-};
-
-type RenderedChangeSummary = {
-  added: number;
-  modified: number;
-  removed: number;
-};
-
-type RenderedChangeAnnotations = {
-  lineChanges: Map<number, RenderedLineChange>;
-  summary: RenderedChangeSummary;
-};
-
-type MermaidRetryHandler = Parameters<typeof createMarkdownCodeRenderer>[0]['onMermaidRetry'];
-
-type ArtifactMarkdownComponentsFactory = (
-  onMermaidRetry?: MermaidRetryHandler,
-  activeAnchorText?: string | null,
-  reportVisualDiagnostics?: boolean,
-  attachVisualDiagnosticAnchors?: boolean,
-  deferMermaidRender?: boolean,
-  mermaidBlockOffset?: number,
-  structuredVisualBlockOffset?: number,
-  renderedLineChanges?: Map<number, RenderedLineChange>,
-  showRenderedChanges?: boolean,
-  lineNumberOffset?: number,
-) => Components;
-
-const captureCollaborationState = (): CollaborationStateSnapshot => {
-  const state = useStore.getState();
-  return {
-    artifactComments: state.artifactComments,
-    artifactSectionLocks: state.artifactSectionLocks,
-  };
-};
-
-const countMarkdownVisualBlocks = (content: string): MarkdownVisualBlockCounts => {
-  const counts: MarkdownVisualBlockCounts = {
-    mermaid: 0,
-    structuredVisual: 0,
-  };
-  const fencePattern = /```([^\s\n]*)[^\n]*\n[\s\S]*?```/g;
-  let match = fencePattern.exec(content);
-  while (match) {
-    const language = match[1]?.trim();
-    if (language === 'mermaid') counts.mermaid += 1;
-    if (language === 'ai4se-visual') counts.structuredVisual += 1;
-    match = fencePattern.exec(content);
-  }
-  return counts;
-};
-
-const buildArtifactMarkdownRenderBlocks = (content: string): ArtifactMarkdownRenderBlock[] => {
-  const sections = extractArtifactSections(content);
-  if (sections.length === 0) {
-    return [{
-      key: 'full-document',
-      content,
-      startLine: 0,
-      mermaidBlockOffset: 0,
-      structuredVisualBlockOffset: 0,
-    }];
-  }
-
-  const lines = content.replace(/\r\n/g, '\n').split('\n');
-  const blocks: ArtifactMarkdownRenderBlock[] = [];
-  let mermaidBlockOffset = 0;
-  let structuredVisualBlockOffset = 0;
-
-  const pushBlock = (key: string, blockContent: string, startLine: number, anchor?: string) => {
-    if (!blockContent.trim()) return;
-    blocks.push({
-      key,
-      anchor,
-      content: blockContent.trim(),
-      startLine,
-      mermaidBlockOffset,
-      structuredVisualBlockOffset,
-    });
-    const counts = countMarkdownVisualBlocks(blockContent);
-    mermaidBlockOffset += counts.mermaid;
-    structuredVisualBlockOffset += counts.structuredVisual;
-  };
-
-  if (sections[0].startLine > 0) {
-    pushBlock('preamble', lines.slice(0, sections[0].startLine).join('\n'), 0);
-  }
-
-  sections.forEach((section) => {
-    pushBlock(section.anchor, section.content, section.startLine, section.anchor);
-  });
-
-  return blocks;
-};
-
-const buildRenderedChangeAnnotations = (diff: LineDiffEntry[]): RenderedChangeAnnotations => {
-  const lineChanges = new Map<number, RenderedLineChange>();
-  const summary: RenderedChangeSummary = {
-    added: 0,
-    modified: 0,
-    removed: 0,
-  };
-  let currentLineNumber = 0;
-  let index = 0;
-
-  while (index < diff.length) {
-    const entry = diff[index];
-    if (entry.type === 'unchanged') {
-      currentLineNumber += 1;
-      index += 1;
-      continue;
-    }
-
-    if (entry.type === 'added') {
-      currentLineNumber += 1;
-      lineChanges.set(currentLineNumber, { kind: 'added' });
-      summary.added += 1;
-      index += 1;
-      continue;
-    }
-
-    const removedEntries: LineDiffEntry[] = [];
-    while (index < diff.length && diff[index].type === 'removed') {
-      removedEntries.push(diff[index]);
-      index += 1;
-    }
-
-    const addedEntries: Array<LineDiffEntry & { lineNumber: number }> = [];
-    while (index < diff.length && diff[index].type === 'added') {
-      currentLineNumber += 1;
-      addedEntries.push({ ...diff[index], lineNumber: currentLineNumber });
-      index += 1;
-    }
-
-    if (addedEntries.length === 0) {
-      summary.removed += removedEntries.length;
-      continue;
-    }
-
-    const modifiedCount = Math.min(removedEntries.length, addedEntries.length);
-    for (let pairIndex = 0; pairIndex < modifiedCount; pairIndex += 1) {
-      const addedEntry = addedEntries[pairIndex];
-      lineChanges.set(addedEntry.lineNumber, {
-        kind: 'modified',
-        previousContent: removedEntries[pairIndex].content,
-      });
-      summary.modified += 1;
-    }
-
-    for (let addedIndex = modifiedCount; addedIndex < addedEntries.length; addedIndex += 1) {
-      lineChanges.set(addedEntries[addedIndex].lineNumber, { kind: 'added' });
-      summary.added += 1;
-    }
-
-    if (removedEntries.length > modifiedCount) {
-      summary.removed += removedEntries.length - modifiedCount;
-    }
-  }
-
-  return { lineChanges, summary };
-};
-
-const getMarkdownNodeStartLine = (node: unknown, lineNumberOffset: number): number | null => {
-  const position = (node as { position?: { start?: { line?: unknown } } } | undefined)?.position;
-  const line = position?.start?.line;
-  return typeof line === 'number' ? lineNumberOffset + line : null;
-};
-
-const getRenderedLineChange = (
-  node: unknown,
-  renderedLineChanges: Map<number, RenderedLineChange> | undefined,
-  showRenderedChanges: boolean | undefined,
-  lineNumberOffset: number,
-): RenderedLineChange | undefined => {
-  if (!showRenderedChanges || !renderedLineChanges) return undefined;
-  const startLine = getMarkdownNodeStartLine(node, lineNumberOffset);
-  return startLine === null ? undefined : renderedLineChanges.get(startLine);
-};
-
-const getRenderedChangeClass = (annotation: RenderedLineChange | undefined): string => {
-  if (!annotation) return '';
-  return annotation.kind === 'added'
-    ? ' border-l-4 border-emerald-400/70 bg-emerald-500/10'
-    : ' border-l-4 border-amber-300/80 bg-amber-400/10';
-};
-
-const renderPreviousValue = (annotation: RenderedLineChange | undefined): React.ReactNode => (
-  annotation?.kind === 'modified' && annotation.previousContent
-    ? (
-      <span
-        data-testid="artifact-change-previous-value"
-        className="mt-1 inline-block max-w-full rounded-md border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs font-medium text-rose-100"
-      >
-        原：{annotation.previousContent}
-      </span>
-    )
-    : null
-);
-
-type MemoizedArtifactMarkdownSectionProps = {
-  block: ArtifactMarkdownRenderBlock;
-  createComponents: ArtifactMarkdownComponentsFactory;
-  onMermaidRetry?: MermaidRetryHandler;
-  activeAnchorText?: string | null;
-  reportVisualDiagnostics: boolean;
-  attachVisualDiagnosticAnchors: boolean;
-  deferMermaidRender: boolean;
-  renderedLineChanges?: Map<number, RenderedLineChange>;
-  showRenderedChanges?: boolean;
-};
-
-const MemoizedArtifactMarkdownSection = React.memo(function MemoizedArtifactMarkdownSection({
-  block,
-  createComponents,
-  onMermaidRetry,
-  activeAnchorText,
-  reportVisualDiagnostics,
-  attachVisualDiagnosticAnchors,
-  deferMermaidRender,
-  renderedLineChanges,
-  showRenderedChanges,
-}: MemoizedArtifactMarkdownSectionProps) {
-  const components = createComponents(
-    onMermaidRetry,
-    activeAnchorText,
-    reportVisualDiagnostics,
-    attachVisualDiagnosticAnchors,
-    deferMermaidRender,
-    block.mermaidBlockOffset,
-    block.structuredVisualBlockOffset,
-    renderedLineChanges,
-    showRenderedChanges,
-    block.startLine,
-  );
-
-  return (
-    <div
-      data-testid="artifact-render-section"
-      data-artifact-section-anchor={block.anchor}
-    >
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeRaw]}
-        components={components}
-      >
-        {block.content}
-      </ReactMarkdown>
-    </div>
-  );
-}, (previous, next) => (
-  previous.block.key === next.block.key
-  && previous.block.content === next.block.content
-  && previous.block.mermaidBlockOffset === next.block.mermaidBlockOffset
-  && previous.block.structuredVisualBlockOffset === next.block.structuredVisualBlockOffset
-  && previous.createComponents === next.createComponents
-  && previous.onMermaidRetry === next.onMermaidRetry
-  && previous.activeAnchorText === next.activeAnchorText
-  && previous.reportVisualDiagnostics === next.reportVisualDiagnostics
-  && previous.attachVisualDiagnosticAnchors === next.attachVisualDiagnosticAnchors
-  && previous.deferMermaidRender === next.deferMermaidRender
-  && previous.renderedLineChanges === next.renderedLineChanges
-  && previous.showRenderedChanges === next.showRenderedChanges
-));
+import { buildArtifactQualitySummary } from '../core/artifactQuality';
+import { buildWorkflowQualitySummary } from '../core/workflowQuality';
 
 export const ArtifactPane: React.FC = () => {
   const workflow = useStore((state) => state.workflow);
   const stageIndex = useStore((state) => state.stageIndex);
   const artifactContent = useStore((state) => state.artifactContent);
-  const artifactChangeIndex = useStore((state) => state.artifactChangeIndex);
   const artifactHistory = useStore((state) => state.artifactHistory);
   const artifactTruncated = useStore((state) => state.artifactTruncated);
   const isGenerating = useStore((state) => state.isGenerating);
@@ -340,8 +55,9 @@ export const ArtifactPane: React.FC = () => {
   const clearArtifactVisualDiagnostic = useStore((state) => state.clearArtifactVisualDiagnostic);
   const artifactVisualDiagnostics = useStore((state) => state.artifactVisualDiagnostics);
   const artifactVisualDiagnosticFocusRequest = useStore((state) => state.artifactVisualDiagnosticFocusRequest);
+  const focusArtifactVisualDiagnostic = useStore((state) => state.focusArtifactVisualDiagnostic);
+  const { handleRegenerateArtifactSection } = useChatService();
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
-  const [showCurrentChangeDiff, setShowCurrentChangeDiff] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showArtifactActionsMenu, setShowArtifactActionsMenu] = useState(false);
   const [showReviewPanel, setShowReviewPanel] = useState(false);
@@ -363,21 +79,10 @@ export const ArtifactPane: React.FC = () => {
   const [selectedArtifactText, setSelectedArtifactText] = useState<string | null>(null);
   const [activeCommentAnchorText, setActiveCommentAnchorText] = useState<string | null>(null);
   const [activeVisualDiagnosticId, setActiveVisualDiagnosticId] = useState<string | null>(null);
-  const [storyHandoffCandidates, setStoryHandoffCandidates] = useState<StoryHandoffCandidate[]>([]);
-  const [storyHandoffPackets, setStoryHandoffPackets] = useState<StoryHandoffPacketListItem[]>([]);
-  const [storyHandoffLoading, setStoryHandoffLoading] = useState(false);
-  const [storyHandoffError, setStoryHandoffError] = useState<string | null>(null);
-  const [creatingStoryHandoffId, setCreatingStoryHandoffId] = useState<string | null>(null);
-  const [copiedStoryHandoffId, setCopiedStoryHandoffId] = useState<string | null>(null);
   const artifactPreviewRef = useRef<HTMLDivElement | null>(null);
   const handledVisualDiagnosticFocusSeqRef = useRef<number | null>(null);
-  const lastCurrentChangeDiffKeyRef = useRef<string | null>(null);
-  const currentStageId = WORKFLOWS[workflow].stages[stageIndex]?.id;
-  const canUseStoryHandoffPackets = Boolean(
-    currentRunId
-    && workflow === 'USER_STORY_BREAKDOWN'
-    && currentStageId === 'HANDOFF'
-  );
+  const currentStage = WORKFLOWS[workflow].stages[stageIndex];
+  const currentStageId = currentStage?.id;
   const currentStageArtifactHistory = useMemo(
     () => currentStageId
       ? artifactHistory.filter(version => version.stageId === currentStageId)
@@ -413,190 +118,47 @@ export const ArtifactPane: React.FC = () => {
     [currentStageAuditEvents]
   );
   const latestStageArtifactVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1] ?? null;
-  const currentChangeBaselineVersion = useMemo(() => {
-    if (currentStageArtifactHistory.length === 0) return null;
-    const latestVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1];
-    if (latestVersion.content === artifactContent) {
-      return currentStageArtifactHistory[currentStageArtifactHistory.length - 2] ?? null;
-    }
-    return latestVersion;
-  }, [artifactContent, currentStageArtifactHistory]);
-  const currentChangeDiff = useMemo(
-    () => currentChangeBaselineVersion
-      ? buildLineDiff(currentChangeBaselineVersion.content, artifactContent)
+  const currentStageVisualDiagnostics = useMemo(
+    () => currentStageId
+      ? artifactVisualDiagnostics.filter(diagnostic => diagnostic.stageId === currentStageId)
       : [],
-    [artifactContent, currentChangeBaselineVersion]
+    [artifactVisualDiagnostics, currentStageId]
   );
-  const renderedChangeAnnotations = useMemo(
-    () => buildRenderedChangeAnnotations(currentChangeDiff),
-    [currentChangeDiff]
+  const artifactQualitySummary = useMemo(
+    () => buildArtifactQualitySummary({
+      stage: currentStage,
+      content: artifactContent,
+      visualDiagnostics: currentStageVisualDiagnostics,
+    }),
+    [artifactContent, currentStage, currentStageVisualDiagnostics]
   );
-  const hasCurrentChangeDiff = Boolean(
-    currentChangeBaselineVersion
-    && currentChangeBaselineVersion.content !== artifactContent
-    && currentChangeDiff.some(entry => entry.type !== 'unchanged')
+  const workflowQualitySummary = useMemo(
+    () => buildWorkflowQualitySummary({
+      workflow: WORKFLOWS[workflow],
+      stageId: currentStageId,
+      artifactMarkdown: artifactContent,
+      visualDiagnostics: artifactVisualDiagnostics,
+    }),
+    [artifactContent, artifactVisualDiagnostics, currentStageId, workflow]
   );
-  const currentChangeDiffKey = hasCurrentChangeDiff
-    ? `${currentChangeBaselineVersion?.id}->${latestStageArtifactVersion?.content === artifactContent ? latestStageArtifactVersion.id : 'working'}`
-    : null;
-  const currentArtifactSectionChangeSummary = useMemo(() => {
-    const labels = {
-      added: '新增',
-      removed: '删除',
-      modified: '修改',
-    } as const;
-    return artifactChangeIndex.map(change => `${labels[change.kind]} ${change.displayTitle}`);
-  }, [artifactChangeIndex]);
-  const currentArtifactRenderedChangeSummary = useMemo(() => {
-    const summary = renderedChangeAnnotations.summary;
-    const entries: string[] = [];
-    if (summary.added > 0) entries.push(`新增 ${summary.added} 行`);
-    if (summary.modified > 0) entries.push(`修改 ${summary.modified} 行`);
-    if (summary.removed > 0) entries.push(`删除 ${summary.removed} 行`);
-    return entries;
-  }, [renderedChangeAnnotations]);
 
-  const syncArtifactCollaborationState = useCallback((
-    nextState?: CollaborationStateSnapshot,
-    rollbackState?: CollaborationStateSnapshot,
-  ) => {
+  const syncArtifactCollaborationState = useCallback(() => {
     if (!currentRunId) return;
-    const state = nextState ?? captureCollaborationState();
+    const state = useStore.getState();
     setCollaborationSyncError(null);
     void updateRunArtifactCollaboration(
       currentRunId,
       state.artifactComments,
       state.artifactSectionLocks,
-    ).then((savedState) => {
-      useStore.setState({
-        artifactComments: savedState.artifactComments,
-        artifactSectionLocks: savedState.artifactSectionLocks,
-      });
-    }).catch((error: unknown) => {
-      if (rollbackState) {
-        useStore.setState(rollbackState);
-      }
+    ).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : '未知错误';
       setCollaborationSyncError(`协作状态保存失败：${message}`);
     });
   }, [currentRunId]);
 
-  const loadStoryHandoffPacketState = useCallback(async () => {
-    if (!currentRunId || !currentStageId || !canUseStoryHandoffPackets) {
-      setStoryHandoffCandidates([]);
-      setStoryHandoffPackets([]);
-      setStoryHandoffError(null);
-      setStoryHandoffLoading(false);
-      return;
-    }
-
-    setStoryHandoffLoading(true);
-    setStoryHandoffError(null);
-    try {
-      const [candidateResponse, packetResponse] = await Promise.all([
-        fetchStoryHandoffCandidates(currentRunId, currentStageId),
-        fetchStoryHandoffPackets(currentRunId, currentStageId),
-      ]);
-      setStoryHandoffCandidates(candidateResponse.candidates);
-      setStoryHandoffPackets(packetResponse.packets);
-    } catch (error) {
-      setStoryHandoffCandidates([]);
-      setStoryHandoffPackets([]);
-      setStoryHandoffError(error instanceof Error ? error.message : '需求包加载失败');
-    } finally {
-      setStoryHandoffLoading(false);
-    }
-  }, [canUseStoryHandoffPackets, currentRunId, currentStageId]);
-
-  useEffect(() => {
-    void loadStoryHandoffPacketState();
-  }, [loadStoryHandoffPacketState]);
-
-  const generateStoryHandoffPacket = useCallback(async (storyId: string) => {
-    if (!currentRunId || !currentStageId) return;
-    setCreatingStoryHandoffId(storyId);
-    setStoryHandoffError(null);
-    try {
-      await createStoryHandoffPacket(currentRunId, currentStageId, storyId);
-      await loadStoryHandoffPacketState();
-    } catch (error) {
-      setStoryHandoffError(error instanceof Error ? error.message : '需求包生成失败');
-    } finally {
-      setCreatingStoryHandoffId(null);
-    }
-  }, [currentRunId, currentStageId, loadStoryHandoffPacketState]);
-
-  const copyStoryHandoffPacket = useCallback(async (packet: StoryHandoffPacketListItem) => {
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(packet.packet, null, 2));
-      setCopiedStoryHandoffId(packet.storyId);
-      setStoryHandoffError(null);
-    } catch (error) {
-      setStoryHandoffError(error instanceof Error ? error.message : '需求包复制失败');
-    }
-  }, []);
-
   const isFenceStart = (line: string): boolean => /^```/.test(line.trim());
   const isHeading = (line: string): boolean => /^#{1,3}\s+/.test(line);
-  type ArtifactSection = {
-    heading: string;
-    title: string;
-    displayTitle: string;
-    anchor: string;
-    content: string;
-  };
-
-  const extractMarkdownSections = (content: string): ArtifactSection[] => {
-    const lines = content.split(/\r?\n/);
-    const rawSections: Array<Pick<ArtifactSection, 'heading' | 'title' | 'content'> & { level: number }> = [];
-    let currentStart = -1;
-    let currentHeading = '';
-
-    lines.forEach((line, index) => {
-      if (!/^#{1,3}\s+/.test(line)) return;
-      if (currentStart >= 0) {
-        const headingLevel = currentHeading.match(/^(#{1,3})\s+/)?.[1].length ?? 1;
-        rawSections.push({
-          heading: currentHeading,
-          title: currentHeading.replace(/^#{1,3}\s+/, ''),
-          content: lines.slice(currentStart, index).join('\n').trim(),
-          level: headingLevel,
-        });
-      }
-      currentStart = index;
-      currentHeading = line;
-    });
-
-    if (currentStart >= 0) {
-      const headingLevel = currentHeading.match(/^(#{1,3})\s+/)?.[1].length ?? 1;
-      rawSections.push({
-        heading: currentHeading,
-        title: currentHeading.replace(/^#{1,3}\s+/, ''),
-        content: lines.slice(currentStart).join('\n').trim(),
-        level: headingLevel,
-      });
-    }
-
-    const duplicateCounts = rawSections.reduce<Record<string, number>>((counts, section) => {
-      counts[section.title] = (counts[section.title] ?? 0) + 1;
-      return counts;
-    }, {});
-    const occurrenceCounts: Record<string, number> = {};
-
-    return rawSections.map((section) => {
-      const occurrence = (occurrenceCounts[section.title] ?? 0) + 1;
-      occurrenceCounts[section.title] = occurrence;
-      const isDuplicateTitle = duplicateCounts[section.title] > 1;
-
-      return {
-        heading: section.heading,
-        title: section.title,
-        displayTitle: isDuplicateTitle ? `${section.title} #${occurrence}` : section.title,
-        anchor: `h${section.level}:${section.title}:${occurrence}`,
-        content: section.content,
-      };
-    });
-  };
+  type ArtifactSection = ArtifactMarkdownSection;
 
   const stripInlineMarkdown = (content: string): string => (
     content
@@ -655,13 +217,13 @@ export const ArtifactPane: React.FC = () => {
   };
 
   const artifactSections = useMemo(
-    () => extractMarkdownSections(artifactContent),
+    () => parseArtifactMarkdownSections(artifactContent),
     [artifactContent]
   );
 
   const findLockedSectionChange = (nextContent: string): string | null => {
     if (currentStageSectionLocks.length === 0) return null;
-    const nextSections = extractMarkdownSections(nextContent);
+    const nextSections = parseArtifactMarkdownSections(nextContent);
     for (const lock of currentStageSectionLocks) {
       const currentSection = artifactSections.find(section => (
         lock.sectionAnchor
@@ -739,30 +301,9 @@ export const ArtifactPane: React.FC = () => {
     );
   }, [currentStageArtifactHistory, selectedVersion, showHistory]);
 
-  useEffect(() => {
-    if (!currentChangeDiffKey) {
-      lastCurrentChangeDiffKeyRef.current = null;
-      setShowCurrentChangeDiff(false);
-      return;
-    }
-    if (lastCurrentChangeDiffKeyRef.current === currentChangeDiffKey) return;
-    lastCurrentChangeDiffKeyRef.current = currentChangeDiffKey;
-    setShowCurrentChangeDiff(true);
-  }, [currentChangeDiffKey]);
-
   // Content displays using the imported preprocessMarkdown utility
 
   const displayContent = preprocessMarkdown(artifactContent);
-  const artifactMarkdownRenderBlocks = useMemo(
-    () => buildArtifactMarkdownRenderBlocks(displayContent),
-    [displayContent]
-  );
-  const hasArtifactContent = artifactContent.trim().length > 0;
-  const showArtifactStreamingPositionIndicator = (
-    isGenerating
-    && hasArtifactContent
-    && !isEditing
-  );
   type ParsedMarkdownSection = {
     heading: string;
     lines: string[];
@@ -3558,26 +3099,16 @@ export const ArtifactPane: React.FC = () => {
   const handleMermaidRetry = useCallback(async (brokenCode: string, errorMessage: string, blockIndex: number) => {
     // dynamically import to avoid cyclic or immediate heavy deps
     const { retryMermaidGeneration } = await import('../services/mermaidRetryService');
-    const content = useStore.getState().artifactContent;
-    if (!currentStageId) return false;
-    const newCode = await retryMermaidGeneration(
-      brokenCode,
-      errorMessage,
-      blockIndex,
-      {
-        workflowId: workflow,
-        stageId: currentStageId,
-        currentArtifact: content,
-      },
-    );
+    const newCode = await retryMermaidGeneration(brokenCode, errorMessage, blockIndex);
     if (!newCode) return false;
 
+    const content = useStore.getState().artifactContent;
     const updatedContent = replaceMermaidBlockAtIndex(content, blockIndex, newCode);
     if (!updatedContent) return false;
 
     useStore.getState().setArtifactContent(updatedContent);
     return true;
-  }, [currentStageId, workflow]);
+  }, []);
 
   const handleRestoreSelectedVersion = () => {
     if (!selectedVersion || !currentStageId || selectedVersion.content === artifactContent) {
@@ -4014,7 +3545,6 @@ export const ArtifactPane: React.FC = () => {
     if (!currentStageId) return;
     const content = commentDraft.trim();
     if (!content) return;
-    const previousState = captureCollaborationState();
     const anchorText = captureSelectedArtifactText() ?? selectedArtifactText;
     const artifactExcerpt = anchorText ?? buildCommentExcerpt(artifactContent);
     addArtifactComment({
@@ -4023,22 +3553,20 @@ export const ArtifactPane: React.FC = () => {
       artifactExcerpt,
       anchorText,
     });
-    syncArtifactCollaborationState(captureCollaborationState(), previousState);
+    syncArtifactCollaborationState();
     setCommentDraft('');
   };
 
   const removeCurrentStageComment = (commentId: string) => {
-    const previousState = captureCollaborationState();
     removeArtifactComment(commentId);
-    syncArtifactCollaborationState(captureCollaborationState(), previousState);
+    syncArtifactCollaborationState();
   };
 
   const addCurrentStageCommentReply = (commentId: string) => {
     const content = commentReplyDrafts[commentId]?.trim() ?? '';
     if (!content) return;
-    const previousState = captureCollaborationState();
     addArtifactCommentReply(commentId, content);
-    syncArtifactCollaborationState(captureCollaborationState(), previousState);
+    syncArtifactCollaborationState();
     setCommentReplyDrafts((drafts) => ({
       ...drafts,
       [commentId]: '',
@@ -4049,15 +3577,13 @@ export const ArtifactPane: React.FC = () => {
     commentId: string,
     currentStatus: 'open' | 'resolved'
   ) => {
-    const previousState = captureCollaborationState();
     setArtifactCommentStatus(commentId, currentStatus === 'resolved' ? 'open' : 'resolved');
-    syncArtifactCollaborationState(captureCollaborationState(), previousState);
+    syncArtifactCollaborationState();
   };
 
   const resolveCommentFromReview = (commentId: string) => {
-    const previousState = captureCollaborationState();
     setArtifactCommentStatus(commentId, 'resolved');
-    syncArtifactCollaborationState(captureCollaborationState(), previousState);
+    syncArtifactCollaborationState();
   };
 
   const openCommentsFromReview = () => {
@@ -4087,9 +3613,8 @@ export const ArtifactPane: React.FC = () => {
       return;
     }
 
-    const previousState = captureCollaborationState();
     updateArtifactCommentAnchor(commentId, anchorText);
-    syncArtifactCollaborationState(captureCollaborationState(), previousState);
+    syncArtifactCollaborationState();
     setCommentAnchorRebindErrors((errors) => {
       const nextErrors = { ...errors };
       delete nextErrors[commentId];
@@ -4166,20 +3691,26 @@ export const ArtifactPane: React.FC = () => {
 
   const lockSection = (section: ArtifactSection) => {
     if (!currentStageId) return;
-    const previousState = captureCollaborationState();
     addArtifactSectionLock({
       stageId: currentStageId,
       heading: section.heading,
       sectionAnchor: section.anchor,
       content: section.content,
     });
-    syncArtifactCollaborationState(captureCollaborationState(), previousState);
+    syncArtifactCollaborationState();
   };
 
   const unlockSection = (lockId: string) => {
-    const previousState = captureCollaborationState();
     removeArtifactSectionLock(lockId);
-    syncArtifactCollaborationState(captureCollaborationState(), previousState);
+    syncArtifactCollaborationState();
+  };
+
+  const regenerateSection = (section: ArtifactSection) => {
+    void handleRegenerateArtifactSection({
+      heading: section.heading,
+      sectionAnchor: section.anchor,
+      displayTitle: section.displayTitle,
+    });
   };
 
   const getSectionLock = (section: ArtifactSection) => (
@@ -4232,20 +3763,15 @@ export const ArtifactPane: React.FC = () => {
     clearArtifactVisualDiagnostic(buildVisualDiagnosticId('structured-visual', blockIndex));
   }, [clearArtifactVisualDiagnostic, currentStageId]);
 
-  const createArtifactMarkdownComponents = useCallback((
+  const createArtifactMarkdownComponents = (
     onMermaidRetry?: Parameters<typeof createMarkdownCodeRenderer>[0]['onMermaidRetry'],
     activeAnchorText?: string | null,
     reportVisualDiagnostics = false,
     attachVisualDiagnosticAnchors = false,
-    deferMermaidRender = false,
-    mermaidBlockOffset = 0,
-    structuredVisualBlockOffset = 0,
-    renderedLineChanges?: Map<number, RenderedLineChange>,
-    showRenderedChanges = false,
-    lineNumberOffset = 0
+    deferMermaidRender = false
   ): Components => {
-    let mermaidBlockCounter = mermaidBlockOffset;
-    let structuredVisualBlockCounter = structuredVisualBlockOffset;
+    let mermaidBlockCounter = 0;
+    let structuredVisualBlockCounter = 0;
     let anchorHighlighted = false;
     const normalizedActiveAnchorText = activeAnchorText?.trim() || null;
     const highlightAnchorInChildren = (children: React.ReactNode): React.ReactNode => {
@@ -4281,107 +3807,20 @@ export const ArtifactPane: React.FC = () => {
       return visitNode(children);
     };
 
-    const lineChangeFor = (node: unknown): RenderedLineChange | undefined => (
-      getRenderedLineChange(node, renderedLineChanges, showRenderedChanges, lineNumberOffset)
-    );
-
     return {
-    h1: ({ node, children, ...props }) => {
-      const annotation = lineChangeFor(node);
-      return (
-        <h1
-          {...props}
-          data-testid={annotation ? `artifact-change-${annotation.kind}-block` : undefined}
-          className={`text-3xl font-bold text-white mb-6 pb-2 border-b border-[#1e293b]${annotation ? ` rounded-md px-2 ${getRenderedChangeClass(annotation)}` : ''}`}
-        >
-          {highlightAnchorInChildren(children)}
-          {renderPreviousValue(annotation)}
-        </h1>
-      );
-    },
-    h2: ({ node, children, ...props }) => {
-      const annotation = lineChangeFor(node);
-      return (
-        <h2
-          {...props}
-          data-testid={annotation ? `artifact-change-${annotation.kind}-block` : undefined}
-          className={`text-2xl font-bold text-white mt-8 mb-4 before:content-['#'] before:text-blue-500 before:opacity-50 before:mr-2${annotation ? ` rounded-md px-2 ${getRenderedChangeClass(annotation)}` : ''}`}
-        >
-          {highlightAnchorInChildren(children)}
-          {renderPreviousValue(annotation)}
-        </h2>
-      );
-    },
-    h3: ({ node, children, ...props }) => {
-      const annotation = lineChangeFor(node);
-      return (
-        <h3
-          {...props}
-          data-testid={annotation ? `artifact-change-${annotation.kind}-block` : undefined}
-          className={`text-xl font-semibold text-slate-200 mt-6 mb-3${annotation ? ` rounded-md px-2 ${getRenderedChangeClass(annotation)}` : ''}`}
-        >
-          {highlightAnchorInChildren(children)}
-          {renderPreviousValue(annotation)}
-        </h3>
-      );
-    },
-    p: ({ node, children, ...props }) => {
-      const annotation = lineChangeFor(node);
-      return (
-        <p
-          {...props}
-          data-testid={annotation ? `artifact-change-${annotation.kind}-block` : undefined}
-          className={`mb-4 leading-relaxed text-slate-400${annotation ? ` rounded-md px-2 py-1 ${getRenderedChangeClass(annotation)}` : ''}`}
-        >
-          {highlightAnchorInChildren(children)}
-          {renderPreviousValue(annotation)}
-        </p>
-      );
-    },
+    h1: ({ node, children, ...props }) => <h1 className="text-3xl font-bold text-white mb-6 pb-2 border-b border-[#1e293b]" {...props}>{highlightAnchorInChildren(children)}</h1>,
+    h2: ({ node, children, ...props }) => <h2 className="text-2xl font-bold text-white mt-8 mb-4 before:content-['#'] before:text-blue-500 before:opacity-50 before:mr-2" {...props}>{highlightAnchorInChildren(children)}</h2>,
+    h3: ({ node, children, ...props }) => <h3 className="text-xl font-semibold text-slate-200 mt-6 mb-3" {...props}>{highlightAnchorInChildren(children)}</h3>,
+    p: ({ node, children, ...props }) => <p className="mb-4 leading-relaxed text-slate-400" {...props}>{highlightAnchorInChildren(children)}</p>,
     ul: ({ node, ...props }) => <ul className="list-disc pl-6 mb-4 space-y-2 text-slate-400" {...props} />,
     ol: ({ node, ...props }) => <ol className="list-decimal pl-6 mb-4 space-y-2 text-slate-400" {...props} />,
-    li: ({ node, children, ...props }) => {
-      const annotation = lineChangeFor(node);
-      return (
-        <li
-          {...props}
-          data-testid={annotation ? `artifact-change-${annotation.kind}-item` : undefined}
-          className={`leading-relaxed${annotation ? ` rounded-md px-2 py-1 ${getRenderedChangeClass(annotation)}` : ''}`}
-        >
-          {highlightAnchorInChildren(children)}
-          {renderPreviousValue(annotation)}
-        </li>
-      );
-    },
+    li: ({ node, children, ...props }) => <li className="leading-relaxed" {...props}>{highlightAnchorInChildren(children)}</li>,
     strong: ({ node, children, ...props }) => <strong className="font-bold text-white" {...props}>{highlightAnchorInChildren(children)}</strong>,
     blockquote: ({ node, children, ...props }) => <blockquote className="border-l-4 border-blue-500 pl-4 py-2 my-4 bg-blue-500/5 rounded-r text-slate-400 italic" {...props}>{highlightAnchorInChildren(children)}</blockquote>,
     table: ({ node, ...props }) => <div className="overflow-x-auto mb-6"><table className="w-full border-collapse text-sm" {...props} /></div>,
     th: ({ node, children, ...props }) => <th className="bg-[#1e293b] text-slate-200 font-semibold text-left p-3 border-b border-[#334155]" {...props}>{highlightAnchorInChildren(children)}</th>,
     td: ({ node, children, ...props }) => <td className="p-3 border-b border-[#1e293b] text-slate-400 group-hover:bg-white/5" {...props}>{highlightAnchorInChildren(children)}</td>,
-    tr: ({ node, children, ...props }) => {
-      const annotation = lineChangeFor(node);
-      return (
-        <>
-          <tr
-            {...props}
-            data-testid={annotation ? `artifact-change-${annotation.kind}-row` : undefined}
-            className={`hover:bg-white/[0.02] transition-colors group ${getRenderedChangeClass(annotation)}`}
-          >
-            {children}
-          </tr>
-          {annotation?.kind === 'modified' && annotation.previousContent && (
-            <tr data-testid="artifact-change-previous-row">
-              <td
-                colSpan={99}
-                className="border-b border-[#1e293b] bg-rose-500/5 px-3 py-2 text-xs text-rose-100"
-              >
-                {renderPreviousValue(annotation)}
-              </td>
-            </tr>
-          )}
-        </>
-      );
-    },
+    tr: ({ node, ...props }) => <tr className="hover:bg-white/[0.02] transition-colors group" {...props} />,
     mark: ({ node, ...props }) => <mark className="bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded font-medium shadow-[0_0_8px_rgba(16,185,129,0.1)] box-decoration-clone" {...props} />,
     pre: ({ node, children }) => <>{children}</>,
     code: createMarkdownCodeRenderer({
@@ -4471,15 +3910,15 @@ export const ArtifactPane: React.FC = () => {
       ),
     }),
     };
-  }, [
-    activeVisualDiagnosticId,
-    currentStageId,
-    handleMermaidRenderError,
-    handleMermaidRenderSuccess,
-    handleStructuredVisualValidationError,
-    handleStructuredVisualValidationSuccess,
-  ]);
+  };
 
+  const editableMarkdownComponents = createArtifactMarkdownComponents(
+    handleMermaidRetry,
+    activeCommentAnchorText,
+    true,
+    true,
+    isGenerating
+  );
   const readOnlyMarkdownComponents = createArtifactMarkdownComponents();
 
   return (
@@ -4526,17 +3965,6 @@ export const ArtifactPane: React.FC = () => {
           <button onClick={() => setViewMode('code')} className={`p-1.5 rounded transition-colors ${viewMode === 'code' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`} title="代码">
             <Code className="w-4 h-4" />
           </button>
-          {hasCurrentChangeDiff && (
-            <button
-              type="button"
-              onClick={() => setShowCurrentChangeDiff((current) => !current)}
-              className={`p-1.5 rounded transition-colors ${showCurrentChangeDiff ? 'bg-emerald-500/10 text-emerald-200' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-              title={showCurrentChangeDiff ? '隐藏本轮变更' : '显示本轮变更'}
-              aria-label={showCurrentChangeDiff ? '隐藏本轮变更' : '显示本轮变更'}
-            >
-              <GitCompare className="w-4 h-4" />
-            </button>
-          )}
           <div className="w-px h-4 bg-[#1e293b] mx-1"></div>
           <button onClick={openHistory} className="p-1.5 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors" title="历史版本">
             <History className="w-4 h-4" />
@@ -4661,7 +4089,7 @@ export const ArtifactPane: React.FC = () => {
             <span>产出物内容可能因流式响应中断而不完整，请检查文档完整性。</span>
           </div>
         )}
-        {isGenerating && !hasArtifactContent && (
+        {isGenerating && (
           <div className="max-w-4xl mx-auto mb-4 overflow-hidden rounded-lg border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sky-100 shadow-[0_0_24px_rgba(14,165,233,0.08)]">
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
@@ -4887,205 +4315,18 @@ export const ArtifactPane: React.FC = () => {
                 spellCheck={false}
               />
             </div>
+          ) : viewMode === 'preview' ? (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeRaw]}
+              components={editableMarkdownComponents}
+            >
+              {displayContent}
+            </ReactMarkdown>
           ) : (
-            <>
-              {viewMode === 'preview' ? (
-                <>
-                  {canUseStoryHandoffPackets && (
-                    <div className="mb-4 border border-[#1e293b] bg-[#0f172a]/90 px-4 py-3 shadow-xl">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold text-slate-100">单故事需求包</div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            从 ready story 生成可追溯、可复制的 AI Coding 需求输入。
-                          </div>
-                        </div>
-                        {storyHandoffLoading && (
-                          <span className="rounded border border-sky-300/20 bg-sky-500/10 px-2 py-1 text-[11px] font-semibold text-sky-100">
-                            加载中
-                          </span>
-                        )}
-                      </div>
-                      {storyHandoffError && (
-                        <div className="mt-3 border border-red-300/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-100">
-                          {storyHandoffError}
-                        </div>
-                      )}
-                      <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                        <div className="min-w-0">
-                          <div className="mb-2 text-[11px] font-bold uppercase text-slate-500">
-                            Ready Stories
-                          </div>
-                          {storyHandoffCandidates.length === 0 && !storyHandoffLoading ? (
-                            <div className="border border-[#1e293b] bg-[#020617] px-3 py-2 text-xs text-slate-500">
-                              当前没有可生成需求包的 ready story。
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              {storyHandoffCandidates.map((candidate) => (
-                                <div
-                                  key={candidate.storyId}
-                                  className="border border-[#1e293b] bg-[#020617] px-3 py-2"
-                                >
-                                  <div className="flex flex-wrap items-start justify-between gap-2">
-                                    <div className="min-w-0">
-                                      <div className="text-xs font-semibold text-slate-100">
-                                        {candidate.storyId} · {candidate.title}
-                                      </div>
-                                      <div className="mt-1 text-[11px] text-slate-500">
-                                        {candidate.requirementIds.join(', ')} · {candidate.readyReason}
-                                      </div>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => void generateStoryHandoffPacket(candidate.storyId)}
-                                      disabled={creatingStoryHandoffId === candidate.storyId}
-                                      aria-label={`生成 ${candidate.storyId} 需求包`}
-                                      className="shrink-0 rounded border border-emerald-300/20 px-2 py-1 text-[11px] font-semibold text-emerald-100 transition-colors hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                      {creatingStoryHandoffId === candidate.storyId ? '生成中' : '生成需求包'}
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="mb-2 text-[11px] font-bold uppercase text-slate-500">
-                            已保存需求包
-                          </div>
-                          {storyHandoffPackets.length === 0 && !storyHandoffLoading ? (
-                            <div className="border border-[#1e293b] bg-[#020617] px-3 py-2 text-xs text-slate-500">
-                              还没有保存的单故事需求包。
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              {storyHandoffPackets.map((packet) => (
-                                <div
-                                  key={packet.id}
-                                  className="border border-[#1e293b] bg-[#020617] px-3 py-2"
-                                >
-                                  <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <div>
-                                      <div className="text-xs font-semibold text-slate-100">
-                                        {packet.storyId} · v{packet.packet.sourceArtifactVersion}
-                                      </div>
-                                      <div className="mt-1 text-[11px] text-slate-500">
-                                        {packet.packet.requirementIds.join(', ')}
-                                      </div>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => void copyStoryHandoffPacket(packet)}
-                                      aria-label={`复制 ${packet.storyId} 需求包`}
-                                      className="inline-flex shrink-0 items-center gap-1 rounded border border-sky-300/20 px-2 py-1 text-[11px] font-semibold text-sky-100 transition-colors hover:bg-sky-400/10"
-                                    >
-                                      <Copy className="h-3 w-3" />
-                                      复制需求包
-                                    </button>
-                                  </div>
-                                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                                    {packet.isStale && (
-                                      <span className="rounded border border-amber-300/20 bg-amber-400/10 px-2 py-1 text-[11px] font-semibold text-amber-100">
-                                        源需求已更新
-                                      </span>
-                                    )}
-                                    {copiedStoryHandoffId === packet.storyId && (
-                                      <span className="rounded border border-emerald-300/20 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-100">
-                                        已复制 {packet.storyId}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {showCurrentChangeDiff && hasCurrentChangeDiff && (
-                    <div
-                      data-testid="current-artifact-change-summary"
-                      className="mb-4 rounded-lg border border-emerald-400/20 bg-[#0f172a]/90 px-4 py-3 text-xs text-slate-300 shadow-xl"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <div className="font-semibold text-slate-100">本轮变更</div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setShowCurrentChangeDiff(false)}
-                          className="rounded px-2 py-1 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
-                          aria-label="隐藏本轮变更"
-                        >
-                          隐藏本轮变更
-                        </button>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {currentArtifactRenderedChangeSummary.map(item => (
-                          <span
-                            key={item}
-                            className="rounded-full border border-emerald-300/20 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-100"
-                          >
-                            {item}
-                          </span>
-                        ))}
-                        {currentArtifactSectionChangeSummary.map(item => (
-                          <span
-                            key={item}
-                            className="rounded-full border border-sky-300/20 bg-sky-500/10 px-2 py-1 text-[11px] font-semibold text-sky-100"
-                          >
-                            {item}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <div
-                    data-testid="artifact-section-renderer"
-                  >
-                  {artifactMarkdownRenderBlocks.map((block) => (
-                    <MemoizedArtifactMarkdownSection
-                      key={block.key}
-                      block={block}
-                      createComponents={createArtifactMarkdownComponents}
-                      onMermaidRetry={handleMermaidRetry}
-                      activeAnchorText={activeCommentAnchorText}
-                      reportVisualDiagnostics
-                      attachVisualDiagnosticAnchors
-                      deferMermaidRender={isGenerating}
-                      renderedLineChanges={
-                        showCurrentChangeDiff && hasCurrentChangeDiff
-                          ? renderedChangeAnnotations.lineChanges
-                          : undefined
-                      }
-                      showRenderedChanges={showCurrentChangeDiff && hasCurrentChangeDiff}
-                    />
-                  ))}
-                  </div>
-                </>
-              ) : (
-                <pre className="text-sm font-mono text-slate-300 whitespace-pre-wrap break-words bg-[#0f172a] p-6 rounded-xl border border-[#1e293b]">
-                  {displayContent}
-                </pre>
-              )}
-              {showArtifactStreamingPositionIndicator && (
-                <div
-                  className="mt-6 flex select-none items-center gap-3 rounded-lg border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sm text-sky-100"
-                  data-artifact-ephemeral="true"
-                  data-testid="artifact-streaming-position-indicator"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-400/10">
-                    <span className="h-2 w-2 rounded-full bg-sky-300 animate-pulse" />
-                  </span>
-                  <span className="font-medium">正在生成下一段...</span>
-                </div>
-              )}
-            </>
+            <pre className="text-sm font-mono text-slate-300 whitespace-pre-wrap break-words bg-[#0f172a] p-6 rounded-xl border border-[#1e293b]">
+              {displayContent}
+            </pre>
           )}
         </div>
       </div>
@@ -5106,6 +4347,100 @@ export const ArtifactPane: React.FC = () => {
             </button>
           </div>
           <div className="max-h-[70vh] space-y-4 overflow-auto p-4">
+            <section className="space-y-3 rounded-lg border border-[#1e293b] bg-[#020617] p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">质量治理</h4>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">{workflowQualitySummary.summary}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="text-lg font-bold text-slate-100">质量分 {workflowQualitySummary.score}</div>
+                  <div className="text-[10px] font-semibold text-slate-500">{workflowQualitySummary.statusLabel}</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded border border-emerald-400/20 bg-emerald-400/5 p-2 text-center text-xs text-emerald-200">
+                  通过 {workflowQualitySummary.passedCount}
+                </div>
+                <div className="rounded border border-amber-400/20 bg-amber-400/5 p-2 text-center text-xs text-amber-200">
+                  警告 {workflowQualitySummary.warningCount}
+                </div>
+                <div className="rounded border border-red-400/20 bg-red-400/5 p-2 text-center text-xs text-red-200">
+                  失败 {workflowQualitySummary.failedCount}
+                </div>
+              </div>
+              <div className="space-y-2">
+                {workflowQualitySummary.checks.slice(0, 6).map((check) => (
+                  <article key={check.id} className="rounded border border-[#1e293b] bg-black/10 p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-200">{check.label}</span>
+                      <span className="text-[10px] font-bold text-slate-500">{check.statusLabel}</span>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{check.evidence}</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{check.impact}</p>
+                  </article>
+                ))}
+              </div>
+              <div className="rounded border border-[#1e293b] bg-black/10 p-2">
+                <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">待处理项</div>
+                {workflowQualitySummary.actionItems.length === 0 ? (
+                  <p className="mt-1 text-xs text-slate-500">当前没有阻断项。</p>
+                ) : (
+                  <ul className="mt-2 space-y-1">
+                    {workflowQualitySummary.actionItems.map((item) => (
+                      <li key={item} className="text-xs leading-relaxed text-slate-300">- {item}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              {artifactQualitySummary.missingInfoItems.length > 0 && (
+                <div className="space-y-2 border-t border-[#1e293b] pt-3">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">缺失信息清单</h4>
+                    <p className="mt-1 text-[11px] text-slate-500">按阻断性列出当前阶段需要用户处理的事项</p>
+                  </div>
+                  {artifactQualitySummary.missingInfoItems.map((item) => (
+                    <article
+                      key={item.id}
+                      className={`rounded-md border p-3 ${
+                        item.blocking
+                          ? 'border-rose-400/20 bg-rose-400/5'
+                          : 'border-amber-400/20 bg-amber-400/5'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                            item.blocking
+                              ? 'border-rose-300/30 bg-rose-300/10 text-rose-100'
+                              : 'border-amber-300/30 bg-amber-300/10 text-amber-100'
+                          }`}>
+                            {item.blocking ? '阻断' : '提醒'}
+                          </span>
+                          <p className="mt-2 text-xs font-semibold text-slate-100">缺失项：{item.title}</p>
+                          <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{item.reason}</p>
+                          <p className="mt-1 text-[11px] leading-relaxed text-slate-300">
+                            <span className="font-semibold text-slate-200">下一步：</span>
+                            {item.nextAction}
+                          </p>
+                        </div>
+                        {item.actionDiagnosticId && (
+                          <button
+                            type="button"
+                            onClick={() => focusArtifactVisualDiagnostic(item.actionDiagnosticId ?? '')}
+                            className="shrink-0 rounded border border-blue-400/30 px-2 py-1 text-[10px] font-semibold text-blue-200 transition-colors hover:bg-blue-400/10"
+                            aria-label={`定位缺失信息：${item.title}`}
+                          >
+                            定位
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
             <div className="grid grid-cols-3 gap-2">
               <div className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
                 <div className="text-lg font-bold text-amber-200">{currentStageOpenComments.length}</div>
@@ -5433,26 +4768,41 @@ export const ArtifactPane: React.FC = () => {
                           {section.content.replace(section.heading, '').trim() || '空章节'}
                         </p>
                       </div>
-                      {lock ? (
+                      <div className="flex shrink-0 flex-col items-end gap-2">
                         <button
-                          onClick={() => unlockSection(lock.id)}
-                          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-400/20 px-2 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-400/10"
-                          aria-label={`解除章节锁定 ${section.displayTitle}`}
-                          title="解除章节锁定"
+                          onClick={() => {
+                            if (lock || isGenerating) return;
+                            regenerateSection(section);
+                          }}
+                          disabled={Boolean(lock) || isGenerating}
+                          className="inline-flex items-center gap-1 rounded-md border border-sky-400/20 px-2 py-1 text-xs font-semibold text-sky-200 hover:bg-sky-400/10 disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label={`重生成章节 ${section.displayTitle}`}
+                          title={lock ? '章节已锁定，请先解锁后再重生成' : isGenerating ? '正在生成中' : '重生成章节'}
                         >
-                          <Unlock className="h-3.5 w-3.5" />
-                          解锁
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          重生成
                         </button>
-                      ) : (
-                        <button
-                          onClick={() => lockSection(section)}
-                          className="inline-flex shrink-0 items-center gap-1 rounded-md bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-500"
-                          aria-label={`锁定 ${section.displayTitle}`}
-                        >
-                          <Lock className="h-3.5 w-3.5" />
-                          锁定 {section.displayTitle}
-                        </button>
-                      )}
+                        {lock ? (
+                          <button
+                            onClick={() => unlockSection(lock.id)}
+                            className="inline-flex items-center gap-1 rounded-md border border-amber-400/20 px-2 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-400/10"
+                            aria-label={`解除章节锁定 ${section.displayTitle}`}
+                            title="解除章节锁定"
+                          >
+                            <Unlock className="h-3.5 w-3.5" />
+                            解锁
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => lockSection(section)}
+                            className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-500"
+                            aria-label={`锁定 ${section.displayTitle}`}
+                          >
+                            <Lock className="h-3.5 w-3.5" />
+                            锁定 {section.displayTitle}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </article>
                 );

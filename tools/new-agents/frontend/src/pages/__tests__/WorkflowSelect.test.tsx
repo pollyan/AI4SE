@@ -54,7 +54,7 @@ describe('WorkflowSelect Page', () => {
             renderComponent('alex');
             const card = screen.getByText('用户故事拆解').closest('[class*="rounded-2xl"]')!;
             fireEvent.click(card);
-            expect(mockNavigate).toHaveBeenCalledWith('/workspace/alex/user-story-breakdown');
+            expect(mockNavigate).toHaveBeenCalledWith('/workspace/alex/story-breakdown');
         });
     });
 

@@ -89,7 +89,7 @@ def test_build_judge_prompt_uses_lisa_testing_rubric() -> None:
 
 def test_build_judge_prompt_uses_alex_business_rubric() -> None:
     prompt = build_judge_prompt(
-        "Alex 价值发现",
+        "Alex 需求蓝图梳理",
         _sample_run_result(),
     )
 
@@ -143,7 +143,7 @@ def test_build_handoff_judge_prompt_uses_cross_agent_rubric() -> None:
     )
 
     prompt = build_handoff_judge_prompt(
-        "Alex 价值发现 -> Lisa 测试设计",
+        "Alex 需求蓝图梳理 -> Lisa 测试设计",
         alex_result,
         lisa_result,
     )
@@ -154,7 +154,7 @@ def test_build_handoff_judge_prompt_uses_cross_agent_rubric() -> None:
     assert "需求蓝图" in prompt
     assert "测试用例集" in prompt
     assert "权限隔离、输出质量、追溯能力" in prompt
-    assert "Alex 价值发现 -> Lisa 测试设计" in prompt
+    assert "Alex 需求蓝图梳理 -> Lisa 测试设计" in prompt
     assert "dimension_scores" in prompt
     assert "可视化质量" in prompt
 

@@ -1,7 +1,7 @@
 # New Agents Artifact 批注新增 500 Bug Todo
 
 状态：已归档
-创建日期：2026-06-25  
+创建日期：2026-06-25
 完成日期：2026-06-25
 相关模块：`tools/new-agents/`
 

@@ -1,6 +1,5 @@
 import { WorkflowDef, WorkflowType } from './types';
 import { getStagePromptTemplateId, workflowManifest } from './workflowRegistry';
-import type { ArtifactDataContract } from './workflowRegistry';
 import { IMPROVEMENT_PROMPT, IMPROVEMENT_TEMPLATE } from './prompts/incident_review/improvement';
 import { ROOT_CAUSE_PROMPT, ROOT_CAUSE_TEMPLATE } from './prompts/incident_review/root_cause';
 import { TIMELINE_PROMPT, TIMELINE_TEMPLATE } from './prompts/incident_review/timeline';
@@ -18,10 +17,14 @@ import { ELEVATOR_PROMPT, ELEVATOR_TEMPLATE } from './prompts/value_discovery/el
 import { PERSONA_PROMPT, PERSONA_TEMPLATE } from './prompts/value_discovery/persona';
 import { JOURNEY_PROMPT, JOURNEY_TEMPLATE } from './prompts/value_discovery/journey';
 import { BLUEPRINT_PROMPT, BLUEPRINT_TEMPLATE } from './prompts/value_discovery/blueprint';
-import { SCOPE_PROMPT, SCOPE_TEMPLATE } from './prompts/user_story_breakdown/scope';
-import { STORY_MAP_PROMPT, STORY_MAP_TEMPLATE } from './prompts/user_story_breakdown/story_map';
-import { STORIES_PROMPT, STORIES_TEMPLATE } from './prompts/user_story_breakdown/stories';
-import { HANDOFF_PROMPT, HANDOFF_TEMPLATE } from './prompts/user_story_breakdown/handoff';
+import { INPUT_ANALYSIS_PROMPT, INPUT_ANALYSIS_TEMPLATE } from './prompts/story_breakdown/input_analysis';
+import { EPIC_MAPPING_PROMPT, EPIC_MAPPING_TEMPLATE } from './prompts/story_breakdown/epic_mapping';
+import { STORY_BACKLOG_PROMPT, STORY_BACKLOG_TEMPLATE } from './prompts/story_breakdown/story_backlog';
+import { SPRINT_PLAN_PROMPT, SPRINT_PLAN_TEMPLATE } from './prompts/story_breakdown/sprint_plan';
+import { INVENTORY_PROMPT, INVENTORY_TEMPLATE } from './prompts/prd_review/inventory';
+import { QUALITY_AUDIT_PROMPT, QUALITY_AUDIT_TEMPLATE } from './prompts/prd_review/quality_audit';
+import { COMPLETION_PLAN_PROMPT, COMPLETION_PLAN_TEMPLATE } from './prompts/prd_review/completion_plan';
+import { REVISION_BLUEPRINT_PROMPT, REVISION_BLUEPRINT_TEMPLATE } from './prompts/prd_review/revision_blueprint';
 
 type StageContent = {
     description: string;
@@ -97,66 +100,38 @@ const STAGE_CONTENT_BY_TEMPLATE_ID: Record<string, StageContent> = {
             description: BLUEPRINT_PROMPT,
             template: BLUEPRINT_TEMPLATE,
         },
-        'user_story_breakdown.scope': {
-            description: SCOPE_PROMPT,
-            template: SCOPE_TEMPLATE,
+        'story_breakdown.input_analysis': {
+            description: INPUT_ANALYSIS_PROMPT,
+            template: INPUT_ANALYSIS_TEMPLATE,
         },
-        'user_story_breakdown.story_map': {
-            description: STORY_MAP_PROMPT,
-            template: STORY_MAP_TEMPLATE,
+        'story_breakdown.epic_mapping': {
+            description: EPIC_MAPPING_PROMPT,
+            template: EPIC_MAPPING_TEMPLATE,
         },
-        'user_story_breakdown.stories': {
-            description: STORIES_PROMPT,
-            template: STORIES_TEMPLATE,
+        'story_breakdown.story_backlog': {
+            description: STORY_BACKLOG_PROMPT,
+            template: STORY_BACKLOG_TEMPLATE,
         },
-        'user_story_breakdown.handoff': {
-            description: HANDOFF_PROMPT,
-            template: HANDOFF_TEMPLATE,
+        'story_breakdown.sprint_plan': {
+            description: SPRINT_PLAN_PROMPT,
+            template: SPRINT_PLAN_TEMPLATE,
         },
-};
-
-const compactStrings = (items: string[] | undefined): string[] => (
-    Array.isArray(items)
-        ? items.map(item => item.trim()).filter(Boolean)
-        : []
-);
-
-const joinWithFinalSeparator = (
-    items: string[],
-    finalSeparator: string
-): string => (
-    items.length === 1
-        ? items[0]
-        : `${items.slice(0, -1).join('、')}${finalSeparator}${items.at(-1)}`
-);
-
-const formatArtifactDataContractPrompt = (
-    contract: ArtifactDataContract | undefined
-): string => {
-    if (!contract) return '';
-
-    const modelOutputRules = compactStrings(contract.modelOutputRules);
-    const forbiddenOutputs = compactStrings(contract.forbiddenOutputs);
-    const rendererOutputs = compactStrings(contract.rendererOutputs);
-    if (
-        !modelOutputRules.length
-        && !forbiddenOutputs.length
-        && !rendererOutputs.length
-    ) {
-        return '';
-    }
-
-    const lines = ['【artifact_data 契约同步约束】'];
-    if (modelOutputRules.length) {
-        lines.push(`- ${modelOutputRules.join('；')}`);
-    }
-    if (forbiddenOutputs.length) {
-        lines.push(`- 不要输出${joinWithFinalSeparator(forbiddenOutputs, '或 ')}。`);
-    }
-    if (rendererOutputs.length) {
-        lines.push(`- 后端会负责确定性渲染${joinWithFinalSeparator(rendererOutputs, '和 ')}。`);
-    }
-    return `\n\n${lines.join('\n')}`;
+        'prd_review.inventory': {
+            description: INVENTORY_PROMPT,
+            template: INVENTORY_TEMPLATE,
+        },
+        'prd_review.quality_audit': {
+            description: QUALITY_AUDIT_PROMPT,
+            template: QUALITY_AUDIT_TEMPLATE,
+        },
+        'prd_review.completion_plan': {
+            description: COMPLETION_PLAN_PROMPT,
+            template: COMPLETION_PLAN_TEMPLATE,
+        },
+        'prd_review.revision_blueprint': {
+            description: REVISION_BLUEPRINT_PROMPT,
+            template: REVISION_BLUEPRINT_TEMPLATE,
+        },
 };
 
 const buildWorkflow = (workflowId: WorkflowType): WorkflowDef => {
@@ -172,7 +147,7 @@ const buildWorkflow = (workflowId: WorkflowType): WorkflowDef => {
             }
             return {
                 ...stage,
-                description: `${content.description}${formatArtifactDataContractPrompt(stage.artifactDataContract)}`,
+                description: content.description,
                 template: content.template,
             };
         }),

@@ -2,7 +2,7 @@ import hashlib
 import time
 from typing import Any
 
-from artifact_data_renderers import UserStoryHandoffArtifactData
+from artifact_data_renderers import StoryBreakdownArtifactData
 from models import (
     AgentArtifact,
     AgentArtifactVersion,
@@ -12,8 +12,8 @@ from models import (
 )
 
 
-USER_STORY_WORKFLOW_ID = "USER_STORY_BREAKDOWN"
-USER_STORY_HANDOFF_STAGE_ID = "HANDOFF"
+STORY_BREAKDOWN_WORKFLOW_ID = "STORY_BREAKDOWN"
+STORY_BREAKDOWN_PACKET_STAGE_ID = "SPRINT_PLAN"
 FORBIDDEN_PACKET_KEYS = {
     "tasks",
     "filePaths",
@@ -25,10 +25,11 @@ FORBIDDEN_PACKET_KEYS = {
 
 def list_story_handoff_candidates(
     run_id: str,
-    stage_id: str = USER_STORY_HANDOFF_STAGE_ID,
+    stage_id: str = STORY_BREAKDOWN_PACKET_STAGE_ID,
 ) -> dict[str, Any]:
     source = _get_current_handoff_source(run_id, stage_id)
     artifact_data = _validated_handoff_artifact_data(source["version"])
+    acceptance_by_story = _acceptance_criteria_by_story(artifact_data)
     return {
         "runId": source["run"].id,
         "workflowId": source["run"].workflow_id,
@@ -36,14 +37,8 @@ def list_story_handoff_candidates(
         "sourceArtifactVersion": source["version"].version_number,
         "sourceArtifactDigest": source["digest"],
         "candidates": [
-            {
-                "storyId": item.story_id,
-                "title": item.title,
-                "requirementIds": item.requirement_ids,
-                "userValue": item.user_value,
-                "readyReason": item.ready_reason,
-            }
-            for item in artifact_data.ready_story_overview
+            _candidate_from_story(story, acceptance_by_story)
+            for story in artifact_data.user_stories
         ],
     }
 
@@ -55,17 +50,31 @@ def create_story_handoff_packet(
 ) -> dict[str, Any]:
     source = _get_current_handoff_source(run_id, stage_id)
     artifact_data = _validated_handoff_artifact_data(source["version"])
-    packet_source = next(
+    story = next(
         (
             item
-            for item in artifact_data.single_story_packets
+            for item in artifact_data.user_stories
             if item.story_id == story_id
         ),
         None,
     )
-    if packet_source is None:
+    if story is None:
         raise ValueError(f"未知 ready story: {story_id}")
 
+    criteria = [
+        item
+        for item in artifact_data.acceptance_criteria
+        if item.story_id == story.story_id
+    ]
+    related_dependencies = [
+        item
+        for item in artifact_data.dependencies
+        if story.story_id in item.related_story_ids
+    ]
+    epic = next(
+        (item for item in artifact_data.epics if item.epic_id == story.epic_id),
+        None,
+    )
     created_at_ms = int(time.time() * 1000)
     packet = {
         "sourceRunId": source["run"].id,
@@ -74,15 +83,19 @@ def create_story_handoff_packet(
         "sourceArtifactVersion": source["version"].version_number,
         "sourceArtifactDigest": source["digest"],
         "createdAt": created_at_ms,
-        "storyId": packet_source.story_id,
-        "requirementIds": packet_source.requirement_ids,
-        "userStory": packet_source.user_story,
-        "acceptanceCriteria": packet_source.acceptance_criteria,
-        "businessRules": packet_source.business_rules,
-        "nonFunctionalNotes": packet_source.non_functional_notes,
-        "outOfScope": packet_source.out_of_scope,
-        "dependencies": packet_source.dependencies,
-        "openQuestions": packet_source.open_questions,
+        "storyId": story.story_id,
+        "requirementIds": _requirement_ids_for_story(story, criteria),
+        "userStory": story.user_story,
+        "acceptanceCriteria": [
+            criterion.criterion for criterion in criteria
+        ],
+        "businessRules": _business_rules_for_story(epic),
+        "nonFunctionalNotes": _non_functional_notes_for_story(story),
+        "outOfScope": list(artifact_data.input_analysis.constraints),
+        "dependencies": [
+            dependency.description for dependency in related_dependencies
+        ],
+        "openQuestions": list(artifact_data.input_analysis.open_questions),
     }
     _assert_no_implementation_fields(packet)
 
@@ -90,7 +103,7 @@ def create_story_handoff_packet(
         run_id=source["run"].id,
         source_stage_id=stage_id,
         source_artifact_version=source["version"].version_number,
-        story_id=packet_source.story_id,
+        story_id=story.story_id,
     ).first()
     if existing is None:
         existing = AgentStoryHandoffPacket(
@@ -99,7 +112,7 @@ def create_story_handoff_packet(
             source_stage_id=stage_id,
             source_artifact_version=source["version"].version_number,
             source_artifact_digest=source["digest"],
-            story_id=packet_source.story_id,
+            story_id=story.story_id,
             packet_json=packet,
             created_at_ms=created_at_ms,
         )
@@ -114,7 +127,7 @@ def create_story_handoff_packet(
 
 def list_story_handoff_packets(
     run_id: str,
-    stage_id: str = USER_STORY_HANDOFF_STAGE_ID,
+    stage_id: str = STORY_BREAKDOWN_PACKET_STAGE_ID,
 ) -> dict[str, Any]:
     source = _get_current_handoff_source(run_id, stage_id)
     packets = (
@@ -162,14 +175,14 @@ def _packet_snapshot(
 
 
 def _get_current_handoff_source(run_id: str, stage_id: str) -> dict[str, Any]:
-    if stage_id != USER_STORY_HANDOFF_STAGE_ID:
-        raise ValueError("只能从 USER_STORY_BREAKDOWN/HANDOFF 生成单故事需求包")
+    if stage_id != STORY_BREAKDOWN_PACKET_STAGE_ID:
+        raise ValueError("只能从 STORY_BREAKDOWN/SPRINT_PLAN 生成单故事需求包")
 
     run = db.session.get(AgentRun, run_id)
     if run is None:
         raise ValueError(f"未知 runId: {run_id}")
-    if run.workflow_id != USER_STORY_WORKFLOW_ID:
-        raise ValueError("只能从 USER_STORY_BREAKDOWN/HANDOFF 生成单故事需求包")
+    if run.workflow_id != STORY_BREAKDOWN_WORKFLOW_ID:
+        raise ValueError("只能从 STORY_BREAKDOWN/SPRINT_PLAN 生成单故事需求包")
 
     artifact = AgentArtifact.query.filter_by(run_id=run_id, stage_id=stage_id).first()
     if artifact is None or artifact.current_version_id is None:
@@ -187,10 +200,67 @@ def _get_current_handoff_source(run_id: str, stage_id: str) -> dict[str, Any]:
 
 def _validated_handoff_artifact_data(
     version: AgentArtifactVersion,
-) -> UserStoryHandoffArtifactData:
+) -> StoryBreakdownArtifactData:
     if version.artifact_data is None:
         raise ValueError("缺少结构化 artifact_data，无法生成单故事需求包")
-    return UserStoryHandoffArtifactData.model_validate(version.artifact_data)
+    return StoryBreakdownArtifactData.model_validate(version.artifact_data)
+
+
+def _acceptance_criteria_by_story(
+    artifact_data: StoryBreakdownArtifactData,
+) -> dict[str, list[str]]:
+    criteria_by_story: dict[str, list[str]] = {}
+    for criterion in artifact_data.acceptance_criteria:
+        criteria_by_story.setdefault(criterion.story_id, []).append(
+            criterion.criterion_id
+        )
+    return criteria_by_story
+
+
+def _candidate_from_story(
+    story: Any,
+    acceptance_by_story: dict[str, list[str]],
+) -> dict[str, Any]:
+    return {
+        "storyId": story.story_id,
+        "title": story.title,
+        "requirementIds": [
+            story.epic_id,
+            *acceptance_by_story.get(story.story_id, []),
+        ],
+        "userValue": story.user_story,
+        "readyReason": (
+            f"状态：{story.status}；"
+            f"可测试性：{story.testability}；"
+            f"Sprint：{story.sprint}"
+        ),
+    }
+
+
+def _requirement_ids_for_story(story: Any, criteria: list[Any]) -> list[str]:
+    return [
+        story.epic_id,
+        *[criterion.criterion_id for criterion in criteria],
+    ]
+
+
+def _business_rules_for_story(epic: Any | None) -> list[str]:
+    if epic is None:
+        return []
+    return [
+        f"Epic：{epic.name}",
+        f"价值目标：{epic.value_goal}",
+        f"范围：{epic.scope}",
+    ]
+
+
+def _non_functional_notes_for_story(story: Any) -> list[str]:
+    return [
+        f"优先级：{story.priority}",
+        f"故事点：{story.story_points}",
+        f"可测试性：{story.testability}",
+        f"计划迭代：{story.sprint}",
+    ]
 
 
 def _assert_no_implementation_fields(packet: dict[str, Any]) -> None:

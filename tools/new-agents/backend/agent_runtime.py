@@ -12,8 +12,9 @@ from agent_contracts import (
     validate_agent_turn,
 )
 from artifact_data_renderers import (
+    get_artifact_data_renderer_stage_keys,
     render_agent_turn_from_artifact_data,
-    render_partial_agent_turn_from_artifact_data,
+    render_partial_artifact_data_markdown,
 )
 from llm_client import LlmClientError, stream_chat_completion_content
 from sse_schemas import AgentTurnDeltaOutput
@@ -93,7 +94,7 @@ JSON 对象结构：
   "warnings": []
 }
 
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -129,7 +130,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；不要输出完整 Markdown、Mermaid 代码块或表格，后端会负责确定性渲染右侧产出物。
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -150,7 +151,7 @@ JSON 对象结构：
     "document_info": {"artifact_name": "...", "workflow": "TEST_DESIGN", "stage": "STRATEGY", "status": "..."},
     "strategy_summary": {"conclusion": "...", "basis": "F-001 / BR-001 / R-SEED-001", "case_stage_readiness": "可进入/暂缓进入/需补充策略输入"},
     "quality_goals": [{"goal_id": "QG-001", "goal": "...", "metric": "...", "source": "...", "priority": "P0", "status": "..."}],
-    "risks": [{"risk_id": "R-001", "name": "...", "failure_mode": "...", "impact": "...", "source": "...", "severity": 5, "occurrence": 3, "detection": 4, "mitigation": "...", "coverage": "...", "status": "待覆盖/已覆盖/风险接受"}],
+    "risks": [{"risk_id": "R-001", "name": "...", "failure_mode": "...", "impact": "...", "source": "...", "severity": 5, "occurrence": 3, "detection": 4, "rpn": 60, "mitigation": "...", "coverage": "...", "status": "待覆盖/已覆盖/风险接受"}],
     "test_techniques": [{"technique_id": "TS-001", "target": "QG-001 / R-001", "category": "...", "technique": "...", "reason": "...", "applies_to": "R-001 / TP-001"}],
     "test_layers": [{"layer": "单元测试/集成测试/E2E 测试", "ratio": "40%", "scope": "...", "related": "R-001 / TP-001", "tools": "...", "entry_condition": "..."}],
     "test_points": [{"point_id": "TP-001", "point": "...", "priority": "P0", "quality_goal": "QG-001", "risk": "R-001", "technique": "TS-001", "layer": "单元/集成/E2E", "estimated_cases": 6, "coverage": "...", "status": "待生成用例"}],
@@ -161,8 +162,8 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；severity、occurrence、detection 必须是 1 到 5 的整数；RPN 由后端根据 severity * occurrence * detection 计算，不需要在 risks 中输出 rpn。test_points.quality_goal、test_points.risk、test_points.technique 只能引用 artifact_data 中已定义的 QG/R/TS ID；test_techniques.target、test_techniques.applies_to、test_layers.related 只能引用 artifact_data 中已定义的 QG/R/TP ID。不要输出完整 Markdown、Mermaid 代码块、risk-board JSON 代码块或表格，后端会负责确定性渲染右侧测试策略蓝图、quadrantChart、block-beta 和 ai4se-visual risk-board。
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；severity、occurrence、detection 必须是 1 到 5 的整数；rpn 必须等于 severity * occurrence * detection。不要输出完整 Markdown、Mermaid 代码块、risk-board JSON 代码块或表格，后端会负责确定性渲染右侧测试策略蓝图、quadrantChart、block-beta 和 ai4se-visual risk-board。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -194,7 +195,7 @@ JSON 对象结构：
 }
 
 __ARTIFACT_DATA_CONTRACT_INSTRUCTION__
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """.replace(
     "__ARTIFACT_DATA_CONTRACT_INSTRUCTION__",
@@ -232,8 +233,8 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；case_summary_items 中每项 case_count 必须等于 p0_count + p1_count + p2_count；delivery_metrics.total_cases 必须等于所有 case_summary_items.case_count 之和；coverage_map.case_ids 必须至少包含一个用例 ID。coverage_map 必须覆盖需求、风险、测试点、用例和验收状态，后端会同时渲染 ai4se-visual coverage-map 与 traceability-matrix。不要输出完整 Markdown、Mermaid 代码块、coverage-map / traceability-matrix JSON 代码块或表格。
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；case_summary_items 中每项 case_count 必须等于 p0_count + p1_count + p2_count；delivery_metrics.total_cases 必须等于所有 case_summary_items.case_count 之和；coverage_map.case_ids 必须至少包含一个用例 ID。不要输出完整 Markdown、Mermaid 代码块、coverage-map JSON 代码块或表格，后端会负责确定性渲染右侧测试设计交付文档和 ai4se-visual coverage-map。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -265,7 +266,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；quality_overview.severity_score 必须是 1 到 5 的整数；issue_statistics 的 P0/P1/P2 数量必须与 issue_groups 中的问题优先级计数一致；revision_suggestions.related_issues 只能引用已存在的 issue_id。不要输出完整 Markdown、Mermaid 代码块、score-matrix JSON 代码块或表格，后端会负责确定性渲染右侧需求评审问题清单、flowchart 和 ai4se-visual score-matrix。
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -297,7 +298,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；issue_statistics 的 P0/P1/P2 数量必须与 issue_closures 中的问题优先级计数一致；review_conditions.related_issues 只能引用已存在的 issue_id；存在未关闭 P0/P1 问题时 review_result 不能为“通过”。不要输出完整 Markdown、Mermaid 代码块、priority-board JSON 代码块或表格，后端会负责确定性渲染右侧需求评审报告、pie 和 ai4se-visual priority-board。
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -327,7 +328,7 @@ JSON 对象结构：
     "differentiators": [{"dimension": "核心优势/用户获益/差异化壁垒", "our_value": "...", "existing_solution": "...", "evidence": "...", "status": "已确认/AI 假设/待验证"}],
     "business_feasibility": [{"dimension": "用户付费意愿/商业模式方向/市场规模感知", "judgement": "...", "basis": "...", "validation_action": "...", "status": "已确认/AI 假设/待验证"}],
     "score_matrix": [{"dimension": "痛点强度", "score": 4, "basis": "...", "next_validation": "..."}, {"dimension": "证据强度", "score": 2, "basis": "...", "next_validation": "..."}],
-    "score_summary": {"judgement": "..."},
+    "score_summary": {"total_score": 6, "average_score": 3.0, "judgement": "..."},
     "assumptions": [{"assumption_id": "H-001", "content": "...", "impact": "...", "validation_action": "...", "owner": "产品/业务/用户研究", "status": "待验证/已验证/否定"}],
     "elevator_pitch": "60 秒内能讲完、让外行听懂、能引起兴趣的完整电梯演讲稿。",
     "stage_gate": [{"checked": true, "item": "..."}]
@@ -336,8 +337,8 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；value_flow.links 只能引用 value_flow.nodes 中已存在的 node_id；score_matrix.score 必须是 1 到 5 的整数；score_summary 只需要输出 judgement，总分和平均分由后端根据 score_matrix.score 计算。不要输出完整 Markdown、Mermaid 代码块、score-matrix JSON 代码块或表格，后端会负责确定性渲染右侧价值定位分析、flowchart 和 ai4se-visual score-matrix。
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；value_flow.links 只能引用 value_flow.nodes 中已存在的 node_id；score_matrix.score 必须是 1 到 5 的整数；score_summary.total_score 必须等于 score_matrix.score 总和；score_summary.average_score 必须等于平均分。不要输出完整 Markdown、Mermaid 代码块、score-matrix JSON 代码块或表格，后端会负责确定性渲染右侧价值定位分析、flowchart 和 ai4se-visual score-matrix。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -378,7 +379,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；personas.persona_id 必须唯一；behavior_scenarios、decision_chain、pain_evidence、priority_ranking 中的 persona_id 只能引用 personas 中已存在的 persona_id；priority_ranking 中同一个 persona_id 只能出现一次。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或解释文字，后端会负责确定性渲染右侧用户画像分析。
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -427,7 +428,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；journey_stages.stage_id、pain_id、opportunity_id 必须分别唯一；emotion_score 必须是 1 到 5 的整数；pain_priorities.stage_id 只能引用 journey_stages 中已存在的 stage_id；pain_priorities.pain_id 和 opportunity_scores.pain_id 只能引用 journey_stages 中已存在的 pain_id；opportunity_scores.opportunity_id、entry_strategy.related_opportunity、validation_experiments.opportunity_id 只能引用 journey_stages 中已存在的 opportunity_id。不要输出完整 Markdown 文档、Markdown 表格、Mermaid journey 代码块或 journey-map JSON 代码块，后端会负责确定性渲染右侧用户旅程分析、Mermaid journey 和 ai4se-visual journey-map。
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -444,7 +445,7 @@ VALUE_BLUEPRINT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
 
 JSON 对象结构：
 {
-  "chat": "面向用户的自然工作对话。说明我本轮已经整合哪些前序价值发现成果、形成哪些 P0/P1/P2 需求、哪些验收标准和 Lisa Handoff 输入仍需确认。不要复制完整产出物正文。",
+  "chat": "面向用户的自然工作对话。说明我本轮已经整合哪些前序需求蓝图梳理成果、形成哪些 P0/P1/P2 需求、哪些验收标准和 Lisa Handoff 输入仍需确认。不要复制完整产出物正文。",
   "artifact_data": {
     "document_info": {"product_name": "...", "version": "v1.0", "created_at": "YYYY-MM-DD", "product_direction": "...", "artifact_name": "可评审需求蓝图", "blueprint_status": "草稿/待确认/可交接 Lisa"},
     "product_overview": {"vision": "...", "positioning_for": "...", "positioning_who": "...", "positioning_product": "...", "positioning_category": "...", "positioning_value": "...", "positioning_unlike": "...", "positioning_differentiator": "...", "user_value": "...", "business_value": "...", "business_model": "..."},
@@ -466,137 +467,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；requirements.requirement_id 必须唯一；feature_modules.features.requirement_id、mvp_plan.included_features.requirement_id、acceptance_criteria.requirement_id 和 input_type 为“需求”的 lisa_handoff_inputs.reference_id 只能引用 requirements 中已存在的 requirement_id；input_type 为“验收标准”的 lisa_handoff_inputs.reference_id 只能引用 acceptance_criteria 中已存在的 acceptance_id；main_flow.links 只能引用 main_flow.nodes 中已存在的 node_id。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 roadmap JSON 代码块，后端会负责确定性渲染右侧需求蓝图、功能架构、主流程图和 ai4se-visual roadmap。
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
-所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
-"""
-
-
-USER_STORY_SCOPE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
-
-【结构化输出格式要求】
-你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
-为了支持后端确定性渲染，请严格按照以下字段顺序输出：
-1. "chat"
-2. "artifact_data"
-3. "stage_action"
-4. "warnings"
-
-JSON 对象结构：
-{
-  "chat": "面向用户的自然工作对话。说明本轮已经校准哪些需求范围、哪些需求暂不拆、哪些阻塞问题需要补充。不要复制完整产出物正文。",
-  "artifact_data": {
-    "document_info": {"artifact_name": "用户故事拆解文档", "workflow": "USER_STORY_BREAKDOWN", "stage": "SCOPE", "status": "..."},
-    "in_scope_requirements": [{"requirement_id": "REQ-001", "name": "...", "user_value": "...", "priority": "P0/P1/P2", "split_decision": "进入拆分", "status": "已确认/待确认"}],
-    "traceability_index": [{"requirement_id": "REQ-001", "source": "需求蓝图章节或用户输入", "target_user": "...", "scenario": "...", "acceptance_hint": "...", "status": "已确认/待确认"}],
-    "out_of_scope_items": [{"requirement_id": "REQ-101", "item": "...", "reason": "...", "reentry_condition": "...", "status": "已记录/待确认"}],
-    "blocking_questions": [{"question_id": "Q-001", "requirement_id": "REQ-101", "question": "...", "impact": "...", "owner": "产品/业务/用户", "status": "开放/已确认"}],
-    "stage_gate": [{"checked": true, "item": "..."}]
-  },
-  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "STORY_MAP"},
-  "warnings": []
-}
-
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；in_scope_requirements.requirement_id 必须唯一；traceability_index 只能引用进入拆分的 requirement_id；blocking_questions 只能引用已知 requirement_id。不要输出完整 Markdown、Mermaid 代码块或表格，后端会负责确定性渲染拆分范围和需求追溯图。
-chat 字段必须像一次自然的工作对话；不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
-所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
-"""
-
-
-USER_STORY_MAP_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
-
-【结构化输出格式要求】
-你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
-为了支持后端确定性渲染，请严格按照以下字段顺序输出：
-1. "chat"
-2. "artifact_data"
-3. "stage_action"
-4. "warnings"
-
-JSON 对象结构：
-{
-  "chat": "面向用户的自然工作对话。说明本轮已经形成哪些用户活动、任务、故事地图和 MVP / Release Slice。不要复制完整产出物正文。",
-  "artifact_data": {
-    "document_info": {"artifact_name": "用户故事拆解文档", "workflow": "USER_STORY_BREAKDOWN", "stage": "STORY_MAP", "status": "..."},
-    "requirements": [{"requirement_id": "REQ-001", "name": "...", "priority": "P0/P1/P2", "status": "已确认/待确认"}],
-    "activities": [{"activity_id": "ACT-001", "activity": "...", "user_goal": "...", "requirement_ids": ["REQ-001"], "priority": "P0"}],
-    "tasks": [{"task_id": "TASK-001", "activity_id": "ACT-001", "task": "...", "success_result": "...", "requirement_ids": ["REQ-001"], "status": "已确认/待确认"}],
-    "story_map_items": [{"story_id": "US-001", "activity_id": "ACT-001", "task_id": "TASK-001", "title": "...", "requirement_ids": ["REQ-001"], "slice_id": "MVP-001", "status": "候选/待确认"}],
-    "mvp_slices": [{"slice_id": "MVP-001", "story_ids": ["US-001"], "business_outcome": "...", "excluded_items": ["..."], "acceptance": "..."}],
-    "release_slices": [{"slice_id": "REL-001", "story_ids": ["US-101"], "release_goal": "...", "dependencies": ["..."], "status": "待排期/待确认"}],
-    "stage_gate": [{"checked": true, "item": "..."}]
-  },
-  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "STORIES"},
-  "warnings": []
-}
-
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；activity_id、task_id、story_id、slice_id 必须唯一；所有 activity/task/story/slice 引用必须存在；故事必须保持垂直业务切片，不能拆成技术任务。不要输出完整 Markdown、Mermaid 代码块或表格，后端会负责确定性渲染用户故事地图。
-chat 字段必须像一次自然的工作对话；不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
-所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
-"""
-
-
-USER_STORIES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
-
-【结构化输出格式要求】
-你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
-为了支持后端确定性渲染，请严格按照以下字段顺序输出：
-1. "chat"
-2. "artifact_data"
-3. "stage_action"
-4. "warnings"
-
-JSON 对象结构：
-{
-  "chat": "面向用户的自然工作对话。说明本轮已经生成哪些 Ready / Not Ready 用户故事、哪些故事还缺什么信息。不要复制完整产出物正文。",
-  "artifact_data": {
-    "document_info": {"artifact_name": "用户故事拆解文档", "workflow": "USER_STORY_BREAKDOWN", "stage": "STORIES", "status": "..."},
-    "requirements": [{"requirement_id": "REQ-001", "name": "...", "priority": "P0/P1/P2", "status": "已确认/待确认"}],
-    "split_principles": [{"principle": "垂直业务切片", "applied": "...", "anti_pattern": "不按工程层拆分"}],
-    "story_cards": [{"story_id": "US-001", "title": "...", "user_role": "...", "user_goal": "...", "benefit": "...", "requirement_ids": ["REQ-001"], "activity_id": "ACT-001", "task_id": "TASK-001", "business_rules": ["..."], "acceptance_criteria": ["..."], "non_functional_notes": ["..."], "out_of_scope": ["..."], "dependencies": ["..."], "open_questions": ["..."], "status": "ready"}],
-    "ready_story_summaries": [{"story_id": "US-001", "ready_reason": "...", "handoff_summary": "...", "acceptance_criteria_count": 3, "concerns": "..."}],
-    "not_ready_stories": [{"story_id": "US-101", "requirement_ids": ["REQ-101"], "blocker_reason": "...", "questions": ["..."], "suggested_next_step": "...", "status": "not_ready"}],
-    "open_questions": [{"question_id": "Q-001", "story_id": "US-101", "question": "...", "decision_impact": "...", "owner": "产品/业务/用户", "status": "开放/已确认"}],
-    "stage_gate": [{"checked": true, "item": "..."}]
-  },
-  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "HANDOFF"},
-  "warnings": []
-}
-
-artifact_data 中所有字符串必须非空；story_cards.story_id 必须唯一；story_cards.requirement_ids 只能引用 requirements 中已存在的 requirement_id；status 只能是 ready 或 not_ready。ready story 必须包含用户故事正文、acceptance_criteria、business_rules 或明确 N/A、不做范围、依赖和 ready 状态；not_ready story 必须包含 blocker_reason、questions 和 not_ready 状态。不要输出技术任务、文件路径、实现计划、测试命令、完整 Markdown 或表格，后端会负责确定性渲染故事卡片。
-chat 字段必须像一次自然的工作对话；不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
-所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
-"""
-
-
-USER_STORY_HANDOFF_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
-
-【结构化输出格式要求】
-你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
-为了支持后端确定性渲染，请严格按照以下字段顺序输出：
-1. "chat"
-2. "artifact_data"
-3. "stage_action"
-4. "warnings"
-
-JSON 对象结构：
-{
-  "chat": "面向用户的自然工作对话。说明哪些 Ready story 可以形成需求包、哪些 Not Ready story 仍被阻塞。不要复制完整产出物正文。",
-  "artifact_data": {
-    "document_info": {"artifact_name": "单故事 Handoff 清单", "workflow": "USER_STORY_BREAKDOWN", "stage": "HANDOFF", "status": "..."},
-    "requirements": [{"requirement_id": "REQ-001", "name": "...", "priority": "P0/P1/P2", "status": "已确认/待确认"}],
-    "ready_story_overview": [{"story_id": "US-001", "title": "...", "requirement_ids": ["REQ-001"], "user_value": "...", "ready_reason": "...", "status": "ready"}],
-    "single_story_packets": [{"story_id": "US-001", "requirement_ids": ["REQ-001"], "user_story": "作为...我想要...以便...", "acceptance_criteria": ["..."], "business_rules": ["..."], "non_functional_notes": ["..."], "out_of_scope": ["..."], "dependencies": ["..."], "open_questions": ["..."]}],
-    "upstream_traceability": [{"story_id": "US-001", "source_workflow": "VALUE_DISCOVERY", "source_stage": "BLUEPRINT", "source_requirements": ["REQ-001"], "source_slice": "MVP-001", "trace_note": "..."}],
-    "not_ready_blockers": [{"story_id": "US-101", "requirement_ids": ["REQ-101"], "blocker_reason": "...", "questions": ["..."], "suggested_next_step": "..."}],
-    "ai_coding_input_boundary": {"allowed": ["用户故事正文", "来源需求", "业务规则", "验收标准", "不做范围", "依赖", "开放问题"], "forbidden": ["工程实施内容", "代码层设计", "开发任务拆分", "执行类指令"]},
-    "stage_gate": [{"checked": true, "item": "..."}]
-  },
-  "stage_action": null,
-  "warnings": []
-}
-
-artifact_data 中所有字符串必须非空；single_story_packets 只能引用 ready_story_overview 中的 story_id；所有 requirement_ids 必须存在；handoff 清单只能包含需求信息和上游追溯，不得包含实现计划、文件路径、代码任务或测试命令。不要输出完整 Markdown 或表格，后端会负责确定性渲染单故事 Handoff 清单。
-chat 字段必须像一次自然的工作对话；不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -630,7 +501,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；fact_sources.fact_id 必须唯一；timeline_events.fact_ids 只能引用已存在的 fact_id。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或解释文字，后端会负责确定性渲染右侧故障复盘报告和 Mermaid timeline，并会处理时间线标签中的半角冒号。
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -663,7 +534,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；why_chain 至少包含 3 层 Why；cause_evidence.cause_id 必须唯一；fishbone_categories 至少包含 2 个分类；fishbone_categories.cause_ids 和 root_cause_conclusions.related_cause_id 只能引用已存在的 cause_id；root_cause_conclusions 必须包含“根本原因”。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块、mindmap 或 cause-map JSON 代码块，后端会负责确定性渲染右侧根因分析、Mermaid mindmap 和 ai4se-visual cause-map。
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -701,7 +572,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；report_info.action_count 必须等于 improvement_actions 数量；improvement_actions.action_id 必须唯一；priority_distribution 必须与 improvement_actions.priority 计数一致；root_cause_coverage.action_ids 只能引用已存在的 action_id；improvement_actions.root_cause_id 必须能在 root_cause_coverage.cause_id 中找到。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块、pie 或 action-board JSON 代码块，后端会负责确定性渲染右侧最终故障复盘报告、Mermaid pie 和 ai4se-visual action-board。
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -722,8 +593,8 @@ JSON 对象结构：
   "artifact_data": {
     "problem_statement": {"target_user": "...", "scenario": "...", "core_pain": "...", "existing_alternative": "...", "alternative_gap": "...", "consequence": "...", "validation_status": "待验证/部分验证/已验证"},
     "target_users": [{"dimension": "角色定义/核心痛点/痛点频率/现有应对/期望状态/付费意愿", "description": "...", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "validation_status": "已验证/部分验证/待验证"}],
-    "problem_landscape": {"root_problem_id": "P-ROOT", "root_problem": "...", "subproblems": [{"problem_id": "P-001", "problem": "...", "symptoms": ["..."]}]},
-    "evidence_items": [{"evidence_id": "EV-001", "related_problem": "...", "related_problem_ids": ["P-ROOT"], "source": "用户访谈/数据/社区讨论/类比案例/AI 假设", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "validation_action": "...", "owner": "产品/用户研究/业务/用户确认", "validation_status": "已验证/部分验证/待验证"}],
+    "problem_landscape": {"root_problem": "...", "subproblems": [{"problem_id": "P-001", "problem": "...", "symptoms": ["..."]}]},
+    "evidence_items": [{"evidence_id": "EV-001", "related_problem": "...", "source": "用户访谈/数据/社区讨论/类比案例/AI 假设", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "validation_action": "...", "owner": "产品/用户研究/业务/用户确认", "validation_status": "已验证/部分验证/待验证"}],
     "problem_user_fit": [{"dimension": "问题是否真实存在？/受影响用户群规模/用户是否在主动寻求解决方案？/现有替代方案的满意度", "current_judgement": "...", "evidence_or_assumption": "...", "evidence_ids": ["EV-001"], "validation_action": "...", "validation_status": "已验证/部分验证/待验证"}],
     "constraints_boundaries": [{"boundary_type": "约束/不可做边界", "content": "...", "impact": "...", "status": "已确认/待确认"}],
     "reverse_validation": [{"failure_hypothesis": "...", "trigger_signal": "...", "validation_action": "...", "validation_status": "待验证/部分验证/已验证"}],
@@ -733,8 +604,8 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；evidence_items.evidence_id 必须唯一；problem_landscape.root_problem_id 必须唯一且不能与 subproblems.problem_id 重复；problem_landscape.subproblems.problem_id 必须唯一；evidence_items.related_problem_ids 只能引用 root_problem_id 或已存在的 subproblems.problem_id；至少一个 evidence_items.related_problem_ids 必须包含 root_problem_id；problem_user_fit.evidence_ids 只能引用已存在的 evidence_id，且至少一个 problem_user_fit.evidence_ids 必须引用支撑 root_problem_id 的 evidence；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 mindmap，后端会负责确定性渲染右侧问题域分析和 Mermaid mindmap。
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；evidence_items.evidence_id 必须唯一；problem_landscape.subproblems.problem_id 必须唯一；problem_user_fit.evidence_ids 只能引用已存在的 evidence_id；problem_landscape.root_problem 必须被至少一个 evidence_items 或 problem_user_fit 条目覆盖；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 mindmap，后端会负责确定性渲染右侧问题域分析和 Mermaid mindmap。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -765,7 +636,7 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；idea_cards.idea_id 必须唯一；idea_sources.source_id 必须唯一；parked_or_excluded.record_id 必须唯一；idea_landscape.groups.idea_ids 和 idea_sources.idea_ids 只能引用已存在的 idea_id；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 mindmap，后端会负责确定性渲染右侧创意发散产物和 Mermaid mindmap。
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
@@ -797,7 +668,7 @@ JSON 对象结构：
 }
 
 __ARTIFACT_DATA_CONTRACT_INSTRUCTION__
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """.replace(
     "__ARTIFACT_DATA_CONTRACT_INSTRUCTION__",
@@ -836,61 +707,177 @@ JSON 对象结构：
 }
 
 artifact_data 中所有字符串必须非空；数组必须至少包含一项；core_assumptions.assumption_id、validation_roadmap.validation_id 和 next_actions.action_id 必须唯一；lean_canvas 必须覆盖问题、用户群体、独特价值主张、解决方案、渠道、收入来源、成本结构、关键指标和竞争壁垒；growth_funnel 必须覆盖 Acquisition、Activation、Retention、Revenue 和 Referral；mvp_features.assumption_ids 和 validation_roadmap.assumption_ids 只能引用已存在的 assumption_id；next_actions.related_ids 只能引用已存在的 assumption_id、validation_id 或 risk_id；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块、pie、flowchart 或 ai4se-visual mvp-map，后端会负责确定性渲染右侧产品概念简报、Mermaid 图和 mvp-map。
-chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
 
+def _story_breakdown_artifact_data_instruction(stage_action: str) -> str:
+    return """你必须只输出一个 JSON 对象，不要输出 Markdown、解释文字或代码围栏。
+顶层字段只能包含：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮如何把输入需求拆成 Epic、User Story、验收标准、依赖风险、Sprint 切片和 Lisa Handoff 输入。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "用户故事拆解包", "workflow": "STORY_BREAKDOWN", "stage": "当前阶段 ID", "status": "草稿/待确认/可交接 Lisa"},
+    "input_analysis": {"source_type": "PRD/需求蓝图/产品想法/用户输入", "product_goal": "...", "target_users": ["..."], "constraints": ["..."], "open_questions": ["..."]},
+    "epics": [{"epic_id": "EPIC-001", "name": "...", "value_goal": "...", "scope": "...", "priority": "P0/P1/P2", "dependencies": ["..."]}],
+    "user_stories": [{"story_id": "US-001", "epic_id": "EPIC-001", "title": "...", "user_story": "作为...我想...以便...", "priority": "P0/P1/P2", "sprint": "Sprint 1", "story_points": 5, "testability": "高/中/低", "status": "待评审/已确认"}],
+    "acceptance_criteria": [{"criterion_id": "AC-001", "story_id": "US-001", "criterion": "...", "verification_method": "单元/接口/UI/人工评审/LLM judge", "status": "待验证/已验证"}],
+    "dependencies": [{"dependency_id": "DEP-001", "related_story_ids": ["US-001"], "description": "...", "risk": "...", "mitigation": "...", "owner": "产品/研发/测试/AI 工程", "status": "已识别/待确认/已解决"}],
+    "sprint_slices": [{"sprint_id": "Sprint 1", "goal": "...", "story_ids": ["US-001"], "deliverable": "...", "acceptance_focus": "..."}],
+    "lisa_handoff_inputs": [{"input_type": "用户故事/验收标准", "reference_id": "US-001", "content": "...", "usage": "Lisa 测试设计输入/Lisa 需求评审输入", "status": "可用/待补充"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": {stage_action},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；epics.epic_id、user_stories.story_id、acceptance_criteria.criterion_id、dependencies.dependency_id 和 sprint_slices.sprint_id 必须唯一；user_stories.epic_id 只能引用已存在的 epic_id；acceptance_criteria.story_id、dependencies.related_story_ids 和 sprint_slices.story_ids 只能引用已存在的 story_id；lisa_handoff_inputs 中 input_type 为“用户故事”时 reference_id 必须引用 story_id，input_type 为“验收标准”时 reference_id 必须引用 criterion_id；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 story-map JSON 代码块，后端会负责确定性渲染右侧用户故事拆解包、flowchart 和 ai4se-visual story-map。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+""".replace("{stage_action}", stage_action)
+
+
+PRD_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+
+【结构化输出格式要求】
+你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
+为了支持后端确定性渲染，请严格按照以下字段顺序输出：
+1. "chat"
+2. "artifact_data"
+3. "stage_action"
+4. "warnings"
+
+JSON 对象结构：
+{
+  "chat": "面向用户的自然工作对话。说明我本轮如何评审 PRD、识别缺口、组织补全动作或形成修订蓝图。不要复制完整产出物正文。",
+  "artifact_data": {
+    "document_info": {"artifact_name": "PRD 质量评审与补全", "workflow": "PRD_REVIEW", "stage": "INVENTORY/QUALITY_AUDIT/COMPLETION_PLAN/REVISION_BLUEPRINT", "status": "可进入下一阶段/需补充信息/暂缓"},
+    "prd_inventory": [{"item_id": "INV-001", "category": "目标用户/业务目标/范围/约束/验收材料", "content": "...", "source": "PRD 草案/用户输入/AI 推断", "evidence_level": "用户提供/文档证据/AI 假设", "status": "已识别/待确认/缺失"}],
+    "quality_findings": [{"finding_id": "FIND-001", "dimension": "完整性/一致性/可测试性/边界/异常路径/非功能/风险/证据强度", "problem": "...", "severity": "P0/P1/P2", "blocking": "阻断/非阻断", "evidence": "...", "impact": "...", "recommendation": "...", "status": "待修订/待确认/已关闭"}],
+    "completion_actions": [{"action_id": "ACT-001", "finding_ids": ["FIND-001"], "action": "...", "priority": "P0/P1/P2", "owner": "产品经理/业务/研发/测试/用户确认", "verification_method": "...", "review_condition": "...", "status": "待开始/进行中/已完成"}],
+    "revision_sections": [{"section_id": "SEC-001", "title": "...", "rewrite_goal": "...", "recommended_content": "...", "acceptance_note": "...", "status": "待修订/待确认/已完成"}],
+    "acceptance_criteria": [{"criterion_id": "AC-001", "related_section_ids": ["SEC-001"], "scenario": "...", "given": "...", "when": "...", "then": "...", "testability_level": "高/中/低", "status": "待确认/已确认"}],
+    "handoff_inputs": [{"input_id": "HI-001", "related_section_ids": ["SEC-001"], "target_workflow": "TEST_DESIGN/REQ_REVIEW", "content": "...", "risk": "...", "status": "可交给 Lisa/需补充/暂缓"}],
+    "stage_gate": [{"checked": true, "item": "..."}]
+  },
+  "stage_action": null 或 {"type": "request_next_stage", "target_stage_id": "QUALITY_AUDIT/COMPLETION_PLAN/REVISION_BLUEPRINT"},
+  "warnings": []
+}
+
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；quality_findings.finding_id、completion_actions.action_id 和 revision_sections.section_id 必须唯一；completion_actions.finding_ids 只能引用已存在的 finding_id；acceptance_criteria.related_section_ids 和 handoff_inputs.related_section_ids 只能引用已存在的 section_id；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 ai4se-visual，后端会负责确定性渲染右侧 PRD artifact、score-matrix、action-board 和 roadmap。
+chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
+所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
+"""
+
+
+ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS: dict[tuple[str, str], str] = {
+    (
+        "IDEA_BRAINSTORM",
+        "DEFINE",
+    ): IDEA_DEFINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "IDEA_BRAINSTORM",
+        "DIVERGE",
+    ): IDEA_DIVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "IDEA_BRAINSTORM",
+        "CONVERGE",
+    ): IDEA_CONVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "IDEA_BRAINSTORM",
+        "CONCEPT",
+    ): IDEA_CONCEPT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    ("TEST_DESIGN", "CLARIFY"): ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    ("TEST_DESIGN", "STRATEGY"): STRATEGY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    ("TEST_DESIGN", "CASES"): CASES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    ("TEST_DESIGN", "DELIVERY"): DELIVERY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    ("REQ_REVIEW", "REVIEW"): REQ_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "REQ_REVIEW",
+        "REPORT",
+    ): REQ_REVIEW_REPORT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "VALUE_DISCOVERY",
+        "ELEVATOR",
+    ): VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "VALUE_DISCOVERY",
+        "PERSONA",
+    ): VALUE_PERSONA_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "VALUE_DISCOVERY",
+        "JOURNEY",
+    ): VALUE_JOURNEY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "VALUE_DISCOVERY",
+        "BLUEPRINT",
+    ): VALUE_BLUEPRINT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "INCIDENT_REVIEW",
+        "TIMELINE",
+    ): INCIDENT_TIMELINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "INCIDENT_REVIEW",
+        "ROOT_CAUSE",
+    ): INCIDENT_ROOT_CAUSE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "INCIDENT_REVIEW",
+        "IMPROVEMENT",
+    ): INCIDENT_IMPROVEMENT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "STORY_BREAKDOWN",
+        "INPUT_ANALYSIS",
+    ): _story_breakdown_artifact_data_instruction(
+        '{"type": "request_next_stage", "target_stage_id": "EPIC_MAPPING"}'
+    ),
+    (
+        "STORY_BREAKDOWN",
+        "EPIC_MAPPING",
+    ): _story_breakdown_artifact_data_instruction(
+        '{"type": "request_next_stage", "target_stage_id": "STORY_BACKLOG"}'
+    ),
+    (
+        "STORY_BREAKDOWN",
+        "STORY_BACKLOG",
+    ): _story_breakdown_artifact_data_instruction(
+        '{"type": "request_next_stage", "target_stage_id": "SPRINT_PLAN"}'
+    ),
+    (
+        "STORY_BREAKDOWN",
+        "SPRINT_PLAN",
+    ): _story_breakdown_artifact_data_instruction("null"),
+    ("PRD_REVIEW", "INVENTORY"): PRD_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "PRD_REVIEW",
+        "QUALITY_AUDIT",
+    ): PRD_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "PRD_REVIEW",
+        "COMPLETION_PLAN",
+    ): PRD_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+    (
+        "PRD_REVIEW",
+        "REVISION_BLUEPRINT",
+    ): PRD_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
+}
+
+
+def get_artifact_data_ready_stages() -> set[tuple[str, str]]:
+    return set(ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS)
+
+
 def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) -> bool:
-    return (workflow_id, current_stage_id) in {
-        ("IDEA_BRAINSTORM", "DEFINE"),
-        ("IDEA_BRAINSTORM", "DIVERGE"),
-        ("IDEA_BRAINSTORM", "CONVERGE"),
-        ("IDEA_BRAINSTORM", "CONCEPT"),
-        ("TEST_DESIGN", "CLARIFY"),
-        ("TEST_DESIGN", "STRATEGY"),
-        ("TEST_DESIGN", "CASES"),
-        ("TEST_DESIGN", "DELIVERY"),
-        ("REQ_REVIEW", "REVIEW"),
-        ("REQ_REVIEW", "REPORT"),
-        ("VALUE_DISCOVERY", "ELEVATOR"),
-        ("VALUE_DISCOVERY", "PERSONA"),
-        ("VALUE_DISCOVERY", "JOURNEY"),
-        ("VALUE_DISCOVERY", "BLUEPRINT"),
-        ("USER_STORY_BREAKDOWN", "SCOPE"),
-        ("USER_STORY_BREAKDOWN", "STORY_MAP"),
-        ("USER_STORY_BREAKDOWN", "STORIES"),
-        ("USER_STORY_BREAKDOWN", "HANDOFF"),
-        ("INCIDENT_REVIEW", "TIMELINE"),
-        ("INCIDENT_REVIEW", "ROOT_CAUSE"),
-        ("INCIDENT_REVIEW", "IMPROVEMENT"),
-    }
-
-
-def prioritize_artifact_data_for_visible_streaming(instruction: str) -> str:
-    """Move artifact_data before chat so right-pane output can stream first."""
-    instruction = instruction.replace(
-        '1. "chat"\n2. "artifact_data"',
-        '1. "artifact_data"\n2. "chat"',
-        1,
-    )
-    match = re.search(
-        r'(JSON 对象结构：\n\{\n)  "chat": ([^\n]+),\n  "artifact_data":',
-        instruction,
-    )
-    if not match:
-        return instruction
-    chat_value = match.group(2)
-    instruction = (
-        instruction[: match.start()]
-        + match.group(1)
-        + '  "artifact_data":'
-        + instruction[match.end() :]
-    )
-    return instruction.replace(
-        '\n  },\n  "stage_action"',
-        f'\n  }},\n  "chat": {chat_value},\n  "stage_action"',
-        1,
+    stage_key = (workflow_id, current_stage_id)
+    return (
+        stage_key in ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS
+        and stage_key in get_artifact_data_renderer_stage_keys()
     )
 
 
@@ -898,52 +885,10 @@ def build_structured_output_instruction(
     workflow_id: str,
     current_stage_id: str,
 ) -> str:
-    artifact_data_instruction = None
-    if (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DEFINE"):
-        artifact_data_instruction = IDEA_DEFINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DIVERGE"):
-        artifact_data_instruction = IDEA_DIVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONVERGE"):
-        artifact_data_instruction = IDEA_CONVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONCEPT"):
-        artifact_data_instruction = IDEA_CONCEPT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
-        artifact_data_instruction = ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
-        artifact_data_instruction = STRATEGY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "CASES"):
-        artifact_data_instruction = CASES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "DELIVERY"):
-        artifact_data_instruction = DELIVERY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("REQ_REVIEW", "REVIEW"):
-        artifact_data_instruction = REQ_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("REQ_REVIEW", "REPORT"):
-        artifact_data_instruction = REQ_REVIEW_REPORT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
-        artifact_data_instruction = VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "PERSONA"):
-        artifact_data_instruction = VALUE_PERSONA_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "JOURNEY"):
-        artifact_data_instruction = VALUE_JOURNEY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "BLUEPRINT"):
-        artifact_data_instruction = VALUE_BLUEPRINT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "SCOPE"):
-        artifact_data_instruction = USER_STORY_SCOPE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "STORY_MAP"):
-        artifact_data_instruction = USER_STORY_MAP_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "STORIES"):
-        artifact_data_instruction = USER_STORIES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "HANDOFF"):
-        artifact_data_instruction = USER_STORY_HANDOFF_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
-        artifact_data_instruction = INCIDENT_TIMELINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "ROOT_CAUSE"):
-        artifact_data_instruction = INCIDENT_ROOT_CAUSE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "IMPROVEMENT"):
-        artifact_data_instruction = INCIDENT_IMPROVEMENT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION
-    if artifact_data_instruction is not None:
-        return prioritize_artifact_data_for_visible_streaming(artifact_data_instruction)
-    return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
+    return ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS.get(
+        (workflow_id, current_stage_id),
+        TEXT_STRUCTURED_OUTPUT_INSTRUCTION,
+    )
 
 
 def build_raw_json_retry_prompt(
@@ -1199,6 +1144,21 @@ class PydanticAgentRuntime:
                     current_stage_id=current_stage_id,
                 )
             except json.JSONDecodeError:
+                if emitted_any_delta and (latest_chat or latest_markdown):
+                    yield AgentTurnOutput.model_validate(
+                        {
+                            "chat": latest_chat
+                            or "本轮响应已中断，右侧产出物可能不完整。",
+                            "artifact_update": (
+                                {"type": "replace", "markdown": latest_markdown}
+                                if latest_markdown
+                                else {"type": "none"}
+                            ),
+                            "stage_action": None,
+                            "warnings": ["artifact_truncated"],
+                        }
+                    )
+                    return
                 raise
             except ValidationError as exc:
                 if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:
@@ -1357,85 +1317,6 @@ def extract_json_string_prefix(text: str, key: str) -> str | None:
     return "".join(chars) if chars else None
 
 
-def extract_json_object_prefix(text: str, key: str) -> dict[str, Any] | None:
-    key_match = re.search(rf'"{re.escape(key)}"\s*:', text)
-    if not key_match:
-        return None
-    index = key_match.end()
-    while index < len(text) and text[index].isspace():
-        index += 1
-    if index >= len(text) or text[index] != "{":
-        return None
-    try:
-        value, _ = json.JSONDecoder().raw_decode(text[index:])
-    except json.JSONDecodeError:
-        return None
-    return value if isinstance(value, dict) else None
-
-
-def extract_completed_json_object_members(text: str, key: str) -> dict[str, Any]:
-    key_match = re.search(rf'"{re.escape(key)}"\s*:', text)
-    if not key_match:
-        return {}
-    index = key_match.end()
-    while index < len(text) and text[index].isspace():
-        index += 1
-    if index >= len(text) or text[index] != "{":
-        return {}
-
-    index += 1
-    members: dict[str, Any] = {}
-    decoder = json.JSONDecoder()
-    while index < len(text):
-        while index < len(text) and text[index].isspace():
-            index += 1
-        if index >= len(text):
-            return members
-        if text[index] == "}":
-            return members
-        if text[index] == ",":
-            index += 1
-            continue
-        if text[index] != '"':
-            return members
-
-        try:
-            member_key, key_end = decoder.raw_decode(text[index:])
-        except json.JSONDecodeError:
-            return members
-        if not isinstance(member_key, str):
-            return members
-        index += key_end
-
-        while index < len(text) and text[index].isspace():
-            index += 1
-        if index >= len(text) or text[index] != ":":
-            return members
-        index += 1
-
-        while index < len(text) and text[index].isspace():
-            index += 1
-        try:
-            value, value_end = decoder.raw_decode(text[index:])
-        except json.JSONDecodeError:
-            return members
-        members[member_key] = value
-        index += value_end
-
-        while index < len(text) and text[index].isspace():
-            index += 1
-        if index >= len(text):
-            return members
-        if text[index] == ",":
-            index += 1
-            continue
-        if text[index] == "}":
-            return members
-        return members
-
-    return members
-
-
 def build_partial_agent_delta(
     text: str,
     *,
@@ -1444,53 +1325,12 @@ def build_partial_agent_delta(
 ) -> AgentTurnDeltaOutput | None:
     chat = extract_json_string_prefix(text, "chat")
     markdown = extract_json_string_prefix(text, "markdown")
-    artifact_patch = None
-    if (
-        not markdown
-        and workflow_id is not None
-        and current_stage_id is not None
-        and supports_artifact_data_rendering(workflow_id, current_stage_id)
-    ):
-        artifact_data = extract_json_object_prefix(text, "artifact_data")
-        if artifact_data is not None:
-            try:
-                rendered = render_agent_turn_from_artifact_data(
-                    {
-                        "chat": chat or "正在生成右侧产出物。",
-                        "artifact_data": artifact_data,
-                        "stage_action": None,
-                        "warnings": [],
-                    },
-                    workflow_id=workflow_id,
-                    current_stage_id=current_stage_id,
-                )
-            except (ValueError, ValidationError):
-                rendered = None
-            if rendered is not None:
-                markdown = rendered.artifact_update.markdown
-                artifact_patch = rendered.artifact_patch
-        else:
-            partial_artifact_data = extract_completed_json_object_members(
-                text,
-                "artifact_data",
-            )
-            if partial_artifact_data:
-                try:
-                    rendered = render_partial_agent_turn_from_artifact_data(
-                        {
-                            "chat": chat or "正在生成右侧产出物。",
-                            "artifact_data": partial_artifact_data,
-                            "stage_action": None,
-                            "warnings": [],
-                        },
-                        workflow_id=workflow_id,
-                        current_stage_id=current_stage_id,
-                    )
-                except (ValueError, ValidationError):
-                    rendered = None
-                if rendered is not None:
-                    markdown = rendered.artifact_update.markdown
-                    artifact_patch = rendered.artifact_patch
+    if not markdown and re.search(r'"artifact_data"\s*:', text):
+        markdown = build_artifact_data_progress_markdown(
+            text,
+            workflow_id=workflow_id,
+            current_stage_id=current_stage_id,
+        )
     if not chat and not markdown:
         return None
     return AgentTurnDeltaOutput(
@@ -1498,7 +1338,143 @@ def build_partial_agent_delta(
         artifact_update=(
             {"type": "replace", "markdown": markdown} if markdown else None
         ),
-        artifact_patch=artifact_patch,
+    )
+
+
+def build_artifact_data_progress_markdown(
+    text: str,
+    *,
+    workflow_id: str | None = None,
+    current_stage_id: str | None = None,
+) -> str | None:
+    complete_markdown = render_complete_streamed_artifact_data_markdown(
+        text,
+        workflow_id=workflow_id,
+        current_stage_id=current_stage_id,
+    )
+    if complete_markdown:
+        return complete_markdown
+    return render_partial_streamed_artifact_data_markdown(
+        text,
+        workflow_id=workflow_id,
+        current_stage_id=current_stage_id,
+    )
+
+
+def extract_complete_json_value_after_key(text: str, key: str) -> Any | None:
+    key_match = re.search(rf'"{re.escape(key)}"\s*:', text)
+    if key_match is None:
+        return None
+    index = key_match.end()
+    while index < len(text) and text[index].isspace():
+        index += 1
+    try:
+        value, _ = json.JSONDecoder().raw_decode(text[index:])
+    except json.JSONDecodeError:
+        return None
+    return value
+
+
+def extract_partial_json_object_after_key(text: str, key: str) -> dict[str, Any] | None:
+    key_match = re.search(rf'"{re.escape(key)}"\s*:', text)
+    if key_match is None:
+        return None
+    index = key_match.end()
+    while index < len(text) and text[index].isspace():
+        index += 1
+    if index >= len(text) or text[index] != "{":
+        return None
+
+    decoder = json.JSONDecoder()
+    index += 1
+    partial: dict[str, Any] = {}
+    while index < len(text):
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index < len(text) and text[index] == ",":
+            index += 1
+            continue
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index >= len(text) or text[index] == "}":
+            break
+
+        try:
+            field_name, next_index = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            break
+        if not isinstance(field_name, str):
+            break
+        index += next_index
+
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index >= len(text) or text[index] != ":":
+            break
+        index += 1
+        while index < len(text) and text[index].isspace():
+            index += 1
+
+        try:
+            field_value, next_index = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            break
+        partial[field_name] = field_value
+        index += next_index
+
+    return partial or None
+
+
+def render_complete_streamed_artifact_data_markdown(
+    text: str,
+    *,
+    workflow_id: str | None,
+    current_stage_id: str | None,
+) -> str | None:
+    if workflow_id is None or current_stage_id is None:
+        return None
+    artifact_data = extract_complete_json_value_after_key(text, "artifact_data")
+    if artifact_data is None:
+        return None
+    try:
+        rendered = render_agent_turn_from_artifact_data(
+            {
+                "chat": (
+                    extract_json_string_prefix(text, "chat")
+                    or "正在生成右侧产出物。"
+                ),
+                "artifact_data": artifact_data,
+                "stage_action": None,
+                "warnings": [],
+            },
+            workflow_id=workflow_id,
+            current_stage_id=current_stage_id,
+        )
+    except (ValidationError, ValueError):
+        return None
+    if rendered is None:
+        return None
+    artifact_update = rendered.artifact_update
+    if artifact_update.type != "replace" or not artifact_update.markdown:
+        return None
+    return artifact_update.markdown
+
+
+def render_partial_streamed_artifact_data_markdown(
+    text: str,
+    *,
+    workflow_id: str | None,
+    current_stage_id: str | None,
+) -> str | None:
+    if workflow_id is None or current_stage_id is None:
+        return None
+    artifact_data = extract_partial_json_object_after_key(text, "artifact_data")
+    if artifact_data is None:
+        return None
+    return render_partial_artifact_data_markdown(
+        artifact_data,
+        workflow_id=workflow_id,
+        current_stage_id=current_stage_id,
     )
 
 

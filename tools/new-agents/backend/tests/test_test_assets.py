@@ -366,6 +366,104 @@ def test_update_lisa_test_asset_issue_status_rejects_invalid_status(app):
             )
 
 
+def test_materialized_collection_reports_quality_summary_from_persisted_states(app):
+    inconsistent_markdown = CASES_MARKDOWN.replace(
+        "TC-002 | 部分覆盖",
+        "TC-999 | 部分覆盖",
+    )
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CASES")
+        record_artifact_version(run.id, "CASES", inconsistent_markdown)
+
+        collection = materialize_lisa_test_assets(run.id)
+
+    assert collection["qualitySummary"] == {
+        "status": "blocked",
+        "label": "存在阻断",
+        "pendingIssueCount": 2,
+        "confirmedIssueCount": 0,
+        "ignoredIssueCount": 0,
+        "uncoveredTestPointCount": 0,
+        "partialTestPointCount": 1,
+        "openRiskCount": 2,
+        "mitigatingRiskCount": 0,
+        "acceptedRiskCount": 0,
+        "closedRiskCount": 0,
+        "gates": [
+            {
+                "id": "asset-issues",
+                "status": "fail",
+                "title": "资产问题",
+                "detail": "2 个待处理，0 个已确认，0 个已忽略",
+            },
+            {
+                "id": "test-point-coverage",
+                "status": "warn",
+                "title": "测试点覆盖",
+                "detail": "0 个未覆盖，1 个部分覆盖",
+            },
+            {
+                "id": "risk-lifecycle",
+                "status": "warn",
+                "title": "风险处置",
+                "detail": "2 个待处置，0 个缓解中，0 个已接受，0 个已关闭",
+            },
+        ],
+    }
+
+
+def test_quality_summary_updates_after_issue_coverage_and_risk_actions(app):
+    inconsistent_markdown = CASES_MARKDOWN.replace(
+        "TC-002 | 部分覆盖",
+        "TC-999 | 部分覆盖",
+    )
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CASES")
+        record_artifact_version(run.id, "CASES", inconsistent_markdown)
+        collection = materialize_lisa_test_assets(run.id)
+
+        for issue in collection["assetIssues"]:
+            update_lisa_test_asset_issue_status(
+                collection["id"],
+                issue["id"],
+                {"status": "confirmed"},
+            )
+        update_lisa_test_point_asset(
+            collection["id"],
+            "登录错误处理",
+            {
+                "status": "已覆盖",
+                "testCases": ["TC-002"],
+            },
+        )
+        for risk in get_lisa_test_asset_collection(collection["id"])["riskMatrix"]:
+            update_lisa_test_asset_risk(
+                collection["id"],
+                risk["risk"],
+                {"status": "accepted"},
+            )
+        confirmed_collection = get_lisa_test_asset_collection(collection["id"])
+
+        for issue in confirmed_collection["assetIssues"]:
+            update_lisa_test_asset_issue_status(
+                collection["id"],
+                issue["id"],
+                {"status": "ignored"},
+            )
+        ready_collection = get_lisa_test_asset_collection(collection["id"])
+
+    assert confirmed_collection["qualitySummary"]["status"] == "attention"
+    assert confirmed_collection["qualitySummary"]["label"] == "需要关注"
+    assert confirmed_collection["qualitySummary"]["confirmedIssueCount"] == 2
+    assert confirmed_collection["qualitySummary"]["pendingIssueCount"] == 0
+    assert confirmed_collection["qualitySummary"]["partialTestPointCount"] == 0
+    assert confirmed_collection["qualitySummary"]["acceptedRiskCount"] == 2
+    assert ready_collection["qualitySummary"]["status"] == "ready"
+    assert ready_collection["qualitySummary"]["label"] == "可交付"
+    assert ready_collection["qualitySummary"]["ignoredIssueCount"] == 2
+    assert all(gate["status"] == "pass" for gate in ready_collection["qualitySummary"]["gates"])
+
+
 def test_export_lisa_test_assets_rejects_missing_cases_artifact(app):
     with app.app_context():
         run = create_agent_run("TEST_DESIGN", "lisa", "STRATEGY")

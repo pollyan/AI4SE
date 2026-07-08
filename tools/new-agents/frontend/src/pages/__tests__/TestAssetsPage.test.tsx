@@ -20,6 +20,7 @@ import {
     fetchIntentTesterExecutionDetail,
     fetchLatestIntentTesterExecution,
 } from '../../services/intentTesterExecutionService';
+import { withTestAssetQualitySummary } from '../../core/testAssetQuality';
 import type { TestAssetCollection } from '../../store';
 
 vi.mock('../../services/testAssetService', () => ({
@@ -74,6 +75,39 @@ const TEST_ASSET_COLLECTION: TestAssetCollection = {
                 partial: 0,
                 uncovered: 1,
                 coverageRate: 0,
+            },
+        ],
+    },
+    qualitySummary: {
+        status: 'blocked',
+        label: '存在阻断',
+        pendingIssueCount: 1,
+        confirmedIssueCount: 0,
+        ignoredIssueCount: 0,
+        uncoveredTestPointCount: 1,
+        partialTestPointCount: 0,
+        openRiskCount: 1,
+        mitigatingRiskCount: 0,
+        acceptedRiskCount: 0,
+        closedRiskCount: 0,
+        gates: [
+            {
+                id: 'asset-issues',
+                status: 'fail',
+                title: '资产问题',
+                detail: '1 个待处理，0 个已确认，0 个已忽略',
+            },
+            {
+                id: 'test-point-coverage',
+                status: 'fail',
+                title: '测试点覆盖',
+                detail: '1 个未覆盖，0 个部分覆盖',
+            },
+            {
+                id: 'risk-lifecycle',
+                status: 'warn',
+                title: '风险处置',
+                detail: '1 个待处置，0 个缓解中，0 个已接受，0 个已关闭',
             },
         ],
     },
@@ -440,6 +474,11 @@ describe('TestAssetsPage', () => {
         expect(await screen.findByText('Lisa 测试资产中心')).toBeTruthy();
         expect(fetchTestAssetCollection).toHaveBeenCalledWith(7);
         expect(screen.getByText('覆盖率 50%')).toBeTruthy();
+        expect(screen.getByText('质量状态')).toBeTruthy();
+        expect(screen.getByText('存在阻断')).toBeTruthy();
+        expect(screen.getByText('1 个待处理，0 个已确认，0 个已忽略')).toBeTruthy();
+        expect(screen.getByText('1 个未覆盖，0 个部分覆盖')).toBeTruthy();
+        expect(screen.getByText('1 个待处置，0 个缓解中，0 个已接受，0 个已关闭')).toBeTruthy();
         expect(screen.getByText('用户登录成功')).toBeTruthy();
         expect(screen.getByText('用户登录失败提示错误')).toBeTruthy();
         expect(screen.getByText('覆盖追溯引用了不存在的测试用例 TC-999')).toBeTruthy();
@@ -755,10 +794,11 @@ describe('TestAssetsPage', () => {
         });
         const issue = screen.getByTestId('asset-issue-5');
         expect(within(issue).getByText('已确认')).toBeTruthy();
+        expect(screen.getByText('0 个待处理，1 个已确认，0 个已忽略')).toBeTruthy();
     });
 
     it('edits a test point and refreshes derived coverage and risk matrix', async () => {
-        const updatedCollection: TestAssetCollection = {
+        const updatedCollection: TestAssetCollection = withTestAssetQualitySummary({
             ...TEST_ASSET_COLLECTION,
             coverageSummary: {
                 ...TEST_ASSET_COLLECTION.coverageSummary,
@@ -792,7 +832,7 @@ describe('TestAssetsPage', () => {
                     note: '',
                 },
             ],
-        };
+        });
         vi.mocked(fetchTestAssetCollection)
             .mockResolvedValueOnce(TEST_ASSET_COLLECTION)
             .mockResolvedValueOnce(updatedCollection);
@@ -826,6 +866,7 @@ describe('TestAssetsPage', () => {
         expect(fetchTestAssetCollection).toHaveBeenCalledTimes(2);
         expect(await screen.findByText('已保存测试点 登录异常链路')).toBeTruthy();
         expect(screen.getByText('覆盖率 100%')).toBeTruthy();
+        expect(screen.getByText('0 个未覆盖，0 个部分覆盖')).toBeTruthy();
         expect(screen.getAllByText('R-LOGIN-LOCK').length).toBeGreaterThan(0);
         const editedPoint = screen.getByTestId('test-asset-point-登录异常链路');
         expect(within(editedPoint).getByText('P0 · 已覆盖')).toBeTruthy();
@@ -833,7 +874,7 @@ describe('TestAssetsPage', () => {
     });
 
     it('edits risk lifecycle status owner and note in the asset center', async () => {
-        const updatedCollection: TestAssetCollection = {
+        const updatedCollection: TestAssetCollection = withTestAssetQualitySummary({
             ...TEST_ASSET_COLLECTION,
             riskMatrix: [
                 {
@@ -843,7 +884,7 @@ describe('TestAssetsPage', () => {
                     note: '补充异常登录覆盖',
                 },
             ],
-        };
+        });
         vi.mocked(fetchTestAssetCollection)
             .mockResolvedValueOnce(TEST_ASSET_COLLECTION)
             .mockResolvedValueOnce(updatedCollection);
@@ -873,6 +914,7 @@ describe('TestAssetsPage', () => {
             });
         });
         expect(await screen.findByText('已保存风险 R-LOGIN-002')).toBeTruthy();
+        expect(screen.getByText('0 个待处置，1 个缓解中，0 个已接受，0 个已关闭')).toBeTruthy();
         const risk = screen.getByTestId('test-asset-risk-11');
         expect(within(risk).getByText('缓解中')).toBeTruthy();
         expect(within(risk).getByText('责任人 QA 赵六')).toBeTruthy();
@@ -906,7 +948,7 @@ describe('TestAssetsPage', () => {
     });
 
     it('renames a linked risk and refreshes derived assets', async () => {
-        const updatedCollection: TestAssetCollection = {
+        const updatedCollection: TestAssetCollection = withTestAssetQualitySummary({
             ...TEST_ASSET_COLLECTION,
             testCases: TEST_ASSET_COLLECTION.testCases.map(testCase => (
                 testCase.id === 'TC-002'
@@ -929,7 +971,7 @@ describe('TestAssetsPage', () => {
                     status: 'mitigating',
                 },
             ],
-        };
+        });
         vi.mocked(fetchTestAssetCollection)
             .mockResolvedValueOnce(TEST_ASSET_COLLECTION)
             .mockResolvedValueOnce(updatedCollection);
@@ -962,7 +1004,7 @@ describe('TestAssetsPage', () => {
     });
 
     it('deletes an unlinked manual risk', async () => {
-        const collectionWithManualRisk: TestAssetCollection = {
+        const collectionWithManualRisk: TestAssetCollection = withTestAssetQualitySummary({
             ...TEST_ASSET_COLLECTION,
             riskMatrix: [
                 ...TEST_ASSET_COLLECTION.riskMatrix,
@@ -980,7 +1022,7 @@ describe('TestAssetsPage', () => {
                     note: '',
                 },
             ],
-        };
+        });
         vi.mocked(fetchTestAssetCollection).mockResolvedValueOnce(collectionWithManualRisk);
 
         renderPage();

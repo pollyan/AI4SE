@@ -16,17 +16,17 @@ describe('storyHandoffPacketService', () => {
         vi.mocked(fetch).mockResolvedValue(new Response(
             JSON.stringify({
                 runId: 'alex-run-123',
-                workflowId: 'USER_STORY_BREAKDOWN',
-                stageId: 'HANDOFF',
+                workflowId: 'STORY_BREAKDOWN',
+                stageId: 'SPRINT_PLAN',
                 sourceArtifactVersion: 1,
                 sourceArtifactDigest: 'sha256:abc123',
                 candidates: [
                     {
                         storyId: 'US-001',
-                        title: '生成澄清问题',
-                        requirementIds: ['REQ-001'],
-                        userValue: '测试负责人能在设计前发现缺失业务规则',
-                        readyReason: '验收标准和业务规则已明确',
+                        title: '需求澄清基线',
+                        requirementIds: ['EPIC-001', 'AC-001'],
+                        userValue: '作为测试负责人，我想把需求输入转成澄清清单，以便在开发前发现遗漏。',
+                        readyReason: '状态：待评审；可测试性：高；Sprint：Sprint 1',
                     },
                 ],
             }),
@@ -36,15 +36,15 @@ describe('storyHandoffPacketService', () => {
             },
         ));
 
-        const result = await fetchStoryHandoffCandidates('alex-run-123', 'HANDOFF');
+        const result = await fetchStoryHandoffCandidates('alex-run-123', 'SPRINT_PLAN');
 
         expect(fetch).toHaveBeenCalledWith(
-            '/new-agents/api/agent/runs/alex-run-123/story-handoff-candidates?stageId=HANDOFF'
+            '/new-agents/api/agent/runs/alex-run-123/story-handoff-candidates?stageId=SPRINT_PLAN'
         );
         expect(result.candidates).toEqual([
             expect.objectContaining({
                 storyId: 'US-001',
-                requirementIds: ['REQ-001'],
+                requirementIds: ['EPIC-001', 'AC-001'],
             }),
         ]);
     });
@@ -53,13 +53,13 @@ describe('storyHandoffPacketService', () => {
         vi.mocked(fetch).mockResolvedValue(new Response(
             JSON.stringify({
                 sourceRunId: 'alex-run-123',
-                sourceWorkflowId: 'USER_STORY_BREAKDOWN',
-                sourceStageId: 'HANDOFF',
+                sourceWorkflowId: 'STORY_BREAKDOWN',
+                sourceStageId: 'SPRINT_PLAN',
                 sourceArtifactVersion: 1,
                 sourceArtifactDigest: 'sha256:abc123',
                 createdAt: 1710000000000,
                 storyId: 'US-001',
-                requirementIds: ['REQ-001'],
+                requirementIds: ['EPIC-001', 'AC-001'],
                 userStory: '作为测试负责人，我想看到澄清问题，以便补齐规则。',
                 acceptanceCriteria: ['输出需求事实清单'],
                 businessRules: ['问题必须标注责任方'],
@@ -74,26 +74,26 @@ describe('storyHandoffPacketService', () => {
             },
         ));
 
-        const packet = await createStoryHandoffPacket('alex-run-123', 'HANDOFF', 'US-001');
+        const packet = await createStoryHandoffPacket('alex-run-123', 'SPRINT_PLAN', 'US-001');
 
         expect(fetch).toHaveBeenCalledWith(
             '/new-agents/api/agent/runs/alex-run-123/story-handoff-packets',
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ stageId: 'HANDOFF', storyId: 'US-001' }),
+                body: JSON.stringify({ stageId: 'SPRINT_PLAN', storyId: 'US-001' }),
             },
         );
         expect(packet.storyId).toBe('US-001');
-        expect(packet.requirementIds).toEqual(['REQ-001']);
+        expect(packet.requirementIds).toEqual(['EPIC-001', 'AC-001']);
     });
 
     it('fetches saved story handoff packets with stale metadata', async () => {
         vi.mocked(fetch).mockResolvedValue(new Response(
             JSON.stringify({
                 runId: 'alex-run-123',
-                workflowId: 'USER_STORY_BREAKDOWN',
-                stageId: 'HANDOFF',
+                workflowId: 'STORY_BREAKDOWN',
+                stageId: 'SPRINT_PLAN',
                 sourceArtifactVersion: 2,
                 sourceArtifactDigest: 'sha256:new',
                 packets: [
@@ -106,8 +106,8 @@ describe('storyHandoffPacketService', () => {
                         currentSourceArtifactDigest: 'sha256:new',
                         packet: {
                             sourceRunId: 'alex-run-123',
-                            sourceWorkflowId: 'USER_STORY_BREAKDOWN',
-                            sourceStageId: 'HANDOFF',
+                            sourceWorkflowId: 'STORY_BREAKDOWN',
+                            sourceStageId: 'SPRINT_PLAN',
                             sourceArtifactVersion: 1,
                             sourceArtifactDigest: 'sha256:old',
                             createdAt: 1710000000000,
@@ -130,10 +130,10 @@ describe('storyHandoffPacketService', () => {
             },
         ));
 
-        const result = await fetchStoryHandoffPackets('alex-run-123', 'HANDOFF');
+        const result = await fetchStoryHandoffPackets('alex-run-123', 'SPRINT_PLAN');
 
         expect(fetch).toHaveBeenCalledWith(
-            '/new-agents/api/agent/runs/alex-run-123/story-handoff-packets?stageId=HANDOFF'
+            '/new-agents/api/agent/runs/alex-run-123/story-handoff-packets?stageId=SPRINT_PLAN'
         );
         expect(result.packets[0]).toMatchObject({
             id: '1',
@@ -147,8 +147,8 @@ describe('storyHandoffPacketService', () => {
         vi.mocked(fetch).mockResolvedValue(new Response(
             JSON.stringify({
                 runId: 'alex-run-123',
-                workflowId: 'USER_STORY_BREAKDOWN',
-                stageId: 'HANDOFF',
+                workflowId: 'STORY_BREAKDOWN',
+                stageId: 'SPRINT_PLAN',
                 sourceArtifactVersion: 1,
                 sourceArtifactDigest: 'sha256:abc123',
                 packets: [
@@ -167,7 +167,7 @@ describe('storyHandoffPacketService', () => {
         ));
 
         await expect(
-            fetchStoryHandoffPackets('alex-run-123', 'HANDOFF')
+            fetchStoryHandoffPackets('alex-run-123', 'SPRINT_PLAN')
         ).rejects.toThrow('Invalid story handoff packet response');
     });
 });

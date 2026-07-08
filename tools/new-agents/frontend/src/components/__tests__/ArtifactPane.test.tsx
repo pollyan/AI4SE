@@ -3,8 +3,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ArtifactPane } from '../ArtifactPane';
 import { useStore } from '../../store';
 import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../../services/runSnapshotService';
-import { createStoryHandoffPacket, fetchStoryHandoffCandidates, fetchStoryHandoffPackets } from '../../services/storyHandoffPacketService';
-import { retryMermaidGeneration } from '../../services/mermaidRetryService';
+
+const mockHandleRegenerateArtifactSection = vi.hoisted(() => vi.fn());
 
 vi.mock('../../services/runSnapshotService', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../services/runSnapshotService')>();
@@ -15,10 +15,10 @@ vi.mock('../../services/runSnapshotService', async (importOriginal) => {
     };
 });
 
-vi.mock('../../services/storyHandoffPacketService', () => ({
-    createStoryHandoffPacket: vi.fn(),
-    fetchStoryHandoffCandidates: vi.fn(),
-    fetchStoryHandoffPackets: vi.fn(),
+vi.mock('../../services/chatService', () => ({
+    useChatService: () => ({
+        handleRegenerateArtifactSection: mockHandleRegenerateArtifactSection,
+    }),
 }));
 
 // Mock Mermaid component
@@ -28,18 +28,11 @@ vi.mock('../Mermaid', () => ({
         onRetry,
     }: {
         chart: string;
-        onRetry?: (brokenCode: string, errorMessage: string, blockIndex: number) => Promise<boolean>;
+        onRetry?: () => Promise<boolean>;
     }) => (
         <div data-testid="mermaid">
             {chart}
-            {onRetry && (
-                <button
-                    type="button"
-                    onClick={() => void onRetry(chart, 'Syntax Error', 0)}
-                >
-                    重新生成图表
-                </button>
-            )}
+            {onRetry && <button type="button">重新生成图表</button>}
         </div>
     ),
 }));
@@ -51,7 +44,7 @@ vi.mock('../../services/mermaidRetryService', () => ({
 
 // Mock lucide-react
 vi.mock('lucide-react', () => {
-    const icons = ['Download', 'Code', 'Eye', 'History', 'X', 'AlertTriangle', 'GitCompare', 'Edit3', 'Save', 'MessageSquare', 'Trash2', 'Lock', 'Unlock', 'MoreHorizontal', 'Copy'];
+    const icons = ['Download', 'Code', 'Eye', 'History', 'X', 'AlertTriangle', 'GitCompare', 'Edit3', 'Save', 'MessageSquare', 'Trash2', 'Lock', 'Unlock', 'MoreHorizontal', 'RefreshCw'];
     const mod: Record<string, React.FC> = {};
     icons.forEach(name => {
         mod[name] = () => <span>{name}</span>;
@@ -76,26 +69,17 @@ describe('ArtifactPane Component', () => {
 
     beforeEach(() => {
         vi.restoreAllMocks();
-        vi.mocked(fetchStoryHandoffCandidates).mockReset();
-        vi.mocked(fetchStoryHandoffPackets).mockReset();
-        vi.mocked(createStoryHandoffPacket).mockReset();
+        mockHandleRegenerateArtifactSection.mockReset();
         useStore.setState({
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
             artifactContent: '',
-            artifactChangeIndex: [],
             artifactHistory: [],
             stageArtifacts: {},
             artifactTruncated: false,
             artifactVisualDiagnostics: [],
             currentRunId: null,
             isGenerating: false,
-        });
-        Object.defineProperty(navigator, 'clipboard', {
-            configurable: true,
-            value: {
-                writeText: vi.fn().mockResolvedValue(undefined),
-            },
         });
     });
 
@@ -128,7 +112,7 @@ describe('ArtifactPane Component', () => {
 
     it('shows a friendly animated artifact generation state while generating', () => {
         useStore.setState({
-            artifactContent: '',
+            artifactContent: '# 需求分析文档\n\n初始内容',
             isGenerating: true,
         });
 
@@ -137,48 +121,7 @@ describe('ArtifactPane Component', () => {
         expect(screen.getByText('正在构建产出物')).toBeTruthy();
         expect(screen.getByText('正在构建右侧产出物')).toBeTruthy();
         expect(screen.getByTestId('artifact-generation-animation')).toBeTruthy();
-        expect(screen.queryByTestId('artifact-streaming-position-indicator')).toBeNull();
         expect(container.querySelector('.mt-3.h-1')).toBeNull();
-    });
-
-    it('shows a body-position streaming indicator after rendered content while generating', () => {
-        useStore.setState({
-            artifactContent: '# 需求分析文档\n\n## 已完成章节\n\n正式内容',
-            isGenerating: true,
-        });
-
-        render(<ArtifactPane />);
-
-        expect(screen.getByText('已完成章节')).toBeTruthy();
-        expect(screen.getByTestId('artifact-streaming-position-indicator')).toBeTruthy();
-        expect(screen.getByText('正在生成下一段...')).toBeTruthy();
-    });
-
-    it('keeps the body-position streaming indicator outside source markdown text', () => {
-        useStore.setState({
-            artifactContent: '# 需求分析文档\n\n## 已完成章节\n\n正式内容',
-            isGenerating: true,
-        });
-
-        const { container } = render(<ArtifactPane />);
-        fireEvent.click(screen.getByTitle('代码'));
-
-        const sourceBlock = container.querySelector('pre');
-        expect(sourceBlock?.textContent).toContain('已完成章节');
-        expect(sourceBlock?.textContent).not.toContain('正在生成下一段...');
-        expect(screen.getByTestId('artifact-streaming-position-indicator').getAttribute('data-artifact-ephemeral')).toBe('true');
-    });
-
-    it('hides the body-position streaming indicator after generation completes', () => {
-        useStore.setState({
-            artifactContent: '# 需求分析文档\n\n## 已完成章节\n\n正式内容',
-            isGenerating: false,
-        });
-
-        render(<ArtifactPane />);
-
-        expect(screen.getByText('已完成章节')).toBeTruthy();
-        expect(screen.queryByTestId('artifact-streaming-position-indicator')).toBeNull();
     });
 
     it('keeps secondary artifact actions behind the artifact toolbar menu', () => {
@@ -279,6 +222,35 @@ describe('ArtifactPane Component', () => {
         expect(screen.getByText('## 登录边界')).toBeTruthy();
         expect(screen.getByText('合并轨迹：恢复服务端删除块「风险 / 验收」')).toBeTruthy();
         expect(screen.getByText('最近版本：run-123-CLARIFY-v2')).toBeTruthy();
+    });
+
+    it('shows workflow quality governance in the artifact review panel', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            artifactContent: '# 测试策略蓝图\n\n## 1. 策略摘要\n\n## 8. 阶段门禁',
+            artifactVisualDiagnostics: [
+                {
+                    id: 'structured-visual:STRATEGY:0',
+                    stageId: 'STRATEGY',
+                    kind: 'structured-visual',
+                    title: '结构化可视化无效',
+                    message: 'risk-board JSON 缺 items',
+                    createdAt: 1,
+                },
+            ],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByRole('button', { name: '更多产物操作' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: '审阅' }));
+
+        expect(screen.getByText('质量治理')).toBeTruthy();
+        expect(screen.getByText(/质量分/)).toBeTruthy();
+        expect(screen.getByText(/补齐必需章节/)).toBeTruthy();
+        expect(screen.getByText(/修复当前阶段可视化渲染问题/)).toBeTruthy();
+        expect(screen.getByText('缺失信息清单')).toBeTruthy();
+        expect(screen.getByText('缺失项：缺少标题：## 2. 质量目标')).toBeTruthy();
     });
 
     it('resolves unresolved comments directly from the artifact review panel', () => {
@@ -496,6 +468,68 @@ describe('ArtifactPane Component', () => {
         });
     });
 
+    it('shows artifact quality diagnostics in the review panel', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 草稿\n\n## 8. 阶段门禁\n\n等待确认',
+        });
+
+        render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('审阅');
+
+        expect(screen.getByText('质量治理')).toBeTruthy();
+        expect(screen.getByText('缺失信息清单')).toBeTruthy();
+        expect(screen.getByText((_, element) => element?.textContent === '缺失项：缺少标题：# 需求分析文档')).toBeTruthy();
+        expect(screen.getByText((_, element) => element?.textContent === '缺失项：缺少专业字段：事实 ID')).toBeTruthy();
+        expect(screen.getByText((_, element) => element?.textContent === '缺失项：缺少 Mermaid 图：flowchart')).toBeTruthy();
+        expect(screen.getByText((_, element) => element?.textContent === '缺失项：阶段门禁缺少决策项')).toBeTruthy();
+    });
+
+    it('shows missing information checklist with blocking state and next actions in the review panel', () => {
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: '# 草稿\n\n## 8. 阶段门禁\n\n等待确认',
+        });
+
+        render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('审阅');
+
+        expect(screen.getByText('缺失信息清单')).toBeTruthy();
+        expect(screen.getAllByText('阻断').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('提醒').length).toBeGreaterThan(0);
+        expect(screen.getByText((_, element) => element?.textContent === '缺失项：缺少标题：# 需求分析文档')).toBeTruthy();
+        expect(screen.getAllByText('补充缺失内容后重新生成或手动完善当前阶段产物。').length).toBeGreaterThan(0);
+        expect(screen.getByText('确认阶段门禁决策项，明确是否可以进入下一阶段。')).toBeTruthy();
+    });
+
+    it('focuses a visual diagnostic from the artifact quality panel', async () => {
+        const scrollIntoView = vi.fn();
+        window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: [
+                '```ai4se-visual',
+                '{ broken',
+                '```',
+            ].join('\n'),
+            artifactVisualDiagnostics: [],
+        });
+
+        const { container } = render(<ArtifactPane />);
+        await waitFor(() => {
+            expect(screen.getByText('结构化可视化格式错误')).toBeTruthy();
+        });
+
+        clickArtifactToolbarMenuItem('审阅');
+        fireEvent.click(screen.getByRole('button', { name: '定位缺失信息：结构化可视化格式错误' }));
+
+        await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+        expect(container.querySelector('[data-artifact-visual-focused="true"]')).toBeTruthy();
+    });
+
     it('scrolls and highlights a focused Mermaid visual diagnostic in the current preview', async () => {
         const scrollIntoView = vi.fn();
         window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
@@ -590,44 +624,6 @@ describe('ArtifactPane Component', () => {
         expect(screen.getByText(/版本预览/)).toBeTruthy();
         expect(screen.getByTestId('mermaid').textContent).toContain('graph TD');
         expect(screen.queryByRole('button', { name: '重新生成图表' })).toBeNull();
-    });
-
-    it('passes workflow, stage and current artifact context when retrying a Mermaid block', async () => {
-        const artifact = [
-            '# 需求分析文档',
-            '',
-            '```mermaid',
-            'graph TD',
-            '  A-->',
-            '```',
-        ].join('\n');
-        vi.mocked(retryMermaidGeneration).mockResolvedValue('graph TD\n  A-->B');
-        useStore.setState({
-            workflow: 'TEST_DESIGN',
-            stageIndex: 0,
-            artifactContent: artifact,
-            stageArtifacts: {
-                CLARIFY: artifact,
-            },
-        });
-
-        render(<ArtifactPane />);
-
-        fireEvent.click(screen.getByRole('button', { name: '重新生成图表' }));
-
-        await waitFor(() => {
-            expect(retryMermaidGeneration).toHaveBeenCalledWith(
-                'graph TD\n  A-->',
-                'Syntax Error',
-                0,
-                {
-                    workflowId: 'TEST_DESIGN',
-                    stageId: 'CLARIFY',
-                    currentArtifact: artifact,
-                },
-            );
-        });
-        expect(useStore.getState().artifactContent).toContain('A-->B');
     });
 
     it('does not record visual diagnostics from read-only history preview', async () => {
@@ -749,7 +745,7 @@ describe('ArtifactPane Component', () => {
     it('downloads artifact markdown with a workflow-specific filename', async () => {
         const createdAnchors: HTMLAnchorElement[] = [];
         const click = vi.fn();
-        const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:artifact');
+        vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:artifact');
         vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
         vi.spyOn(document, 'createElement').mockImplementation((tagName, options) => {
             const element = originalCreateElement(tagName, options);
@@ -765,7 +761,6 @@ describe('ArtifactPane Component', () => {
         useStore.setState({
             workflow: 'REQ_REVIEW',
             artifactContent: '# 需求评审报告',
-            isGenerating: true,
         });
 
         render(<ArtifactPane />);
@@ -774,10 +769,6 @@ describe('ArtifactPane Component', () => {
         expect(createdAnchors).toHaveLength(1);
         expect(createdAnchors[0].download).toBe('req_review_artifact.md');
         expect(createdAnchors[0].download).not.toBe('lisa_artifact.md');
-        const blob = createObjectURL.mock.calls[0][0] as Blob;
-        const content = await blob.text();
-        expect(content).toBe('# 需求评审报告');
-        expect(content).not.toContain('正在生成下一段...');
         expect(click).toHaveBeenCalledTimes(1);
     });
 
@@ -1432,253 +1423,9 @@ describe('ArtifactPane Component', () => {
         fireEvent.click(screen.getByRole('button', { name: '差异' }));
 
         expect(screen.getByText('与当前产出物对比')).toBeTruthy();
-        expect(screen.getAllByText('- 旧结论').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('+ 新结论').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('保留内容').length).toBeGreaterThan(0);
-    });
-
-    it('renders current artifact changes as formal preview annotations instead of raw line diff', async () => {
-        const previousArtifact = [
-            '# 当前产物',
-            '',
-            '## 2. 被测系统与边界',
-            '',
-            '| 类型 | 具体内容 | 测试含义 | 状态 |',
-            '| --- | --- | --- | --- |',
-            '| 用户入口 | 登录页面（Web/移动端） | 覆盖不同终端和浏览器 | 待确认 |',
-            '| 成功反馈 | 跳转至首页并设置登录态（Token/Cookie） | 验证登录态正确生成 | 待确认 |',
-        ].join('\n');
-        const currentArtifact = [
-            '# 当前产物',
-            '',
-            '## 2. 被测系统与边界',
-            '',
-            '| 类型 | 具体内容 | 测试含义 | 状态 |',
-            '| --- | --- | --- | --- |',
-            '| 用户入口 | 登录页面（Web 端） | 覆盖 Chrome、Firefox、Edge、Safari | 待确认 |',
-            '| 成功反馈 | 跳转至首页并设置 JWT Token | 验证 Token 正确生成并存储 | 待确认 |',
-        ].join('\n');
-        useStore.setState({
-            workflow: 'TEST_DESIGN',
-            stageIndex: 0,
-            artifactContent: currentArtifact,
-            stageArtifacts: {
-                CLARIFY: currentArtifact,
-            },
-            artifactHistory: [
-                {
-                    id: 'version-before',
-                    timestamp: 123,
-                    content: previousArtifact,
-                    stageId: 'CLARIFY',
-                },
-                {
-                    id: 'version-after',
-                    timestamp: 124,
-                    content: currentArtifact,
-                    stageId: 'CLARIFY',
-                },
-            ],
-            artifactChangeIndex: [
-                {
-                    kind: 'modified',
-                    anchor: 'h2:2. 被测系统与边界:1',
-                    title: '2. 被测系统与边界',
-                    displayTitle: '2. 被测系统与边界',
-                    safeForPatch: false,
-                    unsafeReason: 'markdown_table',
-                },
-            ],
-        });
-
-        render(<ArtifactPane />);
-
-        expect(await screen.findByTestId('current-artifact-change-summary')).toBeTruthy();
-        expect(screen.queryByTestId('current-artifact-diff')).toBeNull();
-        expect(screen.getByRole('table')).toBeTruthy();
-        expect(screen.getAllByTestId('artifact-change-modified-row')).toHaveLength(2);
-        expect(screen.getByText(/原：.*登录页面（Web\/移动端）/)).toBeTruthy();
-        expect(screen.getByText(/原：.*登录态（Token\/Cookie）/)).toBeTruthy();
-        expect(screen.queryByText('- | 用户入口 | 登录页面（Web/移动端） | 覆盖不同终端和浏览器 | 待确认 |')).toBeNull();
-    });
-
-    it('shows changed section summary inside current artifact change summary', async () => {
-        useStore.setState({
-            workflow: 'TEST_DESIGN',
-            stageIndex: 0,
-            artifactContent: '# 当前产物\n\n## 范围\n\n新范围\n\n## 风险\n\n保持不变',
-            stageArtifacts: {
-                CLARIFY: '# 当前产物\n\n## 范围\n\n新范围\n\n## 风险\n\n保持不变',
-            },
-            artifactHistory: [
-                {
-                    id: 'version-before',
-                    timestamp: 123,
-                    content: '# 当前产物\n\n## 范围\n\n旧范围\n\n## 风险\n\n保持不变',
-                    stageId: 'CLARIFY',
-                },
-                {
-                    id: 'version-after',
-                    timestamp: 124,
-                    content: '# 当前产物\n\n## 范围\n\n新范围\n\n## 风险\n\n保持不变',
-                    stageId: 'CLARIFY',
-                },
-            ],
-            artifactChangeIndex: [
-                {
-                    kind: 'modified',
-                    anchor: 'h2:范围:1',
-                    title: '范围',
-                    displayTitle: '范围',
-                    safeForPatch: true,
-                },
-            ],
-        });
-
-        render(<ArtifactPane />);
-
-        const summary = await screen.findByTestId('current-artifact-change-summary');
-        expect(summary.textContent).toContain('修改 1 行');
-        expect(summary.textContent).toContain('修改 范围');
-        expect(screen.queryByTestId('current-artifact-diff-section-summary')).toBeNull();
-    });
-
-    it('does not show section chips when current artifact change index is empty', async () => {
-        useStore.setState({
-            workflow: 'TEST_DESIGN',
-            stageIndex: 0,
-            artifactContent: '# 当前产物\n\n新结论',
-            artifactHistory: [
-                {
-                    id: 'version-before',
-                    timestamp: 123,
-                    content: '# 当前产物\n\n旧结论',
-                    stageId: 'CLARIFY',
-                },
-                {
-                    id: 'version-after',
-                    timestamp: 124,
-                    content: '# 当前产物\n\n新结论',
-                    stageId: 'CLARIFY',
-                },
-            ],
-            artifactChangeIndex: [],
-        });
-
-        render(<ArtifactPane />);
-
-        const summary = await screen.findByTestId('current-artifact-change-summary');
-        expect(summary.textContent).toContain('修改 1 行');
-        expect(summary.textContent).not.toContain('修改 范围');
-        expect(screen.queryByTestId('current-artifact-diff-section-summary')).toBeNull();
-    });
-
-    it('hides current artifact change annotations and returns to clean preview', async () => {
-        useStore.setState({
-            workflow: 'TEST_DESIGN',
-            stageIndex: 0,
-            artifactContent: '# 当前产物\n\n新结论\n保留内容',
-            stageArtifacts: {
-                CLARIFY: '# 当前产物\n\n新结论\n保留内容',
-            },
-            artifactHistory: [
-                {
-                    id: 'version-before',
-                    timestamp: 123,
-                    content: '# 当前产物\n\n旧结论\n保留内容',
-                    stageId: 'CLARIFY',
-                },
-                {
-                    id: 'version-after',
-                    timestamp: 124,
-                    content: '# 当前产物\n\n新结论\n保留内容',
-                    stageId: 'CLARIFY',
-                },
-            ],
-        });
-
-        const { container } = render(<ArtifactPane />);
-
-        await screen.findByTestId('current-artifact-change-summary');
-        fireEvent.click(screen.getAllByRole('button', { name: '隐藏本轮变更' })[0]);
-
-        expect(screen.queryByTestId('current-artifact-change-summary')).toBeNull();
-        expect(screen.queryByTestId('current-artifact-diff')).toBeNull();
-        expect(screen.queryByTestId('artifact-change-previous-value')).toBeNull();
-        expect(screen.getByRole('heading', { name: '当前产物' })).toBeTruthy();
-        expect(container.textContent).toContain('新结论');
-        expect(screen.queryByText('- 旧结论')).toBeNull();
-    });
-
-    it('downloads clean markdown while current artifact change annotations are visible', async () => {
-        const createdAnchors: HTMLAnchorElement[] = [];
-        const click = vi.fn();
-        const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:artifact-clean-diff');
-        vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
-        vi.spyOn(document, 'createElement').mockImplementation((tagName, options) => {
-            const element = originalCreateElement(tagName, options);
-            if (tagName.toLowerCase() === 'a') {
-                Object.defineProperty(element, 'click', {
-                    configurable: true,
-                    value: click,
-                });
-                createdAnchors.push(element as HTMLAnchorElement);
-            }
-            return element;
-        });
-        useStore.setState({
-            workflow: 'TEST_DESIGN',
-            stageIndex: 0,
-            artifactContent: '# 当前产物\n\n新结论\n保留内容',
-            artifactHistory: [
-                {
-                    id: 'version-before',
-                    timestamp: 123,
-                    content: '# 当前产物\n\n旧结论\n保留内容',
-                    stageId: 'CLARIFY',
-                },
-                {
-                    id: 'version-after',
-                    timestamp: 124,
-                    content: '# 当前产物\n\n新结论\n保留内容',
-                    stageId: 'CLARIFY',
-                },
-            ],
-        });
-
-        render(<ArtifactPane />);
-        await screen.findByTestId('current-artifact-change-summary');
-        downloadArtifactAs('Markdown');
-
-        expect(createdAnchors).toHaveLength(1);
-        const blob = createObjectURL.mock.calls[0][0] as Blob;
-        const content = await blob.text();
-        expect(content).toBe('# 当前产物\n\n新结论\n保留内容');
-        expect(content).not.toContain('旧结论');
-        expect(content).not.toContain('+ 新结论');
-        expect(content).not.toContain('原：');
-        expect(click).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not show current artifact change diff when no previous baseline exists', () => {
-        useStore.setState({
-            workflow: 'TEST_DESIGN',
-            stageIndex: 0,
-            artifactContent: '# 当前产物\n\n首版内容',
-            artifactHistory: [
-                {
-                    id: 'version-first',
-                    timestamp: 123,
-                    content: '# 当前产物\n\n首版内容',
-                    stageId: 'CLARIFY',
-                },
-            ],
-        });
-
-        render(<ArtifactPane />);
-
-        expect(screen.queryByTestId('current-artifact-diff')).toBeNull();
-        expect(screen.queryByRole('button', { name: '显示本轮变更' })).toBeNull();
+        expect(screen.getByText('- 旧结论')).toBeTruthy();
+        expect(screen.getByText('+ 新结论')).toBeTruthy();
+        expect(screen.getByText('保留内容')).toBeTruthy();
     });
 
     it('restores the selected history version and keeps the previous current artifact in history', () => {
@@ -7153,10 +6900,10 @@ describe('ArtifactPane Component', () => {
     });
 
     it('rebinds stale comment anchor to selected artifact text and syncs it', async () => {
-        vi.mocked(updateRunArtifactCollaboration).mockImplementation(async (_runId, comments, sectionLocks) => ({
-            artifactComments: comments,
-            artifactSectionLocks: sectionLocks,
-        }));
+        vi.mocked(updateRunArtifactCollaboration).mockResolvedValue({
+            artifactComments: [],
+            artifactSectionLocks: [],
+        });
         useStore.setState({
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
@@ -7250,10 +6997,10 @@ describe('ArtifactPane Component', () => {
     });
 
     it('syncs artifact comments to the current server run', async () => {
-        vi.mocked(updateRunArtifactCollaboration).mockImplementation(async (_runId, comments, sectionLocks) => ({
-            artifactComments: comments,
-            artifactSectionLocks: sectionLocks,
-        }));
+        vi.mocked(updateRunArtifactCollaboration).mockResolvedValue({
+            artifactComments: [],
+            artifactSectionLocks: [],
+        });
         useStore.setState({
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
@@ -7295,36 +7042,11 @@ describe('ArtifactPane Component', () => {
         });
     });
 
-    it('rolls back a new artifact comment when collaboration sync fails', async () => {
-        vi.mocked(updateRunArtifactCollaboration).mockRejectedValue(
-            new Error('协作状态保存失败')
-        );
-        useStore.setState({
-            workflow: 'TEST_DESIGN',
-            stageIndex: 0,
-            currentRunId: 'run-123',
-            artifactContent: '# 需求分析文档\n\n登录边界需要确认。',
+    it('adds replies and toggles resolved state for artifact comments', async () => {
+        vi.mocked(updateRunArtifactCollaboration).mockResolvedValue({
             artifactComments: [],
             artifactSectionLocks: [],
         });
-
-        render(<ArtifactPane />);
-        clickArtifactToolbarMenuItem('批注');
-        fireEvent.change(screen.getByLabelText('新增批注'), {
-            target: { value: '这里需要业务确认登录边界。' },
-        });
-        fireEvent.click(screen.getByRole('button', { name: '添加批注' }));
-
-        await screen.findByText('协作状态保存失败：协作状态保存失败');
-        expect(useStore.getState().artifactComments).toEqual([]);
-        expect(screen.queryByText('这里需要业务确认登录边界。')).toBeNull();
-    });
-
-    it('adds replies and toggles resolved state for artifact comments', async () => {
-        vi.mocked(updateRunArtifactCollaboration).mockImplementation(async (_runId, comments, sectionLocks) => ({
-            artifactComments: comments,
-            artifactSectionLocks: sectionLocks,
-        }));
         useStore.setState({
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
@@ -7577,147 +7299,85 @@ describe('ArtifactPane Component', () => {
         expect(useStore.getState().artifactContent).toContain('第二个验收口径已经确认。');
     });
 
-    it('generates and copies a single story handoff packet from the handoff stage', async () => {
-        const packet = {
-            sourceRunId: 'alex-run-123',
-            sourceWorkflowId: 'USER_STORY_BREAKDOWN' as const,
-            sourceStageId: 'HANDOFF',
-            sourceArtifactVersion: 1,
-            sourceArtifactDigest: 'sha256:abc123',
-            createdAt: 1710000000000,
-            storyId: 'US-001',
-            requirementIds: ['REQ-001'],
-            userStory: '作为测试负责人，我想看到澄清问题，以便补齐规则。',
-            acceptanceCriteria: ['输出需求事实清单'],
-            businessRules: ['问题必须标注责任方'],
-            nonFunctionalNotes: ['可追溯'],
-            outOfScope: ['不直接生成用例'],
-            dependencies: ['用户提供需求文本'],
-            openQuestions: ['问题分类口径待校准'],
-        };
-        vi.mocked(fetchStoryHandoffCandidates).mockResolvedValue({
-            runId: 'alex-run-123',
-            workflowId: 'USER_STORY_BREAKDOWN',
-            stageId: 'HANDOFF',
-            sourceArtifactVersion: 1,
-            sourceArtifactDigest: 'sha256:abc123',
-            candidates: [
-                {
-                    storyId: 'US-001',
-                    title: '生成澄清问题',
-                    requirementIds: ['REQ-001'],
-                    userValue: '测试负责人能在设计前发现缺失业务规则',
-                    readyReason: '验收标准和业务规则已明确',
-                },
-            ],
-        });
-        vi.mocked(fetchStoryHandoffPackets)
-            .mockResolvedValueOnce({
-                runId: 'alex-run-123',
-                workflowId: 'USER_STORY_BREAKDOWN',
-                stageId: 'HANDOFF',
-                sourceArtifactVersion: 1,
-                sourceArtifactDigest: 'sha256:abc123',
-                packets: [],
-            })
-            .mockResolvedValueOnce({
-                runId: 'alex-run-123',
-                workflowId: 'USER_STORY_BREAKDOWN',
-                stageId: 'HANDOFF',
-                sourceArtifactVersion: 1,
-                sourceArtifactDigest: 'sha256:abc123',
-                packets: [
-                    {
-                        id: '1',
-                        storyId: 'US-001',
-                        createdAt: 1710000000000,
-                        isStale: false,
-                        currentSourceArtifactVersion: 1,
-                        currentSourceArtifactDigest: 'sha256:abc123',
-                        packet,
-                    },
-                ],
-            });
-        vi.mocked(createStoryHandoffPacket).mockResolvedValue(packet);
+    it('regenerates an unlocked artifact section from the section lock panel', () => {
         useStore.setState({
-            workflow: 'USER_STORY_BREAKDOWN',
-            stageIndex: 3,
-            currentRunId: 'alex-run-123',
-            artifactContent: '# 单故事 Handoff 清单',
-            stageArtifacts: { HANDOFF: '# 单故事 Handoff 清单' },
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: [
+                '# 需求分析文档',
+                '',
+                '## 目标章节',
+                '',
+                '旧目标内容',
+                '',
+                '## 锁定章节',
+                '',
+                '确认内容',
+            ].join('\n'),
+            stageArtifacts: {
+                CLARIFY: [
+                    '# 需求分析文档',
+                    '',
+                    '## 目标章节',
+                    '',
+                    '旧目标内容',
+                    '',
+                    '## 锁定章节',
+                    '',
+                    '确认内容',
+                ].join('\n'),
+            },
+            artifactSectionLocks: [{
+                id: 'lock-confirmed',
+                stageId: 'CLARIFY',
+                heading: '## 锁定章节',
+                sectionAnchor: 'h2:锁定章节:1',
+                content: '## 锁定章节\n\n确认内容',
+                createdAt: 1,
+            }],
+            artifactHistory: [],
+            isGenerating: false,
         });
 
         render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('章节锁定');
+        fireEvent.click(screen.getByRole('button', { name: '重生成章节 目标章节' }));
 
-        expect(await screen.findByText('单故事需求包')).toBeTruthy();
-        fireEvent.click(screen.getByRole('button', { name: '生成 US-001 需求包' }));
-
-        await waitFor(() => {
-            expect(createStoryHandoffPacket).toHaveBeenCalledWith('alex-run-123', 'HANDOFF', 'US-001');
+        expect(mockHandleRegenerateArtifactSection).toHaveBeenCalledWith({
+            heading: '## 目标章节',
+            sectionAnchor: 'h2:目标章节:1',
+            displayTitle: '目标章节',
         });
-        expect(await screen.findByText('US-001 · v1')).toBeTruthy();
-        fireEvent.click(screen.getByRole('button', { name: '复制 US-001 需求包' }));
-
-        await waitFor(() => {
-            expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('"storyId": "US-001"'));
-        });
-        expect(screen.getByText('已复制 US-001')).toBeTruthy();
+        const lockedRegenerateButton = screen.getByRole('button', { name: '重生成章节 锁定章节' }) as HTMLButtonElement;
+        expect(lockedRegenerateButton.disabled).toBe(true);
+        expect(lockedRegenerateButton.getAttribute('title')).toBe('章节已锁定，请先解锁后再重生成');
     });
 
-    it('warns when a saved single story handoff packet is stale', async () => {
-        vi.mocked(fetchStoryHandoffCandidates).mockResolvedValue({
-            runId: 'alex-run-123',
-            workflowId: 'USER_STORY_BREAKDOWN',
-            stageId: 'HANDOFF',
-            sourceArtifactVersion: 2,
-            sourceArtifactDigest: 'sha256:new',
-            candidates: [],
-        });
-        vi.mocked(fetchStoryHandoffPackets).mockResolvedValue({
-            runId: 'alex-run-123',
-            workflowId: 'USER_STORY_BREAKDOWN',
-            stageId: 'HANDOFF',
-            sourceArtifactVersion: 2,
-            sourceArtifactDigest: 'sha256:new',
-            packets: [
-                {
-                    id: '1',
-                    storyId: 'US-001',
-                    createdAt: 1710000000000,
-                    isStale: true,
-                    currentSourceArtifactVersion: 2,
-                    currentSourceArtifactDigest: 'sha256:new',
-                    packet: {
-                        sourceRunId: 'alex-run-123',
-                        sourceWorkflowId: 'USER_STORY_BREAKDOWN',
-                        sourceStageId: 'HANDOFF',
-                        sourceArtifactVersion: 1,
-                        sourceArtifactDigest: 'sha256:old',
-                        createdAt: 1710000000000,
-                        storyId: 'US-001',
-                        requirementIds: ['REQ-001'],
-                        userStory: '作为测试负责人，我想看到澄清问题，以便补齐规则。',
-                        acceptanceCriteria: ['输出需求事实清单'],
-                        businessRules: ['问题必须标注责任方'],
-                        nonFunctionalNotes: ['可追溯'],
-                        outOfScope: ['不直接生成用例'],
-                        dependencies: ['用户提供需求文本'],
-                        openQuestions: ['问题分类口径待校准'],
-                    },
-                },
-            ],
-        });
+    it('disables artifact section regeneration while generation is already running', () => {
         useStore.setState({
-            workflow: 'USER_STORY_BREAKDOWN',
-            stageIndex: 3,
-            currentRunId: 'alex-run-123',
-            artifactContent: '# 单故事 Handoff 清单',
-            stageArtifacts: { HANDOFF: '# 单故事 Handoff 清单' },
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: [
+                '# 需求分析文档',
+                '',
+                '## 目标章节',
+                '',
+                '旧目标内容',
+            ].join('\n'),
+            stageArtifacts: {
+                CLARIFY: '# 需求分析文档\n\n## 目标章节\n\n旧目标内容',
+            },
+            artifactSectionLocks: [],
+            artifactHistory: [],
+            isGenerating: true,
         });
 
         render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('章节锁定');
+        const regenerateButton = screen.getByRole('button', { name: '重生成章节 目标章节' });
 
-        expect(await screen.findByText('源需求已更新')).toBeTruthy();
-        expect(screen.getByText('US-001 · v1')).toBeTruthy();
+        expect((regenerateButton as HTMLButtonElement).disabled).toBe(true);
+        fireEvent.click(regenerateButton);
+        expect(mockHandleRegenerateArtifactSection).not.toHaveBeenCalled();
     });
 });

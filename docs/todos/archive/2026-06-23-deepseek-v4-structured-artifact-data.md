@@ -1,6 +1,6 @@
 # DeepSeek V4 兼容的后端结构化产物数据改造 Todo
 
-> 状态: 活动候选
+> 状态: 本地确定性改造已完成，待最终合回；真实 DeepSeek V4 Flash smoke 仍需显式凭证、网络和额度
 > 创建日期: 2026-06-23
 > 背景: 当前主要使用 DeepSeek V4 Flash。该模型链路适合按 JSON mode 约束“合法 JSON”，但不能把它等同于 OpenAI strict Structured Outputs。长期最稳方案应减少模型直接生成完整 Markdown/Mermaid 的职责。
 
@@ -25,6 +25,30 @@
 - 2026-06-23 已完成第十七个垂直切片: `IDEA_BRAINSTORM/CONCEPT` 支持模型输出 `artifact_data`，后端校验定位声明、核心假设、Lean Canvas、MVP 功能、增长漏斗、Pre-mortem 风险、验证路线、不可做范围、决策记录、下一步行动和阶段门禁后，确定性渲染《产品概念简报》、Mermaid `pie`/`flowchart` 和 `ai4se-visual` `mvp-map`。
 - DeepSeek V4 Flash capability 已明确为 `json_object_only`，仍只发送 OpenAI-compatible `response_format={"type":"json_object"}`，并保持 thinking disabled。
 - `TEST_DESIGN` 四阶段、`REQ_REVIEW` 两阶段、`VALUE_DISCOVERY` 四阶段、`INCIDENT_REVIEW` 三阶段和 `IDEA_BRAINSTORM` 四阶段已完成结构化产物数据迁移；真实 DeepSeek V4 Flash smoke 仍需要显式凭证、网络和额度，不作为默认本地门禁。
+- 2026-06-24 已补齐 DeepSeek V4 格式化输出 readiness gate: 全部 17 个在线 stage 均由测试矩阵证明支持 `artifact_data`、使用数据型 structured instruction、进入 artifact_data 纠错 prompt，并由后端 renderer 输出通过现有 artifact contract。
+- 2026-06-23 已完成本地 readiness gate: 从 `workflow_manifest.json` 枚举全部 17 个在线 stage，验证每个 stage 都有 `artifact_data` renderer、有效 fixture、artifact contract 通过、structured output instruction 要求 `artifact_data` 且不要求 `artifact_update.markdown`，并用 fake DeepSeek raw JSON stream 验证 `response_format={"type":"json_object"}` 与 thinking disabled。
+- 2026-06-23 已完成结构化产物数据持久化闭环: renderer 返回的 validated `artifact_data` 会随 artifact version 保存，并在 run snapshot 当前 artifact 的 `artifactData` 中暴露；旧版本和手工编辑版本明确返回 `artifactData: null`，继续只依赖 Markdown 内容。
+- 2026-06-23 已完成真实 DeepSeek V4 Flash smoke gate 对齐: `test_agent_real_smoke.py` 默认无凭证时 skip，配置 `DEEPSEEK_V4_SMOKE_*` 或兼容的 `NEW_AGENTS_SMOKE_*` 后走 raw JSON streaming、`artifact_data` schema、后端 renderer 和 artifact contract，不再要求模型直接输出完整 Markdown。
+- 2026-06-23 已完成信任闭环整合: `codex/deepseek-confidence-consolidation` 以 cherry-pick 方式汇总 readiness gate、`artifact_data` persistence 和真实 smoke gate 三条已验证分支，作为后续 DeepSeek V4 格式化输出需求的主线基础。
+- 2026-06-23 已完成 prompt 边界去格式化闭环: 已迁移 `artifact_data` stage 的前端 system prompt 不再注入 `<mark>`、`artifact_update`、完整 Markdown 重写要求或 Mermaid fence 参考，避免与后端 DeepSeek `artifact_data` 指令冲突。
+
+## 完成记录
+
+### 2026-06-24 DeepSeek V4 格式化输出信任闭环
+
+- Milestone: DeepSeek V4 格式化输出全链路信任闭环。
+- 消化范围: 本 todo 中 P0/P1 的结构化产物数据、后端确定性 renderer、DeepSeek `json_object_only` adapter、数据纠错 retry 和 17 个在线 stage 分阶段迁移。
+- 本地完成证据:
+  - `TEST_DESIGN`、`REQ_REVIEW`、`VALUE_DISCOVERY`、`INCIDENT_REVIEW`、`IDEA_BRAINSTORM` 全部在线 stage 已在 `DEEPSEEK_FORMAT_STAGE_FIXTURES` readiness matrix 中覆盖。
+  - `supports_artifact_data_rendering()` 对全部在线 stage 返回 true。
+  - `build_structured_output_instruction()` 对全部在线 stage 要求 `artifact_data`，不要求 `artifact_update.markdown`，并明确后端负责确定性渲染。
+  - `build_raw_json_retry_prompt()` 对全部在线 stage 进入 artifact_data 数据纠错路径，不要求模型重写 Markdown。
+  - `render_agent_turn_from_artifact_data()` 对全部在线 stage 输出的 `AgentTurnOutput` 均通过 `validate_agent_turn()` artifact contract。
+- 计划与 spec:
+  - `docs/superpowers/specs/2026-06-24-deepseek-v4-format-output-readiness-design.md`
+  - `docs/superpowers/plans/2026-06-24-deepseek-v4-format-output-readiness.md`
+- 外部验证边界: 真实 DeepSeek V4 Flash smoke 仍依赖 API key、网络和额度；没有这些条件时不作为默认本地门禁，也不能把本地 fixture 测试表述为真实模型验证。
+- 2026-06-24 已完成格式化输出 readiness gate，提交证据为 `50f444f7`；当前状态与后续恢复规则见 `2026-06-24-goal-mode-milestone-ledger.md`。
 
 ## 目标
 
@@ -37,11 +61,11 @@
 - 不新增 Lisa/Alex 专属运行时: 所有 workflow 继续走共享 `/api/agent/runs/stream`、共享 Agent Runtime、共享 typed SSE、共享 UI。
 - 降低“格式不完整”频率: 模型不再负责拼完整 Markdown 标题、表格、Mermaid 代码块和 fenced block，后端 renderer 统一生成这些格式。
 
-## 当前问题
+## 已关闭的问题
 
-- 现有 raw JSON streaming 已比纯文本标签稳定，但模型仍要把完整 Markdown 文档、Mermaid 和表格塞进 JSON 字符串，容易出现字段缺失、Markdown 结构不完整、Mermaid 格式错误或输出截断。
-- DeepSeek V4 Flash 的 JSON mode 只能要求返回合法 JSON，不能保证字段完整、枚举合法、跨字段一致或业务 contract 合格。
-- 失败时前端会看到“结构化输出生成失败”，即使 backend 已经做了校验与一次纠错重试，根因仍是模型承担了过多最终交付格式责任。
+- 现有 raw JSON streaming 已比纯文本标签稳定；本 todo 启动时的主要风险是模型仍要把完整 Markdown 文档、Mermaid 和表格塞进 JSON 字符串，容易出现字段缺失、Markdown 结构不完整、Mermaid 格式错误或输出截断。该风险已通过 17 个在线 stage 的 `artifact_data` schema + 后端 deterministic renderer 迁移收口。
+- DeepSeek V4 Flash 的 JSON mode 仍只能要求返回合法 JSON，不能保证字段完整、枚举合法、跨字段一致或业务 contract 合格；当前边界是后端 Pydantic schema、应用级 contract、有限纠错重试和 readiness gate。
+- 失败时前端仍可能看到“结构化输出生成失败”，但默认根因不再是模型承担最终 Markdown/Mermaid/表格格式化职责，而应定位到 schema path、contract rule、renderer rule、供应商配置或真实模型输出质量。
 
 ## 改造方向
 
@@ -158,6 +182,8 @@ renderer 职责:
 
 - DeepSeek V4 Flash 下，模型只输出 JSON 数据，后端负责产物格式。
 - 至少一个完整 workflow stage 能完成: 用户输入 -> DeepSeek JSON mode -> Pydantic data schema -> backend renderer -> artifact contract -> typed SSE -> 前端展示。
+- validated `artifact_data` 与 renderer 输出的 Markdown 一起进入 artifact version persistence，run snapshot 可审计当前 artifact 的结构化业务数据来源。
+- 真实 DeepSeek V4 Flash smoke gate 可选执行，验证目标是 `artifact_data -> backend renderer -> artifact contract`，不是模型直写 Markdown。
 - “格式不完整 / 结构化输出生成失败”不再由 Markdown 标题缺失、Mermaid fence 不完整或表格格式错误高频触发。
 - 所有失败都能定位到 schema path、contract rule 或 renderer rule。
 
@@ -169,8 +195,8 @@ renderer 职责:
 - `cd tools/new-agents/frontend && npm run test -- --run src/services/__tests__/chatService.test.ts src/components/__tests__/ChatPane.test.tsx`
 - `cd tools/new-agents/frontend && npm run lint`
 
-## 进入实现前需要补的设计问题
+## 已裁决的设计问题
 
-- `artifact_data` schema 是按 workflow/stage 手写 Pydantic model，还是先定义通用 block schema 再按 stage 组合。
-- renderer 输出是否继续保存为 Markdown，或同时持久化 `artifact_data` 便于后续重渲染和审计。
-- 真实 DeepSeek V4 Flash smoke gate 是否作为可选验证，还是每个阶段迁移都要求人工触发一次。
+- `artifact_data` schema 当前按 workflow/stage 手写 Pydantic model，保持专业字段和跨字段校验的可读性；后续如做 E10/E11 再评估通用 block schema 或 prompt/template version registry。
+- renderer 输出继续保存为现有 Markdown artifact，同时持久化 validated `artifact_data`，便于后续重渲染、审计和质量诊断，并保持 typed SSE、前端展示、artifact contract 和 run persistence 兼容。
+- 真实 DeepSeek V4 Flash smoke 是显式凭证、网络和额度条件下的可选外部验证，不作为目标模式默认本地门禁。

@@ -1,10 +1,10 @@
 # New Agents 测试策略阶段产物格式与流式渲染 Bug Todo
 
-状态：活跃 Bug  
-创建日期：2026-06-24  
+状态：活跃 Bug
+创建日期：2026-06-24
 相关模块：`tools/new-agents/`
 
-完成日期：2026-06-25  
+完成日期：2026-06-25
 完成记录：
 
 - 已确认后端 STRATEGY `artifact_data` 结构化渲染和 raw JSON 流式路径已有覆盖，剩余缺口是提示词输出形态冲突与前端 STRATEGY delta 覆盖不足。

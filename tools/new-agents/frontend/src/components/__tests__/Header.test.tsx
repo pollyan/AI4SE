@@ -21,8 +21,10 @@ vi.mock('../WorkflowDropdown', () => ({
 }));
 
 vi.mock('../../services/runSnapshotService', () => ({
+    cloneRun: vi.fn(),
     createRunDecisionSummary: vi.fn(),
     fetchRunList: vi.fn(),
+    fetchRunSnapshot: vi.fn(),
     updateRunContextSummary: vi.fn(),
 }));
 
@@ -54,11 +56,12 @@ vi.mock('lucide-react', () => {
     return mod;
 });
 
-import { createRunDecisionSummary, fetchRunList, updateRunContextSummary } from '../../services/runSnapshotService';
+import { cloneRun, createRunDecisionSummary, fetchRunList, fetchRunSnapshot, updateRunContextSummary } from '../../services/runSnapshotService';
 import { materializeRunTestAssets, updateTestAssetCase, updateTestAssetIssueStatus } from '../../services/testAssetService';
 import { fetchObservabilitySummary } from '../../services/observabilityService';
 import { importIntentTesterDraft } from '../../services/intentTesterImportService';
 import { checkDefaultLlmConfig } from '../../services/configService';
+import { withTestAssetQualitySummary } from '../../core/testAssetQuality';
 import type { ObservabilitySummary, TestAssetCollection } from '../../store';
 
 const TEST_ASSET_COLLECTION: TestAssetCollection = {
@@ -75,6 +78,39 @@ const TEST_ASSET_COLLECTION: TestAssetCollection = {
         uncoveredTestPoints: 0,
         coverageRate: 100,
         byPriority: [],
+    },
+    qualitySummary: {
+        status: 'ready',
+        label: '可交付',
+        pendingIssueCount: 0,
+        confirmedIssueCount: 0,
+        ignoredIssueCount: 0,
+        uncoveredTestPointCount: 0,
+        partialTestPointCount: 0,
+        openRiskCount: 0,
+        mitigatingRiskCount: 0,
+        acceptedRiskCount: 0,
+        closedRiskCount: 0,
+        gates: [
+            {
+                id: 'asset-issues',
+                status: 'pass',
+                title: '资产问题',
+                detail: '0 个待处理，0 个已确认，0 个已忽略',
+            },
+            {
+                id: 'test-point-coverage',
+                status: 'pass',
+                title: '测试点覆盖',
+                detail: '0 个未覆盖，0 个部分覆盖',
+            },
+            {
+                id: 'risk-lifecycle',
+                status: 'pass',
+                title: '风险处置',
+                detail: '0 个待处置，0 个缓解中，0 个已接受，0 个已关闭',
+            },
+        ],
     },
     testCases: [
         {
@@ -159,7 +195,7 @@ const TEST_ASSET_COLLECTION_WITH_TWO_DRAFTS: TestAssetCollection = {
     ],
 };
 
-const TEST_ASSET_COLLECTION_WITH_ISSUES: TestAssetCollection = {
+const TEST_ASSET_COLLECTION_WITH_ISSUES: TestAssetCollection = withTestAssetQualitySummary({
     ...TEST_ASSET_COLLECTION,
     assetIssues: [
         {
@@ -171,9 +207,9 @@ const TEST_ASSET_COLLECTION_WITH_ISSUES: TestAssetCollection = {
             status: 'pending',
         },
     ],
-};
+});
 
-const TEST_ASSET_COLLECTION_WITH_RISK_MATRIX: TestAssetCollection = {
+const TEST_ASSET_COLLECTION_WITH_RISK_MATRIX: TestAssetCollection = withTestAssetQualitySummary({
     ...TEST_ASSET_COLLECTION,
     riskMatrix: [
         {
@@ -190,9 +226,9 @@ const TEST_ASSET_COLLECTION_WITH_RISK_MATRIX: TestAssetCollection = {
             note: '',
         },
     ],
-};
+});
 
-const TEST_ASSET_COLLECTION_WITH_TEST_POINTS: TestAssetCollection = {
+const TEST_ASSET_COLLECTION_WITH_TEST_POINTS: TestAssetCollection = withTestAssetQualitySummary({
     ...TEST_ASSET_COLLECTION,
     testPoints: [
         {
@@ -203,9 +239,19 @@ const TEST_ASSET_COLLECTION_WITH_TEST_POINTS: TestAssetCollection = {
             status: '未覆盖',
         },
     ],
-};
+});
 
 const OBSERVABILITY_SUMMARY: ObservabilitySummary = {
+    contractRetryReasons: { STRUCTURED_OUTPUT_CONTRACT_RETRY: 2 },
+    diagnostics: [
+        {
+            id: 'contract-retry',
+            severity: 'warning',
+            title: '结构化输出重试偏高',
+            detail: '最近运行中有 2 次 contract retry。',
+            action: '检查该阶段 prompt、artifact contract 和 renderer 输出是否同步。',
+        },
+    ],
     totals: {
         turns: 3,
         failedTurns: 1,
@@ -257,13 +303,6 @@ const OBSERVABILITY_SUMMARY: ObservabilitySummary = {
             outputChars: 600,
             estimatedTokens: 225,
             contractRetryCount: 0,
-            diagnostic: {
-                phase: 'structured_output',
-                fieldPath: 'artifact_data.requirement_facts.0.fact',
-                validator: 'string_too_short',
-                publicReason: '模型输出的结构化字段未通过校验，右侧产出物已保持不变。',
-                retryable: true,
-            },
             createdAt: '2026-06-19T10:00:00',
         },
     ],
@@ -290,6 +329,40 @@ describe('Header Component', () => {
             nextOffset: null,
             query: null,
             runs: [],
+        });
+        vi.mocked(fetchRunSnapshot).mockReset();
+        vi.mocked(fetchRunSnapshot).mockResolvedValue({
+            run: {
+                id: 'preview-run',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'STRATEGY',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [],
+            artifacts: [],
+            contextSummaries: [],
+            artifactComments: [],
+            artifactSectionLocks: [],
+            artifactAuditEvents: [],
+        });
+        vi.mocked(cloneRun).mockReset();
+        vi.mocked(cloneRun).mockResolvedValue({
+            run: {
+                id: 'cloned-run',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'STRATEGY',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [],
+            artifacts: [],
+            contextSummaries: [],
+            artifactComments: [],
+            artifactSectionLocks: [],
+            artifactAuditEvents: [],
         });
         vi.mocked(updateRunContextSummary).mockReset();
         vi.mocked(updateRunContextSummary).mockResolvedValue({
@@ -390,6 +463,7 @@ describe('Header Component', () => {
                     agentId: 'alex',
                     currentStageId: 'BLUEPRINT',
                     status: 'active',
+                    reuseStatus: 'ready',
                     model: 'test-model',
                     createdAt: '2026-06-19T09:00:00',
                     updatedAt: '2026-06-19T09:05:00',
@@ -413,11 +487,162 @@ describe('Header Component', () => {
         await waitFor(() => {
             expect(fetchRunList).toHaveBeenCalledWith({ limit: 20 });
         });
+        vi.mocked(fetchRunSnapshot).mockResolvedValueOnce({
+            run: {
+                id: 'alex-run-123',
+                workflowId: 'VALUE_DISCOVERY',
+                agentId: 'alex',
+                currentStageId: 'BLUEPRINT',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [],
+            artifacts: [
+                {
+                    stageId: 'BLUEPRINT',
+                    content: '# 需求蓝图\n\nAI 测试设计助手需求蓝图正文',
+                    versionNumber: 1,
+                },
+            ],
+            contextSummaries: [],
+            artifactComments: [],
+            artifactSectionLocks: [],
+            artifactAuditEvents: [],
+        });
+
         fireEvent.click(await screen.findByRole('button', { name: /需求蓝图梳理/ }));
+
+        expect(await screen.findByText(/AI 测试设计助手需求蓝图正文/)).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: '继续此 run' }));
 
         expect(mockNavigate).toHaveBeenCalledWith(
             '/workspace/alex/value-discovery?runId=alex-run-123'
         );
+    });
+
+    it('clones a selected historical run as a new workspace run', async () => {
+        vi.mocked(fetchRunList).mockResolvedValue({
+            limit: 20,
+            offset: 0,
+            total: 1,
+            hasMore: false,
+            nextOffset: null,
+            query: null,
+            runs: [
+                {
+                    id: 'source-run-123',
+                    workflowId: 'TEST_DESIGN',
+                    agentId: 'lisa',
+                    currentStageId: 'STRATEGY',
+                    status: 'active',
+                    reuseStatus: 'ready',
+                    model: 'test-model',
+                    createdAt: '2026-06-19T09:00:00',
+                    updatedAt: '2026-06-19T09:05:00',
+                    lastMessage: null,
+                    currentArtifact: {
+                        stageId: 'STRATEGY',
+                        versionNumber: 1,
+                        summary: '测试策略历史',
+                    },
+                },
+            ],
+        });
+        vi.mocked(fetchRunSnapshot).mockResolvedValue({
+            run: {
+                id: 'source-run-123',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'STRATEGY',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [],
+            artifacts: [
+                {
+                    stageId: 'STRATEGY',
+                    content: '# 测试策略蓝图\n\n历史策略正文',
+                    versionNumber: 1,
+                },
+            ],
+            contextSummaries: [],
+            artifactComments: [],
+            artifactSectionLocks: [],
+            artifactAuditEvents: [],
+        });
+        vi.mocked(cloneRun).mockResolvedValue({
+            run: {
+                id: 'cloned-run-456',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'STRATEGY',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [],
+            artifacts: [
+                {
+                    stageId: 'STRATEGY',
+                    content: '# 测试策略蓝图\n\n历史策略正文',
+                    versionNumber: 1,
+                },
+            ],
+            contextSummaries: [],
+            artifactComments: [],
+            artifactSectionLocks: [],
+            artifactAuditEvents: [],
+        });
+
+        renderHeader();
+        fireEvent.click(screen.getByRole('button', { name: /历史会话/ }));
+        fireEvent.click(await screen.findByRole('button', { name: /测试设计/ }));
+        fireEvent.click(await screen.findByRole('button', { name: '复制为新 run' }));
+
+        await waitFor(() => {
+            expect(cloneRun).toHaveBeenCalledWith('source-run-123');
+        });
+        expect(useStore.getState().currentRunId).toBe('cloned-run-456');
+        expect(mockNavigate).toHaveBeenCalledWith(
+            '/workspace/lisa/test-design?runId=cloned-run-456'
+        );
+    });
+
+    it('shows failure feedback when cloning a historical run fails', async () => {
+        vi.mocked(fetchRunList).mockResolvedValue({
+            limit: 20,
+            offset: 0,
+            total: 1,
+            hasMore: false,
+            nextOffset: null,
+            query: null,
+            runs: [
+                {
+                    id: 'source-run-123',
+                    workflowId: 'TEST_DESIGN',
+                    agentId: 'lisa',
+                    currentStageId: 'STRATEGY',
+                    status: 'active',
+                    reuseStatus: 'ready',
+                    model: 'test-model',
+                    createdAt: '2026-06-19T09:00:00',
+                    updatedAt: '2026-06-19T09:05:00',
+                    lastMessage: null,
+                    currentArtifact: {
+                        stageId: 'STRATEGY',
+                        versionNumber: 1,
+                        summary: '测试策略历史',
+                    },
+                },
+            ],
+        });
+        vi.mocked(cloneRun).mockRejectedValue(new Error('clone failed'));
+
+        renderHeader();
+        fireEvent.click(screen.getByRole('button', { name: /历史会话/ }));
+        fireEvent.click(await screen.findByRole('button', { name: /测试设计/ }));
+        fireEvent.click(await screen.findByRole('button', { name: '复制为新 run' }));
+
+        expect(await screen.findByText('无法复制历史会话')).toBeTruthy();
     });
 
     it('opens Lisa test assets and saves an edited test case', async () => {
@@ -482,9 +707,6 @@ describe('Header Component', () => {
         expect(screen.getAllByText('api.test.com').length).toBeGreaterThan(0);
         expect(screen.getAllByText('LLM_ERROR').length).toBeGreaterThan(0);
         expect(screen.getAllByText('模型/供应商问题 x1').length).toBeGreaterThan(0);
-        expect(screen.getByText('模型输出的结构化字段未通过校验，右侧产出物已保持不变。')).toBeTruthy();
-        expect(screen.getByText('artifact_data.requirement_facts.0.fact')).toBeTruthy();
-        expect(screen.getByText('string_too_short')).toBeTruthy();
         expect(screen.getByText(/run-123/)).toBeTruthy();
     });
 
@@ -573,6 +795,16 @@ describe('Header Component', () => {
         expect(screen.getByText('模型/供应商异常集中')).toBeTruthy();
     });
 
+    it('shows actionable runtime diagnostics and contract retry reasons', async () => {
+        renderHeader();
+        clickMoreAction(/运行统计/);
+
+        expect(await screen.findByText('诊断建议')).toBeTruthy();
+        expect(screen.getByText('结构化输出重试偏高')).toBeTruthy();
+        expect(screen.getByText(/检查该阶段 prompt、artifact contract/)).toBeTruthy();
+        expect(screen.getByText('STRUCTURED_OUTPUT_CONTRACT_RETRY x2')).toBeTruthy();
+    });
+
     it('opens settings from provider issue observability alert', async () => {
         useStore.setState({ isSettingsOpen: false });
 
@@ -633,10 +865,10 @@ describe('Header Component', () => {
             expect(fetchObservabilitySummary).toHaveBeenCalledWith({ limit: 20 });
         });
 
-        fireEvent.change(screen.getByLabelText('统计工作流'), {
+        fireEvent.change(await screen.findByLabelText('统计工作流'), {
             target: { value: 'TEST_DESIGN' },
         });
-        fireEvent.change(screen.getByLabelText('统计阶段'), {
+        fireEvent.change(await screen.findByLabelText('统计阶段'), {
             target: { value: 'CLARIFY' },
         });
         fireEvent.click(screen.getByRole('button', { name: /应用筛选/ }));
@@ -658,13 +890,13 @@ describe('Header Component', () => {
             expect(fetchObservabilitySummary).toHaveBeenCalledWith({ limit: 20 });
         });
 
-        fireEvent.change(screen.getByLabelText('统计工作流'), {
+        fireEvent.change(await screen.findByLabelText('统计工作流'), {
             target: { value: 'TEST_DESIGN' },
         });
-        fireEvent.change(screen.getByLabelText('统计阶段'), {
+        fireEvent.change(await screen.findByLabelText('统计阶段'), {
             target: { value: 'CLARIFY' },
         });
-        const autoRefreshToggle = screen.getByLabelText('自动刷新');
+        const autoRefreshToggle = await screen.findByLabelText('自动刷新');
 
         vi.useFakeTimers();
         fireEvent.click(autoRefreshToggle);
@@ -729,7 +961,10 @@ describe('Header Component', () => {
         renderHeader();
         clickMoreAction(/测试资产/);
 
-        expect(await screen.findByText('资产问题')).toBeTruthy();
+        expect((await screen.findAllByText('资产问题')).length).toBeGreaterThan(0);
+        expect(screen.getByText('质量状态')).toBeTruthy();
+        expect(screen.getByText('存在阻断')).toBeTruthy();
+        expect(screen.getByText('1 个待处理，0 个已确认，0 个已忽略')).toBeTruthy();
         expect(screen.getByText('1 个问题 · 1 待处理')).toBeTruthy();
         expect(screen.getByText('覆盖追溯引用了不存在的测试用例 TC-999')).toBeTruthy();
         expect(screen.getByText('TC-999')).toBeTruthy();
@@ -746,7 +981,7 @@ describe('Header Component', () => {
         renderHeader();
         clickMoreAction(/测试资产/);
 
-        expect(await screen.findByText('资产问题')).toBeTruthy();
+        expect((await screen.findAllByText('资产问题')).length).toBeGreaterThan(0);
         expect(screen.getByText('1 个问题 · 1 待处理')).toBeTruthy();
         expect(screen.getByText('待处理')).toBeTruthy();
 
@@ -757,6 +992,7 @@ describe('Header Component', () => {
         });
         expect(screen.getByText('1 个问题 · 0 待处理')).toBeTruthy();
         expect(screen.getByText('已确认')).toBeTruthy();
+        expect(screen.getByText('0 个待处理，1 个已确认，0 个已忽略')).toBeTruthy();
 
         vi.mocked(updateTestAssetIssueStatus).mockResolvedValueOnce({
             ...TEST_ASSET_COLLECTION_WITH_ISSUES.assetIssues[0],
@@ -769,6 +1005,7 @@ describe('Header Component', () => {
         });
         expect(screen.getByText('忽略')).toBeTruthy();
         expect(screen.getByText('1 个问题 · 0 待处理')).toBeTruthy();
+        expect(screen.getByText('0 个待处理，0 个已确认，1 个已忽略')).toBeTruthy();
     });
 
     it('shows Lisa test asset risk matrix', async () => {
@@ -799,7 +1036,7 @@ describe('Header Component', () => {
         renderHeader();
         clickMoreAction(/测试资产/);
 
-        expect(await screen.findByText('测试点覆盖')).toBeTruthy();
+        expect((await screen.findAllByText('测试点覆盖')).length).toBeGreaterThan(0);
         expect(screen.getByText('支付异常链路')).toBeTruthy();
         expect(screen.getByText('未覆盖')).toBeTruthy();
         expect(screen.getAllByText('P1').length).toBeGreaterThan(0);
@@ -897,6 +1134,7 @@ describe('Header Component', () => {
                         agentId: 'alex',
                         currentStageId: 'BLUEPRINT',
                         status: 'active',
+                        reuseStatus: 'ready',
                         model: 'test-model',
                         createdAt: '2026-06-19T09:00:00',
                         updatedAt: '2026-06-19T09:05:00',
@@ -904,7 +1142,7 @@ describe('Header Component', () => {
                         currentArtifact: {
                             stageId: 'BLUEPRINT',
                             versionNumber: 1,
-                            summary: '价值发现历史',
+                            summary: '需求蓝图梳理历史',
                         },
                     },
                 ],
@@ -923,6 +1161,7 @@ describe('Header Component', () => {
                         agentId: 'lisa',
                         currentStageId: 'STRATEGY',
                         status: 'active',
+                        reuseStatus: 'ready',
                         model: 'test-model',
                         createdAt: '2026-06-19T10:00:00',
                         updatedAt: '2026-06-19T10:05:00',
@@ -939,7 +1178,7 @@ describe('Header Component', () => {
         renderHeader();
         fireEvent.click(screen.getByRole('button', { name: /历史会话/ }));
 
-        await screen.findByText('价值发现历史');
+        await screen.findByText('需求蓝图梳理历史');
         fireEvent.click(screen.getByRole('button', { name: '当前工作流' }));
 
         await waitFor(() => {
@@ -949,7 +1188,60 @@ describe('Header Component', () => {
             });
         });
         expect(await screen.findByText('测试设计历史')).toBeTruthy();
-        expect(screen.queryByText('价值发现历史')).toBeNull();
+        expect(screen.queryByText('需求蓝图梳理历史')).toBeNull();
+    });
+
+    it('filters recent runs by reusable status', async () => {
+        vi.mocked(fetchRunList)
+            .mockResolvedValueOnce({
+                limit: 20,
+                offset: 0,
+                total: 0,
+                hasMore: false,
+                nextOffset: null,
+                query: null,
+                runs: [],
+            })
+            .mockResolvedValueOnce({
+                limit: 20,
+                offset: 0,
+                total: 1,
+                hasMore: false,
+                nextOffset: null,
+                query: null,
+                runs: [
+                    {
+                        id: 'ready-run',
+                        workflowId: 'TEST_DESIGN',
+                        agentId: 'lisa',
+                        currentStageId: 'STRATEGY',
+                        status: 'active',
+                        reuseStatus: 'ready',
+                        model: 'test-model',
+                        createdAt: '2026-06-19T10:00:00',
+                        updatedAt: '2026-06-19T10:05:00',
+                        lastMessage: null,
+                        currentArtifact: {
+                            stageId: 'STRATEGY',
+                            versionNumber: 1,
+                            summary: '可复用测试策略',
+                        },
+                    },
+                ],
+            });
+
+        renderHeader();
+        fireEvent.click(screen.getByRole('button', { name: /历史会话/ }));
+        await screen.findByText('暂无历史会话');
+        fireEvent.click(screen.getByRole('button', { name: '可复用' }));
+
+        await waitFor(() => {
+            expect(fetchRunList).toHaveBeenLastCalledWith({
+                reuseStatus: 'ready',
+                limit: 20,
+            });
+        });
+        expect(await screen.findByText('可复用测试策略')).toBeTruthy();
     });
 
     it('searches recent runs and appends the next page', async () => {
@@ -977,6 +1269,7 @@ describe('Header Component', () => {
                         agentId: 'lisa',
                         currentStageId: 'STRATEGY',
                         status: 'active',
+                        reuseStatus: 'ready',
                         model: 'test-model',
                         createdAt: '2026-06-19T10:00:00',
                         updatedAt: '2026-06-19T10:05:00',
@@ -1003,6 +1296,7 @@ describe('Header Component', () => {
                         agentId: 'lisa',
                         currentStageId: 'CASES',
                         status: 'active',
+                        reuseStatus: 'ready',
                         model: 'test-model',
                         createdAt: '2026-06-19T10:10:00',
                         updatedAt: '2026-06-19T10:15:00',

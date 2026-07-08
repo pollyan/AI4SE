@@ -11,12 +11,42 @@ WORKFLOW_STAGES: dict[str, list[str]] = {
     "INCIDENT_REVIEW": ["TIMELINE", "ROOT_CAUSE", "IMPROVEMENT"],
     "IDEA_BRAINSTORM": ["DEFINE", "DIVERGE", "CONVERGE", "CONCEPT"],
     "VALUE_DISCOVERY": ["ELEVATOR", "PERSONA", "JOURNEY", "BLUEPRINT"],
-    "USER_STORY_BREAKDOWN": ["SCOPE", "STORY_MAP", "STORIES", "HANDOFF"],
+    "STORY_BREAKDOWN": [
+        "INPUT_ANALYSIS",
+        "EPIC_MAPPING",
+        "STORY_BACKLOG",
+        "SPRINT_PLAN",
+    ],
+    "PRD_REVIEW": [
+        "INVENTORY",
+        "QUALITY_AUDIT",
+        "COMPLETION_PLAN",
+        "REVISION_BLUEPRINT",
+    ],
 }
+
+STORY_BREAKDOWN_REQUIRED_HEADINGS = [
+    "# 用户故事拆解包",
+    "## 输入分析",
+    "## Epic Map",
+    "## User Story Backlog",
+    "## 验收标准",
+    "## 依赖与风险",
+    "## Sprint 切片建议",
+    "## Lisa Handoff 输入",
+    "## 阶段门禁",
+    "Story ID",
+    "Epic ID",
+    "AC ID",
+    "Sprint",
+    "可测试性",
+    "状态",
+]
 
 REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
     ("TEST_DESIGN", "CLARIFY"): [
         "# 需求分析文档",
+        "## 文档信息",
         "## 1. 需求事实清单",
         "## 2. 被测系统与边界",
         "## 3. 业务规则与数据状态",
@@ -25,7 +55,6 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
         "## 6. 隐式质量需求",
         "## 7. 后续测试设计输入",
         "## 8. 阶段门禁",
-        "## 附录：文档信息",
         "事实 ID",
         "证据等级",
         "阻断性",
@@ -77,19 +106,20 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
     ],
     ("TEST_DESIGN", "DELIVERY"): [
         "# 测试设计文档",
-        "## 1. 执行摘要",
-        "## 2. 需求分析摘要",
-        "## 3. 测试策略摘要",
-        "## 4. 测试用例摘要",
-        "## 5. 覆盖地图",
-        "## 6. 开放风险",
-        "## 7. 交付验收清单",
-        "## 8. 签署确认",
-        "## 9. 变更记录",
-        "## 附录：文档信息",
+        "## 1. 文档信息",
+        "## 2. 执行摘要",
+        "## 3. 需求分析摘要",
+        "## 4. 测试策略摘要",
+        "## 5. 测试用例摘要",
+        "## 6. 覆盖地图",
+        "## 7. 开放风险",
+        "## 8. 交付验收清单",
+        "## 9. 签署确认",
+        "## 10. 变更记录",
     ],
     ("REQ_REVIEW", "REVIEW"): [
         "# 需求评审问题清单",
+        "## 评审信息",
         "## 评审范围与不评审范围",
         "## 需求质量总览",
         "## 需求质量结构图",
@@ -97,7 +127,6 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
         "## 按维度问题清单",
         "## 修订建议",
         "## 阶段门禁",
-        "## 附录：评审信息",
         "评审维度",
         "问题描述",
         "优先级",
@@ -307,6 +336,7 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
     ],
     ("VALUE_DISCOVERY", "BLUEPRINT"): [
         "需求蓝图",
+        "## 文档信息",
         "## 1. 产品概述",
         "### 1.1 产品愿景",
         "### 1.2 定位声明",
@@ -329,64 +359,68 @@ REQUIRED_ARTIFACT_HEADINGS: dict[tuple[str, str], list[str]] = {
         "## 10. 风险评估",
         "## 11. Lisa Handoff 输入",
         "## 12. 阶段门禁",
-        "## 附录：文档信息",
         "可测试性等级",
         "owner",
         "状态",
     ],
-    ("USER_STORY_BREAKDOWN", "SCOPE"): [
-        "# 用户故事拆解文档",
-        "## 1. 拆分范围",
-        "## 2. 需求追溯索引",
-        "## 3. 不拆范围",
-        "## 4. 阻塞问题",
-        "## 5. 阶段门禁",
-        "需求 ID",
+    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): STORY_BREAKDOWN_REQUIRED_HEADINGS,
+    ("STORY_BREAKDOWN", "EPIC_MAPPING"): STORY_BREAKDOWN_REQUIRED_HEADINGS,
+    ("STORY_BREAKDOWN", "STORY_BACKLOG"): STORY_BREAKDOWN_REQUIRED_HEADINGS,
+    ("STORY_BREAKDOWN", "SPRINT_PLAN"): STORY_BREAKDOWN_REQUIRED_HEADINGS,
+    ("PRD_REVIEW", "INVENTORY"): [
+        "# PRD 输入盘点",
+        "## 文档信息",
+        "## PRD 目标与范围",
+        "## 输入事实清单",
+        "## 用户与场景",
+        "## 现有验收材料",
+        "## 缺失信息清单",
+        "## 阶段门禁",
+        "证据等级",
+        "状态",
+    ],
+    ("PRD_REVIEW", "QUALITY_AUDIT"): [
+        "# PRD 质量评审",
+        "## 文档信息",
+        "## PRD 目标与范围",
+        "## 质量评审摘要",
+        "## 质量评分矩阵",
+        "## 问题清单",
+        "## 风险影响",
+        "## 阶段门禁",
+        "评审维度",
+        "严重级别",
+        "阻断性",
+        "证据",
+    ],
+    ("PRD_REVIEW", "COMPLETION_PLAN"): [
+        "# PRD 补全建议",
+        "## 文档信息",
+        "## PRD 目标与范围",
+        "## 质量评审摘要",
+        "## 补全任务清单",
+        "## 推荐 PRD 结构",
+        "## 验证方式与复审条件",
+        "## 阶段门禁",
+        "补全动作",
         "优先级",
+        "负责人",
+        "复审条件",
+    ],
+    ("PRD_REVIEW", "REVISION_BLUEPRINT"): [
+        "# PRD 修订蓝图",
+        "## 文档信息",
+        "## PRD 目标与范围",
+        "## 质量评审摘要",
+        "## 补全任务清单",
+        "## 推荐 PRD 结构",
+        "## 核心需求改写",
+        "## 验收标准与可测试性",
+        "## Lisa Handoff 输入",
+        "## 复审条件",
+        "## 阶段门禁",
+        "可测试性等级",
         "状态",
-    ],
-    ("USER_STORY_BREAKDOWN", "STORY_MAP"): [
-        "# 用户故事拆解文档",
-        "## 1. 用户活动主干",
-        "## 2. 用户任务流",
-        "## 3. 用户故事地图",
-        "## 4. MVP Slice",
-        "## 5. Release Slice",
-        "## 6. 阶段门禁",
-        "活动 ID",
-        "任务 ID",
-        "Story ID",
-        "MVP",
-    ],
-    ("USER_STORY_BREAKDOWN", "STORIES"): [
-        "# 用户故事拆解文档",
-        "## 1. 故事拆分原则",
-        "## 2. 用户故事卡片",
-        "## 3. Ready Stories",
-        "## 4. Not Ready Stories",
-        "## 5. 开放问题",
-        "## 6. 阶段门禁",
-        "Story ID",
-        "作为",
-        "我想要",
-        "以便",
-        "验收标准",
-        "来源需求",
-        "状态",
-    ],
-    ("USER_STORY_BREAKDOWN", "HANDOFF"): [
-        "# 单故事 Handoff 清单",
-        "## 1. Ready Story 总览",
-        "## 2. 单故事需求包",
-        "## 3. 上游追溯",
-        "## 4. Not Ready 阻塞项",
-        "## 5. AI Coding 输入边界",
-        "## 6. 阶段门禁",
-        "storyId",
-        "requirementId",
-        "acceptanceCriteria",
-        "businessRules",
-        "openQuestions",
     ],
 }
 
@@ -407,15 +441,15 @@ REQUIRED_ARTIFACT_MERMAID_DIAGRAMS: dict[tuple[str, str], list[str]] = {
     ("IDEA_BRAINSTORM", "CONVERGE"): ["quadrantChart"],
     ("VALUE_DISCOVERY", "ELEVATOR"): ["flowchart"],
     ("VALUE_DISCOVERY", "JOURNEY"): ["journey"],
-    ("USER_STORY_BREAKDOWN", "SCOPE"): ["flowchart"],
-    ("USER_STORY_BREAKDOWN", "STORY_MAP"): ["flowchart"],
+    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): ["flowchart"],
+    ("PRD_REVIEW", "INVENTORY"): ["mindmap"],
 }
 
 REQUIRED_ARTIFACT_STRUCTURED_VISUALS: dict[tuple[str, str], list[str]] = {
     ("REQ_REVIEW", "REVIEW"): ["score-matrix"],
     ("TEST_DESIGN", "STRATEGY"): ["risk-board"],
     ("TEST_DESIGN", "CASES"): ["traceability-matrix"],
-    ("TEST_DESIGN", "DELIVERY"): ["coverage-map", "traceability-matrix"],
+    ("TEST_DESIGN", "DELIVERY"): ["coverage-map"],
     ("INCIDENT_REVIEW", "IMPROVEMENT"): ["action-board"],
     ("VALUE_DISCOVERY", "ELEVATOR"): ["score-matrix"],
     ("VALUE_DISCOVERY", "JOURNEY"): ["journey-map"],
@@ -423,6 +457,10 @@ REQUIRED_ARTIFACT_STRUCTURED_VISUALS: dict[tuple[str, str], list[str]] = {
     ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["cause-map"],
     ("IDEA_BRAINSTORM", "CONCEPT"): ["mvp-map"],
     ("VALUE_DISCOVERY", "BLUEPRINT"): ["roadmap"],
+    ("STORY_BREAKDOWN", "SPRINT_PLAN"): ["story-map"],
+    ("PRD_REVIEW", "QUALITY_AUDIT"): ["score-matrix"],
+    ("PRD_REVIEW", "COMPLETION_PLAN"): ["action-board"],
+    ("PRD_REVIEW", "REVISION_BLUEPRINT"): ["roadmap"],
 }
 
 STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {
@@ -490,16 +528,13 @@ STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {
     "cause-map": (
         'cause-map 必须严格使用如下 JSON 结构：{"type": '
         '"cause-map", "title": "可选标题", "nodes": [{"id": '
-        '"Why-1", "label": "Why-1", "title": "直接原因", '
-        '"description": "发布前缺少关键路径回归门禁", "category": '
-        '"流程", "evidence": "发布记录与测试记录", "confidence": '
-        '"高", "status": "已确认"}], "edges": [{"source": '
-        '"Why-1", "target": "Why-2", "label": "继续追问"}]}。'
-        "nodes 必须是非空对象数组；每个 node 必须包含非空且 id 唯一的 id、"
-        "非空 label 和非空 title；description、category、evidence、"
-        "confidence、status 可选，但如果出现必须是非空字符串。edges 必须是对象数组；"
-        "每条 edge 必须包含非空 source 和 target，并且 source/target 必须引用已存在 node；"
-        "label 可选，但如果出现必须是非空字符串。禁止把 cause-map 写成 columns/rows 表格协议。"
+        '"Why-1", "label": "Why-1", "title": "直接原因", "description": '
+        '"为什么会出现这个现象？", "category": "流程", "evidence": '
+        '"发布记录", "confidence": "高", "status": "已确认"}], '
+        '"edges": [{"source": "Why-1", "target": "Why-2", '
+        '"label": "继续追问"}]}。nodes 必须是非空对象数组，id 唯一，'
+        "每个节点必须包含非空 id、label 和 title；edges 必须是对象数组，"
+        "source/target 必须引用已存在的 node id。禁止使用 columns/rows 矩阵旧结构。"
     ),
     "mvp-map": (
         'mvp-map 必须严格使用如下 JSON 结构：{"type": '
@@ -518,6 +553,15 @@ STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {
         '"目标": "验证主价值", "成功指标": "任务完成率"}]}。'
         "columns 必须是非空字符串数组；rows 必须是对象数组，每个对象的 key "
         "必须对应 columns 中的列名。"
+    ),
+    "story-map": (
+        'story-map 必须严格使用如下 JSON 结构：{"type": '
+        '"story-map", "title": "可选标题", "columns": ["Epic", '
+        '"Story", "优先级", "Sprint", "依赖", "可测试性"], '
+        '"rows": [{"Epic": "EPIC-001 用户管理", "Story": '
+        '"US-001 创建用户", "优先级": "P0", "Sprint": "Sprint 1", '
+        '"依赖": "认证服务", "可测试性": "高"}]}。columns 必须是非空字符串数组；'
+        "rows 必须是对象数组，每个对象的 key 必须对应 columns 中的列名。"
     ),
 }
 
@@ -552,34 +596,27 @@ class ArtifactPatch(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     operation: Literal["replace", "add_after"]
-    section_anchor: str = Field(alias="sectionAnchor", min_length=1)
-    replacement_markdown: str = Field(alias="replacementMarkdown", min_length=1)
+    section_anchor: str = Field(min_length=1, alias="sectionAnchor")
+    replacement_markdown: str = Field(min_length=1, alias="replacementMarkdown")
+    after_section_anchor: str | None = Field(default=None, alias="afterSectionAnchor")
     base_content: str | None = Field(default=None, alias="baseContent")
-    after_section_anchor: str | None = Field(
-        default=None,
-        alias="afterSectionAnchor",
-    )
 
     @field_validator(
         "section_anchor",
         "replacement_markdown",
         "after_section_anchor",
-        mode="before",
+        "base_content",
     )
     @classmethod
-    def validate_optional_strings_not_blank(cls, value: Any) -> Any:
-        if value is None:
-            return value
-        if not isinstance(value, str) or not value.strip():
-            raise ValueError("artifact patch string fields cannot be blank")
+    def validate_patch_strings_not_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("artifact patch fields cannot be blank")
         return value
 
     @model_validator(mode="after")
-    def validate_operation_fields(self) -> "ArtifactPatch":
+    def validate_add_after_anchor(self) -> "ArtifactPatch":
         if self.operation == "add_after" and not self.after_section_anchor:
             raise ValueError("add_after artifact patch requires afterSectionAnchor")
-        if self.operation == "replace" and self.after_section_anchor is not None:
-            raise ValueError("replace artifact patch cannot include afterSectionAnchor")
         return self
 
 
@@ -602,8 +639,8 @@ class AgentTurnOutput(BaseModel):
 
     chat: str = Field(min_length=1)
     artifact_update: ArtifactUpdate
-    artifact_data: dict[str, Any] | None = Field(default=None, exclude=True)
     artifact_patch: ArtifactPatch | None = None
+    artifact_data: dict[str, Any] | None = Field(default=None, exclude=True)
     stage_action: StageAction | None = None
     warnings: list[str] = Field(default_factory=list)
 
@@ -641,7 +678,10 @@ class AgentTurnOutput(BaseModel):
 
     @model_validator(mode="after")
     def validate_chat_artifact_separation(self) -> "AgentTurnOutput":
-        if self.artifact_patch is not None and self.artifact_update.type != "replace":
+        if (
+            self.artifact_patch is not None
+            and self.artifact_update.type != "replace"
+        ):
             raise ValueError("artifact_patch requires replace artifact_update")
         if self.artifact_update.type != "replace":
             return self
@@ -765,7 +805,7 @@ def validate_artifact_template(
                 raise ContractValidationError(
                     "cause-map 必须使用 nodes 和 edges 结构；"
                     "nodes 必须是非空对象数组且 id 唯一，"
-                    "edges 必须引用已存在节点。"
+                    "edges.source/target 必须引用已存在的 node id。"
                 )
             raise ContractValidationError(
                 f"{invalid_type} 必须使用 columns 和 rows 结构；"
@@ -931,11 +971,7 @@ def is_valid_structured_visual_block(
     if block.get("type") != visual_type:
         return False
     if visual_type == "cause-map":
-        return is_valid_node_edge_structured_visual_block(block)
-    return is_valid_matrix_structured_visual_block(block)
-
-
-def is_valid_matrix_structured_visual_block(block: dict[str, Any]) -> bool:
+        return is_valid_cause_map_visual_block(block)
     columns = block.get("columns")
     rows = block.get("rows")
     return (
@@ -947,16 +983,14 @@ def is_valid_matrix_structured_visual_block(block: dict[str, Any]) -> bool:
     )
 
 
-def is_valid_node_edge_structured_visual_block(block: dict[str, Any]) -> bool:
+def is_valid_cause_map_visual_block(block: dict[str, Any]) -> bool:
     nodes = block.get("nodes")
     edges = block.get("edges")
-    if (
-        not isinstance(nodes, list)
-        or not nodes
-        or not all(isinstance(node, dict) for node in nodes)
-        or not isinstance(edges, list)
-        or not all(isinstance(edge, dict) for edge in edges)
+    if not isinstance(nodes, list) or not nodes or not all(
+        isinstance(node, dict) for node in nodes
     ):
+        return False
+    if not isinstance(edges, list) or not all(isinstance(edge, dict) for edge in edges):
         return False
 
     node_ids: set[str] = set()
@@ -964,33 +998,32 @@ def is_valid_node_edge_structured_visual_block(block: dict[str, Any]) -> bool:
         node_id = node.get("id")
         label = node.get("label")
         title = node.get("title")
-        if (
-            not isinstance(node_id, str)
-            or not node_id.strip()
-            or node_id in node_ids
-            or not isinstance(label, str)
-            or not label.strip()
-            or not isinstance(title, str)
-            or not title.strip()
+        if not (
+            isinstance(node_id, str)
+            and node_id.strip()
+            and isinstance(label, str)
+            and label.strip()
+            and isinstance(title, str)
+            and title.strip()
         ):
+            return False
+        if node_id in node_ids:
             return False
         node_ids.add(node_id)
 
     for edge in edges:
         source = edge.get("source")
         target = edge.get("target")
-        if (
-            not isinstance(source, str)
-            or not source.strip()
-            or not isinstance(target, str)
-            or not target.strip()
-            or source not in node_ids
-            or target not in node_ids
+        if not (
+            isinstance(source, str)
+            and source.strip()
+            and isinstance(target, str)
+            and target.strip()
+            and source in node_ids
+            and target in node_ids
         ):
             return False
-        label = edge.get("label")
-        if label is not None and (not isinstance(label, str) or not label.strip()):
-            return False
+
     return True
 
 
@@ -1054,18 +1087,14 @@ def build_artifact_contract_prompt(
     )
     return (
         "\n\n【结构化产出物契约】\n"
-        "本段仅适用于 artifact_update.markdown 输出形态；"
-        "如果运行时追加 artifact_data 结构化输出要求，"
-        "以 artifact_data 要求为准，后端会根据 artifact_data 渲染右侧 Markdown。\n"
         "chat 只允许返回给用户看的自然工作对话，禁止包含 Markdown 标题、"
         "表格、代码块、Mermaid 图、完整文档正文或 <CHART>/<ARTIFACT>/"
         "<CHAT> 旧标签协议。\n"
         "chat 必须承担左侧对话承接作用：像自然顾问式对话，"
         "用短段落说明本次判断、关键假设、右侧产出物更新和用户下一步；"
         "可以适度使用 bullet、少量重点加粗或引用块帮助扫读，但不要每轮都套用"
-        "固定 bullet 数量、固定标签、固定栏目或固定字段模板。"
-        "如果当前阶段可推进，应自然引导用户查看右侧产出物，并由 stage_action "
-        "触发前端确认控件。\n"
+        "固定栏目或固定字段模板。如果当前阶段可推进，应自然引导用户查看右侧产出物，"
+        "并由 stage_action 触发前端确认控件。\n"
         "本阶段必须更新右侧产出物：artifact_update.type 必须为 replace。\n"
         "artifact_update.markdown 必须是完整 Markdown 文档，不能只返回片段，"
         "不能用省略号表示未修改内容。\n"

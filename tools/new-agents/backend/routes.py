@@ -19,6 +19,7 @@ from route_guards import require_default_llm_config
 from run_persistence import (
     AgentRunPersistence,
     ArtifactVersionConflictError,
+    clone_agent_run,
     get_run_snapshot,
     get_runtime_observability_summary,
     list_agent_runs,
@@ -244,6 +245,7 @@ def agent_runs_stream():
 def agent_runs_list():
     """Return recent persisted Agent Runtime runs."""
     workflow_id = request.args.get("workflowId")
+    reuse_status = request.args.get("reuseStatus")
     limit_arg = request.args.get("limit", "20")
     offset_arg = request.args.get("offset", "0")
     query_text = request.args.get("query")
@@ -259,6 +261,7 @@ def agent_runs_list():
         return jsonify(
             list_agent_runs(
                 workflow_id=workflow_id,
+                reuse_status=reuse_status,
                 limit=limit,
                 offset=offset,
                 query_text=query_text,
@@ -295,6 +298,16 @@ def agent_run_snapshot(run_id: str):
     """Return a persisted Agent Runtime run snapshot."""
     try:
         return jsonify(get_run_snapshot(run_id)), 200
+    except ValueError as e:
+        return json_error_response(str(e), 404)
+
+
+@api_bp.route("/agent/runs/<run_id>/clone", methods=["POST"])
+def agent_run_clone(run_id: str):
+    """Clone a persisted Agent Runtime run as a new active run."""
+    try:
+        cloned_run = clone_agent_run(run_id)
+        return jsonify(get_run_snapshot(cloned_run.id)), 200
     except ValueError as e:
         return json_error_response(str(e), 404)
 
@@ -413,7 +426,7 @@ def agent_run_handoff_start(run_id: str, handoff_id: str):
 @api_bp.route("/agent/runs/<run_id>/story-handoff-candidates", methods=["GET"])
 def agent_run_story_handoff_candidates(run_id: str):
     """Return ready stories that can generate single-story handoff packets."""
-    stage_id = (request.args.get("stageId") or "HANDOFF").strip()
+    stage_id = (request.args.get("stageId") or "SPRINT_PLAN").strip()
     try:
         return jsonify(list_story_handoff_candidates(run_id, stage_id)), 200
     except ValueError as e:
@@ -425,7 +438,7 @@ def agent_run_story_handoff_candidates(run_id: str):
 @api_bp.route("/agent/runs/<run_id>/story-handoff-packets", methods=["GET"])
 def agent_run_story_handoff_packets(run_id: str):
     """Return persisted single-story handoff packets for a run."""
-    stage_id = (request.args.get("stageId") or "HANDOFF").strip()
+    stage_id = (request.args.get("stageId") or "SPRINT_PLAN").strip()
     try:
         return jsonify(list_story_handoff_packets(run_id, stage_id)), 200
     except ValueError as e:
@@ -441,7 +454,7 @@ def agent_run_story_handoff_packet_create(run_id: str):
         payload = _read_json_body()
         if not isinstance(payload, dict):
             return json_error_response("请求体必须是 JSON 对象", 400)
-        stage_id = str(payload.get("stageId") or "HANDOFF").strip()
+        stage_id = str(payload.get("stageId") or "SPRINT_PLAN").strip()
         story_id = str(payload.get("storyId") or "").strip()
         if not story_id:
             return json_error_response("storyId 不能为空", 400)

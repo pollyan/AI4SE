@@ -15,22 +15,27 @@ def init_db(app):
     """Create database tables and seed server-managed defaults."""
     with app.app_context():
         db.create_all()
-        _ensure_story_handoff_packet_table()
-        _ensure_artifact_version_artifact_data_column()
+        _ensure_agent_artifact_version_columns()
         _ensure_artifact_comment_columns()
         _ensure_artifact_section_lock_columns()
-        _ensure_turn_metric_diagnostic_columns()
         upsert_default_llm_config_from_env()
 
 
-def _ensure_story_handoff_packet_table():
-    """Upgrade existing databases created before story handoff packets."""
+def _ensure_agent_artifact_version_columns():
+    """Upgrade existing artifact version tables with structured data storage."""
     inspector = inspect(db.engine)
-    if "agent_story_handoff_packets" in inspector.get_table_names():
+    if "agent_artifact_versions" not in inspector.get_table_names():
         return
-    from models import AgentStoryHandoffPacket
 
-    AgentStoryHandoffPacket.__table__.create(bind=db.engine)
+    existing_columns = {
+        column["name"]
+        for column in inspector.get_columns("agent_artifact_versions")
+    }
+    if "artifact_data_json" not in existing_columns:
+        db.session.execute(text(
+            "ALTER TABLE agent_artifact_versions ADD COLUMN artifact_data_json TEXT"
+        ))
+        db.session.commit()
 
 
 def _ensure_artifact_comment_columns():
@@ -55,23 +60,6 @@ def _ensure_artifact_comment_columns():
     db.session.commit()
 
 
-def _ensure_artifact_version_artifact_data_column():
-    """Upgrade existing artifact version tables created before artifact_data."""
-    inspector = inspect(db.engine)
-    if "agent_artifact_versions" not in inspector.get_table_names():
-        return
-
-    existing_columns = {
-        column["name"]
-        for column in inspector.get_columns("agent_artifact_versions")
-    }
-    if "artifact_data" not in existing_columns:
-        db.session.execute(text(
-            "ALTER TABLE agent_artifact_versions ADD COLUMN artifact_data JSON"
-        ))
-        db.session.commit()
-
-
 def _ensure_artifact_section_lock_columns():
     """Upgrade existing section lock tables created before section anchors."""
     inspector = inspect(db.engine)
@@ -87,44 +75,6 @@ def _ensure_artifact_section_lock_columns():
             "ALTER TABLE agent_artifact_section_locks ADD COLUMN section_anchor TEXT"
         ))
         db.session.commit()
-
-
-def _ensure_turn_metric_diagnostic_columns():
-    """Upgrade existing turn metric tables created before error diagnostics."""
-    inspector = inspect(db.engine)
-    if "agent_run_turn_metrics" not in inspector.get_table_names():
-        return
-
-    existing_columns = {
-        column["name"]
-        for column in inspector.get_columns("agent_run_turn_metrics")
-    }
-    column_migrations = {
-        "diagnostic_phase": (
-            "ALTER TABLE agent_run_turn_metrics "
-            "ADD COLUMN diagnostic_phase VARCHAR(64)"
-        ),
-        "diagnostic_field_path": (
-            "ALTER TABLE agent_run_turn_metrics "
-            "ADD COLUMN diagnostic_field_path TEXT"
-        ),
-        "diagnostic_validator": (
-            "ALTER TABLE agent_run_turn_metrics "
-            "ADD COLUMN diagnostic_validator VARCHAR(128)"
-        ),
-        "diagnostic_public_reason": (
-            "ALTER TABLE agent_run_turn_metrics "
-            "ADD COLUMN diagnostic_public_reason TEXT"
-        ),
-        "diagnostic_retryable": (
-            "ALTER TABLE agent_run_turn_metrics "
-            "ADD COLUMN diagnostic_retryable BOOLEAN"
-        ),
-    }
-    for column_name, statement in column_migrations.items():
-        if column_name not in existing_columns:
-            db.session.execute(text(statement))
-    db.session.commit()
 
 
 def create_app(test_config=None):

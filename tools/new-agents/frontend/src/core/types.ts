@@ -13,40 +13,6 @@ export type ArtifactVersion = {
 
 export type ArtifactVersionInput = ArtifactVersion | Omit<ArtifactVersion, 'stageId'>;
 
-export type ArtifactSectionChangeKind = 'added' | 'removed' | 'modified';
-
-export type ArtifactSectionChange = {
-    kind: ArtifactSectionChangeKind;
-    anchor: string;
-    title: string;
-    displayTitle: string;
-    safeForPatch: boolean;
-    unsafeReason?: 'fenced_block' | 'markdown_table' | 'markdown_list' | 'structured_visual';
-};
-
-export type ArtifactSectionPatchOperation = 'replace' | 'add_after';
-
-export type ArtifactSectionPatchFallbackReason =
-    | 'base_mismatch'
-    | 'section_not_found'
-    | 'unsafe_section'
-    | 'invalid_patch';
-
-export type ArtifactSectionPatch = {
-    operation: ArtifactSectionPatchOperation;
-    sectionAnchor: string;
-    afterSectionAnchor?: string;
-    replacementMarkdown: string;
-    baseContent?: string;
-};
-
-export type ArtifactSectionPatchResult = {
-    applied: boolean;
-    content: string;
-    changes: ArtifactSectionChange[];
-    fallbackReason?: ArtifactSectionPatchFallbackReason;
-};
-
 export type ArtifactCommentStatus = 'open' | 'resolved';
 
 export type ArtifactCommentReply = {
@@ -113,16 +79,6 @@ export type PendingStageTransition = {
     toStageIndex: number;
 };
 
-export type Message = {
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp: number;
-    attachments?: Attachment[];
-    retryable?: boolean;
-    errorDiagnostic?: MessageErrorDiagnostic;
-};
-
 export type MessageErrorDiagnosticKind = 'structured' | 'provider' | 'generic';
 
 export type MessageErrorDiagnostic = {
@@ -140,6 +96,16 @@ export type MessageErrorDiagnostic = {
     retryable?: boolean;
 };
 
+export type Message = {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: number;
+    attachments?: Attachment[];
+    retryable?: boolean;
+    errorDiagnostic?: MessageErrorDiagnostic;
+};
+
 // 已实现的工作流类型（仅包含 online 状态）
 export type WorkflowType =
     | 'TEST_DESIGN'
@@ -147,7 +113,8 @@ export type WorkflowType =
     | 'INCIDENT_REVIEW'
     | 'IDEA_BRAINSTORM'
     | 'VALUE_DISCOVERY'
-    | 'USER_STORY_BREAKDOWN';
+    | 'STORY_BREAKDOWN'
+    | 'PRD_REVIEW';
 
 export type WorkflowHandoff = {
     id: string;
@@ -158,6 +125,9 @@ export type WorkflowHandoff = {
     sourceArtifactVersion: number;
     sourceArtifactDigest?: string;
     sourceArtifactSummary?: string;
+    sourceSummary?: string;
+    unconfirmedItems: string[];
+    targetInputChecklist: string[];
     targetRunId?: string;
     targetWorkflowId: WorkflowType;
     targetStageId: string;
@@ -229,7 +199,6 @@ export type AgentRunSnapshotArtifact = {
     stageId: string;
     content: string;
     versionNumber: number;
-    artifactData?: unknown;
 };
 
 export type AgentRunSnapshotContextSummary = {
@@ -256,12 +225,15 @@ export type AgentRunSnapshot = {
     artifactAuditEvents: ArtifactAuditEvent[];
 };
 
+export type RunReuseStatus = 'ready' | 'needs_artifact' | 'failed';
+
 export type AgentRunListItem = {
     id: string;
     workflowId: WorkflowType;
     agentId: string;
     currentStageId: string;
     status: string;
+    reuseStatus: RunReuseStatus;
     model: string | null;
     createdAt: string | null;
     updatedAt: string | null;
@@ -298,6 +270,32 @@ export type TestAssetCoverageSummary = {
         uncovered: number;
         coverageRate: number;
     }>;
+};
+
+export type TestAssetQualityStatus = 'blocked' | 'attention' | 'ready';
+
+export type TestAssetQualityGateStatus = 'fail' | 'warn' | 'pass';
+
+export type TestAssetQualityGate = {
+    id: string;
+    status: TestAssetQualityGateStatus;
+    title: string;
+    detail: string;
+};
+
+export type TestAssetQualitySummary = {
+    status: TestAssetQualityStatus;
+    label: string;
+    pendingIssueCount: number;
+    confirmedIssueCount: number;
+    ignoredIssueCount: number;
+    uncoveredTestPointCount: number;
+    partialTestPointCount: number;
+    openRiskCount: number;
+    mitigatingRiskCount: number;
+    acceptedRiskCount: number;
+    closedRiskCount: number;
+    gates: TestAssetQualityGate[];
 };
 
 export type TestAssetCase = {
@@ -433,6 +431,7 @@ export type TestAssetCollection = {
     sourceStageId: string;
     sourceArtifactVersion: number;
     coverageSummary: TestAssetCoverageSummary;
+    qualitySummary: TestAssetQualitySummary;
     testCases: TestAssetCase[];
     testPoints: TestAssetPoint[];
     coverageTrace: TestAssetPoint[];
@@ -498,6 +497,16 @@ export type ObservabilityTotals = {
     providerIssueCodes: Record<string, number>;
 };
 
+export type ObservabilityDiagnosticSeverity = 'info' | 'warning' | 'critical';
+
+export type ObservabilityDiagnostic = {
+    id: string;
+    severity: ObservabilityDiagnosticSeverity;
+    title: string;
+    detail: string;
+    action: string;
+};
+
 export type ObservabilityStageSummary = ObservabilityTotals & {
     workflowId: WorkflowType;
     stageId: string;
@@ -507,14 +516,6 @@ export type ObservabilityStageSummary = ObservabilityTotals & {
 export type ObservabilityProviderSummary = ObservabilityTotals & {
     provider: string;
     errorCodes: Record<string, number>;
-};
-
-export type ObservabilityTurnDiagnostic = {
-    phase: string;
-    fieldPath: string;
-    validator: string;
-    publicReason: string;
-    retryable: boolean;
 };
 
 export type ObservabilityTurn = {
@@ -531,15 +532,67 @@ export type ObservabilityTurn = {
     outputChars: number;
     estimatedTokens: number;
     contractRetryCount: number;
-    diagnostic?: ObservabilityTurnDiagnostic | null;
     createdAt: string | null;
 };
 
 export type ObservabilitySummary = {
+    contractRetryReasons: Record<string, number>;
+    diagnostics: ObservabilityDiagnostic[];
     totals: ObservabilityTotals;
     byStage: ObservabilityStageSummary[];
     byProvider: ObservabilityProviderSummary[];
     recentTurns: ObservabilityTurn[];
+};
+
+export interface ArtifactContract {
+    requiredHeadings: string[];
+}
+
+export interface ArtifactDataContract {
+    modelOutputRules: string[];
+    forbiddenOutputs: string[];
+    rendererOutputs: string[];
+}
+
+export interface VisualContract {
+    requiredMermaidDiagrams?: string[];
+    requiredStructuredVisuals?: string[];
+}
+
+export type ArtifactContractConfig = ArtifactContract;
+export type ArtifactDataContractConfig = ArtifactDataContract;
+export type VisualContractConfig = VisualContract;
+
+export type ArtifactSectionChangeKind = 'added' | 'modified' | 'removed';
+
+export type ArtifactSectionChange = {
+    kind: ArtifactSectionChangeKind;
+    title: string;
+    anchor: string;
+    heading: string;
+};
+
+export type ArtifactSectionPatchOperation = 'replace' | 'add_after';
+
+export type ArtifactSectionPatch = {
+    operation: ArtifactSectionPatchOperation;
+    sectionAnchor: string;
+    replacementMarkdown: string;
+    afterSectionAnchor?: string;
+    baseContent?: string;
+};
+
+export type ArtifactSectionPatchFallbackReason =
+    | 'section_not_found'
+    | 'anchor_not_found'
+    | 'base_content_mismatch'
+    | 'replacement_section_missing';
+
+export type ArtifactSectionPatchApplyResult = {
+    applied: boolean;
+    content: string;
+    changes: ArtifactSectionChange[];
+    fallbackReason?: ArtifactSectionPatchFallbackReason;
 };
 
 export interface WorkflowStage {
@@ -547,6 +600,12 @@ export interface WorkflowStage {
     name: string;
     description: string;
     template?: string;
+    methodIds?: string[];
+    promptTemplateVersion?: string;
+    regressionSampleIds?: string[];
+    artifactContract?: ArtifactContract;
+    artifactDataContract?: ArtifactDataContract;
+    visualContract?: VisualContract;
 }
 
 export interface OnboardingConfig {
@@ -587,13 +646,13 @@ export interface ChatState {
     stageIndex: number;
     chatHistory: Message[];
     artifactContent: string;
-    artifactChangeIndex: ArtifactSectionChange[];
     artifactHistory: ArtifactVersion[];
     artifactComments: ArtifactComment[];
     artifactSectionLocks: ArtifactSectionLock[];
     artifactAuditEvents: ArtifactAuditEvent[];
     artifactVisualDiagnostics: ArtifactVisualDiagnostic[];
     artifactVisualDiagnosticFocusRequest: ArtifactVisualDiagnosticFocusRequest | null;
+    artifactChangeIndex: ArtifactSectionChange[];
     stageArtifacts: Record<string, string>;
     contextSummaries: AgentRunSnapshotContextSummary[];
     currentRunId: string | null;
@@ -614,7 +673,7 @@ export interface ChatState {
     updateMessage: (id: string, content: string) => void;
     removeLastMessage: () => void;
     setArtifactContent: (content: string) => void;
-    applyArtifactSectionPatch: (patch: ArtifactSectionPatch) => ArtifactSectionPatchResult;
+    applyArtifactSectionPatch: (patch: ArtifactSectionPatch) => ArtifactSectionPatchApplyResult;
     addArtifactVersion: (version: ArtifactVersionInput) => void;
     addArtifactComment: (comment: ArtifactCommentInput) => void;
     addArtifactCommentReply: (commentId: string, content: string) => void;

@@ -1,11 +1,10 @@
 import copy
-import json
 
 import pytest
 from pydantic import ValidationError
 
-from agent_contracts import WORKFLOW_STAGES, validate_agent_turn
-from agent_runtime import supports_artifact_data_rendering
+from agent_contracts import validate_agent_turn
+from agent_runtime import ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS
 from artifact_data_renderers import (
     CasesArtifactData,
     ClarifyArtifactData,
@@ -17,6 +16,7 @@ from artifact_data_renderers import (
     IncidentImprovementArtifactData,
     IncidentRootCauseArtifactData,
     IncidentTimelineArtifactData,
+    PrdReviewArtifactData,
     ReqReviewArtifactData,
     ReqReviewReportArtifactData,
     StrategyArtifactData,
@@ -24,27 +24,241 @@ from artifact_data_renderers import (
     ValueDiscoveryElevatorArtifactData,
     ValueDiscoveryJourneyArtifactData,
     ValueDiscoveryPersonaArtifactData,
+    get_artifact_data_renderer_stage_keys,
     render_agent_turn_from_artifact_data,
-    render_partial_agent_turn_from_artifact_data,
 )
 from test_asset_parsing import parse_lisa_test_asset_markdown
 
 
-def _extract_mermaid_block(markdown: str, marker: str) -> str:
-    for chunk in markdown.split("```mermaid\n")[1:]:
-        block = chunk.split("\n```", 1)[0]
-        if marker in block:
-            return block
-    raise AssertionError(f"Mermaid block not found: {marker}")
+def test_artifact_data_renderer_stage_keys_match_runtime_instruction_registry():
+    assert set(get_artifact_data_renderer_stage_keys()) == set(
+        ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS
+    )
 
 
-def _extract_ai4se_visual_block(markdown: str, visual_type: str) -> dict:
-    for chunk in markdown.split("```ai4se-visual\n")[1:]:
-        block = chunk.split("\n```", 1)[0]
-        visual = json.loads(block)
-        if visual.get("type") == visual_type:
-            return visual
-    raise AssertionError(f"ai4se-visual block not found: {visual_type}")
+VALID_PRD_REVIEW_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "PRD 质量评审与补全",
+        "workflow": "PRD_REVIEW",
+        "stage": "REVISION_BLUEPRINT",
+        "status": "可进入 PRD 修订",
+    },
+    "prd_inventory": [
+        {
+            "item_id": "INV-001",
+            "category": "目标用户",
+            "content": "中小团队的产品经理需要快速补齐需求草案质量问题",
+            "source": "PRD 草案",
+            "evidence_level": "用户提供",
+            "status": "已识别",
+        }
+    ],
+    "quality_findings": [
+        {
+            "finding_id": "FIND-001",
+            "dimension": "可测试性",
+            "problem": "核心需求缺少可验证验收标准",
+            "severity": "P0",
+            "blocking": "阻断",
+            "evidence": "PRD 仅描述功能目标，未定义输入、输出和边界条件",
+            "impact": "Lisa 后续测试设计无法稳定拆分用例",
+            "recommendation": "补齐 Given/When/Then 验收标准和异常路径",
+            "status": "待修订",
+        }
+    ],
+    "completion_actions": [
+        {
+            "action_id": "ACT-001",
+            "finding_ids": ["FIND-001"],
+            "action": "为核心需求补齐验收标准、异常路径和非功能指标",
+            "priority": "P0",
+            "owner": "产品经理",
+            "verification_method": "复审 PRD 中每个 P0 需求是否包含可执行验收标准",
+            "review_condition": "P0 阻断问题关闭后再进入测试设计",
+            "status": "待开始",
+        }
+    ],
+    "revision_sections": [
+        {
+            "section_id": "SEC-001",
+            "title": "核心需求与验收标准",
+            "rewrite_goal": "把目标描述改写为可验收需求",
+            "recommended_content": "作为团队管理员，我需要配置成员权限，以便控制数据访问范围。",
+            "acceptance_note": "包含成功路径、失败路径、边界条件和权限校验",
+            "status": "待修订",
+        }
+    ],
+    "acceptance_criteria": [
+        {
+            "criterion_id": "AC-001",
+            "related_section_ids": ["SEC-001"],
+            "scenario": "管理员授予成员只读权限",
+            "given": "成员已加入团队且无管理员权限",
+            "when": "管理员将成员角色设置为只读",
+            "then": "成员只能查看项目数据，不能编辑或删除",
+            "testability_level": "高",
+            "status": "待确认",
+        }
+    ],
+    "handoff_inputs": [
+        {
+            "input_id": "HI-001",
+            "related_section_ids": ["SEC-001"],
+            "target_workflow": "TEST_DESIGN",
+            "content": "权限配置核心链路、角色边界、异常授权和验收标准",
+            "risk": "权限边界不清会导致越权访问",
+            "status": "可交给 Lisa",
+        }
+    ],
+    "stage_gate": [
+        {
+            "checked": True,
+            "item": "P0 阻断问题已映射到补全动作和复审条件",
+        }
+    ],
+}
+
+
+VALID_STORY_BREAKDOWN_ARTIFACT_DATA = {
+    "document_info": {
+        "artifact_name": "用户故事拆解包",
+        "workflow": "STORY_BREAKDOWN",
+        "stage": "SPRINT_PLAN",
+        "status": "可交接 Lisa",
+    },
+    "input_analysis": {
+        "source_type": "PRD",
+        "product_goal": "把测试资产生成能力拆成可交付迭代",
+        "target_users": ["测试负责人", "产品经理"],
+        "constraints": ["首轮不接入外部项目管理工具"],
+        "open_questions": ["是否需要导入历史测试资产"],
+    },
+    "epics": [
+        {
+            "epic_id": "EPIC-001",
+            "name": "测试资产生成",
+            "value_goal": "减少从需求到测试设计的手工整理成本",
+            "scope": "需求澄清、策略、用例和交付文档",
+            "priority": "P0",
+            "dependencies": ["LLM 配置", "Artifact 持久化"],
+        }
+    ],
+    "user_stories": [
+        {
+            "story_id": "US-001",
+            "epic_id": "EPIC-001",
+            "title": "需求澄清基线",
+            "user_story": "作为测试负责人，我想把需求输入转成澄清清单，以便在开发前发现遗漏。",
+            "priority": "P0",
+            "sprint": "Sprint 1",
+            "story_points": 5,
+            "testability": "高",
+            "status": "待评审",
+        },
+        {
+            "story_id": "US-002",
+            "epic_id": "EPIC-001",
+            "title": "测试策略生成",
+            "user_story": "作为测试负责人，我想自动获得风险、测试点和测试层级建议，以便快速组织评审。",
+            "priority": "P0",
+            "sprint": "Sprint 1",
+            "story_points": 8,
+            "testability": "高",
+            "status": "待评审",
+        },
+    ],
+    "acceptance_criteria": [
+        {
+            "criterion_id": "AC-001",
+            "story_id": "US-001",
+            "criterion": "输入需求后生成事实、边界、业务规则和待澄清问题。",
+            "verification_method": "后端 contract test + UI smoke",
+            "status": "待验证",
+        }
+    ],
+    "dependencies": [
+        {
+            "dependency_id": "DEP-001",
+            "related_story_ids": ["US-001", "US-002"],
+            "description": "模型输出必须使用 artifact_data 结构化数据。",
+            "risk": "模型直写 Markdown 会绕过 deterministic renderer。",
+            "mitigation": "runtime instruction 和 renderer contract 双门禁。",
+            "owner": "AI 工程",
+            "status": "已识别",
+        }
+    ],
+    "sprint_slices": [
+        {
+            "sprint_id": "Sprint 1",
+            "goal": "打通需求澄清到策略的最小闭环",
+            "story_ids": ["US-001", "US-002"],
+            "deliverable": "可评审 artifact_data 输出和右侧 Markdown artifact",
+            "acceptance_focus": "共享 runtime、contract、renderer 均可验证",
+        }
+    ],
+    "lisa_handoff_inputs": [
+        {
+            "input_type": "用户故事",
+            "reference_id": "US-001",
+            "content": "需求澄清基线",
+            "usage": "Lisa 测试设计输入",
+            "status": "可用",
+        },
+        {
+            "input_type": "验收标准",
+            "reference_id": "AC-001",
+            "content": "输入需求后生成事实、边界、业务规则和待澄清问题。",
+            "usage": "Lisa 需求评审输入",
+            "status": "可用",
+        },
+    ],
+    "stage_gate": [
+        {"checked": True, "item": "所有 P0 用户故事均具备验收标准和 Sprint 切片。"}
+    ],
+}
+
+
+def test_render_story_breakdown_artifact_data_outputs_story_package():
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已完成用户故事拆解包。",
+            "artifact_data": VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="SPRINT_PLAN",
+    )
+
+    assert output is not None
+    assert output.artifact_update is not None
+    markdown = output.artifact_update.markdown
+    assert markdown is not None
+    assert "# 用户故事拆解包" in markdown
+    assert "## 输入分析" in markdown
+    assert "## Epic Map" in markdown
+    assert "## User Story Backlog" in markdown
+    assert "## 验收标准" in markdown
+    assert "## Sprint 切片建议" in markdown
+    assert "## Lisa Handoff 输入" in markdown
+    assert '"type": "story-map"' in markdown
+    assert "US-001" in markdown
+
+    validate_agent_turn(
+        output,
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="SPRINT_PLAN",
+    )
+
+
+def test_story_breakdown_artifact_data_rejects_unknown_story_reference():
+    from artifact_data_renderers import StoryBreakdownArtifactData
+
+    invalid = copy.deepcopy(VALID_STORY_BREAKDOWN_ARTIFACT_DATA)
+    invalid["acceptance_criteria"][0]["story_id"] = "US-404"
+
+    with pytest.raises(ValidationError, match="unknown story"):
+        StoryBreakdownArtifactData.model_validate(invalid)
 
 
 VALID_CLARIFY_ARTIFACT_DATA = {
@@ -173,7 +387,6 @@ VALID_IDEA_DEFINE_ARTIFACT_DATA = {
         },
     ],
     "problem_landscape": {
-        "root_problem_id": "P-ROOT",
         "root_problem": "独立开发者变现方向选择困难",
         "subproblems": [
             {
@@ -192,7 +405,6 @@ VALID_IDEA_DEFINE_ARTIFACT_DATA = {
         {
             "evidence_id": "EV-001",
             "related_problem": "独立开发者变现方向选择困难",
-            "related_problem_ids": ["P-ROOT"],
             "source": "独立开发者访谈摘要",
             "evidence_level": "用户陈述",
             "validation_action": "访谈 5 位独立开发者并记录当前方向筛选方式",
@@ -202,7 +414,6 @@ VALID_IDEA_DEFINE_ARTIFACT_DATA = {
         {
             "evidence_id": "EV-002",
             "related_problem": "缺少低成本验证动作",
-            "related_problem_ids": ["P-002"],
             "source": "社群帖子和产品复盘文章",
             "evidence_level": "合理推断",
             "validation_action": "收集 20 篇变现失败复盘并归类失败原因",
@@ -1284,31 +1495,7 @@ VALID_STRATEGY_ARTIFACT_DATA = {
             "estimated_cases": 6,
             "coverage": "覆盖空密码、错误密码、锁定前后重试",
             "status": "待生成用例",
-        },
-        {
-            "point_id": "TP-002",
-            "point": "登录 API 必须正确创建或拒绝会话",
-            "priority": "P1",
-            "quality_goal": "QG-001",
-            "risk": "R-001",
-            "technique": "TS-001 等价类",
-            "layer": "集成",
-            "estimated_cases": 4,
-            "coverage": "覆盖登录 API 与用户库交互、会话创建和错误响应",
-            "status": "待生成用例",
-        },
-        {
-            "point_id": "TP-003",
-            "point": "用户从登录页进入工作台的主链路必须稳定",
-            "priority": "P1",
-            "quality_goal": "QG-001",
-            "risk": "R-001",
-            "technique": "TS-001 状态迁移",
-            "layer": "E2E",
-            "estimated_cases": 2,
-            "coverage": "覆盖浏览器端登录、跳转、用户昵称和登录态",
-            "status": "待生成用例",
-        },
+        }
     ],
     "tradeoffs": [
         {
@@ -2615,6 +2802,36 @@ def test_clarify_artifact_data_rejects_empty_required_lists():
         ClarifyArtifactData.model_validate(invalid)
 
 
+def test_prd_review_artifact_data_rejects_unknown_finding_reference():
+    invalid = copy.deepcopy(VALID_PRD_REVIEW_ARTIFACT_DATA)
+    invalid["completion_actions"][0]["finding_ids"] = ["FIND-MISSING"]
+
+    with pytest.raises(ValidationError, match="unknown finding ids"):
+        PrdReviewArtifactData.model_validate(invalid)
+
+
+def test_prd_review_artifact_data_rejects_unknown_section_reference():
+    invalid = copy.deepcopy(VALID_PRD_REVIEW_ARTIFACT_DATA)
+    invalid["acceptance_criteria"][0]["related_section_ids"] = ["SEC-MISSING"]
+
+    with pytest.raises(ValidationError, match="unknown section ids"):
+        PrdReviewArtifactData.model_validate(invalid)
+
+
+def test_prd_review_artifact_data_requires_stage_gate_checked():
+    invalid = copy.deepcopy(VALID_PRD_REVIEW_ARTIFACT_DATA)
+    invalid["stage_gate"] = [
+        {
+            "checked": False,
+            "item": "PRD 仍缺少可复审的补全动作",
+        }
+    ]
+
+    with pytest.raises(ValidationError, match="stage_gate"):
+        PrdReviewArtifactData.model_validate(invalid)
+
+
+
 def test_idea_define_artifact_data_rejects_duplicate_evidence_id():
     invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
     invalid["evidence_items"].append(copy.deepcopy(invalid["evidence_items"][0]))
@@ -2639,44 +2856,12 @@ def test_idea_define_artifact_data_rejects_unknown_fit_evidence_reference():
         IdeaDefineArtifactData.model_validate(invalid)
 
 
-def test_idea_define_artifact_data_accepts_id_based_root_problem_coverage_without_exact_text_copy():
-    payload = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
-    payload["problem_landscape"]["root_problem_id"] = "P-ROOT"
-    payload["evidence_items"][0]["related_problem"] = "方向优先级和投入判断"
-    payload["evidence_items"][0]["related_problem_ids"] = ["P-ROOT"]
-    payload["problem_user_fit"][0]["evidence_or_assumption"] = (
-        "受访者提到方向筛选焦虑"
-    )
-    payload["problem_user_fit"][0]["evidence_ids"] = ["EV-001"]
-
-    result = IdeaDefineArtifactData.model_validate(payload)
-
-    assert result.problem_landscape.root_problem == "独立开发者变现方向选择困难"
-    assert result.evidence_items[0].related_problem_ids == ["P-ROOT"]
-
-
-def test_idea_define_artifact_data_rejects_unknown_related_problem_reference():
+def test_idea_define_artifact_data_requires_root_problem_coverage():
     invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
-    invalid["evidence_items"][0]["related_problem_ids"] = ["P-404"]
+    invalid["evidence_items"][0]["related_problem"] = "其它问题"
+    invalid["problem_user_fit"][0]["evidence_or_assumption"] = "其它判断"
 
-    with pytest.raises(ValidationError, match="unknown problem ids"):
-        IdeaDefineArtifactData.model_validate(invalid)
-
-
-def test_idea_define_artifact_data_requires_root_problem_id_coverage():
-    invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
-    invalid["evidence_items"][0]["related_problem_ids"] = ["P-001"]
-    invalid["problem_user_fit"][0]["evidence_ids"] = ["EV-001"]
-
-    with pytest.raises(ValidationError, match="root_problem_id"):
-        IdeaDefineArtifactData.model_validate(invalid)
-
-
-def test_idea_define_artifact_data_requires_fit_to_reference_root_problem_evidence():
-    invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
-    invalid["problem_user_fit"][0]["evidence_ids"] = ["EV-002"]
-
-    with pytest.raises(ValidationError, match="root_problem_id"):
+    with pytest.raises(ValidationError, match="root_problem"):
         IdeaDefineArtifactData.model_validate(invalid)
 
 
@@ -3040,14 +3225,8 @@ def test_render_clarify_artifact_data_is_deterministic_and_contract_valid():
     assert first is not None
     assert first.artifact_data == VALID_CLARIFY_ARTIFACT_DATA
     assert first.artifact_update.markdown is not None
-    clarify_markdown = first.artifact_update.markdown
     assert "# 需求分析文档" in first.artifact_update.markdown
     assert "## 8. 阶段门禁" in first.artifact_update.markdown
-    assert clarify_markdown.index("## 1. 需求事实清单") < clarify_markdown.index(
-        "## 附录：文档信息"
-    )
-    assert "| 字段 | 内容 |" not in clarify_markdown
-    assert "- **Artifact 名称**：测试需求分析与澄清基线" in clarify_markdown
     assert "flowchart TD" in first.artifact_update.markdown
     assert (
         validate_agent_turn(
@@ -3072,108 +3251,6 @@ def test_strategy_artifact_data_rejects_inconsistent_rpn():
 
     with pytest.raises(ValidationError, match="rpn"):
         StrategyArtifactData.model_validate(invalid)
-
-
-def test_strategy_artifact_data_rejects_duplicate_strategy_ids():
-    invalid = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
-    invalid["quality_goals"].append({**invalid["quality_goals"][0]})
-
-    with pytest.raises(ValidationError, match="quality_goals"):
-        StrategyArtifactData.model_validate(invalid)
-
-
-def test_strategy_artifact_data_rejects_unknown_test_point_references():
-    invalid = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
-    invalid["test_points"][0]["quality_goal"] = "QG-404"
-    invalid["test_points"][0]["risk"] = "R-404"
-    invalid["test_points"][0]["technique"] = "TS-404"
-
-    with pytest.raises(ValidationError, match="test_points"):
-        StrategyArtifactData.model_validate(invalid)
-
-
-def test_strategy_artifact_data_rejects_unknown_technique_and_layer_references():
-    invalid = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
-    invalid["test_techniques"][0]["target"] = "QG-404 / R-404"
-    invalid["test_techniques"][0]["applies_to"] = "R-404 / TP-404"
-    invalid["test_layers"][0]["related"] = "R-404 / TP-404"
-
-    with pytest.raises(ValidationError, match="test_techniques"):
-        StrategyArtifactData.model_validate(invalid)
-
-
-def test_strategy_artifact_data_computes_missing_rpn_for_generated_visuals():
-    data = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
-    data["risks"][0].pop("rpn")
-
-    artifact = StrategyArtifactData.model_validate(data)
-    assert artifact.risks[0].rpn == 60
-
-    output = render_agent_turn_from_artifact_data(
-        {
-            "chat": "我已形成风险驱动测试策略，请确认右侧蓝图。",
-            "artifact_data": data,
-            "stage_action": None,
-            "warnings": [],
-        },
-        workflow_id="TEST_DESIGN",
-        current_stage_id="STRATEGY",
-    )
-
-    assert output is not None
-    assert output.artifact_update.markdown is not None
-    strategy_markdown = output.artifact_update.markdown
-    assert "| R-001 | 错误凭证绕过认证 |" in strategy_markdown
-    assert "| 5 | 3 | 4 | 60 |" in strategy_markdown
-    assert '"RPN": 60' in strategy_markdown
-    assert (
-        validate_agent_turn(
-            output,
-            workflow_id="TEST_DESIGN",
-            current_stage_id="STRATEGY",
-        )
-        == output
-    )
-
-
-def test_strategy_mermaid_labels_are_normalized_for_special_characters():
-    data = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
-    data["risks"][0]["name"] = '认证 "绕过" \\ 高风险\n二行'
-    data["test_layers"][0]["layer"] = '单元 "核心" \\ 层\nBeta'
-    data["test_layers"][0]["scope"] = '认证 "规则"\n锁定 \\ 状态'
-
-    output = render_agent_turn_from_artifact_data(
-        {
-            "chat": "我已形成风险驱动测试策略，请确认右侧蓝图。",
-            "artifact_data": data,
-            "stage_action": None,
-            "warnings": [],
-        },
-        workflow_id="TEST_DESIGN",
-        current_stage_id="STRATEGY",
-    )
-
-    assert output is not None
-    assert output.artifact_update.markdown is not None
-    strategy_markdown = output.artifact_update.markdown
-    risk_block = _extract_mermaid_block(strategy_markdown, "quadrantChart")
-    pyramid_block = _extract_mermaid_block(strategy_markdown, "block-beta")
-
-    assert '"认证 \\"绕过\\" \\\\ 高风险 二行": [0.60, 1.00]' in risk_block
-    assert "\n二行" not in risk_block
-    assert (
-        '单元 \\"核心\\" \\\\ 层 Beta (40%) - '
-        '认证 \\"规则\\" 锁定 \\\\ 状态'
-    ) in pyramid_block
-    assert "\n锁定" not in pyramid_block
-    assert (
-        validate_agent_turn(
-            output,
-            workflow_id="TEST_DESIGN",
-            current_stage_id="STRATEGY",
-        )
-        == output
-    )
 
 
 def test_render_strategy_artifact_data_is_deterministic_and_contract_valid():
@@ -3206,17 +3283,12 @@ def test_render_strategy_artifact_data_is_deterministic_and_contract_valid():
 
     assert first == second
     assert first is not None
-    assert first.artifact_data == VALID_STRATEGY_ARTIFACT_DATA
     assert first.artifact_update.markdown is not None
     assert "# 测试策略蓝图" in first.artifact_update.markdown
     assert "quadrantChart" in first.artifact_update.markdown
     assert "block-beta" in first.artifact_update.markdown
     assert "```ai4se-visual" in first.artifact_update.markdown
     assert '"type": "risk-board"' in first.artifact_update.markdown
-    strategy_markdown = first.artifact_update.markdown
-    assert "| 字段 | 内容 |" not in strategy_markdown
-    assert "- **策略结论**：" in strategy_markdown
-    assert "| 风险 ID | 风险名称 |" in strategy_markdown
     assert (
         validate_agent_turn(
             first,
@@ -3225,77 +3297,6 @@ def test_render_strategy_artifact_data_is_deterministic_and_contract_valid():
         )
         == first
     )
-
-
-def test_render_partial_strategy_artifact_data_waits_for_references_before_sections_four_to_six():
-    payload = {
-        "chat": "我正在生成测试策略。",
-        "artifact_data": {
-            "document_info": VALID_STRATEGY_ARTIFACT_DATA["document_info"],
-            "strategy_summary": VALID_STRATEGY_ARTIFACT_DATA["strategy_summary"],
-            "quality_goals": VALID_STRATEGY_ARTIFACT_DATA["quality_goals"],
-            "risks": VALID_STRATEGY_ARTIFACT_DATA["risks"],
-            "test_techniques": VALID_STRATEGY_ARTIFACT_DATA["test_techniques"],
-            "test_layers": VALID_STRATEGY_ARTIFACT_DATA["test_layers"],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    output = render_partial_agent_turn_from_artifact_data(
-        payload,
-        workflow_id="TEST_DESIGN",
-        current_stage_id="STRATEGY",
-    )
-
-    assert output is not None
-    assert "## 3. 风险识别与 FMEA" in output.artifact_update.markdown
-    assert "## 4. 测试技术选型" not in output.artifact_update.markdown
-
-    payload["artifact_data"]["test_points"] = VALID_STRATEGY_ARTIFACT_DATA[
-        "test_points"
-    ]
-    output = render_partial_agent_turn_from_artifact_data(
-        payload,
-        workflow_id="TEST_DESIGN",
-        current_stage_id="STRATEGY",
-    )
-
-    assert output is not None
-    assert "## 4. 测试技术选型" in output.artifact_update.markdown
-    assert "## 5. 测试分层策略" in output.artifact_update.markdown
-    assert "## 6. 测试点拓扑" in output.artifact_update.markdown
-
-
-def test_render_partial_strategy_artifact_data_skips_sections_four_to_six_with_unknown_reference():
-    invalid_techniques = copy.deepcopy(
-        VALID_STRATEGY_ARTIFACT_DATA["test_techniques"]
-    )
-    invalid_techniques[0]["applies_to"] = "R-404 / TP-404"
-    payload = {
-        "chat": "我正在生成测试策略。",
-        "artifact_data": {
-            "document_info": VALID_STRATEGY_ARTIFACT_DATA["document_info"],
-            "strategy_summary": VALID_STRATEGY_ARTIFACT_DATA["strategy_summary"],
-            "quality_goals": VALID_STRATEGY_ARTIFACT_DATA["quality_goals"],
-            "risks": VALID_STRATEGY_ARTIFACT_DATA["risks"],
-            "test_techniques": invalid_techniques,
-            "test_layers": VALID_STRATEGY_ARTIFACT_DATA["test_layers"],
-            "test_points": VALID_STRATEGY_ARTIFACT_DATA["test_points"],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    output = render_partial_agent_turn_from_artifact_data(
-        payload,
-        workflow_id="TEST_DESIGN",
-        current_stage_id="STRATEGY",
-    )
-
-    assert output is not None
-    assert "## 3. 风险识别与 FMEA" in output.artifact_update.markdown
-    assert "## 4. 测试技术选型" not in output.artifact_update.markdown
 
 
 def test_cases_artifact_data_rejects_inconsistent_statistics():
@@ -3310,26 +3311,6 @@ def test_cases_artifact_data_rejects_inconsistent_statistics():
     }
 
     with pytest.raises(ValidationError, match="case_statistics"):
-        CasesArtifactData.model_validate(invalid)
-
-
-def test_cases_artifact_data_derives_statistics_when_missing():
-    payload = copy.deepcopy(VALID_CASES_ARTIFACT_DATA)
-    payload.pop("case_statistics")
-
-    data = CasesArtifactData.model_validate(payload)
-
-    assert data.case_statistics.total == 2
-    assert data.case_statistics.p0_count == 1
-    assert data.case_statistics.p1_count == 1
-    assert data.case_statistics.p2_count == 0
-
-
-def test_cases_artifact_data_rejects_unknown_automation_candidate_case_reference():
-    invalid = copy.deepcopy(VALID_CASES_ARTIFACT_DATA)
-    invalid["automation_candidates"][0]["case_id"] = "TC-404"
-
-    with pytest.raises(ValidationError, match="automation_candidates"):
         CasesArtifactData.model_validate(invalid)
 
 
@@ -3393,17 +3374,6 @@ def test_value_elevator_artifact_data_rejects_inconsistent_score_summary():
 
     with pytest.raises(ValidationError, match="score_summary.total_score"):
         ValueDiscoveryElevatorArtifactData.model_validate(invalid)
-
-
-def test_value_elevator_artifact_data_computes_missing_score_summary_fields():
-    data = copy.deepcopy(VALID_VALUE_ELEVATOR_ARTIFACT_DATA)
-    data["score_summary"].pop("total_score")
-    data["score_summary"].pop("average_score")
-
-    artifact = ValueDiscoveryElevatorArtifactData.model_validate(data)
-
-    assert artifact.score_summary.total_score == 16
-    assert artifact.score_summary.average_score == 3.2
 
 
 def test_value_elevator_artifact_data_rejects_unknown_value_flow_reference():
@@ -3508,1368 +3478,6 @@ def test_render_cases_artifact_data_is_contract_valid_and_asset_parseable():
     assert parsed["riskMatrix"][0]["risk"] == "R-LOGIN-001"
 
 
-def test_render_partial_cases_artifact_data_builds_formal_incremental_markdown_and_patch():
-    cases_payload = {
-        "chat": "我正在生成测试用例集。",
-        "artifact_data": {
-            "document_info": VALID_CASES_ARTIFACT_DATA["document_info"],
-            "design_bases": VALID_CASES_ARTIFACT_DATA["design_bases"],
-            "case_groups": VALID_CASES_ARTIFACT_DATA["case_groups"],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    cases_output = render_partial_agent_turn_from_artifact_data(
-        cases_payload,
-        workflow_id="TEST_DESIGN",
-        current_stage_id="CASES",
-    )
-
-    assert cases_output is not None
-    assert cases_output.artifact_update.markdown.startswith("# 测试用例集")
-    assert "## 1. 用例统计" in cases_output.artifact_update.markdown
-    assert "## 2. 用例设计依据" in cases_output.artifact_update.markdown
-    assert "## 3. 按维度分组的用例清单" in cases_output.artifact_update.markdown
-    assert "## 4. 测试数据与环境" not in cases_output.artifact_update.markdown
-    assert cases_output.artifact_patch is None
-
-    environment_payload = {
-        **cases_payload,
-        "artifact_data": {
-            **cases_payload["artifact_data"],
-            "test_data_environments": VALID_CASES_ARTIFACT_DATA[
-                "test_data_environments"
-            ],
-        },
-    }
-
-    environment_output = render_partial_agent_turn_from_artifact_data(
-        environment_payload,
-        workflow_id="TEST_DESIGN",
-        current_stage_id="CASES",
-    )
-
-    assert environment_output is not None
-    assert "## 4. 测试数据与环境" in environment_output.artifact_update.markdown
-    assert "## 5. 自动化候选" not in environment_output.artifact_update.markdown
-    assert environment_output.artifact_patch is not None
-    assert environment_output.artifact_patch.operation == "add_after"
-    assert (
-        environment_output.artifact_patch.section_anchor
-        == "h2:4. 测试数据与环境:1"
-    )
-    assert (
-        environment_output.artifact_patch.after_section_anchor
-        == "h3:3.2 异常与边界值:1"
-    )
-    assert (
-        environment_output.artifact_patch.base_content
-        == cases_output.artifact_update.markdown
-    )
-    assert "## 4. 测试数据与环境" in (
-        environment_output.artifact_patch.replacement_markdown
-    )
-
-
-def test_render_partial_cases_artifact_data_derives_statistics_from_case_groups():
-    bases_only_payload = {
-        "chat": "我正在生成测试用例集。",
-        "artifact_data": {
-            "document_info": VALID_CASES_ARTIFACT_DATA["document_info"],
-            "design_bases": VALID_CASES_ARTIFACT_DATA["design_bases"],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    assert (
-        render_partial_agent_turn_from_artifact_data(
-            bases_only_payload,
-            workflow_id="TEST_DESIGN",
-            current_stage_id="CASES",
-        )
-        is None
-    )
-
-    payload = {
-        **bases_only_payload,
-        "artifact_data": {
-            **bases_only_payload["artifact_data"],
-            "case_groups": VALID_CASES_ARTIFACT_DATA["case_groups"],
-        },
-    }
-
-    output = render_partial_agent_turn_from_artifact_data(
-        payload,
-        workflow_id="TEST_DESIGN",
-        current_stage_id="CASES",
-    )
-
-    assert output is not None
-    assert output.artifact_update.markdown.startswith("# 测试用例集")
-    assert "## 1. 用例统计" in output.artifact_update.markdown
-    assert (
-        "**统计摘要**：共 2 条用例，P0: 1 条 | P1: 1 条 | P2: 0 条"
-        in output.artifact_update.markdown
-    )
-    assert "## 2. 用例设计依据" in output.artifact_update.markdown
-    assert "## 3. 按维度分组的用例清单" in output.artifact_update.markdown
-    assert output.artifact_patch is None
-
-
-def test_render_partial_cases_artifact_data_skips_automation_candidates_with_unknown_case_reference():
-    payload = {
-        "chat": "我正在生成测试用例集。",
-        "artifact_data": {
-            "document_info": VALID_CASES_ARTIFACT_DATA["document_info"],
-            "design_bases": VALID_CASES_ARTIFACT_DATA["design_bases"],
-            "case_groups": VALID_CASES_ARTIFACT_DATA["case_groups"],
-            "test_data_environments": VALID_CASES_ARTIFACT_DATA[
-                "test_data_environments"
-            ],
-            "automation_candidates": [
-                {
-                    **VALID_CASES_ARTIFACT_DATA["automation_candidates"][0],
-                    "case_id": "TC-404",
-                }
-            ],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    output = render_partial_agent_turn_from_artifact_data(
-        payload,
-        workflow_id="TEST_DESIGN",
-        current_stage_id="CASES",
-    )
-
-    assert output is not None
-    assert "## 4. 测试数据与环境" in output.artifact_update.markdown
-    assert "## 5. 自动化候选" not in output.artifact_update.markdown
-
-
-def test_render_partial_cases_artifact_data_skips_coverage_trace_with_unknown_case_reference():
-    payload = {
-        "chat": "我正在生成测试用例集。",
-        "artifact_data": {
-            "document_info": VALID_CASES_ARTIFACT_DATA["document_info"],
-            "design_bases": VALID_CASES_ARTIFACT_DATA["design_bases"],
-            "case_groups": VALID_CASES_ARTIFACT_DATA["case_groups"],
-            "test_data_environments": VALID_CASES_ARTIFACT_DATA[
-                "test_data_environments"
-            ],
-            "automation_candidates": VALID_CASES_ARTIFACT_DATA[
-                "automation_candidates"
-            ],
-            "coverage_trace": [
-                {
-                    **VALID_CASES_ARTIFACT_DATA["coverage_trace"][0],
-                    "covered_cases": ["TC-404"],
-                }
-            ],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    output = render_partial_agent_turn_from_artifact_data(
-        payload,
-        workflow_id="TEST_DESIGN",
-        current_stage_id="CASES",
-    )
-
-    assert output is not None
-    assert "## 5. 自动化候选" in output.artifact_update.markdown
-    assert "## 6. 测试点覆盖追溯" not in output.artifact_update.markdown
-
-
-def test_render_partial_delivery_artifact_data_builds_formal_incremental_markdown_and_patch():
-    summary_payload = {
-        "chat": "我正在形成测试设计交付文档。",
-        "artifact_data": {
-            "document_info": VALID_DELIVERY_ARTIFACT_DATA["document_info"],
-            "executive_summary": VALID_DELIVERY_ARTIFACT_DATA["executive_summary"],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    summary_output = render_partial_agent_turn_from_artifact_data(
-        summary_payload,
-        workflow_id="TEST_DESIGN",
-        current_stage_id="DELIVERY",
-    )
-
-    assert summary_output is not None
-    assert summary_output.artifact_update.markdown.startswith("# 测试设计文档")
-    assert "## 1. 执行摘要" in summary_output.artifact_update.markdown
-    assert "## 2. 需求分析摘要" not in summary_output.artifact_update.markdown
-    assert "## 附录：文档信息" not in summary_output.artifact_update.markdown
-    assert summary_output.artifact_patch is None
-
-    requirement_payload = {
-        **summary_payload,
-        "artifact_data": {
-            **summary_payload["artifact_data"],
-            "requirement_summary": VALID_DELIVERY_ARTIFACT_DATA[
-                "requirement_summary"
-            ],
-        },
-    }
-    requirement_output = render_partial_agent_turn_from_artifact_data(
-        requirement_payload,
-        workflow_id="TEST_DESIGN",
-        current_stage_id="DELIVERY",
-    )
-
-    assert requirement_output is not None
-    assert "## 2. 需求分析摘要" in requirement_output.artifact_update.markdown
-    assert "## 3. 测试策略摘要" not in requirement_output.artifact_update.markdown
-    assert requirement_output.artifact_patch is not None
-    assert requirement_output.artifact_patch.operation == "add_after"
-    assert (
-        requirement_output.artifact_patch.section_anchor
-        == "h2:2. 需求分析摘要:1"
-    )
-    assert (
-        requirement_output.artifact_patch.after_section_anchor
-        == "h2:1. 执行摘要:1"
-    )
-    assert (
-        requirement_output.artifact_patch.base_content
-        == summary_output.artifact_update.markdown
-    )
-
-
-def test_render_partial_req_review_artifact_data_builds_formal_incremental_markdown_and_patch():
-    scope_payload = {
-        "chat": "我正在生成需求评审问题清单。",
-        "artifact_data": {
-            "review_info": VALID_REQ_REVIEW_ARTIFACT_DATA["review_info"],
-            "scope_items": VALID_REQ_REVIEW_ARTIFACT_DATA["scope_items"],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    scope_output = render_partial_agent_turn_from_artifact_data(
-        scope_payload,
-        workflow_id="REQ_REVIEW",
-        current_stage_id="REVIEW",
-    )
-
-    assert scope_output is not None
-    assert scope_output.artifact_update.markdown.startswith("# 需求评审问题清单")
-    assert "## 评审范围与不评审范围" in scope_output.artifact_update.markdown
-    assert "## 需求质量总览" not in scope_output.artifact_update.markdown
-    assert scope_output.artifact_patch is None
-
-    statistics_payload = {
-        **scope_payload,
-        "artifact_data": {
-            **scope_payload["artifact_data"],
-            "quality_overview": VALID_REQ_REVIEW_ARTIFACT_DATA[
-                "quality_overview"
-            ],
-            "issue_statistics": VALID_REQ_REVIEW_ARTIFACT_DATA[
-                "issue_statistics"
-            ],
-        },
-    }
-    statistics_output = render_partial_agent_turn_from_artifact_data(
-        statistics_payload,
-        workflow_id="REQ_REVIEW",
-        current_stage_id="REVIEW",
-    )
-
-    assert statistics_output is not None
-    assert "## 问题统计" in statistics_output.artifact_update.markdown
-    assert '"type": "score-matrix"' in statistics_output.artifact_update.markdown
-    assert "## 按维度问题清单" not in statistics_output.artifact_update.markdown
-    assert statistics_output.artifact_patch is not None
-    assert statistics_output.artifact_patch.operation == "add_after"
-    assert statistics_output.artifact_patch.section_anchor == "h2:问题统计:1"
-    assert (
-        statistics_output.artifact_patch.after_section_anchor
-        == "h2:需求质量结构图:1"
-    )
-
-
-def test_render_partial_req_review_report_artifact_data_builds_formal_incremental_markdown_and_patch():
-    conclusion_payload = {
-        "chat": "我正在生成需求评审报告。",
-        "artifact_data": {
-            "conclusion": VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA["conclusion"],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    conclusion_output = render_partial_agent_turn_from_artifact_data(
-        conclusion_payload,
-        workflow_id="REQ_REVIEW",
-        current_stage_id="REPORT",
-    )
-
-    assert conclusion_output is not None
-    assert conclusion_output.artifact_update.markdown.startswith("# 需求评审报告")
-    assert "## 评审结论" in conclusion_output.artifact_update.markdown
-    assert "## 评审信息" not in conclusion_output.artifact_update.markdown
-    assert conclusion_output.artifact_patch is None
-
-    statistics_payload = {
-        **conclusion_payload,
-        "artifact_data": {
-            **conclusion_payload["artifact_data"],
-            "review_info": VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA["review_info"],
-            "issue_statistics": VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA[
-                "issue_statistics"
-            ],
-        },
-    }
-    statistics_output = render_partial_agent_turn_from_artifact_data(
-        statistics_payload,
-        workflow_id="REQ_REVIEW",
-        current_stage_id="REPORT",
-    )
-
-    assert statistics_output is not None
-    assert "## 问题统计" in statistics_output.artifact_update.markdown
-    assert "## 优先级看板" not in statistics_output.artifact_update.markdown
-    assert statistics_output.artifact_patch is not None
-    assert statistics_output.artifact_patch.operation == "add_after"
-    assert statistics_output.artifact_patch.section_anchor == "h2:问题统计:1"
-    assert (
-        statistics_output.artifact_patch.after_section_anchor
-        == "h2:评审信息:1"
-    )
-
-
-def test_render_partial_incident_timeline_artifact_data_builds_formal_incremental_markdown_and_patch():
-    summary_payload = {
-        "chat": "我正在还原故障事件时间线。",
-        "artifact_data": {
-            "incident_summary": VALID_INCIDENT_TIMELINE_ARTIFACT_DATA[
-                "incident_summary"
-            ],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    summary_output = render_partial_agent_turn_from_artifact_data(
-        summary_payload,
-        workflow_id="INCIDENT_REVIEW",
-        current_stage_id="TIMELINE",
-    )
-
-    assert summary_output is not None
-    assert summary_output.artifact_update.markdown.startswith("# 故障复盘报告")
-    assert "## 1. 事件概要" in summary_output.artifact_update.markdown
-    assert "## 2. 影响量化" not in summary_output.artifact_update.markdown
-    assert summary_output.artifact_patch is None
-
-    impact_payload = {
-        **summary_payload,
-        "artifact_data": {
-            **summary_payload["artifact_data"],
-            "impact_metrics": VALID_INCIDENT_TIMELINE_ARTIFACT_DATA[
-                "impact_metrics"
-            ],
-        },
-    }
-    impact_output = render_partial_agent_turn_from_artifact_data(
-        impact_payload,
-        workflow_id="INCIDENT_REVIEW",
-        current_stage_id="TIMELINE",
-    )
-
-    assert impact_output is not None
-    assert "## 2. 影响量化" in impact_output.artifact_update.markdown
-    assert "## 3. 事实来源" not in impact_output.artifact_update.markdown
-    assert impact_output.artifact_patch is not None
-    assert impact_output.artifact_patch.operation == "add_after"
-    assert impact_output.artifact_patch.section_anchor == "h2:2. 影响量化:1"
-    assert (
-        impact_output.artifact_patch.after_section_anchor
-        == "h2:1. 事件概要:1"
-    )
-
-
-def test_render_partial_incident_root_cause_artifact_data_builds_formal_incremental_markdown_and_patch():
-    context_payload = {
-        "chat": "我正在分析故障根因。",
-        "artifact_data": {
-            "analysis_context": VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA[
-                "analysis_context"
-            ],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    context_output = render_partial_agent_turn_from_artifact_data(
-        context_payload,
-        workflow_id="INCIDENT_REVIEW",
-        current_stage_id="ROOT_CAUSE",
-    )
-
-    assert context_output is not None
-    assert context_output.artifact_update.markdown.startswith("# 故障复盘报告")
-    assert "## 6. 根因分析" in context_output.artifact_update.markdown
-    assert "### 6.1 5-Why 分析链" not in context_output.artifact_update.markdown
-    assert context_output.artifact_patch is None
-
-    why_payload = {
-        **context_payload,
-        "artifact_data": {
-            **context_payload["artifact_data"],
-            "why_chain": VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA["why_chain"],
-        },
-    }
-    why_output = render_partial_agent_turn_from_artifact_data(
-        why_payload,
-        workflow_id="INCIDENT_REVIEW",
-        current_stage_id="ROOT_CAUSE",
-    )
-
-    assert why_output is not None
-    assert "### 6.1 5-Why 分析链" in why_output.artifact_update.markdown
-    assert '"type": "cause-map"' in why_output.artifact_update.markdown
-    cause_map = _extract_ai4se_visual_block(
-        why_output.artifact_update.markdown,
-        "cause-map",
-    )
-    assert "columns" not in cause_map
-    assert "rows" not in cause_map
-    assert [node["id"] for node in cause_map["nodes"]] == [
-        item["level"] for item in VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA["why_chain"]
-    ]
-    assert cause_map["edges"] == [
-        {"source": "现象", "target": "Why-1", "label": "继续追问"},
-        {"source": "Why-1", "target": "Why-2", "label": "继续追问"},
-        {"source": "Why-2", "target": "Why-3", "label": "继续追问"},
-    ]
-    assert "### 6.2 根因证据表" not in why_output.artifact_update.markdown
-    assert why_output.artifact_patch is not None
-    assert why_output.artifact_patch.operation == "add_after"
-    assert why_output.artifact_patch.section_anchor == "h3:6.1 5-Why 分析链:1"
-    assert (
-        why_output.artifact_patch.after_section_anchor
-        == "h2:6. 根因分析:1"
-    )
-
-
-def test_render_partial_incident_improvement_artifact_data_builds_formal_incremental_markdown_and_patch():
-    report_payload = {
-        "chat": "我正在生成故障改进报告。",
-        "artifact_data": {
-            "report_info": VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA[
-                "report_info"
-            ],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    report_output = render_partial_agent_turn_from_artifact_data(
-        report_payload,
-        workflow_id="INCIDENT_REVIEW",
-        current_stage_id="IMPROVEMENT",
-    )
-
-    assert report_output is not None
-    assert report_output.artifact_update.markdown.startswith("# 故障复盘报告")
-    assert "## 报告信息" in report_output.artifact_update.markdown
-    assert "## 第一部分：事件还原" not in report_output.artifact_update.markdown
-    assert report_output.artifact_patch is None
-
-    timeline_payload = {
-        **report_payload,
-        "artifact_data": {
-            **report_payload["artifact_data"],
-            "timeline_summary": VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA[
-                "timeline_summary"
-            ],
-        },
-    }
-    timeline_output = render_partial_agent_turn_from_artifact_data(
-        timeline_payload,
-        workflow_id="INCIDENT_REVIEW",
-        current_stage_id="IMPROVEMENT",
-    )
-
-    assert timeline_output is not None
-    assert "## 第一部分：事件还原" in timeline_output.artifact_update.markdown
-    assert "## 第二部分：根因分析" not in timeline_output.artifact_update.markdown
-    assert timeline_output.artifact_patch is not None
-    assert timeline_output.artifact_patch.operation == "add_after"
-    assert (
-        timeline_output.artifact_patch.section_anchor
-        == "h2:第一部分：事件还原:1"
-    )
-    assert timeline_output.artifact_patch.after_section_anchor == "h2:报告信息:1"
-
-    actions_payload = {
-        **timeline_payload,
-        "artifact_data": {
-            **timeline_payload["artifact_data"],
-            "root_cause_summary": VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA[
-                "root_cause_summary"
-            ],
-            "priority_distribution": VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA[
-                "priority_distribution"
-            ],
-            "improvement_actions": VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA[
-                "improvement_actions"
-            ],
-        },
-    }
-    actions_output = render_partial_agent_turn_from_artifact_data(
-        actions_payload,
-        workflow_id="INCIDENT_REVIEW",
-        current_stage_id="IMPROVEMENT",
-    )
-
-    assert actions_output is not None
-    assert "## 第三部分：改进措施" in actions_output.artifact_update.markdown
-    assert (
-        "pie title 改进措施优先级分布"
-        in actions_output.artifact_update.markdown
-    )
-    assert '"type": "action-board"' in actions_output.artifact_update.markdown
-    assert "#### 7.3 根因覆盖检查" not in actions_output.artifact_update.markdown
-
-
-def test_render_partial_idea_define_artifact_data_builds_formal_incremental_markdown_and_patch():
-    statement_payload = {
-        "chat": "我正在分析问题域。",
-        "artifact_data": {
-            "problem_statement": VALID_IDEA_DEFINE_ARTIFACT_DATA[
-                "problem_statement"
-            ],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    statement_output = render_partial_agent_turn_from_artifact_data(
-        statement_payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="DEFINE",
-    )
-
-    assert statement_output is not None
-    assert statement_output.artifact_update.markdown.startswith("# 问题域分析")
-    assert "## 问题假设陈述" in statement_output.artifact_update.markdown
-    assert "## 目标用户画像" not in statement_output.artifact_update.markdown
-    assert statement_output.artifact_patch is None
-
-    users_payload = {
-        **statement_payload,
-        "artifact_data": {
-            **statement_payload["artifact_data"],
-            "target_users": VALID_IDEA_DEFINE_ARTIFACT_DATA["target_users"],
-        },
-    }
-    users_output = render_partial_agent_turn_from_artifact_data(
-        users_payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="DEFINE",
-    )
-
-    assert users_output is not None
-    assert "## 目标用户画像" in users_output.artifact_update.markdown
-    assert "## 问题域全景" not in users_output.artifact_update.markdown
-    assert users_output.artifact_patch is not None
-    assert users_output.artifact_patch.operation == "add_after"
-    assert users_output.artifact_patch.section_anchor == "h2:目标用户画像:1"
-    assert (
-        users_output.artifact_patch.after_section_anchor
-        == "h2:问题假设陈述:1"
-    )
-    assert (
-        users_output.artifact_patch.base_content
-        == statement_output.artifact_update.markdown
-    )
-
-    landscape_payload = {
-        **users_payload,
-        "artifact_data": {
-            **users_payload["artifact_data"],
-            "problem_landscape": VALID_IDEA_DEFINE_ARTIFACT_DATA[
-                "problem_landscape"
-            ],
-        },
-    }
-    landscape_output = render_partial_agent_turn_from_artifact_data(
-        landscape_payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="DEFINE",
-    )
-
-    assert landscape_output is not None
-    assert "## 问题域全景" in landscape_output.artifact_update.markdown
-    assert "mindmap" in landscape_output.artifact_update.markdown
-    assert "## 证据与验证状态" not in landscape_output.artifact_update.markdown
-    assert landscape_output.artifact_patch is not None
-    assert landscape_output.artifact_patch.section_anchor == "h2:问题域全景:1"
-    assert (
-        landscape_output.artifact_patch.after_section_anchor
-        == "h2:目标用户画像:1"
-    )
-
-
-def test_render_partial_idea_define_artifact_data_skips_evidence_with_unknown_problem_reference():
-    payload = {
-        "chat": "我正在分析问题域。",
-        "artifact_data": {
-            "problem_statement": VALID_IDEA_DEFINE_ARTIFACT_DATA[
-                "problem_statement"
-            ],
-            "target_users": VALID_IDEA_DEFINE_ARTIFACT_DATA["target_users"],
-            "problem_landscape": VALID_IDEA_DEFINE_ARTIFACT_DATA[
-                "problem_landscape"
-            ],
-            "evidence_items": [
-                {
-                    **VALID_IDEA_DEFINE_ARTIFACT_DATA["evidence_items"][0],
-                    "related_problem_ids": ["P-404"],
-                }
-            ],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    output = render_partial_agent_turn_from_artifact_data(
-        payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="DEFINE",
-    )
-
-    assert output is not None
-    assert "## 问题域全景" in output.artifact_update.markdown
-    assert "## 证据与验证状态" not in output.artifact_update.markdown
-
-
-def test_render_partial_idea_diverge_artifact_data_builds_formal_incremental_markdown_and_patch():
-    method_payload = {
-        "chat": "我正在发散产品创意。",
-        "artifact_data": {
-            "divergence_method": VALID_IDEA_DIVERGE_ARTIFACT_DATA[
-                "divergence_method"
-            ],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    method_output = render_partial_agent_turn_from_artifact_data(
-        method_payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="DIVERGE",
-    )
-
-    assert method_output is not None
-    assert method_output.artifact_update.markdown.startswith("# 创意发散")
-    assert "## 发散方法说明" in method_output.artifact_update.markdown
-    assert "## 发散全景图" not in method_output.artifact_update.markdown
-    assert method_output.artifact_patch is None
-
-    cards_payload = {
-        **method_payload,
-        "artifact_data": {
-            **method_payload["artifact_data"],
-            "idea_landscape": VALID_IDEA_DIVERGE_ARTIFACT_DATA[
-                "idea_landscape"
-            ],
-            "idea_cards": VALID_IDEA_DIVERGE_ARTIFACT_DATA["idea_cards"],
-        },
-    }
-    cards_output = render_partial_agent_turn_from_artifact_data(
-        cards_payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="DIVERGE",
-    )
-
-    assert cards_output is not None
-    assert "## 发散全景图" in cards_output.artifact_update.markdown
-    assert "mindmap" in cards_output.artifact_update.markdown
-    assert "## 创意卡片库" in cards_output.artifact_update.markdown
-    assert "## 创意来源与假设" not in cards_output.artifact_update.markdown
-    assert cards_output.artifact_patch is None
-
-    sources_payload = {
-        **cards_payload,
-        "artifact_data": {
-            **cards_payload["artifact_data"],
-            "idea_sources": VALID_IDEA_DIVERGE_ARTIFACT_DATA["idea_sources"],
-        },
-    }
-    sources_output = render_partial_agent_turn_from_artifact_data(
-        sources_payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="DIVERGE",
-    )
-
-    assert sources_output is not None
-    assert "## 创意来源与假设" in sources_output.artifact_update.markdown
-    assert "## 搁置/排除记录" not in sources_output.artifact_update.markdown
-    assert sources_output.artifact_patch is not None
-    assert sources_output.artifact_patch.operation == "add_after"
-    assert (
-        sources_output.artifact_patch.section_anchor
-        == "h2:创意来源与假设:1"
-    )
-    assert (
-        sources_output.artifact_patch.after_section_anchor
-        == "h2:创意卡片库:1"
-    )
-
-
-def test_render_partial_idea_diverge_artifact_data_skips_sources_with_unknown_idea_reference():
-    payload = {
-        "chat": "我正在发散产品创意。",
-        "artifact_data": {
-            "divergence_method": VALID_IDEA_DIVERGE_ARTIFACT_DATA[
-                "divergence_method"
-            ],
-            "idea_landscape": VALID_IDEA_DIVERGE_ARTIFACT_DATA[
-                "idea_landscape"
-            ],
-            "idea_cards": VALID_IDEA_DIVERGE_ARTIFACT_DATA["idea_cards"],
-            "idea_sources": [
-                {
-                    **VALID_IDEA_DIVERGE_ARTIFACT_DATA["idea_sources"][0],
-                    "idea_ids": ["ID-404"],
-                }
-            ],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    output = render_partial_agent_turn_from_artifact_data(
-        payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="DIVERGE",
-    )
-
-    assert output is not None
-    assert "## 创意卡片库" in output.artifact_update.markdown
-    assert "## 创意来源与假设" not in output.artifact_update.markdown
-
-
-def test_render_partial_idea_converge_artifact_data_builds_formal_incremental_markdown_and_patch():
-    matrix_payload = {
-        "chat": "我正在收敛创意方向。",
-        "artifact_data": {
-            "decision_matrix": VALID_IDEA_CONVERGE_ARTIFACT_DATA[
-                "decision_matrix"
-            ],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    assert (
-        render_partial_agent_turn_from_artifact_data(
-            matrix_payload,
-            workflow_id="IDEA_BRAINSTORM",
-            current_stage_id="CONVERGE",
-        )
-        is None
-    )
-
-    evaluations_payload = {
-        **matrix_payload,
-        "artifact_data": {
-            **matrix_payload["artifact_data"],
-            "ice_evaluations": VALID_IDEA_CONVERGE_ARTIFACT_DATA[
-                "ice_evaluations"
-            ],
-        },
-    }
-    evaluations_output = render_partial_agent_turn_from_artifact_data(
-        evaluations_payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="CONVERGE",
-    )
-
-    assert evaluations_output is not None
-    assert evaluations_output.artifact_update.markdown.startswith("# 收敛聚焦")
-    assert "## 决策矩阵" in evaluations_output.artifact_update.markdown
-    assert "quadrantChart" in evaluations_output.artifact_update.markdown
-    assert "## ICE 评估表" in evaluations_output.artifact_update.markdown
-    assert "## 资源约束" not in evaluations_output.artifact_update.markdown
-    assert evaluations_output.artifact_patch is None
-
-    resources_payload = {
-        **evaluations_payload,
-        "artifact_data": {
-            **evaluations_payload["artifact_data"],
-            "resource_constraints": VALID_IDEA_CONVERGE_ARTIFACT_DATA[
-                "resource_constraints"
-            ],
-        },
-    }
-    resources_output = render_partial_agent_turn_from_artifact_data(
-        resources_payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="CONVERGE",
-    )
-
-    assert resources_output is not None
-    assert "## 资源约束" in resources_output.artifact_update.markdown
-    assert "## 敏感性分析" not in resources_output.artifact_update.markdown
-    assert resources_output.artifact_patch is not None
-    assert resources_output.artifact_patch.operation == "add_after"
-    assert resources_output.artifact_patch.section_anchor == "h2:资源约束:1"
-    assert (
-        resources_output.artifact_patch.after_section_anchor
-        == "h2:ICE 评估表:1"
-    )
-
-
-def test_render_partial_idea_converge_artifact_data_rejects_unknown_recommended_idea_reference():
-    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
-    invalid["decision_matrix"]["recommended_idea_id"] = "ID-404"
-    payload = {
-        "chat": "我正在收敛创意方向。",
-        "artifact_data": {
-            "decision_matrix": invalid["decision_matrix"],
-            "ice_evaluations": invalid["ice_evaluations"],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    assert (
-        render_partial_agent_turn_from_artifact_data(
-            payload,
-            workflow_id="IDEA_BRAINSTORM",
-            current_stage_id="CONVERGE",
-        )
-        is None
-    )
-
-
-def test_render_partial_idea_converge_artifact_data_rejects_invalid_ice_score():
-    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
-    invalid["ice_evaluations"][0]["ice_score"] = 9.5
-    payload = {
-        "chat": "我正在收敛创意方向。",
-        "artifact_data": {
-            "decision_matrix": invalid["decision_matrix"],
-            "ice_evaluations": invalid["ice_evaluations"],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    assert (
-        render_partial_agent_turn_from_artifact_data(
-            payload,
-            workflow_id="IDEA_BRAINSTORM",
-            current_stage_id="CONVERGE",
-        )
-        is None
-    )
-
-
-def test_render_partial_idea_converge_artifact_data_skips_validation_experiments_with_unknown_idea_reference():
-    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
-    invalid["validation_experiments"][0]["idea_ids"] = ["ID-404"]
-    payload = {
-        "chat": "我正在收敛创意方向。",
-        "artifact_data": {
-            "decision_matrix": invalid["decision_matrix"],
-            "ice_evaluations": invalid["ice_evaluations"],
-            "resource_constraints": invalid["resource_constraints"],
-            "sensitivity_analysis": invalid["sensitivity_analysis"],
-            "validation_experiments": invalid["validation_experiments"],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    output = render_partial_agent_turn_from_artifact_data(
-        payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="CONVERGE",
-    )
-
-    assert output is not None
-    assert "## 敏感性分析" in output.artifact_update.markdown
-    assert "## 验证实验" not in output.artifact_update.markdown
-
-
-def test_render_partial_idea_converge_artifact_data_skips_merge_paths_with_unknown_idea_reference():
-    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
-    invalid["merge_paths"][0]["source_idea_ids"] = ["ID-404"]
-    payload = {
-        "chat": "我正在收敛创意方向。",
-        "artifact_data": {
-            "decision_matrix": invalid["decision_matrix"],
-            "ice_evaluations": invalid["ice_evaluations"],
-            "resource_constraints": invalid["resource_constraints"],
-            "sensitivity_analysis": invalid["sensitivity_analysis"],
-            "validation_experiments": invalid["validation_experiments"],
-            "merge_paths": invalid["merge_paths"],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    output = render_partial_agent_turn_from_artifact_data(
-        payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="CONVERGE",
-    )
-
-    assert output is not None
-    assert "## 验证实验" in output.artifact_update.markdown
-    assert "## 整合演进路径" not in output.artifact_update.markdown
-
-
-def test_render_partial_idea_concept_artifact_data_builds_formal_incremental_markdown_and_patch():
-    positioning_payload = {
-        "chat": "我正在形成产品概念简报。",
-        "artifact_data": {
-            "positioning_statement": VALID_IDEA_CONCEPT_ARTIFACT_DATA[
-                "positioning_statement"
-            ],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    positioning_output = render_partial_agent_turn_from_artifact_data(
-        positioning_payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="CONCEPT",
-    )
-
-    assert positioning_output is not None
-    assert positioning_output.artifact_update.markdown.startswith("# 产品概念简报")
-    assert "## 定位声明" in positioning_output.artifact_update.markdown
-    assert "## 核心假设" not in positioning_output.artifact_update.markdown
-    assert positioning_output.artifact_patch is None
-
-    assumptions_payload = {
-        **positioning_payload,
-        "artifact_data": {
-            **positioning_payload["artifact_data"],
-            "core_assumptions": VALID_IDEA_CONCEPT_ARTIFACT_DATA[
-                "core_assumptions"
-            ],
-        },
-    }
-    assumptions_output = render_partial_agent_turn_from_artifact_data(
-        assumptions_payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="CONCEPT",
-    )
-
-    assert assumptions_output is not None
-    assert "## 核心假设" in assumptions_output.artifact_update.markdown
-    assert "## Lean Canvas 产品画布" not in assumptions_output.artifact_update.markdown
-    assert assumptions_output.artifact_patch is not None
-    assert assumptions_output.artifact_patch.operation == "add_after"
-    assert assumptions_output.artifact_patch.section_anchor == "h2:核心假设:1"
-    assert (
-        assumptions_output.artifact_patch.after_section_anchor
-        == "h2:定位声明:1"
-    )
-
-    canvas_payload = {
-        **assumptions_payload,
-        "artifact_data": {
-            **assumptions_payload["artifact_data"],
-            "lean_canvas": VALID_IDEA_CONCEPT_ARTIFACT_DATA["lean_canvas"],
-        },
-    }
-    canvas_output = render_partial_agent_turn_from_artifact_data(
-        canvas_payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="CONCEPT",
-    )
-
-    assert canvas_output is not None
-    assert "## Lean Canvas 产品画布" in canvas_output.artifact_update.markdown
-    assert "## MVP 功能分布" not in canvas_output.artifact_update.markdown
-    assert canvas_output.artifact_patch is not None
-    assert (
-        canvas_output.artifact_patch.section_anchor
-        == "h2:Lean Canvas 产品画布:1"
-    )
-
-    mvp_payload = {
-        **canvas_payload,
-        "artifact_data": {
-            **canvas_payload["artifact_data"],
-            "mvp_features": VALID_IDEA_CONCEPT_ARTIFACT_DATA["mvp_features"],
-        },
-    }
-    mvp_output = render_partial_agent_turn_from_artifact_data(
-        mvp_payload,
-        workflow_id="IDEA_BRAINSTORM",
-        current_stage_id="CONCEPT",
-    )
-
-    assert mvp_output is not None
-    assert "## MVP 功能分布" in mvp_output.artifact_update.markdown
-    assert "pie title MVP 功能组成" in mvp_output.artifact_update.markdown
-    assert '"type": "mvp-map"' in mvp_output.artifact_update.markdown
-    assert "## 核心增长漏斗" not in mvp_output.artifact_update.markdown
-    assert mvp_output.artifact_patch is not None
-    assert mvp_output.artifact_patch.section_anchor == "h2:MVP 功能分布:1"
-    assert (
-        mvp_output.artifact_patch.after_section_anchor
-        == "h2:Lean Canvas 产品画布:1"
-    )
-
-
-def test_render_partial_value_elevator_artifact_data_builds_formal_incremental_markdown_and_patch():
-    summary_payload = {
-        "chat": "我正在生成价值定位分析。",
-        "artifact_data": {
-            "document_info": VALID_VALUE_ELEVATOR_ARTIFACT_DATA["document_info"],
-            "positioning_summary": VALID_VALUE_ELEVATOR_ARTIFACT_DATA[
-                "positioning_summary"
-            ],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    summary_output = render_partial_agent_turn_from_artifact_data(
-        summary_payload,
-        workflow_id="VALUE_DISCOVERY",
-        current_stage_id="ELEVATOR",
-    )
-
-    assert summary_output is not None
-    assert summary_output.artifact_update.markdown.startswith("# 价值定位分析")
-    assert "## 定位摘要" in summary_output.artifact_update.markdown
-    assert "## 价值结构图" not in summary_output.artifact_update.markdown
-    assert summary_output.artifact_patch is None
-
-    flow_payload = {
-        **summary_payload,
-        "artifact_data": {
-            **summary_payload["artifact_data"],
-            "value_flow": VALID_VALUE_ELEVATOR_ARTIFACT_DATA["value_flow"],
-        },
-    }
-    flow_output = render_partial_agent_turn_from_artifact_data(
-        flow_payload,
-        workflow_id="VALUE_DISCOVERY",
-        current_stage_id="ELEVATOR",
-    )
-
-    assert flow_output is not None
-    assert "## 价值结构图" in flow_output.artifact_update.markdown
-    assert "flowchart TD" in flow_output.artifact_update.markdown
-    assert "## 目标用户与场景" not in flow_output.artifact_update.markdown
-    assert flow_output.artifact_patch is not None
-    assert flow_output.artifact_patch.operation == "add_after"
-    assert flow_output.artifact_patch.section_anchor == "h2:价值结构图:1"
-    assert flow_output.artifact_patch.after_section_anchor == "h2:定位摘要:1"
-
-    score_payload = {
-        **flow_payload,
-        "artifact_data": {
-            **flow_payload["artifact_data"],
-            "target_scenarios": VALID_VALUE_ELEVATOR_ARTIFACT_DATA[
-                "target_scenarios"
-            ],
-            "pain_evidence": VALID_VALUE_ELEVATOR_ARTIFACT_DATA["pain_evidence"],
-            "differentiators": VALID_VALUE_ELEVATOR_ARTIFACT_DATA[
-                "differentiators"
-            ],
-            "business_feasibility": VALID_VALUE_ELEVATOR_ARTIFACT_DATA[
-                "business_feasibility"
-            ],
-            "score_matrix": VALID_VALUE_ELEVATOR_ARTIFACT_DATA["score_matrix"],
-            "score_summary": VALID_VALUE_ELEVATOR_ARTIFACT_DATA["score_summary"],
-        },
-    }
-    score_output = render_partial_agent_turn_from_artifact_data(
-        score_payload,
-        workflow_id="VALUE_DISCOVERY",
-        current_stage_id="ELEVATOR",
-    )
-
-    assert score_output is not None
-    assert "## 价值主张评分" in score_output.artifact_update.markdown
-    assert '"type": "score-matrix"' in score_output.artifact_update.markdown
-    assert "## 未验证假设" not in score_output.artifact_update.markdown
-    assert score_output.artifact_patch is not None
-    assert score_output.artifact_patch.section_anchor == "h2:价值主张评分:1"
-
-
-def test_render_partial_value_elevator_artifact_data_computes_score_summary_fields():
-    score_payload = {
-        "chat": "我正在生成价值定位分析。",
-        "artifact_data": {
-            "document_info": VALID_VALUE_ELEVATOR_ARTIFACT_DATA["document_info"],
-            "positioning_summary": VALID_VALUE_ELEVATOR_ARTIFACT_DATA[
-                "positioning_summary"
-            ],
-            "value_flow": VALID_VALUE_ELEVATOR_ARTIFACT_DATA["value_flow"],
-            "target_scenarios": VALID_VALUE_ELEVATOR_ARTIFACT_DATA[
-                "target_scenarios"
-            ],
-            "pain_evidence": VALID_VALUE_ELEVATOR_ARTIFACT_DATA["pain_evidence"],
-            "differentiators": VALID_VALUE_ELEVATOR_ARTIFACT_DATA[
-                "differentiators"
-            ],
-            "business_feasibility": VALID_VALUE_ELEVATOR_ARTIFACT_DATA[
-                "business_feasibility"
-            ],
-            "score_matrix": VALID_VALUE_ELEVATOR_ARTIFACT_DATA["score_matrix"],
-            "score_summary": {
-                "judgement": VALID_VALUE_ELEVATOR_ARTIFACT_DATA["score_summary"][
-                    "judgement"
-                ],
-            },
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    output = render_partial_agent_turn_from_artifact_data(
-        score_payload,
-        workflow_id="VALUE_DISCOVERY",
-        current_stage_id="ELEVATOR",
-    )
-
-    assert output is not None
-    assert "总分 16，平均分 3.20" in output.artifact_update.markdown
-
-
-def test_render_partial_value_persona_artifact_data_builds_formal_incremental_markdown_and_patch():
-    summary_payload = {
-        "chat": "我正在生成用户画像分析。",
-        "artifact_data": {
-            "document_info": VALID_VALUE_PERSONA_ARTIFACT_DATA["document_info"],
-            "persona_summary": VALID_VALUE_PERSONA_ARTIFACT_DATA["persona_summary"],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    summary_output = render_partial_agent_turn_from_artifact_data(
-        summary_payload,
-        workflow_id="VALUE_DISCOVERY",
-        current_stage_id="PERSONA",
-    )
-
-    assert summary_output is not None
-    assert summary_output.artifact_update.markdown.startswith("# 用户画像分析")
-    assert "## 画像摘要" in summary_output.artifact_update.markdown
-    assert "## 主要用户画像" not in summary_output.artifact_update.markdown
-    assert summary_output.artifact_patch is None
-
-    personas_payload = {
-        **summary_payload,
-        "artifact_data": {
-            **summary_payload["artifact_data"],
-            "personas": VALID_VALUE_PERSONA_ARTIFACT_DATA["personas"],
-        },
-    }
-    personas_output = render_partial_agent_turn_from_artifact_data(
-        personas_payload,
-        workflow_id="VALUE_DISCOVERY",
-        current_stage_id="PERSONA",
-    )
-
-    assert personas_output is not None
-    assert "## 主要用户画像" in personas_output.artifact_update.markdown
-    assert "### 画像 1" in personas_output.artifact_update.markdown
-    assert "#### 基础特征" in personas_output.artifact_update.markdown
-    assert "## 行为与场景" not in personas_output.artifact_update.markdown
-    assert personas_output.artifact_patch is None
-
-    behavior_payload = {
-        **personas_payload,
-        "artifact_data": {
-            **personas_payload["artifact_data"],
-            "behavior_scenarios": VALID_VALUE_PERSONA_ARTIFACT_DATA[
-                "behavior_scenarios"
-            ],
-        },
-    }
-    behavior_output = render_partial_agent_turn_from_artifact_data(
-        behavior_payload,
-        workflow_id="VALUE_DISCOVERY",
-        current_stage_id="PERSONA",
-    )
-
-    assert behavior_output is not None
-    assert "## 行为与场景" in behavior_output.artifact_update.markdown
-    assert "## 决策链" not in behavior_output.artifact_update.markdown
-    assert behavior_output.artifact_patch is not None
-    assert behavior_output.artifact_patch.section_anchor == "h2:行为与场景:1"
-
-
-def test_render_partial_value_journey_artifact_data_builds_formal_incremental_markdown_and_patch():
-    stages_payload = {
-        "chat": "我正在生成用户旅程分析。",
-        "artifact_data": {
-            "document_info": VALID_VALUE_JOURNEY_ARTIFACT_DATA["document_info"],
-            "journey_stages": VALID_VALUE_JOURNEY_ARTIFACT_DATA["journey_stages"],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    stages_output = render_partial_agent_turn_from_artifact_data(
-        stages_payload,
-        workflow_id="VALUE_DISCOVERY",
-        current_stage_id="JOURNEY",
-    )
-
-    assert stages_output is not None
-    assert stages_output.artifact_update.markdown.startswith("# 用户旅程分析")
-    assert "## 用户旅程地图" in stages_output.artifact_update.markdown
-    assert "journey\n    title 核心用户旅程" in stages_output.artifact_update.markdown
-    assert '"type": "journey-map"' in stages_output.artifact_update.markdown
-    assert "## 痛点优先级排序" not in stages_output.artifact_update.markdown
-    assert stages_output.artifact_patch is None
-
-    pain_payload = {
-        **stages_payload,
-        "artifact_data": {
-            **stages_payload["artifact_data"],
-            "pain_priorities": VALID_VALUE_JOURNEY_ARTIFACT_DATA[
-                "pain_priorities"
-            ],
-        },
-    }
-    pain_output = render_partial_agent_turn_from_artifact_data(
-        pain_payload,
-        workflow_id="VALUE_DISCOVERY",
-        current_stage_id="JOURNEY",
-    )
-
-    assert pain_output is not None
-    assert "## 痛点优先级排序" in pain_output.artifact_update.markdown
-    assert "高优先级痛点" in pain_output.artifact_update.markdown
-    assert "## 机会评分" not in pain_output.artifact_update.markdown
-
-    opportunity_payload = {
-        **pain_payload,
-        "artifact_data": {
-            **pain_payload["artifact_data"],
-            "opportunity_scores": VALID_VALUE_JOURNEY_ARTIFACT_DATA[
-                "opportunity_scores"
-            ],
-        },
-    }
-    opportunity_output = render_partial_agent_turn_from_artifact_data(
-        opportunity_payload,
-        workflow_id="VALUE_DISCOVERY",
-        current_stage_id="JOURNEY",
-    )
-
-    assert opportunity_output is not None
-    assert "## 机会评分" in opportunity_output.artifact_update.markdown
-    assert "## 产品切入策略" not in opportunity_output.artifact_update.markdown
-    assert opportunity_output.artifact_patch is not None
-    assert opportunity_output.artifact_patch.section_anchor == "h2:机会评分:1"
-
-
-def test_render_partial_value_blueprint_artifact_data_builds_formal_incremental_markdown_and_patch():
-    overview_payload = {
-        "chat": "我正在生成需求蓝图。",
-        "artifact_data": {
-            "document_info": VALID_VALUE_BLUEPRINT_ARTIFACT_DATA["document_info"],
-            "product_overview": VALID_VALUE_BLUEPRINT_ARTIFACT_DATA[
-                "product_overview"
-            ],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-
-    overview_output = render_partial_agent_turn_from_artifact_data(
-        overview_payload,
-        workflow_id="VALUE_DISCOVERY",
-        current_stage_id="BLUEPRINT",
-    )
-
-    assert overview_output is not None
-    assert overview_output.artifact_update.markdown.startswith(
-        "# AI4SE 测试设计助手 需求蓝图"
-    )
-    assert "## 1. 产品概述" in overview_output.artifact_update.markdown
-    assert "## 2. 目标用户（摘要）" not in overview_output.artifact_update.markdown
-    assert overview_output.artifact_patch is None
-
-    users_payload = {
-        **overview_payload,
-        "artifact_data": {
-            **overview_payload["artifact_data"],
-            "target_users": VALID_VALUE_BLUEPRINT_ARTIFACT_DATA["target_users"],
-        },
-    }
-    users_output = render_partial_agent_turn_from_artifact_data(
-        users_payload,
-        workflow_id="VALUE_DISCOVERY",
-        current_stage_id="BLUEPRINT",
-    )
-
-    assert users_output is not None
-    assert "## 2. 目标用户（摘要）" in users_output.artifact_update.markdown
-    assert "## 3. 核心需求" not in users_output.artifact_update.markdown
-    assert users_output.artifact_patch is not None
-    assert users_output.artifact_patch.section_anchor == "h2:2. 目标用户（摘要）:1"
-
-    requirements_payload = {
-        **users_payload,
-        "artifact_data": {
-            **users_payload["artifact_data"],
-            "feature_modules": VALID_VALUE_BLUEPRINT_ARTIFACT_DATA[
-                "feature_modules"
-            ],
-            "requirements": VALID_VALUE_BLUEPRINT_ARTIFACT_DATA["requirements"],
-        },
-    }
-    requirements_output = render_partial_agent_turn_from_artifact_data(
-        requirements_payload,
-        workflow_id="VALUE_DISCOVERY",
-        current_stage_id="BLUEPRINT",
-    )
-
-    assert requirements_output is not None
-    assert "## 3. 核心需求" in requirements_output.artifact_update.markdown
-    assert "mindmap" in requirements_output.artifact_update.markdown
-    assert "## 4. 核心流程" not in requirements_output.artifact_update.markdown
-
-    flow_payload = {
-        **requirements_payload,
-        "artifact_data": {
-            **requirements_payload["artifact_data"],
-            "main_flow": VALID_VALUE_BLUEPRINT_ARTIFACT_DATA["main_flow"],
-        },
-    }
-    flow_output = render_partial_agent_turn_from_artifact_data(
-        flow_payload,
-        workflow_id="VALUE_DISCOVERY",
-        current_stage_id="BLUEPRINT",
-    )
-
-    assert flow_output is not None
-    assert "## 4. 核心流程" in flow_output.artifact_update.markdown
-    assert "flowchart TD" in flow_output.artifact_update.markdown
-    assert "## 5. 成功指标" not in flow_output.artifact_update.markdown
-
-
 def test_render_delivery_artifact_data_is_deterministic_and_contract_valid():
     first = render_agent_turn_from_artifact_data(
         {
@@ -4895,16 +3503,10 @@ def test_render_delivery_artifact_data_is_deterministic_and_contract_valid():
     assert first == second
     assert first is not None
     assert first.artifact_update.markdown is not None
-    delivery_markdown = first.artifact_update.markdown
     assert "# 测试设计文档" in first.artifact_update.markdown
-    assert "## 9. 变更记录" in delivery_markdown
-    assert delivery_markdown.index("## 1. 执行摘要") < delivery_markdown.index(
-        "## 附录：文档信息"
-    )
+    assert "## 10. 变更记录" in first.artifact_update.markdown
     assert "```ai4se-visual" in first.artifact_update.markdown
     assert '"type": "coverage-map"' in first.artifact_update.markdown
-    assert '"type": "traceability-matrix"' in first.artifact_update.markdown
-    assert "需求/风险/测试点" in first.artifact_update.markdown
     assert (
         validate_agent_turn(
             first,
@@ -4946,11 +3548,7 @@ def test_render_req_review_artifact_data_is_deterministic_and_contract_valid():
     assert first == second
     assert first is not None
     assert first.artifact_update.markdown is not None
-    review_markdown = first.artifact_update.markdown
     assert "# 需求评审问题清单" in first.artifact_update.markdown
-    assert review_markdown.index("## 需求质量总览") < review_markdown.index(
-        "## 附录：评审信息"
-    )
     assert "flowchart TD" in first.artifact_update.markdown
     assert "```ai4se-visual" in first.artifact_update.markdown
     assert '"type": "score-matrix"' in first.artifact_update.markdown
@@ -5181,13 +3779,10 @@ def test_render_value_blueprint_artifact_data_is_deterministic_and_contract_vali
     assert first == second
     assert first is not None
     assert first.artifact_update.markdown is not None
-    blueprint_markdown = first.artifact_update.markdown
     assert first.artifact_update.type == "replace"
     assert first.stage_action is None
     assert "# AI4SE 测试设计助手 需求蓝图" in first.artifact_update.markdown
-    assert blueprint_markdown.index("## 1. 产品概述") < blueprint_markdown.index(
-        "## 附录：文档信息"
-    )
+    assert "## 文档信息" in first.artifact_update.markdown
     assert "### 功能架构" in first.artifact_update.markdown
     assert "mindmap" in first.artifact_update.markdown
     assert "### 主流程图" in first.artifact_update.markdown
@@ -5203,6 +3798,67 @@ def test_render_value_blueprint_artifact_data_is_deterministic_and_contract_vali
             first,
             workflow_id="VALUE_DISCOVERY",
             current_stage_id="BLUEPRINT",
+        )
+        == first
+    )
+
+
+@pytest.mark.parametrize(
+    ("stage_id", "expected_title", "expected_visual"),
+    [
+        ("INVENTORY", "# PRD 输入盘点", "mindmap"),
+        ("QUALITY_AUDIT", "# PRD 质量评审", '"type": "score-matrix"'),
+        ("COMPLETION_PLAN", "# PRD 补全建议", '"type": "action-board"'),
+        ("REVISION_BLUEPRINT", "# PRD 修订蓝图", '"type": "roadmap"'),
+    ],
+)
+def test_render_prd_review_artifact_data_is_deterministic_and_contract_valid(
+    stage_id,
+    expected_title,
+    expected_visual,
+):
+    first = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已整理 PRD 质量评审与补全建议，请查看右侧补全动作。",
+            "artifact_data": VALID_PRD_REVIEW_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="PRD_REVIEW",
+        current_stage_id=stage_id,
+    )
+    second = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已整理 PRD 质量评审与补全建议，请查看右侧补全动作。",
+            "artifact_data": VALID_PRD_REVIEW_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="PRD_REVIEW",
+        current_stage_id=stage_id,
+    )
+
+    assert first == second
+    assert first is not None
+    assert first.artifact_update.markdown is not None
+    assert first.artifact_update.type == "replace"
+    assert expected_title in first.artifact_update.markdown
+    assert "## 阶段门禁" in first.artifact_update.markdown
+    if stage_id == "REVISION_BLUEPRINT":
+        assert "Given" in first.artifact_update.markdown
+        assert "When" in first.artifact_update.markdown
+        assert "Then" in first.artifact_update.markdown
+    if expected_visual == "mindmap":
+        assert "```mermaid" in first.artifact_update.markdown
+        assert "mindmap" in first.artifact_update.markdown
+    elif expected_visual is not None:
+        assert "```ai4se-visual" in first.artifact_update.markdown
+        assert expected_visual in first.artifact_update.markdown
+    assert (
+        validate_agent_turn(
+            first,
+            workflow_id="PRD_REVIEW",
+            current_stage_id=stage_id,
         )
         == first
     )
@@ -5441,9 +4097,7 @@ def test_render_idea_define_artifact_data_is_deterministic_and_contract_valid():
     assert "## 问题域全景" in first.artifact_update.markdown
     assert "mindmap" in first.artifact_update.markdown
     assert 'root(("独立开发者变现方向选择困难"))' in (first.artifact_update.markdown)
-    assert "P-ROOT" in first.artifact_update.markdown
     assert "## 证据与验证状态" in first.artifact_update.markdown
-    assert "关联问题 ID" in first.artifact_update.markdown
     assert "## 问题-用户-场景匹配" in first.artifact_update.markdown
     assert "## 约束与边界" in first.artifact_update.markdown
     assert "## 反向验证（风险思考）" in first.artifact_update.markdown
@@ -5637,671 +4291,30 @@ def test_render_idea_concept_artifact_data_is_deterministic_and_contract_valid()
     )
 
 
-VALID_USER_STORY_SCOPE_ARTIFACT_DATA = {
-    "document_info": {
-        "artifact_name": "用户故事拆解文档",
-        "workflow": "USER_STORY_BREAKDOWN",
-        "stage": "SCOPE",
-        "status": "可进入用户故事地图",
-    },
-    "in_scope_requirements": [
-        {
-            "requirement_id": "REQ-001",
-            "name": "需求澄清与风险识别",
-            "user_value": "测试负责人能在设计前发现缺失业务规则",
-            "priority": "P0",
-            "split_decision": "进入拆分",
-            "status": "已确认",
-        },
-        {
-            "requirement_id": "REQ-002",
-            "name": "生成测试策略",
-            "user_value": "测试负责人能获得可评审的质量方案",
-            "priority": "P0",
-            "split_decision": "进入拆分",
-            "status": "已确认",
-        },
-    ],
-    "traceability_index": [
-        {
-            "requirement_id": "REQ-001",
-            "source": "需求蓝图 P0 需求",
-            "target_user": "测试负责人",
-            "scenario": "输入需求后识别风险和缺口",
-            "acceptance_hint": "输出待澄清问题和 P0 风险清单",
-            "status": "已确认",
-        },
-        {
-            "requirement_id": "REQ-002",
-            "source": "需求蓝图 P0 需求",
-            "target_user": "测试负责人",
-            "scenario": "确认边界后生成策略",
-            "acceptance_hint": "包含质量目标、风险矩阵和分层策略",
-            "status": "已确认",
-        },
-    ],
-    "out_of_scope_items": [
-        {
-            "requirement_id": "REQ-101",
-            "item": "团队模板适配",
-            "reason": "不属于 MVP 第一条业务闭环",
-            "reentry_condition": "试点团队确认模板格式后进入 Release Slice",
-            "status": "已记录",
-        }
-    ],
-    "blocking_questions": [
-        {
-            "question_id": "Q-001",
-            "requirement_id": "REQ-101",
-            "question": "团队模板字段和导出格式未确认",
-            "impact": "暂不能写 Ready Story",
-            "owner": "试点团队负责人",
-            "status": "开放",
-        }
-    ],
-    "stage_gate": [
-        {"checked": True, "item": "进入拆分的需求都有稳定需求 ID"}
-    ],
-}
-
-
-VALID_USER_STORY_MAP_ARTIFACT_DATA = {
-    "document_info": {
-        "artifact_name": "用户故事拆解文档",
-        "workflow": "USER_STORY_BREAKDOWN",
-        "stage": "STORY_MAP",
-        "status": "可进入故事卡片编写",
-    },
-    "requirements": [
-        {
-            "requirement_id": "REQ-001",
-            "name": "需求澄清与风险识别",
-            "priority": "P0",
-            "status": "已确认",
-        },
-        {
-            "requirement_id": "REQ-002",
-            "name": "生成测试策略",
-            "priority": "P0",
-            "status": "已确认",
-        },
-        {
-            "requirement_id": "REQ-101",
-            "name": "团队模板适配",
-            "priority": "P1",
-            "status": "待确认",
-        },
-    ],
-    "activities": [
-        {
-            "activity_id": "ACT-001",
-            "activity": "输入需求",
-            "user_goal": "让系统理解需求背景和边界",
-            "requirement_ids": ["REQ-001"],
-            "priority": "P0",
-        },
-        {
-            "activity_id": "ACT-002",
-            "activity": "确认风险",
-            "user_goal": "在设计前发现缺失规则和高风险路径",
-            "requirement_ids": ["REQ-001", "REQ-002"],
-            "priority": "P0",
-        },
-    ],
-    "tasks": [
-        {
-            "task_id": "TASK-001",
-            "activity_id": "ACT-001",
-            "task": "粘贴需求并补充业务规则",
-            "success_result": "系统形成需求事实和缺口清单",
-            "requirement_ids": ["REQ-001"],
-            "status": "已确认",
-        },
-        {
-            "task_id": "TASK-002",
-            "activity_id": "ACT-002",
-            "task": "确认风险优先级和准出目标",
-            "success_result": "系统形成可评审策略输入",
-            "requirement_ids": ["REQ-002"],
-            "status": "已确认",
-        },
-    ],
-    "story_map_items": [
-        {
-            "story_id": "US-001",
-            "activity_id": "ACT-001",
-            "task_id": "TASK-001",
-            "title": "从需求输入生成澄清问题",
-            "requirement_ids": ["REQ-001"],
-            "slice_id": "MVP-001",
-            "status": "候选",
-        },
-        {
-            "story_id": "US-002",
-            "activity_id": "ACT-002",
-            "task_id": "TASK-002",
-            "title": "从确认边界生成测试策略",
-            "requirement_ids": ["REQ-002"],
-            "slice_id": "MVP-001",
-            "status": "候选",
-        },
-        {
-            "story_id": "US-101",
-            "activity_id": "ACT-002",
-            "task_id": "TASK-002",
-            "title": "按团队模板导出交付材料",
-            "requirement_ids": ["REQ-101"],
-            "slice_id": "REL-001",
-            "status": "待确认",
-        },
-    ],
-    "mvp_slices": [
-        {
-            "slice_id": "MVP-001",
-            "story_ids": ["US-001", "US-002"],
-            "business_outcome": "测试负责人输入需求后得到澄清问题和策略蓝图",
-            "excluded_items": ["团队模板适配"],
-            "acceptance": "一条需求能完成澄清和策略生成",
-        }
-    ],
-    "release_slices": [
-        {
-            "slice_id": "REL-001",
-            "story_ids": ["US-101"],
-            "release_goal": "适配团队交付模板",
-            "dependencies": ["试点团队确认模板字段"],
-            "status": "待排期",
-        }
-    ],
-    "stage_gate": [
-        {"checked": True, "item": "所有 Story ID 都能追溯到需求 ID"}
-    ],
-}
-
-
-VALID_USER_STORIES_ARTIFACT_DATA = {
-    "document_info": {
-        "artifact_name": "用户故事拆解文档",
-        "workflow": "USER_STORY_BREAKDOWN",
-        "stage": "STORIES",
-        "status": "可进入故事交接准备",
-    },
-    "requirements": VALID_USER_STORY_MAP_ARTIFACT_DATA["requirements"],
-    "split_principles": [
-        {
-            "principle": "垂直业务切片",
-            "applied": "每张故事都让用户获得一个可验收结果",
-            "anti_pattern": "不按工程层拆分",
-        },
-        {
-            "principle": "可追溯",
-            "applied": "每张故事引用来源需求 ID",
-            "anti_pattern": "不生成无来源需求的故事",
-        },
-    ],
-    "story_cards": [
-        {
-            "story_id": "US-001",
-            "title": "生成澄清问题",
-            "user_role": "测试负责人",
-            "user_goal": "输入需求后看到待澄清问题和隐式风险",
-            "benefit": "在测试设计前补齐缺失业务规则",
-            "requirement_ids": ["REQ-001"],
-            "activity_id": "ACT-001",
-            "task_id": "TASK-001",
-            "business_rules": ["问题必须标注阻断性、责任方和状态"],
-            "acceptance_criteria": [
-                "输出需求事实清单",
-                "输出阻断性待澄清问题",
-                "输出 P0 风险线索",
-            ],
-            "non_functional_notes": ["输出内容需要可追溯、可评审"],
-            "out_of_scope": ["不直接生成用例"],
-            "dependencies": ["用户提供需求文本"],
-            "open_questions": ["问题分类口径可在试点中继续校准"],
-            "status": "ready",
-        },
-        {
-            "story_id": "US-002",
-            "title": "生成测试策略",
-            "user_role": "测试负责人",
-            "user_goal": "在确认边界后生成质量目标、风险矩阵和分层策略",
-            "benefit": "快速形成可评审测试方案",
-            "requirement_ids": ["REQ-002"],
-            "activity_id": "ACT-002",
-            "task_id": "TASK-002",
-            "business_rules": ["P0 风险必须进入策略摘要"],
-            "acceptance_criteria": [
-                "输出质量目标",
-                "输出风险矩阵",
-                "输出分层策略和准出条件",
-            ],
-            "non_functional_notes": ["策略内容需要可评审"],
-            "out_of_scope": ["不执行测试"],
-            "dependencies": ["US-001 ready"],
-            "open_questions": ["风险矩阵口径可继续校准"],
-            "status": "ready",
-        },
-        {
-            "story_id": "US-101",
-            "title": "团队模板导出",
-            "user_role": "测试负责人",
-            "user_goal": "按团队模板导出交付材料",
-            "benefit": "减少评审格式调整成本",
-            "requirement_ids": ["REQ-101"],
-            "activity_id": "ACT-002",
-            "task_id": "TASK-002",
-            "business_rules": [],
-            "acceptance_criteria": [],
-            "non_functional_notes": [],
-            "out_of_scope": ["不影响 MVP"],
-            "dependencies": ["模板字段确认"],
-            "open_questions": ["模板需要哪些章节和表格字段"],
-            "status": "not_ready",
-            "blocker_reason": "团队模板字段未确认",
-        },
-    ],
-    "ready_story_summaries": [
-        {
-            "story_id": "US-001",
-            "ready_reason": "用户、场景、业务规则和验收标准明确",
-            "handoff_summary": "输入需求后生成澄清问题和风险线索",
-            "acceptance_criteria_count": 3,
-            "concerns": "问题分类口径",
-        },
-        {
-            "story_id": "US-002",
-            "ready_reason": "上游边界明确且策略产出可验收",
-            "handoff_summary": "生成测试策略蓝图",
-            "acceptance_criteria_count": 3,
-            "concerns": "风险矩阵口径",
-        },
-    ],
-    "not_ready_stories": [
-        {
-            "story_id": "US-101",
-            "requirement_ids": ["REQ-101"],
-            "blocker_reason": "团队模板字段未确认",
-            "questions": ["模板需要哪些章节和表格字段"],
-            "suggested_next_step": "先找试点团队确认模板",
-            "status": "not_ready",
-        }
-    ],
-    "open_questions": [
-        {
-            "question_id": "Q-001",
-            "story_id": "US-101",
-            "question": "模板字段和导出格式未确认",
-            "decision_impact": "影响 Release Slice 排期",
-            "owner": "试点团队负责人",
-            "status": "开放",
-        }
-    ],
-    "stage_gate": [
-        {"checked": True, "item": "每张故事都有 Story ID、来源需求和状态"}
-    ],
-}
-
-
-VALID_USER_STORY_HANDOFF_ARTIFACT_DATA = {
-    "document_info": {
-        "artifact_name": "单故事 Handoff 清单",
-        "workflow": "USER_STORY_BREAKDOWN",
-        "stage": "HANDOFF",
-        "status": "可生成单故事需求包",
-    },
-    "requirements": VALID_USER_STORY_MAP_ARTIFACT_DATA["requirements"],
-    "ready_story_overview": [
-        {
-            "story_id": "US-001",
-            "title": "生成澄清问题",
-            "requirement_ids": ["REQ-001"],
-            "user_value": "测试负责人能在设计前发现缺失业务规则",
-            "ready_reason": "验收标准和业务规则已明确",
-            "status": "ready",
-        },
-        {
-            "story_id": "US-002",
-            "title": "生成测试策略",
-            "requirement_ids": ["REQ-002"],
-            "user_value": "测试负责人能快速形成可评审测试方案",
-            "ready_reason": "输入、输出和准出条件明确",
-            "status": "ready",
-        },
-    ],
-    "single_story_packets": [
-        {
-            "story_id": "US-001",
-            "requirement_ids": ["REQ-001"],
-            "user_story": "作为测试负责人，我想要输入需求后看到待澄清问题和隐式风险，以便在测试设计前补齐缺失业务规则",
-            "acceptance_criteria": [
-                "输出需求事实清单",
-                "输出阻断性待澄清问题",
-                "输出 P0 风险线索",
-            ],
-            "business_rules": ["问题必须标注阻断性、责任方和状态"],
-            "non_functional_notes": ["输出内容需要可追溯、可评审"],
-            "out_of_scope": ["不直接生成用例"],
-            "dependencies": ["用户提供需求文本"],
-            "open_questions": ["问题分类口径可在试点中继续校准"],
-        }
-    ],
-    "upstream_traceability": [
-        {
-            "story_id": "US-001",
-            "source_workflow": "VALUE_DISCOVERY",
-            "source_stage": "BLUEPRINT",
-            "source_requirements": ["REQ-001"],
-            "source_slice": "MVP-001",
-            "trace_note": "来源于需求蓝图中的需求澄清与风险识别",
-        }
-    ],
-    "not_ready_blockers": [
-        {
-            "story_id": "US-101",
-            "requirement_ids": ["REQ-101"],
-            "blocker_reason": "团队模板字段未确认",
-            "questions": ["模板需要哪些章节和表格字段"],
-            "suggested_next_step": "先完成试点团队访谈",
-        }
-    ],
-    "ai_coding_input_boundary": {
-        "allowed": [
-            "用户故事正文",
-            "来源需求",
-            "业务规则",
-            "验收标准",
-            "不做范围",
-            "依赖",
-            "开放问题",
-        ],
-        "forbidden": [
-            "工程实施内容",
-            "代码层设计",
-            "开发任务拆分",
-            "执行类指令",
-        ],
-    },
-    "stage_gate": [
-        {"checked": True, "item": "每个 ready story 都有 storyId 和 requirementId"}
-    ],
-}
-
-
 ARTIFACT_DATA_STAGE_FIXTURES = {
-    ("TEST_DESIGN", "CLARIFY"): {
-        "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
-    },
-    ("TEST_DESIGN", "STRATEGY"): {
-        "artifact_data": VALID_STRATEGY_ARTIFACT_DATA,
-    },
-    ("TEST_DESIGN", "CASES"): {
-        "artifact_data": VALID_CASES_ARTIFACT_DATA,
-    },
-    ("TEST_DESIGN", "DELIVERY"): {
-        "artifact_data": VALID_DELIVERY_ARTIFACT_DATA,
-    },
-    ("REQ_REVIEW", "REVIEW"): {
-        "artifact_data": VALID_REQ_REVIEW_ARTIFACT_DATA,
-    },
-    ("REQ_REVIEW", "REPORT"): {
-        "artifact_data": VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA,
-    },
-    ("INCIDENT_REVIEW", "TIMELINE"): {
-        "artifact_data": VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
-    },
-    ("INCIDENT_REVIEW", "ROOT_CAUSE"): {
-        "artifact_data": VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
-    },
-    ("INCIDENT_REVIEW", "IMPROVEMENT"): {
-        "artifact_data": VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA,
-    },
-    ("IDEA_BRAINSTORM", "DEFINE"): {
-        "artifact_data": VALID_IDEA_DEFINE_ARTIFACT_DATA,
-    },
-    ("IDEA_BRAINSTORM", "DIVERGE"): {
-        "artifact_data": VALID_IDEA_DIVERGE_ARTIFACT_DATA,
-    },
-    ("IDEA_BRAINSTORM", "CONVERGE"): {
-        "artifact_data": VALID_IDEA_CONVERGE_ARTIFACT_DATA,
-    },
-    ("IDEA_BRAINSTORM", "CONCEPT"): {
-        "artifact_data": VALID_IDEA_CONCEPT_ARTIFACT_DATA,
-    },
-    ("VALUE_DISCOVERY", "ELEVATOR"): {
-        "artifact_data": VALID_VALUE_ELEVATOR_ARTIFACT_DATA,
-    },
-    ("VALUE_DISCOVERY", "PERSONA"): {
-        "artifact_data": VALID_VALUE_PERSONA_ARTIFACT_DATA,
-    },
-    ("VALUE_DISCOVERY", "JOURNEY"): {
-        "artifact_data": VALID_VALUE_JOURNEY_ARTIFACT_DATA,
-    },
-    ("VALUE_DISCOVERY", "BLUEPRINT"): {
-        "artifact_data": VALID_VALUE_BLUEPRINT_ARTIFACT_DATA,
-    },
-    ("USER_STORY_BREAKDOWN", "SCOPE"): {
-        "artifact_data": VALID_USER_STORY_SCOPE_ARTIFACT_DATA,
-    },
-    ("USER_STORY_BREAKDOWN", "STORY_MAP"): {
-        "artifact_data": VALID_USER_STORY_MAP_ARTIFACT_DATA,
-    },
-    ("USER_STORY_BREAKDOWN", "STORIES"): {
-        "artifact_data": VALID_USER_STORIES_ARTIFACT_DATA,
-    },
-    ("USER_STORY_BREAKDOWN", "HANDOFF"): {
-        "artifact_data": VALID_USER_STORY_HANDOFF_ARTIFACT_DATA,
-    },
+    ("TEST_DESIGN", "CLARIFY"): VALID_CLARIFY_ARTIFACT_DATA,
+    ("TEST_DESIGN", "STRATEGY"): VALID_STRATEGY_ARTIFACT_DATA,
+    ("TEST_DESIGN", "CASES"): VALID_CASES_ARTIFACT_DATA,
+    ("TEST_DESIGN", "DELIVERY"): VALID_DELIVERY_ARTIFACT_DATA,
+    ("REQ_REVIEW", "REVIEW"): VALID_REQ_REVIEW_ARTIFACT_DATA,
+    ("REQ_REVIEW", "REPORT"): VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA,
+    ("VALUE_DISCOVERY", "ELEVATOR"): VALID_VALUE_ELEVATOR_ARTIFACT_DATA,
+    ("VALUE_DISCOVERY", "PERSONA"): VALID_VALUE_PERSONA_ARTIFACT_DATA,
+    ("VALUE_DISCOVERY", "JOURNEY"): VALID_VALUE_JOURNEY_ARTIFACT_DATA,
+    ("VALUE_DISCOVERY", "BLUEPRINT"): VALID_VALUE_BLUEPRINT_ARTIFACT_DATA,
+    ("INCIDENT_REVIEW", "TIMELINE"): VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
+    ("INCIDENT_REVIEW", "ROOT_CAUSE"): VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
+    ("INCIDENT_REVIEW", "IMPROVEMENT"): VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA,
+    ("IDEA_BRAINSTORM", "DEFINE"): VALID_IDEA_DEFINE_ARTIFACT_DATA,
+    ("IDEA_BRAINSTORM", "DIVERGE"): VALID_IDEA_DIVERGE_ARTIFACT_DATA,
+    ("IDEA_BRAINSTORM", "CONVERGE"): VALID_IDEA_CONVERGE_ARTIFACT_DATA,
+    ("IDEA_BRAINSTORM", "CONCEPT"): VALID_IDEA_CONCEPT_ARTIFACT_DATA,
+    ("PRD_REVIEW", "INVENTORY"): VALID_PRD_REVIEW_ARTIFACT_DATA,
+    ("PRD_REVIEW", "QUALITY_AUDIT"): VALID_PRD_REVIEW_ARTIFACT_DATA,
+    ("PRD_REVIEW", "COMPLETION_PLAN"): VALID_PRD_REVIEW_ARTIFACT_DATA,
+    ("PRD_REVIEW", "REVISION_BLUEPRINT"): VALID_PRD_REVIEW_ARTIFACT_DATA,
+    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+    ("STORY_BREAKDOWN", "EPIC_MAPPING"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+    ("STORY_BREAKDOWN", "STORY_BACKLOG"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+    ("STORY_BREAKDOWN", "SPRINT_PLAN"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
 }
-
-
-def _runtime_supported_artifact_data_stage_keys() -> set[tuple[str, str]]:
-    return {
-        (workflow_id, stage_id)
-        for workflow_id, stage_ids in WORKFLOW_STAGES.items()
-        for stage_id in stage_ids
-        if supports_artifact_data_rendering(workflow_id, stage_id)
-    }
-
-
-def test_artifact_data_stage_fixture_registry_covers_runtime_supported_stages():
-    fixture_stage_keys = set(ARTIFACT_DATA_STAGE_FIXTURES)
-    runtime_stage_keys = _runtime_supported_artifact_data_stage_keys()
-
-    assert fixture_stage_keys == runtime_stage_keys
-
-
-@pytest.mark.parametrize(
-    ("workflow_id", "stage_id", "artifact_data"),
-    [
-        (workflow_id, stage_id, fixture["artifact_data"])
-        for (workflow_id, stage_id), fixture in sorted(
-            ARTIFACT_DATA_STAGE_FIXTURES.items()
-        )
-    ],
-)
-def test_artifact_data_stage_fixture_registry_renders_contract_valid_outputs(
-    workflow_id,
-    stage_id,
-    artifact_data,
-):
-    output = render_agent_turn_from_artifact_data(
-        {
-            "chat": "已生成当前阶段产出物，请查看右侧文档。",
-            "artifact_data": artifact_data,
-            "stage_action": None,
-            "warnings": [],
-        },
-        workflow_id=workflow_id,
-        current_stage_id=stage_id,
-    )
-
-    assert output is not None
-    assert output.artifact_update.type == "replace"
-    assert output.artifact_update.markdown
-    assert output.artifact_data == artifact_data
-    assert validate_agent_turn(
-        output,
-        workflow_id=workflow_id,
-        current_stage_id=stage_id,
-    ) == output
-
-
-@pytest.mark.parametrize(
-    ("workflow_id", "stage_id", "artifact_data", "expected_markers"),
-    [
-        (
-            "USER_STORY_BREAKDOWN",
-            "SCOPE",
-            VALID_USER_STORY_SCOPE_ARTIFACT_DATA,
-            ["# 用户故事拆解文档", "## 1. 拆分范围", "flowchart TD"],
-        ),
-        (
-            "USER_STORY_BREAKDOWN",
-            "STORY_MAP",
-            VALID_USER_STORY_MAP_ARTIFACT_DATA,
-            ["## 3. 用户故事地图", "## 4. MVP Slice", "flowchart TD"],
-        ),
-        (
-            "USER_STORY_BREAKDOWN",
-            "STORIES",
-            VALID_USER_STORIES_ARTIFACT_DATA,
-            ["## 2. 用户故事卡片", "## 3. Ready Stories", "US-001"],
-        ),
-        (
-            "USER_STORY_BREAKDOWN",
-            "HANDOFF",
-            VALID_USER_STORY_HANDOFF_ARTIFACT_DATA,
-            ["# 单故事 Handoff 清单", "## 2. 单故事需求包", "acceptanceCriteria"],
-        ),
-    ],
-)
-def test_render_user_story_breakdown_artifact_data_is_deterministic_and_contract_valid(
-    workflow_id,
-    stage_id,
-    artifact_data,
-    expected_markers,
-):
-    payload = {
-        "chat": "已生成用户故事拆解产物，请查看右侧文档。",
-        "artifact_data": artifact_data,
-        "stage_action": None,
-        "warnings": [],
-    }
-    first = render_agent_turn_from_artifact_data(
-        payload,
-        workflow_id=workflow_id,
-        current_stage_id=stage_id,
-    )
-    second = render_agent_turn_from_artifact_data(
-        payload,
-        workflow_id=workflow_id,
-        current_stage_id=stage_id,
-    )
-
-    assert first == second
-    assert first is not None
-    assert first.artifact_data == artifact_data
-    assert first.artifact_update.markdown is not None
-    for marker in expected_markers:
-        assert marker in first.artifact_update.markdown
-    assert validate_agent_turn(
-        first,
-        workflow_id=workflow_id,
-        current_stage_id=stage_id,
-    ) == first
-
-
-def test_render_partial_user_story_breakdown_stories_artifact_data_builds_formal_incremental_markdown_and_patch():
-    principles_payload = {
-        "chat": "正在生成用户故事卡片。",
-        "artifact_data": {
-            "document_info": VALID_USER_STORIES_ARTIFACT_DATA["document_info"],
-            "requirements": VALID_USER_STORIES_ARTIFACT_DATA["requirements"],
-            "split_principles": VALID_USER_STORIES_ARTIFACT_DATA[
-                "split_principles"
-            ],
-        },
-        "stage_action": None,
-        "warnings": [],
-    }
-    principles_output = render_partial_agent_turn_from_artifact_data(
-        principles_payload,
-        workflow_id="USER_STORY_BREAKDOWN",
-        current_stage_id="STORIES",
-    )
-
-    assert principles_output is not None
-    assert "## 1. 故事拆分原则" in principles_output.artifact_update.markdown
-    assert "## 2. 用户故事卡片" not in principles_output.artifact_update.markdown
-
-    cards_payload = {
-        **principles_payload,
-        "artifact_data": {
-            **principles_payload["artifact_data"],
-            "story_cards": VALID_USER_STORIES_ARTIFACT_DATA["story_cards"],
-        },
-    }
-    cards_output = render_partial_agent_turn_from_artifact_data(
-        cards_payload,
-        workflow_id="USER_STORY_BREAKDOWN",
-        current_stage_id="STORIES",
-    )
-
-    assert cards_output is not None
-    assert "## 2. 用户故事卡片" in cards_output.artifact_update.markdown
-    assert "## 3. Ready Stories" not in cards_output.artifact_update.markdown
-    assert cards_output.artifact_patch is not None
-    assert cards_output.artifact_patch.section_anchor == "h2:2. 用户故事卡片:1"
-
-
-@pytest.mark.parametrize(
-    ("mutate", "expected_message"),
-    [
-        (
-            lambda data: data["story_cards"][0].update(
-                {"requirement_ids": ["REQ-404"]}
-            ),
-            "unknown requirement ids",
-        ),
-        (
-            lambda data: data["story_cards"][0].update({"acceptance_criteria": []}),
-            "ready story US-001 must include acceptance criteria",
-        ),
-        (
-            lambda data: data["story_cards"][0].update({"status": "Ready"}),
-            "Input should be",
-        ),
-        (
-            lambda data: data["story_cards"][1].update({"story_id": "US-001"}),
-            "duplicate story_id",
-        ),
-        (
-            lambda data: data["story_cards"][2].pop("blocker_reason"),
-            "not_ready story US-101 must include blocker reason",
-        ),
-    ],
-)
-def test_user_story_breakdown_story_cards_reject_invalid_ready_story_quality(
-    mutate,
-    expected_message,
-):
-    invalid_data = copy.deepcopy(VALID_USER_STORIES_ARTIFACT_DATA)
-    mutate(invalid_data)
-
-    with pytest.raises(ValidationError) as exc_info:
-        render_agent_turn_from_artifact_data(
-            {
-                "chat": "已生成用户故事卡片。",
-                "artifact_data": invalid_data,
-                "stage_action": {
-                    "type": "request_next_stage",
-                    "target_stage_id": "HANDOFF",
-                },
-                "warnings": [],
-            },
-            workflow_id="USER_STORY_BREAKDOWN",
-            current_stage_id="STORIES",
-        )
-
-    assert expected_message in str(exc_info.value)

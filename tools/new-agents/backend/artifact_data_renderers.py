@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Any, Literal
+from typing import Any, Callable
 
 from pydantic import (
     BaseModel,
@@ -131,7 +131,6 @@ class IdeaSubproblem(StrictArtifactDataModel):
 
 
 class IdeaProblemLandscape(StrictArtifactDataModel):
-    root_problem_id: str
     root_problem: str
     subproblems: list[IdeaSubproblem] = Field(min_length=1)
 
@@ -139,7 +138,6 @@ class IdeaProblemLandscape(StrictArtifactDataModel):
 class IdeaEvidenceItem(StrictArtifactDataModel):
     evidence_id: str
     related_problem: str
-    related_problem_ids: list[str] = Field(min_length=1)
     source: str
     evidence_level: str
     validation_action: str
@@ -190,27 +188,6 @@ class IdeaDefineArtifactData(StrictArtifactDataModel):
         if len(problem_ids) != len(self.problem_landscape.subproblems):
             raise ValueError("problem_landscape contains duplicate problem_id")
 
-        root_problem_id = self.problem_landscape.root_problem_id
-        if root_problem_id in problem_ids:
-            raise ValueError(
-                "problem_landscape.root_problem_id duplicates subproblem problem_id"
-            )
-
-        known_problem_ids = {root_problem_id} | problem_ids
-        unknown_problem_ids = sorted(
-            {
-                problem_id
-                for item in self.evidence_items
-                for problem_id in item.related_problem_ids
-                if problem_id not in known_problem_ids
-            }
-        )
-        if unknown_problem_ids:
-            raise ValueError(
-                "evidence_items references unknown problem ids: "
-                + ", ".join(unknown_problem_ids)
-            )
-
         unknown_fit_evidence_ids = sorted(
             {
                 evidence_id
@@ -225,26 +202,17 @@ class IdeaDefineArtifactData(StrictArtifactDataModel):
                 + ", ".join(unknown_fit_evidence_ids)
             )
 
-        root_evidence_ids = {
-            item.evidence_id
-            for item in self.evidence_items
-            if root_problem_id in item.related_problem_ids
-        }
-        if not root_evidence_ids:
-            raise ValueError(
-                "problem_landscape.root_problem_id must be covered by evidence_items"
-            )
-
-        fit_root_evidence_ids = {
-            evidence_id
+        root_problem = self.problem_landscape.root_problem
+        root_problem_covered = any(
+            root_problem in item.related_problem for item in self.evidence_items
+        ) or any(
+            root_problem in item.evidence_or_assumption
             for item in self.problem_user_fit
-            for evidence_id in item.evidence_ids
-            if evidence_id in root_evidence_ids
-        }
-        if not fit_root_evidence_ids:
+        )
+        if not root_problem_covered:
             raise ValueError(
-                "problem_user_fit must reference evidence covering "
-                "problem_landscape.root_problem_id"
+                "problem_landscape.root_problem must be covered by evidence_items "
+                "or problem_user_fit"
             )
 
         if not any(item.checked for item in self.stage_gate):
@@ -314,10 +282,45 @@ class IdeaDivergeArtifactData(StrictArtifactDataModel):
 
     @model_validator(mode="after")
     def validate_idea_diverge_consistency(self) -> "IdeaDivergeArtifactData":
-        idea_ids = _validate_idea_card_ids(self.idea_cards)
-        _validate_idea_source_references(self.idea_sources, idea_ids)
-        _validate_idea_landscape_references(self.idea_landscape, idea_ids)
-        _validate_idea_parked_record_ids(self.parked_or_excluded)
+        idea_ids = {item.idea_id for item in self.idea_cards}
+        if len(idea_ids) != len(self.idea_cards):
+            raise ValueError("idea_cards contains duplicate idea_id")
+
+        source_ids = {item.source_id for item in self.idea_sources}
+        if len(source_ids) != len(self.idea_sources):
+            raise ValueError("idea_sources contains duplicate source_id")
+
+        record_ids = {item.record_id for item in self.parked_or_excluded}
+        if len(record_ids) != len(self.parked_or_excluded):
+            raise ValueError("parked_or_excluded contains duplicate record_id")
+
+        unknown_landscape_idea_ids = sorted(
+            {
+                idea_id
+                for group in self.idea_landscape.groups
+                for idea_id in group.idea_ids
+                if idea_id not in idea_ids
+            }
+        )
+        if unknown_landscape_idea_ids:
+            raise ValueError(
+                "idea_landscape references unknown idea ids: "
+                + ", ".join(unknown_landscape_idea_ids)
+            )
+
+        unknown_source_idea_ids = sorted(
+            {
+                idea_id
+                for source in self.idea_sources
+                for idea_id in source.idea_ids
+                if idea_id not in idea_ids
+            }
+        )
+        if unknown_source_idea_ids:
+            raise ValueError(
+                "idea_sources references unknown idea ids: "
+                + ", ".join(unknown_source_idea_ids)
+            )
 
         if not any(item.checked for item in self.stage_gate):
             raise ValueError("stage_gate must include at least one checked item")
@@ -403,178 +406,89 @@ class IdeaConvergeArtifactData(StrictArtifactDataModel):
 
     @model_validator(mode="after")
     def validate_idea_converge_consistency(self) -> "IdeaConvergeArtifactData":
-        idea_ids = _validate_idea_ice_evaluations(self.ice_evaluations)
-        _validate_idea_decision_matrix_references(
-            self.decision_matrix,
-            self.ice_evaluations,
-            idea_ids,
+        idea_ids = {item.idea_id for item in self.ice_evaluations}
+        if len(idea_ids) != len(self.ice_evaluations):
+            raise ValueError("ice_evaluations contains duplicate idea_id")
+
+        ranks = {item.rank for item in self.ice_evaluations}
+        if len(ranks) != len(self.ice_evaluations):
+            raise ValueError("ice_evaluations contains duplicate rank")
+
+        for item in self.ice_evaluations:
+            expected_score = item.impact * item.confidence / item.effort
+            if abs(item.ice_score - expected_score) > 0.01:
+                raise ValueError(
+                    f"ice_evaluations.{item.idea_id}.ice_score must equal "
+                    "impact * confidence / effort"
+                )
+
+        recommended_idea_id = self.decision_matrix.recommended_idea_id
+        if recommended_idea_id not in idea_ids:
+            raise ValueError("decision_matrix.recommended_idea_id is unknown")
+
+        decision_idea_ids = {
+            item.idea_id for item in self.decision_matrix.decision_items
+        }
+        unknown_decision_idea_ids = sorted(decision_idea_ids - idea_ids)
+        if unknown_decision_idea_ids:
+            raise ValueError(
+                "decision_matrix references unknown idea ids: "
+                + ", ".join(unknown_decision_idea_ids)
+            )
+
+        recommended_evaluation = next(
+            item for item in self.ice_evaluations if item.idea_id == recommended_idea_id
         )
-        _validate_idea_validation_experiment_references(
-            self.validation_experiments,
-            idea_ids,
+        recommended_decision = next(
+            (
+                item
+                for item in self.decision_matrix.decision_items
+                if item.idea_id == recommended_idea_id
+            ),
+            None,
         )
-        _validate_idea_merge_path_references(self.merge_paths, idea_ids)
+        if (
+            "推荐" not in recommended_evaluation.conclusion
+            or recommended_decision is None
+            or "推荐" not in recommended_decision.decision
+        ):
+            raise ValueError(
+                "recommended idea must match a recommended ICE evaluation "
+                "and decision item"
+            )
+
+        unknown_experiment_idea_ids = sorted(
+            {
+                idea_id
+                for experiment in self.validation_experiments
+                for idea_id in experiment.idea_ids
+                if idea_id not in idea_ids
+            }
+        )
+        if unknown_experiment_idea_ids:
+            raise ValueError(
+                "validation_experiments references unknown idea ids: "
+                + ", ".join(unknown_experiment_idea_ids)
+            )
+
+        unknown_merge_idea_ids = sorted(
+            {
+                idea_id
+                for path in self.merge_paths
+                for idea_id in path.source_idea_ids
+                if idea_id not in idea_ids
+            }
+        )
+        if unknown_merge_idea_ids:
+            raise ValueError(
+                "merge_paths references unknown idea ids: "
+                + ", ".join(unknown_merge_idea_ids)
+            )
 
         if not any(item.checked for item in self.stage_gate):
             raise ValueError("stage_gate must include at least one checked item")
 
         return self
-
-
-def _validate_idea_card_ids(cards: list[IdeaCard]) -> set[str]:
-    idea_ids = {item.idea_id for item in cards}
-    if len(idea_ids) != len(cards):
-        raise ValueError("idea_cards contains duplicate idea_id")
-    return idea_ids
-
-
-def _validate_idea_landscape_references(
-    landscape: IdeaDivergeLandscape,
-    idea_ids: set[str],
-) -> None:
-    unknown_landscape_idea_ids = sorted(
-        {
-            idea_id
-            for group in landscape.groups
-            for idea_id in group.idea_ids
-            if idea_id not in idea_ids
-        }
-    )
-    if unknown_landscape_idea_ids:
-        raise ValueError(
-            "idea_landscape references unknown idea ids: "
-            + ", ".join(unknown_landscape_idea_ids)
-        )
-
-
-def _validate_idea_source_references(
-    sources: list[IdeaSource],
-    idea_ids: set[str],
-) -> None:
-    source_ids = {item.source_id for item in sources}
-    if len(source_ids) != len(sources):
-        raise ValueError("idea_sources contains duplicate source_id")
-
-    unknown_source_idea_ids = sorted(
-        {
-            idea_id
-            for source in sources
-            for idea_id in source.idea_ids
-            if idea_id not in idea_ids
-        }
-    )
-    if unknown_source_idea_ids:
-        raise ValueError(
-            "idea_sources references unknown idea ids: "
-            + ", ".join(unknown_source_idea_ids)
-        )
-
-
-def _validate_idea_parked_record_ids(
-    records: list[IdeaParkedOrExcludedRecord],
-) -> None:
-    record_ids = {item.record_id for item in records}
-    if len(record_ids) != len(records):
-        raise ValueError("parked_or_excluded contains duplicate record_id")
-
-
-def _validate_idea_ice_evaluations(
-    evaluations: list[IdeaIceEvaluation],
-) -> set[str]:
-    idea_ids = {item.idea_id for item in evaluations}
-    if len(idea_ids) != len(evaluations):
-        raise ValueError("ice_evaluations contains duplicate idea_id")
-
-    ranks = {item.rank for item in evaluations}
-    if len(ranks) != len(evaluations):
-        raise ValueError("ice_evaluations contains duplicate rank")
-
-    for item in evaluations:
-        expected_score = item.impact * item.confidence / item.effort
-        if abs(item.ice_score - expected_score) > 0.01:
-            raise ValueError(
-                f"ice_evaluations.{item.idea_id}.ice_score must equal "
-                "impact * confidence / effort"
-            )
-
-    return idea_ids
-
-
-def _validate_idea_decision_matrix_references(
-    matrix: IdeaDecisionMatrix,
-    evaluations: list[IdeaIceEvaluation],
-    idea_ids: set[str],
-) -> None:
-    recommended_idea_id = matrix.recommended_idea_id
-    if recommended_idea_id not in idea_ids:
-        raise ValueError("decision_matrix.recommended_idea_id is unknown")
-
-    decision_idea_ids = {item.idea_id for item in matrix.decision_items}
-    unknown_decision_idea_ids = sorted(decision_idea_ids - idea_ids)
-    if unknown_decision_idea_ids:
-        raise ValueError(
-            "decision_matrix references unknown idea ids: "
-            + ", ".join(unknown_decision_idea_ids)
-        )
-
-    recommended_evaluation = next(
-        item for item in evaluations if item.idea_id == recommended_idea_id
-    )
-    recommended_decision = next(
-        (
-            item
-            for item in matrix.decision_items
-            if item.idea_id == recommended_idea_id
-        ),
-        None,
-    )
-    if (
-        "推荐" not in recommended_evaluation.conclusion
-        or recommended_decision is None
-        or "推荐" not in recommended_decision.decision
-    ):
-        raise ValueError(
-            "recommended idea must match a recommended ICE evaluation "
-            "and decision item"
-        )
-
-
-def _validate_idea_validation_experiment_references(
-    experiments: list[IdeaValidationExperiment],
-    idea_ids: set[str],
-) -> None:
-    unknown_experiment_idea_ids = sorted(
-        {
-            idea_id
-            for experiment in experiments
-            for idea_id in experiment.idea_ids
-            if idea_id not in idea_ids
-        }
-    )
-    if unknown_experiment_idea_ids:
-        raise ValueError(
-            "validation_experiments references unknown idea ids: "
-            + ", ".join(unknown_experiment_idea_ids)
-        )
-
-
-def _validate_idea_merge_path_references(
-    merge_paths: list[IdeaMergePath],
-    idea_ids: set[str],
-) -> None:
-    unknown_merge_idea_ids = sorted(
-        {
-            idea_id
-            for path in merge_paths
-            for idea_id in path.source_idea_ids
-            if idea_id not in idea_ids
-        }
-    )
-    if unknown_merge_idea_ids:
-        raise ValueError(
-            "merge_paths references unknown idea ids: "
-            + ", ".join(unknown_merge_idea_ids)
-        )
 
 
 class IdeaPositioningStatement(StrictArtifactDataModel):
@@ -1218,7 +1132,7 @@ class StrategyRisk(StrictArtifactDataModel):
     severity: int = Field(ge=1, le=5)
     occurrence: int = Field(ge=1, le=5)
     detection: int = Field(ge=1, le=5)
-    rpn: int | None = Field(default=None, ge=1, le=125)
+    rpn: int = Field(ge=1, le=125)
     mitigation: str
     coverage: str
     status: str
@@ -1226,9 +1140,7 @@ class StrategyRisk(StrictArtifactDataModel):
     @model_validator(mode="after")
     def validate_rpn(self) -> "StrategyRisk":
         expected = self.severity * self.occurrence * self.detection
-        if self.rpn is None:
-            self.rpn = expected
-        elif self.rpn != expected:
+        if self.rpn != expected:
             raise ValueError(
                 "rpn must equal severity * occurrence * detection " f"({expected})"
             )
@@ -1274,118 +1186,6 @@ class Tradeoff(StrictArtifactDataModel):
     status: str
 
 
-_STRATEGY_REFERENCE_PATTERN = re.compile(r"\b(QG|R|TS|TP)-\d+\b")
-
-
-def _extract_strategy_references(value: str) -> dict[str, set[str]]:
-    references: dict[str, set[str]] = {
-        "QG": set(),
-        "R": set(),
-        "TS": set(),
-        "TP": set(),
-    }
-    for match in _STRATEGY_REFERENCE_PATTERN.finditer(value):
-        references[match.group(1)].add(match.group(0))
-    return references
-
-
-def _validate_unique_strategy_ids(label: str, values: list[str]) -> None:
-    if len(set(values)) != len(values):
-        raise ValueError(f"{label} contains duplicate ids")
-
-
-def _validate_strategy_reference_field(
-    field_label: str,
-    value: str,
-    allowed_prefixes: set[str],
-    known_ids_by_prefix: dict[str, set[str]],
-) -> None:
-    references = _extract_strategy_references(value)
-    used_allowed: set[str] = set()
-    unknown: list[str] = []
-    for prefix in allowed_prefixes:
-        used_allowed.update(references[prefix])
-        unknown.extend(
-            sorted(
-                item
-                for item in references[prefix]
-                if item not in known_ids_by_prefix[prefix]
-            )
-        )
-    if not used_allowed:
-        raise ValueError(
-            f"{field_label} must reference existing "
-            f"{'/'.join(sorted(allowed_prefixes))} ids"
-        )
-    if unknown:
-        raise ValueError(
-            f"{field_label} references unknown ids: {', '.join(unknown)}"
-        )
-
-
-def _validate_strategy_references(
-    quality_goals: list[QualityGoal],
-    risks: list[StrategyRisk],
-    test_techniques: list[TestTechnique],
-    test_layers: list[TestLayer],
-    test_points: list[TestPoint],
-) -> None:
-    goal_ids = [item.goal_id for item in quality_goals]
-    risk_ids = [item.risk_id for item in risks]
-    technique_ids = [item.technique_id for item in test_techniques]
-    point_ids = [item.point_id for item in test_points]
-    _validate_unique_strategy_ids("quality_goals", goal_ids)
-    _validate_unique_strategy_ids("risks", risk_ids)
-    _validate_unique_strategy_ids("test_techniques", technique_ids)
-    _validate_unique_strategy_ids("test_points", point_ids)
-
-    known_ids_by_prefix = {
-        "QG": set(goal_ids),
-        "R": set(risk_ids),
-        "TS": set(technique_ids),
-        "TP": set(point_ids),
-    }
-    for item in test_techniques:
-        _validate_strategy_reference_field(
-            "test_techniques.target",
-            item.target,
-            {"QG", "R", "TP"},
-            known_ids_by_prefix,
-        )
-        _validate_strategy_reference_field(
-            "test_techniques.applies_to",
-            item.applies_to,
-            {"R", "TP"},
-            known_ids_by_prefix,
-        )
-    for item in test_layers:
-        _validate_strategy_reference_field(
-            "test_layers.related",
-            item.related,
-            {"QG", "R", "TP"},
-            known_ids_by_prefix,
-        )
-    for item in test_points:
-        _validate_strategy_reference_field(
-            "test_points.quality_goal",
-            item.quality_goal,
-            {"QG"},
-            known_ids_by_prefix,
-        )
-        _validate_strategy_reference_field(
-            "test_points.risk",
-            item.risk,
-            {"R"},
-            known_ids_by_prefix,
-        )
-        _validate_strategy_reference_field(
-            "test_points.technique",
-            item.technique,
-            {"TS"},
-            known_ids_by_prefix,
-        )
-
-
 class StrategyArtifactData(StrictArtifactDataModel):
     document_info: DocumentInfo
     strategy_summary: StrategySummary
@@ -1396,17 +1196,6 @@ class StrategyArtifactData(StrictArtifactDataModel):
     test_points: list[TestPoint] = Field(min_length=1)
     tradeoffs: list[Tradeoff] = Field(min_length=1)
     stage_gate: list[StageGateCheck] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def validate_strategy_references(self) -> "StrategyArtifactData":
-        _validate_strategy_references(
-            self.quality_goals,
-            self.risks,
-            self.test_techniques,
-            self.test_layers,
-            self.test_points,
-        )
-        return self
 
 
 class CaseStatistics(StrictArtifactDataModel):
@@ -1483,86 +1272,9 @@ class OpenQuestion(StrictArtifactDataModel):
     status: str
 
 
-def _flatten_cases(case_groups: list[CaseGroup]) -> list[TestCaseItem]:
-    return [case for group in case_groups for case in group.cases]
-
-
-def _derive_case_statistics(case_groups: list[CaseGroup]) -> CaseStatistics:
-    cases = _flatten_cases(case_groups)
-    return CaseStatistics(
-        total=len(cases),
-        p0_count=sum(1 for case in cases if case.priority == "P0"),
-        p1_count=sum(1 for case in cases if case.priority == "P1"),
-        p2_count=sum(1 for case in cases if case.priority == "P2"),
-    )
-
-
-def _collect_case_ids(case_groups: list[CaseGroup]) -> set[str]:
-    return {case.case_id for case in _flatten_cases(case_groups)}
-
-
-def _validate_unique_case_ids(case_groups: list[CaseGroup]) -> None:
-    cases = _flatten_cases(case_groups)
-    case_ids = _collect_case_ids(case_groups)
-    if len(case_ids) != len(cases):
-        raise ValueError("case_groups contains duplicate case_id")
-
-
-def _validate_case_statistics_matches(
-    actual: CaseStatistics,
-    expected: CaseStatistics,
-) -> None:
-    if (
-        actual.total != expected.total
-        or actual.p0_count != expected.p0_count
-        or actual.p1_count != expected.p1_count
-        or actual.p2_count != expected.p2_count
-    ):
-        raise ValueError(
-            "case_statistics must match case_groups totals and P0/P1/P2 counts"
-        )
-
-
-def _validate_automation_candidate_case_references(
-    automation_candidates: list[AutomationCandidate],
-    case_ids: set[str],
-) -> None:
-    unknown_references = sorted(
-        {
-            candidate.case_id
-            for candidate in automation_candidates
-            if candidate.case_id not in case_ids
-        }
-    )
-    if unknown_references:
-        raise ValueError(
-            "automation_candidates references unknown case ids: "
-            + ", ".join(unknown_references)
-        )
-
-
-def _validate_coverage_trace_case_references(
-    coverage_trace: list[CoverageTraceItem],
-    case_ids: set[str],
-) -> None:
-    unknown_references = sorted(
-        {
-            case_id
-            for trace in coverage_trace
-            for case_id in trace.covered_cases
-            if case_id not in case_ids
-        }
-    )
-    if unknown_references:
-        raise ValueError(
-            "coverage_trace references unknown case ids: "
-            + ", ".join(unknown_references)
-        )
-
-
 class CasesArtifactData(StrictArtifactDataModel):
     document_info: DocumentInfo
-    case_statistics: CaseStatistics | None = None
+    case_statistics: CaseStatistics
     design_bases: list[DesignBasis] = Field(min_length=1)
     case_groups: list[CaseGroup] = Field(min_length=1)
     test_data_environments: list[TestDataEnvironment] = Field(min_length=1)
@@ -1573,22 +1285,39 @@ class CasesArtifactData(StrictArtifactDataModel):
 
     @model_validator(mode="after")
     def validate_case_consistency(self) -> "CasesArtifactData":
-        _validate_unique_case_ids(self.case_groups)
-        derived_statistics = _derive_case_statistics(self.case_groups)
-        if self.case_statistics is None:
-            self.case_statistics = derived_statistics
-        else:
-            _validate_case_statistics_matches(
-                self.case_statistics,
-                derived_statistics,
+        cases = [case for group in self.case_groups for case in group.cases]
+        case_ids = {case.case_id for case in cases}
+        if len(case_ids) != len(cases):
+            raise ValueError("case_groups contains duplicate case_id")
+
+        priority_counts = {
+            "P0": sum(1 for case in cases if case.priority == "P0"),
+            "P1": sum(1 for case in cases if case.priority == "P1"),
+            "P2": sum(1 for case in cases if case.priority == "P2"),
+        }
+        if (
+            self.case_statistics.total != len(cases)
+            or self.case_statistics.p0_count != priority_counts["P0"]
+            or self.case_statistics.p1_count != priority_counts["P1"]
+            or self.case_statistics.p2_count != priority_counts["P2"]
+        ):
+            raise ValueError(
+                "case_statistics must match case_groups totals and P0/P1/P2 counts"
             )
 
-        case_ids = _collect_case_ids(self.case_groups)
-        _validate_automation_candidate_case_references(
-            self.automation_candidates,
-            case_ids,
+        unknown_references = sorted(
+            {
+                case_id
+                for trace in self.coverage_trace
+                for case_id in trace.covered_cases
+                if case_id not in case_ids
+            }
         )
-        _validate_coverage_trace_case_references(self.coverage_trace, case_ids)
+        if unknown_references:
+            raise ValueError(
+                "coverage_trace references unknown case ids: "
+                + ", ".join(unknown_references)
+            )
         return self
 
 
@@ -1991,30 +1720,9 @@ class ValueScore(StrictArtifactDataModel):
 
 
 class ValueScoreSummary(StrictArtifactDataModel):
-    total_score: int | None = Field(default=None, ge=1)
-    average_score: float | None = Field(default=None, ge=1, le=5)
+    total_score: int = Field(ge=1)
+    average_score: float = Field(ge=1, le=5)
     judgement: str
-
-
-def _normalize_value_score_summary(
-    score_items: list[ValueScore],
-    summary: ValueScoreSummary,
-) -> ValueScoreSummary:
-    total_score = sum(item.score for item in score_items)
-    if summary.total_score is None:
-        summary.total_score = total_score
-    elif summary.total_score != total_score:
-        raise ValueError("score_summary.total_score must equal score_matrix score sum")
-
-    expected_average = round(total_score / len(score_items), 2)
-    if summary.average_score is None:
-        summary.average_score = expected_average
-    elif abs(summary.average_score - expected_average) > 0.001:
-        raise ValueError(
-            "score_summary.average_score must equal score_matrix average score "
-            f"({expected_average})"
-        )
-    return summary
 
 
 class ValueAssumption(StrictArtifactDataModel):
@@ -2060,7 +1768,18 @@ class ValueDiscoveryElevatorArtifactData(StrictArtifactDataModel):
                 + ", ".join(unknown_references)
             )
 
-        _normalize_value_score_summary(self.score_matrix, self.score_summary)
+        total_score = sum(item.score for item in self.score_matrix)
+        if self.score_summary.total_score != total_score:
+            raise ValueError(
+                "score_summary.total_score must equal score_matrix score sum"
+            )
+
+        expected_average = round(total_score / len(self.score_matrix), 2)
+        if abs(self.score_summary.average_score - expected_average) > 0.001:
+            raise ValueError(
+                "score_summary.average_score must equal score_matrix average score "
+                f"({expected_average})"
+            )
         return self
 
 
@@ -2549,538 +2268,301 @@ class ValueDiscoveryBlueprintArtifactData(StrictArtifactDataModel):
         return self
 
 
-class UserStoryRequirementRef(StrictArtifactDataModel):
-    requirement_id: str
-    name: str
-    priority: str
-    status: str
-
-
-class UserStoryScopeRequirement(StrictArtifactDataModel):
-    requirement_id: str
-    name: str
-    user_value: str
-    priority: str
-    split_decision: str
-    status: str
-
-
-class UserStoryScopeTrace(StrictArtifactDataModel):
-    requirement_id: str
+class PrdInventoryItem(StrictArtifactDataModel):
+    item_id: str
+    category: str
+    content: str
     source: str
-    target_user: str
-    scenario: str
-    acceptance_hint: str
+    evidence_level: str
     status: str
 
 
-class UserStoryOutOfScopeItem(StrictArtifactDataModel):
-    requirement_id: str
-    item: str
-    reason: str
-    reentry_condition: str
-    status: str
-
-
-class UserStoryBlockingQuestion(StrictArtifactDataModel):
-    question_id: str
-    requirement_id: str
-    question: str
+class PrdQualityFinding(StrictArtifactDataModel):
+    finding_id: str
+    dimension: str
+    problem: str
+    severity: str
+    blocking: str
+    evidence: str
     impact: str
-    owner: str
+    recommendation: str
     status: str
 
 
-class UserStoryScopeArtifactData(StrictArtifactDataModel):
+class PrdCompletionAction(StrictArtifactDataModel):
+    action_id: str
+    finding_ids: list[str] = Field(min_length=1)
+    action: str
+    priority: str
+    owner: str
+    verification_method: str
+    review_condition: str
+    status: str
+
+
+class PrdRevisionSection(StrictArtifactDataModel):
+    section_id: str
+    title: str
+    rewrite_goal: str
+    recommended_content: str
+    acceptance_note: str
+    status: str
+
+
+class PrdAcceptanceCriterion(StrictArtifactDataModel):
+    criterion_id: str
+    related_section_ids: list[str] = Field(min_length=1)
+    scenario: str
+    given: str
+    when: str
+    then: str
+    testability_level: str
+    status: str
+
+
+class PrdHandoffInput(StrictArtifactDataModel):
+    input_id: str
+    related_section_ids: list[str] = Field(min_length=1)
+    target_workflow: str
+    content: str
+    risk: str
+    status: str
+
+
+class PrdReviewArtifactData(StrictArtifactDataModel):
     document_info: DocumentInfo
-    in_scope_requirements: list[UserStoryScopeRequirement] = Field(min_length=1)
-    traceability_index: list[UserStoryScopeTrace] = Field(min_length=1)
-    out_of_scope_items: list[UserStoryOutOfScopeItem] = Field(min_length=1)
-    blocking_questions: list[UserStoryBlockingQuestion] = Field(min_length=1)
+    prd_inventory: list[PrdInventoryItem] = Field(min_length=1)
+    quality_findings: list[PrdQualityFinding] = Field(min_length=1)
+    completion_actions: list[PrdCompletionAction] = Field(min_length=1)
+    revision_sections: list[PrdRevisionSection] = Field(min_length=1)
+    acceptance_criteria: list[PrdAcceptanceCriterion] = Field(min_length=1)
+    handoff_inputs: list[PrdHandoffInput] = Field(min_length=1)
     stage_gate: list[StageGateCheck] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_scope_consistency(self) -> "UserStoryScopeArtifactData":
-        in_scope_ids = _unique_ids(
-            [item.requirement_id for item in self.in_scope_requirements],
-            "in_scope_requirements",
-            "requirement_id",
-        )
-        out_scope_ids = _unique_ids(
-            [item.requirement_id for item in self.out_of_scope_items],
-            "out_of_scope_items",
-            "requirement_id",
-        )
-        trace_ids = _unique_ids(
-            [item.requirement_id for item in self.traceability_index],
-            "traceability_index",
-            "requirement_id",
-        )
-        unknown_trace_ids = sorted(trace_ids - in_scope_ids)
-        if unknown_trace_ids:
-            raise ValueError(
-                "traceability_index references unknown requirement ids: "
-                + ", ".join(unknown_trace_ids)
-            )
-        known_requirement_ids = in_scope_ids | out_scope_ids
-        unknown_question_ids = sorted(
+    def validate_prd_review_consistency(self) -> "PrdReviewArtifactData":
+        finding_ids = {item.finding_id for item in self.quality_findings}
+        if len(finding_ids) != len(self.quality_findings):
+            raise ValueError("quality_findings contains duplicate finding_id")
+
+        action_ids = {item.action_id for item in self.completion_actions}
+        if len(action_ids) != len(self.completion_actions):
+            raise ValueError("completion_actions contains duplicate action_id")
+
+        section_ids = {item.section_id for item in self.revision_sections}
+        if len(section_ids) != len(self.revision_sections):
+            raise ValueError("revision_sections contains duplicate section_id")
+
+        unknown_finding_ids = sorted(
             {
-                item.requirement_id
-                for item in self.blocking_questions
-                if item.requirement_id not in known_requirement_ids
+                finding_id
+                for action in self.completion_actions
+                for finding_id in action.finding_ids
+                if finding_id not in finding_ids
             }
         )
-        if unknown_question_ids:
+        if unknown_finding_ids:
             raise ValueError(
-                "blocking_questions references unknown requirement ids: "
-                + ", ".join(unknown_question_ids)
+                "completion_actions references unknown finding ids: "
+                + ", ".join(unknown_finding_ids)
             )
-        _unique_ids(
-            [item.question_id for item in self.blocking_questions],
-            "blocking_questions",
-            "question_id",
+
+        unknown_section_ids = sorted(
+            {
+                section_id
+                for criterion in self.acceptance_criteria
+                for section_id in criterion.related_section_ids
+                if section_id not in section_ids
+            }
+            | {
+                section_id
+                for handoff in self.handoff_inputs
+                for section_id in handoff.related_section_ids
+                if section_id not in section_ids
+            }
         )
+        if unknown_section_ids:
+            raise ValueError(
+                "acceptance_criteria or handoff_inputs references unknown section ids: "
+                + ", ".join(unknown_section_ids)
+            )
+
+        if not any(item.checked for item in self.stage_gate):
+            raise ValueError("stage_gate must include at least one checked item")
+
         return self
 
 
-class UserStoryActivity(StrictArtifactDataModel):
-    activity_id: str
-    activity: str
-    user_goal: str
-    requirement_ids: list[str] = Field(min_length=1)
-    priority: str
 
 
-class UserStoryTask(StrictArtifactDataModel):
-    task_id: str
-    activity_id: str
-    task: str
-    success_result: str
-    requirement_ids: list[str] = Field(min_length=1)
-    status: str
-
-
-class UserStoryMapItem(StrictArtifactDataModel):
-    story_id: str
-    activity_id: str
-    task_id: str
-    title: str
-    requirement_ids: list[str] = Field(min_length=1)
-    slice_id: str
-    status: str
-
-
-class UserStoryMvpSlice(StrictArtifactDataModel):
-    slice_id: str
-    story_ids: list[str] = Field(min_length=1)
-    business_outcome: str
-    excluded_items: list[str] = Field(min_length=1)
-    acceptance: str
-
-
-class UserStoryReleaseSlice(StrictArtifactDataModel):
-    slice_id: str
-    story_ids: list[str] = Field(min_length=1)
-    release_goal: str
-    dependencies: list[str] = Field(min_length=1)
-    status: str
-
-
-class UserStoryMapArtifactData(StrictArtifactDataModel):
-    document_info: DocumentInfo
-    requirements: list[UserStoryRequirementRef] = Field(min_length=1)
-    activities: list[UserStoryActivity] = Field(min_length=1)
-    tasks: list[UserStoryTask] = Field(min_length=1)
-    story_map_items: list[UserStoryMapItem] = Field(min_length=1)
-    mvp_slices: list[UserStoryMvpSlice] = Field(min_length=1)
-    release_slices: list[UserStoryReleaseSlice] = Field(min_length=1)
-    stage_gate: list[StageGateCheck] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def validate_story_map_consistency(self) -> "UserStoryMapArtifactData":
-        requirement_ids = _unique_ids(
-            [item.requirement_id for item in self.requirements],
-            "requirements",
-            "requirement_id",
-        )
-        activity_ids = _unique_ids(
-            [item.activity_id for item in self.activities],
-            "activities",
-            "activity_id",
-        )
-        task_ids = _unique_ids(
-            [item.task_id for item in self.tasks],
-            "tasks",
-            "task_id",
-        )
-        story_ids = _unique_ids(
-            [item.story_id for item in self.story_map_items],
-            "story_map_items",
-            "story_id",
-        )
-        slice_ids = _unique_ids(
-            [item.slice_id for item in self.mvp_slices + self.release_slices],
-            "slices",
-            "slice_id",
-        )
-        _validate_known_ids(
-            {
-                requirement_id
-                for item in self.activities
-                for requirement_id in item.requirement_ids
-            },
-            requirement_ids,
-            "activities references unknown requirement ids",
-        )
-        _validate_known_ids(
-            {item.activity_id for item in self.tasks},
-            activity_ids,
-            "tasks references unknown activity ids",
-        )
-        _validate_known_ids(
-            {
-                requirement_id
-                for item in self.tasks
-                for requirement_id in item.requirement_ids
-            },
-            requirement_ids,
-            "tasks references unknown requirement ids",
-        )
-        _validate_known_ids(
-            {item.activity_id for item in self.story_map_items},
-            activity_ids,
-            "story_map_items references unknown activity ids",
-        )
-        _validate_known_ids(
-            {item.task_id for item in self.story_map_items},
-            task_ids,
-            "story_map_items references unknown task ids",
-        )
-        _validate_known_ids(
-            {
-                requirement_id
-                for item in self.story_map_items
-                for requirement_id in item.requirement_ids
-            },
-            requirement_ids,
-            "story_map_items references unknown requirement ids",
-        )
-        _validate_known_ids(
-            {item.slice_id for item in self.story_map_items},
-            slice_ids,
-            "story_map_items references unknown slice ids",
-        )
-        _validate_known_ids(
-            {
-                story_id
-                for item in self.mvp_slices + self.release_slices
-                for story_id in item.story_ids
-            },
-            story_ids,
-            "slices reference unknown story ids",
-        )
-        return self
-
-
-class UserStorySplitPrinciple(StrictArtifactDataModel):
-    principle: str
-    applied: str
-    anti_pattern: str
-
-
-class UserStoryCard(StrictArtifactDataModel):
-    story_id: str
-    title: str
-    user_role: str
-    user_goal: str
-    benefit: str
-    requirement_ids: list[str] = Field(min_length=1)
-    activity_id: str
-    task_id: str
-    business_rules: list[str] = Field(default_factory=list)
-    acceptance_criteria: list[str] = Field(default_factory=list)
-    non_functional_notes: list[str] = Field(default_factory=list)
-    out_of_scope: list[str] = Field(default_factory=list)
-    dependencies: list[str] = Field(default_factory=list)
-    open_questions: list[str] = Field(default_factory=list)
-    status: Literal["ready", "not_ready"]
-    blocker_reason: str | None = None
-
-
-class UserStoryReadySummary(StrictArtifactDataModel):
-    story_id: str
-    ready_reason: str
-    handoff_summary: str
-    acceptance_criteria_count: int = Field(ge=1)
-    concerns: str
-
-
-class UserStoryNotReadySummary(StrictArtifactDataModel):
-    story_id: str
-    requirement_ids: list[str] = Field(min_length=1)
-    blocker_reason: str
-    questions: list[str] = Field(min_length=1)
-    suggested_next_step: str
-    status: Literal["not_ready"]
-
-
-class UserStoryOpenQuestion(StrictArtifactDataModel):
-    question_id: str
-    story_id: str
-    question: str
-    decision_impact: str
-    owner: str
-    status: str
-
-
-class UserStoriesArtifactData(StrictArtifactDataModel):
-    document_info: DocumentInfo
-    requirements: list[UserStoryRequirementRef] = Field(min_length=1)
-    split_principles: list[UserStorySplitPrinciple] = Field(min_length=1)
-    story_cards: list[UserStoryCard] = Field(min_length=1)
-    ready_story_summaries: list[UserStoryReadySummary] = Field(min_length=1)
-    not_ready_stories: list[UserStoryNotReadySummary] = Field(min_length=1)
-    open_questions: list[UserStoryOpenQuestion] = Field(min_length=1)
-    stage_gate: list[StageGateCheck] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def validate_story_cards_consistency(self) -> "UserStoriesArtifactData":
-        requirement_ids = _unique_ids(
-            [item.requirement_id for item in self.requirements],
-            "requirements",
-            "requirement_id",
-        )
-        story_ids = _unique_ids(
-            [item.story_id for item in self.story_cards],
-            "story_cards",
-            "story_id",
-        )
-        story_by_id = {item.story_id: item for item in self.story_cards}
-        _validate_known_ids(
-            {
-                requirement_id
-                for item in self.story_cards
-                for requirement_id in item.requirement_ids
-            },
-            requirement_ids,
-            "story_cards references unknown requirement ids",
-        )
-
-        for story in self.story_cards:
-            if story.status == "ready":
-                if not story.acceptance_criteria:
-                    raise ValueError(
-                        f"ready story {story.story_id} must include acceptance criteria"
-                    )
-                if not story.business_rules:
-                    raise ValueError(
-                        f"ready story {story.story_id} must include business rules or N/A"
-                    )
-                if not story.out_of_scope:
-                    raise ValueError(
-                        f"ready story {story.story_id} must include out of scope"
-                    )
-                if not story.dependencies:
-                    raise ValueError(
-                        f"ready story {story.story_id} must include dependencies"
-                    )
-            else:
-                if not story.blocker_reason:
-                    raise ValueError(
-                        f"not_ready story {story.story_id} must include blocker reason"
-                    )
-                if not story.open_questions:
-                    raise ValueError(
-                        f"not_ready story {story.story_id} must include questions"
-                    )
-
-        ready_summary_ids = _unique_ids(
-            [item.story_id for item in self.ready_story_summaries],
-            "ready_story_summaries",
-            "story_id",
-        )
-        _validate_known_ids(
-            ready_summary_ids,
-            story_ids,
-            "ready_story_summaries references unknown story ids",
-        )
-        not_ready_summary_ids = _unique_ids(
-            [item.story_id for item in self.not_ready_stories],
-            "not_ready_stories",
-            "story_id",
-        )
-        _validate_known_ids(
-            not_ready_summary_ids,
-            story_ids,
-            "not_ready_stories references unknown story ids",
-        )
-        for story_id in ready_summary_ids:
-            if story_by_id[story_id].status != "ready":
-                raise ValueError(
-                    "ready_story_summaries can only reference ready stories: "
-                    + story_id
-                )
-        for item in self.ready_story_summaries:
-            if item.acceptance_criteria_count != len(
-                story_by_id[item.story_id].acceptance_criteria
-            ):
-                raise ValueError(
-                    "ready_story_summaries acceptance_criteria_count mismatch: "
-                    + item.story_id
-                )
-        for story_id in not_ready_summary_ids:
-            if story_by_id[story_id].status != "not_ready":
-                raise ValueError(
-                    "not_ready_stories can only reference not_ready stories: "
-                    + story_id
-                )
-        _validate_known_ids(
-            {item.story_id for item in self.open_questions},
-            story_ids,
-            "open_questions references unknown story ids",
-        )
-        _unique_ids(
-            [item.question_id for item in self.open_questions],
-            "open_questions",
-            "question_id",
-        )
-        return self
-
-
-class UserStoryReadyOverview(StrictArtifactDataModel):
-    story_id: str
-    title: str
-    requirement_ids: list[str] = Field(min_length=1)
-    user_value: str
-    ready_reason: str
-    status: Literal["ready"]
-
-
-class UserStoryPacket(StrictArtifactDataModel):
-    story_id: str
-    requirement_ids: list[str] = Field(min_length=1)
-    user_story: str
-    acceptance_criteria: list[str] = Field(min_length=1)
-    business_rules: list[str] = Field(min_length=1)
-    non_functional_notes: list[str] = Field(min_length=1)
-    out_of_scope: list[str] = Field(min_length=1)
-    dependencies: list[str] = Field(min_length=1)
+class StoryBreakdownInputAnalysis(StrictArtifactDataModel):
+    source_type: str
+    product_goal: str
+    target_users: list[str] = Field(min_length=1)
+    constraints: list[str] = Field(min_length=1)
     open_questions: list[str] = Field(min_length=1)
 
 
-class UserStoryUpstreamTrace(StrictArtifactDataModel):
+class StoryBreakdownEpic(StrictArtifactDataModel):
+    epic_id: str
+    name: str
+    value_goal: str
+    scope: str
+    priority: str
+    dependencies: list[str] = Field(min_length=1)
+
+
+class StoryBreakdownUserStory(StrictArtifactDataModel):
     story_id: str
-    source_workflow: str
-    source_stage: str
-    source_requirements: list[str] = Field(min_length=1)
-    source_slice: str
-    trace_note: str
+    epic_id: str
+    title: str
+    user_story: str
+    priority: str
+    sprint: str
+    story_points: int = Field(ge=1)
+    testability: str
+    status: str
 
 
-class UserStoryNotReadyBlocker(StrictArtifactDataModel):
+class StoryBreakdownAcceptanceCriterion(StrictArtifactDataModel):
+    criterion_id: str
     story_id: str
-    requirement_ids: list[str] = Field(min_length=1)
-    blocker_reason: str
-    questions: list[str] = Field(min_length=1)
-    suggested_next_step: str
+    criterion: str
+    verification_method: str
+    status: str
 
 
-class AiCodingInputBoundary(StrictArtifactDataModel):
-    allowed: list[str] = Field(min_length=1)
-    forbidden: list[str] = Field(min_length=1)
+class StoryBreakdownDependency(StrictArtifactDataModel):
+    dependency_id: str
+    related_story_ids: list[str] = Field(min_length=1)
+    description: str
+    risk: str
+    mitigation: str
+    owner: str
+    status: str
 
 
-class UserStoryHandoffArtifactData(StrictArtifactDataModel):
+class StoryBreakdownSprintSlice(StrictArtifactDataModel):
+    sprint_id: str
+    goal: str
+    story_ids: list[str] = Field(min_length=1)
+    deliverable: str
+    acceptance_focus: str
+
+
+class StoryBreakdownLisaHandoffInput(StrictArtifactDataModel):
+    input_type: str
+    reference_id: str
+    content: str
+    usage: str
+    status: str
+
+
+class StoryBreakdownArtifactData(StrictArtifactDataModel):
     document_info: DocumentInfo
-    requirements: list[UserStoryRequirementRef] = Field(min_length=1)
-    ready_story_overview: list[UserStoryReadyOverview] = Field(min_length=1)
-    single_story_packets: list[UserStoryPacket] = Field(min_length=1)
-    upstream_traceability: list[UserStoryUpstreamTrace] = Field(min_length=1)
-    not_ready_blockers: list[UserStoryNotReadyBlocker] = Field(min_length=1)
-    ai_coding_input_boundary: AiCodingInputBoundary
+    input_analysis: StoryBreakdownInputAnalysis
+    epics: list[StoryBreakdownEpic] = Field(min_length=1)
+    user_stories: list[StoryBreakdownUserStory] = Field(min_length=1)
+    acceptance_criteria: list[StoryBreakdownAcceptanceCriterion] = Field(min_length=1)
+    dependencies: list[StoryBreakdownDependency] = Field(min_length=1)
+    sprint_slices: list[StoryBreakdownSprintSlice] = Field(min_length=1)
+    lisa_handoff_inputs: list[StoryBreakdownLisaHandoffInput] = Field(min_length=1)
     stage_gate: list[StageGateCheck] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_handoff_consistency(self) -> "UserStoryHandoffArtifactData":
-        requirement_ids = _unique_ids(
-            [item.requirement_id for item in self.requirements],
-            "requirements",
-            "requirement_id",
+    def validate_story_breakdown_consistency(self) -> "StoryBreakdownArtifactData":
+        epic_ids = {item.epic_id for item in self.epics}
+        if len(epic_ids) != len(self.epics):
+            raise ValueError("epics contains duplicate epic_id")
+
+        story_ids = {item.story_id for item in self.user_stories}
+        if len(story_ids) != len(self.user_stories):
+            raise ValueError("user_stories contains duplicate story_id")
+        unknown_epic_ids = sorted(
+            {item.epic_id for item in self.user_stories if item.epic_id not in epic_ids}
         )
-        ready_story_ids = _unique_ids(
-            [item.story_id for item in self.ready_story_overview],
-            "ready_story_overview",
-            "story_id",
-        )
-        packet_story_ids = _unique_ids(
-            [item.story_id for item in self.single_story_packets],
-            "single_story_packets",
-            "story_id",
-        )
-        _validate_known_ids(
-            packet_story_ids,
-            ready_story_ids,
-            "single_story_packets references non-ready story ids",
-        )
-        _validate_known_ids(
+        if unknown_epic_ids:
+            raise ValueError(
+                "user_stories references unknown epic ids: "
+                + ", ".join(unknown_epic_ids)
+            )
+
+        criterion_ids = {item.criterion_id for item in self.acceptance_criteria}
+        if len(criterion_ids) != len(self.acceptance_criteria):
+            raise ValueError("acceptance_criteria contains duplicate criterion_id")
+        unknown_acceptance_story_ids = sorted(
             {
-                requirement_id
-                for item in self.ready_story_overview
-                for requirement_id in item.requirement_ids
-            },
-            requirement_ids,
-            "ready_story_overview references unknown requirement ids",
+                item.story_id
+                for item in self.acceptance_criteria
+                if item.story_id not in story_ids
+            }
         )
-        _validate_known_ids(
+        if unknown_acceptance_story_ids:
+            raise ValueError(
+                "acceptance_criteria references unknown story ids: "
+                + ", ".join(unknown_acceptance_story_ids)
+            )
+
+        dependency_ids = {item.dependency_id for item in self.dependencies}
+        if len(dependency_ids) != len(self.dependencies):
+            raise ValueError("dependencies contains duplicate dependency_id")
+        unknown_dependency_story_ids = sorted(
             {
-                requirement_id
-                for item in self.single_story_packets
-                for requirement_id in item.requirement_ids
-            },
-            requirement_ids,
-            "single_story_packets references unknown requirement ids",
+                story_id
+                for item in self.dependencies
+                for story_id in item.related_story_ids
+                if story_id not in story_ids
+            }
         )
-        _validate_known_ids(
-            {item.story_id for item in self.upstream_traceability},
-            ready_story_ids,
-            "upstream_traceability references unknown ready story ids",
-        )
-        _validate_known_ids(
+        if unknown_dependency_story_ids:
+            raise ValueError(
+                "dependencies references unknown story ids: "
+                + ", ".join(unknown_dependency_story_ids)
+            )
+
+        sprint_ids = {item.sprint_id for item in self.sprint_slices}
+        if len(sprint_ids) != len(self.sprint_slices):
+            raise ValueError("sprint_slices contains duplicate sprint_id")
+        unknown_sprint_story_ids = sorted(
             {
-                requirement_id
-                for item in self.upstream_traceability
-                for requirement_id in item.source_requirements
-            },
-            requirement_ids,
-            "upstream_traceability references unknown requirement ids",
+                story_id
+                for item in self.sprint_slices
+                for story_id in item.story_ids
+                if story_id not in story_ids
+            }
         )
-        _validate_known_ids(
+        if unknown_sprint_story_ids:
+            raise ValueError(
+                "sprint_slices references unknown story ids: "
+                + ", ".join(unknown_sprint_story_ids)
+            )
+
+        unknown_handoff_references = sorted(
             {
-                requirement_id
-                for item in self.not_ready_blockers
-                for requirement_id in item.requirement_ids
-            },
-            requirement_ids,
-            "not_ready_blockers references unknown requirement ids",
+                item.reference_id
+                for item in self.lisa_handoff_inputs
+                if (
+                    (
+                        item.input_type == "用户故事"
+                        and item.reference_id not in story_ids
+                    )
+                    or (
+                        item.input_type == "验收标准"
+                        and item.reference_id not in criterion_ids
+                    )
+                )
+            }
         )
+        if unknown_handoff_references:
+            raise ValueError(
+                "lisa_handoff_inputs references unknown ids: "
+                + ", ".join(unknown_handoff_references)
+            )
+
+        if not any(item.checked for item in self.stage_gate):
+            raise ValueError("stage_gate must include at least one checked item")
+
         return self
-
-
-def _unique_ids(values: list[str], collection: str, field_name: str) -> set[str]:
-    unique = set(values)
-    if len(unique) != len(values):
-        raise ValueError(f"{collection} contains duplicate {field_name}")
-    return unique
-
-
-def _validate_known_ids(
-    referenced_ids: set[str],
-    known_ids: set[str],
-    message: str,
-) -> None:
-    unknown_ids = sorted(referenced_ids - known_ids)
-    if unknown_ids:
-        raise ValueError(f"{message}: " + ", ".join(unknown_ids))
 
 
 def render_agent_turn_from_artifact_data(
@@ -3091,99 +2573,15 @@ def render_agent_turn_from_artifact_data(
 ) -> AgentTurnOutput | None:
     if "artifact_data" not in payload:
         return None
-    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
-        artifact_data = ClarifyArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_test_design_clarify_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DEFINE"):
-        artifact_data = IdeaDefineArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_idea_brainstorm_define_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DIVERGE"):
-        artifact_data = IdeaDivergeArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_idea_brainstorm_diverge_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONVERGE"):
-        artifact_data = IdeaConvergeArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_idea_brainstorm_converge_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONCEPT"):
-        artifact_data = IdeaConceptArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_idea_brainstorm_concept_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
-        artifact_data = IncidentTimelineArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_incident_review_timeline_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "ROOT_CAUSE"):
-        artifact_data = IncidentRootCauseArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_incident_review_root_cause_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "IMPROVEMENT"):
-        artifact_data = IncidentImprovementArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_incident_review_improvement_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
-        artifact_data = StrategyArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_test_design_strategy_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "CASES"):
-        artifact_data = CasesArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_test_design_cases_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "DELIVERY"):
-        artifact_data = DeliveryArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_test_design_delivery_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("REQ_REVIEW", "REVIEW"):
-        artifact_data = ReqReviewArtifactData.model_validate(payload["artifact_data"])
-        markdown = render_req_review_review_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("REQ_REVIEW", "REPORT"):
-        artifact_data = ReqReviewReportArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_req_review_report_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
-        artifact_data = ValueDiscoveryElevatorArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_value_discovery_elevator_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "PERSONA"):
-        artifact_data = ValueDiscoveryPersonaArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_value_discovery_persona_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "JOURNEY"):
-        artifact_data = ValueDiscoveryJourneyArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_value_discovery_journey_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "BLUEPRINT"):
-        artifact_data = ValueDiscoveryBlueprintArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_value_discovery_blueprint_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "SCOPE"):
-        artifact_data = UserStoryScopeArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_user_story_scope_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "STORY_MAP"):
-        artifact_data = UserStoryMapArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_user_story_map_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "STORIES"):
-        artifact_data = UserStoriesArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_user_stories_markdown(artifact_data)
-    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "HANDOFF"):
-        artifact_data = UserStoryHandoffArtifactData.model_validate(
-            payload["artifact_data"]
-        )
-        markdown = render_user_story_handoff_markdown(artifact_data)
-    else:
+    renderer_config = ARTIFACT_DATA_RENDERERS.get((workflow_id, current_stage_id))
+    if renderer_config is None:
         raise ValueError(
             f"artifact_data renderer is not configured for {workflow_id}/{current_stage_id}"
         )
+
+    artifact_data_model, render_markdown = renderer_config
+    artifact_data = artifact_data_model.model_validate(payload["artifact_data"])
+    markdown = render_markdown(artifact_data)
 
     return AgentTurnOutput.model_validate(
         {
@@ -3192,2299 +2590,17 @@ def render_agent_turn_from_artifact_data(
                 "type": "replace",
                 "markdown": markdown,
             },
-            "artifact_data": artifact_data.model_dump(mode="json", exclude_none=True),
+            "artifact_data": artifact_data.model_dump(mode="json"),
             "stage_action": payload.get("stage_action"),
             "warnings": payload.get("warnings", []),
         }
     )
-
-
-def render_partial_agent_turn_from_artifact_data(
-    payload: dict[str, Any],
-    *,
-    workflow_id: str,
-    current_stage_id: str,
-) -> AgentTurnOutput | None:
-    if "artifact_data" not in payload:
-        return None
-    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
-        field_order = [
-            "requirement_facts",
-            "system_boundaries",
-            "business_rules",
-            "flow_links",
-            "clarification_questions",
-            "quality_requirements",
-            "downstream_inputs",
-            "stage_gate",
-        ]
-        renderer = render_partial_test_design_clarify_markdown
-        markdown = render_partial_test_design_clarify_markdown(
-            payload["artifact_data"]
-        )
-    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "STRATEGY"):
-        field_order = [
-            "strategy_summary",
-            "quality_goals",
-            "risks",
-            "test_techniques",
-            "test_layers",
-            "test_points",
-            "tradeoffs",
-            "stage_gate",
-        ]
-        renderer = render_partial_test_design_strategy_markdown
-        markdown = render_partial_test_design_strategy_markdown(payload["artifact_data"])
-    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "CASES"):
-        field_order = [
-            "design_bases",
-            "case_groups",
-            "test_data_environments",
-            "automation_candidates",
-            "coverage_trace",
-            "open_questions",
-            "stage_gate",
-        ]
-        renderer = render_partial_test_design_cases_markdown
-        markdown = render_partial_test_design_cases_markdown(payload["artifact_data"])
-    elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "DELIVERY"):
-        field_order = [
-            "executive_summary",
-            "requirement_summary",
-            "strategy_summary_items",
-            "case_summary_items",
-            "coverage_map",
-            "open_risks",
-            "acceptance_checklist",
-            "signoffs",
-            "change_log",
-        ]
-        renderer = render_partial_test_design_delivery_markdown
-        markdown = render_partial_test_design_delivery_markdown(
-            payload["artifact_data"]
-        )
-    elif (workflow_id, current_stage_id) == ("REQ_REVIEW", "REVIEW"):
-        field_order = [
-            "scope_items",
-            "quality_overview",
-            "issue_statistics",
-            "issue_groups",
-            "revision_suggestions",
-            "stage_gate",
-        ]
-        renderer = render_partial_req_review_review_markdown
-        markdown = render_partial_req_review_review_markdown(payload["artifact_data"])
-    elif (workflow_id, current_stage_id) == ("REQ_REVIEW", "REPORT"):
-        field_order = [
-            "conclusion",
-            "review_info",
-            "issue_statistics",
-            "issue_closures",
-            "review_conditions",
-            "signoffs",
-            "change_log",
-        ]
-        renderer = render_partial_req_review_report_markdown
-        markdown = render_partial_req_review_report_markdown(payload["artifact_data"])
-    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "TIMELINE"):
-        field_order = [
-            "incident_summary",
-            "impact_metrics",
-            "fact_sources",
-            "timeline_events",
-            "fact_separation",
-            "fact_summary",
-            "participants",
-            "missing_information",
-            "stage_gate",
-        ]
-        renderer = render_partial_incident_review_timeline_markdown
-        markdown = render_partial_incident_review_timeline_markdown(
-            payload["artifact_data"]
-        )
-    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "ROOT_CAUSE"):
-        field_order = [
-            "analysis_context",
-            "why_chain",
-            "cause_evidence",
-            "fishbone_categories",
-            "root_cause_conclusions",
-            "excluded_causes",
-            "unverified_causes",
-            "stage_gate",
-        ]
-        renderer = render_partial_incident_review_root_cause_markdown
-        markdown = render_partial_incident_review_root_cause_markdown(
-            payload["artifact_data"]
-        )
-    elif (workflow_id, current_stage_id) == ("INCIDENT_REVIEW", "IMPROVEMENT"):
-        field_order = [
-            "report_info",
-            "timeline_summary",
-            "root_cause_summary",
-            "priority_distribution",
-            "improvement_actions",
-            "root_cause_coverage",
-            "prevention_checklist",
-            "review_plan",
-            "residual_risks",
-            "lessons_learned",
-            "organizational_learning",
-            "signoffs",
-            "stage_gate",
-        ]
-        renderer = render_partial_incident_review_improvement_markdown
-        markdown = render_partial_incident_review_improvement_markdown(
-            payload["artifact_data"]
-        )
-    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DEFINE"):
-        field_order = [
-            "problem_statement",
-            "target_users",
-            "problem_landscape",
-            "evidence_items",
-            "problem_user_fit",
-            "constraints_boundaries",
-            "reverse_validation",
-            "stage_gate",
-        ]
-        renderer = render_partial_idea_brainstorm_define_markdown
-        markdown = render_partial_idea_brainstorm_define_markdown(
-            payload["artifact_data"]
-        )
-    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "DIVERGE"):
-        field_order = [
-            "divergence_method",
-            "idea_landscape",
-            "idea_cards",
-            "idea_sources",
-            "parked_or_excluded",
-            "stage_gate",
-        ]
-        renderer = render_partial_idea_brainstorm_diverge_markdown
-        markdown = render_partial_idea_brainstorm_diverge_markdown(
-            payload["artifact_data"]
-        )
-    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONVERGE"):
-        field_order = [
-            "decision_matrix",
-            "ice_evaluations",
-            "resource_constraints",
-            "sensitivity_analysis",
-            "validation_experiments",
-            "merge_paths",
-            "stage_gate",
-        ]
-        renderer = render_partial_idea_brainstorm_converge_markdown
-        markdown = render_partial_idea_brainstorm_converge_markdown(
-            payload["artifact_data"]
-        )
-    elif (workflow_id, current_stage_id) == ("IDEA_BRAINSTORM", "CONCEPT"):
-        field_order = [
-            "positioning_statement",
-            "core_assumptions",
-            "lean_canvas",
-            "mvp_features",
-            "growth_funnel",
-            "premortem_risks",
-            "validation_roadmap",
-            "out_of_scope",
-            "decision_records",
-            "next_actions",
-            "stage_gate",
-        ]
-        renderer = render_partial_idea_brainstorm_concept_markdown
-        markdown = render_partial_idea_brainstorm_concept_markdown(
-            payload["artifact_data"]
-        )
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "ELEVATOR"):
-        field_order = [
-            "document_info",
-            "positioning_summary",
-            "value_flow",
-            "target_scenarios",
-            "pain_evidence",
-            "differentiators",
-            "business_feasibility",
-            "score_matrix",
-            "score_summary",
-            "assumptions",
-            "elevator_pitch",
-            "stage_gate",
-        ]
-        renderer = render_partial_value_discovery_elevator_markdown
-        markdown = render_partial_value_discovery_elevator_markdown(
-            payload["artifact_data"]
-        )
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "PERSONA"):
-        field_order = [
-            "document_info",
-            "persona_summary",
-            "personas",
-            "behavior_scenarios",
-            "decision_chain",
-            "pain_evidence",
-            "anti_personas",
-            "priority_ranking",
-            "stage_gate",
-        ]
-        renderer = render_partial_value_discovery_persona_markdown
-        markdown = render_partial_value_discovery_persona_markdown(
-            payload["artifact_data"]
-        )
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "JOURNEY"):
-        field_order = [
-            "document_info",
-            "journey_summary",
-            "journey_stages",
-            "pain_priorities",
-            "opportunity_scores",
-            "entry_strategy",
-            "validation_experiments",
-            "stage_gate",
-        ]
-        renderer = render_partial_value_discovery_journey_markdown
-        markdown = render_partial_value_discovery_journey_markdown(
-            payload["artifact_data"]
-        )
-    elif (workflow_id, current_stage_id) == ("VALUE_DISCOVERY", "BLUEPRINT"):
-        field_order = [
-            "document_info",
-            "product_overview",
-            "target_users",
-            "feature_modules",
-            "requirements",
-            "main_flow",
-            "success_metrics",
-            "mvp_plan",
-            "non_functional_requirements",
-            "acceptance_criteria",
-            "roadmap",
-            "risks",
-            "lisa_handoff_inputs",
-            "stage_gate",
-        ]
-        renderer = render_partial_value_discovery_blueprint_markdown
-        markdown = render_partial_value_discovery_blueprint_markdown(
-            payload["artifact_data"]
-        )
-    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "SCOPE"):
-        field_order = [
-            "document_info",
-            "in_scope_requirements",
-            "traceability_index",
-            "out_of_scope_items",
-            "blocking_questions",
-            "stage_gate",
-        ]
-        renderer = render_partial_user_story_scope_markdown
-        markdown = render_partial_user_story_scope_markdown(payload["artifact_data"])
-    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "STORY_MAP"):
-        field_order = [
-            "document_info",
-            "requirements",
-            "activities",
-            "tasks",
-            "story_map_items",
-            "mvp_slices",
-            "release_slices",
-            "stage_gate",
-        ]
-        renderer = render_partial_user_story_map_markdown
-        markdown = render_partial_user_story_map_markdown(payload["artifact_data"])
-    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "STORIES"):
-        field_order = [
-            "document_info",
-            "requirements",
-            "split_principles",
-            "story_cards",
-            "ready_story_summaries",
-            "not_ready_stories",
-            "open_questions",
-            "stage_gate",
-        ]
-        renderer = render_partial_user_stories_markdown
-        markdown = render_partial_user_stories_markdown(payload["artifact_data"])
-    elif (workflow_id, current_stage_id) == ("USER_STORY_BREAKDOWN", "HANDOFF"):
-        field_order = [
-            "document_info",
-            "requirements",
-            "ready_story_overview",
-            "single_story_packets",
-            "upstream_traceability",
-            "not_ready_blockers",
-            "ai_coding_input_boundary",
-            "stage_gate",
-        ]
-        renderer = render_partial_user_story_handoff_markdown
-        markdown = render_partial_user_story_handoff_markdown(payload["artifact_data"])
-    else:
-        return None
-    if markdown is None:
-        return None
-    artifact_patch = _build_partial_add_after_patch(
-        payload["artifact_data"],
-        markdown,
-        field_order=field_order,
-        renderer=renderer,
-    )
-    return AgentTurnOutput.model_validate(
-        {
-            "chat": payload.get("chat") or "正在生成右侧产出物。",
-            "artifact_update": {
-                "type": "replace",
-                "markdown": markdown,
-            },
-            "artifact_patch": artifact_patch,
-            "stage_action": payload.get("stage_action"),
-            "warnings": payload.get("warnings", []),
-        }
-    )
-
-
-def _validate_partial_list(value: Any, model_type: type[StrictArtifactDataModel]):
-    if not isinstance(value, list) or len(value) == 0:
-        raise ValueError("partial artifact list must be non-empty")
-    return [model_type.model_validate(item) for item in value]
-
-
-def _validate_partial_string_list(value: Any) -> list[str]:
-    if not isinstance(value, list) or len(value) == 0:
-        raise ValueError("partial artifact string list must be non-empty")
-    if not all(isinstance(item, str) and item.strip() for item in value):
-        raise ValueError("partial artifact string list must contain non-empty strings")
-    return value
-
-
-def _join_partial_sections(sections: list[str]) -> str | None:
-    return "\n\n".join(sections) if len(sections) > 1 else None
-
-
-_ARTIFACT_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
-
-
-def _extract_artifact_sections(markdown: str) -> list[dict[str, Any]]:
-    lines = markdown.replace("\r\n", "\n").split("\n")
-    raw_sections: list[dict[str, Any]] = []
-    in_fence = False
-    current_start = -1
-    current_level = 0
-    current_heading = ""
-    current_title = ""
-
-    for index, line in enumerate(lines):
-        if re.match(r"^\s*```", line):
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
-        match = _ARTIFACT_HEADING_PATTERN.match(line)
-        if not match:
-            continue
-        if current_start >= 0:
-            raw_sections.append({
-                "level": current_level,
-                "heading": current_heading,
-                "title": current_title,
-                "content": "\n".join(lines[current_start:index]).strip(),
-            })
-        current_start = index
-        current_level = len(match.group(1))
-        current_heading = line.strip()
-        current_title = match.group(2).strip()
-
-    if current_start >= 0:
-        raw_sections.append({
-            "level": current_level,
-            "heading": current_heading,
-            "title": current_title,
-            "content": "\n".join(lines[current_start:]).strip(),
-        })
-
-    duplicate_counts: dict[str, int] = {}
-    for section in raw_sections:
-        title = section["title"]
-        duplicate_counts[title] = duplicate_counts.get(title, 0) + 1
-
-    occurrence_counts: dict[str, int] = {}
-    sections: list[dict[str, Any]] = []
-    for section in raw_sections:
-        title = section["title"]
-        occurrence = occurrence_counts.get(title, 0) + 1
-        occurrence_counts[title] = occurrence
-        sections.append({
-            **section,
-            "anchor": f"h{section['level']}:{title}:{occurrence}",
-        })
-    return sections
-
-
-def _build_partial_add_after_patch(
-    data: Any,
-    markdown: str,
-    *,
-    field_order: list[str],
-    renderer: Any,
-) -> dict[str, str] | None:
-    if not isinstance(data, dict):
-        return None
-    completed_fields = [field for field in field_order if field in data]
-    if len(completed_fields) < 2:
-        return None
-
-    previous_data = dict(data)
-    previous_data.pop(completed_fields[-1], None)
-    previous_markdown = renderer(previous_data)
-    if not previous_markdown:
-        return None
-    if not markdown.startswith(f"{previous_markdown}\n\n"):
-        return None
-
-    previous_sections = _extract_artifact_sections(previous_markdown)
-    current_sections = _extract_artifact_sections(markdown)
-    if (
-        not previous_sections
-        or len(current_sections) != len(previous_sections) + 1
-    ):
-        return None
-
-    added_section = current_sections[-1]
-    replacement_markdown = markdown[len(previous_markdown) + 2 :].strip()
-    if replacement_markdown != added_section["content"]:
-        return None
-
-    return {
-        "operation": "add_after",
-        "sectionAnchor": added_section["anchor"],
-        "afterSectionAnchor": previous_sections[-1]["anchor"],
-        "replacementMarkdown": replacement_markdown,
-        "baseContent": previous_markdown,
-    }
-
-
-def render_partial_test_design_cases_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "document_info" not in data:
-        return None
-    try:
-        DocumentInfo.model_validate(data["document_info"])
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = ["# 测试用例集"]
-    try:
-        if "design_bases" not in data or "case_groups" not in data:
-            return None
-        design_bases = _validate_partial_list(data["design_bases"], DesignBasis)
-        case_groups = _validate_partial_list(data["case_groups"], CaseGroup)
-        _validate_unique_case_ids(case_groups)
-        case_ids = _collect_case_ids(case_groups)
-        sections.append(
-            _render_case_statistics(_derive_case_statistics(case_groups))
-        )
-        sections.append(_render_design_bases(design_bases))
-        sections.append(_render_case_groups(case_groups))
-
-        if "test_data_environments" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_test_data_environments(
-                _validate_partial_list(
-                    data["test_data_environments"],
-                    TestDataEnvironment,
-                )
-            )
-        )
-
-        if "automation_candidates" not in data:
-            return _join_partial_sections(sections)
-        automation_candidates = _validate_partial_list(
-            data["automation_candidates"],
-            AutomationCandidate,
-        )
-        _validate_automation_candidate_case_references(
-            automation_candidates,
-            case_ids,
-        )
-        sections.append(
-            _render_automation_candidates(automation_candidates)
-        )
-
-        if "coverage_trace" not in data:
-            return _join_partial_sections(sections)
-        coverage_trace = _validate_partial_list(
-            data["coverage_trace"],
-            CoverageTraceItem,
-        )
-        _validate_coverage_trace_case_references(coverage_trace, case_ids)
-        sections.append(_render_coverage_trace(coverage_trace))
-
-        if "open_questions" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_open_questions(
-                _validate_partial_list(data["open_questions"], OpenQuestion)
-            )
-        )
-
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck)
-            )
-        )
-    except (TypeError, ValueError, ValidationError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_test_design_delivery_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "document_info" not in data:
-        return None
-    try:
-        document_info = DocumentInfo.model_validate(data["document_info"])
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = ["# 测试设计文档"]
-    try:
-        if "executive_summary" not in data:
-            return None
-        sections.append(
-            _render_delivery_executive_summary(
-                _validate_partial_list(
-                    data["executive_summary"],
-                    DeliveryExecutiveSummaryItem,
-                )
-            )
-        )
-
-        if "requirement_summary" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_delivery_requirement_summary(
-                _validate_partial_list(
-                    data["requirement_summary"],
-                    DeliveryRequirementSummaryItem,
-                )
-            )
-        )
-
-        if "strategy_summary_items" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_delivery_strategy_summary(
-                _validate_partial_list(
-                    data["strategy_summary_items"],
-                    DeliveryStrategySummaryItem,
-                )
-            )
-        )
-
-        if "case_summary_items" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_delivery_case_summary(
-                _validate_partial_list(
-                    data["case_summary_items"],
-                    DeliveryCaseSummaryItem,
-                )
-            )
-        )
-
-        if "coverage_map" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_delivery_coverage_map(
-                _validate_partial_list(
-                    data["coverage_map"],
-                    DeliveryCoverageMapItem,
-                )
-            )
-        )
-
-        if "open_risks" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_delivery_open_risks(
-                _validate_partial_list(data["open_risks"], DeliveryOpenRisk)
-            )
-        )
-
-        if "acceptance_checklist" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_delivery_acceptance_checklist(
-                _validate_partial_list(data["acceptance_checklist"], StageGateCheck)
-            )
-        )
-
-        if "signoffs" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_delivery_signoffs(
-                _validate_partial_list(data["signoffs"], DeliverySignoff)
-            )
-        )
-
-        if "change_log" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_delivery_change_log(
-                _validate_partial_list(data["change_log"], DeliveryChangeLogItem)
-            )
-        )
-
-        if "delivery_metrics" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_delivery_document_info(
-                document_info,
-                DeliveryMetrics.model_validate(data["delivery_metrics"]),
-            )
-        )
-    except (TypeError, ValueError, ValidationError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_req_review_review_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "review_info" not in data:
-        return None
-    try:
-        review_info = ReqReviewInfo.model_validate(data["review_info"])
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = ["# 需求评审问题清单"]
-    try:
-        if "scope_items" not in data:
-            return None
-        sections.append(
-            _render_req_review_scope(
-                _validate_partial_list(data["scope_items"], ReqReviewScopeItem)
-            )
-        )
-
-        if "quality_overview" not in data:
-            return _join_partial_sections(sections)
-        quality_overview = _validate_partial_list(
-            data["quality_overview"],
-            ReqReviewQualityOverviewItem,
-        )
-        sections.append(_render_req_review_quality_overview(quality_overview))
-        sections.append(_render_req_review_quality_flowchart())
-
-        if "issue_statistics" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_req_review_issue_statistics(
-                ReqReviewIssueStatistics.model_validate(data["issue_statistics"]),
-                quality_overview,
-            )
-        )
-
-        if "issue_groups" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_req_review_issue_groups(
-                _validate_partial_list(data["issue_groups"], ReqReviewIssueGroup)
-            )
-        )
-
-        if "revision_suggestions" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_req_review_revision_suggestions(
-                _validate_partial_list(
-                    data["revision_suggestions"],
-                    ReqReviewRevisionSuggestion,
-                )
-            )
-        )
-
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_req_review_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck)
-            )
-        )
-        sections.append(_render_req_review_info(review_info))
-    except (TypeError, ValueError, ValidationError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_req_review_report_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict):
-        return None
-
-    sections = ["# 需求评审报告"]
-    try:
-        if "conclusion" not in data:
-            return None
-        sections.append(
-            _render_req_review_report_conclusion(
-                ReqReviewReportConclusion.model_validate(data["conclusion"])
-            )
-        )
-
-        if "review_info" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_req_review_report_info(
-                ReqReviewReportInfo.model_validate(data["review_info"])
-            )
-        )
-
-        if "issue_statistics" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_req_review_report_statistics(
-                ReqReviewReportIssueStatistics.model_validate(
-                    data["issue_statistics"]
-                )
-            )
-        )
-
-        if "issue_closures" not in data:
-            return _join_partial_sections(sections)
-        issue_closures = _validate_partial_list(
-            data["issue_closures"],
-            ReqReviewReportIssueClosure,
-        )
-        sections.append(_render_req_review_report_priority_board(issue_closures))
-        sections.append(_render_req_review_report_issue_closures(issue_closures))
-
-        if "review_conditions" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_req_review_report_conditions(
-                _validate_partial_list(
-                    data["review_conditions"],
-                    ReqReviewReportCondition,
-                )
-            )
-        )
-
-        if "signoffs" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_req_review_report_signoffs(
-                _validate_partial_list(data["signoffs"], ReqReviewReportSignoff)
-            )
-        )
-
-        if "change_log" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_req_review_report_change_log(
-                _validate_partial_list(
-                    data["change_log"],
-                    ReqReviewReportChangeLogItem,
-                )
-            )
-        )
-    except (TypeError, ValueError, ValidationError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_incident_review_timeline_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "incident_summary" not in data:
-        return None
-    try:
-        incident_summary = IncidentSummary.model_validate(data["incident_summary"])
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = ["# 故障复盘报告"]
-    try:
-        sections.append(_render_incident_summary(incident_summary))
-
-        if "impact_metrics" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_impact_metrics(
-                _validate_partial_list(
-                    data["impact_metrics"],
-                    IncidentImpactMetric,
-                )
-            )
-        )
-
-        if "fact_sources" not in data:
-            return _join_partial_sections(sections)
-        _validate_partial_list(data["fact_sources"], IncidentFactSource)
-        sections.append(
-            _render_incident_fact_sources(
-                _validate_partial_list(data["fact_sources"], IncidentFactSource)
-            )
-        )
-
-        if "timeline_events" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_timeline(
-                incident_summary,
-                _validate_partial_list(
-                    data["timeline_events"],
-                    IncidentTimelineEvent,
-                ),
-            )
-        )
-
-        if "fact_separation" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_fact_separation(
-                _validate_partial_list(
-                    data["fact_separation"],
-                    IncidentFactSeparationItem,
-                )
-            )
-        )
-
-        if "fact_summary" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_fact_summary(
-                _validate_partial_string_list(data["fact_summary"])
-            )
-        )
-
-        if "participants" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_participants(
-                _validate_partial_list(data["participants"], IncidentParticipant)
-            )
-        )
-
-        if "missing_information" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_missing_information(
-                _validate_partial_list(
-                    data["missing_information"],
-                    IncidentMissingInformation,
-                )
-            )
-        )
-
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck)
-            )
-        )
-    except (TypeError, ValueError, ValidationError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_incident_review_root_cause_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "analysis_context" not in data:
-        return None
-    try:
-        analysis_context = IncidentRootCauseContext.model_validate(
-            data["analysis_context"]
-        )
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = ["# 故障复盘报告"]
-    try:
-        sections.append(_render_incident_root_cause_context(analysis_context))
-
-        if "why_chain" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_why_chain(
-                _validate_partial_list(data["why_chain"], IncidentWhyChainItem)
-            )
-        )
-
-        if "cause_evidence" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_cause_evidence(
-                _validate_partial_list(data["cause_evidence"], IncidentCauseEvidence)
-            )
-        )
-
-        if "fishbone_categories" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_fishbone(
-                analysis_context,
-                _validate_partial_list(
-                    data["fishbone_categories"],
-                    IncidentFishboneCategory,
-                ),
-            )
-        )
-
-        if "root_cause_conclusions" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_root_cause_conclusions(
-                _validate_partial_list(
-                    data["root_cause_conclusions"],
-                    IncidentRootCauseConclusion,
-                )
-            )
-        )
-
-        if "excluded_causes" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_excluded_causes(
-                _validate_partial_list(data["excluded_causes"], IncidentExcludedCause)
-            )
-        )
-
-        if "unverified_causes" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_unverified_causes(
-                _validate_partial_list(
-                    data["unverified_causes"],
-                    IncidentUnverifiedCause,
-                )
-            )
-        )
-
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_root_cause_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck)
-            )
-        )
-    except (TypeError, ValueError, ValidationError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_incident_review_improvement_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "report_info" not in data:
-        return None
-    try:
-        IncidentImprovementReportInfo.model_validate(data["report_info"])
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = ["# 故障复盘报告"]
-    try:
-        sections.append(
-            _render_incident_improvement_report_info(
-                IncidentImprovementReportInfo.model_validate(data["report_info"])
-            )
-        )
-
-        if "timeline_summary" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_improvement_timeline_summary(
-                IncidentImprovementTimelineSummary.model_validate(
-                    data["timeline_summary"]
-                )
-            )
-        )
-
-        if "root_cause_summary" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_improvement_root_cause_summary(
-                IncidentImprovementRootCauseSummary.model_validate(
-                    data["root_cause_summary"]
-                )
-            )
-        )
-
-        if (
-            "priority_distribution" not in data
-            and "improvement_actions" not in data
-        ):
-            return _join_partial_sections(sections)
-        sections.append("## 第三部分：改进措施")
-        sections.append("### 7. 改进措施")
-
-        if "priority_distribution" in data:
-            sections.append(
-                _render_incident_improvement_priority_distribution(
-                    IncidentImprovementPriorityDistribution.model_validate(
-                        data["priority_distribution"]
-                    )
-                )
-            )
-
-        if "improvement_actions" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_improvement_actions(
-                _validate_partial_list(
-                    data["improvement_actions"],
-                    IncidentImprovementAction,
-                )
-            )
-        )
-
-        if "root_cause_coverage" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_improvement_root_cause_coverage(
-                _validate_partial_list(
-                    data["root_cause_coverage"],
-                    IncidentRootCauseCoverage,
-                )
-            )
-        )
-
-        if "prevention_checklist" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_improvement_prevention_checklist(
-                _validate_partial_list(
-                    data["prevention_checklist"],
-                    IncidentPreventionCheckItem,
-                )
-            )
-        )
-
-        if "review_plan" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_improvement_review_plan(
-                _validate_partial_list(data["review_plan"], IncidentReviewPlanItem)
-            )
-        )
-
-        if "residual_risks" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_improvement_residual_risks(
-                _validate_partial_list(data["residual_risks"], IncidentResidualRisk)
-            )
-        )
-
-        if "lessons_learned" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_improvement_lessons(
-                _validate_partial_list(data["lessons_learned"], IncidentLessonLearned)
-            )
-        )
-
-        if "organizational_learning" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_improvement_organizational_learning(
-                _validate_partial_list(
-                    data["organizational_learning"],
-                    IncidentOrganizationalLearning,
-                )
-            )
-        )
-
-        if "signoffs" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_improvement_signoffs(
-                _validate_partial_list(data["signoffs"], IncidentSignoff)
-            )
-        )
-
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_incident_improvement_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck)
-            )
-        )
-    except (TypeError, ValueError, ValidationError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_idea_brainstorm_define_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "problem_statement" not in data:
-        return None
-    try:
-        problem_statement = IdeaProblemStatement.model_validate(
-            data["problem_statement"]
-        )
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = ["# 问题域分析"]
-    try:
-        sections.append(_render_idea_problem_statement(problem_statement))
-
-        if "target_users" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_target_users(
-                _validate_partial_list(data["target_users"], IdeaTargetUser)
-            )
-        )
-
-        if "problem_landscape" not in data:
-            return _join_partial_sections(sections)
-        problem_landscape = IdeaProblemLandscape.model_validate(
-            data["problem_landscape"]
-        )
-        sections.append(
-            _render_idea_problem_landscape(problem_landscape)
-        )
-
-        if "evidence_items" not in data:
-            return _join_partial_sections(sections)
-        evidence_items = _validate_partial_list(
-            data["evidence_items"], IdeaEvidenceItem
-        )
-        known_problem_ids = {problem_landscape.root_problem_id} | {
-            item.problem_id for item in problem_landscape.subproblems
-        }
-        if any(
-            problem_id not in known_problem_ids
-            for item in evidence_items
-            for problem_id in item.related_problem_ids
-        ):
-            return _join_partial_sections(sections)
-        sections.append(_render_idea_evidence_items(evidence_items))
-
-        if "problem_user_fit" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_problem_user_fit(
-                _validate_partial_list(
-                    data["problem_user_fit"],
-                    IdeaProblemUserFit,
-                )
-            )
-        )
-
-        if "constraints_boundaries" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_constraints_boundaries(
-                _validate_partial_list(
-                    data["constraints_boundaries"],
-                    IdeaConstraintBoundary,
-                )
-            )
-        )
-
-        if "reverse_validation" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_reverse_validation(
-                _validate_partial_list(
-                    data["reverse_validation"],
-                    IdeaReverseValidation,
-                )
-            )
-        )
-
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck)
-            )
-        )
-    except (TypeError, ValueError, ValidationError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_idea_brainstorm_diverge_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "divergence_method" not in data:
-        return None
-    try:
-        divergence_method = IdeaDivergenceMethod.model_validate(
-            data["divergence_method"]
-        )
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = ["# 创意发散"]
-    try:
-        sections.append(_render_idea_divergence_method(divergence_method))
-
-        if "idea_landscape" not in data or "idea_cards" not in data:
-            return _join_partial_sections(sections)
-        idea_cards = _validate_partial_list(data["idea_cards"], IdeaCard)
-        idea_ids = _validate_idea_card_ids(idea_cards)
-        idea_landscape = IdeaDivergeLandscape.model_validate(data["idea_landscape"])
-        _validate_idea_landscape_references(idea_landscape, idea_ids)
-        sections.append(
-            _render_idea_diverge_landscape(
-                idea_landscape,
-                idea_cards,
-            )
-        )
-        sections.append(_render_idea_cards(idea_cards))
-
-        if "idea_sources" not in data:
-            return _join_partial_sections(sections)
-        idea_sources = _validate_partial_list(data["idea_sources"], IdeaSource)
-        _validate_idea_source_references(idea_sources, idea_ids)
-        sections.append(_render_idea_sources(idea_sources))
-
-        if "parked_or_excluded" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_parked_or_excluded(
-                _validate_partial_list(
-                    data["parked_or_excluded"],
-                    IdeaParkedOrExcludedRecord,
-                )
-            )
-        )
-
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck)
-            )
-        )
-    except (TypeError, ValueError, ValidationError, KeyError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_idea_brainstorm_converge_markdown(data: Any) -> str | None:
-    if (
-        not isinstance(data, dict)
-        or "decision_matrix" not in data
-        or "ice_evaluations" not in data
-    ):
-        return None
-    try:
-        decision_matrix = IdeaDecisionMatrix.model_validate(data["decision_matrix"])
-        ice_evaluations = _validate_partial_list(
-            data["ice_evaluations"],
-            IdeaIceEvaluation,
-        )
-        idea_ids = _validate_idea_ice_evaluations(ice_evaluations)
-        _validate_idea_decision_matrix_references(
-            decision_matrix,
-            ice_evaluations,
-            idea_ids,
-        )
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = ["# 收敛聚焦"]
-    try:
-        sections.append(
-            _render_idea_converge_decision_matrix(
-                decision_matrix,
-                ice_evaluations,
-            )
-        )
-        sections.append(_render_idea_ice_evaluations(ice_evaluations))
-
-        if "resource_constraints" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_resource_constraints(
-                _validate_partial_list(
-                    data["resource_constraints"],
-                    IdeaResourceConstraint,
-                )
-            )
-        )
-
-        if "sensitivity_analysis" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_sensitivity_analysis(
-                _validate_partial_list(
-                    data["sensitivity_analysis"],
-                    IdeaSensitivityItem,
-                )
-            )
-        )
-
-        if "validation_experiments" not in data:
-            return _join_partial_sections(sections)
-        validation_experiments = _validate_partial_list(
-            data["validation_experiments"],
-            IdeaValidationExperiment,
-        )
-        _validate_idea_validation_experiment_references(
-            validation_experiments,
-            idea_ids,
-        )
-        sections.append(_render_idea_validation_experiments(validation_experiments))
-
-        if "merge_paths" not in data:
-            return _join_partial_sections(sections)
-        merge_paths = _validate_partial_list(data["merge_paths"], IdeaMergePath)
-        _validate_idea_merge_path_references(merge_paths, idea_ids)
-        sections.append(_render_idea_merge_paths(merge_paths))
-
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck)
-            )
-        )
-    except (TypeError, ValueError, ValidationError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_idea_brainstorm_concept_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "positioning_statement" not in data:
-        return None
-    try:
-        positioning_statement = IdeaPositioningStatement.model_validate(
-            data["positioning_statement"]
-        )
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = ["# 产品概念简报"]
-    try:
-        sections.append(_render_idea_concept_positioning(positioning_statement))
-
-        if "core_assumptions" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_concept_core_assumptions(
-                _validate_partial_list(
-                    data["core_assumptions"],
-                    IdeaCoreAssumption,
-                )
-            )
-        )
-
-        if "lean_canvas" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_concept_lean_canvas(
-                _validate_partial_list(data["lean_canvas"], IdeaLeanCanvasCell)
-            )
-        )
-
-        if "mvp_features" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_concept_mvp_features(
-                _validate_partial_list(data["mvp_features"], IdeaMvpFeature)
-            )
-        )
-
-        if "growth_funnel" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_concept_growth_funnel(
-                _validate_partial_list(
-                    data["growth_funnel"],
-                    IdeaGrowthFunnelStage,
-                )
-            )
-        )
-
-        if "premortem_risks" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_concept_premortem_risks(
-                _validate_partial_list(
-                    data["premortem_risks"],
-                    IdeaPremortemRisk,
-                )
-            )
-        )
-
-        if "validation_roadmap" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_concept_validation_roadmap(
-                _validate_partial_list(
-                    data["validation_roadmap"],
-                    IdeaValidationRoadmapItem,
-                )
-            )
-        )
-
-        if "out_of_scope" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_concept_out_of_scope(
-                _validate_partial_list(data["out_of_scope"], IdeaOutOfScopeItem)
-            )
-        )
-
-        if "decision_records" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_concept_decision_records(
-                _validate_partial_list(
-                    data["decision_records"],
-                    IdeaDecisionRecord,
-                )
-            )
-        )
-
-        if "next_actions" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_concept_next_actions(
-                _validate_partial_list(data["next_actions"], IdeaNextAction)
-            )
-        )
-
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck)
-            )
-        )
-    except (TypeError, ValueError, ValidationError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_value_discovery_elevator_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "positioning_summary" not in data:
-        return None
-    try:
-        if "document_info" in data:
-            DocumentInfo.model_validate(data["document_info"])
-        positioning_summary = PositioningSummary.model_validate(
-            data["positioning_summary"]
-        )
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = ["# 价值定位分析"]
-    try:
-        sections.append(_render_value_positioning_summary(positioning_summary))
-
-        if "value_flow" not in data:
-            return _join_partial_sections(sections)
-        sections.append(_render_value_flow(ValueFlow.model_validate(data["value_flow"])))
-
-        if "target_scenarios" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_target_scenarios(
-                _validate_partial_list(data["target_scenarios"], TargetScenario)
-            )
-        )
-
-        if "pain_evidence" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_pain_evidence(
-                _validate_partial_list(data["pain_evidence"], PainEvidence)
-            )
-        )
-
-        if "differentiators" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_differentiators(
-                _validate_partial_list(data["differentiators"], Differentiator)
-            )
-        )
-
-        if "business_feasibility" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_business_feasibility(
-                _validate_partial_list(
-                    data["business_feasibility"],
-                    BusinessFeasibility,
-                )
-            )
-        )
-
-        if "score_matrix" not in data or "score_summary" not in data:
-            return _join_partial_sections(sections)
-        score_items = _validate_partial_list(data["score_matrix"], ValueScore)
-        score_summary = _normalize_value_score_summary(
-            score_items,
-            ValueScoreSummary.model_validate(data["score_summary"]),
-        )
-        sections.append(
-            _render_value_score_matrix(
-                score_items,
-                score_summary,
-            )
-        )
-
-        if "assumptions" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_value_assumptions(
-                _validate_partial_list(data["assumptions"], ValueAssumption)
-            )
-        )
-
-        if "elevator_pitch" not in data:
-            return _join_partial_sections(sections)
-        if not isinstance(data["elevator_pitch"], str) or not data[
-            "elevator_pitch"
-        ].strip():
-            raise ValueError("elevator_pitch must be a non-empty string")
-        sections.append(_render_elevator_pitch(data["elevator_pitch"]))
-
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_value_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck)
-            )
-        )
-    except (TypeError, ValueError, ValidationError, KeyError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_value_discovery_persona_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "persona_summary" not in data:
-        return None
-    try:
-        if "document_info" in data:
-            DocumentInfo.model_validate(data["document_info"])
-        persona_summary = PersonaSummary.model_validate(data["persona_summary"])
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = ["# 用户画像分析"]
-    try:
-        sections.append(_render_persona_summary(persona_summary))
-
-        if "personas" not in data:
-            return _join_partial_sections(sections)
-        personas = _validate_partial_list(data["personas"], PersonaProfile)
-        sections.append(_render_persona_profiles(personas))
-
-        if "behavior_scenarios" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_persona_behavior_scenarios(
-                _validate_partial_list(
-                    data["behavior_scenarios"],
-                    PersonaBehaviorScenario,
-                ),
-                personas,
-            )
-        )
-
-        if "decision_chain" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_persona_decision_chain(
-                _validate_partial_list(data["decision_chain"], PersonaDecisionRole),
-                personas,
-            )
-        )
-
-        if "pain_evidence" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_persona_pain_evidence(
-                _validate_partial_list(data["pain_evidence"], PersonaPainEvidence),
-                personas,
-            )
-        )
-
-        if "anti_personas" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_anti_personas(
-                _validate_partial_list(data["anti_personas"], AntiPersona)
-            )
-        )
-
-        if "priority_ranking" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_persona_priority_ranking(
-                _validate_partial_list(
-                    data["priority_ranking"],
-                    PersonaPriorityRanking,
-                ),
-                personas,
-            )
-        )
-
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_value_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck)
-            )
-        )
-    except (TypeError, ValueError, ValidationError, KeyError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_value_discovery_journey_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "journey_stages" not in data:
-        return None
-    try:
-        if "document_info" in data:
-            DocumentInfo.model_validate(data["document_info"])
-        journey_stages = _validate_partial_list(data["journey_stages"], JourneyStage)
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = ["# 用户旅程分析"]
-    try:
-        sections.append(_render_journey_map(journey_stages))
-        sections.append(_render_journey_map_visual(journey_stages))
-        sections.append(_render_journey_stage_details(journey_stages))
-
-        if "pain_priorities" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_journey_pain_priorities(
-                _validate_partial_list(
-                    data["pain_priorities"],
-                    JourneyPainPriority,
-                ),
-                journey_stages,
-            )
-        )
-
-        if "opportunity_scores" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_journey_opportunity_scores(
-                _validate_partial_list(
-                    data["opportunity_scores"],
-                    JourneyOpportunityScore,
-                )
-            )
-        )
-
-        if "entry_strategy" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_journey_entry_strategy(
-                _validate_partial_list(data["entry_strategy"], JourneyEntryStrategy)
-            )
-        )
-
-        if "validation_experiments" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_journey_validation_experiments(
-                _validate_partial_list(
-                    data["validation_experiments"],
-                    JourneyValidationExperiment,
-                )
-            )
-        )
-
-        if "journey_summary" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_journey_summary(
-                JourneySummary.model_validate(data["journey_summary"])
-            )
-        )
-
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_value_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck)
-            )
-        )
-    except (TypeError, ValueError, ValidationError, KeyError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_value_discovery_blueprint_markdown(data: Any) -> str | None:
-    if (
-        not isinstance(data, dict)
-        or "document_info" not in data
-        or "product_overview" not in data
-    ):
-        return None
-    try:
-        document_info = BlueprintDocumentInfo.model_validate(data["document_info"])
-        product_overview = BlueprintProductOverview.model_validate(
-            data["product_overview"]
-        )
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = [f"# {document_info.product_name} 需求蓝图"]
-    try:
-        sections.append(_render_blueprint_product_overview(product_overview))
-
-        if "target_users" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_blueprint_target_users(
-                _validate_partial_list(data["target_users"], BlueprintTargetUser)
-            )
-        )
-
-        if "feature_modules" not in data or "requirements" not in data:
-            return _join_partial_sections(sections)
-        feature_modules = _validate_partial_list(
-            data["feature_modules"],
-            BlueprintFeatureModule,
-        )
-        requirements = _validate_partial_list(
-            data["requirements"],
-            BlueprintRequirement,
-        )
-        sections.append(_render_blueprint_requirements(feature_modules, requirements))
-
-        if "main_flow" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_blueprint_main_flow(
-                BlueprintMainFlow.model_validate(data["main_flow"])
-            )
-        )
-
-        if "success_metrics" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_blueprint_success_metrics(
-                _validate_partial_list(
-                    data["success_metrics"],
-                    BlueprintSuccessMetric,
-                )
-            )
-        )
-
-        if "mvp_plan" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_blueprint_mvp_plan(
-                BlueprintMvpPlan.model_validate(data["mvp_plan"])
-            )
-        )
-
-        if "non_functional_requirements" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_blueprint_non_functional_requirements(
-                _validate_partial_list(
-                    data["non_functional_requirements"],
-                    BlueprintNonFunctionalRequirement,
-                )
-            )
-        )
-
-        if "acceptance_criteria" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_blueprint_acceptance_criteria(
-                _validate_partial_list(
-                    data["acceptance_criteria"],
-                    BlueprintAcceptanceCriterion,
-                )
-            )
-        )
-
-        if "roadmap" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_blueprint_roadmap(
-                _validate_partial_list(data["roadmap"], BlueprintRoadmapItem)
-            )
-        )
-
-        if "risks" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_blueprint_risks(
-                _validate_partial_list(data["risks"], BlueprintRisk)
-            )
-        )
-
-        if "lisa_handoff_inputs" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_blueprint_lisa_handoff_inputs(
-                _validate_partial_list(
-                    data["lisa_handoff_inputs"],
-                    BlueprintLisaHandoffInput,
-                )
-            )
-        )
-
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_blueprint_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck)
-            )
-        )
-        sections.append(_render_blueprint_document_info(document_info))
-    except (TypeError, ValueError, ValidationError, KeyError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_user_story_scope_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "document_info" not in data:
-        return None
-    try:
-        DocumentInfo.model_validate(data["document_info"])
-    except (TypeError, ValueError, ValidationError):
-        return None
-    sections = ["# 用户故事拆解文档"]
-    try:
-        if "in_scope_requirements" not in data:
-            return None
-        sections.append(
-            _render_user_story_scope_requirements(
-                _validate_partial_list(
-                    data["in_scope_requirements"],
-                    UserStoryScopeRequirement,
-                )
-            )
-        )
-        if "traceability_index" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_traceability_index(
-                _validate_partial_list(
-                    data["traceability_index"],
-                    UserStoryScopeTrace,
-                )
-            )
-        )
-        if "out_of_scope_items" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_out_of_scope(
-                _validate_partial_list(
-                    data["out_of_scope_items"],
-                    UserStoryOutOfScopeItem,
-                )
-            )
-        )
-        if "blocking_questions" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_blocking_questions(
-                _validate_partial_list(
-                    data["blocking_questions"],
-                    UserStoryBlockingQuestion,
-                )
-            )
-        )
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck),
-                heading_number=5,
-            )
-        )
-    except (TypeError, ValueError, ValidationError):
-        return _join_partial_sections(sections)
-    return _join_partial_sections(sections)
-
-
-def render_partial_user_story_map_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "document_info" not in data:
-        return None
-    try:
-        DocumentInfo.model_validate(data["document_info"])
-    except (TypeError, ValueError, ValidationError):
-        return None
-    sections = ["# 用户故事拆解文档"]
-    try:
-        if "activities" not in data:
-            return None
-        activities = _validate_partial_list(data["activities"], UserStoryActivity)
-        sections.append(_render_user_story_activities(activities))
-        if "tasks" not in data:
-            return _join_partial_sections(sections)
-        tasks = _validate_partial_list(data["tasks"], UserStoryTask)
-        sections.append(_render_user_story_tasks(tasks))
-        if "story_map_items" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_map(
-                _validate_partial_list(
-                    data["story_map_items"],
-                    UserStoryMapItem,
-                ),
-                activities,
-                tasks,
-            )
-        )
-        if "mvp_slices" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_mvp_slices(
-                _validate_partial_list(data["mvp_slices"], UserStoryMvpSlice)
-            )
-        )
-        if "release_slices" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_release_slices(
-                _validate_partial_list(
-                    data["release_slices"],
-                    UserStoryReleaseSlice,
-                )
-            )
-        )
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck),
-                heading_number=6,
-            )
-        )
-    except (TypeError, ValueError, ValidationError, KeyError):
-        return _join_partial_sections(sections)
-    return _join_partial_sections(sections)
-
-
-def render_partial_user_stories_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "document_info" not in data:
-        return None
-    try:
-        DocumentInfo.model_validate(data["document_info"])
-    except (TypeError, ValueError, ValidationError):
-        return None
-    sections = ["# 用户故事拆解文档"]
-    try:
-        if "split_principles" not in data:
-            return None
-        sections.append(
-            _render_user_story_split_principles(
-                _validate_partial_list(
-                    data["split_principles"],
-                    UserStorySplitPrinciple,
-                )
-            )
-        )
-        if "story_cards" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_cards(
-                _validate_partial_list(data["story_cards"], UserStoryCard)
-            )
-        )
-        if "ready_story_summaries" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_ready_summaries(
-                _validate_partial_list(
-                    data["ready_story_summaries"],
-                    UserStoryReadySummary,
-                )
-            )
-        )
-        if "not_ready_stories" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_not_ready(
-                _validate_partial_list(
-                    data["not_ready_stories"],
-                    UserStoryNotReadySummary,
-                )
-            )
-        )
-        if "open_questions" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_open_questions(
-                _validate_partial_list(
-                    data["open_questions"],
-                    UserStoryOpenQuestion,
-                )
-            )
-        )
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck),
-                heading_number=6,
-            )
-        )
-    except (TypeError, ValueError, ValidationError):
-        return _join_partial_sections(sections)
-    return _join_partial_sections(sections)
-
-
-def render_partial_user_story_handoff_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "document_info" not in data:
-        return None
-    try:
-        DocumentInfo.model_validate(data["document_info"])
-    except (TypeError, ValueError, ValidationError):
-        return None
-    sections = ["# 单故事 Handoff 清单"]
-    try:
-        if "ready_story_overview" not in data:
-            return None
-        sections.append(
-            _render_user_story_ready_overview(
-                _validate_partial_list(
-                    data["ready_story_overview"],
-                    UserStoryReadyOverview,
-                )
-            )
-        )
-        if "single_story_packets" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_packets(
-                _validate_partial_list(
-                    data["single_story_packets"],
-                    UserStoryPacket,
-                )
-            )
-        )
-        if "upstream_traceability" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_upstream_traceability(
-                _validate_partial_list(
-                    data["upstream_traceability"],
-                    UserStoryUpstreamTrace,
-                )
-            )
-        )
-        if "not_ready_blockers" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_not_ready_blockers(
-                _validate_partial_list(
-                    data["not_ready_blockers"],
-                    UserStoryNotReadyBlocker,
-                )
-            )
-        )
-        if "ai_coding_input_boundary" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_ai_coding_boundary(
-                AiCodingInputBoundary.model_validate(
-                    data["ai_coding_input_boundary"]
-                )
-            )
-        )
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_user_story_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck),
-                heading_number=6,
-            )
-        )
-    except (TypeError, ValueError, ValidationError):
-        return _join_partial_sections(sections)
-    return _join_partial_sections(sections)
-
-
-def render_partial_test_design_clarify_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "document_info" not in data:
-        return None
-    try:
-        document_info = DocumentInfo.model_validate(data["document_info"])
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = ["# 需求分析文档"]
-    try:
-        if "requirement_facts" not in data:
-            return None
-        sections.append(
-            _render_requirement_facts(
-                _validate_partial_list(data["requirement_facts"], RequirementFact)
-            )
-        )
-
-        if "system_boundaries" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_system_boundaries(
-                _validate_partial_list(data["system_boundaries"], SystemBoundary)
-            )
-        )
-
-        if "business_rules" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_business_rules(
-                _validate_partial_list(data["business_rules"], BusinessRule)
-            )
-        )
-
-        if "flow_links" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_flow_links(
-                _validate_partial_list(data["flow_links"], FlowLink)
-            )
-        )
-
-        if "clarification_questions" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_clarification_questions(
-                _validate_partial_list(
-                    data["clarification_questions"],
-                    ClarificationQuestion,
-                )
-            )
-        )
-
-        if "quality_requirements" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_quality_requirements(
-                _validate_partial_list(
-                    data["quality_requirements"],
-                    QualityRequirement,
-                )
-            )
-        )
-
-        if "downstream_inputs" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_downstream_inputs(
-                _validate_partial_list(data["downstream_inputs"], DownstreamInput)
-            )
-        )
-
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck)
-            )
-        )
-        sections.append(_render_document_info(document_info))
-    except (TypeError, ValueError, ValidationError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
-
-
-def render_partial_test_design_strategy_markdown(data: Any) -> str | None:
-    if not isinstance(data, dict) or "document_info" not in data:
-        return None
-    try:
-        DocumentInfo.model_validate(data["document_info"])
-    except (TypeError, ValueError, ValidationError):
-        return None
-
-    sections = ["# 测试策略蓝图"]
-    try:
-        if "strategy_summary" not in data:
-            return None
-        sections.append(
-            _render_strategy_summary(
-                StrategySummary.model_validate(data["strategy_summary"])
-            )
-        )
-
-        if "quality_goals" not in data:
-            return _join_partial_sections(sections)
-        quality_goals = _validate_partial_list(data["quality_goals"], QualityGoal)
-        sections.append(
-            _render_quality_goals(quality_goals)
-        )
-
-        if "risks" not in data:
-            return _join_partial_sections(sections)
-        risks = _validate_partial_list(data["risks"], StrategyRisk)
-        sections.append(_render_strategy_risks(risks))
-
-        if (
-            "test_techniques" not in data
-            or "test_layers" not in data
-            or "test_points" not in data
-        ):
-            return _join_partial_sections(sections)
-        test_techniques = _validate_partial_list(
-            data["test_techniques"],
-            TestTechnique,
-        )
-        test_layers = _validate_partial_list(
-            data["test_layers"],
-            TestLayer,
-        )
-        test_points = _validate_partial_list(
-            data["test_points"],
-            TestPoint,
-        )
-        _validate_strategy_references(
-            quality_goals,
-            risks,
-            test_techniques,
-            test_layers,
-            test_points,
-        )
-        sections.append(_render_test_techniques(test_techniques))
-        sections.append(_render_test_layers(test_layers))
-        sections.append(_render_test_points(test_points))
-
-        if "tradeoffs" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_tradeoffs(
-                _validate_partial_list(data["tradeoffs"], Tradeoff)
-            )
-        )
-
-        if "stage_gate" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_stage_gate(
-                _validate_partial_list(data["stage_gate"], StageGateCheck)
-            )
-        )
-    except (TypeError, ValueError, ValidationError):
-        return _join_partial_sections(sections)
-
-    return _join_partial_sections(sections)
 
 
 def render_test_design_clarify_markdown(data: ClarifyArtifactData) -> str:
     sections = [
         "# 需求分析文档",
+        _render_document_info(data.document_info),
         _render_requirement_facts(data.requirement_facts),
         _render_system_boundaries(data.system_boundaries),
         _render_business_rules(data.business_rules),
@@ -5493,8 +2609,113 @@ def render_test_design_clarify_markdown(data: ClarifyArtifactData) -> str:
         _render_quality_requirements(data.quality_requirements),
         _render_downstream_inputs(data.downstream_inputs),
         _render_stage_gate(data.stage_gate),
-        _render_document_info(data.document_info),
     ]
+    return "\n\n".join(sections)
+
+
+def render_partial_artifact_data_markdown(
+    artifact_data: dict[str, Any],
+    *,
+    workflow_id: str,
+    current_stage_id: str,
+) -> str | None:
+    if (workflow_id, current_stage_id) == ("TEST_DESIGN", "CLARIFY"):
+        return _render_partial_test_design_clarify_markdown(artifact_data)
+    return None
+
+
+def _validate_partial_model(
+    model: type[StrictArtifactDataModel],
+    value: Any,
+) -> StrictArtifactDataModel | None:
+    try:
+        return model.model_validate(value)
+    except (TypeError, ValidationError, ValueError):
+        return None
+
+
+def _validate_partial_model_list(
+    model: type[StrictArtifactDataModel],
+    value: Any,
+) -> list[StrictArtifactDataModel] | None:
+    if not isinstance(value, list) or not value:
+        return None
+    try:
+        return [model.model_validate(item) for item in value]
+    except (TypeError, ValidationError, ValueError):
+        return None
+
+
+def _render_partial_test_design_clarify_markdown(
+    artifact_data: dict[str, Any],
+) -> str | None:
+    sections = ["# 需求分析文档"]
+
+    document_info = _validate_partial_model(
+        DocumentInfo,
+        artifact_data.get("document_info"),
+    )
+    if document_info is not None:
+        sections.append(_render_document_info(document_info))
+
+    requirement_facts = _validate_partial_model_list(
+        RequirementFact,
+        artifact_data.get("requirement_facts"),
+    )
+    if requirement_facts is not None:
+        sections.append(_render_requirement_facts(requirement_facts))
+
+    system_boundaries = _validate_partial_model_list(
+        SystemBoundary,
+        artifact_data.get("system_boundaries"),
+    )
+    if system_boundaries is not None:
+        sections.append(_render_system_boundaries(system_boundaries))
+
+    business_rules = _validate_partial_model_list(
+        BusinessRule,
+        artifact_data.get("business_rules"),
+    )
+    if business_rules is not None:
+        sections.append(_render_business_rules(business_rules))
+
+    flow_links = _validate_partial_model_list(
+        FlowLink,
+        artifact_data.get("flow_links"),
+    )
+    if flow_links is not None:
+        sections.append(_render_flow_links(flow_links))
+
+    clarification_questions = _validate_partial_model_list(
+        ClarificationQuestion,
+        artifact_data.get("clarification_questions"),
+    )
+    if clarification_questions is not None:
+        sections.append(_render_clarification_questions(clarification_questions))
+
+    quality_requirements = _validate_partial_model_list(
+        QualityRequirement,
+        artifact_data.get("quality_requirements"),
+    )
+    if quality_requirements is not None:
+        sections.append(_render_quality_requirements(quality_requirements))
+
+    downstream_inputs = _validate_partial_model_list(
+        DownstreamInput,
+        artifact_data.get("downstream_inputs"),
+    )
+    if downstream_inputs is not None:
+        sections.append(_render_downstream_inputs(downstream_inputs))
+
+    stage_gate = _validate_partial_model_list(
+        StageGateCheck,
+        artifact_data.get("stage_gate"),
+    )
+    if stage_gate is not None:
+        sections.append(_render_stage_gate(stage_gate))
+
+    if len(sections) == 1:
+        return None
     return "\n\n".join(sections)
 
 
@@ -5638,8 +2859,6 @@ def render_test_design_strategy_markdown(data: StrategyArtifactData) -> str:
 
 
 def render_test_design_cases_markdown(data: CasesArtifactData) -> str:
-    if data.case_statistics is None:
-        raise ValueError("case_statistics must be derived before rendering")
     sections = [
         "# 测试用例集",
         _render_case_statistics(data.case_statistics),
@@ -5657,6 +2876,7 @@ def render_test_design_cases_markdown(data: CasesArtifactData) -> str:
 def render_test_design_delivery_markdown(data: DeliveryArtifactData) -> str:
     sections = [
         "# 测试设计文档",
+        _render_delivery_document_info(data.document_info, data.delivery_metrics),
         _render_delivery_executive_summary(data.executive_summary),
         _render_delivery_requirement_summary(data.requirement_summary),
         _render_delivery_strategy_summary(data.strategy_summary_items),
@@ -5666,7 +2886,6 @@ def render_test_design_delivery_markdown(data: DeliveryArtifactData) -> str:
         _render_delivery_acceptance_checklist(data.acceptance_checklist),
         _render_delivery_signoffs(data.signoffs),
         _render_delivery_change_log(data.change_log),
-        _render_delivery_document_info(data.document_info, data.delivery_metrics),
     ]
     return "\n\n".join(sections)
 
@@ -5674,6 +2893,7 @@ def render_test_design_delivery_markdown(data: DeliveryArtifactData) -> str:
 def render_req_review_review_markdown(data: ReqReviewArtifactData) -> str:
     sections = [
         "# 需求评审问题清单",
+        _render_req_review_info(data.review_info),
         _render_req_review_scope(data.scope_items),
         _render_req_review_quality_overview(data.quality_overview),
         _render_req_review_quality_flowchart(),
@@ -5683,7 +2903,6 @@ def render_req_review_review_markdown(data: ReqReviewArtifactData) -> str:
         _render_req_review_issue_groups(data.issue_groups),
         _render_req_review_revision_suggestions(data.revision_suggestions),
         _render_req_review_stage_gate(data.stage_gate),
-        _render_req_review_info(data.review_info),
     ]
     return "\n\n".join(sections)
 
@@ -5762,6 +2981,7 @@ def render_value_discovery_blueprint_markdown(
 ) -> str:
     sections = [
         f"# {data.document_info.product_name} 需求蓝图",
+        _render_blueprint_document_info(data.document_info),
         _render_blueprint_product_overview(data.product_overview),
         _render_blueprint_target_users(data.target_users),
         _render_blueprint_requirements(data.feature_modules, data.requirements),
@@ -5774,489 +2994,259 @@ def render_value_discovery_blueprint_markdown(
         _render_blueprint_risks(data.risks),
         _render_blueprint_lisa_handoff_inputs(data.lisa_handoff_inputs),
         _render_blueprint_stage_gate(data.stage_gate),
-        _render_blueprint_document_info(data.document_info),
     ]
     return "\n\n".join(sections)
 
 
-def render_user_story_scope_markdown(data: UserStoryScopeArtifactData) -> str:
-    sections = [
-        "# 用户故事拆解文档",
-        _render_user_story_scope_requirements(data.in_scope_requirements),
-        _render_user_story_traceability_index(data.traceability_index),
-        _render_user_story_out_of_scope(data.out_of_scope_items),
-        _render_user_story_blocking_questions(data.blocking_questions),
-        _render_user_story_stage_gate(data.stage_gate, heading_number=5),
+def render_prd_review_markdown(data: PrdReviewArtifactData, stage_id: str) -> str:
+    common = [
+        _render_prd_document_info(data.document_info),
+        _render_prd_goal_scope(data.prd_inventory),
     ]
-    return "\n\n".join(sections)
-
-
-def render_user_story_map_markdown(data: UserStoryMapArtifactData) -> str:
-    sections = [
-        "# 用户故事拆解文档",
-        _render_user_story_activities(data.activities),
-        _render_user_story_tasks(data.tasks),
-        _render_user_story_map(data.story_map_items, data.activities, data.tasks),
-        _render_user_story_mvp_slices(data.mvp_slices),
-        _render_user_story_release_slices(data.release_slices),
-        _render_user_story_stage_gate(data.stage_gate, heading_number=6),
-    ]
-    return "\n\n".join(sections)
-
-
-def render_user_stories_markdown(data: UserStoriesArtifactData) -> str:
-    sections = [
-        "# 用户故事拆解文档",
-        _render_user_story_split_principles(data.split_principles),
-        _render_user_story_cards(data.story_cards),
-        _render_user_story_ready_summaries(data.ready_story_summaries),
-        _render_user_story_not_ready(data.not_ready_stories),
-        _render_user_story_open_questions(data.open_questions),
-        _render_user_story_stage_gate(data.stage_gate, heading_number=6),
-    ]
-    return "\n\n".join(sections)
-
-
-def render_user_story_handoff_markdown(
-    data: UserStoryHandoffArtifactData,
-) -> str:
-    sections = [
-        "# 单故事 Handoff 清单",
-        _render_user_story_ready_overview(data.ready_story_overview),
-        _render_user_story_packets(data.single_story_packets),
-        _render_user_story_upstream_traceability(data.upstream_traceability),
-        _render_user_story_not_ready_blockers(data.not_ready_blockers),
-        _render_user_story_ai_coding_boundary(data.ai_coding_input_boundary),
-        _render_user_story_stage_gate(data.stage_gate, heading_number=6),
-    ]
-    return "\n\n".join(sections)
-
-
-def _render_user_story_scope_requirements(
-    items: list[UserStoryScopeRequirement],
-) -> str:
-    rows = [
-        (
-            item.requirement_id,
-            item.name,
-            item.user_value,
-            item.priority,
-            item.split_decision,
-            item.status,
-        )
-        for item in items
-    ]
-    return "## 1. 拆分范围\n" + _markdown_table(
-        ["需求 ID", "需求名称", "用户价值", "优先级", "是否进入拆分", "状态"],
-        rows,
-    )
-
-
-def _render_user_story_traceability_index(
-    items: list[UserStoryScopeTrace],
-) -> str:
-    rows = [
-        (
-            item.requirement_id,
-            item.source,
-            item.target_user,
-            item.scenario,
-            item.acceptance_hint,
-            item.status,
-        )
-        for item in items
-    ]
-    return (
-        "## 2. 需求追溯索引\n"
-        + _markdown_table(
-            ["需求 ID", "来源章节 / 上游依据", "目标用户", "关键场景", "验收线索", "状态"],
-            rows,
-        )
-        + "\n\n"
-        + _render_user_story_scope_flowchart(items)
-    )
-
-
-def _render_user_story_scope_flowchart(items: list[UserStoryScopeTrace]) -> str:
-    lines = [
-        "```mermaid",
-        "flowchart TD",
-        '    Blueprint["需求蓝图"] --> InScope["进入拆分范围"]',
-    ]
-    for item in items:
-        label = _escape_mermaid_label(f"{item.requirement_id} {item.scenario}")
-        lines.append(f'    InScope --> {item.requirement_id.replace("-", "")}["{label}"]')
-    lines.append("```")
-    return "\n".join(lines)
-
-
-def _render_user_story_out_of_scope(
-    items: list[UserStoryOutOfScopeItem],
-) -> str:
-    rows = [
-        (
-            item.requirement_id,
-            item.item,
-            item.reason,
-            item.reentry_condition,
-            item.status,
-        )
-        for item in items
-    ]
-    return "## 3. 不拆范围\n" + _markdown_table(
-        ["需求 ID", "范围项", "不拆原因", "重新进入条件", "状态"],
-        rows,
-    )
-
-
-def _render_user_story_blocking_questions(
-    items: list[UserStoryBlockingQuestion],
-) -> str:
-    rows = [
-        (
-            item.question_id,
-            item.requirement_id,
-            item.question,
-            item.impact,
-            item.owner,
-            item.status,
-        )
-        for item in items
-    ]
-    return "## 4. 阻塞问题\n" + _markdown_table(
-        ["问题 ID", "关联需求 ID", "问题", "对拆分的影响", "需要谁确认", "状态"],
-        rows,
-    )
-
-
-def _render_user_story_activities(items: list[UserStoryActivity]) -> str:
-    rows = [
-        (
-            item.activity_id,
-            item.activity,
-            item.user_goal,
-            _join_inline(item.requirement_ids),
-            item.priority,
-        )
-        for item in items
-    ]
-    return "## 1. 用户活动主干\n" + _markdown_table(
-        ["活动 ID", "用户活动", "用户目标", "关联需求 ID", "优先级"],
-        rows,
-    )
-
-
-def _render_user_story_tasks(items: list[UserStoryTask]) -> str:
-    rows = [
-        (
-            item.task_id,
-            item.activity_id,
-            item.task,
-            item.success_result,
-            _join_inline(item.requirement_ids),
-            item.status,
-        )
-        for item in items
-    ]
-    return "## 2. 用户任务流\n" + _markdown_table(
-        ["任务 ID", "活动 ID", "用户任务", "成功结果", "关联需求 ID", "状态"],
-        rows,
-    )
-
-
-def _render_user_story_map(
-    items: list[UserStoryMapItem],
-    activities: list[UserStoryActivity],
-    tasks: list[UserStoryTask],
-) -> str:
-    rows = [
-        (
-            item.story_id,
-            item.activity_id,
-            item.task_id,
-            item.title,
-            _join_inline(item.requirement_ids),
-            item.slice_id,
-            item.status,
-        )
-        for item in items
-    ]
-    return (
-        "## 3. 用户故事地图\n"
-        + _render_user_story_map_flowchart(items, activities, tasks)
-        + "\n\n"
-        + _markdown_table(
-            ["Story ID", "活动 ID", "任务 ID", "故事标题", "来源需求", "Slice", "状态"],
-            rows,
-        )
-    )
-
-
-def _render_user_story_map_flowchart(
-    items: list[UserStoryMapItem],
-    activities: list[UserStoryActivity],
-    tasks: list[UserStoryTask],
-) -> str:
-    activity_lookup = {item.activity_id: item for item in activities}
-    task_lookup = {item.task_id: item for item in tasks}
-    lines = ["```mermaid", "flowchart TD"]
-    for item in items:
-        activity = activity_lookup[item.activity_id]
-        task = task_lookup[item.task_id]
-        activity_node = _safe_mermaid_node_id(activity.activity_id)
-        task_node = _safe_mermaid_node_id(task.task_id)
-        story_node = _safe_mermaid_node_id(item.story_id)
-        slice_node = _safe_mermaid_node_id(item.slice_id)
-        lines.extend([
-            f'    {activity_node}["{_escape_mermaid_label(activity.activity_id + " " + activity.activity)}"] --> {task_node}["{_escape_mermaid_label(task.task_id + " " + task.task)}"]',
-            f'    {task_node} --> {story_node}["{_escape_mermaid_label(item.story_id + " " + item.title)}"]',
-            f'    {story_node} --> {slice_node}["{_escape_mermaid_label(item.slice_id)}"]',
-        ])
-    lines.append("```")
-    return "\n".join(lines)
-
-
-def _render_user_story_mvp_slices(items: list[UserStoryMvpSlice]) -> str:
-    rows = [
-        (
-            item.slice_id,
-            _join_inline(item.story_ids),
-            item.business_outcome,
-            _join_inline(item.excluded_items),
-            item.acceptance,
-        )
-        for item in items
-    ]
-    return "## 4. MVP Slice\n" + _markdown_table(
-        ["Slice ID", "包含 Story ID", "可验证业务闭环", "排除项", "验收口径"],
-        rows,
-    )
-
-
-def _render_user_story_release_slices(items: list[UserStoryReleaseSlice]) -> str:
-    rows = [
-        (
-            item.slice_id,
-            _join_inline(item.story_ids),
-            item.release_goal,
-            _join_inline(item.dependencies),
-            item.status,
-        )
-        for item in items
-    ]
-    return "## 5. Release Slice\n" + _markdown_table(
-        ["Slice ID", "包含 Story ID", "发布目标", "依赖", "状态"],
-        rows,
-    )
-
-
-def _render_user_story_split_principles(
-    items: list[UserStorySplitPrinciple],
-) -> str:
-    rows = [
-        (item.principle, item.applied, item.anti_pattern)
-        for item in items
-    ]
-    return "## 1. 故事拆分原则\n" + _markdown_table(
-        ["原则", "本轮采用方式", "反例拦截"],
-        rows,
-    )
-
-
-def _render_user_story_cards(items: list[UserStoryCard]) -> str:
-    rows = [
-        (
-            item.story_id,
-            item.title,
-            item.user_role,
-            item.user_goal,
-            item.benefit,
-            _join_inline(item.requirement_ids),
-            f"{item.activity_id} / {item.task_id}",
-            _join_inline(item.business_rules),
-            _join_inline(item.acceptance_criteria),
-            _join_inline(item.out_of_scope),
-            _join_inline(item.dependencies),
-            item.status,
-        )
-        for item in items
-    ]
-    return "## 2. 用户故事卡片\n" + _markdown_table(
-        [
-            "Story ID",
-            "标题",
-            "作为",
-            "我想要",
-            "以便",
-            "来源需求",
-            "用户活动 / 任务",
-            "业务规则",
-            "验收标准",
-            "不包含范围",
-            "依赖",
-            "状态",
-        ],
-        rows,
-    )
-
-
-def _render_user_story_ready_summaries(
-    items: list[UserStoryReadySummary],
-) -> str:
-    rows = [
-        (
-            item.story_id,
-            item.ready_reason,
-            item.handoff_summary,
-            item.acceptance_criteria_count,
-            item.concerns,
-        )
-        for item in items
-    ]
-    return "## 3. Ready Stories\n" + _markdown_table(
-        ["Story ID", "Ready 理由", "可交接需求摘要", "验收标准数量", "仍需关注"],
-        rows,
-    )
-
-
-def _render_user_story_not_ready(items: list[UserStoryNotReadySummary]) -> str:
-    rows = [
-        (
-            item.story_id,
-            _join_inline(item.requirement_ids),
-            item.blocker_reason,
-            _join_inline(item.questions),
-            item.suggested_next_step,
-            item.status,
-        )
-        for item in items
-    ]
-    return "## 4. Not Ready Stories\n" + _markdown_table(
-        ["Story ID", "来源需求", "阻塞原因", "需要补充的问题", "建议下一步", "状态"],
-        rows,
-    )
-
-
-def _render_user_story_open_questions(items: list[UserStoryOpenQuestion]) -> str:
-    rows = [
-        (
-            item.question_id,
-            item.story_id,
-            item.question,
-            item.decision_impact,
-            item.owner,
-            item.status,
-        )
-        for item in items
-    ]
-    return "## 5. 开放问题\n" + _markdown_table(
-        ["问题 ID", "关联 Story ID", "问题", "决策影响", "责任方", "状态"],
-        rows,
-    )
-
-
-def _render_user_story_ready_overview(
-    items: list[UserStoryReadyOverview],
-) -> str:
-    rows = [
-        (
-            item.story_id,
-            item.title,
-            _join_inline(item.requirement_ids),
-            item.user_value,
-            item.ready_reason,
-            item.status,
-        )
-        for item in items
-    ]
-    return "## 1. Ready Story 总览\n" + _markdown_table(
-        ["storyId", "标题", "requirementId", "用户价值", "Ready 理由", "状态"],
-        rows,
-    )
-
-
-def _render_user_story_packets(items: list[UserStoryPacket]) -> str:
-    sections = ["## 2. 单故事需求包"]
-    for item in items:
-        rows = [
-            ("storyId", item.story_id),
-            ("requirementId", _join_inline(item.requirement_ids)),
-            ("userStory", item.user_story),
-            ("acceptanceCriteria", _join_inline(item.acceptance_criteria)),
-            ("businessRules", _join_inline(item.business_rules)),
-            ("nonFunctionalNotes", _join_inline(item.non_functional_notes)),
-            ("outOfScope", _join_inline(item.out_of_scope)),
-            ("dependencies", _join_inline(item.dependencies)),
-            ("openQuestions", _join_inline(item.open_questions)),
+    if stage_id == "INVENTORY":
+        sections = [
+            "# PRD 输入盘点",
+            *common,
+            _render_prd_inventory(data.prd_inventory),
+            _render_prd_inventory_mindmap(data.prd_inventory),
+            _render_prd_users_and_scenarios(data.prd_inventory),
+            _render_prd_existing_acceptance(data.acceptance_criteria),
+            _render_prd_missing_information(data.quality_findings),
+            _render_prd_stage_gate(data.stage_gate),
         ]
-        sections.append(
-            f"### {item.story_id}\n" + _markdown_table(["字段", "内容"], rows)
-        )
+    elif stage_id == "QUALITY_AUDIT":
+        sections = [
+            "# PRD 质量评审",
+            *common,
+            _render_prd_quality_summary(data.quality_findings),
+            _render_prd_quality_score_matrix(data.quality_findings),
+            _render_prd_findings(data.quality_findings),
+            _render_prd_risk_impact(data.quality_findings),
+            _render_prd_stage_gate(data.stage_gate),
+        ]
+    elif stage_id == "COMPLETION_PLAN":
+        sections = [
+            "# PRD 补全建议",
+            *common,
+            _render_prd_quality_summary(data.quality_findings),
+            _render_prd_completion_actions(data.completion_actions),
+            _render_prd_revision_structure(data.revision_sections),
+            _render_prd_verification_and_review(data.completion_actions),
+            _render_prd_stage_gate(data.stage_gate),
+        ]
+    elif stage_id == "REVISION_BLUEPRINT":
+        sections = [
+            "# PRD 修订蓝图",
+            *common,
+            _render_prd_quality_summary(data.quality_findings),
+            _render_prd_completion_actions(data.completion_actions),
+            _render_prd_revision_structure(data.revision_sections),
+            _render_prd_core_rewrites(data.revision_sections),
+            _render_prd_acceptance_criteria(data.acceptance_criteria),
+            _render_prd_handoff_inputs(data.handoff_inputs),
+            _render_prd_review_conditions(data.completion_actions),
+            _render_prd_stage_gate(data.stage_gate),
+        ]
+    else:
+        raise ValueError(f"unsupported PRD_REVIEW stage: {stage_id}")
     return "\n\n".join(sections)
 
 
-def _render_user_story_upstream_traceability(
-    items: list[UserStoryUpstreamTrace],
-) -> str:
+
+
+def render_story_breakdown_markdown(data: StoryBreakdownArtifactData) -> str:
+    sections = [
+        "# 用户故事拆解包",
+        _render_story_input_analysis(data.input_analysis),
+        _render_story_epic_map(data.epics),
+        _render_story_backlog(data.user_stories),
+        _render_story_acceptance_criteria(data.acceptance_criteria),
+        _render_story_dependencies(data.dependencies),
+        _render_story_sprint_slices(data.sprint_slices),
+        _render_story_lisa_handoff_inputs(data.lisa_handoff_inputs),
+        _render_story_stage_gate(data.stage_gate),
+    ]
+    return "\n\n".join(sections)
+
+
+def _render_story_input_analysis(data: StoryBreakdownInputAnalysis) -> str:
+    rows = [
+        ("输入类型", data.source_type),
+        ("产品目标", data.product_goal),
+        ("目标用户", "、".join(data.target_users)),
+        ("关键约束", "；".join(data.constraints)),
+        ("待澄清问题", "；".join(data.open_questions)),
+    ]
+    return "## 输入分析\n" + _markdown_table(["维度", "内容"], rows)
+
+
+def _render_story_epic_map(epics: list[StoryBreakdownEpic]) -> str:
+    flow_lines = ["```mermaid", "flowchart TD", '    Goal["产品目标"]']
+    node_ids: dict[str, str] = {}
+    for epic in epics:
+        node_id = _node_id(epic.epic_id, node_ids)
+        label = (
+            f"{_escape_mermaid_label(epic.epic_id)} "
+            f"{_escape_mermaid_label(epic.name)}"
+        )
+        flow_lines.append(f'    Goal --> {node_id}["{label}"]')
+    flow_lines.append("```")
+    rows = [
+        (
+            item.epic_id,
+            item.name,
+            item.value_goal,
+            item.scope,
+            item.priority,
+            "、".join(item.dependencies),
+        )
+        for item in epics
+    ]
+    return "\n".join(
+        [
+            "## Epic Map",
+            *flow_lines,
+            "",
+            _markdown_table(
+                ["Epic ID", "名称", "价值目标", "范围边界", "优先级", "依赖"],
+                rows,
+            ),
+        ]
+    )
+
+
+def _render_story_backlog(stories: list[StoryBreakdownUserStory]) -> str:
     rows = [
         (
             item.story_id,
-            item.source_workflow,
-            item.source_stage,
-            _join_inline(item.source_requirements),
-            item.source_slice,
-            item.trace_note,
+            item.epic_id,
+            item.title,
+            item.user_story,
+            item.priority,
+            item.sprint,
+            item.story_points,
+            item.testability,
+            item.status,
         )
-        for item in items
+        for item in stories
     ]
-    return "## 3. 上游追溯\n" + _markdown_table(
-        ["storyId", "sourceWorkflow", "sourceStage", "sourceRequirement", "sourceSlice", "追溯说明"],
-        rows,
+    visual_rows = [
+        {
+            "Epic": item.epic_id,
+            "Story": f"{item.story_id} {item.title}",
+            "优先级": item.priority,
+            "Sprint": item.sprint,
+            "依赖": "",
+            "可测试性": item.testability,
+        }
+        for item in stories
+    ]
+    story_map = {
+        "type": "story-map",
+        "title": "用户故事地图",
+        "columns": ["Epic", "Story", "优先级", "Sprint", "依赖", "可测试性"],
+        "rows": visual_rows,
+    }
+    return "\n".join(
+        [
+            "## User Story Backlog",
+            _markdown_table(
+                [
+                    "Story ID",
+                    "Epic ID",
+                    "标题",
+                    "用户故事",
+                    "优先级",
+                    "Sprint",
+                    "点数",
+                    "可测试性",
+                    "状态",
+                ],
+                rows,
+            ),
+            "",
+            "```ai4se-visual",
+            json.dumps(story_map, ensure_ascii=False, indent=2),
+            "```",
+        ]
     )
 
 
-def _render_user_story_not_ready_blockers(
-    items: list[UserStoryNotReadyBlocker],
+def _render_story_acceptance_criteria(
+    criteria: list[StoryBreakdownAcceptanceCriterion],
 ) -> str:
     rows = [
         (
+            item.criterion_id,
             item.story_id,
-            _join_inline(item.requirement_ids),
-            item.blocker_reason,
-            _join_inline(item.questions),
-            item.suggested_next_step,
+            item.criterion,
+            item.verification_method,
+            item.status,
         )
-        for item in items
+        for item in criteria
     ]
-    return "## 4. Not Ready 阻塞项\n" + _markdown_table(
-        ["storyId", "requirementId", "阻塞原因", "需要补充的问题", "建议处理"],
+    return "## 验收标准\n" + _markdown_table(
+        ["AC ID", "Story ID", "验收标准", "验证方式", "状态"],
         rows,
     )
 
 
-def _render_user_story_ai_coding_boundary(boundary: AiCodingInputBoundary) -> str:
-    rows = [(_join_inline(boundary.allowed), _join_inline(boundary.forbidden))]
-    return "## 5. AI Coding 输入边界\n" + _markdown_table(
-        ["可以交接", "不在本清单中交接"],
-        rows,
-    )
-
-
-def _render_user_story_stage_gate(
-    checks: list[StageGateCheck],
-    *,
-    heading_number: int,
+def _render_story_dependencies(
+    dependencies: list[StoryBreakdownDependency],
 ) -> str:
+    rows = [
+        (
+            item.dependency_id,
+            "、".join(item.related_story_ids),
+            item.description,
+            item.risk,
+            item.mitigation,
+            item.owner,
+            item.status,
+        )
+        for item in dependencies
+    ]
+    return "## 依赖与风险\n" + _markdown_table(
+        ["依赖 ID", "关联 Story", "依赖描述", "风险", "缓解策略", "owner", "状态"],
+        rows,
+    )
+
+
+def _render_story_sprint_slices(
+    sprints: list[StoryBreakdownSprintSlice],
+) -> str:
+    rows = [
+        (
+            item.sprint_id,
+            item.goal,
+            "、".join(item.story_ids),
+            item.deliverable,
+            item.acceptance_focus,
+        )
+        for item in sprints
+    ]
+    return "## Sprint 切片建议\n" + _markdown_table(
+        ["Sprint", "目标", "Story", "交付物", "验收重点"],
+        rows,
+    )
+
+
+def _render_story_lisa_handoff_inputs(
+    inputs: list[StoryBreakdownLisaHandoffInput],
+) -> str:
+    rows = [
+        (item.input_type, item.reference_id, item.content, item.usage, item.status)
+        for item in inputs
+    ]
+    return "## Lisa Handoff 输入\n" + _markdown_table(
+        ["输入类型", "ID", "内容", "给 Lisa 的用途", "状态"],
+        rows,
+    )
+
+
+def _render_story_stage_gate(checks: list[StageGateCheck]) -> str:
     lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
-    return f"## {heading_number}. 阶段门禁\n" + "\n".join(lines)
-
-
-def _join_inline(items: list[str]) -> str:
-    return "；".join(items) if items else "无"
-
-
-def _safe_mermaid_node_id(value: str) -> str:
-    return re.sub(r"[^A-Za-z0-9_]", "", value) or "Node"
+    return "## 阶段门禁\n" + "\n".join(lines)
 
 
 def _render_document_info(info: DocumentInfo) -> str:
@@ -6266,7 +3256,7 @@ def _render_document_info(info: DocumentInfo) -> str:
         ("Stage", info.stage),
         ("状态", info.status),
     ]
-    return "## 附录：文档信息\n" + _markdown_table(["字段", "内容"], rows)
+    return "## 文档信息\n" + _markdown_table(["字段", "内容"], rows)
 
 
 def _render_incident_summary(summary: IncidentSummary) -> str:
@@ -6335,17 +3325,14 @@ def _render_idea_problem_landscape(landscape: IdeaProblemLandscape) -> str:
             lines.append(f"      {_escape_mermaid_mindmap_text(symptom)}")
     lines.append("```")
     rows = [
-        (landscape.root_problem_id, "根问题", landscape.root_problem, "-"),
-        *[
-            (item.problem_id, "子问题", item.problem, "、".join(item.symptoms))
-            for item in landscape.subproblems
-        ],
+        (item.problem_id, item.problem, "、".join(item.symptoms))
+        for item in landscape.subproblems
     ]
     return (
         "## 问题域全景\n"
         + "\n".join(lines)
         + "\n\n"
-        + _markdown_table(["问题 ID", "类型", "问题", "表现"], rows)
+        + _markdown_table(["问题 ID", "子问题", "表现"], rows)
     )
 
 
@@ -6353,7 +3340,6 @@ def _render_idea_evidence_items(items: list[IdeaEvidenceItem]) -> str:
     rows = [
         (
             item.evidence_id,
-            ", ".join(item.related_problem_ids),
             item.related_problem,
             item.source,
             item.evidence_level,
@@ -6366,7 +3352,6 @@ def _render_idea_evidence_items(items: list[IdeaEvidenceItem]) -> str:
     return "## 证据与验证状态\n" + _markdown_table(
         [
             "证据 ID",
-            "关联问题 ID",
             "关联问题",
             "证据来源",
             "证据等级",
@@ -7159,11 +4144,11 @@ def _render_incident_why_chain(items: list[IncidentWhyChainItem]) -> str:
         ],
         "edges": [
             {
-                "source": previous.level,
-                "target": current.level,
+                "source": items[index].level,
+                "target": items[index + 1].level,
                 "label": "继续追问",
             }
-            for previous, current in zip(items, items[1:])
+            for index in range(len(items) - 1)
         ],
     }
     return (
@@ -7721,7 +4706,7 @@ def _render_risk_detail_table(risks: list[StrategyRisk]) -> str:
             item.severity,
             item.occurrence,
             item.detection,
-            _strategy_risk_rpn(item),
+            item.rpn,
             item.mitigation,
             item.coverage,
             item.status,
@@ -7758,7 +4743,7 @@ def _render_risk_board_visual(risks: list[StrategyRisk]) -> str:
                 "S": item.severity,
                 "O": item.occurrence,
                 "D": item.detection,
-                "RPN": _strategy_risk_rpn(item),
+                "RPN": item.rpn,
                 "缓解策略": item.mitigation,
                 "覆盖建议": item.coverage,
             }
@@ -7767,14 +4752,6 @@ def _render_risk_board_visual(risks: list[StrategyRisk]) -> str:
     }
     return (
         "```ai4se-visual\n" + json.dumps(visual, ensure_ascii=False, indent=2) + "\n```"
-    )
-
-
-def _strategy_risk_rpn(risk: StrategyRisk) -> int:
-    return (
-        risk.rpn
-        if risk.rpn is not None
-        else risk.severity * risk.occurrence * risk.detection
     )
 
 
@@ -8097,7 +5074,7 @@ def _render_delivery_document_info(
         ("高风险项", metrics.high_risk_count),
         ("状态", info.status),
     ]
-    return "## 附录：文档信息\n" + _markdown_table(["字段", "内容"], rows)
+    return "## 1. 文档信息\n" + _markdown_table(["字段", "内容"], rows)
 
 
 def _render_delivery_executive_summary(
@@ -8107,7 +5084,7 @@ def _render_delivery_executive_summary(
         (item.summary_item, item.conclusion, item.evidence_source, item.status)
         for item in items
     ]
-    return "## 1. 执行摘要\n" + _markdown_table(
+    return "## 2. 执行摘要\n" + _markdown_table(
         ["摘要项", "结论", "证据来源", "状态"],
         rows,
     )
@@ -8120,7 +5097,7 @@ def _render_delivery_requirement_summary(
         (item.content_type, item.reference, item.conclusion, item.open_status)
         for item in items
     ]
-    return "## 2. 需求分析摘要\n" + _markdown_table(
+    return "## 3. 需求分析摘要\n" + _markdown_table(
         ["内容类型", "ID/范围", "核心结论", "开放状态"],
         rows,
     )
@@ -8133,7 +5110,7 @@ def _render_delivery_strategy_summary(
         (item.strategy_item, item.conclusion, item.related, item.coverage_status)
         for item in items
     ]
-    return "## 3. 测试策略摘要\n" + _markdown_table(
+    return "## 4. 测试策略摘要\n" + _markdown_table(
         ["策略项", "结论", "关联风险/目标", "覆盖状态"],
         rows,
     )
@@ -8152,7 +5129,7 @@ def _render_delivery_case_summary(items: list[DeliveryCaseSummaryItem]) -> str:
         )
         for item in items
     ]
-    return "## 4. 测试用例摘要\n" + _markdown_table(
+    return "## 5. 测试用例摘要\n" + _markdown_table(
         ["维度", "用例数", "P0", "P1", "P2", "自动化候选", "不可执行/需补环境"],
         rows,
     )
@@ -8170,15 +5147,13 @@ def _render_delivery_coverage_map(items: list[DeliveryCoverageMapItem]) -> str:
         for item in items
     ]
     return (
-        "## 5. 覆盖地图\n"
+        "## 6. 覆盖地图\n"
         + _markdown_table(
             ["需求", "风险", "测试点", "用例", "验收状态"],
             rows,
         )
         + "\n\n"
         + _render_coverage_map_visual(items)
-        + "\n\n### 5.1 需求/风险/测试点追溯矩阵\n"
-        + _render_delivery_traceability_matrix_visual(items)
     )
 
 
@@ -8203,29 +5178,6 @@ def _render_coverage_map_visual(items: list[DeliveryCoverageMapItem]) -> str:
     )
 
 
-def _render_delivery_traceability_matrix_visual(
-    items: list[DeliveryCoverageMapItem],
-) -> str:
-    visual = {
-        "type": "traceability-matrix",
-        "title": "需求-风险-测试点-用例追溯矩阵",
-        "columns": ["需求", "风险", "测试点", "覆盖用例", "验收状态"],
-        "rows": [
-            {
-                "需求": item.requirement,
-                "风险": item.risk,
-                "测试点": item.test_point,
-                "覆盖用例": ", ".join(item.case_ids),
-                "验收状态": item.acceptance_status,
-            }
-            for item in items
-        ],
-    }
-    return (
-        "```ai4se-visual\n" + json.dumps(visual, ensure_ascii=False, indent=2) + "\n```"
-    )
-
-
 def _render_delivery_open_risks(items: list[DeliveryOpenRisk]) -> str:
     rows = [
         (
@@ -8240,7 +5192,7 @@ def _render_delivery_open_risks(items: list[DeliveryOpenRisk]) -> str:
         )
         for item in items
     ]
-    return "## 6. 开放风险\n" + _markdown_table(
+    return "## 7. 开放风险\n" + _markdown_table(
         [
             "风险/问题 ID",
             "类型",
@@ -8257,12 +5209,12 @@ def _render_delivery_open_risks(items: list[DeliveryOpenRisk]) -> str:
 
 def _render_delivery_acceptance_checklist(checks: list[StageGateCheck]) -> str:
     lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
-    return "## 7. 交付验收清单\n" + "\n".join(lines)
+    return "## 8. 交付验收清单\n" + "\n".join(lines)
 
 
 def _render_delivery_signoffs(items: list[DeliverySignoff]) -> str:
     rows = [(item.role, item.owner, item.opinion, item.status) for item in items]
-    return "## 8. 签署确认\n" + _markdown_table(
+    return "## 9. 签署确认\n" + _markdown_table(
         ["角色", "姓名/责任方", "签署意见", "状态"],
         rows,
     )
@@ -8273,7 +5225,7 @@ def _render_delivery_change_log(items: list[DeliveryChangeLogItem]) -> str:
         (item.version, item.date, item.change, item.reason, item.owner)
         for item in items
     ]
-    return "## 9. 变更记录\n" + _markdown_table(
+    return "## 10. 变更记录\n" + _markdown_table(
         ["版本", "日期", "变更内容", "变更原因", "责任方"],
         rows,
     )
@@ -8287,7 +5239,7 @@ def _render_req_review_info(info: ReqReviewInfo) -> str:
         ("需求概述", info.requirement_summary),
         ("评审结论倾向", info.conclusion),
     ]
-    return "## 附录：评审信息\n" + _markdown_table(["字段", "内容"], rows)
+    return "## 评审信息\n" + _markdown_table(["字段", "内容"], rows)
 
 
 def _render_req_review_scope(items: list[ReqReviewScopeItem]) -> str:
@@ -9206,7 +6158,7 @@ def _render_blueprint_document_info(info: BlueprintDocumentInfo) -> str:
         ("Artifact 名称", info.artifact_name),
         ("蓝图状态", info.blueprint_status),
     ]
-    return "## 附录：文档信息\n" + _markdown_table(["维度", "内容"], rows)
+    return "## 文档信息\n" + _markdown_table(["维度", "内容"], rows)
 
 
 def _render_blueprint_product_overview(overview: BlueprintProductOverview) -> str:
@@ -9559,15 +6511,6 @@ def _render_stage_gate(checks: list[StageGateCheck]) -> str:
 
 
 def _markdown_table(headers: list[str], rows: list[tuple[Any, ...]]) -> str:
-    explanatory_headers = {
-        ("字段", "内容"),
-        ("维度", "内容"),
-        ("格子", "内容"),
-        ("属性", "详情"),
-    }
-    if len(headers) == 2 and tuple(headers) in explanatory_headers:
-        return _definition_list(rows)
-
     header = "| " + " | ".join(headers) + " |"
     separator = "| " + " | ".join("---" for _ in headers) + " |"
     body = [
@@ -9575,27 +6518,6 @@ def _markdown_table(headers: list[str], rows: list[tuple[Any, ...]]) -> str:
         for row in rows
     ]
     return "\n".join([header, separator, *body])
-
-
-def _definition_list(rows: list[tuple[Any, ...]]) -> str:
-    lines = []
-    for row in rows:
-        if len(row) != 2:
-            lines.append(
-                "- "
-                + "：".join(_format_definition_value(cell) for cell in row)
-            )
-            continue
-        label, value = row
-        lines.append(
-            f"- **{_format_definition_value(label)}**："
-            f"{_format_definition_value(value)}"
-        )
-    return "\n".join(lines)
-
-
-def _format_definition_value(value: Any) -> str:
-    return str(value).replace("\n", "；")
 
 
 def _escape_table_cell(value: Any) -> str:
@@ -9617,6 +6539,1403 @@ def _node_id(label: str, existing: dict[str, str]) -> str:
     return candidate
 
 
+def _render_prd_document_info(info: DocumentInfo) -> str:
+    rows = [
+        ("Artifact 名称", info.artifact_name),
+        ("Workflow", info.workflow),
+        ("阶段", info.stage),
+        ("状态", info.status),
+    ]
+    return "## 文档信息\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_prd_goal_scope(items: list[PrdInventoryItem]) -> str:
+    rows = [
+        (item.category, item.content, item.source, item.evidence_level, item.status)
+        for item in items[:5]
+    ]
+    return "## PRD 目标与范围\n" + _markdown_table(
+        ["类别", "内容", "来源", "证据等级", "状态"],
+        rows,
+    )
+
+
+def _render_prd_inventory(items: list[PrdInventoryItem]) -> str:
+    rows = [
+        (
+            item.item_id,
+            item.category,
+            item.content,
+            item.source,
+            item.evidence_level,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 输入事实清单\n" + _markdown_table(
+        ["ID", "类别", "内容", "来源", "证据等级", "状态"],
+        rows,
+    )
+
+
+def _render_prd_inventory_mindmap(items: list[PrdInventoryItem]) -> str:
+    grouped: dict[str, list[PrdInventoryItem]] = {}
+    for item in items:
+        grouped.setdefault(item.category, []).append(item)
+
+    lines = [
+        "```mermaid",
+        "mindmap",
+        '  root(("PRD 输入盘点"))',
+    ]
+    for category, category_items in grouped.items():
+        lines.append(f"    {_escape_mermaid_mindmap_text(category)}")
+        for item in category_items[:4]:
+            lines.append(
+                "      "
+                + _escape_mermaid_mindmap_text(
+                    f"{item.item_id} {item.status}"
+                )
+            )
+    lines.append("```")
+    return "## PRD 输入结构图\n" + "\n".join(lines)
+
+
+def _render_prd_users_and_scenarios(items: list[PrdInventoryItem]) -> str:
+    rows = [
+        (item.category, item.content, item.status)
+        for item in items
+        if item.category in {"目标用户", "用户场景", "业务场景", "使用场景"}
+    ] or [(items[0].category, items[0].content, items[0].status)]
+    return "## 用户与场景\n" + _markdown_table(
+        ["类别", "内容", "状态"],
+        rows,
+    )
+
+
+def _render_prd_existing_acceptance(
+    criteria: list[PrdAcceptanceCriterion],
+) -> str:
+    rows = [
+        (
+            item.criterion_id,
+            item.scenario,
+            item.given,
+            item.when,
+            item.then,
+            item.testability_level,
+            item.status,
+        )
+        for item in criteria
+    ]
+    return "## 现有验收材料\n" + _markdown_table(
+        ["ID", "场景", "Given", "When", "Then", "可测试性等级", "状态"],
+        rows,
+    )
+
+
+def _render_prd_missing_information(
+    findings: list[PrdQualityFinding],
+) -> str:
+    rows = [
+        (
+            item.finding_id,
+            item.dimension,
+            item.problem,
+            item.blocking,
+            item.recommendation,
+            item.status,
+        )
+        for item in findings
+    ]
+    return "## 缺失信息清单\n" + _markdown_table(
+        ["ID", "维度", "缺失或问题", "阻断性", "建议", "状态"],
+        rows,
+    )
+
+
+def _render_prd_quality_summary(findings: list[PrdQualityFinding]) -> str:
+    p0_count = sum(1 for item in findings if item.severity == "P0")
+    p1_count = sum(1 for item in findings if item.severity == "P1")
+    blocking_count = sum(1 for item in findings if item.blocking == "阻断")
+    rows = [
+        ("问题总数", len(findings)),
+        ("P0 问题", p0_count),
+        ("P1 问题", p1_count),
+        ("阻断问题", blocking_count),
+        ("当前建议", "先关闭 P0/P1 阻断问题，再进入 Lisa 后续 workflow"),
+    ]
+    return "## 质量评审摘要\n" + _markdown_table(["指标", "内容"], rows)
+
+
+def _render_prd_quality_score_matrix(findings: list[PrdQualityFinding]) -> str:
+    rows = [
+        (item.dimension, item.severity, item.evidence, item.impact)
+        for item in findings
+    ]
+    visual = {
+        "type": "score-matrix",
+        "title": "PRD 质量评分矩阵",
+        "columns": ["维度", "评分", "依据", "风险"],
+        "rows": [
+            {
+                "维度": item.dimension,
+                "评分": item.severity,
+                "依据": item.evidence,
+                "风险": item.impact,
+            }
+            for item in findings
+        ],
+    }
+    return (
+        "## 质量评分矩阵\n"
+        + _markdown_table(["评审维度", "严重级别", "证据", "风险"], rows)
+        + "\n\n```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+
+
+def _render_prd_findings(findings: list[PrdQualityFinding]) -> str:
+    rows = [
+        (
+            item.finding_id,
+            item.dimension,
+            item.problem,
+            item.severity,
+            item.blocking,
+            item.evidence,
+            item.recommendation,
+            item.status,
+        )
+        for item in findings
+    ]
+    return "## 问题清单\n" + _markdown_table(
+        ["ID", "评审维度", "问题", "严重级别", "阻断性", "证据", "建议", "状态"],
+        rows,
+    )
+
+
+def _render_prd_risk_impact(findings: list[PrdQualityFinding]) -> str:
+    rows = [(item.finding_id, item.impact, item.recommendation) for item in findings]
+    return "## 风险影响\n" + _markdown_table(
+        ["问题 ID", "影响范围", "缓解建议"],
+        rows,
+    )
+
+
+def _render_prd_completion_actions(actions: list[PrdCompletionAction]) -> str:
+    rows = [
+        (
+            item.action_id,
+            ", ".join(item.finding_ids),
+            item.action,
+            item.priority,
+            item.owner,
+            item.verification_method,
+            item.review_condition,
+            item.status,
+        )
+        for item in actions
+    ]
+    visual = {
+        "type": "action-board",
+        "title": "PRD 补全任务清单",
+        "columns": ["行动", "对应根因", "负责人", "期限", "状态", "验证方式"],
+        "rows": [
+            {
+                "行动": item.action,
+                "对应根因": ", ".join(item.finding_ids),
+                "负责人": item.owner,
+                "期限": "进入下一阶段前",
+                "状态": item.status,
+                "验证方式": item.verification_method,
+            }
+            for item in actions
+        ],
+    }
+    return (
+        "## 补全任务清单\n"
+        + _markdown_table(
+            [
+                "ID",
+                "关联问题",
+                "补全动作",
+                "优先级",
+                "负责人",
+                "验证方式",
+                "复审条件",
+                "状态",
+            ],
+            rows,
+        )
+        + "\n\n```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+
+
+def _render_prd_revision_structure(sections: list[PrdRevisionSection]) -> str:
+    rows = [
+        (
+            item.section_id,
+            item.title,
+            item.rewrite_goal,
+            item.acceptance_note,
+            item.status,
+        )
+        for item in sections
+    ]
+    visual = {
+        "type": "roadmap",
+        "title": "PRD 修订路线",
+        "columns": ["版本", "时间", "核心功能", "目标", "成功指标"],
+        "rows": [
+            {
+                "版本": item.section_id,
+                "时间": "本次修订",
+                "核心功能": item.title,
+                "目标": item.rewrite_goal,
+                "成功指标": item.acceptance_note,
+            }
+            for item in sections
+        ],
+    }
+    return (
+        "## 推荐 PRD 结构\n"
+        + _markdown_table(["章节 ID", "章节", "改写目标", "验收说明", "状态"], rows)
+        + "\n\n```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+
+
+def _render_prd_verification_and_review(actions: list[PrdCompletionAction]) -> str:
+    rows = [
+        (item.action_id, item.verification_method, item.review_condition, item.status)
+        for item in actions
+    ]
+    return "## 验证方式与复审条件\n" + _markdown_table(
+        ["动作 ID", "验证方式", "复审条件", "状态"],
+        rows,
+    )
+
+
+def _render_prd_core_rewrites(sections: list[PrdRevisionSection]) -> str:
+    rows = [
+        (item.section_id, item.title, item.recommended_content, item.acceptance_note)
+        for item in sections
+    ]
+    return "## 核心需求改写\n" + _markdown_table(
+        ["章节 ID", "章节", "推荐内容", "验收说明"],
+        rows,
+    )
+
+
+def _render_prd_acceptance_criteria(
+    criteria: list[PrdAcceptanceCriterion],
+) -> str:
+    rows = [
+        (
+            item.criterion_id,
+            ", ".join(item.related_section_ids),
+            item.scenario,
+            item.given,
+            item.when,
+            item.then,
+            item.testability_level,
+            item.status,
+        )
+        for item in criteria
+    ]
+    return "## 验收标准与可测试性\n" + _markdown_table(
+        ["ID", "关联章节", "场景", "Given", "When", "Then", "可测试性等级", "状态"],
+        rows,
+    )
+
+
+def _render_prd_handoff_inputs(items: list[PrdHandoffInput]) -> str:
+    rows = [
+        (
+            item.input_id,
+            ", ".join(item.related_section_ids),
+            item.target_workflow,
+            item.content,
+            item.risk,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## Lisa Handoff 输入\n" + _markdown_table(
+        ["ID", "关联章节", "目标 Workflow", "内容", "风险", "状态"],
+        rows,
+    )
+
+
+def _render_prd_review_conditions(actions: list[PrdCompletionAction]) -> str:
+    rows = [
+        (item.action_id, item.review_condition, item.owner, item.status)
+        for item in actions
+    ]
+    return "## 复审条件\n" + _markdown_table(
+        ["动作 ID", "复审条件", "责任方", "状态"],
+        rows,
+    )
+
+
+def _render_prd_stage_gate(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 阶段门禁\n" + "\n".join(lines)
+
+
+def _render_value_positioning_summary(summary: PositioningSummary) -> str:
+    rows = [
+        ("Artifact 名称", "价值定位诊断报告"),
+        ("一句话定位", summary.one_liner),
+        ("核心用户", summary.core_user),
+        ("核心痛点", summary.core_pain),
+        ("独特价值", summary.unique_value),
+        ("当前判断", summary.current_judgement),
+    ]
+    return "## 定位摘要\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_value_flow(flow: ValueFlow) -> str:
+    node_lookup = {node.node_id: node for node in flow.nodes}
+    safe_ids: dict[str, str] = {}
+    rendered_ids = {
+        node.node_id: _node_id(node.node_id, safe_ids) for node in flow.nodes
+    }
+    lines = ["```mermaid", "flowchart TD"]
+    for node in flow.nodes:
+        lines.append(
+            f'    {rendered_ids[node.node_id]}["{_escape_mermaid_label(node.label)}<br/>'
+            f'{_escape_mermaid_label(node.description)}"]'
+        )
+    for link in flow.links:
+        lines.append(
+            f"    {rendered_ids[link.from_node]} -->|"
+            f'"{_escape_mermaid_label(link.label)}"| '
+            f"{rendered_ids[link.to_node]}"
+        )
+    lines.append("```")
+
+    rows = [
+        (node.node_id, node.label, node.description) for node in node_lookup.values()
+    ]
+    return (
+        "## 价值结构图\n"
+        + "\n".join(lines)
+        + "\n\n"
+        + _markdown_table(["节点 ID", "节点", "说明"], rows)
+    )
+
+
+def _render_target_scenarios(items: list[TargetScenario]) -> str:
+    rows = [
+        (item.dimension, item.description, item.evidence_level, item.status)
+        for item in items
+    ]
+    return "## 目标用户与场景\n" + _markdown_table(
+        ["维度", "描述", "证据等级", "状态"],
+        rows,
+    )
+
+
+def _render_pain_evidence(items: list[PainEvidence]) -> str:
+    rows = [
+        (
+            item.pain_id,
+            item.description,
+            item.scene,
+            item.impact,
+            item.evidence_level,
+            item.validation_action,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 痛点证据\n" + _markdown_table(
+        ["痛点 ID", "痛点描述", "发生场景", "影响程度", "证据等级", "验证动作", "状态"],
+        rows,
+    )
+
+
+def _render_differentiators(items: list[Differentiator]) -> str:
+    rows = [
+        (
+            item.dimension,
+            item.our_value,
+            item.existing_solution,
+            item.evidence,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 差异化价值\n" + _markdown_table(
+        ["维度", "我们", "现有方案/竞品", "差异化证据", "状态"],
+        rows,
+    )
+
+
+def _render_business_feasibility(items: list[BusinessFeasibility]) -> str:
+    rows = [
+        (
+            item.dimension,
+            item.judgement,
+            item.basis,
+            item.validation_action,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 商业可行性\n" + _markdown_table(
+        ["维度", "判断", "依据", "验证动作", "状态"],
+        rows,
+    )
+
+
+def _render_value_score_matrix(
+    items: list[ValueScore],
+    summary: ValueScoreSummary,
+) -> str:
+    rows = [
+        (item.dimension, item.score, item.basis, item.next_validation) for item in items
+    ]
+    visual = {
+        "type": "score-matrix",
+        "title": "价值主张初筛评分矩阵",
+        "columns": ["评估维度", "评分", "依据", "下一步验证"],
+        "rows": [
+            {
+                "评估维度": item.dimension,
+                "评分": item.score,
+                "依据": item.basis,
+                "下一步验证": item.next_validation,
+            }
+            for item in items
+        ],
+    }
+    return (
+        "## 价值主张评分\n"
+        + _markdown_table(["评估维度", "评分", "依据", "下一步验证"], rows)
+        + "\n\n"
+        + "```ai4se-visual\n"
+        + json.dumps(visual, ensure_ascii=False, indent=2)
+        + "\n```"
+        + "\n\n"
+        + f"> **评分结论**：总分 {summary.total_score}，平均分 "
+        + f"{summary.average_score:.2f}。{summary.judgement}"
+    )
+
+
+def _render_value_assumptions(items: list[ValueAssumption]) -> str:
+    rows = [
+        (
+            item.assumption_id,
+            item.content,
+            item.impact,
+            item.validation_action,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 未验证假设\n" + _markdown_table(
+        ["假设 ID", "假设内容", "影响范围", "验证动作", "责任方/验证人", "状态"],
+        rows,
+    )
+
+
+def _render_elevator_pitch(pitch: str) -> str:
+    return "## 60 秒电梯演讲\n\n> " + pitch
+
+
+def _render_value_stage_gate(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 阶段门禁\n" + "\n".join(lines)
+
+
+def _persona_names(personas: list[PersonaProfile]) -> dict[str, str]:
+    return {persona.persona_id: persona.name for persona in personas}
+
+
+def _render_persona_summary(summary: PersonaSummary) -> str:
+    rows = [
+        ("Artifact 名称", summary.artifact_name),
+        ("核心用户判断", summary.core_user_judgement),
+        ("主要痛点", summary.primary_pain),
+        ("验证状态", summary.validation_status),
+        ("进入旅程阶段判断", summary.journey_readiness),
+    ]
+    return "## 画像摘要\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_persona_profiles(personas: list[PersonaProfile]) -> str:
+    sections = ["## 主要用户画像"]
+    for index, persona in enumerate(personas, start=1):
+        basic_rows = [
+            (
+                item.dimension,
+                item.description,
+                item.evidence_level,
+                item.validation_status,
+            )
+            for item in persona.basic_features
+        ]
+        behavior_rows = [
+            (
+                item.dimension,
+                item.description,
+                item.trigger,
+                item.evidence_level,
+                item.validation_status,
+            )
+            for item in persona.behavior_features
+        ]
+        sections.append(
+            f"### 画像 {index}\n\n"
+            f"**用户类型名称**：{persona.name}（{persona.priority}）\n\n"
+            f"> {persona.summary}\n\n"
+            "#### 基础特征\n"
+            + _markdown_table(
+                ["维度", "描述", "证据等级", "验证状态"],
+                basic_rows,
+            )
+            + "\n\n"
+            + "#### 行为特征\n"
+            + _markdown_table(
+                ["维度", "描述", "场景触发", "证据等级", "验证状态"],
+                behavior_rows,
+            )
+        )
+    return "\n\n".join(sections)
+
+
+def _render_persona_behavior_scenarios(
+    items: list[PersonaBehaviorScenario],
+    personas: list[PersonaProfile],
+) -> str:
+    persona_names = _persona_names(personas)
+    rows = [
+        (
+            item.scenario_id,
+            persona_names[item.persona_id],
+            item.scenario,
+            item.trigger,
+            item.user_goal,
+            item.current_solution,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 行为与场景\n" + _markdown_table(
+        ["场景 ID", "用户类型", "场景描述", "触发条件", "用户目标", "当前做法", "状态"],
+        rows,
+    )
+
+
+def _render_persona_decision_chain(
+    items: list[PersonaDecisionRole],
+    personas: list[PersonaProfile],
+) -> str:
+    persona_names = _persona_names(personas)
+    rows = [
+        (
+            item.role,
+            persona_names[item.persona_id],
+            item.concern,
+            item.influence,
+            item.payment_relation,
+            item.evidence_level,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 决策链\n" + _markdown_table(
+        [
+            "决策角色",
+            "用户类型/岗位",
+            "关注点",
+            "影响力",
+            "付费/采购关系",
+            "证据等级",
+            "验证状态",
+        ],
+        rows,
+    )
+
+
+def _render_persona_pain_evidence(
+    items: list[PersonaPainEvidence],
+    personas: list[PersonaProfile],
+) -> str:
+    persona_names = _persona_names(personas)
+    rows = [
+        (
+            item.pain_id,
+            persona_names[item.persona_id],
+            item.pain,
+            item.frequency,
+            item.impact,
+            item.existing_solution_gap,
+            item.evidence_level,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 痛点证据\n" + _markdown_table(
+        [
+            "痛点 ID",
+            "用户类型",
+            "痛点",
+            "频率",
+            "影响程度",
+            "现有方案不足",
+            "证据等级",
+            "验证状态",
+        ],
+        rows,
+    )
+
+
+def _render_anti_personas(items: list[AntiPersona]) -> str:
+    rows = [
+        (item.name, item.reason, item.boundary, item.risk, item.status)
+        for item in items
+    ]
+    return "## 反画像\n" + _markdown_table(
+        ["非目标用户", "为什么不是当前核心用户", "不服务的边界", "风险", "状态"],
+        rows,
+    )
+
+
+def _render_persona_priority_ranking(
+    items: list[PersonaPriorityRanking],
+    personas: list[PersonaProfile],
+) -> str:
+    persona_names = _persona_names(personas)
+    rows = [
+        (
+            item.priority,
+            persona_names[item.persona_id],
+            item.reason,
+            item.related_pain,
+            item.evidence_level,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 用户优先级排序\n" + _markdown_table(
+        ["优先级", "用户类型", "理由", "关联痛点", "证据等级", "验证状态"],
+        rows,
+    )
+
+
+def _render_journey_map(stages: list[JourneyStage]) -> str:
+    lines = [
+        "```mermaid",
+        "journey",
+        "    title 核心用户旅程",
+    ]
+    for stage in stages:
+        lines.append(f"    section {_escape_journey_text(stage.stage_name)}")
+        lines.append(
+            f"        {_escape_journey_text(stage.user_task)}: "
+            f"{stage.emotion_score}: 用户"
+        )
+    lines.append("```")
+    return (
+        "## 用户旅程地图\n"
+        + "\n".join(lines)
+        + "\n\n> 数字为情绪评分：1=非常沮丧，5=非常满意"
+    )
+
+
+def _render_journey_map_visual(stages: list[JourneyStage]) -> str:
+    visual = {
+        "type": "journey-map",
+        "title": "用户旅程结构化地图",
+        "columns": [
+            "阶段",
+            "用户任务",
+            "触点",
+            "情绪评分",
+            "关键痛点",
+            "机会假设",
+            "成功指标",
+            "验证状态",
+        ],
+        "rows": [
+            {
+                "阶段": item.stage_name,
+                "用户任务": item.user_task,
+                "触点": item.touchpoint,
+                "情绪评分": item.emotion_score,
+                "关键痛点": item.key_pain,
+                "机会假设": item.opportunity_hypothesis,
+                "成功指标": item.success_metric,
+                "验证状态": item.validation_status,
+            }
+            for item in stages
+        ],
+    }
+    return (
+        "## 结构化旅程地图\n"
+        "```ai4se-visual\n" + json.dumps(visual, ensure_ascii=False, indent=2) + "\n```"
+    )
+
+
+def _render_journey_stage_details(stages: list[JourneyStage]) -> str:
+    sections = ["## 关键阶段详细分析"]
+    for index, stage in enumerate(stages, start=1):
+        rows = [
+            ("旅程阶段", f"{stage.stage_id} {stage.stage_name}"),
+            ("触点渠道", stage.touchpoint),
+            ("用户任务", stage.user_task),
+            ("用户目标", stage.user_goal),
+            ("用户行为", stage.user_behavior),
+            ("情绪评分", f"{stage.emotion_score} 分：{stage.emotion_reason}"),
+            ("关键痛点", f"{stage.pain_id} {stage.key_pain}"),
+            ("现有方案不足", stage.existing_solution_gap),
+            ("机会假设", f"{stage.opportunity_id} {stage.opportunity_hypothesis}"),
+            ("成功指标", stage.success_metric),
+            ("验证状态", stage.validation_status),
+        ]
+        sections.append(
+            f"### 阶段 {index}：{stage.stage_name}\n"
+            + _markdown_table(["维度", "描述"], rows)
+        )
+    return "\n\n".join(sections)
+
+
+def _render_journey_pain_priorities(
+    items: list[JourneyPainPriority],
+    stages: list[JourneyStage],
+) -> str:
+    stage_names = {stage.stage_id: stage.stage_name for stage in stages}
+    sections = ["## 痛点优先级排序"]
+    priority_levels = ["高优先级痛点", "中等优先级痛点", "低优先级痛点"]
+    headers = ["痛点 ID", "痛点", "影响阶段", "影响程度", "发生频率", "现有方案不足"]
+    for level in priority_levels:
+        rows = [
+            (
+                item.pain_id,
+                item.pain,
+                stage_names[item.stage_id],
+                item.impact,
+                item.frequency,
+                item.existing_solution_gap,
+            )
+            for item in items
+            if item.priority_level == level
+        ]
+        if not rows:
+            rows = [("无", "本轮未识别", "无", "无", "无", "无")]
+        sections.append(f"### {level}\n" + _markdown_table(headers, rows))
+    return "\n\n".join(sections)
+
+
+def _render_journey_opportunity_scores(
+    items: list[JourneyOpportunityScore],
+) -> str:
+    rows = [
+        (
+            item.opportunity_id,
+            item.opportunity,
+            item.pain_id,
+            item.value_potential,
+            item.competition_strength,
+            item.feasibility,
+            item.success_metric,
+            item.validation_status,
+        )
+        for item in items
+    ]
+    return "## 机会评分\n" + _markdown_table(
+        [
+            "机会 ID",
+            "机会",
+            "对应痛点",
+            "价值潜力",
+            "竞争强度",
+            "实现可行性",
+            "成功指标",
+            "验证状态",
+        ],
+        rows,
+    )
+
+
+def _render_journey_entry_strategy(items: list[JourneyEntryStrategy]) -> str:
+    rows = [
+        (
+            item.strategy_item,
+            item.content,
+            item.related_opportunity,
+            item.tradeoff_reason,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 产品切入策略\n" + _markdown_table(
+        ["策略项", "内容", "关联机会", "取舍理由", "状态"],
+        rows,
+    )
+
+
+def _render_journey_validation_experiments(
+    items: list[JourneyValidationExperiment],
+) -> str:
+    rows = [
+        (
+            item.experiment_id,
+            item.hypothesis,
+            item.opportunity_id,
+            item.method,
+            item.success_metric,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 验证实验\n" + _markdown_table(
+        ["实验 ID", "验证假设", "关联机会", "实验方式", "成功指标", "责任方", "状态"],
+        rows,
+    )
+
+
+def _render_journey_summary(summary: JourneySummary) -> str:
+    rows = [
+        ("核心用户", summary.core_persona),
+        ("核心痛点", summary.core_pain),
+        ("产品切入策略", summary.entry_strategy),
+        ("需求蓝图就绪判断", summary.blueprint_readiness),
+    ]
+    return "## 旅程摘要\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _escape_journey_text(value: str) -> str:
+    return value.replace("\n", " ").replace(":", "：").replace("|", "｜")
+
+
+def _escape_mermaid_time(value: str) -> str:
+    return value.replace("\n", " ").replace(":", "：")
+
+
+def _escape_mermaid_timeline_text(value: str) -> str:
+    return value.replace("\n", " ").replace(":", "：").replace("|", "｜")
+
+
+def _escape_mermaid_mindmap_text(value: str) -> str:
+    return (
+        value.replace("\n", " ").replace(":", "：").replace("|", "｜").replace('"', "'")
+    )
+
+
+def _render_blueprint_document_info(info: BlueprintDocumentInfo) -> str:
+    rows = [
+        ("文档版本", info.version),
+        ("创建日期", info.created_at),
+        ("产品方向", info.product_direction),
+        ("Artifact 名称", info.artifact_name),
+        ("蓝图状态", info.blueprint_status),
+    ]
+    return "## 文档信息\n" + _markdown_table(["维度", "内容"], rows)
+
+
+def _render_blueprint_product_overview(overview: BlueprintProductOverview) -> str:
+    core_value_rows = [
+        ("用户价值", overview.user_value),
+        ("商业价值", overview.business_value),
+        ("商业模式", overview.business_model),
+    ]
+    return (
+        "## 1. 产品概述\n\n"
+        "### 1.1 产品愿景\n"
+        f"> {overview.vision}\n\n"
+        "### 1.2 定位声明\n"
+        f"**For** {overview.positioning_for} **who** {overview.positioning_who},\n"
+        f"**the** {overview.positioning_product} **is a** "
+        f"{overview.positioning_category}\n"
+        f"**that** {overview.positioning_value}. **Unlike** "
+        f"{overview.positioning_unlike},\n"
+        f"**our product** {overview.positioning_differentiator}.\n\n"
+        "### 1.3 核心价值\n" + _markdown_table(["维度", "描述"], core_value_rows)
+    )
+
+
+def _render_blueprint_target_users(items: list[BlueprintTargetUser]) -> str:
+    rows = [(item.user_type, item.core_pain, item.priority) for item in items]
+    return "## 2. 目标用户（摘要）\n" + _markdown_table(
+        ["用户类型", "核心痛点", "优先级"], rows
+    )
+
+
+def _render_blueprint_requirements(
+    modules: list[BlueprintFeatureModule],
+    requirements: list[BlueprintRequirement],
+) -> str:
+    sections = [
+        "## 3. 核心需求",
+        "### 功能架构\n" + _render_blueprint_feature_mindmap(modules),
+    ]
+    headings = [
+        ("P0", "### P0 需求（核心功能，必须实现）"),
+        ("P1", "### P1 需求（重要功能，应该实现）"),
+        ("P2", "### P2 需求（增值功能，可以实现）"),
+    ]
+    headers = [
+        "ID",
+        "需求名称",
+        "用户故事",
+        "对应痛点",
+        "范围边界",
+        "依赖",
+        "验收标准",
+        "可测试性等级",
+        "owner",
+        "状态",
+    ]
+    for priority, heading in headings:
+        rows = [
+            (
+                item.requirement_id,
+                item.name,
+                item.user_story,
+                item.related_pain,
+                item.scope,
+                item.dependency,
+                item.acceptance,
+                item.testability_level,
+                item.owner,
+                item.status,
+            )
+            for item in requirements
+            if item.priority == priority
+        ]
+        if not rows:
+            rows = [
+                ("无", "本轮未规划", "无", "无", "无", "无", "无", "无", "无", "无")
+            ]
+        sections.append(heading + "\n" + _markdown_table(headers, rows))
+    return "\n\n".join(sections)
+
+
+def _render_blueprint_feature_mindmap(modules: list[BlueprintFeatureModule]) -> str:
+    lines = ["```mermaid", "mindmap", '    root(("产品名称"))']
+    for module in modules:
+        lines.append(f'        ("{_escape_mermaid_label(module.module_name)}")')
+        for feature in module.features:
+            lines.append(
+                f'            ["{_escape_mermaid_label(feature.feature_name)}"]'
+            )
+    lines.append("```")
+    return "\n".join(lines)
+
+
+def _render_blueprint_main_flow(flow: BlueprintMainFlow) -> str:
+    node_lookup = {node.node_id: node for node in flow.nodes}
+    existing_ids: dict[str, str] = {}
+    safe_ids = {
+        node.node_id: _node_id(node.node_id, existing_ids) for node in flow.nodes
+    }
+    lines = ["```mermaid", "flowchart TD"]
+    for node in flow.nodes:
+        lines.append(
+            f'    {safe_ids[node.node_id]}["{_escape_mermaid_label(node.label)}"]'
+        )
+    for link in flow.links:
+        lines.append(
+            f"    {safe_ids[link.from_node]} -->|"
+            f'"{_escape_mermaid_label(link.label)}"| {safe_ids[link.to_node]}'
+        )
+    lines.append("```")
+    rows = [
+        (
+            link.from_node,
+            node_lookup[link.from_node].label,
+            link.label,
+            link.to_node,
+            node_lookup[link.to_node].label,
+        )
+        for link in flow.links
+    ]
+    return "## 4. 核心流程\n\n" "### 主流程图\n" + "\n".join(
+        lines
+    ) + "\n\n" + _markdown_table(["起点 ID", "起点", "动作", "终点 ID", "终点"], rows)
+
+
+def _render_blueprint_success_metrics(
+    items: list[BlueprintSuccessMetric],
+) -> str:
+    rows = [
+        (item.metric_type, item.metric_name, item.target, item.measurement)
+        for item in items
+    ]
+    return "## 5. 成功指标\n" + _markdown_table(
+        ["指标类型", "指标名称", "目标值", "衡量方式"],
+        rows,
+    )
+
+
+def _render_blueprint_mvp_plan(plan: BlueprintMvpPlan) -> str:
+    feature_lines = [
+        f"- [{'x' if item.included else ' '}] {item.requirement_id}: "
+        f"{item.feature_name} — {item.release}"
+        for item in plan.included_features
+    ]
+    iteration_rows = [
+        (item.version, item.time, item.core_features, item.goal)
+        for item in plan.iterations
+    ]
+    return (
+        "## 6. MVP 范围与计划\n"
+        "### MVP 包含功能\n" + "\n".join(feature_lines) + "\n\n"
+        "### 迭代路线\n"
+        + _markdown_table(["版本", "时间", "核心功能", "目标"], iteration_rows)
+    )
+
+
+def _render_blueprint_non_functional_requirements(
+    items: list[BlueprintNonFunctionalRequirement],
+) -> str:
+    rows = [
+        (
+            item.type,
+            item.description,
+            item.metric_or_constraint,
+            item.verification,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 7. 非功能需求\n" + _markdown_table(
+        ["类型", "需求描述", "指标/约束", "验证方式", "owner", "状态"],
+        rows,
+    )
+
+
+def _render_blueprint_acceptance_criteria(
+    items: list[BlueprintAcceptanceCriterion],
+) -> str:
+    rows = [
+        (
+            item.acceptance_id,
+            item.requirement_id,
+            item.criterion,
+            item.verification,
+            item.testability_level,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 8. 验收标准\n" + _markdown_table(
+        [
+            "验收 ID",
+            "关联需求",
+            "验收标准",
+            "验证方式",
+            "可测试性等级",
+            "owner",
+            "状态",
+        ],
+        rows,
+    )
+
+
+def _render_blueprint_roadmap(items: list[BlueprintRoadmapItem]) -> str:
+    visual = {
+        "type": "roadmap",
+        "title": "产品迭代路线图",
+        "columns": ["版本", "时间", "核心功能", "目标", "成功指标"],
+        "rows": [
+            {
+                "版本": item.version,
+                "时间": item.time,
+                "核心功能": item.core_features,
+                "目标": item.goal,
+                "成功指标": item.success_metric,
+            }
+            for item in items
+        ],
+    }
+    return (
+        "## 9. 路线图\n"
+        "```ai4se-visual\n" + json.dumps(visual, ensure_ascii=False, indent=2) + "\n```"
+    )
+
+
+def _render_blueprint_risks(items: list[BlueprintRisk]) -> str:
+    rows = [
+        (
+            item.risk_type,
+            item.description,
+            item.probability,
+            item.impact,
+            item.mitigation,
+            item.owner,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 10. 风险评估\n" + _markdown_table(
+        ["风险类型", "风险描述", "可能性", "影响", "缓解措施", "owner", "状态"],
+        rows,
+    )
+
+
+def _render_blueprint_lisa_handoff_inputs(
+    items: list[BlueprintLisaHandoffInput],
+) -> str:
+    rows = [
+        (
+            item.input_type,
+            item.reference_id,
+            item.content,
+            item.source,
+            item.usage,
+            item.status,
+        )
+        for item in items
+    ]
+    return "## 11. Lisa Handoff 输入\n" + _markdown_table(
+        ["输入类型", "ID", "内容", "来源", "给 Lisa 的用途", "状态"],
+        rows,
+    )
+
+
+def _render_blueprint_stage_gate(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 12. 阶段门禁\n" + "\n".join(lines)
+
+
+def _render_flow_links(links: list[FlowLink]) -> str:
+    node_ids: dict[str, str] = {}
+    lines = ["```mermaid", "flowchart TD"]
+    for link in links:
+        from_id = _node_id(link.from_node, node_ids)
+        to_id = _node_id(link.to_node, node_ids)
+        lines.append(
+            f'    {from_id}["{_escape_mermaid_label(link.from_node)}"] '
+            f'-->|"{_escape_mermaid_label(link.label)}"| '
+            f'{to_id}["{_escape_mermaid_label(link.to_node)}"]'
+        )
+    lines.append("```")
+    return "## 4. 核心链路与异常链路\n" + "\n".join(lines)
+
+
+def _render_clarification_questions(
+    questions: list[ClarificationQuestion],
+) -> str:
+    rows = [
+        (
+            item.question_id,
+            item.question,
+            item.priority,
+            item.blocking,
+            item.impact,
+            item.assumption,
+            item.owner,
+            item.status,
+        )
+        for item in questions
+    ]
+    return "## 5. 待澄清问题\n" + _markdown_table(
+        [
+            "问题 ID",
+            "问题描述",
+            "优先级",
+            "阻断性",
+            "影响范围",
+            "当前假设",
+            "责任方",
+            "状态",
+        ],
+        rows,
+    )
+
+
+def _render_quality_requirements(
+    requirements: list[QualityRequirement],
+) -> str:
+    rows = [
+        (
+            item.dimension,
+            item.requirement_or_assumption,
+            item.metric,
+            item.risk,
+            item.status,
+        )
+        for item in requirements
+    ]
+    return "## 6. 隐式质量需求\n" + _markdown_table(
+        ["质量维度", "需求或假设", "可验证指标", "风险", "状态"],
+        rows,
+    )
+
+
+def _render_downstream_inputs(inputs: list[DownstreamInput]) -> str:
+    rows = [
+        (item.input_type, item.input_id, item.content, item.source, item.usage)
+        for item in inputs
+    ]
+    return "## 7. 后续测试设计输入\n" + _markdown_table(
+        ["输入类型", "ID", "内容", "来源", "后续用途"],
+        rows,
+    )
+
+
+def _render_stage_gate(checks: list[StageGateCheck]) -> str:
+    lines = [f"- [{'x' if item.checked else ' '}] {item.item}" for item in checks]
+    return "## 8. 阶段门禁\n" + "\n".join(lines)
+
+
+def _markdown_table(headers: list[str], rows: list[tuple[Any, ...]]) -> str:
+    header = "| " + " | ".join(headers) + " |"
+    separator = "| " + " | ".join("---" for _ in headers) + " |"
+    body = [
+        "| " + " | ".join(_escape_table_cell(cell) for cell in row) + " |"
+        for row in rows
+    ]
+    return "\n".join([header, separator, *body])
+
+
+def _escape_table_cell(value: Any) -> str:
+    return str(value).replace("|", "\\|").replace("\n", "<br>")
+
+
+def _node_id(label: str, existing: dict[str, str]) -> str:
+    if label in existing:
+        return existing[label]
+    base = re.sub(r"[^0-9A-Za-z_]+", "_", label).strip("_")
+    if not base or base[0].isdigit():
+        base = f"N_{base}" if base else "N"
+    candidate = base
+    suffix = 2
+    while candidate in existing.values():
+        candidate = f"{base}_{suffix}"
+        suffix += 1
+    existing[label] = candidate
+    return candidate
+
+
+
+
 def _escape_mermaid_label(value: str) -> str:
-    normalized = re.sub(r"\s+", " ", str(value)).strip()
-    return normalized.replace("\\", "\\\\").replace('"', '\\"')
+    return value.replace('"', "'")
+
+
+ArtifactDataRenderer = tuple[
+    type[StrictArtifactDataModel],
+    Callable[[Any], str],
+]
+
+ARTIFACT_DATA_RENDERERS: dict[tuple[str, str], ArtifactDataRenderer] = {
+    ("TEST_DESIGN", "CLARIFY"): (
+        ClarifyArtifactData,
+        render_test_design_clarify_markdown,
+    ),
+    ("TEST_DESIGN", "STRATEGY"): (
+        StrategyArtifactData,
+        render_test_design_strategy_markdown,
+    ),
+    ("TEST_DESIGN", "CASES"): (
+        CasesArtifactData,
+        render_test_design_cases_markdown,
+    ),
+    ("TEST_DESIGN", "DELIVERY"): (
+        DeliveryArtifactData,
+        render_test_design_delivery_markdown,
+    ),
+    ("REQ_REVIEW", "REVIEW"): (
+        ReqReviewArtifactData,
+        render_req_review_review_markdown,
+    ),
+    ("REQ_REVIEW", "REPORT"): (
+        ReqReviewReportArtifactData,
+        render_req_review_report_markdown,
+    ),
+    ("INCIDENT_REVIEW", "TIMELINE"): (
+        IncidentTimelineArtifactData,
+        render_incident_review_timeline_markdown,
+    ),
+    ("INCIDENT_REVIEW", "ROOT_CAUSE"): (
+        IncidentRootCauseArtifactData,
+        render_incident_review_root_cause_markdown,
+    ),
+    ("INCIDENT_REVIEW", "IMPROVEMENT"): (
+        IncidentImprovementArtifactData,
+        render_incident_review_improvement_markdown,
+    ),
+    ("IDEA_BRAINSTORM", "DEFINE"): (
+        IdeaDefineArtifactData,
+        render_idea_brainstorm_define_markdown,
+    ),
+    ("IDEA_BRAINSTORM", "DIVERGE"): (
+        IdeaDivergeArtifactData,
+        render_idea_brainstorm_diverge_markdown,
+    ),
+    ("IDEA_BRAINSTORM", "CONVERGE"): (
+        IdeaConvergeArtifactData,
+        render_idea_brainstorm_converge_markdown,
+    ),
+    ("IDEA_BRAINSTORM", "CONCEPT"): (
+        IdeaConceptArtifactData,
+        render_idea_brainstorm_concept_markdown,
+    ),
+    ("VALUE_DISCOVERY", "ELEVATOR"): (
+        ValueDiscoveryElevatorArtifactData,
+        render_value_discovery_elevator_markdown,
+    ),
+    ("VALUE_DISCOVERY", "PERSONA"): (
+        ValueDiscoveryPersonaArtifactData,
+        render_value_discovery_persona_markdown,
+    ),
+    ("VALUE_DISCOVERY", "JOURNEY"): (
+        ValueDiscoveryJourneyArtifactData,
+        render_value_discovery_journey_markdown,
+    ),
+    ("VALUE_DISCOVERY", "BLUEPRINT"): (
+        ValueDiscoveryBlueprintArtifactData,
+        render_value_discovery_blueprint_markdown,
+    ),
+    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): (
+        StoryBreakdownArtifactData,
+        render_story_breakdown_markdown,
+    ),
+    ("STORY_BREAKDOWN", "EPIC_MAPPING"): (
+        StoryBreakdownArtifactData,
+        render_story_breakdown_markdown,
+    ),
+    ("STORY_BREAKDOWN", "STORY_BACKLOG"): (
+        StoryBreakdownArtifactData,
+        render_story_breakdown_markdown,
+    ),
+    ("STORY_BREAKDOWN", "SPRINT_PLAN"): (
+        StoryBreakdownArtifactData,
+        render_story_breakdown_markdown,
+    ),
+    ("PRD_REVIEW", "INVENTORY"): (
+        PrdReviewArtifactData,
+        lambda data: render_prd_review_markdown(data, "INVENTORY"),
+    ),
+    ("PRD_REVIEW", "QUALITY_AUDIT"): (
+        PrdReviewArtifactData,
+        lambda data: render_prd_review_markdown(data, "QUALITY_AUDIT"),
+    ),
+    ("PRD_REVIEW", "COMPLETION_PLAN"): (
+        PrdReviewArtifactData,
+        lambda data: render_prd_review_markdown(data, "COMPLETION_PLAN"),
+    ),
+    ("PRD_REVIEW", "REVISION_BLUEPRINT"): (
+        PrdReviewArtifactData,
+        lambda data: render_prd_review_markdown(data, "REVISION_BLUEPRINT"),
+    ),
+}
+
+
+def get_artifact_data_renderer_stage_keys() -> tuple[tuple[str, str], ...]:
+    return tuple(sorted(ARTIFACT_DATA_RENDERERS))

@@ -94,7 +94,7 @@
 | `prompts/req_review/` | 需求评审 | review, report |
 | `prompts/incident_review/` | 故障复盘 | timeline, root_cause, improvement |
 | `prompts/idea_brainstorm/` | 创意风暴 | define, diverge, converge, concept |
-| `prompts/value_discovery/` | 价值发现 | elevator, persona, journey, blueprint |
+| `prompts/value_discovery/` | 需求蓝图梳理（内部目录仍为 value_discovery） | elevator, persona, journey, blueprint |
 
 ---
 

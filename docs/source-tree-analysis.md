@@ -130,7 +130,7 @@ AI4SE/                                    # 项目根目录 (Monorepo)
 │   │   │   │   │   │   ├── req_review/   # 需求评审 2 阶段
 │   │   │   │   │   │   ├── incident_review/  # 故障复盘 3 阶段
 │   │   │   │   │   │   ├── idea_brainstorm/  # 创意头脑风暴 4 阶段
-│   │   │   │   │   │   └── value_discovery/  # 价值发现 4 阶段
+│   │   │   │   │   │   └── value_discovery/  # 需求蓝图梳理 4 阶段（内部目录仍为 value_discovery）
 │   │   │   │   │   └── utils/            # 工具 (mermaidSanitizer, markdownUtils)
 │   │   │   │   └── services/
 │   │   │   │       ├── chatService.ts    # 聊天服务 Hook

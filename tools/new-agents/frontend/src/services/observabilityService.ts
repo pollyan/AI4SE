@@ -1,10 +1,11 @@
 import type {
+    ObservabilityDiagnostic,
+    ObservabilityDiagnosticSeverity,
     ObservabilityProviderSummary,
     ObservabilityStageSummary,
     ObservabilitySummary,
     ObservabilityTotals,
     ObservabilityTurn,
-    ObservabilityTurnDiagnostic,
     WorkflowType,
 } from '../core/types';
 import { WORKFLOWS } from '../core/workflows';
@@ -55,24 +56,24 @@ const parseErrorCodes = (value: unknown): Record<string, number> => {
     );
 };
 
-const parseTurnDiagnostic = (
-    value: unknown
-): ObservabilityTurnDiagnostic | null | undefined => {
-    if (value === undefined) return undefined;
-    if (value === null) return null;
-    if (!isRecord(value)) {
-        throw new Error(INVALID_OBSERVABILITY_ERROR);
+const parseDiagnosticSeverity = (value: unknown): ObservabilityDiagnosticSeverity => {
+    if (value === 'info' || value === 'warning' || value === 'critical') {
+        return value;
     }
-    if (typeof value.retryable !== 'boolean') {
+    throw new Error(INVALID_OBSERVABILITY_ERROR);
+};
+
+const parseDiagnostic = (value: unknown): ObservabilityDiagnostic => {
+    if (!isRecord(value)) {
         throw new Error(INVALID_OBSERVABILITY_ERROR);
     }
 
     return {
-        phase: parseString(value.phase),
-        fieldPath: parseString(value.fieldPath),
-        validator: parseString(value.validator),
-        publicReason: parseString(value.publicReason),
-        retryable: value.retryable,
+        id: parseString(value.id),
+        severity: parseDiagnosticSeverity(value.severity),
+        title: parseString(value.title),
+        detail: parseString(value.detail),
+        action: parseString(value.action),
     };
 };
 
@@ -122,7 +123,6 @@ const parseTurn = (value: unknown): ObservabilityTurn => {
         throw new Error(INVALID_OBSERVABILITY_ERROR);
     }
 
-    const diagnostic = parseTurnDiagnostic(value.diagnostic);
     return {
         id: parseInteger(value.id),
         runId: parseString(value.runId),
@@ -137,7 +137,6 @@ const parseTurn = (value: unknown): ObservabilityTurn => {
         outputChars: parseInteger(value.outputChars),
         estimatedTokens: parseInteger(value.estimatedTokens),
         contractRetryCount: parseInteger(value.contractRetryCount),
-        ...(diagnostic !== undefined ? { diagnostic } : {}),
         createdAt: parseNullableString(value.createdAt),
     };
 };
@@ -145,6 +144,7 @@ const parseTurn = (value: unknown): ObservabilityTurn => {
 const parseSummary = (payload: unknown): ObservabilitySummary => {
     if (
         !isRecord(payload)
+        || !Array.isArray(payload.diagnostics)
         || !Array.isArray(payload.byStage)
         || !Array.isArray(payload.byProvider)
         || !Array.isArray(payload.recentTurns)
@@ -153,6 +153,8 @@ const parseSummary = (payload: unknown): ObservabilitySummary => {
     }
 
     return {
+        contractRetryReasons: parseErrorCodes(payload.contractRetryReasons),
+        diagnostics: payload.diagnostics.map(parseDiagnostic),
         totals: parseTotals(payload.totals),
         byStage: payload.byStage.map(parseStageSummary),
         byProvider: payload.byProvider.map(parseProviderSummary),

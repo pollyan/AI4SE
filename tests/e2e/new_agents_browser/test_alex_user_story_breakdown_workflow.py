@@ -25,8 +25,8 @@ def _alex_user_story_breakdown_scenario() -> WorkflowScenario:
         prompt="基于 AI 测试设计助手需求蓝图，拆成用户故事地图和可交接故事卡。",
         stages=(
             StageExpectation(
-                stage_tab="校准拆分范围",
-                transition_label="确认进入 绘制故事地图",
+                stage_tab="输入分析",
+                transition_label="确认进入 Epic 映射",
                 artifact_headings=(
                     "# 用户故事拆解文档",
                     "## 1. 拆分范围",
@@ -39,8 +39,8 @@ def _alex_user_story_breakdown_scenario() -> WorkflowScenario:
                 ),
             ),
             StageExpectation(
-                stage_tab="绘制故事地图",
-                transition_label="确认进入 编写故事卡片",
+                stage_tab="Epic 映射",
+                transition_label="确认进入 Story Backlog",
                 artifact_headings=(
                     "# 用户故事拆解文档",
                     "## 3. 用户故事地图",
@@ -54,8 +54,8 @@ def _alex_user_story_breakdown_scenario() -> WorkflowScenario:
                 ),
             ),
             StageExpectation(
-                stage_tab="编写故事卡片",
-                transition_label="确认进入 准备故事交接",
+                stage_tab="Story Backlog",
+                transition_label="确认进入 Sprint 计划",
                 artifact_headings=(
                     "# 用户故事拆解文档",
                     "## 2. 用户故事卡片",
@@ -70,7 +70,7 @@ def _alex_user_story_breakdown_scenario() -> WorkflowScenario:
                 ),
             ),
             StageExpectation(
-                stage_tab="准备故事交接",
+                stage_tab="Sprint 计划",
                 transition_label=None,
                 artifact_headings=(
                     "# 单故事 Handoff 清单",
@@ -95,10 +95,10 @@ def test_alex_user_story_breakdown_workflow_completes_all_stages(new_agents_page
     assert "实现计划" not in run_result.final_artifact
     assert "文件路径" not in run_result.final_artifact
     assert [snapshot.stage_name for snapshot in run_result.stage_artifacts] == [
-        "校准拆分范围",
-        "绘制故事地图",
-        "编写故事卡片",
-        "准备故事交接",
+        "输入分析",
+        "Epic 映射",
+        "Story Backlog",
+        "Sprint 计划",
     ]
     assert len(run_result.stage_transitions) == 3
 
@@ -159,7 +159,7 @@ def test_alex_requirement_blueprint_handoff_to_story_packet_chain(new_agents_pag
 
     expect(new_agents_page).to_have_url(
         re.compile(
-            r"/workspace/alex/user-story-breakdown"
+            r"/workspace/alex/story-breakdown"
             r"\?runId=mock-run-user_story_breakdown-handoff$"
         )
     )
@@ -210,8 +210,8 @@ def test_alex_requirement_blueprint_handoff_to_story_packet_chain(new_agents_pag
 
 def test_alex_user_story_breakdown_mock_fixture_keeps_business_vertical_slices():
     combined = "\n".join(
-        STAGE_PAYLOADS[("USER_STORY_BREAKDOWN", stage)].markdown
-        for stage in ("SCOPE", "STORY_MAP", "STORIES", "HANDOFF")
+        STAGE_PAYLOADS[("STORY_BREAKDOWN", stage)].markdown
+        for stage in ("INPUT_ANALYSIS", "EPIC_MAPPING", "STORY_BACKLOG", "SPRINT_PLAN")
     )
 
     for required_text in (

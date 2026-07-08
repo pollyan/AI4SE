@@ -1,7 +1,7 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, WORKFLOWS } from '../store';
-import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw, Copy, Check, ChevronRight, ChevronDown, ArrowRight, AlertTriangle, Settings } from 'lucide-react';
+import { Send, PlusCircle, Bot, User, FileText, X, Square, RefreshCw, Copy, Check, ChevronRight, ArrowRight, AlertTriangle, Settings } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -15,7 +15,8 @@ import {
   fetchWorkflowHandoffs,
   startWorkflowHandoff,
 } from '../services/workflowHandoffService';
-import type { Attachment, Message, MessageErrorDiagnosticKind, WorkflowHandoff, WorkflowType } from '../store';
+import type { Attachment, Message, WorkflowHandoff } from '../store';
+import { buildArtifactQualitySummary } from '../core/artifactQuality';
 
 const asRenderableAttachments = (attachments: unknown): Attachment[] => {
   if (!Array.isArray(attachments)) return [];
@@ -43,7 +44,7 @@ const isStructuredOutputFailureContent = (content: string | undefined): boolean 
 );
 
 const isProviderFailureContent = (content: string | undefined): boolean => (
-  Boolean(content?.includes('模型配置或供应商异常') || content?.includes('模型调用未完成'))
+  Boolean(content?.includes('模型调用未完成') || content?.includes('模型配置或供应商异常'))
 );
 
 const isStructuredOutputFailureMessage = (message: Message | undefined): boolean => (
@@ -66,67 +67,7 @@ const isProviderFailureMessage = (message: Message | undefined): boolean => (
   )
 );
 
-const getMessageContentWithoutDiagnosticSummary = (message: Message): string => {
-  if (!message.errorDiagnostic) return message.content;
-
-  const summaryLine = `⚠️ ${message.errorDiagnostic.summary}`;
-  if (!message.content.endsWith(summaryLine)) return message.content;
-  return message.content.slice(0, -summaryLine.length).trim();
-};
-
-const ERROR_CARD_STYLE = {
-  structured: {
-    container: 'border-amber-500/25 bg-amber-500/10 text-amber-100',
-    icon: 'text-amber-300',
-    detail: 'border-amber-300/20 bg-amber-950/25 text-amber-50/85',
-    secondaryButton: 'border-amber-300/30 bg-amber-300/10 text-amber-100 hover:bg-amber-300/20',
-    primaryButton: 'bg-amber-500 text-slate-950 hover:bg-amber-400',
-  },
-  provider: {
-    container: 'border-rose-500/25 bg-rose-500/10 text-rose-100',
-    icon: 'text-rose-300',
-    detail: 'border-rose-300/20 bg-rose-950/25 text-rose-50/85',
-    secondaryButton: 'border-rose-300/30 bg-rose-300/10 text-rose-100 hover:bg-rose-300/20',
-    primaryButton: 'bg-rose-500 text-white hover:bg-rose-400',
-  },
-  generic: {
-    container: 'border-sky-500/25 bg-sky-500/10 text-sky-100',
-    icon: 'text-sky-300',
-    detail: 'border-sky-300/20 bg-sky-950/25 text-sky-50/85',
-    secondaryButton: 'border-sky-300/30 bg-sky-300/10 text-sky-100 hover:bg-sky-300/20',
-    primaryButton: 'bg-sky-500 text-white hover:bg-sky-400',
-  },
-} as const;
-
-const getDiagnosticTitle = (kind: MessageErrorDiagnosticKind): string => (
-  kind === 'structured'
-    ? '结构化结果未更新'
-    : kind === 'provider'
-      ? '模型调用未完成'
-      : '本轮生成失败'
-);
-
 const STRUCTURED_FAILURE_SUPPLEMENT_PROMPT = '请补充更明确的需求或阶段确认信息，我会基于补充内容重新生成当前阶段产出物。';
-
-const TARGET_STARTUP_HANDOFF_COPY: Partial<Record<WorkflowType, {
-  title: string;
-  description: string;
-  loading: string;
-  empty: string;
-}>> = {
-  VALUE_DISCOVERY: {
-    title: '选择需求蓝图起点',
-    description: '可以从空白话题开始，也可以继承已有产品概念简报继续梳理。',
-    loading: '正在查找可继承的产品概念简报...',
-    empty: '暂无可继承的产品概念简报，可以直接开启新话题',
-  },
-  USER_STORY_BREAKDOWN: {
-    title: '选择用户故事拆解起点',
-    description: '可以从空白话题开始，也可以继承已有需求蓝图继续拆分。',
-    loading: '正在查找可继承的需求蓝图...',
-    empty: '暂无可继承的需求蓝图，可以直接开启新话题',
-  },
-};
 
 type ProviderCheckState = {
   status: 'idle' | 'checking' | 'success' | 'error';
@@ -144,13 +85,16 @@ export const ChatPane: React.FC = () => {
   const stageIndex = useStore((state) => state.stageIndex);
   const currentRunId = useStore((state) => state.currentRunId);
   const pendingStageTransition = useStore((state) => state.pendingStageTransition);
+  const artifactContent = useStore((state) => state.artifactContent);
+  const artifactVisualDiagnostics = useStore((state) => state.artifactVisualDiagnostics);
   const clearPendingStageTransition = useStore((state) => state.clearPendingStageTransition);
   const applyWorkflowHandoff = useStore((state) => state.applyWorkflowHandoff);
   const setSettingsOpen = useStore((state) => state.setSettingsOpen);
   
   const onboardingConfig = WORKFLOWS[workflow].onboarding;
   const workflowStages = WORKFLOWS[workflow].stages;
-  const currentStageId = workflowStages[stageIndex]?.id;
+  const currentStage = workflowStages[stageIndex];
+  const currentStageId = currentStage?.id;
   const agentId = WORKFLOWS[workflow].agentId;
   const agentConfig = getAgentById(agentId);
   const displayTitle = agentConfig?.displayTitle || agentId;
@@ -159,17 +103,45 @@ export const ChatPane: React.FC = () => {
     ? workflowStages[pendingStageTransition.toStageIndex]
     : null;
   const latestMessage = chatHistory[chatHistory.length - 1];
-  const isLatestStructuredOutputFailure = isStructuredOutputFailureMessage(latestMessage);
-  const isLatestProviderFailure = isProviderFailureMessage(latestMessage);
+  const isLatestStructuredOutputFailure = (
+    isStructuredOutputFailureMessage(latestMessage)
+  );
+  const isLatestProviderFailure = (
+    isProviderFailureMessage(latestMessage)
+  );
   const latestAssistantMessages = chatHistory
     .filter((message) => message.role === 'assistant')
     .slice(-2);
   const hasRepeatedStructuredOutputFailures = (
     latestAssistantMessages.length === 2
     && latestAssistantMessages.every((message) => (
-      isStructuredOutputFailureMessage(message)
+      isStructuredOutputFailureContent(message.content)
     ))
   );
+  const currentStageVisualDiagnostics = useMemo(
+    () => currentStageId
+      ? artifactVisualDiagnostics.filter((diagnostic) => diagnostic.stageId === currentStageId)
+      : [],
+    [artifactVisualDiagnostics, currentStageId]
+  );
+  const artifactQualitySummary = useMemo(
+    () => buildArtifactQualitySummary({
+      stage: currentStage,
+      content: artifactContent,
+      visualDiagnostics: currentStageVisualDiagnostics,
+    }),
+    [artifactContent, currentStage, currentStageVisualDiagnostics]
+  );
+  const visibleMissingInfoItems = useMemo(() => {
+    const blockingItems = artifactQualitySummary.missingInfoItems.filter((item) => item.blocking);
+    const warningItems = artifactQualitySummary.missingInfoItems.filter((item) => !item.blocking);
+    const leadingBlockingItems = blockingItems.slice(0, warningItems.length > 0 ? 2 : 3);
+    const leadingWarningItems = warningItems.slice(0, 3 - leadingBlockingItems.length);
+    return [...leadingBlockingItems, ...leadingWarningItems];
+  }, [artifactQualitySummary.missingInfoItems]);
+  const hiddenMissingInfoCount = Math.max(0, artifactQualitySummary.missingInfoItems.length - visibleMissingInfoItems.length);
+  const hasConversationStarted = chatHistory.length > 0;
+
   const updateMessage = useStore((state) => state.updateMessage);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -180,17 +152,14 @@ export const ChatPane: React.FC = () => {
   const [toast, setToast] = useState<string | null>(null);
   const [workflowHandoffs, setWorkflowHandoffs] = useState<WorkflowHandoff[]>([]);
   const [targetWorkflowHandoffs, setTargetWorkflowHandoffs] = useState<WorkflowHandoff[]>([]);
-  const [targetHandoffStatus, setTargetHandoffStatus] = useState<'idle' | 'loading' | 'ready' | 'empty' | 'error'>('idle');
-  const [targetHandoffPanelDismissed, setTargetHandoffPanelDismissed] = useState(false);
+  const [targetHandoffCandidatesLoaded, setTargetHandoffCandidatesLoaded] = useState(false);
   const [providerCheckByMessageId, setProviderCheckByMessageId] = useState<ProviderCheckStateByMessage>({});
-  const [expandedErrorDetails, setExpandedErrorDetails] = useState<Record<string, boolean>>({});
-
-  const toggleErrorDetail = (messageId: string) => {
-    setExpandedErrorDetails(current => ({
-      ...current,
-      [messageId]: !current[messageId],
-    }));
-  };
+  const [expandedErrorDetailsByMessageId, setExpandedErrorDetailsByMessageId] = useState<Record<string, boolean>>({});
+  const upstreamSourceLabel = workflow === 'VALUE_DISCOVERY'
+    ? '产品概念简报'
+    : workflow === 'STORY_BREAKDOWN'
+      ? '需求蓝图'
+      : '上游内容';
 
   const handleCopy = async (content: string, msgId: string) => {
     if (copyFeedbackTimeoutRef.current) {
@@ -265,7 +234,7 @@ export const ChatPane: React.FC = () => {
     let isCurrent = true;
 
     if (!currentRunId) {
-      setWorkflowHandoffs([]);
+      setWorkflowHandoffs(current => current.length === 0 ? current : []);
       return () => {
         isCurrent = false;
       };
@@ -289,59 +258,55 @@ export const ChatPane: React.FC = () => {
   }, [currentRunId, chatHistory.length]);
 
   useEffect(() => {
-    setTargetHandoffPanelDismissed(false);
-  }, [workflow, currentStageId]);
-
-  const targetStartupHandoffCopy = TARGET_STARTUP_HANDOFF_COPY[workflow];
-  const shouldOfferTargetStartupHandoff = Boolean(
-    targetStartupHandoffCopy
-    && currentStageId === WORKFLOWS[workflow].stages[0]?.id
-    && !currentRunId
-    && chatHistory.length === 0
-  );
-
-  useEffect(() => {
     let isCurrent = true;
+    const supportsTargetWorkflowStart = (
+      workflow === 'VALUE_DISCOVERY'
+      || workflow === 'STORY_BREAKDOWN'
+    );
+    const shouldLoadTargetHandoffs = (
+      supportsTargetWorkflowStart
+      &&
+      !currentRunId
+      && chatHistory.length === 0
+      && Boolean(currentStageId)
+    );
 
-    if (!shouldOfferTargetStartupHandoff || !currentStageId || targetHandoffPanelDismissed) {
-      setTargetWorkflowHandoffs([]);
-      setTargetHandoffStatus('idle');
+    if (!shouldLoadTargetHandoffs || !currentStageId) {
+      setTargetWorkflowHandoffs(current => current.length === 0 ? current : []);
+      setTargetHandoffCandidatesLoaded(current => current ? false : current);
       return () => {
         isCurrent = false;
       };
     }
 
-    setTargetHandoffStatus('loading');
+    setTargetHandoffCandidatesLoaded(false);
     fetchTargetWorkflowHandoffCandidates(workflow, currentStageId)
       .then((handoffs) => {
-        if (!isCurrent) return;
-        setTargetWorkflowHandoffs(handoffs);
-        setTargetHandoffStatus(handoffs.length > 0 ? 'ready' : 'empty');
+        if (isCurrent) {
+          setTargetWorkflowHandoffs(handoffs);
+          setTargetHandoffCandidatesLoaded(true);
+        }
       })
       .catch(() => {
-        if (!isCurrent) return;
-        setTargetWorkflowHandoffs([]);
-        setTargetHandoffStatus('error');
+        if (isCurrent) {
+          setTargetWorkflowHandoffs([]);
+          setTargetHandoffCandidatesLoaded(true);
+        }
       });
 
     return () => {
       isCurrent = false;
     };
-  }, [chatHistory.length, currentRunId, currentStageId, shouldOfferTargetStartupHandoff, targetHandoffPanelDismissed, workflow]);
+  }, [chatHistory.length, currentRunId, currentStageId, workflow]);
 
   const handleApplyWorkflowHandoff = async (handoff: WorkflowHandoff) => {
     const sourceRunId = currentRunId ?? handoff.sourceRunId;
-    if (!sourceRunId) {
-      setToast('无法启动接力：缺少上游 run');
-      return;
-    }
     const startedHandoff = sourceRunId
       ? await startWorkflowHandoff(sourceRunId, handoff.id)
       : handoff;
     applyWorkflowHandoff(startedHandoff);
     setWorkflowHandoffs([]);
     setTargetWorkflowHandoffs([]);
-    setTargetHandoffPanelDismissed(true);
     const targetWorkflow = WORKFLOWS[startedHandoff.targetWorkflowId];
     const targetRunQuery = startedHandoff.targetRunId
       ? `?runId=${encodeURIComponent(startedHandoff.targetRunId)}`
@@ -407,6 +372,13 @@ export const ChatPane: React.FC = () => {
     textareaRef.current?.focus();
   };
 
+  const toggleErrorDetails = (messageId: string) => {
+    setExpandedErrorDetailsByMessageId(current => ({
+      ...current,
+      [messageId]: !current[messageId],
+    }));
+  };
+
   const renderablePendingAttachments = asRenderableAttachments(pendingAttachments);
 
   return (
@@ -425,25 +397,101 @@ export const ChatPane: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
         {workflowHandoffs.length > 0 && !isGenerating && (
           <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
+            <div className="mb-3 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-cyan-100">跨智能体接力</p>
                 <p className="mt-0.5 truncate text-[11px] text-cyan-200/70">
                   当前产出物可以作为下游工作流输入
                 </p>
               </div>
-              <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                {workflowHandoffs.map((handoff) => (
-                  <button
-                    key={handoff.id}
-                    onClick={() => handleApplyWorkflowHandoff(handoff)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition-colors hover:border-cyan-300/40 hover:bg-cyan-400/20"
-                    title={handoff.label}
-                  >
-                    <span>{handoff.label}</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </button>
-                ))}
+            </div>
+            <div className="space-y-2">
+              {workflowHandoffs.map((handoff) => (
+                <div
+                  key={handoff.id}
+                  className="rounded-lg border border-cyan-400/15 bg-slate-950/30 p-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-cyan-50">
+                        目标 {handoff.targetWorkflowId}/{handoff.targetStageId}
+                      </p>
+                      <p className="mt-1 text-[11px] text-cyan-200/75">
+                        {`来源 ${handoff.sourceWorkflowId}/${handoff.sourceStageId} v${handoff.sourceArtifactVersion}`}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleApplyWorkflowHandoff(handoff)}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition-colors hover:border-cyan-300/40 hover:bg-cyan-400/20"
+                      title={handoff.label}
+                    >
+                      <span>{handoff.label}</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-cyan-50/85">
+                    {handoff.sourceSummary || handoff.sourceArtifactSummary}
+                  </p>
+                  {handoff.unconfirmedItems.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-[10px] font-semibold uppercase text-amber-200/80">未确认项</p>
+                      <ul className="mt-1 space-y-1 text-[11px] leading-relaxed text-amber-50/85">
+                        {handoff.unconfirmedItems.slice(0, 3).map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {handoff.unconfirmedItems.length === 0 && (
+                    <p className="mt-2 text-[11px] text-cyan-50/70">未确认项: 无</p>
+                  )}
+                  <div className="mt-2">
+                    <p className="text-[10px] font-semibold uppercase text-cyan-200/80">目标输入</p>
+                    <ul className="mt-1 space-y-1 text-[11px] leading-relaxed text-cyan-50/80">
+                      {handoff.targetInputChecklist.slice(0, 3).map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {hasConversationStarted && !isGenerating && visibleMissingInfoItems.length > 0 && (
+          <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-rose-100 shadow-sm">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" />
+              <div className="min-w-0">
+                <div className="text-xs font-semibold">当前阶段缺失信息</div>
+                <p className="mt-1 text-[11px] leading-relaxed text-rose-100/75">
+                  右侧产物还没有满足当前阶段合同，请先处理缺失项再继续推进。
+                </p>
+                <div className="mt-2 space-y-2">
+                  {visibleMissingInfoItems.map((item) => (
+                    <div key={item.id} className="rounded-lg border border-white/10 bg-black/10 p-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                          item.blocking
+                            ? 'border-rose-300/30 bg-rose-300/10 text-rose-100'
+                            : 'border-amber-300/30 bg-amber-300/10 text-amber-100'
+                        }`}>
+                          {item.blocking ? '阻断' : '提醒'}
+                        </span>
+                        <span className="text-[11px] font-semibold text-rose-50">{item.title}</span>
+                      </div>
+                      <p className="mt-1 text-[11px] leading-relaxed text-rose-100/75">
+                        {item.nextAction}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                {hiddenMissingInfoCount > 0 && (
+                  <p className="mt-2 text-[11px] text-rose-100/65">
+                    还有 {hiddenMissingInfoCount} 项缺失信息，请在右侧产物审阅中查看完整清单。
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -451,6 +499,47 @@ export const ChatPane: React.FC = () => {
 
         {chatHistory.length === 0 && (
           <div className="flex flex-col h-full items-center justify-center space-y-8 animate-fade-in-up pb-10">
+            {targetHandoffCandidatesLoaded && (
+              <div className="w-full max-w-xl px-4">
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-cyan-50">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">
+                        {targetWorkflowHandoffs.length > 0
+                          ? `选择${WORKFLOWS[workflow].name}起点`
+                          : `暂无可继承的${upstreamSourceLabel}，可以直接开启新话题`}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => textareaRef.current?.focus()}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition-colors hover:border-cyan-300/40 hover:bg-cyan-400/20"
+                    >
+                      开启新话题
+                    </button>
+                  </div>
+                  {targetWorkflowHandoffs.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {targetWorkflowHandoffs.map((handoff) => (
+                        <button
+                          key={handoff.id}
+                          type="button"
+                          onClick={() => handleApplyWorkflowHandoff(handoff)}
+                          className="block w-full rounded-lg border border-cyan-400/15 bg-slate-950/30 p-3 text-left transition-colors hover:border-cyan-300/35 hover:bg-cyan-400/10"
+                        >
+                          <span className="block text-xs font-semibold text-cyan-50">
+                            {handoff.label}
+                          </span>
+                          <span className="mt-1 block text-[11px] leading-relaxed text-cyan-100/75">
+                            {handoff.sourceSummary || handoff.sourceArtifactSummary}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="text-center space-y-4 max-w-xl px-4 flex flex-col items-center">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-blue-500/10 border border-blue-500/20 text-blue-500 shadow-[0_0_30px_-5px_rgba(59,130,246,0.3)] mb-2 mt-4">
                 <Bot className="w-8 h-8" />
@@ -469,65 +558,6 @@ export const ChatPane: React.FC = () => {
                 </ReactMarkdown>
               </div>
             </div>
-
-            {shouldOfferTargetStartupHandoff && !targetHandoffPanelDismissed && (
-              <div className="w-full max-w-xl px-4">
-                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-4 shadow-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-cyan-100">{targetStartupHandoffCopy?.title}</p>
-                      <p className="mt-1 text-xs leading-relaxed text-cyan-100/70">
-                        {targetStartupHandoffCopy?.description}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setTargetHandoffPanelDismissed(true)}
-                      className="shrink-0 rounded-lg border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-xs font-semibold text-cyan-50 transition-colors hover:bg-cyan-300/20"
-                    >
-                      开启新话题
-                    </button>
-                  </div>
-
-                  {targetHandoffStatus === 'loading' && (
-                    <p className="mt-3 text-xs text-cyan-100/70">{targetStartupHandoffCopy?.loading}</p>
-                  )}
-
-                  {targetHandoffStatus === 'error' && (
-                    <p className="mt-3 text-xs text-amber-100">暂时无法读取上游内容，可以直接开启新话题。</p>
-                  )}
-
-                  {targetHandoffStatus === 'empty' && (
-                    <p className="mt-3 text-xs text-cyan-100/70">{targetStartupHandoffCopy?.empty}</p>
-                  )}
-
-                  {targetWorkflowHandoffs.length > 0 && (
-                    <div className="mt-3 grid grid-cols-1 gap-2">
-                      {targetWorkflowHandoffs.map((handoff) => (
-                        <button
-                          key={`${handoff.sourceRunId ?? 'source'}-${handoff.id}-v${handoff.sourceArtifactVersion}`}
-                          onClick={() => handleApplyWorkflowHandoff(handoff)}
-                          className="text-left rounded-lg border border-cyan-300/20 bg-[#0f1623]/80 p-3 text-cyan-50 transition-colors hover:border-cyan-200/40 hover:bg-cyan-400/10"
-                          title={handoff.sourceArtifactDigest}
-                        >
-                          <span className="flex items-center justify-between gap-2 text-sm font-semibold">
-                            <span>{handoff.label}</span>
-                            <ArrowRight className="h-4 w-4 shrink-0" />
-                          </span>
-                          <span className="mt-1 block text-[11px] text-cyan-100/60">
-                            {handoff.sourceWorkflowId}/{handoff.sourceStageId} · v{handoff.sourceArtifactVersion}
-                          </span>
-                          {handoff.sourceArtifactSummary && (
-                            <span className="mt-1.5 block line-clamp-2 text-xs leading-relaxed text-slate-300">
-                              {handoff.sourceArtifactSummary}
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
 
             <div className="flex flex-col gap-3 w-full max-w-xl px-4">
               <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold px-2 mb-1">你可以试试这样问：</p>
@@ -553,19 +583,19 @@ export const ChatPane: React.FC = () => {
             return null;
           }
           const messageAttachments = asRenderableAttachments(msg.attachments);
-          const isStructuredOutputFailure = isStructuredOutputFailureMessage(msg);
-          const isProviderFailure = isProviderFailureMessage(msg);
-          const isDiagnosticFailure = Boolean(msg.errorDiagnostic);
+          const isStructuredOutputFailure = (
+            isStructuredOutputFailureMessage(msg)
+          );
+          const isProviderFailure = (
+            isProviderFailureMessage(msg)
+          );
+          const errorDiagnostic = msg.role === 'assistant' ? msg.errorDiagnostic : undefined;
+          const isErrorDetailsExpanded = Boolean(expandedErrorDetailsByMessageId[msg.id]);
           const shouldShowSupplementStructuredFailure = (
             isStructuredOutputFailure
             && hasRepeatedStructuredOutputFailures
             && msg.id === latestMessage?.id
           );
-          const visibleMessageContent = getMessageContentWithoutDiagnosticSummary(msg);
-          const isErrorDetailExpanded = expandedErrorDetails[msg.id] === true;
-          const diagnosticStyle = msg.errorDiagnostic
-            ? ERROR_CARD_STYLE[msg.errorDiagnostic.kind]
-            : null;
           const providerCheck = providerCheckByMessageId[msg.id] || {
             status: 'idle',
             message: null,
@@ -653,147 +683,15 @@ export const ChatPane: React.FC = () => {
                       ))}
                     </div>
                   )}
-                  {visibleMessageContent && (
+                  {msg.content && (
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={messageMarkdownComponents}
                     >
-                      {preprocessMarkdown(visibleMessageContent)}
+                      {preprocessMarkdown(msg.content)}
                     </ReactMarkdown>
                   )}
-                  {msg.errorDiagnostic && diagnosticStyle && (
-                    <div className={clsx(
-                      'mt-3 rounded-xl border p-3 shadow-sm',
-                      diagnosticStyle.container
-                    )}>
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle className={clsx('mt-0.5 h-4 w-4 shrink-0', diagnosticStyle.icon)} />
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold">{getDiagnosticTitle(msg.errorDiagnostic.kind)}</div>
-                          <p className="mt-1 text-xs leading-relaxed opacity-85">
-                            {msg.errorDiagnostic.summary}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => toggleErrorDetail(msg.id)}
-                          className={clsx(
-                            'inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold transition-colors',
-                            diagnosticStyle.secondaryButton
-                          )}
-                          aria-expanded={isErrorDetailExpanded}
-                        >
-                          {isErrorDetailExpanded ? '收起详情' : '查看详情'}
-                          {isErrorDetailExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                        </button>
-                      </div>
-                      {isErrorDetailExpanded && (
-                        <div className={clsx('mt-3 rounded-lg border px-3 py-2 text-xs leading-relaxed', diagnosticStyle.detail)}>
-                          {msg.errorDiagnostic.reason && (
-                            <p><span className="font-semibold">可能原因：</span>{msg.errorDiagnostic.reason}</p>
-                          )}
-                          {msg.errorDiagnostic.action && (
-                            <p className="mt-1"><span className="font-semibold">建议处理：</span>{msg.errorDiagnostic.action}</p>
-                          )}
-                          {msg.errorDiagnostic.code && (
-                            <p className="mt-1"><span className="font-semibold">错误代码：</span>{msg.errorDiagnostic.code}</p>
-                          )}
-                          {(msg.errorDiagnostic.workflowId || msg.errorDiagnostic.stageId) && (
-                            <p className="mt-1">
-                              <span className="font-semibold">工作流阶段：</span>
-                              {[msg.errorDiagnostic.workflowId, msg.errorDiagnostic.stageId].filter(Boolean).join(' / ')}
-                            </p>
-                          )}
-                          {msg.errorDiagnostic.phase && (
-                            <p className="mt-1"><span className="font-semibold">失败阶段：</span>{msg.errorDiagnostic.phase}</p>
-                          )}
-                          {msg.errorDiagnostic.fieldPath && (
-                            <p className="mt-1"><span className="font-semibold">字段路径：</span>{msg.errorDiagnostic.fieldPath}</p>
-                          )}
-                          {msg.errorDiagnostic.validator && (
-                            <p className="mt-1"><span className="font-semibold">校验器：</span>{msg.errorDiagnostic.validator}</p>
-                          )}
-                          {typeof msg.errorDiagnostic.retryable === 'boolean' && (
-                            <p className="mt-1">
-                              <span className="font-semibold">重试建议：</span>
-                              {msg.errorDiagnostic.retryable ? '可重试' : '需要先处理原因'}
-                            </p>
-                          )}
-                          <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap rounded-md bg-black/25 p-2 font-mono text-[11px] leading-relaxed">
-                            {msg.errorDiagnostic.rawMessage}
-                          </pre>
-                        </div>
-                      )}
-                      {msg.errorDiagnostic.kind === 'provider' && providerCheck.status !== 'idle' && (
-                        <div className={clsx(
-                          "mt-3 rounded-lg border px-3 py-2 text-xs leading-relaxed",
-                          providerCheck.status === 'success'
-                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
-                            : providerCheck.status === 'checking'
-                              ? "border-rose-300/20 bg-rose-400/10 text-rose-100/80"
-                              : "border-rose-400/40 bg-rose-400/10 text-rose-100"
-                        )}>
-                          {providerCheck.message}
-                        </div>
-                      )}
-                      <div className="mt-3 flex flex-wrap justify-end gap-2">
-                        {msg.errorDiagnostic.kind === 'structured' && shouldShowSupplementStructuredFailure && (
-                          <button
-                            type="button"
-                            onClick={handleSupplementStructuredFailure}
-                            className={clsx(
-                              'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors',
-                              diagnosticStyle.secondaryButton
-                            )}
-                          >
-                            补充信息后再试
-                          </button>
-                        )}
-                        {msg.errorDiagnostic.kind === 'provider' && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setSettingsOpen(true)}
-                              className={clsx(
-                                'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors',
-                                diagnosticStyle.secondaryButton
-                              )}
-                            >
-                              <Settings className="h-3.5 w-3.5" />
-                              打开模型设置
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleProviderConfigCheck(msg.id)}
-                              disabled={providerCheck.status === 'checking'}
-                              className={clsx(
-                                'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60',
-                                diagnosticStyle.secondaryButton
-                              )}
-                            >
-                              <RefreshCw className={clsx(
-                                "h-3.5 w-3.5",
-                                providerCheck.status === 'checking' && "animate-spin"
-                              )} />
-                              {providerCheck.status === 'checking' ? '正在检测...' : '检测连接'}
-                            </button>
-                          </>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => void handleRetryCurrentStageGeneration()}
-                          className={clsx(
-                            'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors',
-                            diagnosticStyle.primaryButton
-                          )}
-                        >
-                          <RefreshCw className="h-3.5 w-3.5" />
-                          重试本阶段生成
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {!msg.errorDiagnostic && isStructuredOutputFailure && (
+                  {isStructuredOutputFailure && (
                     <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-100">
                       <div className="flex items-start gap-2">
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
@@ -828,14 +726,14 @@ export const ChatPane: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  {!msg.errorDiagnostic && isProviderFailure && (
+                  {isProviderFailure && (
                     <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-rose-100">
                       <div className="flex items-start gap-2">
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" />
                         <div className="min-w-0">
                           <div className="text-sm font-semibold">模型调用未完成</div>
                           <p className="mt-1 text-xs leading-relaxed text-rose-100/80">
-                            右侧产出物已保持不变
+                            本次没有改写右侧产出物
                           </p>
                           <p className="mt-1 text-xs leading-relaxed text-rose-100/70">
                             请先检查模型配置、供应商额度或网络连通性，确认恢复后再重试。
@@ -886,6 +784,78 @@ export const ChatPane: React.FC = () => {
                       </div>
                     </div>
                   )}
+                  {errorDiagnostic?.kind === 'generic' && (
+                    <div className="mt-3 rounded-xl border border-slate-600/40 bg-slate-950/30 p-3 text-sm font-semibold text-slate-100">
+                      {errorDiagnostic.summary}
+                    </div>
+                  )}
+                  {errorDiagnostic && (
+                    <div className="mt-3 rounded-xl border border-slate-600/40 bg-slate-950/35 p-3 text-xs text-slate-200">
+                      {isErrorDetailsExpanded && (
+                        <div className="mb-3 space-y-2 leading-relaxed">
+                          {errorDiagnostic.workflowId && errorDiagnostic.stageId && (
+                            <div>
+                              <span className="text-slate-400">阶段：</span>
+                              <span>{errorDiagnostic.workflowId} / {errorDiagnostic.stageId}</span>
+                            </div>
+                          )}
+                          {errorDiagnostic.reason && (
+                            <div>
+                              <span className="text-slate-400">原因：</span>
+                              <span>{errorDiagnostic.reason}</span>
+                            </div>
+                          )}
+                          {errorDiagnostic.action && (
+                            <div>
+                              <span className="text-slate-400">建议：</span>
+                              <span>{errorDiagnostic.action}</span>
+                            </div>
+                          )}
+                          {errorDiagnostic.code && (
+                            <div>
+                              <span className="text-slate-400">错误码：</span>
+                              <span>{errorDiagnostic.code}</span>
+                            </div>
+                          )}
+                          {errorDiagnostic.phase && (
+                            <div>
+                              <span className="text-slate-400">阶段类型：</span>
+                              <span>{errorDiagnostic.phase}</span>
+                            </div>
+                          )}
+                          {errorDiagnostic.fieldPath && (
+                            <div>
+                              <span className="text-slate-400">字段：</span>
+                              <span>{errorDiagnostic.fieldPath}</span>
+                            </div>
+                          )}
+                          {errorDiagnostic.validator && (
+                            <div>
+                              <span className="text-slate-400">校验器：</span>
+                              <span>{errorDiagnostic.validator}</span>
+                            </div>
+                          )}
+                          {typeof errorDiagnostic.retryable === 'boolean' && (
+                            <div>
+                              <span className="text-slate-400">重试：</span>
+                              <span>{errorDiagnostic.retryable ? '可重试' : '不可重试'}</span>
+                            </div>
+                          )}
+                          <div>
+                            <span className="text-slate-400">原始错误：</span>
+                            <span>{errorDiagnostic.rawMessage}</span>
+                          </div>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => toggleErrorDetails(msg.id)}
+                        className="text-xs font-semibold text-slate-300 transition-colors hover:text-white"
+                      >
+                        {isErrorDetailsExpanded ? '收起详情' : '查看详情'}
+                      </button>
+                    </div>
+                  )}
                   <div className="mt-3 pt-3 border-t border-white/10 flex justify-end gap-3">
                     <button
                       onClick={() => handleCopy(msg.content || '', msg.id)}
@@ -898,7 +868,7 @@ export const ChatPane: React.FC = () => {
                       {copiedId === msg.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedId === msg.id ? '已复制' : '复制'}</span>
                     </button>
-                    {msg.role === 'assistant' && msg.retryable !== false && !isGenerating && msg.id === chatHistory[chatHistory.length - 1]?.id && !isStructuredOutputFailure && !isProviderFailure && !isDiagnosticFailure && (
+                    {msg.role === 'assistant' && msg.retryable !== false && !isGenerating && msg.id === chatHistory[chatHistory.length - 1]?.id && !isStructuredOutputFailure && !isProviderFailure && (
                       <button
                         onClick={handleRetry}
                         className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-blue-400 transition-colors"

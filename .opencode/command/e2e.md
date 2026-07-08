@@ -19,7 +19,7 @@ description: Run end-to-end tests for AI4SE using Chrome DevTools MCP. Validates
 
 1. Docker 环境已启动: `./scripts/dev/deploy-dev.sh`
 2. Chrome 浏览器已打开并连接到 DevTools MCP
-3. 服务健康: http://localhost/new-agents 可访问
+3. 服务健康: http://localhost/ai-agents 可访问
 
 ## 执行流程
 
@@ -33,7 +33,7 @@ description: Run end-to-end tests for AI4SE using Chrome DevTools MCP. Validates
 docker ps --format "table {{.Names}}\t{{.Status}}" | grep ai4se
 ```
 
-预期看到 `ai4se-new-agents`, `ai4se-new-agents-backend`, `ai4se-gateway` 等容器运行中。
+预期看到 `ai4se-agents`, `ai4se-gateway` 等容器运行中。
 
 如果服务未运行，提示用户执行：
 ```bash
@@ -44,7 +44,8 @@ docker ps --format "table {{.Names}}\t{{.Status}}" | grep ai4se
 
 从 `tests/e2e/scenarios/` 目录读取对应的场景文件：
 - `/e2e` 或 `/e2e lisa` → 读取 `tests/e2e/scenarios/lisa-smoke.md`
-- `/e2e all` → 依次读取现有场景文件
+- `/e2e alex` → 读取 `tests/e2e/scenarios/alex-smoke.md`
+- `/e2e all` → 依次读取所有场景文件
 
 ### 3. 执行测试
 

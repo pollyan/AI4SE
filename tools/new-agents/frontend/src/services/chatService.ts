@@ -1,12 +1,20 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useStore, Attachment, getWelcomeMessage, WORKFLOWS, type MessageErrorDiagnostic } from '../store';
-import { generateResponseStream, type AgentRuntimeErrorDiagnostic } from '../core/llm';
+import { useStore, Attachment, getWelcomeMessage, WORKFLOWS } from '../store';
+import { generateResponseStream } from '../core/llm';
 import {
     planArtifactVersionUpdate,
     planRetryFromHistory,
     reduceAgentStreamChunk,
 } from '../core/agentCore';
-import { applyArtifactSectionPatch as previewArtifactSectionPatch } from '../core/artifactSections';
+import {
+    buildArtifactSectionChangeIndex,
+    findArtifactSection,
+    findArtifactSectionLock,
+    mergeRegeneratedArtifactSection,
+    parseArtifactMarkdownSections,
+    preserveLockedArtifactSections,
+} from '../core/artifactSections';
+import type { ArtifactSectionTarget } from '../core/artifactSections';
 
 const STAGE_CONTINUATION_PROMPT = '请继续生成当前阶段产出物';
 let messageIdSequence = 0;
@@ -15,6 +23,10 @@ type SendOptions = {
     appendUserMessage?: boolean;
     useDraftAttachments?: boolean;
     attachmentsOverride?: Attachment[];
+    sectionRegeneration?: {
+        target: ArtifactSectionTarget;
+        originalArtifact: string;
+    };
 };
 
 type ArtifactRollbackSnapshot = {
@@ -23,68 +35,66 @@ type ArtifactRollbackSnapshot = {
     stageArtifacts: ReturnType<typeof useStore.getState>['stageArtifacts'];
 };
 
-type MarkdownSection = {
-    heading: string;
-    startLine: number;
-    endLine: number;
-};
-
 function createMessageId(): string {
     messageIdSequence += 1;
     return `${Date.now()}-${messageIdSequence}`;
 }
 
-function parseMarkdownSections(markdown: string): MarkdownSection[] {
-    const lines = markdown.split(/\r?\n/);
-    const headingIndexes = lines.flatMap((line, index) => (
-        /^#{1,3}\s+/.test(line)
-            ? [{ heading: line.trim(), startLine: index }]
-            : []
-    ));
-
-    return headingIndexes.map((section, index) => ({
-        ...section,
-        endLine: headingIndexes[index + 1]?.startLine ?? lines.length,
-    }));
-}
-
-function replaceSectionContent(
-    markdown: string,
-    section: MarkdownSection,
-    replacementContent: string
-): string {
-    const lines = markdown.split(/\r?\n/);
-    const replacementLines = replacementContent.split(/\r?\n/);
-    return [
-        ...lines.slice(0, section.startLine),
-        ...replacementLines,
-        ...lines.slice(section.endLine),
-    ].join('\n');
-}
-
-function preserveLockedSections(
-    nextArtifact: string,
-    locks: ReturnType<typeof useStore.getState>['artifactSectionLocks']
-): string {
-    if (locks.length === 0) return nextArtifact;
-
-    let protectedArtifact = nextArtifact;
-    locks.forEach((lock) => {
-        const sections = parseMarkdownSections(protectedArtifact);
-        const section = sections.find(candidate => candidate.heading === lock.heading);
-        if (!section) {
-            protectedArtifact = protectedArtifact.endsWith('\n')
-                ? `${protectedArtifact}${lock.content}`
-                : `${protectedArtifact}\n\n${lock.content}`;
-            return;
-        }
-        protectedArtifact = replaceSectionContent(
-            protectedArtifact,
-            section,
+function buildArtifactSectionRegenerationPrompt({
+    workflowId,
+    stageId,
+    target,
+    targetContent,
+    artifactContent,
+    lockedSections,
+}: {
+    workflowId: string;
+    stageId: string;
+    target: ArtifactSectionTarget;
+    targetContent: string;
+    artifactContent: string;
+    lockedSections: ReturnType<typeof useStore.getState>['artifactSectionLocks'];
+}): string {
+    const lockedSectionBlocks = lockedSections.length === 0
+        ? '无'
+        : lockedSections.map((lock, index) => [
+            `### 锁定章节 ${index + 1}`,
+            `heading: ${lock.heading}`,
+            `anchor: ${lock.sectionAnchor ?? '未记录'}`,
+            '````markdown',
             lock.content,
-        );
-    });
-    return protectedArtifact;
+            '````',
+        ].join('\n')).join('\n\n');
+
+    return [
+        'Artifact 定向修订请求',
+        '',
+        `Workflow: ${workflowId}`,
+        `Stage: ${stageId}`,
+        `目标章节: ${target.displayTitle ?? target.heading.replace(/^#{1,3}\s+/, '')}`,
+        `目标 heading: ${target.heading}`,
+        `目标 anchor: ${target.sectionAnchor ?? '未记录'}`,
+        '',
+        '请基于当前完整 artifact 重生成目标章节，并返回符合当前阶段契约的完整 artifact。',
+        '硬性约束:',
+        '- 只改写目标章节的内容。',
+        '- 不要改写、删除或重排非目标章节。',
+        '- 锁定章节必须逐字保留。',
+        '- 返回仍必须是完整 artifact，而不是只返回目标章节。',
+        '',
+        '当前目标章节内容:',
+        '````markdown',
+        targetContent,
+        '````',
+        '',
+        '锁定章节:',
+        lockedSectionBlocks,
+        '',
+        '当前完整 artifact:',
+        '````markdown',
+        artifactContent,
+        '````',
+    ].join('\n');
 }
 
 function getErrorMessage(error: unknown): string {
@@ -96,116 +106,24 @@ type ProviderErrorDiagnostic = {
     action: string;
 };
 
+type ErrorDiagnosticPayload = {
+    phase?: unknown;
+    workflowId?: unknown;
+    stageId?: unknown;
+    fieldPath?: unknown;
+    validator?: unknown;
+    retryable?: unknown;
+    publicReason?: unknown;
+};
+
 type AssistantErrorFeedback = {
     content: string;
-    errorDiagnostic: MessageErrorDiagnostic;
+    diagnostic: NonNullable<ReturnType<typeof useStore.getState>['chatHistory'][number]['errorDiagnostic']>;
 };
 
-type AgentRuntimeErrorLike = Error & {
-    code?: unknown;
-    diagnostic?: unknown;
-};
-
-function isRuntimeErrorDiagnostic(value: unknown): value is AgentRuntimeErrorDiagnostic {
-    if (!value || typeof value !== 'object') return false;
-    const diagnostic = value as Partial<AgentRuntimeErrorDiagnostic>;
-    return (
-        typeof diagnostic.phase === 'string'
-        && Boolean(diagnostic.phase.trim())
-        && typeof diagnostic.workflowId === 'string'
-        && Boolean(diagnostic.workflowId.trim())
-        && typeof diagnostic.stageId === 'string'
-        && Boolean(diagnostic.stageId.trim())
-        && typeof diagnostic.fieldPath === 'string'
-        && Boolean(diagnostic.fieldPath.trim())
-        && typeof diagnostic.validator === 'string'
-        && Boolean(diagnostic.validator.trim())
-        && typeof diagnostic.retryable === 'boolean'
-        && typeof diagnostic.publicReason === 'string'
-        && Boolean(diagnostic.publicReason.trim())
-    );
-}
-
-function getRuntimeErrorDiagnostic(error: unknown): AgentRuntimeErrorDiagnostic | null {
-    if (!(error instanceof Error)) return null;
-    const diagnostic = (error as AgentRuntimeErrorLike).diagnostic;
-    return isRuntimeErrorDiagnostic(diagnostic) ? diagnostic : null;
-}
-
-function getRuntimeErrorCode(error: unknown, errorMessage: string): string | undefined {
-    if (error instanceof Error) {
-        const code = (error as AgentRuntimeErrorLike).code;
-        if (typeof code === 'string' && code.trim()) return code;
-    }
-    return extractErrorCode(errorMessage);
-}
-
-function getRuntimeDiagnosticKind(
-    diagnostic: AgentRuntimeErrorDiagnostic
-): MessageErrorDiagnostic['kind'] {
-    if (diagnostic.phase === 'provider') return 'provider';
-    if (
-        diagnostic.phase === 'structured_output'
-        || diagnostic.phase === 'contract_validation'
-    ) {
-        return 'structured';
-    }
-    return 'generic';
-}
-
-function getRuntimeDiagnosticSummaryPrefix(
-    kind: MessageErrorDiagnostic['kind']
-): string {
-    if (kind === 'provider') return '模型调用未完成';
-    if (kind === 'structured') return '结构化输出生成失败';
-    return '本轮生成失败';
-}
-
-function getRuntimeDiagnosticAction(
-    diagnostic: AgentRuntimeErrorDiagnostic
-): string {
-    if (diagnostic.phase === 'provider') {
-        if (diagnostic.validator === 'provider_authentication') {
-            return '请检查 API Key、Base URL、模型名称和供应商权限。';
-        }
-        if (diagnostic.validator === 'provider_rate_limit') {
-            return '请检查供应商额度、并发限制和账户状态；如果是临时限流，可以稍后重试本阶段生成。';
-        }
-        if (diagnostic.validator === 'provider_connection') {
-            return '请检查 Base URL、网络连通性或供应商服务状态；如果服务恢复，可以重试本阶段生成。';
-        }
-    }
-    if (diagnostic.retryable) {
-        return '可以直接重试本阶段生成；如果多次失败，请补充更明确的需求或阶段确认信息。';
-    }
-    return '请根据详情修正输入或配置后再重试。';
-}
-
-function formatRuntimeDiagnosticFeedback(
-    errorMessage: string,
-    code: string | undefined,
-    diagnostic: AgentRuntimeErrorDiagnostic
-): AssistantErrorFeedback {
-    const kind = getRuntimeDiagnosticKind(diagnostic);
-    const summary = `${getRuntimeDiagnosticSummaryPrefix(kind)}：${diagnostic.publicReason}`;
-    return {
-        content: `⚠️ ${summary}`,
-        errorDiagnostic: {
-            kind,
-            summary,
-            reason: diagnostic.publicReason,
-            action: getRuntimeDiagnosticAction(diagnostic),
-            rawMessage: errorMessage,
-            ...(code ? { code } : {}),
-            phase: diagnostic.phase,
-            workflowId: diagnostic.workflowId,
-            stageId: diagnostic.stageId,
-            fieldPath: diagnostic.fieldPath,
-            validator: diagnostic.validator,
-            retryable: diagnostic.retryable,
-        },
-    };
-}
+const isErrorRecord = (error: unknown): error is Record<string, unknown> => (
+    typeof error === 'object' && error !== null
+);
 
 function diagnoseProviderError(errorMessage: string): ProviderErrorDiagnostic | null {
     const normalized = errorMessage.toLowerCase();
@@ -267,73 +185,112 @@ function diagnoseProviderError(errorMessage: string): ProviderErrorDiagnostic | 
     return null;
 }
 
-function extractErrorCode(errorMessage: string): string | undefined {
-    const match = /^([A-Z][A-Z0-9_]{2,})(?::|\s|$)/.exec(errorMessage.trim());
-    return match?.[1];
+function formatProviderErrorContent(diagnostic: ProviderErrorDiagnostic): string {
+    return [
+        '⚠️ **模型调用未完成**',
+        '',
+        `**可能原因**：${diagnostic.reason}`,
+        '',
+        '右侧产出物已保持不变。处理配置或供应商问题后，可以直接重试本阶段生成。',
+    ].join('\n');
 }
 
-function formatProviderErrorFeedback(
-    errorMessage: string,
-    diagnostic: ProviderErrorDiagnostic
-): AssistantErrorFeedback {
-    const summary = `模型调用未完成：${diagnostic.reason}，右侧产出物已保持不变。`;
-    return {
-        content: `⚠️ ${summary}`,
-        errorDiagnostic: {
-            kind: 'provider',
-            summary,
-            reason: diagnostic.reason,
-            action: diagnostic.action,
-            rawMessage: errorMessage,
-            ...(extractErrorCode(errorMessage) ? { code: extractErrorCode(errorMessage) } : {}),
-        },
-    };
+function getErrorCode(error: unknown): string | undefined {
+    if (!isErrorRecord(error)) return undefined;
+    return typeof error.code === 'string' ? error.code : undefined;
 }
 
-function formatAssistantErrorFeedback(error: unknown): AssistantErrorFeedback {
-    const errorMessage = getErrorMessage(error);
-    const runtimeDiagnostic = getRuntimeErrorDiagnostic(error);
-    if (runtimeDiagnostic) {
-        return formatRuntimeDiagnosticFeedback(
-            errorMessage,
-            getRuntimeErrorCode(error, errorMessage),
-            runtimeDiagnostic
-        );
-    }
+function getErrorDiagnosticPayload(error: unknown): ErrorDiagnosticPayload | null {
+    if (!isErrorRecord(error)) return null;
+    return isErrorRecord(error.diagnostic)
+        ? error.diagnostic
+        : null;
+}
 
-    if (
-        errorMessage.includes('SCHEMA_VALIDATION_FAILED')
+function isStructuredOutputError(error: unknown, errorMessage: string): boolean {
+    const errorCode = getErrorCode(error);
+    return (
+        errorCode === 'SCHEMA_VALIDATION_FAILED'
+        || errorMessage.includes('SCHEMA_VALIDATION_FAILED')
         || errorMessage.includes('Exceeded maximum output retries')
         || errorMessage.includes('Artifact Mermaid parse failed')
         || errorMessage.includes('Artifact validation failed')
         || errorMessage.includes('Artifact structured visual validation failed')
         || errorMessage.includes('Mermaid parse failed')
+    );
+}
+
+function formatAssistantErrorFeedback(error: unknown): AssistantErrorFeedback {
+    const errorMessage = getErrorMessage(error);
+    const errorCode = getErrorCode(error);
+    const runtimeDiagnostic = getErrorDiagnosticPayload(error);
+
+    if (
+        isStructuredOutputError(error, errorMessage)
     ) {
-        const summary = '结构化输出生成失败：右侧产出物已保持不变，可以直接重试。';
+        const publicReason = typeof runtimeDiagnostic?.publicReason === 'string'
+            ? runtimeDiagnostic.publicReason
+            : '模型本轮没有生成符合工作流契约的结果，右侧产出物已保持不变。可以直接重试；如果连续失败，请补充更明确的需求或阶段确认信息。';
         return {
-            content: `⚠️ ${summary}`,
-            errorDiagnostic: {
+            content: [
+            '⚠️ **结构化输出生成失败**',
+            '',
+                publicReason,
+            ].join('\n'),
+            diagnostic: {
                 kind: 'structured',
-                summary,
+                summary: '结构化输出生成失败',
                 rawMessage: errorMessage,
-                ...(extractErrorCode(errorMessage) ? { code: extractErrorCode(errorMessage) } : {}),
+                ...(errorCode ? { code: errorCode } : {}),
+                ...(typeof runtimeDiagnostic?.phase === 'string' ? { phase: runtimeDiagnostic.phase } : {}),
+                ...(typeof runtimeDiagnostic?.workflowId === 'string' ? { workflowId: runtimeDiagnostic.workflowId } : {}),
+                ...(typeof runtimeDiagnostic?.stageId === 'string' ? { stageId: runtimeDiagnostic.stageId } : {}),
+                ...(typeof runtimeDiagnostic?.fieldPath === 'string' ? { fieldPath: runtimeDiagnostic.fieldPath } : {}),
+                ...(typeof runtimeDiagnostic?.validator === 'string' ? { validator: runtimeDiagnostic.validator } : {}),
+                ...(typeof runtimeDiagnostic?.retryable === 'boolean' ? { retryable: runtimeDiagnostic.retryable } : {}),
+            },
+        };
+    }
+
+    if (isErrorRecord(error) && error.name === 'ArtifactSectionRegenerationError') {
+        return {
+            content: [
+                '⚠️ **本轮生成失败**',
+                '',
+                errorMessage,
+            ].join('\n'),
+            diagnostic: {
+                kind: 'generic',
+                summary: '本轮生成失败',
+                rawMessage: errorMessage,
             },
         };
     }
 
     const providerDiagnostic = diagnoseProviderError(errorMessage);
     if (providerDiagnostic) {
-        return formatProviderErrorFeedback(errorMessage, providerDiagnostic);
+        return {
+            content: formatProviderErrorContent(providerDiagnostic),
+            diagnostic: {
+                kind: 'provider',
+                summary: '模型调用未完成',
+                rawMessage: errorMessage,
+                reason: providerDiagnostic.reason,
+                action: providerDiagnostic.action,
+            },
+        };
     }
 
-    const summary = '本轮生成失败：请查看错误详情后重试。';
     return {
-        content: `⚠️ ${summary}`,
-        errorDiagnostic: {
+        content: [
+            '⚠️ **本轮生成失败**',
+            '',
+            '模型本轮调用没有完成，右侧产出物已保持不变。可以直接重试；如果连续失败，请补充更明确的上下文后再试。',
+        ].join('\n'),
+        diagnostic: {
             kind: 'generic',
-            summary,
+            summary: '本轮生成失败',
             rawMessage: errorMessage,
-            ...(extractErrorCode(errorMessage) ? { code: extractErrorCode(errorMessage) } : {}),
         },
     };
 }
@@ -584,38 +541,66 @@ export function useChatService() {
 
                 if (decision.artifactUpdate) {
                     const latestState = useStore.getState();
-                    const currentStageLocks = latestState.artifactSectionLocks.filter(
-                        lock => lock.stageId === decision.artifactUpdate?.stageId
-                    );
-                    const protectedArtifactContent = preserveLockedSections(
-                        decision.artifactUpdate.content,
-                        currentStageLocks,
-                    );
-                    const patch = decision.artifactUpdate.patch;
-                    const patchPreview = patch && currentStageLocks.length === 0
-                        ? previewArtifactSectionPatch(latestState.artifactContent, patch)
-                        : null;
-                    const shouldApplyPatch = Boolean(
-                        patchPreview?.applied
-                        && patchPreview.content === protectedArtifactContent
-                    );
-                    const didApplyPatch = shouldApplyPatch && patch
-                        ? latestState.applyArtifactSectionPatch(patch).applied
-                        : false;
-                    if (!didApplyPatch) {
-                        latestState.setStageArtifact(
+                    let handledByPatch = false;
+                    let fallbackChangeBaseline: string | null = null;
+                    if (decision.artifactUpdate.patch) {
+                        const artifactBeforePatch = latestState.artifactContent;
+                        const patchResult = latestState.applyArtifactSectionPatch(
+                            decision.artifactUpdate.patch
+                        );
+                        if (
+                            patchResult.applied
+                            && patchResult.content === decision.artifactUpdate.content
+                        ) {
+                            if (!decision.artifactTruncated) {
+                                latestState.setArtifactTruncated(false);
+                            }
+                            didUpdateArtifact = true;
+                            latestRunArtifactContent = patchResult.content;
+                            handledByPatch = true;
+                        }
+                        if (patchResult.applied && !handledByPatch) {
+                            fallbackChangeBaseline = artifactBeforePatch;
+                        }
+                    }
+
+                    if (!handledByPatch) {
+                        const currentState = useStore.getState();
+                        const currentStageLocks = currentState.artifactSectionLocks.filter(
+                            lock => lock.stageId === decision.artifactUpdate?.stageId
+                        );
+                        const protectedArtifactContent = options?.sectionRegeneration
+                            ? mergeRegeneratedArtifactSection({
+                                originalArtifact: options.sectionRegeneration.originalArtifact,
+                                generatedArtifact: decision.artifactUpdate.content,
+                                target: options.sectionRegeneration.target,
+                                locks: currentStageLocks,
+                            }).content
+                            : preserveLockedArtifactSections(
+                                decision.artifactUpdate.content,
+                                currentStageLocks,
+                            );
+                        currentState.setStageArtifact(
                             decision.artifactUpdate.stageId,
                             protectedArtifactContent
                         );
-                        latestState.setArtifactContent(
+                        currentState.setArtifactContent(
                             protectedArtifactContent
                         );
+                        if (fallbackChangeBaseline !== null) {
+                            useStore.setState({
+                                artifactChangeIndex: buildArtifactSectionChangeIndex(
+                                    fallbackChangeBaseline,
+                                    protectedArtifactContent
+                                ),
+                            });
+                        }
+                        if (!decision.artifactTruncated) {
+                            currentState.setArtifactTruncated(false);
+                        }
+                        didUpdateArtifact = true;
+                        latestRunArtifactContent = protectedArtifactContent;
                     }
-                    if (!decision.artifactTruncated) {
-                        latestState.setArtifactTruncated(false);
-                    }
-                    didUpdateArtifact = true;
-                    latestRunArtifactContent = protectedArtifactContent;
                 }
 
                 if (decision.shouldStopStream) {
@@ -624,7 +609,6 @@ export function useChatService() {
                 }
             }
         } catch (error) {
-            const errorMessage = getErrorMessage(error);
             const history = useStore.getState().chatHistory;
             const lastMsgRole = history.length > 0 ? history[history.length - 1].role : null;
             const isMidstream = lastMsgRole === 'assistant' && !isFirstChunk;
@@ -659,7 +643,7 @@ export function useChatService() {
                 if (isMidstream) {
                     updateLastMessage(
                         (history[history.length - 1]?.content || '') + '\n\n' + errorFeedback.content,
-                        errorFeedback.errorDiagnostic
+                        errorFeedback.diagnostic
                     );
                 } else {
                     addMessage({
@@ -668,7 +652,7 @@ export function useChatService() {
                         content: errorFeedback.content,
                         timestamp: Date.now(),
                         retryable: assistantRetryable,
-                        errorDiagnostic: errorFeedback.errorDiagnostic,
+                        errorDiagnostic: errorFeedback.diagnostic,
                     });
                 }
             }
@@ -695,35 +679,75 @@ export function useChatService() {
         }
     }, [input, pendingAttachments, isGenerating, addMessage, updateLastMessage, setIsGenerating]);
 
+    const handleRegenerateArtifactSection = useCallback(async (target: ArtifactSectionTarget) => {
+        const state = useStore.getState();
+        if (state.isGenerating) return;
+
+        const currentStage = WORKFLOWS[state.workflow].stages[state.stageIndex];
+        const currentStageLocks = state.artifactSectionLocks.filter(
+            lock => lock.stageId === currentStage.id
+        );
+        const targetTitle = target.displayTitle ?? target.heading.replace(/^#{1,3}\s+/, '');
+        const currentSection = findArtifactSection(
+            parseArtifactMarkdownSections(state.artifactContent),
+            target
+        );
+        const lockedSection = findArtifactSectionLock(target, currentStageLocks);
+
+        if (lockedSection) {
+            addMessage({
+                id: createMessageId(),
+                role: 'assistant',
+                content: `**Error:** 目标章节“${targetTitle}”已锁定，请先解锁后再重生成。`,
+                timestamp: Date.now(),
+                retryable: false,
+            });
+            return;
+        }
+
+        if (!currentSection) {
+            addMessage({
+                id: createMessageId(),
+                role: 'assistant',
+                content: `**Error:** 当前产出物中没有找到目标章节“${targetTitle}”。`,
+                timestamp: Date.now(),
+                retryable: false,
+            });
+            return;
+        }
+
+        await handleSend(buildArtifactSectionRegenerationPrompt({
+            workflowId: state.workflow,
+            stageId: currentStage.id,
+            target,
+            targetContent: currentSection.content,
+            artifactContent: state.artifactContent,
+            lockedSections: currentStageLocks,
+        }), {
+            appendUserMessage: false,
+            useDraftAttachments: false,
+            sectionRegeneration: {
+                target,
+                originalArtifact: state.artifactContent,
+            },
+        });
+    }, [addMessage, handleSend]);
+
     const handleConfirmStageTransition = useCallback(async () => {
         const state = useStore.getState();
         if (!state.pendingStageTransition || state.isGenerating) return;
 
-        const pendingTransition = state.pendingStageTransition;
-        if (
-            state.stageIndex !== pendingTransition.fromStageIndex
-            || pendingTransition.toStageIndex !== pendingTransition.fromStageIndex + 1
-        ) {
-            useStore.getState().clearPendingStageTransition();
-            return;
-        }
-
         const targetStageIndex = state.pendingStageTransition.toStageIndex;
         const targetStage = WORKFLOWS[state.workflow].stages[targetStageIndex];
-        if (!targetStage) {
-            useStore.getState().clearPendingStageTransition();
-            return;
-        }
+        state.confirmStageTransition();
+        if (useStore.getState().stageIndex !== targetStageIndex) return;
 
-        const confirmationMessage = `已确认进入${targetStage.name}`;
         addMessage({
             id: createMessageId(),
             role: 'user',
-            content: confirmationMessage,
+            content: `已确认进入${targetStage.name}`,
             timestamp: Date.now(),
         });
-        useStore.getState().confirmStageTransition();
-        if (useStore.getState().stageIndex !== targetStageIndex) return;
 
         await handleSend(STAGE_CONTINUATION_PROMPT, {
             appendUserMessage: false,
@@ -837,6 +861,7 @@ export function useChatService() {
         pendingAttachments,
         setPendingAttachments,
         handleSend,
+        handleRegenerateArtifactSection,
         handleConfirmStageTransition,
         handleRetry,
         handleRetryCurrentStageGeneration,

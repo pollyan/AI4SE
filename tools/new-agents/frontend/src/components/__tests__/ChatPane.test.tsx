@@ -22,6 +22,7 @@ vi.mock('../../services/chatService', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
             handleRetryCurrentStageGeneration: vi.fn(),
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -97,6 +98,22 @@ describe('ChatPane Component', () => {
         expect(screen.getByText('你可以试试这样问：')).toBeDefined();
     });
 
+    it('does not show current-stage missing information before the first conversation turn', () => {
+        useStore.setState({
+            chatHistory: [],
+            workflow: 'STORY_BREAKDOWN' as WorkflowType,
+            stageIndex: 0,
+            artifactContent: '# 欢迎使用 Alex 创新顾问\n\n请在左侧告诉我们的初步想法。',
+            artifactVisualDiagnostics: [],
+        });
+
+        render(<ChatPane />);
+
+        expect(screen.getByText('你可以试试这样问：')).toBeDefined();
+        expect(screen.queryByText('当前阶段缺失信息')).toBeNull();
+        expect(screen.queryByText('右侧产物还没有满足当前阶段合同，请先处理缺失项再继续推进。')).toBeNull();
+    });
+
     it('sends starter prompts without consuming draft attachments', () => {
         const mockHandleSend = vi.fn();
         vi.mocked(useChatService).mockReturnValue({
@@ -114,6 +131,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
             handleRetryCurrentStageGeneration: vi.fn(),
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -176,6 +194,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: mockHandleRetry,
             handleRetryCurrentStageGeneration: mockHandleRetryCurrentStageGeneration,
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -245,6 +264,7 @@ describe('ChatPane Component', () => {
                 handleConfirmStageTransition: vi.fn(),
                 handleRetry: mockHandleRetry,
                 handleRetryCurrentStageGeneration: vi.fn(),
+                handleRegenerateArtifactSection: vi.fn(),
                 handleStop: vi.fn(),
                 handleFileChange: vi.fn(),
                 removeAttachment: vi.fn()
@@ -330,6 +350,27 @@ describe('ChatPane Component', () => {
         expect(screen.queryByText('策略阶段可视化错误。')).toBeNull();
     });
 
+    it('shows current-stage missing information with blocking state and next actions', () => {
+        useStore.setState({
+            chatHistory: [
+                { id: '1', role: 'assistant', content: '右侧产物已更新。', timestamp: Date.now() },
+            ],
+            workflow: 'TEST_DESIGN' as WorkflowType,
+            stageIndex: 0,
+            artifactContent: '# 草稿\n\n## 8. 阶段门禁\n\n等待确认',
+            artifactVisualDiagnostics: [],
+        });
+
+        render(<ChatPane />);
+
+        expect(screen.getByText('当前阶段缺失信息')).toBeDefined();
+        expect(screen.getAllByText('阻断').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('提醒').length).toBeGreaterThan(0);
+        expect(screen.getByText('缺少标题：# 需求分析文档')).toBeDefined();
+        expect(screen.getAllByText('补充缺失内容后重新生成或手动完善当前阶段产物。').length).toBeGreaterThan(0);
+        expect(screen.getByText('确认阶段门禁决策项，明确是否可以进入下一阶段。')).toBeDefined();
+    });
+
     it('shows a provider failure recovery card with a retry action', () => {
         const mockHandleRetry = vi.fn();
         const mockHandleRetryCurrentStageGeneration = vi.fn();
@@ -342,6 +383,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: mockHandleRetry,
             handleRetryCurrentStageGeneration: mockHandleRetryCurrentStageGeneration,
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -729,6 +771,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
             handleRetryCurrentStageGeneration: vi.fn(),
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -753,6 +796,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
             handleRetryCurrentStageGeneration: vi.fn(),
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -778,6 +822,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
             handleRetryCurrentStageGeneration: vi.fn(),
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -803,6 +848,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: vi.fn(),
             handleRetry: vi.fn(),
             handleRetryCurrentStageGeneration: vi.fn(),
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: mockHandleStop,
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()
@@ -943,14 +989,14 @@ describe('ChatPane Component', () => {
 
     it('loads target-side handoff choices when user story breakdown starts without a run', async () => {
         useStore.setState({
-            workflow: 'USER_STORY_BREAKDOWN' as WorkflowType,
+            workflow: 'STORY_BREAKDOWN' as WorkflowType,
             stageIndex: 0,
             currentRunId: null,
             chatHistory: [],
         });
         vi.mocked(fetchTargetWorkflowHandoffCandidates).mockResolvedValue([
             {
-                id: 'value-discovery-blueprint-to-user-story-breakdown',
+                id: 'value-discovery-blueprint-to-story-breakdown',
                 label: '从需求蓝图继续拆用户故事',
                 sourceRunId: 'value-run-123',
                 sourceWorkflowId: 'VALUE_DISCOVERY',
@@ -958,8 +1004,8 @@ describe('ChatPane Component', () => {
                 sourceArtifactVersion: 1,
                 sourceArtifactDigest: 'sha256:def456',
                 sourceArtifactSummary: '# AI 测试设计助手需求蓝图',
-                targetWorkflowId: 'USER_STORY_BREAKDOWN',
-                targetStageId: 'SCOPE',
+                targetWorkflowId: 'STORY_BREAKDOWN',
+                targetStageId: 'INPUT_ANALYSIS',
                 targetAgentId: 'alex',
                 prompt: '请基于需求蓝图继续拆用户故事。',
             },
@@ -968,7 +1014,7 @@ describe('ChatPane Component', () => {
         render(<ChatPane />);
 
         await waitFor(() => {
-            expect(fetchTargetWorkflowHandoffCandidates).toHaveBeenCalledWith('USER_STORY_BREAKDOWN', 'SCOPE');
+            expect(fetchTargetWorkflowHandoffCandidates).toHaveBeenCalledWith('STORY_BREAKDOWN', 'INPUT_ANALYSIS');
         });
         expect(await screen.findByText('选择用户故事拆解起点')).toBeDefined();
         expect(screen.getByText('开启新话题')).toBeDefined();
@@ -978,14 +1024,14 @@ describe('ChatPane Component', () => {
 
     it('applies a target-side handoff choice from the user story breakdown empty state', async () => {
         useStore.setState({
-            workflow: 'USER_STORY_BREAKDOWN' as WorkflowType,
+            workflow: 'STORY_BREAKDOWN' as WorkflowType,
             stageIndex: 0,
             currentRunId: null,
             chatHistory: [],
         });
         vi.mocked(fetchTargetWorkflowHandoffCandidates).mockResolvedValue([
             {
-                id: 'value-discovery-blueprint-to-user-story-breakdown',
+                id: 'value-discovery-blueprint-to-story-breakdown',
                 label: '从需求蓝图继续拆用户故事',
                 sourceRunId: 'value-run-123',
                 sourceWorkflowId: 'VALUE_DISCOVERY',
@@ -993,14 +1039,14 @@ describe('ChatPane Component', () => {
                 sourceArtifactVersion: 1,
                 sourceArtifactDigest: 'sha256:def456',
                 sourceArtifactSummary: '# AI 测试设计助手需求蓝图',
-                targetWorkflowId: 'USER_STORY_BREAKDOWN',
-                targetStageId: 'SCOPE',
+                targetWorkflowId: 'STORY_BREAKDOWN',
+                targetStageId: 'INPUT_ANALYSIS',
                 targetAgentId: 'alex',
                 prompt: '请基于需求蓝图继续拆用户故事。',
             },
         ]);
         vi.mocked(startWorkflowHandoff).mockResolvedValue({
-            id: 'value-discovery-blueprint-to-user-story-breakdown',
+            id: 'value-discovery-blueprint-to-story-breakdown',
             label: '从需求蓝图继续拆用户故事',
             sourceRunId: 'value-run-123',
             sourceWorkflowId: 'VALUE_DISCOVERY',
@@ -1009,8 +1055,8 @@ describe('ChatPane Component', () => {
             sourceArtifactDigest: 'sha256:def456',
             sourceArtifactSummary: '# AI 测试设计助手需求蓝图',
             targetRunId: 'story-run-456',
-            targetWorkflowId: 'USER_STORY_BREAKDOWN',
-            targetStageId: 'SCOPE',
+            targetWorkflowId: 'STORY_BREAKDOWN',
+            targetStageId: 'INPUT_ANALYSIS',
             targetAgentId: 'alex',
             prompt: '请基于需求蓝图继续拆用户故事。',
         });
@@ -1021,18 +1067,18 @@ describe('ChatPane Component', () => {
         await waitFor(() => {
             expect(startWorkflowHandoff).toHaveBeenCalledWith(
                 'value-run-123',
-                'value-discovery-blueprint-to-user-story-breakdown'
+                'value-discovery-blueprint-to-story-breakdown'
             );
         });
-        expect(useStore.getState().workflow).toBe('USER_STORY_BREAKDOWN');
+        expect(useStore.getState().workflow).toBe('STORY_BREAKDOWN');
         expect(useStore.getState().stageIndex).toBe(0);
         expect(useStore.getState().currentRunId).toBe('story-run-456');
-        expect(mockNavigate).toHaveBeenCalledWith('/workspace/alex/user-story-breakdown?runId=story-run-456');
+        expect(mockNavigate).toHaveBeenCalledWith('/workspace/alex/story-breakdown?runId=story-run-456');
     });
 
     it('shows a new-topic path when user story breakdown has no upstream candidates', async () => {
         useStore.setState({
-            workflow: 'USER_STORY_BREAKDOWN' as WorkflowType,
+            workflow: 'STORY_BREAKDOWN' as WorkflowType,
             stageIndex: 0,
             currentRunId: null,
             chatHistory: [],
@@ -1077,6 +1123,9 @@ describe('ChatPane Component', () => {
                 sourceWorkflowId: 'VALUE_DISCOVERY',
                 sourceStageId: 'BLUEPRINT',
                 sourceArtifactVersion: 2,
+                sourceSummary: 'AI 测试资产管理平台需求蓝图: AI 测试资产管理平台。',
+                unconfirmedItems: ['需求 F-001: 自动生成测试策略和用例'],
+                targetInputChecklist: ['复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2'],
                 targetWorkflowId: 'TEST_DESIGN',
                 targetStageId: 'CLARIFY',
                 targetAgentId: 'lisa',
@@ -1088,6 +1137,10 @@ describe('ChatPane Component', () => {
 
         expect(fetchWorkflowHandoffs).toHaveBeenCalledWith('alex-run-123');
         expect(await screen.findByText('交给 Lisa 做测试设计')).toBeDefined();
+        expect(screen.getByText('来源 VALUE_DISCOVERY/BLUEPRINT v2')).toBeDefined();
+        expect(screen.getByText(/AI 测试资产管理平台需求蓝图/)).toBeDefined();
+        expect(screen.getByText('需求 F-001: 自动生成测试策略和用例')).toBeDefined();
+        expect(screen.getByText('复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2')).toBeDefined();
     });
 
     it('applies a workflow handoff from the chat pane action', async () => {
@@ -1106,6 +1159,9 @@ describe('ChatPane Component', () => {
                 sourceWorkflowId: 'VALUE_DISCOVERY',
                 sourceStageId: 'BLUEPRINT',
                 sourceArtifactVersion: 2,
+                sourceSummary: 'AI 测试资产管理平台需求蓝图: AI 测试资产管理平台。',
+                unconfirmedItems: ['需求 F-001: 自动生成测试策略和用例'],
+                targetInputChecklist: ['复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2'],
                 targetWorkflowId: 'TEST_DESIGN',
                 targetStageId: 'CLARIFY',
                 targetAgentId: 'lisa',
@@ -1118,6 +1174,9 @@ describe('ChatPane Component', () => {
             sourceWorkflowId: 'VALUE_DISCOVERY',
             sourceStageId: 'BLUEPRINT',
             sourceArtifactVersion: 2,
+            sourceSummary: 'AI 测试资产管理平台需求蓝图: AI 测试资产管理平台。',
+            unconfirmedItems: ['需求 F-001: 自动生成测试策略和用例'],
+            targetInputChecklist: ['复核来源版本 VALUE_DISCOVERY/BLUEPRINT v2'],
             targetWorkflowId: 'TEST_DESIGN',
             targetStageId: 'CLARIFY',
             targetAgentId: 'lisa',
@@ -1229,6 +1288,7 @@ describe('ChatPane Component', () => {
             handleConfirmStageTransition: mockHandleConfirmStageTransition,
             handleRetry: vi.fn(),
             handleRetryCurrentStageGeneration: vi.fn(),
+            handleRegenerateArtifactSection: vi.fn(),
             handleStop: vi.fn(),
             handleFileChange: vi.fn(),
             removeAttachment: vi.fn()

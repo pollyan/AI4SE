@@ -1,17 +1,22 @@
 import workflowManifestData from '../../../workflow_manifest.json';
-import type { WorkflowDef, WorkflowType } from './types';
-
-export type ArtifactDataContract = {
-    modelOutputRules?: string[];
-    forbiddenOutputs?: string[];
-    rendererOutputs?: string[];
-};
+import type {
+    ArtifactContractConfig,
+    ArtifactDataContractConfig,
+    VisualContractConfig,
+    WorkflowDef,
+    WorkflowType,
+} from './types';
 
 export type WorkflowManifestStage = {
     id: string;
     name: string;
     promptTemplateId: string;
-    artifactDataContract?: ArtifactDataContract;
+    methodIds?: string[];
+    promptTemplateVersion?: string;
+    regressionSampleIds?: string[];
+    artifactContract?: ArtifactContractConfig;
+    artifactDataContract?: ArtifactDataContractConfig;
+    visualContract?: VisualContractConfig;
 };
 
 export type WorkflowManifestWorkflow = Omit<WorkflowDef, 'stages' | 'welcomeMessage'> & {

@@ -11,10 +11,12 @@ from app import create_app
 from models import AgentArtifact, AgentArtifactVersion, AgentMessage, AgentRun, db
 from run_persistence import (
     append_run_message,
+    clone_agent_run,
     create_agent_run,
     ensure_agent_run,
     get_runtime_observability_summary,
     get_run_snapshot,
+    list_agent_runs,
     record_artifact_version,
     record_turn_metric,
     replace_artifact_collaboration_state,
@@ -119,12 +121,12 @@ def test_artifact_versions_increment_per_run_stage(app):
 
 def test_record_artifact_version_persists_artifact_data_in_current_snapshot(app):
     with app.app_context():
-        run = create_agent_run("USER_STORY_BREAKDOWN", "alex", "STORIES")
+        run = create_agent_run("STORY_BREAKDOWN", "alex", "STORY_BACKLOG")
         artifact_data = {
             "document_info": {
                 "artifact_name": "用户故事卡片",
-                "workflow": "USER_STORY_BREAKDOWN",
-                "stage": "STORIES",
+                "workflow": "STORY_BREAKDOWN",
+                "stage": "STORY_BACKLOG",
             },
             "story_cards": [
                 {
@@ -136,7 +138,7 @@ def test_record_artifact_version_persists_artifact_data_in_current_snapshot(app)
 
         version = record_artifact_version(
             run.id,
-            "STORIES",
+            "STORY_BACKLOG",
             "# 用户故事卡片\n\nUS-001",
             artifact_data=artifact_data,
         )
@@ -146,7 +148,7 @@ def test_record_artifact_version_persists_artifact_data_in_current_snapshot(app)
 
     assert snapshot["artifacts"] == [
         {
-            "stageId": "STORIES",
+            "stageId": "STORY_BACKLOG",
             "content": "# 用户故事卡片\n\nUS-001",
             "versionNumber": 1,
             "artifactData": artifact_data,
@@ -160,7 +162,20 @@ def test_run_snapshot_returns_messages_and_current_artifacts(app):
         append_run_message(run.id, "user", "输入")
         append_run_message(run.id, "assistant", "回复")
         record_artifact_version(run.id, "CLARIFY", "初版")
-        record_artifact_version(run.id, "CLARIFY", "二版")
+        record_artifact_version(
+            run.id,
+            "CLARIFY",
+            "二版",
+            artifact_data={
+                "document_info": {
+                    "artifact_name": "测试需求分析与澄清基线",
+                },
+                "stage_gate": {
+                    "status": "需要用户补充",
+                    "blocking": True,
+                },
+            },
+        )
 
         snapshot = get_run_snapshot(run.id)
 
@@ -180,10 +195,36 @@ def test_run_snapshot_returns_messages_and_current_artifacts(app):
             "stageId": "CLARIFY",
             "content": "二版",
             "versionNumber": 2,
+            "artifactData": {
+                "document_info": {
+                    "artifact_name": "测试需求分析与澄清基线",
+                },
+                "stage_gate": {
+                    "status": "需要用户补充",
+                    "blocking": True,
+                },
+            },
         }
     ]
     assert snapshot["artifactComments"] == []
     assert snapshot["artifactSectionLocks"] == []
+
+
+def test_run_snapshot_returns_null_artifact_data_for_manual_versions(app):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY", model="gpt-test")
+        record_artifact_version(run.id, "CLARIFY", "手工编辑版本")
+
+        snapshot = get_run_snapshot(run.id)
+
+    assert snapshot["artifacts"] == [
+        {
+            "stageId": "CLARIFY",
+            "content": "手工编辑版本",
+            "versionNumber": 1,
+            "artifactData": None,
+        }
+    ]
 
 
 def test_run_snapshot_returns_artifact_collaboration_state(app):
@@ -260,6 +301,96 @@ def test_run_snapshot_returns_artifact_collaboration_state(app):
     }
     assert snapshot["artifactComments"] == saved["artifactComments"]
     assert snapshot["artifactSectionLocks"] == saved["artifactSectionLocks"]
+
+
+def test_clone_agent_run_copies_reusable_context_without_mutating_source(app):
+    with app.app_context():
+        source = create_agent_run("TEST_DESIGN", "lisa", "STRATEGY", model="gpt-test")
+        append_run_message(source.id, "user", "请评估登录需求")
+        append_run_message(source.id, "assistant", "已形成测试策略")
+        record_artifact_version(source.id, "CLARIFY", "# 需求分析文档\n\n登录边界")
+        record_artifact_version(source.id, "STRATEGY", "# 测试策略蓝图\n\n覆盖登录风险")
+        replace_artifact_collaboration_state(
+            source.id,
+            {
+                "comments": [
+                    {
+                        "id": "comment-source",
+                        "stageId": "STRATEGY",
+                        "content": "源 run 的审阅意见",
+                        "artifactExcerpt": "登录风险",
+                        "anchorText": "登录风险",
+                        "createdAt": 1710000000000,
+                        "status": "open",
+                        "resolvedAt": None,
+                        "replies": [],
+                    }
+                ],
+                "sectionLocks": [
+                    {
+                        "id": "lock-source",
+                        "stageId": "STRATEGY",
+                        "heading": "## 风险范围",
+                        "sectionAnchor": "h2:风险范围:1",
+                        "content": "## 风险范围\n\n源 run 锁定内容",
+                        "createdAt": 1710000000100,
+                    }
+                ],
+            },
+        )
+
+        cloned = clone_agent_run(source.id)
+        source_snapshot = get_run_snapshot(source.id)
+        cloned_snapshot = get_run_snapshot(cloned.id)
+
+    assert cloned.id != source.id
+    assert cloned.workflow_id == "TEST_DESIGN"
+    assert cloned.agent_id == "lisa"
+    assert cloned.current_stage_id == "STRATEGY"
+    assert cloned.status == "active"
+    assert cloned.model == "gpt-test"
+    assert [message["content"] for message in cloned_snapshot["messages"]] == [
+        "请评估登录需求",
+        "已形成测试策略",
+    ]
+    assert cloned_snapshot["artifacts"] == [
+        {
+            "stageId": "CLARIFY",
+            "content": "# 需求分析文档\n\n登录边界",
+            "versionNumber": 1,
+            "artifactData": None,
+        },
+        {
+            "stageId": "STRATEGY",
+            "content": "# 测试策略蓝图\n\n覆盖登录风险",
+            "versionNumber": 1,
+            "artifactData": None,
+        },
+    ]
+    assert cloned_snapshot["contextSummaries"] == source_snapshot["contextSummaries"]
+    assert cloned_snapshot["artifactComments"] == []
+    assert cloned_snapshot["artifactSectionLocks"] == []
+    assert source_snapshot["artifactComments"][0]["id"] == "comment-source"
+    assert source_snapshot["artifactSectionLocks"][0]["id"] == "lock-source"
+
+
+def test_list_agent_runs_filters_by_reuse_status(app):
+    with app.app_context():
+        ready_run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        record_artifact_version(ready_run.id, "CLARIFY", "# 需求分析文档\n\n可复用")
+        draft_run = create_agent_run("TEST_DESIGN", "lisa", "STRATEGY")
+        failed_run = create_agent_run("TEST_DESIGN", "lisa", "CASES", status="failed")
+
+        ready_result = list_agent_runs(reuse_status="ready")
+        draft_result = list_agent_runs(reuse_status="needs_artifact")
+        failed_result = list_agent_runs(reuse_status="failed")
+
+    assert [run["id"] for run in ready_result["runs"]] == [ready_run.id]
+    assert ready_result["runs"][0]["reuseStatus"] == "ready"
+    assert [run["id"] for run in draft_result["runs"]] == [draft_run.id]
+    assert draft_result["runs"][0]["reuseStatus"] == "needs_artifact"
+    assert [run["id"] for run in failed_result["runs"]] == [failed_run.id]
+    assert failed_result["runs"][0]["reuseStatus"] == "failed"
 
 
 def test_run_snapshot_returns_artifact_audit_events(app):

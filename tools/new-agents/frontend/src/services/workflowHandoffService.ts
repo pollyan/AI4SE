@@ -12,6 +12,10 @@ const isWorkflowType = (value: unknown): value is WorkflowType => (
     && Object.prototype.hasOwnProperty.call(WORKFLOWS, value)
 );
 
+const isStringArray = (value: unknown): value is string[] => (
+    Array.isArray(value) && value.every(item => typeof item === 'string')
+);
+
 const parseWorkflowHandoff = (handoff: unknown): WorkflowHandoff => {
     if (!isRecord(handoff)) {
         throw new Error('Invalid workflow handoff response');
@@ -26,18 +30,14 @@ const parseWorkflowHandoff = (handoff: unknown): WorkflowHandoff => {
     const sourceArtifactVersion = payload.sourceArtifactVersion;
     const sourceArtifactDigest = payload.sourceArtifactDigest;
     const sourceArtifactSummary = payload.sourceArtifactSummary;
+    const sourceSummary = payload.sourceSummary ?? sourceArtifactSummary;
+    const unconfirmedItems = payload.unconfirmedItems;
+    const targetInputChecklist = payload.targetInputChecklist;
     const targetRunId = payload.targetRunId;
     const targetWorkflowId = payload.targetWorkflowId;
     const targetStageId = payload.targetStageId;
     const targetAgentId = payload.targetAgentId;
     const prompt = payload.prompt;
-    let parsedTargetRunId: string | undefined;
-    if (targetRunId !== undefined) {
-        if (typeof targetRunId !== 'string') {
-            throw new Error('Invalid workflow handoff response');
-        }
-        parsedTargetRunId = targetRunId;
-    }
     let parsedSourceRunId: string | undefined;
     if (sourceRunId !== undefined) {
         if (typeof sourceRunId !== 'string') {
@@ -59,6 +59,13 @@ const parseWorkflowHandoff = (handoff: unknown): WorkflowHandoff => {
         }
         parsedSourceArtifactSummary = sourceArtifactSummary;
     }
+    let parsedTargetRunId: string | undefined;
+    if (targetRunId !== undefined) {
+        if (typeof targetRunId !== 'string') {
+            throw new Error('Invalid workflow handoff response');
+        }
+        parsedTargetRunId = targetRunId;
+    }
 
     if (
         typeof id !== 'string'
@@ -67,6 +74,9 @@ const parseWorkflowHandoff = (handoff: unknown): WorkflowHandoff => {
         || typeof sourceStageId !== 'string'
         || typeof sourceArtifactVersion !== 'number'
         || !Number.isInteger(sourceArtifactVersion)
+        || typeof sourceSummary !== 'string'
+        || !isStringArray(unconfirmedItems)
+        || !isStringArray(targetInputChecklist)
         || !isWorkflowType(targetWorkflowId)
         || typeof targetStageId !== 'string'
         || typeof targetAgentId !== 'string'
@@ -84,6 +94,9 @@ const parseWorkflowHandoff = (handoff: unknown): WorkflowHandoff => {
         sourceArtifactVersion,
         ...(parsedSourceArtifactDigest !== undefined ? { sourceArtifactDigest: parsedSourceArtifactDigest } : {}),
         ...(parsedSourceArtifactSummary !== undefined ? { sourceArtifactSummary: parsedSourceArtifactSummary } : {}),
+        sourceSummary,
+        unconfirmedItems,
+        targetInputChecklist,
         ...(parsedTargetRunId !== undefined ? { targetRunId: parsedTargetRunId } : {}),
         targetWorkflowId,
         targetStageId,
@@ -120,17 +133,15 @@ export const fetchTargetWorkflowHandoffCandidates = async (
 ): Promise<WorkflowHandoff[]> => {
     const params = new URLSearchParams();
     params.set('targetWorkflowId', targetWorkflowId);
-    const normalizedTargetStageId = targetStageId?.trim();
-    if (normalizedTargetStageId) {
-        params.set('targetStageId', normalizedTargetStageId);
+    if (targetStageId?.trim()) {
+        params.set('targetStageId', targetStageId.trim());
     }
 
     const response = await fetch(
         `/new-agents/api/agent/workflow-handoff-candidates?${params.toString()}`
     );
-
     if (!response.ok) {
-        throw new Error(`Failed to fetch target workflow handoffs: ${response.status}`);
+        throw new Error(`Failed to fetch target workflow handoff candidates: ${response.status}`);
     }
 
     const payload: unknown = await response.json();

@@ -23,6 +23,12 @@
 
 New Agents 智能体框架深化阶段 1-2 已升格为计划路线图：`../../plans/2026-06-25-new-agents-agent-framework-phase1-phase2.md`。
 
+2026-06-24 目标模式记录：New Agents 增强诊断中的 E01-E14 已按共享 runtime / manifest / typed SSE / artifact contract 路线消化为主干能力或历史完成记录；恢复目标模式时继续按 `docs/strategy/goal-mode-playbook.md` 做当前状态分析，不从旧 ID 清单机械恢复实施。
+
+2026-06-24 目标模式记录：本轮在 `codex/workflow-quality-governance-current` 中消化 New Agents E03/E08 合并能力包「Artifact/Workflow 质量治理闭环」，以现有 `ArtifactPane` 审阅入口展示质量分、contract/visual/stage gate 检查、证据和待处理项。
+
+2026-06-24 已复核：DeepSeek V4 格式化输出需求已由 17 个在线 stage 的 `artifact_data` schema、后端 deterministic renderer、DeepSeek `json_object_only` adapter、数据纠错 retry 和 readiness gate 收口。真实 DeepSeek V4 Flash smoke 仍需显式凭证、网络和额度，不属于默认本地门禁。
+
 2026-06-25 已复核：6/23 的结构化产物改造和功能盘点诊断已归档；不要从 `archive/` 中的过程性“待办/剩余”直接恢复实施。
 
 ## 已归档

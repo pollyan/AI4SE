@@ -1,5 +1,5 @@
+import json
 import time
-from typing import Any
 from uuid import uuid4
 
 from api_responses import DEFAULT_LLM_CONFIG_MISSING_CODE
@@ -38,11 +38,14 @@ from workflow_manifest import get_workflow_agent_id
 
 MESSAGE_ROLES = {"user", "assistant"}
 RUN_STATUSES = {"active", "completed", "failed"}
+RUN_REUSE_STATUSES = {"ready", "needs_artifact", "failed"}
 SUMMARY_SOURCE_ARTIFACT = "artifact"
 SUMMARY_SOURCE_USER_INPUT = "user_input"
 DEFAULT_RUN_LIST_LIMIT = 20
 MAX_RUN_LIST_LIMIT = 100
 PROVIDER_ISSUE_ERROR_CODES = {"LLM_ERROR", DEFAULT_LLM_CONFIG_MISSING_CODE}
+LOW_OBSERVABILITY_SUCCESS_RATE_THRESHOLD = 80.0
+CONTRACT_RETRY_REASON = "STRUCTURED_OUTPUT_CONTRACT_RETRY"
 
 
 class ArtifactVersionConflictError(ValueError):
@@ -139,6 +142,61 @@ def ensure_agent_run(
     return run
 
 
+def clone_agent_run(source_run_id: str) -> AgentRun:
+    source = _get_run(source_run_id)
+    cloned = create_agent_run(
+        source.workflow_id,
+        source.agent_id,
+        source.current_stage_id,
+        model=source.model,
+        status="active",
+    )
+
+    source_messages = (
+        AgentMessage.query.filter_by(run_id=source.id)
+        .order_by(AgentMessage.sequence_index.asc())
+        .all()
+    )
+    for message in source_messages:
+        db.session.add(
+            AgentMessage(
+                run_id=cloned.id,
+                role=message.role,
+                content=message.content,
+                sequence_index=message.sequence_index,
+            )
+        )
+
+    source_artifacts = (
+        AgentArtifact.query.filter_by(run_id=source.id)
+        .order_by(AgentArtifact.id.asc())
+        .all()
+    )
+    for artifact in source_artifacts:
+        artifact_snapshot = _artifact_snapshot(artifact)
+        record_artifact_version(
+            cloned.id,
+            artifact_snapshot["stageId"],
+            artifact_snapshot["content"],
+        )
+
+    source_summaries = (
+        AgentContextSummary.query.filter_by(run_id=source.id)
+        .order_by(AgentContextSummary.id.asc())
+        .all()
+    )
+    for summary in source_summaries:
+        _upsert_context_summary(
+            cloned.id,
+            source_type=summary.source_type,
+            source_stage_id=summary.source_stage_id,
+            summary_type=summary.summary_type,
+            content=summary.content,
+        )
+    db.session.commit()
+    return cloned
+
+
 class AgentRunPersistence:
     def ensure_run(self, agent_request, *, model_name: str) -> str:
         agent_id = get_workflow_agent_id(agent_request.workflow_id)
@@ -174,7 +232,7 @@ class AgentRunPersistence:
         stage_id: str,
         content: str,
         *,
-        artifact_data: dict[str, Any] | None = None,
+        artifact_data: dict | None = None,
     ) -> None:
         record_artifact_version(
             run_id,
@@ -210,7 +268,7 @@ def record_artifact_version(
     stage_id: str,
     content: str,
     *,
-    artifact_data: dict[str, Any] | None = None,
+    artifact_data: dict | None = None,
 ) -> AgentArtifactVersion:
     run = _get_run(run_id)
     _validate_workflow_stage(run.workflow_id, stage_id)
@@ -228,7 +286,11 @@ def record_artifact_version(
         artifact_id=artifact.id,
         version_number=_next_artifact_version(artifact.id),
         content=content,
-        artifact_data=artifact_data,
+        artifact_data_json=(
+            json.dumps(artifact_data, ensure_ascii=False)
+            if artifact_data is not None
+            else None
+        ),
     )
     db.session.add(version)
     db.session.flush()
@@ -475,16 +537,6 @@ def replace_artifact_collaboration_state(run_id: str, patch: dict) -> dict:
         patch=patch,
         created_at_ms=int(time.time() * 1000),
     )
-    _require_collaboration_artifacts(
-        run_id,
-        {
-            item.stage_id
-            for item in [
-                *collaboration_state.comments,
-                *collaboration_state.section_locks,
-            ]
-        },
-    )
 
     AgentArtifactComment.query.filter_by(run_id=run_id).delete()
     AgentArtifactSectionLock.query.filter_by(run_id=run_id).delete()
@@ -502,34 +554,6 @@ def replace_artifact_collaboration_state(run_id: str, patch: dict) -> dict:
             for lock in collaboration_state.section_locks
         ],
     }
-
-
-def _require_collaboration_artifacts(run_id: str, stage_ids: set[str]) -> None:
-    if not stage_ids:
-        return
-
-    existing_stage_ids = {
-        stage_id
-        for (stage_id,) in (
-            db.session.query(AgentArtifact.stage_id)
-            .filter(
-                AgentArtifact.run_id == run_id,
-                AgentArtifact.stage_id.in_(stage_ids),
-                AgentArtifact.current_version_id.isnot(None),
-            )
-            .all()
-        )
-    }
-    missing_stage_ids = sorted(stage_ids - existing_stage_ids)
-    if missing_stage_ids:
-        if len(missing_stage_ids) == 1:
-            raise ValueError(
-                f"{missing_stage_ids[0]} 阶段产出物不存在，无法保存协作状态"
-            )
-        raise ValueError(
-            "以下阶段产出物不存在，无法保存协作状态: "
-            + ", ".join(missing_stage_ids)
-        )
 
 
 def upsert_manual_decision_summary(run_id: str, patch: dict) -> dict:
@@ -656,7 +680,6 @@ def record_turn_metric(
     output_chars: int,
     estimated_tokens: int,
     contract_retry_count: int,
-    diagnostic: dict | None = None,
 ) -> AgentRunTurnMetric:
     _get_run(run_id)
     metric = AgentRunTurnMetric(
@@ -672,42 +695,10 @@ def record_turn_metric(
         output_chars=max(0, output_chars),
         estimated_tokens=max(0, estimated_tokens),
         contract_retry_count=max(0, contract_retry_count),
-        diagnostic_phase=_diagnostic_string(diagnostic, "phase"),
-        diagnostic_field_path=_diagnostic_string(
-            diagnostic,
-            "fieldPath",
-            "field_path",
-        ),
-        diagnostic_validator=_diagnostic_string(diagnostic, "validator"),
-        diagnostic_public_reason=_diagnostic_string(
-            diagnostic,
-            "publicReason",
-            "public_reason",
-        ),
-        diagnostic_retryable=_diagnostic_bool(diagnostic, "retryable"),
     )
     db.session.add(metric)
     db.session.commit()
     return metric
-
-
-def _diagnostic_string(diagnostic: dict | None, *keys: str) -> str | None:
-    if not isinstance(diagnostic, dict):
-        return None
-    for key in keys:
-        value = diagnostic.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def _diagnostic_bool(diagnostic: dict | None, key: str) -> bool | None:
-    if not isinstance(diagnostic, dict):
-        return None
-    value = diagnostic.get(key)
-    if isinstance(value, bool):
-        return value
-    return None
 
 
 def record_runtime_config_issue(
@@ -799,6 +790,26 @@ def get_runtime_observability_summary(
         ).append(issue)
     stage_keys = sorted(set(stage_index) | set(stage_config_issue_index))
 
+    contract_retry_reasons = _contract_retry_reasons(metrics)
+    diagnostics = _runtime_diagnostics(
+        total_turns=total_turns,
+        failed_turns=failed_turns,
+        success_rate=_success_rate(total_turns, failed_turns),
+        provider_issue_codes=provider_issue_codes,
+        metrics=metrics,
+        config_issues=config_issues,
+        stage_items=[
+            _stage_observability_item(
+                workflow_id,
+                stage_id,
+                stage_index.get((workflow_id, stage_id), []),
+                stage_config_issue_index.get((workflow_id, stage_id), []),
+            )
+            for workflow_id, stage_id in stage_keys
+        ],
+        contract_retry_reasons=contract_retry_reasons,
+    )
+
     return {
         "totals": {
             "turns": total_turns,
@@ -829,7 +840,119 @@ def get_runtime_observability_summary(
             _turn_metric_snapshot(metric)
             for metric in metrics[:limit]
         ],
+        "contractRetryReasons": contract_retry_reasons,
+        "diagnostics": diagnostics,
     }
+
+
+def _contract_retry_reasons(metrics: list[AgentRunTurnMetric]) -> dict[str, int]:
+    retry_count = sum(metric.contract_retry_count for metric in metrics)
+    if retry_count <= 0:
+        return {}
+    return {CONTRACT_RETRY_REASON: retry_count}
+
+
+def _top_contract_retry_stage(
+    metrics: list[AgentRunTurnMetric],
+) -> tuple[str, str, int] | None:
+    retry_by_stage: dict[tuple[str, str], int] = {}
+    for metric in metrics:
+        if metric.contract_retry_count <= 0:
+            continue
+        key = (metric.workflow_id, metric.stage_id)
+        retry_by_stage[key] = retry_by_stage.get(key, 0) + metric.contract_retry_count
+    if not retry_by_stage:
+        return None
+    (workflow_id, stage_id), retry_count = sorted(
+        retry_by_stage.items(),
+        key=lambda item: (-item[1], item[0][0], item[0][1]),
+    )[0]
+    return workflow_id, stage_id, retry_count
+
+
+def _runtime_diagnostics(
+    *,
+    total_turns: int,
+    failed_turns: int,
+    success_rate: float,
+    provider_issue_codes: dict[str, int],
+    metrics: list[AgentRunTurnMetric],
+    config_issues: list[AgentRuntimeConfigIssue],
+    stage_items: list[dict],
+    contract_retry_reasons: dict[str, int],
+) -> list[dict]:
+    diagnostics: list[dict] = []
+    provider_issue_count = sum(provider_issue_codes.values())
+    if provider_issue_count > 0:
+        top_issue_code = sorted(
+            provider_issue_codes.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[0][0]
+        diagnostics.append({
+            "id": "provider-config",
+            "severity": "critical" if config_issues else "warning",
+            "title": "模型/供应商配置异常",
+            "detail": (
+                f"最近运行中有 {provider_issue_count} 轮与模型配置、"
+                f"供应商额度、鉴权或网络有关；最高频错误为 {top_issue_code}。"
+            ),
+            "action": "打开模型设置并检测连接，确认 API Key、Base URL、模型名和额度状态。",
+        })
+
+    if failed_turns > 0 and success_rate < LOW_OBSERVABILITY_SUCCESS_RATE_THRESHOLD:
+        diagnostics.append({
+            "id": "runtime-failures",
+            "severity": "warning",
+            "title": "运行失败率偏高",
+            "detail": (
+                f"最近 {total_turns} 轮中有 {failed_turns} 轮失败，"
+                f"成功率 {success_rate}%。"
+            ),
+            "action": "优先查看失败集中的 workflow/stage 和最近运行错误码，再重试修复后的阶段。",
+        })
+
+    risky_stage = sorted(
+        (
+            stage for stage in stage_items
+            if stage["failedTurns"] > 0
+            and stage["successRate"] < LOW_OBSERVABILITY_SUCCESS_RATE_THRESHOLD
+        ),
+        key=lambda stage: (
+            stage["successRate"],
+            -stage["failedTurns"],
+            stage["workflowId"],
+            stage["stageId"],
+        ),
+    )
+    if risky_stage:
+        stage = risky_stage[0]
+        diagnostics.append({
+            "id": "stage-failures",
+            "severity": "warning",
+            "title": "阶段失败集中",
+            "detail": (
+                f"{stage['workflowId']} / {stage['stageId']} 成功率 "
+                f"{stage['successRate']}%，失败 {stage['failedTurns']}/{stage['turns']} 轮。"
+            ),
+            "action": "检查该阶段输入上下文、stage prompt、artifact contract 和重试后的错误码。",
+        })
+
+    retry_count = contract_retry_reasons.get(CONTRACT_RETRY_REASON, 0)
+    if retry_count > 0:
+        top_stage = _top_contract_retry_stage(metrics)
+        stage_detail = ""
+        if top_stage:
+            workflow_id, stage_id, stage_retry_count = top_stage
+            stage_detail = f"，集中在 {workflow_id} / {stage_id}（{stage_retry_count} 次）"
+        diagnostics.append({
+            "id": "contract-retry",
+            "severity": "warning",
+            "title": "结构化输出重试偏高",
+            "detail": f"最近运行中有 {retry_count} 次 contract retry{stage_detail}。",
+            "action": "检查该阶段 prompt、artifact contract 和 renderer 输出是否同步。",
+        })
+
+    return diagnostics
 
 
 def _success_rate(total_turns: int, failed_turns: int) -> float:
@@ -957,35 +1080,22 @@ def _turn_metric_snapshot(metric: AgentRunTurnMetric) -> dict:
         "outputChars": metric.output_chars,
         "estimatedTokens": metric.estimated_tokens,
         "contractRetryCount": metric.contract_retry_count,
-        "diagnostic": _turn_metric_diagnostic_snapshot(metric),
         "createdAt": _format_datetime(metric.created_at),
     }
-
-
-def _turn_metric_diagnostic_snapshot(metric: AgentRunTurnMetric) -> dict | None:
-    diagnostic: dict[str, Any] = {}
-    if metric.diagnostic_phase:
-        diagnostic["phase"] = metric.diagnostic_phase
-    if metric.diagnostic_field_path:
-        diagnostic["fieldPath"] = metric.diagnostic_field_path
-    if metric.diagnostic_validator:
-        diagnostic["validator"] = metric.diagnostic_validator
-    if metric.diagnostic_public_reason:
-        diagnostic["publicReason"] = metric.diagnostic_public_reason
-    if metric.diagnostic_retryable is not None:
-        diagnostic["retryable"] = bool(metric.diagnostic_retryable)
-    return diagnostic or None
 
 
 def list_agent_runs(
     *,
     workflow_id: str | None = None,
+    reuse_status: str | None = None,
     limit: int = DEFAULT_RUN_LIST_LIMIT,
     offset: int = 0,
     query_text: str | None = None,
 ) -> dict:
     if workflow_id is not None and workflow_id not in WORKFLOW_STAGES:
         raise ValueError(f"未知 workflowId: {workflow_id}")
+    if reuse_status is not None and reuse_status not in RUN_REUSE_STATUSES:
+        raise ValueError(f"未知 reuseStatus: {reuse_status}")
     if limit < 1:
         limit = DEFAULT_RUN_LIST_LIMIT
     if limit > MAX_RUN_LIST_LIMIT:
@@ -997,6 +1107,8 @@ def list_agent_runs(
     query = AgentRun.query
     if workflow_id is not None:
         query = query.filter_by(workflow_id=workflow_id)
+    if reuse_status is not None:
+        query = _apply_run_reuse_status_filter(query, reuse_status)
     if normalized_query:
         query = _apply_run_search_filter(query, normalized_query)
 
@@ -1052,6 +1164,23 @@ def _apply_run_search_filter(query, query_text: str):
     )
 
 
+def _apply_run_reuse_status_filter(query, reuse_status: str):
+    artifact_summary_exists = (
+        db.session.query(AgentContextSummary.id)
+        .filter(
+            AgentContextSummary.run_id == AgentRun.id,
+            AgentContextSummary.source_type == SUMMARY_SOURCE_ARTIFACT,
+            AgentContextSummary.summary_type == CURRENT_ARTIFACT_SUMMARY_TYPE,
+        )
+        .exists()
+    )
+    if reuse_status == "failed":
+        return query.filter(AgentRun.status == "failed")
+    if reuse_status == "ready":
+        return query.filter(AgentRun.status != "failed", artifact_summary_exists)
+    return query.filter(AgentRun.status != "failed", ~artifact_summary_exists)
+
+
 def _run_list_item(run: AgentRun) -> dict:
     return {
         "id": run.id,
@@ -1059,12 +1188,19 @@ def _run_list_item(run: AgentRun) -> dict:
         "agentId": run.agent_id,
         "currentStageId": run.current_stage_id,
         "status": run.status,
+        "reuseStatus": _run_reuse_status(run),
         "model": run.model,
         "createdAt": _format_datetime(run.created_at),
         "updatedAt": _format_datetime(run.updated_at),
         "lastMessage": _last_message_snapshot(run.id),
         "currentArtifact": _current_artifact_summary(run.id),
     }
+
+
+def _run_reuse_status(run: AgentRun) -> str:
+    if run.status == "failed":
+        return "failed"
+    return "ready" if _current_artifact_summary(run.id) is not None else "needs_artifact"
 
 
 def _format_datetime(value) -> str | None:
@@ -1122,11 +1258,13 @@ def _artifact_snapshot(artifact: AgentArtifact) -> dict:
     version = db.session.get(AgentArtifactVersion, artifact.current_version_id)
     if version is None:
         raise ValueError(f"artifact 当前版本不存在: {artifact.id}")
-    snapshot = {
+    return {
         "stageId": artifact.stage_id,
         "content": version.content,
         "versionNumber": version.version_number,
+        "artifactData": (
+            json.loads(version.artifact_data_json)
+            if version.artifact_data_json
+            else None
+        ),
     }
-    if version.artifact_data is not None:
-        snapshot["artifactData"] = version.artifact_data
-    return snapshot

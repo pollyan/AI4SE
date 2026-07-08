@@ -1,177 +1,164 @@
 import { describe, expect, it } from 'vitest';
 import {
-  applyArtifactSectionPatch,
-  buildArtifactSectionChangeIndex,
-  extractArtifactSections,
+    ArtifactSectionRegenerationError,
+    mergeRegeneratedArtifactSection,
+    parseArtifactMarkdownSections,
+    preserveLockedArtifactSections,
 } from '../artifactSections';
+import type { ArtifactSectionLock } from '../types';
+
+const makeLock = (
+    overrides: Partial<ArtifactSectionLock> & Pick<ArtifactSectionLock, 'heading' | 'content'>
+): ArtifactSectionLock => ({
+    id: 'lock-1',
+    stageId: 'CLARIFY',
+    sectionAnchor: null,
+    createdAt: 1,
+    ...overrides,
+});
 
 describe('artifactSections', () => {
-  it('reports only the section whose body changed', () => {
-    const changes = buildArtifactSectionChangeIndex(
-      '# 文档\n\n## 范围\n\n旧范围\n\n## 风险\n\n保持不变',
-      '# 文档\n\n## 范围\n\n新范围\n\n## 风险\n\n保持不变',
-    );
+    it('parses H1-H3 sections with stable duplicate anchors', () => {
+        const sections = parseArtifactMarkdownSections([
+            '# 需求分析',
+            '背景',
+            '## 验收口径',
+            '第一版',
+            '## 验收口径',
+            '第二版',
+            '#### 忽略的深层标题',
+            '仍属于第二版',
+        ].join('\n'));
 
-    expect(changes).toEqual([
-      expect.objectContaining({
-        kind: 'modified',
-        title: '范围',
-        anchor: 'h2:范围:1',
-        safeForPatch: true,
-      }),
-    ]);
-  });
-
-  it('ignores markdown headings inside fenced code blocks', () => {
-    const sections = extractArtifactSections(
-      '# 文档\n\n```md\n## 伪标题\n```\n\n## 真实标题\n\n正文',
-    );
-
-    expect(sections.map(section => section.title)).toEqual(['文档', '真实标题']);
-  });
-
-  it('uses occurrence anchors for duplicate headings', () => {
-    const sections = extractArtifactSections(
-      '# 文档\n\n## 风险\n\n第一处\n\n## 风险\n\n第二处',
-    );
-
-    expect(sections.map(section => section.anchor)).toEqual([
-      'h1:文档:1',
-      'h2:风险:1',
-      'h2:风险:2',
-    ]);
-    expect(sections.map(section => section.displayTitle)).toEqual([
-      '文档',
-      '风险 #1',
-      '风险 #2',
-    ]);
-  });
-
-  it('marks structured markdown sections as unsafe for automatic patching', () => {
-    const changes = buildArtifactSectionChangeIndex(
-      '# 文档\n\n## 表格\n\n| 字段 | 内容 |\n| --- | --- |\n| A | 旧值 |',
-      '# 文档\n\n## 表格\n\n| 字段 | 内容 |\n| --- | --- |\n| A | 新值 |',
-    );
-
-    expect(changes).toEqual([
-      expect.objectContaining({
-        kind: 'modified',
-        title: '表格',
-        safeForPatch: false,
-        unsafeReason: 'markdown_table',
-      }),
-    ]);
-  });
-
-  it('applies a same-base section replace patch and reports the changed section', () => {
-    const base = '# 文档\n\n## 范围\n\n旧范围\n\n## 风险\n\n保持不变';
-    const result = applyArtifactSectionPatch(base, {
-      operation: 'replace',
-      sectionAnchor: 'h2:范围:1',
-      replacementMarkdown: '## 范围\n\n新范围',
-      baseContent: base,
+        expect(sections.map(section => ({
+            heading: section.heading,
+            displayTitle: section.displayTitle,
+            anchor: section.anchor,
+        }))).toEqual([
+            { heading: '# 需求分析', displayTitle: '需求分析', anchor: 'h1:需求分析:1' },
+            { heading: '## 验收口径', displayTitle: '验收口径 #1', anchor: 'h2:验收口径:1' },
+            { heading: '## 验收口径', displayTitle: '验收口径 #2', anchor: 'h2:验收口径:2' },
+        ]);
+        expect(sections[2].content).toContain('#### 忽略的深层标题');
     });
 
-    expect(result).toEqual(expect.objectContaining({
-      applied: true,
-      content: '# 文档\n\n## 范围\n\n新范围\n\n## 风险\n\n保持不变',
-    }));
-    expect(result.changes).toEqual([
-      expect.objectContaining({
-        kind: 'modified',
-        anchor: 'h2:范围:1',
-      }),
-    ]);
-  });
+    it('preserves locked sections by anchor before heading', () => {
+        const nextArtifact = [
+            '# 当前产物',
+            '导语',
+            '## 验收口径',
+            '模型误改第一段',
+            '## 验收口径',
+            '模型误改第二段',
+        ].join('\n');
+        const lock = makeLock({
+            heading: '## 验收口径',
+            sectionAnchor: 'h2:验收口径:2',
+            content: '## 验收口径\n已确认第二段',
+        });
 
-  it('applies an add_after patch after an existing section', () => {
-    const base = '# 文档\n\n## 范围\n\n旧范围';
-    const result = applyArtifactSectionPatch(base, {
-      operation: 'add_after',
-      sectionAnchor: 'h2:风险:1',
-      afterSectionAnchor: 'h2:范围:1',
-      replacementMarkdown: '## 风险\n\n| 风险 | 状态 |\n| --- | --- |\n| R1 | 待处理 |',
-      baseContent: base,
+        expect(preserveLockedArtifactSections(nextArtifact, [lock])).toBe([
+            '# 当前产物',
+            '导语',
+            '## 验收口径',
+            '模型误改第一段',
+            '## 验收口径',
+            '已确认第二段',
+        ].join('\n'));
     });
 
-    expect(result).toEqual(expect.objectContaining({
-      applied: true,
-      content: '# 文档\n\n## 范围\n\n旧范围\n\n## 风险\n\n| 风险 | 状态 |\n| --- | --- |\n| R1 | 待处理 |',
-    }));
-    expect(result.changes).toEqual([
-      expect.objectContaining({
-        kind: 'added',
-        anchor: 'h2:风险:1',
-      }),
-    ]);
-  });
+    it('merges only the regenerated target section and restores locked sections', () => {
+        const originalArtifact = [
+            '# 当前产物',
+            '旧导语',
+            '## 目标章节',
+            '旧目标内容',
+            '## 锁定章节',
+            '确认内容',
+        ].join('\n');
+        const generatedArtifact = [
+            '# 当前产物',
+            '模型试图改导语',
+            '## 目标章节',
+            '新目标内容',
+            '## 锁定章节',
+            '模型误改锁定内容',
+        ].join('\n');
+        const lock = makeLock({
+            heading: '## 锁定章节',
+            sectionAnchor: 'h2:锁定章节:1',
+            content: '## 锁定章节\n确认内容',
+        });
 
-  it('rejects add_after patches without an insertion anchor', () => {
-    const base = '# 文档\n\n## 范围\n\n旧范围';
+        const merged = mergeRegeneratedArtifactSection({
+            originalArtifact,
+            generatedArtifact,
+            target: {
+                heading: '## 目标章节',
+                sectionAnchor: 'h2:目标章节:1',
+                displayTitle: '目标章节',
+            },
+            locks: [lock],
+        });
 
-    const result = applyArtifactSectionPatch(base, {
-      operation: 'add_after',
-      sectionAnchor: 'h2:风险:1',
-      replacementMarkdown: '## 风险\n\n新风险',
-      baseContent: base,
+        expect(merged.content).toBe([
+            '# 当前产物',
+            '旧导语',
+            '## 目标章节',
+            '新目标内容',
+            '## 锁定章节',
+            '确认内容',
+        ].join('\n'));
     });
 
-    expect(result).toEqual({
-      applied: false,
-      content: base,
-      changes: [],
-      fallbackReason: 'invalid_patch',
-    });
-  });
+    it('refuses to regenerate a locked target section', () => {
+        const artifact = [
+            '# 当前产物',
+            '导语',
+            '## 目标章节',
+            '确认内容',
+        ].join('\n');
+        const lock = makeLock({
+            heading: '## 目标章节',
+            sectionAnchor: 'h2:目标章节:1',
+            content: '## 目标章节\n确认内容',
+        });
 
-  it('rejects section patches when the current content no longer matches the base', () => {
-    const base = '# 文档\n\n## 范围\n\n旧范围';
-    const current = '# 文档\n\n## 范围\n\n用户已手动修改';
-
-    const result = applyArtifactSectionPatch(current, {
-      operation: 'replace',
-      sectionAnchor: 'h2:范围:1',
-      replacementMarkdown: '## 范围\n\n新范围',
-      baseContent: base,
-    });
-
-    expect(result).toEqual({
-      applied: false,
-      content: current,
-      changes: [],
-      fallbackReason: 'base_mismatch',
-    });
-  });
-
-  it('rejects section patches when the anchor cannot be found', () => {
-    const current = '# 文档\n\n## 范围\n\n旧范围';
-
-    const result = applyArtifactSectionPatch(current, {
-      operation: 'replace',
-      sectionAnchor: 'h2:不存在:1',
-      replacementMarkdown: '## 不存在\n\n新范围',
-      baseContent: current,
+        expect(() => mergeRegeneratedArtifactSection({
+            originalArtifact: artifact,
+            generatedArtifact: artifact,
+            target: {
+                heading: '## 目标章节',
+                sectionAnchor: 'h2:目标章节:1',
+                displayTitle: '目标章节',
+            },
+            locks: [lock],
+        })).toThrow(ArtifactSectionRegenerationError);
     });
 
-    expect(result.fallbackReason).toBe('section_not_found');
-    expect(result.content).toBe(current);
-  });
+    it('fails when the generated artifact does not contain the target section', () => {
+        const originalArtifact = [
+            '# 当前产物',
+            '导语',
+            '## 目标章节',
+            '旧内容',
+        ].join('\n');
+        const generatedArtifact = [
+            '# 当前产物',
+            '导语',
+            '## 其他章节',
+            '新内容',
+        ].join('\n');
 
-  it('rejects section patches for unsafe structured markdown sections', () => {
-    const current = '# 文档\n\n## 表格\n\n| 字段 | 内容 |\n| --- | --- |\n| A | 旧值 |';
-
-    const result = applyArtifactSectionPatch(current, {
-      operation: 'replace',
-      sectionAnchor: 'h2:表格:1',
-      replacementMarkdown: '## 表格\n\n| 字段 | 内容 |\n| --- | --- |\n| A | 新值 |',
-      baseContent: current,
+        expect(() => mergeRegeneratedArtifactSection({
+            originalArtifact,
+            generatedArtifact,
+            target: {
+                heading: '## 目标章节',
+                sectionAnchor: 'h2:目标章节:1',
+                displayTitle: '目标章节',
+            },
+            locks: [],
+        })).toThrow('模型返回中没有找到目标章节“目标章节”');
     });
-
-    expect(result).toEqual({
-      applied: false,
-      content: current,
-      changes: [],
-      fallbackReason: 'unsafe_section',
-    });
-  });
 });

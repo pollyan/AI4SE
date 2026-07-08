@@ -4,6 +4,16 @@ import { fetchObservabilitySummary } from '../observabilityService';
 global.fetch = vi.fn();
 
 const OBSERVABILITY_PAYLOAD = {
+    contractRetryReasons: { STRUCTURED_OUTPUT_CONTRACT_RETRY: 2 },
+    diagnostics: [
+        {
+            id: 'contract-retry',
+            severity: 'warning',
+            title: '结构化输出重试偏高',
+            detail: '最近运行中有 2 次 contract retry。',
+            action: '检查该阶段 prompt、artifact contract 和 renderer 输出是否同步。',
+        },
+    ],
     totals: {
         turns: 3,
         failedTurns: 1,
@@ -55,13 +65,6 @@ const OBSERVABILITY_PAYLOAD = {
             outputChars: 600,
             estimatedTokens: 225,
             contractRetryCount: 0,
-            diagnostic: {
-                phase: 'structured_output',
-                fieldPath: 'artifact_data.requirement_facts.0.fact',
-                validator: 'string_too_short',
-                publicReason: '模型输出的结构化字段未通过校验，右侧产出物已保持不变。',
-                retryable: true,
-            },
             createdAt: '2026-06-19T10:00:00',
         },
     ],
@@ -88,13 +91,8 @@ describe('observabilityService', () => {
         expect(summary.byStage[0].providerIssueCodes).toEqual({ LLM_ERROR: 1 });
         expect(summary.byProvider[0].providerIssueCount).toBe(1);
         expect(summary.recentTurns[0].errorCode).toBe('LLM_ERROR');
-        expect(summary.recentTurns[0].diagnostic).toEqual({
-            phase: 'structured_output',
-            fieldPath: 'artifact_data.requirement_facts.0.fact',
-            validator: 'string_too_short',
-            publicReason: '模型输出的结构化字段未通过校验，右侧产出物已保持不变。',
-            retryable: true,
-        });
+        expect(summary.contractRetryReasons).toEqual({ STRUCTURED_OUTPUT_CONTRACT_RETRY: 2 });
+        expect(summary.diagnostics[0].title).toBe('结构化输出重试偏高');
     });
 
     it('serializes workflow and stage filters', async () => {
@@ -153,22 +151,11 @@ describe('observabilityService', () => {
         );
     });
 
-    it('fails explicitly when recent turn diagnostics are malformed', async () => {
+    it('fails explicitly when diagnostics are malformed', async () => {
         vi.mocked(fetch).mockResolvedValue(new Response(
             JSON.stringify({
                 ...OBSERVABILITY_PAYLOAD,
-                recentTurns: [
-                    {
-                        ...OBSERVABILITY_PAYLOAD.recentTurns[0],
-                        diagnostic: {
-                            phase: 'structured_output',
-                            fieldPath: 'artifact_data',
-                            validator: 'string_too_short',
-                            publicReason: '模型输出的结构化字段未通过校验。',
-                            retryable: 'true',
-                        },
-                    },
-                ],
+                diagnostics: [{ id: 'bad', severity: 'unknown' }],
             }),
             { status: 200, headers: { 'Content-Type': 'application/json' } },
         ));

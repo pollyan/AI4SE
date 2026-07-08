@@ -7,12 +7,21 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 os.environ["FLASK_TESTING"] = "1"
 
-import workflow_handoffs as handoff_service
 from app import create_app
 from models import db
 from run_persistence import create_agent_run, get_run_snapshot, record_artifact_version
 from workflow_handoffs import export_run_handoffs, start_workflow_handoff
 
+CONCEPT_MARKDOWN = """# 产品概念简报
+
+## 定位声明
+AI 测试资产管理平台帮助测试负责人统一管理测试资产。
+
+## MVP 功能分布
+```ai4se-visual
+{"type":"mvp-map","columns":["模块","MVP层级","用户价值","验证指标","取舍理由"],"rows":[{"模块":"测试资产生成","MVP层级":"P0","用户价值":"减少手工整理","验证指标":"生成完成率","取舍理由":"验证核心价值"}]}
+```
+"""
 
 BLUEPRINT_MARKDOWN = """# AI 测试资产管理平台需求蓝图
 
@@ -116,48 +125,44 @@ flowchart TD
 - [x] P0 需求均具备验收标准、owner 和可测试性等级。
 """
 
+STORY_BREAKDOWN_MARKDOWN = """# 用户故事拆解包
 
-CONCEPT_MARKDOWN = """# 产品概念简报
+## 输入分析
+来源 PRD，目标是把测试资产生成能力拆成 Sprint 可交付切片。
 
-## 定位声明
-面向测试负责人，解决测试资产分散、复用困难的问题，提供 AI 测试资产管理平台。
+## Epic Map
+| Epic ID | 名称 | 价值目标 | 优先级 |
+| --- | --- | --- | --- |
+| EPIC-001 | 测试资产生成 | 减少测试设计手工整理成本 | P0 |
 
-## 核心假设
-| 假设 | 验证方式 | 状态 |
+## User Story Backlog
+| Story ID | Epic ID | 用户故事 | 优先级 | Sprint |
+| --- | --- | --- | --- | --- |
+| US-001 | EPIC-001 | 作为测试负责人，我想把需求输入转成澄清清单，以便发现遗漏。 | P0 | Sprint 1 |
+
+## 验收标准
+| AC ID | Story ID | 验收标准 | 验证方式 |
+| --- | --- | --- | --- |
+| AC-001 | US-001 | 输入需求后生成事实、边界、业务规则和待澄清问题。 | 后端 contract test |
+
+## 依赖与风险
+| 依赖 ID | 关联 Story | 风险 | 缓解 |
+| --- | --- | --- | --- |
+| DEP-001 | US-001 | 模型直写 Markdown 绕过 renderer | runtime instruction 和 renderer contract 双门禁 |
+
+## Sprint 切片建议
+| Sprint | 目标 | Story |
 | --- | --- | --- |
-| 测试负责人愿意用 AI 生成初版测试策略和用例 | 访谈与原型试用 | 待验证 |
+| Sprint 1 | 打通需求澄清最小闭环 | US-001 |
 
-## Lean Canvas 产品画布
-| 模块 | 内容 |
-| --- | --- |
-| 问题 | 测试资产分散，重复设计成本高 |
-| 解决方案 | 基于需求生成可评审测试资产 |
-
-## MVP 功能分布
-- 自动生成测试策略
-- 自动生成核心测试用例
-
-## 核心增长漏斗
-试用 -> 生成资产 -> 团队复用 -> 持续沉淀
-
-## Pre-mortem 风险分析
-- 输出质量不稳定
-- 用户不信任自动生成结果
-
-## 验证路线
-- 找 3 个测试负责人试用
-
-## 不可做范围
-- 不直接执行测试脚本
-
-## 决策记录
-- 先围绕测试资产生成做 MVP
-
-## 下一步行动
-- 进入需求蓝图梳理，明确 P0 需求和验收标准
+## Lisa Handoff 输入
+| 输入类型 | ID | 内容 | 给 Lisa 的用途 |
+| --- | --- | --- | --- |
+| 用户故事 | US-001 | 需求澄清基线 | 测试设计输入 |
+| 验收标准 | AC-001 | 输入需求后生成澄清问题 | 需求评审输入 |
 
 ## 阶段门禁
-- [x] 已形成可继续梳理需求蓝图的产品概念。
+- [x] 所有 P0 用户故事均具备验收标准和 Sprint 切片。
 """
 
 
@@ -178,59 +183,7 @@ def app():
     os.unlink(db_path)
 
 
-def test_export_run_handoffs_returns_configured_lisa_targets(app):
-    with app.app_context():
-        run = create_agent_run("VALUE_DISCOVERY", "alex", "BLUEPRINT")
-        record_artifact_version(run.id, "BLUEPRINT", BLUEPRINT_MARKDOWN)
-
-        result = export_run_handoffs(run.id)
-
-    assert result["runId"] == run.id
-    assert result["sourceWorkflowId"] == "VALUE_DISCOVERY"
-    lisa_targets = [
-        (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
-        for handoff in result["handoffs"]
-        if handoff["targetAgentId"] == "lisa"
-    ]
-    assert lisa_targets == [
-        ("TEST_DESIGN", "CLARIFY", "lisa"),
-        ("REQ_REVIEW", "REVIEW", "lisa"),
-    ]
-    first = next(
-        handoff for handoff in result["handoffs"]
-        if handoff["targetWorkflowId"] == "TEST_DESIGN"
-    )
-    assert first["sourceStageId"] == "BLUEPRINT"
-    assert first["sourceArtifactVersion"] == 1
-    assert "VALUE_DISCOVERY/BLUEPRINT" in first["prompt"]
-    assert "TEST_DESIGN/CLARIFY" in first["prompt"]
-    assert "AI 测试资产管理平台" in first["prompt"]
-    assert "Alex 产出的需求蓝图" not in first["prompt"]
-
-
-def test_export_run_handoffs_includes_alex_user_story_breakdown_target(app):
-    with app.app_context():
-        run = create_agent_run("VALUE_DISCOVERY", "alex", "BLUEPRINT")
-        record_artifact_version(run.id, "BLUEPRINT", BLUEPRINT_MARKDOWN)
-
-        result = export_run_handoffs(run.id)
-
-    targets = [
-        (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
-        for handoff in result["handoffs"]
-    ]
-    assert ("USER_STORY_BREAKDOWN", "SCOPE", "alex") in targets
-    handoff = next(
-        item for item in result["handoffs"]
-        if item["targetWorkflowId"] == "USER_STORY_BREAKDOWN"
-    )
-    assert handoff["id"] == "value-discovery-blueprint-to-user-story-breakdown"
-    assert handoff["label"] == "从需求蓝图继续拆用户故事"
-    assert "VALUE_DISCOVERY/BLUEPRINT" in handoff["prompt"]
-    assert "USER_STORY_BREAKDOWN/SCOPE" in handoff["prompt"]
-
-
-def test_export_run_handoffs_returns_alex_value_discovery_target_for_product_concept(app):
+def test_export_idea_handoff_returns_value_discovery_target(app):
     with app.app_context():
         run = create_agent_run("IDEA_BRAINSTORM", "alex", "CONCEPT")
         record_artifact_version(run.id, "CONCEPT", CONCEPT_MARKDOWN)
@@ -240,103 +193,118 @@ def test_export_run_handoffs_returns_alex_value_discovery_target_for_product_con
     assert result["runId"] == run.id
     assert result["sourceWorkflowId"] == "IDEA_BRAINSTORM"
     assert [
-        (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
+        (
+            handoff["targetWorkflowId"],
+            handoff["targetStageId"],
+            handoff["targetAgentId"],
+        )
         for handoff in result["handoffs"]
-    ] == [
-        ("VALUE_DISCOVERY", "ELEVATOR", "alex"),
-    ]
+    ] == [("VALUE_DISCOVERY", "ELEVATOR", "alex")]
     handoff = result["handoffs"][0]
     assert handoff["id"] == "idea-brainstorm-concept-to-value-discovery"
     assert handoff["label"] == "从产品概念简报继续梳理需求蓝图"
-    assert handoff["sourceStageId"] == "CONCEPT"
-    assert handoff["sourceArtifactVersion"] == 1
     assert "IDEA_BRAINSTORM/CONCEPT" in handoff["prompt"]
     assert "VALUE_DISCOVERY/ELEVATOR" in handoff["prompt"]
     assert "产品概念简报" in handoff["prompt"]
 
 
-def test_export_target_workflow_handoffs_returns_upstream_requirement_blueprints(app):
+def test_export_run_handoffs_returns_story_breakdown_and_lisa_targets(app):
     with app.app_context():
-        source_run = create_agent_run("VALUE_DISCOVERY", "alex", "BLUEPRINT")
-        record_artifact_version(source_run.id, "BLUEPRINT", BLUEPRINT_MARKDOWN)
-        source_run_id = source_run.id
+        run = create_agent_run("VALUE_DISCOVERY", "alex", "BLUEPRINT")
+        record_artifact_version(run.id, "BLUEPRINT", BLUEPRINT_MARKDOWN)
 
-        result = handoff_service.export_target_workflow_handoffs(
-            "USER_STORY_BREAKDOWN",
-            "SCOPE",
+        result = export_run_handoffs(run.id)
+
+    assert result["runId"] == run.id
+    assert result["sourceWorkflowId"] == "VALUE_DISCOVERY"
+    assert [
+        (
+            handoff["targetWorkflowId"],
+            handoff["targetStageId"],
+            handoff["targetAgentId"],
         )
+        for handoff in result["handoffs"]
+    ] == [
+        ("STORY_BREAKDOWN", "INPUT_ANALYSIS", "alex"),
+        ("TEST_DESIGN", "CLARIFY", "lisa"),
+        ("REQ_REVIEW", "REVIEW", "lisa"),
+    ]
+    first = result["handoffs"][0]
+    assert first["sourceStageId"] == "BLUEPRINT"
+    assert first["sourceArtifactVersion"] == 1
+    assert first["sourceSummary"].startswith("AI 测试资产管理平台需求蓝图")
+    assert first["unconfirmedItems"] == []
+    assert first["targetInputChecklist"] == [
+        "复核来源版本 VALUE_DISCOVERY/BLUEPRINT v1",
+        "确认目标阶段 STORY_BREAKDOWN/INPUT_ANALYSIS 所需的需求、验收标准和约束均已覆盖",
+        "确认没有遗留未确认项后进入目标产物生成",
+    ]
+    assert first["id"] == "value-discovery-blueprint-to-story-breakdown"
+    assert "VALUE_DISCOVERY/BLUEPRINT" in first["prompt"]
+    assert "STORY_BREAKDOWN/INPUT_ANALYSIS" in first["prompt"]
+    assert "来源版本: VALUE_DISCOVERY/BLUEPRINT v1" in first["prompt"]
+    assert "关键摘要:" in first["prompt"]
+    assert "未确认项:" in first["prompt"]
+    assert "目标工作流输入:" in first["prompt"]
+    assert "AI 测试资产管理平台" in first["prompt"]
+    assert "Alex 产出的需求蓝图" not in first["prompt"]
 
-    assert result["targetWorkflowId"] == "USER_STORY_BREAKDOWN"
-    assert result["targetStageId"] == "SCOPE"
-    assert len(result["handoffs"]) == 1
-    handoff = result["handoffs"][0]
-    assert handoff["id"] == "value-discovery-blueprint-to-user-story-breakdown"
-    assert handoff["label"] == "从需求蓝图继续拆用户故事"
-    assert handoff["sourceRunId"] == source_run_id
-    assert handoff["sourceWorkflowId"] == "VALUE_DISCOVERY"
-    assert handoff["sourceStageId"] == "BLUEPRINT"
-    assert handoff["targetWorkflowId"] == "USER_STORY_BREAKDOWN"
-    assert handoff["targetStageId"] == "SCOPE"
-    assert handoff["targetAgentId"] == "alex"
-    assert "需求蓝图" in handoff["sourceArtifactSummary"]
+    lisa_targets = [
+        handoff
+        for handoff in result["handoffs"]
+        if handoff["targetAgentId"] == "lisa"
+    ]
+    assert [
+        (handoff["targetWorkflowId"], handoff["targetStageId"])
+        for handoff in lisa_targets
+    ] == [("TEST_DESIGN", "CLARIFY"), ("REQ_REVIEW", "REVIEW")]
 
-
-def test_export_target_workflow_handoffs_returns_upstream_product_concepts(app):
+def test_export_story_breakdown_handoffs_returns_lisa_targets(app):
     with app.app_context():
-        source_run = create_agent_run("IDEA_BRAINSTORM", "alex", "CONCEPT")
-        record_artifact_version(source_run.id, "CONCEPT", CONCEPT_MARKDOWN)
-        source_run_id = source_run.id
+        run = create_agent_run("STORY_BREAKDOWN", "alex", "SPRINT_PLAN")
+        record_artifact_version(run.id, "SPRINT_PLAN", STORY_BREAKDOWN_MARKDOWN)
 
-        result = handoff_service.export_target_workflow_handoffs(
-            "VALUE_DISCOVERY",
-            "ELEVATOR",
+        result = export_run_handoffs(run.id)
+
+    assert result["runId"] == run.id
+    assert result["sourceWorkflowId"] == "STORY_BREAKDOWN"
+    assert [
+        (
+            handoff["targetWorkflowId"],
+            handoff["targetStageId"],
+            handoff["targetAgentId"],
         )
-
-    assert result["targetWorkflowId"] == "VALUE_DISCOVERY"
-    assert result["targetStageId"] == "ELEVATOR"
-    assert len(result["handoffs"]) == 1
-    handoff = result["handoffs"][0]
-    assert handoff["id"] == "idea-brainstorm-concept-to-value-discovery"
-    assert handoff["label"] == "从产品概念简报继续梳理需求蓝图"
-    assert handoff["sourceRunId"] == source_run_id
-    assert handoff["sourceWorkflowId"] == "IDEA_BRAINSTORM"
-    assert handoff["sourceStageId"] == "CONCEPT"
-    assert handoff["sourceArtifactVersion"] == 1
-    assert handoff["sourceArtifactDigest"].startswith("sha256:")
-    assert len(handoff["sourceArtifactDigest"]) == len("sha256:") + 64
-    assert "产品概念简报" in handoff["sourceArtifactSummary"]
-    assert handoff["targetWorkflowId"] == "VALUE_DISCOVERY"
-    assert handoff["targetStageId"] == "ELEVATOR"
-    assert handoff["targetAgentId"] == "alex"
-    assert "IDEA_BRAINSTORM/CONCEPT" in handoff["prompt"]
-    assert "VALUE_DISCOVERY/ELEVATOR" in handoff["prompt"]
+        for handoff in result["handoffs"]
+    ] == [
+        ("TEST_DESIGN", "CLARIFY", "lisa"),
+        ("REQ_REVIEW", "REVIEW", "lisa"),
+    ]
+    first = result["handoffs"][0]
+    assert first["sourceStageId"] == "SPRINT_PLAN"
+    assert first["sourceArtifactVersion"] == 1
+    assert "STORY_BREAKDOWN/SPRINT_PLAN" in first["prompt"]
+    assert "TEST_DESIGN/CLARIFY" in first["prompt"]
+    assert "US-001" in first["prompt"]
+    assert "AC-001" in first["prompt"]
+    assert "模型直写 Markdown 绕过 renderer" in first["prompt"]
+    assert "Alex 产出的用户故事拆解包" not in first["prompt"]
 
 
-def test_export_target_workflow_handoffs_excludes_runs_without_source_artifact(app):
+def test_export_run_handoffs_extracts_unconfirmed_items_for_review(app):
+    markdown = BLUEPRINT_MARKDOWN.replace(
+        "| 需求 | F-001 | 自动生成测试策略和用例 | P0 需求 | 需求评审 / 测试设计 | 已确认 |",
+        "| 需求 | F-001 | 自动生成测试策略和用例 | P0 需求 | 需求评审 / 测试设计 | 待确认 |",
+    )
     with app.app_context():
-        create_agent_run("IDEA_BRAINSTORM", "alex", "DIVERGE")
+        run = create_agent_run("VALUE_DISCOVERY", "alex", "BLUEPRINT")
+        record_artifact_version(run.id, "BLUEPRINT", markdown)
 
-        result = handoff_service.export_target_workflow_handoffs(
-            "VALUE_DISCOVERY",
-            "ELEVATOR",
-        )
+        result = export_run_handoffs(run.id)
 
-    assert result["handoffs"] == []
-
-
-def test_export_target_workflow_handoffs_returns_empty_without_inbound_handoff(app):
-    with app.app_context():
-        source_run = create_agent_run("IDEA_BRAINSTORM", "alex", "CONCEPT")
-        record_artifact_version(source_run.id, "CONCEPT", CONCEPT_MARKDOWN)
-
-        result = handoff_service.export_target_workflow_handoffs(
-            "INCIDENT_REVIEW",
-            "TIMELINE",
-        )
-
-    assert result["targetWorkflowId"] == "INCIDENT_REVIEW"
-    assert result["targetStageId"] == "TIMELINE"
-    assert result["handoffs"] == []
+    first = result["handoffs"][0]
+    assert first["unconfirmedItems"] == ["需求 F-001: 自动生成测试策略和用例"]
+    assert "处理 1 个未确认项后再进入目标产物生成" in first["targetInputChecklist"]
+    assert "- 需求 F-001: 自动生成测试策略和用例" in first["prompt"]
 
 
 def test_export_run_handoffs_returns_empty_without_required_artifact(app):
@@ -346,6 +314,26 @@ def test_export_run_handoffs_returns_empty_without_required_artifact(app):
         result = export_run_handoffs(run.id)
 
     assert result["handoffs"] == []
+
+
+def test_story_breakdown_exports_lisa_handoff_targets(app):
+    with app.app_context():
+        run = create_agent_run("STORY_BREAKDOWN", "alex", "SPRINT_PLAN")
+        record_artifact_version(
+            run.id,
+            "SPRINT_PLAN",
+            "# 用户故事拆解交付包\n\n## Lisa Handoff 输入\nStory 包内容",
+        )
+
+        result = export_run_handoffs(run.id)
+
+    assert [
+        (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
+        for handoff in result["handoffs"]
+    ] == [
+        ("TEST_DESIGN", "CLARIFY", "lisa"),
+        ("REQ_REVIEW", "REVIEW", "lisa"),
+    ]
 
 
 def test_export_run_handoffs_returns_empty_for_non_source_workflow(app):
@@ -386,7 +374,7 @@ def test_start_workflow_handoff_creates_target_run_with_handoff_prompt(app):
     ]
 
 
-def test_start_alex_workflow_handoff_persists_source_trace_in_target_message(app):
+def test_start_idea_handoff_creates_value_discovery_target_run(app):
     with app.app_context():
         source_run = create_agent_run("IDEA_BRAINSTORM", "alex", "CONCEPT")
         record_artifact_version(source_run.id, "CONCEPT", CONCEPT_MARKDOWN)
@@ -402,38 +390,11 @@ def test_start_alex_workflow_handoff_persists_source_trace_in_target_message(app
     assert result["targetWorkflowId"] == "VALUE_DISCOVERY"
     assert result["targetStageId"] == "ELEVATOR"
     assert result["targetAgentId"] == "alex"
-    assert result["sourceArtifactDigest"].startswith("sha256:")
-    target_message = target_snapshot["messages"][0]["content"]
-    assert f"源 run: {source_run_id}" in target_message
-    assert "源 artifact version: 1" in target_message
-    assert f"源 artifact digest: {result['sourceArtifactDigest']}" in target_message
-    assert "IDEA_BRAINSTORM/CONCEPT" in target_message
-    assert "VALUE_DISCOVERY/ELEVATOR" in target_message
-
-
-def test_start_user_story_breakdown_handoff_persists_source_trace_in_target_message(app):
-    with app.app_context():
-        source_run = create_agent_run("VALUE_DISCOVERY", "alex", "BLUEPRINT")
-        record_artifact_version(source_run.id, "BLUEPRINT", BLUEPRINT_MARKDOWN)
-        source_run_id = source_run.id
-
-        result = start_workflow_handoff(
-            source_run.id,
-            "value-discovery-blueprint-to-user-story-breakdown",
-        )
-        target_snapshot = get_run_snapshot(result["targetRunId"])
-
-    assert result["sourceRunId"] == source_run_id
-    assert result["targetWorkflowId"] == "USER_STORY_BREAKDOWN"
-    assert result["targetStageId"] == "SCOPE"
-    assert result["targetAgentId"] == "alex"
-    assert result["sourceArtifactDigest"].startswith("sha256:")
-    target_message = target_snapshot["messages"][0]["content"]
-    assert f"源 run: {source_run_id}" in target_message
-    assert "源 artifact version: 1" in target_message
-    assert f"源 artifact digest: {result['sourceArtifactDigest']}" in target_message
-    assert "VALUE_DISCOVERY/BLUEPRINT" in target_message
-    assert "USER_STORY_BREAKDOWN/SCOPE" in target_message
+    assert target_snapshot["run"]["workflowId"] == "VALUE_DISCOVERY"
+    assert target_snapshot["run"]["agentId"] == "alex"
+    assert target_snapshot["run"]["currentStageId"] == "ELEVATOR"
+    assert "IDEA_BRAINSTORM/CONCEPT" in target_snapshot["messages"][0]["content"]
+    assert "VALUE_DISCOVERY/ELEVATOR" in target_snapshot["messages"][0]["content"]
 
 
 def test_start_workflow_handoff_rejects_unknown_candidate(app):

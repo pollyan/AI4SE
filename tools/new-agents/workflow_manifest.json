@@ -11,11 +11,11 @@
       "label": "从产品概念简报继续梳理需求蓝图"
     },
     {
-      "id": "value-discovery-blueprint-to-user-story-breakdown",
+      "id": "value-discovery-blueprint-to-story-breakdown",
       "sourceWorkflowId": "VALUE_DISCOVERY",
       "sourceStageId": "BLUEPRINT",
-      "targetWorkflowId": "USER_STORY_BREAKDOWN",
-      "targetStageId": "SCOPE",
+      "targetWorkflowId": "STORY_BREAKDOWN",
+      "targetStageId": "INPUT_ANALYSIS",
       "targetAgentId": "alex",
       "promptTemplateId": "source-artifact-handoff",
       "label": "从需求蓝图继续拆用户故事"
@@ -34,6 +34,26 @@
       "id": "value-discovery-blueprint-to-req-review",
       "sourceWorkflowId": "VALUE_DISCOVERY",
       "sourceStageId": "BLUEPRINT",
+      "targetWorkflowId": "REQ_REVIEW",
+      "targetStageId": "REVIEW",
+      "targetAgentId": "lisa",
+      "promptTemplateId": "source-artifact-handoff",
+      "label": "交给 Lisa 做需求评审"
+    },
+    {
+      "id": "story-breakdown-sprint-plan-to-test-design",
+      "sourceWorkflowId": "STORY_BREAKDOWN",
+      "sourceStageId": "SPRINT_PLAN",
+      "targetWorkflowId": "TEST_DESIGN",
+      "targetStageId": "CLARIFY",
+      "targetAgentId": "lisa",
+      "promptTemplateId": "source-artifact-handoff",
+      "label": "交给 Lisa 做测试设计"
+    },
+    {
+      "id": "story-breakdown-sprint-plan-to-req-review",
+      "sourceWorkflowId": "STORY_BREAKDOWN",
+      "sourceStageId": "SPRINT_PLAN",
       "targetWorkflowId": "REQ_REVIEW",
       "targetStageId": "REVIEW",
       "targetAgentId": "lisa",
@@ -83,6 +103,7 @@
           "artifactContract": {
             "requiredHeadings": [
               "# 需求分析文档",
+              "## 文档信息",
               "## 1. 需求事实清单",
               "## 2. 被测系统与边界",
               "## 3. 业务规则与数据状态",
@@ -91,7 +112,6 @@
               "## 6. 隐式质量需求",
               "## 7. 后续测试设计输入",
               "## 8. 阶段门禁",
-              "## 附录：文档信息",
               "事实 ID",
               "证据等级",
               "阻断性",
@@ -103,12 +123,20 @@
             "requiredMermaidDiagrams": [
               "flowchart"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "test-design.clarify.baseline"
+          ]
         },
         {
           "id": "STRATEGY",
           "name": "策略制定",
           "promptTemplateId": "test_design.strategy",
+          "methodIds": [
+            "fmea",
+            "test_pyramid"
+          ],
           "artifactContract": {
             "requiredHeadings": [
               "# 测试策略蓝图",
@@ -137,7 +165,11 @@
             "requiredStructuredVisuals": [
               "risk-board"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "test-design.strategy.baseline"
+          ]
         },
         {
           "id": "CASES",
@@ -179,8 +211,8 @@
             "modelOutputRules": [
               "case_statistics 由后端根据 case_groups 计算，模型不要输出",
               "case_groups[].cases[].case_id 必须唯一",
-              "automation_candidates.case_id 只能引用 case_groups[].cases[].case_id 中已存在的 case_id",
-              "coverage_trace.covered_cases 只能引用 case_groups[].cases[].case_id 中已存在的 case_id",
+              "automation_candidates.case_id 只能引用已存在的 case_id",
+              "coverage_trace.covered_cases 只能引用已存在的 case_id",
               "stage_gate 至少包含一个 checked=true"
             ],
             "forbiddenOutputs": [
@@ -193,7 +225,11 @@
               "右侧测试用例集",
               "ai4se-visual traceability-matrix"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "test-design.cases.baseline"
+          ]
         },
         {
           "id": "DELIVERY",
@@ -202,24 +238,27 @@
           "artifactContract": {
             "requiredHeadings": [
               "# 测试设计文档",
-              "## 1. 执行摘要",
-              "## 2. 需求分析摘要",
-              "## 3. 测试策略摘要",
-              "## 4. 测试用例摘要",
-              "## 5. 覆盖地图",
-              "## 6. 开放风险",
-              "## 7. 交付验收清单",
-              "## 8. 签署确认",
-              "## 9. 变更记录",
-              "## 附录：文档信息"
+              "## 1. 文档信息",
+              "## 2. 执行摘要",
+              "## 3. 需求分析摘要",
+              "## 4. 测试策略摘要",
+              "## 5. 测试用例摘要",
+              "## 6. 覆盖地图",
+              "## 7. 开放风险",
+              "## 8. 交付验收清单",
+              "## 9. 签署确认",
+              "## 10. 变更记录"
             ]
           },
           "visualContract": {
             "requiredStructuredVisuals": [
-              "coverage-map",
-              "traceability-matrix"
+              "coverage-map"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "test-design.delivery.baseline"
+          ]
         }
       ],
       "onboarding": {
@@ -273,6 +312,7 @@
           "artifactContract": {
             "requiredHeadings": [
               "# 需求评审问题清单",
+              "## 评审信息",
               "## 评审范围与不评审范围",
               "## 需求质量总览",
               "## 需求质量结构图",
@@ -280,7 +320,6 @@
               "## 按维度问题清单",
               "## 修订建议",
               "## 阶段门禁",
-              "## 附录：评审信息",
               "评审维度",
               "问题描述",
               "优先级",
@@ -300,7 +339,11 @@
             "requiredStructuredVisuals": [
               "score-matrix"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "req-review.review.baseline"
+          ]
         },
         {
           "id": "REPORT",
@@ -333,7 +376,11 @@
             "requiredStructuredVisuals": [
               "priority-board"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "req-review.report.baseline"
+          ]
         }
       ],
       "onboarding": {
@@ -405,7 +452,11 @@
             "requiredMermaidDiagrams": [
               "timeline"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "incident-review.timeline.baseline"
+          ]
         },
         {
           "id": "ROOT_CAUSE",
@@ -434,12 +485,19 @@
             "requiredStructuredVisuals": [
               "cause-map"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "incident-review.root-cause.baseline"
+          ]
         },
         {
           "id": "IMPROVEMENT",
           "name": "改进报告",
           "promptTemplateId": "incident_review.improvement",
+          "methodIds": [
+            "capa"
+          ],
           "artifactContract": {
             "requiredHeadings": [
               "# 故障复盘报告",
@@ -481,7 +539,11 @@
             "requiredStructuredVisuals": [
               "action-board"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "incident-review.improvement.baseline"
+          ]
         }
       ],
       "onboarding": {
@@ -552,7 +614,11 @@
             "requiredMermaidDiagrams": [
               "mindmap"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "idea-brainstorm.define.baseline"
+          ]
         },
         {
           "id": "DIVERGE",
@@ -575,12 +641,19 @@
             "requiredMermaidDiagrams": [
               "mindmap"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "idea-brainstorm.diverge.baseline"
+          ]
         },
         {
           "id": "CONVERGE",
           "name": "收敛聚焦",
           "promptTemplateId": "idea_brainstorm.converge",
+          "methodIds": [
+            "ice"
+          ],
           "artifactContract": {
             "requiredHeadings": [
               "# 收敛聚焦",
@@ -612,7 +685,7 @@
           "artifactDataContract": {
             "modelOutputRules": [
               "ice_evaluations.idea_id 必须唯一",
-              "ice_evaluations.rank 必须唯一",
+              "rank 必须唯一",
               "impact、confidence、effort 必须是 1 到 5 的整数",
               "ice_score 必须等于 impact * confidence / effort",
               "decision_matrix.recommended_idea_id、validation_experiments.idea_ids 和 merge_paths.source_idea_ids 只能引用已存在的 idea_id",
@@ -629,7 +702,11 @@
               "右侧收敛聚焦产物",
               "Mermaid quadrantChart"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "idea-brainstorm.converge.baseline"
+          ]
         },
         {
           "id": "CONCEPT",
@@ -657,7 +734,11 @@
             "requiredStructuredVisuals": [
               "mvp-map"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "idea-brainstorm.concept.baseline"
+          ]
         }
       ],
       "onboarding": {
@@ -675,16 +756,16 @@
       "agentId": "alex",
       "slug": "value-discovery",
       "name": "需求蓝图梳理",
-      "description": "帮助用户将已有产品方向梳理成清晰的需求蓝图，明确价值定位、目标用户、核心场景和可验证需求。",
+      "description": "帮助用户将已有的产品方向系统化梳理，通过价值定位、用户画像、旅程分析，输出结构化需求蓝图。",
       "listing": {
         "name": "需求蓝图梳理",
-        "description": "从已有产品方向出发，梳理价值定位、目标用户、核心场景和可交接需求蓝图。",
+        "description": "系统化梳理产品方向的价值定位、目标用户和核心场景，输出结构化需求蓝图。",
         "icon": "Compass",
         "preview": {
           "suitableFor": [
             "已有产品方向但价值、用户和场景还不清晰",
             "需要把机会梳理成需求蓝图",
-            "需要为后续用户故事拆解或评审准备输入"
+            "需要为后续 Lisa 测试设计或需求评审准备输入"
           ],
           "notSuitableFor": [
             "只是早期发散创意，还没有明确方向",
@@ -698,7 +779,7 @@
           "expectedOutputs": [
             "价值定位和目标用户画像",
             "用户旅程、机会评分和验证实验",
-            "结构化需求蓝图与后续工作流输入"
+            "结构化需求蓝图与 Lisa handoff 输入"
           ],
           "sampleInput": "我们想做 AI 测试用例生成工具，请帮我梳理价值定位和需求蓝图。"
         }
@@ -706,7 +787,7 @@
       "stages": [
         {
           "id": "ELEVATOR",
-          "name": "明确价值定位",
+          "name": "价值定位",
           "promptTemplateId": "value_discovery.elevator",
           "artifactContract": {
             "requiredHeadings": [
@@ -733,11 +814,15 @@
             "requiredStructuredVisuals": [
               "score-matrix"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "value-discovery.elevator.baseline"
+          ]
         },
         {
           "id": "PERSONA",
-          "name": "梳理目标用户",
+          "name": "用户画像",
           "promptTemplateId": "value_discovery.persona",
           "artifactContract": {
             "requiredHeadings": [
@@ -756,12 +841,21 @@
               "证据等级",
               "验证状态"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "value-discovery.persona.baseline"
+          ]
         },
         {
           "id": "JOURNEY",
-          "name": "梳理用户旅程",
+          "name": "用户旅程",
           "promptTemplateId": "value_discovery.journey",
+          "methodIds": [
+            "jtbd",
+            "rice",
+            "kano"
+          ],
           "artifactContract": {
             "requiredHeadings": [
               "# 用户旅程分析",
@@ -794,15 +888,20 @@
             "requiredStructuredVisuals": [
               "journey-map"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "value-discovery.journey.baseline"
+          ]
         },
         {
           "id": "BLUEPRINT",
-          "name": "生成需求蓝图",
+          "name": "需求蓝图",
           "promptTemplateId": "value_discovery.blueprint",
           "artifactContract": {
             "requiredHeadings": [
               "需求蓝图",
+              "## 文档信息",
               "## 1. 产品概述",
               "### 1.1 产品愿景",
               "### 1.2 定位声明",
@@ -825,7 +924,6 @@
               "## 10. 风险评估",
               "## 11. Lisa Handoff 输入",
               "## 12. 阶段门禁",
-              "## 附录：文档信息",
               "可测试性等级",
               "owner",
               "状态"
@@ -835,11 +933,15 @@
             "requiredStructuredVisuals": [
               "roadmap"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "value-discovery.blueprint.baseline"
+          ]
         }
       ],
       "onboarding": {
-        "welcomeMessage": "你好！我是 Alex，需求蓝图梳理顾问。告诉我你已有的产品方向，我会帮你把目标用户、核心场景、价值定位和需求蓝图梳理清楚。",
+        "welcomeMessage": "你好！我是 Alex，需求蓝图梳理顾问。告诉我你想做的产品方向，我会用系统化的方法帮你梳理清楚它的场景、用户和核心价值。",
         "starterPrompts": [
           "我们团队想做一个面向中小企业的智能客户管理系统，初步方向已确定，但还没想清楚核心场景",
           "我们计划用 AI 帮测试工程师自动生成测试用例，想验证一下这个方向的价值",
@@ -848,54 +950,60 @@
         "inputPlaceholder": "描述你已有的产品方向或想法..."
       }
     },
-    "USER_STORY_BREAKDOWN": {
-      "id": "USER_STORY_BREAKDOWN",
+    "STORY_BREAKDOWN": {
+      "id": "STORY_BREAKDOWN",
       "agentId": "alex",
-      "slug": "user-story-breakdown",
+      "slug": "story-breakdown",
       "name": "用户故事拆解",
-      "description": "把需求蓝图拆成用户故事地图、MVP 切片、用户故事卡片和可交接故事清单。",
+      "description": "把 PRD、需求蓝图或产品想法拆成 Epic、User Story、验收标准、依赖风险和 Sprint 切片",
       "listing": {
         "name": "用户故事拆解",
-        "description": "从需求蓝图或新话题出发，拆出可独立交付给后续 AI Coding 的用户故事卡片。",
+        "description": "将需求或蓝图拆解为可评审、可测试、可排期的用户故事包，并可交接给 Lisa 做测试设计或需求评审。",
         "icon": "ListChecks",
         "preview": {
           "suitableFor": [
-            "已经有需求蓝图，需要拆成用户故事",
-            "需要识别 MVP slice 和后续 release slice",
-            "需要准备可交给 AI Coding 的单故事需求输入"
+            "已有 PRD 或需求蓝图，需要拆成研发可执行 backlog",
+            "需要为 P0/P1/P2 需求补齐用户故事和验收标准",
+            "需要把产品切片交给 Lisa 继续做测试设计或需求评审"
           ],
           "notSuitableFor": [
-            "只有模糊想法，还没有产品方向或需求蓝图",
-            "需要直接生成开发任务、代码结构或实现计划"
+            "只想做竞品调研或市场定位",
+            "完全没有产品目标、用户场景或需求输入"
           ],
           "requiredInputs": [
-            "需求蓝图、核心需求或产品范围说明",
-            "目标用户、关键场景和业务规则",
-            "MVP 约束、优先级或交付边界"
+            "PRD、需求蓝图、产品想法或变更背景",
+            "目标用户、业务目标和关键约束",
+            "已知范围边界、依赖、风险或交付节奏"
           ],
           "expectedOutputs": [
-            "拆分范围和需求追溯索引",
-            "用户故事地图与 MVP slice",
-            "Ready / Not ready 用户故事卡片和 handoff 清单"
+            "Epic Map 与 User Story Backlog",
+            "验收标准、依赖风险和 Sprint 切片建议",
+            "可交给 Lisa 的测试设计 / 需求评审输入"
           ],
-          "sampleInput": "基于这份需求蓝图，帮我拆成用户故事地图和可交给 AI Coding 的故事卡。"
+          "sampleInput": "请把这份 AI 测试资产管理平台 PRD 拆成 Epic、用户故事、验收标准和两轮 Sprint 计划。"
         }
       },
       "stages": [
         {
-          "id": "SCOPE",
-          "name": "校准拆分范围",
-          "promptTemplateId": "user_story_breakdown.scope",
+          "id": "INPUT_ANALYSIS",
+          "name": "输入分析",
+          "promptTemplateId": "story_breakdown.input_analysis",
           "artifactContract": {
             "requiredHeadings": [
-              "# 用户故事拆解文档",
-              "## 1. 拆分范围",
-              "## 2. 需求追溯索引",
-              "## 3. 不拆范围",
-              "## 4. 阻塞问题",
-              "## 5. 阶段门禁",
-              "需求 ID",
-              "优先级",
+              "# 用户故事拆解包",
+              "## 输入分析",
+              "## Epic Map",
+              "## User Story Backlog",
+              "## 验收标准",
+              "## 依赖与风险",
+              "## Sprint 切片建议",
+              "## Lisa Handoff 输入",
+              "## 阶段门禁",
+              "Story ID",
+              "Epic ID",
+              "AC ID",
+              "Sprint",
+              "可测试性",
               "状态"
             ]
           },
@@ -903,86 +1011,274 @@
             "requiredMermaidDiagrams": [
               "flowchart"
             ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "story-breakdown.input-analysis.baseline"
+          ]
         },
         {
-          "id": "STORY_MAP",
-          "name": "绘制故事地图",
-          "promptTemplateId": "user_story_breakdown.story_map",
+          "id": "EPIC_MAPPING",
+          "name": "Epic 映射",
+          "promptTemplateId": "story_breakdown.epic_mapping",
           "artifactContract": {
             "requiredHeadings": [
-              "# 用户故事拆解文档",
-              "## 1. 用户活动主干",
-              "## 2. 用户任务流",
-              "## 3. 用户故事地图",
-              "## 4. MVP Slice",
-              "## 5. Release Slice",
-              "## 6. 阶段门禁",
-              "活动 ID",
-              "任务 ID",
+              "# 用户故事拆解包",
+              "## 输入分析",
+              "## Epic Map",
+              "## User Story Backlog",
+              "## 验收标准",
+              "## 依赖与风险",
+              "## Sprint 切片建议",
+              "## Lisa Handoff 输入",
+              "## 阶段门禁",
               "Story ID",
-              "MVP"
+              "Epic ID",
+              "AC ID",
+              "Sprint",
+              "可测试性",
+              "状态"
+            ]
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "story-breakdown.epic-mapping.baseline"
+          ]
+        },
+        {
+          "id": "STORY_BACKLOG",
+          "name": "Story Backlog",
+          "promptTemplateId": "story_breakdown.story_backlog",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 用户故事拆解包",
+              "## 输入分析",
+              "## Epic Map",
+              "## User Story Backlog",
+              "## 验收标准",
+              "## 依赖与风险",
+              "## Sprint 切片建议",
+              "## Lisa Handoff 输入",
+              "## 阶段门禁",
+              "Story ID",
+              "Epic ID",
+              "AC ID",
+              "Sprint",
+              "可测试性",
+              "状态"
+            ]
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "story-breakdown.story-backlog.baseline"
+          ]
+        },
+        {
+          "id": "SPRINT_PLAN",
+          "name": "Sprint 计划",
+          "promptTemplateId": "story_breakdown.sprint_plan",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# 用户故事拆解包",
+              "## 输入分析",
+              "## Epic Map",
+              "## User Story Backlog",
+              "## 验收标准",
+              "## 依赖与风险",
+              "## Sprint 切片建议",
+              "## Lisa Handoff 输入",
+              "## 阶段门禁",
+              "Story ID",
+              "Epic ID",
+              "AC ID",
+              "Sprint",
+              "可测试性",
+              "状态"
             ]
           },
           "visualContract": {
-            "requiredMermaidDiagrams": [
-              "flowchart"
+            "requiredStructuredVisuals": [
+              "story-map"
             ]
-          }
-        },
-        {
-          "id": "STORIES",
-          "name": "编写故事卡片",
-          "promptTemplateId": "user_story_breakdown.stories",
-          "artifactContract": {
-            "requiredHeadings": [
-              "# 用户故事拆解文档",
-              "## 1. 故事拆分原则",
-              "## 2. 用户故事卡片",
-              "## 3. Ready Stories",
-              "## 4. Not Ready Stories",
-              "## 5. 开放问题",
-              "## 6. 阶段门禁",
-              "Story ID",
-              "作为",
-              "我想要",
-              "以便",
-              "验收标准",
-              "来源需求",
-              "状态"
-            ]
-          }
-        },
-        {
-          "id": "HANDOFF",
-          "name": "准备故事交接",
-          "promptTemplateId": "user_story_breakdown.handoff",
-          "artifactContract": {
-            "requiredHeadings": [
-              "# 单故事 Handoff 清单",
-              "## 1. Ready Story 总览",
-              "## 2. 单故事需求包",
-              "## 3. 上游追溯",
-              "## 4. Not Ready 阻塞项",
-              "## 5. AI Coding 输入边界",
-              "## 6. 阶段门禁",
-              "storyId",
-              "requirementId",
-              "acceptanceCriteria",
-              "businessRules",
-              "openQuestions"
-            ]
-          }
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "story-breakdown.sprint-plan.baseline"
+          ]
         }
       ],
       "onboarding": {
-        "welcomeMessage": "你好！我是 Alex，用户故事拆解顾问。你可以直接描述需求范围，也可以从已有需求蓝图继续，我会帮你拆出用户故事地图、MVP 切片和可交接的故事卡片。",
+        "welcomeMessage": "你好！我是 Alex，产品用户故事拆解顾问。给我 PRD、需求蓝图或产品想法，我会帮你拆成可评审、可测试、可排期的用户故事包。",
         "starterPrompts": [
-          "我有一份 AI 测试设计助手需求蓝图，帮我拆成用户故事",
-          "请把会员权益需求拆成 MVP 用户故事和后续版本故事",
-          "我想把客户反馈整理工具的需求拆成能交给 AI Coding 的故事卡"
+          "请把这份 PRD 拆成 Epic、用户故事、验收标准和两轮 Sprint 计划",
+          "我们已经有需求蓝图，想交给研发评审前先整理成 Backlog",
+          "请把这个产品想法拆成 Lisa 可以继续做测试设计的用户故事包"
         ],
-        "inputPlaceholder": "粘贴需求蓝图、核心需求或产品范围..."
+        "inputPlaceholder": "粘贴 PRD、需求蓝图或产品想法..."
+      }
+    },
+    "PRD_REVIEW": {
+      "id": "PRD_REVIEW",
+      "agentId": "alex",
+      "slug": "prd-review",
+      "name": "PRD 质量评审与补全",
+      "description": "帮助产品经理评审已有 PRD 或需求草案，识别质量问题、补齐缺口，并输出可复审的修订蓝图。",
+      "listing": {
+        "name": "PRD 质量评审与补全",
+        "description": "评审已有 PRD 的完整性、一致性、可测试性和风险缺口，输出补全动作与修订蓝图。",
+        "icon": "ClipboardCheck",
+        "preview": {
+          "suitableFor": [
+            "已有 PRD、Epic 或需求草案，需要系统化质量评审",
+            "需要把需求缺口转成可执行补全任务和复审条件",
+            "需要为后续 Lisa 需求评审或测试设计准备高质量输入"
+          ],
+          "notSuitableFor": [
+            "只有早期产品想法，还没有形成需求草案",
+            "需要从零发散产品方向或价值定位"
+          ],
+          "requiredInputs": [
+            "PRD、需求草案、Epic 或用户故事文本",
+            "业务目标、目标用户、范围和关键约束",
+            "已有验收标准、风险、非功能要求或待确认问题"
+          ],
+          "expectedOutputs": [
+            "PRD 输入盘点和缺失信息清单",
+            "质量评审问题、补全动作和复审条件",
+            "PRD 修订蓝图与 Lisa handoff 输入"
+          ],
+          "sampleInput": "这是我们会员权限管理 PRD 草案，请帮我评审质量问题并给出补全和修订蓝图。"
+        }
+      },
+      "stages": [
+        {
+          "id": "INVENTORY",
+          "name": "输入盘点",
+          "promptTemplateId": "prd_review.inventory",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# PRD 输入盘点",
+              "## 文档信息",
+              "## PRD 目标与范围",
+              "## 输入事实清单",
+              "## 用户与场景",
+              "## 现有验收材料",
+              "## 缺失信息清单",
+              "## 阶段门禁",
+              "证据等级",
+              "状态"
+            ]
+          },
+          "visualContract": {
+            "requiredMermaidDiagrams": [
+              "mindmap"
+            ]
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "prd-review.inventory.baseline"
+          ]
+        },
+        {
+          "id": "QUALITY_AUDIT",
+          "name": "质量评审",
+          "promptTemplateId": "prd_review.quality_audit",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# PRD 质量评审",
+              "## 文档信息",
+              "## PRD 目标与范围",
+              "## 质量评审摘要",
+              "## 质量评分矩阵",
+              "## 问题清单",
+              "## 风险影响",
+              "## 阶段门禁",
+              "评审维度",
+              "严重级别",
+              "阻断性",
+              "证据"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "score-matrix"
+            ]
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "prd-review.quality-audit.baseline"
+          ]
+        },
+        {
+          "id": "COMPLETION_PLAN",
+          "name": "补全建议",
+          "promptTemplateId": "prd_review.completion_plan",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# PRD 补全建议",
+              "## 文档信息",
+              "## PRD 目标与范围",
+              "## 质量评审摘要",
+              "## 补全任务清单",
+              "## 推荐 PRD 结构",
+              "## 验证方式与复审条件",
+              "## 阶段门禁",
+              "补全动作",
+              "优先级",
+              "负责人",
+              "复审条件"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "action-board"
+            ]
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "prd-review.completion-plan.baseline"
+          ]
+        },
+        {
+          "id": "REVISION_BLUEPRINT",
+          "name": "修订蓝图",
+          "promptTemplateId": "prd_review.revision_blueprint",
+          "artifactContract": {
+            "requiredHeadings": [
+              "# PRD 修订蓝图",
+              "## 文档信息",
+              "## PRD 目标与范围",
+              "## 质量评审摘要",
+              "## 补全任务清单",
+              "## 推荐 PRD 结构",
+              "## 核心需求改写",
+              "## 验收标准与可测试性",
+              "## Lisa Handoff 输入",
+              "## 复审条件",
+              "## 阶段门禁",
+              "可测试性等级",
+              "状态"
+            ]
+          },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "roadmap"
+            ]
+          },
+          "promptTemplateVersion": "2026.06.24.1",
+          "regressionSampleIds": [
+            "prd-review.revision-blueprint.baseline"
+          ]
+        }
+      ],
+      "onboarding": {
+        "welcomeMessage": "你好！我是 Alex，PRD 质量评审顾问。把你的 PRD 或需求草案发给我，我会帮你识别质量问题、补齐缺口，并整理成可复审的修订蓝图。",
+        "starterPrompts": [
+          "这是我们的会员权限管理 PRD 草案，请帮我评审并补全",
+          "我有一组用户故事和验收标准，想检查是否足够可测试",
+          "请帮我把这份需求草案整理成可交给 Lisa 做测试设计的版本"
+        ],
+        "inputPlaceholder": "粘贴 PRD、需求草案、Epic 或用户故事..."
       }
     }
   }

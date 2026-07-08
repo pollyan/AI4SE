@@ -206,13 +206,13 @@ def new_agents_page(
                     "prompt": "请基于 Alex 的价值蓝图继续做 Lisa 需求评审。",
                 },
                 {
-                    "id": "value-discovery-blueprint-to-user-story-breakdown",
+                    "id": "value-discovery-blueprint-to-story-breakdown",
                     "label": "从需求蓝图继续拆用户故事",
                     "sourceWorkflowId": "VALUE_DISCOVERY",
                     "sourceStageId": "BLUEPRINT",
                     "sourceArtifactVersion": 1,
-                    "targetWorkflowId": "USER_STORY_BREAKDOWN",
-                    "targetStageId": "SCOPE",
+                    "targetWorkflowId": "STORY_BREAKDOWN",
+                    "targetStageId": "INPUT_ANALYSIS",
                     "targetAgentId": "alex",
                     "prompt": (
                         "请基于 Alex 的需求蓝图继续拆用户故事。\n\n"
@@ -240,21 +240,21 @@ def new_agents_page(
 
     def route_start_handoff(route: Route) -> None:
         handoff_id = handoff_id_from_url(route.request.url)
-        if handoff_id == "value-discovery-blueprint-to-user-story-breakdown":
+        if handoff_id == "value-discovery-blueprint-to-story-breakdown":
             route.fulfill(
                 status=200,
                 content_type="application/json",
                 body=json.dumps(
                     {
-                        "id": "value-discovery-blueprint-to-user-story-breakdown",
+                        "id": "value-discovery-blueprint-to-story-breakdown",
                         "label": "从需求蓝图继续拆用户故事",
                         "sourceRunId": "mock-run-value_discovery",
                         "sourceWorkflowId": "VALUE_DISCOVERY",
                         "sourceStageId": "BLUEPRINT",
                         "sourceArtifactVersion": 1,
                         "targetRunId": "mock-run-user_story_breakdown-handoff",
-                        "targetWorkflowId": "USER_STORY_BREAKDOWN",
-                        "targetStageId": "SCOPE",
+                        "targetWorkflowId": "STORY_BREAKDOWN",
+                        "targetStageId": "INPUT_ANALYSIS",
                         "targetAgentId": "alex",
                         "prompt": (
                             "请基于 Alex 的需求蓝图继续拆用户故事。\n\n"
@@ -308,9 +308,9 @@ def new_agents_page(
                     {
                         "run": {
                             "id": "mock-run-user_story_breakdown-handoff",
-                            "workflowId": "USER_STORY_BREAKDOWN",
+                            "workflowId": "STORY_BREAKDOWN",
                             "agentId": "alex",
-                            "currentStageId": "SCOPE",
+                            "currentStageId": "INPUT_ANALYSIS",
                             "status": "active",
                             "model": "mock",
                         },
@@ -378,8 +378,8 @@ def new_agents_page(
             body=json.dumps(
                 {
                     "runId": run_id,
-                    "workflowId": "USER_STORY_BREAKDOWN",
-                    "stageId": "HANDOFF",
+                    "workflowId": "STORY_BREAKDOWN",
+                    "stageId": "SPRINT_PLAN",
                     "sourceArtifactVersion": 1,
                     "sourceArtifactDigest": "sha256:mock-user-story-handoff",
                     "candidates": [
@@ -402,8 +402,8 @@ def new_agents_page(
             body = route.request.post_data_json
             packet = {
                 "sourceRunId": run_id,
-                "sourceWorkflowId": "USER_STORY_BREAKDOWN",
-                "sourceStageId": body.get("stageId", "HANDOFF"),
+                "sourceWorkflowId": "STORY_BREAKDOWN",
+                "sourceStageId": body.get("stageId", "SPRINT_PLAN"),
                 "sourceArtifactVersion": 1,
                 "sourceArtifactDigest": "sha256:mock-user-story-handoff",
                 "createdAt": 1710000000000,
@@ -449,8 +449,8 @@ def new_agents_page(
             body=json.dumps(
                 {
                     "runId": run_id,
-                    "workflowId": "USER_STORY_BREAKDOWN",
-                    "stageId": "HANDOFF",
+                    "workflowId": "STORY_BREAKDOWN",
+                    "stageId": "SPRINT_PLAN",
                     "sourceArtifactVersion": 1,
                     "sourceArtifactDigest": "sha256:mock-user-story-handoff",
                     "packets": story_handoff_packets,

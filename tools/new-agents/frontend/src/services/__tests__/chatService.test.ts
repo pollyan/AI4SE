@@ -2505,4 +2505,130 @@ describe('useChatService', () => {
         });
         expect(state.artifactHistory).toEqual([]);
     });
+
+    it('should regenerate only the requested artifact section through the shared stream', async () => {
+        const originalArtifact = [
+            '# 当前产物',
+            '旧导语',
+            '## 目标章节',
+            '旧目标内容',
+            '## 锁定章节',
+            '确认内容',
+        ].join('\n');
+        const generatedArtifact = [
+            '# 当前产物',
+            '模型试图改导语',
+            '## 目标章节',
+            '新目标内容',
+            '## 锁定章节',
+            '模型误改锁定内容',
+        ].join('\n');
+        useStore.setState({
+            artifactContent: originalArtifact,
+            stageArtifacts: {
+                CLARIFY: originalArtifact,
+            },
+            artifactHistory: [],
+            artifactSectionLocks: [{
+                id: 'lock-confirmed',
+                stageId: 'CLARIFY',
+                heading: '## 锁定章节',
+                sectionAnchor: 'h2:锁定章节:1',
+                content: '## 锁定章节\n确认内容',
+                createdAt: 1,
+            }],
+        });
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            yield {
+                chatResponse: '已重生成目标章节',
+                newArtifact: generatedArtifact,
+                action: '',
+                hasArtifactUpdate: true,
+            };
+        });
+
+        const { result } = renderHook(() => useChatService());
+
+        await act(async () => {
+            await result.current.handleRegenerateArtifactSection({
+                heading: '## 目标章节',
+                sectionAnchor: 'h2:目标章节:1',
+                displayTitle: '目标章节',
+            });
+        });
+
+        const state = useStore.getState();
+        const expectedArtifact = [
+            '# 当前产物',
+            '旧导语',
+            '## 目标章节',
+            '新目标内容',
+            '## 锁定章节',
+            '确认内容',
+        ].join('\n');
+        expect(generateResponseStream).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(generateResponseStream).mock.calls[0][0]).toContain('Artifact 定向修订');
+        expect(vi.mocked(generateResponseStream).mock.calls[0][0]).toContain('## 目标章节');
+        expect(vi.mocked(generateResponseStream).mock.calls[0][0]).toContain('## 锁定章节');
+        expect(state.chatHistory).toHaveLength(1);
+        expect(state.chatHistory[0]).toMatchObject({
+            role: 'assistant',
+            content: '已重生成目标章节',
+            retryable: false,
+        });
+        expect(state.artifactContent).toBe(expectedArtifact);
+        expect(state.stageArtifacts.CLARIFY).toBe(expectedArtifact);
+        expect(state.artifactHistory).toEqual([
+            expect.objectContaining({
+                stageId: 'CLARIFY',
+                content: expectedArtifact,
+            }),
+        ]);
+    });
+
+    it('should keep the artifact unchanged when regenerated output misses the target section', async () => {
+        const originalArtifact = [
+            '# 当前产物',
+            '旧导语',
+            '## 目标章节',
+            '旧目标内容',
+        ].join('\n');
+        useStore.setState({
+            artifactContent: originalArtifact,
+            stageArtifacts: {
+                CLARIFY: originalArtifact,
+            },
+            artifactHistory: [],
+            artifactSectionLocks: [],
+        });
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            yield {
+                chatResponse: '模型返回了不完整 artifact',
+                newArtifact: [
+                    '# 当前产物',
+                    '旧导语',
+                    '## 其他章节',
+                    '新内容',
+                ].join('\n'),
+                action: '',
+                hasArtifactUpdate: true,
+            };
+        });
+
+        const { result } = renderHook(() => useChatService());
+
+        await act(async () => {
+            await result.current.handleRegenerateArtifactSection({
+                heading: '## 目标章节',
+                sectionAnchor: 'h2:目标章节:1',
+                displayTitle: '目标章节',
+            });
+        });
+
+        const state = useStore.getState();
+        expect(state.artifactContent).toBe(originalArtifact);
+        expect(state.stageArtifacts.CLARIFY).toBe(originalArtifact);
+        expect(state.artifactHistory).toEqual([]);
+        expect(state.chatHistory[state.chatHistory.length - 1].content).toContain('模型返回中没有找到目标章节“目标章节”');
+    });
 });

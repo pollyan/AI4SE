@@ -1,17 +1,19 @@
 import hashlib
 
-from agent_contracts import WORKFLOW_STAGES
-from context_summary_format import CURRENT_ARTIFACT_SUMMARY_TYPE
-from models import AgentArtifact, AgentArtifactVersion, AgentContextSummary, AgentRun, db
+from models import AgentRun
 from run_persistence import append_run_message, create_agent_run, get_run_snapshot
 from workflow_manifest import get_workflow_handoffs
 
 
 HANDOFF_CONTEXT_MAX_CHARS = 6000
-HANDOFF_SUMMARY_MAX_CHARS = 280
 HANDOFF_TRUNCATION_NOTICE = "\n\n[源产物内容已截断]"
+UNCONFIRMED_MARKERS = ("待确认", "未确认", "待澄清", "未验证", "开放问题")
 HANDOFF_PROMPT_TEMPLATES = {
-    "source-artifact-handoff": "请基于以下上游产物继续工作。",
+    "source-artifact-handoff": (
+        "请基于以下上游产物继续工作。"
+        "来源阶段: {sourceWorkflowId}/{sourceStageId}。"
+        "目标阶段: {targetWorkflowId}/{targetStageId}。"
+    ),
 }
 
 
@@ -26,11 +28,49 @@ def export_run_handoffs(run_id: str) -> dict:
         artifact = _source_artifact(snapshot, handoff["sourceStageId"])
         if artifact is None:
             continue
-        handoffs.append(_build_handoff(handoff, artifact, source_run_id=run["id"]))
+        handoffs.append(_build_handoff(handoff, artifact))
 
     return {
         "runId": run["id"],
         "sourceWorkflowId": run["workflowId"],
+        "handoffs": handoffs,
+    }
+
+
+def export_target_workflow_handoffs(
+    target_workflow_id: str,
+    target_stage_id: str | None = None,
+) -> dict:
+    handoffs = []
+    configured_handoffs = [
+        handoff
+        for handoff in get_workflow_handoffs()
+        if handoff["targetWorkflowId"] == target_workflow_id
+        and (
+            target_stage_id is None
+            or handoff["targetStageId"] == target_stage_id
+        )
+    ]
+
+    for handoff in configured_handoffs:
+        source_runs = (
+            AgentRun.query.filter_by(workflow_id=handoff["sourceWorkflowId"])
+            .order_by(AgentRun.updated_at.desc(), AgentRun.created_at.desc())
+            .all()
+        )
+        for run in source_runs:
+            snapshot = get_run_snapshot(run.id)
+            artifact = _source_artifact(snapshot, handoff["sourceStageId"])
+            if artifact is None:
+                continue
+            handoffs.append({
+                **_build_handoff(handoff, artifact),
+                "sourceRunId": run.id,
+            })
+
+    return {
+        "targetWorkflowId": target_workflow_id,
+        "targetStageId": target_stage_id,
         "handoffs": handoffs,
     }
 
@@ -61,66 +101,6 @@ def start_workflow_handoff(run_id: str, handoff_id: str) -> dict:
     }
 
 
-def export_target_workflow_handoffs(
-    target_workflow_id: str,
-    target_stage_id: str | None = None,
-    *,
-    limit: int = 20,
-) -> dict:
-    _validate_workflow_stage(target_workflow_id, target_stage_id)
-    normalized_limit = max(1, min(limit, 100))
-    handoffs = []
-
-    for handoff in get_workflow_handoffs():
-        if handoff["targetWorkflowId"] != target_workflow_id:
-            continue
-        if target_stage_id is not None and handoff["targetStageId"] != target_stage_id:
-            continue
-
-        source_artifacts = (
-            db.session.query(AgentRun, AgentArtifact, AgentArtifactVersion)
-            .join(AgentArtifact, AgentArtifact.run_id == AgentRun.id)
-            .join(
-                AgentArtifactVersion,
-                AgentArtifactVersion.id == AgentArtifact.current_version_id,
-            )
-            .filter(AgentRun.workflow_id == handoff["sourceWorkflowId"])
-            .filter(AgentArtifact.stage_id == handoff["sourceStageId"])
-            .order_by(
-                AgentArtifact.updated_at.desc(),
-                AgentRun.updated_at.desc(),
-                AgentRun.created_at.desc(),
-            )
-            .limit(normalized_limit)
-            .all()
-        )
-
-        for run, artifact, version in source_artifacts:
-            artifact_payload = {
-                "content": version.content,
-                "versionNumber": version.version_number,
-                "digest": _source_artifact_digest(version.content),
-                "summary": _source_artifact_summary(
-                    run.id,
-                    artifact.stage_id,
-                    version.content,
-                ),
-            }
-            handoffs.append(
-                _build_handoff(
-                    handoff,
-                    artifact_payload,
-                    source_run_id=run.id,
-                )
-            )
-
-    return {
-        "targetWorkflowId": target_workflow_id,
-        "targetStageId": target_stage_id,
-        "handoffs": handoffs,
-    }
-
-
 def _source_artifact(snapshot: dict, source_stage_id: str) -> dict | None:
     return next(
         (
@@ -132,68 +112,64 @@ def _source_artifact(snapshot: dict, source_stage_id: str) -> dict | None:
     )
 
 
-def _build_handoff(
-    handoff: dict,
-    artifact: dict,
-    *,
-    source_run_id: str | None = None,
-) -> dict:
-    source_artifact_digest = artifact.get("digest") or _source_artifact_digest(
-        artifact["content"]
+def _build_handoff(handoff: dict, artifact: dict) -> dict:
+    source_summary = _build_source_summary(artifact["content"])
+    unconfirmed_items = _extract_unconfirmed_items(artifact["content"])
+    target_input_checklist = _build_target_input_checklist(
+        handoff,
+        artifact["versionNumber"],
+        unconfirmed_items,
     )
-    payload = {
+    return {
         "id": handoff["id"],
         "label": handoff["label"],
         "sourceWorkflowId": handoff["sourceWorkflowId"],
         "sourceStageId": handoff["sourceStageId"],
         "sourceArtifactVersion": artifact["versionNumber"],
-        "sourceArtifactDigest": source_artifact_digest,
+        "sourceArtifactDigest": _source_artifact_digest(artifact["content"]),
+        "sourceArtifactSummary": source_summary,
+        "sourceSummary": source_summary,
+        "unconfirmedItems": unconfirmed_items,
+        "targetInputChecklist": target_input_checklist,
         "targetWorkflowId": handoff["targetWorkflowId"],
         "targetStageId": handoff["targetStageId"],
         "targetAgentId": handoff["targetAgentId"],
         "prompt": _build_handoff_prompt(
             handoff,
             artifact["content"],
-            source_run_id=source_run_id,
-            source_artifact_version=artifact["versionNumber"],
-            source_artifact_digest=source_artifact_digest,
+            artifact["versionNumber"],
+            source_summary,
+            unconfirmed_items,
+            target_input_checklist,
         ),
     }
-    if source_run_id is not None:
-        payload["sourceRunId"] = source_run_id
-    summary = artifact.get("summary")
-    if isinstance(summary, str) and summary.strip():
-        payload["sourceArtifactSummary"] = summary.strip()
-    return payload
 
 
 def _build_handoff_prompt(
     handoff: dict,
     source_artifact: str,
-    *,
-    source_run_id: str | None = None,
-    source_artifact_version: int | None = None,
-    source_artifact_digest: str | None = None,
+    source_artifact_version: int,
+    source_summary: str,
+    unconfirmed_items: list[str],
+    target_input_checklist: list[str],
 ) -> str:
     bounded_artifact = _bounded_source_artifact(source_artifact)
     template_id = handoff.get("promptTemplateId")
     template = HANDOFF_PROMPT_TEMPLATES.get(template_id)
     if template is None:
         raise ValueError(f"未知 handoff promptTemplateId: {template_id}")
-    trace_lines = [
-        f"来源阶段: {handoff['sourceWorkflowId']}/{handoff['sourceStageId']}",
-        f"目标阶段: {handoff['targetWorkflowId']}/{handoff['targetStageId']}",
-    ]
-    if source_run_id is not None:
-        trace_lines.append(f"源 run: {source_run_id}")
-    if source_artifact_version is not None:
-        trace_lines.append(f"源 artifact version: {source_artifact_version}")
-    if source_artifact_digest is not None:
-        trace_lines.append(f"源 artifact digest: {source_artifact_digest}")
+    source_version = (
+        f"{handoff['sourceWorkflowId']}/{handoff['sourceStageId']} "
+        f"v{source_artifact_version}"
+    )
     return "\n\n".join(
         [
             template.format(**handoff),
-            "Handoff 追溯:\n" + "\n".join(f"- {line}" for line in trace_lines),
+            f"来源版本: {source_version}",
+            "关键摘要:\n" + _format_bullets([source_summary]),
+            "未确认项:\n" + _format_bullets(unconfirmed_items or ["无"]),
+            "目标工作流输入:\n" + _format_bullets(target_input_checklist),
+            "源产物内容:",
             bounded_artifact,
         ]
     )
@@ -206,39 +182,99 @@ def _bounded_source_artifact(source_artifact: str) -> str:
     return content[:HANDOFF_CONTEXT_MAX_CHARS].rstrip() + HANDOFF_TRUNCATION_NOTICE
 
 
-def _validate_workflow_stage(
-    workflow_id: str,
-    stage_id: str | None = None,
-) -> None:
-    if workflow_id not in WORKFLOW_STAGES:
-        raise ValueError(f"未知 workflowId: {workflow_id}")
-    if stage_id is not None and stage_id not in WORKFLOW_STAGES[workflow_id]:
-        raise ValueError(f"workflowId 与 stageId 不匹配: {workflow_id}/{stage_id}")
-
-
 def _source_artifact_digest(content: str) -> str:
-    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
-    return f"sha256:{digest}"
+    return "sha256:" + hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
-def _source_artifact_summary(
-    run_id: str,
-    stage_id: str,
-    content: str,
-) -> str:
-    summary = AgentContextSummary.query.filter_by(
-        run_id=run_id,
-        source_type="artifact",
-        source_stage_id=stage_id,
-        summary_type=CURRENT_ARTIFACT_SUMMARY_TYPE,
-    ).first()
-    if summary is not None and summary.content.strip():
-        return _bounded_source_summary(summary.content)
-    return _bounded_source_summary(content)
+def _build_source_summary(source_artifact: str) -> str:
+    title = _first_markdown_heading(source_artifact)
+    body_line = _first_summary_body_line(source_artifact)
+    if title and body_line:
+        return f"{title}: {body_line}"
+    if title:
+        return title
+    if body_line:
+        return body_line
+    return "源产物未提供可提取摘要"
 
 
-def _bounded_source_summary(content: str) -> str:
-    summary = " ".join(line.strip() for line in content.splitlines() if line.strip())
-    if len(summary) <= HANDOFF_SUMMARY_MAX_CHARS:
-        return summary
-    return summary[:HANDOFF_SUMMARY_MAX_CHARS].rstrip() + "..."
+def _first_markdown_heading(source_artifact: str) -> str:
+    for line in source_artifact.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            return stripped.lstrip("#").strip()
+    return ""
+
+
+def _first_summary_body_line(source_artifact: str) -> str:
+    in_fence = False
+    for line in source_artifact.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence or not stripped:
+            continue
+        if stripped.startswith("#") or stripped.startswith("|"):
+            continue
+        if stripped.startswith("- ["):
+            continue
+        if stripped.startswith("- "):
+            return stripped[2:].strip()
+        return stripped
+    return ""
+
+
+def _extract_unconfirmed_items(source_artifact: str) -> list[str]:
+    items = []
+    for line in source_artifact.splitlines():
+        stripped = line.strip()
+        if not stripped or not any(marker in stripped for marker in UNCONFIRMED_MARKERS):
+            continue
+        if _is_table_separator(stripped) or ("状态" in stripped and "内容" in stripped):
+            continue
+        item = _format_unconfirmed_item(stripped)
+        if item and item not in items:
+            items.append(item)
+    return items[:5]
+
+
+def _format_unconfirmed_item(line: str) -> str:
+    if line.startswith("|"):
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        cells = [cell for cell in cells if cell]
+        if len(cells) >= 3:
+            item_type, item_id, content = cells[0], cells[1], cells[2]
+            return f"{item_type} {item_id}: {content}"
+    return line.lstrip("- ").strip()
+
+
+def _is_table_separator(line: str) -> bool:
+    compact = line.replace("|", "").replace("-", "").replace(":", "").strip()
+    return compact == ""
+
+
+def _build_target_input_checklist(
+    handoff: dict,
+    source_artifact_version: int,
+    unconfirmed_items: list[str],
+) -> list[str]:
+    source_version = (
+        f"{handoff['sourceWorkflowId']}/{handoff['sourceStageId']} "
+        f"v{source_artifact_version}"
+    )
+    target_stage = f"{handoff['targetWorkflowId']}/{handoff['targetStageId']}"
+    unconfirmed_step = (
+        f"处理 {len(unconfirmed_items)} 个未确认项后再进入目标产物生成"
+        if unconfirmed_items
+        else "确认没有遗留未确认项后进入目标产物生成"
+    )
+    return [
+        f"复核来源版本 {source_version}",
+        f"确认目标阶段 {target_stage} 所需的需求、验收标准和约束均已覆盖",
+        unconfirmed_step,
+    ]
+
+
+def _format_bullets(items: list[str]) -> str:
+    return "\n".join(f"- {item}" for item in items)

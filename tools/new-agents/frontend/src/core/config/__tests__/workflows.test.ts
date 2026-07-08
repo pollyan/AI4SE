@@ -49,12 +49,11 @@ describe('Workflow Configuration', () => {
         expect(wf.stages[1].description.length).toBeGreaterThan(100);
     });
 
-    it('should return core workflows for Alex', () => {
+    it('should return at least two core workflows for Alex', () => {
         const workflows = getAgentWorkflows('alex');
         const ids = workflows.map(w => w.id);
         expect(ids).toContain('idea-brainstorm');
         expect(ids).toContain('value-discovery');
-        expect(ids).toContain('user-story-breakdown');
     });
 
     it('should configure IDEA_BRAINSTORM as online for Alex', () => {
@@ -74,40 +73,6 @@ describe('Workflow Configuration', () => {
         expect(wf.stages[3].id).toBe('CONCEPT');
     });
 
-    it('appends manifest artifact data contract guidance to IDEA CONVERGE prompt description', () => {
-        const convergeStage = WORKFLOWS.IDEA_BRAINSTORM.stages.find(stage => stage.id === 'CONVERGE');
-
-        expect(convergeStage).toBeDefined();
-        expect(convergeStage?.description).toContain('【artifact_data 契约同步约束】');
-        expect(convergeStage?.description).toContain('ice_evaluations.idea_id 必须唯一');
-        expect(convergeStage?.description).toContain('decision_matrix.recommended_idea_id');
-        expect(convergeStage?.description).toContain('validation_experiments.idea_ids');
-        expect(convergeStage?.description).toContain('merge_paths.source_idea_ids');
-        expect(convergeStage?.description).toContain('不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 quadrantChart');
-        expect(convergeStage?.description).toContain('后端会负责确定性渲染右侧收敛聚焦产物和 Mermaid quadrantChart');
-    });
-
-    it('appends manifest artifact data contract guidance to TEST DESIGN CASES prompt description', () => {
-        const casesStage = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'CASES');
-
-        expect(casesStage).toBeDefined();
-        expect(casesStage?.description).toContain('【artifact_data 契约同步约束】');
-        expect(casesStage?.description).toContain('case_statistics 由后端根据 case_groups 计算，模型不要输出');
-        expect(casesStage?.description).toContain('case_groups[].cases[].case_id 必须唯一');
-        expect(casesStage?.description).toContain('automation_candidates.case_id');
-        expect(casesStage?.description).toContain('coverage_trace.covered_cases');
-        expect(casesStage?.description).toContain('不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 traceability-matrix JSON 代码块');
-        expect(casesStage?.description).toContain('后端会负责确定性渲染右侧测试用例集和 ai4se-visual traceability-matrix');
-    });
-
-    it('does not ask TEST DESIGN CASES to handwrite renderer-owned visuals', () => {
-        const casesStage = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'CASES');
-
-        expect(casesStage).toBeDefined();
-        expect(casesStage?.description).not.toContain('测试点覆盖追溯必须同时输出 Markdown 表格和 ai4se-visual 结构化矩阵');
-        expect(casesStage?.description).not.toContain('ai4se-visual 必须使用 ```ai4se-visual fenced 代码块');
-    });
-
     it('should have VALUE_DISCOVERY workflow defined with correct agentId and stages', () => {
         const wf = WORKFLOWS.VALUE_DISCOVERY;
         expect(wf).toBeDefined();
@@ -122,17 +87,50 @@ describe('Workflow Configuration', () => {
         expect(wf.stages[3].description.length).toBeGreaterThan(100);
     });
 
-    it('should have USER_STORY_BREAKDOWN workflow defined with correct agentId and stages', () => {
-        const wf = WORKFLOWS.USER_STORY_BREAKDOWN;
+    it('should configure STORY_BREAKDOWN as an online Alex workflow', () => {
+        const wf = WORKFLOWS.STORY_BREAKDOWN;
         expect(wf).toBeDefined();
         expect(wf.name).toBe('用户故事拆解');
         expect(wf.agentId).toBe('alex');
-        expect(wf.slug).toBe('user-story-breakdown');
-        expect(wf.stages.map(stage => stage.id)).toEqual(['SCOPE', 'STORY_MAP', 'STORIES', 'HANDOFF']);
-        for (const stage of wf.stages) {
+        expect(wf.slug).toBe('story-breakdown');
+        expect(wf.stages).toHaveLength(4);
+        expect(wf.stages[0].id).toBe('INPUT_ANALYSIS');
+        expect(wf.stages[1].id).toBe('EPIC_MAPPING');
+        expect(wf.stages[2].id).toBe('STORY_BACKLOG');
+        expect(wf.stages[3].id).toBe('SPRINT_PLAN');
+
+        const workflows = getAgentWorkflows('alex');
+        const storyBreakdown = workflows.find(w => w.id === 'story-breakdown');
+        expect(storyBreakdown).toBeDefined();
+        expect(storyBreakdown?.status).toBe('online');
+        expect(storyBreakdown?.link).toBe('/workspace/alex/story-breakdown');
+    });
+
+    it('publishes Alex PRD review as an online runtime workflow', () => {
+        const workflow = WORKFLOWS.PRD_REVIEW;
+
+        expect(workflow.agentId).toBe('alex');
+        expect(workflow.slug).toBe('prd-review');
+        expect(workflow.stages.map(stage => stage.id)).toEqual([
+            'INVENTORY',
+            'QUALITY_AUDIT',
+            'COMPLETION_PLAN',
+            'REVISION_BLUEPRINT',
+        ]);
+        for (const stage of workflow.stages) {
             expect(stage.description.length).toBeGreaterThan(100);
-            expect(stage.template.length).toBeGreaterThan(100);
+            expect(stage.template?.length).toBeGreaterThan(100);
         }
+
+        expect(getAgentWorkflows('alex')).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    id: 'prd-review',
+                    status: 'online',
+                    link: '/workspace/alex/prd-review',
+                }),
+            ])
+        );
     });
 
     it('should have value-discovery workflow in Alex agent workflows as online and without prd-creation', () => {
@@ -146,14 +144,42 @@ describe('Workflow Configuration', () => {
         expect(prdCreation).toBeUndefined();
     });
 
-    it('should expose user-story-breakdown as online instead of plan for Alex', () => {
+    it('should expose story-breakdown as an online Alex runtime workflow', () => {
         const workflows = getAgentWorkflows('alex');
+        const storyBreakdown = workflows.find(w => w.id === 'story-breakdown');
 
-        const storyBreakdown = workflows.find(w => w.id === 'user-story-breakdown');
         expect(storyBreakdown).toBeDefined();
         expect(storyBreakdown?.status).toBe('online');
-        expect(storyBreakdown?.link).toBe('/workspace/alex/user-story-breakdown');
-        expect(workflows.find(w => w.id === 'story-breakdown')).toBeUndefined();
+        expect(storyBreakdown?.link).toBe('/workspace/alex/story-breakdown');
+
+        const wf = WORKFLOWS.STORY_BREAKDOWN;
+        expect(wf.agentId).toBe('alex');
+        expect(wf.slug).toBe('story-breakdown');
+        expect(wf.stages.map(stage => stage.id)).toEqual([
+            'INPUT_ANALYSIS',
+            'EPIC_MAPPING',
+            'STORY_BACKLOG',
+            'SPRINT_PLAN',
+        ]);
+    });
+
+    it('should configure PRD_REVIEW as an online Alex workflow', () => {
+        const workflows = getAgentWorkflows('alex');
+        const prdReview = workflows.find(w => w.id === 'prd-review');
+
+        expect(prdReview).toBeDefined();
+        expect(prdReview?.status).toBe('online');
+        expect(prdReview?.link).toBe('/workspace/alex/prd-review');
+
+        const wf = WORKFLOWS.PRD_REVIEW;
+        expect(wf.agentId).toBe('alex');
+        expect(wf.slug).toBe('prd-review');
+        expect(wf.stages.map(stage => stage.id)).toEqual([
+            'INVENTORY',
+            'QUALITY_AUDIT',
+            'COMPLETION_PLAN',
+            'REVISION_BLUEPRINT',
+        ]);
     });
 
     it('every workflow definition should configure an agentId', () => {

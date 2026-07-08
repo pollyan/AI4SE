@@ -3,7 +3,13 @@ import json
 
 import pytest
 
-from agent_contracts import AgentTurnOutput, ContractValidationError
+from agent_contracts import (
+    WORKFLOW_STAGES,
+    AgentTurnOutput,
+    ContractValidationError,
+    validate_agent_turn,
+)
+from artifact_data_renderers import render_agent_turn_from_artifact_data
 from agent_runtime import (
     AgentRuntimeModelError,
     AgentRuntimeSchemaError,
@@ -11,6 +17,7 @@ from agent_runtime import (
     PydanticAgentRuntime,
     RawStreamingConfig,
     TEXT_STRUCTURED_OUTPUT_INSTRUCTION,
+    build_artifact_data_progress_markdown,
     build_partial_agent_delta,
     build_agent_retries,
     build_model_settings,
@@ -20,6 +27,7 @@ from agent_runtime import (
     parse_agent_turn_output_text,
     register_contract_output_validator,
     resolve_structured_output_capability,
+    supports_artifact_data_rendering,
 )
 from sse_schemas import AgentTurnDeltaOutput
 from test_artifact_data_renderers import (
@@ -31,15 +39,13 @@ from test_artifact_data_renderers import (
     VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA,
     VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
     VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
+    VALID_PRD_REVIEW_ARTIFACT_DATA,
     VALID_CASES_ARTIFACT_DATA,
     VALID_DELIVERY_ARTIFACT_DATA,
     VALID_REQ_REVIEW_ARTIFACT_DATA,
     VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA,
+    VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
     VALID_STRATEGY_ARTIFACT_DATA,
-    VALID_USER_STORY_HANDOFF_ARTIFACT_DATA,
-    VALID_USER_STORY_MAP_ARTIFACT_DATA,
-    VALID_USER_STORY_SCOPE_ARTIFACT_DATA,
-    VALID_USER_STORIES_ARTIFACT_DATA,
     VALID_VALUE_BLUEPRINT_ARTIFACT_DATA,
     VALID_VALUE_ELEVATOR_ARTIFACT_DATA,
     VALID_VALUE_JOURNEY_ARTIFACT_DATA,
@@ -242,6 +248,104 @@ VALID_CLARIFY_ARTIFACT_DATA = {
         }
     ],
 }
+
+DEEPSEEK_FORMAT_STAGE_FIXTURES = {
+    ("TEST_DESIGN", "CLARIFY"): VALID_CLARIFY_ARTIFACT_DATA,
+    ("TEST_DESIGN", "STRATEGY"): VALID_STRATEGY_ARTIFACT_DATA,
+    ("TEST_DESIGN", "CASES"): VALID_CASES_ARTIFACT_DATA,
+    ("TEST_DESIGN", "DELIVERY"): VALID_DELIVERY_ARTIFACT_DATA,
+    ("REQ_REVIEW", "REVIEW"): VALID_REQ_REVIEW_ARTIFACT_DATA,
+    ("REQ_REVIEW", "REPORT"): VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA,
+    ("VALUE_DISCOVERY", "ELEVATOR"): VALID_VALUE_ELEVATOR_ARTIFACT_DATA,
+    ("VALUE_DISCOVERY", "PERSONA"): VALID_VALUE_PERSONA_ARTIFACT_DATA,
+    ("VALUE_DISCOVERY", "JOURNEY"): VALID_VALUE_JOURNEY_ARTIFACT_DATA,
+    ("VALUE_DISCOVERY", "BLUEPRINT"): VALID_VALUE_BLUEPRINT_ARTIFACT_DATA,
+    ("INCIDENT_REVIEW", "TIMELINE"): VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
+    ("INCIDENT_REVIEW", "ROOT_CAUSE"): VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
+    ("INCIDENT_REVIEW", "IMPROVEMENT"): VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA,
+    ("IDEA_BRAINSTORM", "DEFINE"): VALID_IDEA_DEFINE_ARTIFACT_DATA,
+    ("IDEA_BRAINSTORM", "DIVERGE"): VALID_IDEA_DIVERGE_ARTIFACT_DATA,
+    ("IDEA_BRAINSTORM", "CONVERGE"): VALID_IDEA_CONVERGE_ARTIFACT_DATA,
+    ("IDEA_BRAINSTORM", "CONCEPT"): VALID_IDEA_CONCEPT_ARTIFACT_DATA,
+    ("PRD_REVIEW", "INVENTORY"): VALID_PRD_REVIEW_ARTIFACT_DATA,
+    ("PRD_REVIEW", "QUALITY_AUDIT"): VALID_PRD_REVIEW_ARTIFACT_DATA,
+    ("PRD_REVIEW", "COMPLETION_PLAN"): VALID_PRD_REVIEW_ARTIFACT_DATA,
+    ("PRD_REVIEW", "REVISION_BLUEPRINT"): VALID_PRD_REVIEW_ARTIFACT_DATA,
+    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+    ("STORY_BREAKDOWN", "EPIC_MAPPING"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+    ("STORY_BREAKDOWN", "STORY_BACKLOG"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+    ("STORY_BREAKDOWN", "SPRINT_PLAN"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+}
+
+DEEPSEEK_FORMAT_STAGE_CASES = [
+    (workflow_id, stage_id, artifact_data)
+    for (workflow_id, stage_id), artifact_data in sorted(
+        DEEPSEEK_FORMAT_STAGE_FIXTURES.items()
+    )
+]
+
+
+def test_deepseek_format_readiness_covers_every_online_stage():
+    online_stages = {
+        (workflow_id, stage_id)
+        for workflow_id, stages in WORKFLOW_STAGES.items()
+        for stage_id in stages
+    }
+
+    assert set(DEEPSEEK_FORMAT_STAGE_FIXTURES) == online_stages
+
+
+@pytest.mark.parametrize(
+    ("workflow_id", "stage_id", "artifact_data"),
+    DEEPSEEK_FORMAT_STAGE_CASES,
+)
+def test_deepseek_format_readiness_uses_artifact_data_instructions(
+    workflow_id,
+    stage_id,
+    artifact_data,
+):
+    instruction = build_structured_output_instruction(workflow_id, stage_id)
+    retry_prompt = build_raw_json_retry_prompt(
+        "请生成当前阶段产出物",
+        ValueError("artifact_data.document_info 缺失"),
+        workflow_id=workflow_id,
+        current_stage_id=stage_id,
+    )
+
+    assert artifact_data
+    assert supports_artifact_data_rendering(workflow_id, stage_id)
+    assert "artifact_data" in instruction
+    assert "artifact_update.markdown" not in instruction
+    assert "不要输出完整 Markdown" in instruction
+    assert "后端会负责确定性渲染" in instruction
+    assert "必须修正上述 artifact_data 数据问题" in retry_prompt
+    assert "后端会根据 artifact_data 渲染右侧产出物" in retry_prompt
+    assert "artifact_update.type 必须为 replace" not in retry_prompt
+
+
+@pytest.mark.parametrize(
+    ("workflow_id", "stage_id", "artifact_data"),
+    DEEPSEEK_FORMAT_STAGE_CASES,
+)
+def test_deepseek_format_readiness_renderers_pass_artifact_contract(
+    workflow_id,
+    stage_id,
+    artifact_data,
+):
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已按结构化数据生成当前阶段产出物，请查看右侧文档。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id=workflow_id,
+        current_stage_id=stage_id,
+    )
+
+    assert output is not None
+    assert output.artifact_update.type == "replace"
+    validate_agent_turn(output, workflow_id=workflow_id, current_stage_id=stage_id)
 
 
 class FakeRunResult:
@@ -454,6 +558,35 @@ def test_parse_agent_turn_output_text_renders_clarify_artifact_data():
     assert "flowchart TD" in output.artifact_update.markdown
     assert output.stage_action is not None
     assert output.stage_action.target_stage_id == "STRATEGY"
+
+
+def test_parse_agent_turn_output_text_renders_story_breakdown_input_analysis_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "我已完成需求输入盘点，请确认右侧 Story 拆解基线。",
+            "artifact_data": VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "EPIC_MAPPING",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="INPUT_ANALYSIS",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 用户故事拆解包")
+    assert "## 输入分析" in output.artifact_update.markdown
+    assert "## Epic Map" in output.artifact_update.markdown
+    assert output.stage_action is not None
+    assert output.stage_action.target_stage_id == "EPIC_MAPPING"
 
 
 def test_parse_agent_turn_output_text_renders_strategy_artifact_data():
@@ -811,6 +944,49 @@ def test_req_review_report_retry_prompt_requests_artifact_data_fix_not_markdown_
     assert "不要输出 Markdown 文档" in prompt
     assert "Mermaid 代码块或表格" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
+
+
+def test_parse_agent_turn_output_text_renders_prd_review_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "我已整理 PRD 补全建议，请确认右侧内容。",
+            "artifact_data": VALID_PRD_REVIEW_ARTIFACT_DATA,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "REVISION_BLUEPRINT",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="PRD_REVIEW",
+        current_stage_id="COMPLETION_PLAN",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# PRD 补全建议")
+    assert '"type": "action-board"' in output.artifact_update.markdown
+    assert output.stage_action is not None
+    assert output.stage_action.target_stage_id == "REVISION_BLUEPRINT"
+
+
+def test_prd_review_structured_output_instruction_requests_artifact_data_not_markdown():
+    instruction = build_structured_output_instruction(
+        "PRD_REVIEW",
+        "COMPLETION_PLAN",
+    )
+
+    assert "artifact_data" in instruction
+    assert "quality_findings" in instruction
+    assert "completion_actions" in instruction
+    assert "action-board" in instruction
+    assert "stage_action" in instruction
+    assert "不要输出完整 Markdown" in instruction
+    assert "artifact_update.markdown" not in instruction
 
 
 def test_parse_agent_turn_output_text_renders_value_elevator_artifact_data():
@@ -1198,6 +1374,33 @@ def test_parse_agent_turn_output_text_renders_idea_concept_artifact_data():
     assert output.stage_action is None
 
 
+def test_parse_agent_turn_output_text_renders_story_breakdown_artifact_data():
+    json_text = json.dumps(
+        {
+            "chat": "已完成用户故事拆解包。",
+            "artifact_data": VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="SPRINT_PLAN",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_update.markdown is not None
+    assert output.artifact_update.markdown.startswith("# 用户故事拆解包")
+    assert "## Epic Map" in output.artifact_update.markdown
+    assert "## User Story Backlog" in output.artifact_update.markdown
+    assert "## Sprint 切片建议" in output.artifact_update.markdown
+    assert '"type": "story-map"' in output.artifact_update.markdown
+    assert output.stage_action is None
+
+
 def test_value_persona_structured_output_instruction_requests_artifact_data_not_markdown():
     instruction = build_structured_output_instruction(
         "VALUE_DISCOVERY",
@@ -1402,6 +1605,24 @@ def test_idea_concept_structured_output_instruction_requests_artifact_data_not_m
     assert "不要输出完整 Markdown" in instruction
 
 
+def test_story_breakdown_structured_output_instruction_requests_artifact_data_not_markdown():
+    instruction = build_structured_output_instruction(
+        "STORY_BREAKDOWN",
+        "SPRINT_PLAN",
+    )
+
+    assert "artifact_data" in instruction
+    assert "artifact_update" not in instruction
+    assert "input_analysis" in instruction
+    assert "epics" in instruction
+    assert "user_stories" in instruction
+    assert "acceptance_criteria" in instruction
+    assert "sprint_slices" in instruction
+    assert "lisa_handoff_inputs" in instruction
+    assert '"stage_action": null' in instruction
+    assert "不要输出完整 Markdown" in instruction
+
+
 def test_value_persona_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
     prompt = build_raw_json_retry_prompt(
         "原始提示",
@@ -1540,6 +1761,20 @@ def test_idea_concept_retry_prompt_requests_artifact_data_fix_not_markdown_rewri
 
     assert "artifact_data" in prompt
     assert "growth_funnel" in prompt
+    assert "不要输出 Markdown 文档" in prompt
+    assert "artifact_update.type 必须为 replace" not in prompt
+
+
+def test_story_breakdown_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
+    prompt = build_raw_json_retry_prompt(
+        "请拆解用户故事",
+        ValueError("acceptance_criteria references unknown story ids"),
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="SPRINT_PLAN",
+    )
+
+    assert "artifact_data" in prompt
+    assert "acceptance_criteria references unknown story ids" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -2600,7 +2835,7 @@ def test_runtime_raw_json_stream_turn_renders_value_elevator_artifact_data_befor
             api_key="test-key",
             base_url="https://api.deepseek.com",
             model_name="deepseek-v4-flash",
-            system_prompt="你是价值发现顾问。",
+            system_prompt="你是需求蓝图梳理顾问。",
         ),
     )
 
@@ -2690,7 +2925,7 @@ def test_runtime_raw_json_stream_turn_renders_value_persona_artifact_data_before
             api_key="test-key",
             base_url="https://api.deepseek.com",
             model_name="deepseek-v4-flash",
-            system_prompt="你是价值发现顾问。",
+            system_prompt="你是需求蓝图梳理顾问。",
         ),
     )
 
@@ -2779,7 +3014,7 @@ def test_runtime_raw_json_stream_turn_renders_value_journey_artifact_data_before
             api_key="test-key",
             base_url="https://api.deepseek.com",
             model_name="deepseek-v4-flash",
-            system_prompt="你是价值发现顾问。",
+            system_prompt="你是需求蓝图梳理顾问。",
         ),
     )
 
@@ -2866,13 +3101,13 @@ def test_runtime_raw_json_stream_turn_renders_value_blueprint_artifact_data_befo
             api_key="test-key",
             base_url="https://api.deepseek.com",
             model_name="deepseek-v4-flash",
-            system_prompt="你是价值发现顾问。",
+            system_prompt="你是需求蓝图梳理顾问。",
         ),
     )
 
     outputs = list(
         runtime.stream_turn(
-            "请整合价值发现前序成果生成需求蓝图",
+            "请整合需求蓝图梳理前序成果生成需求蓝图",
             workflow_id="VALUE_DISCOVERY",
             current_stage_id="BLUEPRINT",
         )
@@ -3740,135 +3975,43 @@ def test_runtime_raw_json_stream_turn_renders_idea_concept_artifact_data_before_
     )
 
 
-def test_runtime_raw_json_stream_turn_renders_user_story_breakdown_artifact_data_before_final_output(
-    monkeypatch,
-):
-    final_json = json.dumps(
-        {
-            "chat": "我已完成用户故事卡片，请确认进入故事交接准备。",
-            "artifact_data": VALID_USER_STORIES_ARTIFACT_DATA,
-            "stage_action": {
-                "type": "request_next_stage",
-                "target_stage_id": "HANDOFF",
-            },
-            "warnings": [],
-        },
-        ensure_ascii=False,
-    )
-    chunks = _raw_json_chunks_after_artifact_data_members(
-        final_json,
-        ["split_principles", "story_cards"],
-    )
-    calls = []
-
-    def fake_stream_chat_completion_content(**kwargs):
-        calls.append(kwargs)
-        yield from chunks
-
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
-    runtime = PydanticAgentRuntime(
-        FakeAgent({}),
-        raw_streaming_config=RawStreamingConfig(
-            api_key="test-key",
-            base_url="https://api.deepseek.com",
-            model_name="deepseek-v4-flash",
-            system_prompt="你是 Alex 用户故事拆解顾问。",
-        ),
-    )
-
-    outputs = list(
-        runtime.stream_turn(
-            "请把需求蓝图拆成用户故事卡片",
-            workflow_id="USER_STORY_BREAKDOWN",
-            current_stage_id="STORIES",
-        )
-    )
-    partial_markdowns = [
-        output.artifact_update.markdown
-        for output in outputs[:-1]
-        if isinstance(output, AgentTurnDeltaOutput)
-        and output.artifact_update is not None
-        and output.artifact_update.type == "replace"
-        and output.artifact_update.markdown is not None
-    ]
-    partial_patches = [
-        output.artifact_patch
-        for output in outputs[:-1]
-        if isinstance(output, AgentTurnDeltaOutput)
-        and output.artifact_patch is not None
-    ]
-
-    assert len(partial_markdowns) >= 2
-    assert partial_markdowns[0].startswith("# 用户故事拆解文档")
-    assert "## 1. 故事拆分原则" in partial_markdowns[0]
-    assert "## 2. 用户故事卡片" not in partial_markdowns[0]
-    assert "## 2. 用户故事卡片" in partial_markdowns[1]
-    assert "## 3. Ready Stories" not in partial_markdowns[1]
-    assert partial_patches
-    assert partial_patches[0].operation == "add_after"
-    assert partial_patches[0].section_anchor == "h2:2. 用户故事卡片:1"
-    assert isinstance(outputs[-1], AgentTurnOutput)
-    assert outputs[-1].stage_action is not None
-    assert outputs[-1].stage_action.target_stage_id == "HANDOFF"
-    assert outputs[-1].artifact_update.markdown is not None
-    assert "## 3. Ready Stories" in outputs[-1].artifact_update.markdown
-    assert "## 4. Not Ready Stories" in outputs[-1].artifact_update.markdown
-    assert calls[0]["response_format"] == {"type": "json_object"}
-    assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
-    assert "artifact_data" in calls[0]["messages"][0]["content"]
-    assert "story_cards" in calls[0]["messages"][0]["content"]
-    assert "artifact_update.markdown" not in build_structured_output_instruction(
-        "USER_STORY_BREAKDOWN",
-        "STORIES",
-    )
-
-
 @pytest.mark.parametrize(
     (
         "stage_id",
-        "artifact_data",
         "member_names",
         "expected_markers",
         "stage_action",
     ),
     [
         (
-            "SCOPE",
-            VALID_USER_STORY_SCOPE_ARTIFACT_DATA,
-            ["in_scope_requirements", "traceability_index"],
-            ["# 用户故事拆解文档", "## 1. 拆分范围", "flowchart TD"],
-            {"type": "request_next_stage", "target_stage_id": "STORY_MAP"},
+            "INPUT_ANALYSIS",
+            ["input_analysis", "epics"],
+            ["# 用户故事拆解包", "## 输入分析", "## Epic Map"],
+            {"type": "request_next_stage", "target_stage_id": "EPIC_MAPPING"},
         ),
         (
-            "STORY_MAP",
-            VALID_USER_STORY_MAP_ARTIFACT_DATA,
-            ["activities", "tasks", "story_map_items"],
-            ["## 3. 用户故事地图", "## 4. MVP Slice", "flowchart TD"],
-            {"type": "request_next_stage", "target_stage_id": "STORIES"},
+            "EPIC_MAPPING",
+            ["epics", "user_stories"],
+            ["## Epic Map", "EPIC-001", "## User Story Backlog"],
+            {"type": "request_next_stage", "target_stage_id": "STORY_BACKLOG"},
         ),
         (
-            "STORIES",
-            VALID_USER_STORIES_ARTIFACT_DATA,
-            ["split_principles", "story_cards"],
-            ["## 2. 用户故事卡片", "## 3. Ready Stories", "US-001"],
-            {"type": "request_next_stage", "target_stage_id": "HANDOFF"},
+            "STORY_BACKLOG",
+            ["user_stories", "acceptance_criteria"],
+            ["## User Story Backlog", "US-001", "## 验收标准"],
+            {"type": "request_next_stage", "target_stage_id": "SPRINT_PLAN"},
         ),
         (
-            "HANDOFF",
-            VALID_USER_STORY_HANDOFF_ARTIFACT_DATA,
-            ["ready_story_overview", "single_story_packets"],
-            ["# 单故事 Handoff 清单", "## 2. 单故事需求包", "acceptanceCriteria"],
+            "SPRINT_PLAN",
+            ["sprint_slices", "lisa_handoff_inputs"],
+            ["## Sprint 切片建议", "## Lisa Handoff 输入", "US-001"],
             None,
         ),
     ],
 )
-def test_runtime_raw_json_stream_turn_renders_all_user_story_breakdown_stages_from_artifact_data(
+def test_runtime_raw_json_stream_turn_renders_all_story_breakdown_stages_from_artifact_data(
     monkeypatch,
     stage_id,
-    artifact_data,
     member_names,
     expected_markers,
     stage_action,
@@ -3876,7 +4019,7 @@ def test_runtime_raw_json_stream_turn_renders_all_user_story_breakdown_stages_fr
     final_json = json.dumps(
         {
             "chat": "我已完成用户故事拆解产物，请查看右侧文档。",
-            "artifact_data": artifact_data,
+            "artifact_data": VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
             "stage_action": stage_action,
             "warnings": [],
         },
@@ -3906,7 +4049,7 @@ def test_runtime_raw_json_stream_turn_renders_all_user_story_breakdown_stages_fr
     outputs = list(
         runtime.stream_turn(
             "请把需求蓝图拆成用户故事",
-            workflow_id="USER_STORY_BREAKDOWN",
+            workflow_id="STORY_BREAKDOWN",
             current_stage_id=stage_id,
         )
     )
@@ -3928,7 +4071,7 @@ def test_runtime_raw_json_stream_turn_renders_all_user_story_breakdown_stages_fr
     for member_name in member_names:
         assert member_name in calls[0]["messages"][0]["content"]
     assert "artifact_update.markdown" not in build_structured_output_instruction(
-        "USER_STORY_BREAKDOWN",
+        "STORY_BREAKDOWN",
         stage_id,
     )
 
@@ -4025,6 +4168,101 @@ def test_runtime_raw_json_stream_turn_fails_final_json_truncation_after_partial_
 
     with pytest.raises(AgentRuntimeSchemaError):
         next(stream)
+
+
+def test_runtime_raw_json_stream_turn_streams_artifact_progress_for_artifact_data(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "正在生成结构化产物。",
+            "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    chunks = [
+        final_json[: final_json.index('"artifact_data"')],
+        final_json[
+            final_json.index('"artifact_data"') : final_json.index('"stage_action"')
+        ],
+        final_json[final_json.index('"stage_action"') :],
+    ]
+
+    def fake_stream_chat_completion_content(**kwargs):
+        yield from chunks
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            system_prompt="system prompt",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "用户需求",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    )
+
+    progress_deltas = [
+        output
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+    ]
+
+    assert progress_deltas
+    progress_markdown = progress_deltas[0].artifact_update.markdown
+    assert progress_markdown.startswith("# 需求分析文档")
+    assert "## 文档信息" in progress_markdown
+    assert "| F-001 | 用户需要登录功能 | 用户描述 | 用户陈述 | 已确认 |" in progress_markdown
+    assert "| 测试范围 | 登录页面和登录 API | 验证登录主链路 | 已确认 |" in progress_markdown
+    assert "```mermaid" in progress_markdown
+    assert "# 产出物生成中" not in progress_markdown
+    assert outputs[-1].artifact_update.markdown.startswith("# 需求分析文档")
+
+
+def test_runtime_raw_json_stream_turn_streams_partial_artifact_data_in_final_format():
+    final_json = json.dumps(
+        {
+            "chat": "正在生成结构化产物。",
+            "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    artifact_start = final_json.index('"artifact_data"')
+    business_rules_start = final_json.index(',"business_rules"')
+    partial_text = final_json[:business_rules_start]
+
+    progress_markdown = build_artifact_data_progress_markdown(
+        partial_text,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert progress_markdown is not None
+    assert progress_markdown.startswith("# 需求分析文档")
+    assert "## 文档信息" in progress_markdown
+    assert "| F-001 | 用户需要登录功能 | 用户描述 | 用户陈述 | 已确认 |" in progress_markdown
+    assert "| 测试范围 | 登录页面和登录 API | 验证登录主链路 | 已确认 |" in progress_markdown
+    assert "## 3. 业务规则与数据状态" not in progress_markdown
+    assert "# 产出物生成中" not in progress_markdown
+    assert "已接收字符数" not in progress_markdown
 
 
 def test_runtime_raw_json_stream_turn_retries_contract_failure_with_feedback(
