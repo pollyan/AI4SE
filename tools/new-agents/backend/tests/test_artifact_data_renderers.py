@@ -3936,6 +3936,39 @@ def test_render_partial_idea_diverge_artifact_data_builds_formal_incremental_mar
     )
 
 
+def test_render_partial_idea_diverge_artifact_data_skips_sources_with_unknown_idea_reference():
+    payload = {
+        "chat": "我正在发散产品创意。",
+        "artifact_data": {
+            "divergence_method": VALID_IDEA_DIVERGE_ARTIFACT_DATA[
+                "divergence_method"
+            ],
+            "idea_landscape": VALID_IDEA_DIVERGE_ARTIFACT_DATA[
+                "idea_landscape"
+            ],
+            "idea_cards": VALID_IDEA_DIVERGE_ARTIFACT_DATA["idea_cards"],
+            "idea_sources": [
+                {
+                    **VALID_IDEA_DIVERGE_ARTIFACT_DATA["idea_sources"][0],
+                    "idea_ids": ["ID-404"],
+                }
+            ],
+        },
+        "stage_action": None,
+        "warnings": [],
+    }
+
+    output = render_partial_agent_turn_from_artifact_data(
+        payload,
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="DIVERGE",
+    )
+
+    assert output is not None
+    assert "## 创意卡片库" in output.artifact_update.markdown
+    assert "## 创意来源与假设" not in output.artifact_update.markdown
+
+
 def test_render_partial_idea_converge_artifact_data_builds_formal_incremental_markdown_and_patch():
     matrix_payload = {
         "chat": "我正在收敛创意方向。",
@@ -4005,6 +4038,107 @@ def test_render_partial_idea_converge_artifact_data_builds_formal_incremental_ma
         resources_output.artifact_patch.after_section_anchor
         == "h2:ICE 评估表:1"
     )
+
+
+def test_render_partial_idea_converge_artifact_data_rejects_unknown_recommended_idea_reference():
+    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    invalid["decision_matrix"]["recommended_idea_id"] = "ID-404"
+    payload = {
+        "chat": "我正在收敛创意方向。",
+        "artifact_data": {
+            "decision_matrix": invalid["decision_matrix"],
+            "ice_evaluations": invalid["ice_evaluations"],
+        },
+        "stage_action": None,
+        "warnings": [],
+    }
+
+    assert (
+        render_partial_agent_turn_from_artifact_data(
+            payload,
+            workflow_id="IDEA_BRAINSTORM",
+            current_stage_id="CONVERGE",
+        )
+        is None
+    )
+
+
+def test_render_partial_idea_converge_artifact_data_rejects_invalid_ice_score():
+    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    invalid["ice_evaluations"][0]["ice_score"] = 9.5
+    payload = {
+        "chat": "我正在收敛创意方向。",
+        "artifact_data": {
+            "decision_matrix": invalid["decision_matrix"],
+            "ice_evaluations": invalid["ice_evaluations"],
+        },
+        "stage_action": None,
+        "warnings": [],
+    }
+
+    assert (
+        render_partial_agent_turn_from_artifact_data(
+            payload,
+            workflow_id="IDEA_BRAINSTORM",
+            current_stage_id="CONVERGE",
+        )
+        is None
+    )
+
+
+def test_render_partial_idea_converge_artifact_data_skips_validation_experiments_with_unknown_idea_reference():
+    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    invalid["validation_experiments"][0]["idea_ids"] = ["ID-404"]
+    payload = {
+        "chat": "我正在收敛创意方向。",
+        "artifact_data": {
+            "decision_matrix": invalid["decision_matrix"],
+            "ice_evaluations": invalid["ice_evaluations"],
+            "resource_constraints": invalid["resource_constraints"],
+            "sensitivity_analysis": invalid["sensitivity_analysis"],
+            "validation_experiments": invalid["validation_experiments"],
+        },
+        "stage_action": None,
+        "warnings": [],
+    }
+
+    output = render_partial_agent_turn_from_artifact_data(
+        payload,
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONVERGE",
+    )
+
+    assert output is not None
+    assert "## 敏感性分析" in output.artifact_update.markdown
+    assert "## 验证实验" not in output.artifact_update.markdown
+
+
+def test_render_partial_idea_converge_artifact_data_skips_merge_paths_with_unknown_idea_reference():
+    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    invalid["merge_paths"][0]["source_idea_ids"] = ["ID-404"]
+    payload = {
+        "chat": "我正在收敛创意方向。",
+        "artifact_data": {
+            "decision_matrix": invalid["decision_matrix"],
+            "ice_evaluations": invalid["ice_evaluations"],
+            "resource_constraints": invalid["resource_constraints"],
+            "sensitivity_analysis": invalid["sensitivity_analysis"],
+            "validation_experiments": invalid["validation_experiments"],
+            "merge_paths": invalid["merge_paths"],
+        },
+        "stage_action": None,
+        "warnings": [],
+    }
+
+    output = render_partial_agent_turn_from_artifact_data(
+        payload,
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONVERGE",
+    )
+
+    assert output is not None
+    assert "## 验证实验" in output.artifact_update.markdown
+    assert "## 整合演进路径" not in output.artifact_update.markdown
 
 
 def test_render_partial_idea_concept_artifact_data_builds_formal_incremental_markdown_and_patch():

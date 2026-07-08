@@ -314,45 +314,10 @@ class IdeaDivergeArtifactData(StrictArtifactDataModel):
 
     @model_validator(mode="after")
     def validate_idea_diverge_consistency(self) -> "IdeaDivergeArtifactData":
-        idea_ids = {item.idea_id for item in self.idea_cards}
-        if len(idea_ids) != len(self.idea_cards):
-            raise ValueError("idea_cards contains duplicate idea_id")
-
-        source_ids = {item.source_id for item in self.idea_sources}
-        if len(source_ids) != len(self.idea_sources):
-            raise ValueError("idea_sources contains duplicate source_id")
-
-        record_ids = {item.record_id for item in self.parked_or_excluded}
-        if len(record_ids) != len(self.parked_or_excluded):
-            raise ValueError("parked_or_excluded contains duplicate record_id")
-
-        unknown_landscape_idea_ids = sorted(
-            {
-                idea_id
-                for group in self.idea_landscape.groups
-                for idea_id in group.idea_ids
-                if idea_id not in idea_ids
-            }
-        )
-        if unknown_landscape_idea_ids:
-            raise ValueError(
-                "idea_landscape references unknown idea ids: "
-                + ", ".join(unknown_landscape_idea_ids)
-            )
-
-        unknown_source_idea_ids = sorted(
-            {
-                idea_id
-                for source in self.idea_sources
-                for idea_id in source.idea_ids
-                if idea_id not in idea_ids
-            }
-        )
-        if unknown_source_idea_ids:
-            raise ValueError(
-                "idea_sources references unknown idea ids: "
-                + ", ".join(unknown_source_idea_ids)
-            )
+        idea_ids = _validate_idea_card_ids(self.idea_cards)
+        _validate_idea_source_references(self.idea_sources, idea_ids)
+        _validate_idea_landscape_references(self.idea_landscape, idea_ids)
+        _validate_idea_parked_record_ids(self.parked_or_excluded)
 
         if not any(item.checked for item in self.stage_gate):
             raise ValueError("stage_gate must include at least one checked item")
@@ -438,89 +403,178 @@ class IdeaConvergeArtifactData(StrictArtifactDataModel):
 
     @model_validator(mode="after")
     def validate_idea_converge_consistency(self) -> "IdeaConvergeArtifactData":
-        idea_ids = {item.idea_id for item in self.ice_evaluations}
-        if len(idea_ids) != len(self.ice_evaluations):
-            raise ValueError("ice_evaluations contains duplicate idea_id")
-
-        ranks = {item.rank for item in self.ice_evaluations}
-        if len(ranks) != len(self.ice_evaluations):
-            raise ValueError("ice_evaluations contains duplicate rank")
-
-        for item in self.ice_evaluations:
-            expected_score = item.impact * item.confidence / item.effort
-            if abs(item.ice_score - expected_score) > 0.01:
-                raise ValueError(
-                    f"ice_evaluations.{item.idea_id}.ice_score must equal "
-                    "impact * confidence / effort"
-                )
-
-        recommended_idea_id = self.decision_matrix.recommended_idea_id
-        if recommended_idea_id not in idea_ids:
-            raise ValueError("decision_matrix.recommended_idea_id is unknown")
-
-        decision_idea_ids = {
-            item.idea_id for item in self.decision_matrix.decision_items
-        }
-        unknown_decision_idea_ids = sorted(decision_idea_ids - idea_ids)
-        if unknown_decision_idea_ids:
-            raise ValueError(
-                "decision_matrix references unknown idea ids: "
-                + ", ".join(unknown_decision_idea_ids)
-            )
-
-        recommended_evaluation = next(
-            item for item in self.ice_evaluations if item.idea_id == recommended_idea_id
+        idea_ids = _validate_idea_ice_evaluations(self.ice_evaluations)
+        _validate_idea_decision_matrix_references(
+            self.decision_matrix,
+            self.ice_evaluations,
+            idea_ids,
         )
-        recommended_decision = next(
-            (
-                item
-                for item in self.decision_matrix.decision_items
-                if item.idea_id == recommended_idea_id
-            ),
-            None,
+        _validate_idea_validation_experiment_references(
+            self.validation_experiments,
+            idea_ids,
         )
-        if (
-            "推荐" not in recommended_evaluation.conclusion
-            or recommended_decision is None
-            or "推荐" not in recommended_decision.decision
-        ):
-            raise ValueError(
-                "recommended idea must match a recommended ICE evaluation "
-                "and decision item"
-            )
-
-        unknown_experiment_idea_ids = sorted(
-            {
-                idea_id
-                for experiment in self.validation_experiments
-                for idea_id in experiment.idea_ids
-                if idea_id not in idea_ids
-            }
-        )
-        if unknown_experiment_idea_ids:
-            raise ValueError(
-                "validation_experiments references unknown idea ids: "
-                + ", ".join(unknown_experiment_idea_ids)
-            )
-
-        unknown_merge_idea_ids = sorted(
-            {
-                idea_id
-                for path in self.merge_paths
-                for idea_id in path.source_idea_ids
-                if idea_id not in idea_ids
-            }
-        )
-        if unknown_merge_idea_ids:
-            raise ValueError(
-                "merge_paths references unknown idea ids: "
-                + ", ".join(unknown_merge_idea_ids)
-            )
+        _validate_idea_merge_path_references(self.merge_paths, idea_ids)
 
         if not any(item.checked for item in self.stage_gate):
             raise ValueError("stage_gate must include at least one checked item")
 
         return self
+
+
+def _validate_idea_card_ids(cards: list[IdeaCard]) -> set[str]:
+    idea_ids = {item.idea_id for item in cards}
+    if len(idea_ids) != len(cards):
+        raise ValueError("idea_cards contains duplicate idea_id")
+    return idea_ids
+
+
+def _validate_idea_landscape_references(
+    landscape: IdeaDivergeLandscape,
+    idea_ids: set[str],
+) -> None:
+    unknown_landscape_idea_ids = sorted(
+        {
+            idea_id
+            for group in landscape.groups
+            for idea_id in group.idea_ids
+            if idea_id not in idea_ids
+        }
+    )
+    if unknown_landscape_idea_ids:
+        raise ValueError(
+            "idea_landscape references unknown idea ids: "
+            + ", ".join(unknown_landscape_idea_ids)
+        )
+
+
+def _validate_idea_source_references(
+    sources: list[IdeaSource],
+    idea_ids: set[str],
+) -> None:
+    source_ids = {item.source_id for item in sources}
+    if len(source_ids) != len(sources):
+        raise ValueError("idea_sources contains duplicate source_id")
+
+    unknown_source_idea_ids = sorted(
+        {
+            idea_id
+            for source in sources
+            for idea_id in source.idea_ids
+            if idea_id not in idea_ids
+        }
+    )
+    if unknown_source_idea_ids:
+        raise ValueError(
+            "idea_sources references unknown idea ids: "
+            + ", ".join(unknown_source_idea_ids)
+        )
+
+
+def _validate_idea_parked_record_ids(
+    records: list[IdeaParkedOrExcludedRecord],
+) -> None:
+    record_ids = {item.record_id for item in records}
+    if len(record_ids) != len(records):
+        raise ValueError("parked_or_excluded contains duplicate record_id")
+
+
+def _validate_idea_ice_evaluations(
+    evaluations: list[IdeaIceEvaluation],
+) -> set[str]:
+    idea_ids = {item.idea_id for item in evaluations}
+    if len(idea_ids) != len(evaluations):
+        raise ValueError("ice_evaluations contains duplicate idea_id")
+
+    ranks = {item.rank for item in evaluations}
+    if len(ranks) != len(evaluations):
+        raise ValueError("ice_evaluations contains duplicate rank")
+
+    for item in evaluations:
+        expected_score = item.impact * item.confidence / item.effort
+        if abs(item.ice_score - expected_score) > 0.01:
+            raise ValueError(
+                f"ice_evaluations.{item.idea_id}.ice_score must equal "
+                "impact * confidence / effort"
+            )
+
+    return idea_ids
+
+
+def _validate_idea_decision_matrix_references(
+    matrix: IdeaDecisionMatrix,
+    evaluations: list[IdeaIceEvaluation],
+    idea_ids: set[str],
+) -> None:
+    recommended_idea_id = matrix.recommended_idea_id
+    if recommended_idea_id not in idea_ids:
+        raise ValueError("decision_matrix.recommended_idea_id is unknown")
+
+    decision_idea_ids = {item.idea_id for item in matrix.decision_items}
+    unknown_decision_idea_ids = sorted(decision_idea_ids - idea_ids)
+    if unknown_decision_idea_ids:
+        raise ValueError(
+            "decision_matrix references unknown idea ids: "
+            + ", ".join(unknown_decision_idea_ids)
+        )
+
+    recommended_evaluation = next(
+        item for item in evaluations if item.idea_id == recommended_idea_id
+    )
+    recommended_decision = next(
+        (
+            item
+            for item in matrix.decision_items
+            if item.idea_id == recommended_idea_id
+        ),
+        None,
+    )
+    if (
+        "推荐" not in recommended_evaluation.conclusion
+        or recommended_decision is None
+        or "推荐" not in recommended_decision.decision
+    ):
+        raise ValueError(
+            "recommended idea must match a recommended ICE evaluation "
+            "and decision item"
+        )
+
+
+def _validate_idea_validation_experiment_references(
+    experiments: list[IdeaValidationExperiment],
+    idea_ids: set[str],
+) -> None:
+    unknown_experiment_idea_ids = sorted(
+        {
+            idea_id
+            for experiment in experiments
+            for idea_id in experiment.idea_ids
+            if idea_id not in idea_ids
+        }
+    )
+    if unknown_experiment_idea_ids:
+        raise ValueError(
+            "validation_experiments references unknown idea ids: "
+            + ", ".join(unknown_experiment_idea_ids)
+        )
+
+
+def _validate_idea_merge_path_references(
+    merge_paths: list[IdeaMergePath],
+    idea_ids: set[str],
+) -> None:
+    unknown_merge_idea_ids = sorted(
+        {
+            idea_id
+            for path in merge_paths
+            for idea_id in path.source_idea_ids
+            if idea_id not in idea_ids
+        }
+    )
+    if unknown_merge_idea_ids:
+        raise ValueError(
+            "merge_paths references unknown idea ids: "
+            + ", ".join(unknown_merge_idea_ids)
+        )
 
 
 class IdeaPositioningStatement(StrictArtifactDataModel):
@@ -4197,9 +4251,12 @@ def render_partial_idea_brainstorm_diverge_markdown(data: Any) -> str | None:
         if "idea_landscape" not in data or "idea_cards" not in data:
             return _join_partial_sections(sections)
         idea_cards = _validate_partial_list(data["idea_cards"], IdeaCard)
+        idea_ids = _validate_idea_card_ids(idea_cards)
+        idea_landscape = IdeaDivergeLandscape.model_validate(data["idea_landscape"])
+        _validate_idea_landscape_references(idea_landscape, idea_ids)
         sections.append(
             _render_idea_diverge_landscape(
-                IdeaDivergeLandscape.model_validate(data["idea_landscape"]),
+                idea_landscape,
                 idea_cards,
             )
         )
@@ -4207,11 +4264,9 @@ def render_partial_idea_brainstorm_diverge_markdown(data: Any) -> str | None:
 
         if "idea_sources" not in data:
             return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_sources(
-                _validate_partial_list(data["idea_sources"], IdeaSource)
-            )
-        )
+        idea_sources = _validate_partial_list(data["idea_sources"], IdeaSource)
+        _validate_idea_source_references(idea_sources, idea_ids)
+        sections.append(_render_idea_sources(idea_sources))
 
         if "parked_or_excluded" not in data:
             return _join_partial_sections(sections)
@@ -4250,6 +4305,12 @@ def render_partial_idea_brainstorm_converge_markdown(data: Any) -> str | None:
             data["ice_evaluations"],
             IdeaIceEvaluation,
         )
+        idea_ids = _validate_idea_ice_evaluations(ice_evaluations)
+        _validate_idea_decision_matrix_references(
+            decision_matrix,
+            ice_evaluations,
+            idea_ids,
+        )
     except (TypeError, ValueError, ValidationError):
         return None
 
@@ -4287,22 +4348,21 @@ def render_partial_idea_brainstorm_converge_markdown(data: Any) -> str | None:
 
         if "validation_experiments" not in data:
             return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_validation_experiments(
-                _validate_partial_list(
-                    data["validation_experiments"],
-                    IdeaValidationExperiment,
-                )
-            )
+        validation_experiments = _validate_partial_list(
+            data["validation_experiments"],
+            IdeaValidationExperiment,
         )
+        _validate_idea_validation_experiment_references(
+            validation_experiments,
+            idea_ids,
+        )
+        sections.append(_render_idea_validation_experiments(validation_experiments))
 
         if "merge_paths" not in data:
             return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_merge_paths(
-                _validate_partial_list(data["merge_paths"], IdeaMergePath)
-            )
-        )
+        merge_paths = _validate_partial_list(data["merge_paths"], IdeaMergePath)
+        _validate_idea_merge_path_references(merge_paths, idea_ids)
+        sections.append(_render_idea_merge_paths(merge_paths))
 
         if "stage_gate" not in data:
             return _join_partial_sections(sections)
