@@ -1302,8 +1302,9 @@ def test_idea_define_structured_output_instruction_explains_root_problem_coverag
         "DEFINE",
     )
 
-    assert "evidence_items.related_problem 必须原样包含 problem_landscape.root_problem" in instruction
-    assert "problem_user_fit.evidence_or_assumption 必须原样包含 problem_landscape.root_problem" in instruction
+    assert "root_problem_id" in instruction
+    assert "related_problem_ids" in instruction
+    assert "原样包含 problem_landscape.root_problem" not in instruction
 
 
 def test_idea_diverge_structured_output_instruction_requests_artifact_data_not_markdown():

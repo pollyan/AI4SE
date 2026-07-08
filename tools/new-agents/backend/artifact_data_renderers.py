@@ -131,6 +131,7 @@ class IdeaSubproblem(StrictArtifactDataModel):
 
 
 class IdeaProblemLandscape(StrictArtifactDataModel):
+    root_problem_id: str
     root_problem: str
     subproblems: list[IdeaSubproblem] = Field(min_length=1)
 
@@ -138,6 +139,7 @@ class IdeaProblemLandscape(StrictArtifactDataModel):
 class IdeaEvidenceItem(StrictArtifactDataModel):
     evidence_id: str
     related_problem: str
+    related_problem_ids: list[str] = Field(min_length=1)
     source: str
     evidence_level: str
     validation_action: str
@@ -188,6 +190,27 @@ class IdeaDefineArtifactData(StrictArtifactDataModel):
         if len(problem_ids) != len(self.problem_landscape.subproblems):
             raise ValueError("problem_landscape contains duplicate problem_id")
 
+        root_problem_id = self.problem_landscape.root_problem_id
+        if root_problem_id in problem_ids:
+            raise ValueError(
+                "problem_landscape.root_problem_id duplicates subproblem problem_id"
+            )
+
+        known_problem_ids = {root_problem_id} | problem_ids
+        unknown_problem_ids = sorted(
+            {
+                problem_id
+                for item in self.evidence_items
+                for problem_id in item.related_problem_ids
+                if problem_id not in known_problem_ids
+            }
+        )
+        if unknown_problem_ids:
+            raise ValueError(
+                "evidence_items references unknown problem ids: "
+                + ", ".join(unknown_problem_ids)
+            )
+
         unknown_fit_evidence_ids = sorted(
             {
                 evidence_id
@@ -202,17 +225,26 @@ class IdeaDefineArtifactData(StrictArtifactDataModel):
                 + ", ".join(unknown_fit_evidence_ids)
             )
 
-        root_problem = self.problem_landscape.root_problem
-        root_problem_covered = any(
-            root_problem in item.related_problem for item in self.evidence_items
-        ) or any(
-            root_problem in item.evidence_or_assumption
-            for item in self.problem_user_fit
-        )
-        if not root_problem_covered:
+        root_evidence_ids = {
+            item.evidence_id
+            for item in self.evidence_items
+            if root_problem_id in item.related_problem_ids
+        }
+        if not root_evidence_ids:
             raise ValueError(
-                "problem_landscape.root_problem must be covered by evidence_items "
-                "or problem_user_fit"
+                "problem_landscape.root_problem_id must be covered by evidence_items"
+            )
+
+        fit_root_evidence_ids = {
+            evidence_id
+            for item in self.problem_user_fit
+            for evidence_id in item.evidence_ids
+            if evidence_id in root_evidence_ids
+        }
+        if not fit_root_evidence_ids:
+            raise ValueError(
+                "problem_user_fit must reference evidence covering "
+                "problem_landscape.root_problem_id"
             )
 
         if not any(item.checked for item in self.stage_gate):
@@ -4079,19 +4111,28 @@ def render_partial_idea_brainstorm_define_markdown(data: Any) -> str | None:
 
         if "problem_landscape" not in data:
             return _join_partial_sections(sections)
+        problem_landscape = IdeaProblemLandscape.model_validate(
+            data["problem_landscape"]
+        )
         sections.append(
-            _render_idea_problem_landscape(
-                IdeaProblemLandscape.model_validate(data["problem_landscape"])
-            )
+            _render_idea_problem_landscape(problem_landscape)
         )
 
         if "evidence_items" not in data:
             return _join_partial_sections(sections)
-        sections.append(
-            _render_idea_evidence_items(
-                _validate_partial_list(data["evidence_items"], IdeaEvidenceItem)
-            )
+        evidence_items = _validate_partial_list(
+            data["evidence_items"], IdeaEvidenceItem
         )
+        known_problem_ids = {problem_landscape.root_problem_id} | {
+            item.problem_id for item in problem_landscape.subproblems
+        }
+        if any(
+            problem_id not in known_problem_ids
+            for item in evidence_items
+            for problem_id in item.related_problem_ids
+        ):
+            return _join_partial_sections(sections)
+        sections.append(_render_idea_evidence_items(evidence_items))
 
         if "problem_user_fit" not in data:
             return _join_partial_sections(sections)
@@ -6055,14 +6096,17 @@ def _render_idea_problem_landscape(landscape: IdeaProblemLandscape) -> str:
             lines.append(f"      {_escape_mermaid_mindmap_text(symptom)}")
     lines.append("```")
     rows = [
-        (item.problem_id, item.problem, "、".join(item.symptoms))
-        for item in landscape.subproblems
+        (landscape.root_problem_id, "根问题", landscape.root_problem, "-"),
+        *[
+            (item.problem_id, "子问题", item.problem, "、".join(item.symptoms))
+            for item in landscape.subproblems
+        ],
     ]
     return (
         "## 问题域全景\n"
         + "\n".join(lines)
         + "\n\n"
-        + _markdown_table(["问题 ID", "子问题", "表现"], rows)
+        + _markdown_table(["问题 ID", "类型", "问题", "表现"], rows)
     )
 
 
@@ -6070,6 +6114,7 @@ def _render_idea_evidence_items(items: list[IdeaEvidenceItem]) -> str:
     rows = [
         (
             item.evidence_id,
+            ", ".join(item.related_problem_ids),
             item.related_problem,
             item.source,
             item.evidence_level,
@@ -6082,6 +6127,7 @@ def _render_idea_evidence_items(items: list[IdeaEvidenceItem]) -> str:
     return "## 证据与验证状态\n" + _markdown_table(
         [
             "证据 ID",
+            "关联问题 ID",
             "关联问题",
             "证据来源",
             "证据等级",

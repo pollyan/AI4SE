@@ -162,6 +162,7 @@ VALID_IDEA_DEFINE_ARTIFACT_DATA = {
         },
     ],
     "problem_landscape": {
+        "root_problem_id": "P-ROOT",
         "root_problem": "独立开发者变现方向选择困难",
         "subproblems": [
             {
@@ -180,6 +181,7 @@ VALID_IDEA_DEFINE_ARTIFACT_DATA = {
         {
             "evidence_id": "EV-001",
             "related_problem": "独立开发者变现方向选择困难",
+            "related_problem_ids": ["P-ROOT"],
             "source": "独立开发者访谈摘要",
             "evidence_level": "用户陈述",
             "validation_action": "访谈 5 位独立开发者并记录当前方向筛选方式",
@@ -189,6 +191,7 @@ VALID_IDEA_DEFINE_ARTIFACT_DATA = {
         {
             "evidence_id": "EV-002",
             "related_problem": "缺少低成本验证动作",
+            "related_problem_ids": ["P-002"],
             "source": "社群帖子和产品复盘文章",
             "evidence_level": "合理推断",
             "validation_action": "收集 20 篇变现失败复盘并归类失败原因",
@@ -2601,12 +2604,44 @@ def test_idea_define_artifact_data_rejects_unknown_fit_evidence_reference():
         IdeaDefineArtifactData.model_validate(invalid)
 
 
-def test_idea_define_artifact_data_requires_root_problem_coverage():
-    invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
-    invalid["evidence_items"][0]["related_problem"] = "其它问题"
-    invalid["problem_user_fit"][0]["evidence_or_assumption"] = "其它判断"
+def test_idea_define_artifact_data_accepts_id_based_root_problem_coverage_without_exact_text_copy():
+    payload = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
+    payload["problem_landscape"]["root_problem_id"] = "P-ROOT"
+    payload["evidence_items"][0]["related_problem"] = "方向优先级和投入判断"
+    payload["evidence_items"][0]["related_problem_ids"] = ["P-ROOT"]
+    payload["problem_user_fit"][0]["evidence_or_assumption"] = (
+        "受访者提到方向筛选焦虑"
+    )
+    payload["problem_user_fit"][0]["evidence_ids"] = ["EV-001"]
 
-    with pytest.raises(ValidationError, match="root_problem"):
+    result = IdeaDefineArtifactData.model_validate(payload)
+
+    assert result.problem_landscape.root_problem == "独立开发者变现方向选择困难"
+    assert result.evidence_items[0].related_problem_ids == ["P-ROOT"]
+
+
+def test_idea_define_artifact_data_rejects_unknown_related_problem_reference():
+    invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
+    invalid["evidence_items"][0]["related_problem_ids"] = ["P-404"]
+
+    with pytest.raises(ValidationError, match="unknown problem ids"):
+        IdeaDefineArtifactData.model_validate(invalid)
+
+
+def test_idea_define_artifact_data_requires_root_problem_id_coverage():
+    invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
+    invalid["evidence_items"][0]["related_problem_ids"] = ["P-001"]
+    invalid["problem_user_fit"][0]["evidence_ids"] = ["EV-001"]
+
+    with pytest.raises(ValidationError, match="root_problem_id"):
+        IdeaDefineArtifactData.model_validate(invalid)
+
+
+def test_idea_define_artifact_data_requires_fit_to_reference_root_problem_evidence():
+    invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
+    invalid["problem_user_fit"][0]["evidence_ids"] = ["EV-002"]
+
+    with pytest.raises(ValidationError, match="root_problem_id"):
         IdeaDefineArtifactData.model_validate(invalid)
 
 
@@ -3793,6 +3828,39 @@ def test_render_partial_idea_define_artifact_data_builds_formal_incremental_mark
     )
 
 
+def test_render_partial_idea_define_artifact_data_skips_evidence_with_unknown_problem_reference():
+    payload = {
+        "chat": "我正在分析问题域。",
+        "artifact_data": {
+            "problem_statement": VALID_IDEA_DEFINE_ARTIFACT_DATA[
+                "problem_statement"
+            ],
+            "target_users": VALID_IDEA_DEFINE_ARTIFACT_DATA["target_users"],
+            "problem_landscape": VALID_IDEA_DEFINE_ARTIFACT_DATA[
+                "problem_landscape"
+            ],
+            "evidence_items": [
+                {
+                    **VALID_IDEA_DEFINE_ARTIFACT_DATA["evidence_items"][0],
+                    "related_problem_ids": ["P-404"],
+                }
+            ],
+        },
+        "stage_action": None,
+        "warnings": [],
+    }
+
+    output = render_partial_agent_turn_from_artifact_data(
+        payload,
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="DEFINE",
+    )
+
+    assert output is not None
+    assert "## 问题域全景" in output.artifact_update.markdown
+    assert "## 证据与验证状态" not in output.artifact_update.markdown
+
+
 def test_render_partial_idea_diverge_artifact_data_builds_formal_incremental_markdown_and_patch():
     method_payload = {
         "chat": "我正在发散产品创意。",
@@ -4945,7 +5013,9 @@ def test_render_idea_define_artifact_data_is_deterministic_and_contract_valid():
     assert "## 问题域全景" in first.artifact_update.markdown
     assert "mindmap" in first.artifact_update.markdown
     assert 'root(("独立开发者变现方向选择困难"))' in (first.artifact_update.markdown)
+    assert "P-ROOT" in first.artifact_update.markdown
     assert "## 证据与验证状态" in first.artifact_update.markdown
+    assert "关联问题 ID" in first.artifact_update.markdown
     assert "## 问题-用户-场景匹配" in first.artifact_update.markdown
     assert "## 约束与边界" in first.artifact_update.markdown
     assert "## 反向验证（风险思考）" in first.artifact_update.markdown

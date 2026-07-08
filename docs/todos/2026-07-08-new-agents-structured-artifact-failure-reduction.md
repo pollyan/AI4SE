@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 0 轮能力 spike 尚未执行）
+- 状态：执行中（第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 0 轮能力 spike 尚未执行）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -100,6 +100,7 @@
 - [ ] 收敛 ID 与引用关系。（第 4-6 轮）
   - 目标：后端生成稳定 ID，或在 renderer/normalizer 中确定性分配 ID；模型不再负责维护容易漂移的跨表引用。
   - 重点阶段：`IDEA_BRAINSTORM/DEFINE` 的 evidence 引用，`IDEA_BRAINSTORM/CONVERGE` 的 idea / rank / recommended idea 引用，`TEST_DESIGN/CASES` 的 requirement / risk / case 覆盖引用。
+  - 进展：第 4 轮已完成 `IDEA_BRAINSTORM/DEFINE` 的 root problem / evidence / problem-user-fit ID 引用治理；`CONVERGE` 和 `TEST_DESIGN/CASES` 仍未完成。
 
 - [ ] 建立 schema / prompt / contract 单源同步机制。（横切，第 3-8 轮）
   - 目标：Pydantic validators、structured output instruction、workflow manifest visual contract、frontend prompt 不再各写一套约束。
@@ -108,6 +109,7 @@
 - [ ] 针对高失败阶段做纵切专项修复。（第 4-6 轮）
   - 优先顺序：`IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY`、`IDEA_BRAINSTORM/DIVERGE`。
   - 目标：每个阶段都有失败复现、根因定位、最小 schema 设计修复和回归测试。
+  - 进展：第 4 轮已完成 `IDEA_BRAINSTORM/DEFINE` 的已知 root-problem 覆盖失败模式修复；后续仍需处理 `CONVERGE`、`CASES`、`STRATEGY`、`DIVERGE`。
 
 - [ ] 增加结构化失败回归门禁。（第 8 轮）
   - 目标：高失败阶段必须有固定 fixture / raw JSON stream / renderer contract 测试，确保不会再次因为已知不变量触发 `SCHEMA_VALIDATION_FAILED`。
@@ -297,6 +299,87 @@ New Agents 验证：
 
 - 本轮只完成 `VALUE_DISCOVERY/ELEVATOR` 的评分汇总后端化，`TEST_DESIGN/CASES` 的用例统计、DELIVERY 的汇总和后续 ID / 引用一致性仍按第 4-8 轮推进。
 - 本轮没有启用真实外部模型 smoke 或 LLM judge；该改动由确定性 schema / renderer / runtime / E2E 回归覆盖，不证明 DeepSeek 真实样本成功率已经提升到某个数值。
+
+### 2026-07-08 第 4 轮：IDEA_BRAINSTORM/DEFINE 证据引用稳定化
+
+已完成 `IDEA_BRAINSTORM/DEFINE` 根问题与证据一致性治理：
+
+- `IdeaProblemLandscape` 新增 `root_problem_id`，`IdeaEvidenceItem` 新增 `related_problem_ids`，模型不再需要把 `root_problem` 原样复制到 evidence 或 problem-user-fit 文本中。
+- 后端 validator 改为校验稳定 ID 引用图：root problem id 不能与 subproblem id 重复；evidence 只能引用 root 或已存在 subproblem；至少一条 evidence 必须支撑 root；problem-user-fit 必须引用支撑 root 的 evidence。
+- 未知 problem id、缺少 root coverage、problem-user-fit 未引用 root evidence、未知 evidence id、重复 ID 和无 checked stage gate 仍显式 `ValidationError`，不生成假成功 artifact。
+- DEFINE Markdown deterministic renderer 在问题域表中展示 root problem 行，并在证据表中展示“关联问题 ID”；partial renderer 在 evidence 引用未知 problem id 时停在上一段，不预览已知错误的证据章节。
+- `IDEA_DEFINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION` 已同步 `root_problem_id` / `related_problem_ids`，删除“原样包含 `problem_landscape.root_problem`”的脆弱要求。
+- 本轮设计与执行计划已记录在：
+  - `docs/superpowers/specs/2026-07-08-new-agents-idea-define-evidence-reference-design.md`
+  - `docs/superpowers/plans/2026-07-08-new-agents-idea-define-evidence-reference.md`
+
+RED 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_define_artifact_data_accepts_id_based_root_problem_coverage_without_exact_text_copy tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_define_artifact_data_rejects_unknown_related_problem_reference tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_define_artifact_data_requires_root_problem_id_coverage tools/new-agents/backend/tests/test_agent_runtime.py::test_idea_define_structured_output_instruction_explains_root_problem_coverage -q
+```
+
+结果：`4 failed`，失败点为 `root_problem_id` / `related_problem_ids` 尚不是 schema 或 prompt 的一部分。
+
+补充 RED 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_idea_define_artifact_data_skips_evidence_with_unknown_problem_reference -q
+```
+
+结果：`1 failed`，失败点为 partial renderer 会把未知 `related_problem_ids` 的证据表预览出来。
+
+GREEN 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_define_artifact_data_accepts_id_based_root_problem_coverage_without_exact_text_copy tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_define_artifact_data_rejects_unknown_related_problem_reference tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_define_artifact_data_requires_root_problem_id_coverage tools/new-agents/backend/tests/test_agent_runtime.py::test_idea_define_structured_output_instruction_explains_root_problem_coverage -q
+```
+
+结果：`4 passed`
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_idea_define_artifact_data_skips_evidence_with_unknown_problem_reference -q
+```
+
+结果：`1 passed`
+
+DEFINE 聚焦回归：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_define_artifact_data_rejects_duplicate_evidence_id tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_define_artifact_data_rejects_duplicate_problem_id tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_define_artifact_data_rejects_unknown_fit_evidence_reference tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_define_artifact_data_accepts_id_based_root_problem_coverage_without_exact_text_copy tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_define_artifact_data_rejects_unknown_related_problem_reference tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_define_artifact_data_requires_root_problem_id_coverage tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_define_artifact_data_requires_fit_to_reference_root_problem_evidence tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_define_artifact_data_requires_checked_stage_gate tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_idea_define_artifact_data_builds_formal_incremental_markdown_and_patch tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_idea_define_artifact_data_skips_evidence_with_unknown_problem_reference tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_idea_define_artifact_data_is_deterministic_and_contract_valid tools/new-agents/backend/tests/test_agent_runtime.py::test_idea_define_structured_output_instruction_requests_artifact_data_not_markdown tools/new-agents/backend/tests/test_agent_runtime.py::test_idea_define_structured_output_instruction_explains_root_problem_coverage tools/new-agents/backend/tests/test_agent_runtime.py::test_runtime_raw_json_stream_turn_renders_idea_define_artifact_data_before_final_output -q
+```
+
+结果：`14 passed`
+
+聚焦后端回归：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_stream_services.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_contracts.py -q
+```
+
+结果：`352 passed`
+
+New Agents 验证：
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：New Agents 前端 `718 passed`；New Agents 后端 `605 passed, 1 deselected`。运行中出现既有 React `ArtifactPane.test.tsx` `act(...)` warning，但未导致测试失败。
+
+全量验证：
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：默认沙箱失败，失败点为 MidScene proxy `listen EPERM: operation not permitted 0.0.0.0:3002`、Playwright Chromium `bootstrap_check_in ... Permission denied (1100)`，并且曾卡在 `python -m playwright install chromium`；非沙箱重跑通过，关键结果包括 Intent Tester API `294 passed`、flake8 严重错误检查通过、MidScene proxy `17 passed`、Common Frontend lint/build 通过、New Agents Frontend `718 passed`、New Agents Backend `605 passed, 1 deselected`、New Agents Browser E2E `11 passed, 10 deselected`。
+
+残余风险：
+
+- 本轮只完成 `IDEA_BRAINSTORM/DEFINE` 的证据引用稳定化，不代表 `IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/DIVERGE`、`TEST_DESIGN/CASES` 或 `TEST_DESIGN/STRATEGY` 的引用/统计风险已解决。
+- 本轮未启用真实外部模型 smoke 或 LLM judge；确定性测试证明脆弱 contract 已被 ID 引用替代，但不证明 DeepSeek 真实样本成功率已经提升到某个数值。
+- 第 0 轮 DeepSeek tool calling 能力 spike 仍未执行，后续需要单独基于 provider 能力和可能的真实模型调用形成结论。
 
 ## 每轮验收口径
 
