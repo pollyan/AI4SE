@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成；前端正式 / partial artifact `ai4se-visual` 写入前校验已完成并全量验证通过；第 8A 轮 `artifact_data` 全阶段 fixture registry 回归门禁已完成并全量验证通过）
+- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成；前端正式 / partial artifact `ai4se-visual` 写入前校验已完成并全量验证通过；第 8A 轮 `artifact_data` 全阶段 fixture registry 回归门禁已完成并全量验证通过；第 8B 轮 `artifact_data` 字段来源与视觉协议矩阵已完成）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -118,6 +118,7 @@
   - 目标：高失败阶段必须有固定 fixture / raw JSON stream / renderer contract 测试，确保不会再次因为已知不变量触发 `SCHEMA_VALIDATION_FAILED`。
   - 验收：纳入 `./scripts/test/test-local.sh new-agents` 或明确的 New Agents backend regression suite。
   - 进展：第 8A 轮已建立 `ARTIFACT_DATA_STAGE_FIXTURES` 全阶段测试登记表，覆盖全部 `supports_artifact_data_rendering()` 支持的 21 个在线阶段；每个 registry fixture 都必须通过 deterministic renderer 和 `validate_agent_turn()`。`test_agent_runtime.py` 的 artifact-data instruction 顺序矩阵已改为从 registry 派生，避免新增阶段时漏掉 raw JSON visible streaming 门禁。`test_workflow_contract_sync.py` 已反向校验 `workflow_manifest.json` 的 `visualContract` 与后端 required Mermaid / structured visual maps 完全一致。
+  - 进展：第 8B 轮已在 `docs/TESTING.md` 补齐 21 个在线阶段的模型输出字段 / 后端派生字段 / 视觉协议来源矩阵，明确 validation-only 与 backend-derived 的边界，并记录 `IDEA_BRAINSTORM/CONVERGE` 是当前唯一完成 `artifactDataContract` manifest 同步迁移的阶段。
 
 - [ ] 建立视觉产物协议分层。（第 7 轮）
   - 目标：明确哪些视觉类型必须走 `ai4se-visual` JSON，哪些 Mermaid 类型允许由后端 deterministic renderer 生成，哪些 DSL 禁止模型直接输出。
@@ -1130,6 +1131,42 @@ GREEN 与聚焦回归：
 - 本轮不迁移 20 个阶段的 `artifactDataContract` 到 manifest。
 - 本轮不增加 backend Mermaid JS parse 或 `mmdc` 渲染门禁。
 - 模型输出字段 / 后端派生字段 / 视觉协议来源的完整全阶段矩阵仍属第 8 轮后续文档收口候选。
+
+### 2026-07-08 第 8B 轮：artifact_data 字段来源与视觉协议矩阵
+
+已完成：
+
+- `docs/TESTING.md` 新增 21 个在线 `artifact_data` 阶段的字段来源矩阵，列出模型负责的语义字段、后端派生 / 归一化字段、视觉来源和现有证据。
+- 矩阵明确区分 backend-derived 与 validation-only：`STRATEGY.risks[].rpn`、`CASES.case_statistics`、`VALUE_DISCOVERY/ELEVATOR.score_summary.total_score/average_score` 属于可后端补齐或归一化；`delivery_metrics`、`issue_statistics`、`priority_distribution`、`ice_score`、`acceptance_criteria_count` 等仍是模型输入后的校验，不声明后端补齐。
+- 矩阵明确 `IDEA_BRAINSTORM/CONVERGE` 是当前唯一完成 `artifactDataContract` manifest 同步迁移的阶段；其余 20 个阶段仍主要由 Pydantic model、renderer tests、runtime instruction 和 artifact contract tests 共同保护。
+- 矩阵明确 Mermaid 仍是后端 deterministic renderer 的编译目标，并区分 manifest required visual 与 renderer 额外输出：例如 `IDEA_BRAINSTORM/CONCEPT` 和 `VALUE_DISCOVERY/BLUEPRINT` 仍会额外生成 Mermaid，但 manifest 当前只要求其 `ai4se-visual`。
+- 只读 explorer `Jason` 已审查 `workflow_manifest.json`、`agent_runtime.py`、`artifact_data_renderers.py` 和相关 backend tests，返回的事实清单已并入矩阵；本轮未改生产 runtime、schema、manifest、prompt、测试代码或前端运行时。
+
+文档验证：
+
+```bash
+git diff --check -- docs/TESTING.md docs/todos/2026-07-08-new-agents-structured-artifact-failure-reduction.md docs/superpowers/specs/2026-07-08-new-agents-artifact-data-source-matrix-design.md docs/superpowers/plans/2026-07-08-new-agents-artifact-data-source-matrix.md
+```
+
+结果：通过，无输出。
+
+```bash
+rg -n "T[B]D|T[O]DO|implement[ ]later|<填[入]|待[补]" docs/TESTING.md docs/todos/2026-07-08-new-agents-structured-artifact-failure-reduction.md docs/superpowers/specs/2026-07-08-new-agents-artifact-data-source-matrix-design.md docs/superpowers/plans/2026-07-08-new-agents-artifact-data-source-matrix.md
+```
+
+结果：通过，退出码 `1`，无匹配。
+
+```bash
+rg -n "模型负责的 artifact_data|后端派生 / 归一化|视觉来源|第 8B" docs/TESTING.md docs/todos/2026-07-08-new-agents-structured-artifact-failure-reduction.md
+```
+
+结果：通过，`docs/TESTING.md` 和本 todo 均包含第 8B 矩阵入口；`docs/TESTING.md:155-175` 覆盖 21 个在线阶段。
+
+残余风险：
+
+- 本轮只补齐字段来源与视觉协议文档矩阵，不迁移 20 个阶段的 `artifactDataContract` 到 manifest。
+- 本轮不增加 backend Mermaid JS parse 或 `mmdc` 渲染门禁。
+- 矩阵是人工维护的文档事实源，后续 schema / renderer / manifest 变化时仍必须同步更新；第 8A 的 fixture registry 和 manifest visualContract sync test 仍是可执行门禁。
 
 ## 每轮验收口径
 
