@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 from playwright.sync_api import expect
 
 from .sse_mock import STAGE_PAYLOADS
+from .test_alex_value_discovery_workflow import _alex_scenario
 from .workflow_runner import (
     StageExpectation,
     WorkflowScenario,
@@ -134,6 +137,75 @@ def test_alex_user_story_breakdown_generates_single_story_handoff_packet(new_age
     assert '"storyId": "US-001"' in copied
     assert '"acceptanceCriteria"' in copied
     assert "implementationPlan" not in copied
+
+
+def test_alex_requirement_blueprint_handoff_to_story_packet_chain(new_agents_page):
+    blueprint_result = run_complete_workflow(new_agents_page, _alex_scenario())
+
+    assert "AI 测试设计助手需求蓝图" in blueprint_result.final_artifact
+    expect(
+        new_agents_page.get_by_role(
+            "button",
+            name=re.compile("交给 Lisa 做测试设计"),
+        )
+    ).to_be_visible(timeout=10000)
+
+    story_handoff_button = new_agents_page.get_by_role(
+        "button",
+        name=re.compile("从需求蓝图继续拆用户故事"),
+    )
+    expect(story_handoff_button).to_be_visible(timeout=10000)
+    story_handoff_button.click()
+
+    expect(new_agents_page).to_have_url(
+        re.compile(
+            r"/workspace/alex/user-story-breakdown"
+            r"\?runId=mock-run-user_story_breakdown-handoff$"
+        )
+    )
+    expect(new_agents_page.locator("section").nth(0)).to_contain_text(
+        "请基于 Alex 的需求蓝图继续拆用户故事",
+        timeout=10000,
+    )
+    expect(new_agents_page.locator("section").nth(0)).to_contain_text(
+        "AI 测试设计助手需求蓝图",
+        timeout=10000,
+    )
+
+    story_result = run_complete_workflow(
+        new_agents_page,
+        _alex_user_story_breakdown_scenario(),
+        from_current_workspace=True,
+    )
+
+    assert "单故事 Handoff 清单" in story_result.final_artifact
+    assert "VALUE_DISCOVERY" in story_result.final_artifact
+    assert "BLUEPRINT" in story_result.final_artifact
+
+    new_agents_page.evaluate(
+        """() => {
+            Object.defineProperty(navigator, 'clipboard', {
+                configurable: true,
+                value: {
+                    writeText: async (text) => {
+                        window.__copiedStoryPacket = text;
+                    },
+                },
+            });
+        }"""
+    )
+    new_agents_page.get_by_title("预览").click()
+    new_agents_page.get_by_role("button", name="生成 US-001 需求包").click()
+    artifact_pane = new_agents_page.locator("section").nth(1)
+    expect(artifact_pane).to_contain_text("US-001 · v1", timeout=10000)
+    new_agents_page.get_by_role("button", name="复制 US-001 需求包").click()
+
+    copied = new_agents_page.evaluate("() => window.__copiedStoryPacket")
+    assert '"storyId": "US-001"' in copied
+    assert '"acceptanceCriteria"' in copied
+    assert "implementationPlan" not in copied
+    assert "filePaths" not in copied
+    assert "testCommands" not in copied
 
 
 def test_alex_user_story_breakdown_mock_fixture_keeps_business_vertical_slices():

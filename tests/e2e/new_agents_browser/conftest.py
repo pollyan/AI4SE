@@ -129,6 +129,18 @@ def new_agents_page(
     page.on("console", capture_console_error)
     story_handoff_packets: list[dict] = []
 
+    def run_id_from_url(url: str) -> str:
+        marker = "/agent/runs/"
+        if marker not in url:
+            return ""
+        return url.split(marker, 1)[1].split("/", 1)[0].split("?", 1)[0]
+
+    def handoff_id_from_url(url: str) -> str:
+        marker = "/handoffs/"
+        if marker not in url:
+            return ""
+        return url.split(marker, 1)[1].split("/start", 1)[0]
+
     def route_config(route: Route) -> None:
         route.fulfill(
             status=200,
@@ -188,6 +200,24 @@ def new_agents_page(
                     "targetAgentId": "lisa",
                     "prompt": "请基于 Alex 的价值蓝图继续做 Lisa 需求评审。",
                 },
+                {
+                    "id": "value-discovery-blueprint-to-user-story-breakdown",
+                    "label": "从需求蓝图继续拆用户故事",
+                    "sourceWorkflowId": "VALUE_DISCOVERY",
+                    "sourceStageId": "BLUEPRINT",
+                    "sourceArtifactVersion": 1,
+                    "targetWorkflowId": "USER_STORY_BREAKDOWN",
+                    "targetStageId": "SCOPE",
+                    "targetAgentId": "alex",
+                    "prompt": (
+                        "请基于 Alex 的需求蓝图继续拆用户故事。\n\n"
+                        "# AI 测试设计助手需求蓝图\n\n"
+                        "## 1. 产品概述\n"
+                        "AI 测试设计助手帮助测试负责人从需求生成测试策略和测试用例。\n\n"
+                        "## 7. 风险评估\n"
+                        "重点关注输出质量、权限隔离、需求追溯和 LLM judge 质量门。"
+                    ),
+                },
             ]
 
         route.fulfill(
@@ -204,6 +234,37 @@ def new_agents_page(
         )
 
     def route_start_handoff(route: Route) -> None:
+        handoff_id = handoff_id_from_url(route.request.url)
+        if handoff_id == "value-discovery-blueprint-to-user-story-breakdown":
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps(
+                    {
+                        "id": "value-discovery-blueprint-to-user-story-breakdown",
+                        "label": "从需求蓝图继续拆用户故事",
+                        "sourceRunId": "mock-run-value_discovery",
+                        "sourceWorkflowId": "VALUE_DISCOVERY",
+                        "sourceStageId": "BLUEPRINT",
+                        "sourceArtifactVersion": 1,
+                        "targetRunId": "mock-run-user_story_breakdown-handoff",
+                        "targetWorkflowId": "USER_STORY_BREAKDOWN",
+                        "targetStageId": "SCOPE",
+                        "targetAgentId": "alex",
+                        "prompt": (
+                            "请基于 Alex 的需求蓝图继续拆用户故事。\n\n"
+                            "# AI 测试设计助手需求蓝图\n\n"
+                            "## 1. 产品概述\n"
+                            "AI 测试设计助手帮助测试负责人从需求生成测试策略和测试用例。\n\n"
+                            "## 7. 风险评估\n"
+                            "重点关注输出质量、权限隔离、需求追溯和 LLM judge 质量门。"
+                        ),
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+            return
+
         route.fulfill(
             status=200,
             content_type="application/json",
@@ -233,6 +294,43 @@ def new_agents_page(
         )
 
     def route_run_snapshot(route: Route) -> None:
+        run_id = run_id_from_url(route.request.url)
+        if run_id == "mock-run-user_story_breakdown-handoff":
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps(
+                    {
+                        "run": {
+                            "id": "mock-run-user_story_breakdown-handoff",
+                            "workflowId": "USER_STORY_BREAKDOWN",
+                            "agentId": "alex",
+                            "currentStageId": "SCOPE",
+                            "status": "active",
+                            "model": "mock",
+                        },
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": (
+                                    "请基于 Alex 的需求蓝图继续拆用户故事。\n\n"
+                                    "# AI 测试设计助手需求蓝图\n\n"
+                                    "## 1. 产品概述\n"
+                                    "AI 测试设计助手帮助测试负责人从需求生成测试策略和测试用例。\n\n"
+                                    "## 7. 风险评估\n"
+                                    "重点关注输出质量、权限隔离、需求追溯和 LLM judge 质量门。"
+                                ),
+                                "sequenceIndex": 1,
+                            }
+                        ],
+                        "artifacts": [],
+                        "contextSummaries": [],
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+            return
+
         route.fulfill(
             status=200,
             content_type="application/json",
@@ -268,12 +366,13 @@ def new_agents_page(
         )
 
     def route_story_handoff_candidates(route: Route) -> None:
+        run_id = run_id_from_url(route.request.url) or "mock-run-user_story_breakdown"
         route.fulfill(
             status=200,
             content_type="application/json",
             body=json.dumps(
                 {
-                    "runId": "mock-run-user_story_breakdown",
+                    "runId": run_id,
                     "workflowId": "USER_STORY_BREAKDOWN",
                     "stageId": "HANDOFF",
                     "sourceArtifactVersion": 1,
@@ -293,10 +392,11 @@ def new_agents_page(
         )
 
     def route_story_handoff_packets(route: Route) -> None:
+        run_id = run_id_from_url(route.request.url) or "mock-run-user_story_breakdown"
         if route.request.method == "POST":
             body = route.request.post_data_json
             packet = {
-                "sourceRunId": "mock-run-user_story_breakdown",
+                "sourceRunId": run_id,
                 "sourceWorkflowId": "USER_STORY_BREAKDOWN",
                 "sourceStageId": body.get("stageId", "HANDOFF"),
                 "sourceArtifactVersion": 1,
@@ -343,7 +443,7 @@ def new_agents_page(
             content_type="application/json",
             body=json.dumps(
                 {
-                    "runId": "mock-run-user_story_breakdown",
+                    "runId": run_id,
                     "workflowId": "USER_STORY_BREAKDOWN",
                     "stageId": "HANDOFF",
                     "sourceArtifactVersion": 1,
@@ -371,6 +471,10 @@ def new_agents_page(
     page.route("**/new-agents/api/agent/runs/*/handoffs", route_run_handoffs)
     page.route(
         "**/new-agents/api/agent/runs/mock-run-test_design-handoff",
+        route_run_snapshot,
+    )
+    page.route(
+        "**/new-agents/api/agent/runs/mock-run-user_story_breakdown-handoff",
         route_run_snapshot,
     )
     page.goto(new_agents_base_url)

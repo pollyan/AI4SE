@@ -253,6 +253,7 @@ cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.tes
 - `tools/new-agents/frontend/src/components/__tests__/ChatPane.test.tsx`
 - `tools/new-agents/frontend/src/__tests__/store.test.ts`
 - `tests/e2e/new_agents_browser/test_alex_user_story_breakdown_workflow.py`
+- `tests/e2e/new_agents_browser/test_alex_value_discovery_workflow.py`
 
 ### Story Handoff Packet 层：`story_handoff_packets.py` / `storyHandoffPacketService.ts` / `ArtifactPane.tsx`
 
@@ -265,7 +266,7 @@ cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.tes
 - 当前 artifact version 或 digest 与已保存 packet 不一致时，API 和前端必须能标记 stale，提示“源需求已更新”。
 - 缺少 artifactData、未知 story、非 `HANDOFF` stage 或非 `USER_STORY_BREAKDOWN` run 必须显式失败，不生成假 packet。
 - ArtifactPane 必须能加载 ready story 候选、触发生成、显示 packet 摘要并复制完整 packet 内容。
-- 浏览器级 mock E2E 至少覆盖 `USER_STORY_BREAKDOWN` 最终阶段生成和复制单故事需求包；第 5 轮再扩展为 `idea -> 需求蓝图 -> 用户故事 -> packet` 全链路证据。
+- 浏览器级 mock E2E 至少覆盖 `USER_STORY_BREAKDOWN` 最终阶段生成和复制单故事需求包，并覆盖 `VALUE_DISCOVERY/BLUEPRINT -> USER_STORY_BREAKDOWN/SCOPE -> 单故事 packet` 全链路证据。
 
 典型测试文件：
 - `tools/new-agents/backend/tests/test_story_handoff_packets.py`

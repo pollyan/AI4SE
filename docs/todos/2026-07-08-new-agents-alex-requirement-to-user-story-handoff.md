@@ -1,6 +1,6 @@
 # New Agents Alex 需求蓝图到用户故事 Handoff 路线
 
-- 状态：执行中（第 1、2、3、4 轮已完成；第 5 轮待启动）
+- 状态：已完成（第 1、2、3、4、5 轮已完成）
 - 创建日期：2026-07-08
 - 来源：用户要求先聚焦 Alex 需求梳理到后续 AI Coding 工作流的需求输入，不纳入 Lisa/Alex 之间的 handoff
 - 优先级：P0
@@ -122,8 +122,8 @@ handoff 给 AI Coding 的基本单位是单张 ready 用户故事卡片。ready 
 - 需求 ID、用户故事 ID、slice ID 已有后端结构化校验；重复 storyId、非法 Ready 状态、缺少来源需求、缺少验收标准等失败会显式拒绝。
 - 单故事 packet 已能识别上游 artifact version 或 digest 变化，并在前端提示该需求包可能基于旧需求。
 - 单故事 handoff packet 已持久化在 `agent_story_handoff_packets`。
-- 防止故事拆分技术任务化的质量口径已进入 prompt / artifact_data contract；后续第 4、5 轮仍需在 packet 和 E2E 证据中继续回归。
-- 已有浏览器级 mock E2E 证明 `USER_STORY_BREAKDOWN` 四阶段可推进，并覆盖单故事 packet 生成 / 复制；仍缺第 5 轮 `idea -> 需求蓝图 -> 用户故事 -> 单故事 packet` 全链路证据收口。
+- 防止故事拆分技术任务化的质量口径已进入 prompt / artifact_data contract，并已在 packet 与浏览器级 E2E 证据中回归。
+- 已有浏览器级 mock E2E 证明 `USER_STORY_BREAKDOWN` 四阶段可推进、单故事 packet 可生成 / 复制，并覆盖 `VALUE_DISCOVERY/BLUEPRINT -> USER_STORY_BREAKDOWN/SCOPE -> 单故事 packet` 链路证据。
 - 修改 Alex handoff 底层能力时，需要保证 Lisa 现有 handoff 不回归。
 
 ## 目标轮数声明
@@ -524,8 +524,56 @@ cd tools/new-agents/frontend && npm run lint
 
 结果：默认 sandbox 下失败，失败点为 MidScene proxy 端口绑定 `EPERM`，随后 Browser E2E 阶段卡在 Playwright Chromium 安装 / 启动路径；按 playbook 提权重跑后通过：Intent Tester API `294 passed`；MidScene proxy `17 passed`；Common Frontend lint/build 通过；New Agents 前端 `718 passed`；New Agents 后端 `598 passed, 1 deselected`；New Agents Browser E2E `10 passed, 10 deselected`。
 
-下一轮承接：
+### 2026-07-08 第 5 轮：Alex 需求拆分到单故事需求包证据收口
 
-- 第 5 轮应聚焦证据收口，不新增真实 AI Coding workflow。
-- 第 5 轮需要用自动化与浏览器级证据证明 `idea -> 需求蓝图 -> 用户故事 -> 单故事 handoff packet` 主路径可用，并回归 Lisa 既有 handoff 不被 Alex 新链路破坏。
-- 第 5 轮还需要做 CI 等价映射、全量验证记录和本路线最终状态收敛。
+已完成：
+
+- 新增浏览器级链路测试，从 Alex `需求蓝图梳理` 完成 `VALUE_DISCOVERY/BLUEPRINT`，在同一 workspace 点击“从需求蓝图继续拆用户故事”，恢复 `USER_STORY_BREAKDOWN/SCOPE` 目标 run。
+- E2E mock 已补齐 `value-discovery-blueprint-to-user-story-breakdown` 出站候选、start response 和目标 run snapshot；既有 “交给 Lisa 做测试设计 / 需求评审” 出站候选保留。
+- 链路测试继续完成 `USER_STORY_BREAKDOWN` 四阶段，生成并复制 `US-001` 单故事需求包。
+- 复制内容断言包含 `storyId` 和 `acceptanceCriteria`，且不包含 `implementationPlan`、`filePaths`、`testCommands`。
+- 第 5 轮把 Lisa handoff 回归纳入同一聚焦浏览器验证，确保 Alex 新链路没有破坏 `VALUE_DISCOVERY/BLUEPRINT -> Lisa`。
+- `docs/TESTING.md` 已同步记录 workflow handoff 与 story packet 的浏览器级全链路测试责任。
+- 第 5 轮设计与执行计划已记录在：
+  - `docs/superpowers/specs/2026-07-08-new-agents-alex-requirement-to-story-packet-evidence-design.md`
+  - `docs/superpowers/plans/2026-07-08-new-agents-alex-requirement-to-story-packet-evidence.md`
+
+RED 验证：
+
+```bash
+.venv/bin/python -m pytest tests/e2e/new_agents_browser/test_alex_user_story_breakdown_workflow.py::test_alex_requirement_blueprint_handoff_to_story_packet_chain -q
+```
+
+结果：修复前失败，失败原因是浏览器 mock 未返回“从需求蓝图继续拆用户故事”按钮对应的 Alex handoff。
+
+已验证：
+
+```bash
+.venv/bin/python -m pytest tests/e2e/new_agents_browser/test_alex_user_story_breakdown_workflow.py::test_alex_requirement_blueprint_handoff_to_story_packet_chain -q
+```
+
+结果：`1 passed`。运行中出现 coverage `no-data-collected` warning，但未导致测试失败。
+
+```bash
+.venv/bin/python -m pytest tests/e2e/new_agents_browser/test_alex_user_story_breakdown_workflow.py tests/e2e/new_agents_browser/test_alex_value_discovery_workflow.py -q
+```
+
+结果：`8 passed`。运行中出现 coverage `no-data-collected` warning，但未导致测试失败。
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：New Agents 前端 `718 passed`；New Agents 后端 `598 passed, 1 deselected`。运行中仍出现既有 `ArtifactPane.test.tsx` React `act(...)` warning，但未导致测试失败。
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：提权后通过：Intent Tester API `294 passed`；MidScene proxy `17 passed`；Common Frontend lint/build 通过；New Agents 前端 `718 passed`；New Agents 后端 `598 passed, 1 deselected`；New Agents Browser E2E `11 passed, 10 deselected`。
+
+路线收口：
+
+- Alex 需求前处理路线的 5 个目标模式轮次已全部完成。
+- 当前系统已具备：从产品概念到需求蓝图、从需求蓝图到用户故事拆解、从 ready story 到可追溯单故事需求包的主路径证据。
+- 本路线仍明确不实现真实 AI Coding workflow；后续 AI Coding 工具只消费单故事需求信息，代码库调研、实现计划和任务拆分仍属于后续 coding 工作流职责。
