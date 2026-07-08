@@ -1273,7 +1273,31 @@ VALID_STRATEGY_ARTIFACT_DATA = {
             "estimated_cases": 6,
             "coverage": "覆盖空密码、错误密码、锁定前后重试",
             "status": "待生成用例",
-        }
+        },
+        {
+            "point_id": "TP-002",
+            "point": "登录 API 必须正确创建或拒绝会话",
+            "priority": "P1",
+            "quality_goal": "QG-001",
+            "risk": "R-001",
+            "technique": "TS-001 等价类",
+            "layer": "集成",
+            "estimated_cases": 4,
+            "coverage": "覆盖登录 API 与用户库交互、会话创建和错误响应",
+            "status": "待生成用例",
+        },
+        {
+            "point_id": "TP-003",
+            "point": "用户从登录页进入工作台的主链路必须稳定",
+            "priority": "P1",
+            "quality_goal": "QG-001",
+            "risk": "R-001",
+            "technique": "TS-001 状态迁移",
+            "layer": "E2E",
+            "estimated_cases": 2,
+            "coverage": "覆盖浏览器端登录、跳转、用户昵称和登录态",
+            "status": "待生成用例",
+        },
     ],
     "tradeoffs": [
         {
@@ -3039,6 +3063,34 @@ def test_strategy_artifact_data_rejects_inconsistent_rpn():
         StrategyArtifactData.model_validate(invalid)
 
 
+def test_strategy_artifact_data_rejects_duplicate_strategy_ids():
+    invalid = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
+    invalid["quality_goals"].append({**invalid["quality_goals"][0]})
+
+    with pytest.raises(ValidationError, match="quality_goals"):
+        StrategyArtifactData.model_validate(invalid)
+
+
+def test_strategy_artifact_data_rejects_unknown_test_point_references():
+    invalid = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
+    invalid["test_points"][0]["quality_goal"] = "QG-404"
+    invalid["test_points"][0]["risk"] = "R-404"
+    invalid["test_points"][0]["technique"] = "TS-404"
+
+    with pytest.raises(ValidationError, match="test_points"):
+        StrategyArtifactData.model_validate(invalid)
+
+
+def test_strategy_artifact_data_rejects_unknown_technique_and_layer_references():
+    invalid = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
+    invalid["test_techniques"][0]["target"] = "QG-404 / R-404"
+    invalid["test_techniques"][0]["applies_to"] = "R-404 / TP-404"
+    invalid["test_layers"][0]["related"] = "R-404 / TP-404"
+
+    with pytest.raises(ValidationError, match="test_techniques"):
+        StrategyArtifactData.model_validate(invalid)
+
+
 def test_strategy_artifact_data_computes_missing_rpn_for_generated_visuals():
     data = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
     data["risks"][0].pop("rpn")
@@ -3162,6 +3214,77 @@ def test_render_strategy_artifact_data_is_deterministic_and_contract_valid():
         )
         == first
     )
+
+
+def test_render_partial_strategy_artifact_data_waits_for_references_before_sections_four_to_six():
+    payload = {
+        "chat": "我正在生成测试策略。",
+        "artifact_data": {
+            "document_info": VALID_STRATEGY_ARTIFACT_DATA["document_info"],
+            "strategy_summary": VALID_STRATEGY_ARTIFACT_DATA["strategy_summary"],
+            "quality_goals": VALID_STRATEGY_ARTIFACT_DATA["quality_goals"],
+            "risks": VALID_STRATEGY_ARTIFACT_DATA["risks"],
+            "test_techniques": VALID_STRATEGY_ARTIFACT_DATA["test_techniques"],
+            "test_layers": VALID_STRATEGY_ARTIFACT_DATA["test_layers"],
+        },
+        "stage_action": None,
+        "warnings": [],
+    }
+
+    output = render_partial_agent_turn_from_artifact_data(
+        payload,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="STRATEGY",
+    )
+
+    assert output is not None
+    assert "## 3. 风险识别与 FMEA" in output.artifact_update.markdown
+    assert "## 4. 测试技术选型" not in output.artifact_update.markdown
+
+    payload["artifact_data"]["test_points"] = VALID_STRATEGY_ARTIFACT_DATA[
+        "test_points"
+    ]
+    output = render_partial_agent_turn_from_artifact_data(
+        payload,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="STRATEGY",
+    )
+
+    assert output is not None
+    assert "## 4. 测试技术选型" in output.artifact_update.markdown
+    assert "## 5. 测试分层策略" in output.artifact_update.markdown
+    assert "## 6. 测试点拓扑" in output.artifact_update.markdown
+
+
+def test_render_partial_strategy_artifact_data_skips_sections_four_to_six_with_unknown_reference():
+    invalid_techniques = copy.deepcopy(
+        VALID_STRATEGY_ARTIFACT_DATA["test_techniques"]
+    )
+    invalid_techniques[0]["applies_to"] = "R-404 / TP-404"
+    payload = {
+        "chat": "我正在生成测试策略。",
+        "artifact_data": {
+            "document_info": VALID_STRATEGY_ARTIFACT_DATA["document_info"],
+            "strategy_summary": VALID_STRATEGY_ARTIFACT_DATA["strategy_summary"],
+            "quality_goals": VALID_STRATEGY_ARTIFACT_DATA["quality_goals"],
+            "risks": VALID_STRATEGY_ARTIFACT_DATA["risks"],
+            "test_techniques": invalid_techniques,
+            "test_layers": VALID_STRATEGY_ARTIFACT_DATA["test_layers"],
+            "test_points": VALID_STRATEGY_ARTIFACT_DATA["test_points"],
+        },
+        "stage_action": None,
+        "warnings": [],
+    }
+
+    output = render_partial_agent_turn_from_artifact_data(
+        payload,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="STRATEGY",
+    )
+
+    assert output is not None
+    assert "## 3. 风险识别与 FMEA" in output.artifact_update.markdown
+    assert "## 4. 测试技术选型" not in output.artifact_update.markdown
 
 
 def test_cases_artifact_data_rejects_inconsistent_statistics():

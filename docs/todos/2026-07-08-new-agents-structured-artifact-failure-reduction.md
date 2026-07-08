@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮首个 `TEST_DESIGN/CASES` 统计后端化与 case_id 引用门禁纵切已完成）
+- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -102,7 +102,7 @@
 - [ ] 收敛 ID 与引用关系。（第 4-6 轮）
   - 目标：后端生成稳定 ID，或在 renderer/normalizer 中确定性分配 ID；模型不再负责维护容易漂移的跨表引用。
   - 重点阶段：`IDEA_BRAINSTORM/DEFINE` 的 evidence 引用，`IDEA_BRAINSTORM/CONVERGE` 的 idea / rank / recommended idea 引用，`TEST_DESIGN/CASES` 的 requirement / risk / case 覆盖引用。
-  - 进展：第 4 轮已完成 `IDEA_BRAINSTORM/DEFINE` 的 root problem / evidence / problem-user-fit ID 引用治理；第 5 轮首个纵切已完成 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial preview 的跨引用门禁，避免流式右侧产物预览已知错误章节；第 6 轮首个纵切已完成 `TEST_DESIGN/CASES` 的 `automation_candidates.case_id` 与 `coverage_trace.covered_cases` case_id 引用门禁。更广泛的后端确定性 ID 分配仍未完成。
+  - 进展：第 4 轮已完成 `IDEA_BRAINSTORM/DEFINE` 的 root problem / evidence / problem-user-fit ID 引用治理；第 5 轮首个纵切已完成 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial preview 的跨引用门禁，避免流式右侧产物预览已知错误章节；第 6 轮已完成 `TEST_DESIGN/CASES` 的 `automation_candidates.case_id` / `coverage_trace.covered_cases` case_id 引用门禁，以及 `TEST_DESIGN/STRATEGY` 的 `QG/R/TS/TP` 内部 ID 唯一性与引用门禁。更广泛的后端确定性 ID 分配仍未完成。
 
 - [ ] 建立 schema / prompt / contract 单源同步机制。（横切，第 3-8 轮）
   - 目标：Pydantic validators、structured output instruction、workflow manifest visual contract、frontend prompt 不再各写一套约束。
@@ -111,7 +111,7 @@
 - [ ] 针对高失败阶段做纵切专项修复。（第 4-6 轮）
   - 优先顺序：`IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY`、`IDEA_BRAINSTORM/DIVERGE`。
   - 目标：每个阶段都有失败复现、根因定位、最小 schema 设计修复和回归测试。
-  - 进展：第 4 轮已完成 `IDEA_BRAINSTORM/DEFINE` 的已知 root-problem 覆盖失败模式修复；第 5 轮首个纵切已完成 `DIVERGE` / `CONVERGE` partial preview 与 final validator 关键引用不变量对齐；第 6 轮首个纵切已完成 `CASES` 的用例统计后端化与 partial case_id 引用门禁。后续仍需处理 `STRATEGY`，以及 `CONVERGE` 更深层的 prompt / schema 单源同步。
+  - 进展：第 4 轮已完成 `IDEA_BRAINSTORM/DEFINE` 的已知 root-problem 覆盖失败模式修复；第 5 轮首个纵切已完成 `DIVERGE` / `CONVERGE` partial preview 与 final validator 关键引用不变量对齐；第 6 轮已完成 `CASES` 的用例统计后端化与 partial case_id 引用门禁，以及 `STRATEGY` 的内部引用门禁。后续仍需处理 `CONVERGE` 更深层的 prompt / schema 单源同步。
 
 - [ ] 增加结构化失败回归门禁。（第 8 轮）
   - 目标：高失败阶段必须有固定 fixture / raw JSON stream / renderer contract 测试，确保不会再次因为已知不变量触发 `SCHEMA_VALIDATION_FAILED`。
@@ -569,6 +569,98 @@ Browser E2E 复跑：
 - 本轮不做跨阶段 `STRATEGY.test_points` 到 `CASES.test_point` 的强 ID 校验；当前 `CASES.test_point` 是自由文本，不是结构化 `point_id`，需要后续单独改上游数据形态。
 - 本轮不改 Lisa 测试资产解析、测试资产编辑 API 或 Header 测试资产面板。
 - `test_data_environments.related_cases` 仍是自由文本，未纳入结构化 case_id 引用门禁。
+
+### 2026-07-08 第 6 轮第二个纵切：TEST_DESIGN STRATEGY 内部引用门禁
+
+已完成 `TEST_DESIGN/STRATEGY` 的 `QG/R/TS/TP` 内部引用门禁：
+
+- `StrategyArtifactData` 增加 after validator，校验 `quality_goals.goal_id`、`risks.risk_id`、`test_techniques.technique_id`、`test_points.point_id` 不重复。
+- `test_points.quality_goal`、`test_points.risk`、`test_points.technique` 必须引用同一 artifact_data 中已存在的 `QG/R/TS`。
+- `test_techniques.target`、`test_techniques.applies_to`、`test_layers.related` 必须引用同一 artifact_data 中已存在的 `QG/R/TP`。
+- STRATEGY partial renderer 不再单独提前展示测试技术或测试分层；章节 4-6 必须等 `test_techniques + test_layers + test_points` 到齐并通过引用校验后一起展示。
+- 当章节 4-6 出现未知引用时，partial renderer 停在上一段可信章节，不预览最终 validator 会拒绝的内容。
+- STRATEGY 后端 structured output instruction 与前端 prompt 已同步：模型必须复用当前策略蓝图中已经定义的 `QG/R/TS/TP` ID。
+- 现有 STRATEGY 测试 fixture 已补齐 `TP-002`、`TP-003`，修复历史 fixture 中分层策略引用未定义测试点的问题。
+- 本轮设计与执行计划已记录在：
+  - `docs/superpowers/specs/2026-07-08-new-agents-strategy-reference-gate-design.md`
+  - `docs/superpowers/plans/2026-07-08-new-agents-strategy-reference-gate.md`
+
+RED 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_strategy_artifact_data_rejects_duplicate_strategy_ids tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_strategy_artifact_data_rejects_unknown_test_point_references tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_strategy_artifact_data_rejects_unknown_technique_and_layer_references tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_strategy_artifact_data_waits_for_references_before_sections_four_to_six tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_strategy_artifact_data_skips_sections_four_to_six_with_unknown_reference tools/new-agents/backend/tests/test_agent_runtime.py::test_strategy_structured_output_instruction_requests_internal_id_references tools/new-agents/backend/tests/test_agent_runtime.py::test_runtime_raw_json_stream_turn_waits_for_strategy_references_before_sections_four_to_six -q
+```
+
+结果：`6 failed, 1 passed`，失败点分别为旧 validator 不拒绝重复 / 未知引用、旧 partial renderer 提前展示章节 4-5、旧 prompt 缺少内部引用规则。raw streaming 用例在旧实现下已通过，因为旧流式分块只观察到了最终完整状态。
+
+GREEN 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_strategy_artifact_data_rejects_duplicate_strategy_ids tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_strategy_artifact_data_rejects_unknown_test_point_references tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_strategy_artifact_data_rejects_unknown_technique_and_layer_references tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_strategy_artifact_data_waits_for_references_before_sections_four_to_six tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_strategy_artifact_data_skips_sections_four_to_six_with_unknown_reference tools/new-agents/backend/tests/test_agent_runtime.py::test_strategy_structured_output_instruction_requests_internal_id_references tools/new-agents/backend/tests/test_agent_runtime.py::test_runtime_raw_json_stream_turn_waits_for_strategy_references_before_sections_four_to_six -q
+```
+
+结果：`7 passed`
+
+STRATEGY 聚焦回归：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_strategy_artifact_data_rejects_inconsistent_rpn tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_strategy_artifact_data_computes_missing_rpn_for_generated_visuals tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_strategy_mermaid_labels_are_normalized_for_special_characters tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_strategy_artifact_data_is_deterministic_and_contract_valid tools/new-agents/backend/tests/test_agent_runtime.py::test_parse_agent_turn_output_text_renders_strategy_artifact_data tools/new-agents/backend/tests/test_agent_runtime.py::test_parse_agent_turn_output_text_renders_strategy_artifact_data_without_model_rpn tools/new-agents/backend/tests/test_agent_runtime.py::test_strategy_structured_output_instruction_requests_artifact_data_not_markdown tools/new-agents/backend/tests/test_agent_runtime.py::test_strategy_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite tools/new-agents/backend/tests/test_agent_runtime.py::test_runtime_raw_json_stream_turn_renders_strategy_artifact_data_before_final_output tools/new-agents/backend/tests/test_agent_runtime.py::test_runtime_raw_json_stream_turn_renders_paragraph_level_strategy_artifact_data -q
+```
+
+结果：`10 passed`
+
+后端共享回归：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_stream_services.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_contracts.py -q
+```
+
+结果：`371 passed`
+
+New Agents 验证：
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：New Agents Frontend `718 passed`；New Agents Backend `624 passed, 1 deselected`。运行中仍出现既有 React `ArtifactPane.test.tsx` `act(...)` warning，但未导致测试失败。
+
+全量验证：
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：默认沙箱失败，失败点为 MidScene proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 Playwright Chromium `bootstrap_check_in ... Permission denied (1100)`，属于端口 / 浏览器权限环境限制。
+
+非沙箱第一次重跑中，Intent Tester API `294 passed`、flake8 严重错误检查通过、MidScene proxy `17 passed`、Common Frontend lint/build 通过、New Agents Frontend `718 passed`、New Agents Backend `624 passed, 1 deselected`，但 Browser E2E 的 `test_alex_final_artifact_passes_optional_llm_judge` 得分 `75`，低于目标模式默认通过线 `80`。
+
+补充质量门修复：
+
+- `tests/e2e/new_agents_browser/sse_mock.py` 的 Alex `VALUE_DISCOVERY/BLUEPRINT` mock 需求蓝图补充分析方法与边界、优先级取舍依据、交付后复盘闭环、交互验收条件和交付后复盘覆盖率指标。
+- `docs/todos/2026-07-08-new-agents-alex-requirement-to-user-story-handoff.md` 已记录这次 Alex 需求蓝图 LLM Judge 证据补强。
+
+复验：
+
+```bash
+.venv/bin/python -m pytest -o addopts='' tests/e2e/new_agents_browser/test_alex_value_discovery_workflow.py::test_alex_final_artifact_passes_optional_llm_judge -q
+```
+
+结果：`1 passed`
+
+非沙箱第二次全量重跑：
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：通过。关键结果包括 Intent Tester API `294 passed`、flake8 严重错误检查通过、MidScene proxy `17 passed`、Common Frontend lint/build 通过、New Agents Frontend `718 passed`、New Agents Backend `624 passed, 1 deselected`、New Agents Browser E2E `11 passed, 10 deselected`。
+
+残余风险：
+
+- 本轮只校验 STRATEGY artifact_data 内部的 `QG/R/TS/TP` 引用，不校验 `quality_goals.source`、`risks.source` 到 CLARIFY 阶段的事实 / 规则 / 链路 ID。
+- 本轮不改变 `TEST_DESIGN/CASES.test_point` 仍为自由文本的上游消费形态；跨阶段 `STRATEGY.test_points` 到 `CASES` 的强 ID 链路仍需后续单独治理。
+- 本轮不做后端确定性 ID 分配，只拒绝模型输出中的重复 ID 和未知引用。
 
 ## 每轮验收口径
 

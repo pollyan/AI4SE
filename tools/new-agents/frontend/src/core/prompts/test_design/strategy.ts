@@ -4,6 +4,7 @@ export const STRATEGY_PROMPT = `基于需求澄清阶段的结论，制定测试
 【重要警告】：产出物中绝对不要包含"下一步计划"或类似章节。
 策略必须从澄清阶段的事实、业务规则、异常链路、风险种子和测试点候选出发，不要泛泛罗列测试类型。
 风险分析必须提供可渲染为风险矩阵和 risk-board 的完整业务数据，用于稳定展示 FMEA 三因子、RPN、缓解策略和测试覆盖建议。
+所有 QG/R/TS/TP 引用必须引用同一份策略蓝图中已经定义的 ID；不要在测试点、测试技术或分层策略里编造未定义 ID。
 如果后端结构化契约要求 artifact_data，以 artifact_data 字段要求为准，不要手写 Mermaid、ai4se-visual risk-board 或 Markdown 表格；后端会确定性渲染 quadrantChart、测试金字塔和 risk-board。
 如果契约明确要求 artifact_update.markdown，Mermaid 必须严格按模板格式输出：quadrantChart 的 title、x-axis、y-axis、quadrant-* 各自独立成行，轴标签和象限标签必须使用英文双引号；block-beta 只使用 columns 与普通节点，不要使用 block["..."] { ... } 分组语法。
 `;

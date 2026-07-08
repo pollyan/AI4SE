@@ -551,6 +551,16 @@ def test_strategy_structured_output_instruction_requests_artifact_data_not_markd
     assert "artifact_update.markdown" not in instruction
 
 
+def test_strategy_structured_output_instruction_requests_internal_id_references():
+    instruction = build_structured_output_instruction("TEST_DESIGN", "STRATEGY")
+
+    assert (
+        "test_points.quality_goal、test_points.risk、test_points.technique"
+        in instruction
+    )
+    assert "只能引用 artifact_data 中已定义的 QG/R/TS ID" in instruction
+
+
 def test_strategy_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
     prompt = build_raw_json_retry_prompt(
         "用户需求",
@@ -1894,6 +1904,98 @@ def test_runtime_raw_json_stream_turn_renders_paragraph_level_strategy_artifact_
     assert "## 3. 风险识别与 FMEA" not in partial_markdowns[1]
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert "## 3. 风险识别与 FMEA" in outputs[-1].artifact_update.markdown
+
+
+def test_runtime_raw_json_stream_turn_waits_for_strategy_references_before_sections_four_to_six(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "chat": "我正在逐段形成风险驱动测试策略。",
+            "artifact_data": VALID_STRATEGY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    def prefix_after_artifact_data_member(member_name: str) -> str:
+        decoder = json.JSONDecoder()
+        artifact_key_index = final_json.index('"artifact_data"')
+        index = final_json.index("{", artifact_key_index) + 1
+        while index < len(final_json):
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            key, key_end = decoder.raw_decode(final_json[index:])
+            assert isinstance(key, str)
+            index += key_end
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            assert final_json[index] == ":"
+            index += 1
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            _, value_end = decoder.raw_decode(final_json[index:])
+            index += value_end
+            if key == member_name:
+                return final_json[:index]
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            if index < len(final_json) and final_json[index] == ",":
+                index += 1
+        raise AssertionError(f"artifact_data member not found: {member_name}")
+
+    risks_prefix = prefix_after_artifact_data_member("risks")
+    techniques_prefix = prefix_after_artifact_data_member("test_techniques")
+    layers_prefix = prefix_after_artifact_data_member("test_layers")
+    points_prefix = prefix_after_artifact_data_member("test_points")
+    chunks = [
+        risks_prefix,
+        techniques_prefix[len(risks_prefix) :],
+        layers_prefix[len(techniques_prefix) :],
+        points_prefix[len(layers_prefix) :],
+        final_json[len(points_prefix) :],
+    ]
+
+    def fake_stream_chat_completion_content(**kwargs):
+        yield from chunks
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是测试专家。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "请制定测试策略",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="STRATEGY",
+        )
+    )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert len(partial_markdowns) >= 2
+    assert "## 3. 风险识别与 FMEA" in partial_markdowns[0]
+    assert "## 4. 测试技术选型" not in partial_markdowns[0]
+    assert "## 4. 测试技术选型" in partial_markdowns[-1]
+    assert "## 6. 测试点拓扑" in partial_markdowns[-1]
+    assert isinstance(outputs[-1], AgentTurnOutput)
 
 
 def test_runtime_raw_json_stream_turn_renders_paragraph_level_cases_artifact_data(

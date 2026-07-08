@@ -1274,6 +1274,118 @@ class Tradeoff(StrictArtifactDataModel):
     status: str
 
 
+_STRATEGY_REFERENCE_PATTERN = re.compile(r"\b(QG|R|TS|TP)-\d+\b")
+
+
+def _extract_strategy_references(value: str) -> dict[str, set[str]]:
+    references: dict[str, set[str]] = {
+        "QG": set(),
+        "R": set(),
+        "TS": set(),
+        "TP": set(),
+    }
+    for match in _STRATEGY_REFERENCE_PATTERN.finditer(value):
+        references[match.group(1)].add(match.group(0))
+    return references
+
+
+def _validate_unique_strategy_ids(label: str, values: list[str]) -> None:
+    if len(set(values)) != len(values):
+        raise ValueError(f"{label} contains duplicate ids")
+
+
+def _validate_strategy_reference_field(
+    field_label: str,
+    value: str,
+    allowed_prefixes: set[str],
+    known_ids_by_prefix: dict[str, set[str]],
+) -> None:
+    references = _extract_strategy_references(value)
+    used_allowed: set[str] = set()
+    unknown: list[str] = []
+    for prefix in allowed_prefixes:
+        used_allowed.update(references[prefix])
+        unknown.extend(
+            sorted(
+                item
+                for item in references[prefix]
+                if item not in known_ids_by_prefix[prefix]
+            )
+        )
+    if not used_allowed:
+        raise ValueError(
+            f"{field_label} must reference existing "
+            f"{'/'.join(sorted(allowed_prefixes))} ids"
+        )
+    if unknown:
+        raise ValueError(
+            f"{field_label} references unknown ids: {', '.join(unknown)}"
+        )
+
+
+def _validate_strategy_references(
+    quality_goals: list[QualityGoal],
+    risks: list[StrategyRisk],
+    test_techniques: list[TestTechnique],
+    test_layers: list[TestLayer],
+    test_points: list[TestPoint],
+) -> None:
+    goal_ids = [item.goal_id for item in quality_goals]
+    risk_ids = [item.risk_id for item in risks]
+    technique_ids = [item.technique_id for item in test_techniques]
+    point_ids = [item.point_id for item in test_points]
+    _validate_unique_strategy_ids("quality_goals", goal_ids)
+    _validate_unique_strategy_ids("risks", risk_ids)
+    _validate_unique_strategy_ids("test_techniques", technique_ids)
+    _validate_unique_strategy_ids("test_points", point_ids)
+
+    known_ids_by_prefix = {
+        "QG": set(goal_ids),
+        "R": set(risk_ids),
+        "TS": set(technique_ids),
+        "TP": set(point_ids),
+    }
+    for item in test_techniques:
+        _validate_strategy_reference_field(
+            "test_techniques.target",
+            item.target,
+            {"QG", "R", "TP"},
+            known_ids_by_prefix,
+        )
+        _validate_strategy_reference_field(
+            "test_techniques.applies_to",
+            item.applies_to,
+            {"R", "TP"},
+            known_ids_by_prefix,
+        )
+    for item in test_layers:
+        _validate_strategy_reference_field(
+            "test_layers.related",
+            item.related,
+            {"QG", "R", "TP"},
+            known_ids_by_prefix,
+        )
+    for item in test_points:
+        _validate_strategy_reference_field(
+            "test_points.quality_goal",
+            item.quality_goal,
+            {"QG"},
+            known_ids_by_prefix,
+        )
+        _validate_strategy_reference_field(
+            "test_points.risk",
+            item.risk,
+            {"R"},
+            known_ids_by_prefix,
+        )
+        _validate_strategy_reference_field(
+            "test_points.technique",
+            item.technique,
+            {"TS"},
+            known_ids_by_prefix,
+        )
+
+
 class StrategyArtifactData(StrictArtifactDataModel):
     document_info: DocumentInfo
     strategy_summary: StrategySummary
@@ -1284,6 +1396,17 @@ class StrategyArtifactData(StrictArtifactDataModel):
     test_points: list[TestPoint] = Field(min_length=1)
     tradeoffs: list[Tradeoff] = Field(min_length=1)
     stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_strategy_references(self) -> "StrategyArtifactData":
+        _validate_strategy_references(
+            self.quality_goals,
+            self.risks,
+            self.test_techniques,
+            self.test_layers,
+            self.test_points,
+        )
+        return self
 
 
 class CaseStatistics(StrictArtifactDataModel):
@@ -5299,43 +5422,44 @@ def render_partial_test_design_strategy_markdown(data: Any) -> str | None:
 
         if "quality_goals" not in data:
             return _join_partial_sections(sections)
+        quality_goals = _validate_partial_list(data["quality_goals"], QualityGoal)
         sections.append(
-            _render_quality_goals(
-                _validate_partial_list(data["quality_goals"], QualityGoal)
-            )
+            _render_quality_goals(quality_goals)
         )
 
         if "risks" not in data:
             return _join_partial_sections(sections)
-        sections.append(
-            _render_strategy_risks(
-                _validate_partial_list(data["risks"], StrategyRisk)
-            )
-        )
+        risks = _validate_partial_list(data["risks"], StrategyRisk)
+        sections.append(_render_strategy_risks(risks))
 
-        if "test_techniques" not in data:
+        if (
+            "test_techniques" not in data
+            or "test_layers" not in data
+            or "test_points" not in data
+        ):
             return _join_partial_sections(sections)
-        sections.append(
-            _render_test_techniques(
-                _validate_partial_list(data["test_techniques"], TestTechnique)
-            )
+        test_techniques = _validate_partial_list(
+            data["test_techniques"],
+            TestTechnique,
         )
-
-        if "test_layers" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_test_layers(
-                _validate_partial_list(data["test_layers"], TestLayer)
-            )
+        test_layers = _validate_partial_list(
+            data["test_layers"],
+            TestLayer,
         )
-
-        if "test_points" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_test_points(
-                _validate_partial_list(data["test_points"], TestPoint)
-            )
+        test_points = _validate_partial_list(
+            data["test_points"],
+            TestPoint,
         )
+        _validate_strategy_references(
+            quality_goals,
+            risks,
+            test_techniques,
+            test_layers,
+            test_points,
+        )
+        sections.append(_render_test_techniques(test_techniques))
+        sections.append(_render_test_layers(test_layers))
+        sections.append(_render_test_points(test_points))
 
         if "tradeoffs" not in data:
             return _join_partial_sections(sections)

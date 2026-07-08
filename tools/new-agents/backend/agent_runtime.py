@@ -160,7 +160,7 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；severity、occurrence、detection 必须是 1 到 5 的整数；RPN 由后端根据 severity * occurrence * detection 计算，不需要在 risks 中输出 rpn。不要输出完整 Markdown、Mermaid 代码块、risk-board JSON 代码块或表格，后端会负责确定性渲染右侧测试策略蓝图、quadrantChart、block-beta 和 ai4se-visual risk-board。
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；severity、occurrence、detection 必须是 1 到 5 的整数；RPN 由后端根据 severity * occurrence * detection 计算，不需要在 risks 中输出 rpn。test_points.quality_goal、test_points.risk、test_points.technique 只能引用 artifact_data 中已定义的 QG/R/TS ID；test_techniques.target、test_techniques.applies_to、test_layers.related 只能引用 artifact_data 中已定义的 QG/R/TP ID。不要输出完整 Markdown、Mermaid 代码块、risk-board JSON 代码块或表格，后端会负责确定性渲染右侧测试策略蓝图、quadrantChart、block-beta 和 ai4se-visual risk-board。
 chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
