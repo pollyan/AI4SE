@@ -174,6 +174,25 @@
             "requiredStructuredVisuals": [
               "traceability-matrix"
             ]
+          },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "case_statistics 由后端根据 case_groups 计算，模型不要输出",
+              "case_groups[].cases[].case_id 必须唯一",
+              "automation_candidates.case_id 只能引用 case_groups[].cases[].case_id 中已存在的 case_id",
+              "coverage_trace.covered_cases 只能引用 case_groups[].cases[].case_id 中已存在的 case_id",
+              "stage_gate 至少包含一个 checked=true"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格",
+              "Mermaid 代码块",
+              "traceability-matrix JSON 代码块"
+            ],
+            "rendererOutputs": [
+              "右侧测试用例集",
+              "ai4se-visual traceability-matrix"
+            ]
           }
         },
         {

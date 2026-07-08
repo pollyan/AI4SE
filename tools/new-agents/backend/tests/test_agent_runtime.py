@@ -45,6 +45,7 @@ from test_artifact_data_renderers import (
     VALID_VALUE_JOURNEY_ARTIFACT_DATA,
     VALID_VALUE_PERSONA_ARTIFACT_DATA,
 )
+from workflow_manifest import format_artifact_data_contract_instruction
 
 
 ARTIFACT_DATA_STREAMING_STAGES = sorted(ARTIFACT_DATA_STAGE_FIXTURES)
@@ -604,7 +605,28 @@ def test_cases_structured_output_instruction_omits_derived_statistics():
 
     assert '"case_statistics"' not in instruction
     assert "case_groups" in instruction
-    assert "用例总数和 P0/P1/P2 分布由后端" in instruction
+    assert "case_statistics 由后端根据 case_groups 计算，模型不要输出" in instruction
+
+
+def test_cases_structured_output_instruction_uses_manifest_artifact_data_contract():
+    instruction = build_structured_output_instruction("TEST_DESIGN", "CASES")
+
+    assert (
+        format_artifact_data_contract_instruction("TEST_DESIGN", "CASES")
+        in instruction
+    )
+    assert "case_statistics 由后端根据 case_groups 计算，模型不要输出" in instruction
+    assert "case_groups[].cases[].case_id 必须唯一" in instruction
+    assert "automation_candidates.case_id" in instruction
+    assert "coverage_trace.covered_cases" in instruction
+    assert (
+        "不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 traceability-matrix JSON 代码块"
+        in instruction
+    )
+    assert (
+        "后端会负责确定性渲染右侧测试用例集和 ai4se-visual traceability-matrix"
+        in instruction
+    )
 
 
 def test_cases_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():

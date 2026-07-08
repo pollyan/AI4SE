@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成；前端正式 / partial artifact `ai4se-visual` 写入前校验已完成并全量验证通过；第 8A 轮 `artifact_data` 全阶段 fixture registry 回归门禁已完成并全量验证通过；第 8B 轮 `artifact_data` 字段来源与视觉协议矩阵已完成）
+- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成；前端正式 / partial artifact `ai4se-visual` 写入前校验已完成并全量验证通过；第 8A 轮 `artifact_data` 全阶段 fixture registry 回归门禁已完成并全量验证通过；第 8B 轮 `artifact_data` 字段来源与视觉协议矩阵已完成；第 8C 轮 `TEST_DESIGN/CASES` artifactDataContract manifest 同步已完成）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -107,18 +107,20 @@
 - [ ] 建立 schema / prompt / contract 单源同步机制。（横切，第 3-8 轮）
   - 目标：Pydantic validators、structured output instruction、workflow manifest visual contract、frontend prompt 不再各写一套约束。
   - 验收：新增 contract sync 测试，证明关键不变量在 prompt 和后端 validator 中同时存在。
-  - 进展：已完成 `IDEA_BRAINSTORM/CONVERGE` 首个 `artifactDataContract` 同步纵切。CONVERGE 的关键 artifact_data 不变量已进入 `workflow_manifest.json`，后端 structured output instruction 和前端 stage prompt 均从 manifest 生成同步约束，并由 backend / frontend 同步测试保护。其他阶段尚未迁移。
+  - 进展：已完成 `IDEA_BRAINSTORM/CONVERGE` 首个 `artifactDataContract` 同步纵切。CONVERGE 的关键 artifact_data 不变量已进入 `workflow_manifest.json`，后端 structured output instruction 和前端 stage prompt 均从 manifest 生成同步约束，并由 backend / frontend 同步测试保护。
+  - 进展：第 8C 轮已完成 `TEST_DESIGN/CASES` `artifactDataContract` manifest 同步。CASES 的 `case_statistics` 后端派生、case_id 唯一性、`automation_candidates.case_id` / `coverage_trace.covered_cases` 引用门禁、禁止模型输出 renderer-owned Markdown / `ai4se-visual` 产物等关键约束已进入 manifest，并由 backend instruction sync、runtime instruction 和 frontend prompt tests 保护。其余 19 个 artifact-data 阶段尚未迁移。
 
 - [ ] 针对高失败阶段做纵切专项修复。（第 4-6 轮）
   - 优先顺序：`IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY`、`IDEA_BRAINSTORM/DIVERGE`。
   - 目标：每个阶段都有失败复现、根因定位、最小 schema 设计修复和回归测试。
-  - 进展：第 4 轮已完成 `IDEA_BRAINSTORM/DEFINE` 的已知 root-problem 覆盖失败模式修复；第 5 轮首个纵切已完成 `DIVERGE` / `CONVERGE` partial preview 与 final validator 关键引用不变量对齐；第 6 轮已完成 `CASES` 的用例统计后端化与 partial case_id 引用门禁，以及 `STRATEGY` 的内部引用门禁。后续仍需处理 `CONVERGE` 更深层的 prompt / schema 单源同步。
+  - 进展：第 4 轮已完成 `IDEA_BRAINSTORM/DEFINE` 的已知 root-problem 覆盖失败模式修复；第 5 轮首个纵切已完成 `DIVERGE` / `CONVERGE` partial preview 与 final validator 关键引用不变量对齐；第 6 轮已完成 `CASES` 的用例统计后端化与 partial case_id 引用门禁，以及 `STRATEGY` 的内部引用门禁。第 8C 轮进一步把 CASES 的核心 artifact_data 约束迁入 manifest，并清理前端 prompt 中要求模型手写 Markdown 表格 / `ai4se-visual` block 的旧冲突描述。
 
 - [ ] 增加结构化失败回归门禁。（第 8 轮）
   - 目标：高失败阶段必须有固定 fixture / raw JSON stream / renderer contract 测试，确保不会再次因为已知不变量触发 `SCHEMA_VALIDATION_FAILED`。
   - 验收：纳入 `./scripts/test/test-local.sh new-agents` 或明确的 New Agents backend regression suite。
   - 进展：第 8A 轮已建立 `ARTIFACT_DATA_STAGE_FIXTURES` 全阶段测试登记表，覆盖全部 `supports_artifact_data_rendering()` 支持的 21 个在线阶段；每个 registry fixture 都必须通过 deterministic renderer 和 `validate_agent_turn()`。`test_agent_runtime.py` 的 artifact-data instruction 顺序矩阵已改为从 registry 派生，避免新增阶段时漏掉 raw JSON visible streaming 门禁。`test_workflow_contract_sync.py` 已反向校验 `workflow_manifest.json` 的 `visualContract` 与后端 required Mermaid / structured visual maps 完全一致。
   - 进展：第 8B 轮已在 `docs/TESTING.md` 补齐 21 个在线阶段的模型输出字段 / 后端派生字段 / 视觉协议来源矩阵，明确 validation-only 与 backend-derived 的边界，并记录 `IDEA_BRAINSTORM/CONVERGE` 是当前唯一完成 `artifactDataContract` manifest 同步迁移的阶段。
+  - 进展：第 8C 轮已新增 `TEST_DESIGN/CASES` 的 backend manifest contract sync、runtime instruction source 和 frontend prompt sync 回归测试；相关 CASES renderer / 引用门禁测试继续通过。
 
 - [ ] 建立视觉产物协议分层。（第 7 轮）
   - 目标：明确哪些视觉类型必须走 `ai4se-visual` JSON，哪些 Mermaid 类型允许由后端 deterministic renderer 生成，哪些 DSL 禁止模型直接输出。
@@ -1167,6 +1169,90 @@ rg -n "模型负责的 artifact_data|后端派生 / 归一化|视觉来源|第 8
 - 本轮只补齐字段来源与视觉协议文档矩阵，不迁移 20 个阶段的 `artifactDataContract` 到 manifest。
 - 本轮不增加 backend Mermaid JS parse 或 `mmdc` 渲染门禁。
 - 矩阵是人工维护的文档事实源，后续 schema / renderer / manifest 变化时仍必须同步更新；第 8A 的 fixture registry 和 manifest visualContract sync test 仍是可执行门禁。
+
+### 2026-07-08 第 8C 轮：TEST_DESIGN CASES artifactDataContract 同步
+
+已完成：
+
+- `workflow_manifest.json` 为 `TEST_DESIGN/CASES` 新增 `artifactDataContract`，声明 `case_statistics` 由后端根据 `case_groups` 计算、`case_groups[].cases[].case_id` 必须唯一、`automation_candidates.case_id` 和 `coverage_trace.covered_cases` 只能引用已存在 case id、`stage_gate` 至少包含一个 checked 项。
+- `agent_runtime.py` 的 CASES structured output instruction 改为复用 `format_artifact_data_contract_instruction("TEST_DESIGN", "CASES")`，避免 runtime 文案和 manifest 漂移。
+- CASES 前端 prompt 清理了要求模型手写 Markdown 覆盖追溯表和 `ai4se-visual` fenced block 的旧描述，改为要求模型提供结构化覆盖关系，由后端确定性渲染右侧测试用例集和 `ai4se-visual traceability-matrix`。
+- 新增 backend / frontend 回归测试，覆盖 CASES manifest contract 驱动 backend instruction、runtime instruction 来源、frontend prompt 同步，以及禁止 prompt 回退到 renderer-owned 视觉产物手写要求。
+- 只读 explorer `Euler` 已审查 CONVERGE 现有 contract sync 链路和 CASES 最小迁移清单；本轮采纳其关于 `case_groups[].cases[].case_id` 唯一性的建议。
+
+RED 证据：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py::test_cases_artifact_data_contract_manifest_drives_backend_instruction tools/new-agents/backend/tests/test_agent_runtime.py::test_cases_structured_output_instruction_uses_manifest_artifact_data_contract -q
+```
+
+结果：按预期失败，`test_cases_artifact_data_contract_manifest_drives_backend_instruction` 失败在 `contract is not None`，`test_cases_structured_output_instruction_uses_manifest_artifact_data_contract` 失败在 instruction 不包含 manifest formatter 输出。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts -t "TEST DESIGN CASES"
+```
+
+结果：按预期失败，CASES prompt description 不包含 `【artifact_data 契约同步约束】`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts -t "renderer-owned visuals"
+```
+
+结果：按预期失败，CASES prompt description 仍包含要求模型手写 Markdown 表格和 `ai4se-visual` fenced block 的旧描述。
+
+GREEN 证据：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py::test_cases_artifact_data_contract_manifest_drives_backend_instruction tools/new-agents/backend/tests/test_agent_runtime.py::test_cases_structured_output_instruction_omits_derived_statistics tools/new-agents/backend/tests/test_agent_runtime.py::test_cases_structured_output_instruction_uses_manifest_artifact_data_contract -q
+```
+
+结果：通过，`3 passed`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts -t "TEST DESIGN CASES|renderer-owned visuals"
+```
+
+结果：通过，`2 passed | 16 skipped`。
+
+相关回归：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_runtime.py::test_cases_structured_output_instruction_requests_artifact_data_not_markdown tools/new-agents/backend/tests/test_agent_runtime.py::test_cases_structured_output_instruction_omits_derived_statistics tools/new-agents/backend/tests/test_agent_runtime.py::test_cases_structured_output_instruction_uses_manifest_artifact_data_contract tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_cases_artifact_data_derives_statistics_when_missing tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_cases_artifact_data_rejects_inconsistent_statistics tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_cases_artifact_data_rejects_unknown_automation_candidate_case_reference tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_cases_artifact_data_rejects_unknown_coverage_case_reference -q
+```
+
+结果：通过，`20 passed`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts
+```
+
+结果：通过，`18 passed`。
+
+集成 / 全量验证：
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：通过。New Agents Frontend `47 passed` / `738 passed`；New Agents Backend `659 passed, 1 deselected`。
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：默认沙箱失败，失败点为 MidScene proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 Playwright Chromium `bootstrap_check_in ... Permission denied (1100)`，属于端口 / 浏览器权限限制；脚本失败前已完成 Intent Tester API、代码质量、Common Frontend、New Agents Frontend / Backend。
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：非沙箱重跑通过。Intent Tester API `294 passed`；MidScene proxy `17 passed`；Common Frontend lint/build 通过；New Agents Frontend `47 passed` / `738 passed`；New Agents Backend `659 passed, 1 deselected`；New Agents Browser E2E `11 passed, 10 deselected`；汇总未发现失败。
+
+残余风险：
+
+- 本轮只迁移 `TEST_DESIGN/CASES`，当前已完成 `artifactDataContract` manifest 同步迁移的阶段为 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES`；其余 19 个 artifact-data 阶段仍待后续纵切迁移。
+- 本轮不改变 CASES Pydantic schema、renderer、SSE runtime 或 ArtifactPane。
+- 本轮不增加 backend Mermaid JS parse 或 `mmdc` 渲染门禁。
 
 ## 每轮验收口径
 

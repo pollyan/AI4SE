@@ -87,6 +87,27 @@ describe('Workflow Configuration', () => {
         expect(convergeStage?.description).toContain('后端会负责确定性渲染右侧收敛聚焦产物和 Mermaid quadrantChart');
     });
 
+    it('appends manifest artifact data contract guidance to TEST DESIGN CASES prompt description', () => {
+        const casesStage = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'CASES');
+
+        expect(casesStage).toBeDefined();
+        expect(casesStage?.description).toContain('【artifact_data 契约同步约束】');
+        expect(casesStage?.description).toContain('case_statistics 由后端根据 case_groups 计算，模型不要输出');
+        expect(casesStage?.description).toContain('case_groups[].cases[].case_id 必须唯一');
+        expect(casesStage?.description).toContain('automation_candidates.case_id');
+        expect(casesStage?.description).toContain('coverage_trace.covered_cases');
+        expect(casesStage?.description).toContain('不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 traceability-matrix JSON 代码块');
+        expect(casesStage?.description).toContain('后端会负责确定性渲染右侧测试用例集和 ai4se-visual traceability-matrix');
+    });
+
+    it('does not ask TEST DESIGN CASES to handwrite renderer-owned visuals', () => {
+        const casesStage = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'CASES');
+
+        expect(casesStage).toBeDefined();
+        expect(casesStage?.description).not.toContain('测试点覆盖追溯必须同时输出 Markdown 表格和 ai4se-visual 结构化矩阵');
+        expect(casesStage?.description).not.toContain('ai4se-visual 必须使用 ```ai4se-visual fenced 代码块');
+    });
+
     it('should have VALUE_DISCOVERY workflow defined with correct agentId and stages', () => {
         const wf = WORKFLOWS.VALUE_DISCOVERY;
         expect(wf).toBeDefined();

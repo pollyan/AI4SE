@@ -390,3 +390,29 @@ def test_converge_artifact_data_contract_manifest_drives_backend_instruction():
         assert forbidden in instruction
     for renderer_output in contract["rendererOutputs"]:
         assert renderer_output in instruction
+
+
+def test_cases_artifact_data_contract_manifest_drives_backend_instruction():
+    contract = get_stage_artifact_data_contract("TEST_DESIGN", "CASES")
+
+    assert contract is not None
+    assert "modelOutputRules" in contract
+    assert "forbiddenOutputs" in contract
+    assert "rendererOutputs" in contract
+
+    instruction = build_structured_output_instruction(
+        "TEST_DESIGN",
+        "CASES",
+    )
+    formatted = format_artifact_data_contract_instruction(
+        "TEST_DESIGN",
+        "CASES",
+    )
+
+    assert formatted in instruction
+    for rule in contract["modelOutputRules"]:
+        assert rule in instruction
+    for forbidden in contract["forbiddenOutputs"]:
+        assert forbidden in instruction
+    for renderer_output in contract["rendererOutputs"]:
+        assert renderer_output in instruction

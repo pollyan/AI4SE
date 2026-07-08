@@ -193,10 +193,13 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；用例总数和 P0/P1/P2 分布由后端根据 case_groups 计算，不需要输出 case_statistics；automation_candidates.case_id 与 coverage_trace.covered_cases 只能引用已存在的 case_groups[].cases[].case_id。不要输出完整 Markdown、Mermaid 代码块、traceability-matrix JSON 代码块或表格，后端会负责确定性渲染右侧测试用例集和 ai4se-visual traceability-matrix。
+__ARTIFACT_DATA_CONTRACT_INSTRUCTION__
 chat 字段必须像一次自然的工作对话；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时再使用短列表、少量重点加粗或引用块帮助扫读。不要每轮套用固定 bullet 数量、固定标签或固定字段模板。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
-"""
+""".replace(
+    "__ARTIFACT_DATA_CONTRACT_INSTRUCTION__",
+    format_artifact_data_contract_instruction("TEST_DESIGN", "CASES"),
+)
 
 
 DELIVERY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
