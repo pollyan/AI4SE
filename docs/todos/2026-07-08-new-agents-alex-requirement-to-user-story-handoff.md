@@ -577,3 +577,39 @@ RED 验证：
 - Alex 需求前处理路线的 5 个目标模式轮次已全部完成。
 - 当前系统已具备：从产品概念到需求蓝图、从需求蓝图到用户故事拆解、从 ready story 到可追溯单故事需求包的主路径证据。
 - 本路线仍明确不实现真实 AI Coding workflow；后续 AI Coding 工具只消费单故事需求信息，代码库调研、实现计划和任务拆分仍属于后续 coding 工作流职责。
+
+### 2026-07-08 补充质量门修复：Alex 需求蓝图 LLM Judge 证据补强
+
+触发原因：结构化产出失败治理的提交前全量验证启用了 `NEW_AGENTS_E2E_LLM_JUDGE`，`test_alex_final_artifact_passes_optional_llm_judge` 对 Alex `需求蓝图梳理` mock 最终产物评分为 75，低于目标模式默认通过线 80。
+
+Judge 反馈的缺口：
+
+- 业务闭环未充分体现交付后的度量、反馈和迭代。
+- 优先级划分缺少明确取舍依据。
+- 产物未说明使用的分析方法或框架。
+- 用户旅程未覆盖复盘阶段和测试设计资产复用反馈。
+- 交互验收条件不够明确。
+
+已修复：
+
+- `tests/e2e/new_agents_browser/sse_mock.py` 中 `VALUE_DISCOVERY/BLUEPRINT` mock 需求蓝图补充“分析方法与边界”。
+- 补充 P0 / P1 / P2 优先级取舍依据，说明 MVP 为什么只保留第一条完整业务闭环。
+- 在关键用户旅程中增加交付后复盘步骤，明确返工次数、漏测问题、用例复用率和节省时间如何反哺风险库、提示词模板和下一轮优先级。
+- 增加“交互验收条件”，明确阶段推进、策略确认、用例检查、导出后版本和度量入口的可验收行为。
+- 成功指标增加交付后复盘覆盖率，补齐业务闭环度量。
+
+复验：
+
+```bash
+.venv/bin/python -m pytest -o addopts='' tests/e2e/new_agents_browser/test_alex_value_discovery_workflow.py::test_alex_final_artifact_passes_optional_llm_judge -q
+```
+
+结果：`1 passed`
+
+全量回归确认：
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：非沙箱全量通过，关键结果包括 Intent Tester API `294 passed`、MidScene proxy `17 passed`、Common Frontend lint/build 通过、New Agents Frontend `718 passed`、New Agents Backend `624 passed, 1 deselected`、New Agents Browser E2E `11 passed, 10 deselected`。默认沙箱下仍受端口绑定和 Playwright Chromium 权限限制影响，这属于环境权限限制，不是 Alex 产物质量失败。
