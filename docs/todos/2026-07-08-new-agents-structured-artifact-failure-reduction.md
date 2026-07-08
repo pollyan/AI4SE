@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 0 轮能力 spike 尚未执行）
+- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -75,10 +75,11 @@
 
 下列优化点分为横切能力、纵切阶段治理和回归门禁三类。若条目之间看起来覆盖相同问题，以“横切能力提供机制，纵切阶段消化具体 workflow 风险，回归门禁防止回退”为准，不按重复事项分别验收。
 
-- [ ] 做 DeepSeek tool calling 能力 spike。（第 0 轮）
+- [x] 做 DeepSeek tool calling 能力 spike。（第 0 轮）
   - 目标：验证 `submit_artifact_data(...)` 工具调用是否能在 DeepSeek V4 Flash 下稳定产出 tool arguments，并评估它对当前 partial artifact streaming 的影响。
   - 范围：只做共享 provider capability、tool-call stream parsing、最小单阶段 fixture，不接入正式 workflow 主链路。
   - 验收：形成明确结论：是否支持 streaming tool arguments、是否需要 `/beta` base URL、strict schema 子集能覆盖哪些字段、失败时是否仍然能 typed error 显式暴露。
+  - 结论：本轮完成静态 provider capability spike，不启用正式 tool calls 主链路。DeepSeek 官方支持 tool calls，strict mode 需要 `/beta` base URL；strict schema 子集不能完整覆盖当前 `artifact_data` contract，不能替代 Pydantic validators。官方 streaming chunk schema 未明确展示 `delta.tool_calls` / streaming tool arguments；本地 `llm_client.py` 也只消费 `delta.content`，没有 `tools`、`tool_choice` 或 tool argument parser。当前环境缺少 `DEEPSEEK_API_KEY`，因此未做真实 provider smoke，不声明 DeepSeek V4 Flash 已稳定支持 streaming tool arguments。后续若要启用，必须单独增加 shared provider capability registry、mock stream fixture、toy `submit_artifact_data` live smoke 和 typed error 路径。
 
 - [x] 移除 raw JSON 截断后的伪最终输出路径。（第 2 轮）
   - 当前风险：`agent_runtime.py` 在 JSON 截断且已经发过 partial delta 时，会返回带 `warnings=["artifact_truncated"]` 的 `AgentTurnOutput`，这会把不完整产物包装成一次最终输出。
@@ -137,7 +138,7 @@
 
 ## 目标轮数声明
 
-基线按 1 个第 0 轮能力 spike 加 8 个目标模式治理轮次推进。每轮都必须保留“失败显式报错”的架构边界，不允许通过 fallback 降低用户可见错误。第 0 轮是能力 spike，不改变正式 workflow 主链路；当前第 1 轮已先完成，后续仍需补做第 0 轮能力结论。
+基线按 1 个第 0 轮能力 spike 加 8 个目标模式治理轮次推进。每轮都必须保留“失败显式报错”的架构边界，不允许通过 fallback 降低用户可见错误。第 0 轮是能力 spike，不改变正式 workflow 主链路；当前已补做第 0 轮静态能力结论，真实 provider smoke 仅在具备 `DEEPSEEK_API_KEY` 和明确外部调用授权时再单独执行。
 
 | 轮次 | 目标模式 | 覆盖范围 | 交付边界 |
 |---|---|---|---|
@@ -379,7 +380,52 @@ New Agents 验证：
 
 - 本轮只完成 `IDEA_BRAINSTORM/DEFINE` 的证据引用稳定化，不代表 `IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/DIVERGE`、`TEST_DESIGN/CASES` 或 `TEST_DESIGN/STRATEGY` 的引用/统计风险已解决。
 - 本轮未启用真实外部模型 smoke 或 LLM judge；确定性测试证明脆弱 contract 已被 ID 引用替代，但不证明 DeepSeek 真实样本成功率已经提升到某个数值。
-- 第 0 轮 DeepSeek tool calling 能力 spike 仍未执行，后续需要单独基于 provider 能力和可能的真实模型调用形成结论。
+- 第 0 轮 DeepSeek tool calls 静态能力 spike 已补做；真实 provider smoke 因缺少 `DEEPSEEK_API_KEY` 未执行，后续若要启用 tool calls 仍需单独完成 toy schema live smoke 和 stream parser 验证。
+
+### 2026-07-08 补做第 0 轮：DeepSeek tool calls 静态能力 spike
+
+已完成 DeepSeek provider 能力边界澄清：
+
+- 官方 Tool Calls 文档显示 DeepSeek 支持 OpenAI SDK 兼容的 `tools` 调用；strict tool calls 属于 beta 能力，需要 `/beta` base URL，并要求 function 开启 `strict=true`。
+- 官方 Chat Completion 文档显示 `response_format.type` 只支持 `text` 和 `json_object`，不能直接照搬 OpenAI strict JSON Schema `response_format`。
+- strict schema 子集不能完整覆盖当前 New Agents `artifact_data` contract：object 字段必须全部 required 且 `additionalProperties=false`，并且不支持 `minLength`、`maxLength`、`minItems`、`maxItems` 等约束；因此它不能替代 Pydantic validator、业务不变量和 deterministic renderer。
+- 官方 streaming chunk 示例和 schema 未明确展示 `delta.tool_calls` 或 streaming tool arguments；只看到 stream delta 文本增量和 `finish_reason=tool_calls`。缺少真实 `DEEPSEEK_API_KEY`，本轮不声明 DeepSeek V4 Flash 已稳定支持 streaming tool arguments。
+- 当前本地 `llm_client.py` 只消费 `delta.content`，且 `stream_chat_completion_content()` 不传 `tools` / `tool_choice`；`agent_runtime.py` 对 `deepseek-v4-*` 仍应保持 `json_object_only` 能力。
+- 本轮结论：不把 tool calls 接入正式 workflow 主链路。若未来启用，必须先实现 shared provider capability registry、独立 tool-call stream event parser、mock fixture、toy live smoke 和 typed error 显式失败路径。
+- 本轮设计与执行计划已记录在：
+  - `docs/superpowers/specs/2026-07-08-new-agents-deepseek-tool-calling-capability-spike-design.md`
+  - `docs/superpowers/plans/2026-07-08-new-agents-deepseek-tool-calling-capability-spike.md`
+
+已验证：
+
+```bash
+curl -L -A Mozilla https://api-docs.deepseek.com/guides/tool_calls | rg -n "strict|Strict|Beta|tools|tool_choice|tool_calls|/beta|required|additionalProperties|minLength|maxLength|minItems|maxItems|Unsupported"
+```
+
+结果：确认官方 Tool Calls 页面、strict beta `/beta` 要求、object required / `additionalProperties=false` 约束，以及 string / array 的部分 unsupported 参数。
+
+```bash
+curl -L -A Mozilla https://api-docs.deepseek.com/api/create-chat-completion | rg -n "tools|tool_choice|tool_calls|response_format|json_object|chat.completion.chunk|finish_reason|delta|stream"
+```
+
+结果：确认 Chat Completion 文档中 `response_format` 为 `text` / `json_object`，stream chunk 示例为文本 delta，`finish_reason` 包含 `tool_calls`。
+
+```bash
+curl -L -A Mozilla https://api-docs.deepseek.com/guides/json_mode | rg -n "response_format|json_object|JSON|stream|must|Output"
+```
+
+结果：确认 JSON Output 使用 `response_format={'type':'json_object'}`，仍要求 prompt 明确要求 JSON，并提示空内容 / 截断风险。
+
+```bash
+if [ -n "$DEEPSEEK_API_KEY" ]; then echo present; else echo missing; fi
+```
+
+结果：`missing`，未调用外部模型端点。
+
+残余风险：
+
+- 本轮是官方文档 + 本地静态代码事实 spike，不是 live provider smoke；不证明真实 DeepSeek streaming tool arguments 可用或稳定。
+- 当前治理主线仍应优先推进派生字段后端化、ID / 引用关系收敛、schema / prompt / contract 同步和高失败阶段纵切治理。
 
 ## 每轮验收口径
 
