@@ -65,6 +65,15 @@ const OBSERVABILITY_PAYLOAD = {
             outputChars: 600,
             estimatedTokens: 225,
             contractRetryCount: 0,
+            diagnostic: {
+                phase: 'structured_output',
+                workflowId: 'TEST_DESIGN',
+                stageId: 'CLARIFY',
+                fieldPath: 'artifact_data.requirement_facts.0.fact',
+                validator: 'pydantic_validation',
+                retryable: true,
+                publicReason: '模型输出的结构化字段未通过校验，右侧产出物已保持不变。',
+            },
             createdAt: '2026-06-19T10:00:00',
         },
     ],
@@ -91,6 +100,9 @@ describe('observabilityService', () => {
         expect(summary.byStage[0].providerIssueCodes).toEqual({ LLM_ERROR: 1 });
         expect(summary.byProvider[0].providerIssueCount).toBe(1);
         expect(summary.recentTurns[0].errorCode).toBe('LLM_ERROR');
+        expect(summary.recentTurns[0].diagnostic?.fieldPath).toBe(
+            'artifact_data.requirement_facts.0.fact'
+        );
         expect(summary.contractRetryReasons).toEqual({ STRUCTURED_OUTPUT_CONTRACT_RETRY: 2 });
         expect(summary.diagnostics[0].title).toBe('结构化输出重试偏高');
     });

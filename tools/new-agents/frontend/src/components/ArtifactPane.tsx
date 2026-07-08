@@ -30,6 +30,82 @@ import { buildPlainTextPdf as buildArtifactPdf } from '../core/artifactExport';
 import { buildArtifactQualitySummary } from '../core/artifactQuality';
 import { buildWorkflowQualitySummary } from '../core/workflowQuality';
 
+type MarkdownPreviewChunk = {
+  sectionKey: string;
+  content: string;
+  mermaidBlockStartIndex: number;
+  structuredVisualBlockStartIndex: number;
+};
+
+type RenderedMarkdownSectionProps = MarkdownPreviewChunk & {
+  components: Components;
+  renderVersionKey: string;
+};
+
+const countFencedBlocksByLanguage = (
+  content: string,
+  language: 'mermaid' | 'ai4se-visual'
+): number => {
+  const fencePattern = /^```\s*([^\s`]+)/gm;
+  let count = 0;
+  let match: RegExpExecArray | null;
+  while ((match = fencePattern.exec(content)) !== null) {
+    if (match[1] === language) {
+      count += 1;
+    }
+  }
+  return count;
+};
+
+const buildMarkdownPreviewChunks = (content: string): MarkdownPreviewChunk[] => {
+  const parsedSections = parseArtifactMarkdownSections(content);
+  const baseChunks = parsedSections.length > 0
+    ? parsedSections.map(section => ({
+      sectionKey: section.anchor,
+      content: section.content,
+    }))
+    : [{
+      sectionKey: 'full-document',
+      content,
+    }];
+
+  let mermaidBlockStartIndex = 0;
+  let structuredVisualBlockStartIndex = 0;
+  return baseChunks
+    .filter(chunk => chunk.content.trim().length > 0)
+    .map((chunk) => {
+      const result = {
+        ...chunk,
+        mermaidBlockStartIndex,
+        structuredVisualBlockStartIndex,
+      };
+      mermaidBlockStartIndex += countFencedBlocksByLanguage(chunk.content, 'mermaid');
+      structuredVisualBlockStartIndex += countFencedBlocksByLanguage(
+        chunk.content,
+        'ai4se-visual'
+      );
+      return result;
+    });
+};
+
+const RenderedMarkdownSection = React.memo(({
+  content,
+  components,
+}: RenderedMarkdownSectionProps) => (
+  <ReactMarkdown
+    remarkPlugins={[remarkGfm]}
+    rehypePlugins={[rehypeRaw]}
+    components={components}
+  >
+    {content}
+  </ReactMarkdown>
+), (previous, next) => (
+  previous.content === next.content
+  && previous.mermaidBlockStartIndex === next.mermaidBlockStartIndex
+  && previous.structuredVisualBlockStartIndex === next.structuredVisualBlockStartIndex
+  && previous.renderVersionKey === next.renderVersionKey
+));
+
 export const ArtifactPane: React.FC = () => {
   const workflow = useStore((state) => state.workflow);
   const stageIndex = useStore((state) => state.stageIndex);
@@ -216,9 +292,14 @@ export const ArtifactPane: React.FC = () => {
     return nextSelectedText;
   };
 
+  const displayContent = preprocessMarkdown(artifactContent);
   const artifactSections = useMemo(
     () => parseArtifactMarkdownSections(artifactContent),
     [artifactContent]
+  );
+  const markdownPreviewChunks = useMemo(
+    () => buildMarkdownPreviewChunks(displayContent),
+    [displayContent]
   );
 
   const findLockedSectionChange = (nextContent: string): string | null => {
@@ -302,8 +383,6 @@ export const ArtifactPane: React.FC = () => {
   }, [currentStageArtifactHistory, selectedVersion, showHistory]);
 
   // Content displays using the imported preprocessMarkdown utility
-
-  const displayContent = preprocessMarkdown(artifactContent);
   type ParsedMarkdownSection = {
     heading: string;
     lines: string[];
@@ -3768,10 +3847,12 @@ export const ArtifactPane: React.FC = () => {
     activeAnchorText?: string | null,
     reportVisualDiagnostics = false,
     attachVisualDiagnosticAnchors = false,
-    deferMermaidRender = false
+    deferMermaidRender = false,
+    mermaidBlockStartIndex = 0,
+    structuredVisualBlockStartIndex = 0
   ): Components => {
-    let mermaidBlockCounter = 0;
-    let structuredVisualBlockCounter = 0;
+    let mermaidBlockCounter = mermaidBlockStartIndex;
+    let structuredVisualBlockCounter = structuredVisualBlockStartIndex;
     let anchorHighlighted = false;
     const normalizedActiveAnchorText = activeAnchorText?.trim() || null;
     const highlightAnchorInChildren = (children: React.ReactNode): React.ReactNode => {
@@ -3912,13 +3993,12 @@ export const ArtifactPane: React.FC = () => {
     };
   };
 
-  const editableMarkdownComponents = createArtifactMarkdownComponents(
-    handleMermaidRetry,
-    activeCommentAnchorText,
-    true,
-    true,
-    isGenerating
-  );
+  const markdownPreviewRenderVersionKey = [
+    activeCommentAnchorText ?? '',
+    activeVisualDiagnosticId ?? '',
+    currentStageId ?? '',
+    isGenerating ? 'defer-mermaid' : 'render-mermaid',
+  ].join('|');
   const readOnlyMarkdownComponents = createArtifactMarkdownComponents();
 
   return (
@@ -4316,13 +4396,22 @@ export const ArtifactPane: React.FC = () => {
               />
             </div>
           ) : viewMode === 'preview' ? (
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeRaw]}
-              components={editableMarkdownComponents}
-            >
-              {displayContent}
-            </ReactMarkdown>
+            markdownPreviewChunks.map((chunk) => (
+              <RenderedMarkdownSection
+                key={chunk.sectionKey}
+                {...chunk}
+                components={createArtifactMarkdownComponents(
+                  handleMermaidRetry,
+                  activeCommentAnchorText,
+                  true,
+                  true,
+                  isGenerating,
+                  chunk.mermaidBlockStartIndex,
+                  chunk.structuredVisualBlockStartIndex,
+                )}
+                renderVersionKey={markdownPreviewRenderVersionKey}
+              />
+            ))
           ) : (
             <pre className="text-sm font-mono text-slate-300 whitespace-pre-wrap break-words bg-[#0f172a] p-6 rounded-xl border border-[#1e293b]">
               {displayContent}

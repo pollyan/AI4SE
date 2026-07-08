@@ -1254,6 +1254,66 @@ cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workfl
 - 本轮不改变 CASES Pydantic schema、renderer、SSE runtime 或 ArtifactPane。
 - 本轮不增加 backend Mermaid JS parse 或 `mmdc` 渲染门禁。
 
+### 2026-07-09 补充质量门修复：artifact_data 输出顺序与 ArtifactPane section memo
+
+触发原因：
+
+- 目标模式继续盘点当前 `docs/todos` 时，结构化失败治理仍是 P0 活跃项；Alex handoff 主线已完成，不应重新恢复为活跃主线。
+- 前端全量 Vitest 暴露 `ArtifactPane.incrementalRender.test.tsx` 失败：ArtifactPane 预览仍整篇渲染 Markdown，未变章节会在其他章节变化时重新渲染。
+- 后端质量门 `test_artifact_data_structured_output_instruction_puts_artifact_data_before_chat_for_visible_streaming` 失败：25 个 artifact-data 阶段的模型指令仍要求先输出 `chat`，再输出 `artifact_data`，会削弱右侧真实流式预览。
+
+已修复：
+
+- `ArtifactPane` 预览态按 Markdown 标题章节拆成 memoized section render chunk；单章节内容不变时不会重新调用 `ReactMarkdown`，同时继续用全局 Mermaid / `ai4se-visual` block 起始索引保持视觉诊断锚点稳定。
+- 前端类型补齐 `AgentRunSnapshotArtifact.artifactData` 和 observability recent turn `diagnostic`；`observabilityService` 严格解析可选 diagnostic，`ChatPane` handoff fixture 补齐 `unconfirmedItems` 与 `targetInputChecklist`。
+- 后端 `build_structured_output_instruction()` 对 artifact-data 阶段统一归一化输出顺序，确保提示词和 JSON 示例都要求 `artifact_data` 在 `chat` 前面；非 artifact-data 文本输出指令不受影响。
+
+验证：
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/components/__tests__/ArtifactPane.incrementalRender.test.tsx
+```
+
+结果：修复前 `1 failed`；修复后 `1 passed`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/components/__tests__/ArtifactPane.incrementalRender.test.tsx src/components/__tests__/ArtifactPane.test.tsx src/core/__tests__/artifactSections.test.ts src/components/__tests__/StructuredVisual.test.tsx
+```
+
+结果：`157 passed`。
+
+```bash
+cd tools/new-agents/frontend && npm run test
+```
+
+结果：`51 passed` / `782 passed`；仍有既有 React `act(...)` warning，未导致失败。
+
+```bash
+cd tools/new-agents/frontend && npm run lint
+```
+
+结果：TypeScript `tsc --noEmit` 通过。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py::test_artifact_data_structured_output_instruction_puts_artifact_data_before_chat_for_visible_streaming -q
+```
+
+结果：修复前 `25 failed`；修复后 `25 passed`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_deepseek_v4_readiness.py tools/new-agents/backend/tests/test_workflow_dry_run.py -q
+```
+
+结果：`81 passed`。
+
+扩大验证现状：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_stream_services.py -q
+```
+
+结果：`40 failed, 182 passed`。失败集中在历史 contract fixture / 派生字段测试预期 / typed diagnostic 预期滞后等既有后端回归缺口；本轮已修复的 artifact-data 输出顺序质量门包含在该套件中并已单独通过。后续目标模式应把这些后端红灯纳入结构化失败治理的下一批 P0 改道候选，而不是继续新增 workflow 能力。
+
 ## 每轮验收口径
 
 - 必须先写或更新失败测试，复现目标失败类别。

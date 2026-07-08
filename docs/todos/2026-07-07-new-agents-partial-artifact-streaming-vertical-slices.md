@@ -320,19 +320,13 @@
 - 残余风险：真实模型 smoke 仍取决于本地模型配置、网络和额度；当前收口证明稳定契约和确定性证据齐备，不声称所有真实模型运行质量。
 - 下一步候选：该纵切路线已完成。后续如要提升真实模型质量，应另开目标模式故事，围绕真实 smoke、judge 维度或具体 workflow 质量评分推进。
 
-## 建议启动提示词
+## 后续启动提示
 
 ```text
 请按照 `AGENTS.md` 和 `docs/strategy/goal-mode-playbook.md` 进入目标模式。
 
-本轮目标：
-- 执行 `docs/todos/2026-07-07-new-agents-partial-artifact-streaming-vertical-slices.md` 中声明的下一轮纵切目标；当前下一轮候选为第 7 轮全工作流 streaming 契约收口与证据归档。后续轮次启动时只替换为本文件表格中对应的明确轮次名称。
-- 每轮只选择该轮声明范围内的一个可验收用户故事；如果 CGA 判断需要拆成子轮次，只允许缩小同一 workflow 内阶段范围。
-- 必须继续复用共享 Agent Runtime、typed SSE、workflow manifest、artifact contract、run persistence、共享前端 store 和 ArtifactPane。
-
-执行要求：
-- 第一个实质性产物必须是 Current State Gap Analysis；若本轮是已确认目标轮次的连续执行，则按 playbook 输出目标承接检查。
-- 代码或行为变更按 TDD 执行。
-- 验证 final `agent_turn` 前存在正式 artifact delta，并验证最终 artifact contract 和前端消费链路。
-- 更新本 todo 对应轮次状态、spec / plan 链接、验证证据和残余风险。
+注意：
+- 本文件记录的 partial artifact streaming 纵切路线已经完成，不要再按“下一轮候选”机械恢复实施。
+- 如果后续真实模型 smoke、LLM judge 或全量回归重新暴露流式产物问题，应基于当前失败证据重新做 Current State Gap Analysis，并优先读取 `docs/todos/2026-07-08-new-agents-structured-artifact-failure-reduction.md`。
+- 任何后续修复仍必须复用共享 Agent Runtime、typed SSE、workflow manifest、artifact contract、run persistence、共享前端 store 和 ArtifactPane。
 ```

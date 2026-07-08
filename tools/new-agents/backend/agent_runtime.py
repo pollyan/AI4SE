@@ -881,14 +881,86 @@ def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) ->
     )
 
 
+def _find_json_object_end(text: str, object_start_index: int) -> int:
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(object_start_index, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+            continue
+        if char == "{":
+            depth += 1
+            continue
+        if char == "}":
+            depth -= 1
+            if depth == 0:
+                return index + 1
+    return -1
+
+
+def _normalize_artifact_data_instruction_order(instruction: str) -> str:
+    if '"artifact_data"' not in instruction:
+        return instruction
+
+    normalized = instruction.replace(
+        '1. "chat"\n2. "artifact_data"',
+        '1. "artifact_data"\n2. "chat"',
+    )
+    json_object_start = normalized.find('{\n  "chat"')
+    if json_object_start < 0:
+        return normalized
+
+    chat_line_start = normalized.find('  "chat"', json_object_start)
+    artifact_block_start = normalized.find('  "artifact_data"', chat_line_start)
+    if chat_line_start < 0 or artifact_block_start < 0:
+        return normalized
+
+    chat_line_end = normalized.find("\n", chat_line_start)
+    artifact_value_start = normalized.find("{", artifact_block_start)
+    if chat_line_end < 0 or artifact_value_start < 0:
+        return normalized
+
+    artifact_value_end = _find_json_object_end(normalized, artifact_value_start)
+    if artifact_value_end < 0:
+        return normalized
+
+    artifact_block_end = artifact_value_end
+    if normalized[artifact_block_end:artifact_block_end + 2] == ",\n":
+        artifact_block_end += 2
+    elif artifact_block_end < len(normalized) and normalized[artifact_block_end] == "\n":
+        artifact_block_end += 1
+
+    chat_line = normalized[chat_line_start:chat_line_end + 1]
+    artifact_block = normalized[artifact_block_start:artifact_block_end]
+    return (
+        normalized[:chat_line_start]
+        + artifact_block
+        + chat_line
+        + normalized[chat_line_end + 1:artifact_block_start]
+        + normalized[artifact_block_end:]
+    )
+
+
 def build_structured_output_instruction(
     workflow_id: str,
     current_stage_id: str,
 ) -> str:
-    return ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS.get(
-        (workflow_id, current_stage_id),
-        TEXT_STRUCTURED_OUTPUT_INSTRUCTION,
-    )
+    stage_key = (workflow_id, current_stage_id)
+    instruction = ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS.get(stage_key)
+    if instruction is None:
+        return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
+    return _normalize_artifact_data_instruction_order(instruction)
+
 
 
 def build_raw_json_retry_prompt(

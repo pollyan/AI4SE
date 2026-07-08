@@ -6,6 +6,7 @@ import type {
     ObservabilitySummary,
     ObservabilityTotals,
     ObservabilityTurn,
+    ObservabilityTurnDiagnostic,
     WorkflowType,
 } from '../core/types';
 import { WORKFLOWS } from '../core/workflows';
@@ -38,6 +39,11 @@ const parseNumber = (value: unknown): number => {
 
 const parseInteger = (value: unknown): number => {
     if (typeof value === 'number' && Number.isInteger(value)) return value;
+    throw new Error(INVALID_OBSERVABILITY_ERROR);
+};
+
+const parseBoolean = (value: unknown): boolean => {
+    if (typeof value === 'boolean') return value;
     throw new Error(INVALID_OBSERVABILITY_ERROR);
 };
 
@@ -74,6 +80,22 @@ const parseDiagnostic = (value: unknown): ObservabilityDiagnostic => {
         title: parseString(value.title),
         detail: parseString(value.detail),
         action: parseString(value.action),
+    };
+};
+
+const parseTurnDiagnostic = (value: unknown): ObservabilityTurnDiagnostic => {
+    if (!isRecord(value)) {
+        throw new Error(INVALID_OBSERVABILITY_ERROR);
+    }
+
+    return {
+        phase: parseString(value.phase),
+        workflowId: parseString(value.workflowId),
+        stageId: parseString(value.stageId),
+        fieldPath: parseString(value.fieldPath),
+        validator: parseString(value.validator),
+        retryable: parseBoolean(value.retryable),
+        publicReason: parseString(value.publicReason),
     };
 };
 
@@ -123,7 +145,7 @@ const parseTurn = (value: unknown): ObservabilityTurn => {
         throw new Error(INVALID_OBSERVABILITY_ERROR);
     }
 
-    return {
+    const turn: ObservabilityTurn = {
         id: parseInteger(value.id),
         runId: parseString(value.runId),
         workflowId: parseWorkflowType(value.workflowId),
@@ -139,6 +161,12 @@ const parseTurn = (value: unknown): ObservabilityTurn => {
         contractRetryCount: parseInteger(value.contractRetryCount),
         createdAt: parseNullableString(value.createdAt),
     };
+
+    if (value.diagnostic !== undefined && value.diagnostic !== null) {
+        turn.diagnostic = parseTurnDiagnostic(value.diagnostic);
+    }
+
+    return turn;
 };
 
 const parseSummary = (payload: unknown): ObservabilitySummary => {

@@ -199,6 +199,7 @@ export type AgentRunSnapshotArtifact = {
     stageId: string;
     content: string;
     versionNumber: number;
+    artifactData?: unknown;
 };
 
 export type AgentRunSnapshotContextSummary = {
@@ -518,6 +519,16 @@ export type ObservabilityProviderSummary = ObservabilityTotals & {
     errorCodes: Record<string, number>;
 };
 
+export type ObservabilityTurnDiagnostic = {
+    phase: string;
+    workflowId: string;
+    stageId: string;
+    fieldPath: string;
+    validator: string;
+    retryable: boolean;
+    publicReason: string;
+};
+
 export type ObservabilityTurn = {
     id: number;
     runId: string;
@@ -533,6 +544,7 @@ export type ObservabilityTurn = {
     estimatedTokens: number;
     contractRetryCount: number;
     createdAt: string | null;
+    diagnostic?: ObservabilityTurnDiagnostic;
 };
 
 export type ObservabilitySummary = {
