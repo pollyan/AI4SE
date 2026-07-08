@@ -712,6 +712,21 @@ def test_build_artifact_contract_prompt_requires_delivery_coverage_and_traceabil
     assert '"rows"' in prompt
 
 
+def test_build_artifact_contract_prompt_requires_cause_map_node_edge_contract():
+    prompt = build_artifact_contract_prompt(
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="ROOT_CAUSE",
+    )
+
+    assert "cause-map" in prompt
+    assert '"nodes"' in prompt
+    assert '"edges"' in prompt
+    assert '"source"' in prompt
+    assert '"target"' in prompt
+    assert "id 唯一" in prompt
+    assert '"columns": ["层级", "问题", "回答"' not in prompt
+
+
 def test_validate_agent_turn_rejects_missing_required_mermaid_contract():
     output = AgentTurnOutput.model_validate(
         {

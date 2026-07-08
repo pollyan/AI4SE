@@ -57,6 +57,11 @@ def _wait_for_server(url: str, process: subprocess.Popen[str]) -> None:
     raise RuntimeError(f"Vite dev server did not start at {url}: {last_error}")
 
 
+def _open_new_agents_home(page: Page, base_url: str) -> None:
+    page.goto(base_url, wait_until="domcontentloaded", timeout=60_000)
+    page.get_by_role("heading", name="选择你的 AI 助手").wait_for(timeout=30_000)
+
+
 @pytest.fixture(scope="session")
 def new_agents_base_url() -> Generator[str, None, None]:
     port = int(os.environ.get("NEW_AGENTS_E2E_PORT", "0")) or _free_port()
@@ -477,9 +482,10 @@ def new_agents_page(
         "**/new-agents/api/agent/runs/mock-run-user_story_breakdown-handoff",
         route_run_snapshot,
     )
-    page.goto(new_agents_base_url)
+    _open_new_agents_home(page, new_agents_base_url)
     page.evaluate("localStorage.clear()")
-    page.reload()
+    page.reload(wait_until="domcontentloaded", timeout=60_000)
+    page.get_by_role("heading", name="选择你的 AI 助手").wait_for(timeout=30_000)
 
     yield page
 

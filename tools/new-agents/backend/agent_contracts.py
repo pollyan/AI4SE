@@ -489,11 +489,17 @@ STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {
     ),
     "cause-map": (
         'cause-map 必须严格使用如下 JSON 结构：{"type": '
-        '"cause-map", "title": "可选标题", "columns": ["层级", '
-        '"问题", "回答", "原因类型", "证据"], "rows": [{"层级": '
-        '"Why-2", "问题": "为什么未被拦截", "回答": "缺少发布门禁", '
-        '"原因类型": "流程", "证据": "发布记录"}]}。columns 必须是非空字符串数组；'
-        "rows 必须是对象数组，每个对象的 key 必须对应 columns 中的列名。"
+        '"cause-map", "title": "可选标题", "nodes": [{"id": '
+        '"Why-1", "label": "Why-1", "title": "直接原因", '
+        '"description": "发布前缺少关键路径回归门禁", "category": '
+        '"流程", "evidence": "发布记录与测试记录", "confidence": '
+        '"高", "status": "已确认"}], "edges": [{"source": '
+        '"Why-1", "target": "Why-2", "label": "继续追问"}]}。'
+        "nodes 必须是非空对象数组；每个 node 必须包含非空且 id 唯一的 id、"
+        "非空 label 和非空 title；description、category、evidence、"
+        "confidence、status 可选，但如果出现必须是非空字符串。edges 必须是对象数组；"
+        "每条 edge 必须包含非空 source 和 target，并且 source/target 必须引用已存在 node；"
+        "label 可选，但如果出现必须是非空字符串。禁止把 cause-map 写成 columns/rows 表格协议。"
     ),
     "mvp-map": (
         'mvp-map 必须严格使用如下 JSON 结构：{"type": '

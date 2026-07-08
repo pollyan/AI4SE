@@ -817,6 +817,69 @@ New Agents 验证：
 - ROOT_CAUSE 的鱼骨图 Mermaid mindmap 本轮仍保留为后端 deterministic renderer 输出；未迁移为新的结构化 `mindmap` visual。
 - 本轮建立的是前后端 contract / renderer / 导出回归门禁；正式 artifact 持久化前的运行时视觉 parse 门禁仍需后续第 7 轮继续收紧。
 
+### 2026-07-08 第 7 轮补充：ROOT_CAUSE cause-map contract prompt 同步
+
+已关闭上一轮后发现的 `cause-map` contract prompt 矛盾：后端 `build_artifact_contract_prompt()` 现在要求 `nodes/edges` 节点 / 边协议，不再提示旧 `columns/rows` 表格示例。
+
+RED 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_contracts.py::test_build_artifact_contract_prompt_requires_cause_map_node_edge_contract -q
+```
+
+结果：失败符合预期。旧 prompt 不包含 `"nodes"`，因为 `STRUCTURED_VISUAL_SCHEMA_PROMPTS["cause-map"]` 仍使用 `columns/rows` 示例。
+
+GREEN 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_contracts.py::test_build_artifact_contract_prompt_requires_cause_map_node_edge_contract -q
+```
+
+结果：`1 passed`
+
+聚焦后端契约回归：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_contracts.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_workflow_contract_registry.py -q
+```
+
+结果：`109 passed`
+
+New Agents 验证：
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：New Agents Frontend `724 passed`；New Agents Backend `628 passed, 1 deselected`。运行中仍出现既有 React `ArtifactPane.test.tsx` `act(...)` warning，但未导致测试失败。
+
+提交前全量验证与验证阻塞处理：
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：默认沙箱失败，失败点为 MidScene proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 Playwright Chromium `bootstrap_check_in ... Permission denied (1100)`，属于端口 / 浏览器权限限制。
+
+非沙箱全量重跑先后暴露 New Agents Browser E2E setup 阶段 `Page.goto` / `Page.reload` 默认 `load` 等待超时；同一 E2E 套件单独非沙箱运行通过，证明应用工作流可跑通，失败集中在 fixture 等待条件。已同步修复 `tests/e2e/new_agents_browser/conftest.py`：打开 New Agents 首页时等待 `domcontentloaded`，再等待 `选择你的 AI 助手` 标题出现，不再把浏览器 `load` 事件作为 React 首页可交互证据。
+
+```bash
+/bin/zsh -lc './scripts/test/test-local.sh e2e > /private/tmp/ai4se-e2e-domcontentloaded.log 2>&1; rc=$?; tail -120 /private/tmp/ai4se-e2e-domcontentloaded.log; echo EXIT_STATUS:$rc; exit $rc'
+```
+
+结果：通过，退出码 `0`；New Agents Browser E2E `11 passed, 10 deselected`。
+
+```bash
+/bin/zsh -lc './scripts/test/test-local.sh all > /private/tmp/ai4se-cause-map-contract-prompt-full-all-after-e2e-fix.log 2>&1; rc=$?; tail -160 /private/tmp/ai4se-cause-map-contract-prompt-full-all-after-e2e-fix.log; echo EXIT_STATUS:$rc; exit $rc'
+```
+
+结果：通过，退出码 `0`。关键结果包括 Intent Tester API `294 passed`、MidScene proxy `17 passed`、Common Frontend lint/build 通过、New Agents Frontend `724 passed`、New Agents Backend `628 passed, 1 deselected`、New Agents Browser E2E `11 passed, 10 deselected`。
+
+残余风险：
+
+- 本轮只同步 `cause-map` 的 backend artifact contract prompt，不改变其他结构化视觉类型的 schema prompt。
+- 本轮不迁移 ROOT_CAUSE 的 Mermaid mindmap，也不实现运行时 Mermaid parse 门禁。
+
 ## 每轮验收口径
 
 - 必须先写或更新失败测试，复现目标失败类别。
