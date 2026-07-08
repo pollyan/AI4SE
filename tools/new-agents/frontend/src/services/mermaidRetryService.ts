@@ -1,5 +1,22 @@
+import { sanitizeMermaidCode } from '../core/utils/mermaidSanitizer';
+
 type MermaidRepairResponse = {
     repairedCode: string;
+};
+
+type MermaidRepairArtifactContext = {
+    workflowId: string;
+    stageId: string;
+    currentArtifact: string;
+};
+
+type MermaidRepairRequestPayload = {
+    brokenCode: string;
+    errorMessage: string;
+    blockIndex?: number;
+    workflowId?: string;
+    stageId?: string;
+    currentArtifact?: string;
 };
 
 function isMermaidRepairResponse(value: unknown): value is MermaidRepairResponse {
@@ -9,6 +26,19 @@ function isMermaidRepairResponse(value: unknown): value is MermaidRepairResponse
         && 'repairedCode' in value
         && typeof value.repairedCode === 'string'
     );
+}
+
+async function validateRepairedMermaidCode(code: string): Promise<string | null> {
+    const sanitized = sanitizeMermaidCode(code.trim());
+    if (!sanitized.trim()) return null;
+
+    const { default: mermaid } = await import('mermaid');
+    const parseResult = await mermaid.parse(
+        sanitized,
+        { suppressErrors: false },
+    );
+    if ((parseResult as unknown) === false) return null;
+    return sanitized;
 }
 
 /**
@@ -22,17 +52,25 @@ function isMermaidRepairResponse(value: unknown): value is MermaidRepairResponse
 export async function retryMermaidGeneration(
     brokenCode: string,
     errorMessage: string,
-    blockIndex?: number
+    blockIndex?: number,
+    artifactContext?: MermaidRepairArtifactContext
 ): Promise<string | null> {
     try {
+        const requestBody: MermaidRepairRequestPayload = {
+            brokenCode,
+            errorMessage,
+            blockIndex,
+        };
+        if (artifactContext) {
+            requestBody.workflowId = artifactContext.workflowId;
+            requestBody.stageId = artifactContext.stageId;
+            requestBody.currentArtifact = artifactContext.currentArtifact;
+        }
+
         const response = await fetch('/new-agents/api/utils/mermaid/repair', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                brokenCode,
-                errorMessage,
-                blockIndex,
-            }),
+            body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
@@ -53,7 +91,7 @@ export async function retryMermaidGeneration(
             throw new Error('Invalid Mermaid repair response');
         }
 
-        return payload.repairedCode.trim();
+        return await validateRepairedMermaidCode(payload.repairedCode);
     } catch {
         return null;
     }

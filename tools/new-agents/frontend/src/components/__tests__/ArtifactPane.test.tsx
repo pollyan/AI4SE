@@ -4,6 +4,7 @@ import { ArtifactPane } from '../ArtifactPane';
 import { useStore } from '../../store';
 import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../../services/runSnapshotService';
 import { createStoryHandoffPacket, fetchStoryHandoffCandidates, fetchStoryHandoffPackets } from '../../services/storyHandoffPacketService';
+import { retryMermaidGeneration } from '../../services/mermaidRetryService';
 
 vi.mock('../../services/runSnapshotService', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../services/runSnapshotService')>();
@@ -27,11 +28,18 @@ vi.mock('../Mermaid', () => ({
         onRetry,
     }: {
         chart: string;
-        onRetry?: () => Promise<boolean>;
+        onRetry?: (brokenCode: string, errorMessage: string, blockIndex: number) => Promise<boolean>;
     }) => (
         <div data-testid="mermaid">
             {chart}
-            {onRetry && <button type="button">重新生成图表</button>}
+            {onRetry && (
+                <button
+                    type="button"
+                    onClick={() => void onRetry(chart, 'Syntax Error', 0)}
+                >
+                    重新生成图表
+                </button>
+            )}
         </div>
     ),
 }));
@@ -582,6 +590,44 @@ describe('ArtifactPane Component', () => {
         expect(screen.getByText(/版本预览/)).toBeTruthy();
         expect(screen.getByTestId('mermaid').textContent).toContain('graph TD');
         expect(screen.queryByRole('button', { name: '重新生成图表' })).toBeNull();
+    });
+
+    it('passes workflow, stage and current artifact context when retrying a Mermaid block', async () => {
+        const artifact = [
+            '# 需求分析文档',
+            '',
+            '```mermaid',
+            'graph TD',
+            '  A-->',
+            '```',
+        ].join('\n');
+        vi.mocked(retryMermaidGeneration).mockResolvedValue('graph TD\n  A-->B');
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            artifactContent: artifact,
+            stageArtifacts: {
+                CLARIFY: artifact,
+            },
+        });
+
+        render(<ArtifactPane />);
+
+        fireEvent.click(screen.getByRole('button', { name: '重新生成图表' }));
+
+        await waitFor(() => {
+            expect(retryMermaidGeneration).toHaveBeenCalledWith(
+                'graph TD\n  A-->',
+                'Syntax Error',
+                0,
+                {
+                    workflowId: 'TEST_DESIGN',
+                    stageId: 'CLARIFY',
+                    currentArtifact: artifact,
+                },
+            );
+        });
+        expect(useStore.getState().artifactContent).toContain('A-->B');
     });
 
     it('does not record visual diagnostics from read-only history preview', async () => {

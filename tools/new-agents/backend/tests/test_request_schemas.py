@@ -199,6 +199,65 @@ def test_parse_mermaid_repair_request_accepts_required_fields() -> None:
     assert parsed.block_index == 2
 
 
+def test_parse_mermaid_repair_request_accepts_artifact_contract_context() -> None:
+    parsed = parse_mermaid_repair_request({
+        "brokenCode": "graph TD\nA-->",
+        "errorMessage": "Syntax error",
+        "blockIndex": 0,
+        "workflowId": "TEST_DESIGN",
+        "stageId": "CLARIFY",
+        "currentArtifact": "# 需求分析文档\n\n```mermaid\ngraph TD\nA-->\n```",
+    })
+
+    assert parsed.workflow_id == "TEST_DESIGN"
+    assert parsed.stage_id == "CLARIFY"
+    assert parsed.current_artifact.startswith("# 需求分析文档")
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        (
+            {
+                "brokenCode": "graph TD\nA-->",
+                "errorMessage": "Syntax error",
+                "blockIndex": 0,
+                "workflowId": "TEST_DESIGN",
+                "stageId": "CLARIFY",
+            },
+            "artifact contract context 必须同时包含 workflowId、stageId、currentArtifact 和 blockIndex",
+        ),
+        (
+            {
+                "brokenCode": "graph TD\nA-->",
+                "errorMessage": "Syntax error",
+                "workflowId": "TEST_DESIGN",
+                "stageId": "CLARIFY",
+                "currentArtifact": "# 需求分析文档",
+            },
+            "artifact contract context 必须同时包含 workflowId、stageId、currentArtifact 和 blockIndex",
+        ),
+        (
+            {
+                "brokenCode": "graph TD\nA-->",
+                "errorMessage": "Syntax error",
+                "blockIndex": 0,
+                "workflowId": "TEST_DESIGN",
+                "stageId": "UNKNOWN",
+                "currentArtifact": "# 需求分析文档",
+            },
+            "workflowId 与 stageId 不匹配: TEST_DESIGN/UNKNOWN",
+        ),
+    ],
+)
+def test_parse_mermaid_repair_request_requires_complete_artifact_contract_context(
+    payload: dict[str, object],
+    message: str,
+) -> None:
+    with pytest.raises(RequestValidationError, match=message):
+        parse_mermaid_repair_request(payload)
+
+
 def test_parse_mermaid_repair_request_rejects_negative_block_index() -> None:
     with pytest.raises(RequestValidationError) as exc_info:
         parse_mermaid_repair_request({

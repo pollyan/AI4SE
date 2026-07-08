@@ -3558,16 +3558,26 @@ export const ArtifactPane: React.FC = () => {
   const handleMermaidRetry = useCallback(async (brokenCode: string, errorMessage: string, blockIndex: number) => {
     // dynamically import to avoid cyclic or immediate heavy deps
     const { retryMermaidGeneration } = await import('../services/mermaidRetryService');
-    const newCode = await retryMermaidGeneration(brokenCode, errorMessage, blockIndex);
+    const content = useStore.getState().artifactContent;
+    if (!currentStageId) return false;
+    const newCode = await retryMermaidGeneration(
+      brokenCode,
+      errorMessage,
+      blockIndex,
+      {
+        workflowId: workflow,
+        stageId: currentStageId,
+        currentArtifact: content,
+      },
+    );
     if (!newCode) return false;
 
-    const content = useStore.getState().artifactContent;
     const updatedContent = replaceMermaidBlockAtIndex(content, blockIndex, newCode);
     if (!updatedContent) return false;
 
     useStore.getState().setArtifactContent(updatedContent);
     return true;
-  }, []);
+  }, [currentStageId, workflow]);
 
   const handleRestoreSelectedVersion = () => {
     if (!selectedVersion || !currentStageId || selectedVersion.content === artifactContent) {

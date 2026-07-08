@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成）
+- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -135,9 +135,10 @@
   - `ai4se-visual` 校验：JSON 必须合法，`type` 必须受支持，columns / rows / nodes / edges / events 等结构必须完整，引用目标必须存在。
   - 验收：新增测试证明视觉校验失败会显式报错，不产生成功 `agent_turn`、不持久化 artifact、不推进 stage。
 
-- [ ] 收紧 Mermaid repair 的架构边界。（第 7 轮）
+- [x] 收紧 Mermaid repair 的架构边界。（第 7 轮）
   - 目标：`/api/utils/mermaid/repair` 和前端 retry 只能作为用户显式触发的修复辅助，不能自动替换正式 artifact、不能绕过 contract、不能让失败状态变成成功。
   - 验收：测试证明 repair 结果必须重新经过 Mermaid parse / artifact contract 校验；repair 失败继续显式展示，不隐藏原始错误。
+  - 进展：已完成前端 `retryMermaidGeneration()` parse gate；ArtifactPane 发起 repair 时会把 `workflowId`、`stageId` 和当前完整 artifact 一起提交给共享 `/api/utils/mermaid/repair`，后端替换候选 Mermaid block 后复用 `validate_agent_turn` 做完整 artifact contract 校验。ChatPane 不替换 artifact，只保留 Mermaid parse gate。失败时 service 返回 `null`，父组件不写入 artifact/message，原始错误状态继续保留。
 
 ## 目标轮数声明
 
@@ -879,6 +880,93 @@ New Agents 验证：
 
 - 本轮只同步 `cause-map` 的 backend artifact contract prompt，不改变其他结构化视觉类型的 schema prompt。
 - 本轮不迁移 ROOT_CAUSE 的 Mermaid mindmap，也不实现运行时 Mermaid parse 门禁。
+
+### 2026-07-08 第 7 轮补充：Mermaid repair parse 与 artifact contract 双门禁
+
+已完成：
+
+- 前端 `retryMermaidGeneration()` 在接收 repair endpoint 返回后，会先用现有 Mermaid sanitizer 规范化代码，再调用 `mermaid.parse(..., { suppressErrors: false })`；parse 异常、空代码或 parse 返回 `false` 都返回 `null`，调用方不会替换 Markdown。
+- `ArtifactPane` 发起 Mermaid retry 时会传入当前 `workflowId`、`stageId` 和完整 `artifactContent`；`ChatPane` 不传 artifact context，只保留 Mermaid parse gate。
+- 后端 `MermaidRepairRequest` 支持可选 artifact contract context，并要求 `workflowId`、`stageId`、`currentArtifact` 和 `blockIndex` 成组出现；workflow/stage 不匹配会显式 400。
+- `/api/utils/mermaid/repair` 在有 artifact context 时，会将修复后的 Mermaid code 替换进候选完整 artifact，并复用共享 `AgentTurnOutput` / `validate_agent_turn` 校验当前 workflow/stage 的 artifact contract。contract 失败返回 JSON error，不返回可写入的 `repairedCode`。
+- 本轮继续复用共享 repair endpoint、ArtifactPane、Mermaid component 和 backend contract；未新增 Lisa/Alex/workflow 专属 runtime、API、store 或渲染管线。
+- 只读 explorer `Tesla` 已审查 repair 调用路径，确认仅前端 parse 不足以覆盖 artifact contract，本轮已据此补齐后端 contract gate。
+
+RED 验证：
+
+```bash
+cd tools/new-agents/frontend && npm run test -- --run src/services/__tests__/mermaidRetryService.test.ts
+```
+
+结果：修复前 `4 failed, 1 passed`。失败证明 service 没有调用 `mermaid.parse`、没有发送 artifact context，并会返回仍无法 parse 的 repaired code。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_request_schemas.py::test_parse_mermaid_repair_request_accepts_artifact_contract_context tools/new-agents/backend/tests/test_request_schemas.py::test_parse_mermaid_repair_request_requires_complete_artifact_contract_context tools/new-agents/backend/tests/test_mermaid_repair_endpoint.py::test_mermaid_repair_validates_candidate_artifact_contract tools/new-agents/backend/tests/test_mermaid_repair_endpoint.py::test_mermaid_repair_rejects_candidate_when_artifact_contract_fails -q
+```
+
+结果：修复前 `5 failed, 1 passed`。失败证明 schema 忽略 artifact context，endpoint 未拦截破坏 contract 的 repair 结果。
+
+GREEN 与聚焦回归：
+
+```bash
+cd tools/new-agents/frontend && npm run test -- --run src/services/__tests__/mermaidRetryService.test.ts
+```
+
+结果：`5 passed`
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_request_schemas.py::test_parse_mermaid_repair_request_accepts_artifact_contract_context tools/new-agents/backend/tests/test_request_schemas.py::test_parse_mermaid_repair_request_requires_complete_artifact_contract_context tools/new-agents/backend/tests/test_mermaid_repair_endpoint.py::test_mermaid_repair_validates_candidate_artifact_contract tools/new-agents/backend/tests/test_mermaid_repair_endpoint.py::test_mermaid_repair_rejects_candidate_when_artifact_contract_fails -q
+```
+
+结果：`6 passed`
+
+```bash
+cd tools/new-agents/frontend && npm run test -- --run src/components/__tests__/ArtifactPane.test.tsx -t "passes workflow, stage and current artifact context"
+```
+
+结果：`1 passed, 149 skipped`
+
+```bash
+cd tools/new-agents/frontend && npm run test -- --run src/services/__tests__/mermaidRetryService.test.ts src/components/__tests__/ChatPane.test.tsx src/components/__tests__/ArtifactPane.test.tsx src/core/__tests__/llm.test.ts
+```
+
+结果：`272 passed`。运行中仍出现既有 React `ArtifactPane.test.tsx` `act(...)` warning，但未导致测试失败。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_request_schemas.py tools/new-agents/backend/tests/test_mermaid_repair_endpoint.py tools/new-agents/backend/tests/test_agent_contracts.py -q
+```
+
+结果：`131 passed`
+
+New Agents 批量验证：
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：New Agents Frontend `728 passed`；New Agents Backend `634 passed, 1 deselected`。运行中仍出现既有 React `ArtifactPane.test.tsx` `act(...)` warning，但未导致测试失败。
+
+全量验证：
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：默认沙箱失败，失败点为 MidScene proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 Playwright Chromium `bootstrap_check_in ... Permission denied (1100)`，属于端口 / 浏览器权限限制；脚本被中断前已完成 Intent Tester API、代码质量、Common Frontend、New Agents Frontend / Backend，Browser E2E 因 Chromium 权限失败。
+
+非沙箱重跑：
+
+```bash
+/bin/zsh -lc './scripts/test/test-local.sh all > /private/tmp/ai4se-mermaid-repair-full-all.log 2>&1; rc=$?; tail -160 /private/tmp/ai4se-mermaid-repair-full-all.log; echo EXIT_STATUS:$rc; exit $rc'
+```
+
+结果：通过，退出码 `0`。关键结果包括 Intent Tester API `294 passed`、MidScene proxy `17 passed`、Common Frontend lint/build 通过、New Agents Frontend `728 passed`、New Agents Backend `634 passed, 1 deselected`、New Agents Browser E2E `11 passed, 10 deselected`。
+
+残余风险：
+
+- 本轮只收紧用户显式触发的 Mermaid repair 边界，不迁移其他复杂视觉类型到 `ai4se-visual`。
+- Backend 仍不执行 Mermaid JS parse；parse gate 由前端 Mermaid runtime 承担，artifact contract gate 由后端承担。
+- 更广泛的正式 artifact 视觉运行时门禁和 CI / `mmdc` 渲染门禁仍属于第 7 轮后续视觉稳定化候选。
 
 ## 每轮验收口径
 

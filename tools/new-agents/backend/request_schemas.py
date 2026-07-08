@@ -25,6 +25,13 @@ class MermaidRepairRequest(BaseModel):
     broken_code: str = Field(alias="brokenCode", min_length=1)
     error_message: str = Field(alias="errorMessage", min_length=1)
     block_index: int | None = Field(default=None, alias="blockIndex")
+    workflow_id: str | None = Field(default=None, alias="workflowId", min_length=1)
+    stage_id: str | None = Field(default=None, alias="stageId", min_length=1)
+    current_artifact: str | None = Field(
+        default=None,
+        alias="currentArtifact",
+        min_length=1,
+    )
 
 
 class DefaultLlmConfigUpdateRequest(BaseModel):
@@ -114,6 +121,32 @@ def parse_mermaid_repair_request(
             raise RequestValidationError("blockIndex 必须为整数")
         if block_index < 0:
             raise RequestValidationError("blockIndex 不能为负数")
+    context_keys = ("workflowId", "stageId", "currentArtifact")
+    has_artifact_context = any(key in data for key in context_keys)
+    if has_artifact_context:
+        if (
+            block_index is None
+            or _is_blank(data.get("workflowId"))
+            or _is_blank(data.get("stageId"))
+            or _is_blank(data.get("currentArtifact"))
+        ):
+            raise RequestValidationError(
+                "artifact contract context 必须同时包含 "
+                "workflowId、stageId、currentArtifact 和 blockIndex"
+            )
+        workflow_id = data["workflowId"].strip()
+        stage_id = data["stageId"].strip()
+        workflow_stages = get_workflow_stages().get(workflow_id)
+        if workflow_stages is None or stage_id not in workflow_stages:
+            raise RequestValidationError(
+                f"workflowId 与 stageId 不匹配: {workflow_id}/{stage_id}"
+            )
+        data = {
+            **data,
+            "workflowId": workflow_id,
+            "stageId": stage_id,
+            "currentArtifact": data["currentArtifact"].strip(),
+        }
     return MermaidRepairRequest.model_validate(data)
 
 

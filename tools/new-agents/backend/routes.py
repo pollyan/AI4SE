@@ -1,7 +1,10 @@
+import re
+
 from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.exceptions import HTTPException
 
+from agent_contracts import AgentTurnOutput, validate_agent_turn
 from api_responses import DEFAULT_LLM_CONFIG_MISSING_CODE, json_error_response
 from config_service import (
     build_default_llm_config_payload,
@@ -51,6 +54,10 @@ from workflow_handoffs import (
 api_bp = Blueprint("new_agents_api", __name__, url_prefix="/api")
 register_test_asset_routes(api_bp)
 
+MERMAID_CODE_BLOCK_PATTERN = re.compile(
+    r"```mermaid(?:[ \t].*)?\n[\s\S]*?```",
+)
+
 
 def _read_json_body():
     try:
@@ -63,6 +70,71 @@ def _read_json_body():
         if validation_error is not None:
             raise validation_error from e
         raise
+
+
+def _replace_mermaid_block_at_index(
+    markdown: str,
+    block_index: int,
+    new_code: str,
+) -> str | None:
+    matches = list(MERMAID_CODE_BLOCK_PATTERN.finditer(markdown))
+    if block_index < 0 or block_index >= len(matches):
+        return None
+
+    target = matches[block_index]
+    replacement = f"```mermaid\n{new_code.strip()}\n```"
+    if replacement == target.group(0):
+        return markdown
+    return (
+        f"{markdown[:target.start()]}"
+        f"{replacement}"
+        f"{markdown[target.end():]}"
+    )
+
+
+def _validate_mermaid_repair_artifact_contract(
+    repair_request,
+    repaired_code: str,
+) -> None:
+    if not (
+        repair_request.workflow_id
+        and repair_request.stage_id
+        and repair_request.current_artifact
+        and repair_request.block_index is not None
+    ):
+        return
+
+    candidate_artifact = _replace_mermaid_block_at_index(
+        repair_request.current_artifact,
+        repair_request.block_index,
+        repaired_code,
+    )
+    if candidate_artifact is None:
+        raise MermaidRepairError(
+            "Mermaid repair artifact contract validation failed: "
+            "target Mermaid block not found"
+        )
+
+    try:
+        output = AgentTurnOutput.model_validate({
+            "chat": "已完成 Mermaid 图表修复校验。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": candidate_artifact,
+            },
+            "stage_action": None,
+            "warnings": [],
+        })
+        validate_agent_turn(
+            output,
+            workflow_id=repair_request.workflow_id,
+            current_stage_id=repair_request.stage_id,
+        )
+    except ValueError as e:
+        raise MermaidRepairError(
+            "Mermaid repair artifact contract validation failed: "
+            f"{str(e)}"
+        ) from e
 
 
 @api_bp.route("/health", methods=["GET"])
@@ -404,6 +476,10 @@ def mermaid_repair():
             api_key=config.api_key,
             base_url=config.base_url,
             model_name=config.model,
+        )
+        _validate_mermaid_repair_artifact_contract(
+            repair_request,
+            repaired_code,
         )
     except MermaidRepairError as e:
         current_app.logger.warning(
