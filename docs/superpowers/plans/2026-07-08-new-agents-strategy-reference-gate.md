@@ -505,7 +505,7 @@ Results:
 - Alex judge evidence staged check: `git diff --cached --check` passed; staged files were `docs/todos/2026-07-08-new-agents-alex-requirement-to-user-story-handoff.md` and `tests/e2e/new_agents_browser/sse_mock.py`.
 - STRATEGY staged check: `git diff --cached --check` passed; staged files were this plan, the STRATEGY design spec, the structured-artifact todo, backend renderer/runtime/tests, and frontend STRATEGY prompt.
 
-- [ ] **Step 3: Commit and push**
+- [x] **Step 3: Commit and push**
 
 Commit messages:
 
@@ -523,3 +523,9 @@ git rev-parse @{u}
 ```
 
 Expected: both SHAs match.
+
+Results:
+
+- Alex judge evidence commit: `57abce48` (`test(new-agents): 补强Alex蓝图评审证据`), pushed to `origin/codex/structured-failure-diagnostics`.
+- STRATEGY reference gate commit: `d744378f` (`fix(new-agents): 收紧Lisa策略引用门禁`), pushed to `origin/codex/structured-failure-diagnostics`.
+- `git rev-parse HEAD` and `git rev-parse @{u}` both returned `d744378f39e0c50f72a55254c80c1e563b63843a`.
