@@ -1,6 +1,6 @@
 # AI4SE 目标模式运行手册
 
-本文是 Codex / AI Coding Agent 在目标模式下持续演进 AI4SE 的精简入口。它只保留每轮必须遵守的执行规则；详细模板、子智能体策略和 CI 等价验证分别下沉到专题附录，避免每轮把长示例和重复原则全部塞进上下文。
+本文是 Codex / AI Coding Agent 在目标模式下持续演进 AI4SE 的执行入口。它保留每轮必须遵守的规则；CGA 模板和 CI 等价验证分别下沉到专题附录，避免把长模板和命令矩阵塞进主流程。子智能体调度属于目标模式执行循环本身，直接收敛在本文中维护。
 
 ## 1. 定位
 
@@ -12,7 +12,6 @@
 - `docs/index.md`：项目知识库入口，说明模块、架构、API、数据、部署和深层文档导航。
 - `docs/strategy/goal-mode-playbook.md`：目标模式通用运行入口，也就是本文档。
 - `docs/strategy/goal-mode-cga-template.md`：CGA 模板、切片厚度门禁和常见过薄切片处理。
-- `docs/strategy/goal-mode-subagents.md`：子智能体、并行协作、当前工作区保护和集成规则。
 - `docs/strategy/goal-mode-ci-verification.md`：CI 等价验证、远端失败复盘和提交前验证表。
 - `docs/todos/`：长期演进 todo，记录跨目标模式持续消化的高优先级产品、工程、测试和评判事项。
 - `docs/plans/`：专项计划和专项目标模式规则。只有当本轮目标指向对应主题时，才展开相关计划。
@@ -55,17 +54,43 @@
 3. 读取 `docs/index.md`，获取当前项目结构和深层文档导航。
 4. 检查 `git status --short`。如果存在未提交变更，必须判断它们是用户改动、上一轮遗留还是当前轮输入；不得覆盖、回滚或格式化不属于本轮的变更。若未提交 diff 很大或包含大量删除 / 生成文件，还必须补充 `git status -sb`、`git diff --shortstat` 和按目录归类的 ownership 判断，区分“本轮可提交 diff”和“需保护的无关脏变更”。
 5. 按任务方向读取相关事实源：架构、API、测试、编码规范、设计原则、todo、专项计划、已有 spec / plan、当前代码和测试。
-6. 判断是否需要读取专题附录：CGA 模板见 `goal-mode-cga-template.md`，子智能体见 `goal-mode-subagents.md`，CI / 提交前验证见 `goal-mode-ci-verification.md`。
+6. 判断是否需要读取专题附录：CGA 模板见 `goal-mode-cga-template.md`，CI / 提交前验证见 `goal-mode-ci-verification.md`。
 7. 检查未关闭质量门和用户最新反馈。任何 LLM judge 低于 80 分、阻断测试失败或用户明确指出的遗漏，都必须先作为改道条件进入本轮判断；如果反馈发生在本轮运行中，也必须先中断当前推进并更新改道判断。
-8. 第一个实质性工作产物必须是完整 Current State Gap Analysis；若本轮是已确认目标轮次的连续执行，则第一个实质性工作产物必须是目标承接检查。该产物必须包含子智能体 / 旁路审查决策：可并行读取、审查、验证或互不重叠实现且环境提供子智能体工具时，必须实际尝试分发；不分发时写清原因。若分发失败，按 `docs/strategy/goal-mode-subagents.md` 的失败降级规则处理并记录。
+8. 第一个实质性工作产物必须是完整 Current State Gap Analysis；若本轮是已确认目标轮次的连续执行，则第一个实质性工作产物必须是目标承接检查。该产物必须包含子智能体 / 旁路审查决策：可并行读取、审查、验证或互不重叠实现且环境提供子智能体工具时，必须实际尝试分发；不分发时写清原因。若分发失败，按本文“并行协作与子智能体”规则降级并记录。
 
 不要先写 implementation plan、先改代码、先跑固定 todo 清单，或直接沿用上一轮记忆。已确认目标轮次也必须先做承接检查，不能在不验证当前事实源和工作区状态的情况下机械继续。
 
 ### 工作区保护
 
-目标模式默认只在当前主工作区推进，不创建或切换 git worktree。启动时先记录 `git status --short`，限定本轮写入范围，只 stage 本轮相关文件；如需使用子智能体，按 `docs/strategy/goal-mode-subagents.md` 在当前工作区保护规则下分发只读探索、验证或严格限定写入范围的 worker。
+目标模式默认只在当前主工作区推进，不创建或切换 git worktree。启动时先记录 `git status --short`，限定本轮写入范围，只 stage 本轮相关文件；如需使用子智能体，按本文并行协作规则分发只读探索、验证或严格限定写入范围的 worker。
 
 只有用户明确要求使用独立工作区时，才允许重新讨论 worktree。默认情况下，CGA 或 spec 必须写清楚本轮允许写入路径和不会触碰的既有脏文件。不得因为任务简单就跳过 git 状态检查，也不得回滚、覆盖或格式化不属于本轮的改动。
+
+### 并行协作与子智能体
+
+子智能体是目标模式的执行加速和旁路审查手段，不是独立决策者。主 Agent 始终负责选题、边界、最终集成、验证、提交和完成声明。子智能体输出只能作为工程输入；任何“已修复”“测试通过”“可合并”的结论，都必须由主 Agent 重新检查 diff 和验证证据后才能对用户声明。
+
+每轮 CGA、目标承接检查或收尾说明必须记录：当前是否有可用子智能体工具、是否存在可并行事项、实际派发的 agent id / 范围 / 状态、失败降级情况、不派发原因、本轮允许写入路径和不触碰的既有脏文件。
+
+默认触发点：
+
+- CGA 阶段存在 2 个以上独立候选、多个事实源可并行读取、跨 workflow 契约同步、LLM judge 低分、浏览器级证据审查、文档规则审查、禁止模式扫描，或工作区存在大规模未提交 diff / staging ownership 风险时，优先分发只读 explorer、reviewer 或 verification。
+- implementation plan 已明确且任务能拆成互不重叠文件集合时，可以分发 worker；worker 必须有明确文件所有权、测试命令和禁止回滚他人改动的约束。worker 不得自行 commit 或 push。
+- 当前工作区有大量未提交改动时，优先只派发只读 explorer / verification；只有写入范围能精确隔离时才派发 worker。
+
+分发规则：
+
+- 子智能体运行期间，主 Agent 继续处理不重叠工作，不空等。
+- 多个 worker 的写入范围必须互不重叠；高冲突文件，例如大型 store、`ArtifactPane.tsx`、共享 todo、playbook 和全局配置，默认由主 Agent 统一接线。
+- 可写 worker 返回后，主 Agent 必须先读最终说明，再用 `git status --short` 和 `git diff -- <允许路径>` 核对是否越界，随后运行该切片最小验证。
+- 只读 explorer / reviewer 的结论必须进入 spec、plan、todo 或收尾说明，不能只停留在对话通知里。
+
+失败降级：
+
+- 子智能体分发失败包括工具不可用、stream disconnected、权限错误、超时未返回、或返回 `BLOCKED` 且无法通过更小范围推进。
+- 第一次失败时，记录 agent id、任务目标和失败类型；如果任务仍有并行价值，用更小、更具体、优先只读的任务重试一次。
+- 第二次仍失败时停止重试，主 Agent 顺序完成原本分发的审查或验证，并在本轮记录中标注“子智能体环境降级”。
+- 如果失败发生在可写 worker，主 Agent 不得假设 worker 有任何有效改动，必须重新检查 `git status --short` 和相关 diff。
 
 ## 4. 事实源与冲突优先级
 
