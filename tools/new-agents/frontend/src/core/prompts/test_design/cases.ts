@@ -7,6 +7,7 @@ export const CASES_PROMPT = `根据测试策略蓝图中的测试点和优先级
 - 每条用例直接在表格行中写清 ID、用例标题、优先级、测试维度、关联测试点、关联风险、前置条件、操作步骤、测试数据、预期结果、断言、执行层级、自动化建议和状态，不要再单独列出"用例详情"章节。
 - 用例必须能被测试人员直接评审和执行；如果缺环境、缺账号、缺测试数据，必须把状态标为“需补环境”或写入开放问题。
 - 测试点覆盖追溯必须同时输出 Markdown 表格和 ai4se-visual 结构化矩阵。ai4se-visual 必须使用 \`\`\`ai4se-visual fenced 代码块，JSON 只能使用 type/columns/rows 结构，禁止使用 fenced:ai4se-visual 或 data.requirements/data.testCases/data.matrix。
+- 结构化链路中不要手写用例统计数量；用例总数和 P0/P1/P2 分布由后端根据用例清单计算。
 `;
 
 export const CASES_TEMPLATE = `# 测试用例集

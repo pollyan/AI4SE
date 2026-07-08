@@ -1360,9 +1360,86 @@ class OpenQuestion(StrictArtifactDataModel):
     status: str
 
 
+def _flatten_cases(case_groups: list[CaseGroup]) -> list[TestCaseItem]:
+    return [case for group in case_groups for case in group.cases]
+
+
+def _derive_case_statistics(case_groups: list[CaseGroup]) -> CaseStatistics:
+    cases = _flatten_cases(case_groups)
+    return CaseStatistics(
+        total=len(cases),
+        p0_count=sum(1 for case in cases if case.priority == "P0"),
+        p1_count=sum(1 for case in cases if case.priority == "P1"),
+        p2_count=sum(1 for case in cases if case.priority == "P2"),
+    )
+
+
+def _collect_case_ids(case_groups: list[CaseGroup]) -> set[str]:
+    return {case.case_id for case in _flatten_cases(case_groups)}
+
+
+def _validate_unique_case_ids(case_groups: list[CaseGroup]) -> None:
+    cases = _flatten_cases(case_groups)
+    case_ids = _collect_case_ids(case_groups)
+    if len(case_ids) != len(cases):
+        raise ValueError("case_groups contains duplicate case_id")
+
+
+def _validate_case_statistics_matches(
+    actual: CaseStatistics,
+    expected: CaseStatistics,
+) -> None:
+    if (
+        actual.total != expected.total
+        or actual.p0_count != expected.p0_count
+        or actual.p1_count != expected.p1_count
+        or actual.p2_count != expected.p2_count
+    ):
+        raise ValueError(
+            "case_statistics must match case_groups totals and P0/P1/P2 counts"
+        )
+
+
+def _validate_automation_candidate_case_references(
+    automation_candidates: list[AutomationCandidate],
+    case_ids: set[str],
+) -> None:
+    unknown_references = sorted(
+        {
+            candidate.case_id
+            for candidate in automation_candidates
+            if candidate.case_id not in case_ids
+        }
+    )
+    if unknown_references:
+        raise ValueError(
+            "automation_candidates references unknown case ids: "
+            + ", ".join(unknown_references)
+        )
+
+
+def _validate_coverage_trace_case_references(
+    coverage_trace: list[CoverageTraceItem],
+    case_ids: set[str],
+) -> None:
+    unknown_references = sorted(
+        {
+            case_id
+            for trace in coverage_trace
+            for case_id in trace.covered_cases
+            if case_id not in case_ids
+        }
+    )
+    if unknown_references:
+        raise ValueError(
+            "coverage_trace references unknown case ids: "
+            + ", ".join(unknown_references)
+        )
+
+
 class CasesArtifactData(StrictArtifactDataModel):
     document_info: DocumentInfo
-    case_statistics: CaseStatistics
+    case_statistics: CaseStatistics | None = None
     design_bases: list[DesignBasis] = Field(min_length=1)
     case_groups: list[CaseGroup] = Field(min_length=1)
     test_data_environments: list[TestDataEnvironment] = Field(min_length=1)
@@ -1373,39 +1450,22 @@ class CasesArtifactData(StrictArtifactDataModel):
 
     @model_validator(mode="after")
     def validate_case_consistency(self) -> "CasesArtifactData":
-        cases = [case for group in self.case_groups for case in group.cases]
-        case_ids = {case.case_id for case in cases}
-        if len(case_ids) != len(cases):
-            raise ValueError("case_groups contains duplicate case_id")
-
-        priority_counts = {
-            "P0": sum(1 for case in cases if case.priority == "P0"),
-            "P1": sum(1 for case in cases if case.priority == "P1"),
-            "P2": sum(1 for case in cases if case.priority == "P2"),
-        }
-        if (
-            self.case_statistics.total != len(cases)
-            or self.case_statistics.p0_count != priority_counts["P0"]
-            or self.case_statistics.p1_count != priority_counts["P1"]
-            or self.case_statistics.p2_count != priority_counts["P2"]
-        ):
-            raise ValueError(
-                "case_statistics must match case_groups totals and P0/P1/P2 counts"
+        _validate_unique_case_ids(self.case_groups)
+        derived_statistics = _derive_case_statistics(self.case_groups)
+        if self.case_statistics is None:
+            self.case_statistics = derived_statistics
+        else:
+            _validate_case_statistics_matches(
+                self.case_statistics,
+                derived_statistics,
             )
 
-        unknown_references = sorted(
-            {
-                case_id
-                for trace in self.coverage_trace
-                for case_id in trace.covered_cases
-                if case_id not in case_ids
-            }
+        case_ids = _collect_case_ids(self.case_groups)
+        _validate_automation_candidate_case_references(
+            self.automation_candidates,
+            case_ids,
         )
-        if unknown_references:
-            raise ValueError(
-                "coverage_trace references unknown case ids: "
-                + ", ".join(unknown_references)
-            )
+        _validate_coverage_trace_case_references(self.coverage_trace, case_ids)
         return self
 
 
@@ -3054,7 +3114,6 @@ def render_partial_agent_turn_from_artifact_data(
         markdown = render_partial_test_design_strategy_markdown(payload["artifact_data"])
     elif (workflow_id, current_stage_id) == ("TEST_DESIGN", "CASES"):
         field_order = [
-            "case_statistics",
             "design_bases",
             "case_groups",
             "test_data_environments",
@@ -3490,27 +3549,17 @@ def render_partial_test_design_cases_markdown(data: Any) -> str | None:
 
     sections = ["# 测试用例集"]
     try:
-        if "case_statistics" not in data:
+        if "design_bases" not in data or "case_groups" not in data:
             return None
+        design_bases = _validate_partial_list(data["design_bases"], DesignBasis)
+        case_groups = _validate_partial_list(data["case_groups"], CaseGroup)
+        _validate_unique_case_ids(case_groups)
+        case_ids = _collect_case_ids(case_groups)
         sections.append(
-            _render_case_statistics(
-                CaseStatistics.model_validate(data["case_statistics"])
-            )
+            _render_case_statistics(_derive_case_statistics(case_groups))
         )
-
-        if "design_bases" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_design_bases(
-                _validate_partial_list(data["design_bases"], DesignBasis)
-            )
-        )
-
-        if "case_groups" not in data:
-            return _join_partial_sections(sections)
-        sections.append(
-            _render_case_groups(_validate_partial_list(data["case_groups"], CaseGroup))
-        )
+        sections.append(_render_design_bases(design_bases))
+        sections.append(_render_case_groups(case_groups))
 
         if "test_data_environments" not in data:
             return _join_partial_sections(sections)
@@ -3525,22 +3574,26 @@ def render_partial_test_design_cases_markdown(data: Any) -> str | None:
 
         if "automation_candidates" not in data:
             return _join_partial_sections(sections)
+        automation_candidates = _validate_partial_list(
+            data["automation_candidates"],
+            AutomationCandidate,
+        )
+        _validate_automation_candidate_case_references(
+            automation_candidates,
+            case_ids,
+        )
         sections.append(
-            _render_automation_candidates(
-                _validate_partial_list(
-                    data["automation_candidates"],
-                    AutomationCandidate,
-                )
-            )
+            _render_automation_candidates(automation_candidates)
         )
 
         if "coverage_trace" not in data:
             return _join_partial_sections(sections)
-        sections.append(
-            _render_coverage_trace(
-                _validate_partial_list(data["coverage_trace"], CoverageTraceItem)
-            )
+        coverage_trace = _validate_partial_list(
+            data["coverage_trace"],
+            CoverageTraceItem,
         )
+        _validate_coverage_trace_case_references(coverage_trace, case_ids)
+        sections.append(_render_coverage_trace(coverage_trace))
 
         if "open_questions" not in data:
             return _join_partial_sections(sections)
@@ -5461,6 +5514,8 @@ def render_test_design_strategy_markdown(data: StrategyArtifactData) -> str:
 
 
 def render_test_design_cases_markdown(data: CasesArtifactData) -> str:
+    if data.case_statistics is None:
+        raise ValueError("case_statistics must be derived before rendering")
     sections = [
         "# 测试用例集",
         _render_case_statistics(data.case_statistics),

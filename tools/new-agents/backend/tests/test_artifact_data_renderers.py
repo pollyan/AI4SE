@@ -3179,6 +3179,26 @@ def test_cases_artifact_data_rejects_inconsistent_statistics():
         CasesArtifactData.model_validate(invalid)
 
 
+def test_cases_artifact_data_derives_statistics_when_missing():
+    payload = copy.deepcopy(VALID_CASES_ARTIFACT_DATA)
+    payload.pop("case_statistics")
+
+    data = CasesArtifactData.model_validate(payload)
+
+    assert data.case_statistics.total == 2
+    assert data.case_statistics.p0_count == 1
+    assert data.case_statistics.p1_count == 1
+    assert data.case_statistics.p2_count == 0
+
+
+def test_cases_artifact_data_rejects_unknown_automation_candidate_case_reference():
+    invalid = copy.deepcopy(VALID_CASES_ARTIFACT_DATA)
+    invalid["automation_candidates"][0]["case_id"] = "TC-404"
+
+    with pytest.raises(ValidationError, match="automation_candidates"):
+        CasesArtifactData.model_validate(invalid)
+
+
 def test_cases_artifact_data_rejects_unknown_coverage_case_reference():
     invalid = {
         **VALID_CASES_ARTIFACT_DATA,
@@ -3355,54 +3375,180 @@ def test_render_cases_artifact_data_is_contract_valid_and_asset_parseable():
 
 
 def test_render_partial_cases_artifact_data_builds_formal_incremental_markdown_and_patch():
-    statistics_payload = {
+    cases_payload = {
         "chat": "我正在生成测试用例集。",
         "artifact_data": {
             "document_info": VALID_CASES_ARTIFACT_DATA["document_info"],
-            "case_statistics": VALID_CASES_ARTIFACT_DATA["case_statistics"],
+            "design_bases": VALID_CASES_ARTIFACT_DATA["design_bases"],
+            "case_groups": VALID_CASES_ARTIFACT_DATA["case_groups"],
         },
         "stage_action": None,
         "warnings": [],
     }
 
-    statistics_output = render_partial_agent_turn_from_artifact_data(
-        statistics_payload,
+    cases_output = render_partial_agent_turn_from_artifact_data(
+        cases_payload,
         workflow_id="TEST_DESIGN",
         current_stage_id="CASES",
     )
 
-    assert statistics_output is not None
-    assert statistics_output.artifact_update.markdown.startswith("# 测试用例集")
-    assert "## 1. 用例统计" in statistics_output.artifact_update.markdown
-    assert "## 2. 用例设计依据" not in statistics_output.artifact_update.markdown
-    assert statistics_output.artifact_patch is None
+    assert cases_output is not None
+    assert cases_output.artifact_update.markdown.startswith("# 测试用例集")
+    assert "## 1. 用例统计" in cases_output.artifact_update.markdown
+    assert "## 2. 用例设计依据" in cases_output.artifact_update.markdown
+    assert "## 3. 按维度分组的用例清单" in cases_output.artifact_update.markdown
+    assert "## 4. 测试数据与环境" not in cases_output.artifact_update.markdown
+    assert cases_output.artifact_patch is None
 
-    bases_payload = {
-        **statistics_payload,
+    environment_payload = {
+        **cases_payload,
         "artifact_data": {
-            **statistics_payload["artifact_data"],
-            "design_bases": VALID_CASES_ARTIFACT_DATA["design_bases"],
+            **cases_payload["artifact_data"],
+            "test_data_environments": VALID_CASES_ARTIFACT_DATA[
+                "test_data_environments"
+            ],
         },
     }
 
-    bases_output = render_partial_agent_turn_from_artifact_data(
-        bases_payload,
+    environment_output = render_partial_agent_turn_from_artifact_data(
+        environment_payload,
         workflow_id="TEST_DESIGN",
         current_stage_id="CASES",
     )
 
-    assert bases_output is not None
-    assert "## 2. 用例设计依据" in bases_output.artifact_update.markdown
-    assert "## 3. 按维度分组的用例清单" not in bases_output.artifact_update.markdown
-    assert bases_output.artifact_patch is not None
-    assert bases_output.artifact_patch.operation == "add_after"
-    assert bases_output.artifact_patch.section_anchor == "h2:2. 用例设计依据:1"
-    assert bases_output.artifact_patch.after_section_anchor == "h2:1. 用例统计:1"
+    assert environment_output is not None
+    assert "## 4. 测试数据与环境" in environment_output.artifact_update.markdown
+    assert "## 5. 自动化候选" not in environment_output.artifact_update.markdown
+    assert environment_output.artifact_patch is not None
+    assert environment_output.artifact_patch.operation == "add_after"
     assert (
-        bases_output.artifact_patch.base_content
-        == statistics_output.artifact_update.markdown
+        environment_output.artifact_patch.section_anchor
+        == "h2:4. 测试数据与环境:1"
     )
-    assert "## 2. 用例设计依据" in (bases_output.artifact_patch.replacement_markdown)
+    assert (
+        environment_output.artifact_patch.after_section_anchor
+        == "h3:3.2 异常与边界值:1"
+    )
+    assert (
+        environment_output.artifact_patch.base_content
+        == cases_output.artifact_update.markdown
+    )
+    assert "## 4. 测试数据与环境" in (
+        environment_output.artifact_patch.replacement_markdown
+    )
+
+
+def test_render_partial_cases_artifact_data_derives_statistics_from_case_groups():
+    bases_only_payload = {
+        "chat": "我正在生成测试用例集。",
+        "artifact_data": {
+            "document_info": VALID_CASES_ARTIFACT_DATA["document_info"],
+            "design_bases": VALID_CASES_ARTIFACT_DATA["design_bases"],
+        },
+        "stage_action": None,
+        "warnings": [],
+    }
+
+    assert (
+        render_partial_agent_turn_from_artifact_data(
+            bases_only_payload,
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CASES",
+        )
+        is None
+    )
+
+    payload = {
+        **bases_only_payload,
+        "artifact_data": {
+            **bases_only_payload["artifact_data"],
+            "case_groups": VALID_CASES_ARTIFACT_DATA["case_groups"],
+        },
+    }
+
+    output = render_partial_agent_turn_from_artifact_data(
+        payload,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CASES",
+    )
+
+    assert output is not None
+    assert output.artifact_update.markdown.startswith("# 测试用例集")
+    assert "## 1. 用例统计" in output.artifact_update.markdown
+    assert (
+        "**统计摘要**：共 2 条用例，P0: 1 条 | P1: 1 条 | P2: 0 条"
+        in output.artifact_update.markdown
+    )
+    assert "## 2. 用例设计依据" in output.artifact_update.markdown
+    assert "## 3. 按维度分组的用例清单" in output.artifact_update.markdown
+    assert output.artifact_patch is None
+
+
+def test_render_partial_cases_artifact_data_skips_automation_candidates_with_unknown_case_reference():
+    payload = {
+        "chat": "我正在生成测试用例集。",
+        "artifact_data": {
+            "document_info": VALID_CASES_ARTIFACT_DATA["document_info"],
+            "design_bases": VALID_CASES_ARTIFACT_DATA["design_bases"],
+            "case_groups": VALID_CASES_ARTIFACT_DATA["case_groups"],
+            "test_data_environments": VALID_CASES_ARTIFACT_DATA[
+                "test_data_environments"
+            ],
+            "automation_candidates": [
+                {
+                    **VALID_CASES_ARTIFACT_DATA["automation_candidates"][0],
+                    "case_id": "TC-404",
+                }
+            ],
+        },
+        "stage_action": None,
+        "warnings": [],
+    }
+
+    output = render_partial_agent_turn_from_artifact_data(
+        payload,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CASES",
+    )
+
+    assert output is not None
+    assert "## 4. 测试数据与环境" in output.artifact_update.markdown
+    assert "## 5. 自动化候选" not in output.artifact_update.markdown
+
+
+def test_render_partial_cases_artifact_data_skips_coverage_trace_with_unknown_case_reference():
+    payload = {
+        "chat": "我正在生成测试用例集。",
+        "artifact_data": {
+            "document_info": VALID_CASES_ARTIFACT_DATA["document_info"],
+            "design_bases": VALID_CASES_ARTIFACT_DATA["design_bases"],
+            "case_groups": VALID_CASES_ARTIFACT_DATA["case_groups"],
+            "test_data_environments": VALID_CASES_ARTIFACT_DATA[
+                "test_data_environments"
+            ],
+            "automation_candidates": VALID_CASES_ARTIFACT_DATA[
+                "automation_candidates"
+            ],
+            "coverage_trace": [
+                {
+                    **VALID_CASES_ARTIFACT_DATA["coverage_trace"][0],
+                    "covered_cases": ["TC-404"],
+                }
+            ],
+        },
+        "stage_action": None,
+        "warnings": [],
+    }
+
+    output = render_partial_agent_turn_from_artifact_data(
+        payload,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CASES",
+    )
+
+    assert output is not None
+    assert "## 5. 自动化候选" in output.artifact_update.markdown
+    assert "## 6. 测试点覆盖追溯" not in output.artifact_update.markdown
 
 
 def test_render_partial_delivery_artifact_data_builds_formal_incremental_markdown_and_patch():

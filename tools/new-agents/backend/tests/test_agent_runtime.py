@@ -610,6 +610,14 @@ def test_cases_structured_output_instruction_requests_artifact_data_not_markdown
     assert "artifact_update.markdown" not in instruction
 
 
+def test_cases_structured_output_instruction_omits_derived_statistics():
+    instruction = build_structured_output_instruction("TEST_DESIGN", "CASES")
+
+    assert '"case_statistics"' not in instruction
+    assert "case_groups" in instruction
+    assert "用例总数和 P0/P1/P2 分布由后端" in instruction
+
+
 def test_cases_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
     prompt = build_raw_json_retry_prompt(
         "用户需求",
@@ -1927,12 +1935,14 @@ def test_runtime_raw_json_stream_turn_renders_paragraph_level_cases_artifact_dat
                 index += 1
         raise AssertionError(f"artifact_data member not found: {member_name}")
 
-    statistics_prefix = prefix_after_artifact_data_member("case_statistics")
     bases_prefix = prefix_after_artifact_data_member("design_bases")
+    cases_prefix = prefix_after_artifact_data_member("case_groups")
+    environment_prefix = prefix_after_artifact_data_member("test_data_environments")
     chunks = [
-        statistics_prefix,
-        bases_prefix[len(statistics_prefix) :],
-        final_json[len(bases_prefix) :],
+        bases_prefix,
+        cases_prefix[len(bases_prefix) :],
+        environment_prefix[len(cases_prefix) :],
+        final_json[len(environment_prefix) :],
     ]
 
     def fake_stream_chat_completion_content(**kwargs):
@@ -1977,16 +1987,113 @@ def test_runtime_raw_json_stream_turn_renders_paragraph_level_cases_artifact_dat
     assert len(partial_markdowns) >= 2
     assert partial_markdowns[0].startswith("# 测试用例集")
     assert "## 1. 用例统计" in partial_markdowns[0]
-    assert "## 2. 用例设计依据" not in partial_markdowns[0]
-    assert "## 2. 用例设计依据" in partial_markdowns[1]
-    assert "## 3. 按维度分组的用例清单" not in partial_markdowns[1]
+    assert "## 2. 用例设计依据" in partial_markdowns[0]
+    assert "## 3. 按维度分组的用例清单" in partial_markdowns[0]
+    assert "## 4. 测试数据与环境" not in partial_markdowns[0]
+    assert "## 4. 测试数据与环境" in partial_markdowns[1]
+    assert "## 5. 自动化候选" not in partial_markdowns[1]
     assert partial_patches
     assert partial_patches[0].operation == "add_after"
-    assert partial_patches[0].section_anchor == "h2:2. 用例设计依据:1"
-    assert partial_patches[0].after_section_anchor == "h2:1. 用例统计:1"
+    assert partial_patches[0].section_anchor == "h2:4. 测试数据与环境:1"
+    assert partial_patches[0].after_section_anchor == "h3:3.2 异常与边界值:1"
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert "## 3. 按维度分组的用例清单" in (outputs[-1].artifact_update.markdown)
     assert '"type": "traceability-matrix"' in outputs[-1].artifact_update.markdown
+
+
+def test_runtime_raw_json_stream_turn_renders_cases_after_case_groups_without_model_statistics(
+    monkeypatch,
+):
+    artifact_data = copy.deepcopy(VALID_CASES_ARTIFACT_DATA)
+    artifact_data.pop("case_statistics")
+    final_json = json.dumps(
+        {
+            "chat": "我正在逐段形成测试用例集。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    def prefix_after_artifact_data_member(member_name: str) -> str:
+        decoder = json.JSONDecoder()
+        artifact_key_index = final_json.index('"artifact_data"')
+        index = final_json.index("{", artifact_key_index) + 1
+        while index < len(final_json):
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            key, key_end = decoder.raw_decode(final_json[index:])
+            assert isinstance(key, str)
+            index += key_end
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            assert final_json[index] == ":"
+            index += 1
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            _, value_end = decoder.raw_decode(final_json[index:])
+            index += value_end
+            if key == member_name:
+                return final_json[:index]
+            while index < len(final_json) and final_json[index].isspace():
+                index += 1
+            if index < len(final_json) and final_json[index] == ",":
+                index += 1
+        raise AssertionError(f"artifact_data member not found: {member_name}")
+
+    bases_prefix = prefix_after_artifact_data_member("design_bases")
+    cases_prefix = prefix_after_artifact_data_member("case_groups")
+    chunks = [
+        bases_prefix,
+        cases_prefix[len(bases_prefix) :],
+        final_json[len(cases_prefix) :],
+    ]
+
+    def fake_stream_chat_completion_content(**kwargs):
+        yield from chunks
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是测试专家。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "请生成测试用例集",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CASES",
+        )
+    )
+    partial_markdowns = [
+        output.artifact_update.markdown
+        for output in outputs[:-1]
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+        and output.artifact_update.markdown is not None
+    ]
+
+    assert len(partial_markdowns) >= 1
+    assert partial_markdowns[0].startswith("# 测试用例集")
+    assert "## 1. 用例统计" in partial_markdowns[0]
+    assert "## 3. 按维度分组的用例清单" in partial_markdowns[0]
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert outputs[-1].artifact_data["case_statistics"] == {
+        "total": 2,
+        "p0_count": 1,
+        "p1_count": 1,
+        "p2_count": 0,
+    }
 
 
 def test_runtime_raw_json_stream_turn_renders_delivery_artifact_data_before_final_output(
