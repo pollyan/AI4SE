@@ -152,6 +152,29 @@ def test_representative_stages_declare_professional_methods():
         assert set(stage.get("methodIds", [])) >= method_ids
 
 
+def test_strategy_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    instruction = format_artifact_data_contract_instruction(
+        "TEST_DESIGN",
+        "STRATEGY",
+    )
+    contract = (
+        _workflow_manifest()["workflows"]["TEST_DESIGN"]["stages"][1]
+        .get("artifactDataContract")
+    )
+
+    assert contract is not None
+    assert "risks[].rpn 由后端根据 severity * occurrence * detection 计算" in instruction
+    assert "quality_goals[].goal_id 必须唯一" in instruction
+    assert "risks[].risk_id 必须唯一" in instruction
+    assert "test_techniques[].technique_id 必须唯一" in instruction
+    assert "test_points[].point_id 必须唯一" in instruction
+    assert "test_points.quality_goal、test_points.risk、test_points.technique" in instruction
+    assert "test_techniques.target、test_techniques.applies_to、test_layers.related" in instruction
+    assert "risk-board JSON 代码块" in instruction
+
+
 def test_workflow_manifest_declares_prompt_template_versions_for_every_stage():
     manifest = _workflow_manifest()
 

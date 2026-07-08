@@ -151,7 +151,7 @@ JSON 对象结构：
     "document_info": {"artifact_name": "...", "workflow": "TEST_DESIGN", "stage": "STRATEGY", "status": "..."},
     "strategy_summary": {"conclusion": "...", "basis": "F-001 / BR-001 / R-SEED-001", "case_stage_readiness": "可进入/暂缓进入/需补充策略输入"},
     "quality_goals": [{"goal_id": "QG-001", "goal": "...", "metric": "...", "source": "...", "priority": "P0", "status": "..."}],
-    "risks": [{"risk_id": "R-001", "name": "...", "failure_mode": "...", "impact": "...", "source": "...", "severity": 5, "occurrence": 3, "detection": 4, "rpn": 60, "mitigation": "...", "coverage": "...", "status": "待覆盖/已覆盖/风险接受"}],
+    "risks": [{"risk_id": "R-001", "name": "...", "failure_mode": "...", "impact": "...", "source": "...", "severity": 5, "occurrence": 3, "detection": 4, "mitigation": "...", "coverage": "...", "status": "待覆盖/已覆盖/风险接受"}],
     "test_techniques": [{"technique_id": "TS-001", "target": "QG-001 / R-001", "category": "...", "technique": "...", "reason": "...", "applies_to": "R-001 / TP-001"}],
     "test_layers": [{"layer": "单元测试/集成测试/E2E 测试", "ratio": "40%", "scope": "...", "related": "R-001 / TP-001", "tools": "...", "entry_condition": "..."}],
     "test_points": [{"point_id": "TP-001", "point": "...", "priority": "P0", "quality_goal": "QG-001", "risk": "R-001", "technique": "TS-001", "layer": "单元/集成/E2E", "estimated_cases": 6, "coverage": "...", "status": "待生成用例"}],
@@ -162,7 +162,7 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；severity、occurrence、detection 必须是 1 到 5 的整数；rpn 必须等于 severity * occurrence * detection。不要输出完整 Markdown、Mermaid 代码块、risk-board JSON 代码块或表格，后端会负责确定性渲染右侧测试策略蓝图、quadrantChart、block-beta 和 ai4se-visual risk-board。
+""" + format_artifact_data_contract_instruction("TEST_DESIGN", "STRATEGY") + """
 chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
@@ -328,7 +328,7 @@ JSON 对象结构：
     "differentiators": [{"dimension": "核心优势/用户获益/差异化壁垒", "our_value": "...", "existing_solution": "...", "evidence": "...", "status": "已确认/AI 假设/待验证"}],
     "business_feasibility": [{"dimension": "用户付费意愿/商业模式方向/市场规模感知", "judgement": "...", "basis": "...", "validation_action": "...", "status": "已确认/AI 假设/待验证"}],
     "score_matrix": [{"dimension": "痛点强度", "score": 4, "basis": "...", "next_validation": "..."}, {"dimension": "证据强度", "score": 2, "basis": "...", "next_validation": "..."}],
-    "score_summary": {"total_score": 6, "average_score": 3.0, "judgement": "..."},
+    "score_summary": {"judgement": "..."},
     "assumptions": [{"assumption_id": "H-001", "content": "...", "impact": "...", "validation_action": "...", "owner": "产品/业务/用户研究", "status": "待验证/已验证/否定"}],
     "elevator_pitch": "60 秒内能讲完、让外行听懂、能引起兴趣的完整电梯演讲稿。",
     "stage_gate": [{"checked": true, "item": "..."}]
@@ -337,7 +337,7 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；value_flow.links 只能引用 value_flow.nodes 中已存在的 node_id；score_matrix.score 必须是 1 到 5 的整数；score_summary.total_score 必须等于 score_matrix.score 总和；score_summary.average_score 必须等于平均分。不要输出完整 Markdown、Mermaid 代码块、score-matrix JSON 代码块或表格，后端会负责确定性渲染右侧价值定位分析、flowchart 和 ai4se-visual score-matrix。
+artifact_data 中所有字符串必须非空；数组必须至少包含一项；value_flow.links 只能引用 value_flow.nodes 中已存在的 node_id；score_matrix.score 必须是 1 到 5 的整数；总分和平均分由后端根据 score_matrix.score 计算，模型不要输出总分或平均分字段；如果模型显式输出则必须与后端计算一致。不要输出完整 Markdown、Mermaid 代码块、score-matrix JSON 代码块或表格，后端会负责确定性渲染右侧价值定位分析、flowchart 和 ai4se-visual score-matrix。
 chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；建议保留 2 到 4 个短段落或短列表，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """

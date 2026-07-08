@@ -1495,7 +1495,31 @@ VALID_STRATEGY_ARTIFACT_DATA = {
             "estimated_cases": 6,
             "coverage": "覆盖空密码、错误密码、锁定前后重试",
             "status": "待生成用例",
-        }
+        },
+        {
+            "point_id": "TP-002",
+            "point": "登录 API 必须正确建立或拒绝会话",
+            "priority": "P0",
+            "quality_goal": "QG-001",
+            "risk": "R-001",
+            "technique": "TS-001 状态迁移",
+            "layer": "集成",
+            "estimated_cases": 4,
+            "coverage": "覆盖成功登录、失败登录和锁定状态下的会话行为",
+            "status": "待生成用例",
+        },
+        {
+            "point_id": "TP-003",
+            "point": "用户端登录主链路必须可完成",
+            "priority": "P1",
+            "quality_goal": "QG-001",
+            "risk": "R-001",
+            "technique": "TS-001 主路径验证",
+            "layer": "E2E",
+            "estimated_cases": 2,
+            "coverage": "覆盖正确凭证进入工作台和错误凭证提示",
+            "status": "待生成用例",
+        },
     ],
     "tradeoffs": [
         {
@@ -3251,6 +3275,80 @@ def test_strategy_artifact_data_rejects_inconsistent_rpn():
 
     with pytest.raises(ValidationError, match="rpn"):
         StrategyArtifactData.model_validate(invalid)
+
+
+def test_strategy_artifact_data_rejects_duplicate_strategy_ids():
+    invalid = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
+    invalid["quality_goals"].append({
+        **invalid["quality_goals"][0],
+        "goal": "重复目标",
+    })
+    invalid["risks"].append({
+        **invalid["risks"][0],
+        "name": "重复风险",
+    })
+    invalid["test_techniques"].append({
+        **invalid["test_techniques"][0],
+        "technique": "重复技术",
+    })
+    invalid["test_points"].append({
+        **invalid["test_points"][0],
+        "point": "重复测试点",
+    })
+
+    with pytest.raises(ValidationError, match="duplicate"):
+        StrategyArtifactData.model_validate(invalid)
+
+
+def test_strategy_artifact_data_rejects_unknown_test_point_references():
+    invalid = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
+    invalid["test_points"][0]["quality_goal"] = "QG-404"
+    invalid["test_points"][0]["risk"] = "R-404"
+    invalid["test_points"][0]["technique"] = "TS-404"
+
+    with pytest.raises(ValidationError, match="test_points"):
+        StrategyArtifactData.model_validate(invalid)
+
+
+def test_strategy_artifact_data_rejects_unknown_technique_and_layer_references():
+    invalid = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
+    invalid["test_techniques"][0]["target"] = "QG-404"
+    invalid["test_techniques"][0]["applies_to"] = "R-404 / TP-404"
+    invalid["test_layers"][0]["related"] = "R-404 / TP-404"
+
+    with pytest.raises(ValidationError, match="test_techniques"):
+        StrategyArtifactData.model_validate(invalid)
+
+
+def test_strategy_artifact_data_requires_checked_stage_gate():
+    invalid = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
+    invalid["stage_gate"] = [
+        {**item, "checked": False} for item in invalid["stage_gate"]
+    ]
+
+    with pytest.raises(ValidationError, match="stage_gate"):
+        StrategyArtifactData.model_validate(invalid)
+
+
+def test_strategy_artifact_data_computes_missing_rpn_for_generated_visuals():
+    artifact_data = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
+    artifact_data["risks"][0].pop("rpn")
+
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已形成风险驱动测试策略，请确认右侧蓝图。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="TEST_DESIGN",
+        current_stage_id="STRATEGY",
+    )
+
+    assert output is not None
+    assert output.artifact_update.markdown is not None
+    assert "| 5 | 3 | 4 | 60 |" in output.artifact_update.markdown
+    assert '"RPN": 60' in output.artifact_update.markdown
 
 
 def test_render_strategy_artifact_data_is_deterministic_and_contract_valid():

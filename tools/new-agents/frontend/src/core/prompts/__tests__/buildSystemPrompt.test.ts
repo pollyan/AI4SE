@@ -241,6 +241,25 @@ describe('buildSystemPrompt', () => {
         }
     );
 
+    it('injects TEST DESIGN STRATEGY artifact data contract exactly once from the manifest', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            currentArtifact: '# 测试策略蓝图\n已有内容',
+        });
+
+        const rpnRule = 'risks[].rpn 由后端根据 severity * occurrence * detection 计算';
+        expect(prompt).toContain('【artifact_data 结构化契约】');
+        expect(prompt).toContain(rpnRule);
+        expect(prompt).toContain('quality_goals[].goal_id 必须唯一');
+        expect(prompt).toContain('test_points.quality_goal、test_points.risk、test_points.technique 只能引用 artifact_data 中已定义的 QG/R/TS ID');
+        expect(prompt).toContain('risk-board JSON 代码块');
+        expect(prompt).not.toContain('【artifact_data 契约同步约束】');
+        const rpnRuleMatches = prompt.match(new RegExp(rpnRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
+        expect(rpnRuleMatches).toHaveLength(1);
+    });
+
     it('describes story breakdown work without markdown direct-write instructions', () => {
         const prompt = buildSystemPrompt({
             agentId: 'alex',

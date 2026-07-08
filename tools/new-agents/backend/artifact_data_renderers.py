@@ -1132,7 +1132,7 @@ class StrategyRisk(StrictArtifactDataModel):
     severity: int = Field(ge=1, le=5)
     occurrence: int = Field(ge=1, le=5)
     detection: int = Field(ge=1, le=5)
-    rpn: int = Field(ge=1, le=125)
+    rpn: int | None = Field(default=None, ge=1, le=125)
     mitigation: str
     coverage: str
     status: str
@@ -1140,6 +1140,9 @@ class StrategyRisk(StrictArtifactDataModel):
     @model_validator(mode="after")
     def validate_rpn(self) -> "StrategyRisk":
         expected = self.severity * self.occurrence * self.detection
+        if self.rpn is None:
+            self.rpn = expected
+            return self
         if self.rpn != expected:
             raise ValueError(
                 "rpn must equal severity * occurrence * detection " f"({expected})"
@@ -1186,6 +1189,23 @@ class Tradeoff(StrictArtifactDataModel):
     status: str
 
 
+def _extract_strategy_reference_ids(
+    value: str,
+    allowed_prefixes: tuple[str, ...],
+) -> set[str]:
+    candidates = set(re.findall(r"\b(?:QG|R|TS|TP)-[A-Za-z0-9_-]+\b", value))
+    return {
+        candidate
+        for candidate in candidates
+        if candidate.split("-", maxsplit=1)[0] in allowed_prefixes
+    }
+
+
+def _require_unique_strategy_ids(ids: list[str], label: str) -> None:
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"{label} contains duplicate id")
+
+
 class StrategyArtifactData(StrictArtifactDataModel):
     document_info: DocumentInfo
     strategy_summary: StrategySummary
@@ -1196,6 +1216,93 @@ class StrategyArtifactData(StrictArtifactDataModel):
     test_points: list[TestPoint] = Field(min_length=1)
     tradeoffs: list[Tradeoff] = Field(min_length=1)
     stage_gate: list[StageGateCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_strategy_references(self) -> "StrategyArtifactData":
+        goal_ids = [item.goal_id for item in self.quality_goals]
+        risk_ids = [item.risk_id for item in self.risks]
+        technique_ids = [item.technique_id for item in self.test_techniques]
+        point_ids = [item.point_id for item in self.test_points]
+
+        _require_unique_strategy_ids(goal_ids, "quality_goals")
+        _require_unique_strategy_ids(risk_ids, "risks")
+        _require_unique_strategy_ids(technique_ids, "test_techniques")
+        _require_unique_strategy_ids(point_ids, "test_points")
+
+        known_goal_ids = set(goal_ids)
+        known_risk_ids = set(risk_ids)
+        known_technique_ids = set(technique_ids)
+        known_point_ids = set(point_ids)
+
+        unknown_test_point_refs: set[str] = set()
+        for item in self.test_points:
+            unknown_test_point_refs.update(
+                _extract_strategy_reference_ids(item.quality_goal, ("QG",))
+                - known_goal_ids
+            )
+            unknown_test_point_refs.update(
+                _extract_strategy_reference_ids(item.risk, ("R",))
+                - known_risk_ids
+            )
+            unknown_test_point_refs.update(
+                _extract_strategy_reference_ids(item.technique, ("TS",))
+                - known_technique_ids
+            )
+        if unknown_test_point_refs:
+            raise ValueError(
+                "test_points references unknown ids: "
+                + ", ".join(sorted(unknown_test_point_refs))
+            )
+
+        unknown_technique_refs: set[str] = set()
+        for item in self.test_techniques:
+            unknown_technique_refs.update(
+                _extract_strategy_reference_ids(item.target, ("QG",))
+                - known_goal_ids
+            )
+            unknown_technique_refs.update(
+                _extract_strategy_reference_ids(item.target, ("R",))
+                - known_risk_ids
+            )
+            unknown_technique_refs.update(
+                _extract_strategy_reference_ids(item.target, ("TP",))
+                - known_point_ids
+            )
+            unknown_technique_refs.update(
+                _extract_strategy_reference_ids(item.applies_to, ("QG",))
+                - known_goal_ids
+            )
+            unknown_technique_refs.update(
+                _extract_strategy_reference_ids(item.applies_to, ("R",))
+                - known_risk_ids
+            )
+            unknown_technique_refs.update(
+                _extract_strategy_reference_ids(item.applies_to, ("TP",))
+                - known_point_ids
+            )
+        for item in self.test_layers:
+            unknown_technique_refs.update(
+                _extract_strategy_reference_ids(item.related, ("QG",))
+                - known_goal_ids
+            )
+            unknown_technique_refs.update(
+                _extract_strategy_reference_ids(item.related, ("R",))
+                - known_risk_ids
+            )
+            unknown_technique_refs.update(
+                _extract_strategy_reference_ids(item.related, ("TP",))
+                - known_point_ids
+            )
+        if unknown_technique_refs:
+            raise ValueError(
+                "test_techniques references unknown ids: "
+                + ", ".join(sorted(unknown_technique_refs))
+            )
+
+        if not any(item.checked for item in self.stage_gate):
+            raise ValueError("stage_gate must include at least one checked item")
+
+        return self
 
 
 class CaseStatistics(StrictArtifactDataModel):
@@ -1720,8 +1827,8 @@ class ValueScore(StrictArtifactDataModel):
 
 
 class ValueScoreSummary(StrictArtifactDataModel):
-    total_score: int = Field(ge=1)
-    average_score: float = Field(ge=1, le=5)
+    total_score: int | None = Field(default=None, ge=1)
+    average_score: float | None = Field(default=None, ge=1, le=5)
     judgement: str
 
 
@@ -1769,13 +1876,17 @@ class ValueDiscoveryElevatorArtifactData(StrictArtifactDataModel):
             )
 
         total_score = sum(item.score for item in self.score_matrix)
-        if self.score_summary.total_score != total_score:
+        if self.score_summary.total_score is None:
+            self.score_summary.total_score = total_score
+        elif self.score_summary.total_score != total_score:
             raise ValueError(
                 "score_summary.total_score must equal score_matrix score sum"
             )
 
         expected_average = round(total_score / len(self.score_matrix), 2)
-        if abs(self.score_summary.average_score - expected_average) > 0.001:
+        if self.score_summary.average_score is None:
+            self.score_summary.average_score = expected_average
+        elif abs(self.score_summary.average_score - expected_average) > 0.001:
             raise ValueError(
                 "score_summary.average_score must equal score_matrix average score "
                 f"({expected_average})"

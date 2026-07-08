@@ -160,7 +160,7 @@ flowchart TD
 ## 8. 阶段门禁
 - [x] 测试范围和不测范围已明确。
 
-## 附录：文档信息
+## 文档信息
 | 字段 | 内容 |
 |---|---|
 | Artifact 名称 | 测试需求分析与澄清基线 |"""
@@ -672,6 +672,28 @@ def test_strategy_structured_output_instruction_requests_internal_id_references(
         in instruction
     )
     assert "只能引用 artifact_data 中已定义的 QG/R/TS ID" in instruction
+
+
+def test_strategy_structured_output_instruction_uses_manifest_artifact_data_contract():
+    instruction = build_structured_output_instruction("TEST_DESIGN", "STRATEGY")
+
+    assert (
+        format_artifact_data_contract_instruction("TEST_DESIGN", "STRATEGY")
+        in instruction
+    )
+    assert "risks[].rpn 由后端根据 severity * occurrence * detection 计算" in instruction
+    assert "quality_goals[].goal_id 必须唯一" in instruction
+    assert "test_points.quality_goal、test_points.risk、test_points.technique" in instruction
+    assert "test_techniques.target、test_techniques.applies_to、test_layers.related" in instruction
+    assert (
+        "不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 risk-board JSON 代码块"
+        in instruction
+    )
+    assert "后端会负责确定性渲染" in instruction
+    assert "右侧测试策略蓝图" in instruction
+    assert "Mermaid quadrantChart" in instruction
+    assert "Mermaid block-beta" in instruction
+    assert "ai4se-visual risk-board" in instruction
 
 
 def test_strategy_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
@@ -1524,8 +1546,9 @@ def test_idea_define_structured_output_instruction_explains_root_problem_coverag
         "DEFINE",
     )
 
-    assert "root_problem_id" in instruction
-    assert "related_problem_ids" in instruction
+    assert "problem_landscape.root_problem 必须被至少一个 evidence_items 或 problem_user_fit 条目覆盖" in instruction
+    assert "related_problem" in instruction
+    assert "evidence_ids" in instruction
     assert "原样包含 problem_landscape.root_problem" not in instruction
 
 

@@ -212,6 +212,28 @@ describe('Workflow Configuration', () => {
         }
     });
 
+    it('exposes manifest artifact data contract for TEST DESIGN STRATEGY', () => {
+        const strategy = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'STRATEGY');
+
+        expect(strategy?.artifactDataContract?.modelOutputRules).toContain(
+            'risks[].rpn 由后端根据 severity * occurrence * detection 计算；RPN 由后端根据 severity * occurrence * detection 计算，模型不要输出',
+        );
+        expect(strategy?.artifactDataContract?.modelOutputRules).toContain('quality_goals[].goal_id 必须唯一');
+        expect(strategy?.artifactDataContract?.modelOutputRules).toContain(
+            'test_points.quality_goal、test_points.risk、test_points.technique 只能引用 artifact_data 中已定义的 QG/R/TS ID',
+        );
+        expect(strategy?.artifactDataContract?.forbiddenOutputs).toContain('risk-board JSON 代码块');
+    });
+
+    it('does not ask TEST DESIGN STRATEGY model to handwrite renderer-owned visuals in artifact data mode', () => {
+        const strategy = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'STRATEGY');
+
+        expect(strategy?.description).not.toContain('如果契约明确要求 artifact_update.markdown');
+        expect(strategy?.description).not.toContain('Mermaid 必须严格按模板格式输出');
+        expect(strategy?.description).not.toContain('手写 Mermaid');
+        expect(strategy?.description).not.toContain('手写 Mermaid、ai4se-visual risk-board 或 Markdown 表格');
+    });
+
     it('should derive every online agent workflow card from runtime workflow definitions', () => {
         const allCards = [
             ...getAgentWorkflows('lisa'),
