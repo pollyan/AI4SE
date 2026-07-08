@@ -1,6 +1,6 @@
 # New Agents Alex 需求蓝图到用户故事 Handoff 路线
 
-- 状态：执行中（第 1、2、3 轮已完成；第 4 轮待启动）
+- 状态：执行中（第 1、2、3、4 轮已完成；第 5 轮待启动）
 - 创建日期：2026-07-08
 - 来源：用户要求先聚焦 Alex 需求梳理到后续 AI Coding 工作流的需求输入，不纳入 Lisa/Alex 之间的 handoff
 - 优先级：P0
@@ -114,16 +114,16 @@ handoff 给 AI Coding 的基本单位是单张 ready 用户故事卡片。ready 
 关键缺口：
 
 - `USER_STORY_BREAKDOWN` 已上线为 Alex 在线工作流，四个阶段已进入结构化 `artifact_data` contract，后端负责确定性渲染 Markdown / Mermaid。
-- `VALUE_DISCOVERY/BLUEPRINT -> USER_STORY_BREAKDOWN/SCOPE` handoff 已接入，目标侧启动入口已覆盖 `VALUE_DISCOVERY/ELEVATOR` 和 `USER_STORY_BREAKDOWN/SCOPE`；后续仍需把 handoff 关系升级为更强的一等持久化对象。
+- `VALUE_DISCOVERY/BLUEPRINT -> USER_STORY_BREAKDOWN/SCOPE` handoff 已接入，目标侧启动入口已覆盖 `VALUE_DISCOVERY/ELEVATOR` 和 `USER_STORY_BREAKDOWN/SCOPE`；后续 workflow 级 handoff 关系仍可升级为更强的一等持久化对象，但单故事需求包已具备独立持久化记录。
 - Alex 用户可见命名已完成第 1、2 轮入口收敛；后续结构化故事卡和单故事 packet 仍需继续遵守直白任务命名。
-- handoff 关系本身不是一等持久化对象；当前目标 run 只能通过第一条 user message 间接看到上游内容。
-- handoff packet 还不是结构化数据；当前主要使用截断 Markdown prompt。
-- 结构化 `artifact_data` 已作为可恢复的原始需求数据写入 artifact version snapshot；后续单故事 packet 仍需在第 4 轮读取并消费该数据。
+- workflow 级 handoff 关系本身仍不是一等持久化对象；当前目标 run 仍主要通过第一条 user message 间接看到上游内容。
+- 单故事 handoff packet 已是结构化持久化数据，可按 run / stage 查询和复制。
+- 结构化 `artifact_data` 已作为可恢复的原始需求数据写入 artifact version snapshot；单故事 packet 生成已读取并消费该数据，不再从 Markdown 反解析用户故事。
 - 需求 ID、用户故事 ID、slice ID 已有后端结构化校验；重复 storyId、非法 Ready 状态、缺少来源需求、缺少验收标准等失败会显式拒绝。
-- 没有上游 artifact 更新后的版本过期或 stale 提示。
-- 没有持久化单故事 handoff packet。
+- 单故事 packet 已能识别上游 artifact version 或 digest 变化，并在前端提示该需求包可能基于旧需求。
+- 单故事 handoff packet 已持久化在 `agent_story_handoff_packets`。
 - 防止故事拆分技术任务化的质量口径已进入 prompt / artifact_data contract；后续第 4、5 轮仍需在 packet 和 E2E 证据中继续回归。
-- 已有浏览器级 mock E2E 证明 `USER_STORY_BREAKDOWN` 四阶段可推进；仍缺持久化单故事 packet 后的全链路 E2E。
+- 已有浏览器级 mock E2E 证明 `USER_STORY_BREAKDOWN` 四阶段可推进，并覆盖单故事 packet 生成 / 复制；仍缺第 5 轮 `idea -> 需求蓝图 -> 用户故事 -> 单故事 packet` 全链路证据收口。
 - 修改 Alex handoff 底层能力时，需要保证 Lisa 现有 handoff 不回归。
 
 ## 目标轮数声明
@@ -431,3 +431,101 @@ RED 验证：
 
 - 第 4 轮应基于 `artifactData` 读取单张 ready story，生成并持久化单故事 handoff packet，记录 source run / workflow / stage / artifact version / digest / storyId / requirementId 追溯。
 - 第 4 轮需要处理上游 artifact version 或 digest 变化后的 stale 提示；仍不实现真实 AI Coding workflow，也不生成实现计划、文件路径、测试命令或架构方案。
+
+### 2026-07-08 第 4 轮：单故事 handoff packet
+
+已完成：
+
+- 新增 `agent_story_handoff_packets` 持久化表，按 `run_id`、`source_stage_id`、`source_artifact_version`、`story_id` 约束同一源故事只生成一份可恢复需求包。
+- 新增后端 story packet 服务，从 `USER_STORY_BREAKDOWN/HANDOFF` 当前 artifact version 的结构化 `artifact_data` 读取 ready story，生成包含 source run / workflow / stage / artifact version / artifact digest / storyId / requirementIds 追溯的单故事需求包。
+- packet payload 只保留需求信息：用户故事、验收标准、业务规则、非功能说明、不做范围、依赖和开放问题；显式排除实现计划、文件路径、代码任务、测试命令和架构方案。
+- 新增 `GET /api/agent/runs/{runId}/story-handoff-candidates`、`POST /api/agent/runs/{runId}/story-handoff-packets` 和 `GET /api/agent/runs/{runId}/story-handoff-packets`。
+- 前端 artifact snapshot 现在保留 `artifactData`；新增 story handoff packet service，严格解析候选、创建结果和列表响应。
+- `ArtifactPane` 在 `USER_STORY_BREAKDOWN/HANDOFF` 预览态展示“单故事需求包”，用户可对 ready story 生成持久化需求包、看到 stale 提示，并复制结构化 JSON。
+- 浏览器级 mock E2E 已覆盖用户完成 `USER_STORY_BREAKDOWN` 四阶段后生成并复制 `US-001` 单故事需求包，且断言复制内容不包含实现计划。
+- API 与 TESTING 文档已补充单故事需求包端点、payload 边界、stale 提示和测试层责任。
+- 第 4 轮设计与执行计划已记录在：
+  - `docs/superpowers/specs/2026-07-08-new-agents-user-story-handoff-packet-design.md`
+  - `docs/superpowers/plans/2026-07-08-new-agents-user-story-handoff-packet.md`
+
+RED 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_story_handoff_packets.py -q
+```
+
+结果：修复前失败，失败原因是 `story_handoff_packets` 模块尚不存在。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/services/__tests__/storyHandoffPacketService.test.ts
+```
+
+结果：修复前失败，失败原因是 `storyHandoffPacketService` 尚不存在。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/components/__tests__/ArtifactPane.test.tsx
+```
+
+结果：修复前新增 packet 测试失败，失败原因是 `ArtifactPane` 尚未展示“单故事需求包”和 stale 提示。
+
+已验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_story_handoff_packets.py -q
+```
+
+结果：`7 passed`
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/services/__tests__/storyHandoffPacketService.test.ts
+```
+
+结果：`4 passed`
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/components/__tests__/ArtifactPane.test.tsx
+```
+
+结果：`149 passed`。运行中仍出现既有 React `act(...)` warning，但未导致测试失败。
+
+```bash
+.venv/bin/python -m pytest tests/e2e/new_agents_browser/test_alex_user_story_breakdown_workflow.py -q
+```
+
+结果：`3 passed`。运行中出现 coverage `no-data-collected` warning，但未导致测试失败。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_story_handoff_packets.py tools/new-agents/backend/tests/test_workflow_handoffs.py tools/new-agents/backend/tests/test_run_persistence.py -q
+```
+
+结果：`44 passed`
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/services/__tests__/storyHandoffPacketService.test.ts src/components/__tests__/ArtifactPane.test.tsx src/services/__tests__/runSnapshotService.test.ts
+```
+
+结果：`165 passed`。运行中仍出现既有 React `act(...)` warning，但未导致测试失败。
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：New Agents 前端 `718 passed`；New Agents 后端 `598 passed, 1 deselected`。运行中仍出现既有 `ArtifactPane.test.tsx` React `act(...)` warning，但未导致测试失败。
+
+```bash
+cd tools/new-agents/frontend && npm run lint
+```
+
+结果：TypeScript `tsc --noEmit` 通过。
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：默认 sandbox 下失败，失败点为 MidScene proxy 端口绑定 `EPERM`，随后 Browser E2E 阶段卡在 Playwright Chromium 安装 / 启动路径；按 playbook 提权重跑后通过：Intent Tester API `294 passed`；MidScene proxy `17 passed`；Common Frontend lint/build 通过；New Agents 前端 `718 passed`；New Agents 后端 `598 passed, 1 deselected`；New Agents Browser E2E `10 passed, 10 deselected`。
+
+下一轮承接：
+
+- 第 5 轮应聚焦证据收口，不新增真实 AI Coding workflow。
+- 第 5 轮需要用自动化与浏览器级证据证明 `idea -> 需求蓝图 -> 用户故事 -> 单故事 handoff packet` 主路径可用，并回归 Lisa 既有 handoff 不被 Alex 新链路破坏。
+- 第 5 轮还需要做 CI 等价映射、全量验证记录和本路线最终状态收敛。

@@ -144,6 +144,9 @@
 | PUT | `/api/agent/runs/{runId}/artifact-collaboration` | 替换 run 的 artifact 批注与章节锁协作状态 | 无 |
 | GET | `/api/agent/observability` | 获取 Agent Runtime 运行统计 | 无 |
 | GET | `/api/agent/workflow-handoff-candidates` | 按目标 workflow/stage 查询可继承的上游产物 | 无 |
+| GET | `/api/agent/runs/{runId}/story-handoff-candidates` | 查询 Alex ready story 单故事需求包候选 | 无 |
+| GET | `/api/agent/runs/{runId}/story-handoff-packets` | 读取已持久化单故事需求包 | 无 |
+| POST | `/api/agent/runs/{runId}/story-handoff-packets` | 从单张 ready story 生成并持久化需求包 | 无 |
 | GET | `/api/agent/runs/{runId}/test-assets` | 只读导出 Lisa 测试资产 | 无 |
 | POST | `/api/agent/runs/{runId}/test-assets/materialize` | 将 Lisa CASES artifact 实体化为可编辑测试资产集 | 无 |
 | GET | `/api/agent/test-assets/{collectionId}` | 读取已实体化测试资产集 | 无 |
@@ -681,6 +684,115 @@ GET /api/agent/workflow-handoff-candidates?targetWorkflowId=USER_STORY_BREAKDOWN
 ```
 
 未知 `targetWorkflowId` 或与 workflow 不匹配的 `targetStageId` 返回 JSON 400。没有可用上游 artifact 时返回 200 和空 `handoffs` 数组。
+
+### GET `/api/agent/runs/{runId}/story-handoff-candidates` 响应
+
+该端点只用于 Alex `USER_STORY_BREAKDOWN/HANDOFF` 当前 artifact version。后端读取当前版本持久化的 `artifactData`，用 `UserStoryHandoffArtifactData` 重新校验后返回可生成 packet 的 ready stories；不得从 Markdown 反解析故事。
+
+```http
+GET /api/agent/runs/{runId}/story-handoff-candidates?stageId=HANDOFF
+```
+
+```json
+{
+  "runId": "run-user-story",
+  "workflowId": "USER_STORY_BREAKDOWN",
+  "stageId": "HANDOFF",
+  "sourceArtifactVersion": 1,
+  "sourceArtifactDigest": "sha256:...",
+  "candidates": [
+    {
+      "storyId": "US-001",
+      "title": "生成澄清问题",
+      "requirementIds": ["REQ-001"],
+      "userValue": "测试负责人能在设计前发现缺失业务规则",
+      "readyReason": "验收标准和业务规则已明确"
+    }
+  ]
+}
+```
+
+未知 run 返回 JSON 404；stage 不是 `HANDOFF`、run workflow 不是 `USER_STORY_BREAKDOWN`、当前 artifact 缺失或缺少结构化 `artifactData` 返回 JSON 400。
+
+### POST `/api/agent/runs/{runId}/story-handoff-packets` 请求与响应
+
+从当前 `HANDOFF` artifactData 中选中一张 ready story，生成并持久化单故事需求包。packet 只包含需求信息和追溯信息，不包含任务、文件路径、实现计划、测试命令或架构方案。
+
+```json
+{
+  "stageId": "HANDOFF",
+  "storyId": "US-001"
+}
+```
+
+响应为已保存的 packet payload：
+
+```json
+{
+  "sourceRunId": "run-user-story",
+  "sourceWorkflowId": "USER_STORY_BREAKDOWN",
+  "sourceStageId": "HANDOFF",
+  "sourceArtifactVersion": 1,
+  "sourceArtifactDigest": "sha256:...",
+  "createdAt": 1710000000000,
+  "storyId": "US-001",
+  "requirementIds": ["REQ-001"],
+  "userStory": "作为测试负责人，我想要输入需求后看到待澄清问题和隐式风险，以便在测试设计前补齐缺失业务规则",
+  "acceptanceCriteria": ["输出需求事实清单"],
+  "businessRules": ["问题必须标注阻断性、责任方和状态"],
+  "nonFunctionalNotes": ["输出内容需要可追溯、可评审"],
+  "outOfScope": ["不直接生成用例"],
+  "dependencies": ["用户提供需求文本"],
+  "openQuestions": ["问题分类口径可在试点中继续校准"]
+}
+```
+
+未知 story、非 ready story 或 artifactData 校验失败返回 JSON 400，不写入 packet。
+
+### GET `/api/agent/runs/{runId}/story-handoff-packets` 响应
+
+返回当前 run 已保存的单故事需求包，并对比当前 `HANDOFF` artifact version/digest 标记 stale。
+
+```http
+GET /api/agent/runs/{runId}/story-handoff-packets?stageId=HANDOFF
+```
+
+```json
+{
+  "runId": "run-user-story",
+  "workflowId": "USER_STORY_BREAKDOWN",
+  "stageId": "HANDOFF",
+  "sourceArtifactVersion": 2,
+  "sourceArtifactDigest": "sha256:new",
+  "packets": [
+    {
+      "id": "1",
+      "storyId": "US-001",
+      "createdAt": 1710000000000,
+      "isStale": true,
+      "currentSourceArtifactVersion": 2,
+      "currentSourceArtifactDigest": "sha256:new",
+      "packet": {
+        "sourceRunId": "run-user-story",
+        "sourceWorkflowId": "USER_STORY_BREAKDOWN",
+        "sourceStageId": "HANDOFF",
+        "sourceArtifactVersion": 1,
+        "sourceArtifactDigest": "sha256:old",
+        "createdAt": 1710000000000,
+        "storyId": "US-001",
+        "requirementIds": ["REQ-001"],
+        "userStory": "作为测试负责人，我想要输入需求后看到待澄清问题和隐式风险，以便在测试设计前补齐缺失业务规则",
+        "acceptanceCriteria": ["输出需求事实清单"],
+        "businessRules": ["问题必须标注阻断性、责任方和状态"],
+        "nonFunctionalNotes": ["输出内容需要可追溯、可评审"],
+        "outOfScope": ["不直接生成用例"],
+        "dependencies": ["用户提供需求文本"],
+        "openQuestions": ["问题分类口径可在试点中继续校准"]
+      }
+    }
+  ]
+}
+```
 
 ### POST `/api/utils/mermaid/repair` 请求
 

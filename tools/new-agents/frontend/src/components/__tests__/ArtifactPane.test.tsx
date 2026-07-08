@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ArtifactPane } from '../ArtifactPane';
 import { useStore } from '../../store';
 import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../../services/runSnapshotService';
+import { createStoryHandoffPacket, fetchStoryHandoffCandidates, fetchStoryHandoffPackets } from '../../services/storyHandoffPacketService';
 
 vi.mock('../../services/runSnapshotService', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../services/runSnapshotService')>();
@@ -12,6 +13,12 @@ vi.mock('../../services/runSnapshotService', async (importOriginal) => {
         updateRunArtifactCollaboration: vi.fn(),
     };
 });
+
+vi.mock('../../services/storyHandoffPacketService', () => ({
+    createStoryHandoffPacket: vi.fn(),
+    fetchStoryHandoffCandidates: vi.fn(),
+    fetchStoryHandoffPackets: vi.fn(),
+}));
 
 // Mock Mermaid component
 vi.mock('../Mermaid', () => ({
@@ -36,7 +43,7 @@ vi.mock('../../services/mermaidRetryService', () => ({
 
 // Mock lucide-react
 vi.mock('lucide-react', () => {
-    const icons = ['Download', 'Code', 'Eye', 'History', 'X', 'AlertTriangle', 'GitCompare', 'Edit3', 'Save', 'MessageSquare', 'Trash2', 'Lock', 'Unlock', 'MoreHorizontal'];
+    const icons = ['Download', 'Code', 'Eye', 'History', 'X', 'AlertTriangle', 'GitCompare', 'Edit3', 'Save', 'MessageSquare', 'Trash2', 'Lock', 'Unlock', 'MoreHorizontal', 'Copy'];
     const mod: Record<string, React.FC> = {};
     icons.forEach(name => {
         mod[name] = () => <span>{name}</span>;
@@ -61,6 +68,9 @@ describe('ArtifactPane Component', () => {
 
     beforeEach(() => {
         vi.restoreAllMocks();
+        vi.mocked(fetchStoryHandoffCandidates).mockReset();
+        vi.mocked(fetchStoryHandoffPackets).mockReset();
+        vi.mocked(createStoryHandoffPacket).mockReset();
         useStore.setState({
             workflow: 'TEST_DESIGN',
             stageIndex: 0,
@@ -72,6 +82,12 @@ describe('ArtifactPane Component', () => {
             artifactVisualDiagnostics: [],
             currentRunId: null,
             isGenerating: false,
+        });
+        Object.defineProperty(navigator, 'clipboard', {
+            configurable: true,
+            value: {
+                writeText: vi.fn().mockResolvedValue(undefined),
+            },
         });
     });
 
@@ -7513,5 +7529,149 @@ describe('ArtifactPane Component', () => {
 
         expect(screen.getByText('保存失败：锁定章节“验收口径 #2”已被修改，请先解锁后再保存。')).toBeTruthy();
         expect(useStore.getState().artifactContent).toContain('第二个验收口径已经确认。');
+    });
+
+    it('generates and copies a single story handoff packet from the handoff stage', async () => {
+        const packet = {
+            sourceRunId: 'alex-run-123',
+            sourceWorkflowId: 'USER_STORY_BREAKDOWN' as const,
+            sourceStageId: 'HANDOFF',
+            sourceArtifactVersion: 1,
+            sourceArtifactDigest: 'sha256:abc123',
+            createdAt: 1710000000000,
+            storyId: 'US-001',
+            requirementIds: ['REQ-001'],
+            userStory: '作为测试负责人，我想看到澄清问题，以便补齐规则。',
+            acceptanceCriteria: ['输出需求事实清单'],
+            businessRules: ['问题必须标注责任方'],
+            nonFunctionalNotes: ['可追溯'],
+            outOfScope: ['不直接生成用例'],
+            dependencies: ['用户提供需求文本'],
+            openQuestions: ['问题分类口径待校准'],
+        };
+        vi.mocked(fetchStoryHandoffCandidates).mockResolvedValue({
+            runId: 'alex-run-123',
+            workflowId: 'USER_STORY_BREAKDOWN',
+            stageId: 'HANDOFF',
+            sourceArtifactVersion: 1,
+            sourceArtifactDigest: 'sha256:abc123',
+            candidates: [
+                {
+                    storyId: 'US-001',
+                    title: '生成澄清问题',
+                    requirementIds: ['REQ-001'],
+                    userValue: '测试负责人能在设计前发现缺失业务规则',
+                    readyReason: '验收标准和业务规则已明确',
+                },
+            ],
+        });
+        vi.mocked(fetchStoryHandoffPackets)
+            .mockResolvedValueOnce({
+                runId: 'alex-run-123',
+                workflowId: 'USER_STORY_BREAKDOWN',
+                stageId: 'HANDOFF',
+                sourceArtifactVersion: 1,
+                sourceArtifactDigest: 'sha256:abc123',
+                packets: [],
+            })
+            .mockResolvedValueOnce({
+                runId: 'alex-run-123',
+                workflowId: 'USER_STORY_BREAKDOWN',
+                stageId: 'HANDOFF',
+                sourceArtifactVersion: 1,
+                sourceArtifactDigest: 'sha256:abc123',
+                packets: [
+                    {
+                        id: '1',
+                        storyId: 'US-001',
+                        createdAt: 1710000000000,
+                        isStale: false,
+                        currentSourceArtifactVersion: 1,
+                        currentSourceArtifactDigest: 'sha256:abc123',
+                        packet,
+                    },
+                ],
+            });
+        vi.mocked(createStoryHandoffPacket).mockResolvedValue(packet);
+        useStore.setState({
+            workflow: 'USER_STORY_BREAKDOWN',
+            stageIndex: 3,
+            currentRunId: 'alex-run-123',
+            artifactContent: '# 单故事 Handoff 清单',
+            stageArtifacts: { HANDOFF: '# 单故事 Handoff 清单' },
+        });
+
+        render(<ArtifactPane />);
+
+        expect(await screen.findByText('单故事需求包')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: '生成 US-001 需求包' }));
+
+        await waitFor(() => {
+            expect(createStoryHandoffPacket).toHaveBeenCalledWith('alex-run-123', 'HANDOFF', 'US-001');
+        });
+        expect(await screen.findByText('US-001 · v1')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: '复制 US-001 需求包' }));
+
+        await waitFor(() => {
+            expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('"storyId": "US-001"'));
+        });
+        expect(screen.getByText('已复制 US-001')).toBeTruthy();
+    });
+
+    it('warns when a saved single story handoff packet is stale', async () => {
+        vi.mocked(fetchStoryHandoffCandidates).mockResolvedValue({
+            runId: 'alex-run-123',
+            workflowId: 'USER_STORY_BREAKDOWN',
+            stageId: 'HANDOFF',
+            sourceArtifactVersion: 2,
+            sourceArtifactDigest: 'sha256:new',
+            candidates: [],
+        });
+        vi.mocked(fetchStoryHandoffPackets).mockResolvedValue({
+            runId: 'alex-run-123',
+            workflowId: 'USER_STORY_BREAKDOWN',
+            stageId: 'HANDOFF',
+            sourceArtifactVersion: 2,
+            sourceArtifactDigest: 'sha256:new',
+            packets: [
+                {
+                    id: '1',
+                    storyId: 'US-001',
+                    createdAt: 1710000000000,
+                    isStale: true,
+                    currentSourceArtifactVersion: 2,
+                    currentSourceArtifactDigest: 'sha256:new',
+                    packet: {
+                        sourceRunId: 'alex-run-123',
+                        sourceWorkflowId: 'USER_STORY_BREAKDOWN',
+                        sourceStageId: 'HANDOFF',
+                        sourceArtifactVersion: 1,
+                        sourceArtifactDigest: 'sha256:old',
+                        createdAt: 1710000000000,
+                        storyId: 'US-001',
+                        requirementIds: ['REQ-001'],
+                        userStory: '作为测试负责人，我想看到澄清问题，以便补齐规则。',
+                        acceptanceCriteria: ['输出需求事实清单'],
+                        businessRules: ['问题必须标注责任方'],
+                        nonFunctionalNotes: ['可追溯'],
+                        outOfScope: ['不直接生成用例'],
+                        dependencies: ['用户提供需求文本'],
+                        openQuestions: ['问题分类口径待校准'],
+                    },
+                },
+            ],
+        });
+        useStore.setState({
+            workflow: 'USER_STORY_BREAKDOWN',
+            stageIndex: 3,
+            currentRunId: 'alex-run-123',
+            artifactContent: '# 单故事 Handoff 清单',
+            stageArtifacts: { HANDOFF: '# 单故事 Handoff 清单' },
+        });
+
+        render(<ArtifactPane />);
+
+        expect(await screen.findByText('源需求已更新')).toBeTruthy();
+        expect(screen.getByText('US-001 · v1')).toBeTruthy();
     });
 });

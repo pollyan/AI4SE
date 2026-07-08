@@ -254,6 +254,25 @@ cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.tes
 - `tools/new-agents/frontend/src/__tests__/store.test.ts`
 - `tests/e2e/new_agents_browser/test_alex_user_story_breakdown_workflow.py`
 
+### Story Handoff Packet 层：`story_handoff_packets.py` / `storyHandoffPacketService.ts` / `ArtifactPane.tsx`
+
+职责：把 Alex `USER_STORY_BREAKDOWN/HANDOFF` 的单张 ready story 转成可保存、可恢复、可复制的 AI Coding 需求输入；该层不创建真实 AI Coding workflow，也不复用 workflow start handoff prompt。
+
+必须覆盖：
+- 候选查询只能读取 `USER_STORY_BREAKDOWN/HANDOFF` 当前 artifact version 的结构化 `artifactData`，不得从 Markdown 反解析用户故事。
+- 创建 packet 必须持久化 `sourceRunId`、`sourceWorkflowId`、`sourceStageId`、`sourceArtifactVersion`、`sourceArtifactDigest`、`storyId` 和 `requirementIds` 等追溯字段。
+- packet payload 只能包含需求信息和追溯信息；不得包含 task、file path、implementation plan、test command 或 architecture plan。
+- 当前 artifact version 或 digest 与已保存 packet 不一致时，API 和前端必须能标记 stale，提示“源需求已更新”。
+- 缺少 artifactData、未知 story、非 `HANDOFF` stage 或非 `USER_STORY_BREAKDOWN` run 必须显式失败，不生成假 packet。
+- ArtifactPane 必须能加载 ready story 候选、触发生成、显示 packet 摘要并复制完整 packet 内容。
+- 浏览器级 mock E2E 至少覆盖 `USER_STORY_BREAKDOWN` 最终阶段生成和复制单故事需求包；第 5 轮再扩展为 `idea -> 需求蓝图 -> 用户故事 -> packet` 全链路证据。
+
+典型测试文件：
+- `tools/new-agents/backend/tests/test_story_handoff_packets.py`
+- `tools/new-agents/frontend/src/services/__tests__/storyHandoffPacketService.test.ts`
+- `tools/new-agents/frontend/src/components/__tests__/ArtifactPane.test.tsx`
+- `tests/e2e/new_agents_browser/test_alex_user_story_breakdown_workflow.py`
+
 ### 后端上下文构建层：`context_builder.py`
 
 职责：在已有服务端 run 的情况下，用持久化消息构造模型上下文，逐步替代前端本地历史拼接。

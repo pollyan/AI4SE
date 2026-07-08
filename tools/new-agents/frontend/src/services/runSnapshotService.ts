@@ -74,11 +74,15 @@ const parseArtifact = (artifact: unknown): AgentRunSnapshotArtifact => {
         throw new Error(INVALID_SNAPSHOT_ERROR);
     }
 
-    return {
+    const parsedArtifact: AgentRunSnapshotArtifact = {
         stageId: artifact.stageId,
         content: artifact.content,
         versionNumber: artifact.versionNumber,
     };
+    if (Object.prototype.hasOwnProperty.call(artifact, 'artifactData')) {
+        parsedArtifact.artifactData = artifact.artifactData;
+    }
+    return parsedArtifact;
 };
 
 const parseContextSummary = (summary: unknown): AgentRunSnapshotContextSummary => {

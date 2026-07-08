@@ -36,6 +36,11 @@ from request_schemas import (
 from sse_response import build_sse_response
 from stream_services import stream_agent_run_events
 from routes_test_assets import register_test_asset_routes
+from story_handoff_packets import (
+    create_story_handoff_packet,
+    list_story_handoff_candidates,
+    list_story_handoff_packets,
+)
 from workflow_handoffs import (
     export_run_handoffs,
     export_target_workflow_handoffs,
@@ -331,6 +336,50 @@ def agent_run_handoff_start(run_id: str, handoff_id: str):
         return jsonify(start_workflow_handoff(run_id, handoff_id)), 200
     except ValueError as e:
         return json_error_response(str(e), 404)
+
+
+@api_bp.route("/agent/runs/<run_id>/story-handoff-candidates", methods=["GET"])
+def agent_run_story_handoff_candidates(run_id: str):
+    """Return ready stories that can generate single-story handoff packets."""
+    stage_id = (request.args.get("stageId") or "HANDOFF").strip()
+    try:
+        return jsonify(list_story_handoff_candidates(run_id, stage_id)), 200
+    except ValueError as e:
+        message = str(e)
+        status_code = 404 if message.startswith("未知 runId:") else 400
+        return json_error_response(message, status_code)
+
+
+@api_bp.route("/agent/runs/<run_id>/story-handoff-packets", methods=["GET"])
+def agent_run_story_handoff_packets(run_id: str):
+    """Return persisted single-story handoff packets for a run."""
+    stage_id = (request.args.get("stageId") or "HANDOFF").strip()
+    try:
+        return jsonify(list_story_handoff_packets(run_id, stage_id)), 200
+    except ValueError as e:
+        message = str(e)
+        status_code = 404 if message.startswith("未知 runId:") else 400
+        return json_error_response(message, status_code)
+
+
+@api_bp.route("/agent/runs/<run_id>/story-handoff-packets", methods=["POST"])
+def agent_run_story_handoff_packet_create(run_id: str):
+    """Create a persisted requirement-only packet for one ready story."""
+    try:
+        payload = _read_json_body()
+        if not isinstance(payload, dict):
+            return json_error_response("请求体必须是 JSON 对象", 400)
+        stage_id = str(payload.get("stageId") or "HANDOFF").strip()
+        story_id = str(payload.get("storyId") or "").strip()
+        if not story_id:
+            return json_error_response("storyId 不能为空", 400)
+        return jsonify(create_story_handoff_packet(run_id, stage_id, story_id)), 200
+    except RequestValidationError as e:
+        return json_error_response(str(e), 400)
+    except ValueError as e:
+        message = str(e)
+        status_code = 404 if message.startswith("未知 runId:") else 400
+        return json_error_response(message, status_code)
 
 
 @api_bp.route("/utils/mermaid/repair", methods=["POST"])

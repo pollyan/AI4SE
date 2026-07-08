@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from playwright.sync_api import expect
 
 from .sse_mock import STAGE_PAYLOADS
 from .workflow_runner import (
@@ -97,6 +98,42 @@ def test_alex_user_story_breakdown_workflow_completes_all_stages(new_agents_page
         "准备故事交接",
     ]
     assert len(run_result.stage_transitions) == 3
+
+
+def test_alex_user_story_breakdown_generates_single_story_handoff_packet(new_agents_page):
+    run_complete_workflow(
+        new_agents_page,
+        _alex_user_story_breakdown_scenario(),
+    )
+
+    new_agents_page.evaluate(
+        """() => {
+            Object.defineProperty(navigator, 'clipboard', {
+                configurable: true,
+                value: {
+                    writeText: async (text) => {
+                        window.__copiedStoryPacket = text;
+                    },
+                },
+            });
+        }"""
+    )
+    new_agents_page.get_by_title("预览").click()
+    packet_button = new_agents_page.get_by_role("button", name="生成 US-001 需求包")
+    expect(packet_button).to_be_visible(timeout=10000)
+    packet_button.click()
+
+    artifact_pane = new_agents_page.locator("section").nth(1)
+    expect(artifact_pane).to_contain_text("US-001 · v1", timeout=10000)
+    expect(artifact_pane).not_to_contain_text("实现计划")
+    expect(artifact_pane).not_to_contain_text("文件路径")
+
+    new_agents_page.get_by_role("button", name="复制 US-001 需求包").click()
+    expect(artifact_pane).to_contain_text("已复制 US-001", timeout=10000)
+    copied = new_agents_page.evaluate("() => window.__copiedStoryPacket")
+    assert '"storyId": "US-001"' in copied
+    assert '"acceptanceCriteria"' in copied
+    assert "implementationPlan" not in copied
 
 
 def test_alex_user_story_breakdown_mock_fixture_keeps_business_vertical_slices():

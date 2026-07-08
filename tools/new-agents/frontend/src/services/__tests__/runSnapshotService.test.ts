@@ -31,6 +31,9 @@ describe('runSnapshotService', () => {
                         stageId: 'STRATEGY',
                         content: '# 测试策略蓝图',
                         versionNumber: 2,
+                        artifactData: {
+                            strategyId: 'STR-001',
+                        },
                     },
                 ],
                 contextSummaries: [
@@ -92,6 +95,7 @@ describe('runSnapshotService', () => {
         expect(snapshot.run.workflowId).toBe('TEST_DESIGN');
         expect(snapshot.messages[0].content).toBe('用户需求: 登录功能');
         expect(snapshot.artifacts[0].stageId).toBe('STRATEGY');
+        expect(snapshot.artifacts[0].artifactData).toEqual({ strategyId: 'STR-001' });
         expect(snapshot.contextSummaries[0].content).toBe('摘要');
         expect(snapshot).toMatchObject({
             artifactComments: [

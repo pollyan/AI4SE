@@ -92,6 +92,15 @@ class AgentRun(db.Model):
             "AgentArtifactAuditEvent.id"
         ),
     )
+    story_handoff_packets = db.relationship(
+        "AgentStoryHandoffPacket",
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by=(
+            "AgentStoryHandoffPacket.created_at_ms,"
+            "AgentStoryHandoffPacket.id"
+        ),
+    )
 
 
 class AgentMessage(db.Model):
@@ -315,6 +324,37 @@ class AgentArtifactAuditEvent(db.Model):
     created_at_ms = db.Column(db.Integer, nullable=False)
 
     run = db.relationship("AgentRun", back_populates="artifact_audit_events")
+
+
+class AgentStoryHandoffPacket(db.Model):
+    __tablename__ = "agent_story_handoff_packets"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "run_id",
+            "source_stage_id",
+            "source_artifact_version",
+            "story_id",
+            name="uq_agent_story_handoff_packets_source_story",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    run_id = db.Column(
+        db.String(36),
+        db.ForeignKey("agent_runs.id"),
+        nullable=False,
+        index=True,
+    )
+    source_workflow_id = db.Column(db.String(64), nullable=False, index=True)
+    source_stage_id = db.Column(db.String(64), nullable=False, index=True)
+    source_artifact_version = db.Column(db.Integer, nullable=False)
+    source_artifact_digest = db.Column(db.String(128), nullable=False)
+    story_id = db.Column(db.String(64), nullable=False, index=True)
+    packet_json = db.Column(db.JSON, nullable=False)
+    created_at_ms = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+
+    run = db.relationship("AgentRun", back_populates="story_handoff_packets")
 
 
 class AgentTestAssetCollection(db.Model):

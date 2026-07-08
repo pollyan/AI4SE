@@ -17,12 +17,14 @@ import {
 } from '../core/artifactMerge';
 import type { AutoMergedConflictResult } from '../core/artifactMerge';
 import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/markdownUtils';
-import { Download, Code, Eye, History, X, AlertTriangle, GitCompare, Edit3, Save, MessageSquare, Trash2, Lock, Unlock, MoreHorizontal } from 'lucide-react';
+import { Download, Code, Eye, History, X, AlertTriangle, GitCompare, Edit3, Save, MessageSquare, Trash2, Lock, Unlock, MoreHorizontal, Copy } from 'lucide-react';
 import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
 import { StructuredVisual } from './StructuredVisual';
 import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../services/runSnapshotService';
+import { createStoryHandoffPacket, fetchStoryHandoffCandidates, fetchStoryHandoffPackets } from '../services/storyHandoffPacketService';
 import { buildDocxPackage } from '../core/docxExport';
 import { buildPlainTextPdf as buildArtifactPdf } from '../core/artifactExport';
+import type { StoryHandoffCandidate, StoryHandoffPacketListItem } from '../core/types';
 
 type CollaborationStateSnapshot = {
   artifactComments: ArtifactComment[];
@@ -361,10 +363,21 @@ export const ArtifactPane: React.FC = () => {
   const [selectedArtifactText, setSelectedArtifactText] = useState<string | null>(null);
   const [activeCommentAnchorText, setActiveCommentAnchorText] = useState<string | null>(null);
   const [activeVisualDiagnosticId, setActiveVisualDiagnosticId] = useState<string | null>(null);
+  const [storyHandoffCandidates, setStoryHandoffCandidates] = useState<StoryHandoffCandidate[]>([]);
+  const [storyHandoffPackets, setStoryHandoffPackets] = useState<StoryHandoffPacketListItem[]>([]);
+  const [storyHandoffLoading, setStoryHandoffLoading] = useState(false);
+  const [storyHandoffError, setStoryHandoffError] = useState<string | null>(null);
+  const [creatingStoryHandoffId, setCreatingStoryHandoffId] = useState<string | null>(null);
+  const [copiedStoryHandoffId, setCopiedStoryHandoffId] = useState<string | null>(null);
   const artifactPreviewRef = useRef<HTMLDivElement | null>(null);
   const handledVisualDiagnosticFocusSeqRef = useRef<number | null>(null);
   const lastCurrentChangeDiffKeyRef = useRef<string | null>(null);
   const currentStageId = WORKFLOWS[workflow].stages[stageIndex]?.id;
+  const canUseStoryHandoffPackets = Boolean(
+    currentRunId
+    && workflow === 'USER_STORY_BREAKDOWN'
+    && currentStageId === 'HANDOFF'
+  );
   const currentStageArtifactHistory = useMemo(
     () => currentStageId
       ? artifactHistory.filter(version => version.stageId === currentStageId)
@@ -467,6 +480,61 @@ export const ArtifactPane: React.FC = () => {
       setCollaborationSyncError(`协作状态保存失败：${message}`);
     });
   }, [currentRunId]);
+
+  const loadStoryHandoffPacketState = useCallback(async () => {
+    if (!currentRunId || !currentStageId || !canUseStoryHandoffPackets) {
+      setStoryHandoffCandidates([]);
+      setStoryHandoffPackets([]);
+      setStoryHandoffError(null);
+      setStoryHandoffLoading(false);
+      return;
+    }
+
+    setStoryHandoffLoading(true);
+    setStoryHandoffError(null);
+    try {
+      const [candidateResponse, packetResponse] = await Promise.all([
+        fetchStoryHandoffCandidates(currentRunId, currentStageId),
+        fetchStoryHandoffPackets(currentRunId, currentStageId),
+      ]);
+      setStoryHandoffCandidates(candidateResponse.candidates);
+      setStoryHandoffPackets(packetResponse.packets);
+    } catch (error) {
+      setStoryHandoffCandidates([]);
+      setStoryHandoffPackets([]);
+      setStoryHandoffError(error instanceof Error ? error.message : '需求包加载失败');
+    } finally {
+      setStoryHandoffLoading(false);
+    }
+  }, [canUseStoryHandoffPackets, currentRunId, currentStageId]);
+
+  useEffect(() => {
+    void loadStoryHandoffPacketState();
+  }, [loadStoryHandoffPacketState]);
+
+  const generateStoryHandoffPacket = useCallback(async (storyId: string) => {
+    if (!currentRunId || !currentStageId) return;
+    setCreatingStoryHandoffId(storyId);
+    setStoryHandoffError(null);
+    try {
+      await createStoryHandoffPacket(currentRunId, currentStageId, storyId);
+      await loadStoryHandoffPacketState();
+    } catch (error) {
+      setStoryHandoffError(error instanceof Error ? error.message : '需求包生成失败');
+    } finally {
+      setCreatingStoryHandoffId(null);
+    }
+  }, [currentRunId, currentStageId, loadStoryHandoffPacketState]);
+
+  const copyStoryHandoffPacket = useCallback(async (packet: StoryHandoffPacketListItem) => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(packet.packet, null, 2));
+      setCopiedStoryHandoffId(packet.storyId);
+      setStoryHandoffError(null);
+    } catch (error) {
+      setStoryHandoffError(error instanceof Error ? error.message : '需求包复制失败');
+    }
+  }, []);
 
   const isFenceStart = (line: string): boolean => /^```/.test(line.trim());
   const isHeading = (line: string): boolean => /^#{1,3}\s+/.test(line);
@@ -4813,6 +4881,120 @@ export const ArtifactPane: React.FC = () => {
             <>
               {viewMode === 'preview' ? (
                 <>
+                  {canUseStoryHandoffPackets && (
+                    <div className="mb-4 border border-[#1e293b] bg-[#0f172a]/90 px-4 py-3 shadow-xl">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-100">单故事需求包</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            从 ready story 生成可追溯、可复制的 AI Coding 需求输入。
+                          </div>
+                        </div>
+                        {storyHandoffLoading && (
+                          <span className="rounded border border-sky-300/20 bg-sky-500/10 px-2 py-1 text-[11px] font-semibold text-sky-100">
+                            加载中
+                          </span>
+                        )}
+                      </div>
+                      {storyHandoffError && (
+                        <div className="mt-3 border border-red-300/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-100">
+                          {storyHandoffError}
+                        </div>
+                      )}
+                      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                        <div className="min-w-0">
+                          <div className="mb-2 text-[11px] font-bold uppercase text-slate-500">
+                            Ready Stories
+                          </div>
+                          {storyHandoffCandidates.length === 0 && !storyHandoffLoading ? (
+                            <div className="border border-[#1e293b] bg-[#020617] px-3 py-2 text-xs text-slate-500">
+                              当前没有可生成需求包的 ready story。
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {storyHandoffCandidates.map((candidate) => (
+                                <div
+                                  key={candidate.storyId}
+                                  className="border border-[#1e293b] bg-[#020617] px-3 py-2"
+                                >
+                                  <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <div className="text-xs font-semibold text-slate-100">
+                                        {candidate.storyId} · {candidate.title}
+                                      </div>
+                                      <div className="mt-1 text-[11px] text-slate-500">
+                                        {candidate.requirementIds.join(', ')} · {candidate.readyReason}
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => void generateStoryHandoffPacket(candidate.storyId)}
+                                      disabled={creatingStoryHandoffId === candidate.storyId}
+                                      aria-label={`生成 ${candidate.storyId} 需求包`}
+                                      className="shrink-0 rounded border border-emerald-300/20 px-2 py-1 text-[11px] font-semibold text-emerald-100 transition-colors hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      {creatingStoryHandoffId === candidate.storyId ? '生成中' : '生成需求包'}
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="mb-2 text-[11px] font-bold uppercase text-slate-500">
+                            已保存需求包
+                          </div>
+                          {storyHandoffPackets.length === 0 && !storyHandoffLoading ? (
+                            <div className="border border-[#1e293b] bg-[#020617] px-3 py-2 text-xs text-slate-500">
+                              还没有保存的单故事需求包。
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {storyHandoffPackets.map((packet) => (
+                                <div
+                                  key={packet.id}
+                                  className="border border-[#1e293b] bg-[#020617] px-3 py-2"
+                                >
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                      <div className="text-xs font-semibold text-slate-100">
+                                        {packet.storyId} · v{packet.packet.sourceArtifactVersion}
+                                      </div>
+                                      <div className="mt-1 text-[11px] text-slate-500">
+                                        {packet.packet.requirementIds.join(', ')}
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => void copyStoryHandoffPacket(packet)}
+                                      aria-label={`复制 ${packet.storyId} 需求包`}
+                                      className="inline-flex shrink-0 items-center gap-1 rounded border border-sky-300/20 px-2 py-1 text-[11px] font-semibold text-sky-100 transition-colors hover:bg-sky-400/10"
+                                    >
+                                      <Copy className="h-3 w-3" />
+                                      复制需求包
+                                    </button>
+                                  </div>
+                                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    {packet.isStale && (
+                                      <span className="rounded border border-amber-300/20 bg-amber-400/10 px-2 py-1 text-[11px] font-semibold text-amber-100">
+                                        源需求已更新
+                                      </span>
+                                    )}
+                                    {copiedStoryHandoffId === packet.storyId && (
+                                      <span className="rounded border border-emerald-300/20 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-100">
+                                        已复制 {packet.storyId}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {showCurrentChangeDiff && hasCurrentChangeDiff && (
                     <div
                       data-testid="current-artifact-change-summary"

@@ -127,6 +127,7 @@ def new_agents_page(
             console_errors.append(text)
 
     page.on("console", capture_console_error)
+    story_handoff_packets: list[dict] = []
 
     def route_config(route: Route) -> None:
         route.fulfill(
@@ -266,8 +267,103 @@ def new_agents_page(
             ),
         )
 
+    def route_story_handoff_candidates(route: Route) -> None:
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "runId": "mock-run-user_story_breakdown",
+                    "workflowId": "USER_STORY_BREAKDOWN",
+                    "stageId": "HANDOFF",
+                    "sourceArtifactVersion": 1,
+                    "sourceArtifactDigest": "sha256:mock-user-story-handoff",
+                    "candidates": [
+                        {
+                            "storyId": "US-001",
+                            "title": "生成澄清问题",
+                            "requirementIds": ["REQ-001"],
+                            "userValue": "测试负责人能在设计前发现缺失业务规则",
+                            "readyReason": "验收标准和业务规则已明确",
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+        )
+
+    def route_story_handoff_packets(route: Route) -> None:
+        if route.request.method == "POST":
+            body = route.request.post_data_json
+            packet = {
+                "sourceRunId": "mock-run-user_story_breakdown",
+                "sourceWorkflowId": "USER_STORY_BREAKDOWN",
+                "sourceStageId": body.get("stageId", "HANDOFF"),
+                "sourceArtifactVersion": 1,
+                "sourceArtifactDigest": "sha256:mock-user-story-handoff",
+                "createdAt": 1710000000000,
+                "storyId": body["storyId"],
+                "requirementIds": ["REQ-001"],
+                "userStory": (
+                    "作为测试负责人，我想要输入需求后看到待澄清问题和隐式风险，"
+                    "以便在测试设计前补齐缺失业务规则"
+                ),
+                "acceptanceCriteria": [
+                    "输出需求事实清单",
+                    "输出阻断性待澄清问题",
+                    "输出 P0 风险线索",
+                ],
+                "businessRules": ["问题必须标注阻断性、责任方和状态"],
+                "nonFunctionalNotes": ["输出内容需要可追溯、可评审"],
+                "outOfScope": ["不直接生成用例"],
+                "dependencies": ["用户提供需求文本"],
+                "openQuestions": ["问题分类口径可在试点中继续校准"],
+            }
+            story_handoff_packets.clear()
+            story_handoff_packets.append(
+                {
+                    "id": "mock-packet-us-001",
+                    "storyId": "US-001",
+                    "createdAt": 1710000000000,
+                    "isStale": False,
+                    "currentSourceArtifactVersion": 1,
+                    "currentSourceArtifactDigest": "sha256:mock-user-story-handoff",
+                    "packet": packet,
+                }
+            )
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps(packet, ensure_ascii=False),
+            )
+            return
+
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "runId": "mock-run-user_story_breakdown",
+                    "workflowId": "USER_STORY_BREAKDOWN",
+                    "stageId": "HANDOFF",
+                    "sourceArtifactVersion": 1,
+                    "sourceArtifactDigest": "sha256:mock-user-story-handoff",
+                    "packets": story_handoff_packets,
+                },
+                ensure_ascii=False,
+            ),
+        )
+
     page.route("**/new-agents/api/config", route_config)
     page.route("**/new-agents/api/agent/runs/stream", route_agent_stream)
+    page.route(
+        "**/new-agents/api/agent/runs/*/story-handoff-candidates**",
+        route_story_handoff_candidates,
+    )
+    page.route(
+        "**/new-agents/api/agent/runs/*/story-handoff-packets**",
+        route_story_handoff_packets,
+    )
     page.route(
         "**/new-agents/api/agent/runs/*/handoffs/*/start",
         route_start_handoff,

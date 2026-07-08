@@ -15,11 +15,22 @@ def init_db(app):
     """Create database tables and seed server-managed defaults."""
     with app.app_context():
         db.create_all()
+        _ensure_story_handoff_packet_table()
         _ensure_artifact_version_artifact_data_column()
         _ensure_artifact_comment_columns()
         _ensure_artifact_section_lock_columns()
         _ensure_turn_metric_diagnostic_columns()
         upsert_default_llm_config_from_env()
+
+
+def _ensure_story_handoff_packet_table():
+    """Upgrade existing databases created before story handoff packets."""
+    inspector = inspect(db.engine)
+    if "agent_story_handoff_packets" in inspector.get_table_names():
+        return
+    from models import AgentStoryHandoffPacket
+
+    AgentStoryHandoffPacket.__table__.create(bind=db.engine)
 
 
 def _ensure_artifact_comment_columns():

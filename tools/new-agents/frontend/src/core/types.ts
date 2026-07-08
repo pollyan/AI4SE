@@ -165,6 +165,60 @@ export type WorkflowHandoff = {
     prompt: string;
 };
 
+export type StoryHandoffCandidate = {
+    storyId: string;
+    title: string;
+    requirementIds: string[];
+    userValue: string;
+    readyReason: string;
+};
+
+export type StoryHandoffCandidateResponse = {
+    runId: string;
+    workflowId: WorkflowType;
+    stageId: string;
+    sourceArtifactVersion: number;
+    sourceArtifactDigest: string;
+    candidates: StoryHandoffCandidate[];
+};
+
+export type StoryHandoffPacket = {
+    sourceRunId: string;
+    sourceWorkflowId: WorkflowType;
+    sourceStageId: string;
+    sourceArtifactVersion: number;
+    sourceArtifactDigest: string;
+    createdAt: number;
+    storyId: string;
+    requirementIds: string[];
+    userStory: string;
+    acceptanceCriteria: string[];
+    businessRules: string[];
+    nonFunctionalNotes: string[];
+    outOfScope: string[];
+    dependencies: string[];
+    openQuestions: string[];
+};
+
+export type StoryHandoffPacketListItem = {
+    id: string;
+    storyId: string;
+    createdAt: number;
+    isStale: boolean;
+    currentSourceArtifactVersion: number;
+    currentSourceArtifactDigest: string;
+    packet: StoryHandoffPacket;
+};
+
+export type StoryHandoffPacketListResponse = {
+    runId: string;
+    workflowId: WorkflowType;
+    stageId: string;
+    sourceArtifactVersion: number;
+    sourceArtifactDigest: string;
+    packets: StoryHandoffPacketListItem[];
+};
+
 export type AgentRunSnapshotMessage = {
     role: 'user' | 'assistant';
     content: string;
@@ -175,6 +229,7 @@ export type AgentRunSnapshotArtifact = {
     stageId: string;
     content: string;
     versionNumber: number;
+    artifactData?: unknown;
 };
 
 export type AgentRunSnapshotContextSummary = {
