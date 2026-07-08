@@ -1,11 +1,16 @@
 import json
 from pathlib import Path
 
+from agent_runtime import build_structured_output_instruction
 from agent_contracts import (
     REQUIRED_ARTIFACT_HEADINGS,
     REQUIRED_ARTIFACT_MERMAID_DIAGRAMS,
     REQUIRED_ARTIFACT_STRUCTURED_VISUALS,
     WORKFLOW_STAGES,
+)
+from workflow_manifest import (
+    format_artifact_data_contract_instruction,
+    get_stage_artifact_data_contract,
 )
 from workflow_handoffs import HANDOFF_PROMPT_TEMPLATES
 
@@ -329,3 +334,29 @@ def test_frontend_templates_include_required_mermaid_diagram_examples():
         assert "mermaid" in template
         for diagram_type in diagram_types:
             assert diagram_type in template
+
+
+def test_converge_artifact_data_contract_manifest_drives_backend_instruction():
+    contract = get_stage_artifact_data_contract("IDEA_BRAINSTORM", "CONVERGE")
+
+    assert contract is not None
+    assert "modelOutputRules" in contract
+    assert "forbiddenOutputs" in contract
+    assert "rendererOutputs" in contract
+
+    instruction = build_structured_output_instruction(
+        "IDEA_BRAINSTORM",
+        "CONVERGE",
+    )
+    formatted = format_artifact_data_contract_instruction(
+        "IDEA_BRAINSTORM",
+        "CONVERGE",
+    )
+
+    assert formatted in instruction
+    for rule in contract["modelOutputRules"]:
+        assert rule in instruction
+    for forbidden in contract["forbiddenOutputs"]:
+        assert forbidden in instruction
+    for renderer_output in contract["rendererOutputs"]:
+        assert renderer_output in instruction

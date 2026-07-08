@@ -1,5 +1,6 @@
 import { WorkflowDef, WorkflowType } from './types';
 import { getStagePromptTemplateId, workflowManifest } from './workflowRegistry';
+import type { ArtifactDataContract } from './workflowRegistry';
 import { IMPROVEMENT_PROMPT, IMPROVEMENT_TEMPLATE } from './prompts/incident_review/improvement';
 import { ROOT_CAUSE_PROMPT, ROOT_CAUSE_TEMPLATE } from './prompts/incident_review/root_cause';
 import { TIMELINE_PROMPT, TIMELINE_TEMPLATE } from './prompts/incident_review/timeline';
@@ -114,6 +115,50 @@ const STAGE_CONTENT_BY_TEMPLATE_ID: Record<string, StageContent> = {
         },
 };
 
+const compactStrings = (items: string[] | undefined): string[] => (
+    Array.isArray(items)
+        ? items.map(item => item.trim()).filter(Boolean)
+        : []
+);
+
+const joinWithFinalSeparator = (
+    items: string[],
+    finalSeparator: string
+): string => (
+    items.length === 1
+        ? items[0]
+        : `${items.slice(0, -1).join('、')}${finalSeparator}${items.at(-1)}`
+);
+
+const formatArtifactDataContractPrompt = (
+    contract: ArtifactDataContract | undefined
+): string => {
+    if (!contract) return '';
+
+    const modelOutputRules = compactStrings(contract.modelOutputRules);
+    const forbiddenOutputs = compactStrings(contract.forbiddenOutputs);
+    const rendererOutputs = compactStrings(contract.rendererOutputs);
+    if (
+        !modelOutputRules.length
+        && !forbiddenOutputs.length
+        && !rendererOutputs.length
+    ) {
+        return '';
+    }
+
+    const lines = ['【artifact_data 契约同步约束】'];
+    if (modelOutputRules.length) {
+        lines.push(`- ${modelOutputRules.join('；')}`);
+    }
+    if (forbiddenOutputs.length) {
+        lines.push(`- 不要输出${joinWithFinalSeparator(forbiddenOutputs, '或 ')}。`);
+    }
+    if (rendererOutputs.length) {
+        lines.push(`- 后端会负责确定性渲染${joinWithFinalSeparator(rendererOutputs, '和 ')}。`);
+    }
+    return `\n\n${lines.join('\n')}`;
+};
+
 const buildWorkflow = (workflowId: WorkflowType): WorkflowDef => {
     const manifestWorkflow = workflowManifest.workflows[workflowId];
 
@@ -127,7 +172,7 @@ const buildWorkflow = (workflowId: WorkflowType): WorkflowDef => {
             }
             return {
                 ...stage,
-                description: content.description,
+                description: `${content.description}${formatArtifactDataContractPrompt(stage.artifactDataContract)}`,
                 template: content.template,
             };
         }),

@@ -589,6 +589,27 @@
             "requiredMermaidDiagrams": [
               "quadrantChart"
             ]
+          },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "ice_evaluations.idea_id 必须唯一",
+              "ice_evaluations.rank 必须唯一",
+              "impact、confidence、effort 必须是 1 到 5 的整数",
+              "ice_score 必须等于 impact * confidence / effort",
+              "decision_matrix.recommended_idea_id、validation_experiments.idea_ids 和 merge_paths.source_idea_ids 只能引用已存在的 idea_id",
+              "推荐方案必须同时出现在 ICE 结论和决策矩阵中",
+              "stage_gate 至少包含一个 checked=true"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格",
+              "Mermaid 代码块",
+              "quadrantChart"
+            ],
+            "rendererOutputs": [
+              "右侧收敛聚焦产物",
+              "Mermaid quadrantChart"
+            ]
           }
         },
         {

@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成）
+- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -107,6 +107,7 @@
 - [ ] 建立 schema / prompt / contract 单源同步机制。（横切，第 3-8 轮）
   - 目标：Pydantic validators、structured output instruction、workflow manifest visual contract、frontend prompt 不再各写一套约束。
   - 验收：新增 contract sync 测试，证明关键不变量在 prompt 和后端 validator 中同时存在。
+  - 进展：已完成 `IDEA_BRAINSTORM/CONVERGE` 首个 `artifactDataContract` 同步纵切。CONVERGE 的关键 artifact_data 不变量已进入 `workflow_manifest.json`，后端 structured output instruction 和前端 stage prompt 均从 manifest 生成同步约束，并由 backend / frontend 同步测试保护。其他阶段尚未迁移。
 
 - [ ] 针对高失败阶段做纵切专项修复。（第 4-6 轮）
   - 优先顺序：`IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY`、`IDEA_BRAINSTORM/DIVERGE`。
@@ -661,6 +662,82 @@ New Agents 验证：
 - 本轮只校验 STRATEGY artifact_data 内部的 `QG/R/TS/TP` 引用，不校验 `quality_goals.source`、`risks.source` 到 CLARIFY 阶段的事实 / 规则 / 链路 ID。
 - 本轮不改变 `TEST_DESIGN/CASES.test_point` 仍为自由文本的上游消费形态；跨阶段 `STRATEGY.test_points` 到 `CASES` 的强 ID 链路仍需后续单独治理。
 - 本轮不做后端确定性 ID 分配，只拒绝模型输出中的重复 ID 和未知引用。
+
+### 2026-07-08 第 6 轮补充横切：IDEA_BRAINSTORM CONVERGE artifactDataContract 同步
+
+已完成 `IDEA_BRAINSTORM/CONVERGE` 的首个 schema / prompt / contract 单源同步纵切：
+
+- `workflow_manifest.json` 的 CONVERGE stage 新增 `artifactDataContract`，声明模型必须遵守的 artifact_data 关键不变量、禁止直接输出的产物形态，以及后端负责确定性渲染的产物。
+- 后端 `workflow_manifest.py` 新增 stage 查询、artifactDataContract 读取和 instruction formatter。
+- 后端 `IDEA_CONVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION` 复用 manifest formatter，不再手写同一组 CONVERGE 约束句。
+- 前端 `workflowRegistry.ts` 扩展 manifest stage 类型，`workflows.ts` 在构建 `WORKFLOWS` 时把同一份 manifest contract guidance 追加到 stage description。
+- Pydantic validator、partial renderer、raw JSON streaming、typed SSE、run persistence、frontend store 和 ArtifactPane 均未新增 CONVERGE 专属分支。
+
+RED 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py::test_converge_artifact_data_contract_manifest_drives_backend_instruction tools/new-agents/backend/tests/test_agent_runtime.py::test_idea_converge_structured_output_instruction_uses_manifest_artifact_data_contract -q
+```
+
+结果：后端选中测试在 collection 阶段失败，因为 `workflow_manifest` 尚未导出 `format_artifact_data_contract_instruction`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts -t "appends manifest artifact data contract guidance"
+```
+
+结果：前端选中测试失败，因为 CONVERGE description 尚未包含 `【artifact_data 契约同步约束】`。
+
+GREEN 验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py::test_converge_artifact_data_contract_manifest_drives_backend_instruction tools/new-agents/backend/tests/test_agent_runtime.py::test_idea_converge_structured_output_instruction_uses_manifest_artifact_data_contract -q
+```
+
+结果：`2 passed`
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts -t "appends manifest artifact data contract guidance"
+```
+
+结果：`1 passed`
+
+聚焦后端回归：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_runtime.py::test_idea_converge_structured_output_instruction_requests_artifact_data_not_markdown tools/new-agents/backend/tests/test_agent_runtime.py::test_idea_converge_structured_output_instruction_uses_manifest_artifact_data_contract tools/new-agents/backend/tests/test_agent_runtime.py::test_runtime_raw_json_stream_turn_renders_idea_converge_artifact_data_before_final_output tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_idea_converge_artifact_data_builds_formal_incremental_markdown_and_patch tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_idea_converge_artifact_data_rejects_unknown_recommended_idea_reference tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_idea_converge_artifact_data_rejects_invalid_ice_score tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_idea_converge_artifact_data_skips_validation_experiments_with_unknown_idea_reference tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_partial_idea_converge_artifact_data_skips_merge_paths_with_unknown_idea_reference -q
+```
+
+结果：`19 passed`
+
+聚焦前端回归：
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts
+```
+
+结果：`16 passed`
+
+New Agents 验证：
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：New Agents Frontend `719 passed`；New Agents Backend `626 passed, 1 deselected`。运行中仍出现既有 React `ArtifactPane.test.tsx` `act(...)` warning，但未导致测试失败。
+
+全量验证：
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：默认沙箱失败，失败点为 MidScene proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 Playwright Chromium `bootstrap_check_in ... Permission denied (1100)`，属于端口 / 浏览器权限环境限制。非沙箱重跑通过，退出码 `0`；关键结果包括 Intent Tester API `294 passed`、flake8 严重错误检查通过、MidScene proxy `17 passed`、Common Frontend lint/build 通过、New Agents Frontend `719 passed`、New Agents Backend `626 passed, 1 deselected`、New Agents Browser E2E `11 passed, 10 deselected`。
+
+残余风险：
+
+- 本轮只迁移 CONVERGE 的 artifactDataContract，不代表所有 artifact_data stage 已完成 schema / prompt / contract 单源同步。
+- manifest 中的 contract 是模型提示和同步测试的配置源，不能替代 Pydantic validators；后端 validators 仍是最终门禁。
+- 本轮不处理第 7 轮视觉协议稳定化，不改变 Mermaid / `ai4se-visual` 的运行时校验策略。
 
 ## 每轮验收口径
 

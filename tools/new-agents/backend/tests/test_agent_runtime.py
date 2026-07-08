@@ -1360,6 +1360,27 @@ def test_idea_converge_structured_output_instruction_requests_artifact_data_not_
     assert "不要输出完整 Markdown" in instruction
 
 
+def test_idea_converge_structured_output_instruction_uses_manifest_artifact_data_contract():
+    instruction = build_structured_output_instruction(
+        "IDEA_BRAINSTORM",
+        "CONVERGE",
+    )
+
+    assert "artifact_data 中所有字符串必须非空" in instruction
+    assert "ice_evaluations.idea_id 必须唯一" in instruction
+    assert "decision_matrix.recommended_idea_id" in instruction
+    assert "validation_experiments.idea_ids" in instruction
+    assert "merge_paths.source_idea_ids" in instruction
+    assert (
+        "不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 quadrantChart"
+        in instruction
+    )
+    assert (
+        "后端会负责确定性渲染右侧收敛聚焦产物和 Mermaid quadrantChart"
+        in instruction
+    )
+
+
 def test_idea_concept_structured_output_instruction_requests_artifact_data_not_markdown():
     instruction = build_structured_output_instruction(
         "IDEA_BRAINSTORM",

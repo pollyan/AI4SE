@@ -74,6 +74,19 @@ describe('Workflow Configuration', () => {
         expect(wf.stages[3].id).toBe('CONCEPT');
     });
 
+    it('appends manifest artifact data contract guidance to IDEA CONVERGE prompt description', () => {
+        const convergeStage = WORKFLOWS.IDEA_BRAINSTORM.stages.find(stage => stage.id === 'CONVERGE');
+
+        expect(convergeStage).toBeDefined();
+        expect(convergeStage?.description).toContain('【artifact_data 契约同步约束】');
+        expect(convergeStage?.description).toContain('ice_evaluations.idea_id 必须唯一');
+        expect(convergeStage?.description).toContain('decision_matrix.recommended_idea_id');
+        expect(convergeStage?.description).toContain('validation_experiments.idea_ids');
+        expect(convergeStage?.description).toContain('merge_paths.source_idea_ids');
+        expect(convergeStage?.description).toContain('不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 quadrantChart');
+        expect(convergeStage?.description).toContain('后端会负责确定性渲染右侧收敛聚焦产物和 Mermaid quadrantChart');
+    });
+
     it('should have VALUE_DISCOVERY workflow defined with correct agentId and stages', () => {
         const wf = WORKFLOWS.VALUE_DISCOVERY;
         expect(wf).toBeDefined();
