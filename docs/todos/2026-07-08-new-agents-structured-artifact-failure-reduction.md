@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync，以及 25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步；artifactDataContract 同步剩余 0 个阶段。后续未完成治理仍需按派生字段后端化、ID 收敛、视觉协议分层等独立价值目标重新拆分切片。）
+- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段。后续未完成治理剩余 5 个能力包：派生字段后端化、ID 收敛、视觉协议分层、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -123,7 +123,7 @@
   - 重点阶段：`IDEA_BRAINSTORM/DEFINE` 的 evidence 引用，`IDEA_BRAINSTORM/CONVERGE` 的 idea / rank / recommended idea 引用，`TEST_DESIGN/CASES` 的 requirement / risk / case 覆盖引用。
   - 进展：第 4 轮已完成 `IDEA_BRAINSTORM/DEFINE` 的 root problem / evidence / problem-user-fit ID 引用治理；第 5 轮首个纵切已完成 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial preview 的跨引用门禁，避免流式右侧产物预览已知错误章节；第 6 轮已完成 `TEST_DESIGN/CASES` 的 `automation_candidates.case_id` / `coverage_trace.covered_cases` case_id 引用门禁，以及 `TEST_DESIGN/STRATEGY` 的 `QG/R/TS/TP` 内部 ID 唯一性与引用门禁。更广泛的后端确定性 ID 分配仍未完成。
 
-- [ ] 建立 schema / prompt / contract 单源同步机制。（横切，第 3-8 轮）
+- [x] 建立 schema / prompt / contract 单源同步机制。（横切，第 3-8 轮）
   - 目标：Pydantic validators、structured output instruction、workflow manifest visual contract、frontend prompt 不再各写一套约束。
   - 验收：新增 contract sync 测试，证明关键不变量在 prompt 和后端 validator 中同时存在。
   - 进展：已完成 `IDEA_BRAINSTORM/CONVERGE` 首个 `artifactDataContract` 同步纵切。CONVERGE 的关键 artifact_data 不变量已进入 `workflow_manifest.json`，后端 structured output instruction 和前端 stage prompt 均从 manifest 生成同步约束，并由 backend / frontend 同步测试保护。
@@ -143,14 +143,14 @@
   - 进展：已完成 `STORY_BREAKDOWN/INPUT_ANALYSIS`、`STORY_BREAKDOWN/EPIC_MAPPING`、`STORY_BREAKDOWN/STORY_BACKLOG` 与 `STORY_BREAKDOWN/SPRINT_PLAN` `artifactDataContract` manifest 同步。STORY_BREAKDOWN 的必需字段、契约外字段拒绝、关键嵌套数组非空、Epic / Story / Criterion / Dependency / Sprint ID 唯一性、Epic / Story / Criterion / Dependency / Sprint / Lisa handoff 引用门禁、`story_points >= 1`、`stage_gate` checked，以及禁止模型输出 renderer-owned Markdown / Mermaid / story-map JSON 等边界已进入 manifest，并由 backend instruction sync、runtime instruction、frontend manifest 配置、frontend prompt 注入和 renderer validator 负例测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`VALUE_DISCOVERY/ELEVATOR`、`VALUE_DISCOVERY/PERSONA`、`VALUE_DISCOVERY/JOURNEY`、`VALUE_DISCOVERY/BLUEPRINT`、`STORY_BREAKDOWN/INPUT_ANALYSIS`、`STORY_BREAKDOWN/EPIC_MAPPING`、`STORY_BREAKDOWN/STORY_BACKLOG`、`STORY_BREAKDOWN/SPRINT_PLAN`、`TEST_DESIGN/CLARIFY`、`TEST_DESIGN/STRATEGY`、`TEST_DESIGN/CASES`、`TEST_DESIGN/DELIVERY`、`REQ_REVIEW/REVIEW`、`REQ_REVIEW/REPORT`、`INCIDENT_REVIEW/TIMELINE`、`INCIDENT_REVIEW/ROOT_CAUSE` 与 `INCIDENT_REVIEW/IMPROVEMENT` 外，其余 4 个阶段尚未迁移。
   - 进展：已完成 `PRD_REVIEW/INVENTORY`、`PRD_REVIEW/QUALITY_AUDIT`、`PRD_REVIEW/COMPLETION_PLAN` 与 `PRD_REVIEW/REVISION_BLUEPRINT` `artifactDataContract` manifest 同步。PRD_REVIEW 的必需字段、契约外字段拒绝、关键列表非空、finding / action / section ID 唯一性、action finding 引用、acceptance / handoff section 引用、`stage_gate` checked，以及禁止模型输出 renderer-owned Markdown / Mermaid / `ai4se-visual` JSON 等边界已进入 manifest，并由 backend instruction sync、runtime instruction、frontend manifest 配置、frontend prompt 注入和 renderer validator 负例测试保护。当前 registry 共 25 个 artifact-data 阶段，25 个阶段均已完成 `artifactDataContract` manifest sync，剩余待迁移阶段为 0。
 
-- [ ] 针对高失败阶段做纵切专项修复。（第 4-6 轮）
+- [x] 针对高失败阶段做纵切专项修复。（第 4-6 轮）
   - 优先顺序：`IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY`、`IDEA_BRAINSTORM/DIVERGE`。
   - 目标：每个阶段都有失败复现、根因定位、最小 schema 设计修复和回归测试。
   - 进展：第 4 轮已完成 `IDEA_BRAINSTORM/DEFINE` 的已知 root-problem 覆盖失败模式修复；第 5 轮首个纵切已完成 `DIVERGE` / `CONVERGE` partial preview 与 final validator 关键引用不变量对齐；第 6 轮已完成 `CASES` 的用例统计后端化与 partial case_id 引用门禁，以及 `STRATEGY` 的内部引用门禁。后续已进一步把 CASES 的核心 artifact_data 约束迁入 manifest，并清理前端 prompt 中要求模型手写 Markdown 表格 / `ai4se-visual` block 的旧冲突描述。
   - 进展：已进一步把 `IDEA_BRAINSTORM/DEFINE` 的核心 root-problem / evidence 引用约束迁入 manifest，让原高失败阶段的后端 validator、structured output instruction 和前端 prompt 使用同一配置源。
   - 进展：已进一步把 `IDEA_BRAINSTORM/DIVERGE` 的核心 idea/source 引用约束迁入 manifest，让原高失败阶段的后端 validator、structured output instruction 和前端 prompt 使用同一配置源。
 
-- [ ] 增加结构化失败回归门禁。（第 8 轮）
+- [x] 增加结构化失败回归门禁。（第 8 轮）
   - 目标：高失败阶段必须有固定 fixture / raw JSON stream / renderer contract 测试，确保不会再次因为已知不变量触发 `SCHEMA_VALIDATION_FAILED`。
   - 验收：纳入 `./scripts/test/test-local.sh new-agents` 或明确的 New Agents backend regression suite。
   - 进展：已建立 `ARTIFACT_DATA_STAGE_FIXTURES` 全阶段测试登记表，当前覆盖全部 `supports_artifact_data_rendering()` 支持的 25 个在线阶段；每个 registry fixture 都必须通过 deterministic renderer 和 `validate_agent_turn()`。`test_agent_runtime.py` 的 artifact-data instruction 顺序矩阵已改为从 registry 派生，避免新增阶段时漏掉 raw JSON visible streaming 门禁。`test_workflow_contract_sync.py` 已反向校验 `workflow_manifest.json` 的 `visualContract` 与后端 required Mermaid / structured visual maps 完全一致。
