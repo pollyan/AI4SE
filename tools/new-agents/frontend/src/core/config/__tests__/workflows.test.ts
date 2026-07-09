@@ -568,16 +568,16 @@ describe('Workflow Configuration', () => {
 
     it('exposes manifest artifact data contract for TEST DESIGN DELIVERY', () => {
         const delivery = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'DELIVERY');
+        const caseCountRule =
+            'case_summary_items[].case_count 缺省时由后端按 p0_count + p1_count + p2_count 派生；显式提供时必须一致';
+        const totalCasesRule =
+            'delivery_metrics.total_cases 缺省时由后端按 case_summary_items[].case_count 总和派生；显式提供时必须一致';
+        const highRiskRule =
+            'delivery_metrics.high_risk_count 缺省时由后端按 open_risks 中不可接受风险数量派生；显式提供时必须一致';
 
-        expect(delivery?.artifactDataContract?.modelOutputRules).toContain(
-            'case_summary_items[].case_count 必须等于 p0_count + p1_count + p2_count',
-        );
-        expect(delivery?.artifactDataContract?.modelOutputRules).toContain(
-            'delivery_metrics.total_cases 必须等于 case_summary_items[].case_count 总和',
-        );
-        expect(delivery?.artifactDataContract?.modelOutputRules).toContain(
-            'delivery_metrics.high_risk_count 必须等于 open_risks 中 risk_type 包含“风险”且 acceptable != “是”的数量',
-        );
+        expect(delivery?.artifactDataContract?.modelOutputRules).toContain(caseCountRule);
+        expect(delivery?.artifactDataContract?.modelOutputRules).toContain(totalCasesRule);
+        expect(delivery?.artifactDataContract?.modelOutputRules).toContain(highRiskRule);
         expect(delivery?.artifactDataContract?.modelOutputRules).toContain(
             'coverage_map[].case_ids 必须至少包含 1 个用例 ID',
         );

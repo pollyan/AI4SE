@@ -288,11 +288,16 @@ describe('buildSystemPrompt', () => {
             currentArtifact: '# 测试设计文档\n已有内容',
         });
 
-        const caseCountRule = 'case_summary_items[].case_count 必须等于 p0_count + p1_count + p2_count';
+        const caseCountRule =
+            'case_summary_items[].case_count 缺省时由后端按 p0_count + p1_count + p2_count 派生；显式提供时必须一致';
+        const totalCasesRule =
+            'delivery_metrics.total_cases 缺省时由后端按 case_summary_items[].case_count 总和派生；显式提供时必须一致';
+        const highRiskRule =
+            'delivery_metrics.high_risk_count 缺省时由后端按 open_risks 中不可接受风险数量派生；显式提供时必须一致';
         expect(prompt).toContain('【artifact_data 结构化契约】');
         expect(prompt).toContain(caseCountRule);
-        expect(prompt).toContain('delivery_metrics.total_cases 必须等于 case_summary_items[].case_count 总和');
-        expect(prompt).toContain('delivery_metrics.high_risk_count 必须等于 open_risks 中 risk_type 包含“风险”且 acceptable != “是”的数量');
+        expect(prompt).toContain(totalCasesRule);
+        expect(prompt).toContain(highRiskRule);
         expect(prompt).toContain('coverage_map[].case_ids 必须至少包含 1 个用例 ID');
         expect(prompt).toContain('coverage-map JSON 代码块');
         expect(prompt).toContain('右侧测试设计交付包');

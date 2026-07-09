@@ -3560,6 +3560,53 @@ def test_delivery_artifact_data_rejects_inconsistent_case_totals():
         DeliveryArtifactData.model_validate(invalid)
 
 
+def test_delivery_artifact_data_derives_case_count_and_metrics_when_missing():
+    artifact_data = copy.deepcopy(VALID_DELIVERY_ARTIFACT_DATA)
+    artifact_data["delivery_metrics"].pop("total_cases")
+    artifact_data["delivery_metrics"].pop("high_risk_count")
+    for item in artifact_data["case_summary_items"]:
+        item.pop("case_count")
+
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已整理测试设计交付文档，请确认右侧终稿。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="TEST_DESIGN",
+        current_stage_id="DELIVERY",
+    )
+
+    assert output is not None
+    assert output.artifact_data["delivery_metrics"]["total_cases"] == 2
+    assert output.artifact_data["delivery_metrics"]["high_risk_count"] == 1
+    assert [
+        item["case_count"] for item in output.artifact_data["case_summary_items"]
+    ] == [1, 1]
+    assert "| 总用例数 | 2 |" in output.artifact_update.markdown
+    assert "| 高风险项 | 1 |" in output.artifact_update.markdown
+    assert "| 正向功能验证 | 1 | 1 | 0 | 0 | 1 | 0 |" in (
+        output.artifact_update.markdown
+    )
+
+
+def test_delivery_artifact_data_rejects_inconsistent_case_count_when_present():
+    invalid = copy.deepcopy(VALID_DELIVERY_ARTIFACT_DATA)
+    invalid["case_summary_items"][0]["case_count"] = 99
+
+    with pytest.raises(ValidationError, match="case_count"):
+        DeliveryArtifactData.model_validate(invalid)
+
+
+def test_delivery_artifact_data_rejects_inconsistent_high_risk_count_when_present():
+    invalid = copy.deepcopy(VALID_DELIVERY_ARTIFACT_DATA)
+    invalid["delivery_metrics"]["high_risk_count"] = 99
+
+    with pytest.raises(ValidationError, match="high_risk_count"):
+        DeliveryArtifactData.model_validate(invalid)
+
+
 def test_req_review_artifact_data_rejects_inconsistent_issue_statistics():
     invalid = {
         **VALID_REQ_REVIEW_ARTIFACT_DATA,

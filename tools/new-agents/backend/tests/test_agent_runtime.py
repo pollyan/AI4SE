@@ -823,6 +823,38 @@ def test_parse_agent_turn_output_text_renders_delivery_artifact_data():
     assert output.stage_action is None
 
 
+def test_parse_agent_turn_output_text_renders_delivery_without_derived_counts():
+    artifact_data = copy.deepcopy(VALID_DELIVERY_ARTIFACT_DATA)
+    artifact_data["delivery_metrics"].pop("total_cases")
+    artifact_data["delivery_metrics"].pop("high_risk_count")
+    for item in artifact_data["case_summary_items"]:
+        item.pop("case_count")
+
+    json_text = json.dumps(
+        {
+            "chat": "我已整理测试设计交付文档，请确认右侧终稿。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="DELIVERY",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_data["delivery_metrics"]["total_cases"] == 2
+    assert output.artifact_data["delivery_metrics"]["high_risk_count"] == 1
+    assert [
+        item["case_count"] for item in output.artifact_data["case_summary_items"]
+    ] == [1, 1]
+    assert '"type": "coverage-map"' in output.artifact_update.markdown
+
+
 def test_delivery_structured_output_instruction_requests_artifact_data_not_markdown():
     instruction = build_structured_output_instruction(
         "TEST_DESIGN",
@@ -837,6 +869,29 @@ def test_delivery_structured_output_instruction_requests_artifact_data_not_markd
     assert 'stage_action": null' in instruction
     assert "不要输出完整 Markdown" in instruction
     assert "artifact_update.markdown" not in instruction
+
+
+def test_delivery_structured_output_instruction_omits_derived_delivery_counts():
+    instruction = build_structured_output_instruction(
+        "TEST_DESIGN",
+        "DELIVERY",
+    )
+
+    assert '"case_count":' not in instruction
+    assert '"total_cases":' not in instruction
+    assert '"high_risk_count":' not in instruction
+    assert (
+        "case_summary_items[].case_count 缺省时由后端按 "
+        "p0_count + p1_count + p2_count 派生"
+    ) in instruction
+    assert (
+        "delivery_metrics.total_cases 缺省时由后端按 "
+        "case_summary_items[].case_count 总和派生"
+    ) in instruction
+    assert (
+        "delivery_metrics.high_risk_count 缺省时由后端按 "
+        "open_risks 中不可接受风险数量派生"
+    ) in instruction
 
 
 def test_delivery_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():

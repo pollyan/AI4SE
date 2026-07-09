@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段。后续未完成治理剩余 5 个能力包：派生字段后端化、ID 收敛、视觉协议分层、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
+- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化已新增 `TEST_DESIGN/DELIVERY` 统计字段纵切。后续未完成治理仍集中在 5 个能力包：派生字段后端化、ID 收敛、视觉协议分层、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -117,6 +117,7 @@
   - 候选字段：`total_score`、`average_score`、`case_count`、P0/P1/P2 汇总、`high_risk_count`、覆盖统计、RPN 等派生值。
   - 目标：模型只输出语义内容和原子事实，后端负责确定性计算、排序和汇总。
   - 进展：第 6 轮首个纵切已完成 `TEST_DESIGN/CASES.case_statistics` 后端派生。缺省统计由后端根据 `case_groups` 计算，显式错误统计仍触发 validation failure。
+  - 进展：已完成 `TEST_DESIGN/DELIVERY` 统计字段纵切。`case_summary_items[].case_count` 缺省时由 P0/P1/P2 派生；`delivery_metrics.total_cases` 和 `high_risk_count` 缺省时由用例摘要和开放风险派生；模型显式输出错误统计仍触发 validation failure。`DELIVERY` runtime instruction 示例不再要求模型输出这些派生字段，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
 
 - [ ] 收敛 ID 与引用关系。（第 4-6 轮）
   - 目标：后端生成稳定 ID，或在 renderer/normalizer 中确定性分配 ID；模型不再负责维护容易漂移的跨表引用。
@@ -2411,6 +2412,62 @@ NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all
 
 - 本轮只迁移 `PRD_REVIEW` 四阶段；至此 25 个在线 artifact-data 阶段均已完成 `artifactDataContract` manifest sync，剩余待迁移阶段为 0。
 - 本轮不新增 PRD 字段派生、自动 ID 分配、严格枚举、ready/pass 判定、deadline 校验、字段级 partial renderer、backend Mermaid JS parse 或 `mmdc` 渲染门禁；Mermaid `mindmap`、`score-matrix`、`action-board` 和 `roadmap` 仍由后端 deterministic renderer 生成，并由现有 artifact contract / visual contract 测试保护。
+
+### 2026-07-09 切片记录：TEST_DESIGN/DELIVERY 派生统计字段后端化
+
+触发原因：
+
+- `artifactDataContract` manifest sync 已全部收口后，未完成治理转入派生字段后端化能力包；不能再把可计算统计继续交给模型维护。
+- 子智能体只读审查确认：`TEST_DESIGN/DELIVERY` 当前模型仍被要求输出 `case_summary_items[].case_count`、`delivery_metrics.total_cases` 和 `delivery_metrics.high_risk_count`，后端只做一致性校验，不做缺省派生。
+- 本轮只处理 DELIVERY 当前 payload 内可确定计算的字段，不做跨阶段从 `TEST_DESIGN/CASES` 回读逐条用例，也不改变 P0/P1/P2、自动化候选、阻塞环境等语义字段。
+
+已修复：
+
+- `DeliveryCaseSummaryItem.case_count` 缺省时由 `p0_count + p1_count + p2_count` 派生；显式提供但不一致时继续触发 validation failure。
+- `DeliveryMetrics.total_cases` 缺省时由 `case_summary_items[].case_count` 总和派生；`high_risk_count` 缺省时由 `open_risks` 中 risk_type 包含“风险”且 `acceptable != "是"` 的开放风险数量派生；显式错误统计仍失败。
+- `TEST_DESIGN/DELIVERY` runtime structured output 示例不再要求模型输出 `case_count`、`total_cases`、`high_risk_count`，并改为注入 manifest 生成的 `artifactDataContract` instruction。
+- `workflow_manifest.json`、前端 workflow 配置测试和前端 system prompt 测试同步更新为“缺省后端派生、显式提供必须一致”。
+- `docs/TESTING.md` 字段来源矩阵同步更新，记录 DELIVERY 交付指标基础信息仍由模型负责，统计汇总由后端确定性派生。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py -q -k "delivery_artifact_data_derives_case_count_and_metrics_when_missing or delivery_artifact_data_rejects_inconsistent_high_risk_count_when_present"
+```
+
+结果：修复前 `1 failed, 1 passed, 121 deselected`，失败点为 DELIVERY 缺少派生字段时 Pydantic 直接报 required；修复后相关聚焦用例通过。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py -q -k "delivery_without_derived_counts or delivery_structured_output_instruction_omits_derived_delivery_counts"
+```
+
+结果：修复前 `2 failed, 200 deselected`，失败点为 runtime parse 缺少派生字段失败、structured output instruction 仍要求模型输出派生字段；修复后 `2 passed, 200 deselected`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py -q -k test_design_delivery_artifact_data_contract
+```
+
+结果：修复前 `1 failed, 34 deselected`，失败点为 manifest contract 仍是“模型必须算对”的旧文案；修复后 `1 passed, 34 deselected`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py -q -k delivery
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py -q -k delivery
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py -q
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run
+```
+
+结果：分别通过 `5 passed, 118 deselected`、`9 passed, 193 deselected`、`35 passed`、前端 `110 passed`。
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：通过。New Agents Frontend `823 passed`；New Agents Backend `817 passed, 4 deselected`。
+
+残余风险：
+
+- 本轮只完成 `TEST_DESIGN/DELIVERY` 当前 payload 内可计算统计字段，不新增跨阶段 CASES 汇总，不后端派生 P0/P1/P2 分布、自动化候选、阻塞环境、交付状态或签署结论。
+- 派生字段后端化能力包仍未整体完成；后续需要继续盘点其它 workflow 中仍由模型输出的覆盖统计、排序摘要、ID 派生或可计算汇总。
 
 ## 每轮验收口径
 

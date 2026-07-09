@@ -1442,8 +1442,8 @@ class DeliveryMetrics(StrictArtifactDataModel):
     version: str
     generated_at: str
     delivery_status: str
-    total_cases: int = Field(ge=0)
-    high_risk_count: int = Field(ge=0)
+    total_cases: int | None = Field(default=None, ge=0)
+    high_risk_count: int | None = Field(default=None, ge=0)
 
 
 class DeliveryExecutiveSummaryItem(StrictArtifactDataModel):
@@ -1469,7 +1469,7 @@ class DeliveryStrategySummaryItem(StrictArtifactDataModel):
 
 class DeliveryCaseSummaryItem(StrictArtifactDataModel):
     dimension: str
-    case_count: int = Field(ge=0)
+    case_count: int | None = Field(default=None, ge=0)
     p0_count: int = Field(ge=0)
     p1_count: int = Field(ge=0)
     p2_count: int = Field(ge=0)
@@ -1479,6 +1479,8 @@ class DeliveryCaseSummaryItem(StrictArtifactDataModel):
     @model_validator(mode="after")
     def validate_priority_counts(self) -> "DeliveryCaseSummaryItem":
         priority_total = self.p0_count + self.p1_count + self.p2_count
+        if self.case_count is None:
+            self.case_count = priority_total
         if priority_total != self.case_count:
             raise ValueError("case_count must equal p0_count + p1_count + p2_count")
         return self
@@ -1534,6 +1536,8 @@ class DeliveryArtifactData(StrictArtifactDataModel):
     @model_validator(mode="after")
     def validate_delivery_consistency(self) -> "DeliveryArtifactData":
         total_cases = sum(item.case_count for item in self.case_summary_items)
+        if self.delivery_metrics.total_cases is None:
+            self.delivery_metrics.total_cases = total_cases
         if self.delivery_metrics.total_cases != total_cases:
             raise ValueError(
                 "delivery_metrics.total_cases must match case_summary_items total_cases"
@@ -1544,6 +1548,8 @@ class DeliveryArtifactData(StrictArtifactDataModel):
             for item in self.open_risks
             if "风险" in item.risk_type and item.acceptable != "是"
         )
+        if self.delivery_metrics.high_risk_count is None:
+            self.delivery_metrics.high_risk_count = high_risk_count
         if self.delivery_metrics.high_risk_count != high_risk_count:
             raise ValueError(
                 "delivery_metrics.high_risk_count must match unacceptable open risks"

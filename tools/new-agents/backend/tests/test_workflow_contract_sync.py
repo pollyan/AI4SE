@@ -217,16 +217,16 @@ def test_test_design_delivery_artifact_data_contract_manifest_drives_backend_ins
 
     assert contract is not None
     assert (
-        "case_summary_items[].case_count 必须等于 "
-        "p0_count + p1_count + p2_count"
+        "case_summary_items[].case_count 缺省时由后端按 "
+        "p0_count + p1_count + p2_count 派生"
     ) in instruction
     assert (
-        "delivery_metrics.total_cases 必须等于 "
-        "case_summary_items[].case_count 总和"
+        "delivery_metrics.total_cases 缺省时由后端按 "
+        "case_summary_items[].case_count 总和派生"
     ) in instruction
     assert (
-        "delivery_metrics.high_risk_count 必须等于 open_risks 中 "
-        "risk_type 包含“风险”且 acceptable != “是”的数量"
+        "delivery_metrics.high_risk_count 缺省时由后端按 open_risks 中"
+        "不可接受风险数量派生"
     ) in instruction
     assert "coverage_map[].case_ids 必须至少包含 1 个用例 ID" in instruction
     assert "coverage-map JSON 代码块" in instruction
