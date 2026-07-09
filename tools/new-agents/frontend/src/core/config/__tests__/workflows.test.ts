@@ -247,6 +247,26 @@ describe('Workflow Configuration', () => {
         expect(rootCause?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual cause-map');
     });
 
+    it('exposes manifest artifact data contract for IDEA BRAINSTORM DEFINE', () => {
+        const define = WORKFLOWS.IDEA_BRAINSTORM.stages.find(stage => stage.id === 'DEFINE');
+
+        expect(define?.artifactDataContract?.modelOutputRules).toContain(
+            'evidence_items[].evidence_id 必须唯一',
+        );
+        expect(define?.artifactDataContract?.modelOutputRules).toContain(
+            'problem_landscape.subproblems[].problem_id 必须唯一',
+        );
+        expect(define?.artifactDataContract?.modelOutputRules).toContain(
+            'problem_user_fit.evidence_ids 只能引用 evidence_items[].evidence_id 中已定义的证据 ID',
+        );
+        expect(define?.artifactDataContract?.modelOutputRules).toContain(
+            'problem_landscape.root_problem 必须被至少一个 evidence_items.related_problem 或 problem_user_fit.evidence_or_assumption 条目覆盖',
+        );
+        expect(define?.artifactDataContract?.forbiddenOutputs).toContain('Mermaid 代码块');
+        expect(define?.artifactDataContract?.forbiddenOutputs).toContain('mindmap 代码块');
+        expect(define?.artifactDataContract?.rendererOutputs).toContain('Mermaid mindmap');
+    });
+
     it('does not ask TEST DESIGN STRATEGY model to handwrite renderer-owned visuals in artifact data mode', () => {
         const strategy = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'STRATEGY');
 

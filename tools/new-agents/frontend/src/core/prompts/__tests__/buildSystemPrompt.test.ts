@@ -260,6 +260,28 @@ describe('buildSystemPrompt', () => {
         expect(rpnRuleMatches).toHaveLength(1);
     });
 
+    it('injects IDEA BRAINSTORM DEFINE artifact data contract from the manifest', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'alex',
+            workflow: 'IDEA_BRAINSTORM',
+            stageIndex: 0,
+            currentArtifact: '# 问题域分析\n已有内容',
+        });
+
+        const evidenceRule = 'evidence_items[].evidence_id 必须唯一';
+        expect(prompt).toContain('【artifact_data 结构化契约】');
+        expect(prompt).toContain(evidenceRule);
+        expect(prompt).toContain('problem_landscape.subproblems[].problem_id 必须唯一');
+        expect(prompt).toContain('problem_user_fit.evidence_ids 只能引用 evidence_items[].evidence_id 中已定义的证据 ID');
+        expect(prompt).toContain('problem_landscape.root_problem 必须被至少一个 evidence_items.related_problem 或 problem_user_fit.evidence_or_assumption 条目覆盖');
+        expect(prompt).toContain('图表 代码块');
+        expect(prompt).toContain('mindmap 代码块');
+        expect(prompt).toContain('图表 mindmap');
+        expect(prompt).not.toContain('Mermaid 代码块');
+        const evidenceRuleMatches = prompt.match(new RegExp(evidenceRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
+        expect(evidenceRuleMatches).toHaveLength(1);
+    });
+
     it('describes story breakdown work without markdown direct-write instructions', () => {
         const prompt = buildSystemPrompt({
             agentId: 'alex',

@@ -662,6 +662,25 @@
               "mindmap"
             ]
           },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "evidence_items[].evidence_id 必须唯一",
+              "problem_landscape.subproblems[].problem_id 必须唯一",
+              "problem_user_fit.evidence_ids 只能引用 evidence_items[].evidence_id 中已定义的证据 ID",
+              "problem_landscape.root_problem 必须被至少一个 evidence_items.related_problem 或 problem_user_fit.evidence_or_assumption 条目覆盖",
+              "stage_gate 至少包含一个 checked=true"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格",
+              "Mermaid 代码块",
+              "mindmap 代码块"
+            ],
+            "rendererOutputs": [
+              "右侧问题域分析",
+              "Mermaid mindmap"
+            ]
+          },
           "promptTemplateVersion": "2026.06.24.1",
           "regressionSampleIds": [
             "idea-brainstorm.define.baseline"

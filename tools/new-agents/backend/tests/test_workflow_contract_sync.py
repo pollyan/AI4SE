@@ -201,6 +201,32 @@ def test_incident_root_cause_artifact_data_contract_manifest_drives_backend_inst
     assert "Mermaid mindmap" in instruction
 
 
+def test_idea_define_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    instruction = format_artifact_data_contract_instruction(
+        "IDEA_BRAINSTORM",
+        "DEFINE",
+    )
+    stage = next(
+        stage
+        for stage in _workflow_manifest()["workflows"]["IDEA_BRAINSTORM"]["stages"]
+        if stage["id"] == "DEFINE"
+    )
+    contract = stage.get("artifactDataContract")
+
+    assert contract is not None
+    assert "evidence_items[].evidence_id 必须唯一" in instruction
+    assert "problem_landscape.subproblems[].problem_id 必须唯一" in instruction
+    assert "problem_user_fit.evidence_ids 只能引用 evidence_items[].evidence_id" in instruction
+    assert "problem_landscape.root_problem 必须被至少一个 evidence_items.related_problem 或 problem_user_fit.evidence_or_assumption 条目覆盖" in instruction
+    assert "stage_gate 至少包含一个 checked=true" in instruction
+    assert "Mermaid 代码块" in instruction
+    assert "mindmap 代码块" in instruction
+    assert "右侧问题域分析" in instruction
+    assert "Mermaid mindmap" in instruction
+
+
 def test_workflow_manifest_declares_prompt_template_versions_for_every_stage():
     manifest = _workflow_manifest()
 
