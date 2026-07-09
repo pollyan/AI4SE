@@ -3156,6 +3156,41 @@ cd tools/new-agents/frontend && npm run build
 - `服务端视觉成功门禁` 仍是候选，但需要重新判断是否与其他视觉协议工作合并成更厚的独立切片。
 - `结构化一致性收口` 当前没有新的 P0/P1 功能缺口证据，后续优先作为状态审计或文档收口处理，避免继续拆成过薄字段切片。
 
+### 2026-07-09 timeline-map 后剩余工作重切片
+
+触发原因：
+
+- 用户反馈当前切片体感过薄，要求当前 timeline-map 切片完成后停止继续实现，重新定义后续工作和切片边界。
+- 当前 `INCIDENT_REVIEW/TIMELINE timeline-map` 已完成并通过 New Agents 总门禁；后续不能沿旧清单继续拆成“单测试 / 单字段 / 单 helper”。
+
+最新切片原则：
+
+- 不允许内部批次。一个切片如果过大，就拆成多个同级切片；不能在一个切片里写“批次 A / 批次 B / 批次 C”。
+- 一个切片必须形成完整用户动作链或工程信任闭环：入口、动作、系统处理、可见结果、状态承接、失败反馈和验证证据都要闭合。
+- 一个 workflow 不应默认拆成多个切片；只有当同一 workflow 内存在多个不同用户意图、不同失败语义或不同验证闭环时，才拆成多个同级切片。
+- 后续优先使用只读子智能体做旁路审查；可写实现仍由主 Agent 在单工作区串行收口，避免多 worker 写同一共享文件。
+
+后续候选切片重排：
+
+| 顺序 | 切片 | 用户/工程闭环 | 进入范围 | 不进入范围 | 验收证据 |
+|---|---|---|---|---|---|
+| 1 | 服务端视觉成功门禁 | Agent 生成正式 artifact -> 服务端在成功、持久化和阶段推进前执行视觉 gate -> 失败显式报错且不落库 | `stream_services` 成功路径、artifact persistence 前 gate、所有 `ai4se-visual` block backend shape 校验、renderer fixture 视觉解析、前端 Mermaid parse fixture 作为 CI 证据、失败诊断测试 | 不把 `mmdc` / Chromium 引入 backend runtime；不做自动 repair；不迁移新 visual type | stream failure 不调用 persistence、New Agents backend/frontend tests、fixture visual parse tests、`./scripts/test/test-local.sh new-agents` |
+| 2 | 视觉契约一致性收口 | 开发者改 manifest / renderer / prompt 时，dry-run 能一次发现 visualProtocol、visualContract、rendererOutputs、前端 parser 支持和 prompt 示例漂移 | `new_agents_workflow_dry_run.py`、workflow sync tests、PRD_REVIEW `rendererOutputs` 与 required visual 语义裁决、docs/TESTING 矩阵更新 | 不新增 visual 渲染组件；不改服务端持久化语义；不迁移 Mermaid 图 | dry-run 负例测试、workflow contract sync tests、frontend workflow/prompt tests |
+| 3 | 下一复杂视觉端到端迁移 | 用户在一个 workflow family 里生成复杂图时，不再依赖模型手写 Mermaid，预览和导出消费同一结构化 visual | 启动前重新 CGA，在 `flow-map` / `mindmap` / `sequence-flow` 中选择一个真实高风险场景；当前优先候选是 `STORY_BREAKDOWN` Epic flowchart -> `flow-map`，因为四个 Story 阶段共享 renderer 和同一用户故事拆解包 | 不一次性迁移所有 Mermaid 类型；不把无当前业务场景的 `distribution-chart` 强行实现；不新增 agent 专属 runtime/UI | 后端 renderer/runtime/contract tests、前端 parser/component/export tests、ArtifactPane 用户级导出测试、New Agents 总门禁 |
+
+当前建议顺序：
+
+1. 下一轮优先做 `服务端视觉成功门禁`。理由：timeline-map 已把一个复杂 structured visual 落地，下一步更值得把“服务端成功语义”补齐，避免继续出现前端能发现但服务端已持久化成功的假成功。
+2. 然后做 `视觉契约一致性收口`。理由：本轮已连续暴露测试 helper、dry-run、prompt smoke、ArtifactPane fixture 等同步漏点；这个切片能把“新增 visual type 时哪里必须同步”变成自动门禁。
+3. 最后再启动 `下一复杂视觉端到端迁移`。理由：在门禁和契约一致性先收紧后，再迁移 `flow-map` / `mindmap` 的风险更低；否则容易继续靠人工搜索追补漏点。
+
+暂不作为后续 P1 切片：
+
+- 更广泛的后端自动 ID 分配：当前无 P0/P1 失败证据，保留为 P2 平台能力研究。
+- `VALUE_DISCOVERY/JOURNEY` pain / opportunity 成对映射：只读审查归类为 P2，不进入结构化失败 P1 主线。
+- 一次性迁移所有复杂 visual type：范围过大，且会形成事实上的内部批次；必须按真实 workflow family / visual type 独立切片。
+- backend runtime 引入 `mmdc` / Chromium：运维成本和镜像复杂度高，除非后续明确选择 SVG 级渲染门禁。
+
 ## 每轮验收口径
 
 - 必须先写或更新失败测试，复现目标失败类别。
