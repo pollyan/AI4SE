@@ -1439,6 +1439,19 @@ class CasesArtifactData(StrictArtifactDataModel):
                 "case_statistics must match case_groups totals and P0/P1/P2 counts"
             )
 
+        unknown_automation_case_ids = sorted(
+            {
+                candidate.case_id
+                for candidate in self.automation_candidates
+                if candidate.case_id not in case_ids
+            }
+        )
+        if unknown_automation_case_ids:
+            raise ValueError(
+                "automation_candidates references unknown case ids: "
+                + ", ".join(unknown_automation_case_ids)
+            )
+
         unknown_references = sorted(
             {
                 case_id

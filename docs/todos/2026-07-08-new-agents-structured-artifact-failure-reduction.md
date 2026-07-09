@@ -126,6 +126,7 @@
   - 目标：后端生成稳定 ID，或在 renderer/normalizer 中确定性分配 ID；模型不再负责维护容易漂移的跨表引用。
   - 重点阶段：`IDEA_BRAINSTORM/DEFINE` 的 evidence 引用，`IDEA_BRAINSTORM/CONVERGE` 的 idea / rank / recommended idea 引用，`TEST_DESIGN/CASES` 的 requirement / risk / case 覆盖引用。
   - 进展：第 4 轮已完成 `IDEA_BRAINSTORM/DEFINE` 的 root problem / evidence / problem-user-fit ID 引用治理；第 5 轮首个纵切已完成 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial preview 的跨引用门禁，避免流式右侧产物预览已知错误章节；第 6 轮已完成 `TEST_DESIGN/CASES` 的 `automation_candidates.case_id` / `coverage_trace.covered_cases` case_id 引用门禁，以及 `TEST_DESIGN/STRATEGY` 的 `QG/R/TS/TP` 内部 ID 唯一性与引用门禁。更广泛的后端确定性 ID 分配仍未完成。
+  - 进展：已补齐 `TEST_DESIGN/CASES automation_candidates.case_id` 后端引用闭环。manifest 已声明自动化候选只能引用已存在 `case_id`，现在 validator 会拒绝未知 case id，与既有 `coverage_trace.covered_cases` 门禁一致。
 
 - [x] 建立 schema / prompt / contract 单源同步机制。（横切，第 3-8 轮）
   - 目标：Pydantic validators、structured output instruction、workflow manifest visual contract、frontend prompt 不再各写一套约束。
@@ -2684,6 +2685,45 @@ cd tools/new-agents/frontend && npm run test
 
 - 本轮只把已由 backend / manifest required 的 `story-map` 纳入前端共享矩阵 visual 协议，不新增非矩阵复杂图 schema。
 - `flow-map`、`timeline-map`、`mindmap`、`sequence-flow`、`distribution-chart` 等复杂视觉类型仍需后续独立切片；backend Mermaid JS parse 或 `mmdc` 渲染门禁也仍未补齐。
+
+### 2026-07-09 切片记录：TEST_DESIGN/CASES 自动化候选 case_id 引用闭环
+
+触发原因：
+
+- 只读审查发现 `workflow_manifest.json` 已声明 `automation_candidates.case_id` 只能引用已存在的 `case_id`，但 `CasesArtifactData` validator 只校验了 `coverage_trace.covered_cases`，没有校验自动化候选引用。
+- 这属于 manifest / 后端 validator 的 contract drift，会让模型输出引用不存在用例的自动化候选后仍被后端接受。
+- 本轮只补 `automation_candidates.case_id` 的后端引用门禁，不引入全局 ID 生成器，不改 CASES 数据结构，不处理 `CONVERGE` / `STRATEGY` 的更广泛 ID 归一化。
+
+已修复：
+
+- `CasesArtifactData.validate_case_consistency()` 增加 `automation_candidates.case_id` unknown reference 校验。
+- 新增负例测试，证明未知自动化候选 `case_id` 会触发 `ValidationError`，错误信息包含 `automation_candidates`。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py -q -k cases_artifact_data_rejects_unknown_automation_candidate_case_reference
+```
+
+结果：修复前 `1 failed, 127 deselected`，失败点为未知 `automation_candidates.case_id` 未触发 `ValidationError`；修复后 `1 passed, 127 deselected`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py -q -k cases_artifact_data
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_workflow_contract_sync.py -q -k cases
+```
+
+结果：分别通过 `5 passed, 123 deselected` 和 `10 passed, 236 deselected`。
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：通过。New Agents Frontend `828 passed`；New Agents Backend `831 passed, 4 deselected`。
+
+残余风险：
+
+- 本轮只补齐已写入 manifest 的 CASES 自动化候选引用门禁，不后端生成或重写 `case_id`。
+- 更广泛的 ID 收敛仍未完成，尤其是 `IDEA_BRAINSTORM/CONVERGE` 的 idea / rank / recommended idea 链路，以及 `TEST_DESIGN/STRATEGY` 的 `QG/R/TS/TP` 字符串引用归一化。
 
 ## 每轮验收口径
 

@@ -3602,6 +3602,14 @@ def test_cases_artifact_data_rejects_unknown_coverage_case_reference():
         CasesArtifactData.model_validate(invalid)
 
 
+def test_cases_artifact_data_rejects_unknown_automation_candidate_case_reference():
+    invalid = copy.deepcopy(VALID_CASES_ARTIFACT_DATA)
+    invalid["automation_candidates"][0]["case_id"] = "TC-404"
+
+    with pytest.raises(ValidationError, match="automation_candidates"):
+        CasesArtifactData.model_validate(invalid)
+
+
 def test_delivery_artifact_data_rejects_inconsistent_case_totals():
     invalid = {
         **VALID_DELIVERY_ARTIFACT_DATA,
