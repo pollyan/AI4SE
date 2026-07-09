@@ -4557,11 +4557,13 @@ def test_render_incident_timeline_artifact_data_is_deterministic_and_contract_va
     assert "## 2. 影响量化" in first.artifact_update.markdown
     assert "## 3. 事实来源" in first.artifact_update.markdown
     assert "## 4. 事件时间线" in first.artifact_update.markdown
-    assert "timeline\n    title 支付回调失败导致订单状态延迟 事件时间线" in (
-        first.artifact_update.markdown
-    )
-    assert "14：30 : 订单状态延迟告警触发" in first.artifact_update.markdown
-    assert "14:30 : 订单状态延迟告警触发" not in first.artifact_update.markdown
+    assert "```mermaid" not in first.artifact_update.markdown
+    assert '"type": "timeline-map"' in first.artifact_update.markdown
+    assert '"id": "TL-001"' in first.artifact_update.markdown
+    assert '"time": "14:30"' in first.artifact_update.markdown
+    assert '"factIds": [' in first.artifact_update.markdown
+    assert "14:30 | 订单状态延迟告警触发" in first.artifact_update.markdown
+    assert "14：30 : 订单状态延迟告警触发" not in first.artifact_update.markdown
     assert "## 5. 事实/推测隔离" in first.artifact_update.markdown
     assert "## 6. 事实摘要" in first.artifact_update.markdown
     assert "## 7. 参与人员" in first.artifact_update.markdown

@@ -6,6 +6,7 @@ import {
 } from '../structuredVisuals';
 import { WORKFLOWS } from '../workflows';
 import { ROOT_CAUSE_TEMPLATE } from '../prompts/incident_review/root_cause';
+import { TIMELINE_TEMPLATE } from '../prompts/incident_review/timeline';
 
 describe('parseStructuredVisual', () => {
     it('extracts fenced ai4se-visual blocks from markdown', () => {
@@ -154,6 +155,82 @@ describe('parseStructuredVisual', () => {
         expect(result.visual.rows[0].cells).toEqual(['关键项', '已识别', '来自阶段产出物']);
     });
 
+    it('parses timeline-map visual blocks as timeline events', () => {
+        const result = parseStructuredVisual(JSON.stringify({
+            type: 'timeline-map',
+            title: '事件时间线',
+            events: [
+                {
+                    id: 'TL-001',
+                    time: '14:30',
+                    title: '订单状态延迟告警触发',
+                    description: '阶段：发现与响应；关联事实：FACT-001',
+                    factIds: ['FACT-001'],
+                },
+            ],
+        }));
+
+        expect(result.valid).toBe(true);
+        if (result.valid === false) throw new Error(result.message);
+        expect(result.visual.kind).toBe('timeline');
+        if (result.visual.kind !== 'timeline') throw new Error('expected timeline visual');
+        expect(result.visual.type).toBe('timeline-map');
+        expect(result.visual.events[0]).toEqual({
+            id: 'TL-001',
+            time: '14:30',
+            title: '订单状态延迟告警触发',
+            description: '阶段：发现与响应；关联事实：FACT-001',
+            factIds: ['FACT-001'],
+        });
+    });
+
+    it('rejects timeline-map duplicate event ids', () => {
+        const result = parseStructuredVisual(JSON.stringify({
+            type: 'timeline-map',
+            events: [
+                {
+                    id: 'TL-001',
+                    time: '14:30',
+                    title: '告警触发',
+                    description: '阶段：发现',
+                    factIds: ['FACT-001'],
+                },
+                {
+                    id: 'TL-001',
+                    time: '14:35',
+                    title: '值班确认',
+                    description: '阶段：响应',
+                    factIds: ['FACT-002'],
+                },
+            ],
+        }));
+
+        expect(result).toEqual({
+            valid: false,
+            message: 'timeline-map 包含重复 event id：TL-001。',
+        });
+    });
+
+    it('rejects timeline-map events without factIds', () => {
+        const result = parseStructuredVisual(JSON.stringify({
+            type: 'timeline-map',
+            events: [
+                {
+                    id: 'TL-001',
+                    time: '14:30',
+                    title: '告警触发',
+                    description: '阶段：发现',
+                    factIds: [],
+                },
+            ],
+        }));
+
+        expect(result).toEqual({
+            valid: false,
+            message: 'timeline-map event 必须包含非空 factIds 字符串数组。',
+        });
+    });
+
     it('supports every structured visual type required by workflow manifests', () => {
         const requiredTypes = new Set<string>();
         Object.values(WORKFLOWS).forEach((workflow) => {
@@ -166,17 +243,34 @@ describe('parseStructuredVisual', () => {
 
         expect(requiredTypes).toContain('story-map');
         requiredTypes.forEach((type) => {
-            const sample = type === 'cause-map'
-                ? {
-                    type,
-                    nodes: [{ id: 'N-1', label: 'N-1', title: '节点' }],
-                    edges: [],
+            const sample = (() => {
+                if (type === 'cause-map') {
+                    return {
+                        type,
+                        nodes: [{ id: 'N-1', label: 'N-1', title: '节点' }],
+                        edges: [],
+                    };
                 }
-                : {
+                if (type === 'timeline-map') {
+                    return {
+                        type,
+                        events: [
+                            {
+                                id: 'TL-001',
+                                time: '14:30',
+                                title: '告警触发',
+                                description: '阶段：发现',
+                                factIds: ['FACT-001'],
+                            },
+                        ],
+                    };
+                }
+                return {
                     type,
                     columns: ['对象', '状态'],
                     rows: [{ 对象: '关键项', 状态: '已识别' }],
                 };
+            })();
             const result = parseStructuredVisual(JSON.stringify(sample));
 
             expect(result, `${type} should be supported by frontend structured visual parser`).toMatchObject({
@@ -246,6 +340,14 @@ describe('parseStructuredVisual', () => {
         expect(ROOT_CAUSE_TEMPLATE).toContain('"nodes"');
         expect(ROOT_CAUSE_TEMPLATE).toContain('"edges"');
         expect(ROOT_CAUSE_TEMPLATE).not.toContain('"columns": ["层级", "问题", "回答"');
+    });
+
+    it('keeps TIMELINE template on the timeline-map protocol', () => {
+        expect(TIMELINE_TEMPLATE).toContain('"type": "timeline-map"');
+        expect(TIMELINE_TEMPLATE).toContain('"events"');
+        expect(TIMELINE_TEMPLATE).toContain('"factIds"');
+        expect(TIMELINE_TEMPLATE).not.toContain('```mermaid');
+        expect(TIMELINE_TEMPLATE).not.toContain('timeline\n');
     });
 
     it('returns an invalid result for malformed JSON', () => {

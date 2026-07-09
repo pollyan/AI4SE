@@ -79,7 +79,8 @@ def test_artifact_data_structured_output_instruction_injects_visual_protocol():
     assert "完整 Markdown 文档、Markdown 表格、ai4se-visual JSON 代码块" in instruction
     assert "Mermaid 只允许由后端确定性渲染器生成" in instruction
     assert "复杂业务图优先使用 ai4se-visual JSON" in instruction
-    assert "flow-map、timeline-map、mindmap、sequence-flow、distribution-chart" in instruction
+    assert "timeline-map" in instruction
+    assert "后续复杂视觉类型包括 flow-map、mindmap、sequence-flow、distribution-chart" in instruction
 
 
 def _raw_json_chunks_after_artifact_data_members(
@@ -1439,10 +1440,12 @@ def test_parse_agent_turn_output_text_renders_incident_timeline_artifact_data():
     assert output.artifact_update.type == "replace"
     assert output.artifact_update.markdown is not None
     assert output.artifact_update.markdown.startswith("# 故障复盘报告")
-    assert "timeline\n    title 支付回调失败导致订单状态延迟 事件时间线" in (
-        output.artifact_update.markdown
-    )
-    assert "14：30 : 订单状态延迟告警触发" in output.artifact_update.markdown
+    assert "```ai4se-visual" in output.artifact_update.markdown
+    assert '"type": "timeline-map"' in output.artifact_update.markdown
+    assert '"time": "14:30"' in output.artifact_update.markdown
+    assert "14:30 | 订单状态延迟告警触发" in output.artifact_update.markdown
+    assert "```mermaid" not in output.artifact_update.markdown
+    assert "14：30 : 订单状态延迟告警触发" not in output.artifact_update.markdown
     assert output.stage_action is not None
     assert output.stage_action.target_stage_id == "ROOT_CAUSE"
 
@@ -1820,7 +1823,8 @@ def test_incident_timeline_structured_output_instruction_requests_artifact_data_
     )
     assert "timeline_events[].fact_ids 必须至少包含 1 个事实 ID" in instruction
     assert "fact_sources[].fact_id 必须唯一" in instruction
-    assert "Mermaid timeline" in instruction
+    assert "ai4se-visual timeline-map" in instruction
+    assert "Mermaid timeline" not in instruction
 
 
 def test_incident_root_cause_structured_output_instruction_requests_artifact_data_not_markdown():
@@ -3673,17 +3677,15 @@ def test_runtime_raw_json_stream_turn_renders_incident_timeline_artifact_data_be
     assert "## 2. 影响量化" in partial_markdowns[-1]
     assert "## 3. 事实来源" in partial_markdowns[-1]
     assert "## 4. 事件时间线" in partial_markdowns[-1]
-    assert "timeline\n    title 支付回调失败导致订单状态延迟 事件时间线" in (
-        partial_markdowns[-1]
-    )
+    assert "```mermaid" not in partial_markdowns[-1]
+    assert '"type": "timeline-map"' in partial_markdowns[-1]
 
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_update.markdown is not None
     assert outputs[-1].artifact_update.markdown.startswith("# 故障复盘报告")
-    assert "timeline\n    title 支付回调失败导致订单状态延迟 事件时间线" in (
-        outputs[-1].artifact_update.markdown
-    )
-    assert "14：30 : 订单状态延迟告警触发" in outputs[-1].artifact_update.markdown
+    assert "```mermaid" not in outputs[-1].artifact_update.markdown
+    assert '"type": "timeline-map"' in outputs[-1].artifact_update.markdown
+    assert "14:30 | 订单状态延迟告警触发" in outputs[-1].artifact_update.markdown
     assert outputs[-1].stage_action is not None
     assert outputs[-1].stage_action.target_stage_id == "ROOT_CAUSE"
     assert calls[0]["response_format"] == {"type": "json_object"}

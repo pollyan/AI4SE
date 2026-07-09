@@ -161,6 +161,34 @@ describe('StructuredVisual', () => {
         expect(screen.getByText('Why-1 -> Why-2')).toBeTruthy();
     });
 
+    it('renders timeline-map JSON as an event timeline instead of a table', () => {
+        render(
+            <StructuredVisual
+                source={JSON.stringify({
+                    type: 'timeline-map',
+                    title: '事件时间线',
+                    events: [
+                        {
+                            id: 'TL-001',
+                            time: '14:30',
+                            title: '订单状态延迟告警触发',
+                            description: '阶段：发现与响应；关联事实：FACT-001',
+                            factIds: ['FACT-001'],
+                        },
+                    ],
+                })}
+            />
+        );
+
+        expect(screen.queryByRole('table')).toBeNull();
+        expect(screen.getByRole('group', { name: '事件时间线' })).toBeTruthy();
+        expect(screen.getByText('ai4se-visual · timeline-map')).toBeTruthy();
+        expect(screen.getByText('14:30')).toBeTruthy();
+        expect(screen.getByText('订单状态延迟告警触发')).toBeTruthy();
+        expect(screen.getByText('阶段：发现与响应；关联事实：FACT-001')).toBeTruthy();
+        expect(screen.getByText('FACT-001')).toBeTruthy();
+    });
+
     it('renders an explicit error panel for invalid visual JSON', () => {
         render(<StructuredVisual source="{ broken" />);
 

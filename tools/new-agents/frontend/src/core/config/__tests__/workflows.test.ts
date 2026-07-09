@@ -247,9 +247,11 @@ describe('Workflow Configuration', () => {
         for (const visualType of requiredStructuredVisualTypes) {
             expect(protocol.structuredVisual.currentTypes).toContain(visualType);
         }
+        expect(protocol.structuredVisual.currentTypes).toContain('timeline-map');
         expect(protocol.structuredVisual.plannedComplexTypes).toEqual(
-            expect.arrayContaining(['flow-map', 'timeline-map', 'mindmap', 'sequence-flow', 'distribution-chart']),
+            expect.arrayContaining(['flow-map', 'mindmap', 'sequence-flow', 'distribution-chart']),
         );
+        expect(protocol.structuredVisual.plannedComplexTypes).not.toContain('timeline-map');
     });
 
     it('exposes manifest artifact data contract for TEST DESIGN STRATEGY', () => {
@@ -330,7 +332,7 @@ describe('Workflow Configuration', () => {
         );
         expect(timeline?.artifactDataContract?.forbiddenOutputs).toContain('Mermaid 代码块');
         expect(timeline?.artifactDataContract?.rendererOutputs).toContain('右侧故障复盘事件还原');
-        expect(timeline?.artifactDataContract?.rendererOutputs).toContain('Mermaid timeline');
+        expect(timeline?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual timeline-map');
     });
 
     it('exposes manifest artifact data contract for INCIDENT REVIEW IMPROVEMENT', () => {

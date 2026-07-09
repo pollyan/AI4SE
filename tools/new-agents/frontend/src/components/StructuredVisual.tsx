@@ -19,6 +19,7 @@ const DEFAULT_TITLES: Record<StructuredVisualType, string> = {
     'mvp-map': 'MVP 功能地图',
     'roadmap': '产品路线图',
     'story-map': '用户故事地图',
+    'timeline-map': '事件时间线',
 };
 
 export const StructuredVisual: React.FC<StructuredVisualProps> = ({
@@ -107,6 +108,59 @@ export const StructuredVisual: React.FC<StructuredVisualProps> = ({
                         </div>
                     )}
                 </div>
+            </div>
+        );
+    }
+
+    if (visual.kind === 'timeline') {
+        return (
+            <div
+                role="group"
+                aria-label={title}
+                className="my-6 overflow-hidden rounded-lg border border-[#1e293b] bg-[#0f172a] shadow-sm"
+            >
+                <div className="border-b border-[#1e293b] bg-[#111827] px-4 py-3">
+                    <h3 className="text-sm font-semibold text-slate-100">{title}</h3>
+                    <p className="mt-1 text-xs text-slate-500">ai4se-visual · {visual.type}</p>
+                </div>
+                <ol className="relative space-y-4 p-4">
+                    {visual.events.map((event, index) => (
+                        <li key={event.id} className="grid grid-cols-[5.5rem_1fr] gap-3">
+                            <div className="pt-1 text-right">
+                                <div className="font-mono text-sm font-semibold text-cyan-200">
+                                    {event.time}
+                                </div>
+                                <div className="mt-1 text-xs text-slate-500">{event.id}</div>
+                            </div>
+                            <div className="relative border-l border-[#334155] pb-1 pl-4">
+                                <span
+                                    aria-hidden="true"
+                                    className="absolute -left-[5px] top-2 h-2.5 w-2.5 rounded-full bg-cyan-300"
+                                />
+                                {index < visual.events.length - 1 && (
+                                    <span
+                                        aria-hidden="true"
+                                        className="absolute -left-px top-5 h-full border-l border-[#334155]"
+                                    />
+                                )}
+                                <div className="text-sm font-semibold text-slate-100">
+                                    {event.title}
+                                </div>
+                                <p className="mt-1 text-sm text-slate-300">{event.description}</p>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {event.factIds.map((factId) => (
+                                        <span
+                                            key={factId}
+                                            className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300"
+                                        >
+                                            {factId}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        </li>
+                    ))}
+                </ol>
             </div>
         );
     }

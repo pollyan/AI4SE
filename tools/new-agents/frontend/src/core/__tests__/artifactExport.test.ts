@@ -90,4 +90,32 @@ describe('artifactExport', () => {
         expect(pdf).toContain(toUtf16BeHex('Why-1 -> Why-2：继续追问'));
         expect(pdf).not.toContain(toUtf16BeHex('"nodes"'));
     });
+
+    it('projects timeline-map visuals into readable PDF text', () => {
+        const pdf = buildPlainTextPdf([
+            '# 事件时间线',
+            '',
+            '```ai4se-visual',
+            JSON.stringify({
+                type: 'timeline-map',
+                title: '支付故障事件时间线',
+                events: [
+                    {
+                        id: 'TL-001',
+                        time: '14:30',
+                        title: '订单状态延迟告警触发',
+                        description: '阶段：发现与响应；关联事实：FACT-001',
+                        factIds: ['FACT-001'],
+                    },
+                ],
+            }, null, 2),
+            '```',
+        ].join('\n'));
+
+        expect(pdf).toContain(toUtf16BeHex('结构化可视化：支付故障事件时间线'));
+        expect(pdf).toContain(toUtf16BeHex('14:30  订单状态延迟告警触发'));
+        expect(pdf).toContain(toUtf16BeHex('阶段：发现与响应；关联事实：FACT-001'));
+        expect(pdf).toContain(toUtf16BeHex('关联事实：FACT-001'));
+        expect(pdf).not.toContain(toUtf16BeHex('"events"'));
+    });
 });

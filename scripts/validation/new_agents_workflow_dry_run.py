@@ -264,6 +264,13 @@ def build_workflow_dry_run_report(
                         "prompt/template must include ai4se-visual nodes and edges",
                         stage_key,
                     )
+            elif visual_type == "timeline-map":
+                if '"events"' not in prompt_text or '"factIds"' not in prompt_text:
+                    add_issue(
+                        "STRUCTURED_VISUAL_TIMELINE_SHAPE_MISSING",
+                        "prompt/template must include ai4se-visual events and factIds",
+                        stage_key,
+                    )
             elif '"columns"' not in prompt_text or '"rows"' not in prompt_text:
                 add_issue(
                     "STRUCTURED_VISUAL_TABLE_SHAPE_MISSING",

@@ -195,6 +195,38 @@ describe('docxExport', () => {
         expect(documentXml).not.toContain('```ai4se-visual');
     });
 
+    it('projects timeline-map visuals into readable DOCX content', async () => {
+        const blob = buildDocxPackage([
+            '# 事件时间线',
+            '',
+            '```ai4se-visual',
+            JSON.stringify({
+                type: 'timeline-map',
+                title: '支付故障事件时间线',
+                events: [
+                    {
+                        id: 'TL-001',
+                        time: '14:30',
+                        title: '订单状态延迟告警触发',
+                        description: '阶段：发现与响应；关联事实：FACT-001',
+                        factIds: ['FACT-001'],
+                    },
+                ],
+            }, null, 2),
+            '```',
+        ].join('\n'));
+
+        const entries = await readStoredZipEntries(blob);
+        const documentXml = entries['word/document.xml'];
+
+        expect(documentXml).toContain('结构化可视化：支付故障事件时间线');
+        expect(documentXml).toContain('14:30  订单状态延迟告警触发');
+        expect(documentXml).toContain('阶段：发现与响应；关联事实：FACT-001');
+        expect(documentXml).toContain('关联事实：FACT-001');
+        expect(documentXml).not.toContain('&quot;events&quot;');
+        expect(documentXml).not.toContain('```ai4se-visual');
+    });
+
     it('embeds supported Mermaid flowcharts as SVG media in DOCX packages', async () => {
         const blob = buildDocxPackage([
             '# 系统边界图',

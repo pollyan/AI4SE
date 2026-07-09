@@ -1,4 +1,8 @@
-import { parseStructuredVisual, type NodeEdgeStructuredVisual } from './structuredVisuals';
+import {
+    parseStructuredVisual,
+    type NodeEdgeStructuredVisual,
+    type TimelineStructuredVisual,
+} from './structuredVisuals';
 
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -117,6 +121,16 @@ const nodeEdgeVisualParagraphs = (visual: NodeEdgeStructuredVisual): string[] =>
             lines.push(`${edge.source} -> ${edge.target}${edge.label ? `：${edge.label}` : ''}`);
         });
     }
+    return lines.map(line => paragraph(line));
+};
+
+const timelineVisualParagraphs = (visual: TimelineStructuredVisual): string[] => {
+    const lines: string[] = [`结构化可视化：${visual.title || visual.type}`];
+    visual.events.forEach((event) => {
+        lines.push(`${event.time}  ${event.title}`);
+        lines.push(event.description);
+        lines.push(`关联事实：${event.factIds.join('、')}`);
+    });
     return lines.map(line => paragraph(line));
 };
 
@@ -740,6 +754,9 @@ const projectStructuredVisualToWordParagraphs = (source: string): string[] => {
     const { visual } = result;
     if (visual.kind === 'node-edge') {
         return nodeEdgeVisualParagraphs(visual);
+    }
+    if (visual.kind === 'timeline') {
+        return timelineVisualParagraphs(visual);
     }
 
     return [

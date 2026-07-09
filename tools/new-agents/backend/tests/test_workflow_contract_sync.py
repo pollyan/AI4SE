@@ -135,13 +135,14 @@ def test_shared_visual_protocol_declares_layering_policy():
     assert protocol["structuredVisual"]["source"] == "backend_deterministic_renderer"
     assert protocol["structuredVisual"]["primaryForComplexBusinessVisuals"] is True
     assert set(protocol["structuredVisual"]["currentTypes"]) >= required_structured_visual_types
+    assert "timeline-map" in protocol["structuredVisual"]["currentTypes"]
     assert set(protocol["structuredVisual"]["plannedComplexTypes"]) >= {
         "flow-map",
-        "timeline-map",
         "mindmap",
         "sequence-flow",
         "distribution-chart",
     }
+    assert "timeline-map" not in protocol["structuredVisual"]["plannedComplexTypes"]
 
     instruction = format_visual_protocol_instruction()
     assert "视觉产物协议" in instruction
@@ -513,7 +514,11 @@ def test_incident_timeline_artifact_data_contract_manifest_drives_backend_instru
     ) in instruction
     assert "Mermaid 代码块" in instruction
     assert "右侧故障复盘事件还原" in instruction
-    assert "Mermaid timeline" in instruction
+    assert "ai4se-visual timeline-map" in instruction
+    assert "Mermaid timeline" not in instruction
+    assert stage["visualContract"] == {
+        "requiredStructuredVisuals": ["timeline-map"],
+    }
 
 
 def test_incident_improvement_artifact_data_contract_manifest_drives_backend_instruction():
@@ -1015,6 +1020,11 @@ def test_frontend_templates_include_required_structured_visual_contract_examples
                 assert '"nodes"' in template
                 assert '"edges"' in template
                 assert '"columns": ["层级", "问题", "回答"' not in template
+            elif visual_type == "timeline-map":
+                assert '"events"' in template
+                assert '"factIds"' in template
+                assert '"columns"' not in template
+                assert '"rows"' not in template
             else:
                 assert '"columns"' in template
                 assert '"rows"' in template

@@ -1,3 +1,5 @@
+import { FENCE } from '../../utils/constants';
+
 export const TIMELINE_PROMPT = `阅读用户提供的故障信息，通过渐进式提问引导用户完整还原故障事件全貌，在右侧生成《故障复盘报告》的事件还原部分。
 
 【阶段门禁（Must-Have）】：
@@ -37,8 +39,7 @@ export const TIMELINE_PROMPT = `阅读用户提供的故障信息，通过渐进
 
 【重要警告】
 - 产出物中绝对不要包含“下一步计划”或类似章节。
-- 时间线必须使用 Mermaid timeline 图表呈现。
-- 【重点防错】：在 Mermaid timeline 图中，时间点（如 14:30）绝对不能包含半角冒号（:），请使用全角冒号（：）、汉字（14点30分）或连字符（14-30），否则会导致图表渲染崩溃！
+- 时间线必须包含 ai4se-visual timeline-map，用于稳定展示事件时间、标题、说明和关联事实。
 - 所有内容必须基于用户陈述的事实，不做推测或暗示原因。
 - 必须区分事实、推测和待确认信息；推测不得进入事实摘要。
 - 影响量化必须标注可信度；没有数据时写“待补充”，并说明是否阻断进入根因分析。
@@ -76,20 +77,21 @@ export const TIMELINE_TEMPLATE = `# 故障复盘报告
 
 ## 4. 事件时间线
 
-\`\`\`mermaid
-timeline
-    title 故障名称 事件时间线
-    section 故障发生
-        时间点 : 事件描述
-    section 发现与响应
-        时间点 : 事件描述
-        时间点 : 事件描述
-    section 处理与恢复
-        时间点 : 事件描述
-        时间点 : 事件描述
-    section 恢复确认
-        时间点 : 事件描述
-\`\`\`
+${FENCE}ai4se-visual
+{
+  "type": "timeline-map",
+  "title": "故障名称 事件时间线",
+  "events": [
+    {
+      "id": "TL-001",
+      "time": "YYYY-MM-DD HH:MM",
+      "title": "事件描述",
+      "description": "阶段：发现与响应；关联事实：FACT-001",
+      "factIds": ["FACT-001"]
+    }
+  ]
+}
+${FENCE}
 
 ## 5. 事实/推测隔离
 

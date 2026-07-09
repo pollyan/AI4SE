@@ -9,7 +9,8 @@ export type StructuredVisualType =
     | 'cause-map'
     | 'mvp-map'
     | 'roadmap'
-    | 'story-map';
+    | 'story-map'
+    | 'timeline-map';
 
 const SUPPORTED_VISUAL_TYPES: StructuredVisualType[] = [
     'traceability-matrix',
@@ -23,6 +24,7 @@ const SUPPORTED_VISUAL_TYPES: StructuredVisualType[] = [
     'mvp-map',
     'roadmap',
     'story-map',
+    'timeline-map',
 ];
 
 export interface MatrixStructuredVisual {
@@ -60,7 +62,25 @@ export interface NodeEdgeStructuredVisual {
     edges: NodeEdgeStructuredVisualEdge[];
 }
 
-export type StructuredVisual = MatrixStructuredVisual | NodeEdgeStructuredVisual;
+export interface TimelineStructuredVisualEvent {
+    id: string;
+    time: string;
+    title: string;
+    description: string;
+    factIds: string[];
+}
+
+export interface TimelineStructuredVisual {
+    kind: 'timeline';
+    type: Extract<StructuredVisualType, 'timeline-map'>;
+    title?: string;
+    events: TimelineStructuredVisualEvent[];
+}
+
+export type StructuredVisual =
+    | MatrixStructuredVisual
+    | NodeEdgeStructuredVisual
+    | TimelineStructuredVisual;
 
 export type StructuredVisualResult =
     | {
@@ -205,6 +225,67 @@ function parseNodeEdgeVisual(
     };
 }
 
+function parseTimelineVisual(
+    parsed: Record<string, unknown>,
+    visualType: Extract<StructuredVisualType, 'timeline-map'>,
+    title: string | undefined
+): StructuredVisualResult {
+    if (!Array.isArray(parsed.events) || !parsed.events.every(isRecord) || !parsed.events.length) {
+        return {
+            valid: false,
+            message: `${visualType} 必须包含非空 events 事件数组。`,
+        };
+    }
+
+    const eventIds = new Set<string>();
+    const events: TimelineStructuredVisualEvent[] = [];
+    for (const event of parsed.events) {
+        const id = requiredNonEmptyString(event.id);
+        const time = requiredNonEmptyString(event.time);
+        const eventTitle = requiredNonEmptyString(event.title);
+        const description = requiredNonEmptyString(event.description);
+        if (!id || !time || !eventTitle || !description) {
+            return {
+                valid: false,
+                message: `${visualType} event 必须包含非空 id、time、title 和 description。`,
+            };
+        }
+        if (eventIds.has(id)) {
+            return {
+                valid: false,
+                message: `${visualType} 包含重复 event id：${id}。`,
+            };
+        }
+        eventIds.add(id);
+
+        const factIds = asNonEmptyStringArray(event.factIds);
+        if (!factIds) {
+            return {
+                valid: false,
+                message: `${visualType} event 必须包含非空 factIds 字符串数组。`,
+            };
+        }
+
+        events.push({
+            id,
+            time,
+            title: eventTitle,
+            description,
+            factIds,
+        });
+    }
+
+    return {
+        valid: true,
+        visual: {
+            kind: 'timeline',
+            type: visualType,
+            title,
+            events,
+        },
+    };
+}
+
 export function parseStructuredVisual(source: string): StructuredVisualResult {
     let parsed: unknown;
 
@@ -241,6 +322,9 @@ export function parseStructuredVisual(source: string): StructuredVisualResult {
 
     if (visualType === 'cause-map') {
         return parseNodeEdgeVisual(parsed, visualType, title);
+    }
+    if (visualType === 'timeline-map') {
+        return parseTimelineVisual(parsed, visualType, title);
     }
 
     const columns = asNonEmptyStringArray(parsed.columns);

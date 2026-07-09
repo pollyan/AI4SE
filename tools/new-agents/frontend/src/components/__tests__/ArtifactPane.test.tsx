@@ -1089,12 +1089,12 @@ describe('ArtifactPane Component', () => {
         expect(click).toHaveBeenCalledTimes(1);
     });
 
-    it('draws Mermaid timelines as vector timeline shapes in exported PDF content streams', async () => {
+    it('exports incident timeline-map visuals as readable PDF content', async () => {
         const createdAnchors: HTMLAnchorElement[] = [];
         const click = vi.fn();
         const createObjectURL = vi
             .spyOn(URL, 'createObjectURL')
-            .mockReturnValue('blob:artifact-mermaid-timeline-pdf');
+            .mockReturnValue('blob:artifact-timeline-map-pdf');
         vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
         vi.spyOn(document, 'createElement').mockImplementation((tagName, options) => {
             const element = originalCreateElement(tagName, options);
@@ -1112,14 +1112,27 @@ describe('ArtifactPane Component', () => {
             artifactContent: [
                 '# 事件还原',
                 '',
-                '```mermaid',
-                'timeline',
-                '    title 登录事故时间线',
-                '    section 发现',
-                '      09点10分 : 监控触发告警',
-                '      09点18分 : 值班确认影响范围',
-                '    section 恢复',
-                '      09点42分 : 回滚异常发布',
+                '```ai4se-visual',
+                JSON.stringify({
+                    type: 'timeline-map',
+                    title: '登录事故时间线',
+                    events: [
+                        {
+                            id: 'TL-001',
+                            time: '09:10',
+                            title: '监控触发告警',
+                            description: '阶段：发现；关联事实：FACT-001',
+                            factIds: ['FACT-001'],
+                        },
+                        {
+                            id: 'TL-002',
+                            time: '09:42',
+                            title: '回滚异常发布',
+                            description: '阶段：恢复；关联事实：FACT-002',
+                            factIds: ['FACT-002'],
+                        },
+                    ],
+                }, null, 2),
                 '```',
             ].join('\n'),
         });
@@ -1129,18 +1142,13 @@ describe('ArtifactPane Component', () => {
 
         const blob = createObjectURL.mock.calls[0][0] as Blob;
         const content = await blob.text();
-        const rectangleCount = content.match(/ re S/g)?.length ?? 0;
         expect(createdAnchors[0].download).toBe('incident_review_artifact.pdf');
-        expect(content).toContain(toUtf16BeHex('Mermaid 图表：timeline'));
-        expect(content).toContain(toUtf16BeHex('登录事故时间线'));
-        expect(content).toContain(toUtf16BeHex('发现'));
-        expect(content).toContain(toUtf16BeHex('09点10分：监控触发告警'));
-        expect(content).not.toContain(toUtf16BeHex('section 发现'));
-        expect(content).not.toContain(toUtf16BeHex('title 登录事故时间线'));
-        expect(content).toContain('0.18 0.55 0.95 RG');
-        expect(rectangleCount).toBeGreaterThanOrEqual(3);
-        expect(content).toContain(' m ');
-        expect(content).toContain(' l S');
+        expect(content).toContain(toUtf16BeHex('结构化可视化：登录事故时间线'));
+        expect(content).toContain(toUtf16BeHex('09:10  监控触发告警'));
+        expect(content).toContain(toUtf16BeHex('阶段：发现；关联事实：FACT-001'));
+        expect(content).toContain(toUtf16BeHex('关联事实：FACT-002'));
+        expect(content).not.toContain(toUtf16BeHex('"events"'));
+        expect(content).not.toContain(toUtf16BeHex('Mermaid 图表：timeline'));
         expect(click).toHaveBeenCalledTimes(1);
     });
 

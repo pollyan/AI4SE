@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import mermaid from 'mermaid';
 import { WORKFLOWS } from '../workflows';
+import { parseStructuredVisual } from '../structuredVisuals';
 
 describe('Mermaid Syntax Validation for workflow prompt examples', () => {
 
@@ -26,19 +27,17 @@ describe('Mermaid Syntax Validation for workflow prompt examples', () => {
         expect(templatesWithLiteralFence).toEqual([]);
     });
 
-    it('should successfully parse the timeline mermaid syntax from timeline prompt', async () => {
+    it('uses timeline-map instead of Mermaid timeline in the timeline prompt', () => {
         const promptText = WORKFLOWS.INCIDENT_REVIEW.stages.find(s => s.id === 'TIMELINE')?.template || '';
-        const match = promptText.match(/```mermaid\n([\s\S]*?)```/);
+        expect(promptText).not.toContain('```mermaid');
+        expect(promptText).not.toContain('\ntimeline\n');
+
+        const match = promptText.match(/```ai4se-visual\n([\s\S]*?)```/);
         expect(match).toBeTruthy();
-
-        // Remove standard prompt placeholders that invalidates real mermaid syntax
-        const rawCode = match![1]
-            .replace(/\[故障名称\]/g, '数据库宕机事故')
-            .replace(/HH:MM : \[事件描述\]/g, '2023-01-01 : 系统挂了')
-            .replace(/\[事件描述\]/g, '系统挂了');
-
-        const isValid = await validateMermaid(rawCode);
-        expect(isValid).toBe(true);
+        const result = parseStructuredVisual(match![1]);
+        expect(result.valid).toBe(true);
+        if (result.valid === false) throw new Error(result.message);
+        expect(result.visual.kind).toBe('timeline');
     });
 
     it('should successfully parse the mindmap mermaid syntax from root_cause prompt', async () => {

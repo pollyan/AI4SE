@@ -36,7 +36,7 @@ export const IMPROVEMENT_PROMPT = `基于根因分析阶段的结论，引导用
 
 【重要警告】
 - 必须包含前面所有阶段的完整内容，绝不能省略或用“参见上文”替代。
-- 所有 Mermaid 图表（timeline 时间线、mindmap 鱼骨图、pie 饼图）都必须保留。
+- 上游 ai4se-visual timeline-map、根因阶段 Mermaid mindmap 和本阶段 pie 饼图都必须保留。
 - 改进行动必须同时输出 Markdown 表格和 ai4se-visual action-board，用于稳定展示 SMART 行动、负责人、期限、状态和验证方式。
 - 改进措施必须具体到可执行，拒绝出现“加强XX意识”。每项措施必须回答“做什么、谁来做、什么时候完成、如何验证、当前状态、如何追踪”。
 - 改进措施必须与根因分析中识别的原因一一对应。
@@ -61,7 +61,7 @@ export const IMPROVEMENT_TEMPLATE = `# 故障复盘报告
 
 ## 第一部分：事件还原
 
-[此处完整引用事件还原阶段的产出物内容，包含事件概要表格、Mermaid timeline 时间线图、事实摘要、参与人员表]
+[此处完整引用事件还原阶段的产出物内容，包含事件概要表格、ai4se-visual timeline-map、事实摘要、参与人员表]
 
 ---
 

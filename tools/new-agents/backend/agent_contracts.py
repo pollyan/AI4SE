@@ -433,7 +433,6 @@ REQUIRED_ARTIFACT_MERMAID_DIAGRAMS: dict[tuple[str, str], list[str]] = {
     ("TEST_DESIGN", "STRATEGY"): ["quadrantChart", "block-beta"],
     ("REQ_REVIEW", "REVIEW"): ["flowchart"],
     ("REQ_REVIEW", "REPORT"): ["pie"],
-    ("INCIDENT_REVIEW", "TIMELINE"): ["timeline"],
     ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["mindmap"],
     ("INCIDENT_REVIEW", "IMPROVEMENT"): ["pie"],
     ("IDEA_BRAINSTORM", "DEFINE"): ["mindmap"],
@@ -454,6 +453,7 @@ REQUIRED_ARTIFACT_STRUCTURED_VISUALS: dict[tuple[str, str], list[str]] = {
     ("VALUE_DISCOVERY", "ELEVATOR"): ["score-matrix"],
     ("VALUE_DISCOVERY", "JOURNEY"): ["journey-map"],
     ("REQ_REVIEW", "REPORT"): ["priority-board"],
+    ("INCIDENT_REVIEW", "TIMELINE"): ["timeline-map"],
     ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["cause-map"],
     ("IDEA_BRAINSTORM", "CONCEPT"): ["mvp-map"],
     ("VALUE_DISCOVERY", "BLUEPRINT"): ["roadmap"],
@@ -535,6 +535,14 @@ STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {
         '"label": "继续追问"}]}。nodes 必须是非空对象数组，id 唯一，'
         "每个节点必须包含非空 id、label 和 title；edges 必须是对象数组，"
         "source/target 必须引用已存在的 node id。禁止使用 columns/rows 矩阵旧结构。"
+    ),
+    "timeline-map": (
+        'timeline-map 必须严格使用如下 JSON 结构：{"type": '
+        '"timeline-map", "title": "可选标题", "events": [{"id": '
+        '"TL-001", "time": "14:30", "title": "告警触发", '
+        '"description": "订单状态延迟告警触发", "factIds": ["F-001"]}]}。'
+        "events 必须是非空对象数组，id 唯一；每个事件必须包含非空 "
+        "id、time、title、description；factIds 必须是非空字符串数组。"
     ),
     "mvp-map": (
         'mvp-map 必须严格使用如下 JSON 结构：{"type": '
@@ -807,6 +815,12 @@ def validate_artifact_template(
                     "nodes 必须是非空对象数组且 id 唯一，"
                     "edges.source/target 必须引用已存在的 node id。"
                 )
+            if invalid_type == "timeline-map":
+                raise ContractValidationError(
+                    "timeline-map 必须使用 events 结构；"
+                    "events 必须是非空对象数组且 id 唯一，"
+                    "每个 event 必须包含非空 time、title、description 和 factIds。"
+                )
             raise ContractValidationError(
                 f"{invalid_type} 必须使用 columns 和 rows 结构；"
                 "columns 必须是非空字符串数组，rows 必须是对象数组。"
@@ -972,6 +986,8 @@ def is_valid_structured_visual_block(
         return False
     if visual_type == "cause-map":
         return is_valid_cause_map_visual_block(block)
+    if visual_type == "timeline-map":
+        return is_valid_timeline_map_visual_block(block)
     columns = block.get("columns")
     rows = block.get("rows")
     return (
@@ -1022,6 +1038,36 @@ def is_valid_cause_map_visual_block(block: dict[str, Any]) -> bool:
             and source in node_ids
             and target in node_ids
         ):
+            return False
+
+    return True
+
+
+def is_valid_timeline_map_visual_block(block: dict[str, Any]) -> bool:
+    events = block.get("events")
+    if not isinstance(events, list) or not events or not all(
+        isinstance(event, dict) for event in events
+    ):
+        return False
+
+    event_ids: set[str] = set()
+    for event in events:
+        event_id = event.get("id")
+        if not (isinstance(event_id, str) and event_id.strip()):
+            return False
+        if event_id in event_ids:
+            return False
+        event_ids.add(event_id)
+
+        for field in ("time", "title", "description"):
+            value = event.get(field)
+            if not isinstance(value, str) or not value.strip():
+                return False
+
+        fact_ids = event.get("factIds")
+        if not isinstance(fact_ids, list) or not fact_ids:
+            return False
+        if not all(isinstance(fact_id, str) and fact_id.strip() for fact_id in fact_ids):
             return False
 
     return True

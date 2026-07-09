@@ -1,35 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import mermaid from 'mermaid';
 import { WORKFLOWS } from '../../workflows';
+import { parseStructuredVisual } from '../../structuredVisuals';
 
 describe('Mermaid Syntax Validation for INCIDENT_REVIEW Workflow', () => {
-   it('should successfully parse the timeline mermaid syntax from timeline prompt', async () => {
-      // Initialize mermaid in non-browser env (jsdom is enough, but tell him not to start render loop on load)
-      mermaid.initialize({ startOnLoad: false });
-
-      // Extract the raw mermaid block from prompt
+   it('should use timeline-map in the timeline prompt instead of Mermaid timeline', () => {
       const promptText = WORKFLOWS.INCIDENT_REVIEW.stages.find(s => s.id === 'TIMELINE')?.template || '';
+      const match = promptText.match(/```ai4se-visual\n([\s\S]*?)```/);
 
-      // We know it looks like:
-      // \`\`\`mermaid
-      // timeline
-      //     title [故障名称] 事件时间线
-      // ...
-      // \`\`\`
-
-      const match = promptText.match(/```mermaid\n([\s\S]*?)```/);
       expect(match).toBeTruthy();
-
-      const graphDefinition = match![1];
-      expect(graphDefinition).toContain('timeline');
-
-      // Let mermaid parse it
-      try {
-         const isValid = await mermaid.parse(graphDefinition);
-         expect(isValid).toBeDefined(); // Actually parse function throws error on invalid or returns void
-      } catch (e) {
-         throw new Error(`Mermaid timeline syntax error: ${e}`);
-      }
+      expect(promptText).not.toContain('```mermaid');
+      expect(promptText).not.toContain('\ntimeline\n');
+      const result = parseStructuredVisual(match![1]);
+      expect(result.valid).toBe(true);
+      if (result.valid === false) throw new Error(result.message);
+      expect(result.visual.kind).toBe('timeline');
    });
 
    it('should successfully parse the mindmap mermaid syntax from root_cause prompt', async () => {

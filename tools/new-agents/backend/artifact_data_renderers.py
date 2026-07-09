@@ -4287,21 +4287,6 @@ def _render_incident_timeline(
     summary: IncidentSummary,
     events: list[IncidentTimelineEvent],
 ) -> str:
-    lines = [
-        "```mermaid",
-        "timeline",
-        f"    title {_escape_mermaid_timeline_text(summary.incident_name)} 事件时间线",
-    ]
-    current_section = None
-    for item in events:
-        if item.section != current_section:
-            current_section = item.section
-            lines.append(f"    section {_escape_mermaid_timeline_text(item.section)}")
-        lines.append(
-            f"        {_escape_mermaid_time(item.occurred_at)} : "
-            f"{_escape_mermaid_timeline_text(item.event)}"
-        )
-    lines.append("```")
     rows = [
         (
             item.section,
@@ -4313,10 +4298,31 @@ def _render_incident_timeline(
     ]
     return (
         "## 4. 事件时间线\n"
-        + "\n".join(lines)
+        + _render_timeline_map_visual(summary, events)
         + "\n\n"
         + _markdown_table(["阶段", "时间点", "事件描述", "关联事实"], rows)
     )
+
+
+def _render_timeline_map_visual(
+    summary: IncidentSummary,
+    events: list[IncidentTimelineEvent],
+) -> str:
+    visual = {
+        "type": "timeline-map",
+        "title": f"{summary.incident_name} 事件时间线",
+        "events": [
+            {
+                "id": f"TL-{index:03d}",
+                "time": item.occurred_at,
+                "title": item.event,
+                "description": f"阶段：{item.section}；关联事实：{', '.join(item.fact_ids)}",
+                "factIds": item.fact_ids,
+            }
+            for index, item in enumerate(events, start=1)
+        ],
+    }
+    return "```ai4se-visual\n" + json.dumps(visual, ensure_ascii=False, indent=2) + "\n```"
 
 
 def _render_incident_fact_separation(

@@ -55,6 +55,20 @@ def _minimal_structured_visual_block(visual_type: str) -> str:
             "}\n"
             "```\n"
         )
+    if visual_type == "timeline-map":
+        return (
+            "```ai4se-visual\n"
+            "{\n"
+            '  "type": "timeline-map",\n'
+            '  "title": "事件时间线",\n'
+            '  "events": [\n'
+            '    {"id": "TL-001", "time": "14:30", '
+            '"title": "告警触发", "description": "阶段：发现；关联事实：FACT-001", '
+            '"factIds": ["FACT-001"]}\n'
+            "  ]\n"
+            "}\n"
+            "```\n"
+        )
     return (
         "```ai4se-visual\n"
         "{\n"
@@ -1179,8 +1193,9 @@ def test_incident_review_contracts_include_professional_artifact_fields():
         "状态",
     ]:
         assert field in timeline_fields
-    assert REQUIRED_ARTIFACT_MERMAID_DIAGRAMS[("INCIDENT_REVIEW", "TIMELINE")] == [
-        "timeline"
+    assert ("INCIDENT_REVIEW", "TIMELINE") not in REQUIRED_ARTIFACT_MERMAID_DIAGRAMS
+    assert REQUIRED_ARTIFACT_STRUCTURED_VISUALS[("INCIDENT_REVIEW", "TIMELINE")] == [
+        "timeline-map"
     ]
 
     for field in [

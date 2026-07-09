@@ -83,7 +83,6 @@
         "quadrantChart",
         "block-beta",
         "pie",
-        "timeline",
         "mindmap",
         "journey"
       ]
@@ -102,11 +101,11 @@
         "roadmap",
         "score-matrix",
         "story-map",
+        "timeline-map",
         "traceability-matrix"
       ],
       "plannedComplexTypes": [
         "flow-map",
-        "timeline-map",
         "mindmap",
         "sequence-flow",
         "distribution-chart"
@@ -600,8 +599,8 @@
             ]
           },
           "visualContract": {
-            "requiredMermaidDiagrams": [
-              "timeline"
+            "requiredStructuredVisuals": [
+              "timeline-map"
             ]
           },
           "artifactDataContract": {
@@ -619,7 +618,7 @@
             ],
             "rendererOutputs": [
               "右侧故障复盘事件还原",
-              "Mermaid timeline"
+              "ai4se-visual timeline-map"
             ]
           },
           "promptTemplateVersion": "2026.06.24.1",

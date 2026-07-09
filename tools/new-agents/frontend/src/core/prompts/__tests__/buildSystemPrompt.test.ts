@@ -275,7 +275,8 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('完整 Markdown 文档、Markdown 表格、ai4se-visual JSON 代码块');
         expect(prompt).toContain('图表只允许由后端确定性渲染器生成');
         expect(prompt).toContain('复杂业务图优先使用 ai4se-visual JSON');
-        expect(prompt).toContain('flow-map、timeline-map、mindmap、sequence-flow、distribution-chart');
+        expect(prompt).toContain('timeline-map');
+        expect(prompt).toContain('后续复杂视觉类型：flow-map、mindmap、sequence-flow、distribution-chart');
         expect(prompt).not.toContain('Mermaid');
     });
 
@@ -417,7 +418,8 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('timeline_events[].fact_ids 只能引用 fact_sources[].fact_id 中已定义的事实 ID');
         expect(prompt).toContain('图表 代码块');
         expect(prompt).toContain('右侧故障复盘事件还原');
-        expect(prompt).toContain('图表 timeline');
+        expect(prompt).toContain('ai4se-visual timeline-map');
+        expect(prompt).not.toContain('图表 timeline');
         expect(prompt).not.toContain('Mermaid 代码块');
         const factIdRuleMatches = prompt.match(new RegExp(factIdRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
         expect(factIdRuleMatches).toHaveLength(1);

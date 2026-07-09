@@ -1,4 +1,8 @@
-import { parseStructuredVisual, type NodeEdgeStructuredVisual } from './structuredVisuals';
+import {
+    parseStructuredVisual,
+    type NodeEdgeStructuredVisual,
+    type TimelineStructuredVisual,
+} from './structuredVisuals';
 
 const PDF_LINES_PER_PAGE = 42;
 
@@ -97,6 +101,16 @@ function formatPdfNodeEdgeVisualLines(visual: NodeEdgeStructuredVisual): string[
     }
     visual.edges.forEach((edge) => {
         lines.push(`${edge.source} -> ${edge.target}${edge.label ? `：${edge.label}` : ''}`);
+    });
+    return lines;
+}
+
+function formatPdfTimelineVisualLines(visual: TimelineStructuredVisual): string[] {
+    const lines: string[] = [`结构化可视化：${visual.title || visual.type}`];
+    visual.events.forEach((event) => {
+        lines.push(`${event.time}  ${event.title}`);
+        lines.push(event.description);
+        lines.push(`关联事实：${event.factIds.join('、')}`);
     });
     return lines;
 }
@@ -326,6 +340,10 @@ function projectMarkdownToPdfDocument(content: string): PdfProjectedDocument {
                 const startLineIndex = pdfLines.length;
                 if (visual.kind === 'node-edge') {
                     pdfLines.push(...formatPdfNodeEdgeVisualLines(visual));
+                    continue;
+                }
+                if (visual.kind === 'timeline') {
+                    pdfLines.push(...formatPdfTimelineVisualLines(visual));
                     continue;
                 }
                 const rows = visual.rows.map(row => row.cells);

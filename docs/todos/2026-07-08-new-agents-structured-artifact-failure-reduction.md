@@ -78,7 +78,7 @@
 视觉产物治理主张：
 
 - 复杂图优先结构化。`flow-map`、`timeline-map`、`mindmap`、`sequence-flow`、`journey-map`、`coverage-map`、`score-matrix`、`roadmap` 等应由 `ai4se-visual` JSON 表达，前端组件直接消费数据渲染。
-- Mermaid 降级为编译目标。只有简单 `pie`、简单 `flowchart`、简单 `timeline`、简单 `mindmap` 可由后端 deterministic renderer 从结构化数据生成 Mermaid；模型不得直接手写 Mermaid。
+- Mermaid 降级为编译目标。只有当前仍被阶段级 contract 要求的简单 `pie`、简单 `flowchart`、简单 `mindmap`、简单 `journey` 等可由后端 deterministic renderer 从结构化数据生成 Mermaid；`INCIDENT_REVIEW/TIMELINE` 已迁移为 `ai4se-visual timeline-map`，模型不得直接手写 Mermaid。
 - 渲染前必须强校验。正式 artifact 被呈现为成功、持久化或推进阶段前，应至少通过 Pydantic / JSON schema、引用完整性校验、Mermaid parse 或等价 `mmdc` / fixture 渲染门禁；具体校验落点在视觉专项中确定，不能假定 Python backend 当前已具备 `mermaid.parse` 运行环境。
 - 视觉失败必须显式失败。Mermaid 解析失败、`ai4se-visual` JSON 无效、引用缺失、渲染失败都不能被旧图、草稿、自动修复或缓存内容掩盖。
 
@@ -189,7 +189,7 @@
   - 目标：在现有 `score-matrix`、`coverage-map`、`journey-map` 等表格类视觉之外，补齐 `flow-map`、`timeline-map`、`mindmap`、`sequence-flow`、`distribution-chart` 等数据结构，使复杂图不再依赖模型手写 Mermaid。
   - 约束：每个 visual 类型必须有严格 schema、引用完整性校验、前端渲染组件、导出降级文本和失败诊断。
   - 验收：至少选一个 Mermaid 失败高风险阶段完成纵切迁移，并证明最终 artifact 不含模型手写 Mermaid。
-  - 进展：已完成首个复杂图纵切 `INCIDENT_REVIEW/ROOT_CAUSE.cause-map`。该 visual type 已从 `columns/rows` 表格协议迁移为 `nodes/edges`，并覆盖后端 deterministic renderer、后端 contract 校验、前端 parser、前端组件、PDF/DOCX 导出降级和模板同步测试。更广泛的 `flow-map`、`timeline-map`、`mindmap`、`sequence-flow` 等类型仍未迁移。
+  - 进展：已完成两个复杂图纵切：`INCIDENT_REVIEW/ROOT_CAUSE.cause-map` 已从 `columns/rows` 表格协议迁移为 `nodes/edges`；`INCIDENT_REVIEW/TIMELINE.timeline-map` 已从 Mermaid `timeline` 迁移为 `events` 结构。两者均覆盖后端 deterministic renderer、后端 contract 校验、前端 parser、前端组件、PDF/DOCX 导出降级和模板同步测试。更广泛的 `flow-map`、`mindmap`、`sequence-flow`、`distribution-chart` 等类型仍未迁移。
   - 进展：已补齐 `STORY_BREAKDOWN` 所需 `story-map` 的前端共享 visual 支持。后端和 manifest 已声明并输出矩阵式 `ai4se-visual story-map`，前端 parser、`StructuredVisual`、PDF 导出和 DOCX 导出已纳入同一 `columns/rows` 协议；当前 manifest `requiredStructuredVisuals` 声明的所有类型均可被前端 parser 识别。
 
 - [ ] 建立视觉渲染强校验门禁。（第 7 轮）
@@ -2693,7 +2693,7 @@ cd tools/new-agents/frontend && npm run test
 残余风险：
 
 - 本轮只把已由 backend / manifest required 的 `story-map` 纳入前端共享矩阵 visual 协议，不新增非矩阵复杂图 schema。
-- `flow-map`、`timeline-map`、`mindmap`、`sequence-flow`、`distribution-chart` 等复杂视觉类型仍需后续独立切片；backend Mermaid JS parse 或 `mmdc` 渲染门禁也仍未补齐。
+- `flow-map`、`mindmap`、`sequence-flow`、`distribution-chart` 等复杂视觉类型仍需后续独立切片；backend Mermaid JS parse 或 `mmdc` 渲染门禁也仍未补齐。
 
 ### 2026-07-09 切片记录：TEST_DESIGN/CASES 自动化候选 case_id 引用闭环
 
@@ -3108,6 +3108,53 @@ git diff --check
 本轮用户故事：
 
 作为故障复盘使用者，当我生成事件时间线时，我可以看到由结构化业务数据渲染出的稳定时间线视觉，并能在预览、导出和恢复中获得同一内容，从而不再受 Mermaid timeline 语法脆弱性影响。
+
+### 2026-07-09 切片记录：INCIDENT_REVIEW/TIMELINE timeline-map 端到端迁移
+
+目标：
+
+- 将 `INCIDENT_REVIEW/TIMELINE` 从 Mermaid `timeline` 迁移为 `ai4se-visual timeline-map`，覆盖后端 deterministic renderer、manifest visual contract、后端合同校验、前端 parser / component、PDF / DOCX 导出和 prompt / workflow 同步测试。
+- 不新增 Lisa/Alex 专属 runtime、SSE endpoint、store 或 ArtifactPane 分支；所有差异仍通过 `workflow_manifest.json`、artifact_data renderer、共享 `StructuredVisual` 和共享 export helpers 表达。
+
+本轮完成：
+
+- `workflow_manifest.json` 将 `timeline-map` 从 `plannedComplexTypes` 提升到 `currentTypes`，并把 `INCIDENT_REVIEW/TIMELINE.visualContract` 改为 `requiredStructuredVisuals: ["timeline-map"]`。
+- 后端 `agent_contracts.py` 新增 `timeline-map` schema prompt 和结构校验，TIMELINE 不再要求 Mermaid `timeline`。
+- 后端 `artifact_data_renderers.py` 从 `artifact_data.timeline_events` 确定性生成 fenced `ai4se-visual` JSON 和原有 Markdown 表格，不再输出 Mermaid timeline，也不再需要半角冒号转义。
+- 前端 `structuredVisuals.ts` 新增 `timeline` visual kind；`StructuredVisual.tsx` 用共享组件渲染事件时间线；PDF / DOCX 导出将 timeline-map 投影为可读文本，不泄露 raw JSON。
+- `TIMELINE`、`ROOT_CAUSE`、`IMPROVEMENT` prompt 中对事件还原阶段的描述已从 Mermaid timeline 同步为 `ai4se-visual timeline-map`。
+
+已验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_contracts.py tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_workflow_contract_sync.py -q -k "incident_timeline or visual_protocol or visual_contract or timeline_map or professional_artifact_fields"
+```
+
+结果：`20 passed, 475 deselected`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/__tests__/structuredVisuals.test.ts src/components/__tests__/StructuredVisual.test.tsx src/core/__tests__/artifactExport.test.ts src/core/__tests__/docxExport.test.ts src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run
+```
+
+结果：`6 passed` test files，`164 passed` tests。
+
+```bash
+cd tools/new-agents/frontend && npm run build
+```
+
+结果：通过，`vite build` 退出码 `0`；仍有既有 chunk size warning。
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：通过。New Agents Frontend `839 passed`；New Agents Backend `854 passed, 4 deselected`。
+
+后续边界：
+
+- 用户最新反馈要求：当前任务完成、提交后停止继续开新功能，先重新定义剩余工作的切片划分。
+- `服务端视觉成功门禁` 仍是候选，但需要重新判断是否与其他视觉协议工作合并成更厚的独立切片。
+- `结构化一致性收口` 当前没有新的 P0/P1 功能缺口证据，后续优先作为状态审计或文档收口处理，避免继续拆成过薄字段切片。
 
 ## 每轮验收口径
 
