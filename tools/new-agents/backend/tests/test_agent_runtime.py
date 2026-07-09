@@ -1011,6 +1011,57 @@ def test_prd_review_structured_output_instruction_requests_artifact_data_not_mar
     assert "artifact_update.markdown" not in instruction
 
 
+@pytest.mark.parametrize(
+    "stage_id",
+    ["INVENTORY", "QUALITY_AUDIT", "COMPLETION_PLAN", "REVISION_BLUEPRINT"],
+)
+def test_prd_review_structured_output_instruction_uses_manifest_artifact_data_contract(
+    stage_id,
+):
+    instruction = build_structured_output_instruction(
+        "PRD_REVIEW",
+        stage_id,
+    )
+    contract_instruction = format_artifact_data_contract_instruction(
+        "PRD_REVIEW",
+        stage_id,
+    )
+
+    assert "契约外字段会被拒绝" in contract_instruction
+    assert contract_instruction in instruction
+
+
+@pytest.mark.parametrize(
+    ("stage_id", "expected_stage_action"),
+    [
+        (
+            "INVENTORY",
+            '"stage_action": {"type": "request_next_stage", "target_stage_id": "QUALITY_AUDIT"}',
+        ),
+        (
+            "QUALITY_AUDIT",
+            '"stage_action": {"type": "request_next_stage", "target_stage_id": "COMPLETION_PLAN"}',
+        ),
+        (
+            "COMPLETION_PLAN",
+            '"stage_action": {"type": "request_next_stage", "target_stage_id": "REVISION_BLUEPRINT"}',
+        ),
+        ("REVISION_BLUEPRINT", '"stage_action": null'),
+    ],
+)
+def test_prd_review_structured_output_instruction_targets_exact_next_stage(
+    stage_id,
+    expected_stage_action,
+):
+    instruction = build_structured_output_instruction(
+        "PRD_REVIEW",
+        stage_id,
+    )
+
+    assert expected_stage_action in instruction
+    assert "QUALITY_AUDIT/COMPLETION_PLAN/REVISION_BLUEPRINT" not in instruction
+
+
 def test_parse_agent_turn_output_text_renders_value_elevator_artifact_data():
     json_text = json.dumps(
         {

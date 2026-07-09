@@ -2910,6 +2910,37 @@ def test_prd_review_artifact_data_requires_stage_gate_checked():
         PrdReviewArtifactData.model_validate(invalid)
 
 
+@pytest.mark.parametrize(
+    ("collection", "id_field", "message"),
+    [
+        ("quality_findings", "finding_id", "duplicate finding_id"),
+        ("completion_actions", "action_id", "duplicate action_id"),
+        ("revision_sections", "section_id", "duplicate section_id"),
+    ],
+)
+def test_prd_review_artifact_data_rejects_duplicate_contract_ids(
+    collection,
+    id_field,
+    message,
+):
+    invalid = copy.deepcopy(VALID_PRD_REVIEW_ARTIFACT_DATA)
+    invalid[collection].append(copy.deepcopy(invalid[collection][0]))
+    invalid[collection][1][id_field] = invalid[collection][0][id_field]
+
+    with pytest.raises(ValidationError, match=message):
+        PrdReviewArtifactData.model_validate(invalid)
+
+
+def test_prd_review_artifact_data_rejects_contract_extra_fields():
+    invalid = copy.deepcopy(VALID_PRD_REVIEW_ARTIFACT_DATA)
+    invalid["quality_findings"][0]["unexpected_field"] = "不允许"
+
+    with pytest.raises(ValidationError) as exc_info:
+        PrdReviewArtifactData.model_validate(invalid)
+
+    assert "unexpected_field" in str(exc_info.value)
+
+
 
 def test_idea_define_artifact_data_rejects_duplicate_evidence_id():
     invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)

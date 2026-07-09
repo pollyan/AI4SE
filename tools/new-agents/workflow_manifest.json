@@ -1604,6 +1604,29 @@
               "mindmap"
             ]
           },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "document_info、prd_inventory、quality_findings、completion_actions、revision_sections、acceptance_criteria、handoff_inputs 和 stage_gate 必须齐全；契约外字段会被拒绝",
+              "prd_inventory、quality_findings、completion_actions、revision_sections、acceptance_criteria、handoff_inputs 和 stage_gate 必须至少包含 1 项",
+              "completion_actions[].finding_ids、acceptance_criteria[].related_section_ids 和 handoff_inputs[].related_section_ids 必须至少包含 1 项",
+              "quality_findings[].finding_id 必须唯一",
+              "completion_actions[].action_id 必须唯一",
+              "revision_sections[].section_id 必须唯一",
+              "completion_actions[].finding_ids 只能引用 quality_findings[].finding_id 中已定义的问题 ID",
+              "acceptance_criteria[].related_section_ids 和 handoff_inputs[].related_section_ids 只能引用 revision_sections[].section_id 中已定义的修订章节 ID",
+              "stage_gate 至少包含一个 checked=true"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格",
+              "Mermaid 代码块",
+              "ai4se-visual JSON 代码块"
+            ],
+            "rendererOutputs": [
+              "右侧 PRD 输入盘点",
+              "Mermaid mindmap"
+            ]
+          },
           "promptTemplateVersion": "2026.06.24.1",
           "regressionSampleIds": [
             "prd-review.inventory.baseline"
@@ -1632,6 +1655,29 @@
           "visualContract": {
             "requiredStructuredVisuals": [
               "score-matrix"
+            ]
+          },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "document_info、prd_inventory、quality_findings、completion_actions、revision_sections、acceptance_criteria、handoff_inputs 和 stage_gate 必须齐全；契约外字段会被拒绝",
+              "prd_inventory、quality_findings、completion_actions、revision_sections、acceptance_criteria、handoff_inputs 和 stage_gate 必须至少包含 1 项",
+              "completion_actions[].finding_ids、acceptance_criteria[].related_section_ids 和 handoff_inputs[].related_section_ids 必须至少包含 1 项",
+              "quality_findings[].finding_id 必须唯一",
+              "completion_actions[].action_id 必须唯一",
+              "revision_sections[].section_id 必须唯一",
+              "completion_actions[].finding_ids 只能引用 quality_findings[].finding_id 中已定义的问题 ID",
+              "acceptance_criteria[].related_section_ids 和 handoff_inputs[].related_section_ids 只能引用 revision_sections[].section_id 中已定义的修订章节 ID",
+              "stage_gate 至少包含一个 checked=true"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格",
+              "Mermaid 代码块",
+              "ai4se-visual JSON 代码块"
+            ],
+            "rendererOutputs": [
+              "右侧 PRD 质量评审",
+              "ai4se-visual score-matrix"
             ]
           },
           "promptTemplateVersion": "2026.06.24.1",
@@ -1664,6 +1710,30 @@
               "action-board"
             ]
           },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "document_info、prd_inventory、quality_findings、completion_actions、revision_sections、acceptance_criteria、handoff_inputs 和 stage_gate 必须齐全；契约外字段会被拒绝",
+              "prd_inventory、quality_findings、completion_actions、revision_sections、acceptance_criteria、handoff_inputs 和 stage_gate 必须至少包含 1 项",
+              "completion_actions[].finding_ids、acceptance_criteria[].related_section_ids 和 handoff_inputs[].related_section_ids 必须至少包含 1 项",
+              "quality_findings[].finding_id 必须唯一",
+              "completion_actions[].action_id 必须唯一",
+              "revision_sections[].section_id 必须唯一",
+              "completion_actions[].finding_ids 只能引用 quality_findings[].finding_id 中已定义的问题 ID",
+              "acceptance_criteria[].related_section_ids 和 handoff_inputs[].related_section_ids 只能引用 revision_sections[].section_id 中已定义的修订章节 ID",
+              "stage_gate 至少包含一个 checked=true"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格",
+              "Mermaid 代码块",
+              "ai4se-visual JSON 代码块"
+            ],
+            "rendererOutputs": [
+              "右侧 PRD 补全建议",
+              "ai4se-visual action-board",
+              "ai4se-visual roadmap"
+            ]
+          },
           "promptTemplateVersion": "2026.06.24.1",
           "regressionSampleIds": [
             "prd-review.completion-plan.baseline"
@@ -1693,6 +1763,30 @@
           "visualContract": {
             "requiredStructuredVisuals": [
               "roadmap"
+            ]
+          },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "document_info、prd_inventory、quality_findings、completion_actions、revision_sections、acceptance_criteria、handoff_inputs 和 stage_gate 必须齐全；契约外字段会被拒绝",
+              "prd_inventory、quality_findings、completion_actions、revision_sections、acceptance_criteria、handoff_inputs 和 stage_gate 必须至少包含 1 项",
+              "completion_actions[].finding_ids、acceptance_criteria[].related_section_ids 和 handoff_inputs[].related_section_ids 必须至少包含 1 项",
+              "quality_findings[].finding_id 必须唯一",
+              "completion_actions[].action_id 必须唯一",
+              "revision_sections[].section_id 必须唯一",
+              "completion_actions[].finding_ids 只能引用 quality_findings[].finding_id 中已定义的问题 ID",
+              "acceptance_criteria[].related_section_ids 和 handoff_inputs[].related_section_ids 只能引用 revision_sections[].section_id 中已定义的修订章节 ID",
+              "stage_gate 至少包含一个 checked=true"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格",
+              "Mermaid 代码块",
+              "ai4se-visual JSON 代码块"
+            ],
+            "rendererOutputs": [
+              "右侧 PRD 修订蓝图",
+              "ai4se-visual action-board",
+              "ai4se-visual roadmap"
             ]
           },
           "promptTemplateVersion": "2026.06.24.1",

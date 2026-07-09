@@ -515,6 +515,43 @@ describe('Workflow Configuration', () => {
         }
     });
 
+    it('exposes manifest artifact data contract for PRD REVIEW stages', () => {
+        const expectedRendererOutputs: Record<string, string[]> = {
+            INVENTORY: ['右侧 PRD 输入盘点', 'Mermaid mindmap'],
+            QUALITY_AUDIT: ['右侧 PRD 质量评审', 'ai4se-visual score-matrix'],
+            COMPLETION_PLAN: ['右侧 PRD 补全建议', 'ai4se-visual action-board', 'ai4se-visual roadmap'],
+            REVISION_BLUEPRINT: ['右侧 PRD 修订蓝图', 'ai4se-visual action-board', 'ai4se-visual roadmap'],
+        };
+
+        for (const stage of WORKFLOWS.PRD_REVIEW.stages) {
+            expect(stage.artifactDataContract?.modelOutputRules).toContain(
+                'document_info、prd_inventory、quality_findings、completion_actions、revision_sections、acceptance_criteria、handoff_inputs 和 stage_gate 必须齐全；契约外字段会被拒绝',
+            );
+            expect(stage.artifactDataContract?.modelOutputRules).toContain(
+                'prd_inventory、quality_findings、completion_actions、revision_sections、acceptance_criteria、handoff_inputs 和 stage_gate 必须至少包含 1 项',
+            );
+            expect(stage.artifactDataContract?.modelOutputRules).toContain(
+                'completion_actions[].finding_ids、acceptance_criteria[].related_section_ids 和 handoff_inputs[].related_section_ids 必须至少包含 1 项',
+            );
+            expect(stage.artifactDataContract?.modelOutputRules).toContain(
+                'quality_findings[].finding_id 必须唯一',
+            );
+            expect(stage.artifactDataContract?.modelOutputRules).toContain(
+                'completion_actions[].finding_ids 只能引用 quality_findings[].finding_id 中已定义的问题 ID',
+            );
+            expect(stage.artifactDataContract?.modelOutputRules).toContain(
+                'acceptance_criteria[].related_section_ids 和 handoff_inputs[].related_section_ids 只能引用 revision_sections[].section_id 中已定义的修订章节 ID',
+            );
+            expect(stage.artifactDataContract?.forbiddenOutputs).toContain('完整 Markdown 文档');
+            expect(stage.artifactDataContract?.forbiddenOutputs).toContain('Markdown 表格');
+            expect(stage.artifactDataContract?.forbiddenOutputs).toContain('Mermaid 代码块');
+            expect(stage.artifactDataContract?.forbiddenOutputs).toContain('ai4se-visual JSON 代码块');
+            for (const output of expectedRendererOutputs[stage.id]) {
+                expect(stage.artifactDataContract?.rendererOutputs).toContain(output);
+            }
+        }
+    });
+
     it('exposes manifest artifact data contract for TEST DESIGN CLARIFY', () => {
         const clarify = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'CLARIFY');
 

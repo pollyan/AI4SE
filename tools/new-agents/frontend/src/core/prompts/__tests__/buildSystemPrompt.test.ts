@@ -627,6 +627,43 @@ describe('buildSystemPrompt', () => {
         expect(WORKFLOWS.STORY_BREAKDOWN.stages[stageIndex].id).toBe(stageId);
     });
 
+    it.each([
+        ['INVENTORY', 0, ['右侧 PRD 输入盘点', '图表 mindmap']],
+        ['QUALITY_AUDIT', 1, ['右侧 PRD 质量评审', 'ai4se-visual score-matrix']],
+        ['COMPLETION_PLAN', 2, ['右侧 PRD 补全建议', 'ai4se-visual action-board', 'ai4se-visual roadmap']],
+        ['REVISION_BLUEPRINT', 3, ['右侧 PRD 修订蓝图', 'ai4se-visual action-board', 'ai4se-visual roadmap']],
+    ])('injects PRD REVIEW %s artifact data contract from the manifest', (stageId, stageIndex, rendererOutputs) => {
+        const prompt = buildSystemPrompt({
+            agentId: 'alex',
+            workflow: 'PRD_REVIEW',
+            stageIndex,
+            currentArtifact: '# PRD 质量评审与补全\n已有内容',
+        });
+
+        const findingRule = 'quality_findings[].finding_id 必须唯一';
+        expect(prompt).toContain('【artifact_data 结构化契约】');
+        expect(prompt).toContain('document_info、prd_inventory、quality_findings、completion_actions、revision_sections、acceptance_criteria、handoff_inputs 和 stage_gate 必须齐全；契约外字段会被拒绝');
+        expect(prompt).toContain('prd_inventory、quality_findings、completion_actions、revision_sections、acceptance_criteria、handoff_inputs 和 stage_gate 必须至少包含 1 项');
+        expect(prompt).toContain('completion_actions[].finding_ids、acceptance_criteria[].related_section_ids 和 handoff_inputs[].related_section_ids 必须至少包含 1 项');
+        expect(prompt).toContain(findingRule);
+        expect(prompt).toContain('completion_actions[].action_id 必须唯一');
+        expect(prompt).toContain('revision_sections[].section_id 必须唯一');
+        expect(prompt).toContain('completion_actions[].finding_ids 只能引用 quality_findings[].finding_id 中已定义的问题 ID');
+        expect(prompt).toContain('acceptance_criteria[].related_section_ids 和 handoff_inputs[].related_section_ids 只能引用 revision_sections[].section_id 中已定义的修订章节 ID');
+        expect(prompt).toContain('stage_gate 至少包含一个 checked=true');
+        expect(prompt).toContain('图表 代码块');
+        expect(prompt).toContain('ai4se-visual JSON 代码块');
+        for (const output of rendererOutputs) {
+            expect(prompt).toContain(output);
+        }
+        expect(prompt).not.toContain('artifact_update');
+        expect(prompt).not.toContain('Mermaid 代码块');
+        expect(prompt).not.toContain('必须提供完整、全部的 Markdown 文档内容');
+        const findingRuleMatches = prompt.match(new RegExp(findingRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
+        expect(findingRuleMatches).toHaveLength(1);
+        expect(WORKFLOWS.PRD_REVIEW.stages[stageIndex].id).toBe(stageId);
+    });
+
     it('keeps next-stage confirmation separate from next-stage artifact generation', () => {
         const prompt = buildSystemPrompt({
             agentId: 'lisa',

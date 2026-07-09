@@ -647,6 +647,67 @@ def test_story_breakdown_artifact_data_contract_manifest_drives_backend_instruct
         assert "ai4se-visual story-map" in instruction
 
 
+def test_prd_review_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    workflow = _workflow_manifest()["workflows"]["PRD_REVIEW"]
+    expected_renderer_outputs = {
+        "INVENTORY": ["右侧 PRD 输入盘点", "Mermaid mindmap"],
+        "QUALITY_AUDIT": ["右侧 PRD 质量评审", "ai4se-visual score-matrix"],
+        "COMPLETION_PLAN": [
+            "右侧 PRD 补全建议",
+            "ai4se-visual action-board",
+            "ai4se-visual roadmap",
+        ],
+        "REVISION_BLUEPRINT": [
+            "右侧 PRD 修订蓝图",
+            "ai4se-visual action-board",
+            "ai4se-visual roadmap",
+        ],
+    }
+
+    for stage in workflow["stages"]:
+        instruction = format_artifact_data_contract_instruction(
+            "PRD_REVIEW",
+            stage["id"],
+        )
+        contract = stage.get("artifactDataContract")
+
+        assert contract is not None, f"PRD_REVIEW/{stage['id']} missing contract"
+        assert (
+            "document_info、prd_inventory、quality_findings、completion_actions、"
+            "revision_sections、acceptance_criteria、handoff_inputs 和 stage_gate "
+            "必须齐全；契约外字段会被拒绝"
+        ) in instruction
+        assert (
+            "prd_inventory、quality_findings、completion_actions、revision_sections、"
+            "acceptance_criteria、handoff_inputs 和 stage_gate 必须至少包含 1 项"
+        ) in instruction
+        assert (
+            "completion_actions[].finding_ids、acceptance_criteria[].related_section_ids "
+            "和 handoff_inputs[].related_section_ids 必须至少包含 1 项"
+        ) in instruction
+        assert "quality_findings[].finding_id 必须唯一" in instruction
+        assert "completion_actions[].action_id 必须唯一" in instruction
+        assert "revision_sections[].section_id 必须唯一" in instruction
+        assert (
+            "completion_actions[].finding_ids 只能引用 quality_findings[].finding_id "
+            "中已定义的问题 ID"
+        ) in instruction
+        assert (
+            "acceptance_criteria[].related_section_ids 和 "
+            "handoff_inputs[].related_section_ids 只能引用 revision_sections[].section_id "
+            "中已定义的修订章节 ID"
+        ) in instruction
+        assert "stage_gate 至少包含一个 checked=true" in instruction
+        assert "完整 Markdown 文档" in instruction
+        assert "Markdown 表格" in instruction
+        assert "Mermaid 代码块" in instruction
+        assert "ai4se-visual JSON 代码块" in instruction
+        for renderer_output in expected_renderer_outputs[stage["id"]]:
+            assert renderer_output in instruction
+
+
 def test_workflow_manifest_declares_prompt_template_versions_for_every_stage():
     manifest = _workflow_manifest()
 

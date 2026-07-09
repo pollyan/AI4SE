@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync，以及 21 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步；仍有 4 个 artifact-data 阶段待迁移，需要在后续同级切片中继续消化。）
+- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync，以及 25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步；artifactDataContract 同步剩余 0 个阶段。后续未完成治理仍需按派生字段后端化、ID 收敛、视觉协议分层等独立价值目标重新拆分切片。）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -12,9 +12,9 @@
 
 初版 9 个切片是路线假设，不是不可调整的硬约束。若某个切片过大，必须在计划层面拆成多个同级切片，每个切片都要有独立目标、验收、验证命令、提交和 push 边界；不能把过大的工作塞进一个切片后再用“内部批次”消化。
 
-当前判断：初版 9 个切片不是完全合适。第 0-7 切片边界基本成立；第 8 切片覆盖“所有在线 artifact-data 阶段”的回归门禁、文档矩阵、visualContract sync 和 manifest contract sync，范围过大，后续必须拆为多个同级切片继续推进。已经完成的 `VALUE_DISCOVERY/JOURNEY`、`VALUE_DISCOVERY/BLUEPRINT`、`STORY_BREAKDOWN`、`TEST_DESIGN`、`REQ_REVIEW` 与 `INCIDENT_REVIEW` 剩余阶段同步是当前已完成切片工作的一部分；继续处理剩余 4 个 artifact-data 阶段时，需要按 workflow 级切片重新定义后续同级切片边界。
+当前判断：初版 9 个切片不是完全合适。第 0-7 切片边界基本成立；第 8 切片覆盖“所有在线 artifact-data 阶段”的回归门禁、文档矩阵、visualContract sync 和 manifest contract sync，范围过大，后续必须拆为多个同级切片继续推进。已经完成的 `VALUE_DISCOVERY/JOURNEY`、`VALUE_DISCOVERY/BLUEPRINT`、`STORY_BREAKDOWN`、`PRD_REVIEW`、`TEST_DESIGN`、`REQ_REVIEW` 与 `INCIDENT_REVIEW` 剩余阶段同步是当前已完成切片工作的一部分；artifactDataContract manifest sync 已覆盖 25 个在线 artifact-data 阶段，后续如果继续治理，必须按未完成横切能力或纵切风险重新定义同级切片边界。
 
-最新评估：默认按“一个 workflow 一个切片”推进。本次 `VALUE_DISCOVERY/BLUEPRINT` contract sync 已按 workflow 出口切片推进；该切片完成后，剩余工作预计还需要 2 个同级切片完成。只有当某个 workflow 在执行中暴露出无法在同一验证闭环内消化的 P0 风险、跨入口用户目标或破坏面失控，才允许在计划层面重新拆成多个同级切片，并必须记录拆分理由。
+最新评估：默认按“一个 workflow 一个切片”推进，且一个工作流能在同一验证闭环内收口时，不再拆成多个切片。本次 `PRD_REVIEW` 已作为最后一个 workflow 级 contract sync 切片收口；`artifactDataContract` manifest 同步剩余 0 个切片。后续派生字段后端化、ID 收敛、视觉协议分层等未完成治理不得塞回“内部批次”，必须按独立价值目标重新评估为新的同级切片。
 
 | 工作流级切片 | 覆盖范围 | 拆分理由 |
 |---|---|---|
@@ -23,7 +23,7 @@
 | INCIDENT_REVIEW 剩余阶段 contract sync | `INCIDENT_REVIEW/TIMELINE`、`INCIDENT_REVIEW/IMPROVEMENT` | 已完成切片；ROOT_CAUSE 此前已完成，剩余两个阶段分别覆盖事实时间线和改进闭环，已补齐 manifest contract、runtime instruction、prompt 注入、backend/frontend sync tests 和 TESTING 矩阵。 |
 | Alex 需求蓝图收口 | `VALUE_DISCOVERY/BLUEPRINT` | 已完成切片；这是 Alex 从价值发现走向需求蓝图和后续 AI Coding 输入的关键出口，已补齐 manifest contract、runtime instruction、prompt 注入、backend/frontend sync tests 和 TESTING 矩阵。 |
 | STORY_BREAKDOWN contract sync | `STORY_BREAKDOWN/INPUT_ANALYSIS`、`STORY_BREAKDOWN/EPIC_MAPPING`、`STORY_BREAKDOWN/STORY_BACKLOG`、`STORY_BREAKDOWN/SPRINT_PLAN` | 已完成切片；同属从需求蓝图到用户故事、Sprint 切片和 AI Coding 单故事包的完整工作流，已补齐 manifest contract、runtime instruction、frontend prompt/config sync tests、renderer validator 负例和 TESTING 矩阵。 |
-| PRD_REVIEW contract sync | `PRD_REVIEW/INVENTORY`、`PRD_REVIEW/QUALITY_AUDIT`、`PRD_REVIEW/COMPLETION_PLAN`、`PRD_REVIEW/REVISION_BLUEPRINT` | 四个阶段共享 PRD 盘点 / 质量发现 / 补全动作 / 修订章节数据形态，适合一个 PRD Review 闭环切片整体收口。 |
+| PRD_REVIEW contract sync | `PRD_REVIEW/INVENTORY`、`PRD_REVIEW/QUALITY_AUDIT`、`PRD_REVIEW/COMPLETION_PLAN`、`PRD_REVIEW/REVISION_BLUEPRINT` | 已完成切片；四个阶段共享 PRD 盘点 / 质量发现 / 补全动作 / 修订章节数据形态，已补齐 manifest contract、runtime instruction、frontend prompt/config sync tests、renderer validator 负例和 TESTING 矩阵。 |
 
 ## 背景与当前证据
 
@@ -141,6 +141,7 @@
   - 进展：已完成 `INCIDENT_REVIEW/TIMELINE` 与 `INCIDENT_REVIEW/IMPROVEMENT` `artifactDataContract` manifest 同步。TIMELINE 的必填列表、`timeline_events[].fact_ids` 非空、fact ID 唯一性和事实引用门禁，IMPROVEMENT 的行动数量、优先级分布、action ID、根因覆盖和 action/root_cause 引用门禁，以及禁止模型输出 renderer-owned Markdown / Mermaid / pie / action-board JSON 等边界已进入 manifest，并由 backend instruction sync、frontend manifest 配置和 frontend prompt 注入测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`VALUE_DISCOVERY/ELEVATOR`、`VALUE_DISCOVERY/PERSONA`、`VALUE_DISCOVERY/JOURNEY`、`TEST_DESIGN/CLARIFY`、`TEST_DESIGN/STRATEGY`、`TEST_DESIGN/CASES`、`TEST_DESIGN/DELIVERY`、`REQ_REVIEW/REVIEW`、`REQ_REVIEW/REPORT`、`INCIDENT_REVIEW/TIMELINE`、`INCIDENT_REVIEW/ROOT_CAUSE` 与 `INCIDENT_REVIEW/IMPROVEMENT` 外，其余 9 个阶段尚未迁移。
   - 进展：已完成 `VALUE_DISCOVERY/BLUEPRINT` `artifactDataContract` manifest 同步。BLUEPRINT 的需求 ID 唯一性、验收标准 ID 唯一性、功能 / MVP / 验收 / Lisa handoff 需求引用、Lisa handoff 验收标准引用、主流程节点唯一性和流程 link 引用门禁，以及禁止模型输出 renderer-owned Markdown / Mermaid / roadmap JSON 等边界已进入 manifest，并由 backend instruction sync、runtime instruction、frontend manifest 配置、frontend prompt 注入和 renderer validator 测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`VALUE_DISCOVERY/ELEVATOR`、`VALUE_DISCOVERY/PERSONA`、`VALUE_DISCOVERY/JOURNEY`、`VALUE_DISCOVERY/BLUEPRINT`、`TEST_DESIGN/CLARIFY`、`TEST_DESIGN/STRATEGY`、`TEST_DESIGN/CASES`、`TEST_DESIGN/DELIVERY`、`REQ_REVIEW/REVIEW`、`REQ_REVIEW/REPORT`、`INCIDENT_REVIEW/TIMELINE`、`INCIDENT_REVIEW/ROOT_CAUSE` 与 `INCIDENT_REVIEW/IMPROVEMENT` 外，其余 8 个阶段尚未迁移。
   - 进展：已完成 `STORY_BREAKDOWN/INPUT_ANALYSIS`、`STORY_BREAKDOWN/EPIC_MAPPING`、`STORY_BREAKDOWN/STORY_BACKLOG` 与 `STORY_BREAKDOWN/SPRINT_PLAN` `artifactDataContract` manifest 同步。STORY_BREAKDOWN 的必需字段、契约外字段拒绝、关键嵌套数组非空、Epic / Story / Criterion / Dependency / Sprint ID 唯一性、Epic / Story / Criterion / Dependency / Sprint / Lisa handoff 引用门禁、`story_points >= 1`、`stage_gate` checked，以及禁止模型输出 renderer-owned Markdown / Mermaid / story-map JSON 等边界已进入 manifest，并由 backend instruction sync、runtime instruction、frontend manifest 配置、frontend prompt 注入和 renderer validator 负例测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`VALUE_DISCOVERY/ELEVATOR`、`VALUE_DISCOVERY/PERSONA`、`VALUE_DISCOVERY/JOURNEY`、`VALUE_DISCOVERY/BLUEPRINT`、`STORY_BREAKDOWN/INPUT_ANALYSIS`、`STORY_BREAKDOWN/EPIC_MAPPING`、`STORY_BREAKDOWN/STORY_BACKLOG`、`STORY_BREAKDOWN/SPRINT_PLAN`、`TEST_DESIGN/CLARIFY`、`TEST_DESIGN/STRATEGY`、`TEST_DESIGN/CASES`、`TEST_DESIGN/DELIVERY`、`REQ_REVIEW/REVIEW`、`REQ_REVIEW/REPORT`、`INCIDENT_REVIEW/TIMELINE`、`INCIDENT_REVIEW/ROOT_CAUSE` 与 `INCIDENT_REVIEW/IMPROVEMENT` 外，其余 4 个阶段尚未迁移。
+  - 进展：已完成 `PRD_REVIEW/INVENTORY`、`PRD_REVIEW/QUALITY_AUDIT`、`PRD_REVIEW/COMPLETION_PLAN` 与 `PRD_REVIEW/REVISION_BLUEPRINT` `artifactDataContract` manifest 同步。PRD_REVIEW 的必需字段、契约外字段拒绝、关键列表非空、finding / action / section ID 唯一性、action finding 引用、acceptance / handoff section 引用、`stage_gate` checked，以及禁止模型输出 renderer-owned Markdown / Mermaid / `ai4se-visual` JSON 等边界已进入 manifest，并由 backend instruction sync、runtime instruction、frontend manifest 配置、frontend prompt 注入和 renderer validator 负例测试保护。当前 registry 共 25 个 artifact-data 阶段，25 个阶段均已完成 `artifactDataContract` manifest sync，剩余待迁移阶段为 0。
 
 - [ ] 针对高失败阶段做纵切专项修复。（第 4-6 轮）
   - 优先顺序：`IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY`、`IDEA_BRAINSTORM/DIVERGE`。
@@ -2321,6 +2322,95 @@ NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all
 
 - 本轮只迁移 `STORY_BREAKDOWN` 四阶段；当前已完成 `artifactDataContract` manifest sync 的阶段为 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`VALUE_DISCOVERY/ELEVATOR`、`VALUE_DISCOVERY/PERSONA`、`VALUE_DISCOVERY/JOURNEY`、`VALUE_DISCOVERY/BLUEPRINT`、`STORY_BREAKDOWN/INPUT_ANALYSIS`、`STORY_BREAKDOWN/EPIC_MAPPING`、`STORY_BREAKDOWN/STORY_BACKLOG`、`STORY_BREAKDOWN/SPRINT_PLAN`、`TEST_DESIGN/CLARIFY`、`TEST_DESIGN/STRATEGY`、`TEST_DESIGN/CASES`、`TEST_DESIGN/DELIVERY`、`REQ_REVIEW/REVIEW`、`REQ_REVIEW/REPORT`、`INCIDENT_REVIEW/TIMELINE`、`INCIDENT_REVIEW/ROOT_CAUSE` 与 `INCIDENT_REVIEW/IMPROVEMENT`，其余 4 个 artifact-data 阶段仍待 `PRD_REVIEW` workflow 级切片迁移。
 - 本轮不新增 STORY 字段派生、自动 ID 分配、严格枚举、Ready 判定、每个 P0 必须验收、Sprint 名称格式、`user_stories[].sprint` 与 `sprint_slices[].sprint_id` 一致性、字段级 partial renderer、backend Mermaid JS parse 或 `mmdc` 渲染门禁；Mermaid `flowchart` 与 `story-map` 仍由后端 deterministic renderer 生成，并由现有 artifact contract / visual contract 测试保护。
+
+### 2026-07-09 切片记录：PRD_REVIEW artifactDataContract 同步
+
+触发原因：
+
+- `STORY_BREAKDOWN` 切片完成后，按“一个 workflow 一个切片”口径继续推进最后 4 个 artifact-data 阶段；这些阶段全部属于 `PRD_REVIEW`，共享 PRD 盘点、质量发现、补全动作、修订章节、验收标准和 handoff 输入数据形态。
+- 当前 `PRD_REVIEW` 四阶段已有 Pydantic validator、deterministic renderer、visual contract 和 raw JSON streaming registry，但 manifest 缺少 `artifactDataContract`，frontend prompt 也没有可注入的结构化契约区块。
+- 子智能体只读审查确认：真实强校验仅包含必需字段、额外字段禁止、字符串非空、关键列表非空、`finding_id` / `action_id` / `section_id` 唯一性、action finding 引用、acceptance / handoff section 引用和 `stage_gate` checked。不得虚构 severity / blocking / status / target_workflow 枚举、ready/pass 判定、deadline 或 PRD 专属 Mermaid flowchart 等未实现规则。
+
+已修复：
+
+- `PRD_REVIEW/INVENTORY`、`QUALITY_AUDIT`、`COMPLETION_PLAN`、`REVISION_BLUEPRINT` 新增 `artifactDataContract` manifest 配置，覆盖真实 schema / validator 强约束、禁止模型输出 renderer-owned Markdown / Mermaid / `ai4se-visual` JSON，以及各阶段后端 renderer 负责输出的右侧 PRD artifact 与视觉产物。
+- 后端新增 `_prd_review_artifact_data_instruction()`，按 stage 注入 `format_artifact_data_contract_instruction("PRD_REVIEW", stage_id)`，并把 `stage_action` 收紧为精确下一阶段；最后阶段为 `null`。
+- 新增 backend/frontend sync 测试：backend manifest instruction、backend runtime instruction、frontend workflow 配置和 frontend system prompt 注入均覆盖 PRD_REVIEW 四阶段。
+- 补齐 PRD_REVIEW renderer validator 负向测试：重复 finding / action / section ID 和额外字段拒绝。
+- `docs/TESTING.md` 字段来源矩阵同步更新：已迁入 `artifactDataContract` manifest sync 的阶段从 21 个增加到 25 个，剩余待迁移阶段从 4 个减少到 0 个。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py -q -k prd_review_artifact_data_contract
+```
+
+结果：修复前 `1 failed, 34 deselected`，失败点为 `PRD_REVIEW/INVENTORY` 缺少 `artifactDataContract`；修复后 `1 passed, 34 deselected`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py -q -k prd_review_structured_output_instruction
+```
+
+结果：修复前 `4 failed, 1 passed, 191 deselected`，失败点为四阶段 runtime instruction 未包含 manifest contract instruction；修复后 `9 passed, 191 deselected`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py -q -k prd_review_structured_output_instruction_targets_exact_next_stage
+```
+
+结果：修复前 `4 failed, 196 deselected`，失败点为 PRD_REVIEW runtime instruction 仍使用泛化目标集合；修复后已纳入 `prd_review_structured_output_instruction` 聚焦测试通过。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts -t "PRD REVIEW"
+```
+
+结果：修复前 `1 failed, 34 skipped`，失败点为 PRD REVIEW `artifactDataContract` 未暴露；修复后 `1 passed, 34 skipped`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/prompts/__tests__/buildSystemPrompt.test.ts -t "PRD REVIEW"
+```
+
+结果：修复前 `4 failed, 71 skipped`，失败点为 PRD REVIEW 四阶段 system prompt 缺少 `【artifact_data 结构化契约】`；修复后 `4 passed, 71 skipped`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py -q -k prd_review
+```
+
+结果：`11 passed, 109 deselected`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py -q
+```
+
+结果：`35 passed`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py -q -k prd_review
+```
+
+结果：`22 passed, 178 deselected`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run
+```
+
+结果：`110 passed`。
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：通过。New Agents Frontend `823 passed`；New Agents Backend `812 passed, 4 deselected`。
+
+```bash
+NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all
+```
+
+结果：非沙箱全量验证通过。关键结果包括 Intent Tester API `294 passed`、flake8 严重错误检查通过、MidScene proxy `17 passed`、Common Frontend lint/build 通过、New Agents Frontend `823 passed`、New Agents Backend `812 passed, 4 deselected`、New Agents Browser E2E `8 passed, 3 skipped, 10 deselected`。
+
+残余风险：
+
+- 本轮只迁移 `PRD_REVIEW` 四阶段；至此 25 个在线 artifact-data 阶段均已完成 `artifactDataContract` manifest sync，剩余待迁移阶段为 0。
+- 本轮不新增 PRD 字段派生、自动 ID 分配、严格枚举、ready/pass 判定、deadline 校验、字段级 partial renderer、backend Mermaid JS parse 或 `mmdc` 渲染门禁；Mermaid `mindmap`、`score-matrix`、`action-board` 和 `roadmap` 仍由后端 deterministic renderer 生成，并由现有 artifact contract / visual contract 测试保护。
 
 ## 每轮验收口径
 
