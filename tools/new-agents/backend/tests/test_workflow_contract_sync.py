@@ -181,6 +181,52 @@ def test_idea_converge_artifact_data_contract_manifest_drives_backend_instructio
     assert "右侧收敛聚焦产物" in instruction
 
 
+def test_derived_artifact_data_fields_are_tracked_and_not_required_in_runtime_examples():
+    from agent_runtime import build_structured_output_instruction
+    from workflow_manifest import (
+        format_artifact_data_contract_instruction,
+        get_derived_artifact_data_field_policies,
+    )
+
+    policies = get_derived_artifact_data_field_policies()
+
+    assert {
+        (policy["workflow_id"], policy["stage_id"], policy["path"])
+        for policy in policies
+    } == {
+        ("TEST_DESIGN", "STRATEGY", "risks[].rpn"),
+        ("TEST_DESIGN", "CASES", "case_statistics"),
+        ("TEST_DESIGN", "DELIVERY", "case_summary_items[].case_count"),
+        ("TEST_DESIGN", "DELIVERY", "delivery_metrics.total_cases"),
+        ("TEST_DESIGN", "DELIVERY", "delivery_metrics.high_risk_count"),
+        ("REQ_REVIEW", "REVIEW", "issue_statistics.p0_count/p1_count/p2_count"),
+        ("REQ_REVIEW", "REPORT", "issue_statistics.p0_count/p1_count/p2_count"),
+        ("VALUE_DISCOVERY", "ELEVATOR", "score_summary.total_score"),
+        ("VALUE_DISCOVERY", "ELEVATOR", "score_summary.average_score"),
+        ("INCIDENT_REVIEW", "IMPROVEMENT", "report_info.action_count"),
+        ("INCIDENT_REVIEW", "IMPROVEMENT", "priority_distribution"),
+        ("IDEA_BRAINSTORM", "CONVERGE", "ice_evaluations[].ice_score"),
+        ("IDEA_BRAINSTORM", "CONVERGE", "ice_evaluations[].rank"),
+    }
+
+    for policy in policies:
+        workflow_id = policy["workflow_id"]
+        stage_id = policy["stage_id"]
+        contract_instruction = format_artifact_data_contract_instruction(
+            workflow_id,
+            stage_id,
+        )
+        runtime_instruction = build_structured_output_instruction(
+            workflow_id,
+            stage_id,
+        )
+
+        for fragment in policy["required_contract_fragments"]:
+            assert fragment in contract_instruction, policy["path"]
+        for token in policy["forbidden_runtime_example_tokens"]:
+            assert token not in runtime_instruction, policy["path"]
+
+
 def test_strategy_artifact_data_contract_manifest_drives_backend_instruction():
     from workflow_manifest import format_artifact_data_contract_instruction
 

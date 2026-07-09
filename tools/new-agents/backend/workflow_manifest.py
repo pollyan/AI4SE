@@ -7,6 +7,142 @@ from typing import Any
 NEW_AGENTS_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_MANIFEST = NEW_AGENTS_ROOT / "workflow_manifest.json"
 
+DERIVED_ARTIFACT_DATA_FIELD_POLICIES: tuple[dict[str, Any], ...] = (
+    {
+        "workflow_id": "TEST_DESIGN",
+        "stage_id": "STRATEGY",
+        "path": "risks[].rpn",
+        "required_contract_fragments": (
+            "risks[].rpn 由后端根据 severity * occurrence * detection 计算",
+        ),
+        "forbidden_runtime_example_tokens": ('"rpn":',),
+    },
+    {
+        "workflow_id": "TEST_DESIGN",
+        "stage_id": "CASES",
+        "path": "case_statistics",
+        "required_contract_fragments": (
+            "case_statistics 由后端根据 case_groups 计算，模型不要输出",
+        ),
+        "forbidden_runtime_example_tokens": ('"case_statistics":',),
+    },
+    {
+        "workflow_id": "TEST_DESIGN",
+        "stage_id": "DELIVERY",
+        "path": "case_summary_items[].case_count",
+        "required_contract_fragments": (
+            "case_summary_items[].case_count 缺省时由后端按 "
+            "p0_count + p1_count + p2_count 派生",
+        ),
+        "forbidden_runtime_example_tokens": ('"case_count":',),
+    },
+    {
+        "workflow_id": "TEST_DESIGN",
+        "stage_id": "DELIVERY",
+        "path": "delivery_metrics.total_cases",
+        "required_contract_fragments": (
+            "delivery_metrics.total_cases 缺省时由后端按 "
+            "case_summary_items[].case_count 总和派生",
+        ),
+        "forbidden_runtime_example_tokens": ('"total_cases":',),
+    },
+    {
+        "workflow_id": "TEST_DESIGN",
+        "stage_id": "DELIVERY",
+        "path": "delivery_metrics.high_risk_count",
+        "required_contract_fragments": (
+            "delivery_metrics.high_risk_count 缺省时由后端按 "
+            "open_risks 中不可接受风险数量派生",
+        ),
+        "forbidden_runtime_example_tokens": ('"high_risk_count":',),
+    },
+    {
+        "workflow_id": "REQ_REVIEW",
+        "stage_id": "REVIEW",
+        "path": "issue_statistics.p0_count/p1_count/p2_count",
+        "required_contract_fragments": (
+            "issue_statistics.p0_count/p1_count/p2_count 缺省时由后端按 "
+            "issue_groups[].issues[].priority 中 P0/P1/P2 的数量派生",
+        ),
+        "forbidden_runtime_example_tokens": (
+            '"p0_count":',
+            '"p1_count":',
+            '"p2_count":',
+        ),
+    },
+    {
+        "workflow_id": "REQ_REVIEW",
+        "stage_id": "REPORT",
+        "path": "issue_statistics.p0_count/p1_count/p2_count",
+        "required_contract_fragments": (
+            "issue_statistics.p0_count/p1_count/p2_count 缺省时由后端按 "
+            "issue_closures[].priority 中 P0/P1/P2 的数量派生",
+        ),
+        "forbidden_runtime_example_tokens": (
+            '"p0_count":',
+            '"p1_count":',
+            '"p2_count":',
+        ),
+    },
+    {
+        "workflow_id": "VALUE_DISCOVERY",
+        "stage_id": "ELEVATOR",
+        "path": "score_summary.total_score",
+        "required_contract_fragments": (
+            "score_summary.total_score 由后端根据 score_matrix[].score 求和计算，"
+            "模型不要输出",
+        ),
+        "forbidden_runtime_example_tokens": ('"total_score":',),
+    },
+    {
+        "workflow_id": "VALUE_DISCOVERY",
+        "stage_id": "ELEVATOR",
+        "path": "score_summary.average_score",
+        "required_contract_fragments": (
+            "score_summary.average_score 由后端根据 score_matrix[].score "
+            "计算并保留 2 位小数，模型不要输出",
+        ),
+        "forbidden_runtime_example_tokens": ('"average_score":',),
+    },
+    {
+        "workflow_id": "INCIDENT_REVIEW",
+        "stage_id": "IMPROVEMENT",
+        "path": "report_info.action_count",
+        "required_contract_fragments": (
+            "report_info.action_count 缺省时由后端按 improvement_actions 数量派生",
+        ),
+        "forbidden_runtime_example_tokens": ('"action_count":',),
+    },
+    {
+        "workflow_id": "INCIDENT_REVIEW",
+        "stage_id": "IMPROVEMENT",
+        "path": "priority_distribution",
+        "required_contract_fragments": (
+            "priority_distribution 缺省时由后端按 "
+            "improvement_actions[].priority 中紧急/重要/常规的数量派生",
+        ),
+        "forbidden_runtime_example_tokens": ('"priority_distribution":',),
+    },
+    {
+        "workflow_id": "IDEA_BRAINSTORM",
+        "stage_id": "CONVERGE",
+        "path": "ice_evaluations[].ice_score",
+        "required_contract_fragments": (
+            "ice_score 缺省时由后端按 impact * confidence / effort 派生",
+        ),
+        "forbidden_runtime_example_tokens": ('"ice_score":',),
+    },
+    {
+        "workflow_id": "IDEA_BRAINSTORM",
+        "stage_id": "CONVERGE",
+        "path": "ice_evaluations[].rank",
+        "required_contract_fragments": (
+            "rank 缺省时由后端按 ICE 得分降序派生",
+        ),
+        "forbidden_runtime_example_tokens": ('"rank":',),
+    },
+)
+
 
 @lru_cache(maxsize=1)
 def load_workflow_manifest() -> dict[str, Any]:
@@ -46,6 +182,10 @@ def get_stage_artifact_data_contract(
             f"artifactDataContract 必须是对象: {workflow_id}/{stage_id}"
         )
     return contract
+
+
+def get_derived_artifact_data_field_policies() -> tuple[dict[str, Any], ...]:
+    return DERIVED_ARTIFACT_DATA_FIELD_POLICIES
 
 
 def _string_list(

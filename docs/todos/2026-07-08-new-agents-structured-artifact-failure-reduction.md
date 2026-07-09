@@ -122,6 +122,8 @@
   - 进展：已完成 `INCIDENT_REVIEW/IMPROVEMENT` 行动统计纵切。`report_info.action_count` 缺省时由 `improvement_actions` 数量派生，`priority_distribution` 缺省时由 `improvement_actions[].priority` 派生；显式错误统计仍触发 validation failure。IMPROVEMENT runtime instruction 示例不再要求模型输出这些派生统计字段，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
   - 进展：已完成 `IDEA_BRAINSTORM/CONVERGE` ICE 评分纵切。`ice_evaluations[].ice_score` 缺省时由 `impact * confidence / effort` 派生；显式错误评分仍触发 validation failure。CONVERGE runtime instruction 示例不再要求模型输出 `ice_score`，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
   - 进展：已完成 `IDEA_BRAINSTORM/CONVERGE` ICE 排名纵切。`ice_evaluations[].rank` 缺省时由后端按 ICE 得分降序派生；显式错误排名仍触发 validation failure。CONVERGE runtime instruction 示例不再要求模型输出 `rank`，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
+  - 进展：已完成已治理派生字段回退审计门禁。新增 `get_derived_artifact_data_field_policies()` 清单和 contract sync 测试，统一校验上述字段必须在 manifest contract 中声明后端派生 / 显式一致性，并且 runtime JSON 示例不得再要求模型输出这些字段。
+  - 后续候选：旁路审查未发现 P0 回退，但识别出 4 个 P1 候选：`TEST_DESIGN/CASES` 内层 `case.dimension` 与外层 case group dimension 一致性、`REQ_REVIEW/REVIEW` 内层 issue dimension 与外层 issue group dimension 一致性、`INCIDENT_REVIEW/IMPROVEMENT` root cause coverage `action_ids` 与 `improvement_actions[].root_cause_id` 精确匹配、`STORY_BREAKDOWN` story sprint 与 `sprint_slices[].story_ids` 映射一致性。后续应按独立切片判断是后端派生、显式一致性校验，还是归入 ID / 引用收敛能力包。
 
 - [ ] 收敛 ID 与引用关系。（第 4-6 轮）
   - 目标：后端生成稳定 ID，或在 renderer/normalizer 中确定性分配 ID；模型不再负责维护容易漂移的跨表引用。
@@ -2782,6 +2784,52 @@ cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workfl
 
 - 本轮只派生 ICE 表内 rank，不代表 `IDEA_BRAINSTORM/CONVERGE` 的 idea id、recommended idea、validation experiment 或 merge path 已完成后端生成 / 归一化。
 - 若后续产品决策允许用户基于战略因素覆盖 ICE 排名，应新增独立字段表达“人工推荐权重”或“决策覆盖理由”，不能复用 `rank` 混合两种含义。
+
+### 2026-07-09 切片记录：已治理派生字段回退审计门禁
+
+触发原因：
+
+- `TEST_DESIGN/DELIVERY`、`REQ_REVIEW`、`INCIDENT_REVIEW/IMPROVEMENT`、`IDEA_BRAINSTORM/CONVERGE` 等派生字段已完成多个纵切，但缺少一张统一审计清单保护这些字段不被后续 runtime 示例或 manifest 文案回退为“模型必须输出”。
+- 单阶段测试能证明局部行为，但不能直接回答“当前已治理派生字段是否整体仍由后端派生、runtime 示例是否没有重新要求模型输出”。
+- 本轮作为工程信任闭环，不新增新 workflow，不改变 shared runtime / transport / state / UI，只补后端 contract sync 审计策略与测试。
+
+已修复：
+
+- 新增 `get_derived_artifact_data_field_policies()`，集中记录当前已治理派生字段：`risks[].rpn`、`case_statistics`、`case_summary_items[].case_count`、`delivery_metrics.total_cases`、`delivery_metrics.high_risk_count`、REQ_REVIEW P0/P1/P2 计数、`score_summary.total_score` / `average_score`、`report_info.action_count`、`priority_distribution`、`ice_score`、`rank`。
+- 新增 backend contract sync 聚合测试，逐项校验 manifest contract instruction 必须包含后端派生 / 显式一致性片段，同时 runtime structured output JSON 示例不得包含对应 `"field":` 示例 token。
+- 子智能体只读旁路审查确认：当前已治理字段未发现 P0 回退；前端配置和 prompt 仍从 manifest 注入派生规则，没有独立要求模型输出上述派生字段。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py -q -k derived_artifact_data_fields_are_tracked
+```
+
+结果：修复前 `1 failed, 36 deselected`，失败点为缺少统一派生字段策略清单；修复后 `1 passed, 36 deselected`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_artifact_data_renderers.py -q -k "derived or artifact_data_contract or structured_output_instruction_omits or without_derived or computes_missing or derives"
+```
+
+结果：通过，`46 passed, 333 deselected`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py -q
+./scripts/test/test-local.sh new-agents
+```
+
+结果：通过。backend contract sync `37 passed`；New Agents Frontend `828 passed`；New Agents Backend `836 passed, 4 deselected`。
+
+```bash
+./scripts/test/test-local.sh
+```
+
+结果：仓库默认全量脚本在本地沙箱下未完全通过。已完成 Intent Tester API `294 passed`、严重 lint 通过、Common Frontend lint / build 通过、New Agents Frontend `828 passed`、New Agents Backend `836 passed, 4 deselected`；MidScene proxy 测试因 `listen EPERM: operation not permitted 0.0.0.0:3002` 失败，New Agents Browser E2E 因 Playwright Chromium `bootstrap_check_in ... Permission denied (1100)` 失败。该失败与本轮 3 个 New Agents contract / todo 文件改动无直接逻辑关联，按环境权限阻塞记录。
+
+残余风险：
+
+- 本轮只防止“已治理统计 / 评分 / 排名派生字段”回退，不代表所有可由 payload 机械推导的字段都已消化。
+- 旁路审查新增 4 个 P1 候选：`TEST_DESIGN/CASES` case dimension、`REQ_REVIEW/REVIEW` issue dimension、`INCIDENT_REVIEW/IMPROVEMENT` root cause coverage action mapping、`STORY_BREAKDOWN` story sprint mapping。后续应按同级切片分别评估，不塞回本轮内部批次。
 
 ## 每轮验收口径
 
