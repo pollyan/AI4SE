@@ -3478,6 +3478,30 @@ def test_req_review_artifact_data_rejects_inconsistent_issue_statistics():
         ReqReviewArtifactData.model_validate(invalid)
 
 
+def test_req_review_artifact_data_rejects_duplicate_issue_id():
+    invalid = copy.deepcopy(VALID_REQ_REVIEW_ARTIFACT_DATA)
+    invalid["issue_groups"][1]["issues"][0]["issue_id"] = "Q-001"
+
+    with pytest.raises(ValidationError, match="duplicate issue_id"):
+        ReqReviewArtifactData.model_validate(invalid)
+
+
+def test_req_review_artifact_data_rejects_unknown_revision_issue_reference():
+    invalid = copy.deepcopy(VALID_REQ_REVIEW_ARTIFACT_DATA)
+    invalid["revision_suggestions"][0]["related_issues"] = ["Q-404"]
+
+    with pytest.raises(ValidationError, match="unknown issue ids"):
+        ReqReviewArtifactData.model_validate(invalid)
+
+
+def test_req_review_artifact_data_rejects_out_of_range_quality_score():
+    invalid = copy.deepcopy(VALID_REQ_REVIEW_ARTIFACT_DATA)
+    invalid["quality_overview"][0]["severity_score"] = 6
+
+    with pytest.raises(ValidationError):
+        ReqReviewArtifactData.model_validate(invalid)
+
+
 def test_req_review_report_artifact_data_rejects_inconsistent_issue_statistics():
     invalid = {
         **VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA,
@@ -3488,6 +3512,30 @@ def test_req_review_report_artifact_data_rejects_inconsistent_issue_statistics()
     }
 
     with pytest.raises(ValidationError, match="issue_statistics"):
+        ReqReviewReportArtifactData.model_validate(invalid)
+
+
+def test_req_review_report_artifact_data_rejects_duplicate_issue_id():
+    invalid = copy.deepcopy(VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA)
+    invalid["issue_closures"][1]["issue_id"] = "Q-001"
+
+    with pytest.raises(ValidationError, match="duplicate issue_id"):
+        ReqReviewReportArtifactData.model_validate(invalid)
+
+
+def test_req_review_report_artifact_data_rejects_unknown_review_condition_issue_reference():
+    invalid = copy.deepcopy(VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA)
+    invalid["review_conditions"][0]["related_issues"] = ["Q-404"]
+
+    with pytest.raises(ValidationError, match="unknown issue ids"):
+        ReqReviewReportArtifactData.model_validate(invalid)
+
+
+def test_req_review_report_artifact_data_rejects_passing_result_with_open_p0_or_p1():
+    invalid = copy.deepcopy(VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA)
+    invalid["conclusion"]["review_result"] = "通过"
+
+    with pytest.raises(ValidationError, match="cannot be 通过"):
         ReqReviewReportArtifactData.model_validate(invalid)
 
 

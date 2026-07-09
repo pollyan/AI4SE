@@ -433,6 +433,48 @@ describe('Workflow Configuration', () => {
         expect(delivery?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual coverage-map');
     });
 
+    it('exposes manifest artifact data contract for REQ REVIEW REVIEW', () => {
+        const review = WORKFLOWS.REQ_REVIEW.stages.find(stage => stage.id === 'REVIEW');
+
+        expect(review?.artifactDataContract?.modelOutputRules).toContain(
+            'quality_overview[].severity_score 必须是 1 到 5 的整数',
+        );
+        expect(review?.artifactDataContract?.modelOutputRules).toContain(
+            'issue_groups[].issues[].issue_id 必须唯一',
+        );
+        expect(review?.artifactDataContract?.modelOutputRules).toContain(
+            'issue_statistics.p0_count/p1_count/p2_count 必须等于 issue_groups[].issues[].priority 中 P0/P1/P2 的数量',
+        );
+        expect(review?.artifactDataContract?.modelOutputRules).toContain(
+            'revision_suggestions[].related_issues 只能引用 issue_groups[].issues[].issue_id 中已定义的问题 ID',
+        );
+        expect(review?.artifactDataContract?.forbiddenOutputs).toContain('score-matrix JSON 代码块');
+        expect(review?.artifactDataContract?.rendererOutputs).toContain('右侧需求评审问题清单');
+        expect(review?.artifactDataContract?.rendererOutputs).toContain('Mermaid flowchart');
+        expect(review?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual score-matrix');
+    });
+
+    it('exposes manifest artifact data contract for REQ REVIEW REPORT', () => {
+        const report = WORKFLOWS.REQ_REVIEW.stages.find(stage => stage.id === 'REPORT');
+
+        expect(report?.artifactDataContract?.modelOutputRules).toContain(
+            'issue_closures[].issue_id 必须唯一',
+        );
+        expect(report?.artifactDataContract?.modelOutputRules).toContain(
+            'issue_statistics.p0_count/p1_count/p2_count 必须等于 issue_closures[].priority 中 P0/P1/P2 的数量',
+        );
+        expect(report?.artifactDataContract?.modelOutputRules).toContain(
+            'review_conditions[].related_issues 只能引用 issue_closures[].issue_id 中已定义的问题 ID',
+        );
+        expect(report?.artifactDataContract?.modelOutputRules).toContain(
+            '当存在 closure_status != “已关闭” 的 P0/P1 issue_closures 时，conclusion.review_result 不能为“通过”',
+        );
+        expect(report?.artifactDataContract?.forbiddenOutputs).toContain('priority-board JSON 代码块');
+        expect(report?.artifactDataContract?.rendererOutputs).toContain('右侧需求评审报告');
+        expect(report?.artifactDataContract?.rendererOutputs).toContain('Mermaid pie');
+        expect(report?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual priority-board');
+    });
+
     it('does not ask TEST DESIGN STRATEGY model to handwrite renderer-owned visuals in artifact data mode', () => {
         const strategy = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'STRATEGY');
 
