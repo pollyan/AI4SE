@@ -3057,6 +3057,15 @@ def test_idea_converge_artifact_data_rejects_duplicate_rank():
         IdeaConvergeArtifactData.model_validate(invalid)
 
 
+def test_idea_converge_artifact_data_rejects_inconsistent_rank_order():
+    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    invalid["ice_evaluations"][0]["rank"] = 2
+    invalid["ice_evaluations"][1]["rank"] = 1
+
+    with pytest.raises(ValidationError, match="rank must match descending ice_score"):
+        IdeaConvergeArtifactData.model_validate(invalid)
+
+
 def test_idea_converge_artifact_data_rejects_invalid_ice_score():
     invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
     invalid["ice_evaluations"][0]["ice_score"] = 9.5
@@ -3088,6 +3097,36 @@ def test_idea_converge_artifact_data_derives_ice_score_when_missing():
     assert [
         item["ice_score"] for item in output.artifact_data["ice_evaluations"]
     ] == [10.0, 6.0, 2.0]
+    assert "| ID-001 | 方向证据评分卡 | 5 | 4 | 2 | 10.00 | 1 | 推荐方案 |" in (
+        output.artifact_update.markdown
+    )
+
+
+def test_idea_converge_artifact_data_derives_rank_when_missing():
+    artifact_data = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    for item in artifact_data["ice_evaluations"]:
+        item.pop("rank")
+
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已完成创意收敛评估，请确认右侧决策矩阵。",
+            "artifact_data": artifact_data,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "CONCEPT",
+            },
+            "warnings": [],
+        },
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONVERGE",
+    )
+
+    assert output is not None
+    assert [item["rank"] for item in output.artifact_data["ice_evaluations"]] == [
+        1,
+        2,
+        3,
+    ]
     assert "| ID-001 | 方向证据评分卡 | 5 | 4 | 2 | 10.00 | 1 | 推荐方案 |" in (
         output.artifact_update.markdown
     )

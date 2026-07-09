@@ -1624,6 +1624,39 @@ def test_parse_agent_turn_output_text_renders_idea_converge_without_ice_score():
     assert "## ICE 评估表" in output.artifact_update.markdown
 
 
+def test_parse_agent_turn_output_text_renders_idea_converge_without_rank():
+    artifact_data = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    for item in artifact_data["ice_evaluations"]:
+        item.pop("rank")
+
+    json_text = json.dumps(
+        {
+            "chat": "已完成创意收敛评估。",
+            "artifact_data": artifact_data,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "CONCEPT",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONVERGE",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert [item["rank"] for item in output.artifact_data["ice_evaluations"]] == [
+        1,
+        2,
+        3,
+    ]
+    assert "## ICE 评估表" in output.artifact_update.markdown
+
+
 def test_parse_agent_turn_output_text_renders_idea_concept_artifact_data():
     json_text = json.dumps(
         {
@@ -1895,6 +1928,7 @@ def test_idea_converge_structured_output_instruction_uses_manifest_artifact_data
         "ice_score 缺省时由后端按 impact * confidence / effort 派生"
         in instruction
     )
+    assert "rank 缺省时由后端按 ICE 得分降序派生" in instruction
     assert (
         "不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 quadrantChart"
         in instruction
@@ -1916,6 +1950,16 @@ def test_idea_converge_structured_output_instruction_omits_ice_score():
         "ice_score 缺省时由后端按 impact * confidence / effort 派生"
         in instruction
     )
+
+
+def test_idea_converge_structured_output_instruction_omits_rank():
+    instruction = build_structured_output_instruction(
+        "IDEA_BRAINSTORM",
+        "CONVERGE",
+    )
+
+    assert '"rank":' not in instruction
+    assert "rank 缺省时由后端按 ICE 得分降序派生" in instruction
 
 
 def test_idea_concept_structured_output_instruction_requests_artifact_data_not_markdown():

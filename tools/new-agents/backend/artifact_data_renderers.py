@@ -351,7 +351,7 @@ class IdeaIceEvaluation(StrictArtifactDataModel):
     confidence: int = Field(ge=1, le=5)
     effort: int = Field(ge=1, le=5)
     ice_score: float | None = None
-    rank: int = Field(ge=1)
+    rank: int | None = Field(default=None, ge=1)
     conclusion: str
     elimination_reason: str
     evidence_source: str
@@ -410,8 +410,10 @@ class IdeaConvergeArtifactData(StrictArtifactDataModel):
         if len(idea_ids) != len(self.ice_evaluations):
             raise ValueError("ice_evaluations contains duplicate idea_id")
 
-        ranks = {item.rank for item in self.ice_evaluations}
-        if len(ranks) != len(self.ice_evaluations):
+        provided_ranks = [
+            item.rank for item in self.ice_evaluations if item.rank is not None
+        ]
+        if len(set(provided_ranks)) != len(provided_ranks):
             raise ValueError("ice_evaluations contains duplicate rank")
 
         for item in self.ice_evaluations:
@@ -423,6 +425,27 @@ class IdeaConvergeArtifactData(StrictArtifactDataModel):
                 raise ValueError(
                     f"ice_evaluations.{item.idea_id}.ice_score must equal "
                     "impact * confidence / effort"
+                )
+
+        ranked_items = sorted(
+            enumerate(self.ice_evaluations),
+            key=lambda indexed_item: (
+                -(indexed_item[1].ice_score or 0),
+                indexed_item[0],
+            ),
+        )
+        expected_ranks = {
+            id(item): rank for rank, (_index, item) in enumerate(ranked_items, start=1)
+        }
+        for item in self.ice_evaluations:
+            expected_rank = expected_ranks[id(item)]
+            if item.rank is None:
+                item.rank = expected_rank
+                continue
+            if item.rank != expected_rank:
+                raise ValueError(
+                    f"ice_evaluations.{item.idea_id}.rank must match "
+                    "descending ice_score order"
                 )
 
         recommended_idea_id = self.decision_matrix.recommended_idea_id

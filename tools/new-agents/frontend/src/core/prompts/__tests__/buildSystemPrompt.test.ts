@@ -461,9 +461,10 @@ describe('buildSystemPrompt', () => {
 
         const iceScoreRule =
             'ice_score 缺省时由后端按 impact * confidence / effort 派生；显式提供时必须一致';
+        const rankRule = 'rank 缺省时由后端按 ICE 得分降序派生；显式提供时必须一致';
         expect(prompt).toContain('【artifact_data 结构化契约】');
         expect(prompt).toContain('ice_evaluations.idea_id 必须唯一');
-        expect(prompt).toContain('rank 必须唯一');
+        expect(prompt).toContain(rankRule);
         expect(prompt).toContain(iceScoreRule);
         expect(prompt).toContain(
             'decision_matrix.recommended_idea_id、validation_experiments.idea_ids 和 merge_paths.source_idea_ids 只能引用已存在的 idea_id',

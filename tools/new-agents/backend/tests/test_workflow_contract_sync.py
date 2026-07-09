@@ -168,7 +168,7 @@ def test_idea_converge_artifact_data_contract_manifest_drives_backend_instructio
 
     assert contract is not None
     assert "ice_evaluations.idea_id 必须唯一" in instruction
-    assert "rank 必须唯一" in instruction
+    assert "rank 缺省时由后端按 ICE 得分降序派生" in instruction
     assert (
         "ice_score 缺省时由后端按 "
         "impact * confidence / effort 派生"

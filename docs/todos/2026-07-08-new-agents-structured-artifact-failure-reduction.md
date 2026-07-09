@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化已新增 `TEST_DESIGN/DELIVERY` 统计字段、`REQ_REVIEW` 问题统计、`INCIDENT_REVIEW/IMPROVEMENT` 行动统计和 `IDEA_BRAINSTORM/CONVERGE` ICE 评分纵切。后续未完成治理仍集中在 5 个能力包：派生字段后端化、ID 收敛、视觉协议分层、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
+- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化已新增 `TEST_DESIGN/DELIVERY` 统计字段、`REQ_REVIEW` 问题统计、`INCIDENT_REVIEW/IMPROVEMENT` 行动统计和 `IDEA_BRAINSTORM/CONVERGE` ICE 评分 / 排名纵切。后续未完成治理仍集中在 5 个能力包：派生字段后端化、ID 收敛、视觉协议分层、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -121,6 +121,7 @@
   - 进展：已完成 `REQ_REVIEW/REVIEW` 与 `REQ_REVIEW/REPORT` 问题统计纵切。REVIEW 的 `issue_statistics.p0_count/p1_count/p2_count` 缺省时由 `issue_groups[].issues[].priority` 派生，REPORT 的 `issue_statistics` 缺省时由 `issue_closures[].priority` 派生；显式错误统计仍触发 validation failure。REQ_REVIEW runtime instruction 示例不再要求模型输出派生计数字段，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
   - 进展：已完成 `INCIDENT_REVIEW/IMPROVEMENT` 行动统计纵切。`report_info.action_count` 缺省时由 `improvement_actions` 数量派生，`priority_distribution` 缺省时由 `improvement_actions[].priority` 派生；显式错误统计仍触发 validation failure。IMPROVEMENT runtime instruction 示例不再要求模型输出这些派生统计字段，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
   - 进展：已完成 `IDEA_BRAINSTORM/CONVERGE` ICE 评分纵切。`ice_evaluations[].ice_score` 缺省时由 `impact * confidence / effort` 派生；显式错误评分仍触发 validation failure。CONVERGE runtime instruction 示例不再要求模型输出 `ice_score`，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
+  - 进展：已完成 `IDEA_BRAINSTORM/CONVERGE` ICE 排名纵切。`ice_evaluations[].rank` 缺省时由后端按 ICE 得分降序派生；显式错误排名仍触发 validation failure。CONVERGE runtime instruction 示例不再要求模型输出 `rank`，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
 
 - [ ] 收敛 ID 与引用关系。（第 4-6 轮）
   - 目标：后端生成稳定 ID，或在 renderer/normalizer 中确定性分配 ID；模型不再负责维护容易漂移的跨表引用。
@@ -2724,6 +2725,63 @@ cd tools/new-agents/frontend && npm run test
 
 - 本轮只补齐已写入 manifest 的 CASES 自动化候选引用门禁，不后端生成或重写 `case_id`。
 - 更广泛的 ID 收敛仍未完成，尤其是 `IDEA_BRAINSTORM/CONVERGE` 的 idea / rank / recommended idea 链路，以及 `TEST_DESIGN/STRATEGY` 的 `QG/R/TS/TP` 字符串引用归一化。
+
+### 2026-07-09 切片记录：IDEA_BRAINSTORM/CONVERGE ICE 排名后端派生
+
+触发原因：
+
+- `CONVERGE` 的 `ice_score` 已由后端按 `impact * confidence / effort` 派生，但同一 ICE 评估表内的 `rank` 仍由模型输出，后端只校验唯一性。
+- 这会把“按 ICE 得分排序”这种确定性产物交给模型维护，导致显式 rank 与 ICE 得分顺序不一致时仍可能通过校验。
+- 本轮只处理 ICE 表内 rank 的派生与一致性校验，不后端生成 idea id，不改推荐方案决策矩阵，不改变 validation experiment 或 merge path 引用逻辑。
+
+已修复：
+
+- `IdeaIceEvaluation.rank` 改为可缺省；缺省时由后端按 `ice_score` 降序派生，分数相同保留输入顺序。
+- 显式提供 rank 时必须与后端派生顺序一致；重复 rank 或错误排序继续触发 `ValidationError`。
+- `IDEA_BRAINSTORM/CONVERGE` runtime structured output 示例不再要求模型输出 `rank`。
+- `workflow_manifest.json`、前端 workflow 配置测试和前端 system prompt 测试同步更新为“rank 缺省后端派生、显式提供必须一致”。
+- `docs/TESTING.md` 字段来源矩阵同步更新，记录 CONVERGE 的 ICE 原子评分由模型负责，ICE 得分和排名由后端确定性派生。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py -q -k "idea_converge_artifact_data_derives_rank_when_missing or idea_converge_artifact_data_rejects_inconsistent_rank_order"
+```
+
+结果：修复前 `2 failed, 128 deselected`，失败点为缺少 `rank` 时 Pydantic required、错误 rank 顺序未触发 `ValidationError`；修复后 `2 passed, 128 deselected`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py -q -k "idea_converge_without_rank or idea_converge_structured_output_instruction_omits_rank"
+```
+
+结果：修复前 `2 failed, 210 deselected`，失败点为 runtime parse 缺少 rank 失败、structured output instruction 仍要求模型输出 `rank`；修复后 `2 passed, 210 deselected`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py -q -k idea_converge_artifact_data_contract
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run -t "IDEA BRAINSTORM CONVERGE"
+```
+
+结果：修复前分别为 `1 failed, 35 deselected` 和前端 `2 failed, 110 skipped`；修复后分别为 `1 passed, 35 deselected` 和前端 `2 passed, 110 skipped`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py -q -k idea_converge
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py -q -k idea_converge
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py -q
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run
+```
+
+结果：分别通过 `13 passed, 117 deselected`、`9 passed, 203 deselected`、`36 passed`、前端 `112 passed`。
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：通过。New Agents Frontend `828 passed`；New Agents Backend `835 passed, 4 deselected`。
+
+残余风险：
+
+- 本轮只派生 ICE 表内 rank，不代表 `IDEA_BRAINSTORM/CONVERGE` 的 idea id、recommended idea、validation experiment 或 merge path 已完成后端生成 / 归一化。
+- 若后续产品决策允许用户基于战略因素覆盖 ICE 排名，应新增独立字段表达“人工推荐权重”或“决策覆盖理由”，不能复用 `rank` 混合两种含义。
 
 ## 每轮验收口径
 
