@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import mermaid from 'mermaid';
 import { WORKFLOWS } from '../workflows';
 import { parseStructuredVisual } from '../structuredVisuals';
+import { sanitizeMermaidCode } from '../utils/mermaidSanitizer';
 
 describe('Mermaid Syntax Validation for workflow prompt examples', () => {
 
@@ -25,6 +26,35 @@ describe('Mermaid Syntax Validation for workflow prompt examples', () => {
             ));
 
         expect(templatesWithLiteralFence).toEqual([]);
+    });
+
+    it.each([
+        [
+            'flowchart',
+            'flowchart TD\n    User["用户"] --> Entry["登录页"]\n    Entry --> Result["工作台"]',
+        ],
+        [
+            'mindmap',
+            'mindmap\n  root(("登录问题"))\n    凭证错误\n      密码错误',
+        ],
+        [
+            'pie',
+            'pie showData\n    "P0" : 2\n    "P1" : 3',
+        ],
+        [
+            'quadrantChart',
+            'quadrantChart\n    title 风险矩阵\n    x-axis 低发生 --> 高发生\n    y-axis 低影响 --> 高影响\n    "验证码绕过": [0.7, 0.8]',
+        ],
+        [
+            'block-beta',
+            'block-beta\n    columns 1\n    A["单元测试"]\n    B["集成测试"]\n    A --> B',
+        ],
+        [
+            'journey',
+            'journey\n    title 用户旅程\n    section 发现问题\n      提交反馈: 3: 用户',
+        ],
+    ])('parses backend renderer Mermaid fixture: %s', async (_name, source) => {
+        expect(await validateMermaid(sanitizeMermaidCode(source))).toBe(true);
     });
 
     it('uses timeline-map instead of Mermaid timeline in the timeline prompt', () => {

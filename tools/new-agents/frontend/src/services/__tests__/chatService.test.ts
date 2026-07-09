@@ -2191,6 +2191,54 @@ describe('useChatService', () => {
         expect(state.artifactHistory).toEqual([]);
     });
 
+    it('should show structured recovery when backend visual validation fails', async () => {
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            throw Object.assign(
+                new Error('VISUAL_VALIDATION_FAILED: ai4se-visual block 1 must contain valid JSON'),
+                {
+                    code: 'VISUAL_VALIDATION_FAILED',
+                    diagnostic: {
+                        phase: 'visual_validation',
+                        workflowId: 'TEST_DESIGN',
+                        stageId: 'CLARIFY',
+                        fieldPath: 'artifact_update.markdown',
+                        validator: 'ai4se_visual_json',
+                        retryable: false,
+                        publicReason: '产出物中的可视化内容未通过校验，右侧产出物已保持不变。',
+                    },
+                }
+            );
+        });
+
+        const { result } = renderHook(() => useChatService());
+
+        act(() => {
+            result.current.setInput('触发视觉门禁');
+        });
+
+        await act(async () => {
+            await result.current.handleSend();
+        });
+
+        const state = useStore.getState();
+        expect(state.chatHistory[1]).toMatchObject({
+            errorDiagnostic: {
+                kind: 'structured',
+                code: 'VISUAL_VALIDATION_FAILED',
+                phase: 'visual_validation',
+                workflowId: 'TEST_DESIGN',
+                stageId: 'CLARIFY',
+                fieldPath: 'artifact_update.markdown',
+                validator: 'ai4se_visual_json',
+                retryable: false,
+            },
+        });
+        expect(state.chatHistory[1].content).toContain('结构化输出生成失败');
+        expect(state.chatHistory[1].content).toContain('可视化内容未通过校验');
+        expect(state.artifactContent).toBe('initial artifact');
+        expect(state.artifactHistory).toEqual([]);
+    });
+
     it.each([
         'Artifact Mermaid parse failed: Parse error on line 3',
         'Artifact validation failed: missing required section',

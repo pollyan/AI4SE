@@ -584,6 +584,14 @@ class ContractValidationError(ValueError):
     """Raised when a structured agent output violates workflow rules."""
 
 
+class ArtifactVisualValidationError(ContractValidationError):
+    """Raised when artifact visual blocks are not parseable or renderable."""
+
+    def __init__(self, message: str, *, validator: str) -> None:
+        super().__init__(message)
+        self.validator = validator
+
+
 class ArtifactUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -809,21 +817,8 @@ def validate_artifact_template(
         ]
         if invalid_required_blocks:
             invalid_type = str(invalid_required_blocks[0].get("type"))
-            if invalid_type == "cause-map":
-                raise ContractValidationError(
-                    "cause-map 必须使用 nodes 和 edges 结构；"
-                    "nodes 必须是非空对象数组且 id 唯一，"
-                    "edges.source/target 必须引用已存在的 node id。"
-                )
-            if invalid_type == "timeline-map":
-                raise ContractValidationError(
-                    "timeline-map 必须使用 events 结构；"
-                    "events 必须是非空对象数组且 id 唯一，"
-                    "每个 event 必须包含非空 time、title、description 和 factIds。"
-                )
             raise ContractValidationError(
-                f"{invalid_type} 必须使用 columns 和 rows 结构；"
-                "columns 必须是非空字符串数组，rows 必须是对象数组。"
+                structured_visual_error_message(invalid_type)
             )
         raise ContractValidationError(
             "missing required artifact visualizations: "
@@ -966,6 +961,38 @@ def extract_structured_visual_blocks(markdown: str) -> list[dict[str, Any]]:
     return blocks
 
 
+def extract_structured_visual_block_sources(markdown: str) -> list[str]:
+    blocks: list[str] = []
+    in_fence = False
+    fence_marker = ""
+    is_structured_visual = False
+    current_lines: list[str] = []
+
+    for line in markdown.splitlines():
+        stripped = line.lstrip()
+        if not in_fence and (stripped.startswith("```") or stripped.startswith("~~~")):
+            fence_marker = stripped[:3]
+            language = stripped[3:].strip().split(maxsplit=1)[0].lower()
+            in_fence = True
+            is_structured_visual = language == "ai4se-visual"
+            current_lines = []
+            continue
+
+        if in_fence:
+            if stripped.startswith(fence_marker):
+                if is_structured_visual:
+                    blocks.append("\n".join(current_lines))
+                in_fence = False
+                fence_marker = ""
+                is_structured_visual = False
+                current_lines = []
+                continue
+            if is_structured_visual:
+                current_lines.append(line)
+
+    return blocks
+
+
 def has_required_structured_visual(
     structured_visual_blocks: list[dict[str, Any]],
     *,
@@ -1071,6 +1098,57 @@ def is_valid_timeline_map_visual_block(block: dict[str, Any]) -> bool:
             return False
 
     return True
+
+
+def structured_visual_error_message(visual_type: str) -> str:
+    if visual_type == "cause-map":
+        return (
+            "cause-map 必须使用 nodes 和 edges 结构；"
+            "nodes 必须是非空对象数组且 id 唯一，"
+            "edges.source/target 必须引用已存在的 node id。"
+        )
+    if visual_type == "timeline-map":
+        return (
+            "timeline-map 必须使用 events 结构；"
+            "events 必须是非空对象数组且 id 唯一，"
+            "每个 event 必须包含非空 time、title、description 和 factIds。"
+        )
+    return (
+        f"{visual_type} 必须使用 columns 和 rows 结构；"
+        "columns 必须是非空字符串数组，rows 必须是对象数组。"
+    )
+
+
+def validate_artifact_visual_blocks(markdown: str) -> None:
+    for index, source in enumerate(extract_structured_visual_block_sources(markdown), 1):
+        try:
+            parsed = json.loads(source)
+        except json.JSONDecodeError as exc:
+            raise ArtifactVisualValidationError(
+                f"ai4se-visual block {index} must contain valid JSON",
+                validator="ai4se_visual_json",
+            ) from exc
+        if not isinstance(parsed, dict):
+            raise ArtifactVisualValidationError(
+                f"ai4se-visual block {index} must contain a JSON object",
+                validator="ai4se_visual_json",
+            )
+        visual_type = parsed.get("type")
+        if not isinstance(visual_type, str) or not visual_type.strip():
+            raise ArtifactVisualValidationError(
+                f"ai4se-visual block {index} must include a supported type",
+                validator="ai4se_visual_type",
+            )
+        if visual_type not in STRUCTURED_VISUAL_SCHEMA_PROMPTS:
+            raise ArtifactVisualValidationError(
+                f"unsupported ai4se-visual type: {visual_type}",
+                validator="ai4se_visual_type",
+            )
+        if not is_valid_structured_visual_block(parsed, visual_type=visual_type):
+            raise ArtifactVisualValidationError(
+                structured_visual_error_message(visual_type),
+                validator="ai4se_visual_shape",
+            )
 
 
 def build_artifact_contract_prompt(
@@ -1225,5 +1303,7 @@ def validate_agent_turn(
         workflow_id=workflow_id,
         current_stage_id=current_stage_id,
     )
+    if output.artifact_update.type == "replace":
+        validate_artifact_visual_blocks(output.artifact_update.markdown or "")
 
     return output

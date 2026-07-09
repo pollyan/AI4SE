@@ -3,7 +3,7 @@ import copy
 import pytest
 from pydantic import ValidationError
 
-from agent_contracts import validate_agent_turn
+from agent_contracts import validate_agent_turn, validate_artifact_visual_blocks
 from agent_runtime import ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS
 from artifact_data_renderers import (
     CasesArtifactData,
@@ -4974,3 +4974,33 @@ ARTIFACT_DATA_STAGE_FIXTURES = {
     ("STORY_BREAKDOWN", "STORY_BACKLOG"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
     ("STORY_BREAKDOWN", "SPRINT_PLAN"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
 }
+
+
+@pytest.mark.parametrize(
+    ("workflow_id", "stage_id", "artifact_data"),
+    [
+        (workflow_id, stage_id, artifact_data)
+        for (workflow_id, stage_id), artifact_data in sorted(
+            ARTIFACT_DATA_STAGE_FIXTURES.items()
+        )
+    ],
+)
+def test_artifact_data_renderer_stage_fixtures_emit_backend_valid_visual_blocks(
+    workflow_id: str,
+    stage_id: str,
+    artifact_data: dict,
+):
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已生成结构化产物。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id=workflow_id,
+        current_stage_id=stage_id,
+    )
+
+    assert output is not None
+    assert output.artifact_update.markdown is not None
+    validate_artifact_visual_blocks(output.artifact_update.markdown)

@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化和 ID / 引用一致性 P1 已收口，剩余自动 ID 分配与 `VALUE_DISCOVERY/JOURNEY` pain / opportunity 成对映射降为 P2 backlog；视觉协议分层已新增 manifest 顶层 `visualProtocol` 并接入后端 runtime / 前端 system prompt。后续 P1 厚切片集中在 `INCIDENT_REVIEW/TIMELINE` 复杂视觉迁移和服务端视觉成功门禁。）
+- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切、结构化失败回归门禁、`INCIDENT_REVIEW/TIMELINE` timeline-map 复杂视觉迁移和服务端视觉成功门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化和 ID / 引用一致性 P1 已收口，剩余自动 ID 分配与 `VALUE_DISCOVERY/JOURNEY` pain / opportunity 成对映射降为 P2 backlog；视觉协议分层已新增 manifest 顶层 `visualProtocol` 并接入后端 runtime / 前端 system prompt。用户要求当前服务端视觉成功门禁完成后停止继续实现，先重新定义后续切片。）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -3190,6 +3190,158 @@ cd tools/new-agents/frontend && npm run build
 - `VALUE_DISCOVERY/JOURNEY` pain / opportunity 成对映射：只读审查归类为 P2，不进入结构化失败 P1 主线。
 - 一次性迁移所有复杂 visual type：范围过大，且会形成事实上的内部批次；必须按真实 workflow family / visual type 独立切片。
 - backend runtime 引入 `mmdc` / Chromium：运维成本和镜像复杂度高，除非后续明确选择 SVG 级渲染门禁。
+
+### 2026-07-09 目标承接检查：服务端视觉成功门禁
+
+事实源快照：
+
+- 已读取：`AGENTS.md`、`docs/strategy/goal-mode-playbook.md`、`docs/strategy/goal-mode-cga-template.md`、`docs/strategy/goal-mode-ci-verification.md`、本 todo、`stream_services.py`、`agent_contracts.py`、`artifact_data_renderers.py`、`test_stream_services.py`、`test_agent_contracts.py`、`test_artifact_data_renderers.py`、前端 `llm.ts`、`structuredVisuals.ts`、`mermaid.test.ts`、`chatService.ts`。
+- 当前工作区：`master...origin/master` 干净，无需保护无关脏变更。
+
+已确认目标来源：
+
+- 来源：本 todo 的“timeline-map 后剩余工作重切片”。
+- 本轮承接：第 1 个剩余厚切片 `服务端视觉成功门禁`。
+- 上一轮状态：`INCIDENT_REVIEW/TIMELINE timeline-map` 已提交并通过 New Agents 总门禁。
+
+改道条件检查：
+
+- 新 P0/P1 或用户新目标：用户要求当前任务完成后停止继续开发，重新定义后续工作与切片划分；该要求纳入本轮收尾边界，不改变当前厚切片。
+- 未关闭质量门或用户明确反馈：无阻断性失败证据；用户对切片过薄的反馈要求本轮不得再拆内部批次。
+- LLM judge / E2E / 审查状态：本轮不启用 LLM judge；浏览器 E2E 非本切片主验收。
+- 测试失败或生产阻断：启动时无本地失败；后续按 TDD 先写失败测试。
+- 架构、文档或代码事实冲突：无。后端当前成功路径在 persistence 前没有视觉 gate，符合本轮缺口。
+- 工作区冲突：无。
+- 是否需要拆分或合并：否。本轮是一个工程信任闭环，包含运行时成功语义、后端 visual shape gate、renderer fixture gate 和前端 Mermaid CI fixture，不拆内部批次。
+
+子智能体 / 旁路审查决策：
+
+- 可用工具：可用。
+- 已派发只读 explorer：`019f46b4-b0fe-7171-ac4b-374d012ca154` 审查后端 success / persistence 路径；`019f46b4-dfe4-71d2-afbb-44bd8d1ce257` 审查 visual contract / fixture gate。
+- 审查结论：视觉 gate 应插在最终 `final_output` 形成并经过 readiness gate 后、`append_assistant_message()` / `record_artifact_version()` / success metric / final `AgentTurnEvent` 前；所有 fenced `ai4se-visual` block 必须严格 JSON + type + shape 校验；renderer fixture 需要统一 visual parse gate；后端 runtime 不引入 `mmdc` / Chromium。
+- 写入策略：子智能体只读，主 Agent 在单工作区串行实现。
+
+边界复核：
+
+- 本轮纳入：服务端 final success 前视觉门禁；坏视觉失败时不发正式成功、不写 assistant final message、不写 artifact version、不写 success metric；所有 `ai4se-visual` fenced block 的后端严格 shape 校验；renderer fixture 视觉解析；前端 Mermaid parse fixture 作为 CI 证据；前端错误卡片识别新的视觉失败码。
+- 本轮排除：不迁移新 visual type；不改 `visualProtocol` / `rendererOutputs` / prompt / dry-run 全链路一致性；不引入 `mmdc`、Chromium、自动 repair 或服务端 Mermaid 自动重写；不新增 agent 专属 runtime/UI/store。
+- 厚度门禁：入口是 `/api/agent/runs/stream` 共享 Agent Runtime；动作是生成正式 artifact；处理是在服务端成功语义前执行视觉校验；结果是成功才持久化和发 final event；状态承接是 artifact version / run metric / 前端错误卡片；失败反馈是 typed SSE error；证据是后端、前端和 New Agents 总门禁。
+
+验收复核：
+
+1. `test_stream_services.py` 证明视觉失败只产生 error event / error metric，不产生 final `agent_turn`、assistant final message、artifact version 或 success metric。
+2. `test_agent_contracts.py` 证明 malformed、unsupported 或 invalid extra `ai4se-visual` block 不能被 required visual 成功路径掩盖。
+3. `test_artifact_data_renderers.py` 证明全阶段 deterministic renderer 产出的 visual block 均能通过后端 strict visual gate。
+4. 前端测试证明 renderer Mermaid fixture 可被 `mermaid.parse` 接受，且 `VISUAL_VALIDATION_FAILED` 进入结构化失败恢复卡片。
+5. 运行 `./scripts/test/test-local.sh new-agents`，提交并 push 后停止继续实现，先重切后续工作。
+
+结论：继续承接 `服务端视觉成功门禁`，当前切片不拆内部批次。
+
+### 2026-07-09 实施计划：服务端视觉成功门禁
+
+目标：
+
+- 调用方现在可以相信：New Agents 服务端只有在最终 artifact 的视觉块通过可执行校验后，才会发出正式成功、持久化 artifact 和记录成功 metric；视觉失败会显式返回诊断并保持正式产物不变。
+
+设计：
+
+- 新增或增强后端 strict visual gate：抽取所有 fenced `ai4se-visual` block，逐个严格解析 JSON，校验 supported `type` 和对应 shape；该 gate 不做 Mermaid JS parse。
+- 在 `stream_services.stream_agent_run_events()` 的 final success 分支中，于 persistence / success metric / final event 前调用 visual gate。失败使用新的 `VISUAL_VALIDATION_FAILED` 错误码和 `phase="visual_validation"` diagnostic。
+- renderer fixture gate 复用相同后端 visual gate，覆盖所有 `ARTIFACT_DATA_STAGE_FIXTURES`。
+- 前端沿用现有写入前 Mermaid / structured visual gate，并补新的 backend 错误码展示；前端 Mermaid fixture 只作为 CI 证据，不进入 backend runtime。
+
+TDD 步骤：
+
+1. 后端 contract RED：新增 malformed `ai4se-visual`、extra invalid `ai4se-visual` 负例。
+2. 后端 stream RED：新增 final visual failure 不落库、不 success metric、不 final event 的测试。
+3. Renderer fixture RED：新增全阶段 visual block strict gate 测试。
+4. 前端 RED：新增 `VISUAL_VALIDATION_FAILED` 诊断展示测试和 renderer Mermaid fixture parse 测试。
+5. GREEN：实现后端 strict gate、stream 插入点、typed diagnostic、前端错误码识别。
+6. REFACTOR：消除重复 helper，保持共享 runtime / renderer / parser 边界。
+7. VERIFY：运行聚焦后端、聚焦前端、frontend build、`./scripts/test/test-local.sh new-agents`。
+8. COMMIT/PUSH：提交当前厚切片；随后按用户要求停止继续实现，重新定义后续切片。
+
+### 2026-07-09 切片记录：服务端视觉成功门禁
+
+目标：
+
+- 让共享 Agent Runtime 的正式成功语义和视觉产物可用性对齐：最终 artifact 只有在服务端视觉 gate 通过后，才会写入 assistant final message、artifact version、success metric 并发出正式 `agent_turn`。
+- 视觉失败必须显式返回 typed SSE error，不得用前端 gate、缓存旧 artifact、草稿或 repair 伪装成功。
+
+本轮完成：
+
+- 后端 `agent_contracts.py` 新增 `ArtifactVisualValidationError` 和 `validate_artifact_visual_blocks()`。所有 fenced `ai4se-visual` block 都必须是合法 JSON object、`type` 受支持，并满足对应 shape：矩阵类使用 `columns/rows`，`cause-map` 使用 `nodes/edges`，`timeline-map` 使用非空 `events/factIds`。
+- `validate_agent_turn()` 复用同一 strict visual gate，避免 required visual 已满足时额外坏 `ai4se-visual` block 被吞掉。
+- `stream_services.py` 在 final output 形成后、任何 assistant / artifact persistence / success metric / final `AgentTurnEvent` 前执行视觉 gate。失败时返回 `VISUAL_VALIDATION_FAILED`，diagnostic 为 `phase="visual_validation"`、`fieldPath="artifact_update.markdown"`、`validator="ai4se_visual_*"`。
+- Renderer fixture 新增全阶段 visual gate，覆盖 `ARTIFACT_DATA_STAGE_FIXTURES` 中 25 个在线 artifact-data 阶段的 deterministic renderer 产物。
+- 前端 `chatService` 将 `VISUAL_VALIDATION_FAILED` 纳入结构化失败恢复卡片，保持右侧产物不变。
+- 前端 Mermaid fixture 补充后端 renderer 风格的 Mermaid 样例 parse gate，作为 CI/frontend 证据；本轮不把 `mmdc`、Chromium 或 Mermaid JS parse 放进 backend runtime。
+
+已验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_contracts.py tools/new-agents/backend/tests/test_stream_services.py tools/new-agents/backend/tests/test_artifact_data_renderers.py -q -k "ai4se_visual or visual_failure or backend_valid_visual_blocks"
+```
+
+结果：`28 passed, 254 deselected`。修复前该命令因缺少 `validate_artifact_visual_blocks` collection 失败；修复后通过。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/services/__tests__/chatService.test.ts src/core/__tests__/mermaid.test.ts --run -t "visual validation|backend renderer Mermaid fixture|VISUAL_VALIDATION_FAILED|structured recovery when backend visual validation fails"
+```
+
+结果：`2 passed` test files，`8 passed, 73 skipped`。
+
+```bash
+.venv/bin/python -m py_compile tools/new-agents/backend/agent_contracts.py tools/new-agents/backend/stream_services.py
+git diff --check
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_contracts.py tools/new-agents/backend/tests/test_stream_services.py tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_workflow_contract_sync.py -q
+cd tools/new-agents/frontend && npm run test -- src/services/__tests__/chatService.test.ts src/core/__tests__/llm.test.ts src/core/__tests__/mermaid.test.ts src/core/__tests__/structuredVisuals.test.ts --run
+cd tools/new-agents/frontend && npm run build
+./scripts/test/test-local.sh new-agents
+```
+
+结果：Python 编译通过；`git diff --check` 通过；后端聚焦回归 `540 passed`；前端聚焦回归 `185 passed`；frontend build 通过，保留既有 chunk size warning；New Agents 总门禁通过，Frontend `846 passed`，Backend `882 passed, 4 deselected`。
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：未通过，判定为本地环境 / 既有跨模块阻塞，不归因于本切片改动。已通过部分包括 Intent Tester API `294 passed`、严重 flake8 检查、Common Frontend lint/build、New Agents Frontend `846 passed`、New Agents Backend `882 passed, 4 deselected`。失败点：
+
+- MidScene proxy tests：`listen EPERM: operation not permitted 0.0.0.0:3002`，并导致多个 HTTP API 断言返回 500。
+- New Agents Browser E2E：Playwright Chromium launch 失败，`bootstrap_check_in org.chromium.Chromium.MachPortRendezvousServer... Permission denied (1100)`；中断退出时还出现 `BlockingIOError: [Errno 35] write could not complete without blocking`。
+
+CI 等价判断：
+
+- 本轮改动只触及 `tools/new-agents` 后端 contract / stream service、New Agents 前端错误展示和 todo 记录；对应的 New Agents 前后端本地总门禁已通过。
+- Browser E2E 失败发生在 Chromium 启动权限阶段，未执行到本轮视觉 gate 相关业务断言；MidScene proxy 失败在 `tools/intent-tester` 独立端口绑定阶段，与本轮 New Agents 代码路径无共享实现。
+- 仍需在具备浏览器 / 端口权限的环境里让远端或本地 E2E 兜底，但不阻塞当前 New Agents 厚切片提交。
+
+### 2026-07-09 服务端视觉门禁后剩余工作重定义
+
+触发原因：
+
+- 用户要求当前服务端视觉成功门禁完成后停止继续开发，重新定义后续工作和切片划分。
+- 当前剩余工作不能继续按“先做一个单独 dry-run / 再迁移一个单独 visual type”的薄切片口径推进，否则容易重复出现开发体感慢、每轮价值不明显的问题。
+
+最新判断：
+
+- 原 `视觉契约一致性收口` 单独作为一个切片偏薄：它主要保护开发者改 manifest / renderer / prompt 的同步路径，用户可见价值依赖下一次真实复杂视觉迁移来证明。
+- 原 `下一复杂视觉端到端迁移` 如果不带契约一致性 gate，又会重复依赖人工搜索和补漏。
+- 因此，下一轮应把两者合并为一个更厚的同级切片：以一个真实 workflow family 的复杂视觉迁移为主线，同时把新增 visual type 必须同步的 dry-run / contract / parser / prompt 证据作为该迁移的完成条件，而不是独立薄切片。
+
+建议后续切片：
+
+| 顺序 | 切片 | 用户/工程闭环 | 进入范围 | 不进入范围 | 验收证据 |
+|---|---|---|---|---|---|
+| 1 | 复杂视觉演进安全闭环 | 开发者迁移一个真实复杂图 -> 系统用 dry-run / contract tests 发现 manifest、renderer、prompt、frontend parser、export 漂移 -> 用户看到该 workflow 的复杂图不再依赖模型手写 Mermaid | 启动前重新 CGA，在 `flow-map` / `mindmap` / `sequence-flow` 中选择一个真实高风险场景；当前优先候选仍是 `STORY_BREAKDOWN` Epic flowchart -> `flow-map`。同轮纳入 `new_agents_workflow_dry_run.py` 或等价 sync gate、workflow contract tests、frontend parser/component/export、prompt fixture 和 docs/TESTING 矩阵更新。 | 不一次性迁移所有 Mermaid 类型；不做无业务场景的 `distribution-chart`；不新增 agent 专属 runtime/UI/store；不把服务端 persistence 语义再重做一遍。 | 后端 renderer/runtime/contract tests、frontend parser/component/export tests、dry-run 负例或 sync tests、New Agents 总门禁。 |
+| 2 | 结构化失败治理总收口 | 工程负责人复核本 todo 的 P0/P1 是否全部有代码或文档证据闭合 -> 剩余 P2 backlog 不再干扰目标模式排序 | 整理本 todo 状态、`docs/TESTING.md` 字段/视觉矩阵、P2 backlog、CI 等价口径和已知本地环境阻塞；必要时补一个只读审计测试或脚本，但不再拆字段级修复。 | 不新增功能；不迁移 visual type；不改 runtime 语义。 | 文档 diff、`git diff --check`、相关 sync tests、目标模式 completion audit。 |
+
+执行原则：
+
+- 下一轮不能再写 `1A/1B` 或“内部批次”。如果 `复杂视觉演进安全闭环` 启动后发现范围过大，应拆成新的同级切片，并明确哪个用户 / 开发者闭环先完成。
+- 子智能体优先做只读旁路审查：一个审查候选 workflow / visual type，一个审查 dry-run / sync gate 边界；可写实现仍由主 Agent 串行落地。
+- 每完成一个厚切片都必须先跑聚焦验证和 New Agents 总门禁，再提交并 push。
 
 ## 每轮验收口径
 

@@ -211,7 +211,9 @@ function isStructuredOutputError(error: unknown, errorMessage: string): boolean 
     const errorCode = getErrorCode(error);
     return (
         errorCode === 'SCHEMA_VALIDATION_FAILED'
+        || errorCode === 'VISUAL_VALIDATION_FAILED'
         || errorMessage.includes('SCHEMA_VALIDATION_FAILED')
+        || errorMessage.includes('VISUAL_VALIDATION_FAILED')
         || errorMessage.includes('Exceeded maximum output retries')
         || errorMessage.includes('Artifact Mermaid parse failed')
         || errorMessage.includes('Artifact validation failed')

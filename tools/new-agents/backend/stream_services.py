@@ -10,8 +10,10 @@ from pydantic import ValidationError
 
 from agent_contracts import (
     AgentTurnOutput,
+    ArtifactVisualValidationError,
     ContractValidationError,
     build_artifact_contract_prompt,
+    validate_artifact_visual_blocks,
 )
 from agent_runtime import (
     AgentRuntimeDependencyError,
@@ -46,6 +48,9 @@ STRUCTURED_OUTPUT_PUBLIC_REASON = (
 )
 CONTRACT_VALIDATION_PUBLIC_REASON = (
     "模型输出未满足当前工作流产物契约，右侧产出物已保持不变。"
+)
+VISUAL_VALIDATION_PUBLIC_REASON = (
+    "产出物中的可视化内容未通过校验，右侧产出物已保持不变。"
 )
 REQUEST_VALIDATION_PUBLIC_REASON = "请求参数未通过校验，本轮生成未开始。"
 RUNTIME_UNAVAILABLE_PUBLIC_REASON = (
@@ -211,6 +216,17 @@ def _build_error_diagnostic(
             validator="workflow_contract",
             retryable=False,
             publicReason=CONTRACT_VALIDATION_PUBLIC_REASON,
+        )
+
+    if code == "VISUAL_VALIDATION_FAILED":
+        return ErrorDiagnostic(
+            phase="visual_validation",
+            workflowId=workflow_id,
+            stageId=stage_id,
+            fieldPath="artifact_update.markdown",
+            validator=getattr(error, "validator", "artifact_visual"),
+            retryable=False,
+            publicReason=VISUAL_VALIDATION_PUBLIC_REASON,
         )
 
     if code == "REQUEST_VALIDATION_FAILED":
@@ -420,9 +436,11 @@ def stream_agent_run_events(
             else:
                 yield AgentTurnDeltaEvent(output=output)
         if final_output is not None:
+            artifact_update = final_output.artifact_update
+            if artifact_update.type == "replace" and artifact_update.markdown:
+                validate_artifact_visual_blocks(artifact_update.markdown)
             if persistence is not None and run_id is not None:
                 persistence.append_assistant_message(run_id, final_output.chat)
-                artifact_update = final_output.artifact_update
                 if artifact_update.type == "replace" and artifact_update.markdown:
                     persistence.record_artifact_version(
                         run_id,
@@ -445,6 +463,19 @@ def stream_agent_run_events(
                     ),
                 )
             yield AgentTurnEvent(output=final_output)
+    except ArtifactVisualValidationError as e:
+        diagnostic = _build_error_diagnostic(
+            code="VISUAL_VALIDATION_FAILED",
+            error=e,
+            workflow_id=agent_request.workflow_id,
+            stage_id=agent_request.stage_id,
+        )
+        record_metric("error", "VISUAL_VALIDATION_FAILED", diagnostic=diagnostic)
+        yield ErrorEvent(
+            code="VISUAL_VALIDATION_FAILED",
+            message=str(e),
+            diagnostic=diagnostic,
+        )
     except ContractValidationError as e:
         diagnostic = _build_error_diagnostic(
             code="CONTRACT_VALIDATION_FAILED",

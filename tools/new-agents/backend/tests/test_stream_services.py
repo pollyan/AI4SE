@@ -295,6 +295,69 @@ def test_stream_agent_run_events_records_turn_through_persistence_adapter(
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_rejects_visual_failure_before_persistence(
+    mock_build_runtime: MagicMock,
+) -> None:
+    invalid_visual_artifact = (
+        VALID_CLARIFY_ARTIFACT
+        + "\n\n```ai4se-visual\n"
+        + "{ broken"
+        + "\n```\n"
+    )
+    final = AgentTurnOutput.model_validate({
+        "chat": "已更新右侧需求分析文档，请确认。",
+        "artifact_update": {
+            "type": "replace",
+            "markdown": invalid_visual_artifact,
+        },
+        "artifact_data": VALID_ARTIFACT_DATA,
+        "stage_action": None,
+        "warnings": [],
+    })
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter([final])
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    events = list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+        persistence=persistence,
+    ))
+
+    assert events == [
+        RunStartedEvent(run_id="run-123"),
+        AgentTurnDeltaEvent(output=AgentTurnDeltaOutput.model_validate(
+            final.model_dump(mode="json")
+        )),
+        ErrorEvent(
+            code="VISUAL_VALIDATION_FAILED",
+            message="ai4se-visual block 1 must contain valid JSON",
+            diagnostic=_diagnostic(
+                phase="visual_validation",
+                field_path="artifact_update.markdown",
+                validator="ai4se_visual_json",
+                retryable=False,
+                public_reason="产出物中的可视化内容未通过校验，右侧产出物已保持不变。",
+            ),
+        ),
+    ]
+    call_names = [call[0] for call in persistence.calls]
+    assert "append_assistant_message" not in call_names
+    assert "record_artifact_version" not in call_names
+    assert not any(
+        call[0] == "record_turn_metric" and call[1]["status"] == "success"
+        for call in persistence.calls
+    )
+    error_metric = persistence.calls[-1]
+    assert error_metric[0] == "record_turn_metric"
+    assert error_metric[1]["status"] == "error"
+    assert error_metric[1]["error_code"] == "VISUAL_VALIDATION_FAILED"
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
 def test_stream_agent_run_events_records_real_token_usage_when_runtime_exposes_it(
     mock_build_runtime: MagicMock,
 ) -> None:

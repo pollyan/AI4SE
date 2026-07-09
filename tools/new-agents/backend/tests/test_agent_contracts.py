@@ -858,6 +858,78 @@ def test_validate_agent_turn_rejects_legacy_traceability_matrix_shape():
         )
 
 
+def test_validate_agent_turn_rejects_malformed_ai4se_visual_block():
+    output = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新测试用例集。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": (
+                    _complete_markdown(
+                        REQUIRED_ARTIFACT_HEADINGS[("TEST_DESIGN", "CASES")]
+                    )
+                    + "\n\n"
+                    + _minimal_structured_visual_block("traceability-matrix")
+                    + "\n\n```ai4se-visual\n"
+                    + "{ broken"
+                    + "\n```\n"
+                ),
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+
+    with pytest.raises(
+        ContractValidationError,
+        match="ai4se-visual block 2 must contain valid JSON",
+    ):
+        validate_agent_turn(
+            output,
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CASES",
+        )
+
+
+def test_validate_agent_turn_rejects_extra_invalid_ai4se_visual_even_when_required_visual_is_present():
+    output = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新事件时间线。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": (
+                    _complete_markdown(
+                        REQUIRED_ARTIFACT_HEADINGS[
+                            ("INCIDENT_REVIEW", "TIMELINE")
+                        ]
+                    )
+                    + "\n\n"
+                    + _minimal_structured_visual_block("timeline-map")
+                    + "\n\n```ai4se-visual\n"
+                    + "{\n"
+                    + '  "type": "score-matrix",\n'
+                    + '  "columns": [],\n'
+                    + '  "rows": []\n'
+                    + "}\n"
+                    + "```\n"
+                ),
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+
+    with pytest.raises(
+        ContractValidationError,
+        match="score-matrix 必须使用 columns 和 rows",
+    ):
+        validate_agent_turn(
+            output,
+            workflow_id="INCIDENT_REVIEW",
+            current_stage_id="TIMELINE",
+        )
+
+
 def test_validate_agent_turn_rejects_cause_map_with_missing_node_reference():
     output = AgentTurnOutput.model_validate(
         {
