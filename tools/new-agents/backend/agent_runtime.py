@@ -567,10 +567,9 @@ JSON 对象结构：
 {
   "chat": "面向用户的自然工作对话。说明我本轮已经形成哪些改进行动、根因覆盖、复查计划、遗留风险和签署确认。不要复制完整产出物正文。",
   "artifact_data": {
-    "report_info": {"incident_name": "...", "severity": "P0/P1/P2/P3", "version": "v1.0", "generated_at": "YYYY-MM-DD HH:MM", "action_count": 3, "review_date": "YYYY-MM-DD", "closure_status": "待复查/可关闭/暂缓关闭"},
+    "report_info": {"incident_name": "...", "severity": "P0/P1/P2/P3", "version": "v1.0", "generated_at": "YYYY-MM-DD HH:MM", "review_date": "YYYY-MM-DD", "closure_status": "待复查/可关闭/暂缓关闭"},
     "timeline_summary": {"key_events": ["..."], "impact_summary": "...", "recovery_summary": "..."},
     "root_cause_summary": {"direct_cause": "...", "root_cause": "...", "contributing_factors": ["..."], "evidence_summary": "..."},
-    "priority_distribution": {"urgent_count": 1, "important_count": 1, "normal_count": 1},
     "improvement_actions": [{"action_id": "A-001", "improvement": "...", "action_type": "纠正措施/预防措施/监控改进/流程改进", "root_cause_id": "CAUSE-001", "root_cause_type": "技术/流程/人员/环境/度量/管理", "owner": "...", "deadline": "YYYY-MM-DD", "verification_method": "...", "acceptance_criteria": "...", "priority": "紧急/重要/常规", "status": "待执行/进行中/待验证/已完成", "tracking_method": "..."}],
     "root_cause_coverage": [{"cause_id": "CAUSE-001", "cause_type": "技术/流程/人员/环境/度量/管理", "description": "...", "action_ids": ["A-001"], "coverage_status": "已覆盖/部分覆盖/风险接受", "uncovered_reason": "不适用 或 ...", "risk_acceptor": "..."}],
     "prevention_checklist": [{"item": "...", "related_cause_id": "CAUSE-001", "owner": "...", "status": "待验证/已纳入/风险接受"}],

@@ -921,7 +921,7 @@ class IncidentImprovementReportInfo(StrictArtifactDataModel):
     severity: str
     version: str
     generated_at: str
-    action_count: int = Field(ge=1)
+    action_count: int | None = Field(default=None, ge=1)
     review_date: str
     closure_status: str
 
@@ -940,9 +940,9 @@ class IncidentImprovementRootCauseSummary(StrictArtifactDataModel):
 
 
 class IncidentImprovementPriorityDistribution(StrictArtifactDataModel):
-    urgent_count: int = Field(ge=0)
-    important_count: int = Field(ge=0)
-    normal_count: int = Field(ge=0)
+    urgent_count: int | None = Field(default=None, ge=0)
+    important_count: int | None = Field(default=None, ge=0)
+    normal_count: int | None = Field(default=None, ge=0)
 
 
 class IncidentImprovementAction(StrictArtifactDataModel):
@@ -1023,7 +1023,7 @@ class IncidentImprovementArtifactData(StrictArtifactDataModel):
     report_info: IncidentImprovementReportInfo
     timeline_summary: IncidentImprovementTimelineSummary
     root_cause_summary: IncidentImprovementRootCauseSummary
-    priority_distribution: IncidentImprovementPriorityDistribution
+    priority_distribution: IncidentImprovementPriorityDistribution | None = None
     improvement_actions: list[IncidentImprovementAction] = Field(min_length=1)
     root_cause_coverage: list[IncidentRootCauseCoverage] = Field(min_length=1)
     prevention_checklist: list[IncidentPreventionCheckItem] = Field(min_length=1)
@@ -1042,21 +1042,36 @@ class IncidentImprovementArtifactData(StrictArtifactDataModel):
         if len(action_ids) != len(self.improvement_actions):
             raise ValueError("improvement_actions contains duplicate action_id")
 
+        if self.report_info.action_count is None:
+            self.report_info.action_count = len(self.improvement_actions)
         if self.report_info.action_count != len(self.improvement_actions):
             raise ValueError(
                 "report_info.action_count must match improvement_actions length"
             )
 
-        expected_distribution = {
-            "紧急": self.priority_distribution.urgent_count,
-            "重要": self.priority_distribution.important_count,
-            "常规": self.priority_distribution.normal_count,
-        }
         actual_distribution = {
             priority: sum(
                 1 for item in self.improvement_actions if item.priority == priority
             )
-            for priority in expected_distribution
+            for priority in ("紧急", "重要", "常规")
+        }
+        if self.priority_distribution is None:
+            self.priority_distribution = IncidentImprovementPriorityDistribution(
+                urgent_count=actual_distribution["紧急"],
+                important_count=actual_distribution["重要"],
+                normal_count=actual_distribution["常规"],
+            )
+        assert self.priority_distribution is not None
+        if self.priority_distribution.urgent_count is None:
+            self.priority_distribution.urgent_count = actual_distribution["紧急"]
+        if self.priority_distribution.important_count is None:
+            self.priority_distribution.important_count = actual_distribution["重要"]
+        if self.priority_distribution.normal_count is None:
+            self.priority_distribution.normal_count = actual_distribution["常规"]
+        expected_distribution = {
+            "紧急": self.priority_distribution.urgent_count,
+            "重要": self.priority_distribution.important_count,
+            "常规": self.priority_distribution.normal_count,
         }
         if actual_distribution != expected_distribution:
             raise ValueError(

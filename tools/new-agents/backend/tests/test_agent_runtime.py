@@ -1468,6 +1468,37 @@ def test_parse_agent_turn_output_text_renders_incident_improvement_artifact_data
     assert output.stage_action is None
 
 
+def test_parse_agent_turn_output_text_renders_incident_improvement_without_statistics():
+    artifact_data = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
+    artifact_data["report_info"].pop("action_count")
+    artifact_data.pop("priority_distribution")
+
+    json_text = json.dumps(
+        {
+            "chat": "已完成故障改进报告。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="IMPROVEMENT",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_data["report_info"]["action_count"] == 3
+    assert output.artifact_data["priority_distribution"] == {
+        "urgent_count": 1,
+        "important_count": 1,
+        "normal_count": 1,
+    }
+    assert '"type": "action-board"' in output.artifact_update.markdown
+
+
 def test_parse_agent_turn_output_text_renders_idea_define_artifact_data():
     json_text = json.dumps(
         {
@@ -1731,9 +1762,27 @@ def test_incident_improvement_structured_output_instruction_requests_artifact_da
         format_artifact_data_contract_instruction("INCIDENT_REVIEW", "IMPROVEMENT")
         in instruction
     )
-    assert "report_info.action_count 必须等于 improvement_actions 数量" in instruction
+    assert "report_info.action_count" in instruction
     assert "improvement_actions[].action_id 必须唯一" in instruction
     assert "ai4se-visual action-board" in instruction
+
+
+def test_incident_improvement_structured_output_instruction_omits_statistics():
+    instruction = build_structured_output_instruction(
+        "INCIDENT_REVIEW",
+        "IMPROVEMENT",
+    )
+
+    assert '"action_count":' not in instruction
+    assert '"priority_distribution":' not in instruction
+    assert (
+        "report_info.action_count 缺省时由后端按 improvement_actions 数量派生"
+        in instruction
+    )
+    assert (
+        "priority_distribution 缺省时由后端按 improvement_actions[].priority "
+        "中紧急/重要/常规的数量派生"
+    ) in instruction
 
 
 def test_idea_define_structured_output_instruction_requests_artifact_data_not_markdown():

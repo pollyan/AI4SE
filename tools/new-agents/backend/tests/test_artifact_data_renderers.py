@@ -3271,6 +3271,33 @@ def test_incident_improvement_artifact_data_rejects_action_count_mismatch():
         IncidentImprovementArtifactData.model_validate(invalid)
 
 
+def test_incident_improvement_artifact_data_derives_action_statistics_when_missing():
+    artifact_data = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
+    artifact_data["report_info"].pop("action_count")
+    artifact_data.pop("priority_distribution")
+
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已形成改进行动闭环，请确认右侧报告。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="IMPROVEMENT",
+    )
+
+    assert output is not None
+    assert output.artifact_data["report_info"]["action_count"] == 3
+    assert output.artifact_data["priority_distribution"] == {
+        "urgent_count": 1,
+        "important_count": 1,
+        "normal_count": 1,
+    }
+    assert "| 改进行动总数 | 3 |" in output.artifact_update.markdown
+    assert "| 紧急 | 1 |" in output.artifact_update.markdown
+
+
 def test_incident_improvement_artifact_data_rejects_priority_distribution_mismatch():
     invalid = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
     invalid["priority_distribution"]["urgent_count"] = 2

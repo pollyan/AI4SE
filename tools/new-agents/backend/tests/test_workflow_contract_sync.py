@@ -368,11 +368,14 @@ def test_incident_improvement_artifact_data_contract_manifest_drives_backend_ins
     contract = stage.get("artifactDataContract")
 
     assert contract is not None
-    assert "report_info.action_count 必须等于 improvement_actions 数量" in instruction
+    assert (
+        "report_info.action_count 缺省时由后端按 "
+        "improvement_actions 数量派生"
+    ) in instruction
     assert "improvement_actions[].action_id 必须唯一" in instruction
     assert (
-        "priority_distribution.urgent_count/important_count/normal_count 必须等于 "
-        "improvement_actions[].priority 中紧急/重要/常规的数量"
+        "priority_distribution 缺省时由后端按 "
+        "improvement_actions[].priority 中紧急/重要/常规的数量派生"
     ) in instruction
     assert (
         "root_cause_coverage[].action_ids 只能引用 "

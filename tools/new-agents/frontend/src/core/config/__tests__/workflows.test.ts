@@ -272,16 +272,16 @@ describe('Workflow Configuration', () => {
 
     it('exposes manifest artifact data contract for INCIDENT REVIEW IMPROVEMENT', () => {
         const improvement = WORKFLOWS.INCIDENT_REVIEW.stages.find(stage => stage.id === 'IMPROVEMENT');
+        const actionCountRule =
+            'report_info.action_count 缺省时由后端按 improvement_actions 数量派生；显式提供时必须一致';
+        const priorityDistributionRule =
+            'priority_distribution 缺省时由后端按 improvement_actions[].priority 中紧急/重要/常规的数量派生；显式提供时必须一致';
 
-        expect(improvement?.artifactDataContract?.modelOutputRules).toContain(
-            'report_info.action_count 必须等于 improvement_actions 数量',
-        );
+        expect(improvement?.artifactDataContract?.modelOutputRules).toContain(actionCountRule);
         expect(improvement?.artifactDataContract?.modelOutputRules).toContain(
             'improvement_actions[].action_id 必须唯一',
         );
-        expect(improvement?.artifactDataContract?.modelOutputRules).toContain(
-            'priority_distribution.urgent_count/important_count/normal_count 必须等于 improvement_actions[].priority 中紧急/重要/常规的数量',
-        );
+        expect(improvement?.artifactDataContract?.modelOutputRules).toContain(priorityDistributionRule);
         expect(improvement?.artifactDataContract?.modelOutputRules).toContain(
             'root_cause_coverage[].action_ids 只能引用 improvement_actions[].action_id 中已定义的行动 ID',
         );
