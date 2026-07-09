@@ -494,6 +494,10 @@ def test_incident_improvement_artifact_data_contract_manifest_drives_backend_ins
         "improvement_actions[].root_cause_id 只能引用 "
         "root_cause_coverage[].cause_id 中已定义的根因 ID"
     ) in instruction
+    assert (
+        "root_cause_coverage[].action_ids 必须精确匹配所有 root_cause_id "
+        "等于对应 cause_id 的 improvement_actions[].action_id"
+    ) in instruction
     assert "action-board JSON 代码块" in instruction
     assert "右侧最终故障复盘报告" in instruction
     assert "ai4se-visual action-board" in instruction

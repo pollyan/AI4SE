@@ -416,12 +416,15 @@ describe('buildSystemPrompt', () => {
             'report_info.action_count 缺省时由后端按 improvement_actions 数量派生；显式提供时必须一致';
         const priorityDistributionRule =
             'priority_distribution 缺省时由后端按 improvement_actions[].priority 中紧急/重要/常规的数量派生；显式提供时必须一致';
+        const actionMappingRule =
+            'root_cause_coverage[].action_ids 必须精确匹配所有 root_cause_id 等于对应 cause_id 的 improvement_actions[].action_id';
         expect(prompt).toContain('【artifact_data 结构化契约】');
         expect(prompt).toContain(actionCountRule);
         expect(prompt).toContain('improvement_actions[].action_id 必须唯一');
         expect(prompt).toContain(priorityDistributionRule);
         expect(prompt).toContain('root_cause_coverage[].action_ids 只能引用 improvement_actions[].action_id 中已定义的行动 ID');
         expect(prompt).toContain('improvement_actions[].root_cause_id 只能引用 root_cause_coverage[].cause_id 中已定义的根因 ID');
+        expect(prompt).toContain(actionMappingRule);
         expect(prompt).toContain('action-board JSON 代码块');
         expect(prompt).toContain('右侧最终故障复盘报告');
         expect(prompt).toContain('ai4se-visual action-board');

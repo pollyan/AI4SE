@@ -3398,6 +3398,23 @@ def test_incident_improvement_artifact_data_rejects_unknown_action_root_cause_re
         IncidentImprovementArtifactData.model_validate(invalid)
 
 
+def test_incident_improvement_artifact_data_rejects_action_mapped_to_wrong_root_cause_coverage():
+    invalid = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
+    invalid["root_cause_coverage"][0]["action_ids"] = ["A-002"]
+    invalid["root_cause_coverage"][1]["action_ids"] = ["A-001", "A-003"]
+
+    with pytest.raises(ValidationError, match="root_cause_coverage.*action_ids"):
+        IncidentImprovementArtifactData.model_validate(invalid)
+
+
+def test_incident_improvement_artifact_data_rejects_missing_action_from_root_cause_coverage():
+    invalid = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
+    invalid["root_cause_coverage"][0]["action_ids"] = ["A-001"]
+
+    with pytest.raises(ValidationError, match="root_cause_coverage.*action_ids"):
+        IncidentImprovementArtifactData.model_validate(invalid)
+
+
 def test_incident_improvement_artifact_data_rejects_covered_cause_without_actions():
     invalid = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
     invalid["root_cause_coverage"][0]["action_ids"] = []

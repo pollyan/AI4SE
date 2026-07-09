@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化已新增 `TEST_DESIGN/DELIVERY` 统计字段、`REQ_REVIEW` 问题统计、`INCIDENT_REVIEW/IMPROVEMENT` 行动统计、`IDEA_BRAINSTORM/CONVERGE` ICE 评分 / 排名，以及 `TEST_DESIGN/CASES` / `REQ_REVIEW/REVIEW` 分组内维度派生纵切。后续未完成治理仍集中在 5 个能力包：派生字段后端化、ID 收敛、视觉协议分层、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
+- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化已新增 `TEST_DESIGN/DELIVERY` 统计字段、`REQ_REVIEW` 问题统计、`INCIDENT_REVIEW/IMPROVEMENT` 行动统计、`IDEA_BRAINSTORM/CONVERGE` ICE 评分 / 排名，以及 `TEST_DESIGN/CASES` / `REQ_REVIEW/REVIEW` 分组内维度派生纵切；映射一致性已新增 `INCIDENT_REVIEW/IMPROVEMENT` root cause/action 精确映射门禁。后续未完成治理仍集中在 5 个能力包：派生字段后端化、ID 收敛、视觉协议分层、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -124,7 +124,8 @@
   - 进展：已完成 `IDEA_BRAINSTORM/CONVERGE` ICE 排名纵切。`ice_evaluations[].rank` 缺省时由后端按 ICE 得分降序派生；显式错误排名仍触发 validation failure。CONVERGE runtime instruction 示例不再要求模型输出 `rank`，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
   - 进展：已完成已治理派生字段回退审计门禁。新增 `get_derived_artifact_data_field_policies()` 清单和 contract sync 测试，统一校验上述字段必须在 manifest contract 中声明后端派生 / 显式一致性，并且 runtime JSON 示例不得再要求模型输出这些字段。
   - 进展：已完成 `TEST_DESIGN/CASES` 与 `REQ_REVIEW/REVIEW` 分组内维度派生纵切。`case_groups[].cases[].dimension` 缺省时由外层 `case_groups[].dimension` 派生，`issue_groups[].issues[].dimension` 缺省时由外层 `issue_groups[].dimension` 派生；显式不一致维度仍触发 validation failure。CASES / REVIEW runtime instruction 示例不再要求模型输出内层维度，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
-  - 后续候选：旁路审查未发现 P0 回退，当前剩余 P1 候选为 `INCIDENT_REVIEW/IMPROVEMENT` root cause coverage `action_ids` 与 `improvement_actions[].root_cause_id` 精确匹配、`STORY_BREAKDOWN` story sprint 与 `sprint_slices[].story_ids` 映射一致性。后续应按独立切片判断是后端派生、显式一致性校验，还是归入 ID / 引用收敛能力包。
+  - 进展：已完成 `INCIDENT_REVIEW/IMPROVEMENT` root cause/action 精确映射门禁。`root_cause_coverage[].action_ids` 现在必须精确匹配所有 `root_cause_id` 等于对应 `cause_id` 的 `improvement_actions[].action_id`；显式不一致映射触发 validation failure，manifest / frontend prompt 同步暴露该规则。
+  - 后续候选：旁路审查未发现 P0 回退，当前剩余 P1 候选为 `STORY_BREAKDOWN` story sprint 与 `sprint_slices[].story_ids` 映射一致性。旁路审查另识别 `VALUE_DISCOVERY/JOURNEY` pain / opportunity 成对映射为 P2，不建议强行并入当前派生字段能力包。
 
 - [ ] 收敛 ID 与引用关系。（第 4-6 轮）
   - 目标：后端生成稳定 ID，或在 renderer/normalizer 中确定性分配 ID；模型不再负责维护容易漂移的跨表引用。
@@ -2881,6 +2882,53 @@ git diff --check
 - 本轮只治理 CASES / REVIEW 分组内维度重复维护，不后端生成或归一化 `case_id`、`issue_id`，也不改变覆盖追溯、修订建议或自动化候选引用语义。
 - `INCIDENT_REVIEW/IMPROVEMENT` root cause coverage `action_ids` 与 `improvement_actions[].root_cause_id` 精确匹配、`STORY_BREAKDOWN` story sprint 与 `sprint_slices[].story_ids` 映射一致性仍是后续 P1 候选。
 - 视觉协议分层、复杂 `ai4se-visual` 类型扩展和后端 / CI 视觉渲染强校验仍未在本轮处理。
+
+### 2026-07-09 切片记录：INCIDENT_REVIEW root cause/action 映射一致性
+
+触发原因：
+
+- 上一轮 P1 候选中，`INCIDENT_REVIEW/IMPROVEMENT` 的 `improvement_actions[].root_cause_id` 与 `root_cause_coverage[].action_ids` 属于同一事实的双向表达。
+- 当前 validator 只校验 action ID 存在、coverage cause ID 存在、已覆盖时 `action_ids` 非空；未校验“某个 cause 的 `action_ids` 必须精确等于所有 `root_cause_id` 指向该 cause 的 action”。
+- 子智能体只读旁路审查确认：Incident 候选成立；`STORY_BREAKDOWN` story sprint/slice 映射也成立，但影响四阶段共享 schema、renderer 和单故事 handoff，建议拆成下一同级切片，不与本轮合并。
+
+已修复：
+
+- `IncidentImprovementArtifactData` 新增 root cause/action 精确映射校验：每个 `root_cause_coverage[].action_ids` 必须等于所有 `improvement_actions[]` 中 `root_cause_id` 等于该 `cause_id` 的 `action_id` 集合。
+- 保留既有错误诊断优先级：`coverage_status == “已覆盖”` 且 `action_ids` 为空时，仍先返回 coverage_status 相关错误。
+- 新增 renderer contract 负例，覆盖 action 被挂到错误 root cause coverage、coverage 漏列某个 action 两类矛盾。
+- `workflow_manifest.json`、backend contract sync、frontend workflow 配置和 frontend system prompt 测试同步新增精确映射规则。
+- `docs/TESTING.md` 字段来源矩阵同步更新，记录根因覆盖 action/root_cause 引用和精确映射只校验不派生。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py -q -k "wrong_root_cause_coverage or missing_action_from_root_cause_coverage"
+```
+
+结果：修复前 `2 failed, 134 deselected`，失败点为错挂 action 和漏列 action 都未触发 `ValidationError`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py -q -k "wrong_root_cause_coverage or missing_action_from_root_cause_coverage or incident_improvement_artifact_data"
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_runtime.py -q -k "incident_improvement"
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run -t "INCIDENT REVIEW IMPROVEMENT"
+```
+
+结果：修复后分别通过 `11 passed, 125 deselected`、`7 passed, 245 deselected`、前端 `2 passed, 112 skipped`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_workflow_contract_sync.py -q -k "incident_improvement or incident_review or derived"
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run
+git diff --check
+./scripts/test/test-local.sh new-agents
+```
+
+结果：后端聚焦回归 `31 passed, 357 deselected`；前端同步测试 `114 passed`；`git diff --check` 通过；New Agents Frontend `830 passed`，New Agents Backend `845 passed, 4 deselected`。
+
+残余风险：
+
+- 本轮只治理 `INCIDENT_REVIEW/IMPROVEMENT` 的 root cause/action 双向映射，不后端生成 action ID 或 cause ID，也不改 prevention / review / residual risk 的引用规则。
+- `STORY_BREAKDOWN` 的 `user_stories[].sprint` 与 `sprint_slices[].story_ids` 映射一致性仍是下一同级 P1 切片；它影响四阶段共享 schema、renderer 和单故事 handoff，不能塞进本轮。
+- 旁路审查识别 `VALUE_DISCOVERY/JOURNEY` pain / opportunity 成对映射为 P2 候选，当前不纳入 P1 收口。
 
 ## 每轮验收口径
 

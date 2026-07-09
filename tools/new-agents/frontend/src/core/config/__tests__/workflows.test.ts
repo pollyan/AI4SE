@@ -299,6 +299,8 @@ describe('Workflow Configuration', () => {
             'report_info.action_count 缺省时由后端按 improvement_actions 数量派生；显式提供时必须一致';
         const priorityDistributionRule =
             'priority_distribution 缺省时由后端按 improvement_actions[].priority 中紧急/重要/常规的数量派生；显式提供时必须一致';
+        const actionMappingRule =
+            'root_cause_coverage[].action_ids 必须精确匹配所有 root_cause_id 等于对应 cause_id 的 improvement_actions[].action_id';
 
         expect(improvement?.artifactDataContract?.modelOutputRules).toContain(actionCountRule);
         expect(improvement?.artifactDataContract?.modelOutputRules).toContain(
@@ -311,6 +313,7 @@ describe('Workflow Configuration', () => {
         expect(improvement?.artifactDataContract?.modelOutputRules).toContain(
             'improvement_actions[].root_cause_id 只能引用 root_cause_coverage[].cause_id 中已定义的根因 ID',
         );
+        expect(improvement?.artifactDataContract?.modelOutputRules).toContain(actionMappingRule);
         expect(improvement?.artifactDataContract?.forbiddenOutputs).toContain('action-board JSON 代码块');
         expect(improvement?.artifactDataContract?.rendererOutputs).toContain('右侧最终故障复盘报告');
         expect(improvement?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual action-board');

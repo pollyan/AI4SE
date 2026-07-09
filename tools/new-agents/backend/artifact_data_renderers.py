@@ -1146,6 +1146,25 @@ class IncidentImprovementArtifactData(StrictArtifactDataModel):
                 + ", ".join(uncovered_completed_causes)
             )
 
+        action_ids_by_cause_id: dict[str, set[str]] = {
+            cause_id: set() for cause_id in coverage_cause_ids
+        }
+        for action in self.improvement_actions:
+            action_ids_by_cause_id.setdefault(action.root_cause_id, set()).add(
+                action.action_id
+            )
+        mismatched_coverage_causes = sorted(
+            item.cause_id
+            for item in self.root_cause_coverage
+            if set(item.action_ids) != action_ids_by_cause_id.get(item.cause_id, set())
+        )
+        if mismatched_coverage_causes:
+            raise ValueError(
+                "root_cause_coverage.action_ids must match "
+                "improvement_actions grouped by root_cause_id: "
+                + ", ".join(mismatched_coverage_causes)
+            )
+
         return self
 
 

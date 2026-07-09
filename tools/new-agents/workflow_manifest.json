@@ -689,6 +689,7 @@
               "root_cause_coverage[].cause_id 必须唯一",
               "root_cause_coverage[].action_ids 只能引用 improvement_actions[].action_id 中已定义的行动 ID",
               "improvement_actions[].root_cause_id 只能引用 root_cause_coverage[].cause_id 中已定义的根因 ID",
+              "root_cause_coverage[].action_ids 必须精确匹配所有 root_cause_id 等于对应 cause_id 的 improvement_actions[].action_id",
               "当 root_cause_coverage[].coverage_status 为“已覆盖”时，action_ids 必须至少包含 1 个行动 ID"
             ],
             "forbiddenOutputs": [
