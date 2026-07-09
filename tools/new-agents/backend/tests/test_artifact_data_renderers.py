@@ -3065,6 +3065,34 @@ def test_idea_converge_artifact_data_rejects_invalid_ice_score():
         IdeaConvergeArtifactData.model_validate(invalid)
 
 
+def test_idea_converge_artifact_data_derives_ice_score_when_missing():
+    artifact_data = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    for item in artifact_data["ice_evaluations"]:
+        item.pop("ice_score")
+
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已完成创意收敛评估，请确认右侧决策矩阵。",
+            "artifact_data": artifact_data,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "CONCEPT",
+            },
+            "warnings": [],
+        },
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONVERGE",
+    )
+
+    assert output is not None
+    assert [
+        item["ice_score"] for item in output.artifact_data["ice_evaluations"]
+    ] == [10.0, 6.0, 2.0]
+    assert "| ID-001 | 方向证据评分卡 | 5 | 4 | 2 | 10.00 | 1 | 推荐方案 |" in (
+        output.artifact_update.markdown
+    )
+
+
 def test_idea_converge_artifact_data_rejects_unknown_recommended_idea():
     invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
     invalid["decision_matrix"]["recommended_idea_id"] = "ID-404"

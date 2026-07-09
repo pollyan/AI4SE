@@ -451,6 +451,32 @@ describe('buildSystemPrompt', () => {
         expect(ideaIdRuleMatches).toHaveLength(1);
     });
 
+    it('injects IDEA BRAINSTORM CONVERGE artifact data contract from the manifest', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'alex',
+            workflow: 'IDEA_BRAINSTORM',
+            stageIndex: 2,
+            currentArtifact: '# 收敛聚焦\n已有内容',
+        });
+
+        const iceScoreRule =
+            'ice_score 缺省时由后端按 impact * confidence / effort 派生；显式提供时必须一致';
+        expect(prompt).toContain('【artifact_data 结构化契约】');
+        expect(prompt).toContain('ice_evaluations.idea_id 必须唯一');
+        expect(prompt).toContain('rank 必须唯一');
+        expect(prompt).toContain(iceScoreRule);
+        expect(prompt).toContain(
+            'decision_matrix.recommended_idea_id、validation_experiments.idea_ids 和 merge_paths.source_idea_ids 只能引用已存在的 idea_id',
+        );
+        expect(prompt).toContain('图表 代码块');
+        expect(prompt).toContain('quadrantChart');
+        expect(prompt).toContain('右侧收敛聚焦产物');
+        expect(prompt).toContain('图表 quadrantChart');
+        expect(prompt).not.toContain('Mermaid 代码块');
+        const iceScoreRuleMatches = prompt.match(new RegExp(iceScoreRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
+        expect(iceScoreRuleMatches).toHaveLength(1);
+    });
+
     it('injects IDEA BRAINSTORM CONCEPT artifact data contract from the manifest', () => {
         const prompt = buildSystemPrompt({
             agentId: 'alex',

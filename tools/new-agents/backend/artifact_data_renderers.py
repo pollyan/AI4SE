@@ -350,7 +350,7 @@ class IdeaIceEvaluation(StrictArtifactDataModel):
     impact: int = Field(ge=1, le=5)
     confidence: int = Field(ge=1, le=5)
     effort: int = Field(ge=1, le=5)
-    ice_score: float
+    ice_score: float | None = None
     rank: int = Field(ge=1)
     conclusion: str
     elimination_reason: str
@@ -416,6 +416,9 @@ class IdeaConvergeArtifactData(StrictArtifactDataModel):
 
         for item in self.ice_evaluations:
             expected_score = item.impact * item.confidence / item.effort
+            if item.ice_score is None:
+                item.ice_score = expected_score
+                continue
             if abs(item.ice_score - expected_score) > 0.01:
                 raise ValueError(
                     f"ice_evaluations.{item.idea_id}.ice_score must equal "

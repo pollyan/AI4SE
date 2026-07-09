@@ -336,6 +336,23 @@ describe('Workflow Configuration', () => {
         expect(diverge?.artifactDataContract?.rendererOutputs).toContain('Mermaid mindmap');
     });
 
+    it('exposes manifest artifact data contract for IDEA BRAINSTORM CONVERGE', () => {
+        const converge = WORKFLOWS.IDEA_BRAINSTORM.stages.find(stage => stage.id === 'CONVERGE');
+        const iceScoreRule =
+            'ice_score 缺省时由后端按 impact * confidence / effort 派生；显式提供时必须一致';
+
+        expect(converge?.artifactDataContract?.modelOutputRules).toContain(
+            'ice_evaluations.idea_id 必须唯一',
+        );
+        expect(converge?.artifactDataContract?.modelOutputRules).toContain('rank 必须唯一');
+        expect(converge?.artifactDataContract?.modelOutputRules).toContain(iceScoreRule);
+        expect(converge?.artifactDataContract?.modelOutputRules).toContain(
+            'decision_matrix.recommended_idea_id、validation_experiments.idea_ids 和 merge_paths.source_idea_ids 只能引用已存在的 idea_id',
+        );
+        expect(converge?.artifactDataContract?.forbiddenOutputs).toContain('quadrantChart');
+        expect(converge?.artifactDataContract?.rendererOutputs).toContain('Mermaid quadrantChart');
+    });
+
     it('exposes manifest artifact data contract for IDEA BRAINSTORM CONCEPT', () => {
         const concept = WORKFLOWS.IDEA_BRAINSTORM.stages.find(stage => stage.id === 'CONCEPT');
 

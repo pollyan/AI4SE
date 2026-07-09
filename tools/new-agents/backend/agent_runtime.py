@@ -672,7 +672,7 @@ JSON 对象结构：
   "chat": "面向用户的自然工作对话。说明我本轮如何对候选创意做收敛评估、推荐了哪个方案、淘汰或暂缓了哪些方向、有哪些资源约束和下一步验证。不要复制完整产出物正文。",
   "artifact_data": {
     "decision_matrix": {"scoring_rubric": "...", "recommended_idea_id": "ID-001", "recommendation": "...", "user_confirmation_status": "待确认/已确认", "decision_items": [{"idea_id": "ID-001", "idea_name": "...", "decision": "推荐方案/备选/暂缓/淘汰", "reason": "...", "evidence_source": "..."}]},
-    "ice_evaluations": [{"idea_id": "ID-001", "idea_name": "...", "impact": 5, "confidence": 4, "effort": 2, "ice_score": 10.0, "rank": 1, "conclusion": "推荐方案/备选/暂缓/淘汰", "elimination_reason": "...", "evidence_source": "...", "next_validation": "..."}],
+    "ice_evaluations": [{"idea_id": "ID-001", "idea_name": "...", "impact": 5, "confidence": 4, "effort": 2, "rank": 1, "conclusion": "推荐方案/备选/暂缓/淘汰", "elimination_reason": "...", "evidence_source": "...", "next_validation": "..."}],
     "resource_constraints": [{"constraint_type": "时间/数据/技术/渠道/预算", "content": "...", "impact": "...", "handling": "...", "status": "已确认/待确认"}],
     "sensitivity_analysis": [{"variable": "...", "change": "...", "impact": "...", "signal": "...", "next_validation": "..."}],
     "validation_experiments": [{"experiment_id": "EXP-001", "idea_ids": ["ID-001"], "goal": "...", "method": "...", "success_metric": "...", "owner": "产品/用户研究/业务/用户确认", "next_validation": "...", "status": "待执行/待排期/进行中/已完成"}],

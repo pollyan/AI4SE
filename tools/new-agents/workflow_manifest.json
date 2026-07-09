@@ -888,7 +888,7 @@
               "ice_evaluations.idea_id 必须唯一",
               "rank 必须唯一",
               "impact、confidence、effort 必须是 1 到 5 的整数",
-              "ice_score 必须等于 impact * confidence / effort",
+              "ice_score 缺省时由后端按 impact * confidence / effort 派生；显式提供时必须一致",
               "decision_matrix.recommended_idea_id、validation_experiments.idea_ids 和 merge_paths.source_idea_ids 只能引用已存在的 idea_id",
               "推荐方案必须同时出现在 ICE 结论和决策矩阵中",
               "stage_gate 至少包含一个 checked=true"

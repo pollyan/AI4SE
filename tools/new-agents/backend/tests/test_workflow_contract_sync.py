@@ -152,6 +152,35 @@ def test_representative_stages_declare_professional_methods():
         assert set(stage.get("methodIds", [])) >= method_ids
 
 
+def test_idea_converge_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    instruction = format_artifact_data_contract_instruction(
+        "IDEA_BRAINSTORM",
+        "CONVERGE",
+    )
+    stage = next(
+        stage
+        for stage in _workflow_manifest()["workflows"]["IDEA_BRAINSTORM"]["stages"]
+        if stage["id"] == "CONVERGE"
+    )
+    contract = stage.get("artifactDataContract")
+
+    assert contract is not None
+    assert "ice_evaluations.idea_id 必须唯一" in instruction
+    assert "rank 必须唯一" in instruction
+    assert (
+        "ice_score 缺省时由后端按 "
+        "impact * confidence / effort 派生"
+    ) in instruction
+    assert "decision_matrix.recommended_idea_id" in instruction
+    assert "validation_experiments.idea_ids" in instruction
+    assert "merge_paths.source_idea_ids" in instruction
+    assert "推荐方案必须同时出现在 ICE 结论和决策矩阵中" in instruction
+    assert "quadrantChart" in instruction
+    assert "右侧收敛聚焦产物" in instruction
+
+
 def test_strategy_artifact_data_contract_manifest_drives_backend_instruction():
     from workflow_manifest import format_artifact_data_contract_instruction
 

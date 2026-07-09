@@ -1593,6 +1593,37 @@ def test_parse_agent_turn_output_text_renders_idea_converge_artifact_data():
     assert output.stage_action.target_stage_id == "CONCEPT"
 
 
+def test_parse_agent_turn_output_text_renders_idea_converge_without_ice_score():
+    artifact_data = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    for item in artifact_data["ice_evaluations"]:
+        item.pop("ice_score")
+
+    json_text = json.dumps(
+        {
+            "chat": "已完成创意收敛评估。",
+            "artifact_data": artifact_data,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "CONCEPT",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONVERGE",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert [
+        item["ice_score"] for item in output.artifact_data["ice_evaluations"]
+    ] == [10.0, 6.0, 2.0]
+    assert "## ICE 评估表" in output.artifact_update.markdown
+
+
 def test_parse_agent_turn_output_text_renders_idea_concept_artifact_data():
     json_text = json.dumps(
         {
@@ -1861,11 +1892,28 @@ def test_idea_converge_structured_output_instruction_uses_manifest_artifact_data
     assert "validation_experiments.idea_ids" in instruction
     assert "merge_paths.source_idea_ids" in instruction
     assert (
+        "ice_score 缺省时由后端按 impact * confidence / effort 派生"
+        in instruction
+    )
+    assert (
         "不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 quadrantChart"
         in instruction
     )
     assert (
         "后端会负责确定性渲染右侧收敛聚焦产物和 Mermaid quadrantChart"
+        in instruction
+    )
+
+
+def test_idea_converge_structured_output_instruction_omits_ice_score():
+    instruction = build_structured_output_instruction(
+        "IDEA_BRAINSTORM",
+        "CONVERGE",
+    )
+
+    assert '"ice_score":' not in instruction
+    assert (
+        "ice_score 缺省时由后端按 impact * confidence / effort 派生"
         in instruction
     )
 
