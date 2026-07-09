@@ -362,6 +362,27 @@ describe('buildSystemPrompt', () => {
         expect(nodeIdRuleMatches).toHaveLength(1);
     });
 
+    it('injects VALUE DISCOVERY PERSONA artifact data contract from the manifest', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'alex',
+            workflow: 'VALUE_DISCOVERY',
+            stageIndex: 1,
+            currentArtifact: '# 用户画像分析\n已有内容',
+        });
+
+        const personaIdRule = 'personas[].persona_id 必须唯一';
+        expect(prompt).toContain('【artifact_data 结构化契约】');
+        expect(prompt).toContain(personaIdRule);
+        expect(prompt).toContain('behavior_scenarios[].persona_id、decision_chain[].persona_id、pain_evidence[].persona_id、priority_ranking[].persona_id 只能引用 personas[].persona_id 中已定义的画像 ID');
+        expect(prompt).toContain('priority_ranking[].persona_id 必须唯一');
+        expect(prompt).toContain('完整 Markdown 文档');
+        expect(prompt).toContain('Markdown 表格');
+        expect(prompt).toContain('右侧用户画像分析');
+        expect(prompt).toContain('画像、行为场景、决策链、痛点证据、反画像和优先级排序 Markdown 表格');
+        const personaIdRuleMatches = prompt.match(new RegExp(personaIdRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
+        expect(personaIdRuleMatches).toHaveLength(1);
+    });
+
     it('describes story breakdown work without markdown direct-write instructions', () => {
         const prompt = buildSystemPrompt({
             agentId: 'alex',

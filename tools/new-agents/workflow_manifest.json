@@ -976,6 +976,21 @@
               "验证状态"
             ]
           },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "personas[].persona_id 必须唯一",
+              "behavior_scenarios[].persona_id、decision_chain[].persona_id、pain_evidence[].persona_id、priority_ranking[].persona_id 只能引用 personas[].persona_id 中已定义的画像 ID",
+              "priority_ranking[].persona_id 必须唯一"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格"
+            ],
+            "rendererOutputs": [
+              "右侧用户画像分析",
+              "画像、行为场景、决策链、痛点证据、反画像和优先级排序 Markdown 表格"
+            ]
+          },
           "promptTemplateVersion": "2026.06.24.1",
           "regressionSampleIds": [
             "value-discovery.persona.baseline"

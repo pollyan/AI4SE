@@ -313,6 +313,30 @@ def test_value_elevator_artifact_data_contract_manifest_drives_backend_instructi
     assert "ai4se-visual score-matrix" in instruction
 
 
+def test_value_persona_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    instruction = format_artifact_data_contract_instruction(
+        "VALUE_DISCOVERY",
+        "PERSONA",
+    )
+    stage = next(
+        stage
+        for stage in _workflow_manifest()["workflows"]["VALUE_DISCOVERY"]["stages"]
+        if stage["id"] == "PERSONA"
+    )
+    contract = stage.get("artifactDataContract")
+
+    assert contract is not None
+    assert "personas[].persona_id 必须唯一" in instruction
+    assert "behavior_scenarios[].persona_id、decision_chain[].persona_id、pain_evidence[].persona_id、priority_ranking[].persona_id 只能引用 personas[].persona_id 中已定义的画像 ID" in instruction
+    assert "priority_ranking[].persona_id 必须唯一" in instruction
+    assert "完整 Markdown 文档" in instruction
+    assert "Markdown 表格" in instruction
+    assert "右侧用户画像分析" in instruction
+    assert "画像、行为场景、决策链、痛点证据、反画像和优先级排序 Markdown 表格" in instruction
+
+
 def test_workflow_manifest_declares_prompt_template_versions_for_every_stage():
     manifest = _workflow_manifest()
 

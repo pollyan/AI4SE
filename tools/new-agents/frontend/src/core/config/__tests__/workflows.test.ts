@@ -349,6 +349,26 @@ describe('Workflow Configuration', () => {
         expect(elevator?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual score-matrix');
     });
 
+    it('exposes manifest artifact data contract for VALUE DISCOVERY PERSONA', () => {
+        const persona = WORKFLOWS.VALUE_DISCOVERY.stages.find(stage => stage.id === 'PERSONA');
+
+        expect(persona?.artifactDataContract?.modelOutputRules).toContain(
+            'personas[].persona_id 必须唯一',
+        );
+        expect(persona?.artifactDataContract?.modelOutputRules).toContain(
+            'behavior_scenarios[].persona_id、decision_chain[].persona_id、pain_evidence[].persona_id、priority_ranking[].persona_id 只能引用 personas[].persona_id 中已定义的画像 ID',
+        );
+        expect(persona?.artifactDataContract?.modelOutputRules).toContain(
+            'priority_ranking[].persona_id 必须唯一',
+        );
+        expect(persona?.artifactDataContract?.forbiddenOutputs).toContain('完整 Markdown 文档');
+        expect(persona?.artifactDataContract?.forbiddenOutputs).toContain('Markdown 表格');
+        expect(persona?.artifactDataContract?.rendererOutputs).toContain('右侧用户画像分析');
+        expect(persona?.artifactDataContract?.rendererOutputs).toContain(
+            '画像、行为场景、决策链、痛点证据、反画像和优先级排序 Markdown 表格',
+        );
+    });
+
     it('does not ask TEST DESIGN STRATEGY model to handwrite renderer-owned visuals in artifact data mode', () => {
         const strategy = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'STRATEGY');
 
