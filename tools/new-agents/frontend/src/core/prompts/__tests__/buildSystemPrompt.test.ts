@@ -307,6 +307,35 @@ describe('buildSystemPrompt', () => {
         expect(ideaIdRuleMatches).toHaveLength(1);
     });
 
+    it('injects IDEA BRAINSTORM CONCEPT artifact data contract from the manifest', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'alex',
+            workflow: 'IDEA_BRAINSTORM',
+            stageIndex: 3,
+            currentArtifact: '# 产品概念简报\n已有内容',
+        });
+
+        const assumptionIdRule = 'core_assumptions[].assumption_id 必须唯一';
+        expect(prompt).toContain('【artifact_data 结构化契约】');
+        expect(prompt).toContain(assumptionIdRule);
+        expect(prompt).toContain('validation_roadmap[].validation_id 必须唯一');
+        expect(prompt).toContain('next_actions[].action_id 必须唯一');
+        expect(prompt).toContain('lean_canvas.cell 必须覆盖问题、用户群体、独特价值主张、解决方案、渠道、收入来源、成本结构、关键指标、竞争壁垒');
+        expect(prompt).toContain('growth_funnel.stage 必须覆盖 Acquisition、Activation、Retention、Revenue、Referral');
+        expect(prompt).toContain('mvp_features[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID');
+        expect(prompt).toContain('validation_roadmap[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID');
+        expect(prompt).toContain('next_actions[].related_ids 只能引用 core_assumptions[].assumption_id、validation_roadmap[].validation_id 或 premortem_risks[].risk_id 中已定义的 ID');
+        expect(prompt).toContain('stage_gate 至少包含一个 checked=true');
+        expect(prompt).toContain('mvp-map JSON 代码块');
+        expect(prompt).toContain('右侧产品概念简报');
+        expect(prompt).toContain('ai4se-visual mvp-map');
+        expect(prompt).toContain('图表 pie');
+        expect(prompt).toContain('图表 flowchart');
+        expect(prompt).not.toContain('Mermaid 代码块');
+        const assumptionIdRuleMatches = prompt.match(new RegExp(assumptionIdRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
+        expect(assumptionIdRuleMatches).toHaveLength(1);
+    });
+
     it('describes story breakdown work without markdown direct-write instructions', () => {
         const prompt = buildSystemPrompt({
             agentId: 'alex',

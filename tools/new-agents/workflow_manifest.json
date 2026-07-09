@@ -821,6 +821,33 @@
               "mvp-map"
             ]
           },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "core_assumptions[].assumption_id 必须唯一",
+              "validation_roadmap[].validation_id 必须唯一",
+              "next_actions[].action_id 必须唯一",
+              "lean_canvas.cell 必须覆盖问题、用户群体、独特价值主张、解决方案、渠道、收入来源、成本结构、关键指标、竞争壁垒",
+              "growth_funnel.stage 必须覆盖 Acquisition、Activation、Retention、Revenue、Referral",
+              "mvp_features[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID",
+              "validation_roadmap[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID",
+              "next_actions[].related_ids 只能引用 core_assumptions[].assumption_id、validation_roadmap[].validation_id 或 premortem_risks[].risk_id 中已定义的 ID",
+              "stage_gate 至少包含一个 checked=true"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格",
+              "Mermaid 代码块",
+              "mvp-map JSON 代码块",
+              "pie 代码块",
+              "flowchart 代码块"
+            ],
+            "rendererOutputs": [
+              "右侧产品概念简报",
+              "ai4se-visual mvp-map",
+              "Mermaid pie",
+              "Mermaid flowchart"
+            ]
+          },
           "promptTemplateVersion": "2026.06.24.1",
           "regressionSampleIds": [
             "idea-brainstorm.concept.baseline"

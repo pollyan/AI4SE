@@ -254,6 +254,37 @@ def test_idea_diverge_artifact_data_contract_manifest_drives_backend_instruction
     assert "Mermaid mindmap" in instruction
 
 
+def test_idea_concept_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    instruction = format_artifact_data_contract_instruction(
+        "IDEA_BRAINSTORM",
+        "CONCEPT",
+    )
+    stage = next(
+        stage
+        for stage in _workflow_manifest()["workflows"]["IDEA_BRAINSTORM"]["stages"]
+        if stage["id"] == "CONCEPT"
+    )
+    contract = stage.get("artifactDataContract")
+
+    assert contract is not None
+    assert "core_assumptions[].assumption_id 必须唯一" in instruction
+    assert "validation_roadmap[].validation_id 必须唯一" in instruction
+    assert "next_actions[].action_id 必须唯一" in instruction
+    assert "lean_canvas.cell 必须覆盖问题、用户群体、独特价值主张、解决方案、渠道、收入来源、成本结构、关键指标、竞争壁垒" in instruction
+    assert "growth_funnel.stage 必须覆盖 Acquisition、Activation、Retention、Revenue、Referral" in instruction
+    assert "mvp_features[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID" in instruction
+    assert "validation_roadmap[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID" in instruction
+    assert "next_actions[].related_ids 只能引用 core_assumptions[].assumption_id、validation_roadmap[].validation_id 或 premortem_risks[].risk_id 中已定义的 ID" in instruction
+    assert "stage_gate 至少包含一个 checked=true" in instruction
+    assert "mvp-map JSON 代码块" in instruction
+    assert "右侧产品概念简报" in instruction
+    assert "ai4se-visual mvp-map" in instruction
+    assert "Mermaid pie" in instruction
+    assert "Mermaid flowchart" in instruction
+
+
 def test_workflow_manifest_declares_prompt_template_versions_for_every_stage():
     manifest = _workflow_manifest()
 

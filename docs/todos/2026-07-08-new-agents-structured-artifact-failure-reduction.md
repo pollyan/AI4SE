@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成；前端正式 / partial artifact `ai4se-visual` 写入前校验已完成并全量验证通过；第 8A 轮 `artifact_data` 全阶段 fixture registry 回归门禁已完成并全量验证通过；第 8B 轮 `artifact_data` 字段来源与视觉协议矩阵已完成；第 8C 轮 `TEST_DESIGN/CASES` artifactDataContract manifest 同步已完成；第 8D 轮 `TEST_DESIGN/STRATEGY` artifactDataContract manifest 同步已完成；第 8E 轮 raw JSON strict failure closure 与 before-final delta 门禁收口已完成；第 8F 轮 `INCIDENT_REVIEW/ROOT_CAUSE` artifactDataContract manifest 同步已完成；第 8G 轮 `IDEA_BRAINSTORM/DEFINE` artifactDataContract manifest 同步已完成；第 8H 轮 `IDEA_BRAINSTORM/DIVERGE` artifactDataContract manifest 同步已完成）
+- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成；前端正式 / partial artifact `ai4se-visual` 写入前校验已完成并全量验证通过；第 8A 轮 `artifact_data` 全阶段 fixture registry 回归门禁已完成并全量验证通过；第 8B 轮 `artifact_data` 字段来源与视觉协议矩阵已完成；第 8C 轮 `TEST_DESIGN/CASES` artifactDataContract manifest 同步已完成；第 8D 轮 `TEST_DESIGN/STRATEGY` artifactDataContract manifest 同步已完成；第 8E 轮 raw JSON strict failure closure 与 before-final delta 门禁收口已完成；第 8F 轮 `INCIDENT_REVIEW/ROOT_CAUSE` artifactDataContract manifest 同步已完成；第 8G 轮 `IDEA_BRAINSTORM/DEFINE` artifactDataContract manifest 同步已完成；第 8H 轮 `IDEA_BRAINSTORM/DIVERGE` artifactDataContract manifest 同步已完成；第 8I 轮 `IDEA_BRAINSTORM/CONCEPT` artifactDataContract manifest 同步已完成）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -113,6 +113,7 @@
   - 进展：第 8F 轮已完成 `INCIDENT_REVIEW/ROOT_CAUSE` `artifactDataContract` manifest 同步。ROOT_CAUSE 的 5-Why 深度、原因 ID 唯一性、证据 / 鱼骨 / 根因结论引用门禁、禁止模型输出 renderer-owned Markdown / Mermaid / cause-map JSON 等关键约束已进入 manifest，并由 backend instruction sync 和 frontend manifest prompt tests 保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 21 个阶段尚未迁移。
   - 进展：第 8G 轮已完成 `IDEA_BRAINSTORM/DEFINE` `artifactDataContract` manifest 同步。DEFINE 的 evidence / problem ID 唯一性、problem-user-fit 证据引用、root problem 覆盖、`stage_gate`、禁止模型输出 renderer-owned Markdown / Mermaid / mindmap 代码块等关键约束已进入 manifest，并由 backend instruction sync、frontend manifest 配置和 frontend prompt 注入测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 20 个阶段尚未迁移。
   - 进展：第 8H 轮已完成 `IDEA_BRAINSTORM/DIVERGE` `artifactDataContract` manifest 同步。DIVERGE 的 idea/source/parked record ID 唯一性、创意全景与创意来源 idea 引用、`stage_gate`、禁止模型输出 renderer-owned Markdown / Mermaid / mindmap 代码块等关键约束已进入 manifest，并由 backend instruction sync、frontend manifest 配置和 frontend prompt 注入测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 19 个阶段尚未迁移。
+  - 进展：第 8I 轮已完成 `IDEA_BRAINSTORM/CONCEPT` `artifactDataContract` manifest 同步。CONCEPT 的 core assumption / validation / action ID 唯一性、Lean Canvas 必备格、AARRR 增长漏斗必备 stage、MVP / validation / next action 引用门禁、`stage_gate`、禁止模型输出 renderer-owned Markdown / Mermaid / mvp-map JSON / pie / flowchart 代码块等关键约束已进入 manifest，并由 backend instruction sync、frontend manifest 配置和 frontend prompt 注入测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 18 个阶段尚未迁移。
 
 - [ ] 针对高失败阶段做纵切专项修复。（第 4-6 轮）
   - 优先顺序：`IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY`、`IDEA_BRAINSTORM/DIVERGE`。
@@ -130,6 +131,7 @@
   - 进展：第 8D 轮已新增 `TEST_DESIGN/STRATEGY` 的 backend manifest contract sync、runtime instruction source、frontend prompt 单点注入和 renderer validator 回归测试；相关 STRATEGY RPN 派生、ID 唯一性、引用门禁和 stage_gate 测试继续通过。
   - 进展：第 8E 轮已移除 raw JSON 截断后的 `artifact_truncated` 伪成功最终输出，恢复最终 JSON 无效时的 `AgentRuntimeSchemaError` strict failure closure；同时把 raw streaming 强门禁明确为“final 前至少一个正式 before-final artifact delta + final contract 通过”，字段级多段 partial renderer 当前仅声明 `TEST_DESIGN/CLARIFY` 已实现，`artifact_patch` 不作为全阶段强门禁。
   - 进展：第 8H 轮已新增 `IDEA_BRAINSTORM/DIVERGE` 的 backend manifest contract sync、frontend manifest 配置和 frontend prompt 注入回归测试；相关 DIVERGE renderer / 引用门禁测试继续作为聚焦验证范围。
+  - 进展：第 8I 轮已新增 `IDEA_BRAINSTORM/CONCEPT` 的 backend manifest contract sync、frontend manifest 配置和 frontend prompt 注入回归测试；相关 CONCEPT renderer / 引用门禁 / raw JSON streaming 测试继续作为聚焦验证范围。
 
 - [ ] 建立视觉产物协议分层。（第 7 轮）
   - 目标：明确哪些视觉类型必须走 `ai4se-visual` JSON，哪些 Mermaid 类型允许由后端 deterministic renderer 生成，哪些 DSL 禁止模型直接输出。
@@ -1596,6 +1598,81 @@ NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all
 
 - 本轮只迁移 `IDEA_BRAINSTORM/DIVERGE`；当前已完成 `artifactDataContract` manifest sync 的阶段为 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE`，其余 19 个 artifact-data 阶段仍待后续纵切迁移。
 - 本轮不新增 DIVERGE 后端派生字段、自动 ID 分配、状态枚举校验、backend Mermaid JS parse 或 `mmdc` 渲染门禁；Mermaid `mindmap` 仍由后端 deterministic renderer 生成，并由现有 artifact contract / visual contract 测试保护。
+
+### 2026-07-09 第 8I 轮：IDEA_BRAINSTORM CONCEPT artifactDataContract 同步
+
+触发原因：
+
+- 继续推进第 8 轮 contract 单源化时，`IDEA_BRAINSTORM/DEFINE`、`DIVERGE`、`CONVERGE` 已完成 manifest sync，`CONCEPT` 是 IDEA_BRAINSTORM 工作流中剩余的最后一个 artifact-data 阶段。
+- `CONCEPT` 已有 Pydantic validator、deterministic renderer、runtime raw JSON streaming 和 handoff 相关测试，但核心约束仍分散在后端硬编码 instruction、schema validator、renderer tests 与前端 prompt 中。
+- 子智能体只读审查确认：CONCEPT 当前没有后端派生 artifact_data 字段；MVP pie 计数仅是 renderer 视觉输出；当前 validator 不校验 `premortem_risks[].risk_id` 唯一性，不校验 MVP level / likelihood 枚举或日期格式，也不自动补齐 Lean Canvas、增长漏斗或业务字段。因此本轮只把现有事实迁入 manifest，不虚构新能力。
+
+已修复：
+
+- `IDEA_BRAINSTORM/CONCEPT` 新增 `artifactDataContract` manifest 配置，把 `core_assumptions[].assumption_id`、`validation_roadmap[].validation_id`、`next_actions[].action_id` 唯一性，Lean Canvas 必备格、AARRR 增长漏斗必备 stage，MVP / validation / next action 引用门禁，`stage_gate` checked 要求，禁止模型手写 Markdown / Mermaid / `mvp-map` JSON / pie / flowchart 代码块，以及后端 renderer 负责输出右侧《产品概念简报》、`ai4se-visual mvp-map`、Mermaid pie 和 Mermaid flowchart 的边界放入单一配置源。
+- 后端 contract sync 测试证明 `format_artifact_data_contract_instruction()` 从 manifest 生成 CONCEPT 结构化输出约束；前端 workflow 配置测试证明 CONCEPT 契约已暴露；前端 system prompt 测试证明该契约会进入共享 prompt 注入路径，并沿用既有 `Mermaid` -> `图表` 的模型提示降噪逻辑。
+- `docs/TESTING.md` 字段来源矩阵同步更新：已迁入 `artifactDataContract` manifest sync 的阶段从 6 个增加到 7 个，剩余待迁移阶段从 19 个减少到 18 个。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py::test_idea_concept_artifact_data_contract_manifest_drives_backend_instruction -q
+```
+
+结果：修复前 `1 failed`，失败点为 CONCEPT `artifactDataContract` 缺失；修复后 `1 passed`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts -t "IDEA BRAINSTORM CONCEPT"
+```
+
+结果：修复前 `1 failed`，失败点为 CONCEPT `artifactDataContract` 未暴露；修复后 `1 passed, 22 skipped`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/prompts/__tests__/buildSystemPrompt.test.ts -t "IDEA BRAINSTORM CONCEPT"
+```
+
+结果：修复前 `1 failed`，失败点为 CONCEPT `artifactDataContract` 未进入 system prompt；修复后 `1 passed, 56 skipped`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_concept_artifact_data_rejects_duplicate_assumption_id tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_concept_artifact_data_rejects_duplicate_validation_id tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_concept_artifact_data_rejects_duplicate_action_id tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_concept_artifact_data_rejects_missing_lean_canvas_cell tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_concept_artifact_data_rejects_missing_growth_funnel_stage tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_concept_artifact_data_rejects_unknown_mvp_feature_assumption tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_concept_artifact_data_rejects_unknown_validation_assumption tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_concept_artifact_data_rejects_unknown_next_action_reference tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_idea_concept_artifact_data_requires_checked_stage_gate tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_idea_concept_artifact_data_is_deterministic_and_contract_valid -q
+```
+
+结果：`33 passed`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py::test_parse_agent_turn_output_text_renders_idea_concept_artifact_data tools/new-agents/backend/tests/test_agent_runtime.py::test_idea_concept_structured_output_instruction_requests_artifact_data_not_markdown tools/new-agents/backend/tests/test_agent_runtime.py::test_idea_concept_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite tools/new-agents/backend/tests/test_agent_runtime.py::test_runtime_raw_json_stream_turn_renders_idea_concept_artifact_data_before_final_output -q
+```
+
+结果：`4 passed`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run
+```
+
+结果：`80 passed`。
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：通过。New Agents Frontend `793 passed`；New Agents Backend `759 passed, 4 deselected`。
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：默认沙箱失败，失败点为 MidScene proxy `listen EPERM: operation not permitted 0.0.0.0:3002` 与 Playwright Chromium `bootstrap_check_in ... Permission denied (1100)`；失败前后 Intent Tester API、严重 lint、Common Frontend、New Agents Frontend / Backend 均已通过。
+
+```bash
+NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all
+```
+
+结果：非沙箱重跑通过。关键结果包括 Intent Tester API `294 passed`、flake8 严重错误检查通过、MidScene proxy `17 passed`、Common Frontend lint/build 通过、New Agents Frontend `793 passed`、New Agents Backend `759 passed, 4 deselected`、New Agents Browser E2E `8 passed, 3 skipped, 10 deselected`。
+
+残余风险：
+
+- 本轮只迁移 `IDEA_BRAINSTORM/CONCEPT`；当前已完成 `artifactDataContract` manifest sync 的阶段为 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE`，其余 18 个 artifact-data 阶段仍待后续纵切迁移。
+- 本轮不新增 CONCEPT 后端派生字段、风险 ID 唯一性、MVP level / likelihood 枚举、日期格式校验、自动 ID 分配、backend Mermaid JS parse 或 `mmdc` 渲染门禁；Mermaid pie / flowchart 和 `mvp-map` 仍由后端 deterministic renderer 生成，并由现有 artifact contract / visual contract 测试保护。
 
 ## 每轮验收口径
 

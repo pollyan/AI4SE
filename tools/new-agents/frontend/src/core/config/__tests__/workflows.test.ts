@@ -290,6 +290,39 @@ describe('Workflow Configuration', () => {
         expect(diverge?.artifactDataContract?.rendererOutputs).toContain('Mermaid mindmap');
     });
 
+    it('exposes manifest artifact data contract for IDEA BRAINSTORM CONCEPT', () => {
+        const concept = WORKFLOWS.IDEA_BRAINSTORM.stages.find(stage => stage.id === 'CONCEPT');
+
+        expect(concept?.artifactDataContract?.modelOutputRules).toContain(
+            'core_assumptions[].assumption_id 必须唯一',
+        );
+        expect(concept?.artifactDataContract?.modelOutputRules).toContain(
+            'validation_roadmap[].validation_id 必须唯一',
+        );
+        expect(concept?.artifactDataContract?.modelOutputRules).toContain(
+            'next_actions[].action_id 必须唯一',
+        );
+        expect(concept?.artifactDataContract?.modelOutputRules).toContain(
+            'lean_canvas.cell 必须覆盖问题、用户群体、独特价值主张、解决方案、渠道、收入来源、成本结构、关键指标、竞争壁垒',
+        );
+        expect(concept?.artifactDataContract?.modelOutputRules).toContain(
+            'growth_funnel.stage 必须覆盖 Acquisition、Activation、Retention、Revenue、Referral',
+        );
+        expect(concept?.artifactDataContract?.modelOutputRules).toContain(
+            'mvp_features[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID',
+        );
+        expect(concept?.artifactDataContract?.modelOutputRules).toContain(
+            'validation_roadmap[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID',
+        );
+        expect(concept?.artifactDataContract?.modelOutputRules).toContain(
+            'next_actions[].related_ids 只能引用 core_assumptions[].assumption_id、validation_roadmap[].validation_id 或 premortem_risks[].risk_id 中已定义的 ID',
+        );
+        expect(concept?.artifactDataContract?.forbiddenOutputs).toContain('mvp-map JSON 代码块');
+        expect(concept?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual mvp-map');
+        expect(concept?.artifactDataContract?.rendererOutputs).toContain('Mermaid pie');
+        expect(concept?.artifactDataContract?.rendererOutputs).toContain('Mermaid flowchart');
+    });
+
     it('does not ask TEST DESIGN STRATEGY model to handwrite renderer-owned visuals in artifact data mode', () => {
         const strategy = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'STRATEGY');
 
