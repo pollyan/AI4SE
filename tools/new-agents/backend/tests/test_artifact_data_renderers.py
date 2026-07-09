@@ -3620,6 +3620,35 @@ def test_req_review_artifact_data_rejects_inconsistent_issue_statistics():
         ReqReviewArtifactData.model_validate(invalid)
 
 
+def test_req_review_artifact_data_derives_issue_statistics_counts_when_missing():
+    artifact_data = copy.deepcopy(VALID_REQ_REVIEW_ARTIFACT_DATA)
+    artifact_data["issue_statistics"].pop("p0_count")
+    artifact_data["issue_statistics"].pop("p1_count")
+    artifact_data["issue_statistics"].pop("p2_count")
+
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已完成需求质量诊断，请确认右侧问题清单。",
+            "artifact_data": artifact_data,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "REPORT",
+            },
+            "warnings": [],
+        },
+        workflow_id="REQ_REVIEW",
+        current_stage_id="REVIEW",
+    )
+
+    assert output is not None
+    assert output.artifact_data["issue_statistics"]["p0_count"] == 1
+    assert output.artifact_data["issue_statistics"]["p1_count"] == 1
+    assert output.artifact_data["issue_statistics"]["p2_count"] == 0
+    assert "| P0 (阻塞) | 1 | 必须在开发前解答，否则无法测试 |" in (
+        output.artifact_update.markdown
+    )
+
+
 def test_req_review_artifact_data_rejects_duplicate_issue_id():
     invalid = copy.deepcopy(VALID_REQ_REVIEW_ARTIFACT_DATA)
     invalid["issue_groups"][1]["issues"][0]["issue_id"] = "Q-001"
@@ -3655,6 +3684,32 @@ def test_req_review_report_artifact_data_rejects_inconsistent_issue_statistics()
 
     with pytest.raises(ValidationError, match="issue_statistics"):
         ReqReviewReportArtifactData.model_validate(invalid)
+
+
+def test_req_review_report_artifact_data_derives_issue_statistics_when_missing():
+    artifact_data = copy.deepcopy(VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA)
+    artifact_data.pop("issue_statistics")
+
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已整理正式需求评审报告，请确认右侧内容。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="REQ_REVIEW",
+        current_stage_id="REPORT",
+    )
+
+    assert output is not None
+    assert output.artifact_data["issue_statistics"] == {
+        "p0_count": 1,
+        "p1_count": 1,
+        "p2_count": 1,
+    }
+    assert "**统计摘要**：共 3 个问题，P0: 1 个 | P1: 1 个 | P2: 1 个" in (
+        output.artifact_update.markdown
+    )
 
 
 def test_req_review_report_artifact_data_rejects_duplicate_issue_id():

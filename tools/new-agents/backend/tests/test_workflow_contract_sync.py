@@ -252,8 +252,8 @@ def test_req_review_review_artifact_data_contract_manifest_drives_backend_instru
     assert "quality_overview[].severity_score 必须是 1 到 5 的整数" in instruction
     assert "issue_groups[].issues[].issue_id 必须唯一" in instruction
     assert (
-        "issue_statistics.p0_count/p1_count/p2_count 必须等于 "
-        "issue_groups[].issues[].priority 中 P0/P1/P2 的数量"
+        "issue_statistics.p0_count/p1_count/p2_count 缺省时由后端按 "
+        "issue_groups[].issues[].priority 中 P0/P1/P2 的数量派生"
     ) in instruction
     assert (
         "revision_suggestions[].related_issues 只能引用 "
@@ -282,8 +282,8 @@ def test_req_review_report_artifact_data_contract_manifest_drives_backend_instru
     assert contract is not None
     assert "issue_closures[].issue_id 必须唯一" in instruction
     assert (
-        "issue_statistics.p0_count/p1_count/p2_count 必须等于 "
-        "issue_closures[].priority 中 P0/P1/P2 的数量"
+        "issue_statistics.p0_count/p1_count/p2_count 缺省时由后端按 "
+        "issue_closures[].priority 中 P0/P1/P2 的数量派生"
     ) in instruction
     assert (
         "review_conditions[].related_issues 只能引用 "

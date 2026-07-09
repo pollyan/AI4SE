@@ -259,7 +259,7 @@ JSON 对象结构：
     "review_info": {"artifact_name": "需求质量诊断与评审问题清单", "requirement_name": "...", "review_date": "YYYY-MM-DD", "requirement_summary": "...", "conclusion": "可进入报告/需补充需求/存在阻断问题"},
     "scope_items": [{"scope_type": "评审范围/不评审范围", "content": "...", "review_impact": "...", "status": "已确认/AI 假设/待确认"}],
     "quality_overview": [{"dimension": "可测试性/功能完整性/边界与规则定义/异常场景与闭环/非功能性需求/依赖与环境/需求一致性", "quality_judgement": "清晰/部分缺失/严重缺失", "severity_score": 5, "evidence": "...", "testing_risk": "...", "status": "待 PM 确认/需研发判断/已确认"}],
-    "issue_statistics": {"p0_count": 1, "p1_count": 1, "p2_count": 0, "p0_description": "必须在开发前解答，否则无法测试", "p1_description": "建议在开发前明确，否则可能返工", "p2_description": "优化性建议，可排入后续迭代"},
+    "issue_statistics": {"p0_description": "必须在开发前解答，否则无法测试", "p1_description": "建议在开发前明确，否则可能返工", "p2_description": "优化性建议，可排入后续迭代"},
     "issue_groups": [{"dimension": "可测试性", "issues": [{"issue_id": "Q-001", "dimension": "可测试性", "description": "...", "priority": "P0", "blocking": "阻断/非阻断", "requirement_section": "...", "impact": "...", "evidence": "...", "suggestion": "...", "owner": "PM/研发/测试/业务方", "status": "待 PM 确认/需研发判断/已确认/非阻断"}]}],
     "revision_suggestions": [{"suggestion_id": "FIX-001", "related_issues": ["Q-001"], "suggestion": "...", "acceptance": "...", "owner": "PM/研发/测试/业务方", "status": "待处理/已确认/已关闭"}],
     "stage_gate": [{"checked": true, "item": "..."}]
@@ -268,10 +268,13 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；quality_overview.severity_score 必须是 1 到 5 的整数；issue_statistics 的 P0/P1/P2 数量必须与 issue_groups 中的问题优先级计数一致；revision_suggestions.related_issues 只能引用已存在的 issue_id。不要输出完整 Markdown、Mermaid 代码块、score-matrix JSON 代码块或表格，后端会负责确定性渲染右侧需求评审问题清单、flowchart 和 ai4se-visual score-matrix。
+__ARTIFACT_DATA_CONTRACT_INSTRUCTION__
 chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
-"""
+""".replace(
+    "__ARTIFACT_DATA_CONTRACT_INSTRUCTION__",
+    format_artifact_data_contract_instruction("REQ_REVIEW", "REVIEW"),
+)
 
 
 REQ_REVIEW_REPORT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
@@ -290,7 +293,6 @@ JSON 对象结构：
   "artifact_data": {
     "conclusion": {"artifact_name": "可签署需求评审报告", "review_result": "通过/有条件通过/不通过", "reason": "...", "development_gate": "允许/有条件允许/暂缓", "needs_recheck": "是/否", "summary": "..."},
     "review_info": {"requirement_name": "...", "review_date": "YYYY-MM-DD", "review_input": "REVIEW 阶段问题清单版本/需求文档版本", "participants": "产品 / 研发 / 测试 / 业务方"},
-    "issue_statistics": {"p0_count": 1, "p1_count": 1, "p2_count": 0},
     "issue_closures": [{"issue_id": "Q-001", "priority": "P0", "description": "...", "requirement_section": "...", "impact": "...", "owner": "PM/研发/测试/业务方", "next_step": "...", "closure_status": "待修订/已关闭/风险接受/待排期/不处理", "recheck_condition": "..."}],
     "review_conditions": [{"condition_id": "RC-001", "condition": "...", "related_issues": ["Q-001"], "verification": "...", "owner": "产品/测试/研发", "status": "待满足/已满足"}],
     "signoffs": [{"role": "产品负责人/研发负责人/测试负责人", "owner": "...", "opinion": "通过/有条件通过/不通过", "status": "待签署/已签署"}],
@@ -300,10 +302,13 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；issue_statistics 的 P0/P1/P2 数量必须与 issue_closures 中的问题优先级计数一致；review_conditions.related_issues 只能引用已存在的 issue_id；存在未关闭 P0/P1 问题时 review_result 不能为“通过”。不要输出完整 Markdown、Mermaid 代码块、priority-board JSON 代码块或表格，后端会负责确定性渲染右侧需求评审报告、pie 和 ai4se-visual priority-board。
+__ARTIFACT_DATA_CONTRACT_INSTRUCTION__
 chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
-"""
+""".replace(
+    "__ARTIFACT_DATA_CONTRACT_INSTRUCTION__",
+    format_artifact_data_contract_instruction("REQ_REVIEW", "REPORT"),
+)
 
 
 VALUE_ELEVATOR_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """

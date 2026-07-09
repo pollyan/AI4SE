@@ -314,7 +314,8 @@ describe('buildSystemPrompt', () => {
             currentArtifact: '# 需求评审问题清单\n已有内容',
         });
 
-        const issueCountRule = 'issue_statistics.p0_count/p1_count/p2_count 必须等于 issue_groups[].issues[].priority 中 P0/P1/P2 的数量';
+        const issueCountRule =
+            'issue_statistics.p0_count/p1_count/p2_count 缺省时由后端按 issue_groups[].issues[].priority 中 P0/P1/P2 的数量派生；显式提供时必须一致';
         expect(prompt).toContain('【artifact_data 结构化契约】');
         expect(prompt).toContain('quality_overview[].severity_score 必须是 1 到 5 的整数');
         expect(prompt).toContain('issue_groups[].issues[].issue_id 必须唯一');
@@ -337,7 +338,8 @@ describe('buildSystemPrompt', () => {
             currentArtifact: '# 需求评审报告\n已有内容',
         });
 
-        const issueCountRule = 'issue_statistics.p0_count/p1_count/p2_count 必须等于 issue_closures[].priority 中 P0/P1/P2 的数量';
+        const issueCountRule =
+            'issue_statistics.p0_count/p1_count/p2_count 缺省时由后端按 issue_closures[].priority 中 P0/P1/P2 的数量派生；显式提供时必须一致';
         expect(prompt).toContain('【artifact_data 结构化契约】');
         expect(prompt).toContain('issue_closures[].issue_id 必须唯一');
         expect(prompt).toContain(issueCountRule);

@@ -1582,9 +1582,9 @@ class ReqReviewQualityOverviewItem(StrictArtifactDataModel):
 
 
 class ReqReviewIssueStatistics(StrictArtifactDataModel):
-    p0_count: int = Field(ge=0)
-    p1_count: int = Field(ge=0)
-    p2_count: int = Field(ge=0)
+    p0_count: int | None = Field(default=None, ge=0)
+    p1_count: int | None = Field(default=None, ge=0)
+    p2_count: int | None = Field(default=None, ge=0)
     p0_description: str
     p1_description: str
     p2_description: str
@@ -1639,6 +1639,12 @@ class ReqReviewArtifactData(StrictArtifactDataModel):
             "P1": sum(1 for issue in issues if issue.priority == "P1"),
             "P2": sum(1 for issue in issues if issue.priority == "P2"),
         }
+        if self.issue_statistics.p0_count is None:
+            self.issue_statistics.p0_count = priority_counts["P0"]
+        if self.issue_statistics.p1_count is None:
+            self.issue_statistics.p1_count = priority_counts["P1"]
+        if self.issue_statistics.p2_count is None:
+            self.issue_statistics.p2_count = priority_counts["P2"]
         if (
             self.issue_statistics.p0_count != priority_counts["P0"]
             or self.issue_statistics.p1_count != priority_counts["P1"]
@@ -1679,9 +1685,9 @@ class ReqReviewReportInfo(StrictArtifactDataModel):
 
 
 class ReqReviewReportIssueStatistics(StrictArtifactDataModel):
-    p0_count: int = Field(ge=0)
-    p1_count: int = Field(ge=0)
-    p2_count: int = Field(ge=0)
+    p0_count: int | None = Field(default=None, ge=0)
+    p1_count: int | None = Field(default=None, ge=0)
+    p2_count: int | None = Field(default=None, ge=0)
 
 
 class ReqReviewReportIssueClosure(StrictArtifactDataModel):
@@ -1723,7 +1729,7 @@ class ReqReviewReportChangeLogItem(StrictArtifactDataModel):
 class ReqReviewReportArtifactData(StrictArtifactDataModel):
     conclusion: ReqReviewReportConclusion
     review_info: ReqReviewReportInfo
-    issue_statistics: ReqReviewReportIssueStatistics
+    issue_statistics: ReqReviewReportIssueStatistics | None = None
     issue_closures: list[ReqReviewReportIssueClosure] = Field(min_length=1)
     review_conditions: list[ReqReviewReportCondition] = Field(min_length=1)
     signoffs: list[ReqReviewReportSignoff] = Field(min_length=1)
@@ -1740,6 +1746,19 @@ class ReqReviewReportArtifactData(StrictArtifactDataModel):
             "P1": sum(1 for item in self.issue_closures if item.priority == "P1"),
             "P2": sum(1 for item in self.issue_closures if item.priority == "P2"),
         }
+        if self.issue_statistics is None:
+            self.issue_statistics = ReqReviewReportIssueStatistics(
+                p0_count=priority_counts["P0"],
+                p1_count=priority_counts["P1"],
+                p2_count=priority_counts["P2"],
+            )
+        assert self.issue_statistics is not None
+        if self.issue_statistics.p0_count is None:
+            self.issue_statistics.p0_count = priority_counts["P0"]
+        if self.issue_statistics.p1_count is None:
+            self.issue_statistics.p1_count = priority_counts["P1"]
+        if self.issue_statistics.p2_count is None:
+            self.issue_statistics.p2_count = priority_counts["P2"]
         if (
             self.issue_statistics.p0_count != priority_counts["P0"]
             or self.issue_statistics.p1_count != priority_counts["P1"]

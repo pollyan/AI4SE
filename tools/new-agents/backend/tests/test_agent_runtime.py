@@ -937,6 +937,38 @@ def test_parse_agent_turn_output_text_renders_req_review_artifact_data():
     assert output.stage_action.target_stage_id == "REPORT"
 
 
+def test_parse_agent_turn_output_text_renders_req_review_without_issue_counts():
+    artifact_data = copy.deepcopy(VALID_REQ_REVIEW_ARTIFACT_DATA)
+    artifact_data["issue_statistics"].pop("p0_count")
+    artifact_data["issue_statistics"].pop("p1_count")
+    artifact_data["issue_statistics"].pop("p2_count")
+
+    json_text = json.dumps(
+        {
+            "chat": "我已完成需求质量诊断，请确认右侧问题清单。",
+            "artifact_data": artifact_data,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "REPORT",
+            },
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="REQ_REVIEW",
+        current_stage_id="REVIEW",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_data["issue_statistics"]["p0_count"] == 1
+    assert output.artifact_data["issue_statistics"]["p1_count"] == 1
+    assert output.artifact_data["issue_statistics"]["p2_count"] == 0
+    assert '"type": "score-matrix"' in output.artifact_update.markdown
+
+
 def test_req_review_structured_output_instruction_requests_artifact_data_not_markdown():
     instruction = build_structured_output_instruction(
         "REQ_REVIEW",
@@ -951,6 +983,21 @@ def test_req_review_structured_output_instruction_requests_artifact_data_not_mar
     assert '"target_stage_id": "REPORT"' in instruction
     assert "不要输出完整 Markdown" in instruction
     assert "artifact_update.markdown" not in instruction
+
+
+def test_req_review_structured_output_instruction_omits_issue_count_fields():
+    instruction = build_structured_output_instruction(
+        "REQ_REVIEW",
+        "REVIEW",
+    )
+
+    assert '"p0_count":' not in instruction
+    assert '"p1_count":' not in instruction
+    assert '"p2_count":' not in instruction
+    assert (
+        "issue_statistics.p0_count/p1_count/p2_count 缺省时由后端按 "
+        "issue_groups[].issues[].priority 中 P0/P1/P2 的数量派生"
+    ) in instruction
 
 
 def test_req_review_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
@@ -992,6 +1039,35 @@ def test_parse_agent_turn_output_text_renders_req_review_report_artifact_data():
     assert output.stage_action is None
 
 
+def test_parse_agent_turn_output_text_renders_req_review_report_without_statistics():
+    artifact_data = copy.deepcopy(VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA)
+    artifact_data.pop("issue_statistics")
+
+    json_text = json.dumps(
+        {
+            "chat": "我已整理正式需求评审报告，请确认右侧内容。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    output = parse_agent_turn_output_text(
+        json_text,
+        workflow_id="REQ_REVIEW",
+        current_stage_id="REPORT",
+    )
+
+    assert output.artifact_update.type == "replace"
+    assert output.artifact_data["issue_statistics"] == {
+        "p0_count": 1,
+        "p1_count": 1,
+        "p2_count": 1,
+    }
+    assert '"type": "priority-board"' in output.artifact_update.markdown
+
+
 def test_req_review_report_structured_output_instruction_requests_artifact_data_not_markdown():
     instruction = build_structured_output_instruction(
         "REQ_REVIEW",
@@ -1006,6 +1082,19 @@ def test_req_review_report_structured_output_instruction_requests_artifact_data_
     assert 'stage_action": null' in instruction
     assert "不要输出完整 Markdown" in instruction
     assert "artifact_update.markdown" not in instruction
+
+
+def test_req_review_report_structured_output_instruction_omits_issue_statistics():
+    instruction = build_structured_output_instruction(
+        "REQ_REVIEW",
+        "REPORT",
+    )
+
+    assert '"issue_statistics":' not in instruction
+    assert (
+        "issue_statistics.p0_count/p1_count/p2_count 缺省时由后端按 "
+        "issue_closures[].priority 中 P0/P1/P2 的数量派生"
+    ) in instruction
 
 
 def test_req_review_report_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():

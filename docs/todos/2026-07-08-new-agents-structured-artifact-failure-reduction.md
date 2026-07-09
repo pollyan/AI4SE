@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化已新增 `TEST_DESIGN/DELIVERY` 统计字段纵切。后续未完成治理仍集中在 5 个能力包：派生字段后端化、ID 收敛、视觉协议分层、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
+- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化已新增 `TEST_DESIGN/DELIVERY` 统计字段纵切和 `REQ_REVIEW` 问题统计纵切。后续未完成治理仍集中在 5 个能力包：派生字段后端化、ID 收敛、视觉协议分层、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -118,6 +118,7 @@
   - 目标：模型只输出语义内容和原子事实，后端负责确定性计算、排序和汇总。
   - 进展：第 6 轮首个纵切已完成 `TEST_DESIGN/CASES.case_statistics` 后端派生。缺省统计由后端根据 `case_groups` 计算，显式错误统计仍触发 validation failure。
   - 进展：已完成 `TEST_DESIGN/DELIVERY` 统计字段纵切。`case_summary_items[].case_count` 缺省时由 P0/P1/P2 派生；`delivery_metrics.total_cases` 和 `high_risk_count` 缺省时由用例摘要和开放风险派生；模型显式输出错误统计仍触发 validation failure。`DELIVERY` runtime instruction 示例不再要求模型输出这些派生字段，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
+  - 进展：已完成 `REQ_REVIEW/REVIEW` 与 `REQ_REVIEW/REPORT` 问题统计纵切。REVIEW 的 `issue_statistics.p0_count/p1_count/p2_count` 缺省时由 `issue_groups[].issues[].priority` 派生，REPORT 的 `issue_statistics` 缺省时由 `issue_closures[].priority` 派生；显式错误统计仍触发 validation failure。REQ_REVIEW runtime instruction 示例不再要求模型输出派生计数字段，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
 
 - [ ] 收敛 ID 与引用关系。（第 4-6 轮）
   - 目标：后端生成稳定 ID，或在 renderer/normalizer 中确定性分配 ID；模型不再负责维护容易漂移的跨表引用。
@@ -2468,6 +2469,63 @@ cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workfl
 
 - 本轮只完成 `TEST_DESIGN/DELIVERY` 当前 payload 内可计算统计字段，不新增跨阶段 CASES 汇总，不后端派生 P0/P1/P2 分布、自动化候选、阻塞环境、交付状态或签署结论。
 - 派生字段后端化能力包仍未整体完成；后续需要继续盘点其它 workflow 中仍由模型输出的覆盖统计、排序摘要、ID 派生或可计算汇总。
+
+### 2026-07-09 切片记录：REQ_REVIEW 问题统计后端派生
+
+触发原因：
+
+- `TEST_DESIGN/DELIVERY` 派生统计切片完成后，继续消化同一能力包中的可计算字段；`REQ_REVIEW/REVIEW` 与 `REQ_REVIEW/REPORT` 均仍要求模型输出 P0/P1/P2 问题数量。
+- 子智能体只读审查确认：`REQ_REVIEW/REVIEW.issue_statistics.p0_count/p1_count/p2_count` 可由 `issue_groups[].issues[].priority` 计数，`REQ_REVIEW/REPORT.issue_statistics` 可由 `issue_closures[].priority` 计数；二者都只依赖当前 payload，不需要跨阶段读取。
+- 本轮按“一个 workflow 一个切片”的口径处理 `REQ_REVIEW` 两阶段；REVIEW 仍保留 `p0_description/p1_description/p2_description` 由模型输出，REPORT 的 `issue_statistics` 可整体缺省。
+
+已修复：
+
+- `ReqReviewIssueStatistics.p0_count/p1_count/p2_count` 缺省时由 `issue_groups[].issues[].priority` 派生；显式提供但不一致时继续 validation failure。
+- `ReqReviewReportArtifactData.issue_statistics` 缺省时由 `issue_closures[].priority` 派生；显式提供但不一致时继续 validation failure。
+- `REQ_REVIEW` runtime structured output 示例不再要求模型输出派生计数字段，并改为注入 manifest 生成的 `artifactDataContract` instruction。
+- `workflow_manifest.json`、前端 workflow 配置测试和前端 system prompt 测试同步更新为“缺省后端派生、显式提供必须一致”。
+- `docs/TESTING.md` 字段来源矩阵同步更新，记录 REVIEW 的问题统计描述仍由模型负责，计数由后端派生；REPORT 的 `issue_statistics` 可由后端整体派生。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py -q -k "req_review_artifact_data_derives_issue_statistics_counts_when_missing or req_review_report_artifact_data_derives_issue_statistics_when_missing"
+```
+
+结果：修复前 `2 failed, 123 deselected`，失败点为缺少 issue statistics 计数字段时 Pydantic 直接报 required；修复后 `2 passed, 123 deselected`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py -q -k "req_review_without_issue_counts or req_review_report_without_statistics or req_review_structured_output_instruction_omits_issue_count_fields or req_review_report_structured_output_instruction_omits_issue_statistics"
+```
+
+结果：修复前 `4 failed, 202 deselected`，失败点为 runtime parse 缺少派生字段失败、structured output instruction 仍要求模型输出派生字段；修复后 `4 passed, 202 deselected`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py -q -k "req_review_review_artifact_data_contract or req_review_report_artifact_data_contract"
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run -t "REQ REVIEW"
+```
+
+结果：修复前分别为 `2 failed, 33 deselected` 和前端 `4 failed, 106 skipped`；修复后分别为 `2 passed, 33 deselected` 和前端 `4 passed, 106 skipped`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py -q -k req_review
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py -q -k req_review
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py -q
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run
+```
+
+结果：分别通过 `12 passed, 113 deselected`、`18 passed, 188 deselected`、`35 passed`、前端 `110 passed`。
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：通过。New Agents Frontend `823 passed`；New Agents Backend `823 passed, 4 deselected`。
+
+残余风险：
+
+- 本轮只处理 `REQ_REVIEW` 当前 payload 内可确定计算的问题统计，不新增跨阶段 REVIEW 到 REPORT 的问题继承，不后端派生评审结论、development gate、needs_recheck 或问题关闭状态。
+- 派生字段后端化能力包仍未整体完成；已知后续候选包括 `INCIDENT_REVIEW/IMPROVEMENT` 的 `action_count` / `priority_distribution` 和 `IDEA_BRAINSTORM/CONVERGE` 的 `ice_score`。
 
 ## 每轮验收口径
 
