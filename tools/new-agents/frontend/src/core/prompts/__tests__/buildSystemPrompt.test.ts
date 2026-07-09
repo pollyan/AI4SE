@@ -260,6 +260,47 @@ describe('buildSystemPrompt', () => {
         expect(rpnRuleMatches).toHaveLength(1);
     });
 
+    it('injects TEST DESIGN CLARIFY artifact data contract from the manifest', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            currentArtifact: '# 需求分析文档\n已有内容',
+        });
+
+        const requiredListsRule = 'requirement_facts、system_boundaries、business_rules、flow_links、clarification_questions、quality_requirements、downstream_inputs 和 stage_gate 都必须至少包含 1 条';
+        expect(prompt).toContain('【artifact_data 结构化契约】');
+        expect(prompt).toContain(requiredListsRule);
+        expect(prompt).toContain('所有字符串字段必须是非空白内容');
+        expect(prompt).toContain('图表 代码块');
+        expect(prompt).toContain('右侧需求分析文档');
+        expect(prompt).toContain('图表 flowchart');
+        expect(prompt).not.toContain('Mermaid 代码块');
+        const requiredListsRuleMatches = prompt.match(new RegExp(requiredListsRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
+        expect(requiredListsRuleMatches).toHaveLength(1);
+    });
+
+    it('injects TEST DESIGN DELIVERY artifact data contract from the manifest', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 3,
+            currentArtifact: '# 测试设计文档\n已有内容',
+        });
+
+        const caseCountRule = 'case_summary_items[].case_count 必须等于 p0_count + p1_count + p2_count';
+        expect(prompt).toContain('【artifact_data 结构化契约】');
+        expect(prompt).toContain(caseCountRule);
+        expect(prompt).toContain('delivery_metrics.total_cases 必须等于 case_summary_items[].case_count 总和');
+        expect(prompt).toContain('delivery_metrics.high_risk_count 必须等于 open_risks 中 risk_type 包含“风险”且 acceptable != “是”的数量');
+        expect(prompt).toContain('coverage_map[].case_ids 必须至少包含 1 个用例 ID');
+        expect(prompt).toContain('coverage-map JSON 代码块');
+        expect(prompt).toContain('右侧测试设计交付包');
+        expect(prompt).toContain('ai4se-visual coverage-map');
+        const caseCountRuleMatches = prompt.match(new RegExp(caseCountRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
+        expect(caseCountRuleMatches).toHaveLength(1);
+    });
+
     it('injects IDEA BRAINSTORM DEFINE artifact data contract from the manifest', () => {
         const prompt = buildSystemPrompt({
             agentId: 'alex',

@@ -124,6 +124,21 @@
               "flowchart"
             ]
           },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "requirement_facts、system_boundaries、business_rules、flow_links、clarification_questions、quality_requirements、downstream_inputs 和 stage_gate 都必须至少包含 1 条",
+              "所有字符串字段必须是非空白内容"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格",
+              "Mermaid 代码块"
+            ],
+            "rendererOutputs": [
+              "右侧需求分析文档",
+              "Mermaid flowchart"
+            ]
+          },
           "promptTemplateVersion": "2026.06.24.1",
           "regressionSampleIds": [
             "test-design.clarify.baseline"
@@ -277,6 +292,24 @@
           "visualContract": {
             "requiredStructuredVisuals": [
               "coverage-map"
+            ]
+          },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "case_summary_items[].case_count 必须等于 p0_count + p1_count + p2_count",
+              "delivery_metrics.total_cases 必须等于 case_summary_items[].case_count 总和",
+              "delivery_metrics.high_risk_count 必须等于 open_risks 中 risk_type 包含“风险”且 acceptable != “是”的数量",
+              "coverage_map[].case_ids 必须至少包含 1 个用例 ID"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格",
+              "Mermaid 代码块",
+              "coverage-map JSON 代码块"
+            ],
+            "rendererOutputs": [
+              "右侧测试设计交付包",
+              "ai4se-visual coverage-map"
             ]
           },
           "promptTemplateVersion": "2026.06.24.1",

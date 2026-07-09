@@ -175,6 +175,65 @@ def test_strategy_artifact_data_contract_manifest_drives_backend_instruction():
     assert "risk-board JSON 代码块" in instruction
 
 
+def test_test_design_clarify_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    instruction = format_artifact_data_contract_instruction(
+        "TEST_DESIGN",
+        "CLARIFY",
+    )
+    stage = next(
+        stage
+        for stage in _workflow_manifest()["workflows"]["TEST_DESIGN"]["stages"]
+        if stage["id"] == "CLARIFY"
+    )
+    contract = stage.get("artifactDataContract")
+
+    assert contract is not None
+    assert (
+        "requirement_facts、system_boundaries、business_rules、flow_links、"
+        "clarification_questions、quality_requirements、downstream_inputs 和 "
+        "stage_gate 都必须至少包含 1 条"
+    ) in instruction
+    assert "所有字符串字段必须是非空白内容" in instruction
+    assert "Mermaid 代码块" in instruction
+    assert "右侧需求分析文档" in instruction
+    assert "Mermaid flowchart" in instruction
+
+
+def test_test_design_delivery_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    instruction = format_artifact_data_contract_instruction(
+        "TEST_DESIGN",
+        "DELIVERY",
+    )
+    stage = next(
+        stage
+        for stage in _workflow_manifest()["workflows"]["TEST_DESIGN"]["stages"]
+        if stage["id"] == "DELIVERY"
+    )
+    contract = stage.get("artifactDataContract")
+
+    assert contract is not None
+    assert (
+        "case_summary_items[].case_count 必须等于 "
+        "p0_count + p1_count + p2_count"
+    ) in instruction
+    assert (
+        "delivery_metrics.total_cases 必须等于 "
+        "case_summary_items[].case_count 总和"
+    ) in instruction
+    assert (
+        "delivery_metrics.high_risk_count 必须等于 open_risks 中 "
+        "risk_type 包含“风险”且 acceptable != “是”的数量"
+    ) in instruction
+    assert "coverage_map[].case_ids 必须至少包含 1 个用例 ID" in instruction
+    assert "coverage-map JSON 代码块" in instruction
+    assert "右侧测试设计交付包" in instruction
+    assert "ai4se-visual coverage-map" in instruction
+
+
 def test_incident_root_cause_artifact_data_contract_manifest_drives_backend_instruction():
     from workflow_manifest import format_artifact_data_contract_instruction
 
