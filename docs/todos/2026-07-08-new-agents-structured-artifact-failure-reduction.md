@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化已新增 `TEST_DESIGN/DELIVERY` 统计字段、`REQ_REVIEW` 问题统计、`INCIDENT_REVIEW/IMPROVEMENT` 行动统计、`IDEA_BRAINSTORM/CONVERGE` ICE 评分 / 排名、`TEST_DESIGN/CASES` / `REQ_REVIEW/REVIEW` 分组内维度派生纵切，以及 `STORY_BREAKDOWN` story sprint 派生纵切；映射一致性已新增 `INCIDENT_REVIEW/IMPROVEMENT` root cause/action 精确映射门禁；视觉协议分层已新增 manifest 顶层 `visualProtocol` 并接入后端 runtime / 前端 system prompt。后续未完成治理仍集中在 4 个能力包：派生字段后端化、ID 收敛、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
+- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化和 ID / 引用一致性 P1 已收口，剩余自动 ID 分配与 `VALUE_DISCOVERY/JOURNEY` pain / opportunity 成对映射降为 P2 backlog；视觉协议分层已新增 manifest 顶层 `visualProtocol` 并接入后端 runtime / 前端 system prompt。后续 P1 厚切片集中在 `INCIDENT_REVIEW/TIMELINE` 复杂视觉迁移和服务端视觉成功门禁。）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -113,7 +113,7 @@
   - 目标：`agent_run_turn_metrics` 或相邻观测表记录 validation path、错误类别、attempt、模型、provider、stage 和最后一次失败原因。
   - 约束：不得记录 API key、完整用户私密输入或完整模型输出。
 
-- [ ] 把可计算字段从模型输出中移除，改为后端确定性生成。（第 3 轮；首个 `VALUE_DISCOVERY/ELEVATOR` 评分汇总纵切已完成）
+- [x] 把可计算字段从模型输出中移除，改为后端确定性生成。（P1 收口完成；P2 候选转 backlog）
   - 候选字段：`total_score`、`average_score`、`case_count`、P0/P1/P2 汇总、`high_risk_count`、覆盖统计、RPN 等派生值。
   - 目标：模型只输出语义内容和原子事实，后端负责确定性计算、排序和汇总。
   - 进展：第 6 轮首个纵切已完成 `TEST_DESIGN/CASES.case_statistics` 后端派生。缺省统计由后端根据 `case_groups` 计算，显式错误统计仍触发 validation failure。
@@ -127,12 +127,14 @@
   - 进展：已完成 `INCIDENT_REVIEW/IMPROVEMENT` root cause/action 精确映射门禁。`root_cause_coverage[].action_ids` 现在必须精确匹配所有 `root_cause_id` 等于对应 `cause_id` 的 `improvement_actions[].action_id`；显式不一致映射触发 validation failure，manifest / frontend prompt 同步暴露该规则。
   - 进展：已完成 `STORY_BREAKDOWN` story sprint 派生纵切。`user_stories[].sprint` 缺省时由后端按 `sprint_slices[].story_ids` 所属 `sprint_slices[].sprint_id` 派生，显式不一致 sprint 触发 validation failure；单故事 handoff candidate 会读取派生后的 Sprint。STORY 四阶段 runtime instruction 示例不再要求模型输出 `sprint`，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
   - 后续候选：旁路审查未发现 P0 回退，当前派生 / 映射能力包无剩余 P1 候选。旁路审查另识别 `VALUE_DISCOVERY/JOURNEY` pain / opportunity 成对映射为 P2，不建议强行并入当前 P1 收口。
+  - 2026-07-09 复核：只读 explorer `019f4688-bf8f-73c2-80de-a6b695325196` 复核 25 个在线 artifact-data 阶段、派生字段策略清单、validator 和 `docs/TESTING.md` 字段来源矩阵，未发现剩余 P0/P1 派生字段缺口。本项按 P1 收口完成；`VALUE_DISCOVERY/JOURNEY` pain / opportunity 成对映射保留为 P2 backlog。
 
-- [ ] 收敛 ID 与引用关系。（第 4-6 轮）
+- [x] 收敛 ID 与引用关系。（P1 收口完成；更广自动 ID 分配转 P2 backlog）
   - 目标：后端生成稳定 ID，或在 renderer/normalizer 中确定性分配 ID；模型不再负责维护容易漂移的跨表引用。
   - 重点阶段：`IDEA_BRAINSTORM/DEFINE` 的 evidence 引用，`IDEA_BRAINSTORM/CONVERGE` 的 idea / rank / recommended idea 引用，`TEST_DESIGN/CASES` 的 requirement / risk / case 覆盖引用。
   - 进展：第 4 轮已完成 `IDEA_BRAINSTORM/DEFINE` 的 root problem / evidence / problem-user-fit ID 引用治理；第 5 轮首个纵切已完成 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial preview 的跨引用门禁，避免流式右侧产物预览已知错误章节；第 6 轮已完成 `TEST_DESIGN/CASES` 的 `automation_candidates.case_id` / `coverage_trace.covered_cases` case_id 引用门禁，以及 `TEST_DESIGN/STRATEGY` 的 `QG/R/TS/TP` 内部 ID 唯一性与引用门禁。更广泛的后端确定性 ID 分配仍未完成。
   - 进展：已补齐 `TEST_DESIGN/CASES automation_candidates.case_id` 后端引用闭环。manifest 已声明自动化候选只能引用已存在 `case_id`，现在 validator 会拒绝未知 case id，与既有 `coverage_trace.covered_cases` 门禁一致。
+  - 2026-07-09 复核：当前引用一致性 P1 已由 workflow-level validator、manifest contract sync、runtime instruction、frontend prompt/config tests 和字段来源矩阵共同保护；未发现新的 P0/P1 漂移。更广泛的后端自动 ID 分配仍可作为 P2 平台能力研究，不作为当前结构化失败 P1 主线。
 
 - [x] 建立 schema / prompt / contract 单源同步机制。（横切，第 3-8 轮）
   - 目标：Pydantic validators、structured output instruction、workflow manifest visual contract、frontend prompt 不再各写一套约束。
@@ -3061,6 +3063,51 @@ git diff --check
 | 复杂视觉端到端迁移 | 从一个高风险 Mermaid 场景开始，落地 `timeline-map` / `flow-map` / `mindmap` / `sequence-flow` 等复杂 `ai4se-visual` 类型之一 | schema、后端 deterministic renderer、前端组件 / parser、导出降级、manifest 视觉声明、失败诊断和回归测试一次收口；用户能看到复杂图不再依赖模型手写 Mermaid。 |
 | 视觉成功门禁端到端 | Mermaid / `ai4se-visual` 在正式 artifact 成功、持久化和阶段推进前的可执行校验 | 至少形成 CI / renderer fixture / 前端 parse 或 backend 可执行门禁；失败必须显式诊断，不产生成功 `agent_turn`、不持久化 artifact、不推进 stage。 |
 | 结构化一致性收口审计 | 派生字段后端化、ID 收敛和引用一致性的剩余候选统一复核 | 明确剩余 P1 是否为 0；若仍有 P1，按 workflow 级或业务闭环级一次收口；P2 只记录 backlog，不继续拆成很薄的小切片。 |
+
+### 2026-07-09 CGA：下一厚切片选择
+
+事实源快照：
+
+- 已读取：`AGENTS.md`、`docs/strategy/goal-mode-playbook.md`、`docs/strategy/goal-mode-cga-template.md`、`docs/index.md`、`docs/TESTING.md`、本 todo、`workflow_manifest.json`、`agent_contracts.py`、`artifact_data_renderers.py`、`agent_runtime.py`、`stream_services.py`、前端 `structuredVisuals.ts` / `StructuredVisual.tsx` / export tests 相关文件。
+- 当前工作区：`master...origin/master` 干净，无需保护无关脏变更。
+- 子智能体 / 旁路审查：已派发 3 个只读 explorer。`019f4684-ce89-7a91-8ae2-fa868cf8e664` 审查复杂视觉迁移，建议 `INCIDENT_REVIEW/TIMELINE -> timeline-map`；`019f4688-8150-7b32-88e7-262052eabcb3` 审查视觉成功门禁，确认缺口在服务端 final success / persistence 语义；`019f4688-bf8f-73c2-80de-a6b695325196` 审查结构化一致性，确认无剩余 P0/P1，建议转为文档收口和 P2 backlog。
+
+能力包聚合：
+
+| 能力包 | 聚合的原始缺口 | 用户动作链 / 工程信任闭环 | 为什么不能再拆薄 | 验收证据 |
+|---|---|---|---|---|
+| TIMELINE 复杂视觉迁移 | `ai4se-visual` 复杂图扩展、Mermaid timeline 脆弱、planned `timeline-map` 未落地 | 用户生成故障复盘时间线 -> 系统从 `artifact_data.timeline_events` 确定性渲染结构化时间线 -> 前端预览 / 导出 / 诊断都消费同一 `timeline-map` | 只改 manifest、只改后端 renderer 或只改前端 parser 都会留下不可见或不可消费的半成品 | 后端 renderer / contract / runtime tests，前端 parser / component / export tests，workflow sync tests，New Agents 回归 |
+| 服务端视觉成功门禁 | 后端 final success 当前不执行 Mermaid parse / `mmdc`，前端 gate 晚于服务端持久化 | Agent 生成正式 artifact -> 服务端在成功、持久化和阶段推进前执行视觉 gate / fixture 视觉解析 -> 失败显式报错且不落库 | 只补前端 gate 已完成，不能保证服务端 success 语义；只补 fixture 不阻止运行时错误落库 | `stream_services` 失败路径测试、persistence not called 断言、renderer fixture visual parse、frontend visual parser tests |
+| 结构化一致性收口 | 顶层派生字段 / ID 收敛 checkbox 未勾，但记录已显示无 P1 | 工程信任闭环：确认 P1 已收口，P2 backlog 不再伪装成活跃 P1 | 若继续拆小字段会回到过薄切片；当前没有证据表明剩余 P2 会导致高失败 | 文档状态更新、字段来源矩阵、derived policy sync tests、validator evidence |
+
+候选 gap：
+
+| 候选 | 来源 | 目标态 | 当前能力 | 缺口 | 价值 | 风险/复杂度 | 可测试性 | 去向 |
+|---|---|---|---|---|---|---|---|---|
+| TIMELINE 复杂视觉迁移 | 本 todo、视觉协议、explorer 审查 | `INCIDENT_REVIEW/TIMELINE` 不再输出 Mermaid `timeline`，改用 `ai4se-visual timeline-map` | TIMELINE 有严格 `artifact_data` schema 和后端 deterministic renderer，但 visual contract 仍要求 Mermaid `timeline` | `timeline-map` 尚不是 current visual type，前端 parser / component / PDF / DOCX / contract 均未支持 | 用户可见，能证明复杂业务图主协议真正落地，不只是协议声明 | 中；跨后端、前端、导出和 tests，但边界集中在一个 workflow stage / 一个 visual type | 高；可用固定 artifact_data fixture 和前端 parser/export tests 验证 | 本轮 |
+| 服务端视觉成功门禁 | 本 todo、explorer 审查、`docs/TESTING.md` | 正式 artifact 成功、持久化、阶段推进前有服务端/CI 视觉 gate | 前端写入前已有 Mermaid / `ai4se-visual` gate；后端 contract 只检查存在性和基础 shape | 服务端 success 语义仍可能早于视觉 parse / render 成功 | 工程信任价值高，防止假成功和错误落库 | 中高；涉及 stream/persistence 语义和 Mermaid parse 运行环境取舍 | 中；后端不具备 Node/mermaid runtime，需定义 runtime gate 与 CI fixture gate 的边界 | 下一轮候选 |
+| 结构化一致性收口 | 本 todo 未勾选项、explorer 审查 | 派生字段和 ID/引用 P1 完成态清楚，P2 backlog 不干扰 P1 排序 | validator、manifest、runtime prompt、前端 prompt 和测试矩阵已覆盖当前 P1 | 主要是文档状态不准，非功能缺口 | 降低目标模式选题噪音 | 低；文档收口 | 高；diff 检查即可 | 本轮文档收口，不作为实现切片 |
+
+排序结论：
+
+1. 选择 `TIMELINE 复杂视觉迁移` 作为下一实现厚切片，因为它有明确用户可见增量：故障复盘时间线从易碎 Mermaid DSL 迁移为结构化业务图，并覆盖后端生成、前端渲染、导出、诊断和契约。
+2. `服务端视觉成功门禁` 暂不选为本轮，因为它是更横切的工程信任闭环；在 `timeline-map` 先落地一个复杂 visual type 后，门禁可以复用更明确的 structured visual 类型和 fixture。
+3. `结构化一致性收口` 不作为实现切片；本轮已把 P1 完成态和 P2 backlog 写入待办。
+
+切片厚度门禁：
+
+- 入口：用户在 Alex/Lisa 共享 New Agents runtime 中运行 `INCIDENT_REVIEW/TIMELINE` 阶段。
+- 动作：用户让系统生成故障复盘事件还原。
+- 处理：后端从 `artifact_data.timeline_events` 和 `fact_sources` 确定性生成 Markdown 表格和 `ai4se-visual timeline-map`，不再生成 Mermaid `timeline`。
+- 可见结果：右侧 artifact 显示可读时间线结构化视觉，不暴露 raw JSON，也不依赖 Mermaid timeline 语法。
+- 状态承接：artifact version、run snapshot、PDF/DOCX 导出和 visual diagnostics 都消费同一 `timeline-map` 结构。
+- 失败反馈：timeline-map JSON 结构、event id、fact 引用或 visual contract 失败时显式拒绝，不降级成旧 Mermaid 或草稿成功。
+- 证据：后端 renderer / runtime / contract sync tests，前端 structured visual parser / component / export tests，`./scripts/test/test-local.sh new-agents`。
+- 结论：通过。该切片是一个 stage + 一个 complex visual type 的端到端迁移，不是单字段、单 helper 或单测试。
+
+本轮用户故事：
+
+作为故障复盘使用者，当我生成事件时间线时，我可以看到由结构化业务数据渲染出的稳定时间线视觉，并能在预览、导出和恢复中获得同一内容，从而不再受 Mermaid timeline 语法脆弱性影响。
 
 ## 每轮验收口径
 
