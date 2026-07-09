@@ -336,6 +336,32 @@ describe('buildSystemPrompt', () => {
         expect(assumptionIdRuleMatches).toHaveLength(1);
     });
 
+    it('injects VALUE DISCOVERY ELEVATOR artifact data contract from the manifest', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'alex',
+            workflow: 'VALUE_DISCOVERY',
+            stageIndex: 0,
+            currentArtifact: '# 价值定位分析\n已有内容',
+        });
+
+        const nodeIdRule = 'value_flow.nodes[].node_id 必须唯一';
+        expect(prompt).toContain('【artifact_data 结构化契约】');
+        expect(prompt).toContain(nodeIdRule);
+        expect(prompt).toContain('value_flow.links[].from_node 和 value_flow.links[].to_node 只能引用 value_flow.nodes[].node_id 中已定义的节点 ID');
+        expect(prompt).toContain('score_matrix[].score 必须是 1 到 5 的整数');
+        expect(prompt).toContain('score_summary.total_score 由后端根据 score_matrix[].score 求和计算，模型不要输出');
+        expect(prompt).toContain('score_summary.average_score 由后端根据 score_matrix[].score 计算并保留 2 位小数，模型不要输出');
+        expect(prompt).toContain('如果模型显式输出 score_summary.total_score 或 score_summary.average_score，必须与后端计算结果一致');
+        expect(prompt).toContain('图表 代码块');
+        expect(prompt).toContain('score-matrix JSON 代码块');
+        expect(prompt).toContain('右侧价值定位分析');
+        expect(prompt).toContain('图表 flowchart');
+        expect(prompt).toContain('ai4se-visual score-matrix');
+        expect(prompt).not.toContain('Mermaid 代码块');
+        const nodeIdRuleMatches = prompt.match(new RegExp(nodeIdRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
+        expect(nodeIdRuleMatches).toHaveLength(1);
+    });
+
     it('describes story breakdown work without markdown direct-write instructions', () => {
         const prompt = buildSystemPrompt({
             agentId: 'alex',

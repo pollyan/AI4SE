@@ -323,6 +323,32 @@ describe('Workflow Configuration', () => {
         expect(concept?.artifactDataContract?.rendererOutputs).toContain('Mermaid flowchart');
     });
 
+    it('exposes manifest artifact data contract for VALUE DISCOVERY ELEVATOR', () => {
+        const elevator = WORKFLOWS.VALUE_DISCOVERY.stages.find(stage => stage.id === 'ELEVATOR');
+
+        expect(elevator?.artifactDataContract?.modelOutputRules).toContain(
+            'value_flow.nodes[].node_id 必须唯一',
+        );
+        expect(elevator?.artifactDataContract?.modelOutputRules).toContain(
+            'value_flow.links[].from_node 和 value_flow.links[].to_node 只能引用 value_flow.nodes[].node_id 中已定义的节点 ID',
+        );
+        expect(elevator?.artifactDataContract?.modelOutputRules).toContain(
+            'score_matrix[].score 必须是 1 到 5 的整数',
+        );
+        expect(elevator?.artifactDataContract?.modelOutputRules).toContain(
+            'score_summary.total_score 由后端根据 score_matrix[].score 求和计算，模型不要输出',
+        );
+        expect(elevator?.artifactDataContract?.modelOutputRules).toContain(
+            'score_summary.average_score 由后端根据 score_matrix[].score 计算并保留 2 位小数，模型不要输出',
+        );
+        expect(elevator?.artifactDataContract?.modelOutputRules).toContain(
+            '如果模型显式输出 score_summary.total_score 或 score_summary.average_score，必须与后端计算结果一致',
+        );
+        expect(elevator?.artifactDataContract?.forbiddenOutputs).toContain('score-matrix JSON 代码块');
+        expect(elevator?.artifactDataContract?.rendererOutputs).toContain('Mermaid flowchart');
+        expect(elevator?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual score-matrix');
+    });
+
     it('does not ask TEST DESIGN STRATEGY model to handwrite renderer-owned visuals in artifact data mode', () => {
         const strategy = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'STRATEGY');
 

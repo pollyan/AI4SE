@@ -285,6 +285,34 @@ def test_idea_concept_artifact_data_contract_manifest_drives_backend_instruction
     assert "Mermaid flowchart" in instruction
 
 
+def test_value_elevator_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    instruction = format_artifact_data_contract_instruction(
+        "VALUE_DISCOVERY",
+        "ELEVATOR",
+    )
+    stage = next(
+        stage
+        for stage in _workflow_manifest()["workflows"]["VALUE_DISCOVERY"]["stages"]
+        if stage["id"] == "ELEVATOR"
+    )
+    contract = stage.get("artifactDataContract")
+
+    assert contract is not None
+    assert "value_flow.nodes[].node_id 必须唯一" in instruction
+    assert "value_flow.links[].from_node 和 value_flow.links[].to_node 只能引用 value_flow.nodes[].node_id 中已定义的节点 ID" in instruction
+    assert "score_matrix[].score 必须是 1 到 5 的整数" in instruction
+    assert "score_summary.total_score 由后端根据 score_matrix[].score 求和计算，模型不要输出" in instruction
+    assert "score_summary.average_score 由后端根据 score_matrix[].score 计算并保留 2 位小数，模型不要输出" in instruction
+    assert "如果模型显式输出 score_summary.total_score 或 score_summary.average_score，必须与后端计算结果一致" in instruction
+    assert "Mermaid 代码块" in instruction
+    assert "score-matrix JSON 代码块" in instruction
+    assert "右侧价值定位分析" in instruction
+    assert "Mermaid flowchart" in instruction
+    assert "ai4se-visual score-matrix" in instruction
+
+
 def test_workflow_manifest_declares_prompt_template_versions_for_every_stage():
     manifest = _workflow_manifest()
 
