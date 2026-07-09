@@ -249,6 +249,7 @@
           "artifactDataContract": {
             "modelOutputRules": [
               "case_statistics 由后端根据 case_groups 计算，模型不要输出",
+              "case_groups[].cases[].dimension 缺省时由后端按外层 case_groups[].dimension 派生；显式提供时必须一致",
               "case_groups[].cases[].case_id 必须唯一",
               "automation_candidates.case_id 只能引用已存在的 case_id",
               "coverage_trace.covered_cases 只能引用已存在的 case_id",
@@ -403,6 +404,7 @@
               "quality_overview[].severity_score 必须是 1 到 5 的整数",
               "issue_groups[].issues[].issue_id 必须唯一",
               "issue_statistics.p0_count/p1_count/p2_count 缺省时由后端按 issue_groups[].issues[].priority 中 P0/P1/P2 的数量派生；显式提供时必须一致",
+              "issue_groups[].issues[].dimension 缺省时由后端按外层 issue_groups[].dimension 派生；显式提供时必须一致",
               "revision_suggestions[].related_issues 只能引用 issue_groups[].issues[].issue_id 中已定义的问题 ID"
             ],
             "forbiddenOutputs": [

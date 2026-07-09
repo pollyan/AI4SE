@@ -28,6 +28,18 @@ DERIVED_ARTIFACT_DATA_FIELD_POLICIES: tuple[dict[str, Any], ...] = (
     },
     {
         "workflow_id": "TEST_DESIGN",
+        "stage_id": "CASES",
+        "path": "case_groups[].cases[].dimension",
+        "required_contract_fragments": (
+            "case_groups[].cases[].dimension 缺省时由后端按外层 "
+            "case_groups[].dimension 派生",
+        ),
+        "forbidden_runtime_example_tokens": (
+            '"case_id": "TC-001", "title": "...", "priority": "P0", "dimension":',
+        ),
+    },
+    {
+        "workflow_id": "TEST_DESIGN",
         "stage_id": "DELIVERY",
         "path": "case_summary_items[].case_count",
         "required_contract_fragments": (
@@ -68,6 +80,18 @@ DERIVED_ARTIFACT_DATA_FIELD_POLICIES: tuple[dict[str, Any], ...] = (
             '"p0_count":',
             '"p1_count":',
             '"p2_count":',
+        ),
+    },
+    {
+        "workflow_id": "REQ_REVIEW",
+        "stage_id": "REVIEW",
+        "path": "issue_groups[].issues[].dimension",
+        "required_contract_fragments": (
+            "issue_groups[].issues[].dimension 缺省时由后端按外层 "
+            "issue_groups[].dimension 派生",
+        ),
+        "forbidden_runtime_example_tokens": (
+            '"issue_id": "Q-001", "dimension":',
         ),
     },
     {

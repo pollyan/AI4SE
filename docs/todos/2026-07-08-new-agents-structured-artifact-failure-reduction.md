@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化已新增 `TEST_DESIGN/DELIVERY` 统计字段、`REQ_REVIEW` 问题统计、`INCIDENT_REVIEW/IMPROVEMENT` 行动统计和 `IDEA_BRAINSTORM/CONVERGE` ICE 评分 / 排名纵切。后续未完成治理仍集中在 5 个能力包：派生字段后端化、ID 收敛、视觉协议分层、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
+- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化已新增 `TEST_DESIGN/DELIVERY` 统计字段、`REQ_REVIEW` 问题统计、`INCIDENT_REVIEW/IMPROVEMENT` 行动统计、`IDEA_BRAINSTORM/CONVERGE` ICE 评分 / 排名，以及 `TEST_DESIGN/CASES` / `REQ_REVIEW/REVIEW` 分组内维度派生纵切。后续未完成治理仍集中在 5 个能力包：派生字段后端化、ID 收敛、视觉协议分层、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -123,7 +123,8 @@
   - 进展：已完成 `IDEA_BRAINSTORM/CONVERGE` ICE 评分纵切。`ice_evaluations[].ice_score` 缺省时由 `impact * confidence / effort` 派生；显式错误评分仍触发 validation failure。CONVERGE runtime instruction 示例不再要求模型输出 `ice_score`，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
   - 进展：已完成 `IDEA_BRAINSTORM/CONVERGE` ICE 排名纵切。`ice_evaluations[].rank` 缺省时由后端按 ICE 得分降序派生；显式错误排名仍触发 validation failure。CONVERGE runtime instruction 示例不再要求模型输出 `rank`，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
   - 进展：已完成已治理派生字段回退审计门禁。新增 `get_derived_artifact_data_field_policies()` 清单和 contract sync 测试，统一校验上述字段必须在 manifest contract 中声明后端派生 / 显式一致性，并且 runtime JSON 示例不得再要求模型输出这些字段。
-  - 后续候选：旁路审查未发现 P0 回退，但识别出 4 个 P1 候选：`TEST_DESIGN/CASES` 内层 `case.dimension` 与外层 case group dimension 一致性、`REQ_REVIEW/REVIEW` 内层 issue dimension 与外层 issue group dimension 一致性、`INCIDENT_REVIEW/IMPROVEMENT` root cause coverage `action_ids` 与 `improvement_actions[].root_cause_id` 精确匹配、`STORY_BREAKDOWN` story sprint 与 `sprint_slices[].story_ids` 映射一致性。后续应按独立切片判断是后端派生、显式一致性校验，还是归入 ID / 引用收敛能力包。
+  - 进展：已完成 `TEST_DESIGN/CASES` 与 `REQ_REVIEW/REVIEW` 分组内维度派生纵切。`case_groups[].cases[].dimension` 缺省时由外层 `case_groups[].dimension` 派生，`issue_groups[].issues[].dimension` 缺省时由外层 `issue_groups[].dimension` 派生；显式不一致维度仍触发 validation failure。CASES / REVIEW runtime instruction 示例不再要求模型输出内层维度，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
+  - 后续候选：旁路审查未发现 P0 回退，当前剩余 P1 候选为 `INCIDENT_REVIEW/IMPROVEMENT` root cause coverage `action_ids` 与 `improvement_actions[].root_cause_id` 精确匹配、`STORY_BREAKDOWN` story sprint 与 `sprint_slices[].story_ids` 映射一致性。后续应按独立切片判断是后端派生、显式一致性校验，还是归入 ID / 引用收敛能力包。
 
 - [ ] 收敛 ID 与引用关系。（第 4-6 轮）
   - 目标：后端生成稳定 ID，或在 renderer/normalizer 中确定性分配 ID；模型不再负责维护容易漂移的跨表引用。
@@ -2830,6 +2831,56 @@ cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workfl
 
 - 本轮只防止“已治理统计 / 评分 / 排名派生字段”回退，不代表所有可由 payload 机械推导的字段都已消化。
 - 旁路审查新增 4 个 P1 候选：`TEST_DESIGN/CASES` case dimension、`REQ_REVIEW/REVIEW` issue dimension、`INCIDENT_REVIEW/IMPROVEMENT` root cause coverage action mapping、`STORY_BREAKDOWN` story sprint mapping。后续应按同级切片分别评估，不塞回本轮内部批次。
+
+### 2026-07-09 切片记录：分组内维度后端派生与一致性校验
+
+触发原因：
+
+- 上一轮回退审计发现 `TEST_DESIGN/CASES` 的 `CaseGroup.dimension` 与 `TestCaseItem.dimension`、`REQ_REVIEW/REVIEW` 的 `ReqReviewIssueGroup.dimension` 与 `ReqReviewIssueItem.dimension` 属于同一事实重复维护。
+- 现状是内层 `dimension` required，模型必须重复输出；同时 validator 只校验 ID / 统计，不校验外层分组维度和内层行维度是否一致，右侧分组标题和行字段可能出现矛盾。
+- 子智能体只读旁路审查确认：这两个候选都成立，且 `artifact_data_renderers.py` 中未发现必须并入本切片的第三个同类 group -> item 重复维度候选。
+
+已修复：
+
+- `TEST_DESIGN/CASES`：`TestCaseItem.dimension` 改为可缺省；缺省时由外层 `case_groups[].dimension` 派生，显式提供时必须与外层分组维度一致，否则触发 `ValidationError`。
+- `REQ_REVIEW/REVIEW`：`ReqReviewIssueItem.dimension` 改为可缺省；缺省时由外层 `issue_groups[].dimension` 派生，显式提供时必须与外层分组维度一致，否则触发 `ValidationError`。
+- CASES / REVIEW runtime structured output 示例不再要求模型输出内层 `dimension`。
+- `workflow_manifest.json`、`get_derived_artifact_data_field_policies()`、backend contract sync 测试、frontend workflow 配置测试和 frontend system prompt 测试同步更新为“缺省后端派生、显式提供必须一致”。
+- `docs/TESTING.md` 字段来源矩阵同步更新，记录 CASES / REVIEW 的内层维度来源从模型重复维护改为后端派生 / 显式一致性校验。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py -q -k "case_dimension or issue_dimension"
+```
+
+结果：修复前 `4 failed, 130 deselected`，失败点为缺省内层维度被 Pydantic required 拒绝，显式矛盾维度未触发 `ValidationError`；修复后 `4 passed, 130 deselected`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_workflow_contract_sync.py -q -k "dimension_examples or derived_artifact_data_fields_are_tracked or req_review_review_artifact_data_contract or cases_artifact_data_contract"
+```
+
+结果：修复前 `4 failed, 247 deselected`，失败点为 runtime 示例仍包含内层维度、派生字段策略清单缺少两条维度规则、REQ_REVIEW manifest contract 缺少维度派生说明；修复后 `5 passed, 247 deselected`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run
+```
+
+结果：通过，`114 passed`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_workflow_contract_sync.py -q -k "cases or req_review or derived"
+git diff --check
+./scripts/test/test-local.sh new-agents
+```
+
+结果：后端聚焦回归 `57 passed, 329 deselected`；`git diff --check` 通过；New Agents Frontend `830 passed`，New Agents Backend `843 passed, 4 deselected`。
+
+残余风险：
+
+- 本轮只治理 CASES / REVIEW 分组内维度重复维护，不后端生成或归一化 `case_id`、`issue_id`，也不改变覆盖追溯、修订建议或自动化候选引用语义。
+- `INCIDENT_REVIEW/IMPROVEMENT` root cause coverage `action_ids` 与 `improvement_actions[].root_cause_id` 精确匹配、`STORY_BREAKDOWN` story sprint 与 `sprint_slices[].story_ids` 映射一致性仍是后续 P1 候选。
+- 视觉协议分层、复杂 `ai4se-visual` 类型扩展和后端 / CI 视觉渲染强校验仍未在本轮处理。
 
 ## 每轮验收口径
 

@@ -763,6 +763,16 @@ def test_cases_structured_output_instruction_omits_derived_statistics():
     assert "case_statistics 由后端根据 case_groups 计算，模型不要输出" in instruction
 
 
+def test_cases_structured_output_instruction_omits_case_dimension_examples():
+    instruction = build_structured_output_instruction("TEST_DESIGN", "CASES")
+
+    assert '"case_id": "TC-001", "title": "...", "priority": "P0", "dimension":' not in instruction
+    assert (
+        "case_groups[].cases[].dimension 缺省时由后端按外层 "
+        "case_groups[].dimension 派生"
+    ) in instruction
+
+
 def test_cases_structured_output_instruction_uses_manifest_artifact_data_contract():
     instruction = build_structured_output_instruction("TEST_DESIGN", "CASES")
 
@@ -997,6 +1007,19 @@ def test_req_review_structured_output_instruction_omits_issue_count_fields():
     assert (
         "issue_statistics.p0_count/p1_count/p2_count 缺省时由后端按 "
         "issue_groups[].issues[].priority 中 P0/P1/P2 的数量派生"
+    ) in instruction
+
+
+def test_req_review_structured_output_instruction_omits_issue_dimension_examples():
+    instruction = build_structured_output_instruction(
+        "REQ_REVIEW",
+        "REVIEW",
+    )
+
+    assert '"issue_id": "Q-001", "dimension":' not in instruction
+    assert (
+        "issue_groups[].issues[].dimension 缺省时由后端按外层 "
+        "issue_groups[].dimension 派生"
     ) in instruction
 
 

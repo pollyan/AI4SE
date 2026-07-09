@@ -196,10 +196,12 @@ def test_derived_artifact_data_fields_are_tracked_and_not_required_in_runtime_ex
     } == {
         ("TEST_DESIGN", "STRATEGY", "risks[].rpn"),
         ("TEST_DESIGN", "CASES", "case_statistics"),
+        ("TEST_DESIGN", "CASES", "case_groups[].cases[].dimension"),
         ("TEST_DESIGN", "DELIVERY", "case_summary_items[].case_count"),
         ("TEST_DESIGN", "DELIVERY", "delivery_metrics.total_cases"),
         ("TEST_DESIGN", "DELIVERY", "delivery_metrics.high_risk_count"),
         ("REQ_REVIEW", "REVIEW", "issue_statistics.p0_count/p1_count/p2_count"),
+        ("REQ_REVIEW", "REVIEW", "issue_groups[].issues[].dimension"),
         ("REQ_REVIEW", "REPORT", "issue_statistics.p0_count/p1_count/p2_count"),
         ("VALUE_DISCOVERY", "ELEVATOR", "score_summary.total_score"),
         ("VALUE_DISCOVERY", "ELEVATOR", "score_summary.average_score"),
@@ -309,6 +311,34 @@ def test_test_design_delivery_artifact_data_contract_manifest_drives_backend_ins
     assert "ai4se-visual coverage-map" in instruction
 
 
+def test_cases_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    instruction = format_artifact_data_contract_instruction(
+        "TEST_DESIGN",
+        "CASES",
+    )
+    stage = next(
+        stage
+        for stage in _workflow_manifest()["workflows"]["TEST_DESIGN"]["stages"]
+        if stage["id"] == "CASES"
+    )
+    contract = stage.get("artifactDataContract")
+
+    assert contract is not None
+    assert "case_statistics 由后端根据 case_groups 计算，模型不要输出" in instruction
+    assert (
+        "case_groups[].cases[].dimension 缺省时由后端按外层 "
+        "case_groups[].dimension 派生"
+    ) in instruction
+    assert "case_groups[].cases[].case_id 必须唯一" in instruction
+    assert "automation_candidates.case_id 只能引用已存在的 case_id" in instruction
+    assert "coverage_trace.covered_cases 只能引用已存在的 case_id" in instruction
+    assert "traceability-matrix JSON 代码块" in instruction
+    assert "右侧测试用例集" in instruction
+    assert "ai4se-visual traceability-matrix" in instruction
+
+
 def test_req_review_review_artifact_data_contract_manifest_drives_backend_instruction():
     from workflow_manifest import format_artifact_data_contract_instruction
 
@@ -329,6 +359,10 @@ def test_req_review_review_artifact_data_contract_manifest_drives_backend_instru
     assert (
         "issue_statistics.p0_count/p1_count/p2_count 缺省时由后端按 "
         "issue_groups[].issues[].priority 中 P0/P1/P2 的数量派生"
+    ) in instruction
+    assert (
+        "issue_groups[].issues[].dimension 缺省时由后端按外层 "
+        "issue_groups[].dimension 派生"
     ) in instruction
     assert (
         "revision_suggestions[].related_issues 只能引用 "

@@ -3626,6 +3626,43 @@ def test_cases_artifact_data_derives_statistics_when_missing():
     assert "| 用例总数 | 2 |" in output.artifact_update.markdown
 
 
+def test_cases_artifact_data_derives_case_dimension_from_group_when_missing():
+    artifact_data = copy.deepcopy(VALID_CASES_ARTIFACT_DATA)
+    for group in artifact_data["case_groups"]:
+        for case in group["cases"]:
+            case.pop("dimension")
+
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已生成测试用例集，请查看右侧产物。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CASES",
+    )
+
+    assert output is not None
+    assert [
+        case["dimension"]
+        for group in output.artifact_data["case_groups"]
+        for case in group["cases"]
+    ] == [
+        group["dimension"]
+        for group in output.artifact_data["case_groups"]
+        for _case in group["cases"]
+    ]
+
+
+def test_cases_artifact_data_rejects_case_dimension_mismatching_group():
+    invalid = copy.deepcopy(VALID_CASES_ARTIFACT_DATA)
+    invalid["case_groups"][0]["cases"][0]["dimension"] = "异常流程验证"
+
+    with pytest.raises(ValidationError, match="case_groups.*dimension"):
+        CasesArtifactData.model_validate(invalid)
+
+
 def test_cases_artifact_data_rejects_unknown_coverage_case_reference():
     invalid = {
         **VALID_CASES_ARTIFACT_DATA,
@@ -3749,6 +3786,46 @@ def test_req_review_artifact_data_derives_issue_statistics_counts_when_missing()
     assert "| P0 (阻塞) | 1 | 必须在开发前解答，否则无法测试 |" in (
         output.artifact_update.markdown
     )
+
+
+def test_req_review_artifact_data_derives_issue_dimension_from_group_when_missing():
+    artifact_data = copy.deepcopy(VALID_REQ_REVIEW_ARTIFACT_DATA)
+    for group in artifact_data["issue_groups"]:
+        for issue in group["issues"]:
+            issue.pop("dimension")
+
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已完成需求质量诊断，请确认右侧问题清单。",
+            "artifact_data": artifact_data,
+            "stage_action": {
+                "type": "request_next_stage",
+                "target_stage_id": "REPORT",
+            },
+            "warnings": [],
+        },
+        workflow_id="REQ_REVIEW",
+        current_stage_id="REVIEW",
+    )
+
+    assert output is not None
+    assert [
+        issue["dimension"]
+        for group in output.artifact_data["issue_groups"]
+        for issue in group["issues"]
+    ] == [
+        group["dimension"]
+        for group in output.artifact_data["issue_groups"]
+        for _issue in group["issues"]
+    ]
+
+
+def test_req_review_artifact_data_rejects_issue_dimension_mismatching_group():
+    invalid = copy.deepcopy(VALID_REQ_REVIEW_ARTIFACT_DATA)
+    invalid["issue_groups"][0]["issues"][0]["dimension"] = "依赖与环境"
+
+    with pytest.raises(ValidationError, match="issue_groups.*dimension"):
+        ReqReviewArtifactData.model_validate(invalid)
 
 
 def test_req_review_artifact_data_rejects_duplicate_issue_id():

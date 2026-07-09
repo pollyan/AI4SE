@@ -1365,7 +1365,7 @@ class TestCaseItem(StrictArtifactDataModel):
     case_id: str
     title: str
     priority: str
-    dimension: str
+    dimension: str | None = None
     test_point: str
     risk: str
     precondition: str
@@ -1433,6 +1433,16 @@ class CasesArtifactData(StrictArtifactDataModel):
 
     @model_validator(mode="after")
     def validate_case_consistency(self) -> "CasesArtifactData":
+        for group in self.case_groups:
+            for case in group.cases:
+                if case.dimension is None:
+                    case.dimension = group.dimension
+                elif case.dimension != group.dimension:
+                    raise ValueError(
+                        "case_groups[].cases[].dimension must match outer "
+                        "case_groups[].dimension"
+                    )
+
         cases = [case for group in self.case_groups for case in group.cases]
         case_ids = {case.case_id for case in cases}
         if len(case_ids) != len(cases):
@@ -1646,7 +1656,7 @@ class ReqReviewIssueStatistics(StrictArtifactDataModel):
 
 class ReqReviewIssueItem(StrictArtifactDataModel):
     issue_id: str
-    dimension: str
+    dimension: str | None = None
     description: str
     priority: str
     blocking: str
@@ -1683,6 +1693,16 @@ class ReqReviewArtifactData(StrictArtifactDataModel):
 
     @model_validator(mode="after")
     def validate_review_consistency(self) -> "ReqReviewArtifactData":
+        for group in self.issue_groups:
+            for issue in group.issues:
+                if issue.dimension is None:
+                    issue.dimension = group.dimension
+                elif issue.dimension != group.dimension:
+                    raise ValueError(
+                        "issue_groups[].issues[].dimension must match outer "
+                        "issue_groups[].dimension"
+                    )
+
         issues = [issue for group in self.issue_groups for issue in group.issues]
         issue_ids = {issue.issue_id for issue in issues}
         if len(issue_ids) != len(issues):

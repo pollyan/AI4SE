@@ -183,7 +183,7 @@ JSON 对象结构：
   "artifact_data": {
     "document_info": {"artifact_name": "...", "workflow": "TEST_DESIGN", "stage": "CASES", "status": "..."},
     "design_bases": [{"basis_id": "BASIS-001", "source_type": "质量目标/风险/测试点/业务规则", "source_id": "TP-001", "basis": "...", "case_direction": "正向/异常/边界/安全/性能"}],
-    "case_groups": [{"dimension": "正向功能验证", "cases": [{"case_id": "TC-001", "title": "...", "priority": "P0", "dimension": "正向功能验证", "test_point": "TP-001 登录主链路", "risk": "R-001", "precondition": "...", "steps": "1. ... 2. ...", "test_data": "...", "expected_result": "...", "assertion": "...", "execution_layer": "单元/集成/E2E/探索", "automation_suggestion": "优先自动化/可自动化/暂不自动化", "status": "草稿/待确认/可执行/需补环境"}]}],
+    "case_groups": [{"dimension": "正向功能验证", "cases": [{"case_id": "TC-001", "title": "...", "priority": "P0", "test_point": "TP-001 登录主链路", "risk": "R-001", "precondition": "...", "steps": "1. ... 2. ...", "test_data": "...", "expected_result": "...", "assertion": "...", "execution_layer": "单元/集成/E2E/探索", "automation_suggestion": "优先自动化/可自动化/暂不自动化", "status": "草稿/待确认/可执行/需补环境"}]}],
     "test_data_environments": [{"data_id": "DATA-001", "type": "测试账号/业务数据/配置/第三方依赖/环境", "content": "...", "preparation": "人工准备/脚本构造/mock/现网只读", "related_cases": "TC-001", "status": "已具备/待准备/需确认"}],
     "automation_candidates": [{"candidate_id": "AUTO-001", "case_id": "TC-001", "recommended_layer": "单元/集成/E2E", "value": "...", "prerequisite": "...", "risk_or_limit": "...", "status": "推荐/暂缓/不建议"}],
     "coverage_trace": [{"test_point": "登录主链路", "priority": "P0", "risk": "R-001", "covered_cases": ["TC-001"], "status": "已覆盖/部分覆盖/未覆盖"}],
@@ -260,7 +260,7 @@ JSON 对象结构：
     "scope_items": [{"scope_type": "评审范围/不评审范围", "content": "...", "review_impact": "...", "status": "已确认/AI 假设/待确认"}],
     "quality_overview": [{"dimension": "可测试性/功能完整性/边界与规则定义/异常场景与闭环/非功能性需求/依赖与环境/需求一致性", "quality_judgement": "清晰/部分缺失/严重缺失", "severity_score": 5, "evidence": "...", "testing_risk": "...", "status": "待 PM 确认/需研发判断/已确认"}],
     "issue_statistics": {"p0_description": "必须在开发前解答，否则无法测试", "p1_description": "建议在开发前明确，否则可能返工", "p2_description": "优化性建议，可排入后续迭代"},
-    "issue_groups": [{"dimension": "可测试性", "issues": [{"issue_id": "Q-001", "dimension": "可测试性", "description": "...", "priority": "P0", "blocking": "阻断/非阻断", "requirement_section": "...", "impact": "...", "evidence": "...", "suggestion": "...", "owner": "PM/研发/测试/业务方", "status": "待 PM 确认/需研发判断/已确认/非阻断"}]}],
+    "issue_groups": [{"dimension": "可测试性", "issues": [{"issue_id": "Q-001", "description": "...", "priority": "P0", "blocking": "阻断/非阻断", "requirement_section": "...", "impact": "...", "evidence": "...", "suggestion": "...", "owner": "PM/研发/测试/业务方", "status": "待 PM 确认/需研发判断/已确认/非阻断"}]}],
     "revision_suggestions": [{"suggestion_id": "FIX-001", "related_issues": ["Q-001"], "suggestion": "...", "acceptance": "...", "owner": "PM/研发/测试/业务方", "status": "待处理/已确认/已关闭"}],
     "stage_gate": [{"checked": true, "item": "..."}]
   },

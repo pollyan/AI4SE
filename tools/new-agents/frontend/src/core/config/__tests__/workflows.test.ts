@@ -225,6 +225,29 @@ describe('Workflow Configuration', () => {
         expect(strategy?.artifactDataContract?.forbiddenOutputs).toContain('risk-board JSON 代码块');
     });
 
+    it('exposes manifest artifact data contract for TEST DESIGN CASES', () => {
+        const cases = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'CASES');
+        const caseDimensionRule =
+            'case_groups[].cases[].dimension 缺省时由后端按外层 case_groups[].dimension 派生；显式提供时必须一致';
+
+        expect(cases?.artifactDataContract?.modelOutputRules).toContain(
+            'case_statistics 由后端根据 case_groups 计算，模型不要输出',
+        );
+        expect(cases?.artifactDataContract?.modelOutputRules).toContain(caseDimensionRule);
+        expect(cases?.artifactDataContract?.modelOutputRules).toContain(
+            'case_groups[].cases[].case_id 必须唯一',
+        );
+        expect(cases?.artifactDataContract?.modelOutputRules).toContain(
+            'automation_candidates.case_id 只能引用已存在的 case_id',
+        );
+        expect(cases?.artifactDataContract?.modelOutputRules).toContain(
+            'coverage_trace.covered_cases 只能引用已存在的 case_id',
+        );
+        expect(cases?.artifactDataContract?.forbiddenOutputs).toContain('traceability-matrix JSON 代码块');
+        expect(cases?.artifactDataContract?.rendererOutputs).toContain('右侧测试用例集');
+        expect(cases?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual traceability-matrix');
+    });
+
     it('exposes manifest artifact data contract for INCIDENT REVIEW ROOT CAUSE', () => {
         const rootCause = WORKFLOWS.INCIDENT_REVIEW.stages.find(stage => stage.id === 'ROOT_CAUSE');
 
@@ -608,6 +631,8 @@ describe('Workflow Configuration', () => {
         const review = WORKFLOWS.REQ_REVIEW.stages.find(stage => stage.id === 'REVIEW');
         const issueStatisticsRule =
             'issue_statistics.p0_count/p1_count/p2_count 缺省时由后端按 issue_groups[].issues[].priority 中 P0/P1/P2 的数量派生；显式提供时必须一致';
+        const issueDimensionRule =
+            'issue_groups[].issues[].dimension 缺省时由后端按外层 issue_groups[].dimension 派生；显式提供时必须一致';
 
         expect(review?.artifactDataContract?.modelOutputRules).toContain(
             'quality_overview[].severity_score 必须是 1 到 5 的整数',
@@ -616,6 +641,7 @@ describe('Workflow Configuration', () => {
             'issue_groups[].issues[].issue_id 必须唯一',
         );
         expect(review?.artifactDataContract?.modelOutputRules).toContain(issueStatisticsRule);
+        expect(review?.artifactDataContract?.modelOutputRules).toContain(issueDimensionRule);
         expect(review?.artifactDataContract?.modelOutputRules).toContain(
             'revision_suggestions[].related_issues 只能引用 issue_groups[].issues[].issue_id 中已定义的问题 ID',
         );
