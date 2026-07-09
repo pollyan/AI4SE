@@ -1460,6 +1460,10 @@ def test_value_blueprint_structured_output_instruction_requests_artifact_data_no
         "BLUEPRINT",
     )
 
+    assert (
+        format_artifact_data_contract_instruction("VALUE_DISCOVERY", "BLUEPRINT")
+        in instruction
+    )
     assert "artifact_data" in instruction
     assert "artifact_update" not in instruction
     assert "product_overview" in instruction

@@ -3615,11 +3615,67 @@ def test_value_blueprint_artifact_data_rejects_unknown_requirement_reference():
         ValueDiscoveryBlueprintArtifactData.model_validate(invalid)
 
 
+def test_value_blueprint_artifact_data_rejects_duplicate_requirement_id():
+    invalid = copy.deepcopy(VALID_VALUE_BLUEPRINT_ARTIFACT_DATA)
+    invalid["requirements"][1]["requirement_id"] = "F-001"
+
+    with pytest.raises(ValidationError, match="duplicate requirement_id"):
+        ValueDiscoveryBlueprintArtifactData.model_validate(invalid)
+
+
+def test_value_blueprint_artifact_data_rejects_duplicate_acceptance_id():
+    invalid = copy.deepcopy(VALID_VALUE_BLUEPRINT_ARTIFACT_DATA)
+    invalid["acceptance_criteria"][1]["acceptance_id"] = "AC-001"
+
+    with pytest.raises(ValidationError, match="duplicate acceptance_id"):
+        ValueDiscoveryBlueprintArtifactData.model_validate(invalid)
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda data: data["feature_modules"][0]["features"][0].update(
+            {"requirement_id": "F-404"}
+        ),
+        lambda data: data["mvp_plan"]["included_features"][0].update(
+            {"requirement_id": "F-404"}
+        ),
+        lambda data: data["lisa_handoff_inputs"][0].update(
+            {"input_type": "需求", "reference_id": "F-404"}
+        ),
+    ],
+)
+def test_value_blueprint_artifact_data_rejects_unknown_requirement_references(
+    mutate,
+):
+    invalid = copy.deepcopy(VALID_VALUE_BLUEPRINT_ARTIFACT_DATA)
+    mutate(invalid)
+
+    with pytest.raises(ValidationError, match="references unknown requirement ids"):
+        ValueDiscoveryBlueprintArtifactData.model_validate(invalid)
+
+
 def test_value_blueprint_artifact_data_rejects_unknown_handoff_reference():
     invalid = copy.deepcopy(VALID_VALUE_BLUEPRINT_ARTIFACT_DATA)
     invalid["lisa_handoff_inputs"][1]["reference_id"] = "AC-404"
 
     with pytest.raises(ValidationError, match="references unknown acceptance ids"):
+        ValueDiscoveryBlueprintArtifactData.model_validate(invalid)
+
+
+def test_value_blueprint_artifact_data_rejects_duplicate_main_flow_node_id():
+    invalid = copy.deepcopy(VALID_VALUE_BLUEPRINT_ARTIFACT_DATA)
+    invalid["main_flow"]["nodes"][1]["node_id"] = "START"
+
+    with pytest.raises(ValidationError, match="duplicate node_id"):
+        ValueDiscoveryBlueprintArtifactData.model_validate(invalid)
+
+
+def test_value_blueprint_artifact_data_rejects_unknown_main_flow_node_reference():
+    invalid = copy.deepcopy(VALID_VALUE_BLUEPRINT_ARTIFACT_DATA)
+    invalid["main_flow"]["links"][0]["to_node"] = "NODE-404"
+
+    with pytest.raises(ValidationError, match="references unknown node ids"):
         ValueDiscoveryBlueprintArtifactData.model_validate(invalid)
 
 

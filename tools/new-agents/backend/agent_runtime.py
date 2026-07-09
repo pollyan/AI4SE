@@ -466,10 +466,13 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；requirements.requirement_id 必须唯一；feature_modules.features.requirement_id、mvp_plan.included_features.requirement_id、acceptance_criteria.requirement_id 和 input_type 为“需求”的 lisa_handoff_inputs.reference_id 只能引用 requirements 中已存在的 requirement_id；input_type 为“验收标准”的 lisa_handoff_inputs.reference_id 只能引用 acceptance_criteria 中已存在的 acceptance_id；main_flow.links 只能引用 main_flow.nodes 中已存在的 node_id。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 roadmap JSON 代码块，后端会负责确定性渲染右侧需求蓝图、功能架构、主流程图和 ai4se-visual roadmap。
+__ARTIFACT_DATA_CONTRACT_INSTRUCTION__
 chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
-"""
+""".replace(
+    "__ARTIFACT_DATA_CONTRACT_INSTRUCTION__",
+    format_artifact_data_contract_instruction("VALUE_DISCOVERY", "BLUEPRINT"),
+)
 
 
 INCIDENT_TIMELINE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """

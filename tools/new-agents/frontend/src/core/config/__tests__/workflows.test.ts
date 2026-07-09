@@ -445,6 +445,40 @@ describe('Workflow Configuration', () => {
         expect(journey?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual journey-map');
     });
 
+    it('exposes manifest artifact data contract for VALUE DISCOVERY BLUEPRINT', () => {
+        const blueprint = WORKFLOWS.VALUE_DISCOVERY.stages.find(stage => stage.id === 'BLUEPRINT');
+
+        expect(blueprint?.artifactDataContract?.modelOutputRules).toContain(
+            'requirements[].requirement_id 必须唯一',
+        );
+        expect(blueprint?.artifactDataContract?.modelOutputRules).toContain(
+            'acceptance_criteria[].acceptance_id 必须唯一',
+        );
+        expect(blueprint?.artifactDataContract?.modelOutputRules).toContain(
+            'feature_modules[].features[].requirement_id 如果非空，只能引用 requirements[].requirement_id 中已定义的需求 ID',
+        );
+        expect(blueprint?.artifactDataContract?.modelOutputRules).toContain(
+            'mvp_plan.included_features[].requirement_id 和 acceptance_criteria[].requirement_id 只能引用 requirements[].requirement_id 中已定义的需求 ID',
+        );
+        expect(blueprint?.artifactDataContract?.modelOutputRules).toContain(
+            'lisa_handoff_inputs[] 中 input_type 为“需求”时 reference_id 只能引用 requirements[].requirement_id 中已定义的需求 ID',
+        );
+        expect(blueprint?.artifactDataContract?.modelOutputRules).toContain(
+            'lisa_handoff_inputs[] 中 input_type 为“验收标准”时 reference_id 只能引用 acceptance_criteria[].acceptance_id 中已定义的验收标准 ID',
+        );
+        expect(blueprint?.artifactDataContract?.modelOutputRules).toContain(
+            'main_flow.nodes[].node_id 必须唯一',
+        );
+        expect(blueprint?.artifactDataContract?.modelOutputRules).toContain(
+            'main_flow.links[].from_node 和 main_flow.links[].to_node 只能引用 main_flow.nodes[].node_id 中已定义的流程节点 ID',
+        );
+        expect(blueprint?.artifactDataContract?.forbiddenOutputs).toContain('roadmap JSON 代码块');
+        expect(blueprint?.artifactDataContract?.rendererOutputs).toContain('右侧需求蓝图');
+        expect(blueprint?.artifactDataContract?.rendererOutputs).toContain('Mermaid mindmap');
+        expect(blueprint?.artifactDataContract?.rendererOutputs).toContain('Mermaid flowchart');
+        expect(blueprint?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual roadmap');
+    });
+
     it('exposes manifest artifact data contract for TEST DESIGN CLARIFY', () => {
         const clarify = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'CLARIFY');
 

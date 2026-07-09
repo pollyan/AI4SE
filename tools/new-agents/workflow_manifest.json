@@ -1220,6 +1220,30 @@
               "roadmap"
             ]
           },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "requirements[].requirement_id 必须唯一",
+              "acceptance_criteria[].acceptance_id 必须唯一",
+              "feature_modules[].features[].requirement_id 如果非空，只能引用 requirements[].requirement_id 中已定义的需求 ID",
+              "mvp_plan.included_features[].requirement_id 和 acceptance_criteria[].requirement_id 只能引用 requirements[].requirement_id 中已定义的需求 ID",
+              "lisa_handoff_inputs[] 中 input_type 为“需求”时 reference_id 只能引用 requirements[].requirement_id 中已定义的需求 ID",
+              "lisa_handoff_inputs[] 中 input_type 为“验收标准”时 reference_id 只能引用 acceptance_criteria[].acceptance_id 中已定义的验收标准 ID",
+              "main_flow.nodes[].node_id 必须唯一",
+              "main_flow.links[].from_node 和 main_flow.links[].to_node 只能引用 main_flow.nodes[].node_id 中已定义的流程节点 ID"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格",
+              "Mermaid 代码块",
+              "roadmap JSON 代码块"
+            ],
+            "rendererOutputs": [
+              "右侧需求蓝图",
+              "Mermaid mindmap",
+              "Mermaid flowchart",
+              "ai4se-visual roadmap"
+            ]
+          },
           "promptTemplateVersion": "2026.06.24.1",
           "regressionSampleIds": [
             "value-discovery.blueprint.baseline"

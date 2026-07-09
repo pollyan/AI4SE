@@ -552,6 +552,37 @@ def test_value_journey_artifact_data_contract_manifest_drives_backend_instructio
     assert "ai4se-visual journey-map" in instruction
 
 
+def test_value_blueprint_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    instruction = format_artifact_data_contract_instruction(
+        "VALUE_DISCOVERY",
+        "BLUEPRINT",
+    )
+    stage = next(
+        stage
+        for stage in _workflow_manifest()["workflows"]["VALUE_DISCOVERY"]["stages"]
+        if stage["id"] == "BLUEPRINT"
+    )
+    contract = stage.get("artifactDataContract")
+
+    assert contract is not None
+    assert "requirements[].requirement_id 必须唯一" in instruction
+    assert "acceptance_criteria[].acceptance_id 必须唯一" in instruction
+    assert "feature_modules[].features[].requirement_id 如果非空，只能引用 requirements[].requirement_id 中已定义的需求 ID" in instruction
+    assert "mvp_plan.included_features[].requirement_id 和 acceptance_criteria[].requirement_id 只能引用 requirements[].requirement_id 中已定义的需求 ID" in instruction
+    assert "lisa_handoff_inputs[] 中 input_type 为“需求”时 reference_id 只能引用 requirements[].requirement_id 中已定义的需求 ID" in instruction
+    assert "lisa_handoff_inputs[] 中 input_type 为“验收标准”时 reference_id 只能引用 acceptance_criteria[].acceptance_id 中已定义的验收标准 ID" in instruction
+    assert "main_flow.nodes[].node_id 必须唯一" in instruction
+    assert "main_flow.links[].from_node 和 main_flow.links[].to_node 只能引用 main_flow.nodes[].node_id 中已定义的流程节点 ID" in instruction
+    assert "Mermaid 代码块" in instruction
+    assert "roadmap JSON 代码块" in instruction
+    assert "右侧需求蓝图" in instruction
+    assert "Mermaid mindmap" in instruction
+    assert "Mermaid flowchart" in instruction
+    assert "ai4se-visual roadmap" in instruction
+
+
 def test_workflow_manifest_declares_prompt_template_versions_for_every_stage():
     manifest = _workflow_manifest()
 

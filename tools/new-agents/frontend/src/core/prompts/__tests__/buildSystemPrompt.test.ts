@@ -544,6 +544,35 @@ describe('buildSystemPrompt', () => {
         expect(stageIdRuleMatches).toHaveLength(1);
     });
 
+    it('injects VALUE DISCOVERY BLUEPRINT artifact data contract from the manifest', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'alex',
+            workflow: 'VALUE_DISCOVERY',
+            stageIndex: 3,
+            currentArtifact: '# 需求蓝图\n已有内容',
+        });
+
+        const requirementIdRule = 'requirements[].requirement_id 必须唯一';
+        expect(prompt).toContain('【artifact_data 结构化契约】');
+        expect(prompt).toContain(requirementIdRule);
+        expect(prompt).toContain('acceptance_criteria[].acceptance_id 必须唯一');
+        expect(prompt).toContain('feature_modules[].features[].requirement_id 如果非空，只能引用 requirements[].requirement_id 中已定义的需求 ID');
+        expect(prompt).toContain('mvp_plan.included_features[].requirement_id 和 acceptance_criteria[].requirement_id 只能引用 requirements[].requirement_id 中已定义的需求 ID');
+        expect(prompt).toContain('lisa_handoff_inputs[] 中 input_type 为“需求”时 reference_id 只能引用 requirements[].requirement_id 中已定义的需求 ID');
+        expect(prompt).toContain('lisa_handoff_inputs[] 中 input_type 为“验收标准”时 reference_id 只能引用 acceptance_criteria[].acceptance_id 中已定义的验收标准 ID');
+        expect(prompt).toContain('main_flow.nodes[].node_id 必须唯一');
+        expect(prompt).toContain('main_flow.links[].from_node 和 main_flow.links[].to_node 只能引用 main_flow.nodes[].node_id 中已定义的流程节点 ID');
+        expect(prompt).toContain('图表 代码块');
+        expect(prompt).toContain('roadmap JSON 代码块');
+        expect(prompt).toContain('右侧需求蓝图');
+        expect(prompt).toContain('图表 mindmap');
+        expect(prompt).toContain('图表 flowchart');
+        expect(prompt).toContain('ai4se-visual roadmap');
+        expect(prompt).not.toContain('Mermaid 代码块');
+        const requirementIdRuleMatches = prompt.match(new RegExp(requirementIdRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
+        expect(requirementIdRuleMatches).toHaveLength(1);
+    });
+
     it('describes story breakdown work without markdown direct-write instructions', () => {
         const prompt = buildSystemPrompt({
             agentId: 'alex',
