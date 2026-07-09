@@ -227,6 +227,33 @@ def test_idea_define_artifact_data_contract_manifest_drives_backend_instruction(
     assert "Mermaid mindmap" in instruction
 
 
+def test_idea_diverge_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    instruction = format_artifact_data_contract_instruction(
+        "IDEA_BRAINSTORM",
+        "DIVERGE",
+    )
+    stage = next(
+        stage
+        for stage in _workflow_manifest()["workflows"]["IDEA_BRAINSTORM"]["stages"]
+        if stage["id"] == "DIVERGE"
+    )
+    contract = stage.get("artifactDataContract")
+
+    assert contract is not None
+    assert "idea_cards[].idea_id 必须唯一" in instruction
+    assert "idea_sources[].source_id 必须唯一" in instruction
+    assert "parked_or_excluded[].record_id 必须唯一" in instruction
+    assert "idea_landscape.groups[].idea_ids 只能引用 idea_cards[].idea_id 中已定义的创意 ID" in instruction
+    assert "idea_sources[].idea_ids 只能引用 idea_cards[].idea_id 中已定义的创意 ID" in instruction
+    assert "stage_gate 至少包含一个 checked=true" in instruction
+    assert "Mermaid 代码块" in instruction
+    assert "mindmap 代码块" in instruction
+    assert "右侧创意发散产物" in instruction
+    assert "Mermaid mindmap" in instruction
+
+
 def test_workflow_manifest_declares_prompt_template_versions_for_every_stage():
     manifest = _workflow_manifest()
 

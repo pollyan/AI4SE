@@ -282,6 +282,31 @@ describe('buildSystemPrompt', () => {
         expect(evidenceRuleMatches).toHaveLength(1);
     });
 
+    it('injects IDEA BRAINSTORM DIVERGE artifact data contract from the manifest', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'alex',
+            workflow: 'IDEA_BRAINSTORM',
+            stageIndex: 1,
+            currentArtifact: '# 创意发散\n已有内容',
+        });
+
+        const ideaIdRule = 'idea_cards[].idea_id 必须唯一';
+        expect(prompt).toContain('【artifact_data 结构化契约】');
+        expect(prompt).toContain(ideaIdRule);
+        expect(prompt).toContain('idea_sources[].source_id 必须唯一');
+        expect(prompt).toContain('parked_or_excluded[].record_id 必须唯一');
+        expect(prompt).toContain('idea_landscape.groups[].idea_ids 只能引用 idea_cards[].idea_id 中已定义的创意 ID');
+        expect(prompt).toContain('idea_sources[].idea_ids 只能引用 idea_cards[].idea_id 中已定义的创意 ID');
+        expect(prompt).toContain('stage_gate 至少包含一个 checked=true');
+        expect(prompt).toContain('图表 代码块');
+        expect(prompt).toContain('mindmap 代码块');
+        expect(prompt).toContain('右侧创意发散产物');
+        expect(prompt).toContain('图表 mindmap');
+        expect(prompt).not.toContain('Mermaid 代码块');
+        const ideaIdRuleMatches = prompt.match(new RegExp(ideaIdRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
+        expect(ideaIdRuleMatches).toHaveLength(1);
+    });
+
     it('describes story breakdown work without markdown direct-write instructions', () => {
         const prompt = buildSystemPrompt({
             agentId: 'alex',

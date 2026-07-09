@@ -708,6 +708,26 @@
               "mindmap"
             ]
           },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "idea_cards[].idea_id 必须唯一",
+              "idea_sources[].source_id 必须唯一",
+              "parked_or_excluded[].record_id 必须唯一",
+              "idea_landscape.groups[].idea_ids 只能引用 idea_cards[].idea_id 中已定义的创意 ID",
+              "idea_sources[].idea_ids 只能引用 idea_cards[].idea_id 中已定义的创意 ID",
+              "stage_gate 至少包含一个 checked=true"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格",
+              "Mermaid 代码块",
+              "mindmap 代码块"
+            ],
+            "rendererOutputs": [
+              "右侧创意发散产物",
+              "Mermaid mindmap"
+            ]
+          },
           "promptTemplateVersion": "2026.06.24.1",
           "regressionSampleIds": [
             "idea-brainstorm.diverge.baseline"

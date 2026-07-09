@@ -267,6 +267,29 @@ describe('Workflow Configuration', () => {
         expect(define?.artifactDataContract?.rendererOutputs).toContain('Mermaid mindmap');
     });
 
+    it('exposes manifest artifact data contract for IDEA BRAINSTORM DIVERGE', () => {
+        const diverge = WORKFLOWS.IDEA_BRAINSTORM.stages.find(stage => stage.id === 'DIVERGE');
+
+        expect(diverge?.artifactDataContract?.modelOutputRules).toContain(
+            'idea_cards[].idea_id 必须唯一',
+        );
+        expect(diverge?.artifactDataContract?.modelOutputRules).toContain(
+            'idea_sources[].source_id 必须唯一',
+        );
+        expect(diverge?.artifactDataContract?.modelOutputRules).toContain(
+            'parked_or_excluded[].record_id 必须唯一',
+        );
+        expect(diverge?.artifactDataContract?.modelOutputRules).toContain(
+            'idea_landscape.groups[].idea_ids 只能引用 idea_cards[].idea_id 中已定义的创意 ID',
+        );
+        expect(diverge?.artifactDataContract?.modelOutputRules).toContain(
+            'idea_sources[].idea_ids 只能引用 idea_cards[].idea_id 中已定义的创意 ID',
+        );
+        expect(diverge?.artifactDataContract?.forbiddenOutputs).toContain('Mermaid 代码块');
+        expect(diverge?.artifactDataContract?.forbiddenOutputs).toContain('mindmap 代码块');
+        expect(diverge?.artifactDataContract?.rendererOutputs).toContain('Mermaid mindmap');
+    });
+
     it('does not ask TEST DESIGN STRATEGY model to handwrite renderer-owned visuals in artifact data mode', () => {
         const strategy = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'STRATEGY');
 
