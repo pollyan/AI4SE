@@ -248,10 +248,12 @@ describe('Workflow Configuration', () => {
             expect(protocol.structuredVisual.currentTypes).toContain(visualType);
         }
         expect(protocol.structuredVisual.currentTypes).toContain('timeline-map');
+        expect(protocol.structuredVisual.currentTypes).toContain('flow-map');
         expect(protocol.structuredVisual.plannedComplexTypes).toEqual(
-            expect.arrayContaining(['flow-map', 'mindmap', 'sequence-flow', 'distribution-chart']),
+            expect.arrayContaining(['mindmap', 'sequence-flow', 'distribution-chart']),
         );
         expect(protocol.structuredVisual.plannedComplexTypes).not.toContain('timeline-map');
+        expect(protocol.structuredVisual.plannedComplexTypes).not.toContain('flow-map');
     });
 
     it('exposes manifest artifact data contract for TEST DESIGN STRATEGY', () => {
@@ -597,9 +599,10 @@ describe('Workflow Configuration', () => {
             expect(stage.artifactDataContract?.forbiddenOutputs).toContain('完整 Markdown 文档');
             expect(stage.artifactDataContract?.forbiddenOutputs).toContain('Markdown 表格');
             expect(stage.artifactDataContract?.forbiddenOutputs).toContain('Mermaid 代码块');
+            expect(stage.artifactDataContract?.forbiddenOutputs).toContain('flow-map JSON 代码块');
             expect(stage.artifactDataContract?.forbiddenOutputs).toContain('story-map JSON 代码块');
             expect(stage.artifactDataContract?.rendererOutputs).toContain('右侧用户故事拆解包');
-            expect(stage.artifactDataContract?.rendererOutputs).toContain('Mermaid flowchart');
+            expect(stage.artifactDataContract?.rendererOutputs).toContain('ai4se-visual flow-map');
             expect(stage.artifactDataContract?.rendererOutputs).toContain('ai4se-visual story-map');
         }
     });

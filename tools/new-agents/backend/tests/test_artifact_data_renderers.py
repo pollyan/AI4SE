@@ -242,7 +242,11 @@ def test_render_story_breakdown_artifact_data_outputs_story_package():
     assert "## 验收标准" in markdown
     assert "## Sprint 切片建议" in markdown
     assert "## Lisa Handoff 输入" in markdown
+    assert '"type": "flow-map"' in markdown
+    assert '"nodes"' in markdown
+    assert '"edges"' in markdown
     assert '"type": "story-map"' in markdown
+    assert "flowchart TD" not in markdown
     assert "US-001" in markdown
 
     validate_agent_turn(

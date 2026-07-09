@@ -39,18 +39,26 @@ def _minimal_mermaid_block(diagram_type: str) -> str:
 
 
 def _minimal_structured_visual_block(visual_type: str) -> str:
-    if visual_type == "cause-map":
+    if visual_type in {"cause-map", "flow-map"}:
+        title = "Epic 流程图" if visual_type == "flow-map" else "5-Why 根因链路图"
+        first_id = "Goal" if visual_type == "flow-map" else "Why-1"
+        first_label = "Goal" if visual_type == "flow-map" else "Why-1"
+        first_title = "产品目标" if visual_type == "flow-map" else "直接原因"
+        second_id = "EPIC-001" if visual_type == "flow-map" else "Why-2"
+        second_label = "EPIC-001" if visual_type == "flow-map" else "Why-2"
+        second_title = "核心 Epic" if visual_type == "flow-map" else "深层原因"
+        edge_label = "拆解为" if visual_type == "flow-map" else "继续追问"
         return (
             "```ai4se-visual\n"
             "{\n"
-            '  "type": "cause-map",\n'
-            '  "title": "5-Why 根因链路图",\n'
+            f'  "type": "{visual_type}",\n'
+            f'  "title": "{title}",\n'
             '  "nodes": [\n'
-            '    {"id": "Why-1", "label": "Why-1", "title": "直接原因"},\n'
-            '    {"id": "Why-2", "label": "Why-2", "title": "深层原因"}\n'
+            f'    {{"id": "{first_id}", "label": "{first_label}", "title": "{first_title}"}},\n'
+            f'    {{"id": "{second_id}", "label": "{second_label}", "title": "{second_title}"}}\n'
             "  ],\n"
             '  "edges": [\n'
-            '    {"source": "Why-1", "target": "Why-2", "label": "继续追问"}\n'
+            f'    {{"source": "{first_id}", "target": "{second_id}", "label": "{edge_label}"}}\n'
             "  ]\n"
             "}\n"
             "```\n"
@@ -514,12 +522,17 @@ def test_required_artifact_headings_cover_every_known_workflow_stage():
     assert required_stage_keys == workflow_stage_keys
 
 
-def test_required_mermaid_contract_covers_every_known_workflow():
-    workflows_with_required_visuals = {
+def test_visual_contract_covers_every_known_workflow():
+    workflows_with_mermaid_visuals = {
         workflow_id for workflow_id, _stage_id in REQUIRED_ARTIFACT_MERMAID_DIAGRAMS
     }
+    workflows_with_structured_visuals = {
+        workflow_id for workflow_id, _stage_id in REQUIRED_ARTIFACT_STRUCTURED_VISUALS
+    }
 
-    assert workflows_with_required_visuals == set(WORKFLOW_STAGES)
+    assert workflows_with_mermaid_visuals | workflows_with_structured_visuals == set(
+        WORKFLOW_STAGES
+    )
 
 
 def test_first_stage_visual_contract_covers_every_known_workflow():
@@ -544,7 +557,10 @@ def test_later_stage_structured_visual_contracts_cover_professional_views():
         ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["cause-map"],
         ("IDEA_BRAINSTORM", "CONCEPT"): ["mvp-map"],
         ("VALUE_DISCOVERY", "BLUEPRINT"): ["roadmap"],
-        ("STORY_BREAKDOWN", "SPRINT_PLAN"): ["story-map"],
+        ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): ["flow-map"],
+        ("STORY_BREAKDOWN", "EPIC_MAPPING"): ["flow-map"],
+        ("STORY_BREAKDOWN", "STORY_BACKLOG"): ["flow-map"],
+        ("STORY_BREAKDOWN", "SPRINT_PLAN"): ["flow-map", "story-map"],
     }
 
     for stage_key, visual_types in expected_visual_contracts.items():
@@ -566,10 +582,12 @@ def test_story_breakdown_contracts_include_story_package_fields():
     assert "## User Story Backlog" in story_fields
     assert "## 验收标准" in story_fields
     assert "## Lisa Handoff 输入" in story_fields
-    assert REQUIRED_ARTIFACT_MERMAID_DIAGRAMS[
-        ("STORY_BREAKDOWN", "INPUT_ANALYSIS")
-    ] == ["flowchart"]
+    assert ("STORY_BREAKDOWN", "INPUT_ANALYSIS") not in REQUIRED_ARTIFACT_MERMAID_DIAGRAMS
+    assert REQUIRED_ARTIFACT_STRUCTURED_VISUALS[("STORY_BREAKDOWN", "INPUT_ANALYSIS")] == [
+        "flow-map"
+    ]
     assert REQUIRED_ARTIFACT_STRUCTURED_VISUALS[("STORY_BREAKDOWN", "SPRINT_PLAN")] == [
+        "flow-map",
         "story-map"
     ]
 
@@ -855,6 +873,43 @@ def test_validate_agent_turn_rejects_legacy_traceability_matrix_shape():
             output,
             workflow_id="TEST_DESIGN",
             current_stage_id="CASES",
+        )
+
+
+def test_validate_agent_turn_rejects_flow_map_table_shape():
+    output = AgentTurnOutput.model_validate(
+        {
+            "chat": "已更新用户故事拆解包。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": (
+                    _complete_markdown(
+                        REQUIRED_ARTIFACT_HEADINGS[
+                            ("STORY_BREAKDOWN", "INPUT_ANALYSIS")
+                        ]
+                    )
+                    + "\n\n```ai4se-visual\n"
+                    + "{\n"
+                    + '  "type": "flow-map",\n'
+                    + '  "columns": ["节点", "状态"],\n'
+                    + '  "rows": [{"节点": "EPIC-001", "状态": "已识别"}]\n'
+                    + "}\n"
+                    + "```\n"
+                ),
+            },
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+
+    with pytest.raises(
+        ContractValidationError,
+        match="flow-map 必须使用 nodes 和 edges",
+    ):
+        validate_agent_turn(
+            output,
+            workflow_id="STORY_BREAKDOWN",
+            current_stage_id="INPUT_ANALYSIS",
         )
 
 

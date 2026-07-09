@@ -8,7 +8,11 @@ export const SPRINT_PLAN_TEMPLATE = `结构化业务数据应覆盖：
 - lisa_handoff_inputs：把 P0 用户故事、关键验收标准、依赖风险和验证重点整理成可交给 Lisa 的输入。
 - stage_gate：确认所有 P0 用户故事均具备验收标准、Sprint 切片、依赖风险记录和 Lisa Handoff 输入。
 
-最终渲染会由后端生成 ai4se-visual，例如：
+最终渲染会由后端生成 ai4se-visual flow-map 和 story-map，例如：
+${FENCE}ai4se-visual
+{"type": "flow-map","title":"Epic 流程图","nodes":[{"id":"Goal","label":"Goal","title":"产品目标"},{"id":"EPIC-001","label":"EPIC-001","title":"核心 Epic"}],"edges":[{"source":"Goal","target":"EPIC-001","label":"拆解为"}]}
+${FENCE}
+
 ${FENCE}ai4se-visual
 {"type": "story-map","columns":["Epic","Story","优先级","Sprint","依赖","可测试性"],"rows":[{"Epic":"EPIC-001","Story":"US-001 核心故事","优先级":"P0","Sprint":"Sprint 1","依赖":"无","可测试性":"高"}]}
 ${FENCE}`;

@@ -440,7 +440,6 @@ REQUIRED_ARTIFACT_MERMAID_DIAGRAMS: dict[tuple[str, str], list[str]] = {
     ("IDEA_BRAINSTORM", "CONVERGE"): ["quadrantChart"],
     ("VALUE_DISCOVERY", "ELEVATOR"): ["flowchart"],
     ("VALUE_DISCOVERY", "JOURNEY"): ["journey"],
-    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): ["flowchart"],
     ("PRD_REVIEW", "INVENTORY"): ["mindmap"],
 }
 
@@ -457,7 +456,10 @@ REQUIRED_ARTIFACT_STRUCTURED_VISUALS: dict[tuple[str, str], list[str]] = {
     ("INCIDENT_REVIEW", "ROOT_CAUSE"): ["cause-map"],
     ("IDEA_BRAINSTORM", "CONCEPT"): ["mvp-map"],
     ("VALUE_DISCOVERY", "BLUEPRINT"): ["roadmap"],
-    ("STORY_BREAKDOWN", "SPRINT_PLAN"): ["story-map"],
+    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): ["flow-map"],
+    ("STORY_BREAKDOWN", "EPIC_MAPPING"): ["flow-map"],
+    ("STORY_BREAKDOWN", "STORY_BACKLOG"): ["flow-map"],
+    ("STORY_BREAKDOWN", "SPRINT_PLAN"): ["flow-map", "story-map"],
     ("PRD_REVIEW", "QUALITY_AUDIT"): ["score-matrix"],
     ("PRD_REVIEW", "COMPLETION_PLAN"): ["action-board"],
     ("PRD_REVIEW", "REVISION_BLUEPRINT"): ["roadmap"],
@@ -533,6 +535,16 @@ STRUCTURED_VISUAL_SCHEMA_PROMPTS: dict[str, str] = {
         '"发布记录", "confidence": "高", "status": "已确认"}], '
         '"edges": [{"source": "Why-1", "target": "Why-2", '
         '"label": "继续追问"}]}。nodes 必须是非空对象数组，id 唯一，'
+        "每个节点必须包含非空 id、label 和 title；edges 必须是对象数组，"
+        "source/target 必须引用已存在的 node id。禁止使用 columns/rows 矩阵旧结构。"
+    ),
+    "flow-map": (
+        'flow-map 必须严格使用如下 JSON 结构：{"type": '
+        '"flow-map", "title": "可选标题", "nodes": [{"id": '
+        '"Goal", "label": "Goal", "title": "产品目标", "description": '
+        '"提升需求拆分质量", "category": "目标", "status": "已确认"}], '
+        '"edges": [{"source": "Goal", "target": "EPIC-001", '
+        '"label": "拆解为"}]}。nodes 必须是非空对象数组，id 唯一，'
         "每个节点必须包含非空 id、label 和 title；edges 必须是对象数组，"
         "source/target 必须引用已存在的 node id。禁止使用 columns/rows 矩阵旧结构。"
     ),
@@ -1011,8 +1023,8 @@ def is_valid_structured_visual_block(
 ) -> bool:
     if block.get("type") != visual_type:
         return False
-    if visual_type == "cause-map":
-        return is_valid_cause_map_visual_block(block)
+    if visual_type in {"cause-map", "flow-map"}:
+        return is_valid_node_edge_visual_block(block)
     if visual_type == "timeline-map":
         return is_valid_timeline_map_visual_block(block)
     columns = block.get("columns")
@@ -1026,7 +1038,7 @@ def is_valid_structured_visual_block(
     )
 
 
-def is_valid_cause_map_visual_block(block: dict[str, Any]) -> bool:
+def is_valid_node_edge_visual_block(block: dict[str, Any]) -> bool:
     nodes = block.get("nodes")
     edges = block.get("edges")
     if not isinstance(nodes, list) or not nodes or not all(
@@ -1101,9 +1113,9 @@ def is_valid_timeline_map_visual_block(block: dict[str, Any]) -> bool:
 
 
 def structured_visual_error_message(visual_type: str) -> str:
-    if visual_type == "cause-map":
+    if visual_type in {"cause-map", "flow-map"}:
         return (
-            "cause-map 必须使用 nodes 和 edges 结构；"
+            f"{visual_type} 必须使用 nodes 和 edges 结构；"
             "nodes 必须是非空对象数组且 id 唯一，"
             "edges.source/target 必须引用已存在的 node id。"
         )

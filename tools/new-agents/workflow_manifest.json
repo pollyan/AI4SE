@@ -101,11 +101,11 @@
         "roadmap",
         "score-matrix",
         "story-map",
+        "flow-map",
         "timeline-map",
         "traceability-matrix"
       ],
       "plannedComplexTypes": [
-        "flow-map",
         "mindmap",
         "sequence-flow",
         "distribution-chart"
@@ -1372,8 +1372,8 @@
             ]
           },
           "visualContract": {
-            "requiredMermaidDiagrams": [
-              "flowchart"
+            "requiredStructuredVisuals": [
+              "flow-map"
             ]
           },
           "artifactDataContract": {
@@ -1399,11 +1399,12 @@
               "完整 Markdown 文档",
               "Markdown 表格",
               "Mermaid 代码块",
+              "flow-map JSON 代码块",
               "story-map JSON 代码块"
             ],
             "rendererOutputs": [
               "右侧用户故事拆解包",
-              "Mermaid flowchart",
+              "ai4se-visual flow-map",
               "ai4se-visual story-map"
             ]
           },
@@ -1435,6 +1436,11 @@
               "状态"
             ]
           },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "flow-map"
+            ]
+          },
           "artifactDataContract": {
             "modelOutputRules": [
               "document_info、input_analysis、epics、user_stories、acceptance_criteria、dependencies、sprint_slices、lisa_handoff_inputs 和 stage_gate 必须齐全；契约外字段会被拒绝",
@@ -1458,11 +1464,12 @@
               "完整 Markdown 文档",
               "Markdown 表格",
               "Mermaid 代码块",
+              "flow-map JSON 代码块",
               "story-map JSON 代码块"
             ],
             "rendererOutputs": [
               "右侧用户故事拆解包",
-              "Mermaid flowchart",
+              "ai4se-visual flow-map",
               "ai4se-visual story-map"
             ]
           },
@@ -1494,6 +1501,11 @@
               "状态"
             ]
           },
+          "visualContract": {
+            "requiredStructuredVisuals": [
+              "flow-map"
+            ]
+          },
           "artifactDataContract": {
             "modelOutputRules": [
               "document_info、input_analysis、epics、user_stories、acceptance_criteria、dependencies、sprint_slices、lisa_handoff_inputs 和 stage_gate 必须齐全；契约外字段会被拒绝",
@@ -1517,11 +1529,12 @@
               "完整 Markdown 文档",
               "Markdown 表格",
               "Mermaid 代码块",
+              "flow-map JSON 代码块",
               "story-map JSON 代码块"
             ],
             "rendererOutputs": [
               "右侧用户故事拆解包",
-              "Mermaid flowchart",
+              "ai4se-visual flow-map",
               "ai4se-visual story-map"
             ]
           },
@@ -1555,6 +1568,7 @@
           },
           "visualContract": {
             "requiredStructuredVisuals": [
+              "flow-map",
               "story-map"
             ]
           },
@@ -1581,11 +1595,12 @@
               "完整 Markdown 文档",
               "Markdown 表格",
               "Mermaid 代码块",
+              "flow-map JSON 代码块",
               "story-map JSON 代码块"
             ],
             "rendererOutputs": [
               "右侧用户故事拆解包",
-              "Mermaid flowchart",
+              "ai4se-visual flow-map",
               "ai4se-visual story-map"
             ]
           },

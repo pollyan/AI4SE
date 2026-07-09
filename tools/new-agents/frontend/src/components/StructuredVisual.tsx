@@ -16,6 +16,7 @@ const DEFAULT_TITLES: Record<StructuredVisualType, string> = {
     'coverage-map': '交付覆盖地图',
     'priority-board': '问题优先级看板',
     'cause-map': '根因链路图',
+    'flow-map': '流程图',
     'mvp-map': 'MVP 功能地图',
     'roadmap': '产品路线图',
     'story-map': '用户故事地图',
@@ -49,7 +50,8 @@ export const StructuredVisual: React.FC<StructuredVisualProps> = ({
     const visual = result.visual;
     const title = visual.title || DEFAULT_TITLES[visual.type];
 
-    if (visual.kind === 'node-edge') {
+    if (visual.kind === 'node-edge' || visual.kind === 'flow') {
+        const connectionLabel = visual.kind === 'flow' ? '流程连接' : '因果连接';
         return (
             <div
                 role="group"
@@ -87,7 +89,9 @@ export const StructuredVisual: React.FC<StructuredVisualProps> = ({
                     ))}
                     {visual.edges.length > 0 && (
                         <div className="border-t border-[#1e293b] pt-3">
-                            <div className="text-xs font-semibold text-slate-500">因果连接</div>
+                            <div className="text-xs font-semibold text-slate-500">
+                                {connectionLabel}
+                            </div>
                             <div className="mt-2 space-y-2">
                                 {visual.edges.map((edge) => (
                                     <div

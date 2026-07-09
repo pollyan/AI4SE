@@ -133,6 +133,26 @@ def load_workflow_dry_run_inputs(repo_root: Path) -> WorkflowDryRunInputs:
     )
 
 
+def _manifest_visual_contracts(
+    manifest: dict[str, Any],
+) -> tuple[dict[StageKey, set[str]], dict[StageKey, set[str]]]:
+    mermaid: dict[StageKey, set[str]] = {}
+    structured: dict[StageKey, set[str]] = {}
+    for workflow_id, workflow in manifest["workflows"].items():
+        for stage in workflow["stages"]:
+            stage_key = (workflow_id, stage["id"])
+            visual_contract = stage.get("visualContract") or {}
+            mermaid_types = set(visual_contract.get("requiredMermaidDiagrams") or [])
+            structured_types = set(
+                visual_contract.get("requiredStructuredVisuals") or []
+            )
+            if mermaid_types:
+                mermaid[stage_key] = mermaid_types
+            if structured_types:
+                structured[stage_key] = structured_types
+    return mermaid, structured
+
+
 def build_workflow_dry_run_report(
     inputs: WorkflowDryRunInputs,
 ) -> WorkflowDryRunReport:
@@ -161,6 +181,34 @@ def build_workflow_dry_run_report(
             "BACKEND_STAGE_MISMATCH",
             "workflow_manifest.json stages must match backend WORKFLOW_STAGES.",
         )
+
+    manifest_mermaid, manifest_structured = _manifest_visual_contracts(inputs.manifest)
+    for stage_key in sorted(
+        set(manifest_mermaid)
+        | set(inputs.required_mermaid_diagrams)
+        | set(manifest_structured)
+        | set(inputs.required_structured_visuals)
+    ):
+        checks += 1
+        manifest_mermaid_types = manifest_mermaid.get(stage_key, set())
+        backend_mermaid_types = inputs.required_mermaid_diagrams.get(stage_key, set())
+        manifest_structured_types = manifest_structured.get(stage_key, set())
+        backend_structured_types = inputs.required_structured_visuals.get(
+            stage_key,
+            set(),
+        )
+        if (
+            manifest_mermaid_types != backend_mermaid_types
+            or manifest_structured_types != backend_structured_types
+        ):
+            add_issue(
+                "MANIFEST_VISUAL_CONTRACT_MISMATCH",
+                (
+                    "workflow_manifest.json visualContract must match backend "
+                    "required Mermaid and structured visual maps"
+                ),
+                stage_key,
+            )
 
     checks += 1
     _check_missing_stage_keys(
@@ -257,7 +305,7 @@ def build_workflow_dry_run_report(
                     f"prompt/template missing ai4se-visual type {visual_type!r}",
                     stage_key,
                 )
-            if visual_type == "cause-map":
+            if visual_type in {"cause-map", "flow-map"}:
                 if '"nodes"' not in prompt_text or '"edges"' not in prompt_text:
                     add_issue(
                         "STRUCTURED_VISUAL_NODE_EDGE_SHAPE_MISSING",

@@ -7,6 +7,7 @@ export type StructuredVisualType =
     | 'coverage-map'
     | 'priority-board'
     | 'cause-map'
+    | 'flow-map'
     | 'mvp-map'
     | 'roadmap'
     | 'story-map'
@@ -21,6 +22,7 @@ const SUPPORTED_VISUAL_TYPES: StructuredVisualType[] = [
     'coverage-map',
     'priority-board',
     'cause-map',
+    'flow-map',
     'mvp-map',
     'roadmap',
     'story-map',
@@ -55,8 +57,8 @@ export interface NodeEdgeStructuredVisualEdge {
 }
 
 export interface NodeEdgeStructuredVisual {
-    kind: 'node-edge';
-    type: Extract<StructuredVisualType, 'cause-map'>;
+    kind: 'node-edge' | 'flow';
+    type: Extract<StructuredVisualType, 'cause-map' | 'flow-map'>;
     title?: string;
     nodes: NodeEdgeStructuredVisualNode[];
     edges: NodeEdgeStructuredVisualEdge[];
@@ -142,7 +144,7 @@ function optionalNonEmptyString(value: unknown): string | undefined {
 
 function parseNodeEdgeVisual(
     parsed: Record<string, unknown>,
-    visualType: Extract<StructuredVisualType, 'cause-map'>,
+    visualType: Extract<StructuredVisualType, 'cause-map' | 'flow-map'>,
     title: string | undefined
 ): StructuredVisualResult {
     if (!Array.isArray(parsed.nodes) || !parsed.nodes.every(isRecord) || !parsed.nodes.length) {
@@ -216,7 +218,7 @@ function parseNodeEdgeVisual(
     return {
         valid: true,
         visual: {
-            kind: 'node-edge',
+            kind: visualType === 'flow-map' ? 'flow' : 'node-edge',
             type: visualType,
             title,
             nodes,
@@ -320,7 +322,7 @@ export function parseStructuredVisual(source: string): StructuredVisualResult {
         ? parsed.title
         : undefined;
 
-    if (visualType === 'cause-map') {
+    if (visualType === 'cause-map' || visualType === 'flow-map') {
         return parseNodeEdgeVisual(parsed, visualType, title);
     }
     if (visualType === 'timeline-map') {

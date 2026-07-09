@@ -9,9 +9,7 @@ export const INPUT_ANALYSIS_TEMPLATE = `结构化业务数据应覆盖：
 - user_stories、acceptance_criteria、dependencies、sprint_slices、lisa_handoff_inputs：可以基于当前输入给出第一版草案，并在 chat 中明确需要用户确认的假设。
 - stage_gate：至少包含输入来源、目标用户、约束和待澄清问题是否已整理。
 
-后端渲染器会基于结构化数据生成流程图示例：
-${FENCE}mermaid
-flowchart TD
-    Input["需求输入"] --> Goal["产品目标"]
-    Goal --> Epic["Epic Map"]
+后端渲染器会基于结构化数据生成 ai4se-visual flow-map 示例：
+${FENCE}ai4se-visual
+{"type": "flow-map","title":"Epic 流程图","nodes":[{"id":"Goal","label":"Goal","title":"产品目标"},{"id":"EPIC-001","label":"EPIC-001","title":"核心 Epic"}],"edges":[{"source":"Goal","target":"EPIC-001","label":"拆解为"}]}
 ${FENCE}`;

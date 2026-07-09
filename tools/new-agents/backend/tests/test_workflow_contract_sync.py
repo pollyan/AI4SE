@@ -48,6 +48,26 @@ def test_shared_workflow_manifest_stage_order_matches_backend_contract():
     assert _workflow_manifest_stages() == WORKFLOW_STAGES
 
 
+def test_shared_workflow_manifest_visual_contract_matches_backend_required_visual_maps():
+    manifest = _workflow_manifest()
+
+    manifest_mermaid = {}
+    manifest_structured = {}
+    for workflow_id, workflow in manifest["workflows"].items():
+        for stage in workflow["stages"]:
+            stage_key = (workflow_id, stage["id"])
+            visual_contract = stage.get("visualContract") or {}
+            mermaid = visual_contract.get("requiredMermaidDiagrams") or []
+            structured = visual_contract.get("requiredStructuredVisuals") or []
+            if mermaid:
+                manifest_mermaid[stage_key] = mermaid
+            if structured:
+                manifest_structured[stage_key] = structured
+
+    assert manifest_mermaid == REQUIRED_ARTIFACT_MERMAID_DIAGRAMS
+    assert manifest_structured == REQUIRED_ARTIFACT_STRUCTURED_VISUALS
+
+
 def test_story_breakdown_is_declared_as_shared_runtime_workflow():
     manifest = _workflow_manifest()
     workflow = manifest["workflows"]["STORY_BREAKDOWN"]
@@ -136,13 +156,14 @@ def test_shared_visual_protocol_declares_layering_policy():
     assert protocol["structuredVisual"]["primaryForComplexBusinessVisuals"] is True
     assert set(protocol["structuredVisual"]["currentTypes"]) >= required_structured_visual_types
     assert "timeline-map" in protocol["structuredVisual"]["currentTypes"]
+    assert "flow-map" in protocol["structuredVisual"]["currentTypes"]
     assert set(protocol["structuredVisual"]["plannedComplexTypes"]) >= {
-        "flow-map",
         "mindmap",
         "sequence-flow",
         "distribution-chart",
     }
     assert "timeline-map" not in protocol["structuredVisual"]["plannedComplexTypes"]
+    assert "flow-map" not in protocol["structuredVisual"]["plannedComplexTypes"]
 
     instruction = format_visual_protocol_instruction()
     assert "视觉产物协议" in instruction
@@ -820,9 +841,10 @@ def test_story_breakdown_artifact_data_contract_manifest_drives_backend_instruct
         assert "完整 Markdown 文档" in instruction
         assert "Markdown 表格" in instruction
         assert "Mermaid 代码块" in instruction
+        assert "flow-map JSON 代码块" in instruction
         assert "story-map JSON 代码块" in instruction
         assert "右侧用户故事拆解包" in instruction
-        assert "Mermaid flowchart" in instruction
+        assert "ai4se-visual flow-map" in instruction
         assert "ai4se-visual story-map" in instruction
 
 
@@ -1016,7 +1038,7 @@ def test_frontend_templates_include_required_structured_visual_contract_examples
         for visual_type in visual_types:
             assert "```ai4se-visual" in template or "${FENCE}ai4se-visual" in template
             assert f'"type": "{visual_type}"' in template
-            if visual_type == "cause-map":
+            if visual_type in {"cause-map", "flow-map"}:
                 assert '"nodes"' in template
                 assert '"edges"' in template
                 assert '"columns": ["层级", "问题", "回答"' not in template

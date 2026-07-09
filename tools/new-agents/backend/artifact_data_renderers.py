@@ -3330,7 +3330,7 @@ def render_story_breakdown_markdown(data: StoryBreakdownArtifactData) -> str:
     sections = [
         "# 用户故事拆解包",
         _render_story_input_analysis(data.input_analysis),
-        _render_story_epic_map(data.epics),
+        _render_story_epic_map(data.epics, product_goal=data.input_analysis.product_goal),
         _render_story_backlog(data.user_stories),
         _render_story_acceptance_criteria(data.acceptance_criteria),
         _render_story_dependencies(data.dependencies),
@@ -3352,17 +3352,56 @@ def _render_story_input_analysis(data: StoryBreakdownInputAnalysis) -> str:
     return "## 输入分析\n" + _markdown_table(["维度", "内容"], rows)
 
 
-def _render_story_epic_map(epics: list[StoryBreakdownEpic]) -> str:
-    flow_lines = ["```mermaid", "flowchart TD", '    Goal["产品目标"]']
-    node_ids: dict[str, str] = {}
+def _render_story_epic_map(
+    epics: list[StoryBreakdownEpic],
+    *,
+    product_goal: str,
+) -> str:
+    node_ids = {epic.epic_id for epic in epics}
+    nodes = [
+        {
+            "id": "Goal",
+            "label": "Goal",
+            "title": product_goal,
+            "description": "产品目标",
+            "category": "目标",
+            "status": "已确认",
+        }
+    ]
+    edges = []
     for epic in epics:
-        node_id = _node_id(epic.epic_id, node_ids)
-        label = (
-            f"{_escape_mermaid_label(epic.epic_id)} "
-            f"{_escape_mermaid_label(epic.name)}"
+        nodes.append(
+            {
+                "id": epic.epic_id,
+                "label": epic.epic_id,
+                "title": epic.name,
+                "description": epic.value_goal,
+                "category": "Epic",
+                "status": epic.priority,
+            }
         )
-        flow_lines.append(f'    Goal --> {node_id}["{label}"]')
-    flow_lines.append("```")
+        edges.append(
+            {
+                "source": "Goal",
+                "target": epic.epic_id,
+                "label": "拆解为",
+            }
+        )
+        for dependency in epic.dependencies:
+            if dependency in node_ids and dependency != epic.epic_id:
+                edges.append(
+                    {
+                        "source": dependency,
+                        "target": epic.epic_id,
+                        "label": "依赖",
+                    }
+                )
+    flow_map = {
+        "type": "flow-map",
+        "title": "Epic 流程图",
+        "nodes": nodes,
+        "edges": edges,
+    }
     rows = [
         (
             item.epic_id,
@@ -3377,7 +3416,9 @@ def _render_story_epic_map(epics: list[StoryBreakdownEpic]) -> str:
     return "\n".join(
         [
             "## Epic Map",
-            *flow_lines,
+            "```ai4se-visual",
+            json.dumps(flow_map, ensure_ascii=False, indent=2),
+            "```",
             "",
             _markdown_table(
                 ["Epic ID", "名称", "价值目标", "范围边界", "优先级", "依赖"],

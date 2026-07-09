@@ -85,6 +85,57 @@ def test_new_agents_workflow_dry_run_reports_missing_artifact_data_readiness():
     assert "ARTIFACT_DATA_READY_MISSING" in _issue_codes(report)
 
 
+def test_new_agents_workflow_dry_run_reports_manifest_visual_contract_mismatch():
+    inputs = load_workflow_dry_run_inputs(REPO_ROOT)
+    required_structured_visuals = dict(inputs.required_structured_visuals)
+    required_structured_visuals[("TEST_DESIGN", "CLARIFY")] = {"flow-map"}
+    modified_inputs = replace(
+        inputs,
+        required_structured_visuals=required_structured_visuals,
+    )
+
+    report = build_workflow_dry_run_report(modified_inputs)
+
+    assert report.passed is False
+    assert "MANIFEST_VISUAL_CONTRACT_MISMATCH" in _issue_codes(report)
+    assert any(
+        issue.workflow_id == "TEST_DESIGN" and issue.stage_id == "CLARIFY"
+        for issue in report.issues
+    )
+
+
+def test_new_agents_workflow_dry_run_reports_flow_map_table_shape(tmp_path: Path):
+    inputs = load_workflow_dry_run_inputs(REPO_ROOT)
+    prompt_file = tmp_path / "story_flow_map_prompt.ts"
+    prompt_file.write_text(
+        """
+export const STORY_FLOW_MAP_PROMPT = `请输出结构化业务数据。`;
+export const STORY_FLOW_MAP_TEMPLATE = `最终渲染示例：
+```ai4se-visual
+{"type": "flow-map", "columns": ["节点", "状态"], "rows": [{"节点": "EPIC-001", "状态": "已识别"}]}
+```
+`;
+""",
+        encoding="utf-8",
+    )
+    prompt_files_by_stage = dict(inputs.prompt_files_by_stage)
+    prompt_files_by_stage[("STORY_BREAKDOWN", "INPUT_ANALYSIS")] = prompt_file
+    required_structured_visuals = dict(inputs.required_structured_visuals)
+    required_structured_visuals[("STORY_BREAKDOWN", "INPUT_ANALYSIS")] = {
+        "flow-map"
+    }
+    modified_inputs = replace(
+        inputs,
+        prompt_files_by_stage=prompt_files_by_stage,
+        required_structured_visuals=required_structured_visuals,
+    )
+
+    report = build_workflow_dry_run_report(modified_inputs)
+
+    assert report.passed is False
+    assert "STRUCTURED_VISUAL_NODE_EDGE_SHAPE_MISSING" in _issue_codes(report)
+
+
 def test_new_agents_workflow_dry_run_cli_returns_nonzero_for_reported_issues(
     capsys,
     monkeypatch,

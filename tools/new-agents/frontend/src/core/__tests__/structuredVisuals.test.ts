@@ -231,6 +231,67 @@ describe('parseStructuredVisual', () => {
         });
     });
 
+    it('parses flow-map visual blocks as node-edge flows', () => {
+        const result = parseStructuredVisual(JSON.stringify({
+            type: 'flow-map',
+            title: 'Epic 流程图',
+            nodes: [
+                { id: 'Goal', label: 'Goal', title: '产品目标', description: '提升需求拆分质量' },
+                { id: 'EPIC-001', label: 'EPIC-001', title: '用户故事拆解' },
+            ],
+            edges: [
+                { source: 'Goal', target: 'EPIC-001', label: '拆解为' },
+            ],
+        }));
+
+        expect(result).toEqual({
+            valid: true,
+            visual: {
+                kind: 'flow',
+                type: 'flow-map',
+                title: 'Epic 流程图',
+                nodes: [
+                    {
+                        id: 'Goal',
+                        label: 'Goal',
+                        title: '产品目标',
+                        description: '提升需求拆分质量',
+                        category: undefined,
+                        evidence: undefined,
+                        confidence: undefined,
+                        status: undefined,
+                    },
+                    {
+                        id: 'EPIC-001',
+                        label: 'EPIC-001',
+                        title: '用户故事拆解',
+                        description: undefined,
+                        category: undefined,
+                        evidence: undefined,
+                        confidence: undefined,
+                        status: undefined,
+                    },
+                ],
+                edges: [
+                    { source: 'Goal', target: 'EPIC-001', label: '拆解为' },
+                ],
+            },
+        });
+    });
+
+    it('rejects flow-map table-shaped visuals', () => {
+        const result = parseStructuredVisual(JSON.stringify({
+            type: 'flow-map',
+            columns: ['节点', '状态'],
+            rows: [{ 节点: 'EPIC-001', 状态: '已识别' }],
+        }));
+
+        expect(result).toEqual({
+            valid: false,
+            message: 'flow-map 必须包含非空 nodes 节点数组。',
+        });
+    });
+
     it('supports every structured visual type required by workflow manifests', () => {
         const requiredTypes = new Set<string>();
         Object.values(WORKFLOWS).forEach((workflow) => {
@@ -244,7 +305,7 @@ describe('parseStructuredVisual', () => {
         expect(requiredTypes).toContain('story-map');
         requiredTypes.forEach((type) => {
             const sample = (() => {
-                if (type === 'cause-map') {
+                if (type === 'cause-map' || type === 'flow-map') {
                     return {
                         type,
                         nodes: [{ id: 'N-1', label: 'N-1', title: '节点' }],

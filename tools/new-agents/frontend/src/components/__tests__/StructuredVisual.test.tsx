@@ -161,6 +161,43 @@ describe('StructuredVisual', () => {
         expect(screen.getByText('Why-1 -> Why-2')).toBeTruthy();
     });
 
+    it('renders flow-map JSON as a flow view instead of a table', () => {
+        render(
+            <StructuredVisual
+                source={JSON.stringify({
+                    type: 'flow-map',
+                    title: 'Epic 流程图',
+                    nodes: [
+                        {
+                            id: 'Goal',
+                            label: 'Goal',
+                            title: '产品目标',
+                            description: '提升需求拆分质量',
+                            category: '目标',
+                        },
+                        {
+                            id: 'EPIC-001',
+                            label: 'EPIC-001',
+                            title: '用户故事拆解',
+                            status: 'P0',
+                        },
+                    ],
+                    edges: [
+                        { source: 'Goal', target: 'EPIC-001', label: '拆解为' },
+                    ],
+                })}
+            />
+        );
+
+        expect(screen.queryByRole('table')).toBeNull();
+        expect(screen.getByRole('group', { name: 'Epic 流程图' })).toBeTruthy();
+        expect(screen.getByText('ai4se-visual · flow-map')).toBeTruthy();
+        expect(screen.getByText('提升需求拆分质量')).toBeTruthy();
+        expect(screen.getByText('流程连接')).toBeTruthy();
+        expect(screen.queryByText('因果连接')).toBeNull();
+        expect(screen.getByText('Goal -> EPIC-001')).toBeTruthy();
+    });
+
     it('renders timeline-map JSON as an event timeline instead of a table', () => {
         render(
             <StructuredVisual

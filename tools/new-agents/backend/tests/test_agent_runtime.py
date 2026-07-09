@@ -80,7 +80,7 @@ def test_artifact_data_structured_output_instruction_injects_visual_protocol():
     assert "Mermaid 只允许由后端确定性渲染器生成" in instruction
     assert "复杂业务图优先使用 ai4se-visual JSON" in instruction
     assert "timeline-map" in instruction
-    assert "后续复杂视觉类型包括 flow-map、mindmap、sequence-flow、distribution-chart" in instruction
+    assert "后续复杂视觉类型包括 mindmap、sequence-flow、distribution-chart" in instruction
 
 
 def _raw_json_chunks_after_artifact_data_members(
@@ -1747,7 +1747,11 @@ def test_parse_agent_turn_output_text_renders_story_breakdown_artifact_data():
     assert "## Epic Map" in output.artifact_update.markdown
     assert "## User Story Backlog" in output.artifact_update.markdown
     assert "## Sprint 切片建议" in output.artifact_update.markdown
+    assert '"type": "flow-map"' in output.artifact_update.markdown
+    assert '"nodes"' in output.artifact_update.markdown
+    assert '"edges"' in output.artifact_update.markdown
     assert '"type": "story-map"' in output.artifact_update.markdown
+    assert "flowchart TD" not in output.artifact_update.markdown
     assert output.stage_action is None
 
 
@@ -4401,25 +4405,48 @@ def test_runtime_raw_json_stream_turn_renders_idea_concept_artifact_data_before_
         (
             "INPUT_ANALYSIS",
             ["input_analysis", "epics"],
-            ["# 用户故事拆解包", "## 输入分析", "## Epic Map"],
+            [
+                "# 用户故事拆解包",
+                "## 输入分析",
+                "## Epic Map",
+                '"type": "flow-map"',
+                '"nodes"',
+                '"edges"',
+            ],
             {"type": "request_next_stage", "target_stage_id": "EPIC_MAPPING"},
         ),
         (
             "EPIC_MAPPING",
             ["epics", "user_stories"],
-            ["## Epic Map", "EPIC-001", "## User Story Backlog"],
+            [
+                "## Epic Map",
+                '"type": "flow-map"',
+                "EPIC-001",
+                "## User Story Backlog",
+            ],
             {"type": "request_next_stage", "target_stage_id": "STORY_BACKLOG"},
         ),
         (
             "STORY_BACKLOG",
             ["user_stories", "acceptance_criteria"],
-            ["## User Story Backlog", "US-001", "## 验收标准"],
+            [
+                "## User Story Backlog",
+                '"type": "flow-map"',
+                "US-001",
+                "## 验收标准",
+            ],
             {"type": "request_next_stage", "target_stage_id": "SPRINT_PLAN"},
         ),
         (
             "SPRINT_PLAN",
             ["sprint_slices", "lisa_handoff_inputs"],
-            ["## Sprint 切片建议", "## Lisa Handoff 输入", "US-001"],
+            [
+                "## Sprint 切片建议",
+                '"type": "flow-map"',
+                '"type": "story-map"',
+                "## Lisa Handoff 输入",
+                "US-001",
+            ],
             None,
         ),
     ],
@@ -4473,6 +4500,7 @@ def test_runtime_raw_json_stream_turn_renders_all_story_breakdown_stages_from_ar
     assert outputs[-1].artifact_update.markdown is not None
     for marker in expected_markers:
         assert marker in outputs[-1].artifact_update.markdown
+    assert "flowchart TD" not in outputs[-1].artifact_update.markdown
     if stage_action is None:
         assert outputs[-1].stage_action is None
     else:

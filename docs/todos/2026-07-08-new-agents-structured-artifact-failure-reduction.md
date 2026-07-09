@@ -3343,6 +3343,109 @@ CI 等价判断：
 - 子智能体优先做只读旁路审查：一个审查候选 workflow / visual type，一个审查 dry-run / sync gate 边界；可写实现仍由主 Agent 串行落地。
 - 每完成一个厚切片都必须先跑聚焦验证和 New Agents 总门禁，再提交并 push。
 
+### 2026-07-09 目标承接检查：复杂视觉演进安全闭环
+
+事实源快照：
+
+- 已读取：`AGENTS.md`、`docs/strategy/goal-mode-playbook.md`、`docs/strategy/goal-mode-cga-template.md`、`docs/index.md`、`docs/TESTING.md`、本 todo、`workflow_manifest.json`、`agent_contracts.py`、`artifact_data_renderers.py`、`new_agents_workflow_dry_run.py`、后端 workflow / runtime / renderer contract tests、前端 structured visual / export / prompt / workflow tests。
+- 当前工作区：`master...origin/master` 干净。
+
+已确认目标来源：
+
+- 来源：本 todo 的“服务端视觉门禁后剩余工作重定义”。
+- 本轮承接：第 1 个剩余厚切片 `复杂视觉演进安全闭环`。
+- 上一轮状态：`服务端视觉成功门禁` 已提交并 push，最新提交 `61733113`。
+
+改道条件检查：
+
+- 新 P0/P1 或用户新目标：无。用户此前要求当前任务完成后重切后续工作；该重切已完成，本轮承接重切后的第 1 个厚切片。
+- 未关闭质量门或用户明确反馈：无新的业务失败；本轮继续遵守“不允许内部批次”和“一个 workflow 不默认拆多片”的反馈。
+- LLM judge / E2E / 审查状态：本轮不启用 LLM judge；浏览器 E2E 非主门禁。
+- 架构、文档或代码事实冲突：有轻微同步缺口。文档要求 manifest visualContract 与后端 required visual maps 同步，但现有测试主要做 superset / prompt 示例检查，未做 exact map equality；本轮纳入 sync gate。
+- 工作区冲突：无。
+- 是否需要拆分或合并：不拆。`flow-map` 类型晋级、`STORY_BREAKDOWN` Epic Map 迁移、后端 contract、前端 parser / preview / export、dry-run / sync gate 是同一工程信任闭环；拆开会回到“单类型 / 单测试 / 单 parser”的薄切片。
+
+子智能体 / 旁路审查决策：
+
+- 可用工具：可用。
+- 已派发只读 explorer：`019f4708-439b-76c0-a6c6-825fb33715f6` 审查 `STORY_BREAKDOWN` 视觉路径；`019f4708-9f10-7ad3-9ccd-1a584f47b7ef` 审查 dry-run / sync gate。
+- 审查结论：`flow-map` 当前只在 `plannedComplexTypes`，后端和前端均不支持；`STORY_BREAKDOWN` 四阶段共享 renderer，都会输出 Epic Mermaid flowchart 和 `story-map`；本轮应定义为 `flow-map` 从 planned 到 current 的端到端晋级，并把 Story Breakdown Epic Map 迁移为 `flow-map`。dry-run 还需要补 manifest visualContract 与后端 required visual maps exact match，以及 `flow-map` node / edge shape 检查。
+- 写入策略：子智能体只读，主 Agent 在单工作区串行实现。
+
+边界复核：
+
+- 本轮纳入：`flow-map` 视觉协议晋级；Story Breakdown Epic Map 从 Mermaid `flowchart` 迁移到 `ai4se-visual flow-map`；后端 visual schema / contract / renderer / runtime 证据；前端 structured visual parser、组件、PDF/DOCX 导出、workflow / prompt 测试；dry-run / sync gate 防止 manifest、backend required maps、prompt 示例和 visual shape 漂移。
+- 本轮排除：不实现 `mindmap`、`sequence-flow`、`distribution-chart`；不迁移其他 workflow 的 Mermaid；不新增 Lisa/Alex 专属 runtime、SSE path、store 或 ArtifactPane 分支；不引入 `mmdc` / Chromium 到后端 runtime；不改变 Story Breakdown 的 artifact_data 业务字段契约。
+- 厚度门禁：入口是 Story Breakdown 四阶段共享 artifact_data renderer 和 shared Agent Runtime；动作是生成用户故事拆解包；处理是后端把 Epic 结构渲染为 `flow-map` 并执行 schema gate；可见结果是前端以结构化流程图视图展示并可导出；状态承接是 artifact version / run snapshot / PDF / DOCX 消费同一 fenced block；失败反馈是 unsupported / invalid `flow-map` 会在后端 visual gate 和前端 parser 中显式失败；证据是后端、前端、dry-run 和 New Agents 总门禁。
+
+本轮用户故事：
+
+作为使用 Story Breakdown 拆需求的产品负责人，当我生成用户故事拆解包时，我可以看到由结构化业务数据渲染出的 Epic flow-map，并在预览、导出和恢复中获得同一内容，从而不再依赖模型或后端手写 Mermaid flowchart 来表达 Epic 关系。
+
+自问自答头脑风暴：
+
+- 问：这个能力包真正服务的用户意图是什么？答：让 Story Breakdown 的 Epic Map 成为稳定、结构化、可校验、可导出的业务视觉，而不是一段容易漂移的 Mermaid DSL。
+- 问：哪些相邻缺口必须同轮并入？答：`flow-map` 类型晋级、后端 schema / renderer、manifest visualContract、前端 parser / preview / export、prompt / dry-run 同步门禁必须同轮并入；缺任何一项都会形成假支持。
+- 问：哪些缺口本轮明确不做？答：不迁移其他 Mermaid 类型，不做更大 UI 重构，不把 Epic dependencies 改成强引用业务契约；`epics[].dependencies` 仍作为表格文本保留，`flow-map` 只对可确定的 Goal -> Epic 与可安全识别的 Epic ID 依赖建边。
+- 问：失败时用户或调用方如何知道原因并继续推进？答：后端 `validate_artifact_visual_blocks()` 会拒绝 unsupported / malformed / invalid `flow-map`；前端 `validateStructuredVisualBlocks()` 和 `StructuredVisual` 会显示结构化错误；dry-run 会报告 manifest / backend / prompt shape 漂移。
+- 问：哪些本地验证最接近 CI？答：后端 renderer / contract / runtime / workflow sync 聚焦测试，前端 structuredVisual / component / export / prompt / workflow 聚焦测试，`npm run build`，`./scripts/test/test-local.sh new-agents`；全仓 `all` 若仍受端口 / Chromium 权限阻塞，按环境例外记录。
+
+验收复核：
+
+1. 后端 renderer 测试证明 Story Breakdown 产物包含 `ai4se-visual flow-map`、`nodes/edges`，不再包含 `flowchart TD`。
+2. 后端 contract / runtime 测试证明 `flow-map` 必须使用 node / edge shape，Story Breakdown 四阶段 before-final artifact delta 都包含 `flow-map` 并通过 final contract。
+3. dry-run / workflow sync 测试证明 manifest visualContract 与后端 required visual maps exact match，`flow-map` prompt 示例不能落入 `columns/rows`。
+4. 前端 parser / component / PDF / DOCX 测试证明 `flow-map` 预览和导出均可读，不泄露 raw JSON。
+5. workflow / prompt 测试证明 Story Breakdown 不再宣称 `Mermaid flowchart`，改为 `ai4se-visual flow-map`。
+
+### 2026-07-09 实施计划：复杂视觉演进安全闭环
+
+目标：
+
+- 将 `flow-map` 从 planned complex visual 晋级为 current structured visual，并把 `STORY_BREAKDOWN` Epic Map 由 Mermaid `flowchart` 迁移为 `ai4se-visual flow-map`，同时补齐同步门禁，避免后续 manifest、renderer、prompt、parser、export 漂移。
+
+设计：
+
+- 后端 `flow-map` 使用与 `cause-map` 相近的 node / edge shape：`nodes[]` 必须包含唯一 `id`、非空 `label` 和 `title`；`edges[]` 必须包含非空 `source` / `target` 并引用已存在 node。Story Breakdown renderer 生成 `Goal -> Epic` 主边；如果 Epic 依赖文本能匹配已存在 Epic ID，则生成 Epic dependency edge。
+- 前端把 `flow-map` 作为 flow kind 渲染，不走矩阵表格，不使用 cause-map 的“因果连接”文案；PDF / DOCX 导出投影为节点和连接文本。
+- Sync gate 以 backend required visual maps 和 manifest visualContract exact match 为硬门禁，dry-run 对 `flow-map` 要求 `nodes/edges` 示例，防止被默认 table shape 掩盖。
+
+TDD 步骤：
+
+1. 后端 RED：新增/更新 `test_render_story_breakdown_artifact_data_uses_flow_map_structured_visual_contract`、`flow-map` schema prompt / invalid edge tests、Story Breakdown runtime visual marker tests、manifest visualContract exact match / dry-run shape tests。
+2. 前端 RED：新增 `flow-map` parser、StructuredVisual、PDF、DOCX 测试；更新 workflows / buildSystemPrompt 中 Story Breakdown 的 renderer output 期望。
+3. GREEN：更新 `workflow_manifest.json`、`agent_contracts.py`、`artifact_data_renderers.py`、`new_agents_workflow_dry_run.py`、front structured visual parser / component / export helpers 和 Story Breakdown prompt 示例。
+4. REFACTOR：提取 node-edge visual helper，避免 `cause-map` 与 `flow-map` 分支复制；保持共享 runtime / renderer / UI 管线。
+5. VERIFY：运行后端聚焦测试、前端聚焦测试、frontend build、`./scripts/test/test-local.sh new-agents`；提交前按 playbook 做 CI 等价映射和 `git diff --check`。
+6. COMMIT/PUSH：以一个聚焦提交提交并 push。本轮完成后进入 `结构化失败治理总收口`，不再拆内部批次。
+
+### 2026-07-09 切片记录：复杂视觉演进安全闭环
+
+完成内容：
+
+- `flow-map` 已从 `visualProtocol.structuredVisual.plannedComplexTypes` 晋级到 `currentTypes`，`mindmap`、`sequence-flow`、`distribution-chart` 仍保留在 planned。
+- `STORY_BREAKDOWN` 四阶段的 Epic Map 视觉契约已从 Mermaid `flowchart` 迁移为 `ai4se-visual flow-map`；`SPRINT_PLAN` 同时保留 `story-map`。
+- 后端 contract / runtime / renderer 已支持 `flow-map` node / edge shape，并拒绝 table shape、缺失 node/edge、无效 edge 引用等错误。
+- Story Breakdown artifact renderer 现在由 `epics` 生成 deterministic `flow-map`，由 `user_stories` 生成既有 `story-map`，不再为 Story Breakdown 输出 `flowchart TD`。
+- 前端 structured visual parser、预览组件、PDF 导出、DOCX 导出均支持 `flow-map`，并使用“流程连接”文案而不是 cause-map 的“因果连接”。
+- dry-run / sync gate 已补齐 manifest visualContract 与后端 required visual maps 的 exact match；`flow-map` 示例必须使用 `nodes/edges`，不能落入默认 `columns/rows` table shape。
+- `docs/TESTING.md` 已同步 Story Breakdown 的 flow-map / story-map 测试矩阵和视觉协议说明。
+
+验证结果：
+
+- RED 先行：后端聚焦测试初始新增断言失败 11 个，前端聚焦测试初始新增断言失败 6 个，证明 `flow-map` 晋级、Story Breakdown 迁移、parser/export/dry-run gate 在实现前均未满足。
+- `.venv/bin/python -m py_compile tools/new-agents/backend/agent_contracts.py tools/new-agents/backend/artifact_data_renderers.py scripts/validation/new_agents_workflow_dry_run.py`：通过。
+- 后端聚焦回归：`.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_contracts.py tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_workflow_dry_run.py -q`：`531 passed`。
+- 前端聚焦回归：`npm run test -- src/core/__tests__/structuredVisuals.test.ts src/components/__tests__/StructuredVisual.test.tsx src/core/__tests__/artifactExport.test.ts src/core/__tests__/docxExport.test.ts src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run`：`6 passed / 169 passed`。
+- `npm run build` in `tools/new-agents/frontend`：通过；仅有既有 chunk size warning。
+- `./scripts/test/test-local.sh new-agents`：前端 `51 passed / 851 passed`，后端 `886 passed, 4 deselected`。
+- `git diff --check`：通过。
+
+后续停止点：
+
+- 按用户反馈，本切片完成并提交后不继续启动新实现切片。
+- 下一步先重新定义剩余工作：当前只剩 `结构化失败治理总收口` 方向需要做 completion audit / P2 backlog 收敛 / 文档状态整理；如果审计发现仍有可执行 P1，必须按新的同级厚切片重新命名，不能写内部批次。
+
 ## 每轮验收口径
 
 - 必须先写或更新失败测试，复现目标失败类别。

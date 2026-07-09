@@ -752,7 +752,7 @@ const projectStructuredVisualToWordParagraphs = (source: string): string[] => {
     }
 
     const { visual } = result;
-    if (visual.kind === 'node-edge') {
+    if (visual.kind === 'node-edge' || visual.kind === 'flow') {
         return nodeEdgeVisualParagraphs(visual);
     }
     if (visual.kind === 'timeline') {

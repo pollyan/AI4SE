@@ -195,6 +195,45 @@ describe('docxExport', () => {
         expect(documentXml).not.toContain('```ai4se-visual');
     });
 
+    it('projects flow-map node-edge visuals into readable DOCX content', async () => {
+        const blob = buildDocxPackage([
+            '# Epic 流程图',
+            '',
+            '```ai4se-visual',
+            JSON.stringify({
+                type: 'flow-map',
+                title: 'Epic 流程图',
+                nodes: [
+                    {
+                        id: 'Goal',
+                        label: 'Goal',
+                        title: '产品目标',
+                        description: '提升需求拆分质量',
+                    },
+                    {
+                        id: 'EPIC-001',
+                        label: 'EPIC-001',
+                        title: '用户故事拆解',
+                    },
+                ],
+                edges: [
+                    { source: 'Goal', target: 'EPIC-001', label: '拆解为' },
+                ],
+            }, null, 2),
+            '```',
+        ].join('\n'));
+
+        const entries = await readStoredZipEntries(blob);
+        const documentXml = entries['word/document.xml'];
+
+        expect(documentXml).toContain('结构化可视化：Epic 流程图');
+        expect(documentXml).toContain('节点：');
+        expect(documentXml).toContain('Goal 产品目标：提升需求拆分质量');
+        expect(documentXml).toContain('Goal -&gt; EPIC-001：拆解为');
+        expect(documentXml).not.toContain('&quot;nodes&quot;');
+        expect(documentXml).not.toContain('```ai4se-visual');
+    });
+
     it('projects timeline-map visuals into readable DOCX content', async () => {
         const blob = buildDocxPackage([
             '# 事件时间线',

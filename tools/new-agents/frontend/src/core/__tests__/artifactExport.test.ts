@@ -91,6 +91,40 @@ describe('artifactExport', () => {
         expect(pdf).not.toContain(toUtf16BeHex('"nodes"'));
     });
 
+    it('projects flow-map node-edge visuals into readable PDF text', () => {
+        const pdf = buildPlainTextPdf([
+            '# Epic 流程图',
+            '',
+            '```ai4se-visual',
+            JSON.stringify({
+                type: 'flow-map',
+                title: 'Epic 流程图',
+                nodes: [
+                    {
+                        id: 'Goal',
+                        label: 'Goal',
+                        title: '产品目标',
+                        description: '提升需求拆分质量',
+                    },
+                    {
+                        id: 'EPIC-001',
+                        label: 'EPIC-001',
+                        title: '用户故事拆解',
+                    },
+                ],
+                edges: [
+                    { source: 'Goal', target: 'EPIC-001', label: '拆解为' },
+                ],
+            }, null, 2),
+            '```',
+        ].join('\n'));
+
+        expect(pdf).toContain(toUtf16BeHex('结构化可视化：Epic 流程图'));
+        expect(pdf).toContain(toUtf16BeHex('Goal 产品目标：提升需求拆分质量'));
+        expect(pdf).toContain(toUtf16BeHex('Goal -> EPIC-001：拆解为'));
+        expect(pdf).not.toContain(toUtf16BeHex('"nodes"'));
+    });
+
     it('projects timeline-map visuals into readable PDF text', () => {
         const pdf = buildPlainTextPdf([
             '# 事件时间线',

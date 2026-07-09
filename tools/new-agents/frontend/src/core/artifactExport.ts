@@ -338,7 +338,7 @@ function projectMarkdownToPdfDocument(content: string): PdfProjectedDocument {
                 }
                 const { visual } = visualResult;
                 const startLineIndex = pdfLines.length;
-                if (visual.kind === 'node-edge') {
+                if (visual.kind === 'node-edge' || visual.kind === 'flow') {
                     pdfLines.push(...formatPdfNodeEdgeVisualLines(visual));
                     continue;
                 }

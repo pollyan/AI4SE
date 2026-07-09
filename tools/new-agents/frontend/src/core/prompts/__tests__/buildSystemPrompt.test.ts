@@ -276,7 +276,7 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('图表只允许由后端确定性渲染器生成');
         expect(prompt).toContain('复杂业务图优先使用 ai4se-visual JSON');
         expect(prompt).toContain('timeline-map');
-        expect(prompt).toContain('后续复杂视觉类型：flow-map、mindmap、sequence-flow、distribution-chart');
+        expect(prompt).toContain('后续复杂视觉类型：mindmap、sequence-flow、distribution-chart');
         expect(prompt).not.toContain('Mermaid');
     });
 
@@ -704,9 +704,10 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('lisa_handoff_inputs[] 中 input_type 为“用户故事”时 reference_id 只能引用 user_stories[].story_id 中已定义的用户故事 ID');
         expect(prompt).toContain('user_stories[].story_points 必须是大于等于 1 的整数');
         expect(prompt).toContain('图表 代码块');
+        expect(prompt).toContain('flow-map JSON 代码块');
         expect(prompt).toContain('story-map JSON 代码块');
         expect(prompt).toContain('右侧用户故事拆解包');
-        expect(prompt).toContain('图表 flowchart');
+        expect(prompt).toContain('ai4se-visual flow-map');
         expect(prompt).toContain('ai4se-visual story-map');
         expect(prompt).not.toContain('artifact_update');
         expect(prompt).not.toContain('Mermaid 代码块');
