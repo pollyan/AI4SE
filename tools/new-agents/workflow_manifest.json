@@ -510,6 +510,29 @@
               "cause-map"
             ]
           },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "why_chain[].level 必须唯一，并按 5-Why 链路从直接原因到深层原因排序",
+              "why_chain 至少包含 3 层追问",
+              "cause_evidence.cause_id 必须唯一",
+              "cause_evidence.related_level 只能引用 why_chain[].level 中已定义的追问层级",
+              "fishbone_categories.cause_ids 只能引用 cause_evidence.cause_id 中已定义的原因 ID",
+              "root_cause_conclusions.related_cause_id 只能引用 cause_evidence.cause_id 中已定义的原因 ID",
+              "root_cause_conclusions 至少包含一个 conclusion_type=根本原因",
+              "stage_gate 至少包含一个 checked=true"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格",
+              "Mermaid 代码块",
+              "cause-map JSON 代码块"
+            ],
+            "rendererOutputs": [
+              "右侧故障复盘根因分析",
+              "ai4se-visual cause-map",
+              "Mermaid mindmap"
+            ]
+          },
           "promptTemplateVersion": "2026.06.24.1",
           "regressionSampleIds": [
             "incident-review.root-cause.baseline"

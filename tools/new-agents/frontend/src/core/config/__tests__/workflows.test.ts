@@ -225,6 +225,28 @@ describe('Workflow Configuration', () => {
         expect(strategy?.artifactDataContract?.forbiddenOutputs).toContain('risk-board JSON 代码块');
     });
 
+    it('exposes manifest artifact data contract for INCIDENT REVIEW ROOT CAUSE', () => {
+        const rootCause = WORKFLOWS.INCIDENT_REVIEW.stages.find(stage => stage.id === 'ROOT_CAUSE');
+
+        expect(rootCause?.artifactDataContract?.modelOutputRules).toContain(
+            'why_chain[].level 必须唯一，并按 5-Why 链路从直接原因到深层原因排序',
+        );
+        expect(rootCause?.artifactDataContract?.modelOutputRules).toContain(
+            'cause_evidence.cause_id 必须唯一',
+        );
+        expect(rootCause?.artifactDataContract?.modelOutputRules).toContain(
+            'cause_evidence.related_level 只能引用 why_chain[].level 中已定义的追问层级',
+        );
+        expect(rootCause?.artifactDataContract?.modelOutputRules).toContain(
+            'fishbone_categories.cause_ids 只能引用 cause_evidence.cause_id 中已定义的原因 ID',
+        );
+        expect(rootCause?.artifactDataContract?.modelOutputRules).toContain(
+            'root_cause_conclusions.related_cause_id 只能引用 cause_evidence.cause_id 中已定义的原因 ID',
+        );
+        expect(rootCause?.artifactDataContract?.forbiddenOutputs).toContain('cause-map JSON 代码块');
+        expect(rootCause?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual cause-map');
+    });
+
     it('does not ask TEST DESIGN STRATEGY model to handwrite renderer-owned visuals in artifact data mode', () => {
         const strategy = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'STRATEGY');
 

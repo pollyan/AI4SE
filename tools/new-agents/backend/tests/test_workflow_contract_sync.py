@@ -175,6 +175,32 @@ def test_strategy_artifact_data_contract_manifest_drives_backend_instruction():
     assert "risk-board JSON 代码块" in instruction
 
 
+def test_incident_root_cause_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    instruction = format_artifact_data_contract_instruction(
+        "INCIDENT_REVIEW",
+        "ROOT_CAUSE",
+    )
+    stage = next(
+        stage
+        for stage in _workflow_manifest()["workflows"]["INCIDENT_REVIEW"]["stages"]
+        if stage["id"] == "ROOT_CAUSE"
+    )
+    contract = stage.get("artifactDataContract")
+
+    assert contract is not None
+    assert "why_chain[].level 必须唯一" in instruction
+    assert "cause_evidence.cause_id 必须唯一" in instruction
+    assert "cause_evidence.related_level 只能引用 why_chain[].level" in instruction
+    assert "fishbone_categories.cause_ids 只能引用 cause_evidence.cause_id" in instruction
+    assert "root_cause_conclusions.related_cause_id 只能引用 cause_evidence.cause_id" in instruction
+    assert "why_chain 至少包含 3 层追问" in instruction
+    assert "cause-map JSON 代码块" in instruction
+    assert "ai4se-visual cause-map" in instruction
+    assert "Mermaid mindmap" in instruction
+
+
 def test_workflow_manifest_declares_prompt_template_versions_for_every_stage():
     manifest = _workflow_manifest()
 

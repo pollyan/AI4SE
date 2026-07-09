@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成；前端正式 / partial artifact `ai4se-visual` 写入前校验已完成并全量验证通过；第 8A 轮 `artifact_data` 全阶段 fixture registry 回归门禁已完成并全量验证通过；第 8B 轮 `artifact_data` 字段来源与视觉协议矩阵已完成；第 8C 轮 `TEST_DESIGN/CASES` artifactDataContract manifest 同步已完成；第 8D 轮 `TEST_DESIGN/STRATEGY` artifactDataContract manifest 同步已完成；第 8E 轮 raw JSON strict failure closure 与 before-final delta 门禁收口已完成）
+- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成；前端正式 / partial artifact `ai4se-visual` 写入前校验已完成并全量验证通过；第 8A 轮 `artifact_data` 全阶段 fixture registry 回归门禁已完成并全量验证通过；第 8B 轮 `artifact_data` 字段来源与视觉协议矩阵已完成；第 8C 轮 `TEST_DESIGN/CASES` artifactDataContract manifest 同步已完成；第 8D 轮 `TEST_DESIGN/STRATEGY` artifactDataContract manifest 同步已完成；第 8E 轮 raw JSON strict failure closure 与 before-final delta 门禁收口已完成；第 8F 轮 `INCIDENT_REVIEW/ROOT_CAUSE` artifactDataContract manifest 同步已完成）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -110,6 +110,7 @@
   - 进展：已完成 `IDEA_BRAINSTORM/CONVERGE` 首个 `artifactDataContract` 同步纵切。CONVERGE 的关键 artifact_data 不变量已进入 `workflow_manifest.json`，后端 structured output instruction 和前端 stage prompt 均从 manifest 生成同步约束，并由 backend / frontend 同步测试保护。
   - 进展：第 8C 轮已完成 `TEST_DESIGN/CASES` `artifactDataContract` manifest 同步。CASES 的 `case_statistics` 后端派生、case_id 唯一性、`automation_candidates.case_id` / `coverage_trace.covered_cases` 引用门禁、禁止模型输出 renderer-owned Markdown / `ai4se-visual` 产物等关键约束已进入 manifest，并由 backend instruction sync、runtime instruction 和 frontend prompt tests 保护。第 8C 完成时 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES` 外，其余 23 个阶段尚未迁移。
   - 进展：第 8D 轮已完成 `TEST_DESIGN/STRATEGY` `artifactDataContract` manifest 同步。STRATEGY 的 `risks[].rpn` 后端派生、`QG/R/TS/TP` ID 唯一性、测试点/测试技术/测试分层引用门禁、禁止模型输出 renderer-owned Markdown / Mermaid / risk-board 代码块等关键约束已进入 manifest，并由 backend instruction sync、runtime instruction、renderer validators 和 frontend prompt tests 保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 外，其余 22 个阶段尚未迁移。
+  - 进展：第 8F 轮已完成 `INCIDENT_REVIEW/ROOT_CAUSE` `artifactDataContract` manifest 同步。ROOT_CAUSE 的 5-Why 深度、原因 ID 唯一性、证据 / 鱼骨 / 根因结论引用门禁、禁止模型输出 renderer-owned Markdown / Mermaid / cause-map JSON 等关键约束已进入 manifest，并由 backend instruction sync 和 frontend manifest prompt tests 保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 21 个阶段尚未迁移。
 
 - [ ] 针对高失败阶段做纵切专项修复。（第 4-6 轮）
   - 优先顺序：`IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY`、`IDEA_BRAINSTORM/DIVERGE`。
@@ -1397,6 +1398,62 @@ cd tools/new-agents/frontend && npm run lint
 ```
 
 结果：`40 failed, 182 passed`。失败集中在历史 contract fixture / 派生字段测试预期 / typed diagnostic 预期滞后等既有后端回归缺口；本轮已修复的 artifact-data 输出顺序质量门包含在该套件中并已单独通过。后续目标模式应把这些后端红灯纳入结构化失败治理的下一批 P0 改道候选，而不是继续新增 workflow 能力。
+
+### 2026-07-09 第 8F 轮：INCIDENT_REVIEW ROOT_CAUSE artifactDataContract 同步
+
+触发原因：
+
+- 继续盘点结构化失败治理时，`docs/TESTING.md` 与 `workflow_manifest.json` 均显示 25 个 artifact-data 阶段中只有 3 个阶段完成 `artifactDataContract` manifest sync，剩余 22 个阶段仍由 Pydantic model、renderer tests、runtime instruction 和 artifact contract tests 分散保护。
+- `INCIDENT_REVIEW/ROOT_CAUSE` 已完成 `cause-map` 复杂视觉纵切，具备既有 renderer、visual contract、frontend parser / component 和导出降级证据，适合作为第 7 轮视觉治理与第 8 轮 contract 单源化之间的独立厚切片。
+
+已修复：
+
+- `INCIDENT_REVIEW/ROOT_CAUSE` 新增 `artifactDataContract` manifest 配置，把 5-Why 深度、`cause_evidence.cause_id` 唯一性、`cause_evidence.related_level` / `fishbone_categories.cause_ids` / `root_cause_conclusions.related_cause_id` 引用约束、根本原因结论要求、`stage_gate` 要求、禁止模型手写 Markdown / Mermaid / `cause-map` JSON，以及后端 renderer 负责输出 `ai4se-visual cause-map` / Mermaid `mindmap` 的边界放入单一配置源。
+- 后端 contract sync 测试证明 `format_artifact_data_contract_instruction()` 从 manifest 生成 ROOT_CAUSE 结构化输出约束；前端 workflow 配置测试证明 ROOT_CAUSE 契约已暴露给共享 prompt 注入路径。
+- `docs/TESTING.md` 字段来源矩阵同步更新：已迁入 `artifactDataContract` manifest sync 的阶段从 3 个增加到 4 个，剩余待迁移阶段从 22 个减少到 21 个。
+
+验证：
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -p no:cacheprovider tools/new-agents/backend/tests/test_workflow_contract_sync.py::test_incident_root_cause_artifact_data_contract_manifest_drives_backend_instruction -q
+```
+
+结果：修复前 `1 failed`，失败点为 ROOT_CAUSE `artifactDataContract` 缺失；修复后 `1 passed`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts --run
+```
+
+结果：修复前 `1 failed`，失败点为 ROOT_CAUSE `artifactDataContract` 未暴露；修复后 `20 passed`。
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -p no:cacheprovider tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_incident_root_cause_artifact_data_is_deterministic_and_contract_valid tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_incident_root_cause_artifact_data_rejects_insufficient_why_depth tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_incident_root_cause_artifact_data_rejects_duplicate_cause_id tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_incident_root_cause_artifact_data_rejects_unknown_fishbone_cause_reference tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_incident_root_cause_artifact_data_rejects_unknown_conclusion_cause_reference tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_incident_root_cause_artifact_data_requires_root_cause_conclusion -q
+```
+
+结果：`26 passed`。
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -p no:cacheprovider tools/new-agents/backend/tests/test_agent_runtime.py::test_incident_root_cause_structured_output_instruction_requests_artifact_data_not_markdown tools/new-agents/backend/tests/test_agent_runtime.py::test_runtime_raw_json_stream_turn_renders_incident_root_cause_artifact_data_before_final_output -q
+```
+
+结果：`2 passed`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run
+```
+
+结果：`74 passed`。
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：通过。New Agents Frontend `787 passed`；New Agents Backend `756 passed, 4 deselected`。
+
+残余风险：
+
+- 本轮只迁移 `INCIDENT_REVIEW/ROOT_CAUSE`；当前已完成 `artifactDataContract` manifest sync 的阶段为 `IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE`，其余 21 个 artifact-data 阶段仍待后续纵切迁移。
+- 本轮不新增 backend Mermaid JS parse 或 `mmdc` 渲染门禁；Mermaid 仍是后端 deterministic renderer 的编译目标，视觉强校验门禁仍需后续第 7 / 第 8 轮继续收口。
 
 ## 每轮验收口径
 
