@@ -4,6 +4,7 @@ import {
     parseStructuredVisual,
     validateStructuredVisualBlocks,
 } from '../structuredVisuals';
+import { WORKFLOWS } from '../workflows';
 import { ROOT_CAUSE_TEMPLATE } from '../prompts/incident_review/root_cause';
 
 describe('parseStructuredVisual', () => {
@@ -129,6 +130,7 @@ describe('parseStructuredVisual', () => {
         ['priority-board', '问题优先级看板'],
         ['mvp-map', 'MVP 功能地图'],
         ['roadmap', '产品路线图'],
+        ['story-map', '用户故事地图'],
     ])('parses %s visual blocks through the shared table shape', (type, title) => {
         const result = parseStructuredVisual(JSON.stringify({
             type,
@@ -150,6 +152,37 @@ describe('parseStructuredVisual', () => {
         expect(result.visual.type).toBe(type);
         expect(result.visual.title).toBe(title);
         expect(result.visual.rows[0].cells).toEqual(['关键项', '已识别', '来自阶段产出物']);
+    });
+
+    it('supports every structured visual type required by workflow manifests', () => {
+        const requiredTypes = new Set<string>();
+        Object.values(WORKFLOWS).forEach((workflow) => {
+            workflow.stages.forEach((stage) => {
+                (stage.visualContract?.requiredStructuredVisuals ?? []).forEach((type) => {
+                    requiredTypes.add(type);
+                });
+            });
+        });
+
+        expect(requiredTypes).toContain('story-map');
+        requiredTypes.forEach((type) => {
+            const sample = type === 'cause-map'
+                ? {
+                    type,
+                    nodes: [{ id: 'N-1', label: 'N-1', title: '节点' }],
+                    edges: [],
+                }
+                : {
+                    type,
+                    columns: ['对象', '状态'],
+                    rows: [{ 对象: '关键项', 状态: '已识别' }],
+                };
+            const result = parseStructuredVisual(JSON.stringify(sample));
+
+            expect(result, `${type} should be supported by frontend structured visual parser`).toMatchObject({
+                valid: true,
+            });
+        });
     });
 
     it('parses cause-map visual blocks as node-edge graphs', () => {

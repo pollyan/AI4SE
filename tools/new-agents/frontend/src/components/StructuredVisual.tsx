@@ -18,6 +18,7 @@ const DEFAULT_TITLES: Record<StructuredVisualType, string> = {
     'cause-map': '根因链路图',
     'mvp-map': 'MVP 功能地图',
     'roadmap': '产品路线图',
+    'story-map': '用户故事地图',
 };
 
 export const StructuredVisual: React.FC<StructuredVisualProps> = ({

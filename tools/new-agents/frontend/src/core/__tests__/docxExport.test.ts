@@ -113,6 +113,17 @@ describe('docxExport', () => {
             '```',
             '',
             '```ai4se-visual',
+            JSON.stringify({
+                type: 'story-map',
+                title: '用户故事地图',
+                columns: ['Epic', 'Story', 'Sprint'],
+                rows: [
+                    { Epic: 'EPIC-001', Story: 'US-001 登录', Sprint: 'Sprint 1' },
+                ],
+            }, null, 2),
+            '```',
+            '',
+            '```ai4se-visual',
             '{ broken',
             '```',
         ].join('\n'));
@@ -130,6 +141,10 @@ describe('docxExport', () => {
         expect(documentXml).toContain('RPN');
         expect(documentXml).toContain('登录失败');
         expect(documentXml).toContain('补充异常路径用例');
+        expect(documentXml).toContain('结构化可视化：用户故事地图');
+        expect(documentXml).toContain('EPIC-001');
+        expect(documentXml).toContain('US-001 登录');
+        expect(documentXml).toContain('Sprint 1');
         expect(documentXml).toContain('结构化可视化错误：结构化可视化必须是合法 JSON。');
         expect(documentXml).not.toContain('```mermaid');
         expect(documentXml).not.toContain('```ai4se-visual');

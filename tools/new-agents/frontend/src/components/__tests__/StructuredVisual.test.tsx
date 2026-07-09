@@ -98,6 +98,30 @@ describe('StructuredVisual', () => {
         expect(screen.getByText('验证主价值')).toBeTruthy();
     });
 
+    it('renders story-map JSON with a professional default title', () => {
+        render(
+            <StructuredVisual
+                source={JSON.stringify({
+                    type: 'story-map',
+                    columns: ['Epic', 'Story', '优先级', 'Sprint'],
+                    rows: [
+                        {
+                            Epic: 'EPIC-001 账号体系',
+                            Story: 'US-001 用户登录',
+                            优先级: 'P0',
+                            Sprint: 'Sprint 1',
+                        },
+                    ],
+                })}
+            />
+        );
+
+        expect(screen.getByRole('table', { name: '用户故事地图' })).toBeTruthy();
+        expect(screen.getByText('ai4se-visual · story-map')).toBeTruthy();
+        expect(screen.getByText('EPIC-001 账号体系')).toBeTruthy();
+        expect(screen.getByText('US-001 用户登录')).toBeTruthy();
+    });
+
     it('renders cause-map node-edge JSON as a graph view instead of a table', () => {
         render(
             <StructuredVisual

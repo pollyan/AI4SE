@@ -32,6 +32,17 @@ describe('artifactExport', () => {
                 ],
             }, null, 2),
             '```',
+            '',
+            '```ai4se-visual',
+            JSON.stringify({
+                type: 'story-map',
+                title: '用户故事地图',
+                columns: ['Epic', 'Story', 'Sprint'],
+                rows: [
+                    { Epic: 'EPIC-001', Story: 'US-001 登录', Sprint: 'Sprint 1' },
+                ],
+            }, null, 2),
+            '```',
         ].join('\n'));
 
         expect(pdf).toContain(toUtf16BeHex('Mermaid 图表：timeline'));
@@ -39,6 +50,8 @@ describe('artifactExport', () => {
         expect(pdf).toContain(toUtf16BeHex('09点10分：监控触发告警'));
         expect(pdf).toContain(toUtf16BeHex('结构化可视化：核心风险矩阵'));
         expect(pdf).toContain(toUtf16BeHex('登录失败    80'));
+        expect(pdf).toContain(toUtf16BeHex('结构化可视化：用户故事地图'));
+        expect(pdf).toContain(toUtf16BeHex('EPIC-001    US-001 登录    Sprint 1'));
         expect(pdf).toContain('0.18 0.55 0.95 RG');
         expect(pdf).toContain('0.23 0.38 0.62 RG');
     });

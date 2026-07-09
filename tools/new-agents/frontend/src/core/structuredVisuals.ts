@@ -8,7 +8,8 @@ export type StructuredVisualType =
     | 'priority-board'
     | 'cause-map'
     | 'mvp-map'
-    | 'roadmap';
+    | 'roadmap'
+    | 'story-map';
 
 const SUPPORTED_VISUAL_TYPES: StructuredVisualType[] = [
     'traceability-matrix',
@@ -21,6 +22,7 @@ const SUPPORTED_VISUAL_TYPES: StructuredVisualType[] = [
     'cause-map',
     'mvp-map',
     'roadmap',
+    'story-map',
 ];
 
 export interface MatrixStructuredVisual {

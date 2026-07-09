@@ -180,6 +180,7 @@
   - 约束：每个 visual 类型必须有严格 schema、引用完整性校验、前端渲染组件、导出降级文本和失败诊断。
   - 验收：至少选一个 Mermaid 失败高风险阶段完成纵切迁移，并证明最终 artifact 不含模型手写 Mermaid。
   - 进展：已完成首个复杂图纵切 `INCIDENT_REVIEW/ROOT_CAUSE.cause-map`。该 visual type 已从 `columns/rows` 表格协议迁移为 `nodes/edges`，并覆盖后端 deterministic renderer、后端 contract 校验、前端 parser、前端组件、PDF/DOCX 导出降级和模板同步测试。更广泛的 `flow-map`、`timeline-map`、`mindmap`、`sequence-flow` 等类型仍未迁移。
+  - 进展：已补齐 `STORY_BREAKDOWN` 所需 `story-map` 的前端共享 visual 支持。后端和 manifest 已声明并输出矩阵式 `ai4se-visual story-map`，前端 parser、`StructuredVisual`、PDF 导出和 DOCX 导出已纳入同一 `columns/rows` 协议；当前 manifest `requiredStructuredVisuals` 声明的所有类型均可被前端 parser 识别。
 
 - [ ] 建立视觉渲染强校验门禁。（第 7 轮）
   - 目标：正式 artifact 被呈现为成功、持久化和阶段推进前，必须通过 Mermaid / `ai4se-visual` 视觉校验；若运行时校验暂不能放在 backend，则必须先以 CI / renderer fixture / frontend parse 形成可执行门禁，并在运行时失败时显式诊断。
@@ -187,6 +188,7 @@
   - `ai4se-visual` 校验：JSON 必须合法，`type` 必须受支持，columns / rows / nodes / edges / events 等结构必须完整，引用目标必须存在。
   - 验收：新增测试证明视觉校验失败会显式报错，不产生成功 `agent_turn`、不持久化 artifact、不推进 stage。
   - 进展：已完成前端写入前视觉 gate。`llm.ts` 在 final `agent_turn`、合成 artifact reveal 和真实 `agent_delta` partial 写出 chunk 前统一校验 Mermaid 与 `ai4se-visual`；`structuredVisuals.ts` 复用共享 parser 校验所有 fenced `ai4se-visual` block；`chatService.ts` 将结构化视觉校验失败归类为结构化输出生成失败并保持右侧产物不变。后续仍可补 CI / `mmdc` 渲染门禁和更广泛的 backend 运行时 Mermaid parse。
+  - 进展：已新增前端门禁测试，反向遍历 `WORKFLOWS[*].stages[*].visualContract.requiredStructuredVisuals` 并验证每一种 required `ai4se-visual` 类型都能被共享 parser 接受，防止 manifest/backend 新增 required 类型但前端无法解析。
 
 - [x] 收紧 Mermaid repair 的架构边界。（第 7 轮）
   - 目标：`/api/utils/mermaid/repair` 和前端 retry 只能作为用户显式触发的修复辅助，不能自动替换正式 artifact、不能绕过 contract、不能让失败状态变成成功。
@@ -2641,6 +2643,47 @@ cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workfl
 
 - 本轮只处理 `IDEA_BRAINSTORM/CONVERGE` 当前 payload 内可确定计算的 ICE 评分，不后端派生 idea id、rank、recommended idea、验证实验引用或合并路径引用。
 - 派生字段后端化能力包仍需后续做全量审计，确认是否还有隐藏在当前 payload 内且可确定计算的字段。
+
+### 2026-07-09 切片记录：STORY_BREAKDOWN story-map 前端视觉协议补齐
+
+触发原因：
+
+- 后端 `REQUIRED_ARTIFACT_STRUCTURED_VISUALS` 和 `workflow_manifest.json` 已声明 `STORY_BREAKDOWN/SPRINT_PLAN` 需要 `ai4se-visual story-map`，后端 renderer 也会输出矩阵式 `columns/rows` story-map。
+- 前端 `structuredVisuals.ts` 原本只支持 `traceability-matrix`、`score-matrix`、`risk-board`、`action-board`、`journey-map`、`coverage-map`、`priority-board`、`cause-map`、`mvp-map`、`roadmap`，没有 `story-map`，导致正式产物中的 story-map 会被前端视觉校验拒绝。
+- 子智能体只读审查确认：当前 manifest required structured visual 集合里除 `story-map` 外没有其他前端 parser 不支持的类型；本轮不扩大到 `flow-map`、`timeline-map`、`mindmap`、`sequence-flow` 等新协议。
+
+已修复：
+
+- `StructuredVisualType` 与 `SUPPORTED_VISUAL_TYPES` 增加 `story-map`，复用已有矩阵式 `columns/rows` 协议。
+- `StructuredVisual` 增加 `story-map` 默认标题“用户故事地图”。
+- 增加 frontend parser 反向门禁：遍历 `WORKFLOWS[*].stages[*].visualContract.requiredStructuredVisuals`，确保每个 manifest required 类型都能被共享 parser 支持。
+- 增加 story-map 的前端渲染、PDF 导出和 DOCX 导出测试，证明预览与导出使用同一 parser，不新增专属 runtime、store、API 或渲染管线。
+
+验证：
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/__tests__/structuredVisuals.test.ts src/components/__tests__/StructuredVisual.test.tsx src/core/__tests__/artifactExport.test.ts src/core/__tests__/docxExport.test.ts --run
+```
+
+结果：修复前 `4 failed`，共 5 个断言失败，失败点均为“不支持的结构化可视化类型：story-map”；修复后 `4 passed`，`41 passed`。
+
+```bash
+cd tools/new-agents/frontend && npm run test
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_contracts.py -q -k "structured_visual or story_map or story_breakdown or visual_contract"
+```
+
+结果：分别通过。New Agents Frontend `828 passed`；backend focused visual / contract sync `12 passed, 123 deselected`。
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：通过。New Agents Frontend `828 passed`；New Agents Backend `830 passed, 4 deselected`。
+
+残余风险：
+
+- 本轮只把已由 backend / manifest required 的 `story-map` 纳入前端共享矩阵 visual 协议，不新增非矩阵复杂图 schema。
+- `flow-map`、`timeline-map`、`mindmap`、`sequence-flow`、`distribution-chart` 等复杂视觉类型仍需后续独立切片；backend Mermaid JS parse 或 `mmdc` 渲染门禁也仍未补齐。
 
 ## 每轮验收口径
 
