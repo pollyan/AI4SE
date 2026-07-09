@@ -479,6 +479,42 @@ describe('Workflow Configuration', () => {
         expect(blueprint?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual roadmap');
     });
 
+    it('exposes manifest artifact data contract for STORY BREAKDOWN stages', () => {
+        for (const stage of WORKFLOWS.STORY_BREAKDOWN.stages) {
+            expect(stage.artifactDataContract?.modelOutputRules).toContain(
+                'document_info、input_analysis、epics、user_stories、acceptance_criteria、dependencies、sprint_slices、lisa_handoff_inputs 和 stage_gate 必须齐全；契约外字段会被拒绝',
+            );
+            expect(stage.artifactDataContract?.modelOutputRules).toContain(
+                'input_analysis.target_users、input_analysis.constraints、input_analysis.open_questions、epics[].dependencies、dependencies[].related_story_ids 和 sprint_slices[].story_ids 必须至少包含 1 项',
+            );
+            expect(stage.artifactDataContract?.modelOutputRules).toContain(
+                'epics[].epic_id 必须唯一',
+            );
+            expect(stage.artifactDataContract?.modelOutputRules).toContain(
+                'user_stories[].story_id 必须唯一',
+            );
+            expect(stage.artifactDataContract?.modelOutputRules).toContain(
+                'user_stories[].epic_id 只能引用 epics[].epic_id 中已定义的 Epic ID',
+            );
+            expect(stage.artifactDataContract?.modelOutputRules).toContain(
+                'acceptance_criteria[].story_id 只能引用 user_stories[].story_id 中已定义的用户故事 ID',
+            );
+            expect(stage.artifactDataContract?.modelOutputRules).toContain(
+                'lisa_handoff_inputs[] 中 input_type 为“用户故事”时 reference_id 只能引用 user_stories[].story_id 中已定义的用户故事 ID',
+            );
+            expect(stage.artifactDataContract?.modelOutputRules).toContain(
+                'user_stories[].story_points 必须是大于等于 1 的整数',
+            );
+            expect(stage.artifactDataContract?.forbiddenOutputs).toContain('完整 Markdown 文档');
+            expect(stage.artifactDataContract?.forbiddenOutputs).toContain('Markdown 表格');
+            expect(stage.artifactDataContract?.forbiddenOutputs).toContain('Mermaid 代码块');
+            expect(stage.artifactDataContract?.forbiddenOutputs).toContain('story-map JSON 代码块');
+            expect(stage.artifactDataContract?.rendererOutputs).toContain('右侧用户故事拆解包');
+            expect(stage.artifactDataContract?.rendererOutputs).toContain('Mermaid flowchart');
+            expect(stage.artifactDataContract?.rendererOutputs).toContain('ai4se-visual story-map');
+        }
+    });
+
     it('exposes manifest artifact data contract for TEST DESIGN CLARIFY', () => {
         const clarify = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'CLARIFY');
 

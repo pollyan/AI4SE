@@ -1664,6 +1664,24 @@ def test_story_breakdown_structured_output_instruction_requests_artifact_data_no
     assert "不要输出完整 Markdown" in instruction
 
 
+@pytest.mark.parametrize(
+    "stage_id",
+    ["INPUT_ANALYSIS", "EPIC_MAPPING", "STORY_BACKLOG", "SPRINT_PLAN"],
+)
+def test_story_breakdown_structured_output_instruction_uses_manifest_artifact_data_contract(
+    stage_id,
+):
+    instruction = build_structured_output_instruction(
+        "STORY_BREAKDOWN",
+        stage_id,
+    )
+
+    assert (
+        format_artifact_data_contract_instruction("STORY_BREAKDOWN", stage_id)
+        in instruction
+    )
+
+
 def test_value_persona_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
     prompt = build_raw_json_retry_prompt(
         "原始提示",

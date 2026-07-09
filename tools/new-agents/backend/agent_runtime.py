@@ -721,7 +721,10 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
-def _story_breakdown_artifact_data_instruction(stage_action: str) -> str:
+def _story_breakdown_artifact_data_instruction(
+    stage_id: str,
+    stage_action: str,
+) -> str:
     return """你必须只输出一个 JSON 对象，不要输出 Markdown、解释文字或代码围栏。
 顶层字段只能包含：
 1. "chat"
@@ -747,10 +750,13 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；epics.epic_id、user_stories.story_id、acceptance_criteria.criterion_id、dependencies.dependency_id 和 sprint_slices.sprint_id 必须唯一；user_stories.epic_id 只能引用已存在的 epic_id；acceptance_criteria.story_id、dependencies.related_story_ids 和 sprint_slices.story_ids 只能引用已存在的 story_id；lisa_handoff_inputs 中 input_type 为“用户故事”时 reference_id 必须引用 story_id，input_type 为“验收标准”时 reference_id 必须引用 criterion_id；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 story-map JSON 代码块，后端会负责确定性渲染右侧用户故事拆解包、flowchart 和 ai4se-visual story-map。
+{artifact_data_contract}
 chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
-""".replace("{stage_action}", stage_action)
+""".replace(
+        "{artifact_data_contract}",
+        format_artifact_data_contract_instruction("STORY_BREAKDOWN", stage_id),
+    ).replace("{stage_action}", stage_action)
 
 
 PRD_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
@@ -844,24 +850,27 @@ ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS: dict[tuple[str, str], str] = {
         "STORY_BREAKDOWN",
         "INPUT_ANALYSIS",
     ): _story_breakdown_artifact_data_instruction(
+        "INPUT_ANALYSIS",
         '{"type": "request_next_stage", "target_stage_id": "EPIC_MAPPING"}'
     ),
     (
         "STORY_BREAKDOWN",
         "EPIC_MAPPING",
     ): _story_breakdown_artifact_data_instruction(
+        "EPIC_MAPPING",
         '{"type": "request_next_stage", "target_stage_id": "STORY_BACKLOG"}'
     ),
     (
         "STORY_BREAKDOWN",
         "STORY_BACKLOG",
     ): _story_breakdown_artifact_data_instruction(
+        "STORY_BACKLOG",
         '{"type": "request_next_stage", "target_stage_id": "SPRINT_PLAN"}'
     ),
     (
         "STORY_BREAKDOWN",
         "SPRINT_PLAN",
-    ): _story_breakdown_artifact_data_instruction("null"),
+    ): _story_breakdown_artifact_data_instruction("SPRINT_PLAN", "null"),
     ("PRD_REVIEW", "INVENTORY"): PRD_REVIEW_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION,
     (
         "PRD_REVIEW",

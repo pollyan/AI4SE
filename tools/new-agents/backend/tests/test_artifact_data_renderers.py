@@ -20,6 +20,7 @@ from artifact_data_renderers import (
     ReqReviewArtifactData,
     ReqReviewReportArtifactData,
     StrategyArtifactData,
+    StoryBreakdownArtifactData,
     ValueDiscoveryBlueprintArtifactData,
     ValueDiscoveryElevatorArtifactData,
     ValueDiscoveryJourneyArtifactData,
@@ -252,12 +253,66 @@ def test_render_story_breakdown_artifact_data_outputs_story_package():
 
 
 def test_story_breakdown_artifact_data_rejects_unknown_story_reference():
-    from artifact_data_renderers import StoryBreakdownArtifactData
-
     invalid = copy.deepcopy(VALID_STORY_BREAKDOWN_ARTIFACT_DATA)
     invalid["acceptance_criteria"][0]["story_id"] = "US-404"
 
     with pytest.raises(ValidationError, match="unknown story"):
+        StoryBreakdownArtifactData.model_validate(invalid)
+
+
+@pytest.mark.parametrize(
+    ("case_name", "expected_message"),
+    [
+        ("duplicate_epic_id", "duplicate epic_id"),
+        ("duplicate_story_id", "duplicate story_id"),
+        ("unknown_epic_id", "unknown epic ids"),
+        ("duplicate_criterion_id", "duplicate criterion_id"),
+        ("unknown_dependency_story_id", "dependencies references unknown story ids"),
+        ("unknown_sprint_story_id", "sprint_slices references unknown story ids"),
+        ("unknown_story_handoff_reference", "lisa_handoff_inputs references unknown ids"),
+        (
+            "unknown_criterion_handoff_reference",
+            "lisa_handoff_inputs references unknown ids",
+        ),
+        ("unchecked_stage_gate", "stage_gate must include at least one checked item"),
+        ("invalid_story_points", "greater than or equal to 1"),
+        ("extra_field", "Extra inputs are not permitted"),
+    ],
+)
+def test_story_breakdown_artifact_data_rejects_contract_violations(
+    case_name,
+    expected_message,
+):
+    invalid = copy.deepcopy(VALID_STORY_BREAKDOWN_ARTIFACT_DATA)
+
+    if case_name == "duplicate_epic_id":
+        invalid["epics"].append(copy.deepcopy(invalid["epics"][0]))
+    elif case_name == "duplicate_story_id":
+        invalid["user_stories"][1]["story_id"] = "US-001"
+    elif case_name == "unknown_epic_id":
+        invalid["user_stories"][0]["epic_id"] = "EPIC-404"
+    elif case_name == "duplicate_criterion_id":
+        invalid["acceptance_criteria"].append(
+            copy.deepcopy(invalid["acceptance_criteria"][0])
+        )
+    elif case_name == "unknown_dependency_story_id":
+        invalid["dependencies"][0]["related_story_ids"] = ["US-404"]
+    elif case_name == "unknown_sprint_story_id":
+        invalid["sprint_slices"][0]["story_ids"] = ["US-404"]
+    elif case_name == "unknown_story_handoff_reference":
+        invalid["lisa_handoff_inputs"][0]["reference_id"] = "US-404"
+    elif case_name == "unknown_criterion_handoff_reference":
+        invalid["lisa_handoff_inputs"][1]["reference_id"] = "AC-404"
+    elif case_name == "unchecked_stage_gate":
+        invalid["stage_gate"] = [{"checked": False, "item": "仍需确认"}]
+    elif case_name == "invalid_story_points":
+        invalid["user_stories"][0]["story_points"] = 0
+    elif case_name == "extra_field":
+        invalid["unexpected"] = "not allowed"
+    else:
+        raise AssertionError(f"Unhandled case: {case_name}")
+
+    with pytest.raises(ValidationError, match=expected_message):
         StoryBreakdownArtifactData.model_validate(invalid)
 
 

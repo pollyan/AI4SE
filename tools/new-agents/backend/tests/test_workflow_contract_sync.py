@@ -583,6 +583,70 @@ def test_value_blueprint_artifact_data_contract_manifest_drives_backend_instruct
     assert "ai4se-visual roadmap" in instruction
 
 
+def test_story_breakdown_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    workflow = _workflow_manifest()["workflows"]["STORY_BREAKDOWN"]
+
+    for stage in workflow["stages"]:
+        instruction = format_artifact_data_contract_instruction(
+            "STORY_BREAKDOWN",
+            stage["id"],
+        )
+        contract = stage.get("artifactDataContract")
+
+        assert contract is not None, f"STORY_BREAKDOWN/{stage['id']} missing contract"
+        assert (
+            "document_info、input_analysis、epics、user_stories、acceptance_criteria、"
+            "dependencies、sprint_slices、lisa_handoff_inputs 和 stage_gate 必须齐全；"
+            "契约外字段会被拒绝"
+        ) in instruction
+        assert (
+            "input_analysis.target_users、input_analysis.constraints、"
+            "input_analysis.open_questions、epics[].dependencies、"
+            "dependencies[].related_story_ids 和 sprint_slices[].story_ids "
+            "必须至少包含 1 项"
+        ) in instruction
+        assert "epics[].epic_id 必须唯一" in instruction
+        assert "user_stories[].story_id 必须唯一" in instruction
+        assert (
+            "user_stories[].epic_id 只能引用 epics[].epic_id 中已定义的 Epic ID"
+            in instruction
+        )
+        assert "acceptance_criteria[].criterion_id 必须唯一" in instruction
+        assert (
+            "acceptance_criteria[].story_id 只能引用 user_stories[].story_id "
+            "中已定义的用户故事 ID"
+        ) in instruction
+        assert "dependencies[].dependency_id 必须唯一" in instruction
+        assert (
+            "dependencies[].related_story_ids 只能引用 user_stories[].story_id "
+            "中已定义的用户故事 ID"
+        ) in instruction
+        assert "sprint_slices[].sprint_id 必须唯一" in instruction
+        assert (
+            "sprint_slices[].story_ids 只能引用 user_stories[].story_id "
+            "中已定义的用户故事 ID"
+        ) in instruction
+        assert (
+            "lisa_handoff_inputs[] 中 input_type 为“用户故事”时 reference_id "
+            "只能引用 user_stories[].story_id 中已定义的用户故事 ID"
+        ) in instruction
+        assert (
+            "lisa_handoff_inputs[] 中 input_type 为“验收标准”时 reference_id "
+            "只能引用 acceptance_criteria[].criterion_id 中已定义的验收标准 ID"
+        ) in instruction
+        assert "user_stories[].story_points 必须是大于等于 1 的整数" in instruction
+        assert "stage_gate 至少包含一个 checked=true" in instruction
+        assert "完整 Markdown 文档" in instruction
+        assert "Markdown 表格" in instruction
+        assert "Mermaid 代码块" in instruction
+        assert "story-map JSON 代码块" in instruction
+        assert "右侧用户故事拆解包" in instruction
+        assert "Mermaid flowchart" in instruction
+        assert "ai4se-visual story-map" in instruction
+
+
 def test_workflow_manifest_declares_prompt_template_versions_for_every_stage():
     manifest = _workflow_manifest()
 

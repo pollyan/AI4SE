@@ -591,6 +591,42 @@ describe('buildSystemPrompt', () => {
         expect(prompt).not.toContain('必须提供完整、全部的 Markdown 文档内容');
     });
 
+    it.each([
+        ['INPUT_ANALYSIS', 0],
+        ['EPIC_MAPPING', 1],
+        ['STORY_BACKLOG', 2],
+        ['SPRINT_PLAN', 3],
+    ])('injects STORY BREAKDOWN %s artifact data contract from the manifest', (stageId, stageIndex) => {
+        const prompt = buildSystemPrompt({
+            agentId: 'alex',
+            workflow: 'STORY_BREAKDOWN',
+            stageIndex,
+            currentArtifact: '# 用户故事拆解包\n已有内容',
+        });
+
+        const epicRule = 'epics[].epic_id 必须唯一';
+        expect(prompt).toContain('【artifact_data 结构化契约】');
+        expect(prompt).toContain('document_info、input_analysis、epics、user_stories、acceptance_criteria、dependencies、sprint_slices、lisa_handoff_inputs 和 stage_gate 必须齐全；契约外字段会被拒绝');
+        expect(prompt).toContain('input_analysis.target_users、input_analysis.constraints、input_analysis.open_questions、epics[].dependencies、dependencies[].related_story_ids 和 sprint_slices[].story_ids 必须至少包含 1 项');
+        expect(prompt).toContain(epicRule);
+        expect(prompt).toContain('user_stories[].story_id 必须唯一');
+        expect(prompt).toContain('user_stories[].epic_id 只能引用 epics[].epic_id 中已定义的 Epic ID');
+        expect(prompt).toContain('acceptance_criteria[].story_id 只能引用 user_stories[].story_id 中已定义的用户故事 ID');
+        expect(prompt).toContain('lisa_handoff_inputs[] 中 input_type 为“用户故事”时 reference_id 只能引用 user_stories[].story_id 中已定义的用户故事 ID');
+        expect(prompt).toContain('user_stories[].story_points 必须是大于等于 1 的整数');
+        expect(prompt).toContain('图表 代码块');
+        expect(prompt).toContain('story-map JSON 代码块');
+        expect(prompt).toContain('右侧用户故事拆解包');
+        expect(prompt).toContain('图表 flowchart');
+        expect(prompt).toContain('ai4se-visual story-map');
+        expect(prompt).not.toContain('artifact_update');
+        expect(prompt).not.toContain('Mermaid 代码块');
+        expect(prompt).not.toContain('必须提供完整、全部的 Markdown 文档内容');
+        const epicRuleMatches = prompt.match(new RegExp(epicRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
+        expect(epicRuleMatches).toHaveLength(1);
+        expect(WORKFLOWS.STORY_BREAKDOWN.stages[stageIndex].id).toBe(stageId);
+    });
+
     it('keeps next-stage confirmation separate from next-stage artifact generation', () => {
         const prompt = buildSystemPrompt({
             agentId: 'lisa',
