@@ -264,6 +264,13 @@ def get_derived_artifact_data_field_policies() -> tuple[dict[str, Any], ...]:
     return DERIVED_ARTIFACT_DATA_FIELD_POLICIES
 
 
+def get_visual_protocol() -> dict[str, Any]:
+    protocol = load_workflow_manifest().get("visualProtocol")
+    if not isinstance(protocol, dict):
+        raise ValueError("workflow manifest 缺少 visualProtocol 对象")
+    return protocol
+
+
 def _string_list(
     value: Any,
     field_name: str,
@@ -290,6 +297,90 @@ def _join_with_final_separator(items: list[str], final_separator: str) -> str:
     if len(items) == 1:
         return items[0]
     return "、".join(items[:-1]) + final_separator + items[-1]
+
+
+def _visual_protocol_string_list(
+    protocol_section: dict[str, Any],
+    field_name: str,
+) -> list[str]:
+    value = protocol_section.get(field_name)
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"visualProtocol.{field_name} 必须是非空字符串数组")
+    result: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"visualProtocol.{field_name} 包含空值")
+        result.append(item.strip())
+    return result
+
+
+def format_visual_protocol_instruction() -> str:
+    protocol = get_visual_protocol()
+    model_output = protocol.get("modelOutput")
+    mermaid = protocol.get("mermaid")
+    structured_visual = protocol.get("structuredVisual")
+    if not isinstance(model_output, dict):
+        raise ValueError("visualProtocol.modelOutput 必须是对象")
+    if not isinstance(mermaid, dict):
+        raise ValueError("visualProtocol.mermaid 必须是对象")
+    if not isinstance(structured_visual, dict):
+        raise ValueError("visualProtocol.structuredVisual 必须是对象")
+    if model_output.get("mode") != "artifact_data_only":
+        raise ValueError("visualProtocol.modelOutput.mode 必须是 artifact_data_only")
+    if mermaid.get("source") != "backend_deterministic_renderer":
+        raise ValueError("visualProtocol.mermaid.source 必须是 backend_deterministic_renderer")
+    if structured_visual.get("source") != "backend_deterministic_renderer":
+        raise ValueError(
+            "visualProtocol.structuredVisual.source 必须是 "
+            "backend_deterministic_renderer"
+        )
+    if structured_visual.get("primaryForComplexBusinessVisuals") is not True:
+        raise ValueError(
+            "visualProtocol.structuredVisual.primaryForComplexBusinessVisuals "
+            "必须为 true"
+        )
+
+    forbidden_dsl_outputs = _visual_protocol_string_list(
+        model_output,
+        "forbiddenDslOutputs",
+    )
+    forbidden_direct_outputs = _visual_protocol_string_list(
+        model_output,
+        "forbiddenDirectVisualOutputs",
+    )
+    allowed_mermaid_types = _visual_protocol_string_list(
+        mermaid,
+        "allowedGeneratedDiagramTypes",
+    )
+    current_structured_types = _visual_protocol_string_list(
+        structured_visual,
+        "currentTypes",
+    )
+    planned_complex_types = _visual_protocol_string_list(
+        structured_visual,
+        "plannedComplexTypes",
+    )
+    forbidden_dsl_labels = [
+        item.removesuffix(" 代码块")
+        for item in forbidden_dsl_outputs
+    ]
+
+    return (
+        "【视觉产物协议】"
+        "模型只输出 artifact_data 结构化业务数据，不输出右侧成品 Markdown "
+        "或可视化代码；禁止输出"
+        + "、".join(forbidden_dsl_labels)
+        + " 代码块"
+        + "；同时禁止输出 "
+        + "、".join(forbidden_direct_outputs)
+        + "；Mermaid 只允许由后端确定性渲染器生成，当前允许的后端生成图表类型为 "
+        + "、".join(allowed_mermaid_types)
+        + "；复杂业务图优先使用 ai4se-visual JSON，当前支持类型为 "
+        + "、".join(current_structured_types)
+        + "；后续复杂视觉类型包括 "
+        + "、".join(planned_complex_types)
+        + "。"
+    )
 
 
 def format_artifact_data_contract_instruction(

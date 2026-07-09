@@ -260,6 +260,25 @@ describe('buildSystemPrompt', () => {
         expect(rpnRuleMatches).toHaveLength(1);
     });
 
+    it('injects shared visual protocol layering for artifact data stages', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'alex',
+            workflow: 'VALUE_DISCOVERY',
+            stageIndex: 2,
+            currentArtifact: '# 用户旅程分析\n\n```mermaid\njourney\n```',
+        });
+
+        expect(prompt).toContain('【视觉产物协议】');
+        expect(prompt).toContain('模型只输出 artifact_data 结构化业务数据');
+        expect(prompt).toContain('文本图 DSL 代码块');
+        expect(prompt).toContain('D2 代码块、Graphviz DOT 代码块、PlantUML 代码块');
+        expect(prompt).toContain('完整 Markdown 文档、Markdown 表格、ai4se-visual JSON 代码块');
+        expect(prompt).toContain('图表只允许由后端确定性渲染器生成');
+        expect(prompt).toContain('复杂业务图优先使用 ai4se-visual JSON');
+        expect(prompt).toContain('flow-map、timeline-map、mindmap、sequence-flow、distribution-chart');
+        expect(prompt).not.toContain('Mermaid');
+    });
+
     it('injects TEST DESIGN CLARIFY artifact data contract from the manifest', () => {
         const prompt = buildSystemPrompt({
             agentId: 'lisa',

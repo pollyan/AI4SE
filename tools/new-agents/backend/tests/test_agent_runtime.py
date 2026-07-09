@@ -70,6 +70,18 @@ def test_artifact_data_structured_output_instruction_puts_artifact_data_before_c
     assert instruction.index('{\n  "artifact_data"') < instruction.index('\n  "chat"')
 
 
+def test_artifact_data_structured_output_instruction_injects_visual_protocol():
+    instruction = build_structured_output_instruction("VALUE_DISCOVERY", "JOURNEY")
+
+    assert "【视觉产物协议】" in instruction
+    assert "模型只输出 artifact_data 结构化业务数据" in instruction
+    assert "Mermaid、D2、Graphviz DOT、PlantUML 代码块" in instruction
+    assert "完整 Markdown 文档、Markdown 表格、ai4se-visual JSON 代码块" in instruction
+    assert "Mermaid 只允许由后端确定性渲染器生成" in instruction
+    assert "复杂业务图优先使用 ai4se-visual JSON" in instruction
+    assert "flow-map、timeline-map、mindmap、sequence-flow、distribution-chart" in instruction
+
+
 def _raw_json_chunks_after_artifact_data_members(
     final_json: str,
     member_names: list[str],
@@ -707,7 +719,7 @@ def test_strategy_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite()
     assert "artifact_data" in prompt
     assert "risks.0.rpn" in prompt
     assert "不要输出 Markdown 文档" in prompt
-    assert "Mermaid 代码块或表格" in prompt
+    assert "Mermaid、D2、Graphviz DOT、PlantUML 代码块或表格" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
 
@@ -805,7 +817,7 @@ def test_cases_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
     assert "artifact_data" in prompt
     assert "coverage_trace.0.covered_cases" in prompt
     assert "不要输出 Markdown 文档" in prompt
-    assert "Mermaid 代码块或表格" in prompt
+    assert "Mermaid、D2、Graphviz DOT、PlantUML 代码块或表格" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
 
@@ -915,7 +927,7 @@ def test_delivery_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite()
     assert "artifact_data" in prompt
     assert "delivery_metrics.total_cases" in prompt
     assert "不要输出 Markdown 文档" in prompt
-    assert "Mermaid 代码块或表格" in prompt
+    assert "Mermaid、D2、Graphviz DOT、PlantUML 代码块或表格" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
 
@@ -1034,7 +1046,7 @@ def test_req_review_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite
     assert "artifact_data" in prompt
     assert "issue_statistics.p0_count" in prompt
     assert "不要输出 Markdown 文档" in prompt
-    assert "Mermaid 代码块或表格" in prompt
+    assert "Mermaid、D2、Graphviz DOT、PlantUML 代码块或表格" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
 
@@ -1131,7 +1143,7 @@ def test_req_review_report_retry_prompt_requests_artifact_data_fix_not_markdown_
     assert "artifact_data" in prompt
     assert "issue_statistics.p0_count" in prompt
     assert "不要输出 Markdown 文档" in prompt
-    assert "Mermaid 代码块或表格" in prompt
+    assert "Mermaid、D2、Graphviz DOT、PlantUML 代码块或表格" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
 

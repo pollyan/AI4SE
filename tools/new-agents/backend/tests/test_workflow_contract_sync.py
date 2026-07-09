@@ -102,6 +102,56 @@ def test_shared_workflow_manifest_stage_keys_match_frontend_prompt_templates():
     assert manifest_stage_keys == set(FRONTEND_PROMPT_FILES)
 
 
+def test_shared_visual_protocol_declares_layering_policy():
+    from workflow_manifest import format_visual_protocol_instruction
+
+    manifest = _workflow_manifest()
+    protocol = manifest["visualProtocol"]
+    required_mermaid_types = {
+        diagram_type
+        for diagram_types in REQUIRED_ARTIFACT_MERMAID_DIAGRAMS.values()
+        for diagram_type in diagram_types
+    }
+    required_structured_visual_types = {
+        visual_type
+        for visual_types in REQUIRED_ARTIFACT_STRUCTURED_VISUALS.values()
+        for visual_type in visual_types
+    }
+
+    assert protocol["modelOutput"]["mode"] == "artifact_data_only"
+    assert protocol["modelOutput"]["forbiddenDslOutputs"] == [
+        "Mermaid 代码块",
+        "D2 代码块",
+        "Graphviz DOT 代码块",
+        "PlantUML 代码块",
+    ]
+    assert protocol["modelOutput"]["forbiddenDirectVisualOutputs"] == [
+        "完整 Markdown 文档",
+        "Markdown 表格",
+        "ai4se-visual JSON 代码块",
+    ]
+    assert protocol["mermaid"]["source"] == "backend_deterministic_renderer"
+    assert set(protocol["mermaid"]["allowedGeneratedDiagramTypes"]) >= required_mermaid_types
+    assert protocol["structuredVisual"]["source"] == "backend_deterministic_renderer"
+    assert protocol["structuredVisual"]["primaryForComplexBusinessVisuals"] is True
+    assert set(protocol["structuredVisual"]["currentTypes"]) >= required_structured_visual_types
+    assert set(protocol["structuredVisual"]["plannedComplexTypes"]) >= {
+        "flow-map",
+        "timeline-map",
+        "mindmap",
+        "sequence-flow",
+        "distribution-chart",
+    }
+
+    instruction = format_visual_protocol_instruction()
+    assert "视觉产物协议" in instruction
+    assert "模型只输出 artifact_data 结构化业务数据" in instruction
+    assert "Mermaid、D2、Graphviz DOT、PlantUML 代码块" in instruction
+    assert "完整 Markdown 文档、Markdown 表格、ai4se-visual JSON 代码块" in instruction
+    assert "Mermaid 只允许由后端确定性渲染器生成" in instruction
+    assert "复杂业务图优先使用 ai4se-visual JSON" in instruction
+
+
 def test_professional_method_registry_has_required_fields():
     methods = _professional_methods()["methods"]
 

@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化已新增 `TEST_DESIGN/DELIVERY` 统计字段、`REQ_REVIEW` 问题统计、`INCIDENT_REVIEW/IMPROVEMENT` 行动统计、`IDEA_BRAINSTORM/CONVERGE` ICE 评分 / 排名、`TEST_DESIGN/CASES` / `REQ_REVIEW/REVIEW` 分组内维度派生纵切，以及 `STORY_BREAKDOWN` story sprint 派生纵切；映射一致性已新增 `INCIDENT_REVIEW/IMPROVEMENT` root cause/action 精确映射门禁。后续未完成治理仍集中在 5 个能力包：派生字段后端化、ID 收敛、视觉协议分层、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
+- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化已新增 `TEST_DESIGN/DELIVERY` 统计字段、`REQ_REVIEW` 问题统计、`INCIDENT_REVIEW/IMPROVEMENT` 行动统计、`IDEA_BRAINSTORM/CONVERGE` ICE 评分 / 排名、`TEST_DESIGN/CASES` / `REQ_REVIEW/REVIEW` 分组内维度派生纵切，以及 `STORY_BREAKDOWN` story sprint 派生纵切；映射一致性已新增 `INCIDENT_REVIEW/IMPROVEMENT` root cause/action 精确映射门禁；视觉协议分层已新增 manifest 顶层 `visualProtocol` 并接入后端 runtime / 前端 system prompt。后续未完成治理仍集中在 4 个能力包：派生字段后端化、ID 收敛、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -177,10 +177,11 @@
   - 进展：已新增 `TEST_DESIGN/CLARIFY` 与 `TEST_DESIGN/DELIVERY` 的 backend manifest contract sync、frontend manifest 配置和 frontend prompt 注入回归测试；相关 CLARIFY / DELIVERY renderer、runtime raw JSON streaming 和视觉 contract 测试继续作为聚焦验证范围。
   - 进展：已新增 `REQ_REVIEW/REVIEW` 与 `REQ_REVIEW/REPORT` 的 backend manifest contract sync、frontend manifest 配置和 frontend prompt 注入回归测试；相关 REVIEW / REPORT renderer、issue statistics consistency、runtime raw JSON streaming 和视觉 contract 测试继续作为聚焦验证范围。
 
-- [ ] 建立视觉产物协议分层。（第 7 轮）
+- [x] 建立视觉产物协议分层。（第 7 轮）
   - 目标：明确哪些视觉类型必须走 `ai4se-visual` JSON，哪些 Mermaid 类型允许由后端 deterministic renderer 生成，哪些 DSL 禁止模型直接输出。
   - 初始策略：复杂图和业务图默认走 `ai4se-visual`；Mermaid 只允许作为后端从结构化数据生成的简单图编译目标；不引入 D2、Graphviz 或 PlantUML 作为运行时主协议，除非后续有单独架构批准。
   - 验收：`workflow_manifest.json`、`agent_contracts.py`、structured output instruction 和前端模板对每个在线阶段的视觉协议一致。
+  - 进展：已完成共享视觉协议分层切片。`workflow_manifest.json` 顶层新增 `visualProtocol`，声明模型只输出 `artifact_data`、Mermaid 只允许后端 deterministic renderer 生成、复杂业务图优先 `ai4se-visual`，并禁止模型直接输出 Mermaid / D2 / Graphviz DOT / PlantUML 代码块。后端 `format_visual_protocol_instruction()` 和 `build_structured_output_instruction()` 会对所有 artifact-data 阶段注入同一协议；前端 `buildSystemPrompt()` 从同一 manifest 字段注入已脱敏的视觉协议文案，继续避免把 Mermaid 手写要求暴露给模型。
 
 - [ ] 扩展 `ai4se-visual` 类型覆盖复杂图。（第 7 轮）
   - 目标：在现有 `score-matrix`、`coverage-map`、`journey-map` 等表格类视觉之外，补齐 `flow-map`、`timeline-map`、`mindmap`、`sequence-flow`、`distribution-chart` 等数据结构，使复杂图不再依赖模型手写 Mermaid。
@@ -2977,6 +2978,89 @@ git diff --check
 - 本轮只治理 `STORY_BREAKDOWN` 的 story sprint / sprint slice 双向映射，不后端生成 `story_id`、`sprint_id`，也不改变 Epic / Criterion / Dependency / Lisa handoff 引用语义。
 - `VALUE_DISCOVERY/JOURNEY` pain / opportunity 成对映射仍是 P2 候选；当前没有证据表明它造成高失败或必须并入 P1 派生字段收口。
 - 视觉协议分层、复杂 `ai4se-visual` 类型扩展和后端 / CI 视觉渲染强校验仍未在本轮处理。
+
+### 2026-07-09 切片记录：共享视觉产物协议分层
+
+目标承接检查：
+
+- 事实源：已重新读取 `AGENTS.md`、`docs/strategy/goal-mode-playbook.md`、`docs/index.md`、`docs/ARCHITECTURE.md`、`docs/TESTING.md`、本 todo、`workflow_manifest.json`、后端 `agent_contracts.py` / `workflow_manifest.py` / `agent_runtime.py`、前端 `workflowRegistry.ts` / `types.ts` / `buildSystemPrompt.ts` 和相关同步测试。
+- 工作区：本轮开始时 `master...origin/master` 干净；本切片只触达 New Agents 共享配置、runtime/prompt 注入、同步测试和文档。
+- 改道条件：没有新的 P0/P1 阻断测试失败；Alex handoff 路线已完成，不回开 Lisa/Alex handoff 设计。
+- 子智能体：已派发只读 explorer `019f4658-152d-7580-9e97-b921dd41f9e1` 审查视觉协议现状。结论是当前只有阶段级 `visualContract` required lists 和分散 `artifactDataContract.forbiddenOutputs`，没有顶层 `visualProtocol`、没有 unified allowed Mermaid source / forbidden DSL / planned complex visual source；建议本轮只做协议来源与模型禁止输出，不扩大到 renderer 重构。
+
+本轮设计：
+
+- 选择方案：新增 manifest 顶层 `visualProtocol` 作为共享视觉协议源；阶段级 `visualContract` 继续只表达 required Mermaid / required structured visual 的存在性。
+- 注入位置：后端 `build_structured_output_instruction()` 对所有 artifact-data 阶段追加 `format_visual_protocol_instruction()`；前端 `buildSystemPrompt()` 从同一 manifest 字段追加视觉协议，并继续把 `Mermaid` 字样脱敏为“图表”，避免模型提示回退到手写 Mermaid。
+- 不纳入本轮：不改 `StructuredVisual` 渲染组件，不迁移 `flow-map` / `timeline-map` / `mindmap` / `sequence-flow` 等复杂类型，不新增 backend Mermaid JS parse / `mmdc` 门禁，不把 `rendererOutputs` 与 `visualContract` 精确一致作为本轮强约束。
+
+已修复：
+
+- `workflow_manifest.json` 顶层新增 `visualProtocol`：声明模型只输出 `artifact_data`，禁止 Mermaid / D2 / Graphviz DOT / PlantUML 代码块，Mermaid 只允许由后端 deterministic renderer 生成，复杂业务图优先 `ai4se-visual`，并列出当前类型和后续复杂类型。
+- 后端 `workflow_manifest.py` 新增 `get_visual_protocol()` 和 `format_visual_protocol_instruction()`，并校验协议结构与来源字段。
+- 后端 `agent_runtime.py` 对 artifact-data 结构化输出说明追加视觉协议；结构化失败 retry prompt 同步禁止 Mermaid / D2 / Graphviz DOT / PlantUML。
+- 前端 `types.ts` / `workflowRegistry.ts` 类型化暴露 `visualProtocol`。
+- 前端 `buildSystemPrompt.ts` 从 manifest 注入共享视觉协议，所有 artifact-data 阶段共享同一模型输出边界。
+- 新增后端 / 前端红绿测试，覆盖 manifest 协议、后端 runtime 注入、前端 manifest 暴露和前端 prompt 注入；测试同时锁定模型不得输出完整 Markdown 文档、Markdown 表格或 `ai4se-visual` JSON 代码块。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py -q -k visual_protocol
+```
+
+结果：修复前 `1 failed, 38 deselected`，失败点为缺少 `format_visual_protocol_instruction()`；修复后 `1 passed, 38 deselected`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py -q -k visual_protocol
+```
+
+结果：修复前 `1 failed, 218 deselected`，失败点为 artifact-data structured output instruction 未注入视觉协议；修复后 `1 passed, 218 deselected`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run -t "visual protocol"
+```
+
+结果：修复前 `2 failed, 114 skipped`，失败点为 manifest 缺 `visualProtocol` 且 system prompt 未注入视觉协议；修复后 `2 passed, 114 skipped`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_agent_runtime.py -q -k "visual_protocol or artifact_data_structured_output_instruction_puts_artifact_data_before_chat_for_visible_streaming or structured_output_instruction_omits or artifact_data_contract"
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run
+git diff --check
+./scripts/test/test-local.sh new-agents
+```
+
+结果：后端协议 / artifact-data 聚焦回归 `70 passed, 188 deselected`；前端 manifest / prompt 同步测试 `116 passed`；`git diff --check` 通过；New Agents Frontend `832 passed`，New Agents Backend `854 passed, 4 deselected`。
+
+```bash
+./scripts/test/test-local.sh all
+```
+
+结果：未形成完整通过结论。已通过部分包括 Intent Tester API `294 passed`、flake8 严重错误检查、Common Frontend lint/build、New Agents Frontend `832 passed`、New Agents Backend `854 passed, 4 deselected`。阻塞点仍是本地全量环境问题：MidScene proxy 在当前沙箱下因 `listen EPERM: operation not permitted 0.0.0.0:3002` 失败；New Agents Browser E2E 在 Playwright / Chromium 检查阶段卡住后被中断。本轮 New Agents 相关验证已用 `./scripts/test/test-local.sh new-agents` 完整覆盖。
+
+残余风险：
+
+- 旁路审查识别 `PRD_REVIEW/COMPLETION_PLAN` 存在 `rendererOutputs` 声明 `roadmap` 但阶段级 `visualContract.requiredStructuredVisuals` 只要求 `action-board` 的不一致信号；本轮不裁决“所有 rendererOutputs 是否必须 required”，后续可并入视觉强校验或协议深化切片。
+- 本轮只建立视觉协议来源与模型输出边界，不提供新的复杂 `ai4se-visual` 类型实现。
+- 后端 / CI 仍未执行 Mermaid JS parse 或 `mmdc` SVG 渲染门禁，仍属于后续“视觉渲染强校验”能力包。
+
+## 后续厚切片重定义
+
+2026-07-09 用户反馈：当前切片过薄，投入时间较长但进展体感不明显。本轮视觉协议分层提交后停止继续实现，后续先重新定义剩余工作和切片边界。
+
+新的切片原则：
+
+- 不允许“内部批次”。如果一个切片过大，直接拆成多个同级切片；每个切片都必须有独立目标、验收、验证命令、提交和 push 边界。
+- 后续切片优先按“用户可见的端到端价值”定义，而不是按单个字段、单个测试或单个配置点定义。
+- 默认把剩余工作收敛为更厚的 3 个候选切片，启动前再做一次事实复核和范围确认。
+
+候选厚切片：
+
+| 候选切片 | 覆盖范围 | 交付边界 |
+|---|---|---|
+| 复杂视觉端到端迁移 | 从一个高风险 Mermaid 场景开始，落地 `timeline-map` / `flow-map` / `mindmap` / `sequence-flow` 等复杂 `ai4se-visual` 类型之一 | schema、后端 deterministic renderer、前端组件 / parser、导出降级、manifest 视觉声明、失败诊断和回归测试一次收口；用户能看到复杂图不再依赖模型手写 Mermaid。 |
+| 视觉成功门禁端到端 | Mermaid / `ai4se-visual` 在正式 artifact 成功、持久化和阶段推进前的可执行校验 | 至少形成 CI / renderer fixture / 前端 parse 或 backend 可执行门禁；失败必须显式诊断，不产生成功 `agent_turn`、不持久化 artifact、不推进 stage。 |
+| 结构化一致性收口审计 | 派生字段后端化、ID 收敛和引用一致性的剩余候选统一复核 | 明确剩余 P1 是否为 0；若仍有 P1，按 workflow 级或业务闭环级一次收口；P2 只记录 backlog，不继续拆成很薄的小切片。 |
 
 ## 每轮验收口径
 

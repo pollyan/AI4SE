@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getAgentWorkflows } from '../agentWorkflows';
 import { WORKFLOWS, WORKFLOW_SLUGS, SLUG_TO_WORKFLOW } from '../../workflows';
+import { workflowManifest } from '../../workflowRegistry';
 import { getStagePromptTemplateId } from '../../workflowRegistry';
 import type { WorkflowType } from '../../types';
 
@@ -210,6 +211,45 @@ describe('Workflow Configuration', () => {
                 expect(stage.template.trim().length).toBeGreaterThan(100);
             }
         }
+    });
+
+    it('exposes shared visual protocol layering from the manifest', () => {
+        const protocol = workflowManifest.visualProtocol;
+        const requiredMermaidTypes = new Set<string>();
+        const requiredStructuredVisualTypes = new Set<string>();
+
+        for (const workflow of Object.values(WORKFLOWS)) {
+            for (const stage of workflow.stages) {
+                for (const diagramType of stage.visualContract?.requiredMermaidDiagrams ?? []) {
+                    requiredMermaidTypes.add(diagramType);
+                }
+                for (const visualType of stage.visualContract?.requiredStructuredVisuals ?? []) {
+                    requiredStructuredVisualTypes.add(visualType);
+                }
+            }
+        }
+
+        expect(protocol.modelOutput.mode).toBe('artifact_data_only');
+        expect(protocol.modelOutput.forbiddenDslOutputs).toEqual([
+            'Mermaid 代码块',
+            'D2 代码块',
+            'Graphviz DOT 代码块',
+            'PlantUML 代码块',
+        ]);
+        expect(protocol.modelOutput.forbiddenDirectVisualOutputs).toEqual([
+            '完整 Markdown 文档',
+            'Markdown 表格',
+            'ai4se-visual JSON 代码块',
+        ]);
+        for (const diagramType of requiredMermaidTypes) {
+            expect(protocol.mermaid.allowedGeneratedDiagramTypes).toContain(diagramType);
+        }
+        for (const visualType of requiredStructuredVisualTypes) {
+            expect(protocol.structuredVisual.currentTypes).toContain(visualType);
+        }
+        expect(protocol.structuredVisual.plannedComplexTypes).toEqual(
+            expect.arrayContaining(['flow-map', 'timeline-map', 'mindmap', 'sequence-flow', 'distribution-chart']),
+        );
     });
 
     it('exposes manifest artifact data contract for TEST DESIGN STRATEGY', () => {

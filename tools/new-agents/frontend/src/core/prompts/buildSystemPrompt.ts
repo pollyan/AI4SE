@@ -1,5 +1,6 @@
 import { WorkflowType, WORKFLOWS, type ArtifactDataContract } from '../../store';
 import { buildProfessionalMethodPromptSection } from '../professionalMethods';
+import { workflowManifest } from '../workflowRegistry';
 import { LISA_PERSONA } from './personas/lisa';
 import { ALEX_PERSONA } from './personas/alex';
 
@@ -50,6 +51,30 @@ const formatArtifactDataContractPrompt = (
     ].filter(Boolean).join('\n');
 };
 
+const formatVisualProtocolPrompt = (): string => {
+    const { visualProtocol } = workflowManifest;
+    const forbiddenDslOutputs = visualProtocol.modelOutput.forbiddenDslOutputs
+        .map(formatContractItemForPrompt);
+    const forbiddenDirectOutputs = visualProtocol.modelOutput.forbiddenDirectVisualOutputs
+        .map(formatContractItemForPrompt);
+    const allowedDiagramTypes = visualProtocol.mermaid.allowedGeneratedDiagramTypes
+        .map(formatContractItemForPrompt);
+    const currentVisualTypes = visualProtocol.structuredVisual.currentTypes
+        .map(formatContractItemForPrompt);
+    const plannedComplexTypes = visualProtocol.structuredVisual.plannedComplexTypes
+        .map(formatContractItemForPrompt);
+
+    return [
+        '【视觉产物协议】',
+        '模型只输出 artifact_data 结构化业务数据，不输出右侧成品 Markdown 或可视化代码。',
+        `模型不要输出文本图 DSL 代码块，包括 ${forbiddenDslOutputs.join('、')}。`,
+        `模型不要输出右侧成品或直接可视化产物，包括 ${forbiddenDirectOutputs.join('、')}。`,
+        `图表只允许由后端确定性渲染器生成，当前允许图表类型：${allowedDiagramTypes.join('、')}。`,
+        `复杂业务图优先使用 ai4se-visual JSON，当前支持类型：${currentVisualTypes.join('、')}。`,
+        `后续复杂视觉类型：${plannedComplexTypes.join('、')}。`,
+    ].join('\n');
+};
+
 const removeFormattingInstructions = (description: string): string => (
     description
         .split('\n')
@@ -75,6 +100,9 @@ export const buildSystemPrompt = (config: {
     const usesArtifactData = isArtifactDataStage(workflow, currentStage.id);
     const artifactDataContractSection = usesArtifactData
         ? formatArtifactDataContractPrompt(currentStage.artifactDataContract)
+        : '';
+    const visualProtocolSection = usesArtifactData
+        ? formatVisualProtocolPrompt()
         : '';
     const cleanArtifact = usesArtifactData
         ? removeFencedCodeBlocks(removeMarkTags(currentArtifact))
@@ -162,6 +190,7 @@ ${artifactModeInstruction}
 ${professionalMethodSection}
 ${promptTemplateVersionSection}
 ${artifactDataContractSection ? `${artifactDataContractSection}\n` : ''}
+${visualProtocolSection ? `${visualProtocolSection}\n` : ''}
 ${previousArtifactsContext}
 
 【语言与排版要求】：

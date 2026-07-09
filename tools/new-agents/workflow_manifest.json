@@ -61,6 +61,58 @@
       "label": "交给 Lisa 做需求评审"
     }
   ],
+  "visualProtocol": {
+    "modelOutput": {
+      "mode": "artifact_data_only",
+      "forbiddenDslOutputs": [
+        "Mermaid 代码块",
+        "D2 代码块",
+        "Graphviz DOT 代码块",
+        "PlantUML 代码块"
+      ],
+      "forbiddenDirectVisualOutputs": [
+        "完整 Markdown 文档",
+        "Markdown 表格",
+        "ai4se-visual JSON 代码块"
+      ]
+    },
+    "mermaid": {
+      "source": "backend_deterministic_renderer",
+      "allowedGeneratedDiagramTypes": [
+        "flowchart",
+        "quadrantChart",
+        "block-beta",
+        "pie",
+        "timeline",
+        "mindmap",
+        "journey"
+      ]
+    },
+    "structuredVisual": {
+      "source": "backend_deterministic_renderer",
+      "primaryForComplexBusinessVisuals": true,
+      "currentTypes": [
+        "action-board",
+        "coverage-map",
+        "cause-map",
+        "journey-map",
+        "mvp-map",
+        "priority-board",
+        "risk-board",
+        "roadmap",
+        "score-matrix",
+        "story-map",
+        "traceability-matrix"
+      ],
+      "plannedComplexTypes": [
+        "flow-map",
+        "timeline-map",
+        "mindmap",
+        "sequence-flow",
+        "distribution-chart"
+      ]
+    }
+  },
   "workflows": {
     "TEST_DESIGN": {
       "id": "TEST_DESIGN",

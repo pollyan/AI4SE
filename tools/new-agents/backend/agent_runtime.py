@@ -18,7 +18,10 @@ from artifact_data_renderers import (
 )
 from llm_client import LlmClientError, stream_chat_completion_content
 from sse_schemas import AgentTurnDeltaOutput
-from workflow_manifest import format_artifact_data_contract_instruction
+from workflow_manifest import (
+    format_artifact_data_contract_instruction,
+    format_visual_protocol_instruction,
+)
 
 try:
     from pydantic_ai.exceptions import (
@@ -1000,7 +1003,12 @@ def build_structured_output_instruction(
     instruction = ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS.get(stage_key)
     if instruction is None:
         return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
-    return _normalize_artifact_data_instruction_order(instruction)
+    return (
+        _normalize_artifact_data_instruction_order(instruction).rstrip()
+        + "\n\n"
+        + format_visual_protocol_instruction()
+        + "\n"
+    )
 
 
 
@@ -1023,7 +1031,8 @@ def build_raw_json_retry_prompt(
             "请立刻重新输出一个完整合法的 JSON 对象，不要输出 JSON 之外的解释。"
             "必须修正上述 artifact_data 数据问题；所有必填字段必须存在，"
             "所有字符串必须非空，数组必须至少包含一项。不要输出 Markdown 文档、"
-            "Mermaid 代码块或表格，后端会根据 artifact_data 渲染右侧产出物。"
+            "Mermaid、D2、Graphviz DOT、PlantUML 代码块或表格，"
+            "后端会根据 artifact_data 渲染右侧产出物。"
         )
     return (
         f"{prompt}\n\n"

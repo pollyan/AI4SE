@@ -571,9 +571,28 @@ export interface VisualContract {
     requiredStructuredVisuals?: string[];
 }
 
+export interface VisualProtocol {
+    modelOutput: {
+        mode: 'artifact_data_only';
+        forbiddenDslOutputs: string[];
+        forbiddenDirectVisualOutputs: string[];
+    };
+    mermaid: {
+        source: 'backend_deterministic_renderer';
+        allowedGeneratedDiagramTypes: string[];
+    };
+    structuredVisual: {
+        source: 'backend_deterministic_renderer';
+        primaryForComplexBusinessVisuals: boolean;
+        currentTypes: string[];
+        plannedComplexTypes: string[];
+    };
+}
+
 export type ArtifactContractConfig = ArtifactContract;
 export type ArtifactDataContractConfig = ArtifactDataContract;
 export type VisualContractConfig = VisualContract;
+export type VisualProtocolConfig = VisualProtocol;
 
 export type ArtifactSectionChangeKind = 'added' | 'modified' | 'removed';
 

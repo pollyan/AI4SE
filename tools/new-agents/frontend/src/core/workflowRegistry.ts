@@ -3,6 +3,7 @@ import type {
     ArtifactContractConfig,
     ArtifactDataContractConfig,
     VisualContractConfig,
+    VisualProtocolConfig,
     WorkflowDef,
     WorkflowType,
 } from './types';
@@ -24,6 +25,7 @@ export type WorkflowManifestWorkflow = Omit<WorkflowDef, 'stages' | 'welcomeMess
 };
 
 export type WorkflowManifest = {
+    visualProtocol: VisualProtocolConfig;
     workflows: Record<WorkflowType, WorkflowManifestWorkflow>;
 };
 
