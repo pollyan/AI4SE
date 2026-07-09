@@ -1,15 +1,15 @@
 # Goal Mode Milestone Ledger
 
-> 状态: 活动事实源
-> 更新日期: 2026-06-24
-> 用途: 记录目标模式已验证 milestone、最终集成状态、剩余能力包和合回条件。
+> 状态: 历史事实源
+> 更新日期: 2026-07-09
+> 用途: 记录目标模式已验证 milestone 和历史集成证据；恢复目标模式时不得从旧 integration branch 或 E 编号直接恢复实现。
 
 ## 当前结论
 
-- DeepSeek V4 结构化产物数据改造: 本地确定性完成，已合入 `codex/goal-final-integration`。
-- New Agents 增强诊断: E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14 已合入 `codex/goal-final-integration`。
-- 当前功能能力包已清空；后续进入主线验证、merge/push/删分支闭环。
-- 最终 merge/push/删分支: 仅在 integration branch 验证通过后执行；主工作区仍有受保护未提交改动，最终合回优先通过隔离 worktree 或远端 ref 更新避免覆盖。
+- DeepSeek V4 结构化产物数据改造: 本地确定性完成并已主线化；真实 DeepSeek V4 Flash smoke 仍需显式凭证、网络和额度。
+- New Agents 增强诊断: E01、E02、E03、E04、E05、E06、E07、E08、E09、E10、E11、E12、E13、E14 均已作为历史能力包收口。
+- 当前功能能力包已清空；后续不再围绕旧 integration branch、旧 E 编号或旧 protected worktree 记录继续执行。
+- 恢复目标模式时，应从当前代码、测试、文档、git 状态、新失败证据和用户最新目标重新做 CGA。
 
 ## integrated_in_goal_final_branch
 
@@ -36,24 +36,17 @@
 
 ## final_integration_status
 
-- Integration branch: `codex/goal-final-integration`。
-- 当前状态: 所有已验证独立 milestone 已合入 integration branch，等待最终验证。
-- 最终验证应覆盖 New Agents 后端 contract/runtime/API、前端 workflow/prompt/component tests、frontend build 和 `git diff --check`。
-- 用户要求的删除当前分支、merge 回主干并 push GitHub，只能在 integration branch 验证通过后执行。
+- 历史 integration branch: `codex/goal-final-integration`。
+- 当前状态: 本账本只保留历史集成证据，不再声明仍有待合回分支或待删除分支。
+- 若未来发现主线验证或远端 CI 回归，应按当前 `docs/strategy/goal-mode-playbook.md` 重新进入 CGA，而不是沿旧 integration branch 规则继续。
 
 ## protected_main_worktree_changes
 
-当前 `master` 工作区仍有以下未提交改动。本账本不覆盖、不回滚、不格式化这些文件:
-
-- `dist/intent-test-proxy.zip`
-- `docs/plans/tech-debt.md`
-- `docs/todos/refactor/2026-06-23-new-agents-enhancement-diagnostic.md`
-- `docs/todos/refactor/README.md`
-- `tools/intent-tester/frontend/static/intent-test-proxy.zip`
+历史记录中的受保护主工作区改动已不作为当前事实源。恢复目标模式时必须重新运行 `git status -sb` 和必要的 diff 归属检查，以当前工作区为准。
 
 ## recovery_rules
 
-- 目标模式恢复时先读本账本，再读具体 todo。
-- 不要从 `integrated_in_goal_final_branch` 中的 E 编号重新启动功能实现，除非 CGA 证明主线集成后仍存在回归、缺失验证或用户重新定义范围。
-- 选择下一轮工作时，默认从最终集成前置闭环、CI 失败复盘或主线验证回归开始；不要重新启动已完成的功能能力包，除非 CGA 证明当前主线仍有缺口。
-- 如果远端 CI、真实 DeepSeek smoke 或 integration branch 暴露失败，优先按目标模式 playbook 的 CI 失败复盘规则处理。
+- 目标模式恢复时可以读本账本了解历史能力包，但必须以当前代码、测试、文档和 git 状态为准。
+- 不要从 `integrated_in_goal_final_branch` 中的 E 编号重新启动功能实现，除非 CGA 证明当前主线仍存在回归、缺失验证或用户重新定义范围。
+- 选择下一轮工作时，默认从新用户目标、当前失败证据、远端 CI 失败复盘或当前 `docs/todos/` 中仍未完成的 P0/P1 开始；不要重新启动已完成的历史能力包。
+- 如果远端 CI 或真实 DeepSeek smoke 暴露失败，优先按目标模式 playbook 的 CI 失败复盘规则处理。

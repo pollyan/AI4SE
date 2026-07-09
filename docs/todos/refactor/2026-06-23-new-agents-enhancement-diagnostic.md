@@ -1,6 +1,6 @@
 # New Agents 功能盘点与增强诊断 Todo
 
-> 状态: 活动候选
+> 状态: 历史事实源；功能能力包已清空
 > 创建日期: 2026-06-23
 > 背景: 对 `tools/new-agents/` 进行只读功能盘点后，当前系统已经具备共享 Agent Runtime、typed SSE、多 workflow、artifact contract、运行持久化、artifact 协作和运行统计基础。后续增强应优先深化已有能力，而不是复制 Lisa/Alex 专属运行时或渲染链路。
 
@@ -48,36 +48,36 @@
 | Test assets | Lisa TEST_DESIGN/CASES 可实体化测试资产、风险、issue | 中 | 增强时不要围绕 intent-tester 联动扩展 |
 | Testing | backend contract/runtime/API/persistence + frontend service/store/component tests | 高 | LLM judge/e2e evidence 需要持续管理 |
 
-## 主要差距
+## 主要差距（历史扫描快照，后续已消化或转 P2）
 
-| 维度 | 当前状态 | 缺口 | 优先级 |
+| 维度 | 当时状态 | 当时缺口 | 当前处理结论 |
 | --- | --- | --- | --- |
-| 专业可信度 | prompt/template 已有 FMEA、5 Why、ICE、roadmap 等方法；Lisa 测试资产已补质量状态闭环 | 仍缺跨 workflow 质量评分、证据强度、复审闭环和趋势化质量门禁 | P1 |
-| Artifact 闭环 | 有版本、diff、批注、章节锁、导出、冲突合并 | 缺统一 artifact quality / contract / stage gate 诊断面板 | P0 |
-| Workflow 入口 | 有 listing、onboarding、starter prompts；2026-06-23 已补在线 workflow 入口 preview | 仍缺自动推荐排序和更深的选择决策引导 | P1 |
-| Run 复用 | 有历史列表、搜索、runId snapshot 恢复、复用状态筛选、当前 artifact 预览、继续原 run、复制为新 run | 跨 run 对比和收藏仍未做；不影响当前历史复用闭环 | P1 已部分完成 |
+| 专业可信度 | prompt/template 已有 FMEA、5 Why、ICE、roadmap 等方法；Lisa 测试资产已补质量状态闭环 | 仍缺跨 workflow 质量评分、证据强度、复审闭环和趋势化质量门禁 | 规则型质量治理已消化；跨 run 趋势 / LLM judge evidence 转后续增强候选。 |
+| Artifact 闭环 | 有版本、diff、批注、章节锁、导出、冲突合并 | 缺统一 artifact quality / contract / stage gate 诊断面板 | 已消化为 Artifact / Workflow 质量治理闭环。 |
+| Workflow 入口 | 有 listing、onboarding、starter prompts；2026-06-23 已补在线 workflow 入口 preview | 仍缺自动推荐排序和更深的选择决策引导 | 入口 preview 已消化；自动推荐排序转后续体验增强候选。 |
+| Run 复用 | 有历史列表、搜索、runId snapshot 恢复、复用状态筛选、当前 artifact 预览、继续原 run、复制为新 run | 跨 run 对比和收藏仍未做；不影响当前历史复用闭环 | 历史复用中心已消化；跨 run 对比 / 收藏转 P2。 |
 | Workflow handoff | 有配置化 handoff 基础，已补上下文审阅卡和目标 run 输入增强 | 当前 P1 缺口已消化；后续只在新增 source/target handoff 时扩展配置 | 已完成 |
-| 可观测性 | 有 success rate、provider、stage、recent turns，且已补 DeepSeek/格式化输出失败分类 drilldown 与行动建议 | 仍缺面向用户的跨 run 质量趋势和产品质量评分趋势 | P1 已部分完成 |
-| 平台扩展 | manifest 已承载核心配置；workflow schema dry-run 已提供本地同步门禁 | 缺完整 scaffold/codegen 和 prompt/template 版本管理 | P2 |
+| 可观测性 | 有 success rate、provider、stage、recent turns，且已补 DeepSeek/格式化输出失败分类 drilldown 与行动建议 | 仍缺面向用户的跨 run 质量趋势和产品质量评分趋势 | 运行统计产品化已消化；跨 run 趋势转后续增强候选。 |
+| 平台扩展 | manifest 已承载核心配置；workflow schema dry-run 已提供本地同步门禁 | 缺完整 scaffold/codegen 和 prompt/template 版本管理 | prompt/template 版本管理和 dry-run 门禁已消化；完整 scaffold/codegen 转 P2。 |
 
 ## 增强机会清单
 
-| ID | 增强点 | 类型 | 类别 | 复杂度 | 优先级 | 验收标准 |
+| ID | 增强点 | 类型 | 类别 | 复杂度 | 历史优先级 | 当前处理结论 |
 | --- | --- | --- | --- | --- | --- | --- |
-| E01 | Workflow 入口 preview | 改造现有功能 | 体验 | S | P0 | 已消化：每个在线 workflow 展示适用/不适用、输入要求、预期产物和样例输入 |
-| E02 | 阶段缺失信息清单 | 深化现有功能 | 专业内容 | S | P0 | 已消化：共享 artifact quality summary 派生缺失信息项，chat 和 artifact 审阅区都能标明缺失项、阻断性和用户下一步 |
-| E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | P0 | 已消化：共享 ArtifactPane 审阅面板展示 headings、visual、stage gate、专业字段和现有 visual diagnostic 的通过/失败/警告；2026-06-24 已合流到 workflow 质量治理基线 |
-| E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | P0 | 已消化：测试资产集合输出统一 `qualitySummary`，资产中心和 Header 展示质量状态/gate，issue、测试点覆盖、风险生命周期动作会推动质量状态变化 |
-| E05 | 章节级重生成 | 新增功能 | 功能 | M | P1 | 已消化为 Artifact 定向修订闭环：用户可从章节侧栏指定未锁定章节重生成，复用共享 typed SSE runtime，客户端只合并目标章节，保留锁定章节和非目标章节，并写入 artifact/stage/history |
-| E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | P1 | 已消化：支持继续、复制为新 run、按 workflow/复用状态筛选、预览当前 artifact |
-| E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | P1 | 已消化：handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入，并用同一增强 prompt 创建目标 run |
-| E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | P1 已部分完成 | 已消化规则型质量治理闭环：每个 stage 有质量分、证据明细和待处理项；后续仅保留跨 run 趋势和 LLM judge evidence |
-| E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | P1 | 已消化：运行统计返回 contract retry 原因和确定性诊断建议，Header modal 展示行动建议；跨 run 质量趋势可并入 E08 后续厚切片 |
-| E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | P2 | 已消化：专业方法库通过 `professional_methods.json` 统一配置，代表性 stage 通过 `methodIds` 引用 FMEA、测试金字塔、JTBD、RICE、Kano、CAPA、ICE，并由 prompt builder 注入系统提示；同步测试阻止未知方法引用 |
-| E11 | Prompt/template 版本管理 | 新增功能 | 平台扩展 | L | P2 | 已消化：每个 online stage 通过 `promptTemplateVersion` 记录 prompt/template 版本，并通过 `regressionSampleIds` 关联 `prompt_regression_samples.json` 中的回归样例；同步测试阻止漏版本、未知样例和样例指向错误 |
-| E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | P2 已部分完成 | 已消化诊断型 dry-run 门禁：新 workflow 缺 manifest、前端 prompt/template 映射、后端 contract、artifact_data renderer/readiness、handoff 或 manifest 打包任一面时本地 dry-run 失败；完整 scaffold/codegen 保留后续 |
-| E13 | Alex 用户故事拆解 workflow | 已消化 | 专业内容 | M | P0 | 2026-06-24 已在本分支主线化：共享 workflow `STORY_BREAKDOWN`、slug `story-breakdown`、四阶段 `artifact_data` renderer、story-map visual contract、Alex 在线入口和 Lisa handoff 均已接入；验证覆盖 backend contract/runtime/renderer/sync/handoff 与 frontend workflow/prompt tests |
-| E14 | Alex PRD 质量评审与补全 workflow | 已消化 | 专业内容 | M | P0 | `PRD_REVIEW` 作为 Alex 在线 workflow 复用共享 Agent Runtime、typed SSE、workflow manifest、artifact contract 和 artifact_data renderer，覆盖输入盘点、质量评审、补全建议和修订蓝图 |
+| E01 | Workflow 入口 preview | 改造现有功能 | 体验 | S | 历史 P0 | 已消化：每个在线 workflow 展示适用/不适用、输入要求、预期产物和样例输入 |
+| E02 | 阶段缺失信息清单 | 深化现有功能 | 专业内容 | S | 历史 P0 | 已消化：共享 artifact quality summary 派生缺失信息项，chat 和 artifact 审阅区都能标明缺失项、阻断性和用户下一步 |
+| E03 | Artifact 质量诊断面板 | 深化现有功能 | 可信质量 | M | 历史 P0 | 已消化：共享 ArtifactPane 审阅面板展示 headings、visual、stage gate、专业字段和现有 visual diagnostic 的通过/失败/警告；2026-06-24 已合流到 workflow 质量治理基线 |
+| E04 | Lisa 测试资产质量闭环 | 深化现有功能 | 专业内容 | M | 历史 P0 | 已消化：测试资产集合输出统一 `qualitySummary`，资产中心和 Header 展示质量状态/gate，issue、测试点覆盖、风险生命周期动作会推动质量状态变化 |
+| E05 | 章节级重生成 | 新增功能 | 功能 | M | 历史 P1 | 已消化为 Artifact 定向修订闭环：用户可从章节侧栏指定未锁定章节重生成，复用共享 typed SSE runtime，客户端只合并目标章节，保留锁定章节和非目标章节，并写入 artifact/stage/history |
+| E06 | Run 历史中心增强 | 深化现有功能 | 功能 | M | 历史 P1 | 已消化：支持继续、复制为新 run、按 workflow/复用状态筛选、预览当前 artifact |
+| E07 | Workflow handoff 增强 | 深化现有功能 | 平台扩展 | M | 历史 P1 | 已消化：handoff 展示来源版本、关键摘要、未确认项和目标 workflow 输入，并用同一增强 prompt 创建目标 run |
+| E08 | 工作流质量评分 | 新增功能 | 可信质量 | M | 历史 P1，规则型已完成 | 已消化规则型质量治理闭环：每个 stage 有质量分、证据明细和待处理项；后续仅保留跨 run 趋势和 LLM judge evidence |
+| E09 | 运行统计产品化 | 深化现有功能 | 可信质量 | M | 历史 P1 | 已消化：运行统计返回 contract retry 原因和确定性诊断建议，Header modal 展示行动建议；跨 run 质量趋势可并入后续厚切片 |
+| E10 | 专业方法库配置 | 新增功能 | 专业内容 | L | 历史 P2 | 已消化：专业方法库通过 `professional_methods.json` 统一配置，代表性 stage 通过 `methodIds` 引用 FMEA、测试金字塔、JTBD、RICE、Kano、CAPA、ICE，并由 prompt builder 注入系统提示；同步测试阻止未知方法引用 |
+| E11 | Prompt/template 版本管理 | 新增功能 | 平台扩展 | L | 历史 P2 | 已消化：每个 online stage 通过 `promptTemplateVersion` 记录 prompt/template 版本，并通过 `regressionSampleIds` 关联 `prompt_regression_samples.json` 中的回归样例；同步测试阻止漏版本、未知样例和样例指向错误 |
+| E12 | Workflow schema dry-run/scaffold | 新增功能 | 平台扩展 | L | 历史 P2，诊断门禁已完成 | 已消化诊断型 dry-run 门禁：新 workflow 缺 manifest、前端 prompt/template 映射、后端 contract、artifact_data renderer/readiness、handoff 或 manifest 打包任一面时本地 dry-run 失败；完整 scaffold/codegen 保留后续 |
+| E13 | Alex 用户故事拆解 workflow | 已消化 | 专业内容 | M | 历史 P0 | 2026-06-24 已在本分支主线化：共享 workflow `STORY_BREAKDOWN`、slug `story-breakdown`、四阶段 `artifact_data` renderer、story-map visual contract、Alex 在线入口和 Lisa handoff 均已接入；验证覆盖 backend contract/runtime/renderer/sync/handoff 与 frontend workflow/prompt tests |
+| E14 | Alex PRD 质量评审与补全 workflow | 已消化 | 专业内容 | M | 历史 P0 | `PRD_REVIEW` 作为 Alex 在线 workflow 复用共享 Agent Runtime、typed SSE、workflow manifest、artifact contract 和 artifact_data renderer，覆盖输入盘点、质量评审、补全建议和修订蓝图 |
 
 ## Goal Mode 消化记录
 
@@ -271,7 +271,7 @@
 
 功能能力包已清空；后续进入最终集成、主线验证、merge/push/删分支闭环。
 
-其余 E 编号如果需要恢复，必须先通过 CGA 证明当前主线集成后仍存在回归或未验收缺口。当前 E01-E14 已合入 `codex/goal-final-integration`，后续只围绕验证回归、CI 失败、完整 scaffold/codegen、跨 run 质量趋势或 LLM judge evidence 继续演进。
+其余 E 编号如果需要恢复，必须先通过 CGA 证明当前主线仍存在回归、未验收缺口或用户重新定义目标。当前 E01-E14 不再作为活跃实现清单；后续只围绕验证回归、CI 失败、完整 scaffold/codegen、跨 run 质量趋势或 LLM judge evidence 等重新定义的厚切片继续演进。
 
 ## 进入实现前需要补的设计问题
 
