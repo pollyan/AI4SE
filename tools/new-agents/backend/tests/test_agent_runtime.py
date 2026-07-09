@@ -2027,6 +2027,30 @@ def test_story_breakdown_structured_output_instruction_requests_artifact_data_no
     "stage_id",
     ["INPUT_ANALYSIS", "EPIC_MAPPING", "STORY_BACKLOG", "SPRINT_PLAN"],
 )
+def test_story_breakdown_structured_output_instruction_omits_story_sprint_examples(
+    stage_id,
+):
+    instruction = build_structured_output_instruction(
+        "STORY_BREAKDOWN",
+        stage_id,
+    )
+
+    forbidden_story_sprint_example = (
+        '"story_id": "US-001", "epic_id": "EPIC-001", "title": "...", '
+        '"user_story": "作为...我想...以便...", "priority": "P0/P1/P2", "sprint":'
+    )
+
+    assert forbidden_story_sprint_example not in instruction
+    assert (
+        "user_stories[].sprint 缺省时由后端按 sprint_slices[].story_ids "
+        "所属 sprint_slices[].sprint_id 派生"
+    ) in instruction
+
+
+@pytest.mark.parametrize(
+    "stage_id",
+    ["INPUT_ANALYSIS", "EPIC_MAPPING", "STORY_BACKLOG", "SPRINT_PLAN"],
+)
 def test_story_breakdown_structured_output_instruction_uses_manifest_artifact_data_contract(
     stage_id,
 ):

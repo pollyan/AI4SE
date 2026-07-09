@@ -252,6 +252,40 @@ def test_render_story_breakdown_artifact_data_outputs_story_package():
     )
 
 
+def test_story_breakdown_artifact_data_derives_story_sprint_from_sprint_slices():
+    artifact_data = copy.deepcopy(VALID_STORY_BREAKDOWN_ARTIFACT_DATA)
+    for story in artifact_data["user_stories"]:
+        story.pop("sprint")
+
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "已完成用户故事拆解包。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="SPRINT_PLAN",
+    )
+
+    assert output is not None
+    assert output.artifact_update is not None
+    assert [story["sprint"] for story in output.artifact_data["user_stories"]] == [
+        "Sprint 1",
+        "Sprint 1",
+    ]
+    assert "| US-001 | EPIC-001 | 需求澄清基线 |" in output.artifact_update.markdown
+    assert "Sprint 1" in output.artifact_update.markdown
+
+
+def test_story_breakdown_artifact_data_rejects_story_sprint_mismatching_slice():
+    invalid = copy.deepcopy(VALID_STORY_BREAKDOWN_ARTIFACT_DATA)
+    invalid["user_stories"][0]["sprint"] = "Sprint 2"
+
+    with pytest.raises(ValidationError, match="user_stories.*sprint"):
+        StoryBreakdownArtifactData.model_validate(invalid)
+
+
 def test_story_breakdown_artifact_data_rejects_unknown_story_reference():
     invalid = copy.deepcopy(VALID_STORY_BREAKDOWN_ARTIFACT_DATA)
     invalid["acceptance_criteria"][0]["story_id"] = "US-404"

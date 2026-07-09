@@ -2656,7 +2656,7 @@ class StoryBreakdownUserStory(StrictArtifactDataModel):
     title: str
     user_story: str
     priority: str
-    sprint: str
+    sprint: str | None = None
     story_points: int = Field(ge=1)
     testability: str
     status: str
@@ -2773,6 +2773,40 @@ class StoryBreakdownArtifactData(StrictArtifactDataModel):
             raise ValueError(
                 "sprint_slices references unknown story ids: "
                 + ", ".join(unknown_sprint_story_ids)
+            )
+
+        sprint_by_story_id: dict[str, str] = {}
+        duplicate_sprint_story_ids: set[str] = set()
+        for sprint in self.sprint_slices:
+            for story_id in sprint.story_ids:
+                if story_id in sprint_by_story_id:
+                    duplicate_sprint_story_ids.add(story_id)
+                else:
+                    sprint_by_story_id[story_id] = sprint.sprint_id
+        if duplicate_sprint_story_ids:
+            raise ValueError(
+                "sprint_slices contains duplicate story assignments: "
+                + ", ".join(sorted(duplicate_sprint_story_ids))
+            )
+
+        missing_sprint_story_ids = sorted(story_ids - set(sprint_by_story_id))
+        if missing_sprint_story_ids:
+            raise ValueError(
+                "sprint_slices must include every user_stories story_id: "
+                + ", ".join(missing_sprint_story_ids)
+            )
+
+        sprint_mismatch_story_ids: list[str] = []
+        for story in self.user_stories:
+            expected_sprint = sprint_by_story_id[story.story_id]
+            if story.sprint is None:
+                story.sprint = expected_sprint
+            elif story.sprint != expected_sprint:
+                sprint_mismatch_story_ids.append(story.story_id)
+        if sprint_mismatch_story_ids:
+            raise ValueError(
+                "user_stories.sprint must match sprint_slices.story_ids: "
+                + ", ".join(sprint_mismatch_story_ids)
             )
 
         unknown_handoff_references = sorted(

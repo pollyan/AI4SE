@@ -746,7 +746,7 @@ JSON 对象结构：
     "document_info": {"artifact_name": "用户故事拆解包", "workflow": "STORY_BREAKDOWN", "stage": "当前阶段 ID", "status": "草稿/待确认/可交接 Lisa"},
     "input_analysis": {"source_type": "PRD/需求蓝图/产品想法/用户输入", "product_goal": "...", "target_users": ["..."], "constraints": ["..."], "open_questions": ["..."]},
     "epics": [{"epic_id": "EPIC-001", "name": "...", "value_goal": "...", "scope": "...", "priority": "P0/P1/P2", "dependencies": ["..."]}],
-    "user_stories": [{"story_id": "US-001", "epic_id": "EPIC-001", "title": "...", "user_story": "作为...我想...以便...", "priority": "P0/P1/P2", "sprint": "Sprint 1", "story_points": 5, "testability": "高/中/低", "status": "待评审/已确认"}],
+    "user_stories": [{"story_id": "US-001", "epic_id": "EPIC-001", "title": "...", "user_story": "作为...我想...以便...", "priority": "P0/P1/P2", "story_points": 5, "testability": "高/中/低", "status": "待评审/已确认"}],
     "acceptance_criteria": [{"criterion_id": "AC-001", "story_id": "US-001", "criterion": "...", "verification_method": "单元/接口/UI/人工评审/LLM judge", "status": "待验证/已验证"}],
     "dependencies": [{"dependency_id": "DEP-001", "related_story_ids": ["US-001"], "description": "...", "risk": "...", "mitigation": "...", "owner": "产品/研发/测试/AI 工程", "status": "已识别/待确认/已解决"}],
     "sprint_slices": [{"sprint_id": "Sprint 1", "goal": "...", "story_ids": ["US-001"], "deliverable": "...", "acceptance_focus": "..."}],

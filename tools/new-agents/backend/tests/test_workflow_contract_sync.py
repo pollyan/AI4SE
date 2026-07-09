@@ -209,6 +209,10 @@ def test_derived_artifact_data_fields_are_tracked_and_not_required_in_runtime_ex
         ("INCIDENT_REVIEW", "IMPROVEMENT", "priority_distribution"),
         ("IDEA_BRAINSTORM", "CONVERGE", "ice_evaluations[].ice_score"),
         ("IDEA_BRAINSTORM", "CONVERGE", "ice_evaluations[].rank"),
+        ("STORY_BREAKDOWN", "INPUT_ANALYSIS", "user_stories[].sprint"),
+        ("STORY_BREAKDOWN", "EPIC_MAPPING", "user_stories[].sprint"),
+        ("STORY_BREAKDOWN", "STORY_BACKLOG", "user_stories[].sprint"),
+        ("STORY_BREAKDOWN", "SPRINT_PLAN", "user_stories[].sprint"),
     }
 
     for policy in policies:
@@ -743,6 +747,10 @@ def test_story_breakdown_artifact_data_contract_manifest_drives_backend_instruct
         assert (
             "sprint_slices[].story_ids 只能引用 user_stories[].story_id "
             "中已定义的用户故事 ID"
+        ) in instruction
+        assert (
+            "user_stories[].sprint 缺省时由后端按 sprint_slices[].story_ids "
+            "所属 sprint_slices[].sprint_id 派生"
         ) in instruction
         assert (
             "lisa_handoff_inputs[] 中 input_type 为“用户故事”时 reference_id "

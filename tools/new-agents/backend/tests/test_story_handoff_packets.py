@@ -97,6 +97,21 @@ def test_story_handoff_candidates_return_ready_stories_from_artifact_data(app):
     ]
 
 
+def test_story_handoff_candidates_use_sprint_derived_from_sprint_slices(app):
+    artifact_data = copy.deepcopy(VALID_STORY_BREAKDOWN_ARTIFACT_DATA)
+    for story in artifact_data["user_stories"]:
+        story.pop("sprint")
+
+    with app.app_context():
+        run = _create_story_breakdown_run(artifact_data=artifact_data)
+
+        result = list_story_handoff_candidates(run.id, "SPRINT_PLAN")
+
+    assert result["candidates"][0]["readyReason"] == (
+        "状态：待评审；可测试性：高；Sprint：Sprint 1"
+    )
+
+
 def test_create_story_handoff_packet_persists_requirement_only_payload(app):
     with app.app_context():
         run = _create_story_breakdown_run()

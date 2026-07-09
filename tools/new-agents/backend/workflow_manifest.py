@@ -165,6 +165,58 @@ DERIVED_ARTIFACT_DATA_FIELD_POLICIES: tuple[dict[str, Any], ...] = (
         ),
         "forbidden_runtime_example_tokens": ('"rank":',),
     },
+    {
+        "workflow_id": "STORY_BREAKDOWN",
+        "stage_id": "INPUT_ANALYSIS",
+        "path": "user_stories[].sprint",
+        "required_contract_fragments": (
+            "user_stories[].sprint 缺省时由后端按 sprint_slices[].story_ids "
+            "所属 sprint_slices[].sprint_id 派生",
+        ),
+        "forbidden_runtime_example_tokens": (
+            '"story_id": "US-001", "epic_id": "EPIC-001", "title": "...", '
+            '"user_story": "作为...我想...以便...", "priority": "P0/P1/P2", "sprint":',
+        ),
+    },
+    {
+        "workflow_id": "STORY_BREAKDOWN",
+        "stage_id": "EPIC_MAPPING",
+        "path": "user_stories[].sprint",
+        "required_contract_fragments": (
+            "user_stories[].sprint 缺省时由后端按 sprint_slices[].story_ids "
+            "所属 sprint_slices[].sprint_id 派生",
+        ),
+        "forbidden_runtime_example_tokens": (
+            '"story_id": "US-001", "epic_id": "EPIC-001", "title": "...", '
+            '"user_story": "作为...我想...以便...", "priority": "P0/P1/P2", "sprint":',
+        ),
+    },
+    {
+        "workflow_id": "STORY_BREAKDOWN",
+        "stage_id": "STORY_BACKLOG",
+        "path": "user_stories[].sprint",
+        "required_contract_fragments": (
+            "user_stories[].sprint 缺省时由后端按 sprint_slices[].story_ids "
+            "所属 sprint_slices[].sprint_id 派生",
+        ),
+        "forbidden_runtime_example_tokens": (
+            '"story_id": "US-001", "epic_id": "EPIC-001", "title": "...", '
+            '"user_story": "作为...我想...以便...", "priority": "P0/P1/P2", "sprint":',
+        ),
+    },
+    {
+        "workflow_id": "STORY_BREAKDOWN",
+        "stage_id": "SPRINT_PLAN",
+        "path": "user_stories[].sprint",
+        "required_contract_fragments": (
+            "user_stories[].sprint 缺省时由后端按 sprint_slices[].story_ids "
+            "所属 sprint_slices[].sprint_id 派生",
+        ),
+        "forbidden_runtime_example_tokens": (
+            '"story_id": "US-001", "epic_id": "EPIC-001", "title": "...", '
+            '"user_story": "作为...我想...以便...", "priority": "P0/P1/P2", "sprint":',
+        ),
+    },
 )
 
 

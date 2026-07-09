@@ -679,6 +679,7 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('user_stories[].story_id 必须唯一');
         expect(prompt).toContain('user_stories[].epic_id 只能引用 epics[].epic_id 中已定义的 Epic ID');
         expect(prompt).toContain('acceptance_criteria[].story_id 只能引用 user_stories[].story_id 中已定义的用户故事 ID');
+        expect(prompt).toContain('user_stories[].sprint 缺省时由后端按 sprint_slices[].story_ids 所属 sprint_slices[].sprint_id 派生；显式提供时必须一致');
         expect(prompt).toContain('lisa_handoff_inputs[] 中 input_type 为“用户故事”时 reference_id 只能引用 user_stories[].story_id 中已定义的用户故事 ID');
         expect(prompt).toContain('user_stories[].story_points 必须是大于等于 1 的整数');
         expect(prompt).toContain('图表 代码块');

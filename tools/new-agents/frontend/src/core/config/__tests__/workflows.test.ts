@@ -544,6 +544,9 @@ describe('Workflow Configuration', () => {
                 'acceptance_criteria[].story_id 只能引用 user_stories[].story_id 中已定义的用户故事 ID',
             );
             expect(stage.artifactDataContract?.modelOutputRules).toContain(
+                'user_stories[].sprint 缺省时由后端按 sprint_slices[].story_ids 所属 sprint_slices[].sprint_id 派生；显式提供时必须一致',
+            );
+            expect(stage.artifactDataContract?.modelOutputRules).toContain(
                 'lisa_handoff_inputs[] 中 input_type 为“用户故事”时 reference_id 只能引用 user_stories[].story_id 中已定义的用户故事 ID',
             );
             expect(stage.artifactDataContract?.modelOutputRules).toContain(

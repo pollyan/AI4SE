@@ -1,6 +1,6 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化已新增 `TEST_DESIGN/DELIVERY` 统计字段、`REQ_REVIEW` 问题统计、`INCIDENT_REVIEW/IMPROVEMENT` 行动统计、`IDEA_BRAINSTORM/CONVERGE` ICE 评分 / 排名，以及 `TEST_DESIGN/CASES` / `REQ_REVIEW/REVIEW` 分组内维度派生纵切；映射一致性已新增 `INCIDENT_REVIEW/IMPROVEMENT` root cause/action 精确映射门禁。后续未完成治理仍集中在 5 个能力包：派生字段后端化、ID 收敛、视觉协议分层、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
+- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切和结构化失败回归门禁；artifactDataContract 同步剩余 0 个阶段；派生字段后端化已新增 `TEST_DESIGN/DELIVERY` 统计字段、`REQ_REVIEW` 问题统计、`INCIDENT_REVIEW/IMPROVEMENT` 行动统计、`IDEA_BRAINSTORM/CONVERGE` ICE 评分 / 排名、`TEST_DESIGN/CASES` / `REQ_REVIEW/REVIEW` 分组内维度派生纵切，以及 `STORY_BREAKDOWN` story sprint 派生纵切；映射一致性已新增 `INCIDENT_REVIEW/IMPROVEMENT` root cause/action 精确映射门禁。后续未完成治理仍集中在 5 个能力包：派生字段后端化、ID 收敛、视觉协议分层、`ai4se-visual` 复杂图扩展、视觉渲染强校验。）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
@@ -125,7 +125,8 @@
   - 进展：已完成已治理派生字段回退审计门禁。新增 `get_derived_artifact_data_field_policies()` 清单和 contract sync 测试，统一校验上述字段必须在 manifest contract 中声明后端派生 / 显式一致性，并且 runtime JSON 示例不得再要求模型输出这些字段。
   - 进展：已完成 `TEST_DESIGN/CASES` 与 `REQ_REVIEW/REVIEW` 分组内维度派生纵切。`case_groups[].cases[].dimension` 缺省时由外层 `case_groups[].dimension` 派生，`issue_groups[].issues[].dimension` 缺省时由外层 `issue_groups[].dimension` 派生；显式不一致维度仍触发 validation failure。CASES / REVIEW runtime instruction 示例不再要求模型输出内层维度，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
   - 进展：已完成 `INCIDENT_REVIEW/IMPROVEMENT` root cause/action 精确映射门禁。`root_cause_coverage[].action_ids` 现在必须精确匹配所有 `root_cause_id` 等于对应 `cause_id` 的 `improvement_actions[].action_id`；显式不一致映射触发 validation failure，manifest / frontend prompt 同步暴露该规则。
-  - 后续候选：旁路审查未发现 P0 回退，当前剩余 P1 候选为 `STORY_BREAKDOWN` story sprint 与 `sprint_slices[].story_ids` 映射一致性。旁路审查另识别 `VALUE_DISCOVERY/JOURNEY` pain / opportunity 成对映射为 P2，不建议强行并入当前派生字段能力包。
+  - 进展：已完成 `STORY_BREAKDOWN` story sprint 派生纵切。`user_stories[].sprint` 缺省时由后端按 `sprint_slices[].story_ids` 所属 `sprint_slices[].sprint_id` 派生，显式不一致 sprint 触发 validation failure；单故事 handoff candidate 会读取派生后的 Sprint。STORY 四阶段 runtime instruction 示例不再要求模型输出 `sprint`，manifest / frontend prompt 改为说明“缺省后端派生、显式提供必须一致”。
+  - 后续候选：旁路审查未发现 P0 回退，当前派生 / 映射能力包无剩余 P1 候选。旁路审查另识别 `VALUE_DISCOVERY/JOURNEY` pain / opportunity 成对映射为 P2，不建议强行并入当前 P1 收口。
 
 - [ ] 收敛 ID 与引用关系。（第 4-6 轮）
   - 目标：后端生成稳定 ID，或在 renderer/normalizer 中确定性分配 ID；模型不再负责维护容易漂移的跨表引用。
@@ -2929,6 +2930,53 @@ git diff --check
 - 本轮只治理 `INCIDENT_REVIEW/IMPROVEMENT` 的 root cause/action 双向映射，不后端生成 action ID 或 cause ID，也不改 prevention / review / residual risk 的引用规则。
 - `STORY_BREAKDOWN` 的 `user_stories[].sprint` 与 `sprint_slices[].story_ids` 映射一致性仍是下一同级 P1 切片；它影响四阶段共享 schema、renderer 和单故事 handoff，不能塞进本轮。
 - 旁路审查识别 `VALUE_DISCOVERY/JOURNEY` pain / opportunity 成对映射为 P2 候选，当前不纳入 P1 收口。
+
+### 2026-07-09 切片记录：STORY_BREAKDOWN story sprint 派生与 handoff 一致性
+
+触发原因：
+
+- 旁路审查确认 `STORY_BREAKDOWN` 的 `user_stories[].sprint` 与 `sprint_slices[].story_ids` 会同时表达故事所属 Sprint，当前 validator 只校验 `sprint_slices[].story_ids` 引用已定义 story，不校验 story 自身 sprint 与 sprint slice 是否一致。
+- renderer 会同时显示两处信息：Backlog / story-map 使用 `user_stories[].sprint`，Sprint 切片表使用 `sprint_slices[].story_ids`；单故事 handoff candidate / packet 也会读取 `story.sprint`。
+- 本轮单独处理 STORY，是因为它覆盖四个共享阶段、renderer 和 handoff packet，影响面明显大于上一轮单阶段 Incident 映射。
+
+已修复：
+
+- `StoryBreakdownUserStory.sprint` 改为可缺省；缺省时由后端按 `sprint_slices[].story_ids` 所属 `sprint_slices[].sprint_id` 派生。
+- `StoryBreakdownArtifactData` 新增 sprint 归属校验：每个 story 必须出现在且只能出现在一个 sprint slice 中；显式提供 `user_stories[].sprint` 时必须与 slice 归属一致，否则触发 `ValidationError`。
+- 单故事 handoff candidate 使用 `StoryBreakdownArtifactData.model_validate()` 后的派生 sprint，因此持久化 artifact_data 即使缺省 story sprint，也能生成带正确 Sprint 的候选和 packet。
+- Story 四阶段 runtime structured output 示例不再要求模型输出 `user_stories[].sprint`。
+- `workflow_manifest.json`、`get_derived_artifact_data_field_policies()`、backend contract sync、frontend workflow 配置和 frontend system prompt 测试同步更新为“缺省后端派生、显式提供必须一致”。
+- `docs/TESTING.md` 字段来源矩阵同步更新，记录 STORY 四阶段的 story sprint 来源从模型重复维护改为后端派生 / 显式一致性校验。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_story_handoff_packets.py -q -k "story_sprint or derived_from_sprint_slices"
+```
+
+结果：修复前 `3 failed, 143 deselected`，失败点为缺省 story sprint 被 Pydantic required 拒绝、显式 sprint 与 sprint slice 矛盾未触发 `ValidationError`、handoff candidate 不能从缺省 sprint 的 artifact_data 派生 Sprint；修复后 `3 passed, 143 deselected`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_workflow_contract_sync.py -q -k "story_breakdown_structured_output_instruction_omits_story_sprint_examples or story_breakdown_artifact_data_contract or derived_artifact_data_fields"
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run -t "STORY BREAKDOWN"
+```
+
+结果：修复前分别为 `5 failed, 251 deselected`、前端 `5 failed, 109 skipped`；修复后分别通过 `6 passed, 250 deselected`、前端 `5 passed, 109 skipped`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_artifact_data_renderers.py tools/new-agents/backend/tests/test_agent_runtime.py tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_story_handoff_packets.py -q -k "story_breakdown or story_handoff or derived"
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts src/services/__tests__/storyHandoffPacketService.test.ts --run
+git diff --check
+./scripts/test/test-local.sh new-agents
+```
+
+结果：后端聚焦回归 `57 passed, 345 deselected`；前端 Story / handoff 同步测试 `118 passed`；`git diff --check` 通过；New Agents Frontend `830 passed`，New Agents Backend `852 passed, 4 deselected`。
+
+残余风险：
+
+- 本轮只治理 `STORY_BREAKDOWN` 的 story sprint / sprint slice 双向映射，不后端生成 `story_id`、`sprint_id`，也不改变 Epic / Criterion / Dependency / Lisa handoff 引用语义。
+- `VALUE_DISCOVERY/JOURNEY` pain / opportunity 成对映射仍是 P2 候选；当前没有证据表明它造成高失败或必须并入 P1 派生字段收口。
+- 视觉协议分层、复杂 `ai4se-visual` 类型扩展和后端 / CI 视觉渲染强校验仍未在本轮处理。
 
 ## 每轮验收口径
 
