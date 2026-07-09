@@ -1,10 +1,30 @@
 # New Agents 结构化产出失败治理待办
 
-- 状态：执行中（第 0 轮 DeepSeek tool calls 静态能力 spike 已完成；第 1、2 轮已完成；第 3 轮首个 `VALUE_DISCOVERY/ELEVATOR` 派生字段纵切已完成；第 4 轮 `IDEA_BRAINSTORM/DEFINE` 证据引用纵切已完成；第 5 轮首个 `IDEA_BRAINSTORM/DIVERGE` 与 `CONVERGE` partial 引用门禁纵切已完成；第 6 轮 `TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 纵切已完成；`IDEA_BRAINSTORM/CONVERGE` artifactDataContract 同步纵切已完成；第 7 轮首个 `INCIDENT_REVIEW/ROOT_CAUSE` `cause-map` 结构化视觉纵切已完成；Mermaid repair parse + artifact contract 双门禁已完成；前端正式 / partial artifact `ai4se-visual` 写入前校验已完成并全量验证通过；第 8A 轮 `artifact_data` 全阶段 fixture registry 回归门禁已完成并全量验证通过；第 8B 轮 `artifact_data` 字段来源与视觉协议矩阵已完成；第 8C 轮 `TEST_DESIGN/CASES` artifactDataContract manifest 同步已完成；第 8D 轮 `TEST_DESIGN/STRATEGY` artifactDataContract manifest 同步已完成；第 8E 轮 raw JSON strict failure closure 与 before-final delta 门禁收口已完成；第 8F 轮 `INCIDENT_REVIEW/ROOT_CAUSE` artifactDataContract manifest 同步已完成；第 8G 轮 `IDEA_BRAINSTORM/DEFINE` artifactDataContract manifest 同步已完成；第 8H 轮 `IDEA_BRAINSTORM/DIVERGE` artifactDataContract manifest 同步已完成；第 8I 轮 `IDEA_BRAINSTORM/CONCEPT` artifactDataContract manifest 同步已完成；第 8J 轮 `VALUE_DISCOVERY/ELEVATOR` artifactDataContract manifest 同步已完成；第 8K 轮 `VALUE_DISCOVERY/PERSONA` artifactDataContract manifest 同步已完成）
+- 状态：执行中（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync，以及 10 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步；仍有 15 个 artifact-data 阶段待迁移，需要在后续同级切片中继续消化。）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
 - 优先级：P0
 - 相关模块：`tools/new-agents/`
+
+## 切片口径修正
+
+目标模式只允许一种计划单位：切片。切片是计划、验收、提交和对用户汇报进度的唯一口径，不允许再拆出“内部批次”“子切片”或 `8A/8H` 这类字母后缀轮次。
+
+初版 9 个切片是路线假设，不是不可调整的硬约束。若某个切片过大，必须在计划层面拆成多个同级切片，每个切片都要有独立目标、验收、验证命令、提交和 push 边界；不能把过大的工作塞进一个切片后再用“内部批次”消化。
+
+当前判断：初版 9 个切片不是完全合适。第 0-7 切片边界基本成立；第 8 切片覆盖“所有在线 artifact-data 阶段”的回归门禁、文档矩阵、visualContract sync 和 manifest contract sync，范围过大，后续必须拆为多个同级切片继续推进。已经完成的 `VALUE_DISCOVERY/JOURNEY` 同步是当前已完成切片工作的一部分；继续处理剩余 15 个 artifact-data 阶段前，需要先重新定义后续同级切片边界。
+
+最新评估：当前 `VALUE_DISCOVERY/JOURNEY` 同步和本切片口径修正作为正在收尾的当前切片；该切片提交后，剩余工作预计还需要 7 个同级切片完成。
+
+| 后续切片 | 覆盖范围 | 拆分理由 |
+|---|---|---|
+| TEST_DESIGN 首尾 contract sync | `TEST_DESIGN/CLARIFY`、`TEST_DESIGN/DELIVERY` | 同属测试设计工作流的输入澄清与最终交付，需补齐 manifest contract、prompt 注入、backend/frontend sync tests 和 TESTING 矩阵。 |
+| REQ_REVIEW contract sync | `REQ_REVIEW/REVIEW`、`REQ_REVIEW/REPORT` | 同属需求评审闭环，重点是问题统计一致性、score / priority 视觉输出和报告闭合。 |
+| INCIDENT_REVIEW 剩余阶段 contract sync | `INCIDENT_REVIEW/TIMELINE`、`INCIDENT_REVIEW/IMPROVEMENT` | ROOT_CAUSE 已完成，剩余两个阶段分别覆盖事实时间线和改进闭环，仍属于同一事故复盘用户目标。 |
+| Alex 需求蓝图收口 | `VALUE_DISCOVERY/BLUEPRINT` | 这是 Alex 从价值发现走向需求蓝图和后续 AI Coding 输入的关键出口，单独成切片更利于验收 handoff 边界。 |
+| STORY_BREAKDOWN 输入与故事地图 | `STORY_BREAKDOWN/INPUT_ANALYSIS`、`STORY_BREAKDOWN/EPIC_MAPPING` | 负责把上游需求蓝图转成可追溯需求、Epic、活动和任务地图，是故事拆分前半段。 |
+| STORY_BREAKDOWN 用户故事与 AI Coding 单故事包 | `STORY_BREAKDOWN/STORY_BACKLOG`、`STORY_BREAKDOWN/SPRINT_PLAN` | 直接产出后续 AI Coding 可消费的细粒度用户故事和单故事需求包，验收边界应独立。 |
+| PRD_REVIEW contract sync | `PRD_REVIEW/INVENTORY`、`PRD_REVIEW/QUALITY_AUDIT`、`PRD_REVIEW/COMPLETION_PLAN`、`PRD_REVIEW/REVISION_BLUEPRINT` | 四个阶段共享 PRD 盘点 / 质量发现 / 补全动作 / 修订章节数据形态，适合一个 PRD Review 闭环切片整体收口。 |
 
 ## 背景与当前证据
 
@@ -108,34 +128,36 @@
   - 目标：Pydantic validators、structured output instruction、workflow manifest visual contract、frontend prompt 不再各写一套约束。
   - 验收：新增 contract sync 测试，证明关键不变量在 prompt 和后端 validator 中同时存在。
   - 进展：已完成 `IDEA_BRAINSTORM/CONVERGE` 首个 `artifactDataContract` 同步纵切。CONVERGE 的关键 artifact_data 不变量已进入 `workflow_manifest.json`，后端 structured output instruction 和前端 stage prompt 均从 manifest 生成同步约束，并由 backend / frontend 同步测试保护。
-  - 进展：第 8C 轮已完成 `TEST_DESIGN/CASES` `artifactDataContract` manifest 同步。CASES 的 `case_statistics` 后端派生、case_id 唯一性、`automation_candidates.case_id` / `coverage_trace.covered_cases` 引用门禁、禁止模型输出 renderer-owned Markdown / `ai4se-visual` 产物等关键约束已进入 manifest，并由 backend instruction sync、runtime instruction 和 frontend prompt tests 保护。第 8C 完成时 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES` 外，其余 23 个阶段尚未迁移。
-  - 进展：第 8D 轮已完成 `TEST_DESIGN/STRATEGY` `artifactDataContract` manifest 同步。STRATEGY 的 `risks[].rpn` 后端派生、`QG/R/TS/TP` ID 唯一性、测试点/测试技术/测试分层引用门禁、禁止模型输出 renderer-owned Markdown / Mermaid / risk-board 代码块等关键约束已进入 manifest，并由 backend instruction sync、runtime instruction、renderer validators 和 frontend prompt tests 保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 外，其余 22 个阶段尚未迁移。
-  - 进展：第 8F 轮已完成 `INCIDENT_REVIEW/ROOT_CAUSE` `artifactDataContract` manifest 同步。ROOT_CAUSE 的 5-Why 深度、原因 ID 唯一性、证据 / 鱼骨 / 根因结论引用门禁、禁止模型输出 renderer-owned Markdown / Mermaid / cause-map JSON 等关键约束已进入 manifest，并由 backend instruction sync 和 frontend manifest prompt tests 保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 21 个阶段尚未迁移。
-  - 进展：第 8G 轮已完成 `IDEA_BRAINSTORM/DEFINE` `artifactDataContract` manifest 同步。DEFINE 的 evidence / problem ID 唯一性、problem-user-fit 证据引用、root problem 覆盖、`stage_gate`、禁止模型输出 renderer-owned Markdown / Mermaid / mindmap 代码块等关键约束已进入 manifest，并由 backend instruction sync、frontend manifest 配置和 frontend prompt 注入测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 20 个阶段尚未迁移。
-  - 进展：第 8H 轮已完成 `IDEA_BRAINSTORM/DIVERGE` `artifactDataContract` manifest 同步。DIVERGE 的 idea/source/parked record ID 唯一性、创意全景与创意来源 idea 引用、`stage_gate`、禁止模型输出 renderer-owned Markdown / Mermaid / mindmap 代码块等关键约束已进入 manifest，并由 backend instruction sync、frontend manifest 配置和 frontend prompt 注入测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 19 个阶段尚未迁移。
-  - 进展：第 8I 轮已完成 `IDEA_BRAINSTORM/CONCEPT` `artifactDataContract` manifest 同步。CONCEPT 的 core assumption / validation / action ID 唯一性、Lean Canvas 必备格、AARRR 增长漏斗必备 stage、MVP / validation / next action 引用门禁、`stage_gate`、禁止模型输出 renderer-owned Markdown / Mermaid / mvp-map JSON / pie / flowchart 代码块等关键约束已进入 manifest，并由 backend instruction sync、frontend manifest 配置和 frontend prompt 注入测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 18 个阶段尚未迁移。
-  - 进展：第 8J 轮已完成 `VALUE_DISCOVERY/ELEVATOR` `artifactDataContract` manifest 同步。ELEVATOR 的 value_flow node ID 唯一性、flow link 引用门禁、score 取值范围、`score_summary.total_score` / `average_score` 后端派生或显式一致性、禁止模型输出 renderer-owned Markdown / Mermaid / score-matrix JSON 等关键约束已进入 manifest，并由 backend instruction sync、frontend manifest 配置和 frontend prompt 注入测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`VALUE_DISCOVERY/ELEVATOR`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 17 个阶段尚未迁移。
-  - 进展：第 8K 轮已完成 `VALUE_DISCOVERY/PERSONA` `artifactDataContract` manifest 同步。PERSONA 的 `personas[].persona_id` 唯一性、行为场景 / 决策链 / 痛点证据 / 优先级排序 persona 引用门禁、`priority_ranking[].persona_id` 唯一性、禁止模型输出 renderer-owned Markdown / Markdown 表格等关键约束已进入 manifest，并由 backend instruction sync、frontend manifest 配置和 frontend prompt 注入测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`VALUE_DISCOVERY/ELEVATOR`、`VALUE_DISCOVERY/PERSONA`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 16 个阶段尚未迁移。
+  - 进展：已完成 `TEST_DESIGN/CASES` `artifactDataContract` manifest 同步。CASES 的 `case_statistics` 后端派生、case_id 唯一性、`automation_candidates.case_id` / `coverage_trace.covered_cases` 引用门禁、禁止模型输出 renderer-owned Markdown / `ai4se-visual` 产物等关键约束已进入 manifest，并由 backend instruction sync、runtime instruction 和 frontend prompt tests 保护。该记录完成时 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES` 外，其余 23 个阶段尚未迁移。
+  - 进展：已完成 `TEST_DESIGN/STRATEGY` `artifactDataContract` manifest 同步。STRATEGY 的 `risks[].rpn` 后端派生、`QG/R/TS/TP` ID 唯一性、测试点/测试技术/测试分层引用门禁、禁止模型输出 renderer-owned Markdown / Mermaid / risk-board 代码块等关键约束已进入 manifest，并由 backend instruction sync、runtime instruction、renderer validators 和 frontend prompt tests 保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES` 与 `TEST_DESIGN/STRATEGY` 外，其余 22 个阶段尚未迁移。
+  - 进展：已完成 `INCIDENT_REVIEW/ROOT_CAUSE` `artifactDataContract` manifest 同步。ROOT_CAUSE 的 5-Why 深度、原因 ID 唯一性、证据 / 鱼骨 / 根因结论引用门禁、禁止模型输出 renderer-owned Markdown / Mermaid / cause-map JSON 等关键约束已进入 manifest，并由 backend instruction sync 和 frontend manifest prompt tests 保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 21 个阶段尚未迁移。
+  - 进展：已完成 `IDEA_BRAINSTORM/DEFINE` `artifactDataContract` manifest 同步。DEFINE 的 evidence / problem ID 唯一性、problem-user-fit 证据引用、root problem 覆盖、`stage_gate`、禁止模型输出 renderer-owned Markdown / Mermaid / mindmap 代码块等关键约束已进入 manifest，并由 backend instruction sync、frontend manifest 配置和 frontend prompt 注入测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 20 个阶段尚未迁移。
+  - 进展：已完成 `IDEA_BRAINSTORM/DIVERGE` `artifactDataContract` manifest 同步。DIVERGE 的 idea/source/parked record ID 唯一性、创意全景与创意来源 idea 引用、`stage_gate`、禁止模型输出 renderer-owned Markdown / Mermaid / mindmap 代码块等关键约束已进入 manifest，并由 backend instruction sync、frontend manifest 配置和 frontend prompt 注入测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 19 个阶段尚未迁移。
+  - 进展：已完成 `IDEA_BRAINSTORM/CONCEPT` `artifactDataContract` manifest 同步。CONCEPT 的 core assumption / validation / action ID 唯一性、Lean Canvas 必备格、AARRR 增长漏斗必备 stage、MVP / validation / next action 引用门禁、`stage_gate`、禁止模型输出 renderer-owned Markdown / Mermaid / mvp-map JSON / pie / flowchart 代码块等关键约束已进入 manifest，并由 backend instruction sync、frontend manifest 配置和 frontend prompt 注入测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 18 个阶段尚未迁移。
+  - 进展：已完成 `VALUE_DISCOVERY/ELEVATOR` `artifactDataContract` manifest 同步。ELEVATOR 的 value_flow node ID 唯一性、flow link 引用门禁、score 取值范围、`score_summary.total_score` / `average_score` 后端派生或显式一致性、禁止模型输出 renderer-owned Markdown / Mermaid / score-matrix JSON 等关键约束已进入 manifest，并由 backend instruction sync、frontend manifest 配置和 frontend prompt 注入测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`VALUE_DISCOVERY/ELEVATOR`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 17 个阶段尚未迁移。
+  - 进展：已完成 `VALUE_DISCOVERY/PERSONA` `artifactDataContract` manifest 同步。PERSONA 的 `personas[].persona_id` 唯一性、行为场景 / 决策链 / 痛点证据 / 优先级排序 persona 引用门禁、`priority_ranking[].persona_id` 唯一性、禁止模型输出 renderer-owned Markdown / Markdown 表格等关键约束已进入 manifest，并由 backend instruction sync、frontend manifest 配置和 frontend prompt 注入测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`VALUE_DISCOVERY/ELEVATOR`、`VALUE_DISCOVERY/PERSONA`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 16 个阶段尚未迁移。
+  - 进展：已完成 `VALUE_DISCOVERY/JOURNEY` `artifactDataContract` manifest 同步。JOURNEY 的 journey stage / pain / opportunity ID 唯一性、emotion score 取值范围、旅程阶段 / 痛点 / 机会引用门禁、禁止模型输出 renderer-owned Markdown / Mermaid / journey-map JSON 等关键约束已进入 manifest，并由 backend instruction sync、frontend manifest 配置和 frontend prompt 注入测试保护。当前 registry 共 25 个 artifact-data 阶段，除 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`VALUE_DISCOVERY/ELEVATOR`、`VALUE_DISCOVERY/PERSONA`、`VALUE_DISCOVERY/JOURNEY`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE` 外，其余 15 个阶段尚未迁移。
 
 - [ ] 针对高失败阶段做纵切专项修复。（第 4-6 轮）
   - 优先顺序：`IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY`、`IDEA_BRAINSTORM/DIVERGE`。
   - 目标：每个阶段都有失败复现、根因定位、最小 schema 设计修复和回归测试。
-  - 进展：第 4 轮已完成 `IDEA_BRAINSTORM/DEFINE` 的已知 root-problem 覆盖失败模式修复；第 5 轮首个纵切已完成 `DIVERGE` / `CONVERGE` partial preview 与 final validator 关键引用不变量对齐；第 6 轮已完成 `CASES` 的用例统计后端化与 partial case_id 引用门禁，以及 `STRATEGY` 的内部引用门禁。第 8C 轮进一步把 CASES 的核心 artifact_data 约束迁入 manifest，并清理前端 prompt 中要求模型手写 Markdown 表格 / `ai4se-visual` block 的旧冲突描述。
-  - 进展：第 8G 轮进一步把 `IDEA_BRAINSTORM/DEFINE` 的核心 root-problem / evidence 引用约束迁入 manifest，让原高失败阶段的后端 validator、structured output instruction 和前端 prompt 使用同一配置源。
-  - 进展：第 8H 轮进一步把 `IDEA_BRAINSTORM/DIVERGE` 的核心 idea/source 引用约束迁入 manifest，让原高失败阶段的后端 validator、structured output instruction 和前端 prompt 使用同一配置源。
+  - 进展：第 4 轮已完成 `IDEA_BRAINSTORM/DEFINE` 的已知 root-problem 覆盖失败模式修复；第 5 轮首个纵切已完成 `DIVERGE` / `CONVERGE` partial preview 与 final validator 关键引用不变量对齐；第 6 轮已完成 `CASES` 的用例统计后端化与 partial case_id 引用门禁，以及 `STRATEGY` 的内部引用门禁。后续已进一步把 CASES 的核心 artifact_data 约束迁入 manifest，并清理前端 prompt 中要求模型手写 Markdown 表格 / `ai4se-visual` block 的旧冲突描述。
+  - 进展：已进一步把 `IDEA_BRAINSTORM/DEFINE` 的核心 root-problem / evidence 引用约束迁入 manifest，让原高失败阶段的后端 validator、structured output instruction 和前端 prompt 使用同一配置源。
+  - 进展：已进一步把 `IDEA_BRAINSTORM/DIVERGE` 的核心 idea/source 引用约束迁入 manifest，让原高失败阶段的后端 validator、structured output instruction 和前端 prompt 使用同一配置源。
 
 - [ ] 增加结构化失败回归门禁。（第 8 轮）
   - 目标：高失败阶段必须有固定 fixture / raw JSON stream / renderer contract 测试，确保不会再次因为已知不变量触发 `SCHEMA_VALIDATION_FAILED`。
   - 验收：纳入 `./scripts/test/test-local.sh new-agents` 或明确的 New Agents backend regression suite。
-  - 进展：第 8A 轮已建立 `ARTIFACT_DATA_STAGE_FIXTURES` 全阶段测试登记表，当前覆盖全部 `supports_artifact_data_rendering()` 支持的 25 个在线阶段；每个 registry fixture 都必须通过 deterministic renderer 和 `validate_agent_turn()`。`test_agent_runtime.py` 的 artifact-data instruction 顺序矩阵已改为从 registry 派生，避免新增阶段时漏掉 raw JSON visible streaming 门禁。`test_workflow_contract_sync.py` 已反向校验 `workflow_manifest.json` 的 `visualContract` 与后端 required Mermaid / structured visual maps 完全一致。
-  - 进展：第 8B 轮已在 `docs/TESTING.md` 补齐 25 个在线阶段的模型输出字段 / 后端派生字段 / 视觉协议来源矩阵，明确 validation-only 与 backend-derived 的边界，并记录当前已完成 `artifactDataContract` manifest 同步迁移的阶段为 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES`。
-  - 进展：第 8C 轮已新增 `TEST_DESIGN/CASES` 的 backend manifest contract sync、runtime instruction source 和 frontend prompt sync 回归测试；相关 CASES renderer / 引用门禁测试继续通过。
-  - 进展：第 8D 轮已新增 `TEST_DESIGN/STRATEGY` 的 backend manifest contract sync、runtime instruction source、frontend prompt 单点注入和 renderer validator 回归测试；相关 STRATEGY RPN 派生、ID 唯一性、引用门禁和 stage_gate 测试继续通过。
-  - 进展：第 8E 轮已移除 raw JSON 截断后的 `artifact_truncated` 伪成功最终输出，恢复最终 JSON 无效时的 `AgentRuntimeSchemaError` strict failure closure；同时把 raw streaming 强门禁明确为“final 前至少一个正式 before-final artifact delta + final contract 通过”，字段级多段 partial renderer 当前仅声明 `TEST_DESIGN/CLARIFY` 已实现，`artifact_patch` 不作为全阶段强门禁。
-  - 进展：第 8H 轮已新增 `IDEA_BRAINSTORM/DIVERGE` 的 backend manifest contract sync、frontend manifest 配置和 frontend prompt 注入回归测试；相关 DIVERGE renderer / 引用门禁测试继续作为聚焦验证范围。
-  - 进展：第 8I 轮已新增 `IDEA_BRAINSTORM/CONCEPT` 的 backend manifest contract sync、frontend manifest 配置和 frontend prompt 注入回归测试；相关 CONCEPT renderer / 引用门禁 / raw JSON streaming 测试继续作为聚焦验证范围。
-  - 进展：第 8J 轮已新增 `VALUE_DISCOVERY/ELEVATOR` 的 backend manifest contract sync、frontend manifest 配置和 frontend prompt 注入回归测试；相关 ELEVATOR score summary 派生、renderer / 引用门禁 / raw JSON streaming 测试继续作为聚焦验证范围。
-  - 进展：第 8K 轮已新增 `VALUE_DISCOVERY/PERSONA` 的 backend manifest contract sync、frontend manifest 配置和 frontend prompt 注入回归测试；相关 PERSONA persona 引用门禁、renderer 和 raw JSON streaming 测试继续作为聚焦验证范围。
+  - 进展：已建立 `ARTIFACT_DATA_STAGE_FIXTURES` 全阶段测试登记表，当前覆盖全部 `supports_artifact_data_rendering()` 支持的 25 个在线阶段；每个 registry fixture 都必须通过 deterministic renderer 和 `validate_agent_turn()`。`test_agent_runtime.py` 的 artifact-data instruction 顺序矩阵已改为从 registry 派生，避免新增阶段时漏掉 raw JSON visible streaming 门禁。`test_workflow_contract_sync.py` 已反向校验 `workflow_manifest.json` 的 `visualContract` 与后端 required Mermaid / structured visual maps 完全一致。
+  - 进展：已在 `docs/TESTING.md` 补齐 25 个在线阶段的模型输出字段 / 后端派生字段 / 视觉协议来源矩阵，明确 validation-only 与 backend-derived 的边界，并记录当前已完成 `artifactDataContract` manifest 同步迁移的阶段为 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES`。
+  - 进展：已新增 `TEST_DESIGN/CASES` 的 backend manifest contract sync、runtime instruction source 和 frontend prompt sync 回归测试；相关 CASES renderer / 引用门禁测试继续通过。
+  - 进展：已新增 `TEST_DESIGN/STRATEGY` 的 backend manifest contract sync、runtime instruction source、frontend prompt 单点注入和 renderer validator 回归测试；相关 STRATEGY RPN 派生、ID 唯一性、引用门禁和 stage_gate 测试继续通过。
+  - 进展：已移除 raw JSON 截断后的 `artifact_truncated` 伪成功最终输出，恢复最终 JSON 无效时的 `AgentRuntimeSchemaError` strict failure closure；同时把 raw streaming 强门禁明确为“final 前至少一个正式 before-final artifact delta + final contract 通过”，字段级多段 partial renderer 当前仅声明 `TEST_DESIGN/CLARIFY` 已实现，`artifact_patch` 不作为全阶段强门禁。
+  - 进展：已新增 `IDEA_BRAINSTORM/DIVERGE` 的 backend manifest contract sync、frontend manifest 配置和 frontend prompt 注入回归测试；相关 DIVERGE renderer / 引用门禁测试继续作为聚焦验证范围。
+  - 进展：已新增 `IDEA_BRAINSTORM/CONCEPT` 的 backend manifest contract sync、frontend manifest 配置和 frontend prompt 注入回归测试；相关 CONCEPT renderer / 引用门禁 / raw JSON streaming 测试继续作为聚焦验证范围。
+  - 进展：已新增 `VALUE_DISCOVERY/ELEVATOR` 的 backend manifest contract sync、frontend manifest 配置和 frontend prompt 注入回归测试；相关 ELEVATOR score summary 派生、renderer / 引用门禁 / raw JSON streaming 测试继续作为聚焦验证范围。
+  - 进展：已新增 `VALUE_DISCOVERY/PERSONA` 的 backend manifest contract sync、frontend manifest 配置和 frontend prompt 注入回归测试；相关 PERSONA persona 引用门禁、renderer 和 raw JSON streaming 测试继续作为聚焦验证范围。
+  - 进展：已新增 `VALUE_DISCOVERY/JOURNEY` 的 backend manifest contract sync、frontend manifest 配置和 frontend prompt 注入回归测试；相关 JOURNEY stage / pain / opportunity 引用门禁、visual contract、renderer 和 raw JSON streaming 测试继续作为聚焦验证范围。
 
 - [ ] 建立视觉产物协议分层。（第 7 轮）
   - 目标：明确哪些视觉类型必须走 `ai4se-visual` JSON，哪些 Mermaid 类型允许由后端 deterministic renderer 生成，哪些 DSL 禁止模型直接输出。
@@ -160,21 +182,21 @@
   - 验收：测试证明 repair 结果必须重新经过 Mermaid parse / artifact contract 校验；repair 失败继续显式展示，不隐藏原始错误。
   - 进展：已完成前端 `retryMermaidGeneration()` parse gate；ArtifactPane 发起 repair 时会把 `workflowId`、`stageId` 和当前完整 artifact 一起提交给共享 `/api/utils/mermaid/repair`，后端替换候选 Mermaid block 后复用 `validate_agent_turn` 做完整 artifact contract 校验。ChatPane 不替换 artifact，只保留 Mermaid parse gate。失败时 service 返回 `null`，父组件不写入 artifact/message，原始错误状态继续保留。
 
-## 目标轮数声明
+## 目标切片声明
 
-基线按 1 个第 0 轮能力 spike 加 8 个目标模式治理轮次推进。每轮都必须保留“失败显式报错”的架构边界，不允许通过 fallback 降低用户可见错误。第 0 轮是能力 spike，不改变正式 workflow 主链路；当前已补做第 0 轮静态能力结论，真实 provider smoke 仅在具备 `DEEPSEEK_API_KEY` 和明确外部调用授权时再单独执行。
+初版按 1 个第 0 切片能力 spike 加 8 个治理切片推进。复盘后确认：第 0-7 切片边界基本成立，原第 8 切片“全工作流失败回归门禁与文档收口”过大，后续必须拆成多个同级切片继续推进。每个切片都必须保留“失败显式报错”的架构边界，不允许通过 fallback 降低用户可见错误。第 0 切片是能力 spike，不改变正式 workflow 主链路；当前已补做第 0 切片静态能力结论，真实 provider smoke 仅在具备 `DEEPSEEK_API_KEY` 和明确外部调用授权时再单独执行。
 
-| 轮次 | 目标模式 | 覆盖范围 | 交付边界 |
+| 切片 | 目标模式 | 覆盖范围 | 交付边界 |
 |---|---|---|---|
-| 第 0 轮 | DeepSeek provider 能力 spike | JSON mode 边界、tool calling、strict tool call、streaming tool arguments | 只产出能力结论、最小 fixture 和 provider capability 设计，不改变正式 workflow 主链路；确认 tool calling 是否值得进入后续轮次。 |
-| 第 1 轮 | 结构化失败诊断透明化 | backend error event、frontend diagnostic card、observability metrics | 用户和工程师能直接看到失败发生在哪个 workflow/stage/field/validator；仍然显式失败，不持久化错误产物。 |
-| 第 2 轮 | 严格失败闭环 | raw JSON 截断、空内容、provider 中断、partial delta 最终失败 | 移除 `artifact_truncated` 伪最终输出；partial delta 可用于流式预览，但最终 JSON 无效必须显式失败，不持久化、不推进 stage。 |
-| 第 3 轮 | 可计算字段后端化首个纵切 | `VALUE_DISCOVERY/ELEVATOR` 或 `TEST_DESIGN/CASES` 中一组派生字段 | 模型不再输出选定派生字段；后端确定性计算并渲染；相关旧失败模式有回归测试。 |
-| 第 4 轮 | IDEA DEFINE 根问题与证据一致性治理 | `IDEA_BRAINSTORM/DEFINE` | root problem、evidence、problem-user-fit 的覆盖关系由更稳定的数据结构或后端确定性关联保证；真实已知失败类型不再复现。 |
-| 第 5 轮 | IDEA CONVERGE / DIVERGE 引用一致性治理 | `IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE` | idea id、source id、rank、recommended idea、merge path 等引用关系不再依赖模型自由维护。 |
-| 第 6 轮 | TEST_DESIGN CASES / STRATEGY 统计与覆盖治理 | `TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` | 用例统计、覆盖追踪、风险/测试点/用例映射中的派生值和引用关系稳定化。 |
-| 第 7 轮 | 视觉产物稳定化专项 | Mermaid、`ai4se-visual`、ArtifactPane、visual contract registry、导出链路 | `ai4se-visual` 成为复杂视觉主协议；Mermaid 只作为后端确定性编译目标；视觉失败显式报错并进入回归门禁。 |
-| 第 8 轮 | 全工作流失败回归门禁与文档收口 | 所有在线 artifact-data 阶段 | 新增或更新测试矩阵、TESTING 文档、观测说明；明确哪些字段由模型输出、哪些字段由后端生成，哪些视觉由结构化协议驱动。 |
+| 第 0 切片 | DeepSeek provider 能力 spike | JSON mode 边界、tool calling、strict tool call、streaming tool arguments | 只产出能力结论、最小 fixture 和 provider capability 设计，不改变正式 workflow 主链路；确认 tool calling 是否值得进入后续切片。 |
+| 第 1 切片 | 结构化失败诊断透明化 | backend error event、frontend diagnostic card、observability metrics | 用户和工程师能直接看到失败发生在哪个 workflow/stage/field/validator；仍然显式失败，不持久化错误产物。 |
+| 第 2 切片 | 严格失败闭环 | raw JSON 截断、空内容、provider 中断、partial delta 最终失败 | 移除 `artifact_truncated` 伪最终输出；partial delta 可用于流式预览，但最终 JSON 无效必须显式失败，不持久化、不推进 stage。 |
+| 第 3 切片 | 可计算字段后端化首个纵切 | `VALUE_DISCOVERY/ELEVATOR` 或 `TEST_DESIGN/CASES` 中一组派生字段 | 模型不再输出选定派生字段；后端确定性计算并渲染；相关旧失败模式有回归测试。 |
+| 第 4 切片 | IDEA DEFINE 根问题与证据一致性治理 | `IDEA_BRAINSTORM/DEFINE` | root problem、evidence、problem-user-fit 的覆盖关系由更稳定的数据结构或后端确定性关联保证；真实已知失败类型不再复现。 |
+| 第 5 切片 | IDEA CONVERGE / DIVERGE 引用一致性治理 | `IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE` | idea id、source id、rank、recommended idea、merge path 等引用关系不再依赖模型自由维护。 |
+| 第 6 切片 | TEST_DESIGN CASES / STRATEGY 统计与覆盖治理 | `TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` | 用例统计、覆盖追踪、风险/测试点/用例映射中的派生值和引用关系稳定化。 |
+| 第 7 切片 | 视觉产物稳定化专项 | Mermaid、`ai4se-visual`、ArtifactPane、visual contract registry、导出链路 | `ai4se-visual` 成为复杂视觉主协议；Mermaid 只作为后端确定性编译目标；视觉失败显式报错并进入回归门禁。 |
+| 第 8 切片及后续同级切片 | 全工作流失败回归门禁与文档收口拆分 | 所有在线 artifact-data 阶段 | 原第 8 切片过大，后续必须按自然业务边界拆成多个同级切片；每个切片独立定义目标、验收、验证、commit 和 push。 |
 
 ## 目标模式执行记录
 
@@ -1050,7 +1072,7 @@ cd tools/new-agents/frontend && npm run lint
 - Backend 仍不执行 Mermaid JS parse；Mermaid parse gate 仍由前端 Mermaid runtime 承担。
 - `mmdc` / 浏览器渲染级 CI 门禁仍属于后续第 7 / 第 8 轮候选，不在本切片内声明完成。
 
-### 2026-07-08 第 8A 轮：artifact_data 全阶段 fixture registry 回归门禁
+### 2026-07-08 切片记录：artifact_data 全阶段 fixture registry 回归门禁
 
 已完成：
 
@@ -1122,17 +1144,17 @@ GREEN 与聚焦回归：
 
 残余风险：
 
-- 本轮不迁移其余阶段的 `artifactDataContract` 到 manifest；第 8A 轮记录时 registry 为 25 个阶段，除 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES` 外仍有 23 个待迁移。
+- 本轮不迁移其余阶段的 `artifactDataContract` 到 manifest；该记录完成时 registry 为 25 个阶段，除 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES` 外仍有 23 个待迁移。
 - 本轮不增加 backend Mermaid JS parse 或 `mmdc` 渲染门禁。
 - 模型输出字段 / 后端派生字段 / 视觉协议来源的完整全阶段矩阵仍属第 8 轮后续文档收口候选。
 
-### 2026-07-08 第 8B 轮：artifact_data 字段来源与视觉协议矩阵
+### 2026-07-08 切片记录：artifact_data 字段来源与视觉协议矩阵
 
 已完成：
 
 - `docs/TESTING.md` 新增并维护 25 个在线 `artifact_data` 阶段的字段来源矩阵，列出模型负责的语义字段、后端派生 / 归一化字段、视觉来源和现有证据。
 - 矩阵明确区分 backend-derived 与 validation-only：`STRATEGY.risks[].rpn`、`CASES.case_statistics`、`VALUE_DISCOVERY/ELEVATOR.score_summary.total_score/average_score` 属于可后端补齐或归一化；`delivery_metrics`、`issue_statistics`、`priority_distribution`、`ice_score`、`acceptance_criteria_count` 等仍是模型输入后的校验，不声明后端补齐。
-- 矩阵在第 8B 轮记录时明确已完成 `artifactDataContract` manifest 同步迁移的阶段为 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES`；其余 23 个阶段仍主要由 Pydantic model、renderer tests、runtime instruction 和 artifact contract tests 共同保护。
+- 矩阵在该记录完成时明确已完成 `artifactDataContract` manifest 同步迁移的阶段为 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES`；其余 23 个阶段仍主要由 Pydantic model、renderer tests、runtime instruction 和 artifact contract tests 共同保护。
 - 矩阵明确 Mermaid 仍是后端 deterministic renderer 的编译目标，并区分 manifest required visual 与 renderer 额外输出：例如 `IDEA_BRAINSTORM/CONCEPT` 和 `VALUE_DISCOVERY/BLUEPRINT` 仍会额外生成 Mermaid，但 manifest 当前只要求其 `ai4se-visual`。
 - 只读 explorer `Jason` 已审查 `workflow_manifest.json`、`agent_runtime.py`、`artifact_data_renderers.py` 和相关 backend tests，返回的事实清单已并入矩阵；本轮未改生产 runtime、schema、manifest、prompt、测试代码或前端运行时。
 
@@ -1141,18 +1163,18 @@ GREEN 与聚焦回归：
 清理后不再保留指向独立过程 spec / plan 文件的历史文档验证命令；本轮稳定文档和代码路径的验证结果仍保留在上方记录中。
 
 ```bash
-rg -n "模型负责的 artifact_data|后端派生 / 归一化|视觉来源|第 8B" docs/TESTING.md docs/todos/2026-07-08-new-agents-structured-artifact-failure-reduction.md
+rg -n "模型负责的 artifact_data|后端派生 / 归一化|视觉来源|字段来源与视觉协议矩阵" docs/TESTING.md docs/todos/2026-07-08-new-agents-structured-artifact-failure-reduction.md
 ```
 
-结果：通过，`docs/TESTING.md` 和本 todo 均包含第 8B 矩阵入口；当前 `docs/TESTING.md` 覆盖 25 个在线阶段。
+结果：通过，`docs/TESTING.md` 和本 todo 均包含字段来源与视觉协议矩阵入口；当前 `docs/TESTING.md` 覆盖 25 个在线阶段。
 
 残余风险：
 
-- 本轮只补齐字段来源与视觉协议文档矩阵，不迁移其余阶段的 `artifactDataContract` 到 manifest；第 8B 轮记录时仍有 23 个 artifact-data 阶段待迁移。
+- 本轮只补齐字段来源与视觉协议文档矩阵，不迁移其余阶段的 `artifactDataContract` 到 manifest；该记录完成时仍有 23 个 artifact-data 阶段待迁移。
 - 本轮不增加 backend Mermaid JS parse 或 `mmdc` 渲染门禁。
-- 矩阵是人工维护的文档事实源，后续 schema / renderer / manifest 变化时仍必须同步更新；第 8A 的 fixture registry 和 manifest visualContract sync test 仍是可执行门禁。
+- 矩阵是人工维护的文档事实源，后续 schema / renderer / manifest 变化时仍必须同步更新；fixture registry 和 manifest visualContract sync test 仍是可执行门禁。
 
-### 2026-07-08 第 8C 轮：TEST_DESIGN CASES artifactDataContract 同步
+### 2026-07-08 切片记录：TEST_DESIGN CASES artifactDataContract 同步
 
 已完成：
 
@@ -1232,11 +1254,11 @@ cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workfl
 
 残余风险：
 
-- 本轮只迁移 `TEST_DESIGN/CASES`；第 8C 完成时已完成 `artifactDataContract` manifest 同步迁移的阶段为 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES`，其余 23 个 artifact-data 阶段仍待后续纵切迁移。
+- 本轮只迁移 `TEST_DESIGN/CASES`；该记录完成时已完成 `artifactDataContract` manifest 同步迁移的阶段为 `IDEA_BRAINSTORM/CONVERGE` 与 `TEST_DESIGN/CASES`，其余 23 个 artifact-data 阶段仍待后续纵切迁移。
 - 本轮不改变 CASES Pydantic schema、renderer、SSE runtime 或 ArtifactPane。
 - 本轮不增加 backend Mermaid JS parse 或 `mmdc` 渲染门禁。
 
-### 2026-07-09 第 8D 轮：TEST_DESIGN STRATEGY artifactDataContract 同步
+### 2026-07-09 切片记录：TEST_DESIGN STRATEGY artifactDataContract 同步
 
 已完成：
 
@@ -1283,11 +1305,11 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -p no:cacheprovider 
 - 本轮不处理 raw JSON partial streaming 多段预览门禁和 `artifact_truncated` 旧路径；这两项应另起纵切，避免混进 STRATEGY contract 同步。
 - 本轮不增加 backend Mermaid JS parse 或 `mmdc` 渲染门禁。
 
-### 2026-07-09 第 8E 轮：raw JSON strict failure closure 与 before-final delta 门禁收口
+### 2026-07-09 切片记录：raw JSON strict failure closure 与 before-final delta 门禁收口
 
 触发原因：
 
-- 第 8D 宽回归已暴露 `test_agent_runtime.py` 中 raw JSON partial streaming 多段预览断言仍与当前实现不一致。
+- STRATEGY 宽回归已暴露 `test_agent_runtime.py` 中 raw JSON partial streaming 多段预览断言仍与当前实现不一致。
 - 只读 explorer `Volta` 复核后确认：当前 runtime 不应恢复 `artifact_truncated` 伪最终输出；多阶段字段级 partial renderer 与 `artifact_patch` 是未来能力，不是当前全阶段强门禁。
 
 已完成：
@@ -1410,7 +1432,7 @@ cd tools/new-agents/frontend && npm run lint
 
 结果：`40 failed, 182 passed`。失败集中在历史 contract fixture / 派生字段测试预期 / typed diagnostic 预期滞后等既有后端回归缺口；本轮已修复的 artifact-data 输出顺序质量门包含在该套件中并已单独通过。后续目标模式应把这些后端红灯纳入结构化失败治理的下一批 P0 改道候选，而不是继续新增 workflow 能力。
 
-### 2026-07-09 第 8F 轮：INCIDENT_REVIEW ROOT_CAUSE artifactDataContract 同步
+### 2026-07-09 切片记录：INCIDENT_REVIEW ROOT_CAUSE artifactDataContract 同步
 
 触发原因：
 
@@ -1466,7 +1488,7 @@ cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workfl
 - 本轮只迁移 `INCIDENT_REVIEW/ROOT_CAUSE`；当前已完成 `artifactDataContract` manifest sync 的阶段为 `IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE`，其余 21 个 artifact-data 阶段仍待后续纵切迁移。
 - 本轮不新增 backend Mermaid JS parse 或 `mmdc` 渲染门禁；Mermaid 仍是后端 deterministic renderer 的编译目标，视觉强校验门禁仍需后续第 7 / 第 8 轮继续收口。
 
-### 2026-07-09 第 8G 轮：IDEA_BRAINSTORM DEFINE artifactDataContract 同步
+### 2026-07-09 切片记录：IDEA_BRAINSTORM DEFINE artifactDataContract 同步
 
 触发原因：
 
@@ -1528,7 +1550,7 @@ NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all
 - 本轮只迁移 `IDEA_BRAINSTORM/DEFINE`；当前已完成 `artifactDataContract` manifest sync 的阶段为 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE`，其余 20 个 artifact-data 阶段仍待后续纵切迁移。
 - 本轮不新增 backend Mermaid JS parse 或 `mmdc` 渲染门禁；Mermaid `mindmap` 仍由后端 deterministic renderer 生成，并由现有 artifact contract / visual contract 测试保护。
 
-### 2026-07-09 第 8H 轮：IDEA_BRAINSTORM DIVERGE artifactDataContract 同步
+### 2026-07-09 切片记录：IDEA_BRAINSTORM DIVERGE artifactDataContract 同步
 
 触发原因：
 
@@ -1603,7 +1625,7 @@ NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all
 - 本轮只迁移 `IDEA_BRAINSTORM/DIVERGE`；当前已完成 `artifactDataContract` manifest sync 的阶段为 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE`，其余 19 个 artifact-data 阶段仍待后续纵切迁移。
 - 本轮不新增 DIVERGE 后端派生字段、自动 ID 分配、状态枚举校验、backend Mermaid JS parse 或 `mmdc` 渲染门禁；Mermaid `mindmap` 仍由后端 deterministic renderer 生成，并由现有 artifact contract / visual contract 测试保护。
 
-### 2026-07-09 第 8I 轮：IDEA_BRAINSTORM CONCEPT artifactDataContract 同步
+### 2026-07-09 切片记录：IDEA_BRAINSTORM CONCEPT artifactDataContract 同步
 
 触发原因：
 
@@ -1678,7 +1700,7 @@ NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all
 - 本轮只迁移 `IDEA_BRAINSTORM/CONCEPT`；当前已完成 `artifactDataContract` manifest sync 的阶段为 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE`，其余 18 个 artifact-data 阶段仍待后续纵切迁移。
 - 本轮不新增 CONCEPT 后端派生字段、风险 ID 唯一性、MVP level / likelihood 枚举、日期格式校验、自动 ID 分配、backend Mermaid JS parse 或 `mmdc` 渲染门禁；Mermaid pie / flowchart 和 `mvp-map` 仍由后端 deterministic renderer 生成，并由现有 artifact contract / visual contract 测试保护。
 
-### 2026-07-09 第 8J 轮：VALUE_DISCOVERY ELEVATOR artifactDataContract 同步
+### 2026-07-09 切片记录：VALUE_DISCOVERY ELEVATOR artifactDataContract 同步
 
 触发原因：
 
@@ -1753,7 +1775,7 @@ NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all
 - 本轮只迁移 `VALUE_DISCOVERY/ELEVATOR`；当前已完成 `artifactDataContract` manifest sync 的阶段为 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`VALUE_DISCOVERY/ELEVATOR`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE`，其余 17 个 artifact-data 阶段仍待后续纵切迁移。
 - 本轮不新增 ELEVATOR 后端派生字段之外的自动 ID 分配，不新增 pain / assumption / score dimension 唯一性，不新增状态枚举、stage_gate 全 checked、60 秒演讲长度校验、backend Mermaid JS parse 或 `mmdc` 渲染门禁；Mermaid flowchart 和 `score-matrix` 仍由后端 deterministic renderer 生成，并由现有 artifact contract / visual contract 测试保护。
 
-### 2026-07-09 第 8K 轮：VALUE_DISCOVERY PERSONA artifactDataContract 同步
+### 2026-07-09 切片记录：VALUE_DISCOVERY PERSONA artifactDataContract 同步
 
 触发原因：
 
@@ -1821,6 +1843,75 @@ NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all
 
 - 本轮只迁移 `VALUE_DISCOVERY/PERSONA`；当前已完成 `artifactDataContract` manifest sync 的阶段为 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`VALUE_DISCOVERY/ELEVATOR`、`VALUE_DISCOVERY/PERSONA`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE`，其余 16 个 artifact-data 阶段仍待后续纵切迁移。
 - 本轮不新增 PERSONA 字段派生、自动 ID 分配、`priority_ranking[].related_pain` 引用校验、`scenario_id` / `pain_id` / `role` 唯一性、枚举强校验、stage_gate checked 要求、使用者 / 决策者 / 付费者三类角色强校验、Mermaid / `ai4se-visual` 输出或 backend Mermaid JS parse / `mmdc` 渲染门禁。
+
+### 2026-07-09 切片记录：VALUE_DISCOVERY JOURNEY artifactDataContract 同步
+
+触发原因：
+
+- `VALUE_DISCOVERY/PERSONA` 已完成 manifest sync；继续推进 Alex 需求蓝图梳理链路时，`VALUE_DISCOVERY/JOURNEY` 是用户画像之后的旅程分析阶段。
+- `JOURNEY` 已有 Pydantic validator、deterministic renderer、visual contract 和 runtime raw JSON streaming 测试，但 stage / pain / opportunity 引用约束仍未进入 `artifactDataContract` manifest 单源。
+- 本地只读审查确认：JOURNEY 当前真实业务 validator 覆盖 `journey_stages[].stage_id`、`pain_id`、`opportunity_id` 唯一性，`emotion_score` 1-5 字段约束，`pain_priorities.stage_id`、痛点引用和机会引用门禁；JOURNEY 由后端 renderer 输出 Mermaid `journey` 和 `ai4se-visual journey-map`。
+
+已修复：
+
+- `VALUE_DISCOVERY/JOURNEY` 新增 `artifactDataContract` manifest 配置，把 journey stage / pain / opportunity ID 唯一性、emotion score 取值范围、旅程阶段 / 痛点 / 机会引用门禁、禁止模型手写完整 Markdown / Markdown 表格 / Mermaid / `journey-map` JSON，以及后端 renderer 负责输出右侧《用户旅程分析》、Mermaid `journey` 和 `ai4se-visual journey-map` 的边界放入单一配置源。
+- 后端 contract sync 测试证明 `format_artifact_data_contract_instruction()` 从 manifest 生成 JOURNEY 结构化输出约束；前端 workflow 配置测试证明 JOURNEY 契约已暴露；前端 system prompt 测试证明该契约会进入共享 prompt 注入路径，并沿用既有 `Mermaid` -> `图表` 的模型提示降噪逻辑。
+- `docs/TESTING.md` 字段来源矩阵同步更新：已迁入 `artifactDataContract` manifest sync 的阶段从 9 个增加到 10 个，剩余待迁移阶段从 16 个减少到 15 个。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py::test_value_journey_artifact_data_contract_manifest_drives_backend_instruction -q
+```
+
+结果：修复前 `1 failed`，失败点为 JOURNEY `artifactDataContract` 缺失；修复后 `1 passed`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts -t "VALUE DISCOVERY JOURNEY"
+```
+
+结果：修复前 `1 failed`，失败点为 JOURNEY `artifactDataContract` 未暴露；修复后 `1 passed, 25 skipped`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/prompts/__tests__/buildSystemPrompt.test.ts -t "VALUE DISCOVERY JOURNEY"
+```
+
+结果：修复前 `1 failed`，失败点为 JOURNEY `artifactDataContract` 未进入 system prompt；修复后 `1 passed, 59 skipped`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_workflow_contract_sync.py tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_value_journey_artifact_data_rejects_unknown_stage_reference tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_value_journey_artifact_data_rejects_unknown_opportunity_reference tools/new-agents/backend/tests/test_artifact_data_renderers.py::test_render_value_journey_artifact_data_is_deterministic_and_contract_valid -q
+```
+
+结果：`29 passed`。
+
+```bash
+.venv/bin/python -m pytest tools/new-agents/backend/tests/test_agent_runtime.py::test_parse_agent_turn_output_text_renders_value_journey_artifact_data tools/new-agents/backend/tests/test_agent_runtime.py::test_value_journey_structured_output_instruction_requests_artifact_data_not_markdown tools/new-agents/backend/tests/test_agent_runtime.py::test_value_journey_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite tools/new-agents/backend/tests/test_agent_runtime.py::test_runtime_raw_json_stream_turn_renders_value_journey_artifact_data_before_final_output -q
+```
+
+结果：`4 passed`。
+
+```bash
+cd tools/new-agents/frontend && npm run test -- src/core/config/__tests__/workflows.test.ts src/core/prompts/__tests__/buildSystemPrompt.test.ts --run
+```
+
+结果：`86 passed`。
+
+```bash
+./scripts/test/test-local.sh new-agents
+```
+
+结果：通过。New Agents Frontend `799 passed`；New Agents Backend `762 passed, 4 deselected`。
+
+```bash
+NEW_AGENTS_E2E_LLM_JUDGE=0 ./scripts/test/test-local.sh all
+```
+
+结果：非沙箱全量验证通过。关键结果包括 Intent Tester API `294 passed`、flake8 严重错误检查通过、MidScene proxy `17 passed`、Common Frontend lint/build 通过、New Agents Frontend `799 passed`、New Agents Backend `762 passed, 4 deselected`、New Agents Browser E2E `8 passed, 3 skipped, 10 deselected`。
+
+残余风险：
+
+- 本轮只迁移 `VALUE_DISCOVERY/JOURNEY`；当前已完成 `artifactDataContract` manifest sync 的阶段为 `IDEA_BRAINSTORM/DEFINE`、`IDEA_BRAINSTORM/DIVERGE`、`IDEA_BRAINSTORM/CONVERGE`、`IDEA_BRAINSTORM/CONCEPT`、`VALUE_DISCOVERY/ELEVATOR`、`VALUE_DISCOVERY/PERSONA`、`VALUE_DISCOVERY/JOURNEY`、`TEST_DESIGN/CASES`、`TEST_DESIGN/STRATEGY` 与 `INCIDENT_REVIEW/ROOT_CAUSE`，其余 15 个 artifact-data 阶段仍待后续纵切迁移。
+- 本轮不新增 JOURNEY 字段派生、自动 ID 分配、`priority_level` 枚举、RICE / Kano 数值评分计算、实验 owner / status 枚举、stage_gate checked 要求、backend Mermaid JS parse 或 `mmdc` 渲染门禁；Mermaid `journey` 和 `journey-map` 仍由后端 deterministic renderer 生成，并由现有 artifact contract / visual contract 测试保护。
 
 ## 每轮验收口径
 

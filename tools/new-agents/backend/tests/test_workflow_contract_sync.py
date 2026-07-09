@@ -337,6 +337,35 @@ def test_value_persona_artifact_data_contract_manifest_drives_backend_instructio
     assert "画像、行为场景、决策链、痛点证据、反画像和优先级排序 Markdown 表格" in instruction
 
 
+def test_value_journey_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    instruction = format_artifact_data_contract_instruction(
+        "VALUE_DISCOVERY",
+        "JOURNEY",
+    )
+    stage = next(
+        stage
+        for stage in _workflow_manifest()["workflows"]["VALUE_DISCOVERY"]["stages"]
+        if stage["id"] == "JOURNEY"
+    )
+    contract = stage.get("artifactDataContract")
+
+    assert contract is not None
+    assert "journey_stages[].stage_id 必须唯一" in instruction
+    assert "journey_stages[].pain_id 必须唯一" in instruction
+    assert "journey_stages[].opportunity_id 必须唯一" in instruction
+    assert "journey_stages[].emotion_score 必须是 1 到 5 的整数" in instruction
+    assert "pain_priorities[].stage_id 只能引用 journey_stages[].stage_id 中已定义的旅程阶段 ID" in instruction
+    assert "pain_priorities[].pain_id 和 opportunity_scores[].pain_id 只能引用 journey_stages[].pain_id 中已定义的痛点 ID" in instruction
+    assert "opportunity_scores[].opportunity_id、entry_strategy[].related_opportunity 和 validation_experiments[].opportunity_id 只能引用 journey_stages[].opportunity_id 中已定义的机会 ID" in instruction
+    assert "Mermaid 代码块" in instruction
+    assert "journey-map JSON 代码块" in instruction
+    assert "右侧用户旅程分析" in instruction
+    assert "Mermaid journey" in instruction
+    assert "ai4se-visual journey-map" in instruction
+
+
 def test_workflow_manifest_declares_prompt_template_versions_for_every_stage():
     manifest = _workflow_manifest()
 

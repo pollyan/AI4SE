@@ -383,6 +383,33 @@ describe('buildSystemPrompt', () => {
         expect(personaIdRuleMatches).toHaveLength(1);
     });
 
+    it('injects VALUE DISCOVERY JOURNEY artifact data contract from the manifest', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'alex',
+            workflow: 'VALUE_DISCOVERY',
+            stageIndex: 2,
+            currentArtifact: '# 用户旅程分析\n已有内容',
+        });
+
+        const stageIdRule = 'journey_stages[].stage_id 必须唯一';
+        expect(prompt).toContain('【artifact_data 结构化契约】');
+        expect(prompt).toContain(stageIdRule);
+        expect(prompt).toContain('journey_stages[].pain_id 必须唯一');
+        expect(prompt).toContain('journey_stages[].opportunity_id 必须唯一');
+        expect(prompt).toContain('journey_stages[].emotion_score 必须是 1 到 5 的整数');
+        expect(prompt).toContain('pain_priorities[].stage_id 只能引用 journey_stages[].stage_id 中已定义的旅程阶段 ID');
+        expect(prompt).toContain('pain_priorities[].pain_id 和 opportunity_scores[].pain_id 只能引用 journey_stages[].pain_id 中已定义的痛点 ID');
+        expect(prompt).toContain('opportunity_scores[].opportunity_id、entry_strategy[].related_opportunity 和 validation_experiments[].opportunity_id 只能引用 journey_stages[].opportunity_id 中已定义的机会 ID');
+        expect(prompt).toContain('图表 代码块');
+        expect(prompt).toContain('journey-map JSON 代码块');
+        expect(prompt).toContain('右侧用户旅程分析');
+        expect(prompt).toContain('图表 journey');
+        expect(prompt).toContain('ai4se-visual journey-map');
+        expect(prompt).not.toContain('Mermaid 代码块');
+        const stageIdRuleMatches = prompt.match(new RegExp(stageIdRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
+        expect(stageIdRuleMatches).toHaveLength(1);
+    });
+
     it('describes story breakdown work without markdown direct-write instructions', () => {
         const prompt = buildSystemPrompt({
             agentId: 'alex',

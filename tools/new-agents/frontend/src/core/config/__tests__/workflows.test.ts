@@ -369,6 +369,36 @@ describe('Workflow Configuration', () => {
         );
     });
 
+    it('exposes manifest artifact data contract for VALUE DISCOVERY JOURNEY', () => {
+        const journey = WORKFLOWS.VALUE_DISCOVERY.stages.find(stage => stage.id === 'JOURNEY');
+
+        expect(journey?.artifactDataContract?.modelOutputRules).toContain(
+            'journey_stages[].stage_id 必须唯一',
+        );
+        expect(journey?.artifactDataContract?.modelOutputRules).toContain(
+            'journey_stages[].pain_id 必须唯一',
+        );
+        expect(journey?.artifactDataContract?.modelOutputRules).toContain(
+            'journey_stages[].opportunity_id 必须唯一',
+        );
+        expect(journey?.artifactDataContract?.modelOutputRules).toContain(
+            'journey_stages[].emotion_score 必须是 1 到 5 的整数',
+        );
+        expect(journey?.artifactDataContract?.modelOutputRules).toContain(
+            'pain_priorities[].stage_id 只能引用 journey_stages[].stage_id 中已定义的旅程阶段 ID',
+        );
+        expect(journey?.artifactDataContract?.modelOutputRules).toContain(
+            'pain_priorities[].pain_id 和 opportunity_scores[].pain_id 只能引用 journey_stages[].pain_id 中已定义的痛点 ID',
+        );
+        expect(journey?.artifactDataContract?.modelOutputRules).toContain(
+            'opportunity_scores[].opportunity_id、entry_strategy[].related_opportunity 和 validation_experiments[].opportunity_id 只能引用 journey_stages[].opportunity_id 中已定义的机会 ID',
+        );
+        expect(journey?.artifactDataContract?.forbiddenOutputs).toContain('Mermaid 代码块');
+        expect(journey?.artifactDataContract?.forbiddenOutputs).toContain('journey-map JSON 代码块');
+        expect(journey?.artifactDataContract?.rendererOutputs).toContain('Mermaid journey');
+        expect(journey?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual journey-map');
+    });
+
     it('does not ask TEST DESIGN STRATEGY model to handwrite renderer-owned visuals in artifact data mode', () => {
         const strategy = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'STRATEGY');
 
