@@ -1485,6 +1485,13 @@ def test_incident_timeline_structured_output_instruction_requests_artifact_data_
     assert "fact_separation" in instruction
     assert '"target_stage_id": "ROOT_CAUSE"' in instruction
     assert "不要输出完整 Markdown" in instruction
+    assert (
+        format_artifact_data_contract_instruction("INCIDENT_REVIEW", "TIMELINE")
+        in instruction
+    )
+    assert "timeline_events[].fact_ids 必须至少包含 1 个事实 ID" in instruction
+    assert "fact_sources[].fact_id 必须唯一" in instruction
+    assert "Mermaid timeline" in instruction
 
 
 def test_incident_root_cause_structured_output_instruction_requests_artifact_data_not_markdown():
@@ -1521,6 +1528,13 @@ def test_incident_improvement_structured_output_instruction_requests_artifact_da
     assert "action-board" in instruction
     assert 'stage_action": null' in instruction
     assert "不要输出完整 Markdown" in instruction
+    assert (
+        format_artifact_data_contract_instruction("INCIDENT_REVIEW", "IMPROVEMENT")
+        in instruction
+    )
+    assert "report_info.action_count 必须等于 improvement_actions 数量" in instruction
+    assert "improvement_actions[].action_id 必须唯一" in instruction
+    assert "ai4se-visual action-board" in instruction
 
 
 def test_idea_define_structured_output_instruction_requests_artifact_data_not_markdown():

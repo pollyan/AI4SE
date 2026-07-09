@@ -347,6 +347,53 @@ describe('buildSystemPrompt', () => {
         expect(issueCountRuleMatches).toHaveLength(1);
     });
 
+    it('injects INCIDENT REVIEW TIMELINE artifact data contract from the manifest', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'INCIDENT_REVIEW',
+            stageIndex: 0,
+            currentArtifact: '# 故障复盘报告\n已有内容',
+        });
+
+        const factIdRule = 'fact_sources[].fact_id 必须唯一';
+        expect(prompt).toContain('【artifact_data 结构化契约】');
+        expect(prompt).toContain('所有字符串字段必须是非空白内容');
+        expect(prompt).toContain('impact_metrics、fact_sources、timeline_events、fact_separation、fact_summary、participants、missing_information 和 stage_gate 都必须至少包含 1 条');
+        expect(prompt).toContain('timeline_events[].fact_ids 必须至少包含 1 个事实 ID');
+        expect(prompt).toContain(factIdRule);
+        expect(prompt).toContain('timeline_events[].fact_ids 只能引用 fact_sources[].fact_id 中已定义的事实 ID');
+        expect(prompt).toContain('图表 代码块');
+        expect(prompt).toContain('右侧故障复盘事件还原');
+        expect(prompt).toContain('图表 timeline');
+        expect(prompt).not.toContain('Mermaid 代码块');
+        const factIdRuleMatches = prompt.match(new RegExp(factIdRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
+        expect(factIdRuleMatches).toHaveLength(1);
+    });
+
+    it('injects INCIDENT REVIEW IMPROVEMENT artifact data contract from the manifest', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'INCIDENT_REVIEW',
+            stageIndex: 2,
+            currentArtifact: '# 故障复盘报告\n已有内容',
+        });
+
+        const actionCountRule = 'report_info.action_count 必须等于 improvement_actions 数量';
+        expect(prompt).toContain('【artifact_data 结构化契约】');
+        expect(prompt).toContain(actionCountRule);
+        expect(prompt).toContain('improvement_actions[].action_id 必须唯一');
+        expect(prompt).toContain('priority_distribution.urgent_count/important_count/normal_count 必须等于 improvement_actions[].priority 中紧急/重要/常规的数量');
+        expect(prompt).toContain('root_cause_coverage[].action_ids 只能引用 improvement_actions[].action_id 中已定义的行动 ID');
+        expect(prompt).toContain('improvement_actions[].root_cause_id 只能引用 root_cause_coverage[].cause_id 中已定义的根因 ID');
+        expect(prompt).toContain('action-board JSON 代码块');
+        expect(prompt).toContain('右侧最终故障复盘报告');
+        expect(prompt).toContain('ai4se-visual action-board');
+        expect(prompt).toContain('图表 pie');
+        expect(prompt).not.toContain('Mermaid pie');
+        const actionCountRuleMatches = prompt.match(new RegExp(actionCountRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
+        expect(actionCountRuleMatches).toHaveLength(1);
+    });
+
     it('injects IDEA BRAINSTORM DEFINE artifact data contract from the manifest', () => {
         const prompt = buildSystemPrompt({
             agentId: 'alex',

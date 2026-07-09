@@ -3193,6 +3193,15 @@ def test_incident_improvement_artifact_data_rejects_priority_distribution_mismat
         IncidentImprovementArtifactData.model_validate(invalid)
 
 
+def test_incident_improvement_artifact_data_rejects_duplicate_root_cause_coverage_cause_id():
+    invalid = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
+    invalid["root_cause_coverage"][1]["cause_id"] = "CAUSE-002"
+    invalid["improvement_actions"][1]["root_cause_id"] = "CAUSE-002"
+
+    with pytest.raises(ValidationError, match="root_cause_coverage"):
+        IncidentImprovementArtifactData.model_validate(invalid)
+
+
 def test_incident_improvement_artifact_data_rejects_unknown_coverage_action_reference():
     invalid = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
     invalid["root_cause_coverage"][0]["action_ids"] = ["A-404"]

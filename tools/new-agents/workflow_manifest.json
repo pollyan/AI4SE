@@ -550,6 +550,24 @@
               "timeline"
             ]
           },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "所有字符串字段必须是非空白内容",
+              "impact_metrics、fact_sources、timeline_events、fact_separation、fact_summary、participants、missing_information 和 stage_gate 都必须至少包含 1 条",
+              "timeline_events[].fact_ids 必须至少包含 1 个事实 ID",
+              "fact_sources[].fact_id 必须唯一",
+              "timeline_events[].fact_ids 只能引用 fact_sources[].fact_id 中已定义的事实 ID"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格",
+              "Mermaid 代码块"
+            ],
+            "rendererOutputs": [
+              "右侧故障复盘事件还原",
+              "Mermaid timeline"
+            ]
+          },
           "promptTemplateVersion": "2026.06.24.1",
           "regressionSampleIds": [
             "incident-review.timeline.baseline"
@@ -658,6 +676,30 @@
             ],
             "requiredStructuredVisuals": [
               "action-board"
+            ]
+          },
+          "artifactDataContract": {
+            "modelOutputRules": [
+              "improvement_actions、root_cause_coverage、prevention_checklist、review_plan、residual_risks、lessons_learned、organizational_learning、signoffs 和 stage_gate 都必须至少包含 1 条",
+              "report_info.action_count 必须等于 improvement_actions 数量",
+              "improvement_actions[].action_id 必须唯一",
+              "priority_distribution.urgent_count/important_count/normal_count 必须等于 improvement_actions[].priority 中紧急/重要/常规的数量",
+              "root_cause_coverage[].cause_id 必须唯一",
+              "root_cause_coverage[].action_ids 只能引用 improvement_actions[].action_id 中已定义的行动 ID",
+              "improvement_actions[].root_cause_id 只能引用 root_cause_coverage[].cause_id 中已定义的根因 ID",
+              "当 root_cause_coverage[].coverage_status 为“已覆盖”时，action_ids 必须至少包含 1 个行动 ID"
+            ],
+            "forbiddenOutputs": [
+              "完整 Markdown 文档",
+              "Markdown 表格",
+              "Mermaid 代码块",
+              "pie 代码块",
+              "action-board JSON 代码块"
+            ],
+            "rendererOutputs": [
+              "右侧最终故障复盘报告",
+              "Mermaid pie",
+              "ai4se-visual action-board"
             ]
           },
           "promptTemplateVersion": "2026.06.24.1",

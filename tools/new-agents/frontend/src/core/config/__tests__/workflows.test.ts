@@ -247,6 +247,52 @@ describe('Workflow Configuration', () => {
         expect(rootCause?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual cause-map');
     });
 
+    it('exposes manifest artifact data contract for INCIDENT REVIEW TIMELINE', () => {
+        const timeline = WORKFLOWS.INCIDENT_REVIEW.stages.find(stage => stage.id === 'TIMELINE');
+
+        expect(timeline?.artifactDataContract?.modelOutputRules).toContain(
+            '所有字符串字段必须是非空白内容',
+        );
+        expect(timeline?.artifactDataContract?.modelOutputRules).toContain(
+            'impact_metrics、fact_sources、timeline_events、fact_separation、fact_summary、participants、missing_information 和 stage_gate 都必须至少包含 1 条',
+        );
+        expect(timeline?.artifactDataContract?.modelOutputRules).toContain(
+            'timeline_events[].fact_ids 必须至少包含 1 个事实 ID',
+        );
+        expect(timeline?.artifactDataContract?.modelOutputRules).toContain(
+            'fact_sources[].fact_id 必须唯一',
+        );
+        expect(timeline?.artifactDataContract?.modelOutputRules).toContain(
+            'timeline_events[].fact_ids 只能引用 fact_sources[].fact_id 中已定义的事实 ID',
+        );
+        expect(timeline?.artifactDataContract?.forbiddenOutputs).toContain('Mermaid 代码块');
+        expect(timeline?.artifactDataContract?.rendererOutputs).toContain('右侧故障复盘事件还原');
+        expect(timeline?.artifactDataContract?.rendererOutputs).toContain('Mermaid timeline');
+    });
+
+    it('exposes manifest artifact data contract for INCIDENT REVIEW IMPROVEMENT', () => {
+        const improvement = WORKFLOWS.INCIDENT_REVIEW.stages.find(stage => stage.id === 'IMPROVEMENT');
+
+        expect(improvement?.artifactDataContract?.modelOutputRules).toContain(
+            'report_info.action_count 必须等于 improvement_actions 数量',
+        );
+        expect(improvement?.artifactDataContract?.modelOutputRules).toContain(
+            'improvement_actions[].action_id 必须唯一',
+        );
+        expect(improvement?.artifactDataContract?.modelOutputRules).toContain(
+            'priority_distribution.urgent_count/important_count/normal_count 必须等于 improvement_actions[].priority 中紧急/重要/常规的数量',
+        );
+        expect(improvement?.artifactDataContract?.modelOutputRules).toContain(
+            'root_cause_coverage[].action_ids 只能引用 improvement_actions[].action_id 中已定义的行动 ID',
+        );
+        expect(improvement?.artifactDataContract?.modelOutputRules).toContain(
+            'improvement_actions[].root_cause_id 只能引用 root_cause_coverage[].cause_id 中已定义的根因 ID',
+        );
+        expect(improvement?.artifactDataContract?.forbiddenOutputs).toContain('action-board JSON 代码块');
+        expect(improvement?.artifactDataContract?.rendererOutputs).toContain('右侧最终故障复盘报告');
+        expect(improvement?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual action-board');
+    });
+
     it('exposes manifest artifact data contract for IDEA BRAINSTORM DEFINE', () => {
         const define = WORKFLOWS.IDEA_BRAINSTORM.stages.find(stage => stage.id === 'DEFINE');
 

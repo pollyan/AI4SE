@@ -325,6 +325,68 @@ def test_incident_root_cause_artifact_data_contract_manifest_drives_backend_inst
     assert "Mermaid mindmap" in instruction
 
 
+def test_incident_timeline_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    instruction = format_artifact_data_contract_instruction(
+        "INCIDENT_REVIEW",
+        "TIMELINE",
+    )
+    stage = next(
+        stage
+        for stage in _workflow_manifest()["workflows"]["INCIDENT_REVIEW"]["stages"]
+        if stage["id"] == "TIMELINE"
+    )
+    contract = stage.get("artifactDataContract")
+
+    assert contract is not None
+    assert "所有字符串字段必须是非空白内容" in instruction
+    assert "impact_metrics、fact_sources、timeline_events、fact_separation" in instruction
+    assert "timeline_events[].fact_ids 必须至少包含 1 个事实 ID" in instruction
+    assert "fact_sources[].fact_id 必须唯一" in instruction
+    assert (
+        "timeline_events[].fact_ids 只能引用 "
+        "fact_sources[].fact_id 中已定义的事实 ID"
+    ) in instruction
+    assert "Mermaid 代码块" in instruction
+    assert "右侧故障复盘事件还原" in instruction
+    assert "Mermaid timeline" in instruction
+
+
+def test_incident_improvement_artifact_data_contract_manifest_drives_backend_instruction():
+    from workflow_manifest import format_artifact_data_contract_instruction
+
+    instruction = format_artifact_data_contract_instruction(
+        "INCIDENT_REVIEW",
+        "IMPROVEMENT",
+    )
+    stage = next(
+        stage
+        for stage in _workflow_manifest()["workflows"]["INCIDENT_REVIEW"]["stages"]
+        if stage["id"] == "IMPROVEMENT"
+    )
+    contract = stage.get("artifactDataContract")
+
+    assert contract is not None
+    assert "report_info.action_count 必须等于 improvement_actions 数量" in instruction
+    assert "improvement_actions[].action_id 必须唯一" in instruction
+    assert (
+        "priority_distribution.urgent_count/important_count/normal_count 必须等于 "
+        "improvement_actions[].priority 中紧急/重要/常规的数量"
+    ) in instruction
+    assert (
+        "root_cause_coverage[].action_ids 只能引用 "
+        "improvement_actions[].action_id 中已定义的行动 ID"
+    ) in instruction
+    assert (
+        "improvement_actions[].root_cause_id 只能引用 "
+        "root_cause_coverage[].cause_id 中已定义的根因 ID"
+    ) in instruction
+    assert "action-board JSON 代码块" in instruction
+    assert "右侧最终故障复盘报告" in instruction
+    assert "ai4se-visual action-board" in instruction
+
+
 def test_idea_define_artifact_data_contract_manifest_drives_backend_instruction():
     from workflow_manifest import format_artifact_data_contract_instruction
 
