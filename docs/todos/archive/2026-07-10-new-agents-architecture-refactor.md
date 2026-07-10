@@ -1,10 +1,13 @@
 # New Agents 智能体架构收口待办
 
-- 状态：已完成。切片 1 至 6 已完成；已完成本轮只读架构复核。
+- 状态：已完成并归档。切片 1 至 6 已完成；已完成本轮只读架构复核。
 - 创建日期：2026-07-10
+- 归档日期：2026-07-10
 - 优先级：P1 架构收口 + P2 模块边界治理
 - 来源：2026-07-10 `tools/new-agents/` 只读架构审计
 - 相关模块：`tools/new-agents/`；不包含 `tools/intent-tester/` 的架构调整。
+- 归档基线：`a2340fc2` 已合流六个切片提交；合流后 `./scripts/test/test-local.sh new-agents` 为 frontend 870 passed、backend 893 passed（4 个 slow deselected），frontend `npm run lint` 通过。
+- 剩余风险去向：数据库启动期 `ALTER TABLE` helper 的 P3 风险已迁入 `docs/todos/refactor/README.md` 的“条件触发 backlog”，本文件不再承担其执行入口。
 
 ## 目标
 
@@ -101,7 +104,7 @@
 - **收口条件**：完成后重新进行只读架构审计，决定是否需要将数据库启动期 schema 变更迁入显式 migration 机制；该事项在没有新证据前保持 P3，不提前实现。
 - **执行证据**：`ArtifactMarkdownPreview.tsx` 承载 Markdown 预处理、分段增量渲染和 block index 偏移；`artifactMarkdownComponents.tsx` 承载共享 Markdown、Mermaid、StructuredVisual renderer 配置，不直接访问 store。`artifactVisualDiagnostics.ts` 统一 Mermaid/structured visual 的诊断 ID、显式错误 payload 与焦点样式。`StoryHandoffPacketPanel.tsx` 独立管理 `STORY_BREAKDOWN/SPRINT_PLAN` 入口的候选加载、持久化 packet 生成、复制和 stale 提示；`ArtifactPane` 只在已有 workflow/stage/run 条件成立时挂载它。三个 structured visual 消费者改为显式 `kind === 'matrix'` 分支，修复既有 TypeScript union narrowing 问题而不改变导出或渲染语义。
 - **验证**：RED 阶段 Story packet 面板、Markdown 预览、Markdown renderer factory 和 visual contracts 测试均按预期因模块缺失失败；GREEN 后定向 Vitest 168 passed。`./scripts/test/test-local.sh new-agents` 通过，frontend 870 passed、backend 893 passed（4 个 slow deselected）；`npm run lint` 通过，`git diff --check` 通过。全量测试曾捕获测试文件名触发 hygiene diagnostic 命名规则，改名后 hygiene 定向回归通过。
-- **最终复核**：共享 `/api/agent/runs/stream`、typed SSE、manifest contract、run persistence 和渲染基础设施仍为主链路；Story packet 与 Lisa test assets 保持 run/artifact 下游领域边界，未新增 Lisa/Alex 专用 runtime、SSE、store 或渲染管线。`backend/app.py` 启动期 `ALTER TABLE` helper 仍是既有 P3 风险；本轮没有新的 schema 变更或生产数据库迁移需求证据，按收口条件不提前实现 migration 机制。
+- **最终复核**：共享 `/api/agent/runs/stream`、typed SSE、manifest contract、run persistence 和渲染基础设施仍为主链路；Story packet 与 Lisa test assets 保持 run/artifact 下游领域边界，未新增 Lisa/Alex 专用 runtime、SSE、store 或渲染管线。`backend/app.py` 启动期 `ALTER TABLE` helper 仍是既有 P3 风险；本轮没有新的 schema 变更或生产数据库迁移需求证据，该风险已迁入 `docs/todos/refactor/README.md` 的条件触发 backlog。
 
 ## 非目标
 
@@ -119,3 +122,4 @@
 - 2026-07-10：完成切片 4。Value Discovery 的 artifact-data schema 与确定性 renderer 已从主文件拆出，stage instruction registry 已从 Runtime 拆出；共享 renderer registry、Agent Runtime、typed SSE 和持久化调用面保持兼容。下一轮从切片 5 做 Artifact 工作台编辑与协作边界的 CGA。
 - 2026-07-10：完成切片 5。产物编辑会话、版本历史恢复、评论锚点与协作持久化、章节锁检测均从 `ArtifactPane` 的领域逻辑中收口为可独立测试的 core 模块；自动/人工合并继续复用既有共享 `artifactMerge` 算法。未新增 workflow 或 agent 专用 UI/store/API/persistence 路径。下一轮从切片 6 做渲染、视觉诊断与 Story packet 边界的 CGA。
 - 2026-07-10：完成切片 6 并完成本轮架构复核。共享 Markdown/visual renderer、visual diagnostics contract 与 Story packet 面板已从 `ArtifactPane` 分离；TypeScript structured visual union narrowing 已收口。共享 Agent Runtime、typed SSE、run persistence 与 workflow contract 未变；数据库启动期 schema helper 仍维持 P3，未在无新增 schema 需求的情况下提前引入 migration 项目。
+- 2026-07-10：本地 Playbook 提交与六个架构提交合流为 `a2340fc2`；合流后 New Agents frontend 870、backend 893 和 frontend lint 均通过。完成 worktree 已清理，P3 migration 风险已迁入明确 backlog，本 todo 整体归档。
