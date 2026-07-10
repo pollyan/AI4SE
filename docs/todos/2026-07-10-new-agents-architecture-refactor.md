@@ -1,6 +1,6 @@
 # New Agents 智能体架构收口待办
 
-- 状态：活跃。切片 1 至 4 已完成；第 5、6 切片按前置条件顺序候选，其中切片 5 为下一轮目标模式候选。
+- 状态：活跃。切片 1 至 5 已完成；第 6 切片为下一轮目标模式候选。
 - 创建日期：2026-07-10
 - 优先级：P1 架构收口 + P2 模块边界治理
 - 来源：2026-07-10 `tools/new-agents/` 只读架构审计
@@ -80,14 +80,16 @@
 - **验证**：RED 阶段 renderer 和 instruction registry 模块边界各失败 1 项；GREEN 后 renderer/runtime/contract/stream 定向 suite 为 505 passed，致命错误 flake8 通过；`./scripts/test/test-local.sh new-agents` 通过，frontend 854 passed、backend 893 passed（4 个 slow deselected）。
 - **已知质量门**：`npm run lint` 的既有 `StructuredVisual.tsx`、`artifactExport.ts`、`docxExport.ts` union narrowing 错误未在本切片触碰，继续留给切片 6。
 
-### 切片 5：Artifact 工作台编辑与协作边界闭环
+### 切片 5：Artifact 工作台编辑与协作边界闭环（已完成，2026-07-10）
 
-- [ ] **目标**：从 `ArtifactPane.tsx` 分离编辑、历史、冲突合并、评论和 section lock 的职责，同时保持现有交互与持久化协议。
+- [x] **目标**：从 `ArtifactPane.tsx` 分离编辑、历史、冲突合并、评论和 section lock 的职责，同时保持现有交互与持久化协议。
 - **范围**：`frontend/src/components/ArtifactPane.tsx`、对应 hooks/components、artifact collaboration/history services、`ArtifactPane` 与 store tests。
 - **完成状态**：ArtifactPane 只承担工作台组合与公共状态连接；编辑、merge、评论、锁定和历史逻辑拥有独立可测试模块；API、artifact version 格式和用户行为不变。
 - **验收**：冲突识别、自动/人工合并、评论锚点、section lock、版本恢复均有回归证据；不把工作流差异写成新的专用编辑管线。
 - **建议验证**：`ArtifactPane.test.tsx`、artifact incremental render tests、`store.test.ts`、相关 backend persistence tests。
 - **后续入口**：编辑协作稳定后，独立收口渲染与 Story packet UI 边界。
+- **执行证据**：`artifactEditSession.ts` 统一本地/服务端保存、乐观版本校验、锁定章节和冲突结果；`artifactHistorySession.ts` 承载历史行/块恢复与冲突服务端版本刷新；既有 `artifactMerge.ts` 继续承载自动/人工合并的纯算法和审计标签。`artifactComments.ts` 承载评论摘要、锚点规范化和 stale 判定，`artifactCollaboration.ts` 承载协作持久化失败语义，`artifactLocking.ts` 承载章节锁变更检测。`ArtifactPane` 保留 store、服务和 UI 状态接线。
+- **验证**：RED 阶段的 history session 与 comments 模块测试均按预期因模块缺失失败；GREEN 后切片定向 Vitest 160 passed。`./scripts/test/test-local.sh new-agents` 通过，frontend 864 passed、backend 893 passed（4 个 slow deselected）；`git diff --check` 通过。`npm run lint` 不再包含本切片文件，仍只失败于切片 6 既有的 `StructuredVisual.tsx`、`artifactExport.ts`、`docxExport.ts` 结构化可视化 union narrowing 错误。
 
 ### 切片 6：Artifact 渲染、视觉诊断与 Story packet 边界闭环
 
@@ -112,3 +114,4 @@
 - 2026-07-10：完成切片 2。声明性 workflow contract map、前端 workflow type 和 artifact-data prompt mode 均由 manifest 派生；新增单一赋值与 source guard，未改变 runtime、SSE、persistence 或 `tools/intent-tester/`。下一轮从切片 3 做服务端 run 与前端状态归属的 CGA。
 - 2026-07-10：完成切片 3。服务型 run 不再从 `localStorage` 恢复会话、产物或 run id；URL `runId` 始终以服务端 snapshot 恢复。下一轮从切片 4 做 backend renderer/runtime 模块化的 CGA。
 - 2026-07-10：完成切片 4。Value Discovery 的 artifact-data schema 与确定性 renderer 已从主文件拆出，stage instruction registry 已从 Runtime 拆出；共享 renderer registry、Agent Runtime、typed SSE 和持久化调用面保持兼容。下一轮从切片 5 做 Artifact 工作台编辑与协作边界的 CGA。
+- 2026-07-10：完成切片 5。产物编辑会话、版本历史恢复、评论锚点与协作持久化、章节锁检测均从 `ArtifactPane` 的领域逻辑中收口为可独立测试的 core 模块；自动/人工合并继续复用既有共享 `artifactMerge` 算法。未新增 workflow 或 agent 专用 UI/store/API/persistence 路径。下一轮从切片 6 做渲染、视觉诊断与 Story packet 边界的 CGA。

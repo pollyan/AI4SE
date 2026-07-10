@@ -17,6 +17,17 @@ import {
   parseArtifactMarkdownSections,
   type ArtifactMarkdownSection,
 } from '../core/artifactSections';
+import { saveArtifactEditSession } from '../core/artifactEditSession';
+import { syncArtifactCollaboration } from '../core/artifactCollaboration';
+import {
+  buildArtifactCommentInput,
+  getArtifactCommentAnchorStatus,
+  normalizeArtifactCommentAnchor,
+} from '../core/artifactComments';
+import {
+  buildConflictRefreshHistory,
+  updateArtifactHistoryContent,
+} from '../core/artifactHistorySession';
 import {
   buildAutoMergedInsertionResult,
   buildConflictMergeBlockLabel,
@@ -30,7 +41,7 @@ import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/ma
 import { Download, Code, Eye, History, X, AlertTriangle, GitCompare, Edit3, Save, MessageSquare, Trash2, Lock, Unlock, MoreHorizontal, RefreshCw } from 'lucide-react';
 import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
 import { StructuredVisual } from './StructuredVisual';
-import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../services/runSnapshotService';
+import { updateRunArtifact, updateRunArtifactCollaboration } from '../services/runSnapshotService';
 import { useChatService } from '../services/chatService';
 import {
   createStoryHandoffPacket,
@@ -286,46 +297,17 @@ export const ArtifactPane: React.FC = () => {
     if (!currentRunId) return;
     const state = useStore.getState();
     setCollaborationSyncError(null);
-    void updateRunArtifactCollaboration(
-      currentRunId,
-      state.artifactComments,
-      state.artifactSectionLocks,
-    ).catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : '未知错误';
-      setCollaborationSyncError(`协作状态保存失败：${message}`);
+    void syncArtifactCollaboration({
+      runId: currentRunId,
+      comments: state.artifactComments,
+      sectionLocks: state.artifactSectionLocks,
+      updateCollaboration: updateRunArtifactCollaboration,
+    }).then((errorMessage) => {
+      if (errorMessage) setCollaborationSyncError(errorMessage);
     });
   }, [currentRunId]);
 
-  const isFenceStart = (line: string): boolean => /^```/.test(line.trim());
-  const isHeading = (line: string): boolean => /^#{1,3}\s+/.test(line);
   type ArtifactSection = ArtifactMarkdownSection;
-
-  const stripInlineMarkdown = (content: string): string => (
-    content
-      .replace(/`([^`]+)`/g, '$1')
-      .replace(/\*\*([^*]+)\*\*/g, '$1')
-      .replace(/\*([^*]+)\*/g, '$1')
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .trim()
-  );
-
-  const buildCommentExcerpt = (content: string): string => {
-    const lines = content.split(/\r?\n/);
-    const firstBodyLine = lines.find((line) => {
-      const trimmedLine = line.trim();
-      return trimmedLine && !isHeading(trimmedLine) && !isFenceStart(trimmedLine);
-    }) || lines.find(line => line.trim()) || '当前产出物';
-    const excerpt = stripInlineMarkdown(firstBodyLine.replace(/^\s*[-*]\s+/, ''));
-    return excerpt.length > 120 ? `${excerpt.slice(0, 117)}...` : excerpt;
-  };
-
-  const normalizeCommentAnchorText = (value: string): string | null => {
-    const normalizedValue = value.replace(/\s+/g, ' ').trim();
-    if (!normalizedValue) return null;
-    return normalizedValue.length > 120
-      ? `${normalizedValue.slice(0, 117)}...`
-      : normalizedValue;
-  };
 
   const readSelectedArtifactText = (): string | null => {
     const selection = window.getSelection();
@@ -345,7 +327,7 @@ export const ArtifactPane: React.FC = () => {
       return null;
     }
 
-    return normalizeCommentAnchorText(selection.toString());
+    return normalizeArtifactCommentAnchor(selection.toString());
   };
 
   const captureSelectedArtifactText = () => {
@@ -365,27 +347,6 @@ export const ArtifactPane: React.FC = () => {
     () => buildMarkdownPreviewChunks(displayContent),
     [displayContent]
   );
-
-  const findLockedSectionChange = (nextContent: string): string | null => {
-    if (currentStageSectionLocks.length === 0) return null;
-    const nextSections = parseArtifactMarkdownSections(nextContent);
-    for (const lock of currentStageSectionLocks) {
-      const currentSection = artifactSections.find(section => (
-        lock.sectionAnchor
-          ? section.anchor === lock.sectionAnchor
-          : section.heading === lock.heading
-      ));
-      const nextSection = nextSections.find(section => (
-        lock.sectionAnchor
-          ? section.anchor === lock.sectionAnchor
-          : section.heading === lock.heading
-      ));
-      if (!nextSection || nextSection.content.trim() !== lock.content.trim()) {
-        return currentSection?.displayTitle ?? lock.heading.replace(/^#{1,3}\s+/, '');
-      }
-    }
-    return null;
-  };
 
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -3323,72 +3284,43 @@ export const ArtifactPane: React.FC = () => {
 
   const restoreHistoryLine = (lineContent: string) => {
     if (!selectedVersion || !lineContent.trim()) return;
-
-    const currentLines = artifactContent.replace(/\r\n/g, '\n').split('\n');
-    if (currentLines.includes(lineContent)) return;
-
-    const historyLines = selectedVersion.content.replace(/\r\n/g, '\n').split('\n');
-    const historyLineIndex = historyLines.findIndex(line => line === lineContent);
-    if (historyLineIndex < 0) return;
-
-    const insertIndex = Math.min(historyLineIndex, currentLines.length);
-    applyHistoryLineReview([
-      ...currentLines.slice(0, insertIndex),
-      lineContent,
-      ...currentLines.slice(insertIndex),
-    ].join('\n'));
+    applyHistoryLineReview(updateArtifactHistoryContent({
+      operation: 'restore',
+      currentContent: artifactContent,
+      historicalContent: selectedVersion.content,
+      lines: [lineContent],
+    }));
   };
 
   const restoreHistoryBlock = (lineContents: string[]) => {
     if (!selectedVersion) return;
 
-    const blockLines = lineContents.filter(line => line.trim());
-    if (blockLines.length === 0) return;
-
-    const currentLines = artifactContent.replace(/\r\n/g, '\n').split('\n');
-    const linesToRestore = blockLines.filter(line => !currentLines.includes(line));
-    if (linesToRestore.length === 0) return;
-
-    const historyLines = selectedVersion.content.replace(/\r\n/g, '\n').split('\n');
-    const historyLineIndex = historyLines.findIndex(line => line === blockLines[0]);
-    if (historyLineIndex < 0) return;
-
-    const insertIndex = Math.min(historyLineIndex, currentLines.length);
-    applyHistoryLineReview([
-      ...currentLines.slice(0, insertIndex),
-      ...linesToRestore,
-      ...currentLines.slice(insertIndex),
-    ].join('\n'));
+    applyHistoryLineReview(updateArtifactHistoryContent({
+      operation: 'restore',
+      currentContent: artifactContent,
+      historicalContent: selectedVersion.content,
+      lines: lineContents,
+    }));
   };
 
   const discardCurrentLine = (lineContent: string) => {
     if (!lineContent.trim()) return;
 
-    const currentLines = artifactContent.replace(/\r\n/g, '\n').split('\n');
-    const currentLineIndex = currentLines.findIndex(line => line === lineContent);
-    if (currentLineIndex < 0) return;
-
-    applyHistoryLineReview([
-      ...currentLines.slice(0, currentLineIndex),
-      ...currentLines.slice(currentLineIndex + 1),
-    ].join('\n'));
+    applyHistoryLineReview(updateArtifactHistoryContent({
+      operation: 'discard',
+      currentContent: artifactContent,
+      historicalContent: artifactContent,
+      lines: [lineContent],
+    }));
   };
 
   const discardCurrentBlock = (lineContents: string[]) => {
-    const blockLines = lineContents.filter(line => line.trim());
-    if (blockLines.length === 0) return;
-
-    const nextCurrentLines = artifactContent.replace(/\r\n/g, '\n').split('\n');
-    let removedAnyLine = false;
-    blockLines.forEach((lineContent) => {
-      const currentLineIndex = nextCurrentLines.findIndex(line => line === lineContent);
-      if (currentLineIndex < 0) return;
-      nextCurrentLines.splice(currentLineIndex, 1);
-      removedAnyLine = true;
-    });
-    if (!removedAnyLine) return;
-
-    applyHistoryLineReview(nextCurrentLines.join('\n'));
+    applyHistoryLineReview(updateArtifactHistoryContent({
+      operation: 'discard',
+      currentContent: artifactContent,
+      historicalContent: artifactContent,
+      lines: lineContents,
+    }));
   };
 
   const beginManualEdit = () => {
@@ -3413,35 +3345,8 @@ export const ArtifactPane: React.FC = () => {
     setIsEditing(false);
   };
 
-  const inferCurrentServerVersionNumber = (): number | undefined => {
-    if (!currentRunId || !currentStageId) return undefined;
-    const latestCurrentStageVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1];
-    if (!latestCurrentStageVersion || latestCurrentStageVersion.content !== artifactContent) {
-      return undefined;
-    }
-    const expectedPrefix = `${currentRunId}-${currentStageId}-v`;
-    if (!latestCurrentStageVersion.id.startsWith(expectedPrefix)) {
-      return undefined;
-    }
-    const versionNumber = Number.parseInt(
-      latestCurrentStageVersion.id.slice(expectedPrefix.length),
-      10
-    );
-    return Number.isInteger(versionNumber) ? versionNumber : undefined;
-  };
-
   const saveManualEdit = async () => {
     if (!currentStageId) return;
-
-    if (editDraft === artifactContent) {
-      setIsEditing(false);
-      setEditDraft('');
-      setManualEditError(null);
-      setConflictVersionNumber(null);
-      setConflictArtifact(null);
-      setShowConflictDiff(false);
-      return;
-    }
 
     setIsSavingManualEdit(true);
     setManualEditError(null);
@@ -3449,41 +3354,43 @@ export const ArtifactPane: React.FC = () => {
     setConflictArtifact(null);
     setShowConflictDiff(false);
 
-    const changedLockedSection = findLockedSectionChange(editDraft);
-    if (changedLockedSection) {
-      setManualEditError(`保存失败：锁定章节“${changedLockedSection}”已被修改，请先解锁后再保存。`);
+    const latestCurrentStageVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1];
+    const sessionResult = saveArtifactEditSession({
+      currentRunId,
+      currentStageId,
+      artifactContent,
+      editDraft,
+      locks: currentStageSectionLocks,
+      latestStageVersion: latestCurrentStageVersion,
+      updateArtifact: updateRunArtifact,
+    });
+    const result = sessionResult instanceof Promise
+      ? await sessionResult
+      : sessionResult;
+    if (result.type === 'unchanged') {
+      setEditDraft('');
+      setIsSavingManualEdit(false);
+      setIsEditing(false);
+      return;
+    }
+    if (result.type === 'locked') {
+      setManualEditError(`保存失败：锁定章节“${result.sectionTitle}”已被修改，请先解锁后再保存。`);
+      setIsSavingManualEdit(false);
+      return;
+    }
+    if (result.type === 'conflict') {
+      setManualEditError(`保存冲突：${result.message}`);
+      setConflictVersionNumber(result.artifact.versionNumber);
+      setConflictArtifact(result.artifact);
+      setIsSavingManualEdit(false);
+      return;
+    }
+    if (result.type === 'error') {
+      setManualEditError(`保存失败：${result.message}`);
       setIsSavingManualEdit(false);
       return;
     }
 
-    let savedContent = editDraft;
-    let savedVersionId: string | null = null;
-    if (currentRunId) {
-      try {
-        const savedArtifact = await updateRunArtifact(
-          currentRunId,
-          currentStageId,
-          editDraft,
-          { expectedVersionNumber: inferCurrentServerVersionNumber() },
-        );
-        savedContent = savedArtifact.content;
-        savedVersionId = `${currentRunId}-${savedArtifact.stageId}-v${savedArtifact.versionNumber}`;
-      } catch (error) {
-        if (error instanceof ArtifactConflictError) {
-          setManualEditError(`保存冲突：${error.message}`);
-          setConflictVersionNumber(error.currentArtifact.versionNumber);
-          setConflictArtifact(error.currentArtifact);
-          setIsSavingManualEdit(false);
-          return;
-        }
-        const message = error instanceof Error ? error.message : '未知错误';
-        setManualEditError(`保存失败：${message}`);
-        setIsSavingManualEdit(false);
-        return;
-      }
-    }
-
-    const latestCurrentStageVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1];
     const timestamp = Date.now();
     if (latestCurrentStageVersion?.content !== artifactContent) {
       addArtifactVersion({
@@ -3494,12 +3401,12 @@ export const ArtifactPane: React.FC = () => {
       });
     }
     addArtifactVersion({
-      id: savedVersionId ?? `manual-edit-${timestamp}`,
+      id: result.versionId ?? `manual-edit-${timestamp}`,
       timestamp: timestamp + 1,
-      content: savedContent,
+      content: result.content,
       stageId: currentStageId,
     });
-    setArtifactContent(savedContent);
+    setArtifactContent(result.content);
     setEditDraft('');
     setManualEditError(null);
     setConflictVersionNumber(null);
@@ -3513,30 +3420,17 @@ export const ArtifactPane: React.FC = () => {
     if (!conflictArtifact || !currentStageId) return;
 
     const latestCurrentStageVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1];
-    const timestamp = Date.now();
-    if (latestCurrentStageVersion?.content !== artifactContent) {
-      addArtifactVersion({
-        id: `conflict-local-backup-${timestamp}`,
-        timestamp,
-        content: artifactContent,
-        stageId: currentStageId,
-      });
-    }
-    addArtifactVersion({
-      id: `conflict-draft-${timestamp}`,
-      timestamp: timestamp + 1,
-      content: editDraft,
-      stageId: currentStageId,
+    const refreshHistory = buildConflictRefreshHistory({
+      currentRunId,
+      currentStageId,
+      artifactContent,
+      latestVersionContent: latestCurrentStageVersion?.content,
+      draftContent: editDraft,
+      serverArtifact: conflictArtifact,
+      timestamp: Date.now(),
     });
-    addArtifactVersion({
-      id: currentRunId
-        ? `${currentRunId}-${conflictArtifact.stageId}-v${conflictArtifact.versionNumber}`
-        : `conflict-server-${timestamp}`,
-      timestamp: timestamp + 2,
-      content: conflictArtifact.content,
-      stageId: currentStageId,
-    });
-    setArtifactContent(conflictArtifact.content);
+    refreshHistory.versions.forEach(addArtifactVersion);
+    setArtifactContent(refreshHistory.content);
     setEditDraft('');
     setManualEditError(null);
     setConflictVersionNumber(null);
@@ -3725,16 +3619,14 @@ export const ArtifactPane: React.FC = () => {
 
   const addCurrentStageComment = () => {
     if (!currentStageId) return;
-    const content = commentDraft.trim();
-    if (!content) return;
-    const anchorText = captureSelectedArtifactText() ?? selectedArtifactText;
-    const artifactExcerpt = anchorText ?? buildCommentExcerpt(artifactContent);
-    addArtifactComment({
+    const comment = buildArtifactCommentInput({
       stageId: currentStageId,
-      content,
-      artifactExcerpt,
-      anchorText,
+      draft: commentDraft,
+      artifactContent,
+      selectedAnchor: captureSelectedArtifactText() ?? selectedArtifactText,
     });
+    if (!comment) return;
+    addArtifactComment(comment);
     syncArtifactCollaborationState();
     setCommentDraft('');
   };
@@ -3805,7 +3697,7 @@ export const ArtifactPane: React.FC = () => {
   };
 
   const locateArtifactCommentAnchor = (anchorText: string) => {
-    const normalizedAnchorText = normalizeCommentAnchorText(anchorText);
+    const normalizedAnchorText = normalizeArtifactCommentAnchor(anchorText);
     if (!normalizedAnchorText) return;
     setIsEditing(false);
     setViewMode('preview');
@@ -3821,14 +3713,6 @@ export const ArtifactPane: React.FC = () => {
   const locateCommentAnchorFromReview = (anchorText: string) => {
     setShowReviewPanel(false);
     locateArtifactCommentAnchor(anchorText);
-  };
-
-  const getCommentAnchorStatus = (anchorText: string | null): 'none' | 'active' | 'stale' => {
-    const normalizedAnchorText = normalizeCommentAnchorText(anchorText ?? '');
-    if (!normalizedAnchorText) return 'none';
-
-    const normalizedArtifactContent = artifactContent.replace(/\s+/g, ' ');
-    return normalizedArtifactContent.includes(normalizedAnchorText) ? 'active' : 'stale';
   };
 
   const locateArtifactVisualDiagnostic = useCallback((
@@ -4756,7 +4640,7 @@ export const ArtifactPane: React.FC = () => {
                 </p>
               ) : (
                 currentStageOpenComments.map((comment) => {
-                  const anchorStatus = getCommentAnchorStatus(comment.anchorText);
+                  const anchorStatus = getArtifactCommentAnchorStatus(comment.anchorText, artifactContent);
                   return (
                     <article key={comment.id} className="rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
                       <p className="break-words text-sm leading-relaxed text-slate-100">{comment.content}</p>
@@ -4909,7 +4793,7 @@ export const ArtifactPane: React.FC = () => {
               ) : (
                 <div className="space-y-3">
                   {currentStageComments.map((comment) => {
-                    const anchorStatus = getCommentAnchorStatus(comment.anchorText);
+                    const anchorStatus = getArtifactCommentAnchorStatus(comment.anchorText, artifactContent);
                     return (
                     <article key={comment.id} className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
                       <div className="mb-2 flex items-start justify-between gap-3">
