@@ -1,62 +1,64 @@
-# Goal Mode Playbook Contract State Machine Implementation Plan
+# 目标模式 Playbook 契约状态机实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **供 Agent 执行：** 必须使用 `superpowers:subagent-driven-development`（推荐）或 `superpowers:executing-plans`，按任务实施本计划。步骤使用复选框（`- [ ]`）跟踪。
 
-**Goal:** Replace the three overlapping goal-mode strategy documents with one behavior-preserving, contract-based state-machine Playbook whose rules are easier to execute, recover, and maintain.
+> **实施状态（2026-07-10）：** Playbook 重写、规则迁移审查、12 个行为探针、独立复审和附录退役均已完成。下列已完成步骤按实际证据标记；“恢复测试质量扫描提示词设计”留待用户查看本次效果后继续。
 
-**Architecture:** Rewrite `goal-mode-playbook.md` around explicit execution states, required artifacts, transition guards, and failure routes. Keep current implementation facts in `AGENTS.md`, `docs/TESTING.md`, package scripts, and CI; validate the new Playbook against a rule migration checklist and behavioral probes before retiring the two annexes.
+**目标：** 将三份重叠的目标模式策略文档替换为一份保持行为效果、基于契约状态机的 Playbook，使规则更易执行、恢复和维护。
 
-**Tech Stack:** Markdown, Mermaid, Git, shell-based static document checks, read-only multi-agent review.
+**架构：** 围绕显式执行状态、必需产物、转换门禁和失败路由重写 `goal-mode-playbook.md`。当前实现事实继续由 `AGENTS.md`、`docs/TESTING.md`、package scripts 和 CI 承载；退役两份附录前，使用规则迁移清单和行为探针验证新 Playbook。
 
-## Global Constraints
+**技术栈：** Markdown、Mermaid、Git、基于 shell 的静态文档检查、只读多 Agent 审查。
 
-- Preserve all user-owned dirty changes in `AGENTS.md`, `docs/todos/refactor/README.md`, and `docs/todos/2026-07-10-new-agents-architecture-refactor.md`.
-- Do not modify business code, tests, CI workflows, test runners, package scripts, or archived/historical execution records.
-- Do not use line count, file count, or character count as a completion criterion.
-- Keep `docs/strategy/goal-mode-playbook.md` as the only future-facing goal-mode entry point.
-- Do not delete either annex until rule coverage and behavior review pass.
-- Use `apply_patch` for every file change and stage only the paths owned by the current task.
-- Treat `PASS`, `FAIL`, `NOT_RUN`, `BLOCKED`, `TIMEOUT`, and `FLAKY` as distinct verification states; retries never erase first-failure evidence.
-- Historical statements that an earlier run read a retired annex remain unchanged because they are evidence, not future instructions.
+## 全局约束
+
+- 保留 `AGENTS.md`、`docs/todos/refactor/README.md` 和 `docs/todos/2026-07-10-new-agents-architecture-refactor.md` 中所有用户已有脏改动。
+- 不修改业务代码、测试、CI workflow、test runner、package script 或归档 / 历史执行记录。
+- 不以行数、文件数或字符数作为完成标准。
+- 保持 `docs/strategy/goal-mode-playbook.md` 为唯一面向未来的目标模式入口。
+- 规则覆盖和行为审查通过前，不得删除任一附录。
+- 所有文件修改使用 `apply_patch`，且只 stage 当前任务拥有的路径。
+- 将 `PASS`、`FAIL`、`NOT_RUN`、`BLOCKED`、`TIMEOUT` 和 `FLAKY` 视为不同验证状态；重试不得抹除首次失败证据。
+- 早期执行曾读取已退役附录的历史陈述保持不变，因为它们是证据而非未来指令。
 
 ---
 
-### Task 1: Rewrite the Main Playbook as an Executable Contract
+### 任务 1：将主 Playbook 重写为可执行契约
 
-**Files:**
-- Modify: `docs/strategy/goal-mode-playbook.md`
-- Read: `docs/superpowers/specs/2026-07-10-goal-mode-playbook-contract-state-machine-design.md`
-- Read: `docs/strategy/goal-mode-cga-template.md`
-- Read: `docs/strategy/goal-mode-ci-verification.md`
+**文件：**
+- 修改：`docs/strategy/goal-mode-playbook.md`
+- 读取：`docs/superpowers/specs/2026-07-10-goal-mode-playbook-contract-state-machine-design.md`
+- 读取：`docs/strategy/goal-mode-cga-template.md`
+- 读取：`docs/strategy/goal-mode-ci-verification.md`
 
-**Interfaces:**
-- Consumes: the approved design plus every normative rule in the current three strategy documents.
-- Produces: a self-contained `goal-mode-playbook.md` with explicit states `BOOTSTRAP`, `ASSESS`, `MILESTONE`, `DESIGN`, `PLAN`, `IMPLEMENT`, `VERIFY`, `DELIVER`, `NEXT`, and `WAIT`.
+**接口：**
+- 输入：已批准的设计，以及原三份策略文档中的每条规范性规则。
+- 输出：可独立执行的 `goal-mode-playbook.md`，显式包含 `BOOTSTRAP`、`ASSESS`、`MILESTONE`、`DESIGN`、`PLAN`、`IMPLEMENT`、`VERIFY`、`DELIVER`、`NEXT` 和 `WAIT`。
 
-- [ ] **Step 1: Capture the pre-rewrite baseline**
+- [x] **步骤 1：记录重写前基线**
 
-Run:
+执行：
 
 ```bash
 wc -l docs/strategy/goal-mode-playbook.md docs/strategy/goal-mode-cga-template.md docs/strategy/goal-mode-ci-verification.md
 rg -n '^## |^### ' docs/strategy/goal-mode-playbook.md docs/strategy/goal-mode-cga-template.md docs/strategy/goal-mode-ci-verification.md
 ```
 
-Expected: three files totaling roughly 700 lines, with duplicated CGA, thickness, verification, and delivery sections visible in the heading list.
+预期：三份文件合计约 700 行；标题列表能看出重复的 CGA、切片厚度、验证和交付章节。
 
-- [ ] **Step 2: Run a red static contract check against the old Playbook**
+- [x] **步骤 2：对旧 Playbook 运行红态静态契约检查**
 
-Run:
+执行：
 
 ```bash
 rg -n 'BOOTSTRAP|ASSESS|MILESTONE|DESIGN|PLAN|IMPLEMENT|VERIFY|DELIVER|NEXT|WAIT|NOT_RUN|TIMEOUT|FLAKY' docs/strategy/goal-mode-playbook.md
 ```
 
-Expected: FAIL to find the complete state and result contract; the old Playbook does not define all required state identifiers and honest verification states.
+预期：无法找到完整状态与结果契约；旧 Playbook 未定义全部必需状态标识和诚实验证状态。
 
-- [ ] **Step 3: Replace the main Playbook with the approved state-machine structure**
+- [x] **步骤 3：使用已批准的状态机结构替换主 Playbook**
 
-Use `apply_patch` to replace the full content of `docs/strategy/goal-mode-playbook.md`. The new file must contain these sections and responsibilities:
+使用 `apply_patch` 替换 `docs/strategy/goal-mode-playbook.md` 的完整内容。新文件必须包含以下章节和职责：
 
 ```markdown
 # AI4SE 目标模式运行手册
@@ -67,7 +69,7 @@ Use `apply_patch` to replace the full content of `docs/strategy/goal-mode-playbo
 - 长期 todo、CGA/承接、spec、plan、验证记录职责
 
 ## 2. 执行状态机
-- Mermaid state flow
+- Mermaid 状态流
 - BOOTSTRAP / ASSESS / MILESTONE / DESIGN / PLAN
 - IMPLEMENT / VERIFY / DELIVER / NEXT / WAIT
 - 每个状态均定义：进入条件、必需产物、离开门禁、失败路由
@@ -102,11 +104,11 @@ Use `apply_patch` to replace the full content of `docs/strategy/goal-mode-playbo
 - 只声明目标、授权和 Playbook 路径
 ```
 
-Do not copy the old fill-in templates, long example catalog, fixed command matrix, current CI job names, model settings, coverage thresholds, or numeric diff-size thresholds.
+不得复制旧填空模板、长示例目录、固定命令矩阵、当前 CI job 名、模型设置、覆盖率阈值或数字化 diff 大小阈值。
 
-- [ ] **Step 4: Run the green static schema checks**
+- [x] **步骤 4：运行绿态静态 schema 检查**
 
-Run:
+执行：
 
 ```bash
 rg -n 'BOOTSTRAP|ASSESS|MILESTONE|DESIGN|PLAN|IMPLEMENT|VERIFY|DELIVER|NEXT|WAIT' docs/strategy/goal-mode-playbook.md
@@ -115,11 +117,11 @@ rg -n '入口|动作|处理|可见结果|状态承接|失败反馈|证据' docs/
 rg -n '完整 CGA|目标承接检查|未选候选去向|工程信任闭环|首个真实错误|CI 等价' docs/strategy/goal-mode-playbook.md
 ```
 
-Expected: every command finds the complete required vocabulary in a single file.
+预期：每条命令都能在单一文件中找到完整必需词汇。
 
-- [ ] **Step 5: Check document formatting and ownership**
+- [x] **步骤 5：检查文档格式和 ownership**
 
-Run:
+执行：
 
 ```bash
 git diff --check -- docs/strategy/goal-mode-playbook.md
@@ -127,11 +129,11 @@ git status --short
 git diff -- docs/strategy/goal-mode-playbook.md
 ```
 
-Expected: no whitespace errors; only `goal-mode-playbook.md` is changed by this task; the three pre-existing user changes remain untouched.
+预期：无 whitespace 错误；本任务只修改 `goal-mode-playbook.md`；三处用户已有改动保持不变。
 
-- [ ] **Step 6: Commit the independently usable new Playbook while the annexes still exist**
+- [x] **步骤 6：在附录仍存在时提交可独立使用的新 Playbook**
 
-Run:
+执行：
 
 ```bash
 git add docs/strategy/goal-mode-playbook.md
@@ -139,74 +141,74 @@ git diff --cached --name-only
 git commit -m "docs(goal-mode): 重构目标模式状态机"
 ```
 
-Expected: the staged list contains only `docs/strategy/goal-mode-playbook.md`, and the commit succeeds.
+预期：staged 列表仅包含 `docs/strategy/goal-mode-playbook.md`，且 commit 成功。
 
-### Task 2: Prove Rule Coverage and Behavioral Equivalence
+### 任务 2：证明规则覆盖与行为等价
 
-**Files:**
-- Modify if review finds gaps: `docs/strategy/goal-mode-playbook.md`
-- Read: `docs/strategy/goal-mode-cga-template.md`
-- Read: `docs/strategy/goal-mode-ci-verification.md`
-- Read: `docs/superpowers/specs/2026-07-10-goal-mode-playbook-contract-state-machine-design.md`
+**文件：**
+- 若审查发现缺口则修改：`docs/strategy/goal-mode-playbook.md`
+- 读取：`docs/strategy/goal-mode-cga-template.md`
+- 读取：`docs/strategy/goal-mode-ci-verification.md`
+- 读取：`docs/superpowers/specs/2026-07-10-goal-mode-playbook-contract-state-machine-design.md`
 
-**Interfaces:**
-- Consumes: the new Playbook and the still-present annexes.
-- Produces: reviewed Playbook with no unmapped P0/P1 rule and no failing behavioral probe.
+**接口：**
+- 输入：新 Playbook 和仍保留的附录。
+- 输出：不存在未映射 P0/P1 规则、所有行为探针通过的已审查 Playbook。
 
-- [ ] **Step 1: Build a temporary rule migration checklist during review**
+- [x] **步骤 1：审查期间建立临时规则迁移清单**
 
-For every normative rule in the three old documents, record one of these decisions in reviewer notes:
+对三份旧文档中的每条规范性规则，在 reviewer notes 中记录以下处置之一：
 
 ```text
 KEEP:§2.1
 MERGE:§3.2
 SOURCE:docs/TESTING.md
-DROP:exact duplicate of rule R-017
+DROP:与规则 R-017 完全重复
 ```
 
-Expected: no rule is unclassified, and no `DROP` decision removes a transition guard, required artifact, failure route, evidence boundary, or delivery condition. The checklist remains review evidence and is not added as a permanent repository file.
+预期：没有未分类规则；任何 `DROP` 决定都未删除转换门禁、必需产物、失败路由、证据边界或交付条件。该清单仅作为审查证据，不新增为仓库永久文件。
 
-- [ ] **Step 2: Dispatch independent read-only reviewers**
+- [x] **步骤 2：派发独立只读 reviewer**
 
-Reviewer A checks rule loss, contradictory requirements, unreachable states, and bypassable transition guards. Reviewer B checks CGA/continuation choice, thick-slice behavior, CI mapping, honest verification states, evidence layering, and remote-CI recovery. Neither reviewer may edit files.
+Reviewer A 检查规则丢失、需求矛盾、不可达状态和可绕过的转换门禁。Reviewer B 检查 CGA / 承接选择、厚切片行为、CI 映射、诚实验证状态、证据分层和远端 CI 恢复。两位 reviewer 均不得编辑文件。
 
-Expected: each reviewer returns findings with severity, source rule, new section, and recommended correction. P0/P1 findings block annex deletion.
+预期：每位 reviewer 都返回带严重级别、来源规则、新章节位置和建议修正的 findings。P0/P1 finding 阻止附录删除。
 
-- [ ] **Step 3: Run the twelve behavior probes from the approved design**
+- [x] **步骤 3：运行已批准设计中的 12 个行为探针**
 
-Review the Playbook against these inputs and require the stated decision:
+用以下输入审查 Playbook，并要求产生指定决策：
 
 ```text
-1. No user goal -> full CGA with at least two capability candidates or a single-candidate reason.
-2. Confirmed next slice, no changed facts -> continuation check.
-3. Confirmed next slice plus blocking failure/user correction -> reroute, not continuation.
-4. Single field/parser/button/test request -> expand, justify trust-loop exception, or defer.
-5. Dirty unrelated worktree changes -> protect and isolate ownership.
-6. Shared API/SSE/persistence change -> cross-layer verification plus dynamic CI mapping.
-7. Full script passes but a CI risk is unmapped -> do not claim CI equivalence.
-8. Skip/no collection/timeout/missing dependency -> not PASS.
-9. Mock browser E2E passes -> do not claim real backend or real-model quality.
-10. Remote CI fails -> compare local evidence, reproduce, prevent recurrence, rerun.
-11. Subagent fails or edits out of scope -> main agent verifies, retries smaller once, then degrades.
-12. Slice is not fully verified -> no delivery and no NEXT transition.
+1. 用户未指定目标 -> 完整 CGA，至少比较两个能力包候选；确实只有一个时说明原因。
+2. 已确认下一切片且事实未变 -> 目标承接检查。
+3. 已确认下一切片但出现阻断失败 / 用户纠错 -> 改道，不继续承接。
+4. 单字段 / parser / 按钮 / 测试请求 -> 扩大边界、证明工程信任例外，或暂缓。
+5. 工作区存在无关 dirty 改动 -> 保护并隔离 ownership。
+6. 共享 API / SSE / 持久化变更 -> 跨层验证加动态 CI 映射。
+7. 全量脚本通过但 CI 风险未映射 -> 不宣称 CI 等价。
+8. skip / 零收集 / timeout / 缺依赖 -> 不记为 `PASS`。
+9. mock 浏览器 E2E 通过 -> 不宣称真实后端或真实模型质量通过。
+10. 远端 CI 失败 -> 比较本地证据、复现、防复发、重跑。
+11. 子智能体失败或越界修改 -> 主 Agent 复核，缩小范围重试一次，再降级。
+12. 切片未完成验证 -> 不交付，也不转换到 `NEXT`。
 ```
 
-Expected: all twelve outcomes are directly required by the Playbook without relying on either annex.
+预期：12 个结果都由 Playbook 直接要求，不依赖任一附录。
 
-- [ ] **Step 4: Fix every P0/P1 review gap**
+- [x] **步骤 4：修复每个 P0/P1 审查缺口**
 
-Use `apply_patch` to update `goal-mode-playbook.md`. Do not add new permanent files. Repeat Steps 1–3 until reviewers find no P0/P1 execution regression.
+使用 `apply_patch` 更新 `goal-mode-playbook.md`。不得新增永久文件。重复步骤 1–3，直到 reviewer 不再发现 P0/P1 执行退化。
 
-- [ ] **Step 5: Verify fixes and commit only if the review changed the Playbook**
+- [x] **步骤 5：验证修复；仅当审查改变 Playbook 时提交**
 
-Run:
+执行：
 
 ```bash
 git diff --check -- docs/strategy/goal-mode-playbook.md
 git diff -- docs/strategy/goal-mode-playbook.md
 ```
 
-If there are changes:
+如果存在改动：
 
 ```bash
 git add docs/strategy/goal-mode-playbook.md
@@ -214,36 +216,37 @@ git diff --cached --name-only
 git commit -m "docs(goal-mode): 补齐状态机执行门禁"
 ```
 
-Expected: no formatting errors; any commit contains only the Playbook.
+预期：没有格式错误；若形成 commit，只包含 Playbook。
 
-### Task 3: Retire the Two Annexes Safely
+### 任务 3：安全退役两份附录
 
-**Files:**
-- Delete: `docs/strategy/goal-mode-cga-template.md`
-- Delete: `docs/strategy/goal-mode-ci-verification.md`
-- Modify only if a future-facing reference exists: the exact active file containing that reference
+**文件：**
+- 删除：`docs/strategy/goal-mode-cga-template.md`
+- 删除：`docs/strategy/goal-mode-ci-verification.md`
+- 仅当存在面向未来的引用时修改：包含该引用的确切活跃文件
 
-**Interfaces:**
-- Consumes: a reviewed Playbook with all behavior probes passing.
-- Produces: a single future-facing target-mode rule source with no live dependency on either annex.
+**接口：**
+- 输入：已经审查且所有行为探针通过的 Playbook。
+- 输出：单一、面向未来且不再实时依赖任一附录的目标模式规则源。
 
-- [ ] **Step 1: Prove there are no future-facing references before deletion**
+- [x] **步骤 1：删除前证明不存在面向未来的引用**
 
-Run:
+执行：
 
 ```bash
 rg -n 'goal-mode-cga-template\.md|goal-mode-ci-verification\.md' docs/strategy AGENTS.md docs/index.md docs/todos/refactor/README.md docs/plans/2026-06-25-new-agents-agent-framework-phase1-phase2.md docs/todos/2026-07-10-new-agents-architecture-refactor.md
+rg -n 'goal-mode-cga-template\.md|goal-mode-ci-verification\.md' --glob '!.git/**' --glob '!.superpowers/**' .
 ```
 
-Expected: no matches outside the two annex files themselves. If a future-facing match remains, replace it with `docs/strategy/goal-mode-playbook.md` using `apply_patch`; do not edit dated execution snapshots.
+预期：第一条命令在两份附录之外没有匹配；全仓扫描的每个额外匹配都被分类为活跃引用、迁移记录或历史快照。如果仍有活跃引用，使用 `apply_patch` 将其替换为 `docs/strategy/goal-mode-playbook.md`；不得仅为消除历史命中而编辑本次迁移设计 / 计划或带日期的执行快照。
 
-- [ ] **Step 2: Delete the annexes with `apply_patch`**
+- [x] **步骤 2：使用 `apply_patch` 删除附录**
 
-Delete both files only after Task 2 has no blocking finding.
+仅在任务 2 没有阻断 finding 后删除两份文件。
 
-- [ ] **Step 3: Verify deletion and historical-reference handling**
+- [x] **步骤 3：验证删除和历史引用处理**
 
-Run:
+执行：
 
 ```bash
 test ! -e docs/strategy/goal-mode-cga-template.md
@@ -251,11 +254,11 @@ test ! -e docs/strategy/goal-mode-ci-verification.md
 rg -n 'goal-mode-cga-template\.md|goal-mode-ci-verification\.md' docs/todos/2026-07-08-new-agents-structured-artifact-failure-reduction.md docs/todos/archive || true
 ```
 
-Expected: both files are absent. Remaining matches, if any, are dated historical facts only and are intentionally unchanged.
+预期：两份文件均不存在。剩余匹配如有，只能是带日期的历史事实，并刻意保持不变。
 
-- [ ] **Step 4: Run final static document checks for this task**
+- [x] **步骤 4：运行本任务最终静态文档检查**
 
-Run:
+执行：
 
 ```bash
 git diff --check -- docs/strategy/goal-mode-cga-template.md docs/strategy/goal-mode-ci-verification.md
@@ -263,11 +266,11 @@ git status --short
 git diff --stat
 ```
 
-Expected: no whitespace errors; the task diff contains the two deletions and only explicitly justified future-reference edits; user dirty files remain unmodified by this task.
+预期：没有 whitespace 错误；任务 diff 包含两份删除，以及有明确理由的未来引用修正；用户 dirty 文件未被本任务修改。
 
-- [ ] **Step 5: Commit annex retirement**
+- [x] **步骤 5：提交附录退役**
 
-Run:
+执行：
 
 ```bash
 git add docs/strategy/goal-mode-cga-template.md docs/strategy/goal-mode-ci-verification.md
@@ -275,48 +278,49 @@ git diff --cached --name-only
 git commit -m "docs(goal-mode): 退役目标模式重复附录"
 ```
 
-Expected: only the two deleted annexes and any necessary future-reference migration are committed.
+预期：只提交两份已删除附录和必要的未来引用迁移。
 
-### Task 4: Final Acceptance and Handoff
+### 任务 4：最终验收与交接
 
-**Files:**
-- Verify: `docs/strategy/goal-mode-playbook.md`
-- Verify: `docs/superpowers/specs/2026-07-10-goal-mode-playbook-contract-state-machine-design.md`
-- Verify: `docs/superpowers/plans/2026-07-10-goal-mode-playbook-contract-state-machine.md`
+**文件：**
+- 验证：`docs/strategy/goal-mode-playbook.md`
+- 验证：`docs/superpowers/specs/2026-07-10-goal-mode-playbook-contract-state-machine-design.md`
+- 验证：`docs/superpowers/plans/2026-07-10-goal-mode-playbook-contract-state-machine.md`
 
-**Interfaces:**
-- Consumes: the committed Playbook rewrite and annex retirement.
-- Produces: evidence-backed completion report and a clean handoff back to the test-quality scan prompt design.
+**接口：**
+- 输入：已提交的 Playbook 重写和附录退役。
+- 输出：有证据支撑的完成报告，以及回到测试质量扫描提示词设计的清晰交接。
 
-- [ ] **Step 1: Run the complete static acceptance suite**
+- [x] **步骤 1：运行完整静态验收套件**
 
-Run:
+执行：
 
 ```bash
 rg -n 'BOOTSTRAP|ASSESS|MILESTONE|DESIGN|PLAN|IMPLEMENT|VERIFY|DELIVER|NEXT|WAIT' docs/strategy/goal-mode-playbook.md
 rg -n 'PASS|FAIL|NOT_RUN|BLOCKED|TIMEOUT|FLAKY' docs/strategy/goal-mode-playbook.md
 rg -n '完整 CGA|目标承接检查|未选候选去向|入口|状态承接|失败反馈|工程信任闭环|首个真实错误|CI 等价' docs/strategy/goal-mode-playbook.md
-git diff --check 584ea756..HEAD
+git diff --check a8390a56..HEAD
 ```
 
-Expected: all mandatory contracts are present and recent commits have no whitespace errors.
+预期：所有强制契约均存在，完整重构提交范围没有 whitespace 错误。
 
-- [ ] **Step 2: Confirm future-reference and worktree ownership**
+- [x] **步骤 2：确认未来引用和工作区 ownership**
 
-Run:
+执行：
 
 ```bash
 rg -n 'goal-mode-cga-template\.md|goal-mode-ci-verification\.md' docs/strategy AGENTS.md docs/index.md docs/todos/refactor/README.md docs/plans/2026-06-25-new-agents-agent-framework-phase1-phase2.md docs/todos/2026-07-10-new-agents-architecture-refactor.md
+rg -n 'goal-mode-cga-template\.md|goal-mode-ci-verification\.md' --glob '!.git/**' --glob '!.superpowers/**' .
 git status -sb
-git log -4 --oneline
+git log --oneline a8390a56..HEAD
 ```
 
-Expected: no future-facing old-annex references; user dirty files are still present and unstaged; the log shows focused design, plan, Playbook, and retirement commits.
+预期：没有面向未来的旧附录引用；全仓匹配均被分类为迁移记录或带日期 / 已归档历史事实；用户 dirty 文件仍存在且未 stage；显式范围日志展示包括设计提交在内的所有聚焦重构 commit。
 
-- [ ] **Step 3: Record validation scope honestly**
+- [x] **步骤 3：诚实记录验证范围**
 
-The completion report must state that this was a documentation-governance change validated by rule migration, static checks, behavior probes, and independent review. It must not claim application tests, real browser tests, external services, or LLM quality gates were run.
+完成报告必须说明：这是文档治理变更，通过规则迁移、静态检查、行为探针和独立审查验证；不得声称运行过应用测试、真实浏览器测试、外部服务或 LLM 质量门。
 
-- [ ] **Step 4: Resume the original task**
+- [ ] **步骤 4：恢复原始任务**
 
-Use the new Playbook as the sole governance source when completing the test-strategy and quality-assurance scan prompt. Keep scan evidence in the scan report, target states and thick slices in the active todo, and future implementation details in per-slice specs/plans.
+完成测试策略与质量保障扫描提示词时，仅以新 Playbook 作为治理规则源。扫描证据写入扫描报告；目标态与厚切片写入活跃 todo；未来实施细节写入各切片 spec / plan。
