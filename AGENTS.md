@@ -19,6 +19,14 @@ For `tools/new-agents`, all agents must share one common runtime, transport, sta
 
 When adding or changing a workflow, keep the configuration surfaces synchronized: shared `workflow_manifest.json`, manifest-derived frontend `WORKFLOWS` / workflow slugs / agent workflow listings, backend `WORKFLOW_STAGES`, artifact contract headings, Mermaid visualization contract, prompt/template files, and tests that prove the workflow uses the shared `/api/agent/runs/stream` typed Agent Runtime. If behavior differs by workflow, encode the difference as data or prompt/template/contract configuration rather than branching infrastructure code. If the change affects workflow quality, update or run the relevant E2E LLM judge evidence.
 
+The shared Agent Runtime contract includes `/api/agent/runs/stream`, typed SSE events (`run_started`, `agent_delta`, `agent_turn`, `error` with sanitized diagnostics), `AgentTurnOutput` validation, deterministic `artifact_data` renderers, artifact version persistence, context summaries, workflow handoffs, story handoff packets, Lisa test assets, and runtime observability. Changes to these capabilities must extend the shared services, contracts, and tests; do not add agent-specific endpoints, parsers, stores, renderers, or persistence paths to bypass the common runtime.
+
+Workflow configuration may have code-level mirrors, but every mirror must be mechanically protected. When adding or changing a workflow/stage, update `workflow_manifest.json`, backend stage and artifact/visual contract maps, artifact-data renderer/instruction registrations, frontend prompt/template mappings, workflow listings, regression samples, and sync tests together. Do not introduce a new source of truth or duplicate contract surface without either deriving it from existing configuration or adding tests that fail on drift.
+
+For service-backed runs, preserve the `runId` reuse path and server-side run/message/artifact/version/context-summary records as the durable execution history. Frontend `localStorage` may cache workspace UI state, but it must not become a competing source of truth for service-backed conversations, artifact versions, handoffs, or packet generation. Prefer persisted `artifactData` for downstream machine-readable features; do not rely on Markdown reverse parsing when structured data is available.
+
+Changes to New Agents architecture must be covered at the boundary they affect: backend contract/runtime/SSE/persistence tests, frontend stream parsing/state/artifact rendering tests, and manifest/contract synchronization tests. Error states must remain explicit and diagnosable; do not add silent fallbacks, production mocks, fabricated artifacts, or fake success responses to keep a workflow moving.
+
 ## Build, Test, and Development Commands
 
 - `./scripts/dev/deploy-dev.sh`: deploy the local Docker development stack.

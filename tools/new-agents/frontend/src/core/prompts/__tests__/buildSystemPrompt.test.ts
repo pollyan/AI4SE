@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { buildSystemPrompt } from '../buildSystemPrompt';
 import { WorkflowType, WORKFLOWS } from '../../../store';
 
@@ -35,6 +37,16 @@ const migratedArtifactDataStages: Array<{
 ];
 
 describe('buildSystemPrompt', () => {
+    it('derives artifact_data prompt mode from the current stage contract', () => {
+        const source = readFileSync(
+            join(process.cwd(), 'src', 'core', 'prompts', 'buildSystemPrompt.ts'),
+            'utf8',
+        );
+
+        expect(source).not.toContain('ARTIFACT_DATA_STAGE_IDS');
+        expect(source).toContain('Boolean(currentStage.artifactDataContract)');
+    });
+
     it('generates different prompts for different workflows', () => {
         const prompt1 = buildSystemPrompt({
             agentId: 'lisa',

@@ -84,6 +84,7 @@ def test_export_lisa_test_assets_parses_cases_and_coverage(app):
     assert assets["workflowId"] == "TEST_DESIGN"
     assert assets["sourceStageId"] == "CASES"
     assert assets["sourceArtifactVersion"] == 1
+    assert assets["sourceFormat"] == "legacy_markdown"
     assert assets["testCases"] == [
         {
             "id": "TC-001",
@@ -218,7 +219,7 @@ def test_export_lisa_test_assets_parses_cases_and_coverage(app):
             },
         ],
         "draftWarnings": [
-            "该草稿由 Lisa Markdown 用例派生，导入 intent-tester 前需要人工校准页面 URL、定位语义和可执行步骤。"
+            "该草稿由 Lisa 测试用例派生，导入 intent-tester 前需要人工校准页面 URL、定位语义和可执行步骤。"
         ],
     }
     assert assets["intentTesterDrafts"][1]["priority"] == 2
@@ -266,6 +267,52 @@ def test_export_lisa_test_assets_accepts_cases_artifact_data_renderer_output(app
         },
     ]
     assert assets["riskMatrix"][0]["risk"] == "R-LOGIN-001"
+
+
+def test_export_lisa_test_assets_prefers_persisted_artifact_data(app):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CASES")
+        record_artifact_version(
+            run.id,
+            "CASES",
+            "这不是可解析的 Markdown 测试用例表格。",
+            artifact_data=VALID_CASES_ARTIFACT_DATA,
+        )
+
+        assets = export_lisa_test_assets(run.id)
+
+    assert assets["sourceFormat"] == "artifact_data"
+    assert [case["id"] for case in assets["testCases"]] == ["TC-001", "TC-002"]
+    assert assets["coverageTrace"] == [
+        {
+            "testPoint": "登录主链路",
+            "priority": "P0",
+            "risk": "R-LOGIN-001",
+            "testCases": ["TC-001"],
+            "status": "已覆盖",
+        },
+        {
+            "testPoint": "登录错误处理",
+            "priority": "P1",
+            "risk": "R-LOGIN-002",
+            "testCases": ["TC-002"],
+            "status": "部分覆盖",
+        },
+    ]
+
+
+def test_export_lisa_test_assets_rejects_invalid_persisted_artifact_data(app):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CASES")
+        record_artifact_version(
+            run.id,
+            "CASES",
+            CASES_MARKDOWN,
+            artifact_data={"case_groups": [], "coverage_trace": []},
+        )
+
+        with pytest.raises(ValueError, match="artifactData.case_groups"):
+            export_lisa_test_assets(run.id)
 
 
 def test_export_lisa_test_assets_reports_latest_source_artifact_version(app):

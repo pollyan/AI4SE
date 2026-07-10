@@ -759,13 +759,17 @@ const projectStructuredVisualToWordParagraphs = (source: string): string[] => {
         return timelineVisualParagraphs(visual);
     }
 
-    return [
-        paragraph(`结构化可视化：${visual.title || visual.type}`),
-        table([
-            visual.columns,
-            ...visual.rows.map(row => row.cells),
-        ]),
-    ];
+    if (visual.kind === 'matrix') {
+        return [
+            paragraph(`结构化可视化：${visual.title || visual.type}`),
+            table([
+                visual.columns,
+                ...visual.rows.map(row => row.cells),
+            ]),
+        ];
+    }
+
+    return [];
 };
 
 const markdownToWordParagraphs = (content: string, context: DocxBuildContext): string[] => {

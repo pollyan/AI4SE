@@ -215,21 +215,25 @@ const sanitizePersistedWorkspaceState = (
   if (hasValidPersistedWorkflow) {
     workflow = persistedWorkflow;
   }
+  const hasPersistedServiceRun = sanitizeCurrentRunId(persistedState.currentRunId) !== null;
   const stageCount = WORKFLOWS[workflow].stages.length;
   const hasValidPersistedStageIndex = (
     Number.isInteger(persistedState.stageIndex)
     && (persistedState.stageIndex as number) >= 0
     && (persistedState.stageIndex as number) < stageCount
   );
-  const stageIndex = hasValidPersistedStageIndex
+  const stageIndex = !hasPersistedServiceRun && hasValidPersistedStageIndex
     ? persistedState.stageIndex as number
     : 0;
-  const stageArtifacts = sanitizeStageArtifacts(
-    persistedState.stageArtifacts,
-    workflow
-  );
+  const stageArtifacts = hasPersistedServiceRun
+    ? {}
+    : sanitizeStageArtifacts(
+      persistedState.stageArtifacts,
+      workflow
+    );
   const currentStageId = WORKFLOWS[workflow].stages[stageIndex].id;
-  const persistedArtifactContent = hasValidPersistedWorkflow
+  const persistedArtifactContent = !hasPersistedServiceRun
+    && hasValidPersistedWorkflow
     && hasValidPersistedStageIndex
     && typeof persistedState.artifactContent === 'string'
     && persistedState.artifactContent.trim()
@@ -244,21 +248,21 @@ const sanitizePersistedWorkspaceState = (
   return {
     workflow,
     stageIndex,
-    chatHistory: sanitizeChatHistory(persistedState.chatHistory),
+    chatHistory: hasPersistedServiceRun ? [] : sanitizeChatHistory(persistedState.chatHistory),
     artifactContent,
     artifactChangeIndex: [],
-    artifactHistory: sanitizeArtifactHistory(persistedState.artifactHistory),
-    artifactComments: sanitizeArtifactComments(persistedState.artifactComments, workflow),
-    artifactSectionLocks: sanitizeArtifactSectionLocks(persistedState.artifactSectionLocks, workflow),
-    artifactAuditEvents: sanitizeArtifactAuditEvents(persistedState.artifactAuditEvents, workflow),
+    artifactHistory: hasPersistedServiceRun ? [] : sanitizeArtifactHistory(persistedState.artifactHistory),
+    artifactComments: hasPersistedServiceRun ? [] : sanitizeArtifactComments(persistedState.artifactComments, workflow),
+    artifactSectionLocks: hasPersistedServiceRun ? [] : sanitizeArtifactSectionLocks(persistedState.artifactSectionLocks, workflow),
+    artifactAuditEvents: hasPersistedServiceRun ? [] : sanitizeArtifactAuditEvents(persistedState.artifactAuditEvents, workflow),
     stageArtifacts: {
       ...stageArtifacts,
       [currentStageId]: artifactContent,
     },
-    currentRunId: sanitizeCurrentRunId(persistedState.currentRunId),
+    currentRunId: null,
     isGenerating: currentState.isGenerating,
     pendingStageTransition: currentState.pendingStageTransition,
-    artifactTruncated,
+    artifactTruncated: hasPersistedServiceRun ? false : artifactTruncated,
   };
 };
 
@@ -881,7 +885,9 @@ export const useStore = create<AppState>()(
     }),
     {
       name: NEW_KEY,
-      partialize: (state) => ({
+      partialize: (state) => state.currentRunId ? {
+        workflow: state.workflow,
+      } : {
         workflow: state.workflow,
         stageIndex: state.stageIndex,
         chatHistory: sanitizeChatHistory(state.chatHistory),
@@ -893,7 +899,7 @@ export const useStore = create<AppState>()(
         stageArtifacts: state.stageArtifacts,
         currentRunId: state.currentRunId,
         artifactTruncated: state.artifactTruncated,
-      }),
+      },
       merge: (persistedState, currentState): AppState => {
         const baseState = currentState as AppState;
         if (!isRecord(persistedState)) return baseState;

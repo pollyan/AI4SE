@@ -1,5 +1,7 @@
+import ast
 import copy
 import json
+from pathlib import Path
 
 import pytest
 
@@ -52,6 +54,30 @@ from test_artifact_data_renderers import (
     VALID_VALUE_PERSONA_ARTIFACT_DATA,
 )
 from workflow_manifest import format_artifact_data_contract_instruction
+
+
+RUNTIME_MODULE = Path(__file__).resolve().parents[1] / "agent_runtime.py"
+INSTRUCTION_REGISTRY_MODULE = (
+    Path(__file__).resolve().parents[1] / "artifact_data_instruction_registry.py"
+)
+
+
+def _top_level_assignment_call_module(path: Path, name: str) -> str | None:
+    module = ast.parse(path.read_text(encoding="utf-8"))
+    for node in module.body:
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if any(alias.name == name for alias in node.names):
+            return node.module
+    return None
+
+
+def test_runtime_imports_structured_instruction_registry_from_dedicated_module():
+    assert INSTRUCTION_REGISTRY_MODULE.is_file()
+    assert _top_level_assignment_call_module(
+        RUNTIME_MODULE,
+        "ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS",
+    ) == "artifact_data_instruction_registry"
 
 
 ARTIFACT_DATA_STREAMING_STAGES = sorted(ARTIFACT_DATA_STAGE_FIXTURES)
@@ -4956,3 +4982,5 @@ def test_deepseek_v4_resolves_json_object_only_capability():
 
     assert capability.tier == "json_object_only"
     assert capability.response_format == {"type": "json_object"}
+import ast
+from pathlib import Path

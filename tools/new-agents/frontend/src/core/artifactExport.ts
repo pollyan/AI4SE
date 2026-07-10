@@ -346,16 +346,18 @@ function projectMarkdownToPdfDocument(content: string): PdfProjectedDocument {
                     pdfLines.push(...formatPdfTimelineVisualLines(visual));
                     continue;
                 }
-                const rows = visual.rows.map(row => row.cells);
-                pdfLines.push(
-                    `结构化可视化：${visual.title || visual.type}`,
-                    ...formatPdfTableRows([visual.columns, ...rows])
-                );
-                structuredTables.push({
-                    startLineIndex,
-                    columns: visual.columns,
-                    rows,
-                });
+                if (visual.kind === 'matrix') {
+                    const rows = visual.rows.map(row => row.cells);
+                    pdfLines.push(
+                        `结构化可视化：${visual.title || visual.type}`,
+                        ...formatPdfTableRows([visual.columns, ...rows])
+                    );
+                    structuredTables.push({
+                        startLineIndex,
+                        columns: visual.columns,
+                        rows,
+                    });
+                }
                 continue;
             }
             codeLines.forEach(codeLine => pdfLines.push(`    ${codeLine}`));

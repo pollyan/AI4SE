@@ -1108,7 +1108,7 @@ describe('llm.ts', () => {
             });
         });
 
-        it('agent_turn 已建议确认进入下一阶段但缺少 stage_action 时应同轮显示确认控件', async () => {
+        it('agent_turn 仅在 chat 建议进入下一阶段但缺少 stage_action 时不应显示确认控件', async () => {
             resetStore({
                 workflow: 'TEST_DESIGN',
                 stageIndex: 0,
@@ -1139,7 +1139,7 @@ describe('llm.ts', () => {
             expect(results.at(-1)).toEqual({
                 chatResponse: '已根据默认场景更新《需求分析文档》。请查看右侧文档，确认无误后回复“确认”进入下一阶段（策略制定）。',
                 newArtifact: artifact,
-                action: 'NEXT_STAGE',
+                action: '',
                 hasArtifactUpdate: true,
             });
         });

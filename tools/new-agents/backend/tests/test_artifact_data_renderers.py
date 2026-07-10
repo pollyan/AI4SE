@@ -1,4 +1,6 @@
+import ast
 import copy
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -31,10 +33,71 @@ from artifact_data_renderers import (
 from test_asset_parsing import parse_lisa_test_asset_markdown
 
 
+RENDERERS_MODULE = Path(__file__).resolve().parents[1] / "artifact_data_renderers.py"
+VALUE_RENDERERS_MODULE = (
+    Path(__file__).resolve().parents[1] / "artifact_data_renderer_value.py"
+)
+VALUE_SCHEMA_MODULE = (
+    Path(__file__).resolve().parents[1] / "artifact_data_value_schema.py"
+)
+
+
+def _top_level_function_names(path: Path) -> set[str]:
+    module = ast.parse(path.read_text(encoding="utf-8"))
+    return {
+        node.name
+        for node in module.body
+        if isinstance(node, ast.FunctionDef)
+    }
+
+
+def _top_level_class_names(path: Path) -> set[str]:
+    module = ast.parse(path.read_text(encoding="utf-8"))
+    return {
+        node.name
+        for node in module.body
+        if isinstance(node, ast.ClassDef)
+    }
+
+
 def test_artifact_data_renderer_stage_keys_match_runtime_instruction_registry():
     assert set(get_artifact_data_renderer_stage_keys()) == set(
         ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS
     )
+
+
+def test_value_discovery_renderer_helpers_have_one_dedicated_module():
+    expected_helpers = {
+        "_render_value_positioning_summary",
+        "_render_value_flow",
+        "_render_persona_profiles",
+        "_render_journey_map",
+        "_render_blueprint_requirements",
+        "_render_blueprint_stage_gate",
+    }
+
+    assert VALUE_RENDERERS_MODULE.is_file()
+    assert expected_helpers <= _top_level_function_names(VALUE_RENDERERS_MODULE)
+    assert not expected_helpers & _top_level_function_names(RENDERERS_MODULE)
+
+
+def test_value_discovery_artifact_data_schemas_have_one_dedicated_module():
+    expected_schemas = {
+        "ValueDiscoveryElevatorArtifactData",
+        "ValueDiscoveryPersonaArtifactData",
+        "ValueDiscoveryJourneyArtifactData",
+        "ValueDiscoveryBlueprintArtifactData",
+    }
+
+    assert VALUE_SCHEMA_MODULE.is_file()
+    module = ast.parse(VALUE_SCHEMA_MODULE.read_text(encoding="utf-8"))
+    schema_names = {
+        node.name
+        for node in module.body
+        if isinstance(node, ast.ClassDef)
+    }
+    assert expected_schemas <= schema_names
+    assert not expected_schemas & _top_level_class_names(RENDERERS_MODULE)
 
 
 VALID_PRD_REVIEW_ARTIFACT_DATA = {

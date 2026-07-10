@@ -1,22 +1,30 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import ReactMarkdown from 'react-markdown';
-import type { Components } from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeRaw from 'rehype-raw';
 import { useStore, ArtifactVersion, WORKFLOWS } from '../store';
 import type {
   AgentRunSnapshotArtifact,
   ArtifactVisualDiagnostic,
   ArtifactVisualDiagnosticFocusRequest,
-  StoryHandoffCandidate,
-  StoryHandoffPacket,
-  StoryHandoffPacketListItem,
 } from '../core/types';
 import { buildLineDiff } from '../core/artifactDiff';
 import {
   parseArtifactMarkdownSections,
   type ArtifactMarkdownSection,
 } from '../core/artifactSections';
+import { saveArtifactEditSession } from '../core/artifactEditSession';
+import { syncArtifactCollaboration } from '../core/artifactCollaboration';
+import {
+  buildArtifactCommentInput,
+  getArtifactCommentAnchorStatus,
+  normalizeArtifactCommentAnchor,
+} from '../core/artifactComments';
+import {
+  buildArtifactVisualDiagnostic,
+  buildArtifactVisualDiagnosticId,
+} from '../core/artifactVisualDiagnostics';
+import {
+  buildConflictRefreshHistory,
+  updateArtifactHistoryContent,
+} from '../core/artifactHistorySession';
 import {
   buildAutoMergedInsertionResult,
   buildConflictMergeBlockLabel,
@@ -28,95 +36,15 @@ import {
 import type { AutoMergedConflictResult } from '../core/artifactMerge';
 import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/markdownUtils';
 import { Download, Code, Eye, History, X, AlertTriangle, GitCompare, Edit3, Save, MessageSquare, Trash2, Lock, Unlock, MoreHorizontal, RefreshCw } from 'lucide-react';
-import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
-import { StructuredVisual } from './StructuredVisual';
-import { ArtifactConflictError, updateRunArtifact, updateRunArtifactCollaboration } from '../services/runSnapshotService';
+import { ArtifactMarkdownPreview } from './ArtifactMarkdownPreview';
+import { createArtifactMarkdownComponents } from './artifactMarkdownComponents';
+import { StoryHandoffPacketPanel } from './StoryHandoffPacketPanel';
+import { updateRunArtifact, updateRunArtifactCollaboration } from '../services/runSnapshotService';
 import { useChatService } from '../services/chatService';
-import {
-  createStoryHandoffPacket,
-  fetchStoryHandoffCandidates,
-  fetchStoryHandoffPackets,
-} from '../services/storyHandoffPacketService';
 import { buildDocxPackage } from '../core/docxExport';
 import { buildPlainTextPdf as buildArtifactPdf } from '../core/artifactExport';
 import { buildArtifactQualitySummary } from '../core/artifactQuality';
 import { buildWorkflowQualitySummary } from '../core/workflowQuality';
-
-type MarkdownPreviewChunk = {
-  sectionKey: string;
-  content: string;
-  mermaidBlockStartIndex: number;
-  structuredVisualBlockStartIndex: number;
-};
-
-type RenderedMarkdownSectionProps = MarkdownPreviewChunk & {
-  components: Components;
-  renderVersionKey: string;
-};
-
-const countFencedBlocksByLanguage = (
-  content: string,
-  language: 'mermaid' | 'ai4se-visual'
-): number => {
-  const fencePattern = /^```\s*([^\s`]+)/gm;
-  let count = 0;
-  let match: RegExpExecArray | null;
-  while ((match = fencePattern.exec(content)) !== null) {
-    if (match[1] === language) {
-      count += 1;
-    }
-  }
-  return count;
-};
-
-const buildMarkdownPreviewChunks = (content: string): MarkdownPreviewChunk[] => {
-  const parsedSections = parseArtifactMarkdownSections(content);
-  const baseChunks = parsedSections.length > 0
-    ? parsedSections.map(section => ({
-      sectionKey: section.anchor,
-      content: section.content,
-    }))
-    : [{
-      sectionKey: 'full-document',
-      content,
-    }];
-
-  let mermaidBlockStartIndex = 0;
-  let structuredVisualBlockStartIndex = 0;
-  return baseChunks
-    .filter(chunk => chunk.content.trim().length > 0)
-    .map((chunk) => {
-      const result = {
-        ...chunk,
-        mermaidBlockStartIndex,
-        structuredVisualBlockStartIndex,
-      };
-      mermaidBlockStartIndex += countFencedBlocksByLanguage(chunk.content, 'mermaid');
-      structuredVisualBlockStartIndex += countFencedBlocksByLanguage(
-        chunk.content,
-        'ai4se-visual'
-      );
-      return result;
-    });
-};
-
-const RenderedMarkdownSection = React.memo(({
-  content,
-  components,
-}: RenderedMarkdownSectionProps) => (
-  <ReactMarkdown
-    remarkPlugins={[remarkGfm]}
-    rehypePlugins={[rehypeRaw]}
-    components={components}
-  >
-    {content}
-  </ReactMarkdown>
-), (previous, next) => (
-  previous.content === next.content
-  && previous.mermaidBlockStartIndex === next.mermaidBlockStartIndex
-  && previous.structuredVisualBlockStartIndex === next.structuredVisualBlockStartIndex
-  && previous.renderVersionKey === next.renderVersionKey
-));
 
 export const ArtifactPane: React.FC = () => {
   const workflow = useStore((state) => state.workflow);
@@ -167,12 +95,6 @@ export const ArtifactPane: React.FC = () => {
   const [selectedArtifactText, setSelectedArtifactText] = useState<string | null>(null);
   const [activeCommentAnchorText, setActiveCommentAnchorText] = useState<string | null>(null);
   const [activeVisualDiagnosticId, setActiveVisualDiagnosticId] = useState<string | null>(null);
-  const [storyHandoffCandidates, setStoryHandoffCandidates] = useState<StoryHandoffCandidate[]>([]);
-  const [storyHandoffPackets, setStoryHandoffPackets] = useState<StoryHandoffPacketListItem[]>([]);
-  const [isLoadingStoryHandoff, setIsLoadingStoryHandoff] = useState(false);
-  const [storyHandoffError, setStoryHandoffError] = useState<string | null>(null);
-  const [creatingStoryPacketId, setCreatingStoryPacketId] = useState<string | null>(null);
-  const [copiedStoryPacketId, setCopiedStoryPacketId] = useState<string | null>(null);
   const artifactPreviewRef = useRef<HTMLDivElement | null>(null);
   const handledVisualDiagnosticFocusSeqRef = useRef<number | null>(null);
   const currentStage = WORKFLOWS[workflow].stages[stageIndex];
@@ -240,92 +162,21 @@ export const ArtifactPane: React.FC = () => {
     && currentStageId === 'SPRINT_PLAN'
     && currentRunId !== null
   );
-  const storyHandoffPacketByStoryId = useMemo(
-    () => new Map(storyHandoffPackets.map(packet => [packet.storyId, packet])),
-    [storyHandoffPackets]
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!isStoryHandoffPacketStage || !currentRunId || !currentStageId) {
-      setStoryHandoffCandidates([]);
-      setStoryHandoffPackets([]);
-      setStoryHandoffError(null);
-      setIsLoadingStoryHandoff(false);
-      return undefined;
-    }
-
-    setIsLoadingStoryHandoff(true);
-    setStoryHandoffError(null);
-    Promise.all([
-      fetchStoryHandoffCandidates(currentRunId, currentStageId),
-      fetchStoryHandoffPackets(currentRunId, currentStageId),
-    ])
-      .then(([candidateResponse, packetResponse]) => {
-        if (cancelled) return;
-        setStoryHandoffCandidates(candidateResponse.candidates);
-        setStoryHandoffPackets(packetResponse.packets);
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        const message = error instanceof Error ? error.message : '未知错误';
-        setStoryHandoffCandidates([]);
-        setStoryHandoffPackets([]);
-        setStoryHandoffError(`单故事需求包加载失败：${message}`);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingStoryHandoff(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentRunId, currentStageId, isStoryHandoffPacketStage]);
-
   const syncArtifactCollaborationState = useCallback(() => {
     if (!currentRunId) return;
     const state = useStore.getState();
     setCollaborationSyncError(null);
-    void updateRunArtifactCollaboration(
-      currentRunId,
-      state.artifactComments,
-      state.artifactSectionLocks,
-    ).catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : '未知错误';
-      setCollaborationSyncError(`协作状态保存失败：${message}`);
+    void syncArtifactCollaboration({
+      runId: currentRunId,
+      comments: state.artifactComments,
+      sectionLocks: state.artifactSectionLocks,
+      updateCollaboration: updateRunArtifactCollaboration,
+    }).then((errorMessage) => {
+      if (errorMessage) setCollaborationSyncError(errorMessage);
     });
   }, [currentRunId]);
 
-  const isFenceStart = (line: string): boolean => /^```/.test(line.trim());
-  const isHeading = (line: string): boolean => /^#{1,3}\s+/.test(line);
   type ArtifactSection = ArtifactMarkdownSection;
-
-  const stripInlineMarkdown = (content: string): string => (
-    content
-      .replace(/`([^`]+)`/g, '$1')
-      .replace(/\*\*([^*]+)\*\*/g, '$1')
-      .replace(/\*([^*]+)\*/g, '$1')
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .trim()
-  );
-
-  const buildCommentExcerpt = (content: string): string => {
-    const lines = content.split(/\r?\n/);
-    const firstBodyLine = lines.find((line) => {
-      const trimmedLine = line.trim();
-      return trimmedLine && !isHeading(trimmedLine) && !isFenceStart(trimmedLine);
-    }) || lines.find(line => line.trim()) || '当前产出物';
-    const excerpt = stripInlineMarkdown(firstBodyLine.replace(/^\s*[-*]\s+/, ''));
-    return excerpt.length > 120 ? `${excerpt.slice(0, 117)}...` : excerpt;
-  };
-
-  const normalizeCommentAnchorText = (value: string): string | null => {
-    const normalizedValue = value.replace(/\s+/g, ' ').trim();
-    if (!normalizedValue) return null;
-    return normalizedValue.length > 120
-      ? `${normalizedValue.slice(0, 117)}...`
-      : normalizedValue;
-  };
 
   const readSelectedArtifactText = (): string | null => {
     const selection = window.getSelection();
@@ -345,7 +196,7 @@ export const ArtifactPane: React.FC = () => {
       return null;
     }
 
-    return normalizeCommentAnchorText(selection.toString());
+    return normalizeArtifactCommentAnchor(selection.toString());
   };
 
   const captureSelectedArtifactText = () => {
@@ -361,31 +212,6 @@ export const ArtifactPane: React.FC = () => {
     () => parseArtifactMarkdownSections(artifactContent),
     [artifactContent]
   );
-  const markdownPreviewChunks = useMemo(
-    () => buildMarkdownPreviewChunks(displayContent),
-    [displayContent]
-  );
-
-  const findLockedSectionChange = (nextContent: string): string | null => {
-    if (currentStageSectionLocks.length === 0) return null;
-    const nextSections = parseArtifactMarkdownSections(nextContent);
-    for (const lock of currentStageSectionLocks) {
-      const currentSection = artifactSections.find(section => (
-        lock.sectionAnchor
-          ? section.anchor === lock.sectionAnchor
-          : section.heading === lock.heading
-      ));
-      const nextSection = nextSections.find(section => (
-        lock.sectionAnchor
-          ? section.anchor === lock.sectionAnchor
-          : section.heading === lock.heading
-      ));
-      if (!nextSection || nextSection.content.trim() !== lock.content.trim()) {
-        return currentSection?.displayTitle ?? lock.heading.replace(/^#{1,3}\s+/, '');
-      }
-    }
-    return null;
-  };
 
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -419,45 +245,6 @@ export const ArtifactPane: React.FC = () => {
       new Blob([artifactContent], { type: 'text/markdown' }),
       `${workflow.toLowerCase()}_artifact.md`
     );
-  };
-
-  const refreshStoryHandoffPackets = async () => {
-    if (!currentRunId || !currentStageId) return;
-    const packetResponse = await fetchStoryHandoffPackets(currentRunId, currentStageId);
-    setStoryHandoffPackets(packetResponse.packets);
-  };
-
-  const handleCreateStoryHandoffPacket = async (storyId: string) => {
-    if (!currentRunId || !currentStageId) return;
-    setCreatingStoryPacketId(storyId);
-    setStoryHandoffError(null);
-    try {
-      await createStoryHandoffPacket(currentRunId, currentStageId, storyId);
-      await refreshStoryHandoffPackets();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '未知错误';
-      setStoryHandoffError(`单故事需求包生成失败：${message}`);
-    } finally {
-      setCreatingStoryPacketId(null);
-    }
-  };
-
-  const handleCopyStoryHandoffPacket = async (
-    storyId: string,
-    packet: StoryHandoffPacket,
-  ) => {
-    setStoryHandoffError(null);
-    if (!navigator.clipboard?.writeText) {
-      setStoryHandoffError('当前浏览器不支持复制单故事需求包。');
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(packet, null, 2));
-      setCopiedStoryPacketId(storyId);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '未知错误';
-      setStoryHandoffError(`单故事需求包复制失败：${message}`);
-    }
   };
 
   const openHistory = () => {
@@ -3323,72 +3110,43 @@ export const ArtifactPane: React.FC = () => {
 
   const restoreHistoryLine = (lineContent: string) => {
     if (!selectedVersion || !lineContent.trim()) return;
-
-    const currentLines = artifactContent.replace(/\r\n/g, '\n').split('\n');
-    if (currentLines.includes(lineContent)) return;
-
-    const historyLines = selectedVersion.content.replace(/\r\n/g, '\n').split('\n');
-    const historyLineIndex = historyLines.findIndex(line => line === lineContent);
-    if (historyLineIndex < 0) return;
-
-    const insertIndex = Math.min(historyLineIndex, currentLines.length);
-    applyHistoryLineReview([
-      ...currentLines.slice(0, insertIndex),
-      lineContent,
-      ...currentLines.slice(insertIndex),
-    ].join('\n'));
+    applyHistoryLineReview(updateArtifactHistoryContent({
+      operation: 'restore',
+      currentContent: artifactContent,
+      historicalContent: selectedVersion.content,
+      lines: [lineContent],
+    }));
   };
 
   const restoreHistoryBlock = (lineContents: string[]) => {
     if (!selectedVersion) return;
 
-    const blockLines = lineContents.filter(line => line.trim());
-    if (blockLines.length === 0) return;
-
-    const currentLines = artifactContent.replace(/\r\n/g, '\n').split('\n');
-    const linesToRestore = blockLines.filter(line => !currentLines.includes(line));
-    if (linesToRestore.length === 0) return;
-
-    const historyLines = selectedVersion.content.replace(/\r\n/g, '\n').split('\n');
-    const historyLineIndex = historyLines.findIndex(line => line === blockLines[0]);
-    if (historyLineIndex < 0) return;
-
-    const insertIndex = Math.min(historyLineIndex, currentLines.length);
-    applyHistoryLineReview([
-      ...currentLines.slice(0, insertIndex),
-      ...linesToRestore,
-      ...currentLines.slice(insertIndex),
-    ].join('\n'));
+    applyHistoryLineReview(updateArtifactHistoryContent({
+      operation: 'restore',
+      currentContent: artifactContent,
+      historicalContent: selectedVersion.content,
+      lines: lineContents,
+    }));
   };
 
   const discardCurrentLine = (lineContent: string) => {
     if (!lineContent.trim()) return;
 
-    const currentLines = artifactContent.replace(/\r\n/g, '\n').split('\n');
-    const currentLineIndex = currentLines.findIndex(line => line === lineContent);
-    if (currentLineIndex < 0) return;
-
-    applyHistoryLineReview([
-      ...currentLines.slice(0, currentLineIndex),
-      ...currentLines.slice(currentLineIndex + 1),
-    ].join('\n'));
+    applyHistoryLineReview(updateArtifactHistoryContent({
+      operation: 'discard',
+      currentContent: artifactContent,
+      historicalContent: artifactContent,
+      lines: [lineContent],
+    }));
   };
 
   const discardCurrentBlock = (lineContents: string[]) => {
-    const blockLines = lineContents.filter(line => line.trim());
-    if (blockLines.length === 0) return;
-
-    const nextCurrentLines = artifactContent.replace(/\r\n/g, '\n').split('\n');
-    let removedAnyLine = false;
-    blockLines.forEach((lineContent) => {
-      const currentLineIndex = nextCurrentLines.findIndex(line => line === lineContent);
-      if (currentLineIndex < 0) return;
-      nextCurrentLines.splice(currentLineIndex, 1);
-      removedAnyLine = true;
-    });
-    if (!removedAnyLine) return;
-
-    applyHistoryLineReview(nextCurrentLines.join('\n'));
+    applyHistoryLineReview(updateArtifactHistoryContent({
+      operation: 'discard',
+      currentContent: artifactContent,
+      historicalContent: artifactContent,
+      lines: lineContents,
+    }));
   };
 
   const beginManualEdit = () => {
@@ -3413,35 +3171,8 @@ export const ArtifactPane: React.FC = () => {
     setIsEditing(false);
   };
 
-  const inferCurrentServerVersionNumber = (): number | undefined => {
-    if (!currentRunId || !currentStageId) return undefined;
-    const latestCurrentStageVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1];
-    if (!latestCurrentStageVersion || latestCurrentStageVersion.content !== artifactContent) {
-      return undefined;
-    }
-    const expectedPrefix = `${currentRunId}-${currentStageId}-v`;
-    if (!latestCurrentStageVersion.id.startsWith(expectedPrefix)) {
-      return undefined;
-    }
-    const versionNumber = Number.parseInt(
-      latestCurrentStageVersion.id.slice(expectedPrefix.length),
-      10
-    );
-    return Number.isInteger(versionNumber) ? versionNumber : undefined;
-  };
-
   const saveManualEdit = async () => {
     if (!currentStageId) return;
-
-    if (editDraft === artifactContent) {
-      setIsEditing(false);
-      setEditDraft('');
-      setManualEditError(null);
-      setConflictVersionNumber(null);
-      setConflictArtifact(null);
-      setShowConflictDiff(false);
-      return;
-    }
 
     setIsSavingManualEdit(true);
     setManualEditError(null);
@@ -3449,41 +3180,43 @@ export const ArtifactPane: React.FC = () => {
     setConflictArtifact(null);
     setShowConflictDiff(false);
 
-    const changedLockedSection = findLockedSectionChange(editDraft);
-    if (changedLockedSection) {
-      setManualEditError(`保存失败：锁定章节“${changedLockedSection}”已被修改，请先解锁后再保存。`);
+    const latestCurrentStageVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1];
+    const sessionResult = saveArtifactEditSession({
+      currentRunId,
+      currentStageId,
+      artifactContent,
+      editDraft,
+      locks: currentStageSectionLocks,
+      latestStageVersion: latestCurrentStageVersion,
+      updateArtifact: updateRunArtifact,
+    });
+    const result = sessionResult instanceof Promise
+      ? await sessionResult
+      : sessionResult;
+    if (result.type === 'unchanged') {
+      setEditDraft('');
+      setIsSavingManualEdit(false);
+      setIsEditing(false);
+      return;
+    }
+    if (result.type === 'locked') {
+      setManualEditError(`保存失败：锁定章节“${result.sectionTitle}”已被修改，请先解锁后再保存。`);
+      setIsSavingManualEdit(false);
+      return;
+    }
+    if (result.type === 'conflict') {
+      setManualEditError(`保存冲突：${result.message}`);
+      setConflictVersionNumber(result.artifact.versionNumber);
+      setConflictArtifact(result.artifact);
+      setIsSavingManualEdit(false);
+      return;
+    }
+    if (result.type === 'error') {
+      setManualEditError(`保存失败：${result.message}`);
       setIsSavingManualEdit(false);
       return;
     }
 
-    let savedContent = editDraft;
-    let savedVersionId: string | null = null;
-    if (currentRunId) {
-      try {
-        const savedArtifact = await updateRunArtifact(
-          currentRunId,
-          currentStageId,
-          editDraft,
-          { expectedVersionNumber: inferCurrentServerVersionNumber() },
-        );
-        savedContent = savedArtifact.content;
-        savedVersionId = `${currentRunId}-${savedArtifact.stageId}-v${savedArtifact.versionNumber}`;
-      } catch (error) {
-        if (error instanceof ArtifactConflictError) {
-          setManualEditError(`保存冲突：${error.message}`);
-          setConflictVersionNumber(error.currentArtifact.versionNumber);
-          setConflictArtifact(error.currentArtifact);
-          setIsSavingManualEdit(false);
-          return;
-        }
-        const message = error instanceof Error ? error.message : '未知错误';
-        setManualEditError(`保存失败：${message}`);
-        setIsSavingManualEdit(false);
-        return;
-      }
-    }
-
-    const latestCurrentStageVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1];
     const timestamp = Date.now();
     if (latestCurrentStageVersion?.content !== artifactContent) {
       addArtifactVersion({
@@ -3494,12 +3227,12 @@ export const ArtifactPane: React.FC = () => {
       });
     }
     addArtifactVersion({
-      id: savedVersionId ?? `manual-edit-${timestamp}`,
+      id: result.versionId ?? `manual-edit-${timestamp}`,
       timestamp: timestamp + 1,
-      content: savedContent,
+      content: result.content,
       stageId: currentStageId,
     });
-    setArtifactContent(savedContent);
+    setArtifactContent(result.content);
     setEditDraft('');
     setManualEditError(null);
     setConflictVersionNumber(null);
@@ -3513,30 +3246,17 @@ export const ArtifactPane: React.FC = () => {
     if (!conflictArtifact || !currentStageId) return;
 
     const latestCurrentStageVersion = currentStageArtifactHistory[currentStageArtifactHistory.length - 1];
-    const timestamp = Date.now();
-    if (latestCurrentStageVersion?.content !== artifactContent) {
-      addArtifactVersion({
-        id: `conflict-local-backup-${timestamp}`,
-        timestamp,
-        content: artifactContent,
-        stageId: currentStageId,
-      });
-    }
-    addArtifactVersion({
-      id: `conflict-draft-${timestamp}`,
-      timestamp: timestamp + 1,
-      content: editDraft,
-      stageId: currentStageId,
+    const refreshHistory = buildConflictRefreshHistory({
+      currentRunId,
+      currentStageId,
+      artifactContent,
+      latestVersionContent: latestCurrentStageVersion?.content,
+      draftContent: editDraft,
+      serverArtifact: conflictArtifact,
+      timestamp: Date.now(),
     });
-    addArtifactVersion({
-      id: currentRunId
-        ? `${currentRunId}-${conflictArtifact.stageId}-v${conflictArtifact.versionNumber}`
-        : `conflict-server-${timestamp}`,
-      timestamp: timestamp + 2,
-      content: conflictArtifact.content,
-      stageId: currentStageId,
-    });
-    setArtifactContent(conflictArtifact.content);
+    refreshHistory.versions.forEach(addArtifactVersion);
+    setArtifactContent(refreshHistory.content);
     setEditDraft('');
     setManualEditError(null);
     setConflictVersionNumber(null);
@@ -3725,16 +3445,14 @@ export const ArtifactPane: React.FC = () => {
 
   const addCurrentStageComment = () => {
     if (!currentStageId) return;
-    const content = commentDraft.trim();
-    if (!content) return;
-    const anchorText = captureSelectedArtifactText() ?? selectedArtifactText;
-    const artifactExcerpt = anchorText ?? buildCommentExcerpt(artifactContent);
-    addArtifactComment({
+    const comment = buildArtifactCommentInput({
       stageId: currentStageId,
-      content,
-      artifactExcerpt,
-      anchorText,
+      draft: commentDraft,
+      artifactContent,
+      selectedAnchor: captureSelectedArtifactText() ?? selectedArtifactText,
     });
+    if (!comment) return;
+    addArtifactComment(comment);
     syncArtifactCollaborationState();
     setCommentDraft('');
   };
@@ -3805,7 +3523,7 @@ export const ArtifactPane: React.FC = () => {
   };
 
   const locateArtifactCommentAnchor = (anchorText: string) => {
-    const normalizedAnchorText = normalizeCommentAnchorText(anchorText);
+    const normalizedAnchorText = normalizeArtifactCommentAnchor(anchorText);
     if (!normalizedAnchorText) return;
     setIsEditing(false);
     setViewMode('preview');
@@ -3821,14 +3539,6 @@ export const ArtifactPane: React.FC = () => {
   const locateCommentAnchorFromReview = (anchorText: string) => {
     setShowReviewPanel(false);
     locateArtifactCommentAnchor(anchorText);
-  };
-
-  const getCommentAnchorStatus = (anchorText: string | null): 'none' | 'active' | 'stale' => {
-    const normalizedAnchorText = normalizeCommentAnchorText(anchorText ?? '');
-    if (!normalizedAnchorText) return 'none';
-
-    const normalizedArtifactContent = artifactContent.replace(/\s+/g, ' ');
-    return normalizedArtifactContent.includes(normalizedAnchorText) ? 'active' : 'stale';
   };
 
   const locateArtifactVisualDiagnostic = useCallback((
@@ -3903,198 +3613,33 @@ export const ArtifactPane: React.FC = () => {
     ))
   );
 
-  const buildVisualDiagnosticId = (kind: 'mermaid' | 'structured-visual', blockIndex: number): string => (
-    `${kind}:${currentStageId || 'unknown'}:${blockIndex}`
-  );
-
-  const getVisualDiagnosticContainerClass = (diagnosticId: string): string => (
-    `my-6 rounded-xl transition-shadow ${activeVisualDiagnosticId === diagnosticId
-      ? 'ring-2 ring-amber-300/70 shadow-[0_0_0_4px_rgba(252,211,77,0.12)]'
-      : 'ring-1 ring-transparent'}`
-  );
-
   const handleMermaidRenderError = useCallback((details: { message: string; blockIndex: number }) => {
     if (!currentStageId) return;
-    setArtifactVisualDiagnostic({
-      id: buildVisualDiagnosticId('mermaid', details.blockIndex),
+    setArtifactVisualDiagnostic(buildArtifactVisualDiagnostic({
       stageId: currentStageId,
       kind: 'mermaid',
-      title: 'Mermaid 图表渲染失败',
-      message: details.message || '右侧 Mermaid 图表暂时无法渲染。',
       blockIndex: details.blockIndex,
-    });
+      message: details.message,
+    }));
   }, [currentStageId, setArtifactVisualDiagnostic]);
 
   const handleMermaidRenderSuccess = useCallback((blockIndex: number) => {
-    clearArtifactVisualDiagnostic(buildVisualDiagnosticId('mermaid', blockIndex));
+    clearArtifactVisualDiagnostic(buildArtifactVisualDiagnosticId(currentStageId, 'mermaid', blockIndex));
   }, [clearArtifactVisualDiagnostic, currentStageId]);
 
   const handleStructuredVisualValidationError = useCallback((blockIndex: number, message: string) => {
     if (!currentStageId) return;
-    setArtifactVisualDiagnostic({
-      id: buildVisualDiagnosticId('structured-visual', blockIndex),
+    setArtifactVisualDiagnostic(buildArtifactVisualDiagnostic({
       stageId: currentStageId,
       kind: 'structured-visual',
-      title: '结构化可视化格式错误',
       message,
       blockIndex,
-    });
+    }));
   }, [currentStageId, setArtifactVisualDiagnostic]);
 
   const handleStructuredVisualValidationSuccess = useCallback((blockIndex: number) => {
-    clearArtifactVisualDiagnostic(buildVisualDiagnosticId('structured-visual', blockIndex));
+    clearArtifactVisualDiagnostic(buildArtifactVisualDiagnosticId(currentStageId, 'structured-visual', blockIndex));
   }, [clearArtifactVisualDiagnostic, currentStageId]);
-
-  const createArtifactMarkdownComponents = (
-    onMermaidRetry?: Parameters<typeof createMarkdownCodeRenderer>[0]['onMermaidRetry'],
-    activeAnchorText?: string | null,
-    reportVisualDiagnostics = false,
-    attachVisualDiagnosticAnchors = false,
-    deferMermaidRender = false,
-    mermaidBlockStartIndex = 0,
-    structuredVisualBlockStartIndex = 0
-  ): Components => {
-    let mermaidBlockCounter = mermaidBlockStartIndex;
-    let structuredVisualBlockCounter = structuredVisualBlockStartIndex;
-    let anchorHighlighted = false;
-    const normalizedActiveAnchorText = activeAnchorText?.trim() || null;
-    const highlightAnchorInChildren = (children: React.ReactNode): React.ReactNode => {
-      if (!normalizedActiveAnchorText || anchorHighlighted) return children;
-
-      const visitNode = (node: React.ReactNode): React.ReactNode => {
-        if (!normalizedActiveAnchorText || anchorHighlighted) return node;
-        if (typeof node === 'string') {
-          const anchorIndex = node.indexOf(normalizedActiveAnchorText);
-          if (anchorIndex < 0) return node;
-          anchorHighlighted = true;
-          return (
-            <>
-              {node.slice(0, anchorIndex)}
-              <mark
-                data-artifact-anchor-highlight="true"
-                className="rounded bg-amber-300/25 px-1 py-0.5 font-medium text-amber-100 ring-1 ring-amber-300/40"
-              >
-                {normalizedActiveAnchorText}
-              </mark>
-              {node.slice(anchorIndex + normalizedActiveAnchorText.length)}
-            </>
-          );
-        }
-        if (Array.isArray(node)) {
-          return node.map((child, index) => (
-            <React.Fragment key={index}>{visitNode(child)}</React.Fragment>
-          ));
-        }
-        return node;
-      };
-
-      return visitNode(children);
-    };
-
-    return {
-    h1: ({ node, children, ...props }) => <h1 className="text-3xl font-bold text-white mb-6 pb-2 border-b border-[#1e293b]" {...props}>{highlightAnchorInChildren(children)}</h1>,
-    h2: ({ node, children, ...props }) => <h2 className="text-2xl font-bold text-white mt-8 mb-4 before:content-['#'] before:text-blue-500 before:opacity-50 before:mr-2" {...props}>{highlightAnchorInChildren(children)}</h2>,
-    h3: ({ node, children, ...props }) => <h3 className="text-xl font-semibold text-slate-200 mt-6 mb-3" {...props}>{highlightAnchorInChildren(children)}</h3>,
-    p: ({ node, children, ...props }) => <p className="mb-4 leading-relaxed text-slate-400" {...props}>{highlightAnchorInChildren(children)}</p>,
-    ul: ({ node, ...props }) => <ul className="list-disc pl-6 mb-4 space-y-2 text-slate-400" {...props} />,
-    ol: ({ node, ...props }) => <ol className="list-decimal pl-6 mb-4 space-y-2 text-slate-400" {...props} />,
-    li: ({ node, children, ...props }) => <li className="leading-relaxed" {...props}>{highlightAnchorInChildren(children)}</li>,
-    strong: ({ node, children, ...props }) => <strong className="font-bold text-white" {...props}>{highlightAnchorInChildren(children)}</strong>,
-    blockquote: ({ node, children, ...props }) => <blockquote className="border-l-4 border-blue-500 pl-4 py-2 my-4 bg-blue-500/5 rounded-r text-slate-400 italic" {...props}>{highlightAnchorInChildren(children)}</blockquote>,
-    table: ({ node, ...props }) => <div className="overflow-x-auto mb-6"><table className="w-full border-collapse text-sm" {...props} /></div>,
-    th: ({ node, children, ...props }) => <th className="bg-[#1e293b] text-slate-200 font-semibold text-left p-3 border-b border-[#334155]" {...props}>{highlightAnchorInChildren(children)}</th>,
-    td: ({ node, children, ...props }) => <td className="p-3 border-b border-[#1e293b] text-slate-400 group-hover:bg-white/5" {...props}>{highlightAnchorInChildren(children)}</td>,
-    tr: ({ node, ...props }) => <tr className="hover:bg-white/[0.02] transition-colors group" {...props} />,
-    mark: ({ node, ...props }) => <mark className="bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded font-medium shadow-[0_0_8px_rgba(16,185,129,0.1)] box-decoration-clone" {...props} />,
-    pre: ({ node, children }) => <>{children}</>,
-    code: createMarkdownCodeRenderer({
-      nextMermaidBlockIndex: () => mermaidBlockCounter++,
-      onMermaidRetry,
-      onMermaidRenderError: reportVisualDiagnostics ? handleMermaidRenderError : undefined,
-      onMermaidRenderSuccess: reportVisualDiagnostics ? handleMermaidRenderSuccess : undefined,
-      renderMermaid: attachVisualDiagnosticAnchors || deferMermaidRender
-        ? ({ blockIndex, element }) => {
-          const mermaidElement = deferMermaidRender
-            ? (
-              <div className="my-6 flex w-full justify-center overflow-x-auto">
-                <div className="flex max-w-xl items-center gap-3 rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-200">
-                  <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-sky-300 border-t-transparent" aria-hidden="true" />
-                  <span>
-                    <span className="block font-medium text-sky-100">图表将在产出物稳定后绘制</span>
-                    <span className="mt-1 block text-xs text-sky-200/75">模型仍在输出图表内容，已暂停实时绘制以保持页面响应。</span>
-                  </span>
-                </div>
-              </div>
-            )
-            : element;
-
-          if (!attachVisualDiagnosticAnchors) {
-            return mermaidElement;
-          }
-
-          const diagnosticId = buildVisualDiagnosticId('mermaid', blockIndex);
-          return (
-            <div
-              data-artifact-visual-diagnostic-id={diagnosticId}
-              data-artifact-visual-focused={activeVisualDiagnosticId === diagnosticId ? 'true' : undefined}
-              className={getVisualDiagnosticContainerClass(diagnosticId)}
-            >
-              {mermaidElement}
-            </div>
-          );
-        }
-        : undefined,
-      renderStructuredVisual: ({ children }) => (
-        (() => {
-          const blockIndex = structuredVisualBlockCounter++;
-          const diagnosticId = buildVisualDiagnosticId('structured-visual', blockIndex);
-          const visual = (
-            <StructuredVisual
-              source={String(children).replace(/\n$/, '')}
-              onValidationError={reportVisualDiagnostics
-                ? (message) => handleStructuredVisualValidationError(blockIndex, message)
-                : undefined}
-              onValidationSuccess={reportVisualDiagnostics
-                ? () => handleStructuredVisualValidationSuccess(blockIndex)
-                : undefined}
-            />
-          );
-          if (!attachVisualDiagnosticAnchors) {
-            return visual;
-          }
-          return (
-            <div
-              data-artifact-visual-diagnostic-id={diagnosticId}
-              data-artifact-visual-focused={activeVisualDiagnosticId === diagnosticId ? 'true' : undefined}
-              className={getVisualDiagnosticContainerClass(diagnosticId)}
-            >
-              {visual}
-            </div>
-          );
-        })()
-      ),
-      renderBlockCode: ({ language, className, children, props }) => (
-        <div className="relative my-6 rounded-lg overflow-hidden border border-[#1e293b] bg-[#0f172a]">
-          {language && (
-            <div className="flex items-center px-4 py-2 bg-[#1e293b] text-xs text-slate-400 font-mono border-b border-[#0f172a]">
-              {language}
-            </div>
-          )}
-          <pre className="p-4 overflow-x-auto text-sm font-mono text-slate-300">
-            <code className={className} {...props}>
-              {children}
-            </code>
-          </pre>
-        </div>
-      ),
-      renderInlineCode: ({ children, props }) => (
-        <code className="bg-white/10 text-blue-300 px-1.5 py-0.5 rounded font-mono text-sm" {...props}>
-          {children}
-        </code>
-      ),
-    }),
-    };
-  };
 
   const markdownPreviewRenderVersionKey = [
     activeCommentAnchorText ?? '',
@@ -4292,99 +3837,8 @@ export const ArtifactPane: React.FC = () => {
             </div>
           </div>
         )}
-        {isStoryHandoffPacketStage && (
-          <section
-            className="mx-auto mb-5 max-w-4xl rounded-lg border border-[#1e293b] bg-[#0f172a] p-4 shadow-xl"
-            aria-label="单故事需求包"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-100">单故事需求包</h3>
-                <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                  从当前 ready story 生成可复制的 AI Coding 需求输入。
-                </p>
-              </div>
-              {isLoadingStoryHandoff && (
-                <span className="rounded-md border border-sky-400/20 bg-sky-400/10 px-2 py-1 text-[11px] font-semibold text-sky-100">
-                  加载中
-                </span>
-              )}
-            </div>
-            {storyHandoffError && (
-              <div className="mt-3 rounded-md border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-100">
-                {storyHandoffError}
-              </div>
-            )}
-            {!isLoadingStoryHandoff && !storyHandoffError && storyHandoffCandidates.length === 0 && (
-              <p className="mt-3 text-xs text-slate-500">
-                当前阶段还没有可生成需求包的 ready story。
-              </p>
-            )}
-            {storyHandoffCandidates.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {storyHandoffCandidates.map((candidate) => {
-                  const packet = storyHandoffPacketByStoryId.get(candidate.storyId);
-                  const isCreating = creatingStoryPacketId === candidate.storyId;
-                  return (
-                    <div
-                      key={candidate.storyId}
-                      className="rounded-md border border-[#1e293b] bg-[#020617] px-3 py-3"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-xs font-bold text-blue-200">{candidate.storyId}</span>
-                            {packet && (
-                              <span className="rounded-md border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-100">
-                                {candidate.storyId} · v{packet.packet.sourceArtifactVersion}
-                              </span>
-                            )}
-                            <span className="text-sm font-semibold text-slate-100">{candidate.title}</span>
-                          </div>
-                          <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                            {candidate.userValue}
-                          </p>
-                          <p className="mt-1 text-[11px] text-slate-500">
-                            {candidate.readyReason}
-                          </p>
-                          {packet?.isStale && (
-                            <p className="mt-2 text-[11px] font-medium text-amber-200">
-                              该需求包可能基于旧版需求，请重新生成后再交给 AI Coding。
-                            </p>
-                          )}
-                          {copiedStoryPacketId === candidate.storyId && (
-                            <p className="mt-2 text-[11px] font-semibold text-emerald-200">
-                              已复制 {candidate.storyId}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          {packet ? (
-                            <button
-                              type="button"
-                              onClick={() => handleCopyStoryHandoffPacket(candidate.storyId, packet.packet)}
-                              className="rounded-md border border-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition-colors hover:bg-emerald-400/10"
-                            >
-                              复制 {candidate.storyId} 需求包
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleCreateStoryHandoffPacket(candidate.storyId)}
-                              disabled={isCreating}
-                              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {isCreating ? `生成 ${candidate.storyId} 中` : `生成 ${candidate.storyId} 需求包`}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+        {isStoryHandoffPacketStage && currentRunId && currentStageId && (
+          <StoryHandoffPacketPanel runId={currentRunId} stageId={currentStageId} />
         )}
         <div
           ref={artifactPreviewRef}
@@ -4593,22 +4047,25 @@ export const ArtifactPane: React.FC = () => {
               />
             </div>
           ) : viewMode === 'preview' ? (
-            markdownPreviewChunks.map((chunk) => (
-              <RenderedMarkdownSection
-                key={chunk.sectionKey}
-                {...chunk}
-                components={createArtifactMarkdownComponents(
-                  handleMermaidRetry,
-                  activeCommentAnchorText,
-                  true,
-                  true,
-                  isGenerating,
-                  chunk.mermaidBlockStartIndex,
-                  chunk.structuredVisualBlockStartIndex,
-                )}
-                renderVersionKey={markdownPreviewRenderVersionKey}
-              />
-            ))
+            <ArtifactMarkdownPreview
+              content={artifactContent}
+              createComponents={(chunk) => createArtifactMarkdownComponents({
+                currentStageId,
+                activeAnchorText: activeCommentAnchorText,
+                activeVisualDiagnosticId,
+                reportVisualDiagnostics: true,
+                attachVisualDiagnosticAnchors: true,
+                deferMermaidRender: isGenerating,
+                mermaidBlockStartIndex: chunk.mermaidBlockStartIndex,
+                structuredVisualBlockStartIndex: chunk.structuredVisualBlockStartIndex,
+                onMermaidRetry: handleMermaidRetry,
+                onMermaidRenderError: handleMermaidRenderError,
+                onMermaidRenderSuccess: handleMermaidRenderSuccess,
+                onStructuredVisualValidationError: handleStructuredVisualValidationError,
+                onStructuredVisualValidationSuccess: handleStructuredVisualValidationSuccess,
+              })}
+              renderVersionKey={markdownPreviewRenderVersionKey}
+            />
           ) : (
             <pre className="text-sm font-mono text-slate-300 whitespace-pre-wrap break-words bg-[#0f172a] p-6 rounded-xl border border-[#1e293b]">
               {displayContent}
@@ -4756,7 +4213,7 @@ export const ArtifactPane: React.FC = () => {
                 </p>
               ) : (
                 currentStageOpenComments.map((comment) => {
-                  const anchorStatus = getCommentAnchorStatus(comment.anchorText);
+                  const anchorStatus = getArtifactCommentAnchorStatus(comment.anchorText, artifactContent);
                   return (
                     <article key={comment.id} className="rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
                       <p className="break-words text-sm leading-relaxed text-slate-100">{comment.content}</p>
@@ -4909,7 +4366,7 @@ export const ArtifactPane: React.FC = () => {
               ) : (
                 <div className="space-y-3">
                   {currentStageComments.map((comment) => {
-                    const anchorStatus = getCommentAnchorStatus(comment.anchorText);
+                    const anchorStatus = getArtifactCommentAnchorStatus(comment.anchorText, artifactContent);
                     return (
                     <article key={comment.id} className="rounded-lg border border-[#1e293b] bg-[#020617] p-3">
                       <div className="mb-2 flex items-start justify-between gap-3">
@@ -5202,13 +4659,11 @@ export const ArtifactPane: React.FC = () => {
               <div className="flex-1 overflow-y-auto p-8 md:px-16 custom-scrollbar">
                 <div className="max-w-4xl mx-auto pb-20">
                   {selectedVersion && historyViewMode === 'preview' ? (
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      rehypePlugins={[rehypeRaw]}
-                      components={readOnlyMarkdownComponents}
-                    >
-                      {preprocessMarkdown(selectedVersion.content)}
-                    </ReactMarkdown>
+                    <ArtifactMarkdownPreview
+                      content={selectedVersion.content}
+                      createComponents={() => readOnlyMarkdownComponents}
+                      renderVersionKey={`history-${selectedVersion.id}`}
+                    />
                   ) : selectedVersion ? (
                     <div className="overflow-hidden rounded-lg border border-[#1e293b] bg-[#0f172a] font-mono text-xs">
                       {selectedVersionDiff.map((entry, index) => {

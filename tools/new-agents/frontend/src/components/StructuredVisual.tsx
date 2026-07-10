@@ -169,7 +169,8 @@ export const StructuredVisual: React.FC<StructuredVisualProps> = ({
         );
     }
 
-    return (
+    if (visual.kind === 'matrix') {
+        return (
         <div className="my-6 overflow-hidden rounded-lg border border-[#1e293b] bg-[#0f172a] shadow-sm">
             <div className="border-b border-[#1e293b] bg-[#111827] px-4 py-3">
                 <h3 className="text-sm font-semibold text-slate-100">{title}</h3>
@@ -206,5 +207,8 @@ export const StructuredVisual: React.FC<StructuredVisualProps> = ({
                 </table>
             </div>
         </div>
-    );
+        );
+    }
+
+    return null;
 };

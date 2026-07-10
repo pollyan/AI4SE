@@ -721,36 +721,12 @@ const hasRenderableArtifactDelta = (output: AgentTurnDeltaOutput): boolean => {
   );
 };
 
-const shouldInferNextStageActionFromChat = (
-  chat: string,
-  expectedNextStageId: string | undefined
-): boolean => {
-  if (!expectedNextStageId) return false;
-
-  const normalized = chat.replace(/\s+/g, '');
-  if (!normalized) return false;
-
-  const blockingPattern = /(?:阻断|待澄清|补充|不能|无法|不建议|暂不|确认或补充|才能进入下一阶段|后才能进入下一阶段)/;
-  if (blockingPattern.test(normalized)) return false;
-
-  return [
-    /建议进入下一阶段/,
-    /可以进入(?:下一阶段|.{0,16}阶段)/,
-    /确认(?:无误)?后(?:回复[“"']?确认[”"']?)?.{0,24}进入(?:下一阶段|.{0,16}阶段)/,
-    /确认进入(?:下一阶段|.{0,16}阶段)/,
-  ].some((pattern) => pattern.test(normalized));
-};
-
 const getAgentTurnAction = (
-  output: AgentTurnOutput,
-  expectedNextStageId: string | undefined
+  output: AgentTurnOutput
 ): string => {
   if (hasArtifactTruncationWarning(output.warnings)) return '';
   if (hasStageReadinessBlockedWarning(output.warnings)) return '';
-  if (output.stage_action) return 'NEXT_STAGE';
-  return shouldInferNextStageActionFromChat(output.chat, expectedNextStageId)
-    ? 'NEXT_STAGE'
-    : '';
+  return output.stage_action ? 'NEXT_STAGE' : '';
 };
 
 const getHttpErrorMessage = (payload: unknown): string => {
@@ -828,7 +804,7 @@ const mapAgentTurnToStreamChunks = async function* (
       chatResponse: isFinalChunk ? output.chat : accumulatedChat,
       newArtifact: isFinalChunk ? newArtifact : artifactFrame,
       action: isFinalChunk
-        ? getAgentTurnAction(output, expectedNextStageId)
+        ? getAgentTurnAction(output)
         : '',
       hasArtifactUpdate,
       ...(artifactTruncated ? { artifactTruncated: true } : {}),
@@ -866,7 +842,7 @@ const mapAgentTurnToFinalChunk = async function* (
   yield {
     chatResponse: output.chat,
     newArtifact,
-    action: getAgentTurnAction(output, expectedNextStageId),
+    action: getAgentTurnAction(output),
     hasArtifactUpdate,
     ...(artifactTruncated ? { artifactTruncated: true } : {}),
     ...(output.artifact_patch ? { artifactPatch: output.artifact_patch } : {}),
@@ -910,7 +886,7 @@ const mapAgentTurnToArtifactRevealChunks = async function* (
       chatResponse: output.chat,
       newArtifact: isFinalChunk ? newArtifact : artifactFrame,
       action: isFinalChunk
-        ? getAgentTurnAction(output, expectedNextStageId)
+        ? getAgentTurnAction(output)
         : '',
       hasArtifactUpdate,
       ...(artifactTruncated ? { artifactTruncated: true } : {}),
