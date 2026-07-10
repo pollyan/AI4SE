@@ -1,6 +1,6 @@
 # New Agents 智能体架构收口待办
 
-- 状态：活跃。切片 1 至 5 已完成；第 6 切片为下一轮目标模式候选。
+- 状态：已完成。切片 1 至 6 已完成；已完成本轮只读架构复核。
 - 创建日期：2026-07-10
 - 优先级：P1 架构收口 + P2 模块边界治理
 - 来源：2026-07-10 `tools/new-agents/` 只读架构审计
@@ -91,14 +91,17 @@
 - **执行证据**：`artifactEditSession.ts` 统一本地/服务端保存、乐观版本校验、锁定章节和冲突结果；`artifactHistorySession.ts` 承载历史行/块恢复与冲突服务端版本刷新；既有 `artifactMerge.ts` 继续承载自动/人工合并的纯算法和审计标签。`artifactComments.ts` 承载评论摘要、锚点规范化和 stale 判定，`artifactCollaboration.ts` 承载协作持久化失败语义，`artifactLocking.ts` 承载章节锁变更检测。`ArtifactPane` 保留 store、服务和 UI 状态接线。
 - **验证**：RED 阶段的 history session 与 comments 模块测试均按预期因模块缺失失败；GREEN 后切片定向 Vitest 160 passed。`./scripts/test/test-local.sh new-agents` 通过，frontend 864 passed、backend 893 passed（4 个 slow deselected）；`git diff --check` 通过。`npm run lint` 不再包含本切片文件，仍只失败于切片 6 既有的 `StructuredVisual.tsx`、`artifactExport.ts`、`docxExport.ts` 结构化可视化 union narrowing 错误。
 
-### 切片 6：Artifact 渲染、视觉诊断与 Story packet 边界闭环
+### 切片 6：Artifact 渲染、视觉诊断与 Story packet 边界闭环（已完成，2026-07-10）
 
-- [ ] **目标**：从 ArtifactPane 分离 Markdown/visual rendering、visual diagnostics 与 Story packet 领域 UI，保持共享视觉组件和结构化 handoff 契约。
+- [x] **目标**：从 ArtifactPane 分离 Markdown/visual rendering、visual diagnostics 与 Story packet 领域 UI，保持共享视觉组件和结构化 handoff 契约。
 - **范围**：`frontend/src/components/ArtifactPane.tsx`、`StructuredVisual.tsx`、`Mermaid.tsx`、Story handoff packet services/tests、必要的 backend packet tests。
 - **完成状态**：通用 Markdown、Mermaid、StructuredVisual 渲染继续共享；`STORY_BREAKDOWN/SPRINT_PLAN` 的 packet 是显式领域入口，不污染通用渲染管线；视觉失败继续以诊断状态显式呈现。
 - **验收**：Mermaid/structured visual、visual diagnostics、Story packet 生成/复制/stale 判定均保持测试覆盖；packet 继续只消费持久化 `artifactData`。
 - **建议验证**：`Mermaid.test.tsx`、`StructuredVisual.test.tsx`、`ArtifactPane.test.tsx`、`test_story_handoff_packets.py`。
 - **收口条件**：完成后重新进行只读架构审计，决定是否需要将数据库启动期 schema 变更迁入显式 migration 机制；该事项在没有新证据前保持 P3，不提前实现。
+- **执行证据**：`ArtifactMarkdownPreview.tsx` 承载 Markdown 预处理、分段增量渲染和 block index 偏移；`artifactMarkdownComponents.tsx` 承载共享 Markdown、Mermaid、StructuredVisual renderer 配置，不直接访问 store。`artifactVisualDiagnostics.ts` 统一 Mermaid/structured visual 的诊断 ID、显式错误 payload 与焦点样式。`StoryHandoffPacketPanel.tsx` 独立管理 `STORY_BREAKDOWN/SPRINT_PLAN` 入口的候选加载、持久化 packet 生成、复制和 stale 提示；`ArtifactPane` 只在已有 workflow/stage/run 条件成立时挂载它。三个 structured visual 消费者改为显式 `kind === 'matrix'` 分支，修复既有 TypeScript union narrowing 问题而不改变导出或渲染语义。
+- **验证**：RED 阶段 Story packet 面板、Markdown 预览、Markdown renderer factory 和 visual contracts 测试均按预期因模块缺失失败；GREEN 后定向 Vitest 168 passed。`./scripts/test/test-local.sh new-agents` 通过，frontend 870 passed、backend 893 passed（4 个 slow deselected）；`npm run lint` 通过，`git diff --check` 通过。全量测试曾捕获测试文件名触发 hygiene diagnostic 命名规则，改名后 hygiene 定向回归通过。
+- **最终复核**：共享 `/api/agent/runs/stream`、typed SSE、manifest contract、run persistence 和渲染基础设施仍为主链路；Story packet 与 Lisa test assets 保持 run/artifact 下游领域边界，未新增 Lisa/Alex 专用 runtime、SSE、store 或渲染管线。`backend/app.py` 启动期 `ALTER TABLE` helper 仍是既有 P3 风险；本轮没有新的 schema 变更或生产数据库迁移需求证据，按收口条件不提前实现 migration 机制。
 
 ## 非目标
 
@@ -115,3 +118,4 @@
 - 2026-07-10：完成切片 3。服务型 run 不再从 `localStorage` 恢复会话、产物或 run id；URL `runId` 始终以服务端 snapshot 恢复。下一轮从切片 4 做 backend renderer/runtime 模块化的 CGA。
 - 2026-07-10：完成切片 4。Value Discovery 的 artifact-data schema 与确定性 renderer 已从主文件拆出，stage instruction registry 已从 Runtime 拆出；共享 renderer registry、Agent Runtime、typed SSE 和持久化调用面保持兼容。下一轮从切片 5 做 Artifact 工作台编辑与协作边界的 CGA。
 - 2026-07-10：完成切片 5。产物编辑会话、版本历史恢复、评论锚点与协作持久化、章节锁检测均从 `ArtifactPane` 的领域逻辑中收口为可独立测试的 core 模块；自动/人工合并继续复用既有共享 `artifactMerge` 算法。未新增 workflow 或 agent 专用 UI/store/API/persistence 路径。下一轮从切片 6 做渲染、视觉诊断与 Story packet 边界的 CGA。
+- 2026-07-10：完成切片 6 并完成本轮架构复核。共享 Markdown/visual renderer、visual diagnostics contract 与 Story packet 面板已从 `ArtifactPane` 分离；TypeScript structured visual union narrowing 已收口。共享 Agent Runtime、typed SSE、run persistence 与 workflow contract 未变；数据库启动期 schema helper 仍维持 P3，未在无新增 schema 需求的情况下提前引入 migration 项目。
