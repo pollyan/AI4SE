@@ -229,6 +229,69 @@ def test_stream_agent_run_events_yields_started_delta_and_final_events(
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_preserves_user_authorized_assumption_stage_action(
+    mock_build_runtime: MagicMock,
+) -> None:
+    authorized_default_artifact = VALID_CLARIFY_ARTIFACT.replace(
+        "| Q-001 | 锁定策略是否存在 | P1 | 非阻断 | 异常登录 | 暂按 5 次失败锁定 | 产品 | 待确认 |",
+        "| Q-001 | 密码错误锁定阈值 | P1 | 阻断 | 异常登录 | 密码错误 3 次后锁定 12 小时 | 用户授权默认场景 | 已假设 |",
+    )
+    authorized_default_data = {
+        "clarification_questions": [
+            {
+                "question_id": "Q-001",
+                "question": "密码错误锁定阈值",
+                "priority": "P1",
+                "blocking": "阻断",
+                "impact": "异常登录",
+                "assumption": "密码错误 3 次后锁定 12 小时",
+                "owner": "用户授权默认场景",
+                "status": "已假设",
+            }
+        ]
+    }
+    final = AgentTurnOutput.model_validate({
+        "chat": "已按授权默认场景更新需求分析文档，请确认进入策略制定。",
+        "artifact_update": {
+            "type": "replace",
+            "markdown": authorized_default_artifact,
+        },
+        "artifact_data": authorized_default_data,
+        "stage_action": {
+            "type": "request_next_stage",
+            "target_stage_id": "STRATEGY",
+        },
+        "warnings": [],
+    })
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter([final])
+    mock_build_runtime.return_value = runtime
+    request = AgentRunStreamRequest.model_validate({
+        "prompt": "我在测试当前工作流，帮我假定一个场景就好",
+        "systemPrompt": "你是 Lisa。",
+        "workflowId": "TEST_DESIGN",
+        "stageId": "CLARIFY",
+    })
+
+    events = list(stream_agent_run_events(
+        request,
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+    ))
+
+    delta = events[1]
+    final_event = events[-1]
+    assert isinstance(delta, AgentTurnDeltaEvent)
+    assert isinstance(final_event, AgentTurnEvent)
+    assert delta.output.stage_action == final.stage_action
+    assert final_event.output.stage_action == final.stage_action
+    assert "stage_readiness_blocked" not in delta.output.warnings
+    assert "stage_readiness_blocked" not in final_event.output.warnings
+    assert "阶段成熟度门禁判断" not in final_event.output.chat
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
 def test_stream_agent_run_events_records_turn_through_persistence_adapter(
     mock_build_runtime: MagicMock,
 ) -> None:

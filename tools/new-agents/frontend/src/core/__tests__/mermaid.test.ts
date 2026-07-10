@@ -57,6 +57,22 @@ describe('Mermaid Syntax Validation for workflow prompt examples', () => {
         expect(await validateMermaid(sanitizeMermaidCode(source))).toBe(true);
     });
 
+    it('parses a deterministic strategy risk quadrant chart at the maximum coordinate', async () => {
+        const source = [
+            'quadrantChart',
+            '    title 风险优先级矩阵',
+            '    x-axis "低发生度" --> "高发生度"',
+            '    y-axis "低严重度" --> "高严重度"',
+            '    quadrant-1 "紧急处理"',
+            '    quadrant-2 "重点关注"',
+            '    quadrant-3 "观察监控"',
+            '    quadrant-4 "常规覆盖"',
+            '    "认证服务不可用": [1, 1]',
+        ].join('\n');
+
+        expect(await validateMermaid(sanitizeMermaidCode(source))).toBe(true);
+    });
+
     it('uses timeline-map instead of Mermaid timeline in the timeline prompt', () => {
         const promptText = WORKFLOWS.INCIDENT_REVIEW.stages.find(s => s.id === 'TIMELINE')?.template || '';
         expect(promptText).not.toContain('```mermaid');

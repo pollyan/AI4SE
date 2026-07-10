@@ -16,8 +16,12 @@ def _clarify_markdown(question_row: str) -> str:
 """
 
 
-def _turn(markdown: str) -> AgentTurnOutput:
-    return AgentTurnOutput.model_validate({
+def _turn(
+    markdown: str,
+    *,
+    artifact_data: dict[str, object] | None = None,
+) -> AgentTurnOutput:
+    payload: dict[str, object] = {
         "chat": "已更新需求分析文档，确认无误后可以进入下一阶段（策略制定）。",
         "artifact_update": {
             "type": "replace",
@@ -28,7 +32,10 @@ def _turn(markdown: str) -> AgentTurnOutput:
             "target_stage_id": "STRATEGY",
         },
         "warnings": [],
-    })
+    }
+    if artifact_data is not None:
+        payload["artifact_data"] = artifact_data
+    return AgentTurnOutput.model_validate(payload)
 
 
 def test_find_blocking_clarify_questions_detects_open_p0_blocker() -> None:
@@ -73,6 +80,166 @@ def test_apply_stage_readiness_gate_keeps_action_for_confirmed_blocker() -> None
 
     assert gated is output
     assert gated.stage_action is not None
+
+
+def test_apply_stage_readiness_gate_keeps_action_for_user_authorized_assumption() -> None:
+    output = _turn(_clarify_markdown(
+        "| Q-001 | 密码错误次数限制和锁定时间 | P1 | 阻断 | 策略制定 | 密码错误 3 次后锁定 12 小时 | 用户 | 已假设 |"
+    ))
+
+    gated = apply_stage_readiness_gate(
+        output,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert gated is output
+    assert gated.stage_action is not None
+    assert STAGE_READINESS_BLOCKED_WARNING not in gated.warnings
+
+
+def test_apply_stage_readiness_gate_blocks_legacy_closed_status_without_authorization() -> None:
+    output = _turn(_clarify_markdown(
+        "| Q-001 | 密码错误次数限制和锁定时间 | P1 | 阻断 | 策略制定 | 密码错误 3 次后锁定 12 小时 | 产品 | 已关闭 |"
+    ))
+
+    gated = apply_stage_readiness_gate(
+        output,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert gated.stage_action is None
+    assert STAGE_READINESS_BLOCKED_WARNING in gated.warnings
+
+
+def test_apply_stage_readiness_gate_uses_structured_questions_before_markdown() -> None:
+    artifact_data = {
+        "clarification_questions": [
+            {
+                "question_id": "Q-001",
+                "question": "密码错误次数限制和锁定时间",
+                "priority": "P1",
+                "blocking": "阻断",
+                "impact": "策略制定",
+                "assumption": "密码错误 3 次后锁定 12 小时",
+                "owner": "用户",
+                "status": "已假设",
+            }
+        ]
+    }
+    output = _turn(
+        _clarify_markdown(
+            "| Q-001 | 密码错误次数限制和锁定时间 | P1 | 阻断 | 策略制定 | 密码错误 3 次后锁定 12 小时 | 用户 | 待确认 |"
+        ),
+        artifact_data=artifact_data,
+    )
+
+    gated = apply_stage_readiness_gate(
+        output,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert gated is output
+    assert gated.stage_action is not None
+
+
+def test_apply_stage_readiness_gate_uses_markdown_when_structured_questions_are_absent() -> None:
+    artifact_data = {
+        "document_info": {
+            "artifact_name": "测试需求分析与澄清基线",
+        }
+    }
+    output = _turn(
+        _clarify_markdown(
+            "| Q-001 | 锁定策略是否存在 | P1 | 阻断 | 策略制定 | 暂按 5 次失败锁定 | 产品 | 待确认 |"
+        ),
+        artifact_data=artifact_data,
+    )
+
+    gated = apply_stage_readiness_gate(
+        output,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert gated.stage_action is None
+    assert STAGE_READINESS_BLOCKED_WARNING in gated.warnings
+    assert gated.artifact_data == artifact_data
+
+
+def test_apply_stage_readiness_gate_uses_markdown_when_structured_questions_are_empty() -> None:
+    artifact_data = {"clarification_questions": []}
+    output = _turn(
+        _clarify_markdown(
+            "| Q-001 | 锁定策略是否存在 | P1 | 阻断 | 策略制定 | 暂按 5 次失败锁定 | 产品 | 待确认 |"
+        ),
+        artifact_data=artifact_data,
+    )
+
+    gated = apply_stage_readiness_gate(
+        output,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert gated.stage_action is None
+    assert STAGE_READINESS_BLOCKED_WARNING in gated.warnings
+    assert gated.artifact_data == artifact_data
+
+
+def test_apply_stage_readiness_gate_uses_markdown_when_structured_question_is_malformed() -> None:
+    artifact_data = {"clarification_questions": [{"question_id": "Q-001"}]}
+    output = _turn(
+        _clarify_markdown(
+            "| Q-001 | 锁定策略是否存在 | P1 | 阻断 | 策略制定 | 暂按 5 次失败锁定 | 产品 | 待确认 |"
+        ),
+        artifact_data=artifact_data,
+    )
+
+    gated = apply_stage_readiness_gate(
+        output,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert gated.stage_action is None
+    assert STAGE_READINESS_BLOCKED_WARNING in gated.warnings
+    assert gated.artifact_data == artifact_data
+
+
+def test_apply_stage_readiness_gate_keeps_artifact_data_when_ai_assumption_blocks() -> None:
+    artifact_data = {
+        "clarification_questions": [
+            {
+                "question_id": "Q-001",
+                "question": "锁定策略是否存在",
+                "priority": "P1",
+                "blocking": "阻断",
+                "impact": "策略制定",
+                "assumption": "暂按 5 次失败锁定",
+                "owner": "产品",
+                "status": "AI 假设",
+            }
+        ]
+    }
+    output = _turn(
+        _clarify_markdown(
+            "| Q-001 | 锁定策略是否存在 | P1 | 阻断 | 策略制定 | 暂按 5 次失败锁定 | 产品 | AI 假设 |"
+        ),
+        artifact_data=artifact_data,
+    )
+
+    gated = apply_stage_readiness_gate(
+        output,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert gated.stage_action is None
+    assert STAGE_READINESS_BLOCKED_WARNING in gated.warnings
+    assert gated.artifact_data == artifact_data
 
 
 def test_apply_stage_readiness_gate_keeps_action_for_non_blocking_question() -> None:

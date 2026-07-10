@@ -2982,6 +2982,27 @@ def test_clarify_artifact_data_rejects_empty_required_lists():
         ClarifyArtifactData.model_validate(invalid)
 
 
+@pytest.mark.parametrize(
+    "status",
+    ["待确认", "已确认", "已假设", "AI 假设"],
+)
+def test_clarify_artifact_data_accepts_declared_question_statuses(status: str):
+    artifact_data = copy.deepcopy(VALID_CLARIFY_ARTIFACT_DATA)
+    artifact_data["clarification_questions"][0]["status"] = status
+
+    parsed = ClarifyArtifactData.model_validate(artifact_data)
+
+    assert parsed.clarification_questions[0].status == status
+
+
+def test_clarify_artifact_data_rejects_unknown_question_status():
+    artifact_data = copy.deepcopy(VALID_CLARIFY_ARTIFACT_DATA)
+    artifact_data["clarification_questions"][0]["status"] = "来源不明"
+
+    with pytest.raises(ValidationError, match="status"):
+        ClarifyArtifactData.model_validate(artifact_data)
+
+
 def test_prd_review_artifact_data_rejects_unknown_finding_reference():
     invalid = copy.deepcopy(VALID_PRD_REVIEW_ARTIFACT_DATA)
     invalid["completion_actions"][0]["finding_ids"] = ["FIND-MISSING"]
@@ -3656,6 +3677,27 @@ def test_strategy_artifact_data_computes_missing_rpn_for_generated_visuals():
     assert output.artifact_update.markdown is not None
     assert "| 5 | 3 | 4 | 60 |" in output.artifact_update.markdown
     assert '"RPN": 60' in output.artifact_update.markdown
+
+
+def test_strategy_quadrant_chart_formats_maximum_scores_without_decimal_padding():
+    artifact_data = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
+    artifact_data["risks"][0]["occurrence"] = 5
+    artifact_data["risks"][0]["rpn"] = 100
+
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已形成风险驱动测试策略，请确认右侧蓝图。",
+            "artifact_data": artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="TEST_DESIGN",
+        current_stage_id="STRATEGY",
+    )
+
+    assert output is not None
+    assert output.artifact_update.markdown is not None
+    assert '"错误凭证绕过认证": [1, 1]' in output.artifact_update.markdown
 
 
 def test_render_strategy_artifact_data_is_deterministic_and_contract_valid():
@@ -4930,6 +4972,7 @@ def test_render_idea_converge_artifact_data_is_deterministic_and_contract_valid(
     assert "# 收敛聚焦" in first.artifact_update.markdown
     assert "## 决策矩阵" in first.artifact_update.markdown
     assert "quadrantChart" in first.artifact_update.markdown
+    assert '"方向证据评分卡": [0.80, 1]' in first.artifact_update.markdown
     assert "## ICE 评估表" in first.artifact_update.markdown
     assert "## 资源约束" in first.artifact_update.markdown
     assert "## 敏感性分析" in first.artifact_update.markdown

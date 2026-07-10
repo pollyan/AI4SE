@@ -655,12 +655,17 @@ describe('Workflow Configuration', () => {
 
     it('exposes manifest artifact data contract for TEST DESIGN CLARIFY', () => {
         const clarify = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'CLARIFY');
+        const clarificationStatusRule =
+            'clarification_questions[].status 只能是待确认、已确认、已假设或 AI 假设；已假设仅用于用户明确授权 Lisa 代定的默认场景，可推进；AI 假设仍表示未经授权的临时推断，P0/P1 阻断问题不能推进；用户给出具体答案后必须更新为已确认';
 
         expect(clarify?.artifactDataContract?.modelOutputRules).toContain(
             'requirement_facts、system_boundaries、business_rules、flow_links、clarification_questions、quality_requirements、downstream_inputs 和 stage_gate 都必须至少包含 1 条',
         );
         expect(clarify?.artifactDataContract?.modelOutputRules).toContain(
             '所有字符串字段必须是非空白内容',
+        );
+        expect(clarify?.artifactDataContract?.modelOutputRules).toContain(
+            clarificationStatusRule,
         );
         expect(clarify?.artifactDataContract?.forbiddenOutputs).toContain('Mermaid 代码块');
         expect(clarify?.artifactDataContract?.rendererOutputs).toContain('右侧需求分析文档');

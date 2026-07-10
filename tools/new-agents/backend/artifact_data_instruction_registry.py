@@ -22,7 +22,7 @@ JSON 对象结构：
     "system_boundaries": [{"boundary_type": "...", "content": "...", "testing_meaning": "...", "status": "..."}],
     "business_rules": [{"rule_id": "BR-001", "rule": "...", "trigger": "...", "state_transition": "...", "exception_handling": "...", "acceptance": "...", "status": "..."}],
     "flow_links": [{"from_node": "用户", "to_node": "登录页", "label": "打开入口"}],
-    "clarification_questions": [{"question_id": "Q-001", "question": "...", "priority": "P1", "blocking": "阻断/非阻断", "impact": "...", "assumption": "...", "owner": "...", "status": "..."}],
+    "clarification_questions": [{"question_id": "Q-001", "question": "...", "priority": "P1", "blocking": "阻断/非阻断", "impact": "...", "assumption": "...", "owner": "...", "status": "待确认/已确认/已假设/AI 假设"}],
     "quality_requirements": [{"dimension": "...", "requirement_or_assumption": "...", "metric": "...", "risk": "...", "status": "..."}],
     "downstream_inputs": [{"input_type": "...", "input_id": "...", "content": "...", "source": "...", "usage": "..."}],
     "stage_gate": [{"checked": true, "item": "..."}]
@@ -31,7 +31,7 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；不要输出完整 Markdown、Mermaid 代码块或表格，后端会负责确定性渲染右侧产出物。
+""" + format_artifact_data_contract_instruction("TEST_DESIGN", "CLARIFY") + """
 chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
