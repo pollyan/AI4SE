@@ -1,6 +1,6 @@
 # New Agents 智能体架构收口待办
 
-- 状态：活跃。切片 1 已完成；第 2 至第 6 切片按前置条件顺序候选，其中切片 2 为下一轮目标模式候选。
+- 状态：活跃。切片 1、2 已完成；第 3 至第 6 切片按前置条件顺序候选，其中切片 3 为下一轮目标模式候选。
 - 创建日期：2026-07-10
 - 优先级：P1 架构收口 + P2 模块边界治理
 - 来源：2026-07-10 `tools/new-agents/` 只读架构审计
@@ -42,14 +42,18 @@
 - **验证**：RED 阶段后端 4 项断言与前端 1 项断言按预期失败；GREEN 后定向 backend 35 passed、frontend 79 passed；扩展 backend 116 passed；`./scripts/test/test-local.sh new-agents` 通过，frontend 851 passed、backend 889 passed（4 个 slow deselected）；Python 致命错误 flake8 通过，`git diff --check` 通过。
 - **已知质量门**：`npm run lint` 在本切片前后都失败于未触碰的 `StructuredVisual.tsx`、`artifactExport.ts` 和 `docxExport.ts` 对 `NodeEdgeStructuredVisual` 的 `columns/rows` 访问；保留为切片 6 的独立现状，不把它混入本切片。
 
-### 切片 2：Workflow contract 机械同步闭环
+### 切片 2：Workflow contract 机械同步闭环（已完成，2026-07-10）
 
-- [ ] **目标**：把新增 workflow/stage 所需的手工同步面变成可机械验证的 registry 边界。
+- [x] **目标**：把新增 workflow/stage 所需的手工同步面变成可机械验证的 registry 边界。
 - **范围**：`workflow_manifest.json`、`backend/workflow_manifest.py`、`backend/agent_contracts.py`、`backend/agent_runtime.py`、`backend/artifact_data_renderers.py`、`frontend/src/core/types.ts`、`frontend/src/core/workflowRegistry.ts`、`frontend/src/core/workflows.ts` 与同步测试。
 - **完成状态**：workflow/stage、prompt/template id、artifact/visual contract、runtime instruction、renderer registration、regression sample 和 handoff 引用的遗漏或错配会在测试中失败；Pydantic schema 与 renderer 实现仍保留在代码中，不强行迁入 JSON。
 - **验收**：manifest 仍是声明式元数据入口；纯声明字段优先从 manifest 派生；其余代码镜像都有直接 drift test；新增 workflow 的最小完整注册有单一、可读的验证入口。
 - **建议验证**：`test_workflow_contract_sync.py`、`test_workflow_contract_registry.py`、`test_artifact_data_renderers.py`、`test_agent_runtime.py`、前端 `workflows.test.ts`。
 - **后续入口**：机械同步护栏可靠后，才调整运行时恢复与 UI handoff 归属。
+- **执行证据**：`agent_contracts.py` 的 stage、artifact heading、Mermaid 和 structured visual 公共 map 现在直接调用 `workflow_contract_registry`，保留原公共名称和既有消费者；Pydantic schema、H1 特例、renderer schema prompt 仍在代码。前端 `WorkflowType` 从 JSON manifest 类型派生，`buildSystemPrompt()` 以当前 stage 的 `artifactDataContract` 决定结构化模式，移除了手工 workflow/stage 集合。
+- **防漂移验证**：新增后端 AST guard，要求四个 map 各有且仅有一个模块级 registry 调用赋值；新增前端 source guard，要求 workflow type 与 artifact-data mode 均从 manifest 派生。RED 阶段 backend 1 项、frontend 2 项按预期失败；实现中的残留 visual map 覆盖被“单一赋值” guard 捕获后移除。
+- **验证**：扩展 backend contract/runtime/renderer suite 为 427 passed；前端定向为 118 passed；`./scripts/test/test-local.sh new-agents` 通过，frontend 853 passed、backend 890 passed（4 个 slow deselected）。
+- **已知质量门**：`npm run lint` 仍只失败于未触碰的 `StructuredVisual.tsx`、`artifactExport.ts`、`docxExport.ts` 对 `NodeEdgeStructuredVisual` 的 `columns/rows` 访问，保留给切片 6，不在本切片混修。
 
 ### 切片 3：服务端 run 与前端状态归属闭环
 
@@ -98,3 +102,4 @@
 
 - 2026-07-10：根据 New Agents 架构审计创建。当前没有已执行切片；下一轮从切片 1 开始做 CGA。
 - 2026-07-10：完成切片 1。新增结构化 CASES 资产转换与来源标记，移除 chat 文案阶段推断；未改变 API 路径、typed SSE event、run persistence schema 或 `tools/intent-tester/`。下一轮从切片 2 做目标承接检查。
+- 2026-07-10：完成切片 2。声明性 workflow contract map、前端 workflow type 和 artifact-data prompt mode 均由 manifest 派生；新增单一赋值与 source guard，未改变 runtime、SSE、persistence 或 `tools/intent-tester/`。下一轮从切片 3 做服务端 run 与前端状态归属的 CGA。

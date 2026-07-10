@@ -1,3 +1,5 @@
+import type workflowManifestData from '../../../workflow_manifest.json';
+
 export type Attachment = {
     name: string;
     data: string;
@@ -107,14 +109,7 @@ export type Message = {
 };
 
 // 已实现的工作流类型（仅包含 online 状态）
-export type WorkflowType =
-    | 'TEST_DESIGN'
-    | 'REQ_REVIEW'
-    | 'INCIDENT_REVIEW'
-    | 'IDEA_BRAINSTORM'
-    | 'VALUE_DISCOVERY'
-    | 'STORY_BREAKDOWN'
-    | 'PRD_REVIEW';
+export type WorkflowType = keyof typeof workflowManifestData.workflows;
 
 export type WorkflowHandoff = {
     id: string;

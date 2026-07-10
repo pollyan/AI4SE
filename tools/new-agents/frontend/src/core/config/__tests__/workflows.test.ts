@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { getAgentWorkflows } from '../agentWorkflows';
 import { WORKFLOWS, WORKFLOW_SLUGS, SLUG_TO_WORKFLOW } from '../../workflows';
 import { workflowManifest } from '../../workflowRegistry';
@@ -6,6 +8,13 @@ import { getStagePromptTemplateId } from '../../workflowRegistry';
 import type { WorkflowType } from '../../types';
 
 describe('Workflow Configuration', () => {
+    it('derives the online workflow type from the manifest', () => {
+        const source = readFileSync(join(process.cwd(), 'src', 'core', 'types.ts'), 'utf8');
+
+        expect(source).toContain('keyof typeof workflowManifestData.workflows');
+        expect(source).not.toMatch(/export type WorkflowType\s*=\s*\|/);
+    });
+
     it('should return a list of workflows for Lisa', () => {
         const workflows = getAgentWorkflows('lisa');
         expect(workflows.length).toBeGreaterThanOrEqual(4);

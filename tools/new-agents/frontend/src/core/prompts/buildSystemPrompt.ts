@@ -9,24 +9,10 @@ const PERSONAS: Record<string, string> = {
     'alex': ALEX_PERSONA
 };
 
-const ARTIFACT_DATA_STAGE_IDS: Record<WorkflowType, ReadonlySet<string>> = {
-    TEST_DESIGN: new Set(['CLARIFY', 'STRATEGY', 'CASES', 'DELIVERY']),
-    REQ_REVIEW: new Set(['REVIEW', 'REPORT']),
-    INCIDENT_REVIEW: new Set(['TIMELINE', 'ROOT_CAUSE', 'IMPROVEMENT']),
-    IDEA_BRAINSTORM: new Set(['DEFINE', 'DIVERGE', 'CONVERGE', 'CONCEPT']),
-    VALUE_DISCOVERY: new Set(['ELEVATOR', 'PERSONA', 'JOURNEY', 'BLUEPRINT']),
-    STORY_BREAKDOWN: new Set(['INPUT_ANALYSIS', 'EPIC_MAPPING', 'STORY_BACKLOG', 'SPRINT_PLAN']),
-    PRD_REVIEW: new Set(['INVENTORY', 'QUALITY_AUDIT', 'COMPLETION_PLAN', 'REVISION_BLUEPRINT']),
-};
-
 const removeMarkTags = (artifact: string): string => artifact.replace(/<\/?mark>/gi, '');
 
 const removeFencedCodeBlocks = (artifact: string): string => (
     artifact.replace(/```[\s\S]*?```/g, '[已省略由后端渲染器维护的可视化片段]')
-);
-
-const isArtifactDataStage = (workflow: WorkflowType, stageId: string): boolean => (
-    ARTIFACT_DATA_STAGE_IDS[workflow]?.has(stageId) ?? false
 );
 
 const formatContractItems = (title: string, items: string[]): string => (
@@ -97,7 +83,7 @@ export const buildSystemPrompt = (config: {
     const promptTemplateVersionSection = currentStage.promptTemplateVersion
         ? `\n【Prompt/template 版本】\n当前阶段版本：${currentStage.promptTemplateVersion}\n`
         : '';
-    const usesArtifactData = isArtifactDataStage(workflow, currentStage.id);
+    const usesArtifactData = Boolean(currentStage.artifactDataContract);
     const artifactDataContractSection = usesArtifactData
         ? formatArtifactDataContractPrompt(currentStage.artifactDataContract)
         : '';
