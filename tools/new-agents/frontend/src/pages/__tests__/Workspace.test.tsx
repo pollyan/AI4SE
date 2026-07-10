@@ -288,6 +288,66 @@ describe('Workspace Page', () => {
         );
     });
 
+    it('prefers the server snapshot when the query run id matches stale local state', async () => {
+        window.history.pushState({}, '', '/new-agents/workspace/lisa/test-design?runId=run-123');
+        mockUseParams.mockReturnValue({
+            agentId: 'lisa',
+            workflowId: 'test-design',
+        });
+        useStore.setState({
+            currentRunId: 'run-123',
+            stageIndex: 0,
+            chatHistory: [{
+                id: 'stale-message',
+                role: 'user',
+                content: '陈旧本地会话',
+                timestamp: 1,
+            }],
+            artifactContent: '# 陈旧本地产物',
+            stageArtifacts: { CLARIFY: '# 陈旧本地产物' },
+        });
+        mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ hasDefault: true }) });
+        vi.mocked(fetchRunSnapshot).mockResolvedValue({
+            run: {
+                id: 'run-123',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'STRATEGY',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [{
+                role: 'user',
+                content: '服务端权威会话',
+                sequenceIndex: 1,
+            }],
+            artifacts: [{
+                stageId: 'STRATEGY',
+                content: '# 服务端权威产物',
+                versionNumber: 2,
+            }],
+            contextSummaries: [],
+            artifactComments: [],
+            artifactSectionLocks: [],
+            artifactAuditEvents: [],
+        });
+
+        render(
+            <BrowserRouter>
+                <Workspace />
+            </BrowserRouter>
+        );
+
+        await waitFor(() => {
+            expect(fetchRunSnapshot).toHaveBeenCalledWith('run-123');
+        });
+        await waitFor(() => {
+            expect(useStore.getState().artifactContent).toBe('# 服务端权威产物');
+        });
+        expect(useStore.getState().chatHistory[0].content).toBe('服务端权威会话');
+        expect(useStore.getState().stageIndex).toBe(1);
+    });
+
     it('redirects to the snapshot workflow when runId query points to a different workflow', async () => {
         window.history.pushState({}, '', '/new-agents/workspace/lisa/test-design?runId=alex-run-123');
         mockUseParams.mockReturnValue({

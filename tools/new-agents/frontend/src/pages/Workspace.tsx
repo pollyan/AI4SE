@@ -52,7 +52,7 @@ export function Workspace() {
     useEffect(() => {
         let isCurrent = true;
         const runId = new URLSearchParams(window.location.search).get('runId')?.trim();
-        if (!runId || useStore.getState().currentRunId === runId) {
+        if (!runId) {
             return () => {
                 isCurrent = false;
             };

@@ -905,18 +905,28 @@ describe('Zustand Store', () => {
         expect(message.attachments).toBeUndefined();
     });
 
-    it('should hydrate a valid persisted current run id', async () => {
+    it('should discard service-backed conversation data during local storage hydration', async () => {
         localStorage.setItem(
             'agent-workspace-storage',
             JSON.stringify({
                 state: {
                     workflow: 'TEST_DESIGN',
-                    stageIndex: 0,
-                    chatHistory: [],
-                    artifactContent: '# Persisted',
-                    artifactHistory: [],
+                    stageIndex: 1,
+                    chatHistory: [{
+                        id: 'persisted-user',
+                        role: 'user',
+                        content: '陈旧的本地会话',
+                        timestamp: 123,
+                    }],
+                    artifactContent: '# 陈旧产物',
+                    artifactHistory: [{
+                        id: 'persisted-v1',
+                        timestamp: 123,
+                        content: '# 陈旧产物',
+                        stageId: 'STRATEGY',
+                    }],
                     stageArtifacts: {
-                        CLARIFY: '# Persisted',
+                        STRATEGY: '# 陈旧产物',
                     },
                     currentRunId: 'run-123',
                 },
@@ -926,7 +936,12 @@ describe('Zustand Store', () => {
 
         await useStore.persist.rehydrate();
 
-        expect(useStore.getState().currentRunId).toBe('run-123');
+        const state = useStore.getState();
+        expect(state.currentRunId).toBeNull();
+        expect(state.chatHistory).toEqual([]);
+        expect(state.artifactHistory).toEqual([]);
+        expect(state.stageIndex).toBe(0);
+        expect(state.artifactContent).toBe(getWelcomeMessage('TEST_DESIGN'));
     });
 
     it('should drop a blank persisted current run id', async () => {

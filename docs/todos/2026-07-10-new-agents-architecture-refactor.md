@@ -1,6 +1,6 @@
 # New Agents 智能体架构收口待办
 
-- 状态：活跃。切片 1、2 已完成；第 3 至第 6 切片按前置条件顺序候选，其中切片 3 为下一轮目标模式候选。
+- 状态：活跃。切片 1、2、3 已完成；第 4 至第 6 切片按前置条件顺序候选，其中切片 4 为下一轮目标模式候选。
 - 创建日期：2026-07-10
 - 优先级：P1 架构收口 + P2 模块边界治理
 - 来源：2026-07-10 `tools/new-agents/` 只读架构审计
@@ -55,14 +55,17 @@
 - **验证**：扩展 backend contract/runtime/renderer suite 为 427 passed；前端定向为 118 passed；`./scripts/test/test-local.sh new-agents` 通过，frontend 853 passed、backend 890 passed（4 个 slow deselected）。
 - **已知质量门**：`npm run lint` 仍只失败于未触碰的 `StructuredVisual.tsx`、`artifactExport.ts`、`docxExport.ts` 对 `NodeEdgeStructuredVisual` 的 `columns/rows` 访问，保留给切片 6，不在本切片混修。
 
-### 切片 3：服务端 run 与前端状态归属闭环
+### 切片 3：服务端 run 与前端状态归属闭环（已完成，2026-07-10）
 
-- [ ] **目标**：明确服务型 run 的服务端 snapshot 是执行历史权威来源，localStorage 只承担 UI cache 与未提交草稿。
+- [x] **目标**：明确服务型 run 的服务端 snapshot 是执行历史权威来源，localStorage 只承担 UI cache 与未提交草稿。
 - **范围**：`frontend/src/store.ts`、`frontend/src/services/runSnapshotService.ts`、`frontend/src/services/chatService.ts`、`frontend/src/components/ChatPane.tsx`、相关 store/chat/handoff 测试。
 - **完成状态**：URL 或显式 `runId` 恢复能覆盖陈旧本地会话数据；artifact version、handoff 与 Story packet 不会从 local-only 内容生成；目标 workflow 的 handoff 可用性优先由 manifest 配置决定，而不是继续增加 workflow 条件分支。
 - **验收**：恢复、切换 workflow/stage、继续对话与 handoff 的状态行为有前端回归测试；服务端 snapshot API 和持久化数据模型不变。
 - **建议验证**：`store.test.ts`、`chatService`/workflow handoff tests、`ChatPane.test.tsx`、`test_run_persistence.py`、`test_workflow_handoffs.py`。
 - **后续入口**：状态职责清晰后，进入 backend renderer/runtime 的文件边界治理。
+- **执行证据**：`localStorage` hydration 检测到历史 `currentRunId` 时会清除聊天、产物、版本和协作状态，并停止恢复该 run id；后续服务型 run 持久化时只保留 workflow UI 选择。`Workspace` 对 URL `runId` 不再因内存中同名 run 而跳过 `fetchRunSnapshot()`，因此 server snapshot 会覆盖陈旧本地状态。
+- **验证**：RED 阶段 store hydration 和同 runId URL 恢复各失败 1 项；GREEN 后定向 Vitest 58 passed；`./scripts/test/test-local.sh new-agents` 通过，frontend 854 passed、backend 890 passed（4 个 slow deselected）。
+- **已知质量门**：`npm run lint` 的既有 `StructuredVisual.tsx`、`artifactExport.ts`、`docxExport.ts` union narrowing 错误未在本切片触碰，继续留给切片 6。
 
 ### 切片 4：后端 artifact renderer 与 instruction registry 模块化
 
@@ -103,3 +106,4 @@
 - 2026-07-10：根据 New Agents 架构审计创建。当前没有已执行切片；下一轮从切片 1 开始做 CGA。
 - 2026-07-10：完成切片 1。新增结构化 CASES 资产转换与来源标记，移除 chat 文案阶段推断；未改变 API 路径、typed SSE event、run persistence schema 或 `tools/intent-tester/`。下一轮从切片 2 做目标承接检查。
 - 2026-07-10：完成切片 2。声明性 workflow contract map、前端 workflow type 和 artifact-data prompt mode 均由 manifest 派生；新增单一赋值与 source guard，未改变 runtime、SSE、persistence 或 `tools/intent-tester/`。下一轮从切片 3 做服务端 run 与前端状态归属的 CGA。
+- 2026-07-10：完成切片 3。服务型 run 不再从 `localStorage` 恢复会话、产物或 run id；URL `runId` 始终以服务端 snapshot 恢复。下一轮从切片 4 做 backend renderer/runtime 模块化的 CGA。
