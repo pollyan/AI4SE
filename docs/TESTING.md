@@ -29,7 +29,7 @@
 | 被 Mock 对象 | Mock 方式 | 使用场景 |
 |-------------|-----------|----------|
 | **LLM 服务** | `unittest.mock.patch` + `FakeLLM` | 所有非 `slow` 标记的测试 |
-| **数据库** | SQLite `:memory:` (conftest.py / test fixtures) | 所有需要持久化的测试 |
+| **数据库** | Intent Tester 仅允许 factory 初始化前传入的 SQLite `:memory:` 测试配置 | 所有需要持久化的 Intent Tester 测试；文件 SQLite、PostgreSQL、默认 URI 在 `TESTING` 模式下拒绝 |
 | **外部 API** | `responses` 库 / `httpx.MockTransport` | API 测试 |
 | **OpenAI Client** | `unittest.mock.patch('llm_client.OpenAI')` | new-agents-backend 测试 |
 
@@ -101,7 +101,7 @@ tools/new-agents/backend/tests/
 - **编排层看路径覆盖**：`stream_services.py`、`routes.py` 应覆盖成功、请求错误、LLM 错误、契约错误，不追求模拟所有 Flask/供应商细节。
 - **前端状态层看行为覆盖**：`chatService.ts`、`agentCore.ts` 必须覆盖左侧消息、右侧 artifact、阶段推进三类状态写入，不能只看组件渲染覆盖。
 - **协议错误不能静默跳过**：typed SSE、结构化 JSON、Pydantic 输出一旦损坏，应报错暴露问题，不通过“忽略坏事件继续处理”制造假成功。
-- **真实模型不纳入覆盖率门禁**：`test_agent_real_smoke.py` 是供应商兼容冒烟，依赖环境变量和额度，只作为发布前/本地专项验证。
+- **真实模型不纳入覆盖率门禁**：`test_agent_real_smoke.py` 是供应商兼容冒烟，依赖环境变量和额度，只作为发布前/本地专项验证；缺少必需配置时 runner 必须报告 `NOT_RUN` 并以非零退出，不能写成通过。
 - **前端覆盖率工具链需显式安装**：如果运行 `npm test -- --coverage` 报缺少 `@vitest/coverage-v8`，说明只能确认测试通过，不能声称已有前端覆盖率数据。
 - **覆盖率下降必须解释**：如果新增代码导致覆盖率下降，要么补测试，要么在变更说明中明确为什么该代码不适合覆盖率衡量。
 

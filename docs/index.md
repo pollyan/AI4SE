@@ -32,7 +32,7 @@
 # 部署开发环境
 ./scripts/dev/deploy-dev.sh
 
-# 运行全部测试
+# 运行本地确定性测试（不包含外部真实模型 smoke）
 ./scripts/test/test-local.sh
 
 # 代码质量检查

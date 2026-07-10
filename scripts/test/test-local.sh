@@ -49,6 +49,7 @@ PROJECT_PYTHON="$PROJECT_ROOT/.venv/bin/python"
 if [ ! -x "$PROJECT_PYTHON" ]; then
     PROJECT_PYTHON="python3"
 fi
+OUTCOME_TOOL="$PROJECT_ROOT/scripts/test/verification_outcomes.py"
 
 # 解析参数
 TEST_TYPE=${1:-all}
@@ -79,7 +80,10 @@ run_api_tests() {
     log_info "运行 API 测试..."
     # 运行 Intent Tester 测试
     log_info "运行 Intent Tester API 测试..."
-    if python3 -m pytest tools/intent-tester/tests/ -v --cov=tools/intent-tester/backend --cov-report=term; then
+    if "$PROJECT_PYTHON" "$OUTCOME_TOOL" run \
+        --suite-id "intent-tester-api" \
+        --parser pytest \
+        -- python3 -m pytest tools/intent-tester/tests/ -v --cov=tools/intent-tester/backend --cov-report=term; then
         log_info "✅ Intent Tester 测试通过"
     else
         log_error "❌ Intent Tester 测试失败"
@@ -102,7 +106,10 @@ run_lint() {
     # 检查严重错误 (和 GitHub Actions 一致)
     LINT_RESULT=0
     
-    if python3 -m flake8 tools/intent-tester/backend --count --select=E9,F63,F7,F82 --show-source --statistics; then
+    if "$PROJECT_PYTHON" "$OUTCOME_TOOL" run \
+        --suite-id "intent-tester-critical-lint" \
+        --parser command \
+        -- python3 -m flake8 tools/intent-tester/backend --count --select=E9,F63,F7,F82 --show-source --statistics; then
         log_info "✅ 代码质量检查通过 (无严重错误)"
     else
         log_warn "⚠️ 代码质量检查发现问题"
@@ -142,7 +149,10 @@ run_proxy_tests() {
     
     # 运行测试
     log_info "运行代理测试..."
-    if npx jest --testPathPatterns="tests/proxy" --passWithNoTests --forceExit; then
+    if "$PROJECT_PYTHON" "$OUTCOME_TOOL" run \
+        --suite-id "intent-proxy" \
+        --parser jest \
+        -- npx jest --testPathPattern="tests/proxy" --forceExit; then
         log_info "✅ 代理测试通过"
     else
         log_error "❌ 代理测试失败"
@@ -169,7 +179,10 @@ run_new_agents_frontend_tests() {
     fi
 
     log_info "运行 New Agents Frontend 测试..."
-    if npm run test; then
+    if "$PROJECT_PYTHON" "$OUTCOME_TOOL" run \
+        --suite-id "new-agents-frontend" \
+        --parser vitest \
+        -- npm run test; then
         log_info "✅ New Agents Frontend 测试通过"
     else
         log_error "❌ New Agents Frontend 测试失败"
@@ -201,7 +214,10 @@ PY
 
     log_info "运行 New Agents Backend 测试..."
     cd "$PROJECT_ROOT/tools/new-agents/backend"
-    if "$PROJECT_PYTHON" -m pytest -m "not slow" -q; then
+    if "$PROJECT_PYTHON" "$OUTCOME_TOOL" run \
+        --suite-id "new-agents-backend" \
+        --parser pytest \
+        -- "$PROJECT_PYTHON" -m pytest -m "not slow" -q; then
         log_info "✅ New Agents Backend 测试通过"
     else
         log_error "❌ New Agents Backend 测试失败"
@@ -233,7 +249,10 @@ PY
     "$PROJECT_PYTHON" -m playwright install chromium
 
     log_info "运行 New Agents Browser E2E 测试..."
-    if "$PROJECT_PYTHON" -m pytest -o addopts='' tests/e2e/new_agents_browser -m e2e -q; then
+    if "$PROJECT_PYTHON" "$OUTCOME_TOOL" run \
+        --suite-id "new-agents-browser-e2e" \
+        --parser pytest \
+        -- "$PROJECT_PYTHON" -m pytest -o addopts='' tests/e2e/new_agents_browser -m e2e -q; then
         log_info "✅ New Agents Browser E2E 测试通过"
     else
         log_error "❌ New Agents Browser E2E 测试失败"
@@ -250,7 +269,16 @@ run_smoke_tests() {
 
     if [ -z "${NEW_AGENTS_SMOKE_API_KEY:-}" ] || [ -z "${NEW_AGENTS_SMOKE_BASE_URL:-}" ] || [ -z "${NEW_AGENTS_SMOKE_MODEL:-}" ]; then
         log_warn "缺少 NEW_AGENTS_SMOKE_API_KEY / NEW_AGENTS_SMOKE_BASE_URL / NEW_AGENTS_SMOKE_MODEL，跳过真实 LLM smoke。"
-        return 0
+        if "$PROJECT_PYTHON" "$OUTCOME_TOOL" emit \
+            --suite-id "new-agents-real-llm-smoke" \
+            --status NOT_RUN \
+            --collected 0 \
+            --executed 0 \
+            --skipped 0 \
+            --reason "Missing NEW_AGENTS_SMOKE_API_KEY, NEW_AGENTS_SMOKE_BASE_URL, or NEW_AGENTS_SMOKE_MODEL."; then
+            :
+        fi
+        return 1
     fi
 
     if "$PROJECT_PYTHON" -m pytest --version >/dev/null 2>&1 && "$PROJECT_PYTHON" - <<'PY' >/dev/null 2>&1
@@ -268,7 +296,10 @@ PY
 
     log_info "运行真实 LLM smoke 测试..."
     cd "$PROJECT_ROOT/tools/new-agents/backend"
-    if "$PROJECT_PYTHON" -m pytest tests/test_agent_real_smoke.py -q; then
+    if "$PROJECT_PYTHON" "$OUTCOME_TOOL" run \
+        --suite-id "new-agents-real-llm-smoke" \
+        --parser pytest \
+        -- "$PROJECT_PYTHON" -m pytest tests/test_agent_real_smoke.py -q; then
         log_info "✅ 真实 LLM smoke 测试通过"
     else
         log_error "❌ 真实 LLM smoke 测试失败"
@@ -302,7 +333,10 @@ run_common_frontend_tests() {
 
     # 运行 Lint
     log_info "运行 Common Frontend Lint..."
-    if npm run lint; then
+    if "$PROJECT_PYTHON" "$OUTCOME_TOOL" run \
+        --suite-id "common-frontend-lint" \
+        --parser command \
+        -- npm run lint; then
         log_info "✅ Common Frontend Lint 通过"
     else
         log_error "❌ Common Frontend Lint 失败"
@@ -312,7 +346,10 @@ run_common_frontend_tests() {
 
     # 运行 Build (作为测试)
     log_info "运行 Common Frontend Build (作为验证)..."
-    if npm run build; then
+    if "$PROJECT_PYTHON" "$OUTCOME_TOOL" run \
+        --suite-id "common-frontend-build" \
+        --parser command \
+        -- npm run build; then
         log_info "✅ Common Frontend Build 通过"
     else
         log_error "❌ Common Frontend Build 失败"

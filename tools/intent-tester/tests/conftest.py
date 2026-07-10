@@ -29,12 +29,12 @@ from backend.models import db as _db
 @pytest.fixture(scope='function')
 def app():
     """Create application for the tests."""
-    # Set testing config
-    os.environ['FLASK_ENV'] = 'testing'
-    
-    _app = create_app()
-    _app.config['TESTING'] = True
-    _app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    _app = create_app(
+        {
+            'TESTING': True,
+            'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',
+        }
+    )
     
     with _app.app_context():
         _db.create_all()
@@ -588,4 +588,3 @@ def pytest_collection_modifyitems(items):
         # 默认为单元测试（包括根目录下的测试）
         else:
             item.add_marker(pytest.mark.unit)
-

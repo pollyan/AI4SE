@@ -4,7 +4,7 @@
 # 文档路径有效性检查 (Docs Check)
 # ========================================
 
-set -e
+set -e -o pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -17,6 +17,38 @@ log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 cd "$(dirname "$0")/../.."
+OUTCOME_TOOL="$PWD/scripts/test/verification_outcomes.py"
+OUTCOME_PYTHON="${PYTHON_BIN:-python3}"
+GREP_BIN="${GREP_BIN:-grep}"
+
+emit_outcome() {
+    local status=$?
+    trap - EXIT
+
+    if [ "$status" -eq 0 ]; then
+        "$OUTCOME_PYTHON" "$OUTCOME_TOOL" emit \
+            --suite-id "docs-links" \
+            --status PASS \
+            --collected 1 \
+            --executed 1 \
+            --skipped 0 \
+            --reason "Documentation link check completed successfully."
+    else
+        if "$OUTCOME_PYTHON" "$OUTCOME_TOOL" emit \
+            --suite-id "docs-links" \
+            --status FAIL \
+            --collected 1 \
+            --executed 1 \
+            --skipped 0 \
+            --reason "Documentation link check failed with exit code $status."; then
+            :
+        fi
+    fi
+
+    exit "$status"
+}
+
+trap emit_outcome EXIT
 
 check_markdown_links() {
     local file=$1
@@ -26,7 +58,17 @@ check_markdown_links() {
     log_info "检查文档: $file"
     
     # 提取 [text](path) 格式的相对路径 (排除了以 http 或 file:/// 开头的外链和绝对路径)
-    links=$(grep -oP '\[.*?\]\((?!http|file:///)(.*?)\)' "$file" | grep -oP '\(\K[^\)]+' || true)
+    if links=$("$GREP_BIN" -oP '\[.*?\]\((?!http|file:///)(.*?)\)' "$file" | "$GREP_BIN" -oP '\(\K[^\)]+'); then
+        :
+    else
+        status=$?
+        if [ "$status" -eq 1 ]; then
+            links=""
+        else
+            log_error "[$file] 无法提取链接，检查工具退出码: $status"
+            return "$status"
+        fi
+    fi
     
     for link in $links; do
         # 移除锚点 (#xxx)

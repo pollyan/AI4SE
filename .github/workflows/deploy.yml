@@ -35,7 +35,10 @@ jobs:
       run: |
         echo "::group::Running Intent Tester API Tests"
         export PYTHONPATH=$PYTHONPATH:$(pwd):$(pwd)/tools/intent-tester
-        python -m pytest tools/intent-tester/tests/ -v --cov=tools/intent-tester/backend --cov-report=term --cov-report=xml --cov-fail-under=50
+        python scripts/test/verification_outcomes.py run \
+          --suite-id "intent-tester-api" \
+          --parser pytest \
+          -- python -m pytest tools/intent-tester/tests/ -v --cov=tools/intent-tester/backend --cov-report=term --cov-report=xml --cov-fail-under=50
         echo "::endgroup::"
         
     - name: 📤 Upload coverage report
@@ -48,7 +51,10 @@ jobs:
       run: |
         echo "::group::Running New Agents Backend Tests"
         cd tools/new-agents/backend
-        python -m pytest tests/ -v -c pytest.ini
+        python ../../../scripts/test/verification_outcomes.py run \
+          --suite-id "new-agents-backend" \
+          --parser pytest \
+          -- python -m pytest tests/ -v -c pytest.ini
         echo "::endgroup::"
   
   # ====================================
@@ -66,13 +72,18 @@ jobs:
       with:
         node-version: '20'
 
+    - name: 🐍 Set up Python 3.11 for gate outcomes
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
     - name: 📦 Lint and Build
       run: |
         echo "::group::Running Common Frontend Lint and Build"
         cd tools/frontend
         npm ci
-        npm run lint
-        npm run build
+        python ../../scripts/test/verification_outcomes.py run --suite-id "common-frontend-lint" --parser command -- npm run lint
+        python ../../scripts/test/verification_outcomes.py run --suite-id "common-frontend-build" --parser command -- npm run build
         echo "::endgroup::"
 
   # ====================================
@@ -90,13 +101,18 @@ jobs:
       with:
         node-version: '20'
 
+    - name: 🐍 Set up Python 3.11 for gate outcomes
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
     - name: 📦 Install and Test
       run: |
         echo "::group::Running New Agents Frontend Tests"
         cd tools/new-agents/frontend
         npm ci
-        npm run lint
-        npm run test
+        python ../../../scripts/test/verification_outcomes.py run --suite-id "new-agents-frontend-lint" --parser command -- npm run lint
+        python ../../../scripts/test/verification_outcomes.py run --suite-id "new-agents-frontend" --parser vitest -- npm run test
         echo "::endgroup::"
 
   # ====================================
@@ -119,7 +135,10 @@ jobs:
       run: |
         echo "::group::Code Quality Analysis"
         pip install flake8
-        flake8 tools/intent-tester/backend --count --select=E9,F63,F7,F82 --show-source --statistics
+        python scripts/test/verification_outcomes.py run \
+          --suite-id "intent-tester-critical-lint" \
+          --parser command \
+          -- flake8 tools/intent-tester/backend --count --select=E9,F63,F7,F82 --show-source --statistics
         echo "::endgroup::"
 
   # ====================================
@@ -147,6 +166,11 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '20'
+
+    - name: 🐍 Set up Python 3.11 for gate outcomes
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
     
     - name: 📦 Install dependencies
       run: |
@@ -155,7 +179,10 @@ jobs:
     - name: 🧪 Run proxy tests
       run: |
         echo "::group::Running MidScene Proxy Tests"
-        npx jest --testPathPatterns="tests/proxy" --passWithNoTests --forceExit
+        python ../../scripts/test/verification_outcomes.py run \
+          --suite-id "intent-proxy" \
+          --parser jest \
+          -- npx jest --testPathPattern="tests/proxy" --forceExit
         echo "::endgroup::"
 
   # ====================================

@@ -153,11 +153,13 @@ docker-compose -f docker-compose.dev.yml logs -f
 
 ## 测试与质量检查
 
-运行完整本地验证：
+运行本地确定性验证（不包含外部真实模型 smoke）：
 
 ```bash
 ./scripts/test/test-local.sh
 ```
+
+真实模型 smoke 需显式运行 `./scripts/test/test-local.sh smoke`；缺少必需环境变量时会报告 `NOT_RUN` 并失败，不会伪装为绿色。
 
 常用命令：
 

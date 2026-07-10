@@ -125,11 +125,13 @@ OPENAI_API_KEY=your-key npm start
 
 ## 测试
 
-### 运行所有测试
+### 运行本地确定性测试
 
 ```bash
 ./scripts/test/test-local.sh
 ```
+
+该入口不包含需要外部凭证与额度的真实模型 smoke；不要把它的成功描述为外部 smoke 已通过。
 
 ### 按类型运行
 
@@ -155,6 +157,8 @@ cd tools/new-agents/frontend && npm test
 # 冒烟测试
 ./scripts/test/test-local.sh smoke
 ```
+
+真实 smoke 缺少 `NEW_AGENTS_SMOKE_API_KEY`、`NEW_AGENTS_SMOKE_BASE_URL` 或 `NEW_AGENTS_SMOKE_MODEL` 时会输出 `NOT_RUN` 并以非零退出；补齐配置后再将真实执行结果记为 `PASS` 或 `FAIL`。
 
 ### 测试标记 (pytest)
 

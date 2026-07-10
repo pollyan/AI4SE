@@ -1,6 +1,8 @@
 """意图测试工具 Flask 应用入口"""
 import sys
 import os
+from collections.abc import Mapping
+from typing import Any
 
 # 添加当前目录到路径 (Removed: we use package structure now)
 # sys.path.insert(0, os.path.dirname(__file__))
@@ -13,7 +15,22 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
 from flask import Flask
 from shared.config import SharedConfig
 
-def create_app():
+_ISOLATED_TEST_DATABASE_URI = 'sqlite:///:memory:'
+
+
+def _validate_test_database_config(app: Flask) -> None:
+    if not app.config.get('TESTING'):
+        return
+
+    database_uri = app.config.get('SQLALCHEMY_DATABASE_URI')
+    if database_uri != _ISOLATED_TEST_DATABASE_URI:
+        raise ValueError(
+            'Testing database must use the isolated in-memory SQLite URI '
+            f'{_ISOLATED_TEST_DATABASE_URI!r}; got {database_uri!r}.'
+        )
+
+
+def create_app(test_config: Mapping[str, Any] | None = None):
     """创建并配置 Flask 应用"""
     app = Flask(
         __name__,
@@ -28,6 +45,9 @@ def create_app():
     # 数据库配置
     from shared.database import get_database_config
     app.config.update(get_database_config())
+    if test_config is not None:
+        app.config.update(test_config)
+    _validate_test_database_config(app)
     
     # 初始化数据库
     # 使用本地 models 模块
@@ -87,4 +107,3 @@ if __name__ == '__main__':
     print("📍 API接口: http://localhost:5001/api/")
     print("=========================")
     socketio.run(app, debug=True, host='0.0.0.0', port=5001, allow_unsafe_werkzeug=True)
-
