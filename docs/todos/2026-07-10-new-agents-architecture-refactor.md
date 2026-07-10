@@ -1,6 +1,6 @@
 # New Agents 智能体架构收口待办
 
-- 状态：活跃。切片 1、2、3 已完成；第 4 至第 6 切片按前置条件顺序候选，其中切片 4 为下一轮目标模式候选。
+- 状态：活跃。切片 1 至 4 已完成；第 5、6 切片按前置条件顺序候选，其中切片 5 为下一轮目标模式候选。
 - 创建日期：2026-07-10
 - 优先级：P1 架构收口 + P2 模块边界治理
 - 来源：2026-07-10 `tools/new-agents/` 只读架构审计
@@ -67,14 +67,18 @@
 - **验证**：RED 阶段 store hydration 和同 runId URL 恢复各失败 1 项；GREEN 后定向 Vitest 58 passed；`./scripts/test/test-local.sh new-agents` 通过，frontend 854 passed、backend 890 passed（4 个 slow deselected）。
 - **已知质量门**：`npm run lint` 的既有 `StructuredVisual.tsx`、`artifactExport.ts`、`docxExport.ts` union narrowing 错误未在本切片触碰，继续留给切片 6。
 
-### 切片 4：后端 artifact renderer 与 instruction registry 模块化
+### 切片 4：后端 artifact renderer 与 instruction registry 模块化（已完成，2026-07-10）
 
-- [ ] **目标**：降低新增 workflow 对巨型 renderer 与 structured instruction 文件的改动冲突面。
+- [x] **目标**：降低新增 workflow 对巨型 renderer 与 structured instruction 文件的改动冲突面。
 - **范围**：`backend/artifact_data_renderers.py`、`backend/agent_runtime.py`、必要的 workflow 子模块、renderer/runtime tests。
 - **完成状态**：按 workflow 或稳定领域边界拆分 artifact-data schema、renderer 与 instruction 示例；对外继续只暴露共享 renderer registry 和 Agent Runtime builder。
 - **验收**：所有在线 stage 的 renderer key、runtime instruction、contract validation 与 deterministic visual 输出保持兼容；不新增任何 agent/workflow 专用 runtime。
 - **建议验证**：`test_artifact_data_renderers.py`、`test_agent_runtime.py`、`test_agent_contracts.py`、`test_stream_services.py`。
 - **后续入口**：后端 registry API 稳定后，进入 Artifact 工作台的 UI 模块化。
+- **执行证据**：新增 `artifact_data_renderer_base.py` 承载共享严格模型，`artifact_data_value_schema.py` 承载 Value Discovery 四个 stage 的 schema 和 cross-reference validation，`artifact_data_renderer_value.py` 承载对应的确定性 Markdown/visual helper；主 renderer 显式重导出既有模型名并保留单一 `ARTIFACT_DATA_RENDERERS` registry。新增 `artifact_data_instruction_registry.py` 承载所有 stage 的结构化输出说明，`agent_runtime.py` 仅消费它并保留 Agent Runtime、stream delta 和 retry API。
+- **防漂移验证**：新增源码结构测试，要求 Value renderer helper 与四个 Value artifact-data schema 各自只存在于专用模块；此前主 renderer 中 900 余行 Value/Blueprint/common helper 的第二份定义已删除，避免后定义静默覆盖前定义。
+- **验证**：RED 阶段 renderer 和 instruction registry 模块边界各失败 1 项；GREEN 后 renderer/runtime/contract/stream 定向 suite 为 505 passed，致命错误 flake8 通过；`./scripts/test/test-local.sh new-agents` 通过，frontend 854 passed、backend 893 passed（4 个 slow deselected）。
+- **已知质量门**：`npm run lint` 的既有 `StructuredVisual.tsx`、`artifactExport.ts`、`docxExport.ts` union narrowing 错误未在本切片触碰，继续留给切片 6。
 
 ### 切片 5：Artifact 工作台编辑与协作边界闭环
 
@@ -107,3 +111,4 @@
 - 2026-07-10：完成切片 1。新增结构化 CASES 资产转换与来源标记，移除 chat 文案阶段推断；未改变 API 路径、typed SSE event、run persistence schema 或 `tools/intent-tester/`。下一轮从切片 2 做目标承接检查。
 - 2026-07-10：完成切片 2。声明性 workflow contract map、前端 workflow type 和 artifact-data prompt mode 均由 manifest 派生；新增单一赋值与 source guard，未改变 runtime、SSE、persistence 或 `tools/intent-tester/`。下一轮从切片 3 做服务端 run 与前端状态归属的 CGA。
 - 2026-07-10：完成切片 3。服务型 run 不再从 `localStorage` 恢复会话、产物或 run id；URL `runId` 始终以服务端 snapshot 恢复。下一轮从切片 4 做 backend renderer/runtime 模块化的 CGA。
+- 2026-07-10：完成切片 4。Value Discovery 的 artifact-data schema 与确定性 renderer 已从主文件拆出，stage instruction registry 已从 Runtime 拆出；共享 renderer registry、Agent Runtime、typed SSE 和持久化调用面保持兼容。下一轮从切片 5 做 Artifact 工作台编辑与协作边界的 CGA。
