@@ -1,6 +1,6 @@
 # Refactor Todo
 
-本目录记录重构类扫描、方案和实施待办。已完成的 todo 归档到 `docs/todos/archive/`；当前没有可直接恢复实现的 P0/P1 功能候选，保留的 New Agents 增强诊断、DeepSeek V4 结构化产物和 milestone ledger 均作为历史事实源使用。
+本目录记录重构类扫描、方案和实施待办。已完成的 todo 归档到 `docs/todos/archive/`；当前活跃的 New Agents 架构收口事项位于 `../2026-07-10-new-agents-architecture-refactor.md`，其余 New Agents 增强诊断、DeepSeek V4 结构化产物和 milestone ledger 均作为历史事实源使用。
 
 ## 使用规则
 
@@ -14,11 +14,13 @@
 ## 文档命名
 
 - `YYYY-MM-DD-new-agents-refactor-scan.md`：只读架构扫描报告。
+- `YYYY-MM-DD-new-agents-architecture-refactor.md`：活跃的架构收口 todo，按同级厚切片承接目标模式。
 - `YYYY-MM-DD-new-agents-refactor-options.md`：基于扫描报告的重构方案比较。
 - `YYYY-MM-DD-new-agents-refactor-phaseN-plan.md`：选定阶段后的 TDD 实施计划。
 
 ## 当前入口
 
+- `../2026-07-10-new-agents-architecture-refactor.md`：活跃的 New Agents 架构收口待办。按其中的同级厚切片进入目标模式；先做 CGA，不从本目录的历史 phase 文档恢复实现。
 - `2026-06-24-goal-mode-milestone-ledger.md`：目标模式 milestone 历史账本；恢复目标模式时可读取它了解已完成能力包，但不得从旧 integration branch / E 编号直接恢复实现。
 - `2026-06-23-deepseek-v4-structured-artifact-data.md`：DeepSeek V4 Flash 兼容的后端结构化产物数据改造已完成本地确定性 readiness gate；除非 CGA 发现新回归、真实 smoke 失败或新增 workflow/stage，否则不要继续按逐 stage 迁移恢复为活跃候选。真实 DeepSeek smoke 仍需要显式凭证、网络和额度。
 - `2026-06-23-new-agents-enhancement-diagnostic.md`：New Agents 功能盘点与增强诊断 todo；已消化 E01 Workflow 入口 preview、E02 阶段缺失信息清单、E03/E08 Artifact/Workflow 质量治理闭环、E04 Lisa 测试资产质量闭环、E05 Artifact 定向修订闭环、E06 Run 历史复用中心、E07 Workflow handoff 上下文审阅、E09 运行统计产品化诊断建议、E10 专业方法库配置、E11 Prompt/template 版本管理、E12 Workflow schema dry-run 门禁、E13 Alex 用户故事拆解 workflow、E14 Alex PRD Review workflow。

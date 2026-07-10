@@ -12,6 +12,7 @@ from models import (
 )
 from run_persistence import get_run_snapshot
 from test_asset_parsing import (
+    build_lisa_test_assets_from_artifact_data,
     build_coverage_summary,
     build_intent_tester_drafts,
     build_risk_matrix,
@@ -87,13 +88,20 @@ def export_lisa_test_assets(run_id: str) -> dict:
     if cases_artifact is None:
         raise ValueError("缺少 TEST_DESIGN/CASES 测试用例集")
 
-    parsed_assets = parse_lisa_test_asset_markdown(cases_artifact["content"])
+    artifact_data = cases_artifact.get("artifactData")
+    if artifact_data is None:
+        parsed_assets = parse_lisa_test_asset_markdown(cases_artifact["content"])
+        source_format = "legacy_markdown"
+    else:
+        parsed_assets = build_lisa_test_assets_from_artifact_data(artifact_data)
+        source_format = "artifact_data"
 
     return {
         "runId": snapshot["run"]["id"],
         "workflowId": snapshot["run"]["workflowId"],
         "sourceStageId": CASE_STAGE_ID,
         "sourceArtifactVersion": cases_artifact["versionNumber"],
+        "sourceFormat": source_format,
         **parsed_assets,
     }
 

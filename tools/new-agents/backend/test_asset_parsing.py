@@ -38,6 +38,50 @@ def parse_lisa_test_asset_markdown(markdown: str) -> dict:
     }
 
 
+def build_lisa_test_assets_from_artifact_data(artifact_data: dict) -> dict:
+    if not isinstance(artifact_data, dict):
+        raise ValueError("artifactData 必须是对象")
+
+    case_groups = _artifact_data_list(artifact_data, "case_groups")
+    coverage_trace_data = _artifact_data_list(artifact_data, "coverage_trace")
+    test_cases = []
+    for group_index, raw_group in enumerate(case_groups):
+        group_path = f"artifactData.case_groups[{group_index}]"
+        group = _artifact_data_object(raw_group, group_path)
+        group_dimension = _artifact_data_text(group, "dimension", group_path)
+        raw_cases = _artifact_data_list(group, "cases", group_path)
+        for case_index, raw_case in enumerate(raw_cases):
+            test_cases.append(
+                _map_artifact_data_case(
+                    _artifact_data_object(
+                        raw_case,
+                        f"{group_path}.cases[{case_index}]",
+                    ),
+                    group_dimension,
+                    f"{group_path}.cases[{case_index}]",
+                )
+            )
+
+    coverage_trace = [
+        _map_artifact_data_coverage(
+            _artifact_data_object(
+                raw_trace,
+                f"artifactData.coverage_trace[{index}]",
+            ),
+            f"artifactData.coverage_trace[{index}]",
+        )
+        for index, raw_trace in enumerate(coverage_trace_data)
+    ]
+    return {
+        "testCases": test_cases,
+        "coverageTrace": coverage_trace,
+        "coverageSummary": build_coverage_summary(test_cases, coverage_trace),
+        "assetIssues": _build_asset_issues(test_cases, coverage_trace),
+        "riskMatrix": build_risk_matrix(test_cases, coverage_trace),
+        "intentTesterDrafts": build_intent_tester_drafts(test_cases),
+    }
+
+
 def build_coverage_summary(
     test_cases: list[dict],
     coverage_trace: list[dict],
@@ -183,6 +227,86 @@ def _map_coverage(row: dict) -> dict:
     }
 
 
+def _map_artifact_data_case(
+    raw_case: dict,
+    group_dimension: str,
+    path: str,
+) -> dict:
+    dimension = raw_case.get("dimension")
+    if dimension is None:
+        dimension = group_dimension
+    elif not isinstance(dimension, str) or not dimension.strip():
+        raise ValueError(f"{path}.dimension 必须是非空字符串")
+
+    field_mapping = {
+        "case_id": "id",
+        "title": "title",
+        "priority": "priority",
+        "test_point": "testPoint",
+        "risk": "risk",
+        "precondition": "precondition",
+        "steps": "steps",
+        "test_data": "testData",
+        "expected_result": "expectedResult",
+        "assertion": "assertion",
+        "execution_layer": "executionLayer",
+        "automation_suggestion": "automationSuggestion",
+        "status": "status",
+    }
+    mapped = {
+        target_field: _artifact_data_text(raw_case, source_field, path)
+        for source_field, target_field in field_mapping.items()
+    }
+    mapped["dimension"] = dimension.strip()
+    return mapped
+
+
+def _map_artifact_data_coverage(raw_trace: dict, path: str) -> dict:
+    return {
+        "testPoint": _artifact_data_text(raw_trace, "test_point", path),
+        "priority": _artifact_data_text(raw_trace, "priority", path),
+        "risk": _artifact_data_text(raw_trace, "risk", path),
+        "testCases": _artifact_data_string_list(raw_trace, "covered_cases", path),
+        "status": _artifact_data_text(raw_trace, "status", path),
+    }
+
+
+def _artifact_data_list(
+    value: dict,
+    field_name: str,
+    path: str = "artifactData",
+) -> list:
+    items = value.get(field_name)
+    if not isinstance(items, list) or not items:
+        raise ValueError(f"{path}.{field_name} 必须是非空数组")
+    return items
+
+
+def _artifact_data_object(value: object, path: str) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError(f"{path} 必须是对象")
+    return value
+
+
+def _artifact_data_text(value: dict, field_name: str, path: str) -> str:
+    field_value = value.get(field_name)
+    if not isinstance(field_value, str) or not field_value.strip():
+        raise ValueError(f"{path}.{field_name} 必须是非空字符串")
+    return field_value.strip()
+
+
+def _artifact_data_string_list(value: dict, field_name: str, path: str) -> list[str]:
+    items = _artifact_data_list(value, field_name, path)
+    result = []
+    for index, item in enumerate(items):
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(
+                f"{path}.{field_name}[{index}] 必须是非空字符串"
+            )
+        result.append(item.strip())
+    return result
+
+
 def _build_priority_coverage(coverage_trace: list[dict]) -> list[dict]:
     priorities = sorted({row["priority"] for row in coverage_trace})
     summary = []
@@ -303,7 +427,7 @@ def _build_intent_tester_draft(test_case: dict) -> dict:
             },
         ],
         "draftWarnings": [
-            "该草稿由 Lisa Markdown 用例派生，导入 intent-tester 前需要人工校准页面 URL、定位语义和可执行步骤。"
+            "该草稿由 Lisa 测试用例派生，导入 intent-tester 前需要人工校准页面 URL、定位语义和可执行步骤。"
         ],
     }
 
