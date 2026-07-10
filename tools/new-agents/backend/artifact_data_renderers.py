@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from pydantic import (
     BaseModel,
@@ -107,6 +107,14 @@ class FlowLink(StrictArtifactDataModel):
     label: str
 
 
+ClarificationQuestionStatus = Literal[
+    "待确认",
+    "已确认",
+    "已假设",
+    "AI 假设",
+]
+
+
 class ClarificationQuestion(StrictArtifactDataModel):
     question_id: str
     question: str
@@ -115,7 +123,7 @@ class ClarificationQuestion(StrictArtifactDataModel):
     impact: str
     assumption: str
     owner: str
-    status: str
+    status: ClarificationQuestionStatus
 
 
 class QualityRequirement(StrictArtifactDataModel):
@@ -3322,11 +3330,11 @@ def _render_idea_converge_quadrant_chart(
         '    quadrant-4 "低成本尝试"',
     ]
     for item in evaluations:
-        x_value = item.confidence / 5
-        y_value = item.impact / 5
+        x_value = _format_mermaid_quadrant_coordinate(item.confidence / 5)
+        y_value = _format_mermaid_quadrant_coordinate(item.impact / 5)
         lines.append(
             f'    "{_escape_mermaid_label(item.idea_name)}": '
-            f"[{x_value:.2f}, {y_value:.2f}]"
+            f"[{x_value}, {y_value}]"
         )
     lines.append("```")
     return "\n".join(lines)
@@ -4428,11 +4436,11 @@ def _render_risk_quadrant_chart(risks: list[StrategyRisk]) -> str:
         '    quadrant-4 "常规覆盖"',
     ]
     for risk in risks:
-        x_value = risk.occurrence / 5
-        y_value = risk.severity / 5
+        x_value = _format_mermaid_quadrant_coordinate(risk.occurrence / 5)
+        y_value = _format_mermaid_quadrant_coordinate(risk.severity / 5)
         lines.append(
             f'    "{_escape_mermaid_label(risk.name)}": '
-            f"[{x_value:.2f}, {y_value:.2f}]"
+            f"[{x_value}, {y_value}]"
         )
     lines.append("```")
     return "\n".join(lines)
@@ -5809,6 +5817,13 @@ def _render_prd_stage_gate(checks: list[StageGateCheck]) -> str:
 
 def _escape_mermaid_label(value: str) -> str:
     return value.replace('"', "'")
+
+
+def _format_mermaid_quadrant_coordinate(value: float) -> str:
+    """Format endpoint coordinates in Mermaid quadrantChart's accepted grammar."""
+    if value.is_integer():
+        return str(int(value))
+    return f"{value:.2f}"
 
 
 from artifact_data_renderer_value import (

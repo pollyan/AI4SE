@@ -329,6 +329,7 @@ def test_strategy_artifact_data_contract_manifest_drives_backend_instruction():
 
 
 def test_test_design_clarify_artifact_data_contract_manifest_drives_backend_instruction():
+    from agent_runtime import build_structured_output_instruction
     from workflow_manifest import format_artifact_data_contract_instruction
 
     instruction = format_artifact_data_contract_instruction(
@@ -341,6 +342,10 @@ def test_test_design_clarify_artifact_data_contract_manifest_drives_backend_inst
         if stage["id"] == "CLARIFY"
     )
     contract = stage.get("artifactDataContract")
+    runtime_instruction = build_structured_output_instruction(
+        "TEST_DESIGN",
+        "CLARIFY",
+    )
 
     assert contract is not None
     assert (
@@ -349,6 +354,18 @@ def test_test_design_clarify_artifact_data_contract_manifest_drives_backend_inst
         "stage_gate 都必须至少包含 1 条"
     ) in instruction
     assert "所有字符串字段必须是非空白内容" in instruction
+    assert (
+        "clarification_questions[].status 只能是待确认、已确认、已假设或 AI 假设；"
+        "已假设仅用于用户明确授权 Lisa 代定的默认场景，可推进；"
+        "AI 假设仍表示未经授权的临时推断，P0/P1 阻断问题不能推进；"
+        "用户给出具体答案后必须更新为已确认"
+    ) in instruction
+    assert (
+        "clarification_questions[].status 只能是待确认、已确认、已假设或 AI 假设；"
+        "已假设仅用于用户明确授权 Lisa 代定的默认场景，可推进；"
+        "AI 假设仍表示未经授权的临时推断，P0/P1 阻断问题不能推进；"
+        "用户给出具体答案后必须更新为已确认"
+    ) in runtime_instruction
     assert "Mermaid 代码块" in instruction
     assert "右侧需求分析文档" in instruction
     assert "Mermaid flowchart" in instruction

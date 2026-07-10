@@ -790,6 +790,19 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('直接设定一个合理、可测试、可推进的默认场景');
     });
 
+    it('defines the clarify status that allows a user-authorized default to advance', () => {
+        const prompt = buildSystemPrompt({
+            agentId: 'lisa',
+            workflow: 'TEST_DESIGN',
+            stageIndex: 0,
+            currentArtifact: '# 需求分析文档\n已有内容',
+        });
+
+        expect(prompt).toContain('已假设仅用于用户明确授权 Lisa 代定的默认场景，可推进');
+        expect(prompt).toContain('AI 假设仍表示未经授权的临时推断，P0/P1 阻断问题不能推进');
+        expect(prompt).toContain('用户给出具体答案后，必须更新为已确认');
+    });
+
     it('injects previous stage artifacts when generating a later non-final stage', () => {
         const prompt = buildSystemPrompt({
             agentId: 'lisa',
