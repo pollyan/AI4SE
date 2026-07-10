@@ -2397,6 +2397,58 @@ def test_runtime_raw_json_stream_turn_renders_artifact_data_before_final_output(
     assert "结构化输出格式要求" in calls[0]["messages"][0]["content"]
 
 
+def test_runtime_raw_json_stream_turn_emits_progress_with_artifact_data_that_precedes_chat(
+    monkeypatch,
+):
+    final_json = json.dumps(
+        {
+            "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
+            "chat": "我已整理登录需求澄清基线，请确认右侧文档。",
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    chat_start = final_json.index('"chat"')
+
+    def fake_stream_chat_completion_content(**kwargs):
+        yield final_json[:chat_start]
+        yield final_json[chat_start:]
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-key",
+            base_url="https://api.deepseek.com",
+            model_name="deepseek-v4-flash",
+            system_prompt="你是测试专家。",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "用户需求: 登录功能",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    )
+    first_artifact_delta = next(
+        output
+        for output in outputs
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+    )
+
+    assert first_artifact_delta.chat is not None
+    assert first_artifact_delta.chat != "正在生成..."
+    assert first_artifact_delta.artifact_update.markdown is not None
+
+
 def test_runtime_raw_json_stream_turn_renders_paragraph_level_clarify_artifact_data(
     monkeypatch,
 ):

@@ -6,7 +6,10 @@ import { generateResponseStream } from '../../core/llm';
 
 // Mock the LLM service to avoid making real API calls during tests
 vi.mock('../../core/llm', () => ({
-    generateResponseStream: vi.fn()
+    createTurnRequestId: vi.fn(
+        () => `request-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    ),
+    generateResponseStream: vi.fn(),
 }));
 
 describe('useChatService', () => {
@@ -792,7 +795,11 @@ describe('useChatService', () => {
         expect(generateResponseStream).toHaveBeenCalledWith(
             '请继续生成当前阶段产出物',
             [],
-            expect.any(AbortSignal)
+            expect.any(AbortSignal),
+            expect.objectContaining({
+                runId: expect.any(String),
+                requestId: expect.any(String),
+            })
         );
     });
 
@@ -902,7 +909,11 @@ describe('useChatService', () => {
         expect(generateResponseStream).toHaveBeenCalledWith(
             '请继续生成当前阶段产出物',
             [],
-            expect.any(AbortSignal)
+            expect.any(AbortSignal),
+            expect.objectContaining({
+                runId: expect.any(String),
+                requestId: expect.any(String),
+            })
         );
         expect(state.chatHistory).toEqual([
             expect.objectContaining({ id: 'user-1' }),
@@ -916,6 +927,38 @@ describe('useChatService', () => {
         expect(state.artifactContent).toBe('# 测试策略蓝图\n重试后的内容');
         expect(state.stageArtifacts.STRATEGY).toBe('# 测试策略蓝图\n重试后的内容');
         expect(result.current.input).toBe('');
+    });
+
+    it('reuses the identity of an assistant-only stage continuation retry', async () => {
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            yield {
+                chatResponse: '继续生成策略内容',
+                newArtifact: '# 测试策略蓝图\n内容',
+                action: '',
+                hasArtifactUpdate: true,
+            };
+        });
+        const { result } = renderHook(() => useChatService());
+
+        act(() => {
+            useStore.getState().setArtifactContent('# 需求分析文档\n内容');
+            useStore.getState().setPendingStageTransition({
+                fromStageIndex: 0,
+                toStageIndex: 1,
+            });
+        });
+        await act(async () => {
+            await result.current.handleConfirmStageTransition();
+        });
+        const firstIdentity = vi.mocked(generateResponseStream).mock.calls[0][3];
+
+        await act(async () => {
+            await result.current.handleRetryCurrentStageGeneration();
+        });
+
+        expect(vi.mocked(generateResponseStream).mock.calls[1][3]).toEqual(
+            firstIdentity
+        );
     });
 
     it('should not save a stale internal continuation artifact after clearing history', async () => {
@@ -1044,7 +1087,11 @@ describe('useChatService', () => {
         expect(generateResponseStream).toHaveBeenCalledWith(
             '请继续生成当前阶段产出物',
             [],
-            expect.any(AbortSignal)
+            expect.any(AbortSignal),
+            expect.objectContaining({
+                runId: expect.any(String),
+                requestId: expect.any(String),
+            })
         );
         expect(result.current.pendingAttachments).toEqual([draftAttachment]);
     });
@@ -1105,6 +1152,65 @@ describe('useChatService', () => {
         expect(state.chatHistory).toEqual([]);
         expect(state.artifactTruncated).toBe(false);
         expect(result.current.input).toBe('生成一份较长产物');
+    });
+
+    it('reuses the same durable request identity when a user retries a failed logical send', async () => {
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            yield {
+                chatResponse: '本轮生成失败，请重试。',
+                newArtifact: '# Initial',
+                action: '',
+                hasArtifactUpdate: false,
+            };
+        });
+        const { result } = renderHook(() => useChatService());
+
+        act(() => {
+            result.current.setInput('请分析登录需求');
+        });
+        await act(async () => {
+            await result.current.handleSend();
+        });
+        const firstIdentity = vi.mocked(generateResponseStream).mock.calls[0][3];
+
+        act(() => {
+            result.current.handleRetry();
+        });
+        await act(async () => {
+            await result.current.handleSend();
+        });
+
+        expect(vi.mocked(generateResponseStream).mock.calls[1][3]).toEqual(
+            firstIdentity
+        );
+    });
+
+    it('reuses the same durable request identity for retry-current-stage generation', async () => {
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            yield {
+                chatResponse: '本轮生成失败，请重试。',
+                newArtifact: '# Initial',
+                action: '',
+                hasArtifactUpdate: false,
+            };
+        });
+        const { result } = renderHook(() => useChatService());
+
+        act(() => {
+            result.current.setInput('请分析登录需求');
+        });
+        await act(async () => {
+            await result.current.handleSend();
+        });
+        const firstIdentity = vi.mocked(generateResponseStream).mock.calls[0][3];
+
+        await act(async () => {
+            await result.current.handleRetryCurrentStageGeneration();
+        });
+
+        expect(vi.mocked(generateResponseStream).mock.calls[1][3]).toEqual(
+            firstIdentity
+        );
     });
 
     it('should roll back artifact state when retrying the assistant response that updated it', async () => {

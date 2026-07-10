@@ -1,6 +1,9 @@
 import json
 import time
+from dataclasses import dataclass
 from uuid import uuid4
+
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from api_responses import DEFAULT_LLM_CONFIG_MISSING_CODE
 from agent_contracts import WORKFLOW_STAGES
@@ -29,6 +32,7 @@ from models import (
     AgentContextSummary,
     AgentMessage,
     AgentRun,
+    AgentRunTurnRequest,
     AgentRunTurnMetric,
     AgentRuntimeConfigIssue,
     db,
@@ -52,6 +56,20 @@ class ArtifactVersionConflictError(ValueError):
     def __init__(self, current_artifact: dict | None):
         super().__init__("产出物已被更新，请刷新后再保存")
         self.current_artifact = current_artifact
+
+
+class TurnPersistenceError(RuntimeError):
+    """A completed turn could not be committed as one durable outcome."""
+
+
+class TurnPersistenceConflictError(TurnPersistenceError):
+    """A concurrent turn wrote the same durable sequence or version slot."""
+
+
+@dataclass(frozen=True)
+class TurnRequestClaim:
+    state: str
+    terminal_event: dict | None = None
 
 
 def _validate_workflow_stage(workflow_id: str, stage_id: str) -> None:
@@ -94,13 +112,14 @@ def create_agent_run(
     *,
     model: str | None = None,
     status: str = "active",
+    run_id: str | None = None,
 ) -> AgentRun:
     _validate_workflow_stage(workflow_id, current_stage_id)
     if status not in RUN_STATUSES:
         raise ValueError(f"未知 run status: {status}")
 
     run = AgentRun(
-        id=str(uuid4()),
+        id=run_id or str(uuid4()),
         workflow_id=workflow_id,
         agent_id=agent_id,
         current_stage_id=current_stage_id,
@@ -129,16 +148,24 @@ def ensure_agent_run(
             model=model,
         )
 
-    run = _get_run(run_id)
+    run = db.session.get(AgentRun, run_id)
+    if run is None:
+        try:
+            return create_agent_run(
+                workflow_id,
+                agent_id,
+                current_stage_id,
+                model=model,
+                run_id=run_id,
+            )
+        except IntegrityError:
+            db.session.rollback()
+            run = _get_run(run_id)
     if run.workflow_id != workflow_id:
         raise ValueError(f"runId 与 workflowId 不匹配: {run_id}/{workflow_id}")
     if run.agent_id != agent_id:
         raise ValueError(f"runId 与 agentId 不匹配: {run_id}/{agent_id}")
 
-    run.current_stage_id = current_stage_id
-    if model is not None:
-        run.model = model
-    db.session.commit()
     return run
 
 
@@ -209,13 +236,33 @@ class AgentRunPersistence:
         )
         return run.id
 
-    def append_user_message(self, run_id: str, content: str) -> None:
-        append_run_message(run_id, "user", content)
+    def claim_turn_request(
+        self,
+        run_id: str,
+        agent_request,
+        *,
+        model_name: str,
+    ) -> TurnRequestClaim:
+        return claim_agent_run_turn_request(
+            run_id,
+            request_id=agent_request.request_id,
+            stage_id=agent_request.stage_id,
+            user_content=agent_request.prompt,
+            model_name=model_name,
+        )
 
-    def build_runtime_prompt(self, run_id: str, current_prompt: str) -> str:
-        from context_builder import build_run_context_prompt
-
-        return build_run_context_prompt(run_id, current_prompt)
+    def fail_turn_request(
+        self,
+        run_id: str,
+        *,
+        request_id: str,
+        terminal_event: dict,
+    ) -> None:
+        fail_agent_run_turn_request(
+            run_id,
+            request_id=request_id,
+            terminal_event=terminal_event,
+        )
 
     def build_runtime_context(self, run_id: str, current_prompt: str):
         from context_builder import build_run_context
@@ -223,29 +270,40 @@ class AgentRunPersistence:
         context = build_run_context(run_id, current_prompt)
         return context.prompt, context.warnings
 
-    def append_assistant_message(self, run_id: str, content: str) -> None:
-        append_run_message(run_id, "assistant", content)
-
-    def record_artifact_version(
+    def complete_agent_run_turn(
         self,
         run_id: str,
-        stage_id: str,
-        content: str,
         *,
-        artifact_data: dict | None = None,
+        stage_id: str,
+        assistant_content: str,
+        artifact_content: str | None,
+        artifact_data: dict | None,
+        request_id: str | None,
+        terminal_event: dict | None,
+        metric: dict,
     ) -> None:
-        record_artifact_version(
+        complete_agent_run_turn(
             run_id,
-            stage_id,
-            content,
+            stage_id=stage_id,
+            assistant_content=assistant_content,
+            artifact_content=artifact_content,
             artifact_data=artifact_data,
+            request_id=request_id,
+            terminal_event=terminal_event,
+            metric=metric,
         )
 
     def record_turn_metric(self, **kwargs) -> None:
         record_turn_metric(**kwargs)
 
 
-def append_run_message(run_id: str, role: str, content: str) -> AgentMessage:
+def append_run_message(
+    run_id: str,
+    role: str,
+    content: str,
+    *,
+    _commit: bool = True,
+) -> AgentMessage:
     run = _get_run(run_id)
     if role not in MESSAGE_ROLES:
         raise ValueError(f"未知 message role: {role}")
@@ -259,8 +317,104 @@ def append_run_message(run_id: str, role: str, content: str) -> AgentMessage:
     db.session.add(message)
     if role == "user":
         _append_user_supplement_summary(run_id, run.current_stage_id, content)
-    db.session.commit()
+    if _commit:
+        db.session.commit()
     return message
+
+
+def _turn_request_claim(turn_request: AgentRunTurnRequest) -> TurnRequestClaim:
+    return TurnRequestClaim(
+        state=turn_request.status,
+        terminal_event=turn_request.terminal_event,
+    )
+
+
+def claim_agent_run_turn_request(
+    run_id: str,
+    *,
+    request_id: str,
+    stage_id: str,
+    user_content: str,
+    model_name: str | None = None,
+) -> TurnRequestClaim:
+    if not request_id.strip():
+        raise ValueError("requestId 不能为空")
+    if not user_content.strip():
+        raise ValueError("user content 不能为空")
+
+    try:
+        transaction = (
+            db.session.begin_nested()
+            if db.session().in_transaction()
+            else db.session.begin()
+        )
+        with transaction:
+            run = _get_run(run_id)
+            _validate_workflow_stage(run.workflow_id, stage_id)
+            existing = AgentRunTurnRequest.query.filter_by(
+                run_id=run_id,
+                request_id=request_id,
+            ).one_or_none()
+            if existing is not None:
+                return _turn_request_claim(existing)
+
+            turn_request = AgentRunTurnRequest(
+                run_id=run_id,
+                request_id=request_id,
+                stage_id=stage_id,
+                status="new",
+            )
+            db.session.add(turn_request)
+            run.current_stage_id = stage_id
+            if model_name is not None:
+                run.model = model_name
+            append_run_message(
+                run_id,
+                "user",
+                user_content,
+                _commit=False,
+            )
+            turn_request.status = "active"
+        if db.session().in_transaction():
+            db.session.commit()
+        return TurnRequestClaim(state="new")
+    except IntegrityError:
+        db.session.rollback()
+        existing = AgentRunTurnRequest.query.filter_by(
+            run_id=run_id,
+            request_id=request_id,
+        ).one()
+        return _turn_request_claim(existing)
+
+
+def fail_agent_run_turn_request(
+    run_id: str,
+    *,
+    request_id: str,
+    terminal_event: dict,
+) -> None:
+    try:
+        transaction = (
+            db.session.begin_nested()
+            if db.session().in_transaction()
+            else db.session.begin()
+        )
+        with transaction:
+            turn_request = AgentRunTurnRequest.query.filter_by(
+                run_id=run_id,
+                request_id=request_id,
+            ).one_or_none()
+            if turn_request is None or turn_request.status != "active":
+                raise ValueError("turn request is not active")
+            turn_request.status = "failed"
+            turn_request.terminal_event = terminal_event
+        if db.session().in_transaction():
+            db.session.commit()
+    except SQLAlchemyError as error:
+        db.session.rollback()
+        raise TurnPersistenceError(
+            "Unable to persist the failed agent turn."
+        ) from error
 
 
 def record_artifact_version(
@@ -269,6 +423,7 @@ def record_artifact_version(
     content: str,
     *,
     artifact_data: dict | None = None,
+    _commit: bool = True,
 ) -> AgentArtifactVersion:
     run = _get_run(run_id)
     _validate_workflow_stage(run.workflow_id, stage_id)
@@ -296,8 +451,102 @@ def record_artifact_version(
     db.session.flush()
     artifact.current_version_id = version.id
     _upsert_artifact_context_summaries(run_id, stage_id, content)
-    db.session.commit()
+    if _commit:
+        db.session.commit()
     return version
+
+
+def _stage_turn_metric(
+    *,
+    run_id: str,
+    workflow_id: str,
+    stage_id: str,
+    model_name: str,
+    provider: str,
+    status: str,
+    error_code: str | None,
+    duration_ms: int,
+    input_chars: int,
+    output_chars: int,
+    estimated_tokens: int,
+    contract_retry_count: int,
+    diagnostic: dict | None = None,
+) -> AgentRunTurnMetric:
+    _get_run(run_id)
+    metric = AgentRunTurnMetric(
+        run_id=run_id,
+        workflow_id=workflow_id,
+        stage_id=stage_id,
+        model=model_name,
+        provider=provider or "unknown",
+        status=status,
+        error_code=error_code,
+        duration_ms=max(0, duration_ms),
+        input_chars=max(0, input_chars),
+        output_chars=max(0, output_chars),
+        estimated_tokens=max(0, estimated_tokens),
+        contract_retry_count=max(0, contract_retry_count),
+        diagnostic=_sanitize_error_diagnostic(diagnostic),
+    )
+    db.session.add(metric)
+    return metric
+
+
+def complete_agent_run_turn(
+    run_id: str,
+    *,
+    request_id: str | None = None,
+    stage_id: str,
+    assistant_content: str,
+    artifact_content: str | None,
+    artifact_data: dict | None,
+    terminal_event: dict | None = None,
+    metric: dict,
+) -> None:
+    """Persist a successful assistant turn as one atomic outcome."""
+    try:
+        transaction = (
+            db.session.begin_nested()
+            if db.session().in_transaction()
+            else db.session.begin()
+        )
+        with transaction:
+            if request_id is not None:
+                turn_request = AgentRunTurnRequest.query.filter_by(
+                    run_id=run_id,
+                    request_id=request_id,
+                ).one_or_none()
+                if turn_request is None or turn_request.status != "active":
+                    raise ValueError("turn request is not active")
+                turn_request.status = "completed"
+                turn_request.terminal_event = terminal_event
+            append_run_message(
+                run_id,
+                "assistant",
+                assistant_content,
+                _commit=False,
+            )
+            if artifact_content is not None:
+                record_artifact_version(
+                    run_id,
+                    stage_id,
+                    artifact_content,
+                    artifact_data=artifact_data,
+                    _commit=False,
+            )
+            _stage_turn_metric(run_id=run_id, **metric)
+        if db.session().in_transaction():
+            db.session.commit()
+    except IntegrityError as error:
+        db.session.rollback()
+        raise TurnPersistenceConflictError(
+            "A concurrent turn updated the durable run state."
+        ) from error
+    except SQLAlchemyError as error:
+        db.session.rollback()
+        raise TurnPersistenceError(
+            "Unable to persist the completed agent turn."
+        ) from error
 
 
 def _upsert_artifact_context_summaries(
@@ -682,23 +931,21 @@ def record_turn_metric(
     contract_retry_count: int,
     diagnostic: dict | None = None,
 ) -> AgentRunTurnMetric:
-    _get_run(run_id)
-    metric = AgentRunTurnMetric(
+    metric = _stage_turn_metric(
         run_id=run_id,
         workflow_id=workflow_id,
         stage_id=stage_id,
-        model=model_name,
-        provider=provider or "unknown",
+        model_name=model_name,
+        provider=provider,
         status=status,
         error_code=error_code,
-        duration_ms=max(0, duration_ms),
-        input_chars=max(0, input_chars),
-        output_chars=max(0, output_chars),
-        estimated_tokens=max(0, estimated_tokens),
-        contract_retry_count=max(0, contract_retry_count),
-        diagnostic=_sanitize_error_diagnostic(diagnostic),
+        duration_ms=duration_ms,
+        input_chars=input_chars,
+        output_chars=output_chars,
+        estimated_tokens=estimated_tokens,
+        contract_retry_count=contract_retry_count,
+        diagnostic=diagnostic,
     )
-    db.session.add(metric)
     db.session.commit()
     return metric
 

@@ -347,6 +347,7 @@ def test_agent_runs_stream_returns_started_delta_and_final_sse_events(
             "systemPrompt": "你是 Lisa 测试专家。",
             "workflowId": "TEST_DESIGN",
             "stageId": "CLARIFY",
+            "requestId": "endpoint-events-001",
         },
     )
 
@@ -395,6 +396,7 @@ def test_agent_runs_stream_persists_run_messages_and_final_artifact(
             "systemPrompt": "你是 Lisa 测试专家。",
             "workflowId": "TEST_DESIGN",
             "stageId": "CLARIFY",
+            "requestId": "endpoint-persist-001",
         },
     )
 
@@ -443,6 +445,7 @@ def test_agent_runs_stream_reuses_existing_run_id(
             "systemPrompt": "你是 Lisa 测试专家。",
             "workflowId": "TEST_DESIGN",
             "stageId": "CLARIFY",
+            "requestId": "endpoint-reuse-first-001",
         },
     )
     run_id = _parse_sse_event_payloads(first_response)[0]["runId"]
@@ -455,6 +458,7 @@ def test_agent_runs_stream_reuses_existing_run_id(
             "workflowId": "TEST_DESIGN",
             "stageId": "CLARIFY",
             "runId": run_id,
+            "requestId": "endpoint-reuse-second-001",
         },
     )
 
@@ -476,6 +480,87 @@ def test_agent_runs_stream_reuses_existing_run_id(
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
+def test_agent_runs_stream_replays_same_request_id_without_duplicate_history_or_model_call(
+    mock_build_runtime,
+    app,
+    client,
+    default_config,
+):
+    runtime = FakeRuntime()
+    mock_build_runtime.return_value = runtime
+    request_payload = {
+        "prompt": "用户需求: 登录功能",
+        "systemPrompt": "你是 Lisa 测试专家。",
+        "workflowId": "TEST_DESIGN",
+        "stageId": "CLARIFY",
+        "requestId": "request-login-001",
+    }
+
+    first_response = client.post("/api/agent/runs/stream", json=request_payload)
+    first_payloads = _parse_sse_event_payloads(first_response)
+    run_id = first_payloads[0]["runId"]
+
+    replay_response = client.post(
+        "/api/agent/runs/stream",
+        json={**request_payload, "runId": run_id},
+    )
+    replay_payloads = _parse_sse_event_payloads(replay_response)
+
+    assert replay_response.status_code == 200
+    assert [payload["type"] for payload in replay_payloads] == [
+        "run_started",
+        "agent_turn",
+    ]
+    assert replay_payloads[-1] == first_payloads[-1]
+    assert len(runtime.calls) == 1
+    with app.app_context():
+        snapshot = get_run_snapshot(run_id)
+    assert [message["role"] for message in snapshot["messages"]] == [
+        "user",
+        "assistant",
+    ]
+    assert snapshot["artifacts"][0]["versionNumber"] == 1
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_agent_runs_stream_replays_failed_request_without_second_model_call(
+    mock_build_runtime,
+    app,
+    client,
+    default_config,
+):
+    mock_build_runtime.return_value = FailingRuntime(
+        UnexpectedModelBehavior("Exceeded maximum output retries (3)")
+    )
+    request_payload = {
+        "prompt": "用户需求: 登录功能",
+        "systemPrompt": "你是 Lisa 测试专家。",
+        "workflowId": "TEST_DESIGN",
+        "stageId": "CLARIFY",
+        "runId": "retryable-login-run-001",
+        "requestId": "retryable-login-request-001",
+    }
+
+    first_response = client.post("/api/agent/runs/stream", json=request_payload)
+    first_payloads = _parse_sse_event_payloads(first_response)
+    replay_response = client.post("/api/agent/runs/stream", json=request_payload)
+    replay_payloads = _parse_sse_event_payloads(replay_response)
+
+    assert first_response.status_code == 200
+    assert replay_response.status_code == 200
+    assert [payload["type"] for payload in first_payloads] == [
+        "run_started",
+        "error",
+    ]
+    assert replay_payloads == first_payloads
+    assert mock_build_runtime.call_count == 1
+    with app.app_context():
+        snapshot = get_run_snapshot(request_payload["runId"])
+    assert [message["role"] for message in snapshot["messages"]] == ["user"]
+    assert snapshot["artifacts"] == []
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
 def test_agent_run_snapshot_endpoint_returns_persisted_trace(
     mock_build_runtime,
     client,
@@ -491,6 +576,7 @@ def test_agent_run_snapshot_endpoint_returns_persisted_trace(
             "systemPrompt": "你是 Lisa 测试专家。",
             "workflowId": "TEST_DESIGN",
             "stageId": "CLARIFY",
+            "requestId": "endpoint-snapshot-001",
         },
     )
     run_id = _parse_sse_event_payloads(stream_response)[0]["runId"]
@@ -1788,6 +1874,21 @@ def test_agent_runs_stream_rejects_missing_prompt(client, default_config):
     assert response.json == {"error": "prompt 不能为空"}
 
 
+def test_agent_runs_stream_rejects_missing_request_identity(client, default_config):
+    response = client.post(
+        "/api/agent/runs/stream",
+        json={
+            "prompt": "用户需求: 登录功能",
+            "systemPrompt": "你是 Lisa 测试专家。",
+            "workflowId": "TEST_DESIGN",
+            "stageId": "CLARIFY",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json == {"error": "requestId 不能为空"}
+
+
 def test_agent_runs_stream_returns_json_error_for_empty_json_body(
     client,
     default_config,
@@ -1829,6 +1930,7 @@ def test_agent_runs_stream_rejects_stage_outside_workflow_before_runtime(
             "systemPrompt": "你是 Lisa 测试专家。",
             "workflowId": "TEST_DESIGN",
             "stageId": "REPORT",
+            "requestId": "endpoint-invalid-stage-001",
         },
     )
 
@@ -1847,6 +1949,7 @@ def test_agent_runs_stream_returns_503_when_default_config_missing(client):
             "systemPrompt": "你是 Lisa 测试专家。",
             "workflowId": "TEST_DESIGN",
             "stageId": "CLARIFY",
+            "requestId": "endpoint-config-missing-001",
         },
     )
 
@@ -1867,6 +1970,7 @@ def test_agent_runs_stream_records_default_llm_missing_observability_issue(
             "systemPrompt": "你是 Lisa 测试专家。",
             "workflowId": "TEST_DESIGN",
             "stageId": "CLARIFY",
+            "requestId": "endpoint-config-observability-001",
         },
     )
 
@@ -1923,6 +2027,7 @@ def test_agent_runs_stream_returns_typed_error_when_runtime_dependency_missing(
             "systemPrompt": "你是 Lisa 测试专家。",
             "workflowId": "TEST_DESIGN",
             "stageId": "CLARIFY",
+            "requestId": "endpoint-runtime-dependency-001",
         },
     )
 
@@ -1964,6 +2069,7 @@ def test_agent_runs_stream_returns_typed_error_when_model_output_exceeds_retries
             "systemPrompt": "你是 Lisa 测试专家。",
             "workflowId": "TEST_DESIGN",
             "stageId": "CLARIFY",
+            "requestId": "endpoint-runtime-schema-001",
         },
     )
 
@@ -2008,6 +2114,7 @@ def test_agent_observability_endpoint_returns_runtime_turn_summary(
             "systemPrompt": "你是 Lisa 测试专家。",
             "workflowId": "TEST_DESIGN",
             "stageId": "CLARIFY",
+            "requestId": "endpoint-observability-success-001",
         },
     )
     assert success_response.status_code == 200
@@ -2023,6 +2130,7 @@ def test_agent_observability_endpoint_returns_runtime_turn_summary(
             "systemPrompt": "你是 Lisa 测试专家。",
             "workflowId": "TEST_DESIGN",
             "stageId": "CLARIFY",
+            "requestId": "endpoint-observability-error-001",
         },
     )
     assert error_response.status_code == 200

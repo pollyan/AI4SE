@@ -194,8 +194,11 @@ describe('llm.ts', () => {
                 systemPrompt: 'mocked-system-prompt',
                 workflowId: 'VALUE_DISCOVERY',
                 stageId: 'ELEVATOR',
+                requestId: expect.any(String),
             });
-            expect(JSON.parse(options.body)).not.toHaveProperty('runId');
+            expect(JSON.parse(options.body)).toMatchObject({
+                runId: expect.any(String),
+            });
 
             // 验证解析结果
             expect(results).toEqual([
@@ -611,6 +614,53 @@ describe('llm.ts', () => {
             });
         });
 
+        it('首次可见 artifact 之前必须先给出非占位的左侧进度', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: '# 需求分析文档\n\n初始内容',
+                stageArtifacts: { CLARIFY: '# 需求分析文档\n\n初始内容' },
+            });
+            const draftArtifact = '# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能';
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"run_started"}',
+                    createAgentDeltaEvent({
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: draftArtifact,
+                        },
+                    }),
+                    createAgentTurnEvent({
+                        chat: '已完成需求分析文档初稿。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: draftArtifact,
+                        },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('帮我设计登录功能测试用例')
+            );
+            const firstArtifactIndex = results.findIndex(result => result.hasArtifactUpdate);
+
+            expect(firstArtifactIndex).toBeGreaterThan(0);
+            expect(results.slice(0, firstArtifactIndex)).toContainEqual(
+                expect.objectContaining({
+                    chatResponse: expect.not.stringMatching(/^正在生成\.\.\.$/),
+                    hasArtifactUpdate: false,
+                })
+            );
+            const chatLengths = results.map(result => result.chatResponse.length);
+            expect(chatLengths).toEqual([...chatLengths].sort((a, b) => a - b));
+        });
+
         it('agent_delta 只有聊天或进度占位时最终正式产物仍应渐进揭示', async () => {
             resetStore({
                 workflow: 'REQ_REVIEW',
@@ -800,6 +850,12 @@ describe('llm.ts', () => {
                     createAgentDeltaEvent({
                         chat: '第一句分析已经完成。第二句继续补充关键风险。第三句说明下一步需要澄清。',
                     }),
+                    createAgentTurnEvent({
+                        chat: '第一句分析已经完成。第二句继续补充关键风险。第三句说明下一步需要澄清。',
+                        artifact_update: { type: 'none' },
+                        stage_action: null,
+                        warnings: [],
+                    }),
                     'data: [DONE]',
                 ]),
             });
@@ -837,6 +893,15 @@ describe('llm.ts', () => {
                             type: 'replace',
                             markdown: '# 需求分析文档\n\n第一段\n\n第二段',
                         },
+                    }),
+                    createAgentTurnEvent({
+                        chat,
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: '# 需求分析文档\n\n第一段\n\n第二段',
+                        },
+                        stage_action: null,
+                        warnings: [],
                     }),
                     'data: [DONE]',
                 ]),
@@ -1911,6 +1976,22 @@ describe('llm.ts', () => {
             expect(allText).not.toContain('这段不应该被处理');
         });
 
+        it('delta 后连接 EOF 不能被当作成功终态', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"run_started"}',
+                    createAgentDeltaEvent({
+                        chat: '正在梳理需求。',
+                    }),
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 在收到终态前意外结束');
+        });
+
         it('应忽略非 data: 开头的 SSE 行', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
@@ -2232,12 +2313,15 @@ describe('llm.ts', () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
                 body: createRawSSEStream(
-                    createAgentTurnEvent({
-                        chat: '最后一条',
-                        artifact_update: { type: 'none' },
-                        stage_action: null,
-                        warnings: [],
-                    })
+                    [
+                        createAgentTurnEvent({
+                            chat: '最后一条',
+                            artifact_update: { type: 'none' },
+                            stage_action: null,
+                            warnings: [],
+                        }),
+                        'data: [DONE]',
+                    ].join('\n')
                 ),
             });
 

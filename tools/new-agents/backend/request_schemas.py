@@ -17,6 +17,11 @@ class AgentRunStreamRequest(BaseModel):
     workflow_id: str = Field(alias="workflowId", min_length=1)
     stage_id: str = Field(alias="stageId", min_length=1)
     run_id: str | None = Field(default=None, alias="runId")
+    request_id: str = Field(
+        alias="requestId",
+        min_length=1,
+        max_length=64,
+    )
 
 
 class MermaidRepairRequest(BaseModel):
@@ -91,6 +96,10 @@ def parse_agent_run_stream_request(
         if _is_blank(run_id):
             raise RequestValidationError("runId 不能为空")
         run_id = run_id.strip()
+    request_id = data.get("requestId")
+    if _is_blank(request_id):
+        raise RequestValidationError("requestId 不能为空")
+    request_id = request_id.strip()
     workflow_stages = get_workflow_stages().get(workflow_id)
     if workflow_stages is None:
         raise RequestValidationError(f"未知 workflowId: {workflow_id}")
@@ -103,6 +112,7 @@ def parse_agent_run_stream_request(
         "workflowId": workflow_id,
         "stageId": stage_id,
         "runId": run_id,
+        "requestId": request_id,
     }
     return AgentRunStreamRequest.model_validate(normalized_data)
 

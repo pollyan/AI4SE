@@ -21,6 +21,7 @@ from stream_services import (
     STRUCTURED_OUTPUT_PUBLIC_REASON,
     stream_agent_run_events,
 )
+from run_persistence import TurnPersistenceError, TurnRequestClaim
 
 
 VALID_ARTIFACT_DATA = {
@@ -111,6 +112,7 @@ class FakePersistence:
     def __init__(self) -> None:
         self.calls = []
         self.context_warnings = []
+        self.turn_request_claim = TurnRequestClaim(state="new")
 
     def ensure_run(self, agent_request, *, model_name: str) -> str:
         self.calls.append((
@@ -122,31 +124,48 @@ class FakePersistence:
         ))
         return "run-123"
 
-    def append_user_message(self, run_id: str, content: str) -> None:
-        self.calls.append(("append_user_message", run_id, content))
-
-    def append_assistant_message(self, run_id: str, content: str) -> None:
-        self.calls.append(("append_assistant_message", run_id, content))
-
-    def record_artifact_version(
+    def claim_turn_request(
         self,
         run_id: str,
-        stage_id: str,
-        content: str,
+        agent_request,
         *,
+        model_name: str,
+    ) -> TurnRequestClaim:
+        self.calls.append(("claim_turn_request", run_id, agent_request.request_id))
+        return self.turn_request_claim
+
+    def fail_turn_request(
+        self,
+        run_id: str,
+        *,
+        request_id: str,
+        terminal_event: dict,
+    ) -> None:
+        self.calls.append(("fail_turn_request", run_id, request_id, terminal_event))
+
+    def complete_agent_run_turn(
+        self,
+        run_id: str,
+        *,
+        stage_id: str,
+        assistant_content: str,
+        artifact_content: str | None,
         artifact_data=None,
+        metric: dict,
+        request_id: str | None = None,
+        terminal_event: dict | None = None,
     ) -> None:
         self.calls.append((
-            "record_artifact_version",
+            "complete_agent_run_turn",
             run_id,
             stage_id,
-            content,
+            assistant_content,
+            artifact_content,
             artifact_data,
+            request_id,
+            terminal_event,
+            metric,
         ))
-
-    def build_runtime_prompt(self, run_id: str, current_prompt: str) -> str:
-        self.calls.append(("build_runtime_prompt", run_id, current_prompt))
-        return f"服务端上下文\n\n[用户]\n{current_prompt}"
 
     def build_runtime_context(self, run_id: str, current_prompt: str):
         self.calls.append(("build_runtime_context", run_id, current_prompt))
@@ -187,6 +206,7 @@ def test_stream_agent_run_events_yields_started_delta_and_final_events(
         "systemPrompt": "你是 Lisa。",
         "workflowId": "TEST_DESIGN",
         "stageId": "CLARIFY",
+        "requestId": "stream-partial-001",
     })
 
     events = list(stream_agent_run_events(
@@ -271,6 +291,7 @@ def test_stream_agent_run_events_preserves_user_authorized_assumption_stage_acti
         "systemPrompt": "你是 Lisa。",
         "workflowId": "TEST_DESIGN",
         "stageId": "CLARIFY",
+        "requestId": "stream-default-001",
     })
 
     events = list(stream_agent_run_events(
@@ -314,6 +335,7 @@ def test_stream_agent_run_events_records_turn_through_persistence_adapter(
         "systemPrompt": "你是 Lisa。",
         "workflowId": "TEST_DESIGN",
         "stageId": "CLARIFY",
+        "requestId": "stream-persistence-001",
     })
 
     events = list(stream_agent_run_events(
@@ -326,22 +348,28 @@ def test_stream_agent_run_events_records_turn_through_persistence_adapter(
 
     assert events[0] == RunStartedEvent(run_id="run-123")
     assert events[-1] == AgentTurnEvent(output=final)
-    assert persistence.calls[:-1] == [
+    assert persistence.calls[:2] == [
         ("ensure_run", "TEST_DESIGN", "CLARIFY", None, "test-model"),
         ("build_runtime_context", "run-123", "用户需求"),
-        ("append_user_message", "run-123", "用户需求"),
-        ("append_assistant_message", "run-123", "已更新右侧需求分析文档，请确认。"),
-        (
-            "record_artifact_version",
-            "run-123",
-            "CLARIFY",
-            VALID_CLARIFY_ARTIFACT,
-            VALID_ARTIFACT_DATA,
-        ),
     ]
-    metric = persistence.calls[-1][1]
-    assert persistence.calls[-1][0] == "record_turn_metric"
-    assert metric["run_id"] == "run-123"
+    request_claim = persistence.calls[2]
+    assert request_claim[:2] == ("claim_turn_request", "run-123")
+    assert request_claim[2]
+    completed_turn = persistence.calls[3]
+    assert completed_turn[:6] == (
+        "complete_agent_run_turn",
+        "run-123",
+        "CLARIFY",
+        "已更新右侧需求分析文档，请确认。",
+        VALID_CLARIFY_ARTIFACT,
+        VALID_ARTIFACT_DATA,
+    )
+    assert completed_turn[6] == request_claim[2]
+    assert completed_turn[7] == {
+        "type": "agent_turn",
+        "output": final.model_dump(mode="json"),
+    }
+    metric = completed_turn[8]
     assert metric["workflow_id"] == "TEST_DESIGN"
     assert metric["stage_id"] == "CLARIFY"
     assert metric["model_name"] == "test-model"
@@ -355,6 +383,96 @@ def test_stream_agent_run_events_records_turn_through_persistence_adapter(
     assert metric["estimated_tokens"] >= 1
     assert metric["duration_ms"] >= 0
     assert metric["contract_retry_count"] == 0
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_replays_completed_request_without_model_invocation(
+    mock_build_runtime: MagicMock,
+) -> None:
+    final = AgentTurnOutput.model_validate({
+        "chat": "已完成登录需求分析。",
+        "artifact_update": {"type": "none"},
+        "stage_action": None,
+        "warnings": [],
+    })
+    persistence = FakePersistence()
+    persistence.turn_request_claim = TurnRequestClaim(
+        state="completed",
+        terminal_event={
+            "type": "agent_turn",
+            "output": final.model_dump(mode="json"),
+        },
+    )
+
+    events = list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+        persistence=persistence,
+    ))
+
+    assert events == [
+        RunStartedEvent(run_id="run-123"),
+        AgentTurnEvent(output=final),
+    ]
+    mock_build_runtime.assert_not_called()
+    assert [call[0] for call in persistence.calls] == [
+        "ensure_run",
+        "build_runtime_context",
+        "claim_turn_request",
+    ]
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_reports_atomic_persistence_failure_without_success_event(
+    mock_build_runtime: MagicMock,
+) -> None:
+    final = AgentTurnOutput.model_validate({
+        "chat": "已更新右侧需求分析文档，请确认。",
+        "artifact_update": {
+            "type": "replace",
+            "markdown": VALID_CLARIFY_ARTIFACT,
+        },
+        "artifact_data": VALID_ARTIFACT_DATA,
+        "stage_action": None,
+        "warnings": [],
+    })
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter([final])
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    def fail_completed_turn(*args, **kwargs) -> None:
+        raise TurnPersistenceError("simulated database failure")
+
+    persistence.complete_agent_run_turn = fail_completed_turn
+
+    events = list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+        persistence=persistence,
+    ))
+
+    assert isinstance(events[0], RunStartedEvent)
+    assert isinstance(events[1], AgentTurnDeltaEvent)
+    assert events[-1] == ErrorEvent(
+        code="PERSISTENCE_FAILED",
+        message="本轮结果未能安全保存，请重试。",
+        diagnostic=_diagnostic(
+            phase="persistence",
+            field_path="run_outcome",
+            validator="atomic_commit",
+            retryable=True,
+            public_reason=(
+                "本轮结果未能安全保存，右侧产出物和历史版本均未作为成功结果提交。"
+            ),
+        ),
+    )
+    assert not any(isinstance(event, AgentTurnEvent) for event in events)
+    assert "record_turn_metric" not in [call[0] for call in persistence.calls]
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -414,7 +532,9 @@ def test_stream_agent_run_events_rejects_visual_failure_before_persistence(
         call[0] == "record_turn_metric" and call[1]["status"] == "success"
         for call in persistence.calls
     )
-    error_metric = persistence.calls[-1]
+    error_metric = next(
+        call for call in persistence.calls if call[0] == "record_turn_metric"
+    )
     assert error_metric[0] == "record_turn_metric"
     assert error_metric[1]["status"] == "error"
     assert error_metric[1]["error_code"] == "VISUAL_VALIDATION_FAILED"
@@ -448,8 +568,8 @@ def test_stream_agent_run_events_records_real_token_usage_when_runtime_exposes_i
     ))
 
     assert events[-1] == AgentTurnEvent(output=final)
-    metric = persistence.calls[-1][1]
-    assert persistence.calls[-1][0] == "record_turn_metric"
+    assert persistence.calls[-1][0] == "complete_agent_run_turn"
+    metric = persistence.calls[-1][8]
     assert metric["estimated_tokens"] == 321
 
 
@@ -487,8 +607,11 @@ def test_stream_agent_run_events_records_error_turn_metric(
             diagnostic=diagnostic,
         ),
     ]
-    metric = persistence.calls[-1][1]
-    assert persistence.calls[-1][0] == "record_turn_metric"
+    metric_call = next(
+        call for call in persistence.calls if call[0] == "record_turn_metric"
+    )
+    metric = metric_call[1]
+    assert metric_call[0] == "record_turn_metric"
     assert metric["run_id"] == "run-123"
     assert metric["workflow_id"] == "TEST_DESIGN"
     assert metric["stage_id"] == "CLARIFY"
@@ -538,8 +661,11 @@ def test_stream_agent_run_events_records_schema_retry_count_from_runtime_error(
             diagnostic=diagnostic,
         ),
     ]
-    metric = persistence.calls[-1][1]
-    assert persistence.calls[-1][0] == "record_turn_metric"
+    metric_call = next(
+        call for call in persistence.calls if call[0] == "record_turn_metric"
+    )
+    metric = metric_call[1]
+    assert metric_call[0] == "record_turn_metric"
     assert metric["status"] == "error"
     assert metric["error_code"] == "SCHEMA_VALIDATION_FAILED"
     assert metric["contract_retry_count"] == 3
@@ -659,6 +785,7 @@ def test_stream_agent_run_events_maps_pydantic_ai_output_failure_to_error_event(
         "systemPrompt": "你是 Lisa。",
         "workflowId": "TEST_DESIGN",
         "stageId": "CLARIFY",
+        "requestId": "stream-schema-error-001",
     })
 
     events = list(stream_agent_run_events(
@@ -740,6 +867,7 @@ def test_stream_agent_run_events_maps_contract_failure_to_error_event(
         "systemPrompt": "你是 Lisa。",
         "workflowId": "TEST_DESIGN",
         "stageId": "CLARIFY",
+        "requestId": "stream-contract-error-001",
     })
 
     events = list(stream_agent_run_events(
@@ -771,6 +899,7 @@ def _request() -> AgentRunStreamRequest:
         "systemPrompt": "你是 Lisa。",
         "workflowId": "TEST_DESIGN",
         "stageId": "CLARIFY",
+        "requestId": "stream-default-request-001",
     })
 
 
@@ -785,6 +914,7 @@ def test_stream_agent_run_events_validates_workflow_stage_before_building_runtim
                 "systemPrompt": "你是 Lisa。",
                 "workflowId": "UNKNOWN_WORKFLOW",
                 "stageId": "CLARIFY",
+                "requestId": "stream-invalid-workflow-001",
             }),
             "未知 workflowId: UNKNOWN_WORKFLOW",
             _diagnostic(
@@ -803,6 +933,7 @@ def test_stream_agent_run_events_validates_workflow_stage_before_building_runtim
                 "systemPrompt": "你是 Lisa。",
                 "workflowId": "TEST_DESIGN",
                 "stageId": "REPORT",
+                "requestId": "stream-invalid-stage-001",
             }),
             "workflowId 与 stageId 不匹配: TEST_DESIGN/REPORT",
             _diagnostic(

@@ -73,6 +73,12 @@ class AgentRun(db.Model):
         cascade="all, delete-orphan",
         order_by="AgentRunTurnMetric.created_at",
     )
+    turn_requests = db.relationship(
+        "AgentRunTurnRequest",
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="AgentRunTurnRequest.created_at",
+    )
     artifact_comments = db.relationship(
         "AgentArtifactComment",
         back_populates="run",
@@ -272,6 +278,51 @@ class AgentRunTurnMetric(db.Model):
     @diagnostic.setter
     def diagnostic(self, value):
         self.diagnostic_json = (
+            json.dumps(value, ensure_ascii=False)
+            if value is not None
+            else None
+        )
+
+
+class AgentRunTurnRequest(db.Model):
+    __tablename__ = "agent_run_turn_requests"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "run_id",
+            "request_id",
+            name="uq_agent_run_turn_requests_run_request",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    run_id = db.Column(
+        db.String(36),
+        db.ForeignKey("agent_runs.id"),
+        nullable=False,
+        index=True,
+    )
+    request_id = db.Column(db.String(64), nullable=False)
+    stage_id = db.Column(db.String(64), nullable=False)
+    status = db.Column(db.String(32), nullable=False, default="active")
+    terminal_event_json = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+    updated_at = db.Column(
+        db.DateTime,
+        server_default=db.func.now(),
+        onupdate=db.func.now(),
+    )
+
+    run = db.relationship("AgentRun", back_populates="turn_requests")
+
+    @property
+    def terminal_event(self):
+        if not self.terminal_event_json:
+            return None
+        return json.loads(self.terminal_event_json)
+
+    @terminal_event.setter
+    def terminal_event(self, value):
+        self.terminal_event_json = (
             json.dumps(value, ensure_ascii=False)
             if value is not None
             else None

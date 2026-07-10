@@ -102,6 +102,9 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 RAW_JSON_STREAMING_MAX_ATTEMPTS = 2
+ARTIFACT_FIRST_PROGRESS_CHAT = (
+    "我正在整理当前输入并生成右侧结构化初稿，随后会同步关键结论。"
+)
 
 
 def get_artifact_data_ready_stages() -> set[tuple[str, str]]:
@@ -629,6 +632,8 @@ def build_partial_agent_delta(
             workflow_id=workflow_id,
             current_stage_id=current_stage_id,
         )
+    if markdown and not chat:
+        chat = ARTIFACT_FIRST_PROGRESS_CHAT
     if not chat and not markdown:
         return None
     return AgentTurnDeltaOutput(

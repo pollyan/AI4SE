@@ -20,6 +20,7 @@ def test_parse_agent_run_stream_request_accepts_alias_fields() -> None:
         "systemPrompt": "你是 Lisa。",
         "workflowId": "TEST_DESIGN",
         "stageId": "CLARIFY",
+        "requestId": "req-alias",
     })
 
     assert parsed.prompt == "用户需求"
@@ -27,6 +28,7 @@ def test_parse_agent_run_stream_request_accepts_alias_fields() -> None:
     assert parsed.workflow_id == "TEST_DESIGN"
     assert parsed.stage_id == "CLARIFY"
     assert parsed.run_id is None
+    assert parsed.request_id
 
 
 def test_parse_agent_run_stream_request_accepts_optional_run_id() -> None:
@@ -36,9 +38,22 @@ def test_parse_agent_run_stream_request_accepts_optional_run_id() -> None:
         "workflowId": "TEST_DESIGN",
         "stageId": "CLARIFY",
         "runId": " existing-run ",
+        "requestId": "req-run",
     })
 
     assert parsed.run_id == "existing-run"
+
+
+def test_parse_agent_run_stream_request_normalizes_client_request_identity() -> None:
+    parsed = parse_agent_run_stream_request({
+        "prompt": "用户需求",
+        "systemPrompt": "你是 Lisa。",
+        "workflowId": "TEST_DESIGN",
+        "stageId": "CLARIFY",
+        "requestId": " request-login-001 ",
+    })
+
+    assert parsed.request_id == "request-login-001"
 
 
 def test_read_json_request_body_returns_none_for_empty_raw_body() -> None:
@@ -83,10 +98,21 @@ def test_parse_agent_run_stream_request_normalizes_workflow_and_stage_ids() -> N
         "systemPrompt": "你是 Lisa。",
         "workflowId": " TEST_DESIGN ",
         "stageId": " CLARIFY ",
+        "requestId": "req-normalize",
     })
 
     assert parsed.workflow_id == "TEST_DESIGN"
     assert parsed.stage_id == "CLARIFY"
+
+
+def test_parse_agent_run_stream_request_rejects_missing_request_identity() -> None:
+    with pytest.raises(RequestValidationError, match="requestId 不能为空"):
+        parse_agent_run_stream_request({
+            "prompt": "用户需求",
+            "systemPrompt": "你是 Lisa。",
+            "workflowId": "TEST_DESIGN",
+            "stageId": "CLARIFY",
+        })
 
 
 @pytest.mark.parametrize(
@@ -96,8 +122,9 @@ def test_parse_agent_run_stream_request_normalizes_workflow_and_stage_ids() -> N
             {
                 "prompt": "用户需求",
                 "systemPrompt": "你是 Lisa。",
-                "workflowId": "UNKNOWN_WORKFLOW",
-                "stageId": "CLARIFY",
+                    "workflowId": "UNKNOWN_WORKFLOW",
+                    "stageId": "CLARIFY",
+                    "requestId": "req-unknown-workflow",
             },
             "未知 workflowId: UNKNOWN_WORKFLOW",
         ),
@@ -105,8 +132,9 @@ def test_parse_agent_run_stream_request_normalizes_workflow_and_stage_ids() -> N
             {
                 "prompt": "用户需求",
                 "systemPrompt": "你是 Lisa。",
-                "workflowId": "TEST_DESIGN",
-                "stageId": "REPORT",
+                    "workflowId": "TEST_DESIGN",
+                    "stageId": "REPORT",
+                    "requestId": "req-unknown-stage",
             },
             "workflowId 与 stageId 不匹配: TEST_DESIGN/REPORT",
         ),

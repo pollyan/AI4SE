@@ -1,18 +1,32 @@
 import os
 import sys
 import tempfile
+import threading
 
 import pytest
+import run_persistence
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 os.environ["FLASK_TESTING"] = "1"
 
 from app import create_app
-from models import AgentArtifact, AgentArtifactVersion, AgentMessage, AgentRun, db
+from models import (
+    AgentArtifact,
+    AgentArtifactVersion,
+    AgentMessage,
+    AgentRun,
+    AgentRunTurnRequest,
+    db,
+)
 from run_persistence import (
     append_run_message,
+    claim_agent_run_turn_request,
     clone_agent_run,
+    complete_agent_run_turn,
     create_agent_run,
+    fail_agent_run_turn_request,
     ensure_agent_run,
     get_runtime_observability_summary,
     get_run_snapshot,
@@ -61,7 +75,7 @@ def test_create_run_persists_generic_workflow_metadata(app):
         assert fetched.model == "gpt-test"
 
 
-def test_ensure_agent_run_reuses_existing_run_and_updates_current_stage(app):
+def test_ensure_agent_run_reuses_existing_run_without_mutating_replay_state(app):
     with app.app_context():
         run = create_agent_run(
             workflow_id="TEST_DESIGN",
@@ -80,8 +94,48 @@ def test_ensure_agent_run_reuses_existing_run_and_updates_current_stage(app):
 
         assert reused.id == run.id
         assert AgentRun.query.count() == 1
-        assert reused.current_stage_id == "STRATEGY"
-        assert reused.model == "gpt-new"
+    assert reused.current_stage_id == "CLARIFY"
+    assert reused.model == "gpt-old"
+
+
+def test_ensure_agent_run_recovers_a_concurrent_first_run_create_conflict(
+    app,
+    monkeypatch,
+):
+    with app.app_context():
+        concurrent_run = create_agent_run(
+            "TEST_DESIGN",
+            "lisa",
+            "CLARIFY",
+            model="gpt-concurrent",
+        )
+        original_get = db.session.get
+        first_lookup = True
+
+        def return_stale_absence(model, identifier, *args, **kwargs):
+            nonlocal first_lookup
+            if model is AgentRun and identifier == concurrent_run.id and first_lookup:
+                first_lookup = False
+                return None
+            return original_get(model, identifier, *args, **kwargs)
+
+        def report_unique_create_conflict(*args, **kwargs):
+            raise IntegrityError("insert", {}, RuntimeError("duplicate run id"))
+
+        monkeypatch.setattr(db.session, "get", return_stale_absence)
+        monkeypatch.setattr(run_persistence, "create_agent_run", report_unique_create_conflict)
+
+        reused = ensure_agent_run(
+            "TEST_DESIGN",
+            "lisa",
+            "STRATEGY",
+            run_id=concurrent_run.id,
+            model="gpt-new",
+        )
+
+        assert reused.id == concurrent_run.id
+        assert reused.current_stage_id == "CLARIFY"
+        assert reused.model == "gpt-concurrent"
 
 
 def test_messages_are_appended_with_stable_sequence(app):
@@ -100,6 +154,425 @@ def test_messages_are_appended_with_stable_sequence(app):
             "请分析这个需求",
             "我会先做需求澄清",
         ]
+
+
+def test_complete_agent_run_turn_rolls_back_every_success_record_when_metric_write_fails(
+    app,
+    monkeypatch,
+):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        append_run_message(run.id, "user", "请分析登录需求")
+
+        def fail_metric_write(*args, **kwargs):
+            raise SQLAlchemyError("metric storage unavailable")
+
+        monkeypatch.setattr(run_persistence, "_stage_turn_metric", fail_metric_write)
+
+        with pytest.raises(run_persistence.TurnPersistenceError):
+            complete_agent_run_turn(
+                run.id,
+                stage_id="CLARIFY",
+                assistant_content="已完成登录需求分析。",
+                artifact_content="# 需求分析文档\n\n登录功能",
+                artifact_data={"document_info": {"artifact_name": "登录需求"}},
+                metric={
+                    "workflow_id": "TEST_DESIGN",
+                    "stage_id": "CLARIFY",
+                    "model_name": "test-model",
+                    "provider": "test-provider",
+                    "status": "success",
+                    "error_code": None,
+                    "duration_ms": 1,
+                    "input_chars": 8,
+                    "output_chars": 20,
+                    "estimated_tokens": 7,
+                    "contract_retry_count": 0,
+                },
+            )
+
+        assert [message.role for message in AgentMessage.query.all()] == ["user"]
+        assert AgentArtifact.query.filter_by(run_id=run.id).count() == 0
+        assert run.turn_metrics == []
+
+
+def test_complete_agent_run_turn_reports_concurrent_unique_slot_conflict_without_partial_success(
+    app,
+    monkeypatch,
+):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        append_run_message(run.id, "user", "请分析登录需求")
+
+        def fail_metric_write(*args, **kwargs):
+            raise IntegrityError("insert", {}, RuntimeError("unique slot"))
+
+        monkeypatch.setattr(run_persistence, "_stage_turn_metric", fail_metric_write)
+
+        with pytest.raises(run_persistence.TurnPersistenceConflictError):
+            complete_agent_run_turn(
+                run.id,
+                stage_id="CLARIFY",
+                assistant_content="已完成登录需求分析。",
+                artifact_content="# 需求分析文档\n\n登录功能",
+                artifact_data=None,
+                metric={
+                    "workflow_id": "TEST_DESIGN",
+                    "stage_id": "CLARIFY",
+                    "model_name": "test-model",
+                    "provider": "test-provider",
+                    "status": "success",
+                    "error_code": None,
+                    "duration_ms": 1,
+                    "input_chars": 8,
+                    "output_chars": 20,
+                    "estimated_tokens": 7,
+                    "contract_retry_count": 0,
+                },
+            )
+
+        assert [message.role for message in AgentMessage.query.all()] == ["user"]
+        assert AgentArtifact.query.filter_by(run_id=run.id).count() == 0
+
+
+def test_turn_request_claim_is_idempotent_and_replays_completed_terminal_outcome(app):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        first = claim_agent_run_turn_request(
+            run.id,
+            request_id="req-login-001",
+            stage_id="CLARIFY",
+            user_content="请分析登录需求",
+        )
+
+        assert first.state == "new"
+        assert [message.role for message in AgentMessage.query.all()] == ["user"]
+
+        duplicate_active = claim_agent_run_turn_request(
+            run.id,
+            request_id="req-login-001",
+            stage_id="CLARIFY",
+            user_content="请分析登录需求",
+        )
+        assert duplicate_active.state == "active"
+        assert AgentMessage.query.count() == 1
+
+        terminal_event = {
+            "type": "agent_turn",
+            "output": {
+                "chat": "已完成登录需求分析。",
+                "artifact_update": {"type": "none"},
+                "stage_action": None,
+                "warnings": [],
+            },
+        }
+        complete_agent_run_turn(
+            run.id,
+            request_id="req-login-001",
+            stage_id="CLARIFY",
+            assistant_content="已完成登录需求分析。",
+            artifact_content=None,
+            artifact_data=None,
+            terminal_event=terminal_event,
+            metric={
+                "workflow_id": "TEST_DESIGN",
+                "stage_id": "CLARIFY",
+                "model_name": "test-model",
+                "provider": "test-provider",
+                "status": "success",
+                "error_code": None,
+                "duration_ms": 1,
+                "input_chars": 8,
+                "output_chars": 12,
+                "estimated_tokens": 5,
+                "contract_retry_count": 0,
+            },
+        )
+
+        duplicate_completed = claim_agent_run_turn_request(
+            run.id,
+            request_id="req-login-001",
+            stage_id="STRATEGY",
+            user_content="请分析登录需求",
+        )
+        assert duplicate_completed.state == "completed"
+        assert duplicate_completed.terminal_event == terminal_event
+        assert db.session.get(AgentRun, run.id).current_stage_id == "CLARIFY"
+        assert [message.role for message in AgentMessage.query.order_by(AgentMessage.id)] == [
+            "user",
+            "assistant",
+        ]
+
+
+def test_turn_request_claim_replays_recorded_failure_without_appending_another_user_message(app):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        run_id = run.id
+        claim_agent_run_turn_request(
+            run_id,
+            request_id="req-login-failure",
+            stage_id="CLARIFY",
+            user_content="请分析登录需求",
+        )
+        terminal_event = {
+            "type": "error",
+            "code": "LLM_ERROR",
+            "message": "provider API failed",
+        }
+        fail_agent_run_turn_request(
+            run.id,
+            request_id="req-login-failure",
+            terminal_event=terminal_event,
+        )
+
+        replay = claim_agent_run_turn_request(
+            run.id,
+            request_id="req-login-failure",
+            stage_id="CLARIFY",
+            user_content="请分析登录需求",
+        )
+
+        assert replay.state == "failed"
+        assert replay.terminal_event == terminal_event
+        assert AgentMessage.query.count() == 1
+
+
+def test_turn_request_unique_identity_is_enforced_across_independent_db_sessions(app):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        session_factory = sessionmaker(bind=db.engine)
+        first_session = session_factory()
+        second_session = session_factory()
+        try:
+            assert first_session.query(AgentRunTurnRequest).filter_by(
+                run_id=run.id,
+                request_id="cross-session-request-001",
+            ).one_or_none() is None
+            assert second_session.query(AgentRunTurnRequest).filter_by(
+                run_id=run.id,
+                request_id="cross-session-request-001",
+            ).one_or_none() is None
+
+            first_session.add(AgentRunTurnRequest(
+                run_id=run.id,
+                request_id="cross-session-request-001",
+                stage_id="CLARIFY",
+                status="active",
+            ))
+            first_session.commit()
+
+            second_session.add(AgentRunTurnRequest(
+                run_id=run.id,
+                request_id="cross-session-request-001",
+                stage_id="CLARIFY",
+                status="active",
+            ))
+            with pytest.raises(IntegrityError):
+                second_session.commit()
+            second_session.rollback()
+        finally:
+            first_session.close()
+            second_session.close()
+
+        assert AgentRunTurnRequest.query.filter_by(
+            run_id=run.id,
+            request_id="cross-session-request-001",
+        ).count() == 1
+
+
+def test_concurrent_turn_completion_returns_one_conflict_without_partial_history(
+    app,
+    monkeypatch,
+):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        run_id = run.id
+        claim_agent_run_turn_request(
+            run_id,
+            request_id="concurrent-complete-first",
+            stage_id="CLARIFY",
+            user_content="第一条并发请求",
+        )
+        claim_agent_run_turn_request(
+            run_id,
+            request_id="concurrent-complete-second",
+            stage_id="CLARIFY",
+            user_content="第二条并发请求",
+        )
+
+    second_has_read_sequence = threading.Event()
+    first_finished = threading.Event()
+
+    def return_same_stale_sequence(_run_id: str) -> int:
+        if threading.current_thread().name == "first-completion":
+            second_has_read_sequence.wait(timeout=5)
+            return 3
+        second_has_read_sequence.set()
+        first_finished.wait(timeout=5)
+        return 3
+
+    monkeypatch.setattr(
+        run_persistence,
+        "_next_message_sequence",
+        return_same_stale_sequence,
+    )
+    outcomes: dict[str, str] = {}
+
+    def complete_in_separate_session(role: str, request_id: str) -> None:
+        with app.app_context():
+            try:
+                complete_agent_run_turn(
+                    run_id,
+                    request_id=request_id,
+                    stage_id="CLARIFY",
+                    assistant_content=f"{role} 完成",
+                    artifact_content=None,
+                    artifact_data=None,
+                    terminal_event={"type": "agent_turn", "output": {}},
+                    metric={
+                        "workflow_id": "TEST_DESIGN",
+                        "stage_id": "CLARIFY",
+                        "model_name": "test-model",
+                        "provider": "test-provider",
+                        "status": "success",
+                        "error_code": None,
+                        "duration_ms": 1,
+                        "input_chars": 8,
+                        "output_chars": 12,
+                        "estimated_tokens": 5,
+                        "contract_retry_count": 0,
+                    },
+                )
+                outcomes[role] = "success"
+            except run_persistence.TurnPersistenceConflictError:
+                outcomes[role] = "conflict"
+            finally:
+                if role == "first":
+                    first_finished.set()
+
+    first = threading.Thread(
+        target=complete_in_separate_session,
+        args=("first", "concurrent-complete-first"),
+        name="first-completion",
+    )
+    second = threading.Thread(
+        target=complete_in_separate_session,
+        args=("second", "concurrent-complete-second"),
+        name="second-completion",
+    )
+    first.start()
+    second.start()
+    first.join(timeout=10)
+    second.join(timeout=10)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert sorted(outcomes.values()) == ["conflict", "success"]
+    with app.app_context():
+        messages = AgentMessage.query.filter_by(run_id=run_id).order_by(
+            AgentMessage.sequence_index
+        ).all()
+        assert [(message.role, message.sequence_index) for message in messages] == [
+            ("user", 1),
+            ("user", 2),
+            ("assistant", 3),
+        ]
+
+
+def test_concurrent_turn_completion_returns_one_artifact_version_conflict(
+    app,
+    monkeypatch,
+):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        run_id = run.id
+        record_artifact_version(run_id, "CLARIFY", "# 初始产出物")
+        for request_id, content in (
+            ("concurrent-version-first", "第一条版本请求"),
+            ("concurrent-version-second", "第二条版本请求"),
+        ):
+            claim_agent_run_turn_request(
+                run_id,
+                request_id=request_id,
+                stage_id="CLARIFY",
+                user_content=content,
+            )
+
+    second_has_read_version = threading.Event()
+    first_finished = threading.Event()
+
+    def distinct_message_sequences(_run_id: str) -> int:
+        return 3 if threading.current_thread().name == "first-version" else 4
+
+    def return_same_stale_version(_artifact_id: int) -> int:
+        if threading.current_thread().name == "first-version":
+            second_has_read_version.wait(timeout=5)
+            return 2
+        second_has_read_version.set()
+        first_finished.wait(timeout=5)
+        return 2
+
+    monkeypatch.setattr(run_persistence, "_next_message_sequence", distinct_message_sequences)
+    monkeypatch.setattr(run_persistence, "_next_artifact_version", return_same_stale_version)
+    outcomes: dict[str, str] = {}
+
+    def complete_in_separate_session(role: str, request_id: str) -> None:
+        with app.app_context():
+            try:
+                complete_agent_run_turn(
+                    run_id,
+                    request_id=request_id,
+                    stage_id="CLARIFY",
+                    assistant_content=f"{role} 完成",
+                    artifact_content=f"# {role} 产出物",
+                    artifact_data=None,
+                    terminal_event={"type": "agent_turn", "output": {}},
+                    metric={
+                        "workflow_id": "TEST_DESIGN",
+                        "stage_id": "CLARIFY",
+                        "model_name": "test-model",
+                        "provider": "test-provider",
+                        "status": "success",
+                        "error_code": None,
+                        "duration_ms": 1,
+                        "input_chars": 8,
+                        "output_chars": 12,
+                        "estimated_tokens": 5,
+                        "contract_retry_count": 0,
+                    },
+                )
+                outcomes[role] = "success"
+            except run_persistence.TurnPersistenceConflictError:
+                outcomes[role] = "conflict"
+            finally:
+                if role == "first":
+                    first_finished.set()
+
+    first = threading.Thread(
+        target=complete_in_separate_session,
+        args=("first", "concurrent-version-first"),
+        name="first-version",
+    )
+    second = threading.Thread(
+        target=complete_in_separate_session,
+        args=("second", "concurrent-version-second"),
+        name="second-version",
+    )
+    first.start()
+    second.start()
+    first.join(timeout=10)
+    second.join(timeout=10)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert sorted(outcomes.values()) == ["conflict", "success"]
+    with app.app_context():
+        artifact = AgentArtifact.query.filter_by(
+            run_id=run_id,
+            stage_id="CLARIFY",
+        ).one()
+        assert AgentArtifactVersion.query.filter_by(artifact_id=artifact.id).count() == 2
+        assert AgentMessage.query.filter_by(run_id=run_id, role="assistant").count() == 1
 
 
 def test_artifact_versions_increment_per_run_stage(app):

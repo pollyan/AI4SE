@@ -22,6 +22,11 @@ export type AgentRuntimeErrorDiagnostic = {
   publicReason: string;
 };
 
+export type AgentRunRequestIdentity = {
+  runId: string;
+  requestId: string;
+};
+
 export class AgentRuntimeStreamError extends Error {
   code: string;
   diagnostic?: AgentRuntimeErrorDiagnostic;
@@ -82,6 +87,14 @@ type AttachmentListState =
 
 const MAX_SYNTHETIC_STREAM_STEPS = 12;
 const SYNTHETIC_STREAM_DELAY_MS = 20;
+const ARTIFACT_FIRST_PROGRESS_CHAT = '我正在整理当前输入并生成右侧结构化初稿，随后会同步关键结论。';
+
+export const createTurnRequestId = (): string => {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return `req-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
 
 const LEGACY_PROTOCOL_TAG_PATTERN = /<\s*\/?\s*(?:CHART|ARTIFACT|CHAT)\b[^>]*>/i;
 const ARTIFACT_PROGRESS_PLACEHOLDER_PATTERN = /^#\s*产出物生成中(?:\s|$)/m;
@@ -903,7 +916,11 @@ const getStableAgentDeltaChat = (
   output: AgentTurnDeltaOutput,
   previousChat: string
 ): string => {
-  const candidate = output.chat || previousChat || '正在生成...';
+  const candidate = output.chat
+    || previousChat
+    || (hasRenderableArtifactDelta(output)
+      ? ARTIFACT_FIRST_PROGRESS_CHAT
+      : '正在生成...');
   if (!previousChat) return candidate;
   if (candidate.length < previousChat.length) return previousChat;
   return candidate;
@@ -920,12 +937,25 @@ const mapAgentDeltaToStreamChunks = async function* (
   const newArtifact = hasArtifactUpdate
     ? output.artifact_update?.markdown || ''
     : currentArtifact;
-  const chatUnits = previousChat ? [chat] : splitChatForStreaming(chat);
+  const emitsInitialArtifactProgress = hasArtifactUpdate && !previousChat;
+  const chatUnits = previousChat || emitsInitialArtifactProgress
+    ? [chat]
+    : splitChatForStreaming(chat);
   const frameCount = Math.max(chatUnits.length, 1);
   let accumulatedChat = '';
 
   if (hasArtifactUpdate) {
     await validateArtifactVisualBlocks(newArtifact);
+  }
+
+  if (emitsInitialArtifactProgress) {
+    yield {
+      chatResponse: chat,
+      newArtifact: currentArtifact,
+      action: '',
+      hasArtifactUpdate: false,
+    };
+    await waitForSyntheticStreamFrame();
   }
 
   for (let index = 0; index < frameCount; index += 1) {
@@ -957,6 +987,7 @@ async function* generateResponseStreamViaAgentRuntime(
   workflowId: WorkflowType,
   stageId: string,
   currentRunId: string | null,
+  requestId: string,
   currentArtifact: string,
   expectedNextStageId: string | undefined,
   signal?: AbortSignal
@@ -969,6 +1000,7 @@ async function* generateResponseStreamViaAgentRuntime(
       systemPrompt,
       workflowId,
       stageId,
+      requestId,
       ...(currentRunId ? { runId: currentRunId } : {}),
     }),
     signal
@@ -990,6 +1022,7 @@ async function* generateResponseStreamViaAgentRuntime(
   let pendingDataLines: string[] = [];
   let receivedAgentDelta = false;
   let receivedRenderableArtifactDelta = false;
+  let receivedTerminalAgentTurn = false;
   let previousAgentDeltaChat = '';
 
   const processSsePayload = async function* (
@@ -997,6 +1030,9 @@ async function* generateResponseStreamViaAgentRuntime(
   ): AsyncGenerator<StreamChunk, void, unknown> {
     const trimmedPayload = payload.trim();
     if (trimmedPayload === '[DONE]') {
+      if (!receivedTerminalAgentTurn) {
+        throw new Error('结构化智能体 SSE 在收到终态前意外结束');
+      }
       shouldStop = true;
       return;
     }
@@ -1045,20 +1081,27 @@ async function* generateResponseStreamViaAgentRuntime(
       return;
     }
     if (event.type === 'agent_turn') {
+      receivedTerminalAgentTurn = true;
+      const finalOutput = previousAgentDeltaChat === ARTIFACT_FIRST_PROGRESS_CHAT
+        ? {
+          ...event.output,
+          chat: `${previousAgentDeltaChat}\n\n${event.output.chat}`,
+        }
+        : event.output;
       const chunkSource = receivedRenderableArtifactDelta
         ? mapAgentTurnToFinalChunk(
-          event.output,
+          finalOutput,
           currentArtifact,
           expectedNextStageId
         )
         : receivedAgentDelta
           ? mapAgentTurnToArtifactRevealChunks(
-            event.output,
+            finalOutput,
             currentArtifact,
             expectedNextStageId
           )
         : mapAgentTurnToStreamChunks(
-          event.output,
+          finalOutput,
           currentArtifact,
           expectedNextStageId
         );
@@ -1126,6 +1169,9 @@ async function* generateResponseStreamViaAgentRuntime(
       for await (const chunk of flushSseEvent()) {
         yield chunk;
       }
+      if (!shouldStop || !receivedTerminalAgentTurn) {
+        throw new Error('结构化智能体 SSE 在收到终态前意外结束');
+      }
       break;
     }
 
@@ -1142,7 +1188,12 @@ async function* generateResponseStreamViaAgentRuntime(
   }
 }
 
-export const generateResponseStream = async function* (userMessage: string, attachments?: Attachment[], signal?: AbortSignal): AsyncGenerator<StreamChunk, void, unknown> {
+export const generateResponseStream = async function* (
+  userMessage: string,
+  attachments?: Attachment[],
+  signal?: AbortSignal,
+  requestIdentity?: AgentRunRequestIdentity,
+): AsyncGenerator<StreamChunk, void, unknown> {
   const state = useStore.getState();
   const {
     workflow,
@@ -1164,6 +1215,13 @@ export const generateResponseStream = async function* (userMessage: string, atta
 
   const currentStageId = getStructuredRuntimeStageId(workflow, stageIndex);
   const expectedNextStageId = WORKFLOWS[workflow].stages[stageIndex + 1]?.id;
+  const identity = requestIdentity ?? {
+    runId: currentRunId || createTurnRequestId(),
+    requestId: createTurnRequestId(),
+  };
+  if (currentRunId !== identity.runId) {
+    useStore.getState().setCurrentRunId(identity.runId);
+  }
   const prompt = currentRunId
     ? buildContentWithAttachments(userMessage, attachments)
     : buildRuntimePrompt(
@@ -1177,7 +1235,8 @@ export const generateResponseStream = async function* (userMessage: string, atta
     systemInstruction,
     workflow,
     currentStageId,
-    currentRunId,
+    identity.runId,
+    identity.requestId,
     artifactContent,
     expectedNextStageId,
     signal

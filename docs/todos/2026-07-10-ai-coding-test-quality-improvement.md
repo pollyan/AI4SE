@@ -405,6 +405,17 @@ print(
 - **已知非 PASS / 归属**：真实外部 LLM smoke 因未提供 `NEW_AGENTS_SMOKE_*` 配置保持 `NOT_RUN`，并未被当作通过；macOS 默认 `grep -P` 不可用时 docs gate 现在诚实输出 `FAIL`，跨平台解析改造仍由 `QS-08/QG-011` owning。本轮未调用付费 model judge；其 77/80 P0 收口仍由 `QS-06/QG-010` owning。Intent full run 仍有大量既有 resource warnings，New Agents frontend 仍有两个 React `act(...)` warnings，诊断预算由 `QS-07/QG-012` owning。
 - **边界确认**：未修改 Intent 业务执行链、New Agents shared runtime、真实生产数据库、LLM judge 或 deployment；本切片只将既有 runner/CI gate 与 Intent 测试 app factory 收口为可诊断、fail-closed 的行为。
 
+### 2026-07-11 — QS-02：共享 run 的流式与持久化一致性
+
+- **状态**：已完成实现与本地验证；下一 owning 厚切片为 `QS-03`。
+- **解决的风险**：`QG-003`、`QG-017`。
+- **共享协议不变量**：首次可见 artifact 前必先渲染非占位 progress frame，且两帧通过异步边界分离；artifact-first raw output 在后端补齐诚实进度，前端对旧式无 chat delta 仍作防御；进度不会因最终 chat 回退。成功终态被收紧为 `agent_turn` 后的 `[DONE]`，delta-only EOF 或缺少 `[DONE]` 都抛出显式协议错误。
+- **持久化与重试**：assistant 消息、artifact version、context summaries 与 success metric 通过单一事务提交，metric / unique-slot 故障会回滚全部成功记录并返回 `PERSISTENCE_FAILED` 或 `PERSISTENCE_CONFLICT`。新增 durable `AgentRunTurnRequest`，以 `(runId, requestId)` 唯一约束保存 active/completed/failed terminal outcome；首轮由客户端生成并发送稳定 `(runId, requestId)`，普通重试、重试本阶段生成及 assistant-only 内部续写重试均复用两者，服务端拒绝缺失 `requestId` 而非隐式生成。首 run 的并发创建冲突会重新读取既有 run；相同 request 重放不调用模型、不重复追加消息或版本，成功和失败终态均可重放。
+- **TDD / 负向证据**：artifact-first SSE、delta-only EOF、缺失 `[DONE]`、metric 写失败和唯一槽冲突均先出现稳定红灯；随后转绿。本轮评审修复的“重试本阶段生成”与 assistant-only 续写重试均先证明会生成新 identity，再收敛为同一 replay identity。端点级真实 persistence 回归证明重复 request 只执行一次模型调用并重放相同 `agent_turn` 或失败 `error`；独立 SQLAlchemy 会话的重复 identity 写入触发真实 unique constraint；两个真实 Flask/SQLite session 的同步 stale sequence 与 stale artifact-version 竞争分别证明一方完成、另一方获得 `TurnPersistenceConflictError` 且不留下部分助手历史或第二个 artifact version。
+- **已验证的实际结果**：New Agents backend 全量 `926 passed, 1 skipped`；frontend 全量 `60 files / 877 tests passed`；此前本次的 `./scripts/test/test-local.sh new-agents` 已输出 frontend `876/876 PASS`、backend `922/922 PASS`（其余 4 项按 runner 选择规则 deselect），本次新增三项回归已由对应前后端全量套件覆盖；`npm run lint` 通过；关键 Python flake8 通过。Playwright E2E 在沙箱内因 macOS MachPort 权限无法启动，随后在本机权限上下文重跑并以零退出完成（6 个用例进度点）。该 E2E 使用 mock typed SSE，不能替代本切片的后端真实 persistence 端点回归。前端 `ChatPane` 的两条既有 `act(...)` warning 仍由 `QS-07/QG-012` owning。
+- **设计与治理记录**：`tools/new-agents/CONTEXT.md` 记录 Run、turn request、progress frame 与 terminal outcome 的术语；ADR-0001 明确 request identity 是客户端生成的 `(runId, requestId)`，服务端以 shared durable model 处理重放，而非依赖 runId、metric JSON 或 localStorage。
+- **边界确认**：所有 workflow 继续使用共享 `/api/agent/runs/stream`、typed SSE、shared persistence 与 renderer；未新增 Lisa/Alex 专属 runtime、SSE、store 或渲染管线。外部 LLM judge、生产-shaped 部署和业务 execution identity 分别留给 `QS-06`、`QS-05`、`QS-03`。
+
 ## 本轮停止线
 
-本 todo 是该目标的唯一活跃整改入口。`QS-01` 已完成，执行顺序继续为 `QS-02 → QS-03 → QS-04 → QS-05 → QS-06 → QS-07 → QS-08`；后续切片不得把本记录中的 `NOT_RUN` 或继任项重新表述为 PASS。
+本 todo 是该目标的唯一活跃整改入口。`QS-01`、`QS-02` 已完成，执行顺序继续为 `QS-03 → QS-04 → QS-05 → QS-06 → QS-07 → QS-08`；后续切片不得把本记录中的 `NOT_RUN` 或继任项重新表述为 PASS。

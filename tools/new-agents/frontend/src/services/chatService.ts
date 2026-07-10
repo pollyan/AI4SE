@@ -1,6 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useStore, Attachment, getWelcomeMessage, WORKFLOWS } from '../store';
-import { generateResponseStream } from '../core/llm';
+import {
+    createTurnRequestId,
+    generateResponseStream,
+    type AgentRunRequestIdentity,
+} from '../core/llm';
 import {
     planArtifactVersionUpdate,
     planRetryFromHistory,
@@ -354,6 +358,22 @@ export function useChatService() {
     const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
     const abortControllerRef = useRef<AbortController | null>(null);
     const artifactRollbackSnapshotsRef = useRef(new Map<string, ArtifactRollbackSnapshot>());
+    const requestIdentityByMessageRef = useRef(
+        new Map<string, AgentRunRequestIdentity>()
+    );
+    const pendingRetryIdentityRef = useRef<AgentRunRequestIdentity | null>(null);
+
+    const restoreRetryRequestIdentity = (
+        removedMessages: ReturnType<typeof useStore.getState>['chatHistory']
+    ) => {
+        const retryIdentity = [...removedMessages]
+            .reverse()
+            .map(message => requestIdentityByMessageRef.current.get(message.id))
+            .find((identity): identity is AgentRunRequestIdentity => Boolean(identity));
+        if (retryIdentity) {
+            pendingRetryIdentityRef.current = retryIdentity;
+        }
+    };
 
     const { chatHistory, addMessage, updateLastMessage, removeLastMessage, isGenerating, setIsGenerating } = useStore();
 
@@ -418,6 +438,17 @@ export function useChatService() {
             ? [...pendingAttachments]
             : [];
         const userMessageId = createMessageId();
+        const requestIdentity = pendingRetryIdentityRef.current || {
+            runId: useStore.getState().currentRunId || createTurnRequestId(),
+            requestId: createTurnRequestId(),
+        };
+        pendingRetryIdentityRef.current = null;
+        if (shouldAppendUserMessage) {
+            requestIdentityByMessageRef.current.set(
+                userMessageId,
+                requestIdentity
+            );
+        }
 
         if (overrideInput === undefined || shouldAppendUserMessage) {
             setInput('');
@@ -489,7 +520,12 @@ export function useChatService() {
         };
 
         try {
-            const stream = generateResponseStream(userMsg, currentAttachments, runAbortController.signal);
+            const stream = generateResponseStream(
+                userMsg,
+                currentAttachments,
+                runAbortController.signal,
+                requestIdentity
+            );
 
             let hasTransitioned = false;
 
@@ -515,6 +551,10 @@ export function useChatService() {
                 if (isFirstChunk) {
                     const assistantMessageId = createMessageId();
                     runAssistantMessageId = assistantMessageId;
+                    requestIdentityByMessageRef.current.set(
+                        assistantMessageId,
+                        requestIdentity
+                    );
                     artifactRollbackSnapshotsRef.current.set(
                         assistantMessageId,
                         artifactRollbackSnapshot
@@ -767,6 +807,7 @@ export function useChatService() {
         const removedMessages = history.slice(
             history.length - retryPlan.messagesToRemove
         );
+        restoreRetryRequestIdentity(removedMessages);
         const inMemoryRollbackSnapshot = [...removedMessages]
             .reverse()
             .map(message => artifactRollbackSnapshotsRef.current.get(message.id))
@@ -815,6 +856,7 @@ export function useChatService() {
         if (messagesToRemove === 0) return;
 
         const removedMessages = history.slice(history.length - messagesToRemove);
+        restoreRetryRequestIdentity(removedMessages);
         const inMemoryRollbackSnapshot = [...removedMessages]
             .reverse()
             .map(message => artifactRollbackSnapshotsRef.current.get(message.id))
