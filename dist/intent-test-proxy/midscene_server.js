@@ -13,7 +13,7 @@ function validateEnvironmentVariables() {
         'OPENAI_BASE_URL': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
         'MIDSCENE_MODEL_NAME': 'qwen-vl-max-latest',
         'PORT': '3001',
-        'MAIN_APP_URL': 'http://localhost:5001/api'
+        'MAIN_APP_URL': 'http://localhost:5001/intent-tester/api'
     };
     
     const issues = [];
@@ -52,14 +52,11 @@ function validateEnvironmentVariables() {
         console.log('   OPENAI_API_KEY=your_api_key_here');
         console.log('   OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1');
         console.log('   MIDSCENE_MODEL_NAME=qwen-vl-max-latest');
-        process.exit(1);
+        throw new Error(`Missing required environment variables: ${requiredVars.filter(name => !process.env[name]).join(', ')}`);
     }
     
     console.log('\n✨ Environment validation completed successfully!\n');
 }
-
-// 执行环境变量检查
-validateEnvironmentVariables();
 
 const express = require('express');
 const cors = require('cors');
@@ -68,6 +65,10 @@ const { chromium } = require('playwright');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const axios = require('axios');
+
+// Lifecycle callback adapter. Tests may replace only this external boundary;
+// the Express app and execution runtime remain the production implementation.
+let lifecycleHttpClient = axios;
 
 const app = express();
 const server = createServer(app);
@@ -81,7 +82,9 @@ const io = new Server(server, {
 const port = process.env.PORT || 3001;
 
 // 数据库配置 - 注意：如果需要连接到主Web应用，请确保端口正确
-const API_BASE_URL = process.env.MAIN_APP_URL || 'http://localhost:5001/api';
+const API_BASE_URL = process.env.MAIN_APP_URL || 'http://localhost:5001/intent-tester/api';
+const LIFECYCLE_CALLBACK_MAX_ATTEMPTS = 3;
+const LIFECYCLE_CALLBACK_BACKOFF_MS = 25;
 
 // 中间件
 app.use(cors());
@@ -100,6 +103,14 @@ const executionControls = new Map();
 
 // 变量上下文管理 - 存储每个执行的变量
 const variableContexts = new Map();
+
+// The runtime owns one global browser/page/agent set, so admission is
+// deliberately serial. This remains set until the owning async execution has
+// completed resource cleanup, even when its public state has been stopped.
+let activeExecutionId = null;
+let activeExecutionPromise = null;
+let runtimeResetting = false;
+let resetPromise = null;
 
 // 清理旧的执行状态 - 保留最近的50个执行记录
 function cleanupOldExecutions() {
@@ -134,11 +145,6 @@ function logMessage(executionId, level, message) {
     }
     
     return logEntry;
-}
-
-// 生成执行ID
-function generateExecutionId() {
-    return 'exec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
 // 解析变量引用 - 使用 ${variable} 语法
@@ -186,6 +192,59 @@ function resolveVariableReferences(text, variableContext) {
     });
 }
 
+function waitForLifecycleRetry(attempt) {
+    return new Promise(resolve => {
+        setTimeout(resolve, LIFECYCLE_CALLBACK_BACKOFF_MS * attempt);
+    });
+}
+
+function lifecycleFailureCode(response, error) {
+    const status = response?.status || error?.response?.status;
+    return Number.isInteger(status) ? `http_${status}` : 'transport_error';
+}
+
+async function sendLifecycleCallback(executionId, event, data) {
+    const url = `${API_BASE_URL}/executions/${encodeURIComponent(executionId)}/lifecycle`;
+    let lastFailureCode = 'transport_error';
+
+    for (let attempt = 1; attempt <= LIFECYCLE_CALLBACK_MAX_ATTEMPTS; attempt += 1) {
+        let response;
+        let transportError;
+        try {
+            response = await lifecycleHttpClient.post(url, data, {
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                timeout: 10000
+            });
+        } catch (error) {
+            transportError = error;
+        }
+
+        if (!transportError && response?.status >= 200 && response.status < 300) {
+            console.log(`✅ 生命周期回调已同步: ${executionId} (${event})`);
+            return true;
+        }
+
+        lastFailureCode = lifecycleFailureCode(response, transportError);
+        if (attempt < LIFECYCLE_CALLBACK_MAX_ATTEMPTS) {
+            console.warn(
+                `⚠️ 生命周期回调失败，将重试: ${executionId} (${event}) ` +
+                `${attempt}/${LIFECYCLE_CALLBACK_MAX_ATTEMPTS} [${lastFailureCode}]`
+            );
+            await waitForLifecycleRetry(attempt);
+        }
+    }
+
+    console.error(
+        `❌ 生命周期回调重试耗尽: ${executionId} (${event}) ` +
+        `${LIFECYCLE_CALLBACK_MAX_ATTEMPTS}/${LIFECYCLE_CALLBACK_MAX_ATTEMPTS} ` +
+        `[${lastFailureCode}]`
+    );
+    recordCallbackExhausted(executionId, event, LIFECYCLE_CALLBACK_MAX_ATTEMPTS);
+    return false;
+}
+
 // Web系统API集成函数
 async function notifyExecutionStart(executionId, testcase, mode) {
     try {
@@ -200,35 +259,11 @@ async function notifyExecutionStart(executionId, testcase, mode) {
             totalSteps: totalSteps
         });
 
-        // 发送执行开始通知到Web系统API
-        try {
-            const startData = {
-                execution_id: executionId,
-                testcase_id: testcase.id,
-                mode: mode,
-                browser: 'chrome',
-                steps_total: totalSteps,
-                executed_by: 'midscene-server'
-            };
-
-            console.log(`📡 发送执行开始通知到Web系统 API: ${executionId}`);
-            
-            const response = await axios.post(`${API_BASE_URL}/midscene/execution-start`, startData, {
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                timeout: 10000
-            });
-
-            if (response.status === 200) {
-                console.log(`✅ 执行开始通知已同步到Web系统: ${executionId}`);
-            } else {
-                console.warn(`⚠️ Web系统API响应异常: ${response.status} - ${response.statusText}`);
-            }
-        } catch (apiError) {
-            console.error(`❌ 发送执行开始通知到Web系统失败: ${apiError.message}`);
-            // 不中断流程，继续执行
-        }
+        const startData = {
+            event: 'started',
+            status: 'running'
+        };
+        await sendLifecycleCallback(executionId, 'started', startData);
         
         console.log(`通知执行开始: ${executionId}`);
         return { success: true };
@@ -261,43 +296,101 @@ async function notifyExecutionResult(executionId, testcase, mode, status, steps,
             errorMessage: errorMessage
         });
 
-        // 发送执行结果到Web系统API
-        try {
-            const resultData = {
-                execution_id: executionId,
-                testcase_id: testcase.id,
-                status: status,
-                mode: mode,
-                start_time: startTime,
-                end_time: endTime,
-                steps: steps || [],
-                error_message: errorMessage
-            };
-
-            console.log(`📡 发送执行结果到Web系统 API: ${executionId}`);
-            
-            const response = await axios.post(`${API_BASE_URL}/midscene/execution-result`, resultData, {
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                timeout: 10000
-            });
-
-            if (response.status === 200) {
-                console.log(`✅ 执行结果已同步到Web系统: ${executionId}`);
-            } else {
-                console.warn(`⚠️ Web系统API响应异常: ${response.status} - ${response.statusText}`);
-            }
-        } catch (apiError) {
-            console.error(`❌ 发送执行结果到Web系统失败: ${apiError.message}`);
-            // 不中断流程，继续WebSocket通知
-        }
+        const resultData = {
+            event: 'result',
+            status: status,
+            start_time: startTime,
+            end_time: endTime,
+            steps: steps || [],
+            error_message: errorMessage
+        };
+        await sendLifecycleCallback(executionId, 'result', resultData);
 
         console.log(`通知执行结果: ${executionId} -> ${status}`);
         return { success: true };
     } catch (error) {
         console.error(`通知执行结果失败: ${error.message}`);
         return null;
+    }
+}
+
+function recordCallbackExhausted(executionId, event, attempts) {
+    const executionState = executionStates.get(executionId);
+    if (!executionState) {
+        return;
+    }
+    if (!Array.isArray(executionState.callbackErrors)) {
+        executionState.callbackErrors = [];
+    }
+    executionState.callbackErrors.push({
+        event,
+        code: 'lifecycle_callback_exhausted',
+        attempts,
+        timestamp: new Date().toISOString()
+    });
+    io.emit('lifecycle-callback-failed', {
+        executionId,
+        event,
+        code: 'lifecycle_callback_exhausted',
+        attempts
+    });
+}
+
+function cleanupErrorCategory(error) {
+    if (error instanceof TypeError) return 'TypeError';
+    if (error instanceof RangeError) return 'RangeError';
+    if (error instanceof ReferenceError) return 'ReferenceError';
+    if (error instanceof SyntaxError) return 'SyntaxError';
+    return error instanceof Error ? 'Error' : 'NonError';
+}
+
+function recordCleanupError(executionId, resource) {
+    const executionState = executionStates.get(executionId);
+    if (!executionState) {
+        return;
+    }
+    if (!Array.isArray(executionState.cleanupErrors)) {
+        executionState.cleanupErrors = [];
+    }
+    executionState.cleanupErrors.push({
+        resource,
+        code: 'resource_cleanup_failed',
+        timestamp: new Date().toISOString()
+    });
+}
+
+function reportCleanupError(executionId, resource, error) {
+    console.error(
+        `⚠️ 资源清理失败 [resource_cleanup_failed] ` +
+        `resource=${resource} category=${cleanupErrorCategory(error)}`
+    );
+    recordCleanupError(executionId, resource);
+}
+
+async function cleanupOwnedResources(executionId) {
+    const ownedPage = page;
+    const ownedBrowser = browser;
+
+    // Detach first so a close rejection can never leave damaged resources
+    // available for a later execution.
+    page = null;
+    agent = null;
+    browser = null;
+
+    if (ownedPage) {
+        try {
+            await ownedPage.close();
+        } catch (error) {
+            reportCleanupError(executionId, 'page', error);
+        }
+    }
+
+    if (ownedBrowser) {
+        try {
+            await ownedBrowser.close();
+        } catch (error) {
+            reportCleanupError(executionId, 'browser', error);
+        }
     }
 }
 
@@ -1259,7 +1352,9 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
             mode,
             steps: [],  // 收集步骤执行数据
             screenshots: [],  // 收集截图数据
-            logs: []  // 收集日志数据
+            logs: [],  // 收集日志数据
+            callbackErrors: [],
+            cleanupErrors: []
         };
         
         // 更新执行状态
@@ -1504,8 +1599,11 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
         const executedSteps = totalSteps - skippedSteps; // 实际执行的步骤数
         
         // 优化成功判断逻辑：如果实际执行的步骤都成功，则判断为成功（跳过的步骤不影响结果）
-        const overallStatus = (failedSteps === 0 && executedSteps > 0) ? 'success' : 
-                             (executedSteps === 0) ? 'skipped' : 'failed';
+        const control = executionControls.get(executionId);
+        const overallStatus = (executionState.status === 'stopped' || control?.shouldStop)
+            ? 'stopped'
+            : (failedSteps === 0 && executedSteps > 0) ? 'success'
+                : 'failed';
         executionState.status = overallStatus;
 
         // 生成更详细的消息
@@ -1514,8 +1612,8 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
             message = skippedSteps > 0 
                 ? `测试执行完成！执行步骤 ${successSteps}/${executedSteps} 全部成功，跳过 ${skippedSteps} 个步骤`
                 : `测试执行完成！所有 ${successSteps} 个步骤全部成功`;
-        } else if (overallStatus === 'skipped') {
-            message = `测试执行完成，但所有步骤都被跳过`;
+        } else if (overallStatus === 'stopped') {
+            message = '测试执行已停止';
         } else {
             message = `测试执行完成，但有 ${failedSteps} 个步骤失败`;
         }
@@ -1549,8 +1647,9 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
 
         // 更新执行状态
         const executionState = executionStates.get(executionId);
+        const terminalStatus = executionState?.status === 'stopped' ? 'stopped' : 'failed';
         if (executionState) {
-            executionState.status = 'failed';
+            executionState.status = terminalStatus;
             executionState.endTime = new Date();
             executionState.error = error.message;
         }
@@ -1558,7 +1657,7 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
         // 发送执行错误事件
         io.emit('execution-completed', {
             executionId,
-            status: 'failed',
+            status: terminalStatus,
             error: error.message,
             timestamp: new Date().toISOString()
         });
@@ -1566,24 +1665,14 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
         logMessage(executionId, 'error', `测试执行失败: ${error.message}`);
 
         // 通知Web系统执行失败
-        await notifyExecutionResult(executionId, testcase, mode, 'failed', executionState?.steps || [], error.message);
+        await notifyExecutionResult(executionId, testcase, mode, terminalStatus, executionState?.steps || [], error.message);
     } finally {
         // 清理执行控制标志
         executionControls.delete(executionId);
-        
-        // 确保每次执行完成后都关闭浏览器，避免资源泄漏和状态污染
-        try {
-            if (browser) {
-                console.log('🔄 关闭浏览器进程，清理资源...');
-                await browser.close();
-                browser = null;
-                page = null;
-                agent = null;
-                console.log('✅ 浏览器进程已关闭');
-            }
-        } catch (closeError) {
-            console.error('⚠️ 关闭浏览器失败:', closeError.message);
-        }
+
+        // Admission remains owned until this cleanup finishes. Resource globals
+        // are detached before close so rejected cleanup cannot be reused.
+        await cleanupOwnedResources(executionId);
     }
 }
 
@@ -1592,7 +1681,7 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
 // 执行完整测试用例
 app.post('/api/execute-testcase', async (req, res) => {
     try {
-        const { testcase, mode = 'headless', timeout_settings = {}, enable_cache = true } = req.body;
+        const { executionId, testcase, mode = 'headless', timeout_settings = {}, enable_cache = true } = req.body;
 
         // 详细记录请求信息
         console.log(`\n[${new Date().toISOString()}] MidScene API Request - /api/execute-testcase`);
@@ -1609,6 +1698,14 @@ app.post('/api/execute-testcase', async (req, res) => {
             timeout_settings
         }, null, 2));
 
+        if (typeof executionId !== 'string' || !executionId.trim()) {
+            console.error('Error: Missing or invalid executionId');
+            return res.status(400).json({
+                success: false,
+                error: 'executionId必须是非空字符串'
+            });
+        }
+
         if (!testcase) {
             console.error('Error: Missing test case data');
             return res.status(400).json({
@@ -1617,8 +1714,24 @@ app.post('/api/execute-testcase', async (req, res) => {
             });
         }
 
-        const executionId = generateExecutionId();
-        console.log(`Generated Execution ID: ${executionId}`);
+        if (runtimeResetting || activeExecutionId !== null) {
+            return res.status(409).json({
+                success: false,
+                error: runtimeResetting
+                    ? '执行器正在重置'
+                    : activeExecutionId === executionId
+                    ? '该executionId正在执行'
+                    : `执行器正忙，当前executionId: ${activeExecutionId}`,
+                activeExecutionId
+            });
+        }
+
+        if (executionStates.get(executionId)?.status === 'running') {
+            return res.status(409).json({
+                success: false,
+                error: '该executionId正在执行'
+            });
+        }
 
         // 解析超时设置
         const timeoutConfig = {
@@ -1630,9 +1743,19 @@ app.post('/api/execute-testcase', async (req, res) => {
         console.log('📋 接收到的超时设置:', JSON.stringify(timeoutConfig, null, 2));
 
         // 异步执行，立即返回执行ID
-        executeTestCaseAsync(testcase, mode, executionId, timeoutConfig, enable_cache).catch(error => {
-            console.error('异步执行错误:', error);
-        });
+        activeExecutionId = executionId;
+        const ownerPromise = executeTestCaseAsync(testcase, mode, executionId, timeoutConfig, enable_cache);
+        activeExecutionPromise = ownerPromise;
+        ownerPromise
+            .catch(error => {
+                console.error('异步执行错误:', error);
+            })
+            .finally(() => {
+                if (activeExecutionPromise === ownerPromise) {
+                    activeExecutionPromise = null;
+                    activeExecutionId = null;
+                }
+            });
 
         console.log(`Test case execution started successfully\n`);
 
@@ -1755,41 +1878,36 @@ app.post('/api/stop-execution/:executionId', async (req, res) => {
 
     if (executionState.status !== 'running') {
         console.log(`Execution already ${executionState.status}`);
-        return res.json({
-            success: true,
-            message: '执行已结束'
+        return res.status(409).json({
+            success: false,
+            error: `执行已结束，当前状态: ${executionState.status}`
+        });
+    }
+
+    if (activeExecutionId !== executionId) {
+        return res.status(409).json({
+            success: false,
+            error: '该executionId不是当前活动执行'
+        });
+    }
+
+    const control = executionControls.get(executionId);
+    if (!control) {
+        return res.status(409).json({
+            success: false,
+            error: '活动执行缺少控制状态'
         });
     }
 
     try {
         // 设置中断标志
-        const control = executionControls.get(executionId);
-        if (control) {
-            control.shouldStop = true;
-            console.log(`Stop flag set successfully for execution ${executionId}`);
-            console.log('Current executionControls:', Array.from(executionControls.entries()));
-        } else {
-            console.log(`Warning: No control object found for execution ${executionId}`);
-            console.log('Available execution IDs:', Array.from(executionControls.keys()));
-        }
+        control.shouldStop = true;
+        console.log(`Stop flag set successfully for execution ${executionId}`);
+        console.log('Current executionControls:', Array.from(executionControls.entries()));
 
         // 更新状态为已停止
         executionState.status = 'stopped';
         executionState.endTime = new Date();
-
-        // 立即关闭浏览器（如果存在）
-        if (browser) {
-            console.log('Closing browser immediately...');
-            try {
-                await browser.close();
-                browser = null;
-                page = null;
-                agent = null;
-                console.log('Browser closed successfully');
-            } catch (closeError) {
-                console.error('Error closing browser:', closeError.message);
-            }
-        }
 
         // 发送停止事件
         io.emit('execution-stopped', {
@@ -1822,7 +1940,8 @@ app.get('/api/status', (req, res) => {
 
     res.json({
         success: true,
-        status: 'ready',
+        status: !runtimeResetting && activeExecutionId === null ? 'ready' : 'busy',
+        activeExecutionId,
         browserInitialized: !!browser,
         runningExecutions: runningExecutions.length,
         totalExecutions: executionStates.size,
@@ -2410,38 +2529,132 @@ function createSimplifiedReportContent(originalContent, testcase, executionState
     return simplifiedContent;
 }
 
-// 启动服务器
-server.listen(port, () => {
-    console.log(`\n🚀 MidSceneJS本地代理服务器启动成功`);
-    console.log(`HTTP服务器: http://localhost:${port}`);
-    console.log(`WebSocket服务器: ws://localhost:${port}`);
-    console.log(`AI模型: ${process.env.MIDSCENE_MODEL_NAME || 'qwen-vl-max-latest'}`);
-    console.log(`API地址: ${process.env.OPENAI_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1'}`);
-    if (process.env.MIDSCENE_USE_GEMINI === '1') {
-        console.log(`Gemini模式: 已启用`);
+function startServer(listenPort = process.env.PORT || port) {
+    validateEnvironmentVariables();
+    if (server.listening) {
+        return Promise.resolve(server);
     }
-    console.log(`服务器就绪，等待测试执行请求...`);
-    console.log(`支持的API端点:`);
-    console.log(`   POST /api/execute-testcase - 执行测试用例`);
-    console.log(`   GET  /api/execution-status/:id - 获取执行状态`);
-    console.log(`   GET  /api/execution-report/:id - 获取独立执行报告`);
-    console.log(`   GET  /api/executions - 获取所有执行记录`);
-    console.log(`   POST /api/stop-execution/:id - 停止执行`);
-    console.log(`   GET  /api/status - 获取服务器状态`);
-    console.log(`   GET  /health - 健康检查`);
-});
 
-// 优雅关闭
-process.on('SIGTERM', async () => {
-    console.log('收到SIGTERM信号，正在优雅关闭...');
-    if (page) await page.close();
-    if (browser) await browser.close();
-    process.exit(0);
-});
+    return new Promise((resolve, reject) => {
+        const handleError = error => {
+            server.off('listening', handleListening);
+            reject(error);
+        };
+        const handleListening = () => {
+            server.off('error', handleError);
+            console.log(`\n🚀 MidSceneJS本地代理服务器启动成功`);
+            console.log(`HTTP服务器: http://localhost:${listenPort}`);
+            console.log(`WebSocket服务器: ws://localhost:${listenPort}`);
+            console.log(`AI模型: ${process.env.MIDSCENE_MODEL_NAME || 'qwen-vl-max-latest'}`);
+            console.log(`API地址: ${process.env.OPENAI_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1'}`);
+            console.log('服务器就绪，等待测试执行请求...');
+            resolve(server);
+        };
+        server.once('error', handleError);
+        server.once('listening', handleListening);
+        server.listen(listenPort);
+    });
+}
 
-process.on('SIGINT', async () => {
-    console.log('收到SIGINT信号，正在优雅关闭...');
-    if (page) await page.close();
-    if (browser) await browser.close();
-    process.exit(0);
-}); 
+async function resetState() {
+    if (resetPromise) {
+        return resetPromise;
+    }
+
+    runtimeResetting = true;
+    const ownerExecutionId = activeExecutionId;
+    const ownerPromise = activeExecutionPromise;
+
+    resetPromise = (async () => {
+        const control = ownerExecutionId
+            ? executionControls.get(ownerExecutionId)
+            : null;
+        if (control) {
+            control.shouldStop = true;
+        }
+
+        // Closing the currently owned resources helps cooperative cancellation,
+        // but reset still waits for the exact owner promise to unwind.
+        await cleanupOwnedResources(ownerExecutionId);
+        if (ownerPromise) {
+            try {
+                await ownerPromise;
+            } catch (error) {
+                console.error('活动执行在重置期间失败:', error.message);
+            }
+        }
+
+        if (activeExecutionPromise === ownerPromise) {
+            activeExecutionPromise = null;
+            activeExecutionId = null;
+        }
+        executionStates.clear();
+        executionControls.clear();
+        variableContexts.clear();
+    })();
+
+    try {
+        await resetPromise;
+    } finally {
+        resetPromise = null;
+        runtimeResetting = false;
+    }
+}
+
+function closeServer() {
+    return new Promise((resolve, reject) => {
+        if (!server.listening) {
+            resolve();
+            return;
+        }
+        server.close(error => {
+            if (error) {
+                reject(error);
+                return;
+            }
+            resolve();
+        });
+    });
+}
+
+function setLifecycleHttpClient(httpClient) {
+    if (!httpClient || typeof httpClient.post !== 'function') {
+        throw new TypeError('Lifecycle HTTP client must provide post(url, data, config)');
+    }
+    lifecycleHttpClient = httpClient;
+}
+
+async function gracefulShutdown(signal) {
+    console.log(`收到${signal}信号，正在优雅关闭...`);
+    await resetState();
+    await closeServer();
+}
+
+module.exports = {
+    app,
+    server,
+    io,
+    startServer,
+    closeServer,
+    resetState,
+    setLifecycleHttpClient,
+    executionStates,
+    executionControls
+};
+
+if (require.main === module) {
+    const shutdown = signal => {
+        gracefulShutdown(signal)
+            .then(() => process.exit(0))
+            .catch(error => {
+                console.error('优雅关闭失败:', error);
+                process.exit(1);
+            });
+    };
+    process.once('SIGTERM', () => shutdown('SIGTERM'));
+    process.once('SIGINT', () => shutdown('SIGINT'));
+    startServer().catch(error => {
+        console.error('MidSceneJS服务器启动失败:', error.message);
+        process.exit(1);
+    });
+}

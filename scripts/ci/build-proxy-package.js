@@ -1,92 +1,165 @@
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 const ROOT_DIR = path.resolve(__dirname, '../../');
 const INTENT_TESTER_DIR = path.join(ROOT_DIR, 'tools', 'intent-tester');
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 const PROXY_DIST_DIR = path.join(DIST_DIR, 'intent-test-proxy');
 const ZIP_FILE = path.join(DIST_DIR, 'intent-test-proxy.zip');
+const FRONTEND_ZIP_FILE = path.join(
+    INTENT_TESTER_DIR,
+    'frontend',
+    'static',
+    'intent-test-proxy.zip'
+);
+const BROWSER_AUTOMATION_DIR = path.join(INTENT_TESTER_DIR, 'browser-automation');
+const TEMPLATES_DIR = path.join(INTENT_TESTER_DIR, 'proxy_templates');
+const REPRODUCIBLE_TIMESTAMP = new Date('2000-01-01T00:00:00.000Z');
 
-console.log(`ROOT_DIR: ${ROOT_DIR}`);
-console.log(`DIST_DIR: ${DIST_DIR}`);
+const EXCLUDED_NAMES = new Set([
+    '.DS_Store',
+    '.pytest_cache',
+    '__pycache__',
+    'node_modules',
+]);
+const EXCLUDED_SUFFIXES = ['.pyc', '.pyo'];
 
-// 1. Clean/Create dist directories
-if (fs.existsSync(PROXY_DIST_DIR)) {
-    fs.rmSync(PROXY_DIST_DIR, { recursive: true, force: true });
+function fail(message) {
+    throw new Error(`Proxy package build failed: ${message}`);
 }
-if (fs.existsSync(ZIP_FILE)) {
-    fs.rmSync(ZIP_FILE);
+
+function requireFile(filePath) {
+    if (!fs.statSync(filePath, { throwIfNoEntry: false })?.isFile()) {
+        fail(`required source file is missing: ${path.relative(ROOT_DIR, filePath)}`);
+    }
 }
-fs.mkdirSync(PROXY_DIST_DIR, { recursive: true });
 
-// 2. Copy core files from browser-automation
-const BROWSER_AUTOMATION_DIR = path.join(ROOT_DIR, 'tools', 'intent-tester', 'browser-automation');
+function shouldExclude(name) {
+    return EXCLUDED_NAMES.has(name) || EXCLUDED_SUFFIXES.some(suffix => name.endsWith(suffix));
+}
 
-const coreFiles = [
-    { src: path.join(BROWSER_AUTOMATION_DIR, 'midscene_server.js'), dest: 'midscene_server.js' },
-    { src: path.join(INTENT_TESTER_DIR, 'package.json'), dest: 'package.json' }
-];
+function normalizeFile(filePath, mode = 0o644) {
+    fs.chmodSync(filePath, mode);
+    fs.utimesSync(filePath, REPRODUCIBLE_TIMESTAMP, REPRODUCIBLE_TIMESTAMP);
+}
 
-coreFiles.forEach(({ src, dest }) => {
-    const destPath = path.join(PROXY_DIST_DIR, dest);
-    if (fs.existsSync(src)) {
-        fs.copyFileSync(src, destPath);
-        console.log(`Copied ${dest}`);
-    } else {
-        console.warn(`Warning: ${src} not found.`);
+function copyFile(source, destination, mode = 0o644) {
+    requireFile(source);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.copyFileSync(source, destination);
+    normalizeFile(destination, mode);
+}
+
+function copyDirectory(source, destination) {
+    if (!fs.statSync(source, { throwIfNoEntry: false })?.isDirectory()) {
+        fail(`required source directory is missing: ${path.relative(ROOT_DIR, source)}`);
     }
-});
 
-// Copy start scripts from templates
-const templatesDir = path.join(INTENT_TESTER_DIR, 'proxy_templates');
-const startScripts = ['start.sh', 'start.bat'];
-
-startScripts.forEach(file => {
-    const src = path.join(templatesDir, file);
-    const dest = path.join(PROXY_DIST_DIR, file);
-    if (fs.existsSync(src)) {
-        fs.copyFileSync(src, dest);
-        console.log(`Copied ${file} from templates`);
-    } else {
-        console.warn(`Warning: ${file} not found in ${templatesDir}.`);
-    }
-});
-
-// 3. Copy directory recursively
-function copyDir(src, dest) {
-    if (!fs.existsSync(src)) return;
-    fs.mkdirSync(dest, { recursive: true });
-    const entries = fs.readdirSync(src, { withFileTypes: true });
-
-    for (const entry of entries) {
-        const srcPath = path.join(src, entry.name);
-        const destPath = path.join(dest, entry.name);
-
+    fs.mkdirSync(destination, { recursive: true });
+    for (const entry of fs.readdirSync(source, { withFileTypes: true })
+        .sort((left, right) => left.name.localeCompare(right.name))) {
+        if (shouldExclude(entry.name)) {
+            continue;
+        }
+        const sourcePath = path.join(source, entry.name);
+        const destinationPath = path.join(destination, entry.name);
         if (entry.isDirectory()) {
-            copyDir(srcPath, destPath);
-        } else {
-            fs.copyFileSync(srcPath, destPath);
+            copyDirectory(sourcePath, destinationPath);
+        } else if (entry.isFile()) {
+            copyFile(sourcePath, destinationPath);
         }
     }
 }
 
-const dirsToCopy = [
-    { src: path.join(INTENT_TESTER_DIR, 'midscene_framework'), dest: 'midscene_framework' }
-];
-dirsToCopy.forEach(({ src, dest }) => {
-    copyDir(src, path.join(PROXY_DIST_DIR, dest));
-    console.log(`Copied directory ${dest}`);
-});
+function collectFiles(directory) {
+    const files = [];
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })
+        .sort((left, right) => left.name.localeCompare(right.name))) {
+        const entryPath = path.join(directory, entry.name);
+        if (entry.isDirectory()) {
+            files.push(...collectFiles(entryPath));
+        } else if (entry.isFile()) {
+            files.push(entryPath);
+        }
+    }
+    return files;
+}
 
-// 4. Create ZIP
-console.log('Creating ZIP package...');
+function writePackageJson() {
+    const sourcePath = path.join(INTENT_TESTER_DIR, 'package.json');
+    requireFile(sourcePath);
+    const packageJson = JSON.parse(fs.readFileSync(sourcePath, 'utf8'));
+    packageJson.main = 'midscene_server.js';
+    packageJson.scripts = {
+        ...packageJson.scripts,
+        start: 'node midscene_server.js',
+    };
+    const destination = path.join(PROXY_DIST_DIR, 'package.json');
+    fs.writeFileSync(destination, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
+    normalizeFile(destination);
+}
+
+function sha256(filePath) {
+    return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
+
+function build() {
+    fs.rmSync(PROXY_DIST_DIR, { recursive: true, force: true });
+    fs.rmSync(ZIP_FILE, { force: true });
+    fs.mkdirSync(PROXY_DIST_DIR, { recursive: true });
+
+    copyFile(
+        path.join(BROWSER_AUTOMATION_DIR, 'midscene_server.js'),
+        path.join(PROXY_DIST_DIR, 'midscene_server.js')
+    );
+    writePackageJson();
+    copyFile(
+        path.join(INTENT_TESTER_DIR, 'package-lock.json'),
+        path.join(PROXY_DIST_DIR, 'package-lock.json')
+    );
+    copyFile(
+        path.join(TEMPLATES_DIR, 'start.sh'),
+        path.join(PROXY_DIST_DIR, 'start.sh'),
+        0o755
+    );
+    copyFile(
+        path.join(TEMPLATES_DIR, 'start.bat'),
+        path.join(PROXY_DIST_DIR, 'start.bat')
+    );
+    copyFile(
+        path.join(TEMPLATES_DIR, '.env.example'),
+        path.join(PROXY_DIST_DIR, '.env.example')
+    );
+    copyDirectory(
+        path.join(INTENT_TESTER_DIR, 'midscene_framework'),
+        path.join(PROXY_DIST_DIR, 'midscene_framework')
+    );
+
+    const archivePaths = collectFiles(PROXY_DIST_DIR)
+        .map(filePath => path.relative(DIST_DIR, filePath))
+        .sort();
+    if (archivePaths.length === 0) {
+        fail('package has no files');
+    }
+
+    execFileSync('zip', ['-X', '-q', ZIP_FILE, ...archivePaths], {
+        cwd: DIST_DIR,
+        env: { ...process.env, TZ: 'UTC' },
+        stdio: 'inherit',
+    });
+    fs.mkdirSync(path.dirname(FRONTEND_ZIP_FILE), { recursive: true });
+    fs.copyFileSync(ZIP_FILE, FRONTEND_ZIP_FILE);
+
+    console.log(`Built ${path.relative(ROOT_DIR, ZIP_FILE)}`);
+    console.log(`Synced ${path.relative(ROOT_DIR, FRONTEND_ZIP_FILE)}`);
+    console.log(`SHA-256 ${sha256(ZIP_FILE)}`);
+}
+
 try {
-    // Check if zip command exists (usually available in unix environments)
-    execSync(`cd "${DIST_DIR}" && zip -r intent-test-proxy.zip intent-test-proxy`);
-    console.log(`Successfully created ${ZIP_FILE}`);
+    build();
 } catch (error) {
-    console.error('Failed to create zip using command line zip tool. Trying internal logic if needed or just fail.', error);
-    // Fallback or exit? For now exit as CI usually has zip. 
+    console.error(error.message);
     process.exit(1);
 }

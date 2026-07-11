@@ -416,6 +416,18 @@ print(
 - **设计与治理记录**：`tools/new-agents/CONTEXT.md` 记录 Run、turn request、progress frame 与 terminal outcome 的术语；ADR-0001 明确 request identity 是客户端生成的 `(runId, requestId)`，服务端以 shared durable model 处理重放，而非依赖 runId、metric JSON 或 localStorage。
 - **边界确认**：所有 workflow 继续使用共享 `/api/agent/runs/stream`、typed SSE、shared persistence 与 renderer；未新增 Lisa/Alex 专属 runtime、SSE、store 或渲染管线。外部 LLM judge、生产-shaped 部署和业务 execution identity 分别留给 `QS-06`、`QS-05`、`QS-03`。
 
+### 2026-07-11 — QS-03：Intent Tester 真实执行与持久化闭环
+
+- **状态**：已完成实现与本地验证；下一个 owning 厚切片为 `QS-04`。
+- **解决的风险**：`QG-004`。Flask `ExecutionHistory` 先创建且唯一分配 canonical `execution_id`，create、Node dispatch、started/result callback、页面进度、GET、stop、retry、reconcile 与重启恢复都复用该 ID；Node 不再生成第二身份，WebSocket 只承载同 ID 的可见进度和脱敏诊断。
+- **durable / recovery 不变量**：Flask 是唯一状态权威；callback 通过条件状态转移和步骤快照事务保持幂等，终态不能回退。页面只调用 Flask durable API；有界轮询耗尽后由 Flask `reconcile` 拉取 production Node 同 ID 状态，遗漏 callback 可补偿，Node 不可用、ID 不匹配或非法响应显式 502。callback 耗尽诊断只在 pending/running 条件更新，终态提交优先并清除 active-only 告警。stop 只作用于当前 owner；pending/running retry 复用原 ID，terminal retry 显式拒绝。
+- **真实组合证据**：`tests/integration/test_durable_execution_loop.py` 通过真实回环 HTTP 启动 Flask、SQLite 与 production `midscene_server.js`，只替换 Playwright / MidScene AI adapter；覆盖首次代理不可用后 same-ID retry、started/result callback、重复 result 不复制步骤、scoped stop、Flask 重启读回，以及故意把 durable 记录退回 pending 后由 production Node status 恢复同一 success 记录。全量 Intent pytest 包含该组合测试并得到 `373 passed`。
+- **production package 证据**：deterministic builder 从 production Node server、lockfile 和 `.env.example` 生成展开目录与两个同步 ZIP，过滤 cache 并固定顺序、权限和时间戳；两个 ZIP 的 SHA-256 均为 `59e1c562edded7d36c39b4eeaf9d132e91887170e7b72a7978c3cbfd458123c8`。clean-room smoke 在临时目录解压，使用仓库已安装依赖边界启动 `/health`，并证明缺 `OPENAI_API_KEY` 时 fail-closed；它不证明离线 fresh `npm install`、真实 provider 或 Windows `start.bat`。
+- **TDD / 审查整改**：canonical ID、非法 lifecycle、retry/reconcile、页面旧响应隔离、callback 重试、raw secret 清理、deterministic package 和 clean-room 启动均先有失败证据再转绿。标准复审发现并修复了 callback 诊断与 terminal commit 的竞态、预期及意外代理异常原文/traceback 入日志和 lifecycle endpoint 类型门禁；两批审查聚焦回归分别为 6 passed 与 5 passed。
+- **双轴复核**：最终 Standards 与 Spec 两条独立复审均为 `CLEAN / READY`；确认厚切片验收、并发状态机、日志脱敏、类型门禁、真实组合边界、生成物同步和交付记录均已闭合。
+- **最终验证**：Intent Python `373 passed, 1368 warnings`；durable frontend controller `50 passed`；Node production proxy 在允许绑定本机临时端口的环境中 `16 passed`；critical flake8、两个 Node `--check` 与 `git diff --check` 均通过。Node proxy 首次在受限沙箱运行因 Supertest `listen EPERM 0.0.0.0` 得到 14 个环境失败，随后以相同命令在本机端口权限环境重跑全绿；未把该首次运行表述为 PASS。
+- **残余边界 / owner**：本切片没有调用真实付费 AI provider，也不处理 Intent 认证、stored XSS、CSP 或生产 secrets，这些由 `QS-04/QG-005` owning；production-shaped Compose/Nginx/PostgreSQL 组合和 release transaction 由 `QS-05/QG-006/QG-008` owning。现有 1363 条 warning 的诊断预算由 `QS-07/QG-012` owning。
+
 ## 本轮停止线
 
-本 todo 是该目标的唯一活跃整改入口。`QS-01`、`QS-02` 已完成，执行顺序继续为 `QS-03 → QS-04 → QS-05 → QS-06 → QS-07 → QS-08`；后续切片不得把本记录中的 `NOT_RUN` 或继任项重新表述为 PASS。
+本 todo 是该目标的唯一活跃整改入口。`QS-01`、`QS-02`、`QS-03` 已完成，执行顺序继续为 `QS-04 → QS-05 → QS-06 → QS-07 → QS-08`；后续切片不得把本记录中的 `NOT_RUN` 或继任项重新表述为 PASS。

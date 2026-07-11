@@ -291,6 +291,7 @@
             <div class="flex gap-2 mb-3">
                 <button id="start-execution" class="btn btn-primary w-full">开始执行</button>
                 <button id="stop-execution" class="btn btn-ghost w-full" disabled>停止执行</button>
+                <button id="retry-execution" class="btn btn-ghost w-full" disabled style="display: none;">重试调度</button>
             </div>
 
             <!-- 超时设置 -->
@@ -449,42 +450,35 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/durable-execution-control.js') }}"></script>
 <script>
     let currentExecution = null;
     let screenshotHistory = [];
     let localProxySocket = null;
     let executionSocket = null;
 
-    // 页面真正关闭时停止执行（增加确认机制）
-    let isPageActuallyUnloading = false;
-
-    window.addEventListener('beforeunload', (event) => {
-        if (currentExecution && currentExecution.local_execution_id) {
-            const executionStatus = document.getElementById('execution-status').textContent;
-
-            // 只有在确实要关闭页面时才停止执行
-            if (executionStatus === '执行中') {
-                // 设置一个短暂的延迟，确认用户真的要离开
-                setTimeout(() => {
-                    if (isPageActuallyUnloading) {
-                        // 用户确认要离开，停止执行
-                        navigator.sendBeacon(`http://localhost:3001/api/stop-execution/${currentExecution.local_execution_id}`,
-                            JSON.stringify({ reason: 'page_unload' })
-                        );
-                    }
-                }, 100);
-
-                // 提示用户
-                event.preventDefault();
-                event.returnValue = '测试正在执行中，确定要离开页面吗？这将停止当前的测试执行。';
-                return event.returnValue;
-            }
+    const durableExecutionControl = DurableExecutionControl.createDurableExecutionControl({
+        httpClient: axios,
+        apiBaseUrl: window.API_BASE_URL,
+        getCurrentExecutionId: () => currentExecution && currentExecution.execution_id,
+        applyDurableExecution: (execution, expectedExecutionId) => {
+            applyDurableExecution(execution, expectedExecutionId);
+        },
+        onTerminal: (execution, expectedExecutionId) => {
+            onExecutionCompleted(execution, expectedExecutionId);
         }
     });
 
-    // 监听实际的页面卸载
-    window.addEventListener('unload', () => {
-        isPageActuallyUnloading = true;
+    window.addEventListener('beforeunload', (event) => {
+        if (currentExecution && currentExecution.execution_id) {
+            const executionStatus = document.getElementById('execution-status').textContent;
+
+            if (executionStatus === '执行中') {
+                event.preventDefault();
+                event.returnValue = '测试正在执行中，离开页面后测试仍将在后台继续。';
+                return event.returnValue;
+            }
+        }
     });
 
     // 页面可见性变化时的处理（仅用于状态更新，不停止执行）
@@ -492,14 +486,13 @@
         if (document.hidden) {
             console.log('页面被隐藏，测试继续在后台执行');
             // 仅记录日志，不停止执行
-            if (currentExecution && currentExecution.local_execution_id) {
-                console.log('当前测试将继续在后台执行:', currentExecution.local_execution_id);
+            if (currentExecution && currentExecution.execution_id) {
+                console.log('当前测试将继续在后台执行:', currentExecution.execution_id);
             }
         } else {
             console.log('页面重新可见，恢复实时状态更新');
             // 页面重新可见时，刷新执行状态
-            if (currentExecution && currentExecution.local_execution_id) {
-                // 重新连接WebSocket或刷新状态
+            if (currentExecution && currentExecution.execution_id) {
                 refreshExecutionStatus();
             }
         }
@@ -507,6 +500,7 @@
 
     // 页面初始化
     document.addEventListener('DOMContentLoaded', function () {
+        void restoreExecutionFromUrl();
         loadTestCases();
         updateExecutionReportsUI();
         initializeWebSocket();
@@ -515,8 +509,77 @@
         // 设置事件监听器
         document.getElementById('start-execution').addEventListener('click', startExecution);
         document.getElementById('stop-execution').addEventListener('click', stopExecution);
+        document.getElementById('retry-execution').addEventListener('click', retryExecution);
         document.getElementById('execution-type').addEventListener('change', updateExecutionType);
     });
+
+    function setCanonicalExecutionIdInUrl(executionId) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('execution_id', executionId);
+        window.history.replaceState(
+            window.history.state,
+            '',
+            `${url.pathname}${url.search}${url.hash}`
+        );
+    }
+
+    function clearCanonicalExecutionIdFromUrl(expectedExecutionId) {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('execution_id') !== expectedExecutionId) {
+            return false;
+        }
+        url.searchParams.delete('execution_id');
+        window.history.replaceState(
+            window.history.state,
+            '',
+            `${url.pathname}${url.search}${url.hash}`
+        );
+        return true;
+    }
+
+    async function restoreExecutionFromUrl() {
+        const url = new URL(window.location.href);
+        const executionId = url.searchParams.get('execution_id');
+        if (!executionId) {
+            return { kind: 'no_url_execution' };
+        }
+
+        currentExecution = { execution_id: executionId, status: 'pending' };
+        document.getElementById('start-execution').disabled = true;
+        document.getElementById('stop-execution').disabled = true;
+        document.getElementById('execution-status').textContent = '正在恢复执行状态';
+        hideRetryControl();
+
+        const outcome = await durableExecutionControl.refresh({
+            expectedExecutionId: executionId
+        });
+        if (!durableExecutionControl.isCurrentExecutionId(executionId)) {
+            return outcome;
+        }
+
+        if (outcome.kind === 'active') {
+            void refreshExecutionStatus({
+                expectedExecutionId: executionId,
+                reconcileUntilTerminal: true
+            });
+            return outcome;
+        }
+
+        const invalidUrlExecution = (
+            outcome.kind === 'execution_id_mismatch' ||
+            (outcome.kind === 'http_failure' && outcome.httpStatus === 404)
+        );
+        if (invalidUrlExecution) {
+            clearCanonicalExecutionIdFromUrl(executionId);
+            currentExecution = null;
+            document.getElementById('start-execution').disabled = false;
+            document.getElementById('stop-execution').disabled = true;
+            document.getElementById('execution-status').textContent = '执行记录不存在';
+            hideRetryControl();
+            addLog(`无法恢复执行 ${executionId}，已清除无效链接`, 'error');
+        }
+        return outcome;
+    }
 
     // 加载测试用例列表
     async function loadTestCases() {
@@ -561,6 +624,14 @@
         // 因为我们只需要连接到客户端本地的代理服务器
         addLog('跳过服务器WebSocket连接，仅使用本地代理连接', 'info');
         executionSocket = null;
+    }
+
+    function isCurrentExecutionEvent(data) {
+        return Boolean(
+            currentExecution &&
+            data &&
+            data.executionId === currentExecution.execution_id
+        );
     }
 
     // 连接到本地代理服务器
@@ -617,30 +688,52 @@
 
             // 监听本地代理服务器事件
             localProxySocket.on('execution-start', function (data) {
+                if (!isCurrentExecutionEvent(data)) {
+                    return;
+                }
                 addLog(`本地代理开始执行: ${data.testcase}`, 'success');
-                document.getElementById('execution-status').textContent = '执行中';
+                refreshExecutionStatus({ expectedExecutionId: data.executionId });
             });
 
             localProxySocket.on('execution-completed', function (data) {
-                console.log('Received execution-completed event:', data);
-                addLog(`执行完成: ${data.status}`, data.status === 'success' ? 'success' : 'error');
-
-                // 确保进度条显示完成状态
-                if (currentExecution && currentExecution.totalSteps) {
-                    updateExecutionProgress(currentExecution.totalSteps, currentExecution.totalSteps,
-                        data.status === 'success' ? '执行完成' : '执行失败');
+                if (!isCurrentExecutionEvent(data)) {
+                    return;
                 }
-
-                onExecutionCompleted(data);
+                console.log('Received execution-completed event:', data);
+                addLog('收到执行完成信号，正在核验持久化状态', 'info');
+                refreshExecutionStatus({
+                    expectedExecutionId: data.executionId,
+                    reconcileUntilTerminal: true
+                });
             });
 
             localProxySocket.on('execution-stopped', function (data) {
+                if (!isCurrentExecutionEvent(data)) {
+                    return;
+                }
                 console.log('Received execution-stopped event:', data);
-                addLog('执行已停止', 'warning');
-                onExecutionCompleted({ status: 'stopped' });
+                addLog('收到执行停止信号，正在核验持久化状态', 'info');
+                refreshExecutionStatus({
+                    expectedExecutionId: data.executionId,
+                    reconcileUntilTerminal: true
+                });
+            });
+
+            localProxySocket.on('lifecycle-callback-failed', function (data) {
+                if (!isCurrentExecutionEvent(data)) {
+                    return;
+                }
+                showRetryControl('终态同步失败，可重试同一任务');
+                addLog(
+                    `生命周期回调失败: executionId=${data.executionId}, event=${data.event}, code=${data.code}, attempts=${data.attempts}`,
+                    'error'
+                );
             });
 
             localProxySocket.on('step-start', function (data) {
+                if (!isCurrentExecutionEvent(data)) {
+                    return;
+                }
                 addLog(`步骤 ${data.stepIndex + 1} 开始: ${data.description}`, 'info');
                 // 使用实际的步骤数或者从testcase获取
                 const totalSteps = data.totalSteps || currentExecution?.totalSteps || 0;
@@ -648,6 +741,10 @@
             });
 
             localProxySocket.on('step-completed', function (data) {
+                if (!isCurrentExecutionEvent(data)) {
+                    return;
+                }
+                const expectedExecutionId = data.executionId;
                 addLog(`步骤 ${data.stepIndex + 1} 完成`, 'success');
                 // 使用实际的步骤数或者从testcase获取
                 const totalSteps = data.totalSteps || currentExecution?.totalSteps || 0;
@@ -658,12 +755,18 @@
                 if (currentStep === totalSteps && totalSteps > 0) {
                     // 延迟一点时间确保所有步骤都完成
                     setTimeout(() => {
+                        if (!durableExecutionControl.isCurrentExecutionId(expectedExecutionId)) {
+                            return;
+                        }
                         updateExecutionProgress(totalSteps, totalSteps, '所有步骤已完成');
                     }, 100);
                 }
             });
 
             localProxySocket.on('step-failed', function (data) {
+                if (!isCurrentExecutionEvent(data)) {
+                    return;
+                }
                 addLog(`步骤 ${data.stepIndex + 1} 失败: ${data.error}`, 'error');
                 // 使用实际的步骤数或者从testcase获取
                 const totalSteps = data.totalSteps || currentExecution?.totalSteps || 0;
@@ -671,6 +774,9 @@
             });
 
             localProxySocket.on('step-skipped', function (data) {
+                if (!isCurrentExecutionEvent(data)) {
+                    return;
+                }
                 addLog(`步骤 ${data.stepIndex + 1} 跳过: ${data.message || '此步骤已被标记为跳过'}`, 'warning');
                 // 使用实际的步骤数或者从testcase获取
                 const totalSteps = data.totalSteps || currentExecution?.totalSteps || 0;
@@ -678,6 +784,9 @@
             });
 
             localProxySocket.on('screenshot-taken', function (data) {
+                if (!isCurrentExecutionEvent(data)) {
+                    return;
+                }
                 const screenshot = {
                     step_index: data.stepIndex,
                     step_name: `步骤 ${data.stepIndex + 1}`,
@@ -688,6 +797,9 @@
             });
 
             localProxySocket.on('log-message', function (data) {
+                if (!isCurrentExecutionEvent(data)) {
+                    return;
+                }
                 if (data.level === 'error') {
                     addLog(data.message, 'error');
                 } else if (data.level === 'warning') {
@@ -696,13 +808,6 @@
                     addLog(data.message, 'info');
                 }
 
-                // 检查是否是执行完成的消息
-                if (data.message && data.message.includes('测试执行完成')) {
-                    // 确保进度条显示完成状态
-                    if (currentExecution && currentExecution.totalSteps) {
-                        updateExecutionProgress(currentExecution.totalSteps, currentExecution.totalSteps, '执行完成');
-                    }
-                }
             });
 
             localProxySocket.on('server-status', function (data) {
@@ -774,6 +879,53 @@
         showMessage('已重置为默认超时设置', 'success');
     }
 
+    function showRetryControl(statusText = '调度失败，可重试') {
+        const retryButton = document.getElementById('retry-execution');
+        retryButton.style.display = 'inline-block';
+        retryButton.disabled = false;
+        document.getElementById('execution-status').textContent = statusText;
+    }
+
+    function hideRetryControl() {
+        const retryButton = document.getElementById('retry-execution');
+        retryButton.disabled = true;
+        retryButton.style.display = 'none';
+    }
+
+    function hasLifecycleCallbackExhaustedDiagnostic(execution) {
+        if (!execution) {
+            return false;
+        }
+        const diagnosticCode = 'lifecycle_callback_exhausted';
+        const errorMessage = String(execution.error_message || '');
+        const resultSummary = JSON.stringify(execution.result_summary || {});
+        return (
+            errorMessage.includes(diagnosticCode) ||
+            resultSummary.includes(diagnosticCode)
+        );
+    }
+
+    function adoptCreateDispatchFailure(response) {
+        if (
+            !response ||
+            response.status !== 502 ||
+            !response.data ||
+            !response.data.data ||
+            !response.data.data.execution_id
+        ) {
+            return false;
+        }
+
+        const executionId = response.data.data.execution_id;
+        currentExecution = { execution_id: executionId, status: 'pending' };
+        setCanonicalExecutionIdInUrl(executionId);
+        document.getElementById('start-execution').disabled = true;
+        document.getElementById('stop-execution').disabled = false;
+        showRetryControl('调度失败，可重试');
+        addLog(`执行 ${executionId} 已持久化，但调度失败，可重试`, 'error');
+        return true;
+    }
+
     // 开始执行
     async function startExecution() {
         const testcaseId = document.getElementById('testcase-select').value;
@@ -803,108 +955,115 @@
         try {
             const healthResponse = await axios.get('http://localhost:3001/health', { timeout: 3000 });
             if (!healthResponse.data.success) {
-                showMessage('本地代理服务器不可用，请检查服务器状态', 'error');
-                return;
+                addLog('本地代理服务器当前不可用，仍将创建持久化执行以便稍后重试', 'warning');
+            } else {
+                addLog('本地代理服务器状态正常', 'success');
             }
-            addLog('本地代理服务器状态正常', 'success');
         } catch (healthError) {
-            showMessage('本地代理服务器未运行，请先启动本地代理服务器后再进行执行', 'error');
-            return;
+            addLog('本地代理服务器未运行，仍将创建持久化执行以便稍后重试', 'warning');
         }
 
         try {
+            hideRetryControl();
             // 清空截图历史
             clearScreenshotHistory();
 
             // 重置进度条
             updateExecutionProgress(0, 0, '准备开始执行...');
 
+            const enableCache = document.getElementById('enable-cache').checked;
             const response = await axios.post(`${window.API_BASE_URL}/executions`, {
                 testcase_id: parseInt(testcaseId),
                 mode: executionMode,
                 browser: 'chrome',
-                executed_by: 'user'
+                executed_by: 'user',
+                enable_cache: enableCache,
+                timeout_settings: {
+                    page_timeout: pageTimeout * 1000,
+                    action_timeout: actionTimeout * 1000,
+                    navigation_timeout: pageTimeout * 1000
+                }
             });
 
             if (response.data.code === 200) {
                 currentExecution = response.data.data;
+                const expectedExecutionId = currentExecution.execution_id;
+                setCanonicalExecutionIdInUrl(expectedExecutionId);
+                hideRetryControl();
                 console.log('Set currentExecution from API response:', currentExecution);
 
                 // 更新UI状态
                 document.getElementById('start-execution').disabled = true;
                 document.getElementById('stop-execution').disabled = false;
-                document.getElementById('execution-status').textContent = '执行中';
+                document.getElementById('execution-status').textContent = '等待启动';
 
-                addLog('开始执行测试用例...', 'info');
+                addLog(`执行任务已创建: ${currentExecution.execution_id}`, 'success');
+                void refreshExecutionStatus({
+                    expectedExecutionId,
+                    reconcileUntilTerminal: true
+                });
 
-                // 发送到本地代理执行
+                // 测试用例详情只用于展示总步骤数；Flask create 已完成唯一一次调度。
                 addLog(`正在获取测试用例数据 (ID: ${testcaseId})...`, 'info');
-                const testcaseResponse = await axios.get(`${window.API_BASE_URL}/testcases/${testcaseId}`);
-                if (testcaseResponse.data.code === 200) {
-                    const testcase = testcaseResponse.data.data;
-                    addLog(`测试用例数据获取成功: ${testcase.name}`, 'success');
-                    addLog(`正在发送执行请求到本地代理服务器...`, 'info');
-
-                    // 保存总步骤数到currentExecution
-                    const totalSteps = testcase.steps ? testcase.steps.length : 0;
-                    currentExecution.totalSteps = totalSteps;
-
-                    // 更新进度条显示总步骤数
-                    updateExecutionProgress(0, totalSteps, '准备开始执行...');
-
-                    // 检查WebSocket连接状态
-                    if (!localProxySocket || !localProxySocket.connected) {
-                        addLog('错误：本地代理连接已断开', 'error');
+                try {
+                    const testcaseResponse = await axios.get(`${window.API_BASE_URL}/testcases/${testcaseId}`);
+                    if (!durableExecutionControl.isCurrentExecutionId(expectedExecutionId)) {
                         return;
                     }
-
-                    const enableCache = document.getElementById('enable-cache').checked;
-
-                    const executeData = {
-                        testcase: testcase,
-                        mode: executionMode,
-                        enable_cache: enableCache,
-                        timeout_settings: {
-                            page_timeout: pageTimeout * 1000, // 转换为毫秒
-                            action_timeout: actionTimeout * 1000, // 转换为毫秒
-                            navigation_timeout: pageTimeout * 1000
-                        }
-                    };
-
-                    addLog(`发送数据到本地代理服务器: ${JSON.stringify(executeData, null, 2)}`, 'info');
-
-                    // 使用HTTP API发送执行请求
-                    try {
-                        const proxyResponse = await axios.post('http://localhost:3001/api/execute-testcase', executeData, {
-                            timeout: 10000
-                        });
-
-                        if (proxyResponse.data.success) {
-                            addLog('执行请求已发送到本地代理服务器', 'success');
-                            addLog(`执行ID: ${proxyResponse.data.executionId}`, 'info');
-
-                            // 保存本地执行ID
-                            currentExecution.local_execution_id = proxyResponse.data.executionId;
-                            console.log('Set local_execution_id:', currentExecution.local_execution_id);
-                            console.log('Updated currentExecution:', currentExecution);
-                        } else {
-                            addLog('本地代理服务器返回错误: ' + proxyResponse.data.error, 'error');
-                        }
-                    } catch (proxyError) {
-                        addLog('发送请求到本地代理服务器失败: ' + proxyError.message, 'error');
-                        addLog('请检查本地代理服务器是否正常运行在端口3001', 'warning');
+                    if (testcaseResponse.data.code === 200) {
+                        const testcase = testcaseResponse.data.data;
+                        const totalSteps = testcase.steps ? testcase.steps.length : 0;
+                        currentExecution.totalSteps = totalSteps;
+                        updateExecutionProgress(0, totalSteps, '等待代理开始执行...');
+                        addLog(`测试用例数据获取成功: ${testcase.name}`, 'success');
+                    } else {
+                        addLog('获取测试用例展示数据失败：' + (testcaseResponse.data.message || '未知错误'), 'warning');
                     }
-                } else {
-                    addLog('获取测试用例失败：' + (testcaseResponse.data.message || '未知错误'), 'error');
+                } catch (testcaseError) {
+                    if (!durableExecutionControl.isCurrentExecutionId(expectedExecutionId)) {
+                        return;
+                    }
+                    addLog('获取测试用例展示数据失败: ' + testcaseError.message, 'warning');
                 }
-
             } else {
-                showMessage(response.data.message || '启动执行失败', 'error');
+                if (!adoptCreateDispatchFailure(response)) {
+                    showMessage(response.data.message || '启动执行失败', 'error');
+                }
             }
         } catch (error) {
             console.error('启动执行失败:', error);
+            if (adoptCreateDispatchFailure(error.response)) {
+                return;
+            }
             showMessage('启动执行失败', 'error');
         }
+    }
+
+    async function retryExecution() {
+        if (!currentExecution || !currentExecution.execution_id) {
+            return { kind: 'no_current_execution' };
+        }
+
+        const expectedExecutionId = currentExecution.execution_id;
+        document.getElementById('retry-execution').disabled = true;
+        const outcome = await durableExecutionControl.retry();
+
+        if (!durableExecutionControl.isCurrentExecutionId(expectedExecutionId)) {
+            return outcome;
+        }
+        if (outcome.kind === 'active') {
+            hideRetryControl();
+            addLog(`执行 ${expectedExecutionId} 已按同一 ID 重新调度`, 'success');
+            void refreshExecutionStatus({
+                expectedExecutionId,
+                reconcileUntilTerminal: true
+            });
+            return outcome;
+        }
+
+        showRetryControl('调度失败，可重试');
+        addLog(`重试调度未获服务端确认 (${outcome.kind})，保留当前执行`, 'error');
+        return outcome;
     }
 
     // 停止执行
@@ -912,67 +1071,127 @@
         console.log('stopExecution called');
         console.log('currentExecution:', currentExecution);
 
-        if (currentExecution && currentExecution.local_execution_id) {
-            try {
-                addLog(`正在向本地代理发送停止请求: ${currentExecution.local_execution_id}`, 'info');
-                const response = await axios.post(`http://localhost:3001/api/stop-execution/${currentExecution.local_execution_id}`);
-                if (response.data.success) {
-                    addLog('本地代理已确认停止执行', 'success');
-                } else {
-                    addLog('本地代理停止执行失败: ' + response.data.error, 'error');
-                }
-            } catch (error) {
-                console.error('Stop execution error:', error);
-                addLog('停止执行请求失败: ' + error.message, 'error');
-            }
-        } else {
+        if (!currentExecution || !currentExecution.execution_id) {
             addLog('没有正在执行的任务或缺少执行ID', 'warning');
-            console.log('No execution to stop or missing local_execution_id');
-        }
-
-        // 更新UI状态
-        document.getElementById('start-execution').disabled = false;
-        document.getElementById('stop-execution').disabled = true;
-        document.getElementById('execution-status').textContent = '已停止';
-
-        addLog('执行已停止', 'warning');
-        currentExecution = null;
-    }
-
-    // 刷新执行状态（页面重新可见时调用）
-    async function refreshExecutionStatus() {
-        if (!currentExecution || !currentExecution.local_execution_id) {
             return;
         }
 
-        try {
-            // 检查本地代理执行状态
-            const response = await axios.get(`http://localhost:3001/api/execution-status/${currentExecution.local_execution_id}`);
-            if (response.data && response.data.success) {
-                const status = response.data;
-                console.log('刷新执行状态:', status);
+        const expectedExecutionId = currentExecution.execution_id;
+        addLog(`正在请求停止执行: ${expectedExecutionId}`, 'info');
+        const outcome = await durableExecutionControl.stop();
 
-                // 更新UI状态
-                if (status.isRunning) {
-                    document.getElementById('execution-status').textContent = '执行中';
-                    document.getElementById('start-execution').disabled = true;
-                    document.getElementById('stop-execution').disabled = false;
-                } else {
-                    const statusText = status.status || '已完成';
-                    document.getElementById('execution-status').textContent = statusText;
-                    document.getElementById('start-execution').disabled = false;
-                    document.getElementById('stop-execution').disabled = true;
-                }
-
-                // 更新进度
-                if (status.currentStep !== undefined && status.totalSteps !== undefined) {
-                    updateExecutionProgress(status.currentStep, status.totalSteps);
-                }
-            }
-        } catch (error) {
-            console.log('刷新执行状态失败:', error);
-            // 如果无法获取状态，可能执行已经完成，不做任何操作
+        if (outcome.kind === 'terminal') {
+            addLog('服务端已确认停止执行', 'success');
+            return;
         }
+
+        console.error('Stop execution was not confirmed:', outcome);
+        if (durableExecutionControl.isCurrentExecutionId(expectedExecutionId)) {
+            document.getElementById('stop-execution').disabled = false;
+            addLog(`停止执行未获服务端确认，可重试 (${outcome.kind})`, 'error');
+        }
+    }
+
+    function applyDurableExecution(durableExecution, expectedExecutionId) {
+        if (!durableExecutionControl.isCurrentExecutionId(expectedExecutionId)) {
+            return false;
+        }
+        if (!durableExecution || durableExecution.execution_id !== expectedExecutionId) {
+            return false;
+        }
+
+        currentExecution = { ...currentExecution, ...durableExecution };
+        console.log('刷新执行状态:', durableExecution);
+
+        if (Array.isArray(durableExecution.step_executions)) {
+            updateExecutionProgress(
+                durableExecution.step_executions.length,
+                currentExecution.totalSteps || durableExecution.step_executions.length
+            );
+        }
+
+        if (durableExecution.status === 'pending') {
+            document.getElementById('execution-status').textContent = '等待启动';
+            document.getElementById('start-execution').disabled = true;
+            document.getElementById('stop-execution').disabled = false;
+        } else if (durableExecution.status === 'running') {
+            hideRetryControl();
+            document.getElementById('execution-status').textContent = '执行中';
+            document.getElementById('start-execution').disabled = true;
+            document.getElementById('stop-execution').disabled = false;
+        }
+
+        return true;
+    }
+
+    // 刷新执行状态（页面重新可见或收到本地代理信号时调用）
+    async function refreshExecutionStatus(options = {}) {
+        const expectedExecutionId = options.expectedExecutionId || (
+            currentExecution && currentExecution.execution_id
+        );
+        if (!expectedExecutionId) {
+            return { kind: 'no_current_execution' };
+        }
+        if (!durableExecutionControl.isCurrentExecutionId(expectedExecutionId)) {
+            return { kind: 'stale', executionId: expectedExecutionId };
+        }
+
+        const outcome = await durableExecutionControl.refresh({
+            expectedExecutionId,
+            reconcileUntilTerminal: Boolean(options.reconcileUntilTerminal)
+        });
+
+        if (outcome.kind === 'exhausted') {
+            const healthyActiveExhaustion = (
+                !outcome.lastFailure &&
+                ['pending', 'running'].includes(outcome.lastStatus)
+            );
+            if (healthyActiveExhaustion) {
+                const reconcileOutcome = await durableExecutionControl.reconcile();
+                if (reconcileOutcome.kind === 'terminal') {
+                    return reconcileOutcome;
+                }
+                if (!durableExecutionControl.isCurrentExecutionId(expectedExecutionId)) {
+                    return reconcileOutcome;
+                }
+                if (reconcileOutcome.kind === 'active') {
+                    if (hasLifecycleCallbackExhaustedDiagnostic(currentExecution)) {
+                        showRetryControl('终态同步失败，可重试同一任务');
+                        addLog('持久化记录表明生命周期回调已耗尽，可重试同一任务', 'error');
+                    } else {
+                        hideRetryControl();
+                        document.getElementById('execution-status').textContent = (
+                            reconcileOutcome.status === 'running' ? '执行中' : '等待启动'
+                        );
+                        addLog('服务端确认任务仍在进行，继续保留当前执行', 'info');
+                    }
+                } else {
+                    showRetryControl('终态同步失败，可重试同一任务');
+                    addLog(
+                        `服务端终态收敛失败 (${reconcileOutcome.kind})，可重试同一任务`,
+                        'error'
+                    );
+                }
+                return reconcileOutcome;
+            } else {
+                showRetryControl('调度失败，可重试');
+                addLog(
+                    `持久化状态对账已耗尽 (${outcome.attempts} 次)，保留当前执行以便重试`,
+                    'warning'
+                );
+            }
+        } else if (
+            outcome.kind === 'request_failed' ||
+            outcome.kind === 'http_failure' ||
+            outcome.kind === 'api_failure' ||
+            outcome.kind === 'wait_failed'
+        ) {
+            addLog(`刷新执行状态失败 (${outcome.kind})，保留当前状态以便重试`, 'warning');
+        } else if (outcome.kind === 'execution_id_mismatch') {
+            addLog('忽略执行 ID 不匹配的持久化状态响应', 'warning');
+        }
+
+        return outcome;
     }
 
     // 更新执行进度
@@ -1009,12 +1228,20 @@
     }
 
     // 执行完成回调
-    function onExecutionCompleted(data) {
+    function onExecutionCompleted(data, expectedExecutionId) {
+        if (!durableExecutionControl.isCurrentExecutionId(expectedExecutionId)) {
+            return false;
+        }
+        if (!data || data.execution_id !== expectedExecutionId) {
+            return false;
+        }
+
         console.log('onExecutionCompleted called with data:', data);
         console.log('Current execution before clearing:', currentExecution);
 
         document.getElementById('start-execution').disabled = false;
         document.getElementById('stop-execution').disabled = true;
+        hideRetryControl();
 
         // 根据状态设置不同的显示文本
         let statusText = '执行完成';
@@ -1054,6 +1281,7 @@
 
         // 刷新执行报告
         updateExecutionReportsUI();
+        return true;
     }
 
     // 添加日志
@@ -1254,7 +1482,7 @@
 
                 // 获取执行ID
                 const executionId = currentExecution ?
-                    (currentExecution.local_execution_id || currentExecution.id || 'unknown') :
+                    (currentExecution.execution_id || 'unknown') :
                     'unknown';
 
                 console.log('📊 处理报告路径:', reportPath.trim());

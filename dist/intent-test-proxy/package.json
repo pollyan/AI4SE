@@ -2,10 +2,10 @@
   "name": "ai4se-intent-tester",
   "version": "1.0.0",
   "description": "Intent Tester Node.js component for MidSceneJS automation",
-  "main": "browser-automation/midscene_server.js",
+  "main": "midscene_server.js",
   "scripts": {
     "install-deps": "npm install",
-    "start": "node browser-automation/midscene_server.js",
+    "start": "node midscene_server.js",
     "test": "python -m pytest tests -v",
     "test:proxy": "jest tests/proxy --verbose",
     "test:proxy:watch": "jest tests/proxy --watch",

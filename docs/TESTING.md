@@ -23,6 +23,7 @@
 | **后端 API** | pytest + Flask test_client | HTTP 端点、请求/响应格式、状态码 | LLM 服务、外部 API |
 | **后端集成** | pytest | 多模块协作、状态流转、工作流 | LLM、外部服务 |
 | **代理测试** | Jest | MidScene Server API、WebSocket | Playwright 调用 |
+| **Intent 真实组合** | pytest + loopback HTTP | Flask durable DB、production Node app、retry/stop/callback/restart、下载包启动 | 只替换 Playwright / MidScene AI adapter；HTTP、SQLite、Express 与 package 均真实 |
 
 ## Mock 策略
 
@@ -38,8 +39,10 @@
 ```text
 tools/intent-tester/tests/
 ├── conftest.py              # 共享 fixtures
+├── integration/             # Flask↔production Node real HTTP 与 clean-room package smoke
 ├── proxy/                   # MidScene API 测试 (Jest)
-└── test_*.py                # Python 测试
+├── api/                     # Flask API 与服务端页面契约
+└── services/                # Python service 单元/组合测试
 
 tools/new-agents/backend/tests/
 ├── conftest.py              # Flask app / SQLite / 环境隔离 fixtures
@@ -67,6 +70,7 @@ tools/new-agents/backend/tests/
 | 新增 React 组件 | component test | 验证渲染和交互 |
 | 修复线上 Bug | 先写复现测试 | 防止回归 |
 | 重构已有代码 | 确保已有测试通过 | 不新增测试，除非发现覆盖盲区 |
+| Intent 执行身份、callback 或下载包变更 | `tests/integration/test_durable_execution_loop.py` + `test_proxy_package_smoke.py` | 证明真实 HTTP、重启恢复和生产包边界，不能只靠 test client / Supertest |
 
 ## 场景覆盖率口径与准入标准
 

@@ -7,10 +7,11 @@
 from flask import current_app, has_app_context
 from contextlib import contextmanager
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import logging
 from functools import wraps
+from typing import Any, Mapping, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,11 @@ def require_app_context(f):
 
 class DatabaseService:
     """数据库服务类，提供统一的数据访问接口"""
+
+    LIFECYCLE_CALLBACK_EXHAUSTED_CODE = "lifecycle_callback_exhausted"
+    LIFECYCLE_CALLBACK_EXHAUSTED_MESSAGE = (
+        "执行生命周期回调重试已耗尽，需要状态协调恢复"
+    )
 
     @staticmethod
     @contextmanager
@@ -195,6 +201,303 @@ class DatabaseService:
     # ==================== 执行历史相关操作 ====================
 
     @staticmethod
+    def _parse_lifecycle_timestamp(
+        value: object, field_name: str
+    ) -> datetime | None:
+        """Parse an optional ISO-8601 callback timestamp into naive UTC."""
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError(f"{field_name}必须是ISO-8601时间字符串")
+
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as error:
+            raise ValueError(f"{field_name}不是有效的ISO-8601时间") from error
+
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed
+
+    @staticmethod
+    def _replace_step_snapshots(
+        execution: ExecutionHistory,
+        steps: Sequence[Mapping[str, Any]],
+        start_time: datetime,
+        end_time: datetime,
+    ) -> None:
+        """Atomically replace the terminal callback's step snapshot."""
+        validated_steps = []
+        seen_step_indexes = set()
+        for position, step in enumerate(steps):
+            if not isinstance(step, dict):
+                raise ValueError("steps必须是对象数组")
+            step_index = step.get("index", step.get("step_index", position))
+            if not isinstance(step_index, int) or isinstance(step_index, bool):
+                raise ValueError("steps中的index必须是整数")
+            if step_index in seen_step_indexes:
+                raise ValueError("steps中的index必须唯一")
+            seen_step_indexes.add(step_index)
+
+            step_start_time = (
+                DatabaseService._parse_lifecycle_timestamp(
+                    step.get("start_time"), "steps.start_time"
+                )
+                or start_time
+            )
+            step_end_time = (
+                DatabaseService._parse_lifecycle_timestamp(
+                    step.get("end_time"), "steps.end_time"
+                )
+                or end_time
+            )
+            step_status = step.get("status")
+            if step_status not in {"success", "failed", "skipped", "stopped"}:
+                raise ValueError(
+                    "steps中的status必须是success、failed、skipped或stopped"
+                )
+
+            validated_steps.append(
+                (step, step_index, step_start_time, step_end_time, step_status)
+            )
+
+        StepExecution.query.filter_by(execution_id=execution.execution_id).delete()
+
+        for (
+            step,
+            step_index,
+            step_start_time,
+            step_end_time,
+            step_status,
+        ) in validated_steps:
+            step_metadata = {
+                "action": step.get("action", "unknown"),
+                "result_data": step.get("result_data", {}),
+            }
+            db.session.add(
+                StepExecution(
+                    execution_id=execution.execution_id,
+                    step_index=step_index,
+                    step_description=step.get(
+                        "description", f"{step_metadata['action']} 步骤"
+                    ),
+                    status=step_status,
+                    start_time=step_start_time,
+                    end_time=step_end_time,
+                    duration=step.get("duration"),
+                    screenshot_path=step.get("screenshot_path"),
+                    ai_confidence=step.get("ai_confidence"),
+                    ai_decision=json.dumps(step_metadata, ensure_ascii=False),
+                    error_message=step.get("error_message"),
+                )
+            )
+
+    @staticmethod
+    def _clear_lifecycle_callback_exhausted(
+        execution: ExecutionHistory,
+    ) -> None:
+        """Remove the active-only callback diagnostic after a terminal result."""
+        if (
+            execution.error_message
+            == DatabaseService.LIFECYCLE_CALLBACK_EXHAUSTED_MESSAGE
+        ):
+            execution.error_message = None
+
+        if not execution.result_summary:
+            return
+        try:
+            summary = json.loads(execution.result_summary)
+        except (TypeError, ValueError):
+            return
+        if not isinstance(summary, dict):
+            return
+
+        diagnostics = summary.get("diagnostics")
+        if not isinstance(diagnostics, list):
+            return
+        retained = [
+            diagnostic
+            for diagnostic in diagnostics
+            if not (
+                isinstance(diagnostic, dict)
+                and diagnostic.get("code")
+                == DatabaseService.LIFECYCLE_CALLBACK_EXHAUSTED_CODE
+            )
+        ]
+        if len(retained) == len(diagnostics):
+            return
+        if retained:
+            summary["diagnostics"] = retained
+        else:
+            summary.pop("diagnostics", None)
+        execution.result_summary = (
+            json.dumps(summary, ensure_ascii=False) if summary else None
+        )
+
+    @staticmethod
+    @require_app_context
+    def apply_execution_lifecycle(
+        execution_id: str,
+        event: str,
+        status: str,
+        payload: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Apply one idempotent, durable execution lifecycle callback.
+
+        The result status is committed with its step snapshot in the same
+        transaction.  Replayed callbacks for the already-reached state are
+        explicit no-ops, while all other backward or skipped transitions are
+        rejected.
+        """
+        with DatabaseService.get_db_session():
+            execution_query = ExecutionHistory.query.filter_by(
+                execution_id=execution_id
+            )
+            execution = execution_query.first()
+            if execution is None:
+                return {"outcome": "not_found"}
+
+            if event == "started":
+                if execution.status == "running":
+                    return {"outcome": "noop", "execution": execution.to_dict()}
+                if execution.status != "pending":
+                    return {"outcome": "invalid_transition"}
+
+                start_time = DatabaseService._parse_lifecycle_timestamp(
+                    payload.get("start_time"), "start_time"
+                )
+                values = {"status": "running"}
+                if start_time is not None:
+                    values["start_time"] = start_time
+                claimed = execution_query.filter(
+                    ExecutionHistory.status == "pending"
+                ).update(values, synchronize_session=False)
+                if claimed == 0:
+                    db.session.expire_all()
+                    current = execution_query.first()
+                    if current is not None and current.status == "running":
+                        return {"outcome": "noop", "execution": current.to_dict()}
+                    return {"outcome": "invalid_transition"}
+                db.session.expire_all()
+                execution = execution_query.one()
+                return {"outcome": "applied", "execution": execution.to_dict()}
+
+            if execution.status == status:
+                return {"outcome": "noop", "execution": execution.to_dict()}
+            if execution.status != "running":
+                return {"outcome": "invalid_transition"}
+
+            end_time = (
+                DatabaseService._parse_lifecycle_timestamp(
+                    payload.get("end_time"), "end_time"
+                )
+                or datetime.utcnow()
+            )
+            claimed = execution_query.filter(
+                ExecutionHistory.status == "running"
+            ).update({"status": status}, synchronize_session=False)
+            if claimed == 0:
+                db.session.expire_all()
+                current = execution_query.first()
+                if current is not None and current.status == status:
+                    return {"outcome": "noop", "execution": current.to_dict()}
+                return {"outcome": "invalid_transition"}
+
+            db.session.expire_all()
+            execution = execution_query.one()
+            DatabaseService._clear_lifecycle_callback_exhausted(execution)
+            steps = payload.get("steps")
+            if steps is not None:
+                DatabaseService._replace_step_snapshots(
+                    execution, steps, execution.start_time, end_time
+                )
+
+            execution.end_time = end_time
+            execution.duration = int((end_time - execution.start_time).total_seconds())
+            if steps is not None:
+                execution.steps_total = len(steps)
+                execution.steps_passed = sum(
+                    1 for step in steps if step.get("status") == "success"
+                )
+                execution.steps_failed = sum(
+                    1 for step in steps if step.get("status") == "failed"
+                )
+            if "result_summary" in payload:
+                execution.result_summary = json.dumps(
+                    payload["result_summary"], ensure_ascii=False
+                )
+            if "error_message" in payload:
+                execution.error_message = payload["error_message"]
+            if "error_stack" in payload:
+                execution.error_stack = payload["error_stack"]
+            if "screenshots_path" in payload:
+                execution.screenshots_path = payload["screenshots_path"]
+            if "logs_path" in payload:
+                execution.logs_path = payload["logs_path"]
+
+            return {"outcome": "applied", "execution": execution.to_dict()}
+
+    @staticmethod
+    @require_app_context
+    def record_lifecycle_callback_exhausted(
+        execution_id: str,
+    ) -> dict[str, Any]:
+        """Persist one fixed, non-sensitive active reconciliation diagnostic."""
+        with DatabaseService.get_db_session():
+            execution_query = ExecutionHistory.query.filter_by(
+                execution_id=execution_id
+            )
+            execution = execution_query.first()
+            if execution is None:
+                return {"outcome": "not_found"}
+            if execution.status not in {"pending", "running"}:
+                return {"outcome": "invalid_transition"}
+
+            summary = (
+                json.loads(execution.result_summary)
+                if execution.result_summary
+                else {}
+            )
+            if not isinstance(summary, dict):
+                summary = {}
+            diagnostics = summary.get("diagnostics")
+            if not isinstance(diagnostics, list):
+                diagnostics = []
+            diagnostic = {
+                "code": DatabaseService.LIFECYCLE_CALLBACK_EXHAUSTED_CODE
+            }
+            if diagnostic not in diagnostics:
+                diagnostics.append(diagnostic)
+            summary["diagnostics"] = diagnostics
+
+            serialized_summary = json.dumps(summary, ensure_ascii=False)
+            message = DatabaseService.LIFECYCLE_CALLBACK_EXHAUSTED_MESSAGE
+            unchanged = (
+                execution.result_summary == serialized_summary
+                and execution.error_message == message
+            )
+
+            claimed = execution_query.filter(
+                ExecutionHistory.status.in_(("pending", "running"))
+            ).update(
+                {
+                    "result_summary": serialized_summary,
+                    "error_message": message,
+                },
+                synchronize_session=False,
+            )
+            db.session.expire_all()
+            current = execution_query.first()
+            if claimed == 0:
+                if current is None:
+                    return {"outcome": "not_found"}
+                return {"outcome": "invalid_transition"}
+            return {
+                "outcome": "noop" if unchanged else "applied",
+                "execution": current.to_dict(),
+            }
+
+    @staticmethod
     @require_app_context
     def create_execution(
         testcase_id, mode="headless", browser="chrome", executed_by="system"
@@ -305,8 +608,6 @@ class DatabaseService:
                 execution.error_message = "用户手动取消执行"
 
                 return {"message": "执行已停止"}
-
-
 
 
 # 创建全局服务实例

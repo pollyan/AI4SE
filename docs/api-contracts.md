@@ -45,7 +45,12 @@
 | GET | `/api/executions` | 获取执行历史列表 |
 | GET | `/api/executions/<id>` | 获取执行详情（含步骤） |
 | POST | `/api/executions` | 触发新的测试执行 |
+| POST | `/api/executions/<id>/lifecycle` | 接收 Node 的 `started` / `result` lifecycle callback |
+| POST | `/api/executions/<id>/reconcile` | Flask 主动读取 Node 同 ID 状态并补偿遗漏的 lifecycle callback |
+| POST | `/api/executions/<id>/retry` | 使用同一个 durable execution ID 重新调度 pending/running 执行 |
 | POST | `/api/executions/<id>/stop` | 停止正在运行的执行 |
+
+Flask `ExecutionHistory` 是执行状态权威。`POST /api/executions` 先持久化唯一 `execution_id`，再把该 ID 交给 MidScene Server；Node 不生成第二个执行 ID。lifecycle payload 只接受 `started/running` 或 `result/success|failed|stopped`，时间必须是有效 ISO-8601，terminal step 的 index 必须唯一且状态只允许 `success|failed|skipped|stopped`。重复的相同 callback 是幂等 no-op，非法回退、未知 ID 和终态 retry 显式返回 4xx。页面有界轮询仍未得到 durable 终态时，只调用 Flask `reconcile`；Flask 再读取 Node 的同 ID 状态并按相同状态转移规则补偿。Node 不可用、ID 不匹配或响应非法时显式返回 502，不伪造成功。
 
 #### 执行历史数据结构
 
@@ -83,6 +88,7 @@
 | `step-failed` | Server → Client | 步骤失败 |
 | `execution-completed` | Server → Client | 执行完成 |
 | `execution-stopped` | Server → Client | 执行停止 |
+| `lifecycle-callback-failed` | MidScene Server → Client | started/result callback 有界重试耗尽；只包含 execution ID、event、固定诊断码和 attempts |
 | `screenshot-taken` | Server → Client | 截图完成 |
 | `log-message` | Server → Client | 日志消息 |
 
@@ -125,6 +131,8 @@
 | POST | `/api/stop-execution/:id` | 停止执行 |
 | POST | `/set-browser-mode` | 设置浏览器模式 (headless/headed) |
 | POST | `/cleanup` | 清理浏览器资源 |
+
+`POST /api/execute-testcase` 必须由 Flask 提供非空 `executionId`；响应、内存状态、WebSocket 事件和 lifecycle callback 都复用该 ID。Node 默认把 lifecycle callback 发送到 `http://localhost:5001/intent-tester/api`，可用 `MAIN_APP_URL` 覆盖。每个 started/result callback 最多尝试 3 次；耗尽时只在 canonical execution state 和 `lifecycle-callback-failed` 事件中保留脱敏诊断，不广播上游原始错误。
 
 ---
 

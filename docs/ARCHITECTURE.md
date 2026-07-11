@@ -143,11 +143,11 @@ backend/
 
 | 端点 | 说明 |
 |------|------|
-| `/api/execute-testcase` | 执行完整测试用例 |
+| `/api/execute-testcase` | 使用 Flask 分配的 canonical execution ID 执行完整测试用例 |
 | `/ai-tap`, `/ai-input`, `/ai-query`, `/ai-assert` | AI 驱动的浏览器操作 |
 | `/goto`, `/screenshot`, `/page-info` | 基础浏览器控制 |
 
-WebSocket 事件推送执行进度（step-start, step-completed, execution-completed 等）。
+Flask `ExecutionHistory` 是 durable 状态权威：页面先由 Flask 创建 ID，Node 只执行并把 `started/result` 回调到 `/intent-tester/api/executions/<id>/lifecycle`；stop、retry、页面刷新恢复和重复 callback 都围绕同一 ID。Node callback 采用有界重试，耗尽时通过脱敏 `lifecycle-callback-failed` WebSocket 事件提供同 ID 恢复提示。页面有界对账耗尽时调用 Flask `reconcile`，由 Flask 主动读取 Node 同 ID 状态并通过同一 lifecycle 状态机补偿遗漏事件；页面不直接读取 Node 状态。WebSocket 只推送执行进度和诊断，不成为竞争状态源。
 
 ---
 
@@ -283,13 +283,15 @@ from shared.database import get_database_config
 ```text
 用户 → Jinja2 UI → Flask API (:5001)
                         │
-                        ├→ 创建 ExecutionHistory 记录
-                        ├→ SocketIO 推送执行状态到前端
-                        └→ HTTP 调用 MidScene Server (:3001)
+                        ├→ 创建唯一 pending ExecutionHistory / execution_id
+                        ├→ GET/retry/stop/reconcile 与页面刷新从同一 durable record 恢复
+                        └→ 携带 canonical ID 调用 MidScene Server (:3001)
                                     │
                                     ├→ Playwright 驱动浏览器
                                     ├→ @midscene/web AI 操作
-                                    └→ WebSocket 回传步骤结果
+                                    ├→ started/result 有界重试回调 Flask lifecycle API
+                                    ├→ 供 Flask reconcile 按同 ID 拉取脱敏状态
+                                    └→ WebSocket 推送同 ID 的步骤进度与脱敏诊断
 ```
 
 ### AI 智能体对话流

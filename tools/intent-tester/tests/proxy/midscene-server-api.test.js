@@ -1,206 +1,340 @@
-/**
- * MidScene代理服务器HTTP API端点测试
- */
+/** Production HTTP API contract tests for the MidScene Node server. */
 
 const request = require('supertest');
-const { TestDataFactory, ServerTestHelper, AssertHelper } = require('./mocks/test-helpers');
 
-// Mock MidSceneJS和Playwright - 必须在内部定义mock函数
-jest.mock('@midscene/web', () => {
-  const mockCreateMockAgent = (behavior = 'success') => {
-    const agent = {};
-    const operations = ['aiTap', 'aiInput', 'aiAssert', 'aiWaitFor', 'aiQuery', 'aiAction', 'aiScroll', 'aiHover', 'ai'];
-    
-    operations.forEach(op => {
-      agent[op] = jest.fn().mockImplementation(async () => {
-        if (behavior === 'error') {
-          throw new Error(`Mock ${op} error`);
-        }
-        if (behavior === 'timeout') {
-          return new Promise((_, reject) => {
-            setTimeout(() => reject(new Error(`Mock ${op} timeout`)), 1000);
-          });
-        }
-        return { success: true, operation: op };
+const mockHttpClient = {
+  post: jest.fn().mockResolvedValue({ status: 200, data: {} })
+};
+
+let releaseBlockedNavigation;
+const mockPage = {
+  setDefaultTimeout: jest.fn(),
+  setDefaultNavigationTimeout: jest.fn(),
+  goto: jest.fn().mockImplementation(url => {
+    if (url === 'https://blocked.example') {
+      return new Promise(resolve => {
+        releaseBlockedNavigation = resolve;
       });
-    });
-    
-    return agent;
-  };
-  
-  return {
-    PlaywrightAgent: jest.fn().mockImplementation(() => mockCreateMockAgent('success'))
-  };
-});
+    }
+    return Promise.resolve();
+  }),
+  waitForTimeout: jest.fn().mockResolvedValue(undefined),
+  screenshot: jest.fn().mockResolvedValue(Buffer.from('screenshot')),
+  close: jest.fn().mockResolvedValue(undefined)
+};
 
-jest.mock('playwright', () => {
-  const mockCreateMockBrowser = (behavior = 'success') => {
-    const browser = {
-      newContext: jest.fn().mockResolvedValue({
-        newPage: jest.fn().mockResolvedValue({
-          goto: jest.fn().mockResolvedValue(undefined),
-          title: jest.fn().mockResolvedValue('Test Page'),
-          url: jest.fn().mockReturnValue('https://example.com'),
-          screenshot: jest.fn().mockResolvedValue(Buffer.from('fake-screenshot')),
-          close: jest.fn().mockResolvedValue(undefined)
-        }),
-        close: jest.fn().mockResolvedValue(undefined)
-      }),
+const mockBrowser = {
+  newContext: jest.fn().mockResolvedValue({
+    newPage: jest.fn().mockResolvedValue(mockPage),
+    close: jest.fn().mockResolvedValue(undefined)
+  }),
+  close: jest.fn().mockResolvedValue(undefined)
+};
+
+function createAutomationResource(pageOverrides = {}, browserOverrides = {}) {
+  const ownedPage = {
+    setDefaultTimeout: jest.fn(),
+    setDefaultNavigationTimeout: jest.fn(),
+    goto: jest.fn().mockResolvedValue(undefined),
+    waitForTimeout: jest.fn().mockResolvedValue(undefined),
+    screenshot: jest.fn().mockResolvedValue(Buffer.from('screenshot')),
+    close: jest.fn().mockResolvedValue(undefined),
+    ...pageOverrides
+  };
+  const ownedBrowser = {
+    newContext: jest.fn().mockResolvedValue({
+      newPage: jest.fn().mockResolvedValue(ownedPage),
       close: jest.fn().mockResolvedValue(undefined)
-    };
-    
-    if (behavior === 'error') {
-      browser.newContext = jest.fn().mockRejectedValue(new Error('Mock browser error'));
-    }
-    
-    return browser;
+    }),
+    close: jest.fn().mockResolvedValue(undefined),
+    ...browserOverrides
   };
-  
-  return {
-    chromium: {
-      launch: jest.fn().mockResolvedValue(mockCreateMockBrowser('success'))
-    }
-  };
+  return { page: ownedPage, browser: ownedBrowser };
+}
+
+jest.mock('@midscene/web', () => ({
+  PlaywrightAgent: jest.fn().mockImplementation(() => ({}))
+}));
+jest.mock('playwright', () => ({
+  chromium: { launch: jest.fn().mockResolvedValue(mockBrowser) }
+}));
+const { chromium } = require('playwright');
+process.env.OPENAI_API_KEY = 'test-api-key';
+process.env.OPENAI_BASE_URL = 'https://test-api.example/v1';
+process.env.MIDSCENE_MODEL_NAME = 'test-model';
+process.env.MAIN_APP_URL = 'http://flask.example/api';
+process.env.NODE_ENV = 'test';
+
+const productionServer = require('../../browser-automation/midscene_server');
+
+const testcase = url => ({
+  id: 1,
+  name: `API contract ${url}`,
+  steps: [{ type: 'navigate', params: { url } }]
 });
 
-// Mock Socket.IO for server - 简化mock避免依赖问题
-jest.mock('socket.io', () => {
-  return {
-    Server: jest.fn().mockImplementation(() => ({
-      emit: jest.fn(),
-      on: jest.fn(),
-      close: jest.fn()
-    }))
-  };
-}, { virtual: true });
+async function waitForRunning(executionId) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (productionServer.executionStates.get(executionId)?.status === 'running') {
+      return;
+    }
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  throw new Error(`Execution ${executionId} did not start`);
+}
 
-// Mock HTTP server
-jest.mock('http', () => {
-  const originalHttp = jest.requireActual('http');
-  return {
-    ...originalHttp,
-    createServer: jest.fn().mockImplementation((app) => {
-      const server = originalHttp.createServer(app);
-      // 使用测试端口
-      const originalListen = server.listen;
-      server.listen = jest.fn().mockImplementation((port, callback) => {
-        return originalListen.call(server, global.testPort, callback);
-      });
-      return server;
-    })
-  };
-});
+async function waitForReady() {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const status = await request(productionServer.app).get('/api/status');
+    if (status.body.status === 'ready') {
+      return;
+    }
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  throw new Error('Production execution runtime did not become ready');
+}
 
-describe('MidScene代理服务器 - HTTP API测试', () => {
-  let app;
-  let server;
-  
-  beforeAll(async () => {
-    // 设置测试环境变量
-    process.env.PORT = global.testPort.toString();
-    process.env.NODE_ENV = 'test';
-    process.env.OPENAI_API_KEY = 'test-api-key';
-    process.env.OPENAI_BASE_URL = 'https://test-api.com/v1';
-    process.env.MIDSCENE_MODEL_NAME = 'test-model';
-    
-    // 创建一个简单的HTTP服务器，不依赖Express
-    const http = require('http');
-    
-    server = http.createServer((req, res) => {
-      res.setHeader('Content-Type', 'application/json');
-      
-      if (req.url === '/health' && req.method === 'GET') {
-        res.writeHead(200);
-        res.end(JSON.stringify({
-          success: true,
-          message: 'MidSceneJS服务器运行正常',
-          model: 'test-model',
-          timestamp: new Date().toISOString()
-        }));
-      } else if (req.url === '/api/status' && req.method === 'GET') {
-        res.writeHead(200);
-        res.end(JSON.stringify({
-          success: true,
-          status: 'ready',
-          browserInitialized: false,
-          runningExecutions: 0,
-          totalExecutions: 0,
-          uptime: Date.now(),
-          timestamp: new Date().toISOString()
-        }));
-      } else {
-        res.writeHead(404);
-        res.end(JSON.stringify({
-          success: false,
-          error: '未找到指定的端点',
-          path: req.url
-        }));
-      }
-    });
-    
-    // 启动测试服务器
-    server.listen(global.testPort);
-    await ServerTestHelper.waitForServer(global.testPort);
-    
-    // 设置app为请求URL，供supertest使用
-    app = `http://localhost:${global.testPort}`;
+describe('MidScene production HTTP API', () => {
+  beforeEach(async () => {
+    await productionServer.resetState();
+    releaseBlockedNavigation = undefined;
+    mockHttpClient.post.mockReset().mockResolvedValue({ status: 200, data: {} });
+    productionServer.setLifecycleHttpClient(mockHttpClient);
+    chromium.launch.mockReset().mockResolvedValue(mockBrowser);
+    mockPage.goto.mockClear();
+    mockPage.close.mockReset().mockResolvedValue(undefined);
+    mockBrowser.close.mockClear();
   });
-  
+
+  afterEach(async () => {
+    releaseBlockedNavigation?.();
+    await productionServer.resetState();
+  });
+
   afterAll(async () => {
-    // 清理
-    if (server) {
-      server.close();
-    }
-    jest.clearAllMocks();
+    releaseBlockedNavigation?.();
+    await productionServer.closeServer();
   });
-  
-  describe('健康检查端点', () => {
-    test('GET /health - 应该返回服务器健康状态', async () => {
-      const response = await request(app)
-        .get('/health');
-      
-      AssertHelper.assertApiResponse(response, 200);
-      expect(response.body.message).toBe('MidSceneJS服务器运行正常');
-      expect(response.body.model).toBeDefined();
-      expect(response.body.timestamp).toBeDefined();
-    });
+
+  test.each([
+    {},
+    { executionId: '' },
+    { executionId: '   ' },
+    { executionId: 42 },
+    { executionId: {} }
+  ])('POST /api/execute-testcase rejects missing or invalid executionId: %p', async invalidId => {
+    const response = await request(productionServer.app)
+      .post('/api/execute-testcase')
+      .send({ ...invalidId, testcase: testcase('https://example.com') });
+
+    expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+    expect(response.body.error).toMatch(/executionId/);
   });
-  
-  describe('服务器状态端点', () => {
-    test('GET /api/status - 应该返回服务器状态信息', async () => {
-      const response = await request(app)
-        .get('/api/status');
-      
-      AssertHelper.assertApiResponse(response, 200);
-      expect(response.body.status).toBe('ready');
-      expect(response.body.browserInitialized).toBeDefined();
-      expect(response.body.runningExecutions).toBeDefined();
-      expect(response.body.totalExecutions).toBeDefined();
-      expect(response.body.uptime).toBeDefined();
-      expect(response.body.timestamp).toBeDefined();
+
+  test('duplicate active executionId and concurrent different execution are explicitly rejected', async () => {
+    const firstId = 'serial-execution';
+    const first = await request(productionServer.app)
+      .post('/api/execute-testcase')
+      .send({ executionId: firstId, testcase: testcase('https://blocked.example') });
+    expect(first.status).toBe(200);
+    await waitForRunning(firstId);
+
+    const busyStatus = await request(productionServer.app).get('/api/status');
+    expect(busyStatus.body).toMatchObject({
+      status: 'busy',
+      activeExecutionId: firstId
     });
+
+    const duplicate = await request(productionServer.app)
+      .post('/api/execute-testcase')
+      .send({ executionId: firstId, testcase: testcase('https://example.com') });
+    const concurrent = await request(productionServer.app)
+      .post('/api/execute-testcase')
+      .send({ executionId: 'other-execution', testcase: testcase('https://example.com') });
+
+    expect(duplicate.status).toBe(409);
+    expect(concurrent.status).toBe(409);
+    expect(productionServer.executionStates.has('other-execution')).toBe(false);
   });
-  
-  // 暂时注释掉复杂的测试用例执行端点，专注于基础API测试
-  // describe('测试用例执行端点', () => {
-  //   // 复杂的测试逻辑暂时禁用
-  // });
-  
-  // 暂时注释掉复杂的测试端点，专注于基础API测试
-  // describe('执行状态查询端点', () => { ... });
-  // describe('执行报告端点', () => { ... });
-  // describe('执行列表端点', () => { ... });
-  // describe('停止执行端点', () => { ... });
-  // describe('AI功能端点', () => { ... });
-  // describe('页面操作端点', () => { ... });
-  // describe('资源管理端点', () => { ... });
-  
-  describe('错误处理', () => {
-    test('访问不存在的端点应该返回404', async () => {
-      const response = await request(app)
-        .get('/non-existent-endpoint');
-      
-      expect(response.status).toBe(404);
+
+  test('stop rejects terminal, non-active and control-less executions without mutating the active owner', async () => {
+    const finishedId = 'finished-execution';
+    await request(productionServer.app)
+      .post('/api/execute-testcase')
+      .send({ executionId: finishedId, testcase: testcase('https://example.com') });
+    await waitForReady();
+    expect(productionServer.executionStates.get(finishedId).status).toBe('success');
+
+    const activeId = 'active-execution';
+    await request(productionServer.app)
+      .post('/api/execute-testcase')
+      .send({ executionId: activeId, testcase: testcase('https://blocked.example') });
+    await waitForRunning(activeId);
+    mockBrowser.close.mockClear();
+
+    const stopFinished = await request(productionServer.app)
+      .post(`/api/stop-execution/${finishedId}`);
+
+    expect(stopFinished.status).toBe(409);
+    expect(stopFinished.body.success).toBe(false);
+    expect(productionServer.executionStates.get(finishedId).status).toBe('success');
+    expect(productionServer.executionStates.get(activeId).status).toBe('running');
+    expect(productionServer.executionControls.get(activeId).shouldStop).toBe(false);
+    expect(mockBrowser.close).not.toHaveBeenCalled();
+
+    productionServer.executionStates.set('foreign-running', {
+      id: 'foreign-running',
+      status: 'running',
+      startTime: new Date(),
+      steps: [],
+      screenshots: [],
+      logs: []
     });
+    productionServer.executionControls.set('foreign-running', { shouldStop: false });
+    const stopForeign = await request(productionServer.app)
+      .post('/api/stop-execution/foreign-running');
+
+    expect(stopForeign.status).toBe(409);
+    expect(stopForeign.body.success).toBe(false);
+    expect(productionServer.executionStates.get('foreign-running').status).toBe('running');
+    expect(productionServer.executionControls.get('foreign-running').shouldStop).toBe(false);
+    expect(productionServer.executionStates.get(activeId).status).toBe('running');
+    expect(productionServer.executionControls.get(activeId).shouldStop).toBe(false);
+
+    const activeControl = productionServer.executionControls.get(activeId);
+    productionServer.executionControls.delete(activeId);
+    const stopWithoutControl = await request(productionServer.app)
+      .post(`/api/stop-execution/${activeId}`);
+
+    expect(stopWithoutControl.status).toBe(409);
+    expect(stopWithoutControl.body.success).toBe(false);
+    expect(productionServer.executionStates.get(activeId).status).toBe('running');
+    expect(activeControl.shouldStop).toBe(false);
+    expect(mockBrowser.close).not.toHaveBeenCalled();
+
+    productionServer.executionControls.set(activeId, activeControl);
+
+    const stopActive = await request(productionServer.app)
+      .post(`/api/stop-execution/${activeId}`);
+    expect(stopActive.status).toBe(200);
+    expect(productionServer.executionStates.get(activeId).status).toBe('stopped');
+    expect(productionServer.executionControls.get(activeId).shouldStop).toBe(true);
+    expect(mockBrowser.close).not.toHaveBeenCalled();
+  });
+
+  test('stop keeps admission busy until the blocked owner unwinds', async () => {
+    const executionId = 'stop-holds-admission';
+    await request(productionServer.app)
+      .post('/api/execute-testcase')
+      .send({ executionId, testcase: testcase('https://blocked.example') });
+    await waitForRunning(executionId);
+
+    const stopped = await request(productionServer.app)
+      .post(`/api/stop-execution/${executionId}`);
+    expect(stopped.status).toBe(200);
+
+    const busy = await request(productionServer.app).get('/api/status');
+    const rejected = await request(productionServer.app)
+      .post('/api/execute-testcase')
+      .send({ executionId: 'too-early', testcase: testcase('https://example.com') });
+    expect(busy.body).toMatchObject({ status: 'busy', activeExecutionId: executionId });
+    expect(rejected.status).toBe(409);
+    expect(productionServer.executionStates.has('too-early')).toBe(false);
+
+    releaseBlockedNavigation();
+    releaseBlockedNavigation = undefined;
+    await waitForReady();
+
+    const admitted = await request(productionServer.app)
+      .post('/api/execute-testcase')
+      .send({ executionId: 'after-owner-unwind', testcase: testcase('https://example.com') });
+    expect(admitted.status).toBe(200);
+    await waitForReady();
+  });
+
+  test('browser close rejection detaches damaged resources and records only the owner cleanup error', async () => {
+    const secret = 'sk-cleanup-secret-value';
+    const cleanupFailure = new Error(`browser close rejected ${secret}`);
+    const websocketEmit = jest.spyOn(productionServer.io, 'emit');
+    const serverErrorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockBrowser.close.mockRejectedValueOnce(cleanupFailure).mockResolvedValue(undefined);
+
+    await request(productionServer.app)
+      .post('/api/execute-testcase')
+      .send({ executionId: 'cleanup-owner', testcase: testcase('https://example.com') });
+    await waitForReady();
+
+    const ownerState = productionServer.executionStates.get('cleanup-owner');
+    expect(ownerState.cleanupErrors).toEqual([
+      {
+        resource: 'browser',
+        code: 'resource_cleanup_failed',
+        timestamp: expect.any(String)
+      }
+    ]);
+    const status = await request(productionServer.app)
+      .get('/api/execution-status/cleanup-owner');
+    expect(status.status).toBe(200);
+    expect(status.body.cleanupErrors).toEqual(ownerState.cleanupErrors);
+    expect(JSON.stringify(status.body)).not.toContain(secret);
+    expect(JSON.stringify(websocketEmit.mock.calls)).not.toContain(secret);
+    expect(JSON.stringify(serverErrorLog.mock.calls)).not.toContain(secret);
+    expect(serverErrorLog).toHaveBeenCalledWith(
+      expect.stringContaining('resource_cleanup_failed')
+    );
+
+    await request(productionServer.app)
+      .post('/api/execute-testcase')
+      .send({ executionId: 'after-cleanup-rejection', testcase: testcase('https://example.com') });
+    await waitForReady();
+
+    expect(chromium.launch).toHaveBeenCalledTimes(2);
+    expect(productionServer.executionStates.get('after-cleanup-rejection').cleanupErrors).toEqual([]);
+    websocketEmit.mockRestore();
+    serverErrorLog.mockRestore();
+  });
+
+  test('reset blocks admission, closes owned resources and waits for the active owner to unwind', async () => {
+    let releaseOwner;
+    const ownerResource = createAutomationResource({
+      goto: jest.fn().mockImplementation(() => new Promise(resolve => {
+        releaseOwner = resolve;
+      }))
+    });
+    const nextResource = createAutomationResource();
+    chromium.launch
+      .mockReset()
+      .mockResolvedValueOnce(ownerResource.browser)
+      .mockResolvedValueOnce(nextResource.browser);
+
+    await request(productionServer.app)
+      .post('/api/execute-testcase')
+      .send({ executionId: 'reset-owner', testcase: testcase('https://reset-blocked.example') });
+    await waitForRunning('reset-owner');
+
+    const resetPromise = productionServer.resetState();
+    await new Promise(resolve => setImmediate(resolve));
+    const duringReset = await request(productionServer.app)
+      .post('/api/execute-testcase')
+      .send({ executionId: 'during-reset', testcase: testcase('https://example.com') });
+
+    expect(duringReset.status).toBe(409);
+    expect(ownerResource.page.close).toHaveBeenCalledTimes(1);
+    expect(ownerResource.browser.close).toHaveBeenCalledTimes(1);
+    expect(productionServer.executionStates.has('reset-owner')).toBe(true);
+
+    releaseOwner();
+    await resetPromise;
+    expect(productionServer.executionStates.size).toBe(0);
+    expect(productionServer.executionControls.size).toBe(0);
+
+    const afterReset = await request(productionServer.app)
+      .post('/api/execute-testcase')
+      .send({ executionId: 'after-reset', testcase: testcase('https://example.com') });
+    expect(afterReset.status).toBe(200);
+    await waitForReady();
+    expect(chromium.launch).toHaveBeenCalledTimes(2);
+    expect(nextResource.browser.close).toHaveBeenCalledTimes(1);
   });
 });

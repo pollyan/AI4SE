@@ -117,7 +117,9 @@ cd tools/new-agents/frontend && npm run dev
 
 ```bash
 cd tools/intent-tester
-OPENAI_API_KEY=your-key npm start
+OPENAI_API_KEY=your-key \
+MAIN_APP_URL=http://localhost:5001/intent-tester/api \
+npm start
 # 运行在 http://localhost:3001
 ```
 
@@ -192,8 +194,11 @@ cd tools/frontend && npm run build    # 输出: dist/
 # New Agents 前端
 cd tools/new-agents/frontend && npm run build    # 输出: dist/
 
-# MidScene 代理包
-node scripts/ci/build-proxy-package.js    # 输出: dist/intent-test-proxy.zip
+# MidScene 代理包（确定性生成并同步前端下载 ZIP）
+node scripts/ci/build-proxy-package.js    # 输出: dist/intent-test-proxy.zip 与 frontend/static 同步副本
+
+# 真实 Flask↔production Node 闭环与 clean-room package smoke
+.venv/bin/python -m pytest tools/intent-tester/tests/integration -q
 ```
 
 ### Docker 镜像构建
