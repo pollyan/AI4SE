@@ -47,7 +47,10 @@ async function validateVariableReference(reference, executionId = null, stepInde
         // 调用后端API进行完整验证
         const response = await fetch(`${window.API_BASE_URL}/v1/executions/${executionId}/variables/validate`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                ...window.IntentSecurity.csrfHeaders('POST')
+            },
             body: JSON.stringify({
                 references: [reference],
                 step_index: stepIndex
@@ -125,7 +128,10 @@ async function validateVariableReferences(references, executionId = null, stepIn
         if (executionId && executionId !== 'temp-execution-id') {
             const response = await fetch(`${window.API_BASE_URL}/v1/executions/${executionId}/variables/validate`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...window.IntentSecurity.csrfHeaders('POST')
+                },
                 body: JSON.stringify({
                     references: references,
                     step_index: stepIndex

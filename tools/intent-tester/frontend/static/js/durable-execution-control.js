@@ -9,8 +9,14 @@
 
     const DEFAULT_RECONCILIATION_ATTEMPTS = 10;
     const DEFAULT_RECONCILIATION_DELAY_MS = 150;
+    const DEFAULT_CONTINUOUS_INITIAL_DELAY_MS = 500;
+    const DEFAULT_CONTINUOUS_MAX_DELAY_MS = 2000;
+    const DEFAULT_CONTINUOUS_FAILURE_BUDGET = 3;
     const TERMINAL_STATUSES = ['success', 'failed', 'stopped'];
     const ACTIVE_STATUSES = ['pending', 'running'];
+    const CONTINUOUS_RETRYABLE_KINDS = [
+        'request_failed', 'http_failure', 'api_failure', 'wait_failed'
+    ];
 
     function defaultWait(delayMs) {
         return new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -42,12 +48,31 @@
         const reconciliationDelayMs = Number.isFinite(options.reconciliationDelayMs)
             ? options.reconciliationDelayMs
             : DEFAULT_RECONCILIATION_DELAY_MS;
+        const continuousInitialDelayMs = Number.isFinite(options.continuousInitialDelayMs)
+            ? options.continuousInitialDelayMs
+            : DEFAULT_CONTINUOUS_INITIAL_DELAY_MS;
+        const continuousMaxDelayMs = Number.isFinite(options.continuousMaxDelayMs)
+            ? options.continuousMaxDelayMs
+            : DEFAULT_CONTINUOUS_MAX_DELAY_MS;
+        const continuousFailureBudget = Number.isInteger(options.continuousFailureBudget)
+            ? options.continuousFailureBudget
+            : DEFAULT_CONTINUOUS_FAILURE_BUDGET;
+        let continuousGeneration = 0;
 
         if (maxReconciliationAttempts < 1) {
             throw new RangeError('maxReconciliationAttempts must be at least 1');
         }
         if (reconciliationDelayMs < 0) {
             throw new RangeError('reconciliationDelayMs must not be negative');
+        }
+        if (continuousInitialDelayMs < 0) {
+            throw new RangeError('continuousInitialDelayMs must not be negative');
+        }
+        if (continuousMaxDelayMs < continuousInitialDelayMs) {
+            throw new RangeError('continuousMaxDelayMs must be at least continuousInitialDelayMs');
+        }
+        if (continuousFailureBudget < 1) {
+            throw new RangeError('continuousFailureBudget must be at least 1');
         }
 
         function isCurrentExecutionId(expectedExecutionId) {
@@ -344,12 +369,18 @@
             };
         }
 
-        async function reconcile() {
-            const requestedExecutionId = getCurrentExecutionId();
+        async function reconcile(reconcileOptions) {
+            const requestedExecutionId = (
+                reconcileOptions && reconcileOptions.expectedExecutionId
+            ) || getCurrentExecutionId();
+            const shouldApply = reconcileOptions && reconcileOptions.shouldApply;
             if (!requestedExecutionId) {
                 return { kind: 'no_current_execution' };
             }
-            if (!isCurrentExecutionId(requestedExecutionId)) {
+            if (
+                !isCurrentExecutionId(requestedExecutionId) ||
+                (typeof shouldApply === 'function' && !shouldApply())
+            ) {
                 return { kind: 'stale', executionId: requestedExecutionId };
             }
 
@@ -374,7 +405,10 @@
                 };
             }
 
-            if (!isCurrentExecutionId(requestedExecutionId)) {
+            if (
+                !isCurrentExecutionId(requestedExecutionId) ||
+                (typeof shouldApply === 'function' && !shouldApply())
+            ) {
                 return { kind: 'stale', executionId: requestedExecutionId };
             }
 
@@ -394,7 +428,10 @@
             }
 
             applyDurableExecution(durableExecution, requestedExecutionId);
-            if (!isCurrentExecutionId(requestedExecutionId)) {
+            if (
+                !isCurrentExecutionId(requestedExecutionId) ||
+                (typeof shouldApply === 'function' && !shouldApply())
+            ) {
                 return { kind: 'stale', executionId: requestedExecutionId };
             }
 
@@ -413,17 +450,107 @@
             };
         }
 
+        function cancelContinuousReconciliation() {
+            continuousGeneration += 1;
+        }
+
+        async function startContinuousReconciliation(continuousOptions) {
+            const requestedExecutionId = (
+                continuousOptions && continuousOptions.expectedExecutionId
+            ) || getCurrentExecutionId();
+            const signal = continuousOptions && continuousOptions.signal;
+            if (!requestedExecutionId) {
+                return { kind: 'no_current_execution' };
+            }
+
+            const generation = continuousGeneration + 1;
+            continuousGeneration = generation;
+            const cancellationOutcome = () => {
+                if (!isCurrentExecutionId(requestedExecutionId)) {
+                    return { kind: 'stale', executionId: requestedExecutionId };
+                }
+                if ((signal && signal.aborted) || generation !== continuousGeneration) {
+                    return { kind: 'cancelled', executionId: requestedExecutionId };
+                }
+                return null;
+            };
+            const shouldApply = () => cancellationOutcome() === null;
+
+            let delayMs = continuousInitialDelayMs;
+            let failures = 0;
+            let attempts = 0;
+            while (true) {
+                const beforeRequest = cancellationOutcome();
+                if (beforeRequest) return beforeRequest;
+
+                const outcome = await reconcile({
+                    expectedExecutionId: requestedExecutionId,
+                    shouldApply
+                });
+                const afterRequest = cancellationOutcome();
+                if (afterRequest) return afterRequest;
+                attempts += 1;
+
+                if (outcome.kind === 'terminal') {
+                    return { ...outcome, attempts };
+                }
+                if (outcome.kind === 'active') {
+                    failures = 0;
+                } else if (CONTINUOUS_RETRYABLE_KINDS.includes(outcome.kind)) {
+                    failures += 1;
+                    if (failures >= continuousFailureBudget) {
+                        return {
+                            kind: 'retry_required',
+                            executionId: requestedExecutionId,
+                            attempts,
+                            failures,
+                            lastFailure: outcome
+                        };
+                    }
+                } else {
+                    return outcome;
+                }
+
+                try {
+                    await wait(delayMs);
+                } catch (error) {
+                    failures += 1;
+                    if (failures >= continuousFailureBudget) {
+                        return {
+                            kind: 'retry_required',
+                            executionId: requestedExecutionId,
+                            attempts,
+                            failures,
+                            lastFailure: {
+                                kind: 'wait_failed',
+                                executionId: requestedExecutionId,
+                                error
+                            }
+                        };
+                    }
+                }
+                const afterWait = cancellationOutcome();
+                if (afterWait) return afterWait;
+                delayMs = Math.min(continuousMaxDelayMs, delayMs * 2);
+            }
+        }
+
         return {
+            cancelContinuousReconciliation,
             isCurrentExecutionId,
             reconcile,
             refresh,
             retry,
+            startContinuousReconciliation,
             stop
         };
     }
 
     return {
         ACTIVE_STATUSES,
+        DEFAULT_CONTINUOUS_FAILURE_BUDGET,
+        DEFAULT_CONTINUOUS_INITIAL_DELAY_MS,
+        DEFAULT_CONTINUOUS_MAX_DELAY_MS,
         DEFAULT_RECONCILIATION_ATTEMPTS,
         DEFAULT_RECONCILIATION_DELAY_MS,
         TERMINAL_STATUSES,

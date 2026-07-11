@@ -100,57 +100,6 @@ function protectButton(button, handler, options = {}) {
     });
 }
 
-// 自动为带有特定类的按钮添加保护
-document.addEventListener('DOMContentLoaded', function() {
-    // 为所有带有 protect-click 类的按钮添加保护
-    document.querySelectorAll('.protect-click').forEach(button => {
-        const originalOnclick = button.onclick;
-        if (originalOnclick) {
-            button.onclick = function(event) {
-                preventDoubleClick(button, () => originalOnclick.call(this, event));
-            };
-        }
-    });
-});
-
-// 添加CSS样式
-if (!document.getElementById('button-protection-styles')) {
-    const style = document.createElement('style');
-    style.id = 'button-protection-styles';
-    style.textContent = `
-        .btn.processing {
-            opacity: 0.7;
-            cursor: not-allowed;
-            position: relative;
-        }
-        
-        .btn.processing:hover {
-            opacity: 0.7;
-        }
-        
-        .btn.processing::after {
-            content: '';
-            position: absolute;
-            width: 16px;
-            height: 16px;
-            margin: auto;
-            border: 2px solid transparent;
-            border-top-color: currentColor;
-            border-radius: 50%;
-            animation: button-spin 1s linear infinite;
-            top: 0;
-            bottom: 0;
-            left: 8px;
-        }
-        
-        @keyframes button-spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    `;
-    document.head.appendChild(style);
-}
-
 // 导出给其他模块使用
 window.ButtonProtection = {
     preventDoubleClick,

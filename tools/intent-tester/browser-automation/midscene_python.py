@@ -15,7 +15,9 @@ load_dotenv()
 class MidSceneAI:
     """MidSceneJS Python封装类 - 纯AI驱动，无传统方法fallback"""
 
-    def __init__(self, server_url: str = "http://127.0.0.1:3001"):
+    def __init__(
+        self, server_url: str = "http://127.0.0.1:3001", token: str | None = None
+    ):
         """
         初始化MidSceneAI
 
@@ -23,6 +25,10 @@ class MidSceneAI:
             server_url: MidSceneJS服务器地址
         """
         self.server_url = server_url.rstrip("/")
+        self._proxy_token = token or os.getenv("INTENT_PROXY_TOKEN")
+        if not self._proxy_token or len(self._proxy_token.encode("utf-8")) < 32:
+            raise ValueError("INTENT_PROXY_TOKEN must contain at least 32 UTF-8 bytes")
+        self._proxy_headers = {"Authorization": f"Bearer {self._proxy_token}"}
         self.config = self._load_config()
         self.current_mode = "headless"  # 默认无头模式
         self._verify_server_connection()
@@ -60,10 +66,12 @@ class MidSceneAI:
             try:
                 if method == "POST":
                     response = requests.post(
-                        url, json=data or {}, timeout=90
+                        url, json=data or {}, timeout=90, headers=self._proxy_headers
                     )  # 增加超时时间
                 else:
-                    response = requests.get(url, timeout=30)
+                    response = requests.get(
+                        url, timeout=30, headers=self._proxy_headers
+                    )
 
                 response.raise_for_status()
                 result = response.json()

@@ -5,7 +5,7 @@
 {% block page_title %}本地代理下载{% endblock %}
 
 {% block extra_css %}
-<style>
+<style nonce="{{ csp_nonce }}">
     /* 状态指示器样式 */
     .status-indicator {
         display: flex;
@@ -225,7 +225,8 @@
         <span>正在检查本地代理服务器连接状态...</span>
     </div>
 
-    <button id="check-connection" class="btn btn-ghost" onclick="checkConnection()">
+    <button id="check-connection" class="btn btn-ghost"
+        data-capability="{{ 'allowed' if intent_capabilities.can_use_local_proxy else 'denied' }}">
         <span>🔄</span>
         重新检查
     </button>
@@ -264,7 +265,7 @@
         <a href="/intent-tester/api/download-proxy" class="btn btn-primary" id="download-btn">
             立即下载
         </a>
-        <button class="btn btn-ghost" onclick="checkVersion()">
+        <button id="check-version" class="btn btn-ghost">
             检查版本
         </button>
     </div>
@@ -362,14 +363,18 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce }}">
     let connectionCheckInterval;
 
     // 页面加载完成后开始检查连接
     document.addEventListener('DOMContentLoaded', function () {
-        checkConnection();
-        // 每30秒自动检查一次连接状态
-        connectionCheckInterval = setInterval(checkConnection, 30000);
+        document.getElementById('check-version').addEventListener('click', checkVersion);
+        document.getElementById('check-connection').addEventListener('click', checkConnection);
+        if ({{ 'true' if intent_capabilities.can_use_local_proxy else 'false' }}) {
+            checkConnection();
+            // 每30秒自动检查一次连接状态
+            connectionCheckInterval = setInterval(checkConnection, 30000);
+        }
     });
 
     // 页面卸载时清除定时器
@@ -415,7 +420,14 @@
     // 检查版本信息
     async function checkVersion() {
         try {
-            document.getElementById('download-btn').href = `${window.API_BASE_URL}/download-proxy`;
+            const safeDownloadUrl = IntentSafeDom.safeUrl(
+                `${window.API_BASE_URL}/download-proxy`,
+                ['http:', 'https:']
+            );
+            if (!safeDownloadUrl) {
+                throw new Error('下载地址不受支持');
+            }
+            document.getElementById('download-btn').href = safeDownloadUrl;
             const response = await axios.get(`${window.API_BASE_URL}/proxy-version`);
             if (response.data.code === 200) {
                 const versionInfo = response.data.data;

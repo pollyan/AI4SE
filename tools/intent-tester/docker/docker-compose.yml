@@ -1,62 +1,71 @@
-version: '3.8'
-
-# Docker Compose配置 - 只包含Web应用和数据库
-# MidScene Server需要手动启动（模拟真实用户场景）
-
 services:
-  # PostgreSQL数据库
   postgres:
     image: postgres:15-alpine
     container_name: intent-test-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: intent_test
-      POSTGRES_USER: ${DB_USER:-intent_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_in_production}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+      POSTGRES_USER: "${DB_USER:?DB_USER is required}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD is required}"
+      POSTGRES_INITDB_ARGS: --encoding=UTF8
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-intent_user}" ]
+      test: [CMD-SHELL, "pg_isready -U ${DB_USER:?DB_USER is required}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Flask Web应用
   web-app:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../../..
+      dockerfile: tools/intent-tester/docker/Dockerfile
+      target: web
     container_name: intent-test-web
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql://${DB_USER:-intent_user}:${DB_PASSWORD:-change_me_in_production}@postgres:5432/intent_test
-      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-please-change-in-production}
-      # MidScene Server在本地手动启动，通过host.docker.internal访问
-      - MIDSCENE_SERVER_URL=http://host.docker.internal:3001
-      - FLASK_ENV=${FLASK_ENV:-production}
+      DATABASE_URL: "postgresql://${DB_USER:?DB_USER is required}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/intent_test"
+      SECRET_KEY: "${SECRET_KEY:?SECRET_KEY is required}"
+      AI4SE_ENV: development
+      INTENT_ACCESS_MODE: local-dev
+      INTENT_EXECUTION_ENABLED: "true"
+      INTENT_PUBLIC_ORIGIN: http://127.0.0.1:5001
+      INTENT_PROXY_TOPOLOGY: managed
+      INTENT_PROXY_TOKEN: "${INTENT_PROXY_TOKEN:?INTENT_PROXY_TOKEN is required}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:?OPENAI_API_KEY is required}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:?OPENAI_BASE_URL is required}"
+      MIDSCENE_MODEL_NAME: "${MIDSCENE_MODEL_NAME:?MIDSCENE_MODEL_NAME is required}"
+      MIDSCENE_SERVER_URL: http://intent-execution-proxy:3001
+      FLASK_ENV: development
     ports:
-      - "5001:5001"
+      - "127.0.0.1:5001:5001"
     volumes:
-      # 持久化截图和日志
-      - ./web_gui/static/screenshots:/app/web_gui/static/screenshots
-      - ./logs:/app/logs
+      - ../frontend/static/screenshots:/app/tools/intent-tester/frontend/static/screenshots
+      - ../logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck:
-      test: [ "CMD", "python", "-c", "import requests; requests.get('http://localhost:5001/health')" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    extra_hosts:
-      # 允许容器访问宿主机的MidScene Server
-      - "host.docker.internal:host-gateway"
 
-  # Nginx反向代理（可选，用于生产环境）
+  intent-execution-proxy:
+    build:
+      context: ../../..
+      dockerfile: tools/intent-tester/docker/Dockerfile
+      target: proxy
+    container_name: intent-execution-proxy
+    restart: unless-stopped
+    environment:
+      INTENT_PROXY_TOPOLOGY: managed
+      INTENT_PROXY_TOKEN: "${INTENT_PROXY_TOKEN:?INTENT_PROXY_TOKEN is required}"
+      INTENT_PUBLIC_ORIGIN: http://127.0.0.1:5001
+      OPENAI_API_KEY: "${OPENAI_API_KEY:?OPENAI_API_KEY is required}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:?OPENAI_BASE_URL is required}"
+      MIDSCENE_MODEL_NAME: "${MIDSCENE_MODEL_NAME:?MIDSCENE_MODEL_NAME is required}"
+      MAIN_APP_URL: http://web-app:5001/intent-tester/api
+      PORT: "3001"
+    depends_on:
+      web-app:
+        condition: service_started
+
   nginx:
     image: nginx:alpine
     container_name: intent-test-nginx
@@ -67,11 +76,10 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
-      - ./web_gui/static:/usr/share/nginx/html/static:ro
+      - ../frontend/static:/usr/share/nginx/html/static:ro
     depends_on:
       - web-app
-    profiles:
-      - production # 只在生产环境启动
+    profiles: [production]
 
 volumes:
   postgres_data:

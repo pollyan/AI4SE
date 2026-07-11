@@ -84,6 +84,23 @@ class TestCase(db.Model):
 
         return data
 
+    def to_public_summary(self):
+        """Return the stable anonymous read-only projection."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "category": self.category,
+            "priority": self.priority,
+            "tags": self.tags.split(",") if self.tags else [],
+            "is_active": self.is_active,
+            "updated_at": (
+                self.updated_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                if self.updated_at
+                else None
+            ),
+        }
+
     @classmethod
     def get_with_stats(cls, limit=None, offset=None):
         """批量获取测试用例及其统计信息，优化查询性能"""

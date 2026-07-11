@@ -48,9 +48,12 @@ function createHarness(overrides = {}) {
         getCurrentExecutionId: () => currentExecutionId,
         applyDurableExecution: (execution) => applied.push(execution),
         onTerminal: (execution) => terminals.push(execution),
-        wait: async (delayMs) => waits.push(delayMs),
+        wait: overrides.wait || (async (delayMs) => waits.push(delayMs)),
         maxReconciliationAttempts: overrides.maxReconciliationAttempts,
-        reconciliationDelayMs: overrides.reconciliationDelayMs
+        reconciliationDelayMs: overrides.reconciliationDelayMs,
+        continuousInitialDelayMs: overrides.continuousInitialDelayMs,
+        continuousMaxDelayMs: overrides.continuousMaxDelayMs,
+        continuousFailureBudget: overrides.continuousFailureBudget
     });
 
     return {
@@ -599,4 +602,121 @@ test('the current-ID predicate supports a second guard inside delayed callbacks'
     assert.equal(harness.control.isCurrentExecutionId(expectedExecutionId), true);
     harness.setCurrentExecutionId('run-2');
     assert.equal(harness.control.isCurrentExecutionId(expectedExecutionId), false);
+});
+
+test('continuous reconciliation survives the old 1.5 second window with bounded backoff', async () => {
+    let requestCount = 0;
+    let elapsed = 0;
+    const harness = createHarness({
+        httpClient: {
+            async post() {
+                requestCount += 1;
+                return response('run-1', requestCount < 5 ? 'running' : 'success');
+            }
+        },
+        wait: async (delayMs) => {
+            harness.waits.push(delayMs);
+            elapsed += delayMs;
+        }
+    });
+
+    const outcome = await harness.control.startContinuousReconciliation({
+        expectedExecutionId: 'run-1'
+    });
+
+    assert.equal(outcome.kind, 'terminal');
+    assert.equal(requestCount, 5);
+    assert.ok(elapsed > 1500);
+    assert.deepEqual(harness.waits, [500, 1000, 2000, 2000]);
+    assert.deepEqual(harness.terminals.map((item) => item.status), ['success']);
+});
+
+test('continuous reconciliation aborts a deferred response without applying it', async () => {
+    const pending = deferred();
+    let requestCount = 0;
+    const controller = new AbortController();
+    const harness = createHarness({
+        httpClient: {
+            post() {
+                requestCount += 1;
+                return pending.promise;
+            }
+        }
+    });
+
+    const running = harness.control.startContinuousReconciliation({
+        expectedExecutionId: 'run-1',
+        signal: controller.signal
+    });
+    controller.abort();
+    pending.resolve(response('run-1', 'success'));
+
+    assert.deepEqual(await running, { kind: 'cancelled', executionId: 'run-1' });
+    assert.equal(requestCount, 1);
+    assert.deepEqual(harness.applied, []);
+    assert.deepEqual(harness.terminals, []);
+});
+
+test('continuous reconciliation ignores a deferred old-ID response', async () => {
+    const pending = deferred();
+    const harness = createHarness({
+        httpClient: { post: () => pending.promise }
+    });
+
+    const running = harness.control.startContinuousReconciliation({
+        expectedExecutionId: 'run-1'
+    });
+    harness.setCurrentExecutionId('run-2');
+    pending.resolve(response('run-1', 'success'));
+
+    assert.deepEqual(await running, { kind: 'stale', executionId: 'run-1' });
+    assert.deepEqual(harness.applied, []);
+    assert.deepEqual(harness.terminals, []);
+});
+
+test('continuous reconciliation returns retry_required after its failure budget', async () => {
+    let requestCount = 0;
+    const harness = createHarness({
+        httpClient: {
+            async post() {
+                requestCount += 1;
+                throw new Error('network unavailable');
+            }
+        },
+        continuousFailureBudget: 3
+    });
+
+    const outcome = await harness.control.startContinuousReconciliation({
+        expectedExecutionId: 'run-1'
+    });
+
+    assert.equal(outcome.kind, 'retry_required');
+    assert.equal(outcome.failures, 3);
+    assert.equal(outcome.lastFailure.kind, 'request_failed');
+    assert.equal(requestCount, 3);
+    assert.deepEqual(harness.waits, [500, 1000]);
+    assert.deepEqual(harness.terminals, []);
+});
+
+test('cancelContinuousReconciliation stops before another request', async () => {
+    let requestCount = 0;
+    let harness;
+    harness = createHarness({
+        httpClient: {
+            async post() {
+                requestCount += 1;
+                return response('run-1', 'running');
+            }
+        },
+        wait: async () => {
+            harness.control.cancelContinuousReconciliation();
+        }
+    });
+
+    const outcome = await harness.control.startContinuousReconciliation({
+        expectedExecutionId: 'run-1'
+    });
+
+    assert.deepEqual(outcome, { kind: 'cancelled', executionId: 'run-1' });
+    assert.equal(requestCount, 1);
 });

@@ -99,6 +99,19 @@ def test_execution_page_ignores_websocket_events_from_other_executions(client):
         assert guarded_handler.search(html), f"{event_name} must use the execution ID guard"
 
 
+def test_execution_page_fetches_a_same_id_ticket_before_local_socket_connect(client):
+    html = _render_execution_page(client)
+
+    assert "async function connectToLocalProxy(expectedExecutionId)" in html
+    assert (
+        "`${window.API_BASE_URL}/executions/${expectedExecutionId}/proxy-ticket`"
+        in html
+    )
+    assert "ticket: ticketResponse.data.data.ticket" in html
+    assert "executionId: expectedExecutionId" in html
+    assert "connectToLocalProxy(expectedExecutionId)" in html
+
+
 def test_execution_page_reconciles_completion_signals_through_durable_control(client):
     html = _render_execution_page(client)
 
@@ -116,8 +129,7 @@ def test_execution_page_reconciles_completion_signals_through_durable_control(cl
     assert completion_handler
     assert stopped_handler
     for handler in (completion_handler.group(), stopped_handler.group()):
-        assert "expectedExecutionId: data.executionId" in handler
-        assert "reconcileUntilTerminal: true" in handler
+        assert "reconcileExecutionNow(data.executionId)" in handler
         assert "onExecutionCompleted(data" not in handler
 
 
@@ -161,7 +173,7 @@ def test_execution_page_has_hidden_disabled_same_id_retry_control(client):
     html = _render_execution_page(client)
 
     assert re.search(
-        r'<button id="retry-execution"[^>]*disabled[^>]*style="[^"]*display:\s*none',
+        r'<button id="retry-execution"[^>]*disabled[^>]*hidden',
         html,
     )
     assert "addEventListener('click', retryExecution)" in html
@@ -217,7 +229,7 @@ def test_execution_page_retry_failure_stays_visible_and_success_reconciles_same_
     assert "showRetryControl" in body
 
 
-def test_execution_page_only_shows_retry_for_failed_exhaustion_and_terminal_clears_it(client):
+def test_execution_page_only_shows_retry_after_continuous_failure_budget_and_terminal_clears_it(client):
     html = _render_execution_page(client)
 
     refresh = re.search(
@@ -228,11 +240,11 @@ def test_execution_page_only_shows_retry_for_failed_exhaustion_and_terminal_clea
     )
     assert refresh
     body = refresh.group("body")
-    assert "!outcome.lastFailure" in body
-    assert "['pending', 'running'].includes(outcome.lastStatus)" in body
-    assert "hideRetryControl()" in body
-    assert "reconcileOutcome.status === 'running' ? '执行中' : '等待启动'" in body
-    assert "showRetryControl('调度失败，可重试')" in body
+    assert "outcome.kind === 'retry_required'" in body
+    assert "outcome.failures" in body
+    assert "showRetryControl('状态同步失败，可重试同一任务')" in body
+    assert "outcome.kind === 'cancelled' || outcome.kind === 'stale'" in body
+    assert "outcome.kind === 'exhausted'" not in body
 
     completion = re.search(
         r"function onExecutionCompleted\(data, expectedExecutionId\) \{(?P<body>.*?)"
@@ -323,7 +335,7 @@ def test_execution_page_handles_callback_failure_event_only_for_current_id(clien
     assert "showRetryControl" in body
 
 
-def test_execution_page_reconciles_healthy_exhaustion_through_flask_once(client):
+def test_execution_page_uses_continuous_flask_reconciliation_and_failure_budget(client):
     html = _render_execution_page(client)
 
     refresh = re.search(
@@ -334,33 +346,37 @@ def test_execution_page_reconciles_healthy_exhaustion_through_flask_once(client)
     )
     assert refresh
     body = refresh.group("body")
-    assert "const reconcileOutcome = await durableExecutionControl.reconcile()" in body
+    assert "durableExecutionControl.startContinuousReconciliation({" in body
+    assert "expectedExecutionId" in body
     assert "durableExecutionControl.isCurrentExecutionId(expectedExecutionId)" in body
-    assert "reconcileOutcome.kind === 'terminal'" in body
-    assert "reconcileOutcome.kind === 'active'" in body
-    assert "hasLifecycleCallbackExhaustedDiagnostic(currentExecution)" in body
-    assert "终态同步失败，可重试同一任务" in body
+    assert "outcome.kind === 'retry_required'" in body
+    assert "outcome.kind === 'cancelled'" in body
+    assert "outcome.kind === 'stale'" in body
+    assert "hasLifecycleCallbackExhaustedDiagnostic(currentExecution)" in html
+    assert "状态同步失败，可重试同一任务" in body
     assert "/api/execute-testcase" not in body
     assert "/api/execution-status/" not in body
 
 
-def test_execution_page_active_reconcile_without_diagnostic_stays_active(client):
+def test_execution_page_immediate_socket_reconcile_stays_same_id(client):
     html = _render_execution_page(client)
 
     assert "function hasLifecycleCallbackExhaustedDiagnostic(execution)" in html
     assert "lifecycle_callback_exhausted" in html
     assert re.search(
-        r"if \(hasLifecycleCallbackExhaustedDiagnostic\(currentExecution\)\) \{"
+        r"async function reconcileExecutionNow\(expectedExecutionId\) \{"
+        r".*?durableExecutionControl\.reconcile\(\{\s*expectedExecutionId\s*\}\)"
+        r".*?if \(hasLifecycleCallbackExhaustedDiagnostic\(currentExecution\)\) \{"
         r".*?showRetryControl\('终态同步失败，可重试同一任务'\);"
         r".*?\} else \{"
         r".*?hideRetryControl\(\);"
-        r".*?reconcileOutcome\.status === 'running' \? '执行中' : '等待启动'",
+        r".*?outcome\.status === 'running' \? '执行中' : '等待启动'",
         html,
         re.DOTALL,
     )
 
 
-def test_execution_page_url_restore_uses_bounded_refresh_then_flask_reconcile(client):
+def test_execution_page_url_restore_uses_get_then_continuous_flask_reconcile(client):
     html = _render_execution_page(client)
 
     restore = re.search(

@@ -7,6 +7,7 @@
     <meta name="author" content="安辉（老兵大头）">
     <meta name="description" content="老兵大头的 AI4SE 工具集，提供意图驱动测试和智能需求分析">
     <meta name="keywords" content="AI4SE, 自动化测试, 意图驱动, 需求分析, 安辉, 老兵大头">
+    <meta name="intent-csrf-token" content="{{ csrf_token }}">
 
     <!-- Open Graph 标签 - 用于社交分享 -->
     <meta property="og:title" content="老兵大头的 AI4SE 工具集">
@@ -16,7 +17,7 @@
     <title>{% block title %}老兵大头的 AI4SE 工具集{% endblock %}</title>
 
     <!-- 极简风格样式 -->
-    <style>
+    <style nonce="{{ csp_nonce }}">
         /* 基础重置 */
         * {
             margin: 0;
@@ -702,6 +703,14 @@
             color: #333333;
         }
 
+        .footer-bio-spaced {
+            margin-top: 16px;
+        }
+
+        .footer-tagline {
+            margin-top: 8px;
+        }
+
         @media (max-width: 768px) {
             .footer-content {
                 grid-template-columns: 1fr;
@@ -712,10 +721,11 @@
     {% block extra_css %}{% endblock %}
 
     <!-- 标准列表组件样式 -->
-    <link rel="stylesheet" href="/static/css/list-components.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/list-components.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/intent-security.css') }}">
 
     <!-- 动态配置 API 基础路径 -->
-    <script>
+    <script nonce="{{ csp_nonce }}">
         // 统一使用 /intent-tester/api 作为 API 基础路径
         window.API_BASE_URL = '/intent-tester/api';
         console.log('API Base URL configured as:', window.API_BASE_URL);
@@ -794,7 +804,7 @@
                 <p class="footer-bio">
                     19年研发经验 | AI4SE 实践者 | ThoughtWorks校友
                 </p>
-                <p class="footer-bio" style="margin-top: 16px;">
+                <p class="footer-bio footer-bio-spaced">
                     作为一名在软件工程领域深耕近 20 年的老兵，致力于将 AI 技术转化为企业级生产力工具。
                     如果这些工具对你有帮助，欢迎反馈和交流！
                 </p>
@@ -829,16 +839,18 @@
             <p>© 2024 老兵大头的 AI4SE 工具集 | 基于 <a
                     href="https://github.com/pollyan/intent-test-framework/blob/master/LICENSE" target="_blank">MIT
                     协议</a>开源</p>
-            <p style="margin-top: 8px;">让 AI 驱动的软件工程变得简单而强大</p>
+            <p class="footer-tagline">让 AI 驱动的软件工程变得简单而强大</p>
         </div>
     </footer>
 
     <!-- 基础库 -->
-    <script src="https://unpkg.com/axios@1.6.0/dist/axios.min.js"></script>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='vendor/axios-1.13.2.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/socket.io-client-4.8.1.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/intent-security.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/safe-dom.js') }}"></script>
 
     <!-- 通用脚本 -->
-    <script>
+    <script nonce="{{ csp_nonce }}">
         // 设置导航点击事件
         document.addEventListener('DOMContentLoaded', function () {
             // 设置axios全局超时为3分钟，避免长AI回复被截断
@@ -854,19 +866,9 @@
         // 通用消息提示函数
         function showMessage(message, type) {
             const messageEl = document.createElement('div');
-            messageEl.className = 'message ' + type;
+            const messageType = type === 'success' ? 'success' : 'error';
+            messageEl.className = `message intent-message intent-message-${messageType}`;
             messageEl.textContent = message;
-            messageEl.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                padding: 12px 20px;
-                border-radius: 4px;
-                color: white;
-                z-index: 1000;
-                background-color: ${type === 'success' ? '#28a745' : '#dc3545'};
-                border: 1px solid ${type === 'success' ? '#28a745' : '#dc3545'};
-            `;
 
             document.body.appendChild(messageEl);
 
@@ -879,9 +881,9 @@
     </script>
 
     <!-- 标准列表组件脚本 -->
-    <script src="/static/js/list-components.js"></script>
+    <script src="{{ url_for('static', filename='js/list-components.js') }}"></script>
     <!-- 按钮保护脚本 -->
-    <script src="/static/js/button-protection.js"></script>
+    <script src="{{ url_for('static', filename='js/button-protection.js') }}"></script>
 
     {% block extra_js %}{% endblock %}
 </body>

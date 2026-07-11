@@ -7,7 +7,7 @@
 {% block page_subtitle %}本地代理测试执行和监控{% endblock %}
 
 {% block extra_css %}
-<style>
+<style nonce="{{ csp_nonce }}">
     /* 执行控制台特定样式 */
     .execution-console-layout {
         display: grid !important;
@@ -233,12 +233,31 @@
             height: 180px;
         }
     }
+
+    .intent-style-1817febd58 { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; width: 100%; }
+    .intent-style-126244f135 { flex: 1; }
+    .intent-style-6e22c58a7a { display: none; }
+    .intent-style-4e3e999162 { background: #f8f8f8; border: 1px solid #e8e8e8; margin-bottom: 16px; }
+    .intent-style-b3a2297a12 { margin-bottom: 0; }
+    .intent-style-7c0f86ab54 { cursor: pointer; }
+    .intent-style-f58fb1ec3e { background: #f8f8f8; border: 1px solid #e8e8e8; }
+    .intent-style-699681a0ce { background: transparent; border: none; }
+    .intent-style-e9140a4d72 { background: transparent; border: none; padding: 12px 0; }
+    .intent-style-37ab52c9d6 { width: 100%; }
+    .intent-style-4933c08820 { margin-bottom: 16px; }
+    .intent-style-92951960c6 { height: 6px; }
+    .intent-style-a356a882a8 { width: 0%; background: #333333; }
+    .intent-style-dbe752fa7f { text-decoration: underline; }
+    .screenshot-thumbnail-frame { text-align: center; }
+    .intent-progress-success { accent-color: #28a745; }
+    .intent-progress-stopped { accent-color: #ffc107; }
+    .intent-progress-failed { accent-color: #dc3545; }
 </style>
 {% endblock %}
 
 {% block content %}
 <!-- 主要内容区域 -->
-<div class="execution-console-layout" style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px; width: 100%;">
+<div class="execution-console-layout intent-style-1817febd58">
     <!-- 左侧：执行控制 -->
     <div class="card">
         <h3 class="card-title">执行控制</h3>
@@ -249,11 +268,11 @@
             <div class="form-group">
                 <label class="form-label">选择测试用例</label>
                 <div class="flex items-center gap-2">
-                    <select id="testcase-select" class="form-select" style="flex: 1;">
+                    <select id="testcase-select" class="form-select intent-style-126244f135">
                         <option value="">请选择测试用例</option>
                     </select>
-                    <button id="back-to-edit" class="btn btn-primary btn-small" style="display: none;"
-                        onclick="backToEdit()">
+                    <button id="back-to-edit" class="btn btn-primary btn-small" hidden
+                        data-capability="{{ 'allowed' if intent_capabilities.can_mutate else 'denied' }}">
                         修改用例
                     </button>
                 </div>
@@ -277,9 +296,9 @@
             </div>
 
             <!-- 缓存设置 -->
-            <div class="card" style="background: #f8f8f8; border: 1px solid #e8e8e8; margin-bottom: 16px;">
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="flex items-center gap-2" style="cursor: pointer;">
+            <div class="card intent-style-4e3e999162">
+                <div class="form-group intent-style-b3a2297a12">
+                    <label class="flex items-center gap-2 intent-style-7c0f86ab54">
                         <input type="checkbox" id="enable-cache" checked>
                         <span>启用AI缓存</span>
                     </label>
@@ -289,13 +308,14 @@
 
             <!-- 执行按钮 -->
             <div class="flex gap-2 mb-3">
-                <button id="start-execution" class="btn btn-primary w-full">开始执行</button>
+                <button id="start-execution" class="btn btn-primary w-full"
+                    data-capability="{{ 'allowed' if intent_capabilities.can_execute else 'denied' }}">开始执行</button>
                 <button id="stop-execution" class="btn btn-ghost w-full" disabled>停止执行</button>
-                <button id="retry-execution" class="btn btn-ghost w-full" disabled style="display: none;">重试调度</button>
+                <button id="retry-execution" class="btn btn-ghost w-full" disabled hidden>重试调度</button>
             </div>
 
             <!-- 超时设置 -->
-            <div class="card" style="background: #f8f8f8; border: 1px solid #e8e8e8; margin-bottom: 16px;">
+            <div class="card intent-style-4e3e999162">
                 <div class="card-title">超时设置</div>
                 <div class="card-subtitle">配置页面加载和操作的超时时间</div>
 
@@ -315,28 +335,29 @@
                 </div>
 
                 <div class="flex items-center gap-2 mt-2">
-                    <button class="btn btn-small btn-ghost" onclick="resetTimeouts()">重置默认</button>
+                    <button id="reset-timeouts" class="btn btn-small btn-ghost">重置默认</button>
                     <span class="text-sm text-gray-500">建议范围：5-120秒</span>
                 </div>
             </div>
 
             <!-- 状态信息 -->
-            <div class="card" style="background: #f8f8f8; border: 1px solid #e8e8e8;">
+            <div class="card intent-style-f58fb1ec3e">
                 <div class="card-title">状态信息</div>
-                <div class="list" style="background: transparent; border: none;">
-                    <div class="list-item" style="background: transparent; border: none; padding: 12px 0;">
+                <div class="list intent-style-699681a0ce">
+                    <div class="list-item intent-style-e9140a4d72">
                         <div class="list-item-content">
                             <div class="list-item-title">本地代理服务器</div>
                             <div class="list-item-subtitle">localhost:3001</div>
                         </div>
                         <div class="flex items-center gap-2">
-                            <button class="btn btn-small btn-ghost" onclick="reconnectLocalProxy()">重连</button>
+                            <button id="reconnect-local-proxy" class="btn btn-small btn-ghost"
+                                data-capability="{{ 'allowed' if intent_capabilities.can_use_local_proxy else 'denied' }}">重连</button>
                             <div id="proxy-status" class="status status-error">
                                 <span class="proxy-status-tooltip">未连接</span>
                             </div>
                         </div>
                     </div>
-                    <div class="list-item" style="background: transparent; border: none; padding: 12px 0;">
+                    <div class="list-item intent-style-e9140a4d72">
                         <div class="list-item-content">
                             <div class="list-item-title">执行状态</div>
                             <div class="list-item-subtitle" id="execution-status">等待中</div>
@@ -349,21 +370,19 @@
     </div>
 
     <!-- 右侧：实时信息 -->
-    <div class="flex flex-column gap-2" style="width: 100%;">
+    <div class="flex flex-column gap-2 intent-style-37ab52c9d6">
         <!-- 执行日志 -->
         <div class="card">
             <h3 class="card-title">执行日志</h3>
             <p class="card-subtitle">实时执行日志输出</p>
 
             <!-- 执行进度条 -->
-            <div class="execution-progress-section" style="margin-bottom: 16px;">
+            <div class="execution-progress-section intent-style-4933c08820">
                 <div class="flex items-center justify-between mb-2">
                     <div class="text-sm text-gray-600">执行进度</div>
                     <div class="text-sm text-gray-600" id="execution-progress">0/0</div>
                 </div>
-                <div class="progress" style="height: 6px;">
-                    <div class="progress-bar" id="execution-progress-bar" style="width: 0%; background: #333333;"></div>
-                </div>
+                <progress class="intent-progress" id="execution-progress-bar" max="1" value="0"></progress>
                 <div class="text-sm text-gray-500 mt-1" id="current-step-info">等待执行开始...</div>
             </div>
 
@@ -400,7 +419,7 @@
                     <div id="screenshot-placeholder" class="empty-state">
                         等待截图...
                     </div>
-                    <img id="current-screenshot" class="screenshot-image" style="display: none;">
+                    <img id="current-screenshot" class="screenshot-image" alt="当前执行截图" hidden>
                 </div>
             </div>
         </div>
@@ -442,8 +461,8 @@
             报告包含截图、日志和错误诊断信息
         </div>
         <div class="flex items-center gap-1">
-            <button class="btn btn-small btn-ghost" onclick="clearReports()">清空报告</button>
-            <button class="btn btn-small btn-ghost" onclick="refreshReports()">刷新</button>
+            <button id="clear-reports" class="btn btn-small btn-ghost">清空报告</button>
+            <button id="refresh-reports" class="btn btn-small btn-ghost">刷新</button>
         </div>
     </div>
 </div>
@@ -451,7 +470,7 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/durable-execution-control.js') }}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
     let currentExecution = null;
     let screenshotHistory = [];
     let localProxySocket = null;
@@ -462,7 +481,16 @@
         apiBaseUrl: window.API_BASE_URL,
         getCurrentExecutionId: () => currentExecution && currentExecution.execution_id,
         applyDurableExecution: (execution, expectedExecutionId) => {
-            applyDurableExecution(execution, expectedExecutionId);
+            const applied = applyDurableExecution(execution, expectedExecutionId);
+            if (
+                applied &&
+                ['pending', 'running'].includes(execution.status) &&
+                hasLifecycleCallbackExhaustedDiagnostic(currentExecution)
+            ) {
+                showRetryControl('终态同步失败，可重试同一任务');
+                durableExecutionControl.cancelContinuousReconciliation();
+            }
+            return applied;
         },
         onTerminal: (execution, expectedExecutionId) => {
             onExecutionCompleted(execution, expectedExecutionId);
@@ -504,13 +532,16 @@
         loadTestCases();
         updateExecutionReportsUI();
         initializeWebSocket();
-        connectToLocalProxy();
-
         // 设置事件监听器
         document.getElementById('start-execution').addEventListener('click', startExecution);
         document.getElementById('stop-execution').addEventListener('click', stopExecution);
         document.getElementById('retry-execution').addEventListener('click', retryExecution);
         document.getElementById('execution-type').addEventListener('change', updateExecutionType);
+        document.getElementById('back-to-edit').addEventListener('click', backToEdit);
+        document.getElementById('reset-timeouts').addEventListener('click', resetTimeouts);
+        document.getElementById('reconnect-local-proxy').addEventListener('click', reconnectLocalProxy);
+        document.getElementById('clear-reports').addEventListener('click', clearReports);
+        document.getElementById('refresh-reports').addEventListener('click', refreshReports);
     });
 
     function setCanonicalExecutionIdInUrl(executionId) {
@@ -558,6 +589,9 @@
         }
 
         if (outcome.kind === 'active') {
+            if ({{ 'true' if intent_capabilities.can_use_local_proxy else 'false' }}) {
+                void connectToLocalProxy(executionId);
+            }
             void refreshExecutionStatus({
                 expectedExecutionId: executionId,
                 reconcileUntilTerminal: true
@@ -635,8 +669,33 @@
     }
 
     // 连接到本地代理服务器
-    function connectToLocalProxy() {
+    async function connectToLocalProxy(expectedExecutionId) {
         try {
+            if (
+                !expectedExecutionId ||
+                !currentExecution ||
+                currentExecution.execution_id !== expectedExecutionId
+            ) {
+                return { kind: 'stale_execution' };
+            }
+
+            const ticketResponse = await axios.post(
+                `${window.API_BASE_URL}/executions/${expectedExecutionId}/proxy-ticket`,
+                {}
+            );
+            if (
+                !currentExecution ||
+                currentExecution.execution_id !== expectedExecutionId
+            ) {
+                return { kind: 'stale_execution' };
+            }
+            if (
+                ticketResponse.data.code !== 200 ||
+                ticketResponse.data.data.execution_id !== expectedExecutionId
+            ) {
+                throw new Error('Proxy ticket response did not match current execution');
+            }
+
             // 如果已有连接，先断开
             if (localProxySocket) {
                 localProxySocket.disconnect();
@@ -646,9 +705,11 @@
             localProxySocket = io('http://localhost:3001', {
                 timeout: 5000,
                 forceNew: true,
-                reconnection: true,
-                reconnectionAttempts: 3,
-                reconnectionDelay: 1000
+                reconnection: false,
+                auth: {
+                    ticket: ticketResponse.data.data.ticket,
+                    executionId: expectedExecutionId
+                }
             });
 
             localProxySocket.on('connect', function () {
@@ -692,7 +753,7 @@
                     return;
                 }
                 addLog(`本地代理开始执行: ${data.testcase}`, 'success');
-                refreshExecutionStatus({ expectedExecutionId: data.executionId });
+                void reconcileExecutionNow(data.executionId);
             });
 
             localProxySocket.on('execution-completed', function (data) {
@@ -701,10 +762,7 @@
                 }
                 console.log('Received execution-completed event:', data);
                 addLog('收到执行完成信号，正在核验持久化状态', 'info');
-                refreshExecutionStatus({
-                    expectedExecutionId: data.executionId,
-                    reconcileUntilTerminal: true
-                });
+                void reconcileExecutionNow(data.executionId);
             });
 
             localProxySocket.on('execution-stopped', function (data) {
@@ -713,10 +771,7 @@
                 }
                 console.log('Received execution-stopped event:', data);
                 addLog('收到执行停止信号，正在核验持久化状态', 'info');
-                refreshExecutionStatus({
-                    expectedExecutionId: data.executionId,
-                    reconcileUntilTerminal: true
-                });
+                void reconcileExecutionNow(data.executionId);
             });
 
             localProxySocket.on('lifecycle-callback-failed', function (data) {
@@ -832,6 +887,8 @@
                 }
             }, 6000);
 
+            return { kind: 'connecting', executionId: expectedExecutionId };
+
         } catch (error) {
             updateProxyStatus('disconnected');
             addLog('本地代理服务器连接失败，请检查是否已正确安装并启动', 'error');
@@ -862,14 +919,21 @@
     // 更新执行类型
     function updateExecutionType() {
         // 始终连接到本地代理
-        connectToLocalProxy();
+        if (currentExecution && currentExecution.execution_id) {
+            void connectToLocalProxy(currentExecution.execution_id);
+        }
     }
 
     // 手动重连本地代理
     function reconnectLocalProxy() {
         addLog('正在尝试重连本地代理服务器...', 'info');
         updateProxyStatus('connecting');
-        connectToLocalProxy();
+        if (!currentExecution || !currentExecution.execution_id) {
+            addLog('请先创建或恢复一个执行任务，再连接本地代理', 'warning');
+            updateProxyStatus('disconnected');
+            return;
+        }
+        void connectToLocalProxy(currentExecution.execution_id);
     }
 
     // 重置超时设置
@@ -881,7 +945,7 @@
 
     function showRetryControl(statusText = '调度失败，可重试') {
         const retryButton = document.getElementById('retry-execution');
-        retryButton.style.display = 'inline-block';
+        retryButton.hidden = false;
         retryButton.disabled = false;
         document.getElementById('execution-status').textContent = statusText;
     }
@@ -889,7 +953,7 @@
     function hideRetryControl() {
         const retryButton = document.getElementById('retry-execution');
         retryButton.disabled = true;
-        retryButton.style.display = 'none';
+        retryButton.hidden = true;
     }
 
     function hasLifecycleCallbackExhaustedDiagnostic(execution) {
@@ -923,6 +987,9 @@
         document.getElementById('stop-execution').disabled = false;
         showRetryControl('调度失败，可重试');
         addLog(`执行 ${executionId} 已持久化，但调度失败，可重试`, 'error');
+        if ({{ 'true' if intent_capabilities.can_use_local_proxy else 'false' }}) {
+            void connectToLocalProxy(executionId);
+        }
         return true;
     }
 
@@ -998,6 +1065,9 @@
                 document.getElementById('execution-status').textContent = '等待启动';
 
                 addLog(`执行任务已创建: ${currentExecution.execution_id}`, 'success');
+                if ({{ 'true' if intent_capabilities.can_use_local_proxy else 'false' }}) {
+                    void connectToLocalProxy(expectedExecutionId);
+                }
                 void refreshExecutionStatus({
                     expectedExecutionId,
                     reconcileUntilTerminal: true
@@ -1124,7 +1194,39 @@
         return true;
     }
 
-    // 刷新执行状态（页面重新可见或收到本地代理信号时调用）
+    async function reconcileExecutionNow(expectedExecutionId) {
+        if (!durableExecutionControl.isCurrentExecutionId(expectedExecutionId)) {
+            return { kind: 'stale', executionId: expectedExecutionId };
+        }
+        const outcome = await durableExecutionControl.reconcile({
+            expectedExecutionId
+        });
+        if (!durableExecutionControl.isCurrentExecutionId(expectedExecutionId)) {
+            return outcome;
+        }
+        if (outcome.kind === 'terminal') {
+            durableExecutionControl.cancelContinuousReconciliation();
+            return outcome;
+        }
+        if (outcome.kind === 'active') {
+            if (hasLifecycleCallbackExhaustedDiagnostic(currentExecution)) {
+                showRetryControl('终态同步失败，可重试同一任务');
+                addLog('持久化记录表明生命周期回调已耗尽，可重试同一任务', 'error');
+                durableExecutionControl.cancelContinuousReconciliation();
+            } else {
+                hideRetryControl();
+                document.getElementById('execution-status').textContent = (
+                    outcome.status === 'running' ? '执行中' : '等待启动'
+                );
+            }
+            return outcome;
+        }
+        showRetryControl('终态同步失败，可重试同一任务');
+        addLog(`服务端状态协调失败 (${outcome.kind})，可重试同一任务`, 'error');
+        return outcome;
+    }
+
+    // 首次恢复使用 GET；active 执行随后持续 POST 同源 reconcile。
     async function refreshExecutionStatus(options = {}) {
         const expectedExecutionId = options.expectedExecutionId || (
             currentExecution && currentExecution.execution_id
@@ -1136,50 +1238,23 @@
             return { kind: 'stale', executionId: expectedExecutionId };
         }
 
-        const outcome = await durableExecutionControl.refresh({
-            expectedExecutionId,
-            reconcileUntilTerminal: Boolean(options.reconcileUntilTerminal)
-        });
+        const outcome = options.reconcileUntilTerminal
+            ? await durableExecutionControl.startContinuousReconciliation({
+                expectedExecutionId
+            })
+            : await durableExecutionControl.refresh({ expectedExecutionId });
 
-        if (outcome.kind === 'exhausted') {
-            const healthyActiveExhaustion = (
-                !outcome.lastFailure &&
-                ['pending', 'running'].includes(outcome.lastStatus)
+        if (!durableExecutionControl.isCurrentExecutionId(expectedExecutionId)) {
+            return outcome;
+        }
+        if (outcome.kind === 'retry_required') {
+            showRetryControl('状态同步失败，可重试同一任务');
+            addLog(
+                `持续状态协调失败 (${outcome.failures} 次)，保留当前执行以便重试`,
+                'warning'
             );
-            if (healthyActiveExhaustion) {
-                const reconcileOutcome = await durableExecutionControl.reconcile();
-                if (reconcileOutcome.kind === 'terminal') {
-                    return reconcileOutcome;
-                }
-                if (!durableExecutionControl.isCurrentExecutionId(expectedExecutionId)) {
-                    return reconcileOutcome;
-                }
-                if (reconcileOutcome.kind === 'active') {
-                    if (hasLifecycleCallbackExhaustedDiagnostic(currentExecution)) {
-                        showRetryControl('终态同步失败，可重试同一任务');
-                        addLog('持久化记录表明生命周期回调已耗尽，可重试同一任务', 'error');
-                    } else {
-                        hideRetryControl();
-                        document.getElementById('execution-status').textContent = (
-                            reconcileOutcome.status === 'running' ? '执行中' : '等待启动'
-                        );
-                        addLog('服务端确认任务仍在进行，继续保留当前执行', 'info');
-                    }
-                } else {
-                    showRetryControl('终态同步失败，可重试同一任务');
-                    addLog(
-                        `服务端终态收敛失败 (${reconcileOutcome.kind})，可重试同一任务`,
-                        'error'
-                    );
-                }
-                return reconcileOutcome;
-            } else {
-                showRetryControl('调度失败，可重试');
-                addLog(
-                    `持久化状态对账已耗尽 (${outcome.attempts} 次)，保留当前执行以便重试`,
-                    'warning'
-                );
-            }
+        } else if (outcome.kind === 'cancelled' || outcome.kind === 'stale') {
+            return outcome;
         } else if (
             outcome.kind === 'request_failed' ||
             outcome.kind === 'http_failure' ||
@@ -1205,11 +1280,11 @@
         // 更新进度条
         const progressBar = document.getElementById('execution-progress-bar');
         if (progressBar && totalSteps > 0) {
-            const percentage = (currentStep / totalSteps) * 100;
-            progressBar.style.width = `${percentage}%`;
-            progressBar.style.background = '#333333';
+            progressBar.max = totalSteps;
+            progressBar.value = Math.min(currentStep, totalSteps);
         } else if (progressBar) {
-            progressBar.style.width = '0%';
+            progressBar.max = 1;
+            progressBar.value = 0;
         }
 
         // 更新当前步骤信息
@@ -1265,13 +1340,18 @@
         // 更新进度条颜色
         const progressBar = document.getElementById('execution-progress-bar');
         if (progressBar) {
-            progressBar.style.width = '100%';
+            progressBar.value = progressBar.max;
+            progressBar.classList.remove(
+                'intent-progress-success',
+                'intent-progress-stopped',
+                'intent-progress-failed'
+            );
             if (data.status === 'success') {
-                progressBar.style.background = '#28a745'; // 成功时显示绿色
+                progressBar.classList.add('intent-progress-success');
             } else if (data.status === 'stopped') {
-                progressBar.style.background = '#ffc107'; // 停止时显示黄色
+                progressBar.classList.add('intent-progress-stopped');
             } else {
-                progressBar.style.background = '#dc3545'; // 失败时显示红色
+                progressBar.classList.add('intent-progress-failed');
             }
         }
 
@@ -1309,9 +1389,14 @@
         const placeholder = document.getElementById('screenshot-placeholder');
         const screenshot = document.getElementById('current-screenshot');
 
-        placeholder.style.display = 'none';
-        screenshot.src = imagePath;
-        screenshot.style.display = 'block';
+        const safeImageUrl = IntentSafeDom.safeUrl(imagePath, ['http:', 'https:', 'data:']);
+        if (!safeImageUrl) {
+            addLog('拒绝显示不受支持的截图地址', 'warning');
+            return;
+        }
+        placeholder.hidden = true;
+        screenshot.src = safeImageUrl;
+        screenshot.hidden = false;
     }
 
     // 添加截图到历史
@@ -1322,16 +1407,25 @@
 
         // 如果这是第一个截图，清空空状态
         if (screenshotHistory.length === 1) {
-            container.innerHTML = '';
+            container.replaceChildren();
         }
 
         const thumbnailDiv = document.createElement('div');
-        thumbnailDiv.style.textAlign = 'center';
+        thumbnailDiv.className = 'screenshot-thumbnail-frame';
 
         const img = document.createElement('img');
-        img.src = screenshot.path;
+        const safeImageUrl = IntentSafeDom.safeUrl(
+            screenshot.path,
+            ['http:', 'https:', 'data:']
+        );
+        if (!safeImageUrl) {
+            addLog('拒绝保存不受支持的截图地址', 'warning');
+            return;
+        }
+        img.src = safeImageUrl;
+        img.alt = screenshot.step_name == null ? '步骤截图' : String(screenshot.step_name);
         img.className = 'screenshot-thumbnail';
-        img.onclick = () => showScreenshot(screenshot.path);
+        img.addEventListener('click', () => showScreenshot(safeImageUrl));
 
         const info = document.createElement('div');
         info.className = 'screenshot-info';
@@ -1349,13 +1443,11 @@
     function clearScreenshotHistory() {
         screenshotHistory = [];
         const historyContainer = document.getElementById('screenshot-history-container');
-        historyContainer.innerHTML = `
-            <div class="empty-state">
-                暂无截图历史
-            </div>
-        `;
-        document.getElementById('screenshot-placeholder').style.display = 'block';
-        document.getElementById('current-screenshot').style.display = 'none';
+        const emptyState = IntentSafeDom.text('div', '暂无截图历史');
+        emptyState.className = 'empty-state';
+        IntentSafeDom.replaceChildren(historyContainer, [emptyState]);
+        document.getElementById('screenshot-placeholder').hidden = false;
+        document.getElementById('current-screenshot').hidden = true;
     }
 
     // 全局变量存储执行报告
@@ -1386,18 +1478,21 @@
         const listContainer = document.getElementById('execution-reports-list');
 
         if (executionReports.length === 0) {
-            listContainer.innerHTML = `
-                <div class="list-item">
-                    <div class="list-item-content">
-                        <div class="list-item-title">暂无执行报告</div>
-                        <div class="list-item-subtitle">执行测试后将生成详细报告</div>
-                    </div>
-                </div>
-            `;
+            const item = document.createElement('div');
+            item.className = 'list-item';
+            const content = document.createElement('div');
+            content.className = 'list-item-content';
+            const title = IntentSafeDom.text('div', '暂无执行报告');
+            title.className = 'list-item-title';
+            const subtitle = IntentSafeDom.text('div', '执行测试后将生成详细报告');
+            subtitle.className = 'list-item-subtitle';
+            content.append(title, subtitle);
+            item.appendChild(content);
+            IntentSafeDom.replaceChildren(listContainer, [item]);
             return;
         }
 
-        listContainer.innerHTML = '';
+        listContainer.replaceChildren();
 
         executionReports.forEach(report => {
             const timeAgo = formatTimeAgo(report.timestamp);
@@ -1405,25 +1500,31 @@
 
             const listItem = document.createElement('div');
             listItem.className = 'list-item';
-            listItem.innerHTML = `
-                <div class="list-item-content">
-                    <div class="list-item-title">${report.testcaseName || '未知测试用例'}</div>
-                    <div class="list-item-subtitle">
-                        <a href="file://${report.path}" target="_blank" class="text-blue-600 hover:text-blue-800" style="text-decoration: underline;">
-                            ${report.path}
-                        </a>
-                    </div>
-                    <div class="list-item-meta">
-                        <span class="text-gray-600">报告文件: ${fileName}</span>
-                        <span class="text-gray-400">•</span>
-                        <span class="text-gray-600">${timeAgo}</span>
-                    </div>
-                </div>
-                <div class="flex items-center gap-1">
-                    <button class="btn btn-small btn-ghost" onclick="copyReportPath('${report.path}')">复制路径</button>
-                    <div class="status status-success"></div>
-                </div>
-            `;
+            const content = document.createElement('div');
+            content.className = 'list-item-content';
+            const title = IntentSafeDom.text('div', report.testcaseName || '未知测试用例');
+            title.className = 'list-item-title';
+            const path = IntentSafeDom.text('div', report.path);
+            path.className = 'list-item-subtitle';
+            const metadata = document.createElement('div');
+            metadata.className = 'list-item-meta';
+            const file = IntentSafeDom.text('span', `报告文件: ${fileName}`);
+            file.className = 'text-gray-600';
+            const separator = IntentSafeDom.text('span', '•');
+            separator.className = 'text-gray-400';
+            const age = IntentSafeDom.text('span', timeAgo);
+            age.className = 'text-gray-600';
+            metadata.append(file, separator, age);
+            content.append(title, path, metadata);
+
+            const actions = document.createElement('div');
+            actions.className = 'flex items-center gap-1';
+            const copy = IntentSafeDom.button('复制路径', () => copyReportPath(report.path));
+            copy.className = 'btn btn-small btn-ghost';
+            const status = document.createElement('div');
+            status.className = 'status status-success';
+            actions.append(copy, status);
+            listItem.append(content, actions);
 
             listContainer.appendChild(listItem);
         });
@@ -1498,7 +1599,7 @@
     function showBackToEditButton(testcaseId) {
         const backButton = document.getElementById('back-to-edit');
         if (backButton) {
-            backButton.style.display = 'inline-block';
+            backButton.hidden = false;
             backButton.setAttribute('data-testcase-id', testcaseId);
         }
     }
@@ -1508,7 +1609,13 @@
         const backButton = document.getElementById('back-to-edit');
         const testcaseId = backButton.getAttribute('data-testcase-id');
         if (testcaseId) {
-            window.location.href = `/intent-tester/testcases/${testcaseId}/edit`;
+            const safeEditUrl = IntentSafeDom.safeUrl(
+                `/intent-tester/testcases/${testcaseId}/edit`,
+                ['http:', 'https:']
+            );
+            if (safeEditUrl) {
+                window.location.assign(safeEditUrl);
+            }
         }
     }
 

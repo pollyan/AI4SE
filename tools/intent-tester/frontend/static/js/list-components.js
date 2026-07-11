@@ -26,7 +26,7 @@ function createStandardListItem(item, config = {}) {
     
     if (clickAction) {
         listItem.title = clickTooltip;
-        listItem.onclick = () => clickAction(item.id || item);
+        listItem.addEventListener('click', () => clickAction(item.id || item));
     }
 
     // 创建内容区域
@@ -78,10 +78,10 @@ function createStandardListItem(item, config = {}) {
         const button = document.createElement('button');
         button.className = `btn btn-small ${action.type || 'btn-ghost'}`;
         button.textContent = action.text;
-        button.onclick = (event) => {
+        button.addEventListener('click', (event) => {
             event.stopPropagation();
             action.handler(item.id || item);
-        };
+        });
         actionsDiv.appendChild(button);
     });
 
@@ -107,8 +107,8 @@ function createStandardListItem(item, config = {}) {
 function createTestCaseListItem(testcase) {
     const steps = testcase.steps || [];
     const stepCount = steps.length;
-    const executionCount = testcase.execution_count || Math.floor(Math.random() * 300) + 50;
-    const successRate = testcase.success_rate || (90 + Math.random() * 10).toFixed(1);
+    const executionCount = testcase.execution_count || 0;
+    const successRate = testcase.success_rate || 0;
     const statusText = testcase.status || '活跃';
 
     return createStandardListItem(testcase, {
@@ -194,7 +194,7 @@ function createExecutionListItem(execution) {
  * @param {Function} itemCreator - 项目创建函数
  */
 function renderList(items, container, itemCreator) {
-    container.innerHTML = '';
+    container.replaceChildren();
     
     if (items.length === 0) {
         showEmptyState(container);
@@ -219,12 +219,16 @@ function showEmptyState(container, options = {}) {
         className = 'empty-state'
     } = options;
 
-    container.innerHTML = `
-        <div class="${className}">
-            <div class="empty-state-text">${text}</div>
-            <div class="empty-state-subtext">${subtext}</div>
-        </div>
-    `;
+    const empty = document.createElement('div');
+    empty.className = className;
+    const title = document.createElement('div');
+    title.className = 'empty-state-text';
+    title.textContent = text;
+    const subtitle = document.createElement('div');
+    subtitle.className = 'empty-state-subtext';
+    subtitle.textContent = subtext;
+    empty.append(title, subtitle);
+    container.replaceChildren(empty);
 }
 
 /**
@@ -233,12 +237,12 @@ function showEmptyState(container, options = {}) {
  * @param {string} message - 加载消息
  */
 function showLoading(container, message = '正在加载...') {
-    container.innerHTML = `
-        <div class="loading">
-            <div class="loading-spinner"></div>
-            ${message}
-        </div>
-    `;
+    const loading = document.createElement('div');
+    loading.className = 'loading';
+    const spinner = document.createElement('div');
+    spinner.className = 'loading-spinner';
+    loading.append(spinner, document.createTextNode(message));
+    container.replaceChildren(loading);
 }
 
 /**

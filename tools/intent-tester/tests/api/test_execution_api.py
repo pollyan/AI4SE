@@ -14,6 +14,8 @@ from sqlalchemy import text
 
 from backend.services.proxy_execution_client import ProxyExecutionClientError
 
+PROXY_TOKEN = "qs04-canary-proxy-token-0123456789abcdef"
+
 
 class RecordingProxyExecutionClient:
     """Injectable proxy double that records the controller boundary."""
@@ -89,6 +91,43 @@ class StubProxySession:
 
 
 class TestProxyExecutionClient:
+    def test_should_attach_canonical_bearer_to_every_proxy_request(self):
+        from backend.services.proxy_execution_client import ProxyExecutionClient
+
+        token = "qs04-canary-proxy-token-0123456789abcdef"
+        session = StubProxySession(
+            StubProxyResponse(
+                payload={
+                    "success": True,
+                    "executionId": "flask-execution-id",
+                    "status": "running",
+                }
+            )
+        )
+        client = ProxyExecutionClient(
+            base_url="http://proxy.example", session=session, token=token
+        )
+        client.dispatch_execution(
+            {"executionId": "flask-execution-id", "testcase": {"id": 1}}
+        )
+        client.stop_execution("flask-execution-id")
+        client.get_execution_status("flask-execution-id")
+
+        assert len(session.calls) == 3
+        assert all(
+            kwargs["headers"] == {"Authorization": f"Bearer {token}"}
+            for _, kwargs in session.calls
+        )
+        assert token not in repr([response for response in ()])
+
+    def test_should_fail_closed_without_base_url_or_token(self):
+        from backend.services.proxy_execution_client import ProxyExecutionClient
+
+        with pytest.raises(ValueError, match="base_url"):
+            ProxyExecutionClient(token="x" * 32)
+        with pytest.raises(ValueError, match="token"):
+            ProxyExecutionClient(base_url="http://proxy.example")
+
     def test_should_post_dispatch_body_and_scoped_stop_path(self):
         from backend.services.proxy_execution_client import ProxyExecutionClient
 
@@ -98,7 +137,7 @@ class TestProxyExecutionClient:
             )
         )
         client = ProxyExecutionClient(
-            base_url="http://proxy.example/", timeout=7, session=session
+            base_url="http://proxy.example/", timeout=7, session=session, token=PROXY_TOKEN
         )
         dispatch_payload = {
             "executionId": "flask-execution-id",
@@ -112,11 +151,11 @@ class TestProxyExecutionClient:
         assert session.calls == [
             (
                 "http://proxy.example/api/execute-testcase",
-                {"json": dispatch_payload, "timeout": 7},
+                {"json": dispatch_payload, "timeout": 7, "headers": {"Authorization": f"Bearer {PROXY_TOKEN}"}},
             ),
             (
                 "http://proxy.example/api/stop-execution/flask-execution-id",
-                {"json": None, "timeout": 7},
+                {"json": None, "timeout": 7, "headers": {"Authorization": f"Bearer {PROXY_TOKEN}"}},
             ),
         ]
 
@@ -132,7 +171,7 @@ class TestProxyExecutionClient:
                 payload={"success": False, "error": "proxy overloaded"},
             )
         )
-        client = ProxyExecutionClient(base_url="http://proxy.example", session=session)
+        client = ProxyExecutionClient(base_url="http://proxy.example", session=session, token=PROXY_TOKEN)
 
         with pytest.raises(ProxyExecutionClientError, match="503.*proxy overloaded"):
             client.dispatch_execution(
@@ -148,7 +187,7 @@ class TestProxyExecutionClient:
         )
 
         session = StubProxySession(error=requests.ConnectionError("connection reset"))
-        client = ProxyExecutionClient(base_url="http://proxy.example", session=session)
+        client = ProxyExecutionClient(base_url="http://proxy.example", session=session, token=PROXY_TOKEN)
 
         with pytest.raises(ProxyExecutionClientError, match="connection reset"):
             client.stop_execution("flask-execution-id")
@@ -165,7 +204,7 @@ class TestProxyExecutionClient:
                 }
             )
         )
-        client = ProxyExecutionClient(base_url="http://proxy.example/", session=session)
+        client = ProxyExecutionClient(base_url="http://proxy.example/", session=session, token=PROXY_TOKEN)
 
         payload = client.get_execution_status("flask/execution-id")
 
@@ -173,7 +212,7 @@ class TestProxyExecutionClient:
         assert session.calls == [
             (
                 "http://proxy.example/api/execution-status/flask%2Fexecution-id",
-                {"timeout": 30.0},
+                {"timeout": 30.0, "headers": {"Authorization": f"Bearer {PROXY_TOKEN}"}},
             )
         ]
 
@@ -199,6 +238,7 @@ class TestProxyExecutionClient:
         client = ProxyExecutionClient(
             base_url="http://proxy.example",
             session=StubProxySession(StubProxyResponse(payload=payload)),
+            token=PROXY_TOKEN,
         )
 
         with pytest.raises(ProxyExecutionClientError):
@@ -454,7 +494,7 @@ class TestExecutionLifecycleCallbackAPI:
     """Durable lifecycle callback contract (POST /api/executions/<id>/lifecycle)."""
 
     def test_should_apply_started_and_duplicate_result_without_duplicate_snapshots(
-        self, api_client, create_execution_history, assert_api_response
+        self, proxy_api_client, create_execution_history, assert_api_response
     ):
         execution = create_execution_history(
             status="pending",
@@ -465,8 +505,8 @@ class TestExecutionLifecycleCallbackAPI:
         lifecycle_url = f"/api/executions/{execution.execution_id}/lifecycle"
 
         started_payload = {"event": "started", "status": "running"}
-        assert_api_response(api_client.post(lifecycle_url, json=started_payload), 200)
-        assert_api_response(api_client.post(lifecycle_url, json=started_payload), 200)
+        assert_api_response(proxy_api_client.post(lifecycle_url, json=started_payload), 200)
+        assert_api_response(proxy_api_client.post(lifecycle_url, json=started_payload), 200)
 
         result_payload = {
             "event": "result",
@@ -481,10 +521,10 @@ class TestExecutionLifecycleCallbackAPI:
             ],
         }
         result = assert_api_response(
-            api_client.post(lifecycle_url, json=result_payload), 200
+            proxy_api_client.post(lifecycle_url, json=result_payload), 200
         )
         duplicate_result = assert_api_response(
-            api_client.post(lifecycle_url, json=result_payload), 200
+            proxy_api_client.post(lifecycle_url, json=result_payload), 200
         )
 
         from backend.models import ExecutionHistory, StepExecution
@@ -552,13 +592,13 @@ class TestExecutionLifecycleCallbackAPI:
             session.expire_on_commit = previous_expire_on_commit
 
     def test_should_reject_stale_callback_after_terminal_result(
-        self, api_client, create_execution_history, assert_api_response
+        self, proxy_api_client, create_execution_history, assert_api_response
     ):
         execution = create_execution_history(status="running", end_time=None)
         lifecycle_url = f"/api/executions/{execution.execution_id}/lifecycle"
 
         assert_api_response(
-            api_client.post(
+            proxy_api_client.post(
                 lifecycle_url,
                 json={
                     "event": "result",
@@ -569,7 +609,7 @@ class TestExecutionLifecycleCallbackAPI:
             200,
         )
         assert_api_response(
-            api_client.post(
+            proxy_api_client.post(
                 lifecycle_url, json={"event": "started", "status": "running"}
             ),
             409,
@@ -584,7 +624,7 @@ class TestExecutionLifecycleCallbackAPI:
         assert persisted_execution.error_message == "proxy failed"
 
     def test_should_reject_invalid_payloads_and_unknown_execution(
-        self, api_client, create_execution_history, assert_api_response
+        self, proxy_api_client, create_execution_history, assert_api_response
     ):
         execution = create_execution_history(
             status="pending",
@@ -595,22 +635,22 @@ class TestExecutionLifecycleCallbackAPI:
         lifecycle_url = f"/api/executions/{execution.execution_id}/lifecycle"
 
         assert_api_response(
-            api_client.post(lifecycle_url, json={"status": "running"}), 400
+            proxy_api_client.post(lifecycle_url, json={"status": "running"}), 400
         )
         assert_api_response(
-            api_client.post(
+            proxy_api_client.post(
                 lifecycle_url, json={"event": "started", "status": "failed"}
             ),
             400,
         )
         assert_api_response(
-            api_client.post(
+            proxy_api_client.post(
                 lifecycle_url, json={"event": "result", "status": "running"}
             ),
             400,
         )
         assert_api_response(
-            api_client.post(
+            proxy_api_client.post(
                 "/api/executions/missing-execution/lifecycle",
                 json={"event": "started", "status": "running"},
             ),
@@ -618,7 +658,7 @@ class TestExecutionLifecycleCallbackAPI:
         )
 
     def test_should_reject_malformed_nested_step_fields_as_400(
-        self, api_client, create_execution_history, assert_api_response
+        self, proxy_api_client, create_execution_history, assert_api_response
     ):
         execution = create_execution_history(status="running", end_time=None)
         url = f"/api/executions/{execution.execution_id}/lifecycle"
@@ -630,7 +670,7 @@ class TestExecutionLifecycleCallbackAPI:
             {"index": 0, "description": "步骤", "status": "success", "ai_confidence": 2},
         ):
             assert_api_response(
-                api_client.post(
+                proxy_api_client.post(
                     url,
                     json={"event": "result", "status": "success", "steps": [invalid_step]},
                 ),
@@ -665,7 +705,7 @@ class TestExecutionLifecycleCallbackAPI:
     def test_should_reject_invalid_iso_timestamps_before_duplicate_noop(
         self,
         invalid_payload,
-        api_client,
+        proxy_api_client,
         create_execution_history,
         assert_api_response,
     ):
@@ -686,7 +726,7 @@ class TestExecutionLifecycleCallbackAPI:
         db.session.commit()
         payload = {"event": "result", "status": "success", **invalid_payload}
 
-        response = api_client.post(
+        response = proxy_api_client.post(
             f"/api/executions/{execution.execution_id}/lifecycle", json=payload
         )
 
@@ -721,7 +761,7 @@ class TestExecutionLifecycleCallbackAPI:
     def test_should_reject_invalid_terminal_step_contract_without_db_changes(
         self,
         steps,
-        api_client,
+        proxy_api_client,
         create_execution_history,
         assert_api_response,
     ):
@@ -741,7 +781,7 @@ class TestExecutionLifecycleCallbackAPI:
         )
         db.session.commit()
 
-        response = api_client.post(
+        response = proxy_api_client.post(
             f"/api/executions/{execution.execution_id}/lifecycle",
             json={"event": "result", "status": "success", "steps": steps},
         )
@@ -814,7 +854,7 @@ class TestExecutionLifecycleCallbackAPI:
         ]
 
     def test_should_preserve_steps_when_result_omits_steps_and_clear_on_explicit_empty(
-        self, api_client, create_execution_history, assert_api_response
+        self, proxy_api_client, create_execution_history, assert_api_response
     ):
         from backend.models import StepExecution, db
 
@@ -832,7 +872,7 @@ class TestExecutionLifecycleCallbackAPI:
         url = f"/api/executions/{execution.execution_id}/lifecycle"
 
         assert_api_response(
-            api_client.post(url, json={"event": "result", "status": "success"}),
+            proxy_api_client.post(url, json={"event": "result", "status": "success"}),
             200,
         )
         assert (
@@ -854,7 +894,7 @@ class TestExecutionLifecycleCallbackAPI:
         )
         db.session.commit()
         assert_api_response(
-            api_client.post(
+            proxy_api_client.post(
                 f"/api/executions/{second.execution_id}/lifecycle",
                 json={"event": "result", "status": "success", "steps": []},
             ),
@@ -870,6 +910,7 @@ class TestExecutionLifecycleCallbackAPI:
         race_app = create_app(
             {
                 "TESTING": False,
+                "SECRET_KEY": "test-secret-key-with-at-least-32-bytes",
                 "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'lifecycle-race.db'}",
                 "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             }
@@ -1197,6 +1238,152 @@ class TestReconcileExecutionAPI:
         assert raw_secret not in (persisted.result_summary or "")
         assert raw_secret not in (persisted.error_message or "")
 
+    def test_should_persist_only_safe_running_step_projection(
+        self,
+        api_client,
+        create_execution_history,
+        proxy_execution_client,
+        assert_api_response,
+    ):
+        from backend.models import StepExecution
+
+        raw_secret = "running-secret=do-not-persist"
+        execution = create_execution_history(status="pending", end_time=None)
+        proxy_execution_client.status_payload = {
+            "success": True,
+            "executionId": execution.execution_id,
+            "status": "running",
+            "startTime": "2026-07-11T08:00:00.000Z",
+            "steps": [
+                {
+                    "index": 0,
+                    "description": "safe active step",
+                    "status": "success",
+                    "start_time": "2026-07-11T08:00:00.000Z",
+                    "end_time": "2026-07-11T08:00:01.000Z",
+                    "duration": 1000,
+                    "params": {"token": raw_secret},
+                    "error_message": raw_secret,
+                    "screenshot_path": "/private/screenshot.png",
+                }
+            ],
+            "logs": [raw_secret],
+            "screenshots": [raw_secret],
+            "error": raw_secret,
+        }
+
+        response = api_client.post(
+            f"/api/executions/{execution.execution_id}/reconcile"
+        )
+        reconciled = assert_api_response(response, 200)
+        persisted = StepExecution.query.filter_by(
+            execution_id=execution.execution_id
+        ).one()
+
+        assert reconciled["status"] == "running"
+        assert reconciled["step_executions"][0]["step_description"] == (
+            "safe active step"
+        )
+        assert persisted.screenshot_path is None
+        assert persisted.error_message is None
+        assert persisted.ai_confidence is None
+        assert persisted.ai_decision == '{"action": "unknown", "result_data": {}}'
+        assert raw_secret not in response.get_data(as_text=True)
+
+    @pytest.mark.parametrize(
+        "unsafe_steps",
+        [
+            [
+                {"index": 0, "description": "one", "status": "success"},
+                {"index": 0, "description": "duplicate", "status": "failed"},
+            ],
+            [{"index": 0, "description": "invalid", "status": "unknown"}],
+        ],
+    )
+    def test_should_reject_invalid_running_step_projection_without_mutation(
+        self,
+        unsafe_steps,
+        api_client,
+        create_execution_history,
+        proxy_execution_client,
+        assert_api_response,
+    ):
+        from backend.models import StepExecution
+
+        execution = create_execution_history(status="running", end_time=None)
+        proxy_execution_client.status_payload = {
+            "success": True,
+            "executionId": execution.execution_id,
+            "status": "running",
+            "steps": unsafe_steps,
+        }
+
+        response = api_client.post(
+            f"/api/executions/{execution.execution_id}/reconcile"
+        )
+        assert_api_response(response, 502)
+
+        assert (
+            StepExecution.query.filter_by(
+                execution_id=execution.execution_id
+            ).count()
+            == 0
+        )
+
+    def test_terminal_lifecycle_replaces_progress_and_late_progress_is_noop(
+        self, create_execution_history
+    ):
+        from backend.models import StepExecution
+        from backend.services.database_service import DatabaseService
+
+        execution = create_execution_history(status="running", end_time=None)
+        progress = DatabaseService.apply_execution_progress(
+            execution.execution_id,
+            [
+                {
+                    "index": 0,
+                    "description": "intermediate",
+                    "status": "running",
+                    "start_time": "2026-07-11T08:00:00.000Z",
+                    "end_time": None,
+                    "duration": None,
+                }
+            ],
+        )
+        terminal = DatabaseService.apply_execution_lifecycle(
+            execution.execution_id,
+            "result",
+            "success",
+            {
+                "event": "result",
+                "status": "success",
+                "end_time": "2026-07-11T08:00:03.000Z",
+                "steps": [
+                    {
+                        "index": 0,
+                        "description": "final",
+                        "status": "success",
+                        "start_time": "2026-07-11T08:00:00.000Z",
+                        "end_time": "2026-07-11T08:00:03.000Z",
+                        "duration": 3000,
+                    }
+                ],
+            },
+        )
+        late = DatabaseService.apply_execution_progress(
+            execution.execution_id,
+            [{"index": 0, "description": "late", "status": "running"}],
+        )
+        snapshots = StepExecution.query.filter_by(
+            execution_id=execution.execution_id
+        ).all()
+
+        assert progress["outcome"] == "applied"
+        assert terminal["outcome"] == "applied"
+        assert late["outcome"] == "terminal_noop"
+        assert len(snapshots) == 1
+        assert snapshots[0].step_description == "final"
+
     def test_should_sanitize_failed_proxy_state_before_persisting_or_responding(
         self,
         api_client,
@@ -1331,7 +1518,9 @@ class TestReconcileExecutionAPI:
         session = StubProxySession(
             StubProxyResponse(payload=payload)
         )
-        app.config["PROXY_EXECUTION_CLIENT"] = ProxyExecutionClient(session=session)
+        app.config["PROXY_EXECUTION_CLIENT"] = ProxyExecutionClient(
+            base_url="http://proxy.example", session=session, token=PROXY_TOKEN
+        )
 
         response = api_client.post(
             f"/api/executions/{execution.execution_id}/reconcile"
@@ -1406,6 +1595,7 @@ class TestReconcileExecutionAPI:
         reconcile_app = create_app(
             {
                 "TESTING": False,
+                "SECRET_KEY": "test-secret-key-with-at-least-32-bytes",
                 "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'reconcile-race.db'}",
                 "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             }
@@ -1451,9 +1641,28 @@ class TestReconcileExecutionAPI:
 
         def reconcile():
             with reconcile_app.test_client() as client:
+                client.get("/intent-tester/login")
+                with client.session_transaction() as current:
+                    login_csrf = current["csrf_token"]
+                login_response = client.post(
+                    "/intent-tester/login",
+                    data={
+                        "username": "admin",
+                        "password": "test-admin-password",
+                        "csrf_token": login_csrf,
+                    },
+                    headers={"Origin": "http://127.0.0.1:5001"},
+                )
+                assert login_response.status_code == 302
+                with client.session_transaction() as current:
+                    csrf_token = current["csrf_token"]
                 response_codes.append(
                     client.post(
-                        f"/intent-tester/api/executions/{execution_id}/reconcile"
+                        f"/intent-tester/api/executions/{execution_id}/reconcile",
+                        headers={
+                            "Origin": "http://127.0.0.1:5001",
+                            "X-CSRF-Token": csrf_token,
+                        },
                     ).status_code
                 )
 
@@ -1815,186 +2024,32 @@ class TestExportExecutionAPI:
         assert export_data["size"] == 2
 
 
-class TestMidSceneIntegrationAPI:
-    """MidScene集成API测试"""
-
-    def test_should_receive_execution_start_notification(
-        self, api_client, create_test_testcase, assert_api_response
+class TestRetiredMidSceneRoutes:
+    def test_legacy_callbacks_are_404_without_durable_writes(
+        self, api_client, create_test_testcase
     ):
-        """测试接收执行开始通知"""
-        # 先创建一个测试用例
-        testcase = create_test_testcase(name="MidScene执行测试用例")
+        from backend.models import ExecutionHistory
 
-        start_data = {
-            "execution_id": "test-exec-start-001",
+        testcase = create_test_testcase(name="retired MidScene")
+        payload = {
+            "execution_id": "retired-midscene-write",
             "testcase_id": testcase.id,
             "mode": "headless",
-            "browser": "chrome",
-            "executed_by": "midscene_user",
-        }
-
-        response = api_client.post(
-            "/api/midscene/execution-start",
-            json=start_data,
-            content_type="application/json",
-        )
-
-        data = assert_api_response(response, 200)
-
-        # 验证创建了执行记录
-        from backend.models import ExecutionHistory
-
-        execution = ExecutionHistory.query.filter_by(
-            execution_id=start_data["execution_id"]
-        ).first()
-
-        assert execution is not None
-        assert execution.status == "running"
-        assert execution.test_case_id == testcase.id
-
-    def test_should_validate_execution_start_data(
-        self, api_client, assert_api_response
-    ):
-        """测试验证执行开始数据"""
-        # 缺少必需字段
-        invalid_data = {
-            "execution_id": "test-exec-001"
-            # 缺少testcase_id
-        }
-
-        response = api_client.post(
-            "/api/midscene/execution-start",
-            json=invalid_data,
-            content_type="application/json",
-        )
-
-        assert_api_response(response, 400)
-
-    def test_should_receive_execution_result(
-        self, api_client, create_execution_history, assert_api_response
-    ):
-        """测试接收执行结果"""
-        # 先创建一个运行中的执行记录
-        execution = create_execution_history(
-            execution_id="test-exec-result-001", status="running"
-        )
-
-        from datetime import datetime
-
-        result_data = {
-            "execution_id": "test-exec-result-001",
-            "testcase_id": execution.test_case_id,
             "status": "success",
-            "mode": "headless",
-            "start_time": execution.start_time.isoformat(),
-            "end_time": datetime.utcnow().isoformat(),
-            "duration": 1500,
-            "steps_total": 3,
-            "steps_passed": 3,
-            "steps_failed": 0,
         }
 
-        response = api_client.post(
+        for path in (
+            "/api/midscene/execution-start",
             "/api/midscene/execution-result",
-            json=result_data,
-            content_type="application/json",
+        ):
+            assert api_client.post(path, json=payload).status_code == 404
+
+        assert (
+            ExecutionHistory.query.filter_by(
+                execution_id="retired-midscene-write"
+            ).first()
+            is None
         )
-
-        data = assert_api_response(response, 200)
-
-        # 验证执行记录已更新
-        from backend.models import ExecutionHistory
-
-        updated_execution = ExecutionHistory.query.filter_by(
-            execution_id="test-exec-result-001"
-        ).first()
-
-        assert updated_execution is not None
-        assert updated_execution.status == "success"
-        assert updated_execution.end_time is not None
-
-    def test_should_create_step_executions_from_result(
-        self,
-        api_client,
-        sample_execution_result_with_steps,
-        create_execution_history,
-        assert_api_response,
-    ):
-        """测试从执行结果创建步骤执行记录"""
-        execution = create_execution_history(
-            execution_id=sample_execution_result_with_steps["execution_id"],
-            status="running",
-        )
-
-        # 添加API要求的必需字段
-        result_data = sample_execution_result_with_steps.copy()
-        result_data["testcase_id"] = execution.test_case_id
-        result_data["mode"] = "headless"
-
-        response = api_client.post(
-            "/api/midscene/execution-result",
-            json=result_data,
-            content_type="application/json",
-        )
-
-        assert_api_response(response, 200)
-
-        # 验证创建了步骤执行记录
-        from backend.models import StepExecution
-
-        step_executions = StepExecution.query.filter_by(
-            execution_id=result_data["execution_id"]
-        ).all()
-
-        expected_steps = len(result_data["steps"])
-        assert len(step_executions) == expected_steps
-
-        # 验证步骤执行数据
-        first_step = step_executions[0]
-        first_step_data = result_data["steps"][0]
-        assert first_step.step_index == first_step_data["index"]
-        assert first_step.status == first_step_data["status"]
-
-    def test_should_return_404_for_nonexistent_execution_result(
-        self, api_client, assert_api_response
-    ):
-        """测试接收不存在执行的结果返回404"""
-        result_data = {
-            "execution_id": "nonexistent-execution",
-            "testcase_id": 99999,  # 不存在的测试用例ID
-            "status": "success",
-            "mode": "headless",
-            "end_time": datetime.utcnow().isoformat(),
-            "duration": 1000,
-        }
-
-        response = api_client.post(
-            "/api/midscene/execution-result",
-            json=result_data,
-            content_type="application/json",
-        )
-
-        assert_api_response(response, 404)
-
-    def test_should_validate_execution_result_data(
-        self, api_client, create_execution_history, assert_api_response
-    ):
-        """测试验证执行结果数据"""
-        execution = create_execution_history(status="running")
-
-        # 缺少必需字段
-        invalid_data = {
-            "execution_id": execution.execution_id
-            # 缺少status等字段
-        }
-
-        response = api_client.post(
-            "/api/midscene/execution-result",
-            json=invalid_data,
-            content_type="application/json",
-        )
-
-        assert_api_response(response, 400)
 
 
 @pytest.mark.usefixtures("proxy_execution_client")

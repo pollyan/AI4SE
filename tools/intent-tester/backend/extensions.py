@@ -4,4 +4,4 @@ from flask_socketio import SocketIO
 # However, I already have db in models/__init__.py.
 # I will only put socketio here, or other extensions.
 
-socketio = SocketIO(cors_allowed_origins="*")
+socketio = SocketIO()

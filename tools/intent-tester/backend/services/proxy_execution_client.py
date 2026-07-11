@@ -1,6 +1,5 @@
 """HTTP client for dispatching canonical executions to the Node proxy."""
 
-import os
 from typing import Any, Mapping, Protocol
 from urllib.parse import quote
 
@@ -23,10 +22,12 @@ class _ProxyResponse(Protocol):
 
 class _ProxySession(Protocol):
     def post(
-        self, url: str, *, json: object, timeout: float | int
+        self, url: str, *, json: object, timeout: float | int, headers: Mapping[str, str]
     ) -> _ProxyResponse: ...
 
-    def get(self, url: str, *, timeout: float | int) -> _ProxyResponse: ...
+    def get(
+        self, url: str, *, timeout: float | int, headers: Mapping[str, str]
+    ) -> _ProxyResponse: ...
 
 
 class ProxyExecutionClient:
@@ -37,19 +38,16 @@ class ProxyExecutionClient:
         base_url: str | None = None,
         timeout: float | int | None = None,
         session: _ProxySession | None = None,
+        token: str | None = None,
     ) -> None:
-        self.base_url = (
-            base_url
-            or os.getenv("MIDSCENE_SERVER_URL")
-            or os.getenv("MIDSCENE_API_URL")
-            or "http://localhost:3001"
-        ).rstrip("/")
-        self.timeout = (
-            timeout
-            if timeout is not None
-            else float(os.getenv("MIDSCENE_API_TIMEOUT", "30"))
-        )
+        if not isinstance(base_url, str) or not base_url.strip():
+            raise ValueError("proxy base_url is required")
+        if not isinstance(token, str) or len(token.encode("utf-8")) < 32:
+            raise ValueError("proxy token must contain at least 32 UTF-8 bytes")
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout if timeout is not None else 30.0
         self.session = session or requests
+        self._headers = {"Authorization": f"Bearer {token}"}
 
     def dispatch_execution(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Dispatch one execution with its Flask-owned canonical ID."""
@@ -83,7 +81,10 @@ class ProxyExecutionClient:
     ) -> dict[str, Any]:
         try:
             response = self.session.post(
-                f"{self.base_url}{path}", json=payload, timeout=self.timeout
+                f"{self.base_url}{path}",
+                json=payload,
+                timeout=self.timeout,
+                headers=self._headers,
             )
         except requests.RequestException as error:
             raise ProxyExecutionClientError(
@@ -95,7 +96,7 @@ class ProxyExecutionClient:
     def _get(self, path: str) -> dict[str, Any]:
         try:
             response = self.session.get(
-                f"{self.base_url}{path}", timeout=self.timeout
+                f"{self.base_url}{path}", timeout=self.timeout, headers=self._headers
             )
         except requests.RequestException as error:
             raise ProxyExecutionClientError(

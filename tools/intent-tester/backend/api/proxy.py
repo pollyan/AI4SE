@@ -3,11 +3,14 @@ import os
 from datetime import datetime
 import logging
 
+from backend.intent_security.policy import EndpointPolicy, intent_policy
+
 logger = logging.getLogger(__name__)
 
 proxy_bp = Blueprint('proxy', __name__)
 
 @proxy_bp.route('/download-proxy')
+@intent_policy(EndpointPolicy.PUBLIC_READONLY)
 def download_proxy():
     """下载本地代理包"""
     try:
@@ -27,16 +30,17 @@ def download_proxy():
         
         if not os.path.exists(zip_path):
              logger.error(f"本地代理包未找到: {zip_path}")
-             return jsonify({"code": 404, "message": f"本地代理包未找到 (Path: {zip_path})"}), 404
+             return jsonify({"code": 404, "message": "本地代理包未找到"}), 404
             
         logger.info(f"开始下载本地代理包: {zip_path}")
         return send_file(zip_path, as_attachment=True, download_name='intent-test-proxy.zip')
         
     except Exception as e:
         logger.error(f"下载本地代理包失败: {str(e)}")
-        return jsonify({"code": 500, "message": f"下载失败: {str(e)}"}), 500
+        return jsonify({"code": 500, "message": "下载失败"}), 500
 
 @proxy_bp.route('/proxy-version')
+@intent_policy(EndpointPolicy.PUBLIC_READONLY)
 def proxy_version():
     """获取本地代理版本信息"""
     try:

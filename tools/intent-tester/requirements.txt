@@ -17,6 +17,7 @@ flask>=2.0.0
 flask-socketio>=5.0.0
 flask-cors>=4.0.0
 python-socketio>=5.0.0
+gunicorn==23.0.0
 
 # 数据库支持
 flask-sqlalchemy>=3.0.0
@@ -30,4 +31,3 @@ black>=22.0.0
 flake8>=4.0.0
 factory-boy>=3.2.0
 faker>=18.0.0
-

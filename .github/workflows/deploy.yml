@@ -296,6 +296,14 @@ jobs:
       env:
         DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        INTENT_ACCESS_MODE: ${{ secrets.INTENT_ACCESS_MODE }}
+        INTENT_TESTER_ADMIN_PASSWORD_HASH: ${{ secrets.INTENT_TESTER_ADMIN_PASSWORD_HASH }}
+        INTENT_PUBLIC_ORIGIN: ${{ secrets.INTENT_PUBLIC_ORIGIN }}
+        INTENT_EXECUTION_ENABLED: ${{ secrets.INTENT_EXECUTION_ENABLED }}
+        INTENT_PROXY_TOKEN: ${{ secrets.INTENT_PROXY_TOKEN }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+        MIDSCENE_MODEL_NAME: ${{ secrets.MIDSCENE_MODEL_NAME }}
         NEW_AGENTS_DEFAULT_LLM_API_KEY: ${{ secrets.NEW_AGENTS_DEFAULT_LLM_API_KEY }}
         NEW_AGENTS_DEFAULT_LLM_BASE_URL: ${{ secrets.NEW_AGENTS_DEFAULT_LLM_BASE_URL }}
         NEW_AGENTS_DEFAULT_LLM_MODEL: ${{ secrets.NEW_AGENTS_DEFAULT_LLM_MODEL }}
@@ -306,7 +314,7 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         timeout: 3600s
         command_timeout: 3600s
-        envs: DB_PASSWORD,SECRET_KEY,NEW_AGENTS_DEFAULT_LLM_API_KEY,NEW_AGENTS_DEFAULT_LLM_BASE_URL,NEW_AGENTS_DEFAULT_LLM_MODEL,NEW_AGENTS_DEFAULT_LLM_DESCRIPTION
+        envs: DB_PASSWORD,SECRET_KEY,INTENT_ACCESS_MODE,INTENT_TESTER_ADMIN_PASSWORD_HASH,INTENT_PUBLIC_ORIGIN,INTENT_EXECUTION_ENABLED,INTENT_PROXY_TOKEN,OPENAI_API_KEY,OPENAI_BASE_URL,MIDSCENE_MODEL_NAME,NEW_AGENTS_DEFAULT_LLM_API_KEY,NEW_AGENTS_DEFAULT_LLM_BASE_URL,NEW_AGENTS_DEFAULT_LLM_MODEL,NEW_AGENTS_DEFAULT_LLM_DESCRIPTION
         script: |
           set -e  # 遇到错误立即退出，防止虚假成功
           
@@ -339,7 +347,7 @@ jobs:
           is_managed_env_key() {
             key="$1"
             case "$key" in
-              DB_PASSWORD|SECRET_KEY|NEW_AGENTS_DEFAULT_LLM_API_KEY|NEW_AGENTS_DEFAULT_LLM_BASE_URL|NEW_AGENTS_DEFAULT_LLM_MODEL|NEW_AGENTS_DEFAULT_LLM_DESCRIPTION)
+              DB_PASSWORD|SECRET_KEY|INTENT_ACCESS_MODE|INTENT_TESTER_ADMIN_PASSWORD_HASH|INTENT_PUBLIC_ORIGIN|INTENT_EXECUTION_ENABLED|INTENT_PROXY_TOKEN|OPENAI_API_KEY|OPENAI_BASE_URL|MIDSCENE_MODEL_NAME|NEW_AGENTS_DEFAULT_LLM_API_KEY|NEW_AGENTS_DEFAULT_LLM_BASE_URL|NEW_AGENTS_DEFAULT_LLM_MODEL|NEW_AGENTS_DEFAULT_LLM_DESCRIPTION)
                 return 0
                 ;;
               *)
@@ -356,6 +364,30 @@ jobs:
 
           require_secret DB_PASSWORD "$DB_PASSWORD"
           require_secret SECRET_KEY "$SECRET_KEY"
+          require_secret INTENT_ACCESS_MODE "$INTENT_ACCESS_MODE"
+          case "$INTENT_ACCESS_MODE" in
+            restricted|public-readonly) ;;
+            *)
+              echo "::error::INTENT_ACCESS_MODE must be restricted or public-readonly"
+              exit 1
+              ;;
+          esac
+          require_secret INTENT_TESTER_ADMIN_PASSWORD_HASH "$INTENT_TESTER_ADMIN_PASSWORD_HASH"
+          require_secret INTENT_PUBLIC_ORIGIN "$INTENT_PUBLIC_ORIGIN"
+          require_secret INTENT_EXECUTION_ENABLED "$INTENT_EXECUTION_ENABLED"
+          case "$INTENT_EXECUTION_ENABLED" in
+            true|false) ;;
+            *)
+              echo "::error::INTENT_EXECUTION_ENABLED must be true or false"
+              exit 1
+              ;;
+          esac
+          if [ "$INTENT_EXECUTION_ENABLED" = "true" ]; then
+            require_secret INTENT_PROXY_TOKEN "$INTENT_PROXY_TOKEN"
+            require_secret OPENAI_API_KEY "$OPENAI_API_KEY"
+            require_secret OPENAI_BASE_URL "$OPENAI_BASE_URL"
+            require_secret MIDSCENE_MODEL_NAME "$MIDSCENE_MODEL_NAME"
+          fi
           require_secret NEW_AGENTS_DEFAULT_LLM_API_KEY "$NEW_AGENTS_DEFAULT_LLM_API_KEY"
           require_secret NEW_AGENTS_DEFAULT_LLM_BASE_URL "$NEW_AGENTS_DEFAULT_LLM_BASE_URL"
           require_secret NEW_AGENTS_DEFAULT_LLM_MODEL "$NEW_AGENTS_DEFAULT_LLM_MODEL"
@@ -380,11 +412,21 @@ jobs:
             cat > .env.managed << 'ENVEOF'
           DB_USER=intent_user
           FLASK_ENV=production
+          AI4SE_ENV=production
+          INTENT_PROXY_TOPOLOGY=managed
           ENVEOF
           fi
 
           write_env_var DB_PASSWORD "$DB_PASSWORD"
           write_env_var SECRET_KEY "$SECRET_KEY"
+          write_env_var INTENT_ACCESS_MODE "$INTENT_ACCESS_MODE"
+          write_env_var INTENT_TESTER_ADMIN_PASSWORD_HASH "$INTENT_TESTER_ADMIN_PASSWORD_HASH"
+          write_env_var INTENT_PUBLIC_ORIGIN "$INTENT_PUBLIC_ORIGIN"
+          write_env_var INTENT_EXECUTION_ENABLED "$INTENT_EXECUTION_ENABLED"
+          write_env_var INTENT_PROXY_TOKEN "$INTENT_PROXY_TOKEN"
+          write_env_var OPENAI_API_KEY "$OPENAI_API_KEY"
+          write_env_var OPENAI_BASE_URL "$OPENAI_BASE_URL"
+          write_env_var MIDSCENE_MODEL_NAME "$MIDSCENE_MODEL_NAME"
           write_env_var NEW_AGENTS_DEFAULT_LLM_API_KEY "$NEW_AGENTS_DEFAULT_LLM_API_KEY"
           write_env_var NEW_AGENTS_DEFAULT_LLM_BASE_URL "$NEW_AGENTS_DEFAULT_LLM_BASE_URL"
           write_env_var NEW_AGENTS_DEFAULT_LLM_MODEL "$NEW_AGENTS_DEFAULT_LLM_MODEL"

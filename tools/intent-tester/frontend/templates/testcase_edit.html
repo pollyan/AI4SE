@@ -9,7 +9,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/smart-variable-input.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/enhanced-step-editor.css') }}">
-<style>
+<style nonce="{{ csp_nonce }}">
     /* 拖拽相关样式 */
     .step-container {
         transition: all 0.3s ease;
@@ -21,7 +21,46 @@
 
     .draggable-item {
         position: relative;
+        margin-bottom: 8px;
+        padding: 20px;
+        border-radius: 6px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        cursor: move;
         transition: all 0.2s ease;
+    }
+
+    .draggable-item.step-skipped {
+        background-color: #f7fafc;
+        opacity: 0.6;
+    }
+
+    .smart-variable-helper {
+        margin-top: 4px;
+        font-size: 12px;
+    }
+
+    .smart-variable-dialog {
+        max-width: 500px;
+        width: 90%;
+        padding: 0;
+        border: 0;
+        border-radius: 8px;
+    }
+
+    .smart-variable-dialog::backdrop {
+        background: rgba(0, 0, 0, 0.5);
+    }
+
+    .smart-variable-dialog-content {
+        display: grid;
+        gap: 16px;
+        padding: 20px;
+    }
+
+    .smart-variable-dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
     }
 
     .draggable-item:hover .drag-handle {
@@ -63,14 +102,14 @@
         overflow: hidden;
     }
 
-    .output-variable-section[style*="display: none"] {
+    .output-variable-section[hidden] {
         max-height: 0;
         opacity: 0;
         margin: 0 !important;
         padding: 0 !important;
     }
 
-    .output-variable-section[style*="display: block"] {
+    .output-variable-section:not([hidden]) {
         max-height: 200px;
         opacity: 1;
     }
@@ -96,6 +135,55 @@
         overflow: hidden;
         text-overflow: ellipsis;
     }
+
+    .intent-style-f3c131ddce { margin-bottom: 6px; }
+    .intent-style-c9ba435a4b { margin-bottom: 2px; }
+    .intent-style-b3a2297a12 { margin-bottom: 0; }
+    .intent-style-506febba1e { min-height: 40px; }
+    .intent-style-a8da699263 { grid-template-columns: 3fr 1fr; }
+    .intent-style-b5d0f3df9c { min-height: 400px; background: #f8f9fa; border-radius: 6px; padding: 16px; border: 1px solid #e2e8f0; }
+    .intent-style-c3b97501f8 { font-size: 13px; }
+    .intent-style-93e5d15d24 { margin-bottom: 8px; }
+    .intent-style-c804002a41 { margin-bottom: 12px; }
+    .intent-style-748077c379 { padding: 4px 8px; cursor: grab; }
+    .intent-style-55f5605788 { font-size: 11px; }
+    .intent-style-eff51f4066 { text-align: center; padding: 60px 20px; color: #a0aec0; }
+    .intent-style-20d8fcdb14 { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+    .intent-style-c6fb60b13c { font-size: 16px; font-weight: 500; color: #4a5568; margin-bottom: 8px; }
+    .intent-style-7f4a9fb925 { font-size: 14px; color: #a0aec0; margin-bottom: 24px; }
+    .intent-style-c1941869be { background: #4299e1; border-color: #4299e1; }
+    .intent-style-d37ce6205a { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); cursor: grab; padding: 4px; }
+    .intent-style-bcf520abea { padding-left: 24px; }
+    .intent-style-79499e17f9 { font-size: 15px; font-weight: 600; color: #2d3748; margin-bottom: 6px; }
+    .intent-style-92492c4983 { display: inline-block; background: #e2e8f0; color: #4a5568; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 500; margin-right: 8px; }
+    .intent-style-a27bd2e702 { margin-left: 8px; background: #fed7d7; color: #c53030; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+    .intent-style-b5e6692c7c { display: flex; align-items: center; gap: 12px; }
+    .intent-style-8eb01b9323 { background: #f7fafc; color: #2d3748; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+    .intent-style-39483e68c5 { color: #a0aec0; font-size: 12px; }
+    .intent-style-691fc3037d { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; padding: 8px 0; }
+    .intent-style-bfb533c7a8 { display: flex; width: 100%; align-items: center; }
+    .intent-style-e5e0eeaafd { padding: 6px 10px; margin-left: 8px; }
+    .intent-style-126244f135 { flex: 1; }
+    .intent-style-1c7c005697 { display: flex; gap: 8px; margin-right: 8px; }
+    .intent-style-dd9f889853 { padding: 6px 12px; }
+    .intent-style-e3383732a5 { font-weight: 500; color: #333; }
+    .intent-style-f1373c6a4c { font-size: 12px; color: #666; }
+    .intent-style-6e7202d3fc { margin-bottom: 4px; }
+    .intent-style-8060fb0ea4 { font-size: 12px; color: #6b7280; margin-top: 2px; }
+    .intent-style-4933c08820 { margin-bottom: 16px; }
+    .intent-style-6e22c58a7a { display: none; }
+    .intent-style-f2fecb34dc { margin-top: 12px; }
+    .intent-style-c53e842385 { font-family: 'SF Mono', Monaco, monospace; font-size: 13px; min-height: 80px; }
+    .intent-style-0ad00672ab { margin-top: 0; margin-bottom: 16px; color: #1f2937; }
+    .intent-style-7efd411a2d { margin-bottom: 16px; color: #6b7280; font-size: 14px; }
+    .intent-style-77271c9044 { background: #f3f4f6; padding: 2px 4px; border-radius: 3px; }
+    .intent-style-d3416c1b4b { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-family: monospace; }
+    .intent-style-2fdb44b99b { font-size: 12px; color: #6b7280; margin-bottom: 8px; }
+    .intent-style-9ced930f23 { font-size: 11px; color: #9ca3af; }
+    .intent-style-bafceb77ca { background: #f3f4f6; padding: 1px 4px; border-radius: 2px; margin-right: 8px; }
+    .intent-style-9078ae8f10 { background: #f3f4f6; padding: 1px 4px; border-radius: 2px; margin: 0 8px; }
+    .intent-style-86c99b5a9d { background: #f3f4f6; padding: 1px 4px; border-radius: 2px; margin-left: 8px; }
+    .intent-style-db0a7dcdea { display: flex; justify-content: flex-end; gap: 8px; }
 </style>
 {% endblock %}
 
@@ -106,13 +194,13 @@
     <div class="card-title">基本信息</div>
     <div class="card-subtitle">测试用例的基本属性和描述</div>
 
-    <div class="grid grid-cols-3 gap-2" style="margin-bottom: 6px;">
+    <div class="grid grid-cols-3 gap-2 intent-style-f3c131ddce">
         <div>
-            <label class="form-label" style="margin-bottom: 2px;">用例名称</label>
+            <label class="form-label intent-style-c9ba435a4b">用例名称</label>
             <input type="text" class="form-input" id="testcase-name" value="{{ testcase.name }}" placeholder="请输入用例名称">
         </div>
         <div>
-            <label class="form-label" style="margin-bottom: 2px;">分类</label>
+            <label class="form-label intent-style-c9ba435a4b">分类</label>
             <select class="form-select" id="testcase-category">
                 <option value="功能测试" {{ 'selected' if testcase.category=='功能测试' }}>功能测试</option>
                 <option value="性能测试" {{ 'selected' if testcase.category=='性能测试' }}>性能测试</option>
@@ -121,7 +209,7 @@
             </select>
         </div>
         <div>
-            <label class="form-label" style="margin-bottom: 2px;">优先级</label>
+            <label class="form-label intent-style-c9ba435a4b">优先级</label>
             <select class="form-select" id="testcase-priority">
                 <option value="1" {{ 'selected' if testcase.priority==1 }}>高</option>
                 <option value="2" {{ 'selected' if testcase.priority==2 }}>中</option>
@@ -130,28 +218,28 @@
         </div>
     </div>
 
-    <div class="grid grid-cols-3 gap-2" style="margin-bottom: 6px;">
+    <div class="grid grid-cols-3 gap-2 intent-style-f3c131ddce">
         <div>
-            <label class="form-label" style="margin-bottom: 2px;">状态</label>
+            <label class="form-label intent-style-c9ba435a4b">状态</label>
             <select class="form-select" id="testcase-status">
                 <option value="active" {{ 'selected' if testcase.is_active }}>活跃</option>
                 <option value="inactive" {{ 'selected' if not testcase.is_active }}>暂停</option>
             </select>
         </div>
         <div>
-            <label class="form-label" style="margin-bottom: 2px;">标签</label>
+            <label class="form-label intent-style-c9ba435a4b">标签</label>
             <input type="text" class="form-input" id="testcase-tags" value="{{ testcase.tags or '' }}"
                 placeholder="用逗号分隔">
         </div>
         <div>
-            <label class="form-label" style="margin-bottom: 2px;">创建者</label>
+            <label class="form-label intent-style-c9ba435a4b">创建者</label>
             <input type="text" class="form-input" value="{{ testcase.created_by or 'admin' }}" readonly>
         </div>
     </div>
 
-    <div style="margin-bottom: 0;">
-        <label class="form-label" style="margin-bottom: 2px;">用例描述</label>
-        <textarea class="form-textarea" id="testcase-description" style="min-height: 40px;"
+    <div class="intent-style-b3a2297a12">
+        <label class="form-label intent-style-c9ba435a4b">用例描述</label>
+        <textarea class="form-textarea intent-style-506febba1e" id="testcase-description"
             placeholder="请输入用例描述">{{ testcase.description or '' }}</textarea>
     </div>
 </div>
@@ -185,7 +273,7 @@
 </div>
 
 <!-- 主要编辑区域 -->
-<div class="grid gap-3" style="grid-template-columns: 3fr 1fr;">
+<div class="grid gap-3 intent-style-a8da699263">
     <!-- 左侧：步骤列表 -->
     <div class="card">
         <div class="flex items-center justify-between mb-2">
@@ -199,201 +287,201 @@
             </div>
         </div>
 
-        <div class="list" id="steps-list"
-            style="min-height: 400px; background: #f8f9fa; border-radius: 6px; padding: 16px; border: 1px solid #e2e8f0;">
+        <div class="list intent-style-b5d0f3df9c" id="steps-list"
+           >
             <!-- 步骤列表将通过JavaScript动态生成 -->
         </div>
     </div>
 
     <!-- 右侧：步骤类型库 -->
-    <div class="card" id="step-types" style="font-size: 13px;">
-        <div class="card-title" style="margin-bottom: 8px;">步骤类型库</div>
-        <div class="card-subtitle" style="margin-bottom: 12px;">拖拽到左侧添加步骤</div>
+    <div class="card intent-style-c3b97501f8" id="step-types">
+        <div class="card-title intent-style-93e5d15d24">步骤类型库</div>
+        <div class="card-subtitle intent-style-c804002a41">拖拽到左侧添加步骤</div>
 
         <!-- 页面导航操作 -->
-        <div style="margin-bottom: 12px;">
-            <div class="text-xs font-medium text-gray-700" style="margin-bottom: 6px;">页面导航</div>
+        <div class="intent-style-c804002a41">
+            <div class="text-xs font-medium text-gray-700 intent-style-f3c131ddce">页面导航</div>
             <div class="grid grid-cols-2 gap-1">
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="goto">
                     <div>
                         <div class="text-xs font-medium">goto</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">导航到页面</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">导航到页面</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="refresh">
                     <div>
                         <div class="text-xs font-medium">refresh</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">刷新页面</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">刷新页面</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="back">
                     <div>
                         <div class="text-xs font-medium">back</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">返回上一页</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">返回上一页</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="evaluateJavaScript">
                     <div>
                         <div class="text-xs font-medium">evaluateJS</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">执行JS</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">执行JS</div>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- 智能交互操作 -->
-        <div style="margin-bottom: 12px;">
-            <div class="text-xs font-medium text-gray-700" style="margin-bottom: 6px;">智能交互</div>
+        <div class="intent-style-c804002a41">
+            <div class="text-xs font-medium text-gray-700 intent-style-f3c131ddce">智能交互</div>
             <div class="grid grid-cols-2 gap-1">
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="ai">
                     <div>
                         <div class="text-xs font-medium">ai</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">智能操作</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">智能操作</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="aiTap">
                     <div>
                         <div class="text-xs font-medium">aiTap</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">点击元素</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">点击元素</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="aiInput">
                     <div>
                         <div class="text-xs font-medium">aiInput</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">输入文本</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">输入文本</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="aiHover">
                     <div>
                         <div class="text-xs font-medium">aiHover</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">悬停元素</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">悬停元素</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="aiScroll">
                     <div>
                         <div class="text-xs font-medium">aiScroll</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">滚动页面</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">滚动页面</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="aiKeyboardPress">
                     <div>
                         <div class="text-xs font-medium">aiKeyPress</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">键盘按键</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">键盘按键</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="aiRightClick">
                     <div>
                         <div class="text-xs font-medium">aiRightClick</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">右键点击</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">右键点击</div>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- 数据提取操作 -->
-        <div style="margin-bottom: 12px;">
-            <div class="text-xs font-medium text-gray-700" style="margin-bottom: 6px;">数据提取</div>
+        <div class="intent-style-c804002a41">
+            <div class="text-xs font-medium text-gray-700 intent-style-f3c131ddce">数据提取</div>
             <div class="grid grid-cols-2 gap-1">
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="aiQuery">
                     <div>
                         <div class="text-xs font-medium">aiQuery</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">结构化数据</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">结构化数据</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="aiAsk">
                     <div>
                         <div class="text-xs font-medium">aiAsk</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">询问信息</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">询问信息</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="aiBoolean">
                     <div>
                         <div class="text-xs font-medium">aiBoolean</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">布尔值</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">布尔值</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="aiNumber">
                     <div>
                         <div class="text-xs font-medium">aiNumber</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">提取数值</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">提取数值</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="aiString">
                     <div>
                         <div class="text-xs font-medium">aiString</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">提取文本</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">提取文本</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="aiLocate">
                     <div>
                         <div class="text-xs font-medium">aiLocate</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">元素坐标</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">元素坐标</div>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- 验证等待操作 -->
-        <div style="margin-bottom: 12px;">
-            <div class="text-xs font-medium text-gray-700" style="margin-bottom: 6px;">验证等待</div>
+        <div class="intent-style-c804002a41">
+            <div class="text-xs font-medium text-gray-700 intent-style-f3c131ddce">验证等待</div>
             <div class="grid grid-cols-2 gap-1">
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="aiAssert">
                     <div>
                         <div class="text-xs font-medium">aiAssert</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">断言验证</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">断言验证</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="aiWaitFor">
                     <div>
                         <div class="text-xs font-medium">aiWaitFor</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">等待条件</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">等待条件</div>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- 工具操作 -->
-        <div style="margin-bottom: 8px;">
-            <div class="text-xs font-medium text-gray-700" style="margin-bottom: 6px;">工具操作</div>
+        <div class="intent-style-93e5d15d24">
+            <div class="text-xs font-medium text-gray-700 intent-style-f3c131ddce">工具操作</div>
             <div class="grid grid-cols-2 gap-1">
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="logScreenshot">
                     <div>
                         <div class="text-xs font-medium">screenshot</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">截图记录</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">截图记录</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="sleep">
                     <div>
                         <div class="text-xs font-medium">sleep</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">延时等待</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">延时等待</div>
                     </div>
                 </div>
-                <div class="btn btn-small btn-ghost text-left step-type-btn" style="padding: 4px 8px; cursor: grab;"
+                <div class="btn btn-small btn-ghost text-left step-type-btn intent-style-748077c379"
                     data-action="runYaml">
                     <div>
                         <div class="text-xs font-medium">runYaml</div>
-                        <div class="text-xs text-gray-500" style="font-size: 11px;">YAML脚本</div>
+                        <div class="text-xs text-gray-500 intent-style-55f5605788">YAML脚本</div>
                     </div>
                 </div>
             </div>
@@ -430,13 +518,17 @@
     </div>
 </div>
 
-<script>
+<script id="intent-testcase-data" type="application/json" nonce="{{ csp_nonce }}">{{ {'testcaseId': testcase.id, 'stepsJson': steps_data, 'isCreateMode': is_create_mode} | tojson }}</script>
+<script nonce="{{ csp_nonce }}">
     // 测试用例编辑器JavaScript
     class TestCaseEditor {
         constructor() {
-            this.testcaseId = {{ testcase.id if testcase.id else 'null' }};
-            this.steps = {{ steps_data | safe }};
-            this.isCreateMode = {{ 'true' if is_create_mode else 'false' }};
+            const testcaseData = JSON.parse(
+                document.getElementById('intent-testcase-data').textContent
+            );
+            this.testcaseId = testcaseData.testcaseId;
+            this.steps = JSON.parse(testcaseData.stepsJson);
+            this.isCreateMode = testcaseData.isCreateMode;
             this.selectedStepIndex = -1;
             this.isDirty = false;
             this.autoSaveTimer = null;
@@ -521,7 +613,13 @@
                 return;
             }
             const pageBaseUrl = window.API_BASE_URL.replace(/\/api$/, '');
-            window.location.href = `${pageBaseUrl}/execution?testcase_id=${this.testcaseId}`;
+            const safeExecutionUrl = IntentSafeDom.safeUrl(
+                `${pageBaseUrl}/execution?testcase_id=${this.testcaseId}`,
+                ['http:', 'https:']
+            );
+            if (safeExecutionUrl) {
+                window.location.assign(safeExecutionUrl);
+            }
         });
 
         // 添加步骤
@@ -569,17 +667,27 @@
     }
 
     renderSteps() {
-        this.stepsList.innerHTML = '';
+        this.stepsList.replaceChildren();
 
         if (this.steps.length === 0) {
-            this.stepsList.innerHTML = `
-                <div class="empty-state" style="text-align: center; padding: 60px 20px; color: #a0aec0;">
-                    <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;">⚙️</div>
-                    <div style="font-size: 16px; font-weight: 500; color: #4a5568; margin-bottom: 8px;">暂无步骤</div>
-                    <div style="font-size: 14px; color: #a0aec0; margin-bottom: 24px;">点击右侧步骤类型或"添加步骤"按钮开始创建</div>
-                    <button class="btn btn-primary btn-small" onclick="document.getElementById('add-step').click()" style="background: #4299e1; border-color: #4299e1;">添加第一个步骤</button>
-                </div>
-            `;
+            const empty = document.createElement('div');
+            empty.className = 'empty-state intent-style-eff51f4066';
+            const icon = IntentSafeDom.text('div', '⚙️');
+            icon.className = 'intent-style-20d8fcdb14';
+            const title = IntentSafeDom.text('div', '暂无步骤');
+            title.className = 'intent-style-c6fb60b13c';
+            const help = IntentSafeDom.text(
+                'div',
+                '点击右侧步骤类型或“添加步骤”按钮开始创建'
+            );
+            help.className = 'intent-style-7f4a9fb925';
+            const add = IntentSafeDom.button(
+                '添加第一个步骤',
+                () => document.getElementById('add-step').click()
+            );
+            add.className = 'btn btn-primary btn-small intent-style-c1941869be';
+            empty.append(icon, title, help, add);
+            this.stepsList.appendChild(empty);
             this.updateStepCount();
             return;
         }
@@ -600,52 +708,58 @@
         const actionDesc = this.getActionDescription(step.action);
         const paramsDesc = this.getParamsDescription(step.action, step.params);
 
-        container.innerHTML = `
-            <div class="list-item draggable-item ${step.skip ? 'step-skipped' : ''}" title="拖拽排序或点击编辑" style="padding: 20px; border-radius: 6px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: move; ${step.skip ? 'opacity: 0.6; background-color: #f7fafc;' : ''}">
-                <div class="drag-handle" draggable="true" style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); cursor: grab; padding: 4px;">
-                    <svg width="12" height="20" viewBox="0 0 12 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="3" cy="3" r="1.5" fill="#CBD5E0"/>
-                        <circle cx="9" cy="3" r="1.5" fill="#CBD5E0"/>
-                        <circle cx="3" cy="10" r="1.5" fill="#CBD5E0"/>
-                        <circle cx="9" cy="10" r="1.5" fill="#CBD5E0"/>
-                        <circle cx="3" cy="17" r="1.5" fill="#CBD5E0"/>
-                        <circle cx="9" cy="17" r="1.5" fill="#CBD5E0"/>
-                    </svg>
-                </div>
-                <div class="list-item-content" style="padding-left: 24px;">
-                    <div class="list-item-title" style="font-size: 15px; font-weight: 600; color: #2d3748; margin-bottom: 6px;">
-                        <span style="display: inline-block; background: #e2e8f0; color: #4a5568; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 500; margin-right: 8px;">${index + 1}</span>
-                        ${step.description || actionDesc}
-                        ${step.skip ? '<span style="margin-left: 8px; background: #fed7d7; color: #c53030; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;">跳过</span>' : ''}
-                    </div>
-                    <div class="list-item-meta" style="display: flex; align-items: center; gap: 12px;">
-                        <span style="background: #f7fafc; color: #2d3748; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">${step.action}</span>
-                        <span style="color: #a0aec0; font-size: 12px;">${this.getMainParam(step.action, step.params)}</span>
-                    </div>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end; padding: 8px 0;">
-                    <div style="display: flex; width: 100%; align-items: center;">
-                        <button class="btn btn-small btn-ghost step-up" ${index === 0 ? 'disabled' : ''} style="padding: 6px 10px; margin-left: 8px;">↑</button>
-                        <div style="flex: 1;"></div>
-                        <div style="display: flex; gap: 8px; margin-right: 8px;">
-                            <button class="btn btn-small btn-ghost step-skip" style="padding: 6px 12px;" title="${step.skip ? '点击取消跳过' : '点击跳过此步骤'}">${step.skip ? '取消' : '跳过'}</button>
-                            <button class="btn btn-small btn-ghost step-edit" style="padding: 6px 12px;">编辑</button>
-                        </div>
-                    </div>
-                    <div style="display: flex; width: 100%; align-items: center;">
-                        <button class="btn btn-small btn-ghost step-down" ${index === this.steps.length - 1 ? 'disabled' : ''} style="padding: 6px 10px; margin-left: 8px;">↓</button>
-                        <div style="flex: 1;"></div>
-                        <div style="display: flex; gap: 8px; margin-right: 8px;">
-                            <button class="btn btn-small btn-ghost step-duplicate" style="padding: 6px 12px;">复制</button>
-                            <button class="btn btn-small btn-ghost step-delete" style="padding: 6px 12px;">删除</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+        const listItem = document.createElement('div');
+        listItem.className = `list-item draggable-item intent-style-5b999b5b32${step.skip ? ' step-skipped' : ''}`;
+        listItem.title = '拖拽排序或点击编辑';
+        const dragHandle = IntentSafeDom.text('div', '⠿');
+        dragHandle.className = 'drag-handle intent-style-d37ce6205a';
+        dragHandle.draggable = true;
+
+        const content = document.createElement('div');
+        content.className = 'list-item-content intent-style-bcf520abea';
+        const title = document.createElement('div');
+        title.className = 'list-item-title intent-style-79499e17f9';
+        const number = IntentSafeDom.text('span', index + 1);
+        number.className = 'intent-style-92492c4983';
+        title.append(number, document.createTextNode(` ${step.description || actionDesc} `));
+        if (step.skip) {
+            const skipped = IntentSafeDom.text('span', '跳过');
+            skipped.className = 'intent-style-a27bd2e702';
+            title.appendChild(skipped);
+        }
+        const metadata = document.createElement('div');
+        metadata.className = 'list-item-meta intent-style-b5e6692c7c';
+        const action = IntentSafeDom.text('span', step.action);
+        action.className = 'intent-style-8eb01b9323';
+        const mainParam = IntentSafeDom.text(
+            'span',
+            this.getMainParam(step.action, step.params)
+        );
+        mainParam.className = 'intent-style-39483e68c5';
+        metadata.append(action, mainParam);
+        content.append(title, metadata);
+
+        const controls = document.createElement('div');
+        controls.className = 'intent-style-691fc3037d';
+        const makeControl = (label, className) => {
+            const control = IntentSafeDom.button(label, () => {});
+            control.className = `btn btn-small btn-ghost ${className}`;
+            return control;
+        };
+        const stepUp = makeControl('↑', 'step-up intent-style-e5e0eeaafd');
+        stepUp.disabled = index === 0;
+        const stepSkip = makeControl(step.skip ? '取消' : '跳过', 'step-skip intent-style-dd9f889853');
+        stepSkip.title = step.skip ? '点击取消跳过' : '点击跳过此步骤';
+        const stepEdit = makeControl('编辑', 'step-edit intent-style-dd9f889853');
+        const stepDown = makeControl('↓', 'step-down intent-style-e5e0eeaafd');
+        stepDown.disabled = index === this.steps.length - 1;
+        const stepDuplicate = makeControl('复制', 'step-duplicate intent-style-dd9f889853');
+        const stepDelete = makeControl('删除', 'step-delete intent-style-dd9f889853');
+        controls.append(stepUp, stepSkip, stepEdit, stepDown, stepDuplicate, stepDelete);
+        listItem.append(dragHandle, content, controls);
+        container.appendChild(listItem);
 
         // 绑定事件
-        const listItem = container.querySelector('.list-item');
         const stepSkipBtn = container.querySelector('.step-skip');
         const stepUpBtn = container.querySelector('.step-up');
         const stepDownBtn = container.querySelector('.step-down');
@@ -689,22 +803,15 @@
         });
 
         // 获取拖拽手柄元素
-        const dragHandle = container.querySelector('.drag-handle');
-
         // 添加拖拽事件到拖拽手柄
         dragHandle.addEventListener('dragstart', (e) => {
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', index);
             container.classList.add('dragging');
-            // 设置拖拽时的视觉效果
-            setTimeout(() => {
-                container.style.opacity = '0.5';
-            }, 0);
         });
 
         dragHandle.addEventListener('dragend', (e) => {
             container.classList.remove('dragging');
-            container.style.opacity = '';
             // 清理所有拖拽提示样式
             document.querySelectorAll('.drag-over').forEach(el => {
                 el.classList.remove('drag-over');
@@ -911,92 +1018,101 @@
     createInlineEditForm(step, index) {
         const editForm = document.createElement('div');
         editForm.className = 'inline-edit-form';
-        editForm.style.cssText = `
-            background: #f8f8f8;
-            border: 1px solid #e8e8e8;
-            border-radius: 4px;
-            padding: 16px;
-            margin-top: 8px;
-            animation: slideDown 0.2s ease;
-        `;
 
-        editForm.innerHTML = `
-            <div class="form-edit-header" style="margin-bottom: 12px;">
-                <div style="font-weight: 500; color: #333;">编辑步骤 ${index + 1}</div>
-                <div style="font-size: 12px; color: #666;">修改步骤的详细参数</div>
-            </div>
-            
-            <div class="grid grid-cols-2 gap-2" style="margin-bottom: 12px;">
-                <div>
-                    <label class="form-label" style="margin-bottom: 4px;">步骤名称</label>
-                    <input type="text" class="form-input" id="edit-title-${index}" value="${step.description || ''}" placeholder="请输入步骤名称">
-                </div>
-                <div>
-                    <label class="form-label" style="margin-bottom: 4px;">动作类型</label>
-                    <select class="form-select" id="edit-action-${index}" onchange="handleActionTypeChange(${index}, this.value)">
-                        <optgroup label="页面导航">
-                            <option value="goto" ${step.action === 'goto' ? 'selected' : ''}>goto - 导航到页面</option>
-                            <option value="refresh" ${step.action === 'refresh' ? 'selected' : ''}>refresh - 刷新页面</option>
-                            <option value="back" ${step.action === 'back' ? 'selected' : ''}>back - 返回上一页</option>
-                            <option value="evaluateJavaScript" ${step.action === 'evaluateJavaScript' ? 'selected' : ''}>evaluateJavaScript - 执行JS代码</option>
-                        </optgroup>
-                        <optgroup label="智能交互">
-                            <option value="ai" ${step.action === 'ai' ? 'selected' : ''}>ai - 智能操作规划</option>
-                            <option value="aiTap" ${step.action === 'aiTap' ? 'selected' : ''}>aiTap - AI点击元素</option>
-                            <option value="aiInput" ${step.action === 'aiInput' ? 'selected' : ''}>aiInput - AI输入文本</option>
-                            <option value="aiHover" ${step.action === 'aiHover' ? 'selected' : ''}>aiHover - AI悬停元素</option>
-                            <option value="aiScroll" ${step.action === 'aiScroll' ? 'selected' : ''}>aiScroll - AI滚动页面</option>
-                            <option value="aiKeyboardPress" ${step.action === 'aiKeyboardPress' ? 'selected' : ''}>aiKeyboardPress - AI键盘按键</option>
-                            <option value="aiRightClick" ${step.action === 'aiRightClick' ? 'selected' : ''}>aiRightClick - AI右键点击</option>
-                        </optgroup>
-                        <optgroup label="数据提取">
-                            <option value="aiQuery" ${step.action === 'aiQuery' ? 'selected' : ''}>aiQuery - 提取结构化数据</option>
-                            <option value="aiAsk" ${step.action === 'aiAsk' ? 'selected' : ''}>aiAsk - 询问页面信息</option>
-                            <option value="aiBoolean" ${step.action === 'aiBoolean' ? 'selected' : ''}>aiBoolean - 提取布尔值</option>
-                            <option value="aiNumber" ${step.action === 'aiNumber' ? 'selected' : ''}>aiNumber - 提取数值</option>
-                            <option value="aiString" ${step.action === 'aiString' ? 'selected' : ''}>aiString - 提取字符串</option>
-                            <option value="aiLocate" ${step.action === 'aiLocate' ? 'selected' : ''}>aiLocate - 定位元素坐标</option>
-                        </optgroup>
-                        <optgroup label="验证等待">
-                            <option value="aiAssert" ${step.action === 'aiAssert' ? 'selected' : ''}>aiAssert - AI断言验证</option>
-                            <option value="aiWaitFor" ${step.action === 'aiWaitFor' ? 'selected' : ''}>aiWaitFor - 等待条件满足</option>
-                        </optgroup>
-                        <optgroup label="工具操作">
-                            <option value="logScreenshot" ${step.action === 'logScreenshot' ? 'selected' : ''}>logScreenshot - 截图并记录</option>
-                            <option value="sleep" ${step.action === 'sleep' ? 'selected' : ''}>sleep - 延时等待</option>
-                            <option value="runYaml" ${step.action === 'runYaml' ? 'selected' : ''}>runYaml - 执行YAML脚本</option>
-                        </optgroup>
-                    </select>
-                </div>
-            </div>
+        const header = document.createElement('div');
+        header.className = 'form-edit-header intent-style-c804002a41';
+        const heading = IntentSafeDom.text('div', `编辑步骤 ${index + 1}`);
+        heading.className = 'intent-style-e3383732a5';
+        const help = IntentSafeDom.text('div', '修改步骤的详细参数');
+        help.className = 'intent-style-f1373c6a4c';
+        header.append(heading, help);
 
-            <!-- 输出变量配置（仅对数据提取类步骤显示） -->
-            <div id="output-variable-section-${index}" class="output-variable-section" style="margin-bottom: 12px;">
-                <label class="form-label" style="margin-bottom: 4px;">输出变量名</label>
-                <input type="text" class="form-input" id="edit-output-variable-${index}" value="${step.output_variable || ''}" placeholder="例如: product_info (可选，用于存储AI方法的返回结果)">
-                <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">设置变量名后，可在后续步骤中通过 \${变量名} 或 \${变量名.属性} 的方式引用数据</div>
-            </div>
+        const fields = document.createElement('div');
+        fields.className = 'grid grid-cols-2 gap-2 intent-style-c804002a41';
+        const titleGroup = document.createElement('div');
+        const titleLabel = IntentSafeDom.text('label', '步骤名称');
+        titleLabel.className = 'form-label intent-style-6e7202d3fc';
+        const titleInput = document.createElement('input');
+        titleInput.type = 'text';
+        titleInput.className = 'form-input';
+        titleInput.id = `edit-title-${index}`;
+        titleInput.value = step.description || '';
+        titleInput.placeholder = '请输入步骤名称';
+        titleGroup.append(titleLabel, titleInput);
 
-            <div style="margin-bottom: 16px;">
-                <div class="enhanced-parameter-container" id="enhanced-params-${index}" style="display: none;">
-                    <!-- 增强参数编辑器将在这里生成 -->
-                </div>
-                
-                <!-- 参数编辑 -->
-                <div class="params-mode" style="margin-top: 12px;">
-                    <div class="mb-2">
-                        <label class="form-label">参数：</label>
-                    </div>
-                    <textarea class="form-textarea advanced-params" id="edit-params-${index}" style="font-family: 'SF Mono', Monaco, monospace; font-size: 13px; min-height: 80px;" placeholder="请输入动作参数的JSON格式">${JSON.stringify(step.params || {}, null, 2)}</textarea>
-                </div>
-            </div>
+        const actionGroup = document.createElement('div');
+        const actionLabel = IntentSafeDom.text('label', '动作类型');
+        actionLabel.className = 'form-label intent-style-6e7202d3fc';
+        const actionSelect = document.createElement('select');
+        actionSelect.className = 'form-select';
+        actionSelect.id = `edit-action-${index}`;
+        const actionLabels = {
+            goto: '导航到页面', refresh: '刷新页面', back: '返回上一页',
+            evaluateJavaScript: '执行JS代码', ai: '智能操作规划', aiTap: 'AI点击元素',
+            aiInput: 'AI输入文本', aiHover: 'AI悬停元素', aiScroll: 'AI滚动页面',
+            aiKeyboardPress: 'AI键盘按键', aiRightClick: 'AI右键点击',
+            aiQuery: '提取结构化数据', aiAsk: '询问页面信息', aiBoolean: '提取布尔值',
+            aiNumber: '提取数值', aiString: '提取字符串', aiLocate: '定位元素坐标',
+            aiAssert: 'AI断言验证', aiWaitFor: '等待条件满足',
+            logScreenshot: '截图并记录', sleep: '延时等待', runYaml: '执行YAML脚本'
+        };
+        Object.entries(actionLabels).forEach(([value, label]) => {
+            const option = IntentSafeDom.text('option', `${value} - ${label}`);
+            option.value = value;
+            option.selected = value === step.action;
+            actionSelect.appendChild(option);
+        });
+        actionSelect.addEventListener('change', () => {
+            this.handleActionTypeChange(index, actionSelect.value);
+        });
+        actionGroup.append(actionLabel, actionSelect);
+        fields.append(titleGroup, actionGroup);
 
-            <div class="flex gap-2">
-                <button class="btn btn-primary save-step-inline">保存步骤</button>
-                <button class="btn btn-ghost cancel-edit-inline">取消编辑</button>
-                <button class="btn btn-ghost delete-step-inline">删除步骤</button>
-            </div>
-        `;
+        const outputSection = document.createElement('div');
+        outputSection.id = `output-variable-section-${index}`;
+        outputSection.className = 'output-variable-section intent-style-c804002a41';
+        const outputLabel = IntentSafeDom.text('label', '输出变量名');
+        outputLabel.className = 'form-label intent-style-6e7202d3fc';
+        const outputInput = document.createElement('input');
+        outputInput.type = 'text';
+        outputInput.className = 'form-input';
+        outputInput.id = `edit-output-variable-${index}`;
+        outputInput.value = step.output_variable || '';
+        outputInput.placeholder = '例如: product_info';
+        const outputHelp = IntentSafeDom.text(
+            'div',
+            '设置变量名后，可在后续步骤中通过 ${变量名} 引用数据'
+        );
+        outputHelp.className = 'intent-style-8060fb0ea4';
+        outputSection.append(outputLabel, outputInput, outputHelp);
+
+        const paramsMode = document.createElement('div');
+        paramsMode.className = 'params-mode intent-style-f2fecb34dc intent-style-4933c08820';
+        const paramsLabel = IntentSafeDom.text('label', '参数：');
+        paramsLabel.className = 'form-label';
+        const params = document.createElement('textarea');
+        params.className = 'form-textarea advanced-params intent-style-c53e842385';
+        params.id = `edit-params-${index}`;
+        params.placeholder = '请输入动作参数的JSON格式';
+        params.value = JSON.stringify(step.params || {}, null, 2);
+        paramsMode.append(paramsLabel, params);
+
+        const enhanced = document.createElement('div');
+        enhanced.className = 'enhanced-parameter-container';
+        enhanced.id = `enhanced-params-${index}`;
+        enhanced.hidden = true;
+
+        const actions = document.createElement('div');
+        actions.className = 'flex gap-2';
+        const save = IntentSafeDom.button('保存步骤', () => {});
+        save.className = 'btn btn-primary save-step-inline';
+        const cancel = IntentSafeDom.button('取消编辑', () => {});
+        cancel.className = 'btn btn-ghost cancel-edit-inline';
+        const remove = IntentSafeDom.button('删除步骤', () => {});
+        remove.className = 'btn btn-ghost delete-step-inline';
+        actions.append(save, cancel, remove);
+
+        editForm.append(header, fields, outputSection, enhanced, paramsMode, actions);
 
         return editForm;
     }
@@ -1076,10 +1192,10 @@
 
         if (outputVariableSection) {
             if (dataExtractionActions.includes(currentStep.action)) {
-                outputVariableSection.style.display = 'block';
+                outputVariableSection.hidden = false;
                 console.log(`显示输出变量字段，步骤类型: ${currentStep.action}`);
             } else {
-                outputVariableSection.style.display = 'none';
+                outputVariableSection.hidden = true;
                 console.log(`隐藏输出变量字段，步骤类型: ${currentStep.action}`);
             }
         } else {
@@ -1353,6 +1469,7 @@
                 method: method,
                 headers: {
                     'Content-Type': 'application/json',
+                    ...window.IntentSecurity.csrfHeaders(method)
                 },
                 body: JSON.stringify(formData)
             });
@@ -1369,12 +1486,24 @@
                             // 确保获得有效的ID后再跳转
                             const testcaseId = result.data && result.data.id;
                             if (testcaseId) {
-                                window.location.href = `/intent-tester/testcases/${testcaseId}/edit`;
+                                const safeEditUrl = IntentSafeDom.safeUrl(
+                                    `/intent-tester/testcases/${testcaseId}/edit`,
+                                    ['http:', 'https:']
+                                );
+                                if (safeEditUrl) {
+                                    window.location.assign(safeEditUrl);
+                                }
                             } else {
                                 console.error('创建测试用例成功，但未获得有效ID:', result);
                                 this.showMessage('测试用例创建成功，但跳转失败，请刷新页面', 'warning');
                                 // 跳转到测试用例列表页面
-                                window.location.href = '/intent-tester/testcases';
+                                const safeListUrl = IntentSafeDom.safeUrl(
+                                    '/intent-tester/testcases',
+                                    ['http:', 'https:']
+                                );
+                                if (safeListUrl) {
+                                    window.location.assign(safeListUrl);
+                                }
                             }
                         }, 1000);
                     }
@@ -1467,7 +1596,7 @@
         const dataExtractionActions = ['aiQuery', 'aiAsk', 'aiBoolean', 'aiNumber', 'aiString', 'aiLocate'];
         if (outputVariableSection) {
             if (dataExtractionActions.includes(newActionType)) {
-                outputVariableSection.style.display = 'block';
+                outputVariableSection.hidden = false;
                 // 为aiQuery设置默认的output_variable值
                 if (newActionType === 'aiQuery' && !currentStep.output_variable) {
                     const outputVariableInput = document.getElementById(`edit-output-variable-${index}`);
@@ -1477,7 +1606,7 @@
                     }
                 }
             } else {
-                outputVariableSection.style.display = 'none';
+                outputVariableSection.hidden = true;
                 // 清除output_variable
                 delete currentStep.output_variable;
             }
@@ -1597,84 +1726,30 @@
     // 初始化增强参数编辑器
     initializeEnhancedParameterEditor(editForm, stepIndex) {
         try {
-            const enhancedContainer = editForm.querySelector(`#enhanced-params-${stepIndex}`);
-            if (!enhancedContainer) {
-                console.warn('增强参数容器未找到:', stepIndex);
-                return;
-            }
-
-            // 获取当前步骤数据
-            const stepRow = editForm.closest('tr');
-            const stepData = this.getStepDataFromRow(stepRow);
-
-            if (!stepData) {
-                console.warn('无法获取步骤数据:', stepIndex);
-                return;
-            }
-
-            // 创建并初始化增强编辑器
-            const enhancedEditor = new EnhancedStepEditor(
+            return window.EnhancedEditorController.initializeEnhancedParameterEditor({
+                EnhancedStepEditorClass: window.EnhancedStepEditor,
                 editForm,
+                editors: this.enhancedEditors,
+                executionId: this.executionId,
+                onParameterChange: (fieldName, value) => {
+                    this.updateParameterInTextarea(
+                        editForm,
+                        stepIndex,
+                        fieldName,
+                        value
+                    );
+                },
                 stepIndex,
-                this.testCaseId,
-                this.executionId
-            );
-
-            // 生成增强参数表单
-            const parameterForm = enhancedEditor.createEnhancedParameterForm(stepData);
-            enhancedContainer.innerHTML = '';
-            enhancedContainer.appendChild(parameterForm);
-
-            // 设置参数变更回调
-            enhancedEditor.onParameterChange = (fieldName, value) => {
-                this.updateParameterInTextarea(editForm, stepIndex, fieldName, value);
-            };
-
-            // 缓存编辑器实例
-            this.enhancedEditors.set(stepIndex, enhancedEditor);
-
-            console.log('增强参数编辑器初始化成功:', stepIndex);
-
+                steps: this.steps,
+                testcaseId: this.testcaseId
+            });
         } catch (error) {
             console.error('增强参数编辑器初始化失败:', stepIndex, error);
             // 失败时隐藏增强容器
             const enhancedContainer = editForm.querySelector(`#enhanced-params-${stepIndex}`);
             if (enhancedContainer) {
-                enhancedContainer.style.display = 'none';
+                enhancedContainer.hidden = true;
             }
-        }
-    }
-
-
-    // 从步骤行获取步骤数据
-    getStepDataFromRow(stepRow) {
-        try {
-            const titleElement = stepRow.querySelector('[id^="step-title-"]');
-            const actionElement = stepRow.querySelector('[id^="step-action-"]');
-            const paramsElement = stepRow.querySelector('[id^="step-params-"]');
-
-            if (!titleElement || !actionElement || !paramsElement) {
-                return null;
-            }
-
-            let params = {};
-            const paramsText = paramsElement.textContent.trim();
-            if (paramsText && paramsText !== '{}') {
-                try {
-                    params = JSON.parse(paramsText);
-                } catch (e) {
-                    console.warn('解析参数JSON失败:', paramsText, e);
-                }
-            }
-
-            return {
-                title: titleElement.textContent.trim(),
-                action: actionElement.textContent.trim(),
-                params: params
-            };
-        } catch (error) {
-            console.error('获取步骤数据失败:', error);
-            return null;
         }
     }
 
@@ -1750,31 +1825,9 @@
     showMessage(message, type = 'info') {
         // 创建消息提示
         const messageDiv = document.createElement('div');
-        messageDiv.className = `message message-${type}`;
+        const safeType = type === 'success' || type === 'error' ? type : 'error';
+        messageDiv.className = `message intent-message intent-message-${safeType}`;
         messageDiv.textContent = message;
-        messageDiv.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 12px 20px;
-            border-radius: 4px;
-            color: white;
-            font-size: 14px;
-            z-index: 10000;
-            animation: slideInRight 0.3s ease;
-        `;
-
-        // 设置背景色
-        switch (type) {
-            case 'success':
-                messageDiv.style.backgroundColor = '#28a745';
-                break;
-            case 'error':
-                messageDiv.style.backgroundColor = '#dc3545';
-                break;
-            default:
-                messageDiv.style.backgroundColor = '#333';
-        }
 
         document.body.appendChild(messageDiv);
 
@@ -1829,8 +1882,9 @@
 <script src="{{ url_for('static', filename='js/utils/variableValidation.js') }}"></script>
 <script src="{{ url_for('static', filename='js/config/variableFieldConfig.js') }}"></script>
 <script src="{{ url_for('static', filename='js/components/EnhancedStepEditor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/enhanced-editor-controller.js') }}"></script>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     // SmartVariableInput组件集成
     const SmartVariableInputManager = {
         instances: new Map(),
@@ -1903,13 +1957,12 @@
             const smartButton = document.createElement('button');
             smartButton.type = 'button';
             smartButton.className = 'btn btn-small btn-ghost smart-variable-helper';
-            smartButton.style.cssText = 'margin-top: 4px; font-size: 12px;';
             smartButton.textContent = '智能变量提示 (Ctrl+Space)';
             smartButton.title = '点击或按Ctrl+Space使用智能变量输入助手';
 
-            smartButton.onclick = () => {
+            smartButton.addEventListener('click', () => {
                 this.showSmartInputModal(textarea);
-            };
+            });
 
             // 插入按钮
             textarea.parentNode.insertBefore(smartButton, textarea.nextSibling);
@@ -1926,62 +1979,39 @@
         // 显示智能输入模态框
         showSmartInputModal(textarea) {
             // 创建模态框
-            const modal = document.createElement('div');
-            modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        `;
+            const modal = document.createElement('dialog');
+            modal.className = 'smart-variable-dialog';
 
             const modalContent = document.createElement('div');
-            modalContent.style.cssText = `
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            max-width: 500px;
-            width: 90%;
-            max-height: 400px;
-            overflow-y: auto;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-        `;
-
-            modalContent.innerHTML = `
-            <h3 style="margin-top: 0; margin-bottom: 16px; color: #1f2937;">智能变量输入助手</h3>
-            <p style="margin-bottom: 16px; color: #6b7280; font-size: 14px;">
-                输入 <code style="background: #f3f4f6; padding: 2px 4px; border-radius: 3px;">\${</code> 触发智能提示，支持变量引用和嵌套属性访问。
-            </p>
-            <div style="margin-bottom: 16px;">
-                <input type="text" id="smart-modal-input" 
-                       placeholder="输入内容，使用\${变量名}引用变量"
-                       style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-family: monospace;">
-            </div>
-            <div style="margin-bottom: 16px;">
-                <div style="font-size: 12px; color: #6b7280; margin-bottom: 8px;">键盘快捷键：</div>
-                <div style="font-size: 11px; color: #9ca3af;">
-                    <span style="background: #f3f4f6; padding: 1px 4px; border-radius: 2px; margin-right: 8px;">↑↓</span>选择变量
-                    <span style="background: #f3f4f6; padding: 1px 4px; border-radius: 2px; margin: 0 8px;">Enter</span>确认
-                    <span style="background: #f3f4f6; padding: 1px 4px; border-radius: 2px; margin: 0 8px;">ESC</span>关闭
-                    <span style="background: #f3f4f6; padding: 1px 4px; border-radius: 2px; margin-left: 8px;">Ctrl+Space</span>强制提示
-                </div>
-            </div>
-            <div style="display: flex; justify-content: flex-end; gap: 8px;">
-                <button type="button" id="smart-cancel-btn" class="btn btn-ghost">取消</button>
-                <button type="button" id="smart-insert-btn" class="btn btn-primary">插入到原位置</button>
-            </div>
-        `;
+            modalContent.className = 'smart-variable-dialog-content';
+            const heading = IntentSafeDom.text('h3', '智能变量输入助手');
+            const instructions = IntentSafeDom.text(
+                'p',
+                '输入 ${ 触发智能提示，支持变量引用和嵌套属性访问。'
+            );
+            const modalInput = document.createElement('input');
+            modalInput.type = 'text';
+            modalInput.id = 'smart-modal-input';
+            modalInput.placeholder = '输入内容，使用${变量名}引用变量';
+            modalInput.className = 'form-input';
+            const keyboardHelp = IntentSafeDom.text(
+                'p',
+                '快捷键：↑↓ 选择变量，Enter 确认，ESC 关闭，Ctrl+Space 强制提示'
+            );
+            const actions = document.createElement('div');
+            actions.className = 'smart-variable-dialog-actions';
+            const cancel = IntentSafeDom.button('取消', () => {});
+            cancel.id = 'smart-cancel-btn';
+            cancel.className = 'btn btn-ghost';
+            const insert = IntentSafeDom.button('插入到原位置', () => {});
+            insert.id = 'smart-insert-btn';
+            insert.className = 'btn btn-primary';
+            actions.append(cancel, insert);
+            modalContent.append(heading, instructions, modalInput, keyboardHelp, actions);
 
             modal.appendChild(modalContent);
             document.body.appendChild(modal);
-
-            // 获取模态框中的输入框
-            const modalInput = modal.querySelector('#smart-modal-input');
+            modal.showModal();
 
             // 为模态框输入框初始化智能提示
             const modalInstance = this.initializeForInput(modalInput);
@@ -2006,12 +2036,13 @@
             // 绑定事件
             const closeModal = () => {
                 if (modalInstance) modalInstance.destroy();
+                modal.close();
                 modal.remove();
             };
 
-            modal.querySelector('#smart-cancel-btn').onclick = closeModal;
+            cancel.addEventListener('click', closeModal);
 
-            modal.querySelector('#smart-insert-btn').onclick = () => {
+            insert.addEventListener('click', () => {
                 const value = modalInput.value;
                 if (value) {
                     // 如果找到了匹配的变量引用开始，替换它
@@ -2038,14 +2069,14 @@
                 }
 
                 closeModal();
-            };
+            });
 
             // 点击外部关闭
-            modal.onclick = (e) => {
+            modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
                     closeModal();
                 }
-            };
+            });
 
             // ESC键关闭
             const handleEsc = (e) => {
@@ -2100,7 +2131,7 @@
     });
 </script>
 
-<style>
+<style nonce="{{ csp_nonce }}">
     /* 步骤列表特定样式 */
     .step-container {
         border: none;

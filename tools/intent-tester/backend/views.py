@@ -1,19 +1,25 @@
 from flask import Blueprint, render_template, redirect
 
+from .intent_security.policy import EndpointPolicy, intent_policy
+from .intent_security.web import login_response, logout_response
+
 views_bp = Blueprint('views', __name__)
 
 @views_bp.route('/')
 @views_bp.route('/intent-tester/')
+@intent_policy(EndpointPolicy.PUBLIC)
 def index():
     return redirect('/intent-tester/testcases')
 
 @views_bp.route('/testcases')
 @views_bp.route('/intent-tester/testcases')
+@intent_policy(EndpointPolicy.PUBLIC_READONLY)
 def testcases():
     return render_template('testcases.html')
 
 @views_bp.route('/testcases/create')
 @views_bp.route('/intent-tester/testcases/create')
+@intent_policy(EndpointPolicy.OPERATOR)
 def create_testcase():
     # 创建模式：传递空的 testcase 对象
     empty_testcase = {
@@ -41,6 +47,7 @@ def create_testcase():
 @views_bp.route('/testcases/<int:testcase_id>/edit')
 @views_bp.route('/intent-tester/testcases/<int:testcase_id>')
 @views_bp.route('/intent-tester/testcases/<int:testcase_id>/edit')
+@intent_policy(EndpointPolicy.OPERATOR)
 def edit_testcase(testcase_id):
     from .models import TestCase
     import json
@@ -66,11 +73,13 @@ def edit_testcase(testcase_id):
 @views_bp.route('/executions/<int:execution_id>')
 @views_bp.route('/intent-tester/execution')
 @views_bp.route('/intent-tester/executions/<int:execution_id>')
+@intent_policy(EndpointPolicy.OPERATOR)
 def view_execution(execution_id=None):
     return render_template('execution.html', execution_id=execution_id)
 
 @views_bp.route('/local-proxy')
 @views_bp.route('/intent-tester/local-proxy')
+@intent_policy(EndpointPolicy.PUBLIC_READONLY)
 def local_proxy():
     from datetime import datetime
     return render_template(
@@ -79,6 +88,17 @@ def local_proxy():
         build_time=datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
     )
 
+
+@views_bp.route('/intent-tester/login', methods=['GET', 'POST'])
+@intent_policy(EndpointPolicy.PUBLIC)
+def login():
+    return login_response()
+
+
+@views_bp.route('/intent-tester/logout', methods=['POST'])
+@intent_policy(EndpointPolicy.OPERATOR)
+def logout():
+    return logout_response()
 
 
 

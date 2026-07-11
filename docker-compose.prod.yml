@@ -1,59 +1,58 @@
-# 腾讯云生产环境部署配置
-# 包含：Nginx 网关、意图测试工具、AI 智能体、PostgreSQL
-
 services:
-  # PostgreSQL 数据库（共享）
   postgres:
     image: postgres:15-alpine
     container_name: ai4se-db-prod
     restart: unless-stopped
     environment:
       POSTGRES_DB: ai4se
-      POSTGRES_USER: ${DB_USER:-ai4se_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_in_production}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+      POSTGRES_USER: "${DB_USER:?DB_USER is required}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD is required}"
+      POSTGRES_INITDB_ARGS: --encoding=UTF8
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-ai4se_user}" ]
+      test: [CMD-SHELL, "pg_isready -U ${DB_USER:?DB_USER is required}"]
       interval: 10s
       timeout: 5s
       retries: 5
     deploy:
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 512M
-    networks:
-      - ai4se-network
+    networks: [ai4se-network]
 
-  # 意图测试工具应用
   intent-tester:
     build:
       context: .
       dockerfile: tools/intent-tester/docker/Dockerfile
+      target: web
     container_name: ai4se-intent-tester-prod
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql://${DB_USER:-ai4se_user}:${DB_PASSWORD:-change_me_in_production}@postgres:5432/ai4se
-      - SECRET_KEY=${SECRET_KEY:-change_me_in_production}
-      - MIDSCENE_SERVER_URL=http://host.docker.internal:3001
-      - FLASK_ENV=production
-    ports:
-      - "5001:5001"
+      DATABASE_URL: "postgresql://${DB_USER:?DB_USER is required}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/ai4se"
+      SECRET_KEY: "${SECRET_KEY:?SECRET_KEY is required}"
+      AI4SE_ENV: production
+      INTENT_ACCESS_MODE: "${INTENT_ACCESS_MODE:?INTENT_ACCESS_MODE is required}"
+      INTENT_EXECUTION_ENABLED: "${INTENT_EXECUTION_ENABLED:?INTENT_EXECUTION_ENABLED is required}"
+      INTENT_PUBLIC_ORIGIN: "${INTENT_PUBLIC_ORIGIN:?INTENT_PUBLIC_ORIGIN is required}"
+      INTENT_TESTER_ADMIN_PASSWORD_HASH: "${INTENT_TESTER_ADMIN_PASSWORD_HASH:?INTENT_TESTER_ADMIN_PASSWORD_HASH is required}"
+      INTENT_PROXY_TOPOLOGY: managed
+      INTENT_PROXY_TOKEN: "${INTENT_PROXY_TOKEN:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-}"
+      MIDSCENE_MODEL_NAME: "${MIDSCENE_MODEL_NAME:-}"
+      MIDSCENE_SERVER_URL: http://intent-execution-proxy:3001
+      FLASK_ENV: production
     volumes:
-      - ./tools/intent-tester/frontend/static/screenshots:/app/frontend/static/screenshots
+      - ./tools/intent-tester/frontend/static/screenshots:/app/tools/intent-tester/frontend/static/screenshots
       - ./logs:/app/logs
       - ./dist:/app/dist:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "python", "-c", "import requests; requests.get('http://localhost:5001/health')" ]
+      test: [CMD, python, -c, "import requests; requests.get('http://localhost:5001/health').raise_for_status()"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -61,12 +60,38 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.5'
+          cpus: "1.5"
           memory: 1.5G
-    networks:
-      - ai4se-network
+    networks: [ai4se-network]
 
-  # 新 Agent（Lisa 纯前端版）
+  intent-execution-proxy:
+    build:
+      context: .
+      dockerfile: tools/intent-tester/docker/Dockerfile
+      target: proxy
+    container_name: ai4se-intent-execution-proxy-prod
+    restart: unless-stopped
+    profiles: [execution]
+    environment:
+      INTENT_PROXY_TOPOLOGY: managed
+      INTENT_PROXY_TOKEN: "${INTENT_PROXY_TOKEN:-}"
+      INTENT_PUBLIC_ORIGIN: "${INTENT_PUBLIC_ORIGIN:?INTENT_PUBLIC_ORIGIN is required}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-}"
+      MIDSCENE_MODEL_NAME: "${MIDSCENE_MODEL_NAME:-}"
+      MAIN_APP_URL: http://intent-tester:5001/intent-tester/api
+      PORT: "3001"
+    depends_on:
+      intent-tester:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3001/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks: [ai4se-network]
+
   new-agents:
     build:
       context: .
@@ -76,12 +101,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 256M
-    networks:
-      - ai4se-network
+    networks: [ai4se-network]
 
-  # 新 Agent 后端代理（LLM Proxy）
   new-agents-backend:
     build:
       context: .
@@ -89,24 +112,22 @@ services:
     container_name: ai4se-new-agents-backend-prod
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql://${DB_USER:-ai4se_user}:${DB_PASSWORD:-change_me_in_production}@postgres:5432/ai4se
-      - NEW_AGENTS_DEFAULT_LLM_API_KEY=${NEW_AGENTS_DEFAULT_LLM_API_KEY:-}
-      - NEW_AGENTS_DEFAULT_LLM_BASE_URL=${NEW_AGENTS_DEFAULT_LLM_BASE_URL:-}
-      - NEW_AGENTS_DEFAULT_LLM_MODEL=${NEW_AGENTS_DEFAULT_LLM_MODEL:-}
-      - NEW_AGENTS_DEFAULT_LLM_DESCRIPTION=${NEW_AGENTS_DEFAULT_LLM_DESCRIPTION:-}
-      - PROXY_API_KEY=${PROXY_API_KEY:-}
+      DATABASE_URL: "postgresql://${DB_USER:?DB_USER is required}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/ai4se"
+      NEW_AGENTS_DEFAULT_LLM_API_KEY: "${NEW_AGENTS_DEFAULT_LLM_API_KEY:?NEW_AGENTS_DEFAULT_LLM_API_KEY is required}"
+      NEW_AGENTS_DEFAULT_LLM_BASE_URL: "${NEW_AGENTS_DEFAULT_LLM_BASE_URL:?NEW_AGENTS_DEFAULT_LLM_BASE_URL is required}"
+      NEW_AGENTS_DEFAULT_LLM_MODEL: "${NEW_AGENTS_DEFAULT_LLM_MODEL:?NEW_AGENTS_DEFAULT_LLM_MODEL is required}"
+      NEW_AGENTS_DEFAULT_LLM_DESCRIPTION: "${NEW_AGENTS_DEFAULT_LLM_DESCRIPTION:-GitHub Actions managed default LLM config}"
+      PROXY_API_KEY: "${PROXY_API_KEY:-}"
     depends_on:
       postgres:
         condition: service_healthy
     deploy:
       resources:
         limits:
-          cpus: '1.0'
+          cpus: "1.0"
           memory: 512M
-    networks:
-      - ai4se-network
+    networks: [ai4se-network]
 
-  # Nginx 反向代理（统一入口）
   nginx:
     image: nginx:alpine
     container_name: ai4se-gateway-prod
@@ -125,17 +146,14 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 256M
-    networks:
-      - ai4se-network
+    networks: [ai4se-network]
 
-# 持久化数据卷
 volumes:
   postgres_data:
     driver: local
 
-# 网络配置
 networks:
   ai4se-network:
     name: ai4se-network

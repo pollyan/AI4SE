@@ -1,15 +1,9 @@
-version: '3.8'
-
-# 统一的 Docker Compose 配置 (Merged from docker-compose.new.yml)
-# 包含：Nginx 网关、意图测试工具、AI 智能体、PostgreSQL
-
 x-proxy: &proxy
   http_proxy: "http://192.168.5.2:7897"
   https_proxy: "http://192.168.5.2:7897"
-  no_proxy: "localhost,127.0.0.1"
+  no_proxy: "localhost,127.0.0.1,postgres,intent-tester,intent-execution-proxy"
 
 services:
-  # PostgreSQL 数据库（共享）
   postgres:
     image: postgres:15-alpine
     container_name: ai4se-db
@@ -17,72 +11,81 @@ services:
     environment:
       <<: *proxy
       POSTGRES_DB: ai4se
-      POSTGRES_USER: ${DB_USER:-ai4se_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_in_production}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+      POSTGRES_USER: "${DB_USER:?DB_USER is required}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD is required}"
+      POSTGRES_INITDB_ARGS: --encoding=UTF8
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-ai4se_user}" ]
+      test: [CMD-SHELL, "pg_isready -U ${DB_USER:?DB_USER is required}"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - ai4se-network
+    networks: [ai4se-network]
 
-  # 意图测试工具应用
   intent-tester:
     build:
       context: .
       dockerfile: tools/intent-tester/docker/Dockerfile
-
+      target: web
     container_name: ai4se-intent-tester
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql://${DB_USER:-ai4se_user}:${DB_PASSWORD:-change_me_in_production}@postgres:5432/ai4se
-      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-please-change}
-      - MIDSCENE_SERVER_URL=http://host.docker.internal:3001
-      - FLASK_ENV=${FLASK_ENV:-production}
-
+      DATABASE_URL: "postgresql://${DB_USER:?DB_USER is required}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/ai4se"
+      SECRET_KEY: "${SECRET_KEY:?SECRET_KEY is required}"
+      AI4SE_ENV: development
+      INTENT_ACCESS_MODE: local-dev
+      INTENT_EXECUTION_ENABLED: "true"
+      INTENT_PUBLIC_ORIGIN: http://127.0.0.1:5001
+      INTENT_PROXY_TOPOLOGY: managed
+      INTENT_PROXY_TOKEN: "${INTENT_PROXY_TOKEN:?INTENT_PROXY_TOKEN is required}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:?OPENAI_API_KEY is required}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:?OPENAI_BASE_URL is required}"
+      MIDSCENE_MODEL_NAME: "${MIDSCENE_MODEL_NAME:?MIDSCENE_MODEL_NAME is required}"
+      MIDSCENE_SERVER_URL: http://intent-execution-proxy:3001
+      FLASK_ENV: development
     ports:
-      - "5001:5001"
+      - "127.0.0.1:5001:5001"
     volumes:
-      - ./tools/intent-tester/frontend/static/screenshots:/app/frontend/static/screenshots
-      - ./logs:/app/logs
-      # Mount source code for simpler debugging if needed, but build is preferred
       - ./tools/intent-tester:/app/tools/intent-tester
       - ./tools/shared:/app/tools/shared
       - ./assistant-bundles:/app/assistant-bundles
+      - ./logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck:
-      test: [ "CMD", "python", "-c", "import requests; requests.get('http://localhost:5001/health')" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - ai4se-network
+    networks: [ai4se-network]
 
-  # 新 Agent（Lisa 纯前端静态服务直接挂载，秒级启动取代容器内构建）
+  intent-execution-proxy:
+    build:
+      context: .
+      dockerfile: tools/intent-tester/docker/Dockerfile
+      target: proxy
+    container_name: ai4se-intent-execution-proxy
+    restart: unless-stopped
+    environment:
+      INTENT_PROXY_TOPOLOGY: managed
+      INTENT_PROXY_TOKEN: "${INTENT_PROXY_TOKEN:?INTENT_PROXY_TOKEN is required}"
+      INTENT_PUBLIC_ORIGIN: http://127.0.0.1:5001
+      OPENAI_API_KEY: "${OPENAI_API_KEY:?OPENAI_API_KEY is required}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:?OPENAI_BASE_URL is required}"
+      MIDSCENE_MODEL_NAME: "${MIDSCENE_MODEL_NAME:?MIDSCENE_MODEL_NAME is required}"
+      MAIN_APP_URL: http://intent-tester:5001/intent-tester/api
+      PORT: "3001"
+    depends_on:
+      intent-tester:
+        condition: service_started
+    networks: [ai4se-network]
+
   new-agents:
     image: nginx:alpine
     container_name: ai4se-new-agents
     restart: unless-stopped
-    environment:
-      <<: *proxy
     volumes:
       - ./tools/new-agents/frontend/dist:/usr/share/nginx/html/new-agents
       - ./tools/new-agents/docker/nginx.conf:/etc/nginx/conf.d/default.conf
-    networks:
-      - ai4se-network
+    networks: [ai4se-network]
 
-  # 新 Agent 后端代理（LLM Proxy）
   new-agents-backend:
     build:
       context: .
@@ -90,12 +93,12 @@ services:
     container_name: ai4se-new-agents-backend
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql://${DB_USER:-ai4se_user}:${DB_PASSWORD:-change_me_in_production}@postgres:5432/ai4se
-      - NEW_AGENTS_DEFAULT_LLM_API_KEY=${NEW_AGENTS_DEFAULT_LLM_API_KEY:-}
-      - NEW_AGENTS_DEFAULT_LLM_BASE_URL=${NEW_AGENTS_DEFAULT_LLM_BASE_URL:-}
-      - NEW_AGENTS_DEFAULT_LLM_MODEL=${NEW_AGENTS_DEFAULT_LLM_MODEL:-}
-      - NEW_AGENTS_DEFAULT_LLM_DESCRIPTION=${NEW_AGENTS_DEFAULT_LLM_DESCRIPTION:-}
-      - PROXY_API_KEY=${PROXY_API_KEY:-}
+      DATABASE_URL: "postgresql://${DB_USER:?DB_USER is required}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/ai4se"
+      NEW_AGENTS_DEFAULT_LLM_API_KEY: "${NEW_AGENTS_DEFAULT_LLM_API_KEY:-}"
+      NEW_AGENTS_DEFAULT_LLM_BASE_URL: "${NEW_AGENTS_DEFAULT_LLM_BASE_URL:-}"
+      NEW_AGENTS_DEFAULT_LLM_MODEL: "${NEW_AGENTS_DEFAULT_LLM_MODEL:-}"
+      NEW_AGENTS_DEFAULT_LLM_DESCRIPTION: "${NEW_AGENTS_DEFAULT_LLM_DESCRIPTION:-}"
+      PROXY_API_KEY: "${PROXY_API_KEY:-}"
     volumes:
       - ./tools/new-agents/backend:/app
       - ./tools/new-agents/workflow_manifest.json:/workflow_manifest.json:ro
@@ -104,10 +107,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - ai4se-network
+    networks: [ai4se-network]
 
-  # Nginx 反向代理（统一入口）
   nginx:
     image: nginx:alpine
     container_name: ai4se-gateway
@@ -125,8 +126,7 @@ services:
       - intent-tester
       - new-agents
       - new-agents-backend
-    networks:
-      - ai4se-network
+    networks: [ai4se-network]
 
 volumes:
   postgres_data:

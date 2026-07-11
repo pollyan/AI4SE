@@ -29,6 +29,15 @@ from backend.services.proxy_execution_client import (
     ProxyExecutionClient,
     ProxyExecutionClientError,
 )
+from backend.intent_security import (
+    current_intent_principal,
+    issue_proxy_ticket as create_proxy_ticket,
+)
+from backend.intent_security.policy import (
+    EndpointPolicy,
+    intent_policy,
+    proxy_ticket_unavailable_response,
+)
 
 # 导入通用代码模式
 
@@ -50,9 +59,14 @@ def _get_proxy_execution_client() -> _ExecutionProxy:
     injected_client = current_app.config.get("PROXY_EXECUTION_CLIENT")
     if injected_client is not None:
         return injected_client
+    security_config = current_app.extensions["intent_security"].config
+    base_url = current_app.config.get("MIDSCENE_SERVER_URL")
+    if not base_url and security_config.proxy_topology == "local-host":
+        base_url = "http://127.0.0.1:3001"
     return ProxyExecutionClient(
-        base_url=current_app.config.get("MIDSCENE_SERVER_URL"),
+        base_url=base_url,
         timeout=current_app.config.get("MIDSCENE_API_TIMEOUT"),
+        token=security_config.proxy_token,
     )
 
 
@@ -246,6 +260,21 @@ def _reconcile_execution_from_proxy(
                 raise ProxyExecutionClientError("durable start reconciliation failed")
 
     if proxy_status == "running":
+        try:
+            progress = DatabaseService.apply_execution_progress(
+                execution_id, proxy_state.get("steps", [])
+            )
+        except (TypeError, ValueError) as error:
+            raise ProxyExecutionClientError(
+                "proxy returned invalid running progress"
+            ) from error
+        if progress["outcome"] == "terminal_noop":
+            return
+        if progress["outcome"] != "applied":
+            raise ProxyExecutionClientError(
+                "durable running progress reconciliation failed"
+            )
+
         callback_errors = proxy_state.get("callbackErrors", [])
         callback_exhausted = isinstance(callback_errors, list) and any(
             isinstance(item, dict)
@@ -311,6 +340,7 @@ def _reconcile_execution_from_proxy(
 
 
 @executions_bp.route("/executions/<execution_id>/lifecycle", methods=["POST"])
+@intent_policy(EndpointPolicy.PROXY_MACHINE)
 @log_api_call
 def record_execution_lifecycle(
     execution_id: str,
@@ -347,6 +377,7 @@ def record_execution_lifecycle(
 
 
 @executions_bp.route("/executions", methods=["POST"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 def create_execution() -> Response | tuple[Response, int]:
     """创建执行任务"""
@@ -374,7 +405,7 @@ def create_execution() -> Response | tuple[Response, int]:
             mode=data.get("mode", "headless"),
             browser=data.get("browser", "chrome"),
             start_time=datetime.utcnow(),
-            executed_by=data.get("executed_by", "system"),
+            executed_by=current_intent_principal().name,
         )
 
         db.session.add(execution)
@@ -413,7 +444,28 @@ def create_execution() -> Response | tuple[Response, int]:
         return jsonify(response), 500
 
 
+@executions_bp.route("/executions/<execution_id>/proxy-ticket", methods=["POST"])
+@intent_policy(EndpointPolicy.OPERATOR)
+@log_api_call
+def issue_proxy_ticket(execution_id: str):
+    config = current_app.extensions["intent_security"].config
+    if config.proxy_topology != "local-host":
+        return proxy_ticket_unavailable_response()
+    execution = ExecutionHistory.query.filter_by(execution_id=execution_id).first()
+    if execution is None:
+        return standard_error_response("执行记录不存在", 404)
+    return format_success_response(
+        message="Proxy ticket issued",
+        data={
+            "ticket": create_proxy_ticket(execution_id),
+            "execution_id": execution_id,
+            "expires_in": 60,
+        },
+    )
+
+
 @executions_bp.route("/executions/<execution_id>/retry", methods=["POST"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 def retry_execution(execution_id: str) -> Response | tuple[Response, int]:
     """Redispatch one durable active execution with its canonical ID."""
@@ -450,6 +502,7 @@ def retry_execution(execution_id: str) -> Response | tuple[Response, int]:
 
 
 @executions_bp.route("/executions/<execution_id>/reconcile", methods=["POST"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 def reconcile_execution(execution_id: str) -> Response | tuple[Response, int]:
     """Pull one proxy state into the durable execution lifecycle."""
@@ -492,6 +545,7 @@ def reconcile_execution(execution_id: str) -> Response | tuple[Response, int]:
 
 
 @executions_bp.route("/executions/<execution_id>", methods=["GET"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 def get_execution_status(execution_id):
     """获取执行状态"""
@@ -506,6 +560,7 @@ def get_execution_status(execution_id):
 
 
 @executions_bp.route("/executions", methods=["GET"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 def get_executions():
     """获取执行历史列表"""
@@ -555,6 +610,7 @@ def get_executions():
 
 
 @executions_bp.route("/executions/<execution_id>/stop", methods=["POST"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 def stop_execution(execution_id: str) -> Response | tuple[Response, int]:
     """停止执行任务"""
@@ -617,6 +673,7 @@ def stop_execution(execution_id: str) -> Response | tuple[Response, int]:
 
 
 @executions_bp.route("/executions/<execution_id>", methods=["DELETE"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 def delete_execution(execution_id):
     """删除执行记录"""
@@ -642,6 +699,7 @@ def delete_execution(execution_id):
 
 
 @executions_bp.route("/executions/<execution_id>/export", methods=["GET"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 def export_execution(execution_id):
     """导出单个执行报告"""
@@ -685,6 +743,7 @@ def export_execution(execution_id):
 
 
 @executions_bp.route("/executions/export-all", methods=["GET"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 def export_all_executions():
     """导出所有执行报告"""
@@ -726,6 +785,7 @@ def export_all_executions():
 
 
 @executions_bp.route("/executions/<execution_id>/variable-references", methods=["GET"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 def get_variable_references(execution_id):
     """获取变量引用历史"""

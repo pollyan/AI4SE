@@ -31,6 +31,8 @@ from backend.utils.common_patterns import (
     database_transaction,
     require_json_data,
 )
+from backend.intent_security import current_intent_principal
+from backend.intent_security.policy import EndpointPolicy, intent_policy
 
 # 导入查询优化器
 
@@ -89,6 +91,7 @@ def validate_step_data(data, is_update=False):
 
 
 @testcases_bp.route("/testcases", methods=["GET"])
+@intent_policy(EndpointPolicy.PUBLIC_READONLY)
 @log_api_call
 def get_testcases() -> Response:
     """获取测试用例列表（使用SQLAlchemy）"""
@@ -126,8 +129,14 @@ def get_testcases() -> Response:
         testcases = query.offset((page - 1) * size).limit(size).all()
 
         # 转换为字典
+        principal = current_intent_principal()
         testcases_data = [
-            testcase.to_dict(include_stats=False) for testcase in testcases
+            (
+                testcase.to_dict(include_stats=False)
+                if principal.is_operator
+                else testcase.to_public_summary()
+            )
+            for testcase in testcases
         ]
 
         return jsonify(
@@ -155,6 +164,7 @@ def get_testcases() -> Response:
 
 
 @testcases_bp.route("/testcases", methods=["POST"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 @require_json
 def create_testcase():
@@ -195,7 +205,7 @@ def create_testcase():
             tags=tags,
             category=data.get("category", ""),
             priority=data.get("priority", 2),
-            created_by=data.get("created_by", "user"),
+            created_by=current_intent_principal().name,
         )
 
         db.session.add(testcase)
@@ -215,6 +225,7 @@ def create_testcase():
 
 
 @testcases_bp.route("/testcases/<int:testcase_id>", methods=["GET"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 def get_testcase(testcase_id):
     """获取测试用例详情"""
@@ -234,6 +245,7 @@ def get_testcase(testcase_id):
 
 
 @testcases_bp.route("/testcases/<int:testcase_id>", methods=["PUT"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 @require_json
 def update_testcase(testcase_id):
@@ -285,6 +297,7 @@ def update_testcase(testcase_id):
 
 
 @testcases_bp.route("/testcases/<int:testcase_id>", methods=["DELETE"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 def delete_testcase(testcase_id):
     """删除测试用例（软删除）"""
@@ -312,6 +325,7 @@ def delete_testcase(testcase_id):
 
 
 @testcases_bp.route("/testcases/<int:testcase_id>/steps", methods=["GET"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 @safe_api_operation("获取测试用例步骤")
 @validate_resource_exists(TestCase, "testcase_id", "测试用例不存在")
@@ -328,6 +342,7 @@ def get_testcase_steps(testcase_id, testcase):
 
 
 @testcases_bp.route("/testcases/<int:testcase_id>/steps", methods=["POST"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 @safe_api_operation("添加测试用例步骤")
 @validate_resource_exists(TestCase, "testcase_id", "测试用例不存在")
@@ -371,6 +386,7 @@ def add_testcase_step(testcase_id, testcase, data):
 
 
 @testcases_bp.route("/testcases/<int:testcase_id>/steps/<int:step_index>", methods=["PUT"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 @safe_api_operation("更新测试用例步骤")
 @validate_resource_exists(TestCase, "testcase_id", "测试用例不存在")
@@ -416,6 +432,7 @@ def update_testcase_step(testcase_id, step_index, testcase, data):
 
 
 @testcases_bp.route("/testcases/<int:testcase_id>/steps/<int:step_index>", methods=["DELETE"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 @safe_api_operation("删除测试用例步骤")
 @validate_resource_exists(TestCase, "testcase_id", "测试用例不存在")
@@ -439,6 +456,7 @@ def delete_testcase_step(testcase_id, step_index, testcase):
 
 
 @testcases_bp.route("/testcases/<int:testcase_id>/steps/reorder", methods=["PUT"])
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 @safe_api_operation("重新排序测试用例步骤")
 @validate_resource_exists(TestCase, "testcase_id", "测试用例不存在")
@@ -473,6 +491,7 @@ def reorder_testcase_steps(testcase_id, testcase, data):
 @testcases_bp.route(
     "/testcases/<int:testcase_id>/steps/<int:step_index>/duplicate", methods=["POST"]
 )
+@intent_policy(EndpointPolicy.OPERATOR)
 @log_api_call
 @safe_api_operation("复制测试用例步骤")
 @validate_resource_exists(TestCase, "testcase_id", "测试用例不存在")

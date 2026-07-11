@@ -53,11 +53,13 @@ class EnhancedStepEditor {
         const parameterFields = VariableFieldConfig.getParameterFields(step.action);
         
         if (parameterFields.length === 0) {
-            formContainer.innerHTML = `
-                <div class="no-parameters">
-                    <p class="text-gray-600">此操作不需要参数配置</p>
-                </div>
-            `;
+            const empty = document.createElement('div');
+            empty.className = 'no-parameters';
+            const message = document.createElement('p');
+            message.className = 'text-gray-600';
+            message.textContent = '此操作不需要参数配置';
+            empty.appendChild(message);
+            formContainer.appendChild(empty);
             return formContainer;
         }
 
@@ -85,33 +87,57 @@ class EnhancedStepEditor {
         const isVariableSupported = fieldConfig.variableSupported;
         const fieldId = `field-${this.stepIndex}-${fieldName}`;
 
-        fieldContainer.innerHTML = `
-            <div class="field-header">
-                <label class="form-label" for="${fieldId}">
-                    ${fieldConfig.label}
-                    ${fieldConfig.required ? '<span class="required">*</span>' : ''}
-                    ${isVariableSupported ? '<span class="variable-support-badge">支持变量</span>' : ''}
-                </label>
-                <div class="field-hint">
-                    ${this.getFieldHint(fieldName, fieldConfig)}
-                </div>
-            </div>
-            
-            <div class="field-input-container">
-                ${this.createInputElement(fieldId, fieldName, fieldConfig, currentValue)}
-            </div>
-            
-            <div class="field-feedback">
-                <div class="validation-error" id="error-${fieldId}" style="display: none;"></div>
-                <div class="preview-value" id="preview-${fieldId}" style="display: none;">
-                    <span class="preview-label">预览值：</span>
-                    <span class="preview-content"></span>
-                </div>
-                <div class="field-meta" id="meta-${fieldId}">
-                    ${VariableFieldConfig.getFieldValueTypeHint(fieldName, currentValue)}
-                </div>
-            </div>
-        `;
+        const header = document.createElement('div');
+        header.className = 'field-header';
+        const label = document.createElement('label');
+        label.className = 'form-label';
+        label.htmlFor = fieldId;
+        label.appendChild(document.createTextNode(fieldConfig.label));
+        if (fieldConfig.required) {
+            const required = document.createElement('span');
+            required.className = 'required';
+            required.textContent = '*';
+            label.appendChild(required);
+        }
+        if (isVariableSupported) {
+            const badge = document.createElement('span');
+            badge.className = 'variable-support-badge';
+            badge.textContent = '支持变量';
+            label.appendChild(badge);
+        }
+        const hint = document.createElement('div');
+        hint.className = 'field-hint';
+        hint.textContent = this.getFieldHint(fieldName, fieldConfig);
+        header.append(label, hint);
+
+        const inputContainer = document.createElement('div');
+        inputContainer.className = 'field-input-container';
+        inputContainer.appendChild(
+            this.createInputElement(fieldId, fieldName, fieldConfig, currentValue)
+        );
+
+        const feedback = document.createElement('div');
+        feedback.className = 'field-feedback';
+        const error = document.createElement('div');
+        error.className = 'validation-error';
+        error.id = `error-${fieldId}`;
+        error.hidden = true;
+        const preview = document.createElement('div');
+        preview.className = 'preview-value';
+        preview.id = `preview-${fieldId}`;
+        preview.hidden = true;
+        const previewLabel = document.createElement('span');
+        previewLabel.className = 'preview-label';
+        previewLabel.textContent = '预览值：';
+        const previewContent = document.createElement('span');
+        previewContent.className = 'preview-content';
+        preview.append(previewLabel, previewContent);
+        const meta = document.createElement('div');
+        meta.className = 'field-meta';
+        meta.id = `meta-${fieldId}`;
+        meta.textContent = VariableFieldConfig.getFieldValueTypeHint(fieldName, currentValue);
+        feedback.append(error, preview, meta);
+        fieldContainer.append(header, inputContainer, feedback);
 
         // 绑定事件和初始化智能输入
         this.bindFieldEvents(fieldContainer, fieldName, fieldConfig);
@@ -124,23 +150,20 @@ class EnhancedStepEditor {
      * @private
      */
     createInputElement(fieldId, fieldName, fieldConfig, currentValue) {
-        const commonAttributes = `
-            id="${fieldId}"
-            name="${fieldName}"
-            placeholder="${fieldConfig.placeholder}"
-            class="form-input ${fieldConfig.variableSupported ? 'variable-supported' : ''}"
-        `;
-
-        switch (fieldConfig.type) {
-            case 'textarea':
-                return `<textarea ${commonAttributes} rows="3">${this.escapeHtml(currentValue)}</textarea>`;
-            
-            case 'number':
-                return `<input type="number" ${commonAttributes} value="${this.escapeHtml(currentValue)}">`;
-            
-            default:
-                return `<input type="text" ${commonAttributes} value="${this.escapeHtml(currentValue)}">`;
+        const input = fieldConfig.type === 'textarea'
+            ? document.createElement('textarea')
+            : document.createElement('input');
+        if (fieldConfig.type === 'textarea') {
+            input.rows = 3;
+        } else {
+            input.type = fieldConfig.type === 'number' ? 'number' : 'text';
         }
+        input.id = fieldId;
+        input.name = fieldName;
+        input.placeholder = fieldConfig.placeholder || '';
+        input.className = `form-input${fieldConfig.variableSupported ? ' variable-supported' : ''}`;
+        input.value = currentValue == null ? '' : String(currentValue);
+        return input;
     }
 
     /**
@@ -412,7 +435,7 @@ class EnhancedStepEditor {
         const errorElement = this.stepContainer.querySelector(`#error-field-${this.stepIndex}-${fieldName}`);
         if (errorElement) {
             errorElement.textContent = errorMessage;
-            errorElement.style.display = 'block';
+            errorElement.hidden = false;
         }
 
         const input = this.stepContainer.querySelector(`#field-${this.stepIndex}-${fieldName}`);
@@ -430,7 +453,7 @@ class EnhancedStepEditor {
     hideFieldError(fieldName) {
         const errorElement = this.stepContainer.querySelector(`#error-field-${this.stepIndex}-${fieldName}`);
         if (errorElement) {
-            errorElement.style.display = 'none';
+            errorElement.hidden = true;
         }
 
         const input = this.stepContainer.querySelector(`#field-${this.stepIndex}-${fieldName}`);
@@ -452,7 +475,7 @@ class EnhancedStepEditor {
             if (contentElement) {
                 contentElement.textContent = previewValue;
             }
-            previewElement.style.display = 'block';
+            previewElement.hidden = false;
         }
 
         this.previewValues[fieldName] = previewValue;
@@ -465,7 +488,7 @@ class EnhancedStepEditor {
     hideFieldPreview(fieldName) {
         const previewElement = this.stepContainer.querySelector(`#preview-field-${this.stepIndex}-${fieldName}`);
         if (previewElement) {
-            previewElement.style.display = 'none';
+            previewElement.hidden = true;
         }
 
         this.previewValues[fieldName] = null;
@@ -486,16 +509,6 @@ class EnhancedStepEditor {
     showVariableHelper(input, fieldName) {
         // 这里可以集成变量选择器或其他辅助工具
         console.log('显示变量助手:', fieldName);
-    }
-
-    /**
-     * HTML转义
-     * @private
-     */
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
     }
 
     /**

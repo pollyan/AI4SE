@@ -225,8 +225,13 @@ class DatabaseService:
         steps: Sequence[Mapping[str, Any]],
         start_time: datetime,
         end_time: datetime,
+        *,
+        allowed_statuses: frozenset[str] = frozenset(
+            {"success", "failed", "skipped", "stopped"}
+        ),
+        allow_open_end_time: bool = False,
     ) -> None:
-        """Atomically replace the terminal callback's step snapshot."""
+        """Atomically replace one validated execution step projection."""
         validated_steps = []
         seen_step_indexes = set()
         for position, step in enumerate(steps):
@@ -245,17 +250,17 @@ class DatabaseService:
                 )
                 or start_time
             )
+            parsed_end_time = DatabaseService._parse_lifecycle_timestamp(
+                step.get("end_time"), "steps.end_time"
+            )
             step_end_time = (
-                DatabaseService._parse_lifecycle_timestamp(
-                    step.get("end_time"), "steps.end_time"
-                )
-                or end_time
+                parsed_end_time
+                if parsed_end_time is not None or allow_open_end_time
+                else end_time
             )
             step_status = step.get("status")
-            if step_status not in {"success", "failed", "skipped", "stopped"}:
-                raise ValueError(
-                    "steps中的status必须是success、failed、skipped或stopped"
-                )
+            if step_status not in allowed_statuses:
+                raise ValueError("steps中的status不在允许范围内")
 
             validated_steps.append(
                 (step, step_index, step_start_time, step_end_time, step_status)
@@ -291,6 +296,132 @@ class DatabaseService:
                     error_message=step.get("error_message"),
                 )
             )
+
+    @staticmethod
+    def _normalize_progress_steps(steps: object) -> list[dict[str, Any]]:
+        """Validate and strip a proxy running snapshot to its safe fields."""
+        if not isinstance(steps, list):
+            raise ValueError("steps必须是对象数组")
+
+        normalized: list[dict[str, Any]] = []
+        seen_indexes: set[int] = set()
+        allowed_statuses = {
+            "pending",
+            "running",
+            "success",
+            "failed",
+            "skipped",
+            "stopped",
+        }
+        for step in steps:
+            if not isinstance(step, dict):
+                raise ValueError("steps必须是对象数组")
+            step_index = step.get("index")
+            if (
+                isinstance(step_index, bool)
+                or not isinstance(step_index, int)
+                or step_index < 0
+            ):
+                raise ValueError("steps中的index必须是非负整数")
+            if step_index in seen_indexes:
+                raise ValueError("steps中的index必须唯一")
+            seen_indexes.add(step_index)
+
+            description = step.get("description")
+            if not isinstance(description, str) or not description.strip():
+                raise ValueError("steps中的description必须是非空字符串")
+            status = step.get("status")
+            if status not in allowed_statuses:
+                raise ValueError("steps中的status不在允许范围内")
+            duration = step.get("duration")
+            if duration is not None and (
+                isinstance(duration, bool)
+                or not isinstance(duration, int)
+                or duration < 0
+            ):
+                raise ValueError("steps中的duration必须是非负整数或null")
+            for field in ("start_time", "end_time"):
+                value = step.get(field)
+                if value is not None:
+                    DatabaseService._parse_lifecycle_timestamp(value, field)
+
+            normalized.append(
+                {
+                    "index": step_index,
+                    "description": description,
+                    "status": status,
+                    "start_time": step.get("start_time"),
+                    "end_time": step.get("end_time"),
+                    "duration": duration,
+                }
+            )
+        return normalized
+
+    @staticmethod
+    @require_app_context
+    def apply_execution_progress(
+        execution_id: str, steps: object
+    ) -> dict[str, Any]:
+        """Replace safe active progress without becoming a terminal authority."""
+        normalized_steps = DatabaseService._normalize_progress_steps(steps)
+        with DatabaseService.get_db_session():
+            execution_query = ExecutionHistory.query.filter_by(
+                execution_id=execution_id
+            )
+            execution = execution_query.first()
+            if execution is None:
+                return {"outcome": "not_found"}
+            if execution.status in {"success", "failed", "stopped"}:
+                return {"outcome": "terminal_noop", "execution": execution.to_dict()}
+            if execution.status not in {"pending", "running"}:
+                return {"outcome": "invalid_transition"}
+
+            values = {
+                "steps_total": len(normalized_steps),
+                "steps_passed": sum(
+                    1 for step in normalized_steps if step["status"] == "success"
+                ),
+                "steps_failed": sum(
+                    1 for step in normalized_steps if step["status"] == "failed"
+                ),
+            }
+            claimed = execution_query.filter(
+                ExecutionHistory.status.in_({"pending", "running"})
+            ).update(values, synchronize_session=False)
+            if claimed == 0:
+                db.session.expire_all()
+                current = execution_query.first()
+                if current is not None and current.status in {
+                    "success",
+                    "failed",
+                    "stopped",
+                }:
+                    return {
+                        "outcome": "terminal_noop",
+                        "execution": current.to_dict(),
+                    }
+                return {"outcome": "invalid_transition"}
+
+            db.session.expire_all()
+            execution = execution_query.one()
+            DatabaseService._replace_step_snapshots(
+                execution,
+                normalized_steps,
+                execution.start_time,
+                datetime.utcnow(),
+                allowed_statuses=frozenset(
+                    {
+                        "pending",
+                        "running",
+                        "success",
+                        "failed",
+                        "skipped",
+                        "stopped",
+                    }
+                ),
+                allow_open_end_time=True,
+            )
+            return {"outcome": "applied", "execution": execution.to_dict()}
 
     @staticmethod
     def _clear_lifecycle_callback_exhausted(

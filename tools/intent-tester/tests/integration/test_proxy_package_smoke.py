@@ -11,6 +11,8 @@ from urllib.error import URLError
 from urllib.request import urlopen
 import zipfile
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 BUILDER = REPO_ROOT / "scripts/ci/build-proxy-package.js"
@@ -21,6 +23,15 @@ EXPANDED_PACKAGE = REPO_ROOT / "dist/intent-test-proxy"
 DIST_ZIP = REPO_ROOT / "dist/intent-test-proxy.zip"
 FRONTEND_ZIP = SOURCE_ROOT / "frontend/static/intent-test-proxy.zip"
 ARCHIVE_ROOT = "intent-test-proxy"
+VALID_RUNTIME_ENV = {
+    "INTENT_PROXY_TOPOLOGY": "local-host",
+    "INTENT_PROXY_TOKEN": "package-proxy-token-with-at-least-32-bytes",
+    "INTENT_PUBLIC_ORIGIN": "http://127.0.0.1:5001",
+    "OPENAI_API_KEY": "package-smoke-test-key",
+    "OPENAI_BASE_URL": "http://127.0.0.1:9999/v1",
+    "MIDSCENE_MODEL_NAME": "offline-package-model",
+    "MAIN_APP_URL": "http://127.0.0.1:5001/intent-tester/api",
+}
 
 
 def _run_builder() -> None:
@@ -99,14 +110,27 @@ def test_builder_produces_complete_synchronized_package() -> None:
     assert package["scripts"]["start"] == "node midscene_server.js"
     assert lock["packages"][""]["dependencies"] == package["dependencies"]
     assert lock["packages"][""]["devDependencies"] == package["devDependencies"]
-    expected_main_app_url = "http://localhost:5001/intent-tester/api"
-    assert (
-        f"MAIN_APP_URL={expected_main_app_url}"
-        in archive_files[f"{ARCHIVE_ROOT}/.env.example"].decode()
-    )
-    assert expected_main_app_url in archive_files[
-        f"{ARCHIVE_ROOT}/midscene_server.js"
-    ].decode()
+    env_example = archive_files[f"{ARCHIVE_ROOT}/.env.example"].decode()
+    for key in VALID_RUNTIME_ENV:
+        assert f"{key}=" in env_example
+    assert "your-api-key-here" in env_example
+    assert VALID_RUNTIME_ENV["INTENT_PROXY_TOKEN"] not in env_example
+    assert archive_files[f"{ARCHIVE_ROOT}/.env.example"] == (
+        SOURCE_ROOT / "proxy_templates/.env.example"
+    ).read_bytes()
+    for script_name in ("start.sh", "start.bat"):
+        packaged_script = archive_files[f"{ARCHIVE_ROOT}/{script_name}"]
+        source_script = (SOURCE_ROOT / "proxy_templates" / script_name).read_bytes()
+        assert packaged_script == source_script
+        script_text = packaged_script.decode()
+        for key in VALID_RUNTIME_ENV:
+            assert key in script_text
+        install_position = min(
+            position
+            for marker in ("npm ci", "npm install")
+            if (position := script_text.find(marker)) >= 0
+        )
+        assert script_text.find("INTENT_PROXY_TOKEN") < install_position
 
     assert DIST_ZIP.read_bytes() == FRONTEND_ZIP.read_bytes()
     assert archive_files == _archive_files(FRONTEND_ZIP)
@@ -126,7 +150,10 @@ def test_builder_is_byte_deterministic() -> None:
     assert _sha256(FRONTEND_ZIP) == first_hash
 
 
-def test_frontend_package_starts_real_server_and_serves_health(tmp_path: Path) -> None:
+@pytest.mark.parametrize("topology", ["local-host", "managed"])
+def test_frontend_package_starts_real_server_and_serves_health(
+    tmp_path: Path, topology: str
+) -> None:
     assert SOURCE_NODE_MODULES.is_dir(), (
         "This smoke test intentionally reuses repository-installed dependencies; "
         "it does not prove a fresh npm download."
@@ -136,7 +163,8 @@ def test_frontend_package_starts_real_server_and_serves_health(tmp_path: Path) -
     port = _free_port()
     env = {
         **os.environ,
-        "OPENAI_API_KEY": "package-smoke-test-key",
+        **VALID_RUNTIME_ENV,
+        "INTENT_PROXY_TOPOLOGY": topology,
         "PORT": str(port),
     }
     process = subprocess.Popen(
@@ -172,12 +200,22 @@ def test_frontend_package_starts_real_server_and_serves_health(tmp_path: Path) -
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=5)
+        output = process.stdout.read() if process.stdout else ""
+        assert VALID_RUNTIME_ENV["INTENT_PROXY_TOKEN"] not in output
 
 
-def test_frontend_package_fails_explicitly_without_api_key(tmp_path: Path) -> None:
+@pytest.mark.parametrize("missing_key", tuple(VALID_RUNTIME_ENV))
+def test_frontend_package_fails_explicitly_without_required_security_config(
+    tmp_path: Path, missing_key: str
+) -> None:
     _run_builder()
     package_root = _extract_frontend_package(tmp_path)
-    env = {**os.environ, "OPENAI_API_KEY": "", "PORT": str(_free_port())}
+    env = {
+        **os.environ,
+        **VALID_RUNTIME_ENV,
+        missing_key: "",
+        "PORT": str(_free_port()),
+    }
 
     result = subprocess.run(
         ["node", "midscene_server.js"],
@@ -190,6 +228,6 @@ def test_frontend_package_fails_explicitly_without_api_key(tmp_path: Path) -> No
     )
 
     assert result.returncode != 0
-    assert "Missing required environment variables: OPENAI_API_KEY" in (
-        result.stdout + result.stderr
-    )
+    output = result.stdout + result.stderr
+    assert missing_key in output
+    assert VALID_RUNTIME_ENV["INTENT_PROXY_TOKEN"] not in output

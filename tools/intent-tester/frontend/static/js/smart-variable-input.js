@@ -365,11 +365,10 @@ class SmartVariableInput {
             return;
         }
 
-        const html = this.filteredSuggestions
-            .map((variable, index) => this.renderSuggestionItem(variable, index))
-            .join('');
-
-        this.dropdown.innerHTML = html;
+        const items = this.filteredSuggestions.map(
+            (variable, index) => this.renderSuggestionItem(variable, index)
+        );
+        this.dropdown.replaceChildren(...items);
 
         // 绑定点击事件
         this.bindSuggestionEvents();
@@ -380,43 +379,32 @@ class SmartVariableInput {
      */
     renderSuggestionItem(item, index) {
         const isSelected = index === this.selectedIndex;
-        const selectedClass = isSelected ? 'selected' : '';
-        const highlightedName = this.highlightMatch(item.name, this.filterText);
-
-        // 区分变量和属性的显示
-        if (this.currentContext && this.currentContext.type === 'property') {
-            // 属性模式
-            return `
-                <div class="suggestion-item ${selectedClass}" data-index="${index}">
-                    <div class="suggestion-item-header">
-                        <span class="suggestion-item-name">${highlightedName}</span>
-                        <div class="suggestion-item-meta">
-                            <span class="property-indicator">属性</span>
-                            <span class="type-info">[${item.type || item.data_type}]</span>
-                        </div>
-                    </div>
-                    <div class="suggestion-item-preview">
-                        ${this.formatPreview(item.value || item.preview, item.type || item.data_type)}
-                    </div>
-                </div>
-            `;
-        } else {
-            // 变量模式
-            return `
-                <div class="suggestion-item ${selectedClass}" data-index="${index}">
-                    <div class="suggestion-item-header">
-                        <span class="suggestion-item-name">${highlightedName}</span>
-                        <div class="suggestion-item-meta">
-                            <span class="step-info">步骤 ${item.source_step_index}</span>
-                            <span class="type-info">[${item.data_type}]</span>
-                        </div>
-                    </div>
-                    <div class="suggestion-item-preview">
-                        预览: ${this.formatPreview(item.preview, item.data_type)}
-                    </div>
-                </div>
-            `;
-        }
+        const propertyMode = this.currentContext && this.currentContext.type === 'property';
+        const suggestion = document.createElement('div');
+        suggestion.className = `suggestion-item${isSelected ? ' selected' : ''}`;
+        suggestion.dataset.index = index;
+        const header = document.createElement('div');
+        header.className = 'suggestion-item-header';
+        const name = document.createElement('span');
+        name.className = 'suggestion-item-name';
+        name.textContent = item.name == null ? '' : String(item.name);
+        const metadata = document.createElement('div');
+        metadata.className = 'suggestion-item-meta';
+        const origin = document.createElement('span');
+        origin.className = propertyMode ? 'property-indicator' : 'step-info';
+        origin.textContent = propertyMode ? '属性' : `步骤 ${item.source_step_index}`;
+        const type = document.createElement('span');
+        type.className = 'type-info';
+        const dataType = propertyMode ? item.type || item.data_type : item.data_type;
+        type.textContent = `[${dataType || ''}]`;
+        metadata.append(origin, type);
+        header.append(name, metadata);
+        const preview = document.createElement('div');
+        preview.className = 'suggestion-item-preview';
+        const previewValue = propertyMode ? item.value || item.preview : item.preview;
+        preview.textContent = `${propertyMode ? '' : '预览: '}${this.formatPreview(previewValue, dataType)}`;
+        suggestion.append(header, preview);
+        return suggestion;
     }
 
     /**
@@ -575,11 +563,10 @@ class SmartVariableInput {
      * 显示加载状态
      */
     showLoadingState() {
-        this.dropdown.innerHTML = `
-            <div class="suggestion-loading">
-                正在加载变量...
-            </div>
-        `;
+        const state = document.createElement('div');
+        state.className = 'suggestion-loading';
+        state.textContent = '正在加载变量...';
+        this.dropdown.replaceChildren(state);
     }
 
     /**
@@ -587,22 +574,20 @@ class SmartVariableInput {
      */
     showEmptyState() {
         const message = this.filterText ? '未找到匹配变量' : '暂无可用变量';
-        this.dropdown.innerHTML = `
-            <div class="suggestion-empty">
-                ${message}
-            </div>
-        `;
+        const state = document.createElement('div');
+        state.className = 'suggestion-empty';
+        state.textContent = message;
+        this.dropdown.replaceChildren(state);
     }
 
     /**
      * 显示错误状态
      */
     showErrorState(message) {
-        this.dropdown.innerHTML = `
-            <div class="suggestion-error">
-                ${message}
-            </div>
-        `;
+        const state = document.createElement('div');
+        state.className = 'suggestion-error';
+        state.textContent = message == null ? '加载失败' : String(message);
+        this.dropdown.replaceChildren(state);
     }
 
     /**

@@ -1,5 +1,14 @@
 # syntax=docker/dockerfile:1
-FROM python:3.11-slim
+FROM mcr.microsoft.com/playwright:v1.57.0-noble AS proxy
+
+WORKDIR /app/tools/intent-tester
+COPY tools/intent-tester/package.json tools/intent-tester/package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+COPY tools/intent-tester/browser-automation ./browser-automation
+COPY tools/intent-tester/midscene_framework ./midscene_framework
+CMD ["node", "browser-automation/midscene_server.js"]
+
+FROM python:3.11-slim AS web
 
 WORKDIR /app
 
@@ -15,7 +24,6 @@ COPY tools/shared ./tools/shared
 COPY tools/intent-tester ./tools/intent-tester
 
 # 设置环境变量
-# 设置环境变量
 ENV PYTHONPATH=/app/tools/intent-tester:${PYTHONPATH}
 ENV FLASK_APP=backend.app
 
@@ -29,5 +37,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # 切换工作目录以便 correctly resolving 'backend' package
 WORKDIR /app/tools/intent-tester
 
-# 启动应用
-CMD ["python", "-m", "backend.app"]
+# 启动 production WSGI server
+CMD ["gunicorn", "--worker-class", "gthread", "--threads", "100", "--bind", "0.0.0.0:5001", "backend.app:create_app()"]

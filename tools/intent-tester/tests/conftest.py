@@ -3,6 +3,9 @@ import pytest
 import sys
 import os
 import json
+import re
+
+from werkzeug.security import generate_password_hash
 
 # Ensure we can import from tools/intent-tester/tests (for test_data_manager)
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -19,6 +22,7 @@ if TOOLS_DIR not in sys.path:
     sys.path.insert(0, TOOLS_DIR)
 
 from shared.tests.api_client import APIClient
+from intent_test_config import intent_test_config
 
 
 
@@ -26,15 +30,26 @@ from backend.app import create_app
 # from shared.database import db as _db # shared db mismatches with web_gui.models.db used in app
 from backend.models import db as _db
 
+
+@pytest.fixture(autouse=True)
+def explicit_intent_security_test_environment(monkeypatch):
+    """Give direct factory calls an explicit, isolated security profile."""
+    monkeypatch.setenv('AI4SE_ENV', 'test')
+    monkeypatch.setenv('INTENT_ACCESS_MODE', 'restricted')
+    monkeypatch.setenv('INTENT_EXECUTION_ENABLED', 'true')
+    monkeypatch.setenv('INTENT_PUBLIC_ORIGIN', 'http://127.0.0.1:5001')
+    monkeypatch.setenv('INTENT_PROXY_TOPOLOGY', 'local-host')
+    monkeypatch.setenv('INTENT_PROXY_TOKEN', 'test-proxy-token-with-at-least-32b')
+    monkeypatch.setenv('INTENT_TESTER_ADMIN_PASSWORD_HASH', generate_password_hash('test-admin-password'))
+    monkeypatch.setenv('OPENAI_API_KEY', 'test-provider-key')
+    monkeypatch.setenv('OPENAI_BASE_URL', 'http://127.0.0.1:3000/v1')
+    monkeypatch.setenv('MIDSCENE_MODEL_NAME', 'test-model')
+
+
 @pytest.fixture(scope='function')
 def app():
     """Create application for the tests."""
-    _app = create_app(
-        {
-            'TESTING': True,
-            'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',
-        }
-    )
+    _app = create_app(intent_test_config())
     
     with _app.app_context():
         _db.create_all()
@@ -48,9 +63,76 @@ def db_session(app):
     yield _db.session
 
 @pytest.fixture(scope='function')
-def client(app):
-    """A test client for the app."""
+def anonymous_client(app):
+    """An unauthenticated client using the default restricted application."""
     return app.test_client()
+
+
+@pytest.fixture(scope='function')
+def operator_client(anonymous_client):
+    """Authenticate through the real login and CSRF flow."""
+    login_page = anonymous_client.get('/intent-tester/login')
+    match = re.search(r'name="csrf_token" value="([^"]+)"', login_page.get_data(as_text=True))
+    assert match is not None
+    response = anonymous_client.post(
+        '/intent-tester/login',
+        data={
+            'username': 'admin',
+            'password': 'test-admin-password',
+            'csrf_token': match.group(1),
+        },
+        headers={'Origin': 'http://127.0.0.1:5001'},
+    )
+    assert response.status_code == 302
+    with anonymous_client.session_transaction() as session:
+        csrf_token = session['csrf_token']
+    anonymous_client.environ_base['HTTP_ORIGIN'] = 'http://127.0.0.1:5001'
+    anonymous_client.environ_base['HTTP_X_CSRF_TOKEN'] = csrf_token
+    return anonymous_client
+
+
+@pytest.fixture(scope='function')
+def client(operator_client):
+    """Existing tests explicitly run as an authenticated operator."""
+    return operator_client
+
+
+@pytest.fixture(scope='function')
+def proxy_client(app):
+    client = app.test_client()
+    client.environ_base['HTTP_AUTHORIZATION'] = (
+        'Bearer test-proxy-token-with-at-least-32b'
+    )
+    return client
+
+
+@pytest.fixture(scope='function')
+def proxy_api_client(proxy_client):
+    """API wrapper for the authenticated execution proxy principal."""
+    return APIClient(proxy_client, prefix='/intent-tester')
+
+
+@pytest.fixture(scope='function')
+def public_client():
+    public_app = create_app(intent_test_config(INTENT_ACCESS_MODE='public-readonly'))
+    with public_app.app_context():
+        from backend.models import TestCase
+
+        _db.create_all()
+        testcase = TestCase(
+            name='Public testcase',
+            description='Safe summary',
+            steps=json.dumps([{'action': 'goto', 'params': {'url': 'https://example.com'}}]),
+            tags='public,example',
+            category='Public',
+            priority=2,
+            created_by='admin',
+        )
+        _db.session.add(testcase)
+        _db.session.commit()
+        yield public_app.test_client()
+        _db.session.remove()
+        _db.drop_all()
 
 @pytest.fixture(scope='function')
 def api_client(client):

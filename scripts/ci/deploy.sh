@@ -94,6 +94,64 @@ fi
 # 切换到部署目录
 cd "$DEPLOY_DIR"
 
+read_env_value() {
+    key="$1"
+    awk -F= -v expected="$key" '$1 == expected {print substr($0, index($0, "=") + 1)}' .env | tail -n 1
+}
+
+require_deploy_env() {
+    key="$1"
+    value="$(read_env_value "$key")"
+    if [ -z "$value" ]; then
+        log_error "缺少部署环境变量: $key"
+        exit 1
+    fi
+}
+
+validate_deploy_environment() {
+    if [ ! -f .env ]; then
+        log_error "缺少部署配置文件: .env"
+        exit 1
+    fi
+    for key in DB_USER DB_PASSWORD SECRET_KEY INTENT_ACCESS_MODE INTENT_TESTER_ADMIN_PASSWORD_HASH \
+        INTENT_PUBLIC_ORIGIN INTENT_EXECUTION_ENABLED \
+        NEW_AGENTS_DEFAULT_LLM_API_KEY NEW_AGENTS_DEFAULT_LLM_BASE_URL \
+        NEW_AGENTS_DEFAULT_LLM_MODEL; do
+        require_deploy_env "$key"
+    done
+
+    INTENT_ACCESS_MODE_VALUE="$(read_env_value INTENT_ACCESS_MODE)"
+    case "$INTENT_ACCESS_MODE_VALUE" in
+        restricted|public-readonly) ;;
+        *)
+            log_error "INTENT_ACCESS_MODE 必须是 restricted 或 public-readonly"
+            exit 1
+            ;;
+    esac
+
+    INTENT_EXECUTION_ENABLED_VALUE="$(read_env_value INTENT_EXECUTION_ENABLED)"
+    case "$INTENT_EXECUTION_ENABLED_VALUE" in
+        true)
+            for key in INTENT_PROXY_TOKEN OPENAI_API_KEY OPENAI_BASE_URL MIDSCENE_MODEL_NAME; do
+                require_deploy_env "$key"
+            done
+            COMPOSE_PROFILE_ARGS="--profile execution"
+            ;;
+        false)
+            COMPOSE_PROFILE_ARGS=""
+            ;;
+        *)
+            log_error "INTENT_EXECUTION_ENABLED 必须是 true 或 false"
+            exit 1
+            ;;
+    esac
+}
+
+COMPOSE_PROFILE_ARGS=""
+if [ "$BACKUP_ENABLED" = true ]; then
+    validate_deploy_environment
+fi
+
 # 备份（仅生产环境）
 if [ "$BACKUP_ENABLED" = true ]; then
     log_info "创建备份..."
@@ -121,7 +179,7 @@ fi
 
 # 停止现有服务
 log_info "停止现有服务..."
-$DOCKER_CMD -f "$COMPOSE_FILE" down || true  # 移除 -v 以保留数据卷
+$DOCKER_CMD $COMPOSE_PROFILE_ARGS -f "$COMPOSE_FILE" down || true  # 移除 -v 以保留数据卷
 sleep 3
 
 # 强制清理残留容器和网络（本地和生产环境都需要）
@@ -140,16 +198,16 @@ log_info "✅ 服务已停止"
 log_info "构建 Docker 镜像..."
 if [ "$BACKUP_ENABLED" = true ]; then
     # 生产环境强制无缓存构建，确保包含最新代码
-    $DOCKER_CMD -f "$COMPOSE_FILE" build --no-cache
+    $DOCKER_CMD $COMPOSE_PROFILE_ARGS -f "$COMPOSE_FILE" build --no-cache
 else
-    $DOCKER_CMD -f "$COMPOSE_FILE" build
+    $DOCKER_CMD $COMPOSE_PROFILE_ARGS -f "$COMPOSE_FILE" build
 fi
 
 log_info "✅ 镜像构建完成"
 
 # 启动服务
 log_info "启动服务..."
-$DOCKER_CMD -f "$COMPOSE_FILE" up -d
+$DOCKER_CMD $COMPOSE_PROFILE_ARGS -f "$COMPOSE_FILE" up -d
 
 log_info "✅ 服务已启动"
 
@@ -162,7 +220,7 @@ sleep 10
 
 if [ "$BACKUP_ENABLED" = true ]; then
     log_info "同步 New Agents 默认 LLM 配置..."
-    $DOCKER_CMD -f "$COMPOSE_FILE" exec -T new-agents-backend \
+    $DOCKER_CMD $COMPOSE_PROFILE_ARGS -f "$COMPOSE_FILE" exec -T new-agents-backend \
         python -c "from app import app, init_db; init_db(app)"
     log_info "✅ New Agents 默认 LLM 配置已同步"
 fi
@@ -175,7 +233,7 @@ MAX_RETRIES=10
 RETRY_COUNT=0
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if curl -f -s --max-time 5 http://localhost:5001/health > /dev/null 2>&1; then
+    if curl -f -s --max-time 5 http://localhost/intent-tester/health > /dev/null 2>&1; then
         log_info "✅ 基础服务响应正常"
         break
     fi
@@ -191,7 +249,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         if [ "$BACKUP_ENABLED" = true ] && [ -d "$BACKUP_DIR" ]; then
             log_error "开始回滚..."
             rsync -a --delete "$BACKUP_DIR/" "$DEPLOY_DIR/"
-            $DOCKER_CMD -f "$COMPOSE_FILE" up -d
+            $DOCKER_CMD $COMPOSE_PROFILE_ARGS -f "$COMPOSE_FILE" up -d
             log_info "已回滚到上一版本"
         fi
         
@@ -213,7 +271,7 @@ if [ -f "scripts/health/health_check.sh" ]; then
         if [ "$BACKUP_ENABLED" = true ] && [ -d "$BACKUP_DIR" ]; then
             log_error "开始回滚..."
             rsync -a --delete "$BACKUP_DIR/" "$DEPLOY_DIR/"
-            $DOCKER_CMD -f "$COMPOSE_FILE" up -d
+            $DOCKER_CMD $COMPOSE_PROFILE_ARGS -f "$COMPOSE_FILE" up -d
             log_info "已回滚到上一版本"
         fi
         
@@ -227,7 +285,7 @@ fi
 log_info "=========================================="
 log_info "服务状态:"
 log_info "=========================================="
-$DOCKER_CMD -f "$COMPOSE_FILE" ps
+$DOCKER_CMD $COMPOSE_PROFILE_ARGS -f "$COMPOSE_FILE" ps
 
 # 清理旧镜像
 log_info "清理未使用的镜像..."
@@ -241,5 +299,5 @@ log_info "=========================================="
 log_info "🎉 部署成功！"
 log_info "=========================================="
 log_info "环境: $ENVIRONMENT"
-log_info "访问地址: http://localhost:5001"
+log_info "访问地址: http://localhost"
 log_info "=========================================="

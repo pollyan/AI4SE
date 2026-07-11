@@ -8,63 +8,172 @@ require('dotenv').config();
 
 // 环境变量完整性检查
 function validateEnvironmentVariables() {
-    const requiredVars = ['OPENAI_API_KEY'];
-    const optionalVars = {
-        'OPENAI_BASE_URL': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-        'MIDSCENE_MODEL_NAME': 'qwen-vl-max-latest',
-        'PORT': '3001',
-        'MAIN_APP_URL': 'http://localhost:5001/intent-tester/api'
-    };
-    
-    const issues = [];
-    const warnings = [];
-    
-    // 检查必需变量
-    for (const varName of requiredVars) {
-        if (!process.env[varName]) {
-            issues.push(`❌ Required environment variable missing: ${varName}`);
-        } else {
-            console.log(`✅ ${varName}: configured`);
+    const requiredVars = [
+        'OPENAI_API_KEY',
+        'OPENAI_BASE_URL',
+        'MIDSCENE_MODEL_NAME',
+        'MAIN_APP_URL'
+    ];
+    const missing = requiredVars.filter(name =>
+        typeof process.env[name] !== 'string' || !process.env[name].trim()
+    );
+    if (missing.length > 0) {
+        throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+    }
+    for (const name of ['OPENAI_BASE_URL', 'MAIN_APP_URL']) {
+        let parsed;
+        try {
+            parsed = new URL(process.env[name]);
+        } catch (_error) {
+            throw new Error(`Invalid required URL environment variable: ${name}`);
+        }
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+            throw new Error(`Invalid required URL environment variable: ${name}`);
         }
     }
-    
-    // 检查可选变量并设置默认值
-    for (const [varName, defaultValue] of Object.entries(optionalVars)) {
-        if (!process.env[varName]) {
-            process.env[varName] = defaultValue;
-            warnings.push(`⚠️  ${varName} not set, using default: ${defaultValue}`);
-        } else {
-            console.log(`✅ ${varName}: ${process.env[varName]}`);
-        }
-    }
-    
-    // 显示警告
-    if (warnings.length > 0) {
-        console.log('\n📋 Environment Configuration Warnings:');
-        warnings.forEach(warning => console.log(warning));
-    }
-    
-    // 如果有严重问题，停止启动
-    if (issues.length > 0) {
-        console.log('\n🚨 Environment Configuration Issues:');
-        issues.forEach(issue => console.log(issue));
-        console.log('\n💡 Please create a .env file with required variables:');
-        console.log('   OPENAI_API_KEY=your_api_key_here');
-        console.log('   OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1');
-        console.log('   MIDSCENE_MODEL_NAME=qwen-vl-max-latest');
-        throw new Error(`Missing required environment variables: ${requiredVars.filter(name => !process.env[name]).join(', ')}`);
-    }
-    
-    console.log('\n✨ Environment validation completed successfully!\n');
 }
 
 const express = require('express');
-const cors = require('cors');
 const { PlaywrightAgent } = require('@midscene/web');
 const { chromium } = require('playwright');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const axios = require('axios');
+const crypto = require('crypto');
+const path = require('path');
+const fs = require('fs');
+
+function loadRuntimeConfig(env) {
+    const topology = env.INTENT_PROXY_TOPOLOGY;
+    if (!['local-host', 'managed'].includes(topology)) {
+        throw new Error('INTENT_PROXY_TOPOLOGY must be local-host or managed');
+    }
+    const proxyToken = env.INTENT_PROXY_TOKEN;
+    if (typeof proxyToken !== 'string' || Buffer.byteLength(proxyToken, 'utf8') < 32) {
+        throw new Error('INTENT_PROXY_TOKEN must contain at least 32 UTF-8 bytes');
+    }
+    let origin;
+    try {
+        origin = new URL(env.INTENT_PUBLIC_ORIGIN);
+    } catch (_error) {
+        throw new Error('INTENT_PUBLIC_ORIGIN must be an absolute HTTP(S) origin');
+    }
+    if (!['http:', 'https:'].includes(origin.protocol) || origin.origin !== env.INTENT_PUBLIC_ORIGIN || env.INTENT_PUBLIC_ORIGIN === '*') {
+        throw new Error('INTENT_PUBLIC_ORIGIN must be an exact HTTP(S) origin');
+    }
+    const loopbackHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
+    if (
+        topology === 'local-host' &&
+        (origin.protocol !== 'http:' || !loopbackHosts.has(origin.hostname))
+    ) {
+        throw new Error('local-host INTENT_PUBLIC_ORIGIN must be an exact loopback HTTP origin');
+    }
+    return {
+        topology,
+        bindHost: topology === 'local-host' ? '127.0.0.1' : '0.0.0.0',
+        browserSocketEnabled: topology === 'local-host',
+        publicOrigin: origin.origin,
+        proxyToken
+    };
+}
+
+let runtimeConfig = null;
+if (process.env.INTENT_PROXY_TOPOLOGY || process.env.INTENT_PROXY_TOKEN || process.env.INTENT_PUBLIC_ORIGIN) {
+    runtimeConfig = loadRuntimeConfig(process.env);
+}
+
+function setRuntimeConfigForTest(config) {
+    if (process.env.NODE_ENV !== 'test') throw new Error('test-only runtime config override');
+    runtimeConfig = config;
+}
+
+function timingSafeEqualSecret(supplied, expected) {
+    if (typeof supplied !== 'string' || typeof expected !== 'string') return false;
+    const left = Buffer.from(supplied, 'utf8');
+    const right = Buffer.from(expected, 'utf8');
+    return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+function parseBearer(value) {
+    const match = typeof value === 'string' ? /^Bearer ([^\s]+)$/.exec(value) : null;
+    return match ? match[1] : null;
+}
+
+function requireBackendToken(req, res, next) {
+    if (req.method === 'GET' && req.path === '/health') return next();
+    if (req.method === 'GET' && req.path === '/ai-test') return res.status(404).end();
+    const supplied = parseBearer(req.get('authorization'));
+    if (!runtimeConfig || !timingSafeEqualSecret(supplied, runtimeConfig.proxyToken)) {
+        return res.status(401).json({ success: false, code: 'PROXY_AUTH_REQUIRED' });
+    }
+    return next();
+}
+
+function resolveArtifactPath(outputRoot, executionId, serverName) {
+    if (typeof executionId !== 'string' || typeof serverName !== 'string') throw new Error('invalid artifact path');
+    const root = path.resolve(outputRoot);
+    const owningRoot = path.resolve(root, executionId);
+    const resolved = path.resolve(root, executionId, serverName);
+    if (!owningRoot.startsWith(`${root}${path.sep}`) || !resolved.startsWith(`${owningRoot}${path.sep}`)) {
+        throw new Error('artifact path escapes owning output root');
+    }
+    if (fs.existsSync(root)) {
+        const rootStat = fs.lstatSync(root);
+        if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+            throw new Error('artifact path has an unsafe output root');
+        }
+        const realRoot = fs.realpathSync(root);
+        const relativeParts = path.relative(root, resolved).split(path.sep);
+        let cursor = root;
+        for (const part of relativeParts) {
+            cursor = path.join(cursor, part);
+            if (!fs.existsSync(cursor)) break;
+            if (fs.lstatSync(cursor).isSymbolicLink()) {
+                throw new Error('artifact path contains a symbolic link');
+            }
+            const realCursor = fs.realpathSync(cursor);
+            if (realCursor !== realRoot && !realCursor.startsWith(`${realRoot}${path.sep}`)) {
+                throw new Error('artifact path escapes owning output root');
+            }
+        }
+    }
+    return resolved;
+}
+
+const SAFE_STEP_STATUSES = new Set(['pending', 'running', 'success', 'failed', 'stopped', 'skipped']);
+
+function safeStepProgress(state) {
+    if (!Array.isArray(state?.steps)) return [];
+    return state.steps.flatMap(step => {
+        if (!step || !Number.isInteger(step.index) || typeof step.description !== 'string' ||
+            !SAFE_STEP_STATUSES.has(step.status)) {
+            return [];
+        }
+        return [{
+            index: step.index,
+            description: step.description,
+            status: step.status,
+            start_time: typeof step.start_time === 'string' ? step.start_time : null,
+            end_time: typeof step.end_time === 'string' ? step.end_time : null,
+            duration: Number.isFinite(step.duration) ? step.duration : null
+        }];
+    });
+}
+
+function safeExecutionSnapshot(executionId, state) {
+    const callbackCodes = Array.isArray(state?.callbackErrors)
+        ? state.callbackErrors.map(item => item?.code).filter(code => typeof code === 'string')
+        : [];
+    const currentStep = Number.isInteger(state?.currentStep) ? state.currentStep : (Array.isArray(state?.steps) ? state.steps.length : 0);
+    const totalSteps = Number.isInteger(state?.totalSteps) ? state.totalSteps : currentStep;
+    return {
+        executionId,
+        status: state?.status,
+        progress: { currentStep, totalSteps },
+        steps: safeStepProgress(state),
+        callbackCodes
+    };
+}
 
 // Lifecycle callback adapter. Tests may replace only this external boundary;
 // the Express app and execution runtime remain the production implementation.
@@ -74,7 +183,9 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: "*",
+        origin(origin, callback) {
+            callback(null, Boolean(runtimeConfig && origin === runtimeConfig.publicOrigin));
+        },
         methods: ["GET", "POST"]
     }
 });
@@ -82,13 +193,21 @@ const io = new Server(server, {
 const port = process.env.PORT || 3001;
 
 // 数据库配置 - 注意：如果需要连接到主Web应用，请确保端口正确
-const API_BASE_URL = process.env.MAIN_APP_URL || 'http://localhost:5001/intent-tester/api';
+const API_BASE_URL = process.env.MAIN_APP_URL;
+const OUTPUT_ROOT = path.resolve(process.cwd(), 'screenshots');
 const LIFECYCLE_CALLBACK_MAX_ATTEMPTS = 3;
 const LIFECYCLE_CALLBACK_BACKOFF_MS = 25;
 
 // 中间件
-app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+app.use((req, res, next) => {
+    const origin = req.get('origin');
+    if (origin && (!runtimeConfig || origin !== runtimeConfig.publicOrigin)) {
+        return res.status(403).json({ success: false, code: 'ORIGIN_NOT_ALLOWED' });
+    }
+    return next();
+});
+app.use(requireBackendToken);
 
 // 全局变量存储浏览器和页面实例
 let browser = null;
@@ -111,6 +230,44 @@ let activeExecutionId = null;
 let activeExecutionPromise = null;
 let runtimeResetting = false;
 let resetPromise = null;
+
+function emitExecutionEvent(executionId, event, payload) {
+    if (typeof executionId !== 'string' || !executionId) return false;
+    io.to(`execution:${executionId}`).emit(event, payload);
+    return true;
+}
+
+function verifySocketTicket(ticket, requestedExecutionId, requestOrigin) {
+    if (!runtimeConfig?.browserSocketEnabled) {
+        const error = new Error('BROWSER_SOCKET_DISABLED');
+        error.data = { code: 'BROWSER_SOCKET_DISABLED' };
+        throw error;
+    }
+    if (typeof ticket !== 'string') throw new Error('SOCKET_TICKET_INVALID');
+    const parts = ticket.split('.');
+    if (parts.length !== 2) throw new Error('SOCKET_TICKET_INVALID');
+    const [encoded, signature] = parts;
+    let payloadBytes;
+    let payload;
+    try {
+        payloadBytes = Buffer.from(encoded, 'base64url');
+        payload = JSON.parse(payloadBytes.toString('utf8'));
+    } catch (_error) {
+        throw new Error('SOCKET_TICKET_INVALID');
+    }
+    const expected = crypto.createHmac('sha256', runtimeConfig.proxyToken).update(payloadBytes).digest('base64url');
+    if (!timingSafeEqualSecret(signature, expected)) throw new Error('SOCKET_TICKET_INVALID');
+    const now = Math.floor(Date.now() / 1000);
+    if (!payload || typeof payload.executionId !== 'string' || !payload.executionId ||
+        requestedExecutionId !== payload.executionId ||
+        payload.origin !== runtimeConfig.publicOrigin || requestOrigin !== runtimeConfig.publicOrigin ||
+        payload.aud !== 'intent-proxy-socket' || !Number.isInteger(payload.iat) ||
+        !Number.isInteger(payload.exp) || payload.iat > now + 5 || payload.exp <= now ||
+        payload.exp !== payload.iat + 60 || typeof payload.nonce !== 'string' || !payload.nonce) {
+        throw new Error('SOCKET_TICKET_INVALID');
+    }
+    return payload;
+}
 
 // 清理旧的执行状态 - 保留最近的50个执行记录
 function cleanupOldExecutions() {
@@ -136,7 +293,7 @@ function logMessage(executionId, level, message) {
     };
     
     // 发送WebSocket消息
-    io.emit('log-message', logEntry);
+    emitExecutionEvent(executionId, 'log-message', logEntry);
     
     // 记录到执行状态
     const executionState = executionStates.get(executionId);
@@ -213,7 +370,8 @@ async function sendLifecycleCallback(executionId, event, data) {
         try {
             response = await lifecycleHttpClient.post(url, data, {
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${runtimeConfig.proxyToken}`
                 },
                 timeout: 10000
             });
@@ -252,7 +410,7 @@ async function notifyExecutionStart(executionId, testcase, mode) {
                           (typeof testcase.steps === 'string' ? JSON.parse(testcase.steps).length : 0);
 
         // 通过WebSocket通知前端执行开始
-        io.emit('execution-start', {
+        emitExecutionEvent(executionId, 'execution-start', {
             executionId: executionId,
             testcase: testcase.name,
             mode: mode,
@@ -285,7 +443,7 @@ async function notifyExecutionResult(executionId, testcase, mode, status, steps,
         const startTime = executionState.startTime.toISOString();
 
         // 通过WebSocket通知前端执行结果
-        io.emit('execution-completed', {
+        emitExecutionEvent(executionId, 'execution-completed', {
             executionId: executionId,
             testcase: testcase.name,
             status: status,
@@ -328,7 +486,7 @@ function recordCallbackExhausted(executionId, event, attempts) {
         attempts,
         timestamp: new Date().toISOString()
     });
-    io.emit('lifecycle-callback-failed', {
+    emitExecutionEvent(executionId, 'lifecycle-callback-failed', {
         executionId,
         event,
         code: 'lifecycle_callback_exhausted',
@@ -484,19 +642,27 @@ async function initBrowser(headless = true, timeoutConfig = {}, enableCache = tr
     return { page, agent };
 }
 
-// WebSocket连接处理
+io.use((socket, next) => {
+    try {
+        const payload = verifySocketTicket(
+            socket.handshake.auth?.ticket,
+            socket.handshake.auth?.executionId,
+            socket.handshake.headers.origin
+        );
+        socket.data.executionId = payload.executionId;
+        next();
+    } catch (error) {
+        const safeError = new Error(error.message === 'BROWSER_SOCKET_DISABLED' ? error.message : 'SOCKET_TICKET_INVALID');
+        safeError.data = { code: safeError.message };
+        next(safeError);
+    }
+});
+
 io.on('connection', (socket) => {
-    console.log('🔌 WebSocket客户端连接:', socket.id);
-
-    socket.on('disconnect', () => {
-        console.log('🔌 WebSocket客户端断开:', socket.id);
-    });
-
-    // 发送服务器状态
-    socket.emit('server-status', {
-        status: 'ready',
-        timestamp: new Date().toISOString()
-    });
+    const executionId = socket.data.executionId;
+    socket.join(`execution:${executionId}`);
+    const state = executionStates.get(executionId);
+    if (state) socket.emit('execution-snapshot', safeExecutionSnapshot(executionId, state));
 });
 
 // 标准化步骤类型 - 将新的MidSceneJS格式映射到执行引擎识别的格式
@@ -564,7 +730,7 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
     const normalizedAction = normalizeStepType(stepType);
 
     // 发送步骤开始事件
-    io.emit('step-start', {
+    emitExecutionEvent(executionId, 'step-start', {
         executionId,
         stepIndex,
         action: normalizedAction,
@@ -1166,7 +1332,8 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
                 break;
 
             case 'screenshot':
-                const screenshotPath = `./screenshots/${executionId}_step_${stepIndex}.png`;
+                const screenshotPath = resolveArtifactPath(OUTPUT_ROOT, executionId, `step-${stepIndex}.png`);
+                fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
                 await page.screenshot({ path: screenshotPath, fullPage: true });
                 logMessage(executionId, 'info', `截图保存到: ${screenshotPath}`);
                 break;
@@ -1317,7 +1484,7 @@ async function executeStep(step, page, agent, executionId, stepIndex, totalSteps
         const duration = stepEndTime - stepStartTime;
         
         // 发送步骤失败事件
-        io.emit('step-failed', {
+        emitExecutionEvent(executionId, 'step-failed', {
             executionId,
             stepIndex,
             totalSteps: totalSteps,
@@ -1367,7 +1534,7 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
         await notifyExecutionStart(executionId, testcase, mode);
 
         // 发送执行开始事件
-        io.emit('execution-start', {
+        emitExecutionEvent(executionId, 'execution-start', {
             executionId,
             testcase: testcase.name,
             mode,
@@ -1439,7 +1606,7 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
                 logMessage(executionId, 'warning', `步骤 ${i + 1} 被跳过: ${step.description || step.action}`);
                 
                 // 发送步骤跳过事件
-                io.emit('step-skipped', {
+                emitExecutionEvent(executionId, 'step-skipped', {
                     executionId,
                     stepIndex: i,
                     totalSteps: steps.length,
@@ -1480,7 +1647,7 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
             }
 
             // 发送步骤进度
-            io.emit('step-progress', {
+            emitExecutionEvent(executionId, 'step-progress', {
                 executionId,
                 stepIndex: i,
                 totalSteps: steps.length,
@@ -1498,7 +1665,7 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
             // 根据步骤结果发送相应事件
             if (stepResult.status === 'success') {
                 // 发送步骤完成事件
-                io.emit('step-completed', {
+                emitExecutionEvent(executionId, 'step-completed', {
                     executionId,
                     stepIndex: i,
                     totalSteps: steps.length,
@@ -1510,7 +1677,7 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
                 logMessage(executionId, 'warning', `步骤 ${i + 1} 被用户中断`);
                 
                 // 发送步骤中断事件
-                io.emit('step-completed', {
+                emitExecutionEvent(executionId, 'step-completed', {
                     executionId,
                     stepIndex: i,
                     totalSteps: steps.length,
@@ -1525,7 +1692,7 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
                 logMessage(executionId, 'error', `步骤 ${i + 1} 执行失败: ${stepResult.error_message}`);
                 
                 // 发送步骤失败事件
-                io.emit('step-completed', {
+                emitExecutionEvent(executionId, 'step-completed', {
                     executionId,
                     stepIndex: i,
                     totalSteps: steps.length,
@@ -1544,7 +1711,7 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
                     type: 'png'
                 });
 
-                io.emit('screenshot-taken', {
+                emitExecutionEvent(executionId, 'screenshot-taken', {
                     executionId,
                     stepIndex: i,
                     screenshot: screenshot.toString('base64'),
@@ -1619,7 +1786,7 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
         }
 
         // 发送执行完成事件
-        io.emit('execution-completed', {
+        emitExecutionEvent(executionId, 'execution-completed', {
             executionId,
             status: overallStatus,
             message: message,
@@ -1655,7 +1822,7 @@ async function executeTestCaseAsync(testcase, mode, executionId, timeoutConfig =
         }
 
         // 发送执行错误事件
-        io.emit('execution-completed', {
+        emitExecutionEvent(executionId, 'execution-completed', {
             executionId,
             status: terminalStatus,
             error: error.message,
@@ -1790,11 +1957,7 @@ app.get('/api/execution-status/:executionId', (req, res) => {
         });
     }
 
-    res.json({
-        success: true,
-        executionId,
-        ...executionState
-    });
+    res.json({ success: true, ...safeExecutionSnapshot(executionId, executionState) });
 });
 
 // 获取独立的执行报告
@@ -1910,7 +2073,7 @@ app.post('/api/stop-execution/:executionId', async (req, res) => {
         executionState.endTime = new Date();
 
         // 发送停止事件
-        io.emit('execution-stopped', {
+        emitExecutionEvent(executionId, 'execution-stopped', {
             executionId,
             timestamp: new Date().toISOString()
         });
@@ -1935,18 +2098,10 @@ app.post('/api/stop-execution/:executionId', async (req, res) => {
 
 // 获取服务器状态
 app.get('/api/status', (req, res) => {
-    const runningExecutions = Array.from(executionStates.values())
-        .filter(state => state.status === 'running');
-
     res.json({
         success: true,
         status: !runtimeResetting && activeExecutionId === null ? 'ready' : 'busy',
-        activeExecutionId,
-        browserInitialized: !!browser,
-        runningExecutions: runningExecutions.length,
-        totalExecutions: executionStates.size,
-        uptime: process.uptime(),
-        timestamp: new Date().toISOString()
+        ...(activeExecutionId ? { activeExecutionId } : {})
     });
 });
 
@@ -2254,14 +2409,17 @@ app.post('/ai-scroll', async (req, res) => {
 // 截图
 app.post('/screenshot', async (req, res) => {
     try {
-        const { path } = req.body;
+        const { executionId, serverName } = req.body;
+        const screenshotPath = resolveArtifactPath(OUTPUT_ROOT, executionId, serverName);
+        fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
         const { page } = await initBrowser();
         
-        const screenshot = await page.screenshot({ path });
+        await page.screenshot({ path: screenshotPath });
         
         res.json({ 
             success: true, 
-            path 
+            executionId,
+            serverName
         });
     } catch (error) {
         res.status(500).json({ 
@@ -2296,18 +2454,14 @@ app.get('/page-info', async (req, res) => {
 
 // 健康检查
 app.get('/health', (req, res) => {
-    const modelName = process.env.MIDSCENE_MODEL_NAME;
-    
     res.json({ 
         success: true, 
-        message: 'MidSceneJS服务器运行正常',
-        model: modelName || null,
-        timestamp: new Date().toISOString()
+        status: 'ok'
     });
 });
 
 // AI模型响应时间测试
-app.get('/ai-test', async (req, res) => {
+app.post('/ai-test', async (req, res) => {
     try {
         console.log('🤖 开始测试AI模型响应时间...');
         
@@ -2390,146 +2544,102 @@ app.use((error, req, res, next) => {
     });
 });
 
-// 检查并通知MidScene生成的报告
-async function checkAndNotifyMidsceneReport(executionId, testcase, executionState) {
-    try {
-        const fs = require('fs');
-        const path = require('path');
-        
-        console.log(`📋 开始检查MidScene报告，执行ID: ${executionId}`);
-        console.log(`📋 当前工作目录: ${process.cwd()}`);
-        
-        // 检查midscene_run目录是否存在
-        const midsceneRunDir = path.join(process.cwd(), 'midscene_run');
-        console.log(`📋 检查目录: ${midsceneRunDir}`);
-        
-        if (!fs.existsSync(midsceneRunDir)) {
-            console.log('📋 midscene_run目录不存在，跳过报告检查');
-            logMessage(executionId, 'warning', 'MidScene报告目录不存在，请检查测试执行环境');
-            return;
-        }
-        
-        // 检查报告目录
-        const reportDir = path.join(midsceneRunDir, 'report');
-        console.log(`📋 检查报告目录: ${reportDir}`);
-        
-        if (!fs.existsSync(reportDir)) {
-            console.log('📋 报告目录不存在，跳过报告检查');
-            logMessage(executionId, 'warning', 'MidScene报告子目录不存在，可能测试未生成报告');
-            return;
-        }
-        
-        // 获取报告目录中的所有HTML文件
-        const files = fs.readdirSync(reportDir);
-        console.log(`📋 报告目录中的文件: ${files.join(', ')}`);
-        
-        const htmlFiles = files.filter(file => file.endsWith('.html') && file.includes('playwright-'));
-        console.log(`📋 找到的HTML报告文件: ${htmlFiles.join(', ')}`);
-        
-        if (htmlFiles.length === 0) {
-            console.log('📋 未找到MidScene报告文件');
-            logMessage(executionId, 'warning', 'MidScene未生成报告文件，可能测试执行过程中出现问题');
-            return;
-        }
-        
-        // 按文件修改时间排序，获取最新的报告文件
-        const fileStats = htmlFiles.map(file => {
-            const filePath = path.join(reportDir, file);
-            const stats = fs.statSync(filePath);
-            return {
-                name: file,
-                path: filePath,
-                mtime: stats.mtime
-            };
-        });
-        
-        // 获取最新的报告文件
-        const latestReport = fileStats.sort((a, b) => b.mtime - a.mtime)[0];
-        
-        if (latestReport) {
-            const reportPath = latestReport.path;
-            console.log(`📊 找到MidScene报告文件: ${reportPath}`);
-            console.log(`📊 报告文件修改时间: ${latestReport.mtime}`);
-            
-            // 生成简化的报告
-            const simplifiedReportPath = await generateSimplifiedReport(reportPath, testcase, executionState);
-            
-            // 通过日志消息通知前端使用简化的报告
-            logMessage(executionId, 'info', `Midscene - report file updated: ${simplifiedReportPath || reportPath}`);
-            
-            // 额外发送一条明确的成功消息
-            logMessage(executionId, 'success', `报告已生成: ${latestReport.name}`);
-        }
-        
-    } catch (error) {
-        console.error('检查MidScene报告失败:', error);
-        logMessage(executionId, 'error', `检查MidScene报告失败: ${error.message}`);
-    }
+function findLatestExecutionReport(outputRoot, executionId) {
+    const reportDir = resolveArtifactPath(outputRoot, executionId, 'report');
+    if (!fs.existsSync(reportDir)) return null;
+    const candidates = fs.readdirSync(reportDir, { withFileTypes: true })
+        .filter(entry => entry.isFile() && /^playwright-.*\.html$/.test(entry.name) && !entry.name.endsWith('_simplified.html'))
+        .map(entry => {
+            const reportPath = resolveArtifactPath(outputRoot, executionId, `report/${entry.name}`);
+            return { path: reportPath, mtimeMs: fs.statSync(reportPath).mtimeMs };
+        })
+        .sort((left, right) => right.mtimeMs - left.mtimeMs);
+    return candidates[0]?.path || null;
 }
 
-// 生成简化的报告
-async function generateSimplifiedReport(originalReportPath, testcase, executionState) {
-    try {
-        const fs = require('fs');
-        const path = require('path');
-        
-        // 读取原始报告
-        const originalContent = fs.readFileSync(originalReportPath, 'utf8');
-        
-        // 生成简化的报告文件名
-        const reportDir = path.dirname(originalReportPath);
-        const originalName = path.basename(originalReportPath, '.html');
-        const simplifiedName = `${originalName}_simplified.html`;
-        const simplifiedPath = path.join(reportDir, simplifiedName);
-        
-        // 创建简化的报告内容
-        const simplifiedContent = createSimplifiedReportContent(originalContent, testcase, executionState);
-        
-        // 写入简化报告
-        fs.writeFileSync(simplifiedPath, simplifiedContent, 'utf8');
-        
-        console.log(`📊 生成简化报告: ${simplifiedPath}`);
-        return simplifiedPath;
-        
-    } catch (error) {
-        console.error('生成简化报告失败:', error);
+async function checkAndNotifyMidsceneReport(executionId, testcase, executionState, outputRoot = OUTPUT_ROOT) {
+    const reportPath = findLatestExecutionReport(outputRoot, executionId);
+    if (!reportPath) {
+        logMessage(executionId, 'warning', 'MidScene execution report is unavailable');
         return null;
     }
+    const simplifiedReportPath = await generateSimplifiedReport(
+        reportPath,
+        testcase,
+        executionState,
+        outputRoot,
+        executionId
+    );
+    logMessage(executionId, 'success', `Execution report generated: ${path.basename(simplifiedReportPath)}`);
+    return simplifiedReportPath;
 }
 
-// 创建简化的报告内容
+async function generateSimplifiedReport(
+    originalReportPath,
+    testcase,
+    executionState,
+    outputRoot = OUTPUT_ROOT,
+    executionId
+) {
+    const reportDir = resolveArtifactPath(outputRoot, executionId, 'report');
+    const resolvedOriginal = path.resolve(originalReportPath);
+    if (!resolvedOriginal.startsWith(`${reportDir}${path.sep}`)) {
+        throw new Error('artifact path is outside the execution report root');
+    }
+    const originalContent = fs.readFileSync(resolvedOriginal, 'utf8');
+    const originalName = path.basename(resolvedOriginal, '.html');
+    const simplifiedName = `${originalName}_simplified.html`;
+    const simplifiedPath = resolveArtifactPath(
+        outputRoot,
+        executionId,
+        `report/${simplifiedName}`
+    );
+    if (fs.existsSync(simplifiedPath) && fs.lstatSync(simplifiedPath).isSymbolicLink()) {
+        throw new Error('artifact path cannot be a symbolic link');
+    }
+    const simplifiedContent = createSimplifiedReportContent(originalContent, testcase, executionState);
+    fs.writeFileSync(simplifiedPath, simplifiedContent, 'utf8');
+    return simplifiedPath;
+}
+
+function escapeReportText(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+// 创建一个纯文本安全报告。原始 MidScene HTML 只作为转义文本展示，
+// 不继承其中的脚本、事件属性、javascript: URL 或未知第三方 markup。
 function createSimplifiedReportContent(originalContent, testcase, executionState) {
     const steps = executionState.steps || [];
     const duration = executionState.duration || 0;
-    
-    // 从原始报告中提取主要内容，去掉统计指标
-    let simplifiedContent = originalContent;
-    
-    // 移除统计指标相关的HTML
-    simplifiedContent = simplifiedContent.replace(/<div[^>]*class="[^"]*summary[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    simplifiedContent = simplifiedContent.replace(/<div[^>]*class="[^"]*stats[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    simplifiedContent = simplifiedContent.replace(/<div[^>]*class="[^"]*metrics[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    
-    // 添加简化的标题信息
-    const titleInfo = `
-        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-            <h1 style="margin: 0; color: #333;">测试执行报告</h1>
-            <div style="margin-top: 10px; color: #666;">
-                <strong>测试用例:</strong> ${testcase.name} &nbsp;&nbsp;
-                <strong>状态:</strong> ${executionState.status || 'completed'} &nbsp;&nbsp;
-                <strong>耗时:</strong> ${Math.round(duration / 1000)}秒 &nbsp;&nbsp;
-                <strong>步骤数:</strong> ${steps.length}
-            </div>
-        </div>
-    `;
-    
-    // 将标题信息插入到body开头
-    simplifiedContent = simplifiedContent.replace(/<body[^>]*>/i, `$&${titleInfo}`);
-    
-    return simplifiedContent;
+
+    return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+  <title>测试执行报告</title>
+</head>
+<body>
+  <h1>测试执行报告</h1>
+  <dl>
+    <dt>测试用例</dt><dd>${escapeReportText(testcase.name)}</dd>
+    <dt>状态</dt><dd>${escapeReportText(executionState.status || 'completed')}</dd>
+    <dt>耗时</dt><dd>${Math.round(duration / 1000)}秒</dd>
+    <dt>步骤数</dt><dd>${steps.length}</dd>
+  </dl>
+  <h2>原始报告（安全文本视图）</h2>
+  <pre>${escapeReportText(originalContent)}</pre>
+</body>
+</html>`;
 }
 
 function startServer(listenPort = process.env.PORT || port) {
+    runtimeConfig = loadRuntimeConfig(process.env);
     validateEnvironmentVariables();
     if (server.listening) {
         return Promise.resolve(server);
@@ -2543,8 +2653,7 @@ function startServer(listenPort = process.env.PORT || port) {
         const handleListening = () => {
             server.off('error', handleError);
             console.log(`\n🚀 MidSceneJS本地代理服务器启动成功`);
-            console.log(`HTTP服务器: http://localhost:${listenPort}`);
-            console.log(`WebSocket服务器: ws://localhost:${listenPort}`);
+            console.log(`HTTP服务器已绑定 ${runtimeConfig.bindHost}:${listenPort}`);
             console.log(`AI模型: ${process.env.MIDSCENE_MODEL_NAME || 'qwen-vl-max-latest'}`);
             console.log(`API地址: ${process.env.OPENAI_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1'}`);
             console.log('服务器就绪，等待测试执行请求...');
@@ -2552,7 +2661,7 @@ function startServer(listenPort = process.env.PORT || port) {
         };
         server.once('error', handleError);
         server.once('listening', handleListening);
-        server.listen(listenPort);
+        server.listen(listenPort, runtimeConfig.bindHost);
     });
 }
 
@@ -2638,6 +2747,13 @@ module.exports = {
     closeServer,
     resetState,
     setLifecycleHttpClient,
+    loadRuntimeConfig,
+    setRuntimeConfigForTest,
+    resolveArtifactPath,
+    findLatestExecutionReport,
+    generateSimplifiedReport,
+    safeExecutionSnapshot,
+    emitExecutionEvent,
     executionStates,
     executionControls
 };

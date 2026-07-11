@@ -10,7 +10,6 @@ def register_api_routes(app):
     from .testcases import testcases_bp
     from .executions import executions_bp
     # from .dashboard import dashboard_bp
-    from .midscene import midscene_bp
     from .proxy import proxy_bp
 
     # 注册主API蓝图
@@ -21,5 +20,4 @@ def register_api_routes(app):
     app.register_blueprint(testcases_bp, url_prefix='/intent-tester/api')
     app.register_blueprint(executions_bp, url_prefix='/intent-tester/api')
     # app.register_blueprint(dashboard_bp, url_prefix='/intent-tester/api')
-    app.register_blueprint(midscene_bp, url_prefix='/intent-tester/api')
     app.register_blueprint(proxy_bp, url_prefix='/intent-tester/api')

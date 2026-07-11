@@ -51,11 +51,13 @@ case "$ENVIRONMENT" in
         BASE_URL="http://localhost"
         COMPOSE_FILE="docker-compose.dev.yml"
         DB_CONTAINER="ai4se-db"
+        CONTAINERS=("ai4se-db" "ai4se-intent-tester" "ai4se-gateway" "ai4se-new-agents-backend")
         ;;
     prod|production|remote)
         BASE_URL="http://localhost"
         COMPOSE_FILE="docker-compose.prod.yml"
-        DB_CONTAINER="intent-test-db-prod"
+        DB_CONTAINER="ai4se-db-prod"
+        CONTAINERS=("ai4se-db-prod" "ai4se-intent-tester-prod" "ai4se-gateway-prod" "ai4se-new-agents-backend-prod")
         ;;
     *)
         log_error "未知环境: $ENVIRONMENT"
@@ -76,10 +78,9 @@ echo ""
 check_containers() {
     log_section "1. Docker 容器状态检查"
     
-    local containers=("ai4se-db" "ai4se-intent-tester" "ai4se-gateway" "ai4se-new-agents-backend")
     local all_running=true
     
-    for container in "${containers[@]}"; do
+    for container in "${CONTAINERS[@]}"; do
         if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
             local status=$(docker inspect --format='{{.State.Status}}' "$container" 2>/dev/null)
             if [ "$status" = "running" ]; then
@@ -89,14 +90,6 @@ check_containers() {
                 all_running=false
             fi
         else
-            # 生产环境容器名可能不同，检查备选名称
-            if [ "$ENVIRONMENT" = "production" ] || [ "$ENVIRONMENT" = "prod" ]; then
-                local alt_container="${container/ai4se-/intent-test-}"
-                if docker ps --format '{{.Names}}' | grep -q "^${alt_container}$"; then
-                    log_info "$alt_container: 运行中 (生产环境)"
-                    continue
-                fi
-            fi
             log_error "$container: 未运行"
             all_running=false
         fi
@@ -120,22 +113,13 @@ check_database() {
     
     local retry=0
     while [ $retry -lt $MAX_RETRIES ]; do
-        # 尝试通过 intent-tester 的深度健康检查端点验证数据库
-        local response=$(curl -s --max-time 10 "${BASE_URL}:5001/health" 2>/dev/null || echo "")
+        # 经唯一网关确认 Intent 服务，再在数据库容器内确认 PostgreSQL readiness。
+        local response=$(curl -s --max-time 10 "${BASE_URL}/intent-tester/health" 2>/dev/null || echo "")
         
         if echo "$response" | grep -q '"status".*"ok"'; then
             log_info "Intent Tester 服务健康"
             
-            # 生产环境如果 HTTP 检查通过，直接认为数据库正常，不再尝试 docker exec（避免权限问题）
-            if [ "$ENVIRONMENT" = "production" ] || [ "$ENVIRONMENT" = "prod" ] || [ "$ENVIRONMENT" = "remote" ]; then
-                log_info "PostgreSQL 数据库: 根据 API 状态判定正常 (生产环境)"
-                return 0
-            fi
-
-            # 直接通过 Docker 检查数据库
-            local db_check=$(docker exec "$DB_CONTAINER" pg_isready -U ai4se_user 2>/dev/null || \
-                           docker exec "ai4se-db" pg_isready -U ai4se_user 2>/dev/null || \
-                           echo "failed")
+            local db_check=$(docker exec "$DB_CONTAINER" sh -c 'pg_isready -U "$POSTGRES_USER"' 2>/dev/null || echo "failed")
             
             if echo "$db_check" | grep -q "accepting connections"; then
                 log_info "PostgreSQL 数据库: 接受连接"
@@ -163,20 +147,20 @@ check_database() {
 check_pages() {
     log_section "3. 页面 HTTP 访问检查"
     
-    # 页面列表: 路径 | 描述
+    # 页面列表: 路径 ^ 描述 ^ 声明允许的匿名状态
     local pages=(
-        "/|首页 (Common Frontend)"
-        "/profile|个人资料页"
-        "/intent-tester/|意图测试首页"
-        "/intent-tester/testcases|测试用例列表"
-        "/intent-tester/execution|执行控制台"
-        "/intent-tester/local-proxy|本地代理页"
+        "/^首页 (Common Frontend)^200|304"
+        "/profile^个人资料页^200|304"
+        "/intent-tester/^意图测试首页^200|302"
+        "/intent-tester/testcases^测试用例列表^200|302"
+        "/intent-tester/execution^执行控制台^200|302|403"
+        "/intent-tester/local-proxy^本地代理页^200|302"
     )
     
     local all_ok=true
     
     for page_info in "${pages[@]}"; do
-        IFS='|' read -r path desc <<< "$page_info"
+        IFS='^' read -r path desc allowed <<< "$page_info"
         
         local retry=0
         local success=false
@@ -184,7 +168,7 @@ check_pages() {
         while [ $retry -lt 3 ]; do
             local status_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${BASE_URL}${path}" 2>/dev/null || echo "000")
             
-            if [ "$status_code" = "200" ] || [ "$status_code" = "304" ] || [ "$status_code" = "302" ]; then
+            if [[ "|$allowed|" == *"|$status_code|"* ]]; then
                 log_info "$desc: HTTP $status_code"
                 success=true
                 break
@@ -222,18 +206,18 @@ check_pages() {
 check_apis() {
     log_section "4. 核心 API 端点检查"
     
-    # API 列表: 路径 | 方法 | 描述
+    # API 列表: 路径 ^ 方法 ^ 描述 ^ 声明允许的匿名状态
     local apis=(
-        "/health|GET|Nginx 网关健康检查"
-        "/intent-tester/health|GET|Intent Tester 健康检查"
-        "/intent-tester/api/testcases|GET|测试用例 API"
-        "/new-agents/api/health|GET|New Agents Backend 健康检查"
+        "/health^GET^Nginx 网关健康检查^200"
+        "/intent-tester/health^GET^Intent Tester 健康检查^200"
+        "/intent-tester/api/testcases^GET^测试用例 API^200|401"
+        "/new-agents/api/health^GET^New Agents Backend 健康检查^200"
     )
     
     local all_ok=true
     
     for api_info in "${apis[@]}"; do
-        IFS='|' read -r path method desc <<< "$api_info"
+        IFS='^' read -r path method desc allowed <<< "$api_info"
         
         local retry=0
         local success=false
@@ -241,7 +225,7 @@ check_apis() {
         while [ $retry -lt 3 ]; do
             local status_code=$(curl -s -o /dev/null -w "%{http_code}" -X "$method" --max-time 10 "${BASE_URL}${path}" 2>/dev/null || echo "000")
             
-            if [ "$status_code" = "200" ]; then
+            if [[ "|$allowed|" == *"|$status_code|"* ]]; then
                 log_info "$desc: HTTP $status_code"
                 success=true
                 break
@@ -282,11 +266,7 @@ main() {
     sleep 10
     
     # 执行所有检查
-    if [ "$ENVIRONMENT" = "production" ] || [ "$ENVIRONMENT" = "prod" ] || [ "$ENVIRONMENT" = "remote" ]; then
-        log_warn "生产环境跳过容器状态检查 (check_containers)"
-    else
-        check_containers || true
-    fi
+    check_containers || true
     check_database || true
     check_pages || true
     check_apis || true

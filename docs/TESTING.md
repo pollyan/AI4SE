@@ -24,6 +24,7 @@
 | **后端集成** | pytest | 多模块协作、状态流转、工作流 | LLM、外部服务 |
 | **代理测试** | Jest | MidScene Server API、WebSocket | Playwright 调用 |
 | **Intent 真实组合** | pytest + loopback HTTP | Flask durable DB、production Node app、retry/stop/callback/restart、下载包启动 | 只替换 Playwright / MidScene AI adapter；HTTP、SQLite、Express 与 package 均真实 |
+| **Intent 浏览器安全 E2E** | pytest + real Playwright Chromium | operator 登录/CSRF 写入/嵌套步骤编辑/受控执行、public-readonly、stored-XSS/CSP/静态资产 | 不 mock 浏览器、Flask、SQLite、HTTP 或 DOM；只让外部 AI/provider 与本地代理不可达 |
 
 ## Mock 策略
 
@@ -40,6 +41,7 @@
 tools/intent-tester/tests/
 ├── conftest.py              # 共享 fixtures
 ├── integration/             # Flask↔production Node real HTTP 与 clean-room package smoke
+├── e2e/                     # real Flask HTTP + isolated SQLite :memory: + real Chromium 安全旅程
 ├── proxy/                   # MidScene API 测试 (Jest)
 ├── api/                     # Flask API 与服务端页面契约
 └── services/                # Python service 单元/组合测试
@@ -71,6 +73,7 @@ tools/new-agents/backend/tests/
 | 修复线上 Bug | 先写复现测试 | 防止回归 |
 | 重构已有代码 | 确保已有测试通过 | 不新增测试，除非发现覆盖盲区 |
 | Intent 执行身份、callback 或下载包变更 | `tests/integration/test_durable_execution_loop.py` + `test_proxy_package_smoke.py` | 证明真实 HTTP、重启恢复和生产包边界，不能只靠 test client / Supertest |
+| Intent access、Origin/CSRF、CSP、DOM、静态路径或 ticket 变更 | `tests/security/` + `tests/e2e/test_stored_xss_csp.py` + real Flask→Node Socket integration | 必须从用户入口贯通持久化、浏览器和跨语言边界，不能只手工构造 header/ticket |
 
 ## 场景覆盖率口径与准入标准
 

@@ -7,7 +7,7 @@
 {% block page_subtitle %}创建、管理和执行测试用例{% endblock %}
 
 {% block extra_css %}
-<style>
+<style nonce="{{ csp_nonce }}">
     /* 移除旧的测试用例样式，使用统一的list样式 */
 
     /* 空状态样式 */
@@ -85,6 +85,8 @@
     .list-item:active {
         transform: translateY(0);
     }
+
+    .intent-style-6e22c58a7a { display: none; }
 </style>
 {% endblock %}
 
@@ -93,9 +95,12 @@
 <div class="card mb-3">
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
-            <a href="/intent-tester/testcases/create" class="btn btn-primary">创建用例</a>
-            <button class="btn btn-ghost" onclick="importTestCases()" disabled>导入用例</button>
-            <button class="btn btn-ghost" onclick="batchOperations()" disabled>批量操作</button>
+            <a href="/intent-tester/testcases/create" class="btn btn-primary"
+                data-capability="{{ 'allowed' if intent_capabilities.can_mutate else 'denied' }}">创建用例</a>
+            <button id="import-testcases" class="btn btn-ghost" disabled
+                data-capability="{{ 'allowed' if intent_capabilities.can_mutate else 'denied' }}">导入用例</button>
+            <button id="batch-operations" class="btn btn-ghost" disabled
+                data-capability="{{ 'allowed' if intent_capabilities.can_mutate else 'denied' }}">批量操作</button>
         </div>
         <div class="text-sm text-gray-600" id="total-count">
             共 0 个测试用例
@@ -146,7 +151,7 @@
     <div class="card-title">测试用例列表</div>
     <div class="card-subtitle">当前筛选结果</div>
 
-    <div id="loading" class="loading" style="display: none;">
+    <div id="loading" class="loading" hidden>
         <div class="loading-spinner"></div>
         正在加载测试用例...
     </div>
@@ -155,14 +160,14 @@
         <!-- 测试用例项目会在这里动态加载 -->
     </div>
 
-    <div id="empty-state" class="empty-state" style="display: none;">
+    <div id="empty-state" class="empty-state" hidden>
         <div class="empty-text">暂无测试用例</div>
         <div class="empty-desc">点击"创建用例"按钮开始创建您的第一个测试用例</div>
     </div>
 
     <!-- 分页 -->
-    <div class="divider" id="pagination-divider" style="display: none;"></div>
-    <div id="pagination" class="flex items-center justify-between" style="display: none;">
+    <div class="divider" id="pagination-divider" hidden></div>
+    <div id="pagination" class="flex items-center justify-between" hidden>
         <div class="text-sm text-gray-600" id="pagination-info">
             显示 1-10 条，共 0 条记录
         </div>
@@ -174,7 +179,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce }}">
     let currentPage = 1;
     let pageSize = 10;
     let totalItems = 0;
@@ -255,12 +260,7 @@
     // 渲染测试用例列表
     function renderTestCases(testcases) {
         const container = document.getElementById('testcase-items');
-        container.innerHTML = '';
-
-        testcases.forEach(testcase => {
-            const item = createTestCaseItem(testcase);
-            container.appendChild(item);
-        });
+        IntentSafeDom.replaceChildren(container, testcases.map(createTestCaseItem));
     }
 
     // 创建测试用例项目
@@ -268,7 +268,7 @@
         const item = document.createElement('div');
         item.className = 'list-item';
         item.title = '点击进入编辑模式';  // 添加提示文本
-        item.onclick = () => editTestCase(testcase.id);
+        item.addEventListener('click', () => editTestCase(testcase.id));
 
         const steps = testcase.steps || [];
         const stepCount = steps.length;
@@ -281,31 +281,55 @@
         const statusText = testcase.status || '活跃';
         const statusClass = getStatusClass(statusText);
 
-        item.innerHTML = `
-            <div class="list-item-content">
-                <div class="list-item-title">${testcase.name}</div>
-                <div class="list-item-subtitle">${testcase.description || '暂无描述'}</div>
-                <div class="list-item-meta">
-                    <span class="text-gray-600">${testcase.category || '未分类'}</span>
-                    <span class="text-gray-400">•</span>
-                    <span class="text-gray-600">${getPriorityText(testcase.priority)}优先级</span>
-                    <span class="text-gray-400">•</span>
-                    <span class="text-gray-600">${stepCount}个步骤</span>
-                    <span class="text-gray-400">•</span>
-                    <span class="text-gray-600">创建于 ${new Date(testcase.created_at).toLocaleDateString()}</span>
-                    <span class="text-gray-400">•</span>
-                    <span class="text-gray-600">执行${executionCount}次</span>
-                    <span class="text-gray-400">•</span>
-                    <span class="text-gray-600">成功率 ${successRate}%</span>
-                </div>
-            </div>
-            <div class="flex items-center gap-1">
-                <button class="btn btn-small btn-ghost" onclick="event.stopPropagation(); editTestCase(${testcase.id})">编辑</button>
-                <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); executeTestCase(${testcase.id})">执行</button>
-                <button class="btn btn-small btn-ghost" onclick="event.stopPropagation(); deleteTestCase(${testcase.id})">删除</button>
-                <div class="status ${statusClass}" title="${getStatusDescription(statusText)}"></div>
-            </div>
-        `;
+        const content = document.createElement('div');
+        content.className = 'list-item-content';
+        const title = IntentSafeDom.text('div', testcase.name);
+        title.className = 'list-item-title';
+        const subtitle = IntentSafeDom.text('div', testcase.description || '暂无描述');
+        subtitle.className = 'list-item-subtitle';
+        const metadata = document.createElement('div');
+        metadata.className = 'list-item-meta';
+        const values = [
+            testcase.category || '未分类',
+            `${getPriorityText(testcase.priority)}优先级`,
+            `${stepCount}个步骤`,
+            `创建于 ${new Date(testcase.created_at).toLocaleDateString()}`,
+            `执行${executionCount}次`,
+            `成功率 ${successRate}%`
+        ];
+        values.forEach((value, index) => {
+            if (index > 0) {
+                const separator = IntentSafeDom.text('span', '•');
+                separator.className = 'text-gray-400';
+                metadata.appendChild(separator);
+            }
+            const detail = IntentSafeDom.text('span', value);
+            detail.className = 'text-gray-600';
+            metadata.appendChild(detail);
+        });
+        content.append(title, subtitle, metadata);
+
+        const actions = document.createElement('div');
+        actions.className = 'flex items-center gap-1';
+        const actionSpecs = [
+            ['编辑', 'btn btn-small btn-ghost', editTestCase, {{ 'true' if intent_capabilities.can_mutate else 'false' }}],
+            ['执行', 'btn btn-small btn-primary', executeTestCase, {{ 'true' if intent_capabilities.can_execute else 'false' }}],
+            ['删除', 'btn btn-small btn-ghost', deleteTestCase, {{ 'true' if intent_capabilities.can_mutate else 'false' }}]
+        ];
+        actionSpecs.forEach(([label, className, handler, allowed]) => {
+            if (!allowed) return;
+            const control = IntentSafeDom.button(label, event => {
+                event.stopPropagation();
+                handler(testcase.id);
+            });
+            control.className = className;
+            actions.appendChild(control);
+        });
+        const indicator = document.createElement('div');
+        indicator.className = `status ${statusClass}`;
+        indicator.title = getStatusDescription(statusText);
+        actions.appendChild(indicator);
+        item.append(content, actions);
 
         return item;
     }
@@ -348,26 +372,24 @@
         const controls = document.getElementById('pagination-controls');
 
         if (totalPages <= 1) {
-            container.style.display = 'none';
-            divider.style.display = 'none';
+            container.hidden = true;
+            divider.hidden = true;
             return;
         }
 
-        container.style.display = 'flex';
-        divider.style.display = 'block';
+        container.hidden = false;
+        divider.hidden = false;
 
         // 更新记录信息
         const startRecord = (currentPage - 1) * pageSize + 1;
         const endRecord = Math.min(currentPage * pageSize, totalItems);
         info.textContent = `显示 ${startRecord}-${endRecord} 条，共 ${totalItems} 条记录`;
 
-        // 生成分页按钮
-        let paginationHTML = '';
-
-        // 上一页按钮
-        paginationHTML += `<button class="btn btn-small btn-ghost ${currentPage === 1 ? 'disabled' : ''}" 
-                                  onclick="loadTestCases(${currentPage - 1})" 
-                                  ${currentPage === 1 ? 'disabled' : ''}>上一页</button>`;
+        const buttons = [];
+        const previous = IntentSafeDom.button('上一页', () => loadTestCases(currentPage - 1));
+        previous.className = 'btn btn-small btn-ghost';
+        previous.disabled = currentPage === 1;
+        buttons.push(previous);
 
         // 页码按钮
         const maxVisiblePages = 5;
@@ -379,32 +401,32 @@
         }
 
         for (let i = startPage; i <= endPage; i++) {
-            const isActive = i === currentPage;
-            paginationHTML += `<button class="btn btn-small ${isActive ? 'btn-primary' : 'btn-ghost'}" 
-                                      onclick="loadTestCases(${i})">${i}</button>`;
+            const page = i;
+            const pageButton = IntentSafeDom.button(page, () => loadTestCases(page));
+            pageButton.className = `btn btn-small ${page === currentPage ? 'btn-primary' : 'btn-ghost'}`;
+            buttons.push(pageButton);
         }
 
-        // 下一页按钮
-        paginationHTML += `<button class="btn btn-small btn-ghost ${currentPage === totalPages ? 'disabled' : ''}" 
-                                  onclick="loadTestCases(${currentPage + 1})" 
-                                  ${currentPage === totalPages ? 'disabled' : ''}>下一页</button>`;
-
-        controls.innerHTML = paginationHTML;
+        const next = IntentSafeDom.button('下一页', () => loadTestCases(currentPage + 1));
+        next.className = 'btn btn-small btn-ghost';
+        next.disabled = currentPage === totalPages;
+        buttons.push(next);
+        IntentSafeDom.replaceChildren(controls, buttons);
     }
 
     // 显示加载状态
     function showLoading(show) {
-        document.getElementById('loading').style.display = show ? 'block' : 'none';
-        document.getElementById('testcase-items').style.display = show ? 'none' : 'block';
-        document.getElementById('empty-state').style.display = 'none';
-        document.getElementById('pagination').style.display = show ? 'none' : 'flex';
+        document.getElementById('loading').hidden = !show;
+        document.getElementById('testcase-items').hidden = show;
+        document.getElementById('empty-state').hidden = true;
+        document.getElementById('pagination').hidden = show;
     }
 
     // 显示空状态
     function showEmptyState() {
-        document.getElementById('empty-state').style.display = 'block';
-        document.getElementById('testcase-items').style.display = 'none';
-        document.getElementById('pagination').style.display = 'none';
+        document.getElementById('empty-state').hidden = false;
+        document.getElementById('testcase-items').hidden = true;
+        document.getElementById('pagination').hidden = true;
     }
 
     // 应用筛选
@@ -418,14 +440,23 @@
         loadTestCases(currentPage);
     }
 
+    function navigateToIntentPath(path) {
+        const safeTarget = IntentSafeDom.safeUrl(path, ['http:', 'https:']);
+        if (!safeTarget) {
+            showMessage('拒绝跳转到不受支持的地址', 'error');
+            return;
+        }
+        window.location.assign(safeTarget);
+    }
+
     // 编辑测试用例
     function editTestCase(id) {
-        window.location.href = `/intent-tester/testcases/${id}/edit`;
+        navigateToIntentPath(`/intent-tester/testcases/${id}/edit`);
     }
 
     // 执行测试用例
     function executeTestCase(id) {
-        window.location.href = `/intent-tester/execution?testcase_id=${id}`;
+        navigateToIntentPath(`/intent-tester/execution?testcase_id=${id}`);
     }
 
     // 导入测试用例
@@ -434,11 +465,11 @@
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.accept = '.json';
-        fileInput.onchange = function (e) {
+        fileInput.addEventListener('change', function (e) {
             const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
-                reader.onload = function (e) {
+                reader.addEventListener('load', function (e) {
                     try {
                         const data = JSON.parse(e.target.result);
                         // 这里可以添加导入逻辑
@@ -446,10 +477,10 @@
                     } catch (error) {
                         showMessage('文件格式错误', 'error');
                     }
-                };
+                });
                 reader.readAsText(file);
             }
-        };
+        });
         fileInput.click();
     }
 
@@ -460,7 +491,7 @@
 
     // 查看测试用例
     function viewTestCase(id) {
-        window.location.href = `/intent-tester/testcases/${id}`;
+        navigateToIntentPath(`/intent-tester/testcases/${id}`);
     }
 
     // 删除测试用例

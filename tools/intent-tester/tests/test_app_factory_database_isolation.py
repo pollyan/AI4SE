@@ -8,6 +8,10 @@ from backend.models import db
 
 MEMORY_TEST_CONFIG = {
     "TESTING": True,
+    "AI4SE_ENV": "test",
+    "INTENT_ACCESS_MODE": "local-dev",
+    "INTENT_EXECUTION_ENABLED": False,
+    "INTENT_PUBLIC_ORIGIN": "http://127.0.0.1:5001",
     "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
 }
 
@@ -17,6 +21,7 @@ def test_test_factory_binds_the_requested_memory_database_before_initialization(
 
     with app.app_context():
         assert app.config["TESTING"] is True
+        assert app.config["INTENT_PROXY_TOPOLOGY"] is None
         assert str(db.engine.url) == "sqlite:///:memory:"
 
 
@@ -31,10 +36,8 @@ def test_test_factory_rejects_file_database_before_opening_it(tmp_path):
     file_uri = f"sqlite:///{sentinel_path}"
     with pytest.raises(ValueError, match="isolated in-memory SQLite"):
         create_app(
-            test_config={
-                "TESTING": True,
-                "SQLALCHEMY_DATABASE_URI": file_uri,
-            }
+            test_config=MEMORY_TEST_CONFIG
+            | {"SQLALCHEMY_DATABASE_URI": file_uri}
         )
 
     connection = sqlite3.connect(sentinel_path)
