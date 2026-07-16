@@ -5,7 +5,7 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from .sse_mock import STAGE_PAYLOADS
+from .sse_mock import DEFAULT_CLARIFICATION_CHAT, STAGE_PAYLOADS
 from .test_alex_value_discovery_workflow import _alex_scenario
 from .workflow_runner import (
     StageExpectation,
@@ -23,6 +23,7 @@ def _alex_user_story_breakdown_scenario() -> WorkflowScenario:
         workflow_name="用户故事拆解",
         initial_heading="用户故事拆解",
         prompt="基于 AI 测试设计助手需求蓝图，拆成用户故事地图和可交接故事卡。",
+        first_chat_marker=DEFAULT_CLARIFICATION_CHAT,
         stages=(
             StageExpectation(
                 stage_tab="输入分析",

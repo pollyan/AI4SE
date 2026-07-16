@@ -155,6 +155,48 @@ LEGACY_PROTOCOL_TAG_PATTERN = re.compile(
 )
 MARK_TAG_PATTERN = re.compile(r"<\s*/?\s*mark\s*>", re.IGNORECASE)
 
+NON_MEANINGFUL_AGENT_CHAT_MESSAGES: frozenset[str] = frozenset(
+    {
+        "正在生成...",
+        "正在生成右侧产出物。",
+        "正在生成结构化产物。",
+        "我正在整理当前输入并生成右侧结构化初稿，随后会同步关键结论。",
+    }
+)
+NON_MEANINGFUL_AGENT_CHAT_PREFIXES: tuple[str, ...] = (
+    "正在生成",
+    "我正在整理当前输入并生成右侧结构化初稿",
+)
+MIN_MEANINGFUL_PARTIAL_CHAT_CHARACTERS = 12
+
+
+def is_meaningful_agent_chat(
+    value: str | None,
+    *,
+    allow_partial: bool = False,
+) -> bool:
+    if value is None:
+        return False
+    normalized = value.strip()
+    if (
+        not normalized
+        or normalized in NON_MEANINGFUL_AGENT_CHAT_MESSAGES
+        or any(
+            normalized.startswith(prefix)
+            for prefix in NON_MEANINGFUL_AGENT_CHAT_PREFIXES
+        )
+    ):
+        return False
+    if allow_partial:
+        if len(normalized) < MIN_MEANINGFUL_PARTIAL_CHAT_CHARACTERS:
+            return False
+        if any(
+            message.startswith(normalized)
+            for message in NON_MEANINGFUL_AGENT_CHAT_MESSAGES
+        ):
+            return False
+    return True
+
 
 class ContractValidationError(ValueError):
     """Raised when a structured agent output violates workflow rules."""
@@ -241,6 +283,8 @@ class AgentTurnOutput(BaseModel):
     def validate_chat_not_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("chat cannot be blank")
+        if not is_meaningful_agent_chat(value):
+            raise ValueError("chat must contain meaningful natural dialogue")
         if LEGACY_PROTOCOL_TAG_PATTERN.search(value):
             raise ValueError(
                 "chat must not contain legacy protocol tags; use structured "

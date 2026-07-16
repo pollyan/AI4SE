@@ -91,14 +91,15 @@ describe('ChatPane Component', () => {
     it('renders the welcome message when chat history is empty', () => {
         render(<ChatPane />);
         const currentWorkflowName = WORKFLOWS['TEST_DESIGN'].name;
-        
+
+        expect(screen.getByTestId('chat-pane')).toBeTruthy();
         expect(screen.getAllByText(currentWorkflowName).length).toBeGreaterThan(0);
         // Since markdown is mocked, we check the test id
         expect(screen.getAllByTestId('markdown').length).toBeGreaterThan(0);
         expect(screen.getByText('你可以试试这样问：')).toBeDefined();
     });
 
-    it('does not show current-stage missing information before the first conversation turn', () => {
+    it('does not show current-stage missing information before the first conversation turn', async () => {
         useStore.setState({
             chatHistory: [],
             workflow: 'STORY_BREAKDOWN' as WorkflowType,
@@ -108,6 +109,10 @@ describe('ChatPane Component', () => {
         });
 
         render(<ChatPane />);
+
+        await waitFor(() => {
+            expect(fetchTargetWorkflowHandoffCandidates).toHaveBeenCalled();
+        });
 
         expect(screen.getByText('你可以试试这样问：')).toBeDefined();
         expect(screen.queryByText('当前阶段缺失信息')).toBeNull();
@@ -159,6 +164,7 @@ describe('ChatPane Component', () => {
         
         const markdownElements = screen.getAllByTestId('markdown');
         expect(markdownElements.length).toBe(2);
+        expect(screen.getByTestId('assistant-message').textContent).toContain('Hello User');
         
         // Ensure standard welcome UI is gone
         expect(screen.queryByText('你可以试试这样问：')).toBeNull();

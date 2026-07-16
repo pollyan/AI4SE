@@ -3,6 +3,9 @@ import re
 from pathlib import Path
 
 from agent_contracts import (
+    MIN_MEANINGFUL_PARTIAL_CHAT_CHARACTERS,
+    NON_MEANINGFUL_AGENT_CHAT_MESSAGES,
+    NON_MEANINGFUL_AGENT_CHAT_PREFIXES,
     REQUIRED_ARTIFACT_HEADINGS,
     REQUIRED_ARTIFACT_MERMAID_DIAGRAMS,
     REQUIRED_ARTIFACT_STRUCTURED_VISUALS,
@@ -21,6 +24,7 @@ PROMPT_REGRESSION_SAMPLES = NEW_AGENTS_ROOT / "prompt_regression_samples.json"
 PROMPT_TEMPLATE_VERSION_RE = re.compile(r"^\d{4}\.\d{2}\.\d{2}\.\d+$")
 DRY_RUN_INPUTS = load_workflow_dry_run_inputs(REPO_ROOT)
 FRONTEND_PROMPT_FILES = DRY_RUN_INPUTS.prompt_files_by_stage
+FRONTEND_LLM = NEW_AGENTS_ROOT / "frontend" / "src" / "core" / "llm.ts"
 
 
 def _workflow_manifest_stages() -> dict[str, list[str]]:
@@ -42,6 +46,35 @@ def _professional_methods() -> dict:
 
 def _prompt_regression_samples() -> dict:
     return json.loads(PROMPT_REGRESSION_SAMPLES.read_text(encoding="utf-8"))
+
+
+def test_non_meaningful_agent_chat_messages_match_frontend_stream_parser():
+    source = FRONTEND_LLM.read_text(encoding="utf-8")
+    match = re.search(
+        r"const NON_MEANINGFUL_AGENT_CHAT_MESSAGES = new Set\(\[(.*?)\]\);",
+        source,
+        re.DOTALL,
+    )
+
+    assert match is not None
+    frontend_messages = set(re.findall(r"'([^']+)'", match.group(1)))
+    assert frontend_messages == set(NON_MEANINGFUL_AGENT_CHAT_MESSAGES)
+
+    prefix_match = re.search(
+        r"const NON_MEANINGFUL_AGENT_CHAT_PREFIXES = \[(.*?)\];",
+        source,
+        re.DOTALL,
+    )
+    assert prefix_match is not None
+    frontend_prefixes = tuple(re.findall(r"'([^']+)'", prefix_match.group(1)))
+    assert frontend_prefixes == NON_MEANINGFUL_AGENT_CHAT_PREFIXES
+
+    minimum_match = re.search(
+        r"const MIN_MEANINGFUL_PARTIAL_CHAT_CHARACTERS = (\d+);",
+        source,
+    )
+    assert minimum_match is not None
+    assert int(minimum_match.group(1)) == MIN_MEANINGFUL_PARTIAL_CHAT_CHARACTERS
 
 
 def test_shared_workflow_manifest_stage_order_matches_backend_contract():

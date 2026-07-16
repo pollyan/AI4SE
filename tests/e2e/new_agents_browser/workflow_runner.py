@@ -21,6 +21,7 @@ class WorkflowScenario:
     workflow_name: str
     prompt: str
     initial_heading: str
+    first_chat_marker: str
     stages: tuple[StageExpectation, ...]
 
 
@@ -50,14 +51,108 @@ class WorkflowRunResult:
     stage_artifacts: tuple[StageArtifactSnapshot, ...]
     conversation_events: tuple[ConversationEvent, ...]
     stage_transitions: tuple[StageTransitionEvent, ...]
+    stream_order: tuple[str, ...] = ()
 
 
 def _artifact_text(page: Page) -> str:
-    return page.locator("section").nth(1).inner_text(timeout=10000)
+    return page.get_by_test_id("artifact-content").inner_text(timeout=10000)
 
 
 def _chat_text(page: Page) -> str:
-    return page.locator("section").nth(0).inner_text(timeout=10000)
+    return page.get_by_test_id("chat-pane").inner_text(timeout=10000)
+
+
+def _start_stream_order_observer(
+    page: Page,
+    expected_chat_marker: str,
+) -> None:
+    page.evaluate(
+        """
+        (expectedChatMarker) => {
+          const chatPane = document.querySelector('[data-testid="chat-pane"]');
+          const artifactContent = document.querySelector('[data-testid="artifact-content"]');
+          if (!chatPane || !artifactContent) {
+            throw new Error('stream order observer requires semantic pane locators');
+          }
+          const initialArtifact = artifactContent.textContent || '';
+          const initialAssistant = Array.from(
+            chatPane.querySelectorAll('[data-testid="assistant-message-content"]')
+          ).at(-1)?.textContent || '';
+          const state = {
+            events: [],
+            seenChat: false,
+            seenArtifact: false,
+            simultaneous: false,
+          };
+          const sample = () => {
+            const latestAssistant = Array.from(
+              chatPane.querySelectorAll('[data-testid="assistant-message-content"]')
+            ).at(-1)?.textContent || '';
+            const chatReady = (
+              !state.seenChat
+              && latestAssistant !== initialAssistant
+              && latestAssistant.includes(expectedChatMarker)
+            );
+            const artifactReady = (
+              !state.seenArtifact
+              && (artifactContent.textContent || '') !== initialArtifact
+            );
+            if (chatReady && artifactReady) {
+              state.events.push('simultaneous');
+              state.seenChat = true;
+              state.seenArtifact = true;
+              state.simultaneous = true;
+              return;
+            }
+            if (chatReady) {
+              state.events.push('chat');
+              state.seenChat = true;
+            }
+            if (artifactReady) {
+              state.events.push('artifact');
+              state.seenArtifact = true;
+            }
+          };
+          const observer = new MutationObserver(sample);
+          observer.observe(chatPane, { childList: true, subtree: true, characterData: true });
+          observer.observe(artifactContent, { childList: true, subtree: true, characterData: true });
+          window.__ai4seStreamOrderState = state;
+          window.__ai4seStreamOrderObserver = observer;
+        }
+        """,
+        expected_chat_marker,
+    )
+
+
+def _finish_stream_order_observer(page: Page) -> tuple[str, ...]:
+    page.wait_for_function(
+        """
+        () => {
+          const state = window.__ai4seStreamOrderState;
+          return Boolean(
+            state
+            && (
+              state.simultaneous
+              || (state.seenChat && state.seenArtifact)
+            )
+          );
+        }
+        """,
+        timeout=10000,
+    )
+    result = page.evaluate(
+        """
+        () => {
+          window.__ai4seStreamOrderObserver?.disconnect();
+          return [...(window.__ai4seStreamOrderState?.events || [])];
+        }
+        """
+    )
+    assert result == ["chat", "artifact"], (
+        "expected separate browser commits in chat -> artifact order, got "
+        f"{result}"
+    )
+    return tuple(result)
 
 
 def _append_assistant_delta(
@@ -83,7 +178,7 @@ def _append_assistant_delta(
 
 
 def _assert_artifact_contains(page: Page, headings: tuple[str, ...]) -> None:
-    artifact_pane = page.locator("section").nth(1)
+    artifact_pane = page.get_by_test_id("artifact-content")
     for heading in headings:
         expect(artifact_pane).to_contain_text(heading, timeout=10000)
 
@@ -97,7 +192,7 @@ def _assert_chat_does_not_contain_full_artifact(
     page: Page,
     forbidden_headings: tuple[str, ...],
 ) -> None:
-    chat_text = page.locator("section").nth(0).inner_text(timeout=10000)
+    chat_text = page.get_by_test_id("chat-pane").inner_text(timeout=10000)
     matched = [heading for heading in forbidden_headings if heading in chat_text]
     assert len(matched) <= 1, (
         "assistant chat appears to contain artifact headings: "
@@ -179,13 +274,17 @@ def run_complete_workflow(
     ]
     stage_artifacts: list[StageArtifactSnapshot] = []
     stage_transitions: list[StageTransitionEvent] = []
+    stream_order: tuple[str, ...] = ()
     previous_chat_text = _chat_text(page)
+    _start_stream_order_observer(page, scenario.first_chat_marker)
     _send_message(page, scenario.prompt)
 
     all_headings: list[str] = []
     completed_stages: list[StageExpectation] = []
     for stage_index, stage in enumerate(scenario.stages):
         _assert_stage_artifact(page, stage)
+        if stage_index == 0:
+            stream_order = _finish_stream_order_observer(page)
         previous_chat_text = _append_assistant_delta(
             page,
             previous_chat_text,
@@ -313,4 +412,5 @@ def run_complete_workflow(
         stage_artifacts=tuple(stage_artifacts),
         conversation_events=tuple(conversation_events),
         stage_transitions=tuple(stage_transitions),
+        stream_order=stream_order,
     )

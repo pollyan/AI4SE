@@ -10,6 +10,7 @@ from .llm_judge import (
     assert_llm_judges_handoff_quality,
     is_llm_judge_enabled,
 )
+from .sse_mock import DEFAULT_CLARIFICATION_CHAT
 from .workflow_runner import (
     StageExpectation,
     WorkflowScenario,
@@ -29,6 +30,7 @@ def _alex_scenario() -> WorkflowScenario:
             "我们计划做一个 AI 测试设计助手，帮助测试负责人从需求生成测试策略"
             "和测试用例。"
         ),
+        first_chat_marker=DEFAULT_CLARIFICATION_CHAT,
         stages=(
             StageExpectation(
                 stage_tab="价值定位",
@@ -88,6 +90,7 @@ def _alex_scenario() -> WorkflowScenario:
 def test_alex_value_discovery_workflow_completes_all_stages(new_agents_page):
     run_result = run_complete_workflow(new_agents_page, _alex_scenario())
 
+    assert run_result.stream_order == ("chat", "artifact")
     assert "AI 测试设计助手需求蓝图" in run_result.final_artifact
     assert [snapshot.stage_name for snapshot in run_result.stage_artifacts] == [
         "价值定位",
@@ -165,6 +168,7 @@ def test_alex_to_lisa_handoff_passes_optional_llm_judge(new_agents_page):
             workflow_name="测试设计",
             initial_heading="测试设计",
             prompt="请继续基于 Alex 蓝图生成测试设计。",
+            first_chat_marker=DEFAULT_CLARIFICATION_CHAT,
             stages=(
                 StageExpectation(
                     stage_tab="需求澄清",

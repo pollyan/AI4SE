@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from .llm_judge import assert_llm_judges_artifact_quality, is_llm_judge_enabled
-from .sse_mock import STAGE_PAYLOADS
+from .sse_mock import DEFAULT_CLARIFICATION_CHAT, STAGE_PAYLOADS
 from .workflow_runner import (
     StageExpectation,
     WorkflowScenario,
@@ -20,6 +20,7 @@ def _lisa_scenario() -> WorkflowScenario:
         workflow_name="测试策略与用例设计",
         initial_heading="测试设计",
         prompt="请为登录和支付联动功能设计完整测试策略与测试用例。",
+        first_chat_marker=DEFAULT_CLARIFICATION_CHAT,
         stages=(
             StageExpectation(
                 stage_tab="需求澄清",
@@ -84,6 +85,7 @@ def _lisa_scenario() -> WorkflowScenario:
 def test_lisa_test_design_workflow_completes_all_stages(new_agents_page):
     run_result = run_complete_workflow(new_agents_page, _lisa_scenario())
 
+    assert run_result.stream_order == ("chat", "artifact")
     assert "登录支付链路测试设计" in run_result.final_artifact
     assert [snapshot.stage_name for snapshot in run_result.stage_artifacts] == [
         "需求澄清",

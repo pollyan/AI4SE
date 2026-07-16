@@ -38,6 +38,7 @@ from sse_schemas import (
     RunStartedEvent,
     SseEvent,
 )
+from stream_ordering import NaturalChatFirstDeltaSequencer
 
 
 SCHEMA_RETRY_EXHAUSTED_MESSAGE = (
@@ -419,6 +420,7 @@ def stream_agent_run_events(
     input_chars = len(agent_request.prompt)
     output_chars = 0
     provider = infer_provider_name(base_url)
+    sequencer = NaturalChatFirstDeltaSequencer()
 
     def duration_ms() -> int:
         return max(0, int((perf_counter() - started_at) * 1000))
@@ -449,6 +451,7 @@ def stream_agent_run_events(
         )
 
     def persist_terminal_error(event: ErrorEvent) -> ErrorEvent:
+        sequencer.discard()
         if persistence is None or run_id is None:
             return event
         try:
@@ -496,6 +499,14 @@ def stream_agent_run_events(
                     run_id=run_id,
                     warnings=context_warnings or None,
                 )
+                replay_delta = AgentTurnDeltaOutput.model_validate(
+                    terminal_event.output.model_dump(mode="json")
+                )
+                for sequenced_output in sequencer.push(
+                    replay_delta,
+                    is_final=True,
+                ):
+                    yield AgentTurnDeltaEvent(output=sequenced_output)
                 yield terminal_event
                 return
             if request_claim.state == "active":
@@ -543,18 +554,26 @@ def stream_agent_run_events(
                     workflow_id=agent_request.workflow_id,
                     current_stage_id=agent_request.stage_id,
                 )
-                yield AgentTurnDeltaEvent(
-                    output=AgentTurnDeltaOutput.model_validate(
-                        output.model_dump(mode="json")
-                    )
+                artifact_update = output.artifact_update
+                if (
+                    artifact_update.type == "replace"
+                    and artifact_update.markdown
+                ):
+                    validate_artifact_visual_blocks(artifact_update.markdown)
+                delta_output = AgentTurnDeltaOutput.model_validate(
+                    output.model_dump(mode="json")
                 )
+                for sequenced_output in sequencer.push(
+                    delta_output,
+                    is_final=True,
+                ):
+                    yield AgentTurnDeltaEvent(output=sequenced_output)
                 final_output = output
             else:
-                yield AgentTurnDeltaEvent(output=output)
+                for sequenced_output in sequencer.push(output):
+                    yield AgentTurnDeltaEvent(output=sequenced_output)
         if final_output is not None:
             artifact_update = final_output.artifact_update
-            if artifact_update.type == "replace" and artifact_update.markdown:
-                validate_artifact_visual_blocks(artifact_update.markdown)
             if persistence is not None and run_id is not None:
                 if artifact_update.type == "replace" and artifact_update.markdown:
                     output_chars = len(final_output.chat) + len(

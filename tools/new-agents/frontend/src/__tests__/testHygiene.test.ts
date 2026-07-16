@@ -193,7 +193,11 @@ describe('test hygiene', () => {
         expect(indexCss).toMatch(/html,\s*body,\s*#root\s*\{[^}]*background:\s*#0B1120;/s);
         expectClassTokens(workspace, /<div className="([^"]*)">/, ['h-[100dvh]', 'min-h-0', 'overflow-hidden']);
         expectClassTokens(workspace, /<main className="([^"]*)">/, ['flex-1', 'min-h-0', 'overflow-hidden']);
-        expectClassTokens(artifactPane, /<section className="([^"]*)">/, ['min-h-0', 'overflow-hidden', 'bg-grid-pattern']);
+        expectClassTokens(
+            artifactPane,
+            /<section[^>]*data-testid="artifact-pane"[^>]*className="([^"]*)"[^>]*>/,
+            ['min-h-0', 'overflow-hidden', 'bg-grid-pattern']
+        );
         expectClassTokens(artifactPane, /<div className="([^"]*overflow-y-auto[^"]*)">/, ['flex-1', 'min-h-0', 'overflow-y-auto']);
     });
 });

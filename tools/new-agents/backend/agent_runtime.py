@@ -102,9 +102,6 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 RAW_JSON_STREAMING_MAX_ATTEMPTS = 2
-ARTIFACT_FIRST_PROGRESS_CHAT = (
-    "我正在整理当前输入并生成右侧结构化初稿，随后会同步关键结论。"
-)
 
 
 def get_artifact_data_ready_stages() -> set[tuple[str, str]]:
@@ -119,76 +116,6 @@ def supports_artifact_data_rendering(workflow_id: str, current_stage_id: str) ->
     )
 
 
-def _find_json_object_end(text: str, object_start_index: int) -> int:
-    depth = 0
-    in_string = False
-    escaped = False
-    for index in range(object_start_index, len(text)):
-        char = text[index]
-        if in_string:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == '"':
-                in_string = False
-            continue
-        if char == '"':
-            in_string = True
-            continue
-        if char == "{":
-            depth += 1
-            continue
-        if char == "}":
-            depth -= 1
-            if depth == 0:
-                return index + 1
-    return -1
-
-
-def _normalize_artifact_data_instruction_order(instruction: str) -> str:
-    if '"artifact_data"' not in instruction:
-        return instruction
-
-    normalized = instruction.replace(
-        '1. "chat"\n2. "artifact_data"',
-        '1. "artifact_data"\n2. "chat"',
-    )
-    json_object_start = normalized.find('{\n  "chat"')
-    if json_object_start < 0:
-        return normalized
-
-    chat_line_start = normalized.find('  "chat"', json_object_start)
-    artifact_block_start = normalized.find('  "artifact_data"', chat_line_start)
-    if chat_line_start < 0 or artifact_block_start < 0:
-        return normalized
-
-    chat_line_end = normalized.find("\n", chat_line_start)
-    artifact_value_start = normalized.find("{", artifact_block_start)
-    if chat_line_end < 0 or artifact_value_start < 0:
-        return normalized
-
-    artifact_value_end = _find_json_object_end(normalized, artifact_value_start)
-    if artifact_value_end < 0:
-        return normalized
-
-    artifact_block_end = artifact_value_end
-    if normalized[artifact_block_end:artifact_block_end + 2] == ",\n":
-        artifact_block_end += 2
-    elif artifact_block_end < len(normalized) and normalized[artifact_block_end] == "\n":
-        artifact_block_end += 1
-
-    chat_line = normalized[chat_line_start:chat_line_end + 1]
-    artifact_block = normalized[artifact_block_start:artifact_block_end]
-    return (
-        normalized[:chat_line_start]
-        + artifact_block
-        + chat_line
-        + normalized[chat_line_end + 1:artifact_block_start]
-        + normalized[artifact_block_end:]
-    )
-
-
 def build_structured_output_instruction(
     workflow_id: str,
     current_stage_id: str,
@@ -198,7 +125,7 @@ def build_structured_output_instruction(
     if instruction is None:
         return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
     return (
-        _normalize_artifact_data_instruction_order(instruction).rstrip()
+        instruction.rstrip()
         + "\n\n"
         + format_visual_protocol_instruction()
         + "\n"
@@ -632,8 +559,6 @@ def build_partial_agent_delta(
             workflow_id=workflow_id,
             current_stage_id=current_stage_id,
         )
-    if markdown and not chat:
-        chat = ARTIFACT_FIRST_PROGRESS_CHAT
     if not chat and not markdown:
         return None
     return AgentTurnDeltaOutput(

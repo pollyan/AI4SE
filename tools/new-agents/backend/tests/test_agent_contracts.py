@@ -155,6 +155,44 @@ def test_agent_turn_output_accepts_json_string_encoded_artifact_update():
     )
 
 
+@pytest.mark.parametrize(
+    "chat",
+    [
+        "正在生成...",
+        "正在生成",
+        "正在生成右侧产出物。",
+        "正在生成右侧产出物",
+        "正在生成结构化产物。",
+        "正在生成结构化产物",
+        "我正在整理当前输入并生成右侧结构化初稿，随后会同步关键结论。",
+        "我正在整理当前输入并生成右侧结构化初稿",
+    ],
+)
+def test_agent_turn_output_rejects_non_meaningful_progress_chat(chat: str):
+    with pytest.raises(ValueError, match="meaningful natural dialogue"):
+        AgentTurnOutput.model_validate(
+            {
+                "chat": chat,
+                "artifact_update": {"type": "none"},
+                "stage_action": None,
+                "warnings": [],
+            }
+        )
+
+
+def test_agent_turn_output_accepts_meaningful_natural_chat():
+    output = AgentTurnOutput.model_validate(
+        {
+            "chat": "我先核对了输入范围，右侧将补充风险与验收标准。",
+            "artifact_update": {"type": "none"},
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+
+    assert output.chat == "我先核对了输入范围，右侧将补充风险与验收标准。"
+
+
 def test_artifact_contract_prompt_includes_exact_next_stage_action_target():
     prompt = build_artifact_contract_prompt(
         workflow_id="TEST_DESIGN",

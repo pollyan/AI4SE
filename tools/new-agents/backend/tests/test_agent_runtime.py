@@ -84,16 +84,16 @@ ARTIFACT_DATA_STREAMING_STAGES = sorted(ARTIFACT_DATA_STAGE_FIXTURES)
 
 
 @pytest.mark.parametrize(("workflow_id", "stage_id"), ARTIFACT_DATA_STREAMING_STAGES)
-def test_artifact_data_structured_output_instruction_puts_artifact_data_before_chat_for_visible_streaming(
+def test_artifact_data_structured_output_instruction_puts_natural_chat_before_artifact_data(
     workflow_id: str,
     stage_id: str,
 ):
     instruction = build_structured_output_instruction(workflow_id, stage_id)
 
-    assert '1. "artifact_data"' in instruction
-    assert '2. "chat"' in instruction
-    assert instruction.index('1. "artifact_data"') < instruction.index('2. "chat"')
-    assert instruction.index('{\n  "artifact_data"') < instruction.index('\n  "chat"')
+    assert '1. "chat"' in instruction
+    assert '2. "artifact_data"' in instruction
+    assert instruction.index('1. "chat"') < instruction.index('2. "artifact_data"')
+    assert instruction.index('{\n  "chat"') < instruction.index('\n  "artifact_data"')
 
 
 def test_artifact_data_structured_output_instruction_injects_visual_protocol():
@@ -2397,7 +2397,7 @@ def test_runtime_raw_json_stream_turn_renders_artifact_data_before_final_output(
     assert "结构化输出格式要求" in calls[0]["messages"][0]["content"]
 
 
-def test_runtime_raw_json_stream_turn_emits_progress_with_artifact_data_that_precedes_chat(
+def test_runtime_raw_json_stream_turn_does_not_synthesize_chat_for_artifact_first_progress(
     monkeypatch,
 ):
     final_json = json.dumps(
@@ -2444,8 +2444,7 @@ def test_runtime_raw_json_stream_turn_emits_progress_with_artifact_data_that_pre
         and output.artifact_update.type == "replace"
     )
 
-    assert first_artifact_delta.chat is not None
-    assert first_artifact_delta.chat != "正在生成..."
+    assert first_artifact_delta.chat is None
     assert first_artifact_delta.artifact_update.markdown is not None
 
 
@@ -4698,7 +4697,7 @@ def test_runtime_raw_json_stream_turn_streams_artifact_progress_for_artifact_dat
 ):
     final_json = json.dumps(
         {
-            "chat": "正在生成结构化产物。",
+            "chat": "我正在逐步核对需求事实与边界，右侧会持续补充分析。",
             "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
             "stage_action": None,
             "warnings": [],
@@ -4760,7 +4759,7 @@ def test_runtime_raw_json_stream_turn_streams_artifact_progress_for_artifact_dat
 def test_runtime_raw_json_stream_turn_streams_partial_artifact_data_in_final_format():
     final_json = json.dumps(
         {
-            "chat": "正在生成结构化产物。",
+            "chat": "我正在逐步核对需求事实与边界，右侧会持续补充分析。",
             "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
             "stage_action": None,
             "warnings": [],

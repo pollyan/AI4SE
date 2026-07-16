@@ -216,16 +216,23 @@ def test_stream_agent_run_events_yields_started_delta_and_final_events(
         model_name="test-model",
     ))
 
-    assert events == [
-        RunStartedEvent(),
-        AgentTurnDeltaEvent(output=AgentTurnDeltaOutput.model_validate(
-            partial.model_dump(mode="json")
-        )),
-        AgentTurnDeltaEvent(output=AgentTurnDeltaOutput.model_validate(
-            final.model_dump(mode="json")
-        )),
-        AgentTurnEvent(output=final),
+    assert events[0] == RunStartedEvent()
+    assert events[-1] == AgentTurnEvent(output=final)
+    delta_events = [
+        event for event in events if isinstance(event, AgentTurnDeltaEvent)
     ]
+    first_chat_index = next(
+        index
+        for index, event in enumerate(delta_events)
+        if event.output.chat == "正在梳理需求。"
+    )
+    first_artifact_index = next(
+        index
+        for index, event in enumerate(delta_events)
+        if event.output.artifact_update is not None
+    )
+    assert first_chat_index < first_artifact_index
+    assert delta_events[first_chat_index].output.artifact_update is None
     runtime_kwargs = mock_build_runtime.call_args.kwargs
     assert runtime_kwargs["api_key"] == "test-api-key"
     assert runtime_kwargs["base_url"] == "https://api.test.com/v1"
@@ -301,13 +308,21 @@ def test_stream_agent_run_events_preserves_user_authorized_assumption_stage_acti
         model_name="test-model",
     ))
 
-    delta = events[1]
+    chat_delta = events[1]
+    action_delta = next(
+        event
+        for event in events
+        if isinstance(event, AgentTurnDeltaEvent)
+        and event.output.stage_action is not None
+    )
     final_event = events[-1]
-    assert isinstance(delta, AgentTurnDeltaEvent)
+    assert isinstance(chat_delta, AgentTurnDeltaEvent)
     assert isinstance(final_event, AgentTurnEvent)
-    assert delta.output.stage_action == final.stage_action
+    assert chat_delta.output.chat == final.chat
+    assert chat_delta.output.stage_action is None
+    assert action_delta.output.stage_action == final.stage_action
     assert final_event.output.stage_action == final.stage_action
-    assert "stage_readiness_blocked" not in delta.output.warnings
+    assert "stage_readiness_blocked" not in action_delta.output.warnings
     assert "stage_readiness_blocked" not in final_event.output.warnings
     assert "阶段成熟度门禁判断" not in final_event.output.chat
 
@@ -414,6 +429,7 @@ def test_stream_agent_run_events_replays_completed_request_without_model_invocat
 
     assert events == [
         RunStartedEvent(run_id="run-123"),
+        AgentTurnDeltaEvent(output=AgentTurnDeltaOutput(chat=final.chat)),
         AgentTurnEvent(output=final),
     ]
     mock_build_runtime.assert_not_called()
@@ -510,9 +526,6 @@ def test_stream_agent_run_events_rejects_visual_failure_before_persistence(
 
     assert events == [
         RunStartedEvent(run_id="run-123"),
-        AgentTurnDeltaEvent(output=AgentTurnDeltaOutput.model_validate(
-            final.model_dump(mode="json")
-        )),
         ErrorEvent(
             code="VISUAL_VALIDATION_FAILED",
             message="ai4se-visual block 1 must contain valid JSON",
@@ -739,7 +752,7 @@ def test_stream_agent_run_events_emits_context_warnings_on_run_started(
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
-def test_stream_agent_run_events_yields_started_and_final_without_delta_for_single_output(
+def test_stream_agent_run_events_splits_single_final_output_into_chat_then_artifact_delta(
     mock_build_runtime: MagicMock,
 ) -> None:
     final = AgentTurnOutput.model_validate({
@@ -764,9 +777,14 @@ def test_stream_agent_run_events_yields_started_and_final_without_delta_for_sing
 
     assert events == [
         RunStartedEvent(),
-        AgentTurnDeltaEvent(output=AgentTurnDeltaOutput.model_validate(
-            final.model_dump(mode="json")
-        )),
+        AgentTurnDeltaEvent(
+            output=AgentTurnDeltaOutput(chat=final.chat)
+        ),
+        AgentTurnDeltaEvent(
+            output=AgentTurnDeltaOutput(
+                artifact_update=final.artifact_update,
+            )
+        ),
         AgentTurnEvent(output=final),
     ]
 
@@ -987,6 +1005,37 @@ def test_stream_agent_run_events_maps_model_http_error_to_llm_error_event(
     assert events[0] == RunStartedEvent()
     assert events[1].code == "LLM_ERROR"
     assert "503" in events[1].message
+
+
+@patch("stream_services.NaturalChatFirstDeltaSequencer.discard", autospec=True)
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_discards_buffered_artifact_before_runtime_error(
+    mock_build_runtime: MagicMock,
+    mock_discard: MagicMock,
+) -> None:
+    def artifact_then_error():
+        yield AgentTurnDeltaOutput.model_validate({
+            "artifact_update": {
+                "type": "replace",
+                "markdown": VALID_CLARIFY_ARTIFACT,
+            }
+        })
+        raise AgentRuntimeModelError("provider failed after partial artifact")
+
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = artifact_then_error()
+    mock_build_runtime.return_value = runtime
+
+    events = list(stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+    ))
+
+    assert not any(isinstance(event, AgentTurnDeltaEvent) for event in events)
+    assert events[-1].code == "LLM_ERROR"
+    mock_discard.assert_called_once()
 
 
 @patch("stream_services.build_pydantic_agent_runtime")

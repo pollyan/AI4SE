@@ -276,6 +276,64 @@ describe('useChatService', () => {
         expect(finalState.isGenerating).toBe(false);
     });
 
+    it('commits meaningful assistant chat in store before the first artifact update', async () => {
+        const naturalChat = '我已核对登录需求边界，接下来请查看右侧分析。';
+        const snapshots: Array<{
+            assistant: string;
+            artifact: string;
+            hasTransition: boolean;
+        }> = [];
+        const unsubscribe = useStore.subscribe((state) => {
+            snapshots.push({
+                assistant: [...state.chatHistory].reverse().find(
+                    message => message.role === 'assistant'
+                )?.content || '',
+                artifact: state.artifactContent,
+                hasTransition: state.pendingStageTransition !== null,
+            });
+        });
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            yield {
+                chatResponse: naturalChat,
+                newArtifact: 'initial artifact',
+                action: '',
+                hasArtifactUpdate: false,
+            };
+            yield {
+                chatResponse: naturalChat,
+                newArtifact: '# 需求分析文档\n\n第一段',
+                action: 'NEXT_STAGE',
+                hasArtifactUpdate: true,
+            };
+        });
+
+        const { result } = renderHook(() => useChatService());
+        act(() => result.current.setInput('分析登录需求'));
+
+        try {
+            await act(async () => {
+                await result.current.handleSend();
+            });
+        } finally {
+            unsubscribe();
+        }
+
+        const chatIndex = snapshots.findIndex(snapshot => (
+            snapshot.assistant === naturalChat
+            && snapshot.artifact === 'initial artifact'
+        ));
+        const artifactIndex = snapshots.findIndex(snapshot => (
+            snapshot.artifact === '# 需求分析文档\n\n第一段'
+        ));
+        const transitionIndex = snapshots.findIndex(snapshot => (
+            snapshot.hasTransition
+        ));
+
+        expect(chatIndex).toBeGreaterThanOrEqual(0);
+        expect(artifactIndex).toBeGreaterThan(chatIndex);
+        expect(transitionIndex).toBeGreaterThanOrEqual(artifactIndex);
+    });
+
     it('should clear draft input when sending an override starter prompt', async () => {
         vi.mocked(generateResponseStream).mockImplementation(async function* () {
             yield {

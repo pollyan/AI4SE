@@ -3650,7 +3650,10 @@ export const ArtifactPane: React.FC = () => {
   const readOnlyMarkdownComponents = createArtifactMarkdownComponents();
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#0B0F17] text-gray-300 relative shadow-2xl bg-grid-pattern lg:w-[60%]">
+    <section
+      data-testid="artifact-pane"
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#0B0F17] text-gray-300 relative shadow-2xl bg-grid-pattern lg:w-[60%]"
+    >
       <style>{`
         .bg-grid-pattern {
             background-image: linear-gradient(to right, #1f2937 1px, transparent 1px), linear-gradient(to bottom, #1f2937 1px, transparent 1px);
@@ -3841,6 +3844,7 @@ export const ArtifactPane: React.FC = () => {
           <StoryHandoffPacketPanel runId={currentRunId} stageId={currentStageId} />
         )}
         <div
+          data-testid="artifact-content"
           ref={artifactPreviewRef}
           onMouseUp={captureSelectedArtifactText}
           onKeyUp={captureSelectedArtifactText}

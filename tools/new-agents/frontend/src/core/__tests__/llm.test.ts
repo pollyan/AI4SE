@@ -159,6 +159,26 @@ function resetStore(overrides: Partial<ChatState> = {}) {
     });
 }
 
+const NON_MEANINGFUL_AGENT_CHAT_MESSAGES = [
+    '正在生成...',
+    '正在生成',
+    '正在生成右侧产出物。',
+    '正在生成右侧产出物',
+    '正在生成结构化产物。',
+    '正在生成结构化产物',
+    '我正在整理当前输入并生成右侧结构化初稿，随后会同步关键结论。',
+    '我正在整理当前输入并生成右侧结构化初稿',
+];
+
+const isMeaningfulTestChat = (value: string): boolean => {
+    const normalized = value.trim();
+    return Boolean(
+        normalized
+        && !NON_MEANINGFUL_AGENT_CHAT_MESSAGES.includes(normalized)
+        && !normalized.startsWith('我正在整理当前输入并生成右侧结构化初稿')
+    );
+};
+
 // ------------------------------------------------------------------
 // 测试开始
 // ------------------------------------------------------------------
@@ -271,6 +291,60 @@ describe('llm.ts', () => {
                 chatResponse: '已更新需求分析文档。',
                 newArtifact: '# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能',
                 action: '',
+                hasArtifactUpdate: true,
+            });
+        });
+
+        it('terminal-only 帧必须先提交权威自然对话，再开始右侧产出物', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: '# 需求分析文档\n\n初始内容',
+                stageArtifacts: { CLARIFY: '# 需求分析文档\n\n初始内容' },
+            });
+            const chat = '我已核对登录需求边界，请查看右侧的风险与待澄清项。';
+            const artifact = '# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能';
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentTurnEvent({
+                        chat,
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: artifact,
+                        },
+                        stage_action: {
+                            type: 'request_next_stage',
+                            target_stage_id: 'STRATEGY',
+                        },
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('帮我设计登录功能测试用例')
+            );
+            const chatIndex = results.findIndex(result => (
+                result.chatResponse === chat
+                && !result.hasArtifactUpdate
+            ));
+            const artifactIndex = results.findIndex(result => result.hasArtifactUpdate);
+
+            expect(chatIndex).toBeGreaterThanOrEqual(0);
+            expect(artifactIndex).toBeGreaterThan(chatIndex);
+            expect(results[chatIndex]).toEqual({
+                chatResponse: chat,
+                newArtifact: '# 需求分析文档\n\n初始内容',
+                action: '',
+                hasArtifactUpdate: false,
+            });
+            expect(results.slice(0, -1).every(result => result.action === '')).toBe(true);
+            expect(results.at(-1)).toMatchObject({
+                chatResponse: chat,
+                newArtifact: artifact,
+                action: 'NEXT_STAGE',
                 hasArtifactUpdate: true,
             });
         });
@@ -427,7 +501,7 @@ describe('llm.ts', () => {
             });
         });
 
-        it('长 agent_turn 回复应渐进拆分为多个累计聊天 chunk，并同步揭示产出物', async () => {
+        it('长 terminal-only 回复应先完成累计聊天，再渐进揭示产出物', async () => {
             resetStore({
                 workflow: 'TEST_DESIGN',
                 stageIndex: 0,
@@ -461,11 +535,18 @@ describe('llm.ts', () => {
             );
 
             expect(results.length).toBeGreaterThan(1);
+            const firstArtifactIndex = results.findIndex(result => result.hasArtifactUpdate);
             expect(results.at(0)).toMatchObject({
                 chatResponse: '需求太模糊了，没法直接出测试用例。',
-                newArtifact: '# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能',
-                hasArtifactUpdate: true,
+                newArtifact: '# 需求分析文档\n\n初始内容',
+                hasArtifactUpdate: false,
             });
+            expect(firstArtifactIndex).toBeGreaterThan(0);
+            expect(results.slice(0, firstArtifactIndex).every(result => (
+                !result.hasArtifactUpdate
+                && result.newArtifact === '# 需求分析文档\n\n初始内容'
+            ))).toBe(true);
+            expect(results[firstArtifactIndex - 1].chatResponse).toBe(fullChat);
             expect(results.at(-1)).toEqual({
                 chatResponse: fullChat,
                 newArtifact: nextArtifact,
@@ -474,7 +555,7 @@ describe('llm.ts', () => {
             });
         });
 
-        it('中文单段 agent_turn 回复也应渐进拆分并同步揭示右侧产出物', async () => {
+        it('中文单段 terminal-only 回复也应先累计聊天再揭示右侧产出物', async () => {
             resetStore({
                 workflow: 'TEST_DESIGN',
                 stageIndex: 0,
@@ -518,12 +599,16 @@ describe('llm.ts', () => {
             );
 
             expect(results.length).toBeGreaterThan(1);
+            const firstArtifactIndex = results.findIndex(result => result.hasArtifactUpdate);
             expect(results.at(0)).toMatchObject({
                 chatResponse: '我会先梳理登录链路。',
-                hasArtifactUpdate: true,
+                newArtifact: '# 需求分析文档\n\n初始内容',
+                hasArtifactUpdate: false,
             });
-            expect(results.at(0)?.newArtifact).toContain('# 需求分析文档');
-            expect(results.at(0)?.newArtifact.length).toBeLessThan(nextArtifact.length);
+            expect(firstArtifactIndex).toBeGreaterThan(0);
+            expect(results[firstArtifactIndex - 1].chatResponse).toBe(fullChat);
+            expect(results[firstArtifactIndex].newArtifact).toContain('# 需求分析文档');
+            expect(results[firstArtifactIndex].newArtifact.length).toBeLessThan(nextArtifact.length);
             expect(results.at(-1)).toEqual({
                 chatResponse: fullChat,
                 newArtifact: nextArtifact,
@@ -602,6 +687,12 @@ describe('llm.ts', () => {
             });
             expect(results[2]).toEqual({
                 chatResponse: '正在梳理需求。\n\n已生成初稿。',
+                newArtifact: '# 需求分析文档\n\n初始内容',
+                action: '',
+                hasArtifactUpdate: false,
+            });
+            expect(results[3]).toEqual({
+                chatResponse: '正在梳理需求。\n\n已生成初稿。',
                 newArtifact: draftArtifact,
                 action: '',
                 hasArtifactUpdate: true,
@@ -614,7 +705,7 @@ describe('llm.ts', () => {
             });
         });
 
-        it('首次可见 artifact 之前必须先给出非占位的左侧进度', async () => {
+        it('artifact-first 兼容流必须等待权威自然对话，不能用固定话术解锁右侧', async () => {
             resetStore({
                 workflow: 'TEST_DESIGN',
                 stageIndex: 0,
@@ -632,6 +723,7 @@ describe('llm.ts', () => {
                             markdown: draftArtifact,
                         },
                     }),
+                    createAgentDeltaEvent({ chat: '需' }),
                     createAgentTurnEvent({
                         chat: '已完成需求分析文档初稿。',
                         artifact_update: {
@@ -648,17 +740,71 @@ describe('llm.ts', () => {
             const results = await collectStream(
                 generateResponseStream('帮我设计登录功能测试用例')
             );
+            const meaningfulChatIndex = results.findIndex(result => (
+                result.chatResponse.includes('已完成需求分析文档初稿。')
+                && isMeaningfulTestChat(result.chatResponse)
+                && !result.hasArtifactUpdate
+            ));
             const firstArtifactIndex = results.findIndex(result => result.hasArtifactUpdate);
 
-            expect(firstArtifactIndex).toBeGreaterThan(0);
-            expect(results.slice(0, firstArtifactIndex)).toContainEqual(
-                expect.objectContaining({
-                    chatResponse: expect.not.stringMatching(/^正在生成\.\.\.$/),
-                    hasArtifactUpdate: false,
-                })
+            expect(meaningfulChatIndex).toBeGreaterThanOrEqual(0);
+            expect(firstArtifactIndex).toBeGreaterThan(meaningfulChatIndex);
+            expect(results.map(result => result.chatResponse).join('\n')).not.toContain(
+                '我正在整理当前输入并生成右侧结构化初稿'
             );
+            expect(results.map(result => result.chatResponse)).not.toContain('需');
             const chatLengths = results.map(result => result.chatResponse.length);
             expect(chatLengths).toEqual([...chatLengths].sort((a, b) => a - b));
+        });
+
+        it('正常 chat-only 后的独立 artifact-only 事件不增加 render commit barrier', async () => {
+            resetStore({
+                workflow: 'TEST_DESIGN',
+                stageIndex: 0,
+                artifactContent: '# 需求分析文档\n\n初始内容',
+                stageArtifacts: { CLARIFY: '# 需求分析文档\n\n初始内容' },
+            });
+            const draftArtifact = '# 需求分析文档\n\n## 1. 被测系统与边界\n登录功能';
+            const requestAnimationFrameSpy = vi.fn((callback: FrameRequestCallback) => {
+                callback(0);
+                return 1;
+            });
+            const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+            vi.stubGlobal('requestAnimationFrame', requestAnimationFrameSpy);
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    createAgentDeltaEvent({
+                        chat: '我已核对登录需求边界，接下来更新右侧分析。',
+                    }),
+                    createAgentDeltaEvent({
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: draftArtifact,
+                        },
+                    }),
+                    createAgentTurnEvent({
+                        chat: '我已核对登录需求边界，接下来更新右侧分析。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: draftArtifact,
+                        },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            try {
+                await collectStream(generateResponseStream('帮我设计登录测试'));
+                expect(requestAnimationFrameSpy).not.toHaveBeenCalled();
+            } finally {
+                vi.stubGlobal(
+                    'requestAnimationFrame',
+                    originalRequestAnimationFrame
+                );
+            }
         });
 
         it('agent_delta 只有聊天或进度占位时最终正式产物仍应渐进揭示', async () => {
@@ -2127,6 +2273,28 @@ describe('llm.ts', () => {
                 collectStream(generateResponseStream('hi'))
             ).rejects.toThrow('结构化智能体 SSE 事件格式错误');
         });
+
+        it.each(NON_MEANINGFUL_AGENT_CHAT_MESSAGES)(
+            'SSE agent_turn output 不能把固定进度话术当作自然对话: %s',
+            async (chat) => {
+                mockFetch.mockResolvedValueOnce({
+                    ok: true,
+                    body: createSSEStream([
+                        createAgentTurnEvent({
+                            chat,
+                            artifact_update: { type: 'none' },
+                            stage_action: null,
+                            warnings: [],
+                        }),
+                        'data: [DONE]',
+                    ]),
+                });
+
+                await expect(
+                    collectStream(generateResponseStream('hi'))
+                ).rejects.toThrow('结构化智能体 SSE 事件格式错误');
+            }
+        );
 
         it('SSE agent_turn output chat 包含旧标签协议时应抛出明确协议错误', async () => {
             mockFetch.mockResolvedValueOnce({

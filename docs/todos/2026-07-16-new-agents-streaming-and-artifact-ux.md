@@ -10,7 +10,7 @@
 
 2026-07-16 用户先明确要求只保留本文件中的 3 项产品体验待办，旧质量整改序列、P2/P3 条件触发项、旧 E 编号、旧结构化失败治理候选和旧真实模型 smoke 候选均不再作为 backlog。随后用户基于当前测试盘点新增并批准第 4 项：以真实 DeepSeek、真实后端/SSE/持久化和无头 Chromium 为核心的 New Agents 功能测试重构。该项是依据当前目标重新建立的独立待办，不是恢复旧 smoke 候选。历史完成证据保留在 `docs/todos/archive/`，不得从归档文字、旧 checkbox、旧计划或旧分支自动恢复实施；未来若出现新的实际失败，必须按当时事实重新建项。
 
-本文件是当前唯一活跃产品待办入口。用户已在 2026-07-16 启动 Goal Mode，并再次确认必须严格按 `QG-017 → QG-018 → QG-019 → QG-020` 串行执行；当前 QG-017 已完成 ASSESS、spec、plan 与 TDD 实现，正在正式审查和验证，后三项不得提前穿插。
+本文件是当前唯一活跃产品待办入口。用户已在 2026-07-16 启动 Goal Mode，并再次确认必须严格按 `QG-017 → QG-018 → QG-019 → QG-020` 串行执行；当前 QG-017 已完成设计、TDD、正式审查、完成型验证与独立交付，下一入口是 QG-018 ASSESS，QG-019 与 QG-020 不得提前穿插。
 
 ## 共享架构边界
 
@@ -23,7 +23,7 @@
 
 | ID | 优先级 | 待办 | 状态 | 独立验收结果 |
 |---|---|---|---|---|
-| `QG-017` | P1 | 全工作流左侧有意义对话先于右侧产出物 | `IN_PROGRESS` | 首个非占位自然对话先出现，随后右侧开始真实产出；双栏各自单调更新、互不饥饿 |
+| `QG-017` | P1 | 全工作流左侧有意义对话先于右侧产出物 | `DONE` | 首个非占位自然对话先出现，随后右侧开始真实产出；双栏各自单调更新、互不饥饿 |
 | `QG-018` | P1 | 统一 25 个在线阶段的右侧分段流式 | `NOT_STARTED` | 已完整且可校验的业务章节逐段出现，最终与 deterministic renderer 完全一致 |
 | `QG-019` | P2 | 文档信息退出首屏重表格 | `NOT_STARTED` | 右侧先展示业务正文，元信息保留但只在尾部轻量附录或共享轻量区出现 |
 | `QG-020` | P1 | New Agents 真实链路、无头优先的功能测试重构 | `NOT_STARTED` | PR 运行关键真实链路，Nightly/发布运行全阶段矩阵；验证格式、流式、持久化与阶段流转，不以截图或像素差异作为门禁 |
@@ -45,6 +45,17 @@
 - 右侧开始后仍按 `QG-018` 逐段流式，不得通过人为延迟或最终批量显示伪造顺序。
 - chat 与 artifact 均单调更新；慢 token、artifact-first provider 输出、断流和最终收敛时任一栏都不会长期饥饿。
 - 至少覆盖一个 Lisa、一个 Alex 的真实 typed SSE → parser/store → `ChatPane`/`ArtifactPane` DOM 时序证据。
+
+### 完成结果与证据（2026-07-16）
+
+- 共享 backend `NaturalChatFirstDeltaSequencer` 在 partial、final、durable replay 与 terminal error 路径统一执行自然对话先行；artifact-first provider 输出先缓存，错误终止会显式丢弃缓存，未增加 workflow/stage 专属分支。
+- frontend 对 artifact-first、混合帧与 terminal-only 帧做防御性拆分；正常 chat-only → artifact-only 事件不增加渲染 barrier，stage action 在 artifact 状态应用后承接。
+- Python 与 TypeScript 共同拒绝固定生成话术、等价前缀和不足 12 字符的 partial chat，并由 workflow contract sync test 防止镜像漂移。
+- Lisa 与 Alex 共用 browser runner 的 DOM 时序观察器，均证明 `chat → artifact`；mock typed SSE 仍保留真实 `run_started / agent_delta / agent_turn / DONE` 语义，不复制生产占位规则。
+- 正式 Spec/Standards 审查发现的 6 个 Important 问题已全部修复并复审关闭：占位前缀、计划横切、浏览器规则重复、过短 partial 解锁、正常事件误加 barrier、错误前未清空缓存。
+- 完成型证据：backend 全量 `944 passed, 1 skipped`；frontend `60 files / 888 passed`，TypeScript lint 与 production build 通过；browser 全量 `18 passed, 3 skipped`；`./scripts/test/test-local.sh new-agents` 通过；最终全仓 `./scripts/test/test-local.sh` 通过（Intent 510、MidScene 40、New Agents frontend 888/backend 941/browser 8，另 3 个按 runner 配置跳过）；关键 Python flake8 与 `git diff --check` 通过。
+- 全仓验证的前两次尝试分别因错误系统 Python 与不完整 PATH 而不具备 CI 等价性；修正环境后的较早一次运行在未改动的 Intent CSP 用例遇到数据库清理干扰。该用例随后单测、完整 Intent 510/510 与最终全仓新鲜运行均通过；没有修改 Intent 业务或测试代码，也不把早期失败改写为通过证据。
+- 设计、厚切片身份与实现计划分别见 [`QG-017 spec`](../superpowers/specs/2026-07-16-qg017-chat-before-artifact-design.md) 和 [`QG-017 plan`](../superpowers/plans/2026-07-16-qg017-chat-before-artifact.md)。聚焦提交由本结果更新所在的 QG-017 commit 承载，交付时以 `git log` 记录其 SHA。
 
 ## QG-018 — 统一全阶段右侧分段流式
 

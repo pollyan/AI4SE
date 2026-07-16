@@ -87,7 +87,17 @@ type AttachmentListState =
 
 const MAX_SYNTHETIC_STREAM_STEPS = 12;
 const SYNTHETIC_STREAM_DELAY_MS = 20;
-const ARTIFACT_FIRST_PROGRESS_CHAT = '我正在整理当前输入并生成右侧结构化初稿，随后会同步关键结论。';
+const NON_MEANINGFUL_AGENT_CHAT_MESSAGES = new Set([
+  '正在生成...',
+  '正在生成右侧产出物。',
+  '正在生成结构化产物。',
+  '我正在整理当前输入并生成右侧结构化初稿，随后会同步关键结论。',
+]);
+const NON_MEANINGFUL_AGENT_CHAT_PREFIXES = [
+  '正在生成',
+  '我正在整理当前输入并生成右侧结构化初稿',
+];
+const MIN_MEANINGFUL_PARTIAL_CHAT_CHARACTERS = 12;
 
 export const createTurnRequestId = (): string => {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
@@ -98,6 +108,34 @@ export const createTurnRequestId = (): string => {
 
 const LEGACY_PROTOCOL_TAG_PATTERN = /<\s*\/?\s*(?:CHART|ARTIFACT|CHAT)\b[^>]*>/i;
 const ARTIFACT_PROGRESS_PLACEHOLDER_PATTERN = /^#\s*产出物生成中(?:\s|$)/m;
+
+const isMeaningfulAgentChat = (
+  value: string | null | undefined,
+  allowPartial = false
+): boolean => {
+  const normalized = value?.trim() || '';
+  if (
+    !normalized
+    || NON_MEANINGFUL_AGENT_CHAT_MESSAGES.has(normalized)
+    || NON_MEANINGFUL_AGENT_CHAT_PREFIXES.some(prefix => (
+      normalized.startsWith(prefix)
+    ))
+  ) {
+    return false;
+  }
+  if (
+    allowPartial
+    && (
+      normalized.length < MIN_MEANINGFUL_PARTIAL_CHAT_CHARACTERS
+      || [...NON_MEANINGFUL_AGENT_CHAT_MESSAGES].some(message => (
+        message.startsWith(normalized)
+      ))
+    )
+  ) {
+    return false;
+  }
+  return true;
+};
 
 /** 将 base64 编码的文本安全解码为 UTF-8 字符串 */
 const decodeBase64Text = (base64: string): string | null => {
@@ -539,7 +577,10 @@ const parseAgentRuntimeEvent = (payload: string): AgentRuntimeEvent | null => {
       throw new Error('结构化智能体 SSE 事件格式错误');
     }
     const output = event.output as Partial<AgentTurnOutput>;
-    if (typeof output.chat !== 'string' || !output.chat.trim()) {
+    if (
+      typeof output.chat !== 'string'
+      || !isMeaningfulAgentChat(output.chat)
+    ) {
       throw new Error('结构化智能体 SSE 事件格式错误');
     }
     if (LEGACY_PROTOCOL_TAG_PATTERN.test(output.chat)) {
@@ -700,6 +741,16 @@ const waitForSyntheticStreamFrame = async (): Promise<void> => {
   });
 };
 
+const waitForRenderCommit = async (): Promise<void> => {
+  await new Promise<void>(resolve => {
+    if (typeof globalThis.requestAnimationFrame === 'function') {
+      globalThis.requestAnimationFrame(() => resolve());
+      return;
+    }
+    globalThis.setTimeout(resolve, 0);
+  });
+};
+
 const hasArtifactTruncationWarning = (warnings?: string[]): boolean => {
   if (!warnings) return false;
 
@@ -768,66 +819,6 @@ const getHttpErrorMessage = (payload: unknown): string => {
   }
 
   return '结构化智能体请求失败';
-};
-
-const mapAgentTurnToStreamChunks = async function* (
-  output: AgentTurnOutput,
-  currentArtifact: string,
-  expectedNextStageId: string | undefined
-): AsyncGenerator<StreamChunk, void, unknown> {
-  const hasArtifactUpdate = output.artifact_update.type === 'replace';
-  const newArtifact = hasArtifactUpdate
-    ? output.artifact_update.markdown || ''
-    : currentArtifact;
-  const artifactTruncated = hasArtifactTruncationWarning(output.warnings);
-
-  if (
-    output.stage_action
-    && output.stage_action.target_stage_id !== expectedNextStageId
-  ) {
-    throw new Error('结构化智能体 SSE 阶段动作目标错误');
-  }
-
-  if (hasArtifactUpdate) {
-    await validateArtifactVisualBlocks(newArtifact);
-  }
-
-  const chatUnits = splitChatForStreaming(output.chat);
-  const artifactUnits = hasArtifactUpdate
-    ? splitArtifactForStreaming(
-      newArtifact,
-      chatUnits.length
-    )
-    : [];
-  const frameCount = Math.max(chatUnits.length, artifactUnits.length, 1);
-  let accumulatedChat = '';
-  for (let index = 0; index < frameCount; index += 1) {
-    const isFinalChunk = index === frameCount - 1;
-    const chatUnit = chatUnits[Math.min(index, chatUnits.length - 1)];
-    if (index < chatUnits.length) {
-      accumulatedChat = accumulatedChat
-        ? `${accumulatedChat}\n\n${chatUnit}`
-        : chatUnit;
-    }
-    const artifactFrame = hasArtifactUpdate
-      ? artifactUnits[Math.min(index, artifactUnits.length - 1)]
-      : currentArtifact;
-
-    yield {
-      chatResponse: isFinalChunk ? output.chat : accumulatedChat,
-      newArtifact: isFinalChunk ? newArtifact : artifactFrame,
-      action: isFinalChunk
-        ? getAgentTurnAction(output)
-        : '',
-      hasArtifactUpdate,
-      ...(artifactTruncated ? { artifactTruncated: true } : {}),
-      ...(isFinalChunk && output.artifact_patch ? { artifactPatch: output.artifact_patch } : {}),
-    };
-
-    if (!isFinalChunk) {
-      await waitForSyntheticStreamFrame();
-    }
-  }
 };
 
 const mapAgentTurnToFinalChunk = async function* (
@@ -916,11 +907,7 @@ const getStableAgentDeltaChat = (
   output: AgentTurnDeltaOutput,
   previousChat: string
 ): string => {
-  const candidate = output.chat
-    || previousChat
-    || (hasRenderableArtifactDelta(output)
-      ? ARTIFACT_FIRST_PROGRESS_CHAT
-      : '正在生成...');
+  const candidate = output.chat || previousChat;
   if (!previousChat) return candidate;
   if (candidate.length < previousChat.length) return previousChat;
   return candidate;
@@ -937,8 +924,7 @@ const mapAgentDeltaToStreamChunks = async function* (
   const newArtifact = hasArtifactUpdate
     ? output.artifact_update?.markdown || ''
     : currentArtifact;
-  const emitsInitialArtifactProgress = hasArtifactUpdate && !previousChat;
-  const chatUnits = previousChat || emitsInitialArtifactProgress
+  const chatUnits = previousChat
     ? [chat]
     : splitChatForStreaming(chat);
   const frameCount = Math.max(chatUnits.length, 1);
@@ -946,16 +932,6 @@ const mapAgentDeltaToStreamChunks = async function* (
 
   if (hasArtifactUpdate) {
     await validateArtifactVisualBlocks(newArtifact);
-  }
-
-  if (emitsInitialArtifactProgress) {
-    yield {
-      chatResponse: chat,
-      newArtifact: currentArtifact,
-      action: '',
-      hasArtifactUpdate: false,
-    };
-    await waitForSyntheticStreamFrame();
   }
 
   for (let index = 0; index < frameCount; index += 1) {
@@ -1020,10 +996,11 @@ async function* generateResponseStreamViaAgentRuntime(
   let buffer = '';
   let shouldStop = false;
   let pendingDataLines: string[] = [];
-  let receivedAgentDelta = false;
   let receivedRenderableArtifactDelta = false;
   let receivedTerminalAgentTurn = false;
   let previousAgentDeltaChat = '';
+  let hasEmittedMeaningfulAgentChat = false;
+  let pendingArtifactDelta: AgentTurnDeltaOutput | null = null;
 
   const processSsePayload = async function* (
     payload: string
@@ -1061,52 +1038,118 @@ async function* generateResponseStreamViaAgentRuntime(
       return;
     }
     if (event.type === 'agent_delta') {
-      receivedAgentDelta = true;
-      if (hasRenderableArtifactDelta(event.output)) {
-        receivedRenderableArtifactDelta = true;
+      const hadEmittedMeaningfulAgentChat = hasEmittedMeaningfulAgentChat;
+      const hasArtifactUpdate = hasRenderableArtifactDelta(event.output);
+      if (hasArtifactUpdate) {
+        await validateArtifactVisualBlocks(
+          event.output.artifact_update?.markdown || ''
+        );
       }
+      const hasMeaningfulChat = isMeaningfulAgentChat(
+        event.output.chat,
+        true
+      );
       const stableChat = getStableAgentDeltaChat(
         event.output,
         previousAgentDeltaChat
       );
-      for await (const chunk of mapAgentDeltaToStreamChunks(
-        event.output,
-        currentArtifact,
-        stableChat,
-        previousAgentDeltaChat
-      )) {
-        yield chunk;
+
+      if (!hasEmittedMeaningfulAgentChat && hasArtifactUpdate) {
+        pendingArtifactDelta = event.output;
       }
-      previousAgentDeltaChat = stableChat;
+      if (!hasEmittedMeaningfulAgentChat && !hasMeaningfulChat) {
+        return;
+      }
+
+      const previousChat = previousAgentDeltaChat;
+      if (hasMeaningfulChat && stableChat !== previousChat) {
+        for await (const chunk of mapAgentDeltaToStreamChunks(
+          {
+            chat: stableChat,
+            warnings: event.output.warnings,
+          },
+          currentArtifact,
+          stableChat,
+          previousChat
+        )) {
+          yield chunk;
+        }
+        hasEmittedMeaningfulAgentChat = true;
+        previousAgentDeltaChat = stableChat;
+      }
+
+      const artifactOutput = hasArtifactUpdate
+        ? event.output
+        : pendingArtifactDelta;
+      if (artifactOutput && hasEmittedMeaningfulAgentChat) {
+        if (
+          !receivedRenderableArtifactDelta
+          && !hadEmittedMeaningfulAgentChat
+        ) {
+          await waitForRenderCommit();
+        }
+        for await (const chunk of mapAgentDeltaToStreamChunks(
+          artifactOutput,
+          currentArtifact,
+          previousAgentDeltaChat,
+          previousAgentDeltaChat
+        )) {
+          yield chunk;
+        }
+        receivedRenderableArtifactDelta = true;
+        pendingArtifactDelta = null;
+      }
       return;
     }
     if (event.type === 'agent_turn') {
       receivedTerminalAgentTurn = true;
-      const finalOutput = previousAgentDeltaChat === ARTIFACT_FIRST_PROGRESS_CHAT
-        ? {
-          ...event.output,
-          chat: `${previousAgentDeltaChat}\n\n${event.output.chat}`,
+      const finalOutput = event.output;
+      const hadEmittedMeaningfulAgentChat = hasEmittedMeaningfulAgentChat;
+      const shouldEmitFinalChat = (
+        !hasEmittedMeaningfulAgentChat
+        || finalOutput.chat !== previousAgentDeltaChat
+      );
+      if (shouldEmitFinalChat) {
+        for await (const chunk of mapAgentDeltaToStreamChunks(
+          {
+            chat: finalOutput.chat,
+            warnings: finalOutput.warnings,
+          },
+          currentArtifact,
+          finalOutput.chat,
+          previousAgentDeltaChat
+        )) {
+          yield chunk;
         }
-        : event.output;
-      const chunkSource = receivedRenderableArtifactDelta
-        ? mapAgentTurnToFinalChunk(
+        hasEmittedMeaningfulAgentChat = true;
+        previousAgentDeltaChat = finalOutput.chat;
+      }
+
+      pendingArtifactDelta = null;
+      const hasFinalArtifact = finalOutput.artifact_update.type === 'replace';
+      const finalAction = getAgentTurnAction(finalOutput);
+      if (hasFinalArtifact && !receivedRenderableArtifactDelta) {
+        if (!hadEmittedMeaningfulAgentChat) {
+          await waitForRenderCommit();
+        }
+        for await (const chunk of mapAgentTurnToArtifactRevealChunks(
           finalOutput,
           currentArtifact,
           expectedNextStageId
-        )
-        : receivedAgentDelta
-          ? mapAgentTurnToArtifactRevealChunks(
-            finalOutput,
-            currentArtifact,
-            expectedNextStageId
-          )
-        : mapAgentTurnToStreamChunks(
+        )) {
+          yield chunk;
+        }
+        receivedRenderableArtifactDelta = true;
+        return;
+      }
+      if (hasFinalArtifact || finalAction || !shouldEmitFinalChat) {
+        for await (const chunk of mapAgentTurnToFinalChunk(
           finalOutput,
           currentArtifact,
           expectedNextStageId
-        );
-      for await (const chunk of chunkSource) {
-        yield chunk;
+        )) {
+          yield chunk;
+        }
       }
     }
   };

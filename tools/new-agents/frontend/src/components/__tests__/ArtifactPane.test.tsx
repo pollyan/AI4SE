@@ -111,6 +111,8 @@ describe('ArtifactPane Component', () => {
     it('shows placeholder when content is empty', () => {
         render(<ArtifactPane />);
         // Should render the pane with "当前产出物.md" header
+        expect(screen.getByTestId('artifact-pane')).toBeTruthy();
+        expect(screen.getByTestId('artifact-content')).toBeTruthy();
         expect(screen.getByText(/当前产出物/)).toBeTruthy();
     });
 

@@ -382,7 +382,10 @@ export const ChatPane: React.FC = () => {
   const renderablePendingAttachments = asRenderableAttachments(pendingAttachments);
 
   return (
-    <section className="flex flex-col w-full lg:w-[40%] min-w-[360px] bg-[#0B1120] border-r border-[#1e293b] relative shadow-[10px_0_30px_-10px_rgba(0,0,0,0.5)] z-20 h-full">
+    <section
+      data-testid="chat-pane"
+      className="flex flex-col w-full lg:w-[40%] min-w-[360px] bg-[#0B1120] border-r border-[#1e293b] relative shadow-[10px_0_30px_-10px_rgba(0,0,0,0.5)] z-20 h-full"
+    >
       <div className="px-5 py-4 border-b border-[#1e293b] bg-[#0B1120]/95 backdrop-blur sticky top-0 z-10">
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-white text-base font-bold flex items-center gap-2">
@@ -653,7 +656,11 @@ export const ChatPane: React.FC = () => {
           };
 
           return (
-            <div key={msg.id} className={clsx("flex items-start gap-4 animate-fade-in-up", msg.role === 'user' ? "flex-row-reverse" : "")}>
+            <div
+              key={msg.id}
+              data-testid={msg.role === 'assistant' ? 'assistant-message' : 'user-message'}
+              className={clsx("flex items-start gap-4 animate-fade-in-up", msg.role === 'user' ? "flex-row-reverse" : "")}
+            >
               <div className={clsx(
                 "flex items-center justify-center w-8 h-8 rounded-lg shrink-0 mt-1 shadow-sm",
                 msg.role === 'user'
@@ -667,12 +674,15 @@ export const ChatPane: React.FC = () => {
                 <span className="text-slate-500 text-[10px] font-mono px-1">
                   {msg.role === 'user' ? 'You' : agentName} • {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
-                <div className={clsx(
+                <div
+                  data-testid={msg.role === 'assistant' ? 'assistant-message-content' : 'user-message-content'}
+                  className={clsx(
                   "rounded-2xl p-4 text-sm leading-relaxed shadow-sm",
                   msg.role === 'user'
                     ? "rounded-tr-none bg-blue-600 text-white shadow-blue-500/10"
                     : "rounded-tl-none bg-[#151e32] text-gray-200 border border-[#1e293b]"
-                )}>
+                  )}
+                >
                   {messageAttachments.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
                       {messageAttachments.map((att, idx) => (

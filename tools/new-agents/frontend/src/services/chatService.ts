@@ -575,12 +575,6 @@ export function useChatService() {
                     useStore.getState().setArtifactTruncated(true);
                 }
 
-                if (decision.pendingStageTransition) {
-                    useStore.getState().setPendingStageTransition(
-                        decision.pendingStageTransition
-                    );
-                }
-
                 if (decision.artifactUpdate) {
                     const latestState = useStore.getState();
                     let handledByPatch = false;
@@ -643,6 +637,12 @@ export function useChatService() {
                         didUpdateArtifact = true;
                         latestRunArtifactContent = protectedArtifactContent;
                     }
+                }
+
+                if (decision.pendingStageTransition) {
+                    useStore.getState().setPendingStageTransition(
+                        decision.pendingStageTransition
+                    );
                 }
 
                 if (decision.shouldStopStream) {

@@ -5,6 +5,11 @@ from dataclasses import dataclass
 from typing import Any
 
 
+DEFAULT_CLARIFICATION_CHAT = (
+    "当前阶段产出物已更新。我还需要你补充确认关键信息后，才会建议进入下一阶段。"
+)
+
+
 @dataclass(frozen=True)
 class StagePayload:
     chat: str
@@ -821,7 +826,7 @@ def build_agent_sse_response(
             payload.chat
             if should_request_next_stage or not payload.next_stage_id
             else payload.clarification_chat
-            or "当前阶段产出物已更新。我还需要你补充确认关键信息后，才会建议进入下一阶段。"
+            or DEFAULT_CLARIFICATION_CHAT
         ),
         "artifact_update": {
             "type": "replace",
@@ -840,9 +845,25 @@ def build_agent_sse_response(
         "runId": request_body.get("runId") or f"mock-run-{workflow_id.lower()}",
         "warnings": [],
     }
+    chat_delta_event = {
+        "type": "agent_delta",
+        "output": {
+            "chat": output["chat"],
+            "warnings": [],
+        },
+    }
+    artifact_delta_event = {
+        "type": "agent_delta",
+        "output": {
+            "artifact_update": output["artifact_update"],
+            "warnings": [],
+        },
+    }
     event = {"type": "agent_turn", "output": output}
     return (
         f"data: {json.dumps(run_started_event, ensure_ascii=False)}\n\n"
+        f"data: {json.dumps(chat_delta_event, ensure_ascii=False)}\n\n"
+        f"data: {json.dumps(artifact_delta_event, ensure_ascii=False)}\n\n"
         f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         "data: [DONE]\n\n"
     )

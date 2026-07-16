@@ -359,8 +359,25 @@ def test_agent_runs_stream_returns_started_delta_and_final_sse_events(
         "run_started",
         "agent_delta",
         "agent_delta",
+        "agent_delta",
+        "agent_delta",
         "agent_turn",
     ]
+    delta_payloads = [
+        payload for payload in payloads if payload["type"] == "agent_delta"
+    ]
+    first_chat_index = next(
+        index
+        for index, payload in enumerate(delta_payloads)
+        if payload["output"].get("chat")
+    )
+    first_artifact_index = next(
+        index
+        for index, payload in enumerate(delta_payloads)
+        if payload["output"].get("artifact_update")
+    )
+    assert first_chat_index < first_artifact_index
+    assert "artifact_update" not in delta_payloads[first_chat_index]["output"]
     assert response.get_data(as_text=True).strip().endswith("data: [DONE]")
 
     event = payloads[-1]
@@ -509,8 +526,15 @@ def test_agent_runs_stream_replays_same_request_id_without_duplicate_history_or_
     assert replay_response.status_code == 200
     assert [payload["type"] for payload in replay_payloads] == [
         "run_started",
+        "agent_delta",
+        "agent_delta",
         "agent_turn",
     ]
+    assert replay_payloads[1]["output"] == {
+        "chat": "已更新右侧需求分析文档。",
+        "warnings": [],
+    }
+    assert replay_payloads[2]["output"]["artifact_update"]["type"] == "replace"
     assert replay_payloads[-1] == first_payloads[-1]
     assert len(runtime.calls) == 1
     with app.app_context():
