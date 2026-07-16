@@ -34,6 +34,26 @@ class ValueFlow(StrictArtifactDataModel):
     links: list[ValueFlowLink] = Field(min_length=1)
 
 
+def validate_value_flow_references(value_flow: ValueFlow) -> None:
+    node_ids = {node.node_id for node in value_flow.nodes}
+    if len(node_ids) != len(value_flow.nodes):
+        raise ValueError("value_flow.nodes contains duplicate node_id")
+
+    unknown_references = sorted(
+        {
+            reference
+            for link in value_flow.links
+            for reference in (link.from_node, link.to_node)
+            if reference not in node_ids
+        }
+    )
+    if unknown_references:
+        raise ValueError(
+            "value_flow.links references unknown node ids: "
+            + ", ".join(unknown_references)
+        )
+
+
 class TargetScenario(StrictArtifactDataModel):
     dimension: str
     description: str
@@ -89,6 +109,26 @@ class ValueAssumption(StrictArtifactDataModel):
     status: str
 
 
+def normalize_value_score_summary(
+    score_matrix: list[ValueScore],
+    score_summary: ValueScoreSummary,
+) -> None:
+    total_score = sum(item.score for item in score_matrix)
+    if score_summary.total_score is None:
+        score_summary.total_score = total_score
+    elif score_summary.total_score != total_score:
+        raise ValueError("score_summary.total_score must equal score_matrix score sum")
+
+    expected_average = round(total_score / len(score_matrix), 2)
+    if score_summary.average_score is None:
+        score_summary.average_score = expected_average
+    elif abs(score_summary.average_score - expected_average) > 0.001:
+        raise ValueError(
+            "score_summary.average_score must equal score_matrix average score "
+            f"({expected_average})"
+        )
+
+
 class ValueDiscoveryElevatorArtifactData(StrictArtifactDataModel):
     document_info: DocumentInfo
     positioning_summary: PositioningSummary
@@ -105,40 +145,9 @@ class ValueDiscoveryElevatorArtifactData(StrictArtifactDataModel):
 
     @model_validator(mode="after")
     def validate_value_consistency(self) -> "ValueDiscoveryElevatorArtifactData":
-        node_ids = {node.node_id for node in self.value_flow.nodes}
-        if len(node_ids) != len(self.value_flow.nodes):
-            raise ValueError("value_flow.nodes contains duplicate node_id")
+        validate_value_flow_references(self.value_flow)
 
-        unknown_references = sorted(
-            {
-                reference
-                for link in self.value_flow.links
-                for reference in (link.from_node, link.to_node)
-                if reference not in node_ids
-            }
-        )
-        if unknown_references:
-            raise ValueError(
-                "value_flow.links references unknown node ids: "
-                + ", ".join(unknown_references)
-            )
-
-        total_score = sum(item.score for item in self.score_matrix)
-        if self.score_summary.total_score is None:
-            self.score_summary.total_score = total_score
-        elif self.score_summary.total_score != total_score:
-            raise ValueError(
-                "score_summary.total_score must equal score_matrix score sum"
-            )
-
-        expected_average = round(total_score / len(self.score_matrix), 2)
-        if self.score_summary.average_score is None:
-            self.score_summary.average_score = expected_average
-        elif abs(self.score_summary.average_score - expected_average) > 0.001:
-            raise ValueError(
-                "score_summary.average_score must equal score_matrix average score "
-                f"({expected_average})"
-            )
+        normalize_value_score_summary(self.score_matrix, self.score_summary)
         return self
 
 
@@ -222,6 +231,40 @@ class PersonaPriorityRanking(StrictArtifactDataModel):
     validation_status: str
 
 
+def validate_persona_ids(personas: list[PersonaProfile]) -> set[str]:
+    persona_ids = {persona.persona_id for persona in personas}
+    if len(persona_ids) != len(personas):
+        raise ValueError("personas contains duplicate persona_id")
+    return persona_ids
+
+
+def validate_persona_references(
+    personas: list[PersonaProfile],
+    references: list[str],
+) -> None:
+    persona_ids = validate_persona_ids(personas)
+    unknown = sorted(
+        {persona_id for persona_id in references if persona_id not in persona_ids}
+    )
+    if unknown:
+        raise ValueError(
+            "persona references unknown persona ids: " + ", ".join(unknown)
+        )
+
+
+def validate_persona_priority_ranking(
+    personas: list[PersonaProfile],
+    priority_ranking: list[PersonaPriorityRanking],
+) -> None:
+    validate_persona_references(
+        personas,
+        [item.persona_id for item in priority_ranking],
+    )
+    ranked_ids = [item.persona_id for item in priority_ranking]
+    if len(set(ranked_ids)) != len(ranked_ids):
+        raise ValueError("priority_ranking contains duplicate persona_id")
+
+
 class ValueDiscoveryPersonaArtifactData(StrictArtifactDataModel):
     document_info: DocumentInfo
     persona_summary: PersonaSummary
@@ -235,27 +278,20 @@ class ValueDiscoveryPersonaArtifactData(StrictArtifactDataModel):
 
     @model_validator(mode="after")
     def validate_persona_consistency(self) -> "ValueDiscoveryPersonaArtifactData":
-        persona_ids = {persona.persona_id for persona in self.personas}
-        if len(persona_ids) != len(self.personas):
-            raise ValueError("personas contains duplicate persona_id")
-
-        references = [
-            *(item.persona_id for item in self.behavior_scenarios),
-            *(item.persona_id for item in self.decision_chain),
-            *(item.persona_id for item in self.pain_evidence),
-            *(item.persona_id for item in self.priority_ranking),
-        ]
-        unknown = sorted(
-            {persona_id for persona_id in references if persona_id not in persona_ids}
+        validate_persona_ids(self.personas)
+        validate_persona_references(
+            self.personas,
+            [item.persona_id for item in self.behavior_scenarios],
         )
-        if unknown:
-            raise ValueError(
-                "persona references unknown persona ids: " + ", ".join(unknown)
-            )
-
-        ranked_ids = [item.persona_id for item in self.priority_ranking]
-        if len(set(ranked_ids)) != len(ranked_ids):
-            raise ValueError("priority_ranking contains duplicate persona_id")
+        validate_persona_references(
+            self.personas,
+            [item.persona_id for item in self.decision_chain],
+        )
+        validate_persona_references(
+            self.personas,
+            [item.persona_id for item in self.pain_evidence],
+        )
+        validate_persona_priority_ranking(self.personas, self.priority_ranking)
         return self
 
 
@@ -323,6 +359,78 @@ class JourneyValidationExperiment(StrictArtifactDataModel):
     status: str
 
 
+def validate_journey_stages(journey_stages: list[JourneyStage]) -> None:
+    for field_name in ("stage_id", "pain_id", "opportunity_id"):
+        values = [getattr(item, field_name) for item in journey_stages]
+        if len(values) != len(set(values)):
+            raise ValueError(f"journey_stages contains duplicate {field_name}")
+
+
+def validate_journey_pain_priorities(
+    journey_stages: list[JourneyStage],
+    pain_priorities: list[JourneyPainPriority],
+) -> None:
+    validate_journey_stages(journey_stages)
+    stage_ids = {item.stage_id for item in journey_stages}
+    pain_ids = {item.pain_id for item in journey_stages}
+    unknown_stage_ids = sorted(
+        {item.stage_id for item in pain_priorities if item.stage_id not in stage_ids}
+    )
+    if unknown_stage_ids:
+        raise ValueError(
+            "pain_priorities references unknown stage ids: "
+            + ", ".join(unknown_stage_ids)
+        )
+    unknown_pain_ids = sorted(
+        {item.pain_id for item in pain_priorities if item.pain_id not in pain_ids}
+    )
+    if unknown_pain_ids:
+        raise ValueError(
+            "journey references unknown pain ids: " + ", ".join(unknown_pain_ids)
+        )
+
+
+def validate_journey_opportunity_scores(
+    journey_stages: list[JourneyStage],
+    opportunity_scores: list[JourneyOpportunityScore],
+) -> None:
+    validate_journey_stages(journey_stages)
+    pain_ids = {item.pain_id for item in journey_stages}
+    opportunity_ids = {item.opportunity_id for item in journey_stages}
+    unknown_pain_ids = sorted(
+        {item.pain_id for item in opportunity_scores if item.pain_id not in pain_ids}
+    )
+    if unknown_pain_ids:
+        raise ValueError(
+            "journey references unknown pain ids: " + ", ".join(unknown_pain_ids)
+        )
+    unknown_opportunity_ids = sorted(
+        {
+            item.opportunity_id
+            for item in opportunity_scores
+            if item.opportunity_id not in opportunity_ids
+        }
+    )
+    if unknown_opportunity_ids:
+        raise ValueError(
+            "journey references unknown opportunity ids: "
+            + ", ".join(unknown_opportunity_ids)
+        )
+
+
+def validate_journey_opportunity_references(
+    journey_stages: list[JourneyStage],
+    references: list[str],
+) -> None:
+    validate_journey_stages(journey_stages)
+    opportunity_ids = {item.opportunity_id for item in journey_stages}
+    unknown = sorted({item for item in references if item not in opportunity_ids})
+    if unknown:
+        raise ValueError(
+            "journey references unknown opportunity ids: " + ", ".join(unknown)
+        )
+
+
 class ValueDiscoveryJourneyArtifactData(StrictArtifactDataModel):
     document_info: DocumentInfo
     journey_summary: JourneySummary
@@ -335,62 +443,22 @@ class ValueDiscoveryJourneyArtifactData(StrictArtifactDataModel):
 
     @model_validator(mode="after")
     def validate_journey_consistency(self) -> "ValueDiscoveryJourneyArtifactData":
-        stage_ids = {item.stage_id for item in self.journey_stages}
-        if len(stage_ids) != len(self.journey_stages):
-            raise ValueError("journey_stages contains duplicate stage_id")
-
-        pain_ids = {item.pain_id for item in self.journey_stages}
-        if len(pain_ids) != len(self.journey_stages):
-            raise ValueError("journey_stages contains duplicate pain_id")
-
-        opportunity_ids = {item.opportunity_id for item in self.journey_stages}
-        if len(opportunity_ids) != len(self.journey_stages):
-            raise ValueError("journey_stages contains duplicate opportunity_id")
-
-        unknown_stage_ids = sorted(
-            {
-                item.stage_id
-                for item in self.pain_priorities
-                if item.stage_id not in stage_ids
-            }
+        validate_journey_stages(self.journey_stages)
+        validate_journey_pain_priorities(self.journey_stages, self.pain_priorities)
+        validate_journey_opportunity_scores(
+            self.journey_stages, self.opportunity_scores
         )
-        if unknown_stage_ids:
-            raise ValueError(
-                "pain_priorities references unknown stage ids: "
-                + ", ".join(unknown_stage_ids)
-            )
-
-        referenced_pain_ids = [
-            *(item.pain_id for item in self.pain_priorities),
-            *(item.pain_id for item in self.opportunity_scores),
-        ]
-        unknown_pain_ids = sorted(
-            {pain_id for pain_id in referenced_pain_ids if pain_id not in pain_ids}
+        validate_journey_opportunity_references(
+            self.journey_stages,
+            [item.related_opportunity for item in self.entry_strategy],
         )
-        if unknown_pain_ids:
-            raise ValueError(
-                "journey references unknown pain ids: " + ", ".join(unknown_pain_ids)
-            )
-
-        referenced_opportunity_ids = [
-            *(item.opportunity_id for item in self.opportunity_scores),
-            *(item.related_opportunity for item in self.entry_strategy),
-            *(item.opportunity_id for item in self.validation_experiments),
-        ]
-        unknown_opportunity_ids = sorted(
-            {
-                opportunity_id
-                for opportunity_id in referenced_opportunity_ids
-                if opportunity_id not in opportunity_ids
-            }
+        validate_journey_opportunity_references(
+            self.journey_stages,
+            [item.opportunity_id for item in self.validation_experiments],
         )
-        if unknown_opportunity_ids:
-            raise ValueError(
-                "journey references unknown opportunity ids: "
-                + ", ".join(unknown_opportunity_ids)
-            )
 
         return self
+
 
 class BlueprintDocumentInfo(StrictArtifactDataModel):
     product_name: str
@@ -535,6 +603,95 @@ class BlueprintLisaHandoffInput(StrictArtifactDataModel):
     status: str
 
 
+def validate_blueprint_requirements(
+    requirements: list[BlueprintRequirement],
+) -> set[str]:
+    requirement_ids = {item.requirement_id for item in requirements}
+    if len(requirement_ids) != len(requirements):
+        raise ValueError("requirements contains duplicate requirement_id")
+    return requirement_ids
+
+
+def validate_blueprint_requirement_references(
+    requirements: list[BlueprintRequirement],
+    references: list[str],
+) -> None:
+    requirement_ids = validate_blueprint_requirements(requirements)
+    unknown = sorted({item for item in references if item not in requirement_ids})
+    if unknown:
+        raise ValueError(
+            "blueprint references unknown requirement ids: " + ", ".join(unknown)
+        )
+
+
+def validate_blueprint_acceptance_criteria(
+    requirements: list[BlueprintRequirement],
+    acceptance_criteria: list[BlueprintAcceptanceCriterion],
+) -> set[str]:
+    acceptance_ids = {item.acceptance_id for item in acceptance_criteria}
+    if len(acceptance_ids) != len(acceptance_criteria):
+        raise ValueError("acceptance_criteria contains duplicate acceptance_id")
+    validate_blueprint_requirement_references(
+        requirements,
+        [item.requirement_id for item in acceptance_criteria],
+    )
+    return acceptance_ids
+
+
+def validate_blueprint_handoff_inputs(
+    requirements: list[BlueprintRequirement],
+    acceptance_criteria: list[BlueprintAcceptanceCriterion],
+    lisa_handoff_inputs: list[BlueprintLisaHandoffInput],
+) -> None:
+    requirement_ids = validate_blueprint_requirements(requirements)
+    acceptance_ids = validate_blueprint_acceptance_criteria(
+        requirements, acceptance_criteria
+    )
+    unknown_requirements = sorted(
+        {
+            item.reference_id
+            for item in lisa_handoff_inputs
+            if item.input_type == "需求" and item.reference_id not in requirement_ids
+        }
+    )
+    if unknown_requirements:
+        raise ValueError(
+            "blueprint references unknown requirement ids: "
+            + ", ".join(unknown_requirements)
+        )
+    unknown_acceptance_ids = sorted(
+        {
+            item.reference_id
+            for item in lisa_handoff_inputs
+            if item.input_type == "验收标准" and item.reference_id not in acceptance_ids
+        }
+    )
+    if unknown_acceptance_ids:
+        raise ValueError(
+            "blueprint references unknown acceptance ids: "
+            + ", ".join(unknown_acceptance_ids)
+        )
+
+
+def validate_blueprint_main_flow(main_flow: BlueprintMainFlow) -> None:
+    flow_node_ids = {item.node_id for item in main_flow.nodes}
+    if len(flow_node_ids) != len(main_flow.nodes):
+        raise ValueError("main_flow.nodes contains duplicate node_id")
+    unknown_flow_nodes = sorted(
+        {
+            node_id
+            for link in main_flow.links
+            for node_id in (link.from_node, link.to_node)
+            if node_id not in flow_node_ids
+        }
+    )
+    if unknown_flow_nodes:
+        raise ValueError(
+            "main_flow.links references unknown node ids: "
+            + ", ".join(unknown_flow_nodes)
+        )
+
+
 class ValueDiscoveryBlueprintArtifactData(StrictArtifactDataModel):
     document_info: BlueprintDocumentInfo
     product_overview: BlueprintProductOverview
@@ -555,73 +712,28 @@ class ValueDiscoveryBlueprintArtifactData(StrictArtifactDataModel):
 
     @model_validator(mode="after")
     def validate_blueprint_consistency(self) -> "ValueDiscoveryBlueprintArtifactData":
-        requirement_ids = {item.requirement_id for item in self.requirements}
-        if len(requirement_ids) != len(self.requirements):
-            raise ValueError("requirements contains duplicate requirement_id")
-
-        acceptance_ids = {item.acceptance_id for item in self.acceptance_criteria}
-        if len(acceptance_ids) != len(self.acceptance_criteria):
-            raise ValueError("acceptance_criteria contains duplicate acceptance_id")
-
-        feature_requirement_ids = [
-            feature.requirement_id
-            for module in self.feature_modules
-            for feature in module.features
-            if feature.requirement_id is not None
-        ]
-        referenced_requirement_ids = [
-            *feature_requirement_ids,
-            *(item.requirement_id for item in self.mvp_plan.included_features),
-            *(item.requirement_id for item in self.acceptance_criteria),
-            *(
-                item.reference_id
-                for item in self.lisa_handoff_inputs
-                if item.input_type == "需求"
-            ),
-        ]
-        unknown_requirement_ids = sorted(
-            {
-                requirement_id
-                for requirement_id in referenced_requirement_ids
-                if requirement_id not in requirement_ids
-            }
+        validate_blueprint_requirements(self.requirements)
+        validate_blueprint_requirement_references(
+            self.requirements,
+            [
+                feature.requirement_id
+                for module in self.feature_modules
+                for feature in module.features
+                if feature.requirement_id is not None
+            ],
         )
-        if unknown_requirement_ids:
-            raise ValueError(
-                "blueprint references unknown requirement ids: "
-                + ", ".join(unknown_requirement_ids)
-            )
-
-        unknown_acceptance_ids = sorted(
-            {
-                item.reference_id
-                for item in self.lisa_handoff_inputs
-                if item.input_type == "验收标准"
-                and item.reference_id not in acceptance_ids
-            }
+        validate_blueprint_requirement_references(
+            self.requirements,
+            [item.requirement_id for item in self.mvp_plan.included_features],
         )
-        if unknown_acceptance_ids:
-            raise ValueError(
-                "blueprint references unknown acceptance ids: "
-                + ", ".join(unknown_acceptance_ids)
-            )
-
-        flow_node_ids = {item.node_id for item in self.main_flow.nodes}
-        if len(flow_node_ids) != len(self.main_flow.nodes):
-            raise ValueError("main_flow.nodes contains duplicate node_id")
-        unknown_flow_nodes = sorted(
-            {
-                node_id
-                for link in self.main_flow.links
-                for node_id in (link.from_node, link.to_node)
-                if node_id not in flow_node_ids
-            }
+        validate_blueprint_acceptance_criteria(
+            self.requirements, self.acceptance_criteria
         )
-        if unknown_flow_nodes:
-            raise ValueError(
-                "main_flow.links references unknown node ids: "
-                + ", ".join(unknown_flow_nodes)
-            )
+        validate_blueprint_handoff_inputs(
+            self.requirements,
+            self.acceptance_criteria,
+            self.lisa_handoff_inputs,
+        )
+        validate_blueprint_main_flow(self.main_flow)
 
         return self
-

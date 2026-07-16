@@ -705,6 +705,141 @@ describe('llm.ts', () => {
             });
         });
 
+        it('应拒绝删除或改写已完成章节的 artifact replace 回退', async () => {
+            resetStore({
+                workflow: 'REQ_REVIEW',
+                stageIndex: 0,
+                artifactContent: '',
+                stageArtifacts: {},
+            });
+            const firstArtifact = [
+                '# 需求评审问题清单',
+                '',
+                '## 评审范围与不评审范围',
+                '会员权益展示、领取和使用流程。',
+            ].join('\n');
+            const regressedArtifact = [
+                '# 需求评审问题清单',
+                '',
+                '## 需求质量总览',
+                '当前存在阻断问题。',
+            ].join('\n');
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"run_started"}',
+                    createAgentDeltaEvent({
+                        chat: '我会先逐段整理需求评审结论。',
+                    }),
+                    createAgentDeltaEvent({
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: firstArtifact,
+                        },
+                    }),
+                    createAgentDeltaEvent({
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: regressedArtifact,
+                        },
+                    }),
+                    createAgentTurnEvent({
+                        chat: '需求评审已完成。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: regressedArtifact,
+                        },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('请评审会员权益需求'))
+            ).rejects.toThrow('结构化智能体 SSE 产出物发生回退');
+        });
+
+        it('模型重试边界应允许新 attempt 从较短产出物重新开始并收敛', async () => {
+            resetStore({
+                workflow: 'REQ_REVIEW',
+                stageIndex: 0,
+                artifactContent: '',
+                stageArtifacts: {},
+            });
+            const firstAttemptArtifact = [
+                '# 需求评审问题清单',
+                '',
+                '## 评审范围',
+                '第一次尝试的范围。',
+                '',
+                '## 问题统计',
+                '错误统计。',
+            ].join('\n');
+            const secondAttemptDraft = [
+                '# 需求评审问题清单',
+                '',
+                '## 评审范围',
+                '第二次尝试已修正范围。',
+            ].join('\n');
+            const finalArtifact = [
+                secondAttemptDraft,
+                '',
+                '## 问题统计',
+                '已修正统计。',
+            ].join('\n');
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"run_started"}',
+                    createAgentDeltaEvent({
+                        chat: '我正在逐段形成第一次需求评审结果。',
+                    }),
+                    createAgentDeltaEvent({
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: firstAttemptArtifact,
+                        },
+                    }),
+                    'data: {"type":"agent_retry","attemptIndex":2}',
+                    createAgentDeltaEvent({
+                        chat: '我已根据契约反馈重新生成需求评审结果。',
+                    }),
+                    createAgentDeltaEvent({
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: secondAttemptDraft,
+                        },
+                    }),
+                    createAgentTurnEvent({
+                        chat: '需求评审已修正并完成。',
+                        artifact_update: {
+                            type: 'replace',
+                            markdown: finalArtifact,
+                        },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ]),
+            });
+
+            const results = await collectStream(
+                generateResponseStream('请评审会员权益需求')
+            );
+
+            expect(results.some(result => (
+                result.hasArtifactUpdate
+                && result.newArtifact === firstAttemptArtifact
+            ))).toBe(true);
+            expect(results.some(result => (
+                result.hasArtifactUpdate
+                && result.newArtifact === secondAttemptDraft
+            ))).toBe(true);
+            expect(results.at(-1)?.newArtifact).toBe(finalArtifact);
+        });
+
         it('artifact-first 兼容流必须等待权威自然对话，不能用固定话术解锁右侧', async () => {
             resetStore({
                 workflow: 'TEST_DESIGN',

@@ -10,7 +10,7 @@
 
 2026-07-16 用户先明确要求只保留本文件中的 3 项产品体验待办，旧质量整改序列、P2/P3 条件触发项、旧 E 编号、旧结构化失败治理候选和旧真实模型 smoke 候选均不再作为 backlog。随后用户基于当前测试盘点新增并批准第 4 项：以真实 DeepSeek、真实后端/SSE/持久化和无头 Chromium 为核心的 New Agents 功能测试重构。该项是依据当前目标重新建立的独立待办，不是恢复旧 smoke 候选。历史完成证据保留在 `docs/todos/archive/`，不得从归档文字、旧 checkbox、旧计划或旧分支自动恢复实施；未来若出现新的实际失败，必须按当时事实重新建项。
 
-本文件是当前唯一活跃产品待办入口。用户已在 2026-07-16 启动 Goal Mode，并再次确认必须严格按 `QG-017 → QG-018 → QG-019 → QG-020` 串行执行；当前 QG-017 已完成设计、TDD、正式审查、完成型验证与独立交付，下一入口是 QG-018 ASSESS，QG-019 与 QG-020 不得提前穿插。
+本文件是当前唯一活跃产品待办入口。用户已在 2026-07-16 启动 Goal Mode，并再次确认必须严格按 `QG-017 → QG-018 → QG-019 → QG-020` 串行执行；QG-017 已独立交付并推送，QG-018 已完成实现、正式审查与完成型验证，正在进行独立提交和推送，QG-019 与 QG-020 不得提前穿插。QG-018 远端同步成功后的唯一下一入口是 QG-019 ASSESS。
 
 ## 共享架构边界
 
@@ -24,7 +24,7 @@
 | ID | 优先级 | 待办 | 状态 | 独立验收结果 |
 |---|---|---|---|---|
 | `QG-017` | P1 | 全工作流左侧有意义对话先于右侧产出物 | `DONE` | 首个非占位自然对话先出现，随后右侧开始真实产出；双栏各自单调更新、互不饥饿 |
-| `QG-018` | P1 | 统一 25 个在线阶段的右侧分段流式 | `NOT_STARTED` | 已完整且可校验的业务章节逐段出现，最终与 deterministic renderer 完全一致 |
+| `QG-018` | P1 | 统一 25 个在线阶段的右侧分段流式 | `DONE` | 已完整且可校验的业务章节逐段出现，最终与 deterministic renderer 完全一致 |
 | `QG-019` | P2 | 文档信息退出首屏重表格 | `NOT_STARTED` | 右侧先展示业务正文，元信息保留但只在尾部轻量附录或共享轻量区出现 |
 | `QG-020` | P1 | New Agents 真实链路、无头优先的功能测试重构 | `NOT_STARTED` | PR 运行关键真实链路，Nightly/发布运行全阶段矩阵；验证格式、流式、持久化与阶段流转，不以截图或像素差异作为门禁 |
 
@@ -85,6 +85,17 @@
 - 已显示内容不回退、闪烁、重复或丢失；其他无效章节不阻塞已经有效的章节。
 - 每个 stage 的 fixture 至少证明两个业务结构块分步出现，并精确收敛到 final deterministic Markdown。
 - 每个 workflow 至少有一条 typed SSE → frontend state → DOM 的用户可见分段流式证据。
+
+### 完成结果与证据（2026-07-16）
+
+- 新增共享 `ArtifactRenderPlan`，让 partial 与 final 复用同一章节顺序、局部类型校验、引用/统计/视觉契约和 deterministic renderer；25/25 个在线 stage 全部机械注册，未增加 workflow/stage 专属 runtime、endpoint、store 或渲染管线。
+- partial 只公布已经完整且独立有效的业务章节：元信息不能单独触发首个增量，无效章节被隔离，已显示章节保持单调；final 会重走同一投影校验并与完整 Pydantic schema 的 deterministic Markdown 精确收敛。
+- typed SSE 增加 `agent_retry`：每次 provider 重试显式重置本次尝试的 backend sequencer 与 frontend 单调状态，同时保留跨尝试 token/retry 观测，避免合法重试被误判为内容回退。
+- backend 以每 stage 至少 3 个业务快照覆盖 25/25 stage，并覆盖 23 组跨引用无效输入、派生字段、visual 隔离和 final exact convergence；frontend 以 7/7 workflow 覆盖三个渐进 DOM 状态、历史版本只在 final 落一版及稳定章节不重渲染。
+- 无头 Chromium 在真实 React 页面内使用分时 `ReadableStream` typed SSE，7/7 workflow 均观察到 `chat → artifact-1 → artifact-2 → final`，精确核对三次 marker 累积、最终 DOM、workflow/stage 请求以及单次 stream 调用；全量 browser 结果为 `25 passed, 3 skipped`。
+- Spec 与 Standards 两轮独立正式审查均为 PASS，无 Critical、Important 或 Minor 遗留。完成型验证：backend 完整集 `1024 passed, 1 skipped`；frontend `61 files / 898 passed`，lint 与 production build 通过；QG-018 聚焦 backend `513 passed`；`./scripts/test/test-local.sh new-agents` 通过；最终全仓 `./scripts/test/test-local.sh` 通过（Intent 510、MidScene 40、New Agents frontend 898/backend 1021/browser 15，另 3 个按 runner 配置跳过、10 个不在 runner 默认范围）；关键 flake8、`git diff --check` 通过。
+- 全仓入口首次在受限沙箱内运行时，10 个本地端口用例和 2 个 Chromium 用例分别被 `Operation not permitted` 与 macOS Mach port 权限阻断；没有断言失败。保留该环境阻断证据后，在具备本地端口/浏览器权限的环境中重新执行同一完整命令并全部通过。
+- 设计与纵向实现计划分别见 [`QG-018 spec`](../superpowers/specs/2026-07-16-qg018-all-stage-paragraph-streaming-design.md) 和 [`QG-018 plan`](../superpowers/plans/2026-07-16-qg018-all-stage-paragraph-streaming.md)。聚焦提交由本结果更新所在的 QG-018 commit 承载，交付时以 `git log` 记录其 SHA。
 
 ## QG-019 — 文档信息退出首屏重表格
 

@@ -100,4 +100,29 @@ describe('ArtifactPane incremental section rendering', () => {
         expect(markdownRenderCounts.get(initialChangingSection)).toBe(1);
         expect(markdownRenderCounts.get(nextChangingSection)).toBe(1);
     });
+
+    it('inserts a previously withheld middle section without rerendering stable anchors', () => {
+        const firstSection = '## 范围\n\n稳定范围';
+        const insertedSection = '## 规则\n\n后续闭合的业务规则';
+        const thirdSection = '## 风险\n\n稳定风险';
+        const initialArtifact = `# 文档\n\n${firstSection}\n\n${thirdSection}`;
+        const expandedArtifact = `# 文档\n\n${firstSection}\n\n${insertedSection}\n\n${thirdSection}`;
+        useStore.setState({
+            artifactContent: initialArtifact,
+            stageArtifacts: { CLARIFY: initialArtifact },
+        });
+
+        render(<ArtifactPane />);
+
+        expect(markdownRenderCounts.get(firstSection)).toBe(1);
+        expect(markdownRenderCounts.get(thirdSection)).toBe(1);
+
+        act(() => {
+            useStore.getState().setArtifactContent(expandedArtifact);
+        });
+
+        expect(markdownRenderCounts.get(firstSection)).toBe(1);
+        expect(markdownRenderCounts.get(thirdSection)).toBe(1);
+        expect(markdownRenderCounts.get(insertedSection)).toBe(1);
+    });
 });

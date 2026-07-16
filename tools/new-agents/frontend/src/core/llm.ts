@@ -1,6 +1,7 @@
 import { buildSystemPrompt } from './prompts/buildSystemPrompt';
 import { validateStructuredVisualBlocks } from './structuredVisuals';
 import { sanitizeMermaidCode } from './utils/mermaidSanitizer';
+import { parseArtifactMarkdownSections } from './artifactSections';
 import { useStore, WORKFLOWS, WorkflowType, Attachment, Message, type ArtifactSectionPatch } from '../store';
 
 type StreamChunk = {
@@ -71,6 +72,7 @@ type AgentTurnDeltaOutput = {
 
 type AgentRuntimeEvent =
   | { type: 'run_started'; runId?: string | null; warnings?: string[] }
+  | { type: 'agent_retry'; attemptIndex: number }
   | { type: 'agent_delta'; output: AgentTurnDeltaOutput }
   | { type: 'agent_turn'; output: AgentTurnOutput }
   | {
@@ -482,6 +484,17 @@ const parseAgentRuntimeEvent = (payload: string): AgentRuntimeEvent | null => {
         !Array.isArray(event.warnings)
         || event.warnings.some(warning => typeof warning !== 'string')
       )
+    ) {
+      throw new Error('结构化智能体 SSE 事件格式错误');
+    }
+    return event as AgentRuntimeEvent;
+  }
+
+  if (event.type === 'agent_retry') {
+    if (
+      typeof event.attemptIndex !== 'number'
+      || !Number.isInteger(event.attemptIndex)
+      || event.attemptIndex < 2
     ) {
       throw new Error('结构化智能体 SSE 事件格式错误');
     }
@@ -913,6 +926,34 @@ const getStableAgentDeltaChat = (
   return candidate;
 };
 
+const assertMonotonicArtifactReplace = (
+  previousArtifact: string,
+  nextArtifact: string
+): void => {
+  if (!previousArtifact || previousArtifact === nextArtifact) return;
+  const previousSections = parseArtifactMarkdownSections(previousArtifact);
+  const nextSections = parseArtifactMarkdownSections(nextArtifact);
+  if (previousSections.length === 0 || nextSections.length === 0) {
+    if (!nextArtifact.startsWith(previousArtifact)) {
+      throw new Error('结构化智能体 SSE 产出物发生回退');
+    }
+    return;
+  }
+
+  const nextByAnchor = new Map(
+    nextSections.map(section => [section.anchor, section])
+  );
+  for (const previousSection of previousSections) {
+    const nextSection = nextByAnchor.get(previousSection.anchor);
+    if (
+      !nextSection
+      || !nextSection.content.startsWith(previousSection.content)
+    ) {
+      throw new Error('结构化智能体 SSE 产出物发生回退');
+    }
+  }
+};
+
 const mapAgentDeltaToStreamChunks = async function* (
   output: AgentTurnDeltaOutput,
   currentArtifact: string,
@@ -999,6 +1040,7 @@ async function* generateResponseStreamViaAgentRuntime(
   let receivedRenderableArtifactDelta = false;
   let receivedTerminalAgentTurn = false;
   let previousAgentDeltaChat = '';
+  let latestStreamedArtifact = '';
   let hasEmittedMeaningfulAgentChat = false;
   let pendingArtifactDelta: AgentTurnDeltaOutput | null = null;
 
@@ -1035,6 +1077,14 @@ async function* generateResponseStreamViaAgentRuntime(
         action: '',
         hasArtifactUpdate: false,
       };
+      return;
+    }
+    if (event.type === 'agent_retry') {
+      receivedRenderableArtifactDelta = false;
+      previousAgentDeltaChat = '';
+      latestStreamedArtifact = '';
+      hasEmittedMeaningfulAgentChat = false;
+      pendingArtifactDelta = null;
       return;
     }
     if (event.type === 'agent_delta') {
@@ -1088,6 +1138,12 @@ async function* generateResponseStreamViaAgentRuntime(
         ) {
           await waitForRenderCommit();
         }
+        const artifactMarkdown = artifactOutput.artifact_update?.markdown || '';
+        assertMonotonicArtifactReplace(
+          latestStreamedArtifact,
+          artifactMarkdown
+        );
+        latestStreamedArtifact = artifactMarkdown;
         for await (const chunk of mapAgentDeltaToStreamChunks(
           artifactOutput,
           currentArtifact,
@@ -1132,6 +1188,9 @@ async function* generateResponseStreamViaAgentRuntime(
         if (!hadEmittedMeaningfulAgentChat) {
           await waitForRenderCommit();
         }
+        const finalMarkdown = finalOutput.artifact_update.markdown || '';
+        assertMonotonicArtifactReplace(latestStreamedArtifact, finalMarkdown);
+        latestStreamedArtifact = finalMarkdown;
         for await (const chunk of mapAgentTurnToArtifactRevealChunks(
           finalOutput,
           currentArtifact,
@@ -1143,6 +1202,11 @@ async function* generateResponseStreamViaAgentRuntime(
         return;
       }
       if (hasFinalArtifact || finalAction || !shouldEmitFinalChat) {
+        if (hasFinalArtifact) {
+          const finalMarkdown = finalOutput.artifact_update.markdown || '';
+          assertMonotonicArtifactReplace(latestStreamedArtifact, finalMarkdown);
+          latestStreamedArtifact = finalMarkdown;
+        }
         for await (const chunk of mapAgentTurnToFinalChunk(
           finalOutput,
           currentArtifact,

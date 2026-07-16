@@ -51,6 +51,13 @@ class NaturalChatFirstDeltaSequencer:
     def discard(self) -> None:
         self._pending_output = None
 
+    def reset_attempt(self) -> None:
+        """Start a new model attempt with a fresh chat-first boundary."""
+
+        self._has_emitted_meaningful_chat = False
+        self._last_emitted_chat = None
+        self._pending_output = None
+
     @staticmethod
     def _without_chat(
         output: AgentTurnDeltaOutput,

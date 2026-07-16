@@ -31,12 +31,8 @@ class AgentTurnDeltaOutput(BaseModel):
 
     @model_validator(mode="after")
     def validate_patch_requires_replace_update(self) -> "AgentTurnDeltaOutput":
-        if (
-            self.artifact_patch is not None
-            and (
-                self.artifact_update is None
-                or self.artifact_update.type != "replace"
-            )
+        if self.artifact_patch is not None and (
+            self.artifact_update is None or self.artifact_update.type != "replace"
         ):
             raise ValueError("artifact_patch requires replace artifact_update")
         return self
@@ -47,6 +43,23 @@ class AgentTurnDeltaEvent(BaseModel):
 
     type: Literal["agent_delta"] = "agent_delta"
     output: AgentTurnDeltaOutput
+
+
+class AgentRetrySignal(BaseModel):
+    """Internal runtime boundary before a fresh model output attempt."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    attempt_index: int = Field(ge=2, alias="attemptIndex")
+
+
+class AgentRetryEvent(BaseModel):
+    """Tell stream consumers to reset per-attempt ordering baselines."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    type: Literal["agent_retry"] = "agent_retry"
+    attempt_index: int = Field(ge=2, alias="attemptIndex")
 
 
 class ErrorDiagnostic(BaseModel):
@@ -93,6 +106,7 @@ class ErrorEvent(BaseModel):
 
 SseEvent = Union[
     RunStartedEvent,
+    AgentRetryEvent,
     AgentTurnDeltaEvent,
     AgentTurnEvent,
     ErrorEvent,

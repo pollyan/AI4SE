@@ -55,7 +55,6 @@ from test_artifact_data_renderers import (
 )
 from workflow_manifest import format_artifact_data_contract_instruction
 
-
 RUNTIME_MODULE = Path(__file__).resolve().parents[1] / "agent_runtime.py"
 INSTRUCTION_REGISTRY_MODULE = (
     Path(__file__).resolve().parents[1] / "artifact_data_instruction_registry.py"
@@ -74,10 +73,13 @@ def _top_level_assignment_call_module(path: Path, name: str) -> str | None:
 
 def test_runtime_imports_structured_instruction_registry_from_dedicated_module():
     assert INSTRUCTION_REGISTRY_MODULE.is_file()
-    assert _top_level_assignment_call_module(
-        RUNTIME_MODULE,
-        "ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS",
-    ) == "artifact_data_instruction_registry"
+    assert (
+        _top_level_assignment_call_module(
+            RUNTIME_MODULE,
+            "ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS",
+        )
+        == "artifact_data_instruction_registry"
+    )
 
 
 ARTIFACT_DATA_STREAMING_STAGES = sorted(ARTIFACT_DATA_STAGE_FIXTURES)
@@ -106,7 +108,9 @@ def test_artifact_data_structured_output_instruction_injects_visual_protocol():
     assert "Mermaid 只允许由后端确定性渲染器生成" in instruction
     assert "复杂业务图优先使用 ai4se-visual JSON" in instruction
     assert "timeline-map" in instruction
-    assert "后续复杂视觉类型包括 mindmap、sequence-flow、distribution-chart" in instruction
+    assert (
+        "后续复杂视觉类型包括 mindmap、sequence-flow、distribution-chart" in instruction
+    )
 
 
 def _raw_json_chunks_after_artifact_data_members(
@@ -720,10 +724,18 @@ def test_strategy_structured_output_instruction_uses_manifest_artifact_data_cont
         format_artifact_data_contract_instruction("TEST_DESIGN", "STRATEGY")
         in instruction
     )
-    assert "risks[].rpn 由后端根据 severity * occurrence * detection 计算" in instruction
+    assert (
+        "risks[].rpn 由后端根据 severity * occurrence * detection 计算" in instruction
+    )
     assert "quality_goals[].goal_id 必须唯一" in instruction
-    assert "test_points.quality_goal、test_points.risk、test_points.technique" in instruction
-    assert "test_techniques.target、test_techniques.applies_to、test_layers.related" in instruction
+    assert (
+        "test_points.quality_goal、test_points.risk、test_points.technique"
+        in instruction
+    )
+    assert (
+        "test_techniques.target、test_techniques.applies_to、test_layers.related"
+        in instruction
+    )
     assert (
         "不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 risk-board JSON 代码块"
         in instruction
@@ -805,7 +817,10 @@ def test_cases_structured_output_instruction_omits_derived_statistics():
 def test_cases_structured_output_instruction_omits_case_dimension_examples():
     instruction = build_structured_output_instruction("TEST_DESIGN", "CASES")
 
-    assert '"case_id": "TC-001", "title": "...", "priority": "P0", "dimension":' not in instruction
+    assert (
+        '"case_id": "TC-001", "title": "...", "priority": "P0", "dimension":'
+        not in instruction
+    )
     assert (
         "case_groups[].cases[].dimension 缺省时由后端按外层 "
         "case_groups[].dimension 派生"
@@ -816,8 +831,7 @@ def test_cases_structured_output_instruction_uses_manifest_artifact_data_contrac
     instruction = build_structured_output_instruction("TEST_DESIGN", "CASES")
 
     assert (
-        format_artifact_data_contract_instruction("TEST_DESIGN", "CASES")
-        in instruction
+        format_artifact_data_contract_instruction("TEST_DESIGN", "CASES") in instruction
     )
     assert "case_statistics 由后端根据 case_groups 计算，模型不要输出" in instruction
     assert "case_groups[].cases[].case_id 必须唯一" in instruction
@@ -1682,9 +1696,11 @@ def test_parse_agent_turn_output_text_renders_idea_converge_without_ice_score():
     )
 
     assert output.artifact_update.type == "replace"
-    assert [
-        item["ice_score"] for item in output.artifact_data["ice_evaluations"]
-    ] == [10.0, 6.0, 2.0]
+    assert [item["ice_score"] for item in output.artifact_data["ice_evaluations"]] == [
+        10.0,
+        6.0,
+        2.0,
+    ]
     assert "## ICE 评估表" in output.artifact_update.markdown
 
 
@@ -1941,7 +1957,10 @@ def test_idea_define_structured_output_instruction_explains_root_problem_coverag
         "DEFINE",
     )
 
-    assert "problem_landscape.root_problem 必须被至少一个 evidence_items 或 problem_user_fit 条目覆盖" in instruction
+    assert (
+        "problem_landscape.root_problem 必须被至少一个 evidence_items 或 problem_user_fit 条目覆盖"
+        in instruction
+    )
     assert "related_problem" in instruction
     assert "evidence_ids" in instruction
     assert "原样包含 problem_landscape.root_problem" not in instruction
@@ -1993,19 +2012,13 @@ def test_idea_converge_structured_output_instruction_uses_manifest_artifact_data
     assert "decision_matrix.recommended_idea_id" in instruction
     assert "validation_experiments.idea_ids" in instruction
     assert "merge_paths.source_idea_ids" in instruction
-    assert (
-        "ice_score 缺省时由后端按 impact * confidence / effort 派生"
-        in instruction
-    )
+    assert "ice_score 缺省时由后端按 impact * confidence / effort 派生" in instruction
     assert "rank 缺省时由后端按 ICE 得分降序派生" in instruction
     assert (
         "不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 quadrantChart"
         in instruction
     )
-    assert (
-        "后端会负责确定性渲染右侧收敛聚焦产物和 Mermaid quadrantChart"
-        in instruction
-    )
+    assert "后端会负责确定性渲染右侧收敛聚焦产物和 Mermaid quadrantChart" in instruction
 
 
 def test_idea_converge_structured_output_instruction_omits_ice_score():
@@ -2015,10 +2028,7 @@ def test_idea_converge_structured_output_instruction_omits_ice_score():
     )
 
     assert '"ice_score":' not in instruction
-    assert (
-        "ice_score 缺省时由后端按 impact * confidence / effort 派生"
-        in instruction
-    )
+    assert "ice_score 缺省时由后端按 impact * confidence / effort 派生" in instruction
 
 
 def test_idea_converge_structured_output_instruction_omits_rank():
@@ -2877,9 +2887,9 @@ def test_runtime_raw_json_stream_turn_renders_paragraph_level_cases_artifact_dat
 
     assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 测试用例集")
-    assert "## 1. 用例统计" in partial_markdowns[0]
     assert "## 2. 用例设计依据" in partial_markdowns[0]
-    assert "## 3. 按维度分组的用例清单" in partial_markdowns[0]
+    assert "## 1. 用例统计" in partial_markdowns[-1]
+    assert "## 3. 按维度分组的用例清单" in partial_markdowns[-1]
     assert "## 4. 测试数据与环境" in partial_markdowns[-1]
     assert "## 5. 自动化候选" in partial_markdowns[-1]
     assert partial_patches == []
@@ -2972,8 +2982,9 @@ def test_runtime_raw_json_stream_turn_renders_cases_after_case_groups_without_mo
 
     assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 测试用例集")
-    assert "## 1. 用例统计" in partial_markdowns[0]
-    assert "## 3. 按维度分组的用例清单" in partial_markdowns[0]
+    assert "## 2. 用例设计依据" in partial_markdowns[0]
+    assert "## 1. 用例统计" in partial_markdowns[-1]
+    assert "## 3. 按维度分组的用例清单" in partial_markdowns[-1]
     assert isinstance(outputs[-1], AgentTurnOutput)
     assert outputs[-1].artifact_data["case_statistics"] == {
         "total": 2,
@@ -3073,7 +3084,8 @@ def test_runtime_raw_json_stream_turn_renders_delivery_artifact_data_before_fina
 
     assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 测试设计文档")
-    assert "## 1. 文档信息" in partial_markdowns[0]
+    assert "## 2. 执行摘要" in partial_markdowns[0]
+    assert "## 1. 文档信息" in partial_markdowns[-1]
     assert "## 2. 执行摘要" in partial_markdowns[-1]
     assert "## 3. 需求分析摘要" in partial_markdowns[-1]
     assert "## 4. 测试策略摘要" in partial_markdowns[-1]
@@ -3184,10 +3196,12 @@ def test_runtime_raw_json_stream_turn_renders_req_review_artifact_data_before_fi
         and output.artifact_patch is not None
     ]
 
-    assert len(partial_markdowns) >= 1
+    assert len(partial_markdowns) >= 3
     assert partial_markdowns[0].startswith("# 需求评审问题清单")
     assert "## 评审范围与不评审范围" in partial_markdowns[0]
-    assert "## 需求质量总览" in partial_markdowns[-1]
+    assert "## 需求质量总览" not in partial_markdowns[0]
+    assert "## 需求质量总览" in partial_markdowns[1]
+    assert "## 问题统计" not in partial_markdowns[1]
     assert "## 问题统计" in partial_markdowns[-1]
     assert "## 按维度问题清单" in partial_markdowns[-1]
     assert partial_patches == []
@@ -3296,6 +3310,8 @@ def test_runtime_raw_json_stream_turn_renders_req_review_report_artifact_data_be
     assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 需求评审报告")
     assert "## 评审结论" in partial_markdowns[0]
+    assert "## 评审信息" in partial_markdowns[0]
+    assert "## 评审结论" in partial_markdowns[-1]
     assert "## 评审信息" in partial_markdowns[-1]
     assert "## 问题统计" in partial_markdowns[-1]
     assert "## 优先级看板" in partial_markdowns[-1]
@@ -3550,9 +3566,10 @@ def test_runtime_raw_json_stream_turn_renders_value_journey_artifact_data_before
 
     assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 用户旅程分析")
-    assert "## 用户旅程地图" in partial_markdowns[0]
-    assert "journey\n    title 核心用户旅程" in partial_markdowns[0]
-    assert '"type": "journey-map"' in partial_markdowns[0]
+    assert "## 旅程摘要" in partial_markdowns[0]
+    assert "## 用户旅程地图" in partial_markdowns[-1]
+    assert "journey\n    title 核心用户旅程" in partial_markdowns[-1]
+    assert '"type": "journey-map"' in partial_markdowns[-1]
     assert "## 痛点优先级排序" in partial_markdowns[-1]
     assert "## 机会评分" in partial_markdowns[-1]
 
@@ -3981,7 +3998,9 @@ def test_runtime_raw_json_stream_turn_renders_incident_improvement_artifact_data
 
     assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 故障复盘报告")
-    assert "## 报告信息" in partial_markdowns[0]
+    assert "## 报告信息" not in partial_markdowns[0]
+    assert "## 第一部分：事件还原" in partial_markdowns[0]
+    assert "## 报告信息" in partial_markdowns[-1]
     assert "## 第一部分：事件还原" in partial_markdowns[-1]
     assert "## 第二部分：根因分析" in partial_markdowns[-1]
     assert "## 第三部分：改进措施" in partial_markdowns[-1]
@@ -4328,8 +4347,11 @@ def test_runtime_raw_json_stream_turn_renders_idea_converge_artifact_data_before
     assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 收敛聚焦")
     assert "## 决策矩阵" in partial_markdowns[0]
-    assert "quadrantChart" in partial_markdowns[0]
     assert "## ICE 评估表" in partial_markdowns[0]
+    assert "## 资源约束" not in partial_markdowns[0]
+    assert "## 决策矩阵" in partial_markdowns[-1]
+    assert "quadrantChart" in partial_markdowns[-1]
+    assert "## ICE 评估表" in partial_markdowns[-1]
     assert "## 资源约束" in partial_markdowns[-1]
     assert "## 验证实验" in partial_markdowns[-1]
 
@@ -4582,9 +4604,9 @@ def test_runtime_raw_json_stream_turn_renders_all_story_breakdown_stages_from_ar
         assert outputs[-1].stage_action is None
     else:
         assert outputs[-1].stage_action is not None
-        assert outputs[-1].stage_action.target_stage_id == stage_action[
-            "target_stage_id"
-        ]
+        assert (
+            outputs[-1].stage_action.target_stage_id == stage_action["target_stage_id"]
+        )
     assert calls[0]["response_format"] == {"type": "json_object"}
     assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
     assert "artifact_data" in calls[0]["messages"][0]["content"]
@@ -4634,6 +4656,46 @@ def test_raw_streaming_runtime_records_stream_usage(monkeypatch):
     assert runtime.last_token_usage == 123
 
 
+def test_raw_streaming_runtime_accumulates_usage_across_retry_attempts(monkeypatch):
+    final_json = (
+        '{"chat":"正在梳理需求。",'
+        '"artifact_update":{"type":"replace","markdown":"'
+        f"{VALID_CLARIFY_ARTIFACT_JSON}" + '"},'
+        '"stage_action":null,"warnings":[]}'
+    )
+    attempts = iter(((40, "{}"), (60, final_json)))
+
+    def fake_stream_chat_completion_content(**kwargs):
+        token_count, content = next(attempts)
+        kwargs["on_usage"](token_count)
+        yield content
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            system_prompt="system prompt",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "用户需求",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    )
+
+    assert outputs[-1].chat == "正在梳理需求。"
+    assert runtime.last_token_usage == 100
+
+
 def test_runtime_raw_json_stream_turn_fails_final_json_truncation_after_partial_delta(
     monkeypatch,
 ):
@@ -4681,9 +4743,7 @@ def test_runtime_raw_json_stream_turn_fails_final_json_truncation_after_partial_
             emitted_deltas.append(output)
 
     artifact_deltas = [
-        output
-        for output in emitted_deltas
-        if output.artifact_update is not None
+        output for output in emitted_deltas if output.artifact_update is not None
     ]
     assert artifact_deltas
     first_markdown = artifact_deltas[0].artifact_update.markdown
@@ -4749,8 +4809,14 @@ def test_runtime_raw_json_stream_turn_streams_artifact_progress_for_artifact_dat
     progress_markdown = progress_deltas[0].artifact_update.markdown
     assert progress_markdown.startswith("# 需求分析文档")
     assert "## 文档信息" in progress_markdown
-    assert "| F-001 | 用户需要登录功能 | 用户描述 | 用户陈述 | 已确认 |" in progress_markdown
-    assert "| 测试范围 | 登录页面和登录 API | 验证登录主链路 | 已确认 |" in progress_markdown
+    assert (
+        "| F-001 | 用户需要登录功能 | 用户描述 | 用户陈述 | 已确认 |"
+        in progress_markdown
+    )
+    assert (
+        "| 测试范围 | 登录页面和登录 API | 验证登录主链路 | 已确认 |"
+        in progress_markdown
+    )
     assert "```mermaid" in progress_markdown
     assert "# 产出物生成中" not in progress_markdown
     assert outputs[-1].artifact_update.markdown.startswith("# 需求分析文档")
@@ -4780,8 +4846,14 @@ def test_runtime_raw_json_stream_turn_streams_partial_artifact_data_in_final_for
     assert progress_markdown is not None
     assert progress_markdown.startswith("# 需求分析文档")
     assert "## 文档信息" in progress_markdown
-    assert "| F-001 | 用户需要登录功能 | 用户描述 | 用户陈述 | 已确认 |" in progress_markdown
-    assert "| 测试范围 | 登录页面和登录 API | 验证登录主链路 | 已确认 |" in progress_markdown
+    assert (
+        "| F-001 | 用户需要登录功能 | 用户描述 | 用户陈述 | 已确认 |"
+        in progress_markdown
+    )
+    assert (
+        "| 测试范围 | 登录页面和登录 API | 验证登录主链路 | 已确认 |"
+        in progress_markdown
+    )
     assert "## 3. 业务规则与数据状态" not in progress_markdown
     assert "# 产出物生成中" not in progress_markdown
     assert "已接收字符数" not in progress_markdown
@@ -4834,6 +4906,79 @@ def test_runtime_raw_json_stream_turn_retries_contract_failure_with_feedback(
     assert "artifact update is required" in calls[1]["messages"][1]["content"]
     assert outputs[-1].chat == "已更新右侧需求分析文档。"
     assert outputs[-1].artifact_update.markdown == VALID_CLARIFY_ARTIFACT
+
+
+def test_runtime_marks_retry_boundary_after_visible_partial_before_success(
+    monkeypatch,
+):
+    invalid_artifact_data = copy.deepcopy(VALID_REQ_REVIEW_ARTIFACT_DATA)
+    invalid_artifact_data["issue_statistics"]["p0_count"] = 99
+    attempts = [
+        json.dumps(
+            {
+                "chat": "我正在逐段形成需求评审结论，请查看右侧当前进度。",
+                "artifact_data": invalid_artifact_data,
+                "stage_action": None,
+                "warnings": [],
+            },
+            ensure_ascii=False,
+        ),
+        json.dumps(
+            {
+                "chat": "我已修正需求评审统计并完成当前阶段产出物。",
+                "artifact_data": VALID_REQ_REVIEW_ARTIFACT_DATA,
+                "stage_action": None,
+                "warnings": [],
+            },
+            ensure_ascii=False,
+        ),
+    ]
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield attempts[len(calls) - 1]
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        fake_stream_chat_completion_content,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            system_prompt="system prompt",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "请评审会员权益需求",
+            workflow_id="REQ_REVIEW",
+            current_stage_id="REVIEW",
+        )
+    )
+
+    retry_indexes = [
+        index
+        for index, output in enumerate(outputs)
+        if getattr(output, "attempt_index", None) == 2
+    ]
+    artifact_delta_indexes = [
+        index
+        for index, output in enumerate(outputs)
+        if isinstance(output, AgentTurnDeltaOutput)
+        and output.artifact_update is not None
+        and output.artifact_update.type == "replace"
+    ]
+
+    assert len(calls) == 2
+    assert retry_indexes
+    assert artifact_delta_indexes[0] < retry_indexes[0] < artifact_delta_indexes[-1]
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert outputs[-1].artifact_data == VALID_REQ_REVIEW_ARTIFACT_DATA
 
 
 def test_runtime_raw_json_stream_turn_retries_schema_shape_failure_with_feedback(
@@ -5033,5 +5178,7 @@ def test_deepseek_v4_resolves_json_object_only_capability():
 
     assert capability.tier == "json_object_only"
     assert capability.response_format == {"type": "json_object"}
+
+
 import ast
 from pathlib import Path

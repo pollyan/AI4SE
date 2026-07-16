@@ -16,6 +16,10 @@
       }
     },
     {
+      "type": "agent_retry",
+      "attemptIndex": 2
+    },
+    {
       "type": "agent_turn",
       "output": {
         "chat": "已更新右侧产出物。",

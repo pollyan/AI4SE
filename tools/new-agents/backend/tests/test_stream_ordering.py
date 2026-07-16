@@ -20,9 +20,7 @@ def test_sequencer_buffers_artifact_until_natural_chat_without_synthesizing_chat
     )
 
     assert outputs == [
-        AgentTurnDeltaOutput(
-            chat="我已核对需求边界，接下来请查看右侧分析。"
-        ),
+        AgentTurnDeltaOutput(chat="我已核对需求边界，接下来请查看右侧分析。"),
         _artifact("# 需求分析\n\n第一段"),
     ]
     assert sequencer.has_emitted_meaningful_chat is True
@@ -33,9 +31,9 @@ def test_sequencer_does_not_unlock_for_progress_placeholder_or_its_prefix():
     sequencer.push(_artifact("# 需求分析\n\n第一段"))
 
     assert sequencer.push(AgentTurnDeltaOutput(chat="正在生成")) == []
-    assert sequencer.push(
-        AgentTurnDeltaOutput(chat="我正在整理当前输入并生成右侧")
-    ) == []
+    assert (
+        sequencer.push(AgentTurnDeltaOutput(chat="我正在整理当前输入并生成右侧")) == []
+    )
     assert sequencer.has_emitted_meaningful_chat is False
 
 
@@ -51,9 +49,7 @@ def test_sequencer_does_not_unlock_for_incomplete_natural_chat_fragment():
     )
 
     assert outputs == [
-        AgentTurnDeltaOutput(
-            chat="我已核对需求边界，右侧将展示本轮分析。"
-        ),
+        AgentTurnDeltaOutput(chat="我已核对需求边界，右侧将展示本轮分析。"),
         _artifact("# 需求分析\n\n第一段"),
     ]
 
@@ -107,9 +103,7 @@ def test_sequencer_keeps_only_latest_buffered_artifact_state():
 def test_sequencer_allows_artifact_updates_after_natural_chat():
     sequencer = NaturalChatFirstDeltaSequencer()
     sequencer.push(
-        AgentTurnDeltaOutput(
-            chat="我先说明本轮关键判断和需要复核的需求边界。"
-        )
+        AgentTurnDeltaOutput(chat="我先说明本轮关键判断和需要复核的需求边界。")
     )
 
     assert sequencer.push(_artifact("# 需求分析\n\n第一段")) == [
@@ -123,6 +117,22 @@ def test_sequencer_discard_drops_artifact_buffered_before_error():
 
     sequencer.discard()
 
-    assert sequencer.push(
+    assert sequencer.push(AgentTurnDeltaOutput(chat="我重新开始核对当前输入。")) == [
         AgentTurnDeltaOutput(chat="我重新开始核对当前输入。")
-    ) == [AgentTurnDeltaOutput(chat="我重新开始核对当前输入。")]
+    ]
+
+
+def test_sequencer_retry_reset_requires_fresh_chat_before_new_artifact():
+    sequencer = NaturalChatFirstDeltaSequencer()
+    sequencer.push(AgentTurnDeltaOutput(chat="我先说明第一次尝试的判断。"))
+    assert sequencer.push(_artifact("# 第一次尝试")) == [_artifact("# 第一次尝试")]
+
+    sequencer.reset_attempt()
+
+    assert sequencer.push(_artifact("# 第二次尝试")) == []
+    assert sequencer.push(
+        AgentTurnDeltaOutput(chat="我已修正数据并重新形成当前阶段结论。")
+    ) == [
+        AgentTurnDeltaOutput(chat="我已修正数据并重新形成当前阶段结论。"),
+        _artifact("# 第二次尝试"),
+    ]

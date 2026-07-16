@@ -14,13 +14,14 @@ from agent_contracts import (
 from artifact_data_renderers import (
     get_artifact_data_renderer_stage_keys,
     render_agent_turn_from_artifact_data,
+    render_complete_artifact_data,
     render_partial_artifact_data_markdown,
 )
 from artifact_data_instruction_registry import (
     ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS,
 )
 from llm_client import LlmClientError, stream_chat_completion_content
-from sse_schemas import AgentTurnDeltaOutput
+from sse_schemas import AgentRetrySignal, AgentTurnDeltaOutput
 from workflow_manifest import format_visual_protocol_instruction
 
 try:
@@ -124,13 +125,7 @@ def build_structured_output_instruction(
     instruction = ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS.get(stage_key)
     if instruction is None:
         return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
-    return (
-        instruction.rstrip()
-        + "\n\n"
-        + format_visual_protocol_instruction()
-        + "\n"
-    )
-
+    return instruction.rstrip() + "\n\n" + format_visual_protocol_instruction() + "\n"
 
 
 def build_raw_json_retry_prompt(
@@ -241,7 +236,7 @@ class PydanticAgentRuntime:
         *,
         workflow_id: str,
         current_stage_id: str,
-    ) -> Iterator[AgentTurnDeltaOutput | AgentTurnOutput]:
+    ) -> Iterator[AgentRetrySignal | AgentTurnDeltaOutput | AgentTurnOutput]:
         if self.raw_streaming_config is not None:
             try:
                 yield from self._stream_raw_json_turn(
@@ -309,7 +304,7 @@ class PydanticAgentRuntime:
         *,
         workflow_id: str,
         current_stage_id: str,
-    ) -> Iterator[AgentTurnDeltaOutput | AgentTurnOutput]:
+    ) -> Iterator[AgentRetrySignal | AgentTurnDeltaOutput | AgentTurnOutput]:
         assert self.raw_streaming_config is not None
         config = self.raw_streaming_config
         self.last_token_usage = None
@@ -323,10 +318,17 @@ class PydanticAgentRuntime:
 
         attempt_prompt = prompt
         for attempt_index in range(RAW_JSON_STREAMING_MAX_ATTEMPTS):
+            if attempt_index > 0:
+                yield AgentRetrySignal(attemptIndex=attempt_index + 1)
             accumulated = ""
             latest_chat = ""
             latest_markdown = ""
             emitted_any_delta = False
+            attempt_token_usage = 0
+
+            def record_attempt_usage(total_tokens: int) -> None:
+                nonlocal attempt_token_usage
+                attempt_token_usage = total_tokens
 
             for text_chunk in stream_chat_completion_content(
                 api_key=config.api_key,
@@ -348,11 +350,7 @@ class PydanticAgentRuntime:
                 temperature=0,
                 response_format=structured_output_capability.response_format,
                 extra_body=extra_body,
-                on_usage=lambda total_tokens: setattr(
-                    self,
-                    "last_token_usage",
-                    total_tokens,
-                ),
+                on_usage=record_attempt_usage,
             ):
                 accumulated += text_chunk
                 delta = build_partial_agent_delta(
@@ -379,6 +377,11 @@ class PydanticAgentRuntime:
                 latest_markdown = next_markdown
                 emitted_any_delta = True
                 yield delta
+
+            if attempt_token_usage:
+                self.last_token_usage = (
+                    self.last_token_usage or 0
+                ) + attempt_token_usage
 
             try:
                 final_output = parse_agent_turn_output_text(
@@ -665,27 +668,14 @@ def render_complete_streamed_artifact_data_markdown(
     if artifact_data is None:
         return None
     try:
-        rendered = render_agent_turn_from_artifact_data(
-            {
-                "chat": (
-                    extract_json_string_prefix(text, "chat")
-                    or "正在生成右侧产出物。"
-                ),
-                "artifact_data": artifact_data,
-                "stage_action": None,
-                "warnings": [],
-            },
+        rendered = render_complete_artifact_data(
+            artifact_data,
             workflow_id=workflow_id,
             current_stage_id=current_stage_id,
         )
     except (ValidationError, ValueError):
         return None
-    if rendered is None:
-        return None
-    artifact_update = rendered.artifact_update
-    if artifact_update.type != "replace" or not artifact_update.markdown:
-        return None
-    return artifact_update.markdown
+    return rendered.markdown
 
 
 def render_partial_streamed_artifact_data_markdown(

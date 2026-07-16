@@ -30,6 +30,8 @@ from request_schemas import (
 from run_persistence import TurnPersistenceConflictError, TurnPersistenceError
 from stage_readiness import apply_stage_readiness_gate
 from sse_schemas import (
+    AgentRetryEvent,
+    AgentRetrySignal,
     AgentTurnDeltaEvent,
     AgentTurnDeltaOutput,
     AgentTurnEvent,
@@ -39,7 +41,6 @@ from sse_schemas import (
     SseEvent,
 )
 from stream_ordering import NaturalChatFirstDeltaSequencer
-
 
 SCHEMA_RETRY_EXHAUSTED_MESSAGE = (
     "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
@@ -55,9 +56,7 @@ VISUAL_VALIDATION_PUBLIC_REASON = (
     "产出物中的可视化内容未通过校验，右侧产出物已保持不变。"
 )
 REQUEST_VALIDATION_PUBLIC_REASON = "请求参数未通过校验，本轮生成未开始。"
-RUNTIME_UNAVAILABLE_PUBLIC_REASON = (
-    "智能体运行时依赖不可用，本轮生成未开始。"
-)
+RUNTIME_UNAVAILABLE_PUBLIC_REASON = "智能体运行时依赖不可用，本轮生成未开始。"
 PROVIDER_AUTH_PUBLIC_REASON = (
     "模型供应商鉴权失败，请检查 API Key、Base URL、模型名称和供应商权限。"
 )
@@ -73,9 +72,7 @@ PROVIDER_ERROR_PUBLIC_REASON = (
 PERSISTENCE_PUBLIC_REASON = (
     "本轮结果未能安全保存，右侧产出物和历史版本均未作为成功结果提交。"
 )
-REQUEST_IN_PROGRESS_PUBLIC_REASON = (
-    "相同请求仍在运行中，请等待其完成或恢复同一请求。"
-)
+REQUEST_IN_PROGRESS_PUBLIC_REASON = "相同请求仍在运行中，请等待其完成或恢复同一请求。"
 PERSISTENCE_CONFLICT_PUBLIC_REASON = (
     "另一项并发更新已占用当前产出物版本，请重新发起本轮生成。"
 )
@@ -87,8 +84,7 @@ class StreamPersistence(Protocol):
         agent_request: AgentRunStreamRequest,
         *,
         model_name: str,
-    ) -> str:
-        ...
+    ) -> str: ...
 
     def claim_turn_request(
         self,
@@ -96,8 +92,7 @@ class StreamPersistence(Protocol):
         agent_request,
         *,
         model_name: str,
-    ) -> object:
-        ...
+    ) -> object: ...
 
     def fail_turn_request(
         self,
@@ -105,15 +100,13 @@ class StreamPersistence(Protocol):
         *,
         request_id: str,
         terminal_event: dict,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     def build_runtime_context(
         self,
         run_id: str,
         current_prompt: str,
-    ) -> tuple[str, list[str]]:
-        ...
+    ) -> tuple[str, list[str]]: ...
 
     def complete_agent_run_turn(
         self,
@@ -126,11 +119,9 @@ class StreamPersistence(Protocol):
         request_id: str | None,
         terminal_event: dict | None,
         metric: dict,
-    ) -> None:
-        ...
+    ) -> None: ...
 
-    def record_turn_metric(self, **kwargs) -> None:
-        ...
+    def record_turn_metric(self, **kwargs) -> None: ...
 
 
 def build_runtime_system_prompt(agent_request: AgentRunStreamRequest) -> str:
@@ -419,6 +410,7 @@ def stream_agent_run_events(
     run_id = None
     input_chars = len(agent_request.prompt)
     output_chars = 0
+    observed_contract_retry_count = 0
     provider = infer_provider_name(base_url)
     sequencer = NaturalChatFirstDeltaSequencer()
 
@@ -445,7 +437,10 @@ def stream_agent_run_events(
             duration_ms=duration_ms(),
             input_chars=input_chars,
             output_chars=output_chars,
-            contract_retry_count=contract_retry_count,
+            contract_retry_count=max(
+                observed_contract_retry_count,
+                contract_retry_count,
+            ),
             actual_token_count=actual_token_count,
             diagnostic=diagnostic,
         )
@@ -523,9 +518,7 @@ def stream_agent_run_events(
                 )
                 return
             if request_claim.state == "failed":
-                terminal_event = ErrorEvent.model_validate(
-                    request_claim.terminal_event
-                )
+                terminal_event = ErrorEvent.model_validate(request_claim.terminal_event)
                 yield RunStartedEvent(
                     run_id=run_id,
                     warnings=context_warnings or None,
@@ -548,17 +541,21 @@ def stream_agent_run_events(
             workflow_id=agent_request.workflow_id,
             current_stage_id=agent_request.stage_id,
         ):
-            if isinstance(output, AgentTurnOutput):
+            if isinstance(output, AgentRetrySignal):
+                observed_contract_retry_count = max(
+                    observed_contract_retry_count,
+                    output.attempt_index - 1,
+                )
+                sequencer.reset_attempt()
+                yield AgentRetryEvent(attemptIndex=output.attempt_index)
+            elif isinstance(output, AgentTurnOutput):
                 output = apply_stage_readiness_gate(
                     output,
                     workflow_id=agent_request.workflow_id,
                     current_stage_id=agent_request.stage_id,
                 )
                 artifact_update = output.artifact_update
-                if (
-                    artifact_update.type == "replace"
-                    and artifact_update.markdown
-                ):
+                if artifact_update.type == "replace" and artifact_update.markdown:
                     validate_artifact_visual_blocks(artifact_update.markdown)
                 delta_output = AgentTurnDeltaOutput.model_validate(
                     output.model_dump(mode="json")
@@ -613,7 +610,7 @@ def stream_agent_run_events(
                             and runtime_token_usage >= 0
                             else _estimated_tokens(input_chars, output_chars)
                         ),
-                        "contract_retry_count": 0,
+                        "contract_retry_count": observed_contract_retry_count,
                     },
                 )
             yield AgentTurnEvent(output=final_output)
@@ -624,11 +621,13 @@ def stream_agent_run_events(
             workflow_id=agent_request.workflow_id,
             stage_id=agent_request.stage_id,
         )
-        yield persist_terminal_error(ErrorEvent(
-            code="PERSISTENCE_CONFLICT",
-            message="本轮结果与并发更新冲突，请重新发起生成。",
-            diagnostic=diagnostic,
-        ))
+        yield persist_terminal_error(
+            ErrorEvent(
+                code="PERSISTENCE_CONFLICT",
+                message="本轮结果与并发更新冲突，请重新发起生成。",
+                diagnostic=diagnostic,
+            )
+        )
     except TurnPersistenceError as e:
         diagnostic = _build_error_diagnostic(
             code="PERSISTENCE_FAILED",
@@ -636,11 +635,13 @@ def stream_agent_run_events(
             workflow_id=agent_request.workflow_id,
             stage_id=agent_request.stage_id,
         )
-        yield persist_terminal_error(ErrorEvent(
-            code="PERSISTENCE_FAILED",
-            message="本轮结果未能安全保存，请重试。",
-            diagnostic=diagnostic,
-        ))
+        yield persist_terminal_error(
+            ErrorEvent(
+                code="PERSISTENCE_FAILED",
+                message="本轮结果未能安全保存，请重试。",
+                diagnostic=diagnostic,
+            )
+        )
     except ArtifactVisualValidationError as e:
         diagnostic = _build_error_diagnostic(
             code="VISUAL_VALIDATION_FAILED",
@@ -649,11 +650,13 @@ def stream_agent_run_events(
             stage_id=agent_request.stage_id,
         )
         record_metric("error", "VISUAL_VALIDATION_FAILED", diagnostic=diagnostic)
-        yield persist_terminal_error(ErrorEvent(
-            code="VISUAL_VALIDATION_FAILED",
-            message=str(e),
-            diagnostic=diagnostic,
-        ))
+        yield persist_terminal_error(
+            ErrorEvent(
+                code="VISUAL_VALIDATION_FAILED",
+                message=str(e),
+                diagnostic=diagnostic,
+            )
+        )
     except ContractValidationError as e:
         diagnostic = _build_error_diagnostic(
             code="CONTRACT_VALIDATION_FAILED",
@@ -662,11 +665,13 @@ def stream_agent_run_events(
             stage_id=agent_request.stage_id,
         )
         record_metric("error", "CONTRACT_VALIDATION_FAILED", diagnostic=diagnostic)
-        yield persist_terminal_error(ErrorEvent(
-            code="CONTRACT_VALIDATION_FAILED",
-            message=str(e),
-            diagnostic=diagnostic,
-        ))
+        yield persist_terminal_error(
+            ErrorEvent(
+                code="CONTRACT_VALIDATION_FAILED",
+                message=str(e),
+                diagnostic=diagnostic,
+            )
+        )
     except ValidationError as e:
         diagnostic = _build_error_diagnostic(
             code="SCHEMA_VALIDATION_FAILED",
@@ -680,11 +685,13 @@ def stream_agent_run_events(
             contract_retry_count=extract_contract_retry_count(e),
             diagnostic=diagnostic,
         )
-        yield persist_terminal_error(ErrorEvent(
-            code="SCHEMA_VALIDATION_FAILED",
-            message=format_schema_validation_error_message(e),
-            diagnostic=diagnostic,
-        ))
+        yield persist_terminal_error(
+            ErrorEvent(
+                code="SCHEMA_VALIDATION_FAILED",
+                message=format_schema_validation_error_message(e),
+                diagnostic=diagnostic,
+            )
+        )
     except AgentRuntimeSchemaError as e:
         diagnostic = _build_error_diagnostic(
             code="SCHEMA_VALIDATION_FAILED",
@@ -698,11 +705,13 @@ def stream_agent_run_events(
             contract_retry_count=extract_contract_retry_count(e),
             diagnostic=diagnostic,
         )
-        yield persist_terminal_error(ErrorEvent(
-            code="SCHEMA_VALIDATION_FAILED",
-            message=format_schema_validation_error_message(e),
-            diagnostic=diagnostic,
-        ))
+        yield persist_terminal_error(
+            ErrorEvent(
+                code="SCHEMA_VALIDATION_FAILED",
+                message=format_schema_validation_error_message(e),
+                diagnostic=diagnostic,
+            )
+        )
     except PYDANTIC_AI_SCHEMA_ERRORS as e:
         diagnostic = _build_error_diagnostic(
             code="SCHEMA_VALIDATION_FAILED",
@@ -716,11 +725,13 @@ def stream_agent_run_events(
             contract_retry_count=extract_contract_retry_count(e),
             diagnostic=diagnostic,
         )
-        yield persist_terminal_error(ErrorEvent(
-            code="SCHEMA_VALIDATION_FAILED",
-            message=format_schema_validation_error_message(e),
-            diagnostic=diagnostic,
-        ))
+        yield persist_terminal_error(
+            ErrorEvent(
+                code="SCHEMA_VALIDATION_FAILED",
+                message=format_schema_validation_error_message(e),
+                diagnostic=diagnostic,
+            )
+        )
     except RequestValidationError as e:
         diagnostic = _build_error_diagnostic(
             code="REQUEST_VALIDATION_FAILED",
@@ -729,11 +740,13 @@ def stream_agent_run_events(
             stage_id=agent_request.stage_id,
         )
         record_metric("error", "REQUEST_VALIDATION_FAILED", diagnostic=diagnostic)
-        yield persist_terminal_error(ErrorEvent(
-            code="REQUEST_VALIDATION_FAILED",
-            message=str(e),
-            diagnostic=diagnostic,
-        ))
+        yield persist_terminal_error(
+            ErrorEvent(
+                code="REQUEST_VALIDATION_FAILED",
+                message=str(e),
+                diagnostic=diagnostic,
+            )
+        )
     except ValueError as e:
         diagnostic = _build_error_diagnostic(
             code="REQUEST_VALIDATION_FAILED",
@@ -742,11 +755,13 @@ def stream_agent_run_events(
             stage_id=agent_request.stage_id,
         )
         record_metric("error", "REQUEST_VALIDATION_FAILED", diagnostic=diagnostic)
-        yield persist_terminal_error(ErrorEvent(
-            code="REQUEST_VALIDATION_FAILED",
-            message=str(e),
-            diagnostic=diagnostic,
-        ))
+        yield persist_terminal_error(
+            ErrorEvent(
+                code="REQUEST_VALIDATION_FAILED",
+                message=str(e),
+                diagnostic=diagnostic,
+            )
+        )
     except AgentRuntimeDependencyError as e:
         diagnostic = _build_error_diagnostic(
             code="AGENT_RUNTIME_UNAVAILABLE",
@@ -755,11 +770,13 @@ def stream_agent_run_events(
             stage_id=agent_request.stage_id,
         )
         record_metric("error", "AGENT_RUNTIME_UNAVAILABLE", diagnostic=diagnostic)
-        yield persist_terminal_error(ErrorEvent(
-            code="AGENT_RUNTIME_UNAVAILABLE",
-            message=str(e),
-            diagnostic=diagnostic,
-        ))
+        yield persist_terminal_error(
+            ErrorEvent(
+                code="AGENT_RUNTIME_UNAVAILABLE",
+                message=str(e),
+                diagnostic=diagnostic,
+            )
+        )
     except AgentRuntimeModelError as e:
         diagnostic = _build_error_diagnostic(
             code="LLM_ERROR",
@@ -768,11 +785,13 @@ def stream_agent_run_events(
             stage_id=agent_request.stage_id,
         )
         record_metric("error", "LLM_ERROR", diagnostic=diagnostic)
-        yield persist_terminal_error(ErrorEvent(
-            code="LLM_ERROR",
-            message=str(e),
-            diagnostic=diagnostic,
-        ))
+        yield persist_terminal_error(
+            ErrorEvent(
+                code="LLM_ERROR",
+                message=str(e),
+                diagnostic=diagnostic,
+            )
+        )
     except (AuthenticationError, RateLimitError, APIError) as e:
         diagnostic = _build_error_diagnostic(
             code="LLM_ERROR",
@@ -781,8 +800,10 @@ def stream_agent_run_events(
             stage_id=agent_request.stage_id,
         )
         record_metric("error", "LLM_ERROR", diagnostic=diagnostic)
-        yield persist_terminal_error(ErrorEvent(
-            code="LLM_ERROR",
-            message=str(e),
-            diagnostic=diagnostic,
-        ))
+        yield persist_terminal_error(
+            ErrorEvent(
+                code="LLM_ERROR",
+                message=str(e),
+                diagnostic=diagnostic,
+            )
+        )
