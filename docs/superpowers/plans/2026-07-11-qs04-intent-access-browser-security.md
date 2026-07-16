@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- 厚切片身份、纳入/排除边界、七项门禁和单一交付以 [设计中的“厚切片身份基线”](../specs/2026-07-11-qs04-intent-access-browser-security-design.md#厚切片身份基线) 为唯一事实；顺序以 [QS 厚切片序列](../../todos/2026-07-10-ai-coding-test-quality-improvement.md#厚切片序列) 为唯一事实。
+- 厚切片身份、纳入/排除边界、七项门禁和单一交付以 [设计中的“厚切片身份基线”](../specs/2026-07-11-qs04-intent-access-browser-security-design.md#厚切片身份基线) 为历史执行事实；当时的顺序见 [已归档 QS 厚切片序列](../../todos/archive/2026-07-10-ai-coding-test-quality-improvement.md#厚切片序列)。2026-07-16 用户已取消后续旧序列，不能据此恢复实施。
 - 本文所有 Task 都是“内部实现步骤（非切片）”；不得改名为 QS-04A/QS-04B、单独验收、计算厚切片进度、commit、push 或交付。
 - 用户要求直接在 `master` 单工作区完成；不创建 branch/worktree。每个内部步骤保留 RED/GREEN 证据，但只在全部 QS-04 门禁通过后形成一个聚焦 commit。
 - production 唯一 browser Origin 配置名是单值 `INTENT_PUBLIC_ORIGIN`；不新增同义配置镜像。

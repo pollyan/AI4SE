@@ -12,7 +12,7 @@
 
 **切片身份基线：** [QS-03 中文 spec 的“厚切片身份基线”](../specs/2026-07-11-qs03-intent-durable-execution-design.md#厚切片身份基线)。
 
-**顺序基线：** [AI Coding 测试质量改进待办的厚切片序列](../../todos/2026-07-10-ai-coding-test-quality-improvement.md#厚切片序列)。
+**历史顺序基线：** [已归档的 AI Coding 测试质量改进待办](../../todos/archive/2026-07-10-ai-coding-test-quality-improvement.md#厚切片序列)。该旧序列已于 2026-07-16 由用户取消，不再是当前执行入口。
 
 ## Global Constraints
 

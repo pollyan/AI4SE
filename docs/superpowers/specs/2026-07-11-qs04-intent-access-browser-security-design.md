@@ -4,7 +4,7 @@
 
 - **ID / 名称**：`QS-04 — Intent Tester 访问与浏览器安全边界`。
 - **完整用户任务**：让 Intent Tester 在公开只读、本地开发和受限生产三种声明模式下具有一致、可执行的访问策略；未授权或错误来源不能写入、执行或控制任务，持久化用户内容不能在浏览器中执行代码，本地 Node proxy 不能被任意网页或局域网调用，所有直接生产入口缺少必需 secret 时必须 fail-closed。
-- **顺序基线**：[AI Coding 测试质量改进待办的厚切片序列](../../todos/2026-07-10-ai-coding-test-quality-improvement.md#厚切片序列)，固定承接已完成的 `QS-03`，下一项仍为 `QS-05`。
+- **历史顺序基线**：[已归档的 AI Coding 测试质量改进待办](../../todos/archive/2026-07-10-ai-coding-test-quality-improvement.md#厚切片序列)。本设计当时固定承接已完成的 `QS-03` 并把 `QS-05` 作为下一项；2026-07-16 用户已取消该后续序列，不能据此恢复实施。
 - **纳入边界**：Intent page/API 访问模式、单管理员 session、Origin/CSRF、session cookie、CSP 与安全响应头、持久化 TestCase/Execution 内容的安全 DOM/Jinja 渲染、production Node proxy 的显式 topology/origin/token/ticket、lifecycle callback 身份、生产 Compose 默认 secret 与直接端口、真实浏览器 exploit regression。
 - **排除边界**：不建立企业级身份平台、组织/角色/租户模型或 SSO；不改变 `QS-03` canonical execution identity；不实现 `QS-05` release transaction、生产 PostgreSQL 组合或回滚；不承担 `QS-08` 的通用 secret/privacy/dependency scanner 治理；不调用真实付费 AI provider。
 - **七项门禁**：入口是 Intent 页面/API，以及声明为 local-host 时浏览器到 localhost proxy；动作是登录、读取、创建/修改/删除/执行用例或连接代理；处理是 Flask 安全策略统一裁决 principal、mode、Origin、CSRF 和 proxy credential，Node 验证 topology/origin/token/ticket；可见结果是合法用户功能保持、未授权/错误来源得到明确 401/403；状态承接是签名 session、CSRF token 和绑定 execution 的短期 proxy ticket；失败反馈是稳定、脱敏错误码与 startup preflight；证据是访问矩阵、负向配置、Node contract、真实浏览器 stored-XSS/CSP 回归和生产配置 contract。

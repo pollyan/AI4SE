@@ -1,6 +1,6 @@
 # New Agents 功能盘点与增强诊断 Todo
 
-> 状态: 历史事实源；功能能力包已清空
+> 状态: `ARCHIVED` — 功能能力包已清空；旧 E 编号和后续增强候选已由用户于 2026-07-16 取消，不再作为待办
 > 创建日期: 2026-06-23
 > 背景: 对 `tools/new-agents/` 进行只读功能盘点后，当前系统已经具备共享 Agent Runtime、typed SSE、多 workflow、artifact contract、运行持久化、artifact 协作和运行统计基础。后续增强应优先深化已有能力，而不是复制 Lisa/Alex 专属运行时或渲染链路。
 

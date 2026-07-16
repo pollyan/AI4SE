@@ -1,6 +1,6 @@
 # DeepSeek V4 兼容的后端结构化产物数据改造 Todo
 
-> 状态: 本地确定性改造已主线化；真实 DeepSeek V4 Flash smoke 仍需显式凭证、网络和额度
+> 状态: `ARCHIVED` — 本地确定性改造已主线化；真实 DeepSeek V4 Flash smoke 候选已由用户于 2026-07-16 取消，不再作为待办
 > 创建日期: 2026-06-23
 > 背景: 当前主要使用 DeepSeek V4 Flash。该模型链路适合按 JSON mode 约束“合法 JSON”，但不能把它等同于 OpenAI strict Structured Outputs。长期最稳方案应减少模型直接生成完整 Markdown/Mermaid 的职责。
 

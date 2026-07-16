@@ -1,6 +1,6 @@
 # Goal Mode Milestone Ledger
 
-> 状态: 历史事实源
+> 状态: `ARCHIVED` — 仅保留历史 milestone 证据；不得作为当前待办或恢复入口
 > 更新日期: 2026-07-09
 > 用途: 记录目标模式已验证 milestone 和历史集成证据；恢复目标模式时不得从旧 integration branch 或 E 编号直接恢复实现。
 

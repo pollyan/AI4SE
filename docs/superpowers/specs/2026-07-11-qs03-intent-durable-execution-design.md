@@ -9,7 +9,7 @@
 - **七项门禁**：入口是 Intent execution page；动作是创建、查看、停止、重试或恢复一次执行；处理是 Flask 创建 durable authority 并驱动 Node 及幂等 callback；可见结果是同一 ID 的进度与显式终态；状态承接是 DB、页面对账和重启恢复；失败反馈是可诊断的 pending/running/failed/stopped 与同 ID 恢复路径；证据是 API、production Node、real HTTP restart/stop/retry 和 clean-room package smoke。
 - **依赖 / 验收 / 交付**：依赖已完成的 `QS-01`；只有上述用户链和全部验证门禁共同闭合后，才形成一个 `QS-03` 聚焦 commit 和交付。页面、retry、real HTTP 与 package 都是内部实现步骤，不是子切片。
 
-用户确认的执行顺序以 [AI Coding 测试质量改进待办的厚切片序列](../../todos/2026-07-10-ai-coding-test-quality-improvement.md#厚切片序列) 为唯一顺序基线。
+本设计执行时，用户确认的顺序以 [已归档的 AI Coding 测试质量改进待办](../../todos/archive/2026-07-10-ai-coding-test-quality-improvement.md#厚切片序列) 为历史顺序基线；该旧序列已于 2026-07-16 由用户取消，不再是当前执行入口。
 
 ## 目标与边界
 

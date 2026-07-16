@@ -1,5 +1,7 @@
 # New Agents 结构化产出失败治理待办
 
+- 归档状态：`ARCHIVED` — P0/P1 完成证据保留；原 P2 候选和条件触发项已由用户于 2026-07-16 取消，不再作为 backlog 或恢复入口
+
 - 状态：P0/P1 治理已收口，进入总收口审计（初版第 0-8 共 9 个切片中，第 8 切片“全工作流失败回归门禁与文档收口”实际过大，已按同级切片口径修正：不再允许内部批次或 8A/8B 字母轮次；过大的工作必须拆成多个明确切片。当前已完成全阶段 fixture registry、字段来源与视觉协议矩阵、raw JSON strict failure closure、manifest visualContract sync、25 个在线 artifact-data 阶段的 `artifactDataContract` manifest 同步、高失败阶段纵切、结构化失败回归门禁、`INCIDENT_REVIEW/TIMELINE` timeline-map 复杂视觉迁移、服务端视觉成功门禁和 `STORY_BREAKDOWN` flow-map 复杂视觉演进安全闭环；artifactDataContract 同步剩余 0 个阶段；派生字段后端化和 ID / 引用一致性 P1 已收口；当前仅保留后端自动 ID 分配、`VALUE_DISCOVERY/JOURNEY` pain / opportunity 成对映射、`mindmap` / `sequence-flow` / `distribution-chart` 等复杂视觉扩展和 `mmdc` / SVG 级视觉渲染门禁为 P2 backlog，除非出现新失败证据或用户重新提升优先级，不再作为本 P0 主线继续实现。）
 - 创建日期：2026-07-08
 - 来源：用户反馈 New Agents 生成右侧产出物时经常出现黄色失败框，要求系统分析反复失败原因，并明确禁止用 fallback 草稿隐藏错误
