@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from workflow_manifest import format_artifact_data_contract_instruction
 
-
-ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = (
+    """
 
 【结构化输出格式要求】
 你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
@@ -31,12 +31,16 @@ JSON 对象结构：
   "warnings": []
 }
 
-""" + format_artifact_data_contract_instruction("TEST_DESIGN", "CLARIFY") + """
+"""
+    + format_artifact_data_contract_instruction("TEST_DESIGN", "CLARIFY")
+    + """
 chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
+)
 
-STRATEGY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+STRATEGY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = (
+    """
 
 【结构化输出格式要求】
 你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
@@ -64,10 +68,13 @@ JSON 对象结构：
   "warnings": []
 }
 
-""" + format_artifact_data_contract_instruction("TEST_DESIGN", "STRATEGY") + """
+"""
+    + format_artifact_data_contract_instruction("TEST_DESIGN", "STRATEGY")
+    + """
 chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
+)
 
 CASES_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
 
@@ -634,7 +641,8 @@ def _story_breakdown_artifact_data_instruction(
     stage_id: str,
     stage_action: str,
 ) -> str:
-    return """你必须只输出一个 JSON 对象，不要输出 Markdown、解释文字或代码围栏。
+    return (
+        """你必须只输出一个 JSON 对象，不要输出 Markdown、解释文字或代码围栏。
 顶层字段只能包含：
 1. "chat"
 2. "artifact_data"
@@ -645,7 +653,7 @@ JSON 对象结构：
 {
   "chat": "面向用户的自然工作对话。说明我本轮如何把输入需求拆成 Epic、User Story、验收标准、依赖风险、Sprint 切片和 Lisa Handoff 输入。不要复制完整产出物正文。",
   "artifact_data": {
-    "document_info": {"artifact_name": "用户故事拆解包", "workflow": "STORY_BREAKDOWN", "stage": "当前阶段 ID", "status": "草稿/待确认/可交接 Lisa"},
+    "document_info": {"artifact_name": "用户故事拆解包", "workflow": "STORY_BREAKDOWN", "stage": "{stage_id}", "status": "草稿/待确认/可交接 Lisa"},
     "input_analysis": {"source_type": "PRD/需求蓝图/产品想法/用户输入", "product_goal": "...", "target_users": ["..."], "constraints": ["..."], "open_questions": ["..."]},
     "epics": [{"epic_id": "EPIC-001", "name": "...", "value_goal": "...", "scope": "...", "priority": "P0/P1/P2", "dependencies": ["..."]}],
     "user_stories": [{"story_id": "US-001", "epic_id": "EPIC-001", "title": "...", "user_story": "作为...我想...以便...", "priority": "P0/P1/P2", "story_points": 5, "testability": "高/中/低", "status": "待评审/已确认"}],
@@ -663,16 +671,20 @@ JSON 对象结构：
 chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """.replace(
-        "{artifact_data_contract}",
-        format_artifact_data_contract_instruction("STORY_BREAKDOWN", stage_id),
-    ).replace("{stage_action}", stage_action)
+            "{artifact_data_contract}",
+            format_artifact_data_contract_instruction("STORY_BREAKDOWN", stage_id),
+        )
+        .replace("{stage_id}", stage_id)
+        .replace("{stage_action}", stage_action)
+    )
 
 
 def _prd_review_artifact_data_instruction(
     stage_id: str,
     stage_action: str,
 ) -> str:
-    return """
+    return (
+        """
 
 【结构化输出格式要求】
 你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
@@ -703,9 +715,12 @@ JSON 对象结构：
 chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """.replace(
-        "{artifact_data_contract}",
-        format_artifact_data_contract_instruction("PRD_REVIEW", stage_id),
-    ).replace("{stage_id}", stage_id).replace("{stage_action}", stage_action)
+            "{artifact_data_contract}",
+            format_artifact_data_contract_instruction("PRD_REVIEW", stage_id),
+        )
+        .replace("{stage_id}", stage_id)
+        .replace("{stage_action}", stage_action)
+    )
 
 
 ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS: dict[tuple[str, str], str] = {
@@ -767,21 +782,21 @@ ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS: dict[tuple[str, str], str] = {
         "INPUT_ANALYSIS",
     ): _story_breakdown_artifact_data_instruction(
         "INPUT_ANALYSIS",
-        '{"type": "request_next_stage", "target_stage_id": "EPIC_MAPPING"}'
+        '{"type": "request_next_stage", "target_stage_id": "EPIC_MAPPING"}',
     ),
     (
         "STORY_BREAKDOWN",
         "EPIC_MAPPING",
     ): _story_breakdown_artifact_data_instruction(
         "EPIC_MAPPING",
-        '{"type": "request_next_stage", "target_stage_id": "STORY_BACKLOG"}'
+        '{"type": "request_next_stage", "target_stage_id": "STORY_BACKLOG"}',
     ),
     (
         "STORY_BREAKDOWN",
         "STORY_BACKLOG",
     ): _story_breakdown_artifact_data_instruction(
         "STORY_BACKLOG",
-        '{"type": "request_next_stage", "target_stage_id": "SPRINT_PLAN"}'
+        '{"type": "request_next_stage", "target_stage_id": "SPRINT_PLAN"}',
     ),
     (
         "STORY_BREAKDOWN",

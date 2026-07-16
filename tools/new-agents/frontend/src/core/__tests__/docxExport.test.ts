@@ -28,6 +28,27 @@ const readStoredZipEntries = async (blob: Blob): Promise<Record<string, string>>
 };
 
 describe('docxExport', () => {
+    it('keeps compact metadata after business content without creating a metadata table', async () => {
+        const blob = buildDocxPackage([
+            '# 测试报告',
+            '',
+            '## 业务结论',
+            '关键链路已经覆盖。',
+            '',
+            '## 文档信息',
+            '文档元信息：值：&#95;draft&#95; &#126;&#126;old&#126;&#126; &#96;code&#96; &#92;path &#91;link&#93; &lt;script&gt; &#124; &amp;copy;',
+        ].join('\n'));
+
+        const entries = await readStoredZipEntries(blob);
+        const documentXml = entries['word/document.xml'];
+        expect(documentXml.indexOf('关键链路已经覆盖。'))
+            .toBeLessThan(documentXml.indexOf('文档元信息：值：'));
+        expect(documentXml).toContain('_draft_ ~~old~~ `code` \\path [link] &lt;script&gt; | &amp;copy;');
+        expect(documentXml).not.toContain('&amp;#95;draft&amp;#95;');
+        expect(documentXml).not.toContain('<w:tbl>');
+        expect(documentXml).not.toContain('---');
+    });
+
     it('builds a real DOCX package with required OOXML entries and escaped Markdown content', async () => {
         const blob = buildDocxPackage([
             '# 测试报告',

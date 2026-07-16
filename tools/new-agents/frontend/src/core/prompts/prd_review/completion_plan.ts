@@ -14,6 +14,7 @@ export const COMPLETION_PLAN_TEMPLATE = `你是 Alex，正在执行 PRD_REVIEW /
 - 保持建议可执行，避免只输出原则性清单。
 - 对 P0 阻断项给出明确复审条件。
 - 后端会通过 artifact_data 渲染 action-board 和右侧 artifact；不要直接输出完整 Markdown、Mermaid 或 ai4se-visual。
+- 最终 Markdown 必须先渲染全部业务正文，再以“## 文档信息”单行展示 document_info 元信息；不要把元信息放在正文开头或渲染成表格。
 
 action-board contract 示例：
 ${FENCE}ai4se-visual

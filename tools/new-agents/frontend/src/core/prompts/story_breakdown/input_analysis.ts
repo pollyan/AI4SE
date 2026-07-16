@@ -9,6 +9,8 @@ export const INPUT_ANALYSIS_TEMPLATE = `结构化业务数据应覆盖：
 - user_stories、acceptance_criteria、dependencies、sprint_slices、lisa_handoff_inputs：可以基于当前输入给出第一版草案，并在 chat 中明确需要用户确认的假设。
 - stage_gate：至少包含输入来源、目标用户、约束和待澄清问题是否已整理。
 
+最终 Markdown 必须先渲染全部业务正文，再以“## 文档信息”单行展示 document_info 元信息；不要把元信息放在正文开头或渲染成表格。
+
 后端渲染器会基于结构化数据生成 ai4se-visual flow-map 示例：
 ${FENCE}ai4se-visual
 {"type": "flow-map","title":"Epic 流程图","nodes":[{"id":"Goal","label":"Goal","title":"产品目标"},{"id":"EPIC-001","label":"EPIC-001","title":"核心 Epic"}],"edges":[{"source":"Goal","target":"EPIC-001","label":"拆解为"}]}

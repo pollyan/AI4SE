@@ -759,7 +759,7 @@ describe('ArtifactPane Component', () => {
     it('downloads artifact markdown with a workflow-specific filename', async () => {
         const createdAnchors: HTMLAnchorElement[] = [];
         const click = vi.fn();
-        vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:artifact');
+        const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:artifact');
         vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
         vi.spyOn(document, 'createElement').mockImplementation((tagName, options) => {
             const element = originalCreateElement(tagName, options);
@@ -772,9 +772,18 @@ describe('ArtifactPane Component', () => {
             }
             return element;
         });
+        const artifactContent = [
+            '# 需求评审报告',
+            '',
+            '## 业务结论',
+            '关键链路已确认。',
+            '',
+            '## 评审信息',
+            '文档元信息：Artifact 名称：可签署需求评审报告 ｜ 评审时间：2026-07-16',
+        ].join('\n');
         useStore.setState({
             workflow: 'REQ_REVIEW',
-            artifactContent: '# 需求评审报告',
+            artifactContent,
         });
 
         render(<ArtifactPane />);
@@ -783,7 +792,108 @@ describe('ArtifactPane Component', () => {
         expect(createdAnchors).toHaveLength(1);
         expect(createdAnchors[0].download).toBe('req_review_artifact.md');
         expect(createdAnchors[0].download).not.toBe('lisa_artifact.md');
+        const blob = createObjectURL.mock.calls[0][0] as Blob;
+        expect(await blob.text()).toBe(artifactContent);
         expect(click).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the compact metadata footer after business content in preview, code, and edit', () => {
+        const artifactContent = [
+            '# 测试策略',
+            '',
+            '## 业务结论',
+            'QG019-BUSINESS',
+            '',
+            '## 文档信息',
+            '文档元信息：Artifact 名称：风险驱动测试策略 ｜ Workflow：TEST_DESIGN',
+        ].join('\n');
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            artifactContent,
+            stageArtifacts: { STRATEGY: artifactContent },
+        });
+
+        const { container } = render(<ArtifactPane />);
+        expect(container.textContent?.indexOf('QG019-BUSINESS'))
+            .toBeLessThan(container.textContent?.indexOf('文档元信息：') ?? -1);
+
+        fireEvent.click(screen.getByTitle('代码'));
+        expect(container.querySelector('pre')?.textContent).toBe(artifactContent);
+
+        fireEvent.click(screen.getByTitle('编辑产出物'));
+        expect((screen.getByLabelText('编辑产出物 Markdown') as HTMLTextAreaElement).value)
+            .toBe(artifactContent);
+    });
+
+    it('keeps the compact metadata footer available to section locking', () => {
+        const artifactContent = [
+            '# 测试策略',
+            '',
+            '## 业务结论',
+            '核心范围已经确认。',
+            '',
+            '## 文档信息',
+            '文档元信息：Artifact 名称：风险驱动测试策略 ｜ Stage：STRATEGY',
+        ].join('\n');
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            artifactContent,
+            stageArtifacts: { STRATEGY: artifactContent },
+            artifactSectionLocks: [],
+        });
+
+        render(<ArtifactPane />);
+        clickArtifactToolbarMenuItem('章节锁定');
+        fireEvent.click(screen.getByRole('button', { name: '锁定 文档信息' }));
+
+        expect(useStore.getState().artifactSectionLocks).toEqual([
+            expect.objectContaining({
+                stageId: 'STRATEGY',
+                heading: '## 文档信息',
+                content: [
+                    '## 文档信息',
+                    '文档元信息：Artifact 名称：风险驱动测试策略 ｜ Stage：STRATEGY',
+                ].join('\n'),
+            }),
+        ]);
+        act(() => useStore.setState({ artifactSectionLocks: [] }));
+    });
+
+    it('restores a historical compact metadata footer without reordering it', () => {
+        const historicalArtifact = [
+            '# 测试策略',
+            '',
+            '## 业务结论',
+            '历史业务结论',
+            '',
+            '## 文档信息',
+            '文档元信息：Artifact 名称：历史测试策略 ｜ Stage：STRATEGY',
+        ].join('\n');
+        useStore.setState({
+            workflow: 'TEST_DESIGN',
+            stageIndex: 1,
+            artifactContent: '# 测试策略\n\n当前业务结论',
+            artifactHistory: [
+                {
+                    id: 'metadata-v1',
+                    timestamp: 123,
+                    content: historicalArtifact,
+                    stageId: 'STRATEGY',
+                },
+            ],
+        });
+
+        render(<ArtifactPane />);
+        fireEvent.click(screen.getByTitle('历史版本'));
+        expect(screen.getByText(/Artifact 名称：历史测试策略/)).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: '恢复此版本' }));
+
+        const restored = useStore.getState().artifactContent;
+        expect(restored).toBe(historicalArtifact);
+        expect(restored.indexOf('历史业务结论'))
+            .toBeLessThan(restored.indexOf('文档元信息：'));
     });
 
     it('downloads artifact as a real DOCX package with escaped content', async () => {

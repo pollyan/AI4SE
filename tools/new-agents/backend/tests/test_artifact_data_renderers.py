@@ -32,7 +32,6 @@ from artifact_data_renderers import (
 )
 from test_asset_parsing import parse_lisa_test_asset_markdown
 
-
 RENDERERS_MODULE = Path(__file__).resolve().parents[1] / "artifact_data_renderers.py"
 VALUE_RENDERERS_MODULE = (
     Path(__file__).resolve().parents[1] / "artifact_data_renderer_value.py"
@@ -44,20 +43,12 @@ VALUE_SCHEMA_MODULE = (
 
 def _top_level_function_names(path: Path) -> set[str]:
     module = ast.parse(path.read_text(encoding="utf-8"))
-    return {
-        node.name
-        for node in module.body
-        if isinstance(node, ast.FunctionDef)
-    }
+    return {node.name for node in module.body if isinstance(node, ast.FunctionDef)}
 
 
 def _top_level_class_names(path: Path) -> set[str]:
     module = ast.parse(path.read_text(encoding="utf-8"))
-    return {
-        node.name
-        for node in module.body
-        if isinstance(node, ast.ClassDef)
-    }
+    return {node.name for node in module.body if isinstance(node, ast.ClassDef)}
 
 
 def test_artifact_data_renderer_stage_keys_match_runtime_instruction_registry():
@@ -91,11 +82,7 @@ def test_value_discovery_artifact_data_schemas_have_one_dedicated_module():
 
     assert VALUE_SCHEMA_MODULE.is_file()
     module = ast.parse(VALUE_SCHEMA_MODULE.read_text(encoding="utf-8"))
-    schema_names = {
-        node.name
-        for node in module.body
-        if isinstance(node, ast.ClassDef)
-    }
+    schema_names = {node.name for node in module.body if isinstance(node, ast.ClassDef)}
     assert expected_schemas <= schema_names
     assert not expected_schemas & _top_level_class_names(RENDERERS_MODULE)
 
@@ -370,7 +357,10 @@ def test_story_breakdown_artifact_data_rejects_unknown_story_reference():
         ("duplicate_criterion_id", "duplicate criterion_id"),
         ("unknown_dependency_story_id", "dependencies references unknown story ids"),
         ("unknown_sprint_story_id", "sprint_slices references unknown story ids"),
-        ("unknown_story_handoff_reference", "lisa_handoff_inputs references unknown ids"),
+        (
+            "unknown_story_handoff_reference",
+            "lisa_handoff_inputs references unknown ids",
+        ),
         (
             "unknown_criterion_handoff_reference",
             "lisa_handoff_inputs references unknown ids",
@@ -3063,7 +3053,6 @@ def test_prd_review_artifact_data_rejects_contract_extra_fields():
     assert "unexpected_field" in str(exc_info.value)
 
 
-
 def test_idea_define_artifact_data_rejects_duplicate_evidence_id():
     invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
     invalid["evidence_items"].append(copy.deepcopy(invalid["evidence_items"][0]))
@@ -3216,9 +3205,11 @@ def test_idea_converge_artifact_data_derives_ice_score_when_missing():
     )
 
     assert output is not None
-    assert [
-        item["ice_score"] for item in output.artifact_data["ice_evaluations"]
-    ] == [10.0, 6.0, 2.0]
+    assert [item["ice_score"] for item in output.artifact_data["ice_evaluations"]] == [
+        10.0,
+        6.0,
+        2.0,
+    ]
     assert "| ID-001 | 方向证据评分卡 | 5 | 4 | 2 | 10.00 | 1 | 推荐方案 |" in (
         output.artifact_update.markdown
     )
@@ -3607,22 +3598,30 @@ def test_strategy_artifact_data_rejects_inconsistent_rpn():
 
 def test_strategy_artifact_data_rejects_duplicate_strategy_ids():
     invalid = copy.deepcopy(VALID_STRATEGY_ARTIFACT_DATA)
-    invalid["quality_goals"].append({
-        **invalid["quality_goals"][0],
-        "goal": "重复目标",
-    })
-    invalid["risks"].append({
-        **invalid["risks"][0],
-        "name": "重复风险",
-    })
-    invalid["test_techniques"].append({
-        **invalid["test_techniques"][0],
-        "technique": "重复技术",
-    })
-    invalid["test_points"].append({
-        **invalid["test_points"][0],
-        "point": "重复测试点",
-    })
+    invalid["quality_goals"].append(
+        {
+            **invalid["quality_goals"][0],
+            "goal": "重复目标",
+        }
+    )
+    invalid["risks"].append(
+        {
+            **invalid["risks"][0],
+            "name": "重复风险",
+        }
+    )
+    invalid["test_techniques"].append(
+        {
+            **invalid["test_techniques"][0],
+            "technique": "重复技术",
+        }
+    )
+    invalid["test_points"].append(
+        {
+            **invalid["test_points"][0],
+            "point": "重复测试点",
+        }
+    )
 
     with pytest.raises(ValidationError, match="duplicate"):
         StrategyArtifactData.model_validate(invalid)
@@ -4580,10 +4579,11 @@ def test_render_prd_review_artifact_data_is_deterministic_and_contract_valid(
     expected_title,
     expected_visual,
 ):
+    artifact_data = _with_document_stage(VALID_PRD_REVIEW_ARTIFACT_DATA, stage_id)
     first = render_agent_turn_from_artifact_data(
         {
             "chat": "我已整理 PRD 质量评审与补全建议，请查看右侧补全动作。",
-            "artifact_data": VALID_PRD_REVIEW_ARTIFACT_DATA,
+            "artifact_data": artifact_data,
             "stage_action": None,
             "warnings": [],
         },
@@ -4593,7 +4593,7 @@ def test_render_prd_review_artifact_data_is_deterministic_and_contract_valid(
     second = render_agent_turn_from_artifact_data(
         {
             "chat": "我已整理 PRD 质量评审与补全建议，请查看右侧补全动作。",
-            "artifact_data": VALID_PRD_REVIEW_ARTIFACT_DATA,
+            "artifact_data": artifact_data,
             "stage_action": None,
             "warnings": [],
         },
@@ -5057,6 +5057,12 @@ def test_render_idea_concept_artifact_data_is_deterministic_and_contract_valid()
     )
 
 
+def _with_document_stage(fixture: dict, stage_id: str) -> dict:
+    stage_fixture = copy.deepcopy(fixture)
+    stage_fixture["document_info"]["stage"] = stage_id
+    return stage_fixture
+
+
 ARTIFACT_DATA_STAGE_FIXTURES = {
     ("TEST_DESIGN", "CLARIFY"): VALID_CLARIFY_ARTIFACT_DATA,
     ("TEST_DESIGN", "STRATEGY"): VALID_STRATEGY_ARTIFACT_DATA,
@@ -5075,14 +5081,30 @@ ARTIFACT_DATA_STAGE_FIXTURES = {
     ("IDEA_BRAINSTORM", "DIVERGE"): VALID_IDEA_DIVERGE_ARTIFACT_DATA,
     ("IDEA_BRAINSTORM", "CONVERGE"): VALID_IDEA_CONVERGE_ARTIFACT_DATA,
     ("IDEA_BRAINSTORM", "CONCEPT"): VALID_IDEA_CONCEPT_ARTIFACT_DATA,
-    ("PRD_REVIEW", "INVENTORY"): VALID_PRD_REVIEW_ARTIFACT_DATA,
-    ("PRD_REVIEW", "QUALITY_AUDIT"): VALID_PRD_REVIEW_ARTIFACT_DATA,
-    ("PRD_REVIEW", "COMPLETION_PLAN"): VALID_PRD_REVIEW_ARTIFACT_DATA,
-    ("PRD_REVIEW", "REVISION_BLUEPRINT"): VALID_PRD_REVIEW_ARTIFACT_DATA,
-    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
-    ("STORY_BREAKDOWN", "EPIC_MAPPING"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
-    ("STORY_BREAKDOWN", "STORY_BACKLOG"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
-    ("STORY_BREAKDOWN", "SPRINT_PLAN"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+    ("PRD_REVIEW", "INVENTORY"): _with_document_stage(
+        VALID_PRD_REVIEW_ARTIFACT_DATA, "INVENTORY"
+    ),
+    ("PRD_REVIEW", "QUALITY_AUDIT"): _with_document_stage(
+        VALID_PRD_REVIEW_ARTIFACT_DATA, "QUALITY_AUDIT"
+    ),
+    ("PRD_REVIEW", "COMPLETION_PLAN"): _with_document_stage(
+        VALID_PRD_REVIEW_ARTIFACT_DATA, "COMPLETION_PLAN"
+    ),
+    ("PRD_REVIEW", "REVISION_BLUEPRINT"): _with_document_stage(
+        VALID_PRD_REVIEW_ARTIFACT_DATA, "REVISION_BLUEPRINT"
+    ),
+    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): _with_document_stage(
+        VALID_STORY_BREAKDOWN_ARTIFACT_DATA, "INPUT_ANALYSIS"
+    ),
+    ("STORY_BREAKDOWN", "EPIC_MAPPING"): _with_document_stage(
+        VALID_STORY_BREAKDOWN_ARTIFACT_DATA, "EPIC_MAPPING"
+    ),
+    ("STORY_BREAKDOWN", "STORY_BACKLOG"): _with_document_stage(
+        VALID_STORY_BREAKDOWN_ARTIFACT_DATA, "STORY_BACKLOG"
+    ),
+    ("STORY_BREAKDOWN", "SPRINT_PLAN"): _with_document_stage(
+        VALID_STORY_BREAKDOWN_ARTIFACT_DATA, "SPRINT_PLAN"
+    ),
 }
 
 

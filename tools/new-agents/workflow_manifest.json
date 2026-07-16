@@ -154,7 +154,6 @@
           "artifactContract": {
             "requiredHeadings": [
               "# 需求分析文档",
-              "## 文档信息",
               "## 1. 需求事实清单",
               "## 2. 被测系统与边界",
               "## 3. 业务规则与数据状态",
@@ -163,6 +162,7 @@
               "## 6. 隐式质量需求",
               "## 7. 后续测试设计输入",
               "## 8. 阶段门禁",
+              "## 文档信息",
               "事实 ID",
               "证据等级",
               "阻断性",
@@ -191,7 +191,7 @@
               "Mermaid flowchart"
             ]
           },
-          "promptTemplateVersion": "2026.07.10.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "test-design.clarify.baseline"
           ]
@@ -219,6 +219,7 @@
               "## 6. 测试点拓扑",
               "## 7. 资源与取舍",
               "## 8. 阶段门禁",
+              "## 文档信息",
               "风险 ID",
               "测试点 ID",
               "覆盖建议"
@@ -257,7 +258,7 @@
               "ai4se-visual risk-board"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "test-design.strategy.baseline"
           ]
@@ -277,6 +278,7 @@
               "## 6. 测试点覆盖追溯",
               "## 7. 开放问题",
               "## 8. 阶段门禁",
+              "## 文档信息",
               "ID",
               "用例标题",
               "优先级",
@@ -318,7 +320,7 @@
               "ai4se-visual traceability-matrix"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "test-design.cases.baseline"
           ]
@@ -330,7 +332,7 @@
           "artifactContract": {
             "requiredHeadings": [
               "# 测试设计文档",
-              "## 1. 文档信息",
+              "## 1. 交付概览",
               "## 2. 执行摘要",
               "## 3. 需求分析摘要",
               "## 4. 测试策略摘要",
@@ -339,7 +341,8 @@
               "## 7. 开放风险",
               "## 8. 交付验收清单",
               "## 9. 签署确认",
-              "## 10. 变更记录"
+              "## 10. 变更记录",
+              "## 1. 文档信息"
             ]
           },
           "visualContract": {
@@ -365,7 +368,7 @@
               "ai4se-visual coverage-map"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "test-design.delivery.baseline"
           ]
@@ -422,7 +425,7 @@
           "artifactContract": {
             "requiredHeadings": [
               "# 需求评审问题清单",
-              "## 评审信息",
+              "## 评审上下文",
               "## 评审范围与不评审范围",
               "## 需求质量总览",
               "## 需求质量结构图",
@@ -430,6 +433,7 @@
               "## 按维度问题清单",
               "## 修订建议",
               "## 阶段门禁",
+              "## 评审信息",
               "评审维度",
               "问题描述",
               "优先级",
@@ -471,7 +475,7 @@
               "ai4se-visual score-matrix"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "req-review.review.baseline"
           ]
@@ -485,7 +489,7 @@
               "# 需求评审报告",
               "## 评审结论",
               "### 判定标准",
-              "## 评审信息",
+              "## 评审上下文",
               "## 问题统计",
               "## 优先级看板",
               "## 问题关闭清单",
@@ -495,6 +499,7 @@
               "## 复审条件",
               "## 签署确认",
               "## 变更记录",
+              "## 评审信息",
               "关闭状态",
               "复审条件",
               "签署状态"
@@ -528,7 +533,7 @@
               "ai4se-visual priority-board"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "req-review.report.baseline"
           ]
@@ -693,7 +698,7 @@
           "artifactContract": {
             "requiredHeadings": [
               "# 故障复盘报告",
-              "## 报告信息",
+              "## 报告概览",
               "## 第一部分：事件还原",
               "## 第二部分：根因分析",
               "## 第三部分：改进措施",
@@ -708,6 +713,7 @@
               "### 12. 组织学习",
               "## 签署确认",
               "### 13. 阶段门禁",
+              "## 报告信息",
               "ID",
               "改进措施",
               "类型",
@@ -757,7 +763,7 @@
               "ai4se-visual action-board"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "incident-review.improvement.baseline"
           ]
@@ -1081,9 +1087,11 @@
               "## 痛点证据",
               "## 差异化价值",
               "## 商业可行性",
+              "## 价值主张评分",
               "## 未验证假设",
               "## 60 秒电梯演讲",
               "## 阶段门禁",
+              "## 文档信息",
               "证据等级",
               "验证动作",
               "状态",
@@ -1119,7 +1127,7 @@
               "ai4se-visual score-matrix"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "value-discovery.elevator.baseline"
           ]
@@ -1142,6 +1150,7 @@
               "## 反画像",
               "## 用户优先级排序",
               "## 阶段门禁",
+              "## 文档信息",
               "证据等级",
               "验证状态"
             ]
@@ -1161,7 +1170,7 @@
               "画像、行为场景、决策链、痛点证据、反画像和优先级排序 Markdown 表格"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "value-discovery.persona.baseline"
           ]
@@ -1182,13 +1191,15 @@
               "## 结构化旅程地图",
               "## 关键阶段详细分析",
               "## 痛点优先级排序",
-              "高优先级痛点",
-              "中等优先级痛点",
-              "低优先级痛点",
+              "### 高优先级痛点",
+              "### 中等优先级痛点",
+              "### 低优先级痛点",
               "## 机会评分",
               "## 产品切入策略",
               "## 验证实验",
+              "## 旅程摘要",
               "## 阶段门禁",
+              "## 文档信息",
               "旅程阶段",
               "触点渠道",
               "用户任务",
@@ -1230,7 +1241,7 @@
               "ai4se-visual journey-map"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "value-discovery.journey.baseline"
           ]
@@ -1242,7 +1253,7 @@
           "artifactContract": {
             "requiredHeadings": [
               "需求蓝图",
-              "## 文档信息",
+              "## 需求蓝图概览",
               "## 1. 产品概述",
               "### 1.1 产品愿景",
               "### 1.2 定位声明",
@@ -1265,6 +1276,7 @@
               "## 10. 风险评估",
               "## 11. Lisa Handoff 输入",
               "## 12. 阶段门禁",
+              "## 文档信息",
               "可测试性等级",
               "owner",
               "状态"
@@ -1299,7 +1311,7 @@
               "ai4se-visual roadmap"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "value-discovery.blueprint.baseline"
           ]
@@ -1364,6 +1376,7 @@
               "## Sprint 切片建议",
               "## Lisa Handoff 输入",
               "## 阶段门禁",
+              "## 文档信息",
               "Story ID",
               "Epic ID",
               "AC ID",
@@ -1409,7 +1422,7 @@
               "ai4se-visual story-map"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "story-breakdown.input-analysis.baseline"
           ]
@@ -1429,6 +1442,7 @@
               "## Sprint 切片建议",
               "## Lisa Handoff 输入",
               "## 阶段门禁",
+              "## 文档信息",
               "Story ID",
               "Epic ID",
               "AC ID",
@@ -1474,7 +1488,7 @@
               "ai4se-visual story-map"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "story-breakdown.epic-mapping.baseline"
           ]
@@ -1494,6 +1508,7 @@
               "## Sprint 切片建议",
               "## Lisa Handoff 输入",
               "## 阶段门禁",
+              "## 文档信息",
               "Story ID",
               "Epic ID",
               "AC ID",
@@ -1539,7 +1554,7 @@
               "ai4se-visual story-map"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "story-breakdown.story-backlog.baseline"
           ]
@@ -1559,6 +1574,7 @@
               "## Sprint 切片建议",
               "## Lisa Handoff 输入",
               "## 阶段门禁",
+              "## 文档信息",
               "Story ID",
               "Epic ID",
               "AC ID",
@@ -1605,7 +1621,7 @@
               "ai4se-visual story-map"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "story-breakdown.sprint-plan.baseline"
           ]
@@ -1662,13 +1678,14 @@
           "artifactContract": {
             "requiredHeadings": [
               "# PRD 输入盘点",
-              "## 文档信息",
               "## PRD 目标与范围",
               "## 输入事实清单",
+              "## PRD 输入结构图",
               "## 用户与场景",
               "## 现有验收材料",
               "## 缺失信息清单",
               "## 阶段门禁",
+              "## 文档信息",
               "证据等级",
               "状态"
             ]
@@ -1701,7 +1718,7 @@
               "Mermaid mindmap"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "prd-review.inventory.baseline"
           ]
@@ -1713,13 +1730,13 @@
           "artifactContract": {
             "requiredHeadings": [
               "# PRD 质量评审",
-              "## 文档信息",
               "## PRD 目标与范围",
               "## 质量评审摘要",
               "## 质量评分矩阵",
               "## 问题清单",
               "## 风险影响",
               "## 阶段门禁",
+              "## 文档信息",
               "评审维度",
               "严重级别",
               "阻断性",
@@ -1754,7 +1771,7 @@
               "ai4se-visual score-matrix"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "prd-review.quality-audit.baseline"
           ]
@@ -1766,13 +1783,13 @@
           "artifactContract": {
             "requiredHeadings": [
               "# PRD 补全建议",
-              "## 文档信息",
               "## PRD 目标与范围",
               "## 质量评审摘要",
               "## 补全任务清单",
               "## 推荐 PRD 结构",
               "## 验证方式与复审条件",
               "## 阶段门禁",
+              "## 文档信息",
               "补全动作",
               "优先级",
               "负责人",
@@ -1808,7 +1825,7 @@
               "ai4se-visual roadmap"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "prd-review.completion-plan.baseline"
           ]
@@ -1820,7 +1837,6 @@
           "artifactContract": {
             "requiredHeadings": [
               "# PRD 修订蓝图",
-              "## 文档信息",
               "## PRD 目标与范围",
               "## 质量评审摘要",
               "## 补全任务清单",
@@ -1830,6 +1846,7 @@
               "## Lisa Handoff 输入",
               "## 复审条件",
               "## 阶段门禁",
+              "## 文档信息",
               "可测试性等级",
               "状态"
             ]
@@ -1863,7 +1880,7 @@
               "ai4se-visual roadmap"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.16.1",
           "regressionSampleIds": [
             "prd-review.revision-blueprint.baseline"
           ]

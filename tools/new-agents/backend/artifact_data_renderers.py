@@ -23,6 +23,7 @@ from artifact_data_renderer_base import (
     DocumentInfo,
     StageGateCheck,
     StrictArtifactDataModel,
+    render_compact_metadata,
 )
 from artifact_data_value_schema import (
     PositioningSummary,
@@ -1553,6 +1554,29 @@ def render_test_design_clarify_markdown(data: ClarifyArtifactData) -> str:
     ).markdown
 
 
+def _validate_document_info_identity(
+    artifact_data: dict[str, Any],
+    *,
+    workflow_id: str,
+    current_stage_id: str,
+) -> None:
+    document_info = artifact_data.get("document_info")
+    if not isinstance(document_info, dict):
+        return
+
+    declared_workflow = document_info.get("workflow")
+    declared_stage = document_info.get("stage")
+    if declared_workflow not in (None, workflow_id) or declared_stage not in (
+        None,
+        current_stage_id,
+    ):
+        raise ValueError(
+            "document_info identity must match runtime workflow/stage: "
+            f"expected {workflow_id}/{current_stage_id}, "
+            f"got {declared_workflow}/{declared_stage}"
+        )
+
+
 def render_complete_artifact_data(
     artifact_data: dict[str, Any],
     *,
@@ -1566,6 +1590,11 @@ def render_complete_artifact_data(
             f"artifact_data renderer is not configured for "
             f"{workflow_id}/{current_stage_id}"
         )
+    _validate_document_info_identity(
+        artifact_data,
+        workflow_id=workflow_id,
+        current_stage_id=current_stage_id,
+    )
     return plan.render_complete(artifact_data)
 
 
@@ -1581,6 +1610,11 @@ def render_available_artifact_data(
             f"artifact_data renderer is not configured for "
             f"{workflow_id}/{current_stage_id}"
         )
+    _validate_document_info_identity(
+        artifact_data,
+        workflow_id=workflow_id,
+        current_stage_id=current_stage_id,
+    )
     return plan.render_available(artifact_data)
 
 
@@ -1978,13 +2012,15 @@ def _render_story_stage_gate(checks: list[StageGateCheck]) -> str:
 
 
 def _render_document_info(info: DocumentInfo) -> str:
-    rows = [
-        ("Artifact 名称", info.artifact_name),
-        ("Workflow", info.workflow),
-        ("Stage", info.stage),
-        ("状态", info.status),
-    ]
-    return "## 文档信息\n" + _markdown_table(["字段", "内容"], rows)
+    return render_compact_metadata(
+        "## 文档信息",
+        (
+            ("Artifact 名称", info.artifact_name),
+            ("Workflow", info.workflow),
+            ("Stage", info.stage),
+            ("状态", info.status),
+        ),
+    )
 
 
 def _render_incident_summary(summary: IncidentSummary) -> str:
@@ -3044,13 +3080,23 @@ def _render_incident_improvement_report_info(
     rows = [
         ("故障名称", info.incident_name),
         ("严重等级", info.severity),
-        ("报告版本", info.version),
-        ("生成时间", info.generated_at),
         ("改进行动总数", info.action_count),
         ("复查日期", info.review_date),
         ("关闭状态", info.closure_status),
     ]
-    return "## 报告信息\n" + _markdown_table(["字段", "内容"], rows)
+    return "## 报告概览\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_incident_improvement_metadata(
+    info: IncidentImprovementReportInfo,
+) -> str:
+    return render_compact_metadata(
+        "## 报告信息",
+        (
+            ("报告版本", info.version),
+            ("生成时间", info.generated_at),
+        ),
+    )
 
 
 def _render_incident_improvement_timeline_summary(
@@ -3792,23 +3838,33 @@ def _render_open_questions(items: list[OpenQuestion]) -> str:
     )
 
 
+def _render_delivery_overview(
+    metrics: DeliveryMetrics,
+) -> str:
+    rows = [
+        ("项目/需求名称", metrics.project_name),
+        ("交付状态", metrics.delivery_status),
+        ("总用例数", metrics.total_cases),
+        ("高风险项", metrics.high_risk_count),
+    ]
+    return "## 1. 交付概览\n" + _markdown_table(["字段", "内容"], rows)
+
+
 def _render_delivery_document_info(
     info: DocumentInfo,
     metrics: DeliveryMetrics,
 ) -> str:
-    rows = [
-        ("Artifact 名称", info.artifact_name),
-        ("项目/需求名称", metrics.project_name),
-        ("版本", metrics.version),
-        ("生成时间", metrics.generated_at),
-        ("Workflow", info.workflow),
-        ("Stage", info.stage),
-        ("交付状态", metrics.delivery_status),
-        ("总用例数", metrics.total_cases),
-        ("高风险项", metrics.high_risk_count),
-        ("状态", info.status),
-    ]
-    return "## 1. 文档信息\n" + _markdown_table(["字段", "内容"], rows)
+    return render_compact_metadata(
+        "## 1. 文档信息",
+        (
+            ("Artifact 名称", info.artifact_name),
+            ("Workflow", info.workflow),
+            ("Stage", info.stage),
+            ("状态", info.status),
+            ("版本", metrics.version),
+            ("生成时间", metrics.generated_at),
+        ),
+    )
 
 
 def _render_delivery_executive_summary(
@@ -3967,13 +4023,21 @@ def _render_delivery_change_log(items: list[DeliveryChangeLogItem]) -> str:
 
 def _render_req_review_info(info: ReqReviewInfo) -> str:
     rows = [
-        ("Artifact 名称", info.artifact_name),
         ("被评审需求", info.requirement_name),
-        ("评审时间", info.review_date),
         ("需求概述", info.requirement_summary),
         ("评审结论倾向", info.conclusion),
     ]
-    return "## 评审信息\n" + _markdown_table(["字段", "内容"], rows)
+    return "## 评审上下文\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_req_review_metadata(info: ReqReviewInfo) -> str:
+    return render_compact_metadata(
+        "## 评审信息",
+        (
+            ("Artifact 名称", info.artifact_name),
+            ("评审时间", info.review_date),
+        ),
+    )
 
 
 def _render_req_review_scope(items: list[ReqReviewScopeItem]) -> str:
@@ -4134,7 +4198,6 @@ def _render_req_review_report_conclusion(
     conclusion: ReqReviewReportConclusion,
 ) -> str:
     rows = [
-        ("Artifact 名称", conclusion.artifact_name),
         ("评审结果", conclusion.review_result),
         ("结论理由", conclusion.reason),
         ("是否允许进入开发/测试设计", conclusion.development_gate),
@@ -4156,11 +4219,23 @@ def _render_req_review_report_conclusion(
 def _render_req_review_report_info(info: ReqReviewReportInfo) -> str:
     rows = [
         ("被评审需求", info.requirement_name),
-        ("评审时间", info.review_date),
         ("评审输入", info.review_input),
         ("评审参与方", info.participants),
     ]
-    return "## 评审信息\n" + _markdown_table(["字段", "内容"], rows)
+    return "## 评审上下文\n" + _markdown_table(["字段", "内容"], rows)
+
+
+def _render_req_review_report_metadata(
+    conclusion: ReqReviewReportConclusion,
+    info: ReqReviewReportInfo,
+) -> str:
+    return render_compact_metadata(
+        "## 评审信息",
+        (
+            ("Artifact 名称", conclusion.artifact_name),
+            ("评审时间", info.review_date),
+        ),
+    )
 
 
 def _render_req_review_report_statistics(
@@ -4450,13 +4525,15 @@ def _node_id(label: str, existing: dict[str, str]) -> str:
 
 
 def _render_prd_document_info(info: DocumentInfo) -> str:
-    rows = [
-        ("Artifact 名称", info.artifact_name),
-        ("Workflow", info.workflow),
-        ("阶段", info.stage),
-        ("状态", info.status),
-    ]
-    return "## 文档信息\n" + _markdown_table(["字段", "内容"], rows)
+    return render_compact_metadata(
+        "## 文档信息",
+        (
+            ("Artifact 名称", info.artifact_name),
+            ("Workflow", info.workflow),
+            ("阶段", info.stage),
+            ("状态", info.status),
+        ),
+    )
 
 
 def _render_prd_goal_scope(items: list[PrdInventoryItem]) -> str:
@@ -4832,11 +4909,13 @@ from artifact_data_renderer_value import (
     _render_journey_entry_strategy,
     _render_journey_validation_experiments,
     _render_journey_summary,
+    _render_value_document_info,
     _escape_journey_text,
     _escape_mermaid_time,
     _escape_mermaid_timeline_text,
     _escape_mermaid_mindmap_text,
     _render_blueprint_document_info,
+    _render_blueprint_overview,
     _render_blueprint_product_overview,
     _render_blueprint_target_users,
     _render_blueprint_requirements,
@@ -5940,6 +6019,12 @@ STRATEGY_RENDER_PLAN = ArtifactRenderPlan(
             lambda data: _render_stage_gate(data.stage_gate),
             validate_projection=_validate_checked_stage_gate,
         ),
+        _section(
+            "document-info",
+            ("document_info",),
+            lambda data: _render_document_info(data.document_info),
+            role="metadata",
+        ),
     ),
 )
 
@@ -5993,6 +6078,12 @@ CASES_RENDER_PLAN = ArtifactRenderPlan(
             lambda data: _render_stage_gate(data.stage_gate),
             validate_projection=_validate_checked_stage_gate,
         ),
+        _section(
+            "document-info",
+            ("document_info",),
+            lambda data: _render_document_info(data.document_info),
+            role="metadata",
+        ),
     ),
 )
 
@@ -6002,17 +6093,21 @@ DELIVERY_RENDER_PLAN = ArtifactRenderPlan(
     title_dependencies=(),
     sections=(
         _section(
-            "document-info",
+            "delivery-overview",
             (
-                "document_info",
                 "delivery_metrics",
                 "case_summary_items",
                 "open_risks",
             ),
+            lambda data: _render_delivery_overview(data.delivery_metrics),
+            validate_projection=_validate_delivery_projection,
+        ),
+        _section(
+            "document-info",
+            ("document_info", "delivery_metrics"),
             lambda data: _render_delivery_document_info(
                 data.document_info, data.delivery_metrics
             ),
-            validate_projection=_validate_delivery_projection,
             role="metadata",
         ),
         _section(
@@ -6071,9 +6166,14 @@ REQ_REVIEW_REVIEW_RENDER_PLAN = ArtifactRenderPlan(
     title_dependencies=(),
     sections=(
         _section(
-            "review-info",
+            "review-context",
             ("review_info",),
             lambda data: _render_req_review_info(data.review_info),
+        ),
+        _section(
+            "review-info",
+            ("review_info",),
+            lambda data: _render_req_review_metadata(data.review_info),
             role="metadata",
         ),
         _section(
@@ -6132,9 +6232,16 @@ REQ_REVIEW_REPORT_RENDER_PLAN = ArtifactRenderPlan(
             validate_projection=_validate_req_report_conclusion,
         ),
         _section(
-            "review-info",
+            "review-context",
             ("review_info",),
             lambda data: _render_req_review_report_info(data.review_info),
+        ),
+        _section(
+            "review-info",
+            ("conclusion", "review_info"),
+            lambda data: _render_req_review_report_metadata(
+                data.conclusion, data.review_info
+            ),
             role="metadata",
         ),
         _section(
@@ -6294,10 +6401,15 @@ INCIDENT_IMPROVEMENT_RENDER_PLAN = ArtifactRenderPlan(
     title_dependencies=(),
     sections=(
         _section(
-            "report-info",
+            "report-overview",
             ("report_info", "improvement_actions"),
             lambda data: _render_incident_improvement_report_info(data.report_info),
             validate_projection=_validate_incident_improvement_report,
+        ),
+        _section(
+            "report-info",
+            ("report_info",),
+            lambda data: _render_incident_improvement_metadata(data.report_info),
             role="metadata",
         ),
         _section(
@@ -6666,6 +6778,12 @@ VALUE_ELEVATOR_RENDER_PLAN = ArtifactRenderPlan(
             ("stage_gate",),
             lambda data: _render_value_stage_gate(data.stage_gate),
         ),
+        _section(
+            "document-info",
+            ("document_info",),
+            lambda data: _render_value_document_info(data.document_info),
+            role="metadata",
+        ),
     ),
 )
 
@@ -6726,6 +6844,12 @@ VALUE_PERSONA_RENDER_PLAN = ArtifactRenderPlan(
             "stage-gate",
             ("stage_gate",),
             lambda data: _render_value_stage_gate(data.stage_gate),
+        ),
+        _section(
+            "document-info",
+            ("document_info",),
+            lambda data: _render_value_document_info(data.document_info),
+            role="metadata",
         ),
     ),
 )
@@ -6791,6 +6915,12 @@ VALUE_JOURNEY_RENDER_PLAN = ArtifactRenderPlan(
             ("stage_gate",),
             lambda data: _render_value_stage_gate(data.stage_gate),
         ),
+        _section(
+            "document-info",
+            ("document_info",),
+            lambda data: _render_value_document_info(data.document_info),
+            role="metadata",
+        ),
     ),
 )
 
@@ -6799,6 +6929,11 @@ VALUE_BLUEPRINT_RENDER_PLAN = ArtifactRenderPlan(
     title=lambda data: f"# {data.document_info.product_name} 需求蓝图",
     title_dependencies=("document_info",),
     sections=(
+        _section(
+            "blueprint-overview",
+            ("document_info",),
+            lambda data: _render_blueprint_overview(data.document_info),
+        ),
         _section(
             "document-info",
             ("document_info",),
@@ -6935,6 +7070,12 @@ STORY_BREAKDOWN_RENDER_PLAN = ArtifactRenderPlan(
             ("stage_gate",),
             lambda data: _render_story_stage_gate(data.stage_gate),
             validate_projection=_validate_checked_stage_gate,
+        ),
+        _section(
+            "document-info",
+            ("document_info",),
+            lambda data: _render_document_info(data.document_info),
+            role="metadata",
         ),
     ),
 )

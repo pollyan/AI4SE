@@ -5,15 +5,16 @@ import pytest
 from pydantic import Field, ValidationError
 
 from agent_contracts import validate_artifact_visual_blocks
-from artifact_data_renderer_base import StrictArtifactDataModel
+from artifact_data_renderer_base import StrictArtifactDataModel, render_compact_metadata
 from artifact_data_renderers import (
+    ARTIFACT_DATA_RENDERERS,
     get_artifact_render_plan_business_section_ids,
     get_artifact_render_plan_stage_keys,
     render_available_artifact_data,
     render_complete_artifact_data,
 )
 from artifact_render_plan import ArtifactRenderPlan, ArtifactSectionSpec
-from agent_contracts import WORKFLOW_STAGES
+from agent_contracts import REQUIRED_ARTIFACT_HEADINGS, WORKFLOW_STAGES
 from test_artifact_data_renderers import (
     ARTIFACT_DATA_STAGE_FIXTURES,
     VALID_CASES_ARTIFACT_DATA,
@@ -23,7 +24,7 @@ from test_artifact_data_renderers import (
 )
 
 
-def test_req_review_render_plan_reveals_closed_business_sections_progressively():
+def test_req_review_render_plan_reveals_business_context_before_later_sections():
     fixture = copy.deepcopy(VALID_REQ_REVIEW_ARTIFACT_DATA)
 
     review_info = render_available_artifact_data(
@@ -49,13 +50,17 @@ def test_req_review_render_plan_reveals_closed_business_sections_progressively()
         current_stage_id="REVIEW",
     )
 
-    assert review_info is None
+    assert review_info is not None
     assert scope is not None
     assert overview is not None
+    assert "## 评审上下文" in review_info.markdown
+    assert "## 评审范围与不评审范围" not in review_info.markdown
     assert "## 评审范围与不评审范围" in scope.markdown
     assert "## 需求质量总览" not in scope.markdown
     assert "## 需求质量总览" in overview.markdown
+    assert set(review_info.completed_section_ids) < set(scope.completed_section_ids)
     assert set(scope.completed_section_ids) < set(overview.completed_section_ids)
+    validate_artifact_visual_blocks(review_info.markdown)
     validate_artifact_visual_blocks(scope.markdown)
     validate_artifact_visual_blocks(overview.markdown)
 
@@ -442,6 +447,417 @@ class _VisualIsolationArtifactData(StrictArtifactDataModel):
     before: str = Field(min_length=1)
     invalid_visual: str = Field(min_length=1)
     after: str = Field(min_length=1)
+
+
+class _MetadataOrderingArtifactData(StrictArtifactDataModel):
+    metadata: str = Field(min_length=1)
+    business: str = Field(min_length=1)
+
+
+def _metadata_ordering_section(
+    section_id: str,
+    field_name: str,
+    *,
+    role: str = "business",
+) -> ArtifactSectionSpec:
+    return ArtifactSectionSpec(
+        section_id=section_id,
+        dependencies=(field_name,),
+        render=lambda data: f"## {section_id}\n\n{getattr(data, field_name)}",
+        role=role,
+    )
+
+
+@pytest.mark.parametrize(
+    "sections",
+    [
+        (
+            _metadata_ordering_section("business", "business"),
+            _metadata_ordering_section("unknown", "metadata", role="unknown"),
+        ),
+        (
+            _metadata_ordering_section("duplicate", "business"),
+            _metadata_ordering_section("duplicate", "metadata", role="metadata"),
+        ),
+        (_metadata_ordering_section("metadata", "metadata", role="metadata"),),
+    ],
+)
+def test_render_plan_rejects_invalid_section_role_configuration(sections):
+    with pytest.raises(ValueError, match="role|duplicate|business"):
+        ArtifactRenderPlan(
+            model=_MetadataOrderingArtifactData,
+            title=lambda _data: "# Metadata ordering probe",
+            title_dependencies=(),
+            sections=sections,
+        )
+
+
+def test_render_plan_uses_business_then_metadata_as_one_canonical_order():
+    plan = ArtifactRenderPlan(
+        model=_MetadataOrderingArtifactData,
+        title=lambda _data: "# Metadata ordering probe",
+        title_dependencies=(),
+        sections=(
+            _metadata_ordering_section("metadata", "metadata", role="metadata"),
+            _metadata_ordering_section("business", "business"),
+        ),
+    )
+
+    partial = plan.render_available({"metadata": "meta", "business": "value"})
+    complete = plan.render_complete({"metadata": "meta", "business": "value"})
+
+    assert partial is not None
+    assert partial.completed_section_ids == ("business", "metadata")
+    assert partial.markdown.index("## business") < partial.markdown.index("## metadata")
+    assert partial.markdown == complete.markdown
+    assert partial.completed_section_ids == complete.completed_section_ids
+
+
+def test_compact_metadata_rejects_invalid_heading_and_escapes_inline_markup():
+    with pytest.raises(ValueError, match="H1-H3"):
+        render_compact_metadata("文档信息", (("字段", "值"),))
+
+    rendered = render_compact_metadata(
+        "## 文档信息",
+        (("Artifact 名称", "<script>*unsafe*</script> | _draft_ ~~old~~ &copy;"),),
+    )
+
+    assert rendered.startswith("## 文档信息\n文档元信息：")
+    assert (
+        "&lt;script&gt;&#42;unsafe&#42;&lt;/script&gt; &#124; "
+        "&#95;draft&#95; &#126;&#126;old&#126;&#126; &amp;copy;"
+    ) in rendered
+    assert "\n|" not in rendered
+
+
+@pytest.mark.parametrize(
+    ("stage_key", "wrong_workflow", "wrong_stage"),
+    [
+        (("STORY_BREAKDOWN", "INPUT_ANALYSIS"), "STORY_BREAKDOWN", "SPRINT_PLAN"),
+        (("PRD_REVIEW", "INVENTORY"), "PRD_REVIEW", "REVISION_BLUEPRINT"),
+        (("TEST_DESIGN", "CLARIFY"), "REQ_REVIEW", "CLARIFY"),
+    ],
+)
+def test_document_info_identity_must_match_runtime_stage(
+    stage_key: tuple[str, str],
+    wrong_workflow: str,
+    wrong_stage: str,
+):
+    workflow_id, stage_id = stage_key
+    fixture = copy.deepcopy(ARTIFACT_DATA_STAGE_FIXTURES[stage_key])
+    fixture["document_info"]["workflow"] = wrong_workflow
+    fixture["document_info"]["stage"] = wrong_stage
+
+    with pytest.raises(ValueError, match="document_info identity"):
+        render_complete_artifact_data(
+            fixture,
+            workflow_id=workflow_id,
+            current_stage_id=stage_id,
+        )
+
+    with pytest.raises(ValueError, match="document_info identity"):
+        render_available_artifact_data(
+            fixture,
+            workflow_id=workflow_id,
+            current_stage_id=stage_id,
+        )
+
+
+def test_clarify_renders_business_first_and_compact_document_metadata_last():
+    fixture = copy.deepcopy(ARTIFACT_DATA_STAGE_FIXTURES[("TEST_DESIGN", "CLARIFY")])
+
+    rendered = render_complete_artifact_data(
+        fixture,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert rendered.markdown.index("## 1. 需求事实清单") < rendered.markdown.index(
+        "文档元信息："
+    )
+    assert rendered.markdown.rstrip().splitlines()[-1].startswith("文档元信息：")
+    assert "| 字段 | 内容 |" not in rendered.markdown
+    assert (
+        rendered.normalized_artifact_data["document_info"] == fixture["document_info"]
+    )
+
+
+def test_delivery_splits_business_overview_from_compact_document_metadata():
+    fixture = copy.deepcopy(ARTIFACT_DATA_STAGE_FIXTURES[("TEST_DESIGN", "DELIVERY")])
+
+    rendered = render_complete_artifact_data(
+        fixture,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="DELIVERY",
+    )
+
+    overview = rendered.markdown.index("## 1. 交付概览")
+    summary = rendered.markdown.index("## 2. 执行摘要")
+    metadata = rendered.markdown.index("文档元信息：")
+    assert overview < summary < metadata
+    business_markdown = rendered.markdown[overview:metadata]
+    metadata_markdown = rendered.markdown[metadata:]
+    for value in ("登录功能", "可签署", "2", "1"):
+        assert value in business_markdown
+    for value in ("TEST&#95;DESIGN", "DELIVERY", "v1.0", "2026-06-23"):
+        assert value in metadata_markdown
+    assert "| 字段 | 内容 |" not in metadata_markdown
+    assert (
+        rendered.normalized_artifact_data["delivery_metrics"]
+        == fixture["delivery_metrics"]
+    )
+
+
+@pytest.mark.parametrize(
+    (
+        "workflow_id",
+        "stage_id",
+        "business_heading",
+        "business_values",
+        "metadata_values",
+    ),
+    [
+        (
+            "REQ_REVIEW",
+            "REVIEW",
+            "## 评审上下文",
+            ("会员权益需求", "会员可在权益中心查看", "存在阻断问题"),
+            ("需求质量诊断与评审问题清单", "2026-06-23"),
+        ),
+        (
+            "REQ_REVIEW",
+            "REPORT",
+            "## 评审上下文",
+            ("会员权益需求", "REQ_REVIEW/REVIEW", "产品 / 研发 / 测试"),
+            ("2026-06-23",),
+        ),
+        (
+            "INCIDENT_REVIEW",
+            "IMPROVEMENT",
+            "## 报告概览",
+            ("支付回调失败", "P1", "改进行动总数 | 3", "2026-07-07", "待复查"),
+            ("v1.0", "2026-06-23 16:30"),
+        ),
+        (
+            "VALUE_DISCOVERY",
+            "BLUEPRINT",
+            "## 需求蓝图概览",
+            ("面向中小研发团队的 AI 测试设计工作台",),
+            ("v1.0", "2026-06-23", "可评审需求蓝图", "可交接 Lisa"),
+        ),
+    ],
+)
+def test_mixed_information_sections_keep_business_context_out_of_metadata_footer(
+    workflow_id: str,
+    stage_id: str,
+    business_heading: str,
+    business_values: tuple[str, ...],
+    metadata_values: tuple[str, ...],
+):
+    fixture = copy.deepcopy(ARTIFACT_DATA_STAGE_FIXTURES[(workflow_id, stage_id)])
+
+    rendered = render_complete_artifact_data(
+        fixture,
+        workflow_id=workflow_id,
+        current_stage_id=stage_id,
+    )
+
+    business_start = rendered.markdown.index(business_heading)
+    metadata_start = rendered.markdown.index("文档元信息：")
+    assert business_start < metadata_start
+    business_markdown = rendered.markdown[business_start:metadata_start]
+    metadata_markdown = rendered.markdown[metadata_start:]
+    for value in business_values:
+        assert value in business_markdown
+        assert value not in metadata_markdown
+    for value in metadata_values:
+        assert value in metadata_markdown
+    assert "\n|" not in metadata_markdown
+
+
+VISIBLE_METADATA_STAGE_KEYS = {
+    ("TEST_DESIGN", "CLARIFY"),
+    ("TEST_DESIGN", "STRATEGY"),
+    ("TEST_DESIGN", "CASES"),
+    ("TEST_DESIGN", "DELIVERY"),
+    ("REQ_REVIEW", "REVIEW"),
+    ("REQ_REVIEW", "REPORT"),
+    ("INCIDENT_REVIEW", "IMPROVEMENT"),
+    ("VALUE_DISCOVERY", "ELEVATOR"),
+    ("VALUE_DISCOVERY", "PERSONA"),
+    ("VALUE_DISCOVERY", "JOURNEY"),
+    ("VALUE_DISCOVERY", "BLUEPRINT"),
+    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"),
+    ("STORY_BREAKDOWN", "EPIC_MAPPING"),
+    ("STORY_BREAKDOWN", "STORY_BACKLOG"),
+    ("STORY_BREAKDOWN", "SPRINT_PLAN"),
+    ("PRD_REVIEW", "INVENTORY"),
+    ("PRD_REVIEW", "QUALITY_AUDIT"),
+    ("PRD_REVIEW", "COMPLETION_PLAN"),
+    ("PRD_REVIEW", "REVISION_BLUEPRINT"),
+}
+
+NO_PURE_METADATA_STAGE_KEYS = {
+    ("INCIDENT_REVIEW", "TIMELINE"),
+    ("INCIDENT_REVIEW", "ROOT_CAUSE"),
+    ("IDEA_BRAINSTORM", "DEFINE"),
+    ("IDEA_BRAINSTORM", "DIVERGE"),
+    ("IDEA_BRAINSTORM", "CONVERGE"),
+    ("IDEA_BRAINSTORM", "CONCEPT"),
+}
+
+
+def test_all_25_stages_have_one_exhaustive_metadata_display_classification():
+    classified = VISIBLE_METADATA_STAGE_KEYS | NO_PURE_METADATA_STAGE_KEYS
+
+    assert len(VISIBLE_METADATA_STAGE_KEYS) == 19
+    assert len(NO_PURE_METADATA_STAGE_KEYS) == 6
+    assert sum(
+        len(group)
+        for group in (
+            VISIBLE_METADATA_STAGE_KEYS,
+            NO_PURE_METADATA_STAGE_KEYS,
+        )
+    ) == len(classified)
+    assert classified == set(ARTIFACT_DATA_RENDERERS)
+
+
+@pytest.mark.parametrize(
+    ("stage_key", "fixture"),
+    sorted(ARTIFACT_DATA_STAGE_FIXTURES.items()),
+)
+def test_every_stage_keeps_business_before_lightweight_or_structured_metadata(
+    stage_key: tuple[str, str],
+    fixture: dict,
+):
+    workflow_id, stage_id = stage_key
+    plan = ARTIFACT_DATA_RENDERERS[stage_key]
+    rendered = render_complete_artifact_data(
+        copy.deepcopy(fixture),
+        workflow_id=workflow_id,
+        current_stage_id=stage_id,
+    )
+    role_by_section_id = {section.section_id: section.role for section in plan.sections}
+    completed_roles = tuple(
+        role_by_section_id[section_id] for section_id in rendered.completed_section_ids
+    )
+
+    assert completed_roles[0] == "business"
+    assert completed_roles == tuple(
+        sorted(completed_roles, key={"business": 0, "metadata": 1}.get)
+    )
+    if stage_key in VISIBLE_METADATA_STAGE_KEYS:
+        assert completed_roles[-1] == "metadata"
+        assert rendered.markdown.count("文档元信息：") == 1
+        assert rendered.markdown.rstrip().splitlines()[-1].startswith("文档元信息：")
+        assert (
+            "\n| 字段 | 内容 |"
+            not in rendered.markdown[rendered.markdown.index("文档元信息：") :]
+        )
+    else:
+        assert "metadata" not in completed_roles
+        assert "文档元信息：" not in rendered.markdown
+
+    if "document_info" in plan.model.model_fields:
+        assert (
+            rendered.normalized_artifact_data["document_info"]
+            == fixture["document_info"]
+        )
+        document_info = rendered.normalized_artifact_data["document_info"]
+        if "workflow" in document_info:
+            assert document_info["workflow"] == workflow_id
+            assert document_info["stage"] == stage_id
+
+
+@pytest.mark.parametrize(
+    ("stage_key", "fixture"),
+    sorted(ARTIFACT_DATA_STAGE_FIXTURES.items()),
+)
+def test_manifest_required_markdown_headings_follow_renderer_order(
+    stage_key: tuple[str, str],
+    fixture: dict,
+):
+    rendered = render_complete_artifact_data(
+        copy.deepcopy(fixture),
+        workflow_id=stage_key[0],
+        current_stage_id=stage_key[1],
+    )
+    rendered_headings: list[str] = []
+    inside_fence = False
+    for line in rendered.markdown.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            inside_fence = not inside_fence
+            continue
+        prefix = stripped.split(" ", 1)[0]
+        if (
+            not inside_fence
+            and 1 <= len(prefix) <= 6
+            and set(prefix) == {"#"}
+            and len(stripped) > len(prefix)
+        ):
+            rendered_headings.append(stripped)
+
+    required_contract = REQUIRED_ARTIFACT_HEADINGS[stage_key]
+    required_headings = [
+        heading for heading in required_contract if heading.startswith("#")
+    ]
+    positions = [rendered_headings.index(heading) for heading in required_headings]
+
+    assert positions == sorted(positions)
+
+    dynamic_headings: set[str] = set()
+    if stage_key == ("TEST_DESIGN", "CASES"):
+        dynamic_headings.update(
+            f"### 3.{index} {group['dimension']}"
+            for index, group in enumerate(fixture["case_groups"], start=1)
+        )
+    elif stage_key == ("REQ_REVIEW", "REVIEW"):
+        dynamic_headings.update(
+            f"### {index}. {group['dimension']}"
+            for index, group in enumerate(fixture["issue_groups"], start=1)
+        )
+    elif stage_key == ("VALUE_DISCOVERY", "JOURNEY"):
+        dynamic_headings.update(
+            f"### 阶段 {index}：{stage['stage_name']}"
+            for index, stage in enumerate(fixture["journey_stages"], start=1)
+        )
+    for rendered_heading in rendered_headings:
+        if rendered_heading in dynamic_headings:
+            continue
+        assert any(
+            (
+                rendered_heading == required_heading
+                if required_heading.startswith("#")
+                else rendered_heading.startswith("# ")
+                and required_heading in rendered_heading
+            )
+            for required_heading in required_contract
+        ), f"renderer heading is missing from manifest contract: {rendered_heading}"
+
+
+@pytest.mark.parametrize(
+    ("stage_id", "business_heading", "artifact_name"),
+    [
+        ("ELEVATOR", "## 定位摘要", "价值定位诊断报告"),
+        ("PERSONA", "## 画像摘要", "用户画像与决策链分析"),
+    ],
+)
+def test_value_summary_keeps_artifact_name_only_in_metadata_footer(
+    stage_id: str,
+    business_heading: str,
+    artifact_name: str,
+):
+    rendered = render_complete_artifact_data(
+        copy.deepcopy(ARTIFACT_DATA_STAGE_FIXTURES[("VALUE_DISCOVERY", stage_id)]),
+        workflow_id="VALUE_DISCOVERY",
+        current_stage_id=stage_id,
+    )
+    business_start = rendered.markdown.index(business_heading)
+    metadata_start = rendered.markdown.index("## 文档信息")
+
+    assert artifact_name not in rendered.markdown[business_start:metadata_start]
+    assert artifact_name in rendered.markdown[metadata_start:]
 
 
 def test_invalid_visual_section_is_withheld_without_blocking_later_section():

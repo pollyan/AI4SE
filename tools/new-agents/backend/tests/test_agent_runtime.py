@@ -292,33 +292,7 @@ VALID_CLARIFY_ARTIFACT_DATA = {
     ],
 }
 
-DEEPSEEK_FORMAT_STAGE_FIXTURES = {
-    ("TEST_DESIGN", "CLARIFY"): VALID_CLARIFY_ARTIFACT_DATA,
-    ("TEST_DESIGN", "STRATEGY"): VALID_STRATEGY_ARTIFACT_DATA,
-    ("TEST_DESIGN", "CASES"): VALID_CASES_ARTIFACT_DATA,
-    ("TEST_DESIGN", "DELIVERY"): VALID_DELIVERY_ARTIFACT_DATA,
-    ("REQ_REVIEW", "REVIEW"): VALID_REQ_REVIEW_ARTIFACT_DATA,
-    ("REQ_REVIEW", "REPORT"): VALID_REQ_REVIEW_REPORT_ARTIFACT_DATA,
-    ("VALUE_DISCOVERY", "ELEVATOR"): VALID_VALUE_ELEVATOR_ARTIFACT_DATA,
-    ("VALUE_DISCOVERY", "PERSONA"): VALID_VALUE_PERSONA_ARTIFACT_DATA,
-    ("VALUE_DISCOVERY", "JOURNEY"): VALID_VALUE_JOURNEY_ARTIFACT_DATA,
-    ("VALUE_DISCOVERY", "BLUEPRINT"): VALID_VALUE_BLUEPRINT_ARTIFACT_DATA,
-    ("INCIDENT_REVIEW", "TIMELINE"): VALID_INCIDENT_TIMELINE_ARTIFACT_DATA,
-    ("INCIDENT_REVIEW", "ROOT_CAUSE"): VALID_INCIDENT_ROOT_CAUSE_ARTIFACT_DATA,
-    ("INCIDENT_REVIEW", "IMPROVEMENT"): VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA,
-    ("IDEA_BRAINSTORM", "DEFINE"): VALID_IDEA_DEFINE_ARTIFACT_DATA,
-    ("IDEA_BRAINSTORM", "DIVERGE"): VALID_IDEA_DIVERGE_ARTIFACT_DATA,
-    ("IDEA_BRAINSTORM", "CONVERGE"): VALID_IDEA_CONVERGE_ARTIFACT_DATA,
-    ("IDEA_BRAINSTORM", "CONCEPT"): VALID_IDEA_CONCEPT_ARTIFACT_DATA,
-    ("PRD_REVIEW", "INVENTORY"): VALID_PRD_REVIEW_ARTIFACT_DATA,
-    ("PRD_REVIEW", "QUALITY_AUDIT"): VALID_PRD_REVIEW_ARTIFACT_DATA,
-    ("PRD_REVIEW", "COMPLETION_PLAN"): VALID_PRD_REVIEW_ARTIFACT_DATA,
-    ("PRD_REVIEW", "REVISION_BLUEPRINT"): VALID_PRD_REVIEW_ARTIFACT_DATA,
-    ("STORY_BREAKDOWN", "INPUT_ANALYSIS"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
-    ("STORY_BREAKDOWN", "EPIC_MAPPING"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
-    ("STORY_BREAKDOWN", "STORY_BACKLOG"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
-    ("STORY_BREAKDOWN", "SPRINT_PLAN"): VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
-}
+DEEPSEEK_FORMAT_STAGE_FIXTURES = copy.deepcopy(ARTIFACT_DATA_STAGE_FIXTURES)
 
 DEEPSEEK_FORMAT_STAGE_CASES = [
     (workflow_id, stage_id, artifact_data)
@@ -607,7 +581,9 @@ def test_parse_agent_turn_output_text_renders_story_breakdown_input_analysis_art
     json_text = json.dumps(
         {
             "chat": "我已完成需求输入盘点，请确认右侧 Story 拆解基线。",
-            "artifact_data": VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+            "artifact_data": ARTIFACT_DATA_STAGE_FIXTURES[
+                ("STORY_BREAKDOWN", "INPUT_ANALYSIS")
+            ],
             "stage_action": {
                 "type": "request_next_stage",
                 "target_stage_id": "EPIC_MAPPING",
@@ -1192,7 +1168,9 @@ def test_parse_agent_turn_output_text_renders_prd_review_artifact_data():
     json_text = json.dumps(
         {
             "chat": "我已整理 PRD 补全建议，请确认右侧内容。",
-            "artifact_data": VALID_PRD_REVIEW_ARTIFACT_DATA,
+            "artifact_data": ARTIFACT_DATA_STAGE_FIXTURES[
+                ("PRD_REVIEW", "COMPLETION_PLAN")
+            ],
             "stage_action": {
                 "type": "request_next_stage",
                 "target_stage_id": "REVISION_BLUEPRINT",
@@ -1770,7 +1748,9 @@ def test_parse_agent_turn_output_text_renders_story_breakdown_artifact_data():
     json_text = json.dumps(
         {
             "chat": "已完成用户故事拆解包。",
-            "artifact_data": VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+            "artifact_data": ARTIFACT_DATA_STAGE_FIXTURES[
+                ("STORY_BREAKDOWN", "SPRINT_PLAN")
+            ],
             "stage_action": None,
             "warnings": [],
         },
@@ -2119,6 +2099,8 @@ def test_story_breakdown_structured_output_instruction_uses_manifest_artifact_da
         format_artifact_data_contract_instruction("STORY_BREAKDOWN", stage_id)
         in instruction
     )
+    assert f'"workflow": "STORY_BREAKDOWN", "stage": "{stage_id}"' in instruction
+    assert '"stage": "当前阶段 ID"' not in instruction
 
 
 def test_value_persona_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
@@ -3309,9 +3291,13 @@ def test_runtime_raw_json_stream_turn_renders_req_review_report_artifact_data_be
 
     assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 需求评审报告")
-    assert "## 评审结论" in partial_markdowns[0]
+    assert "## 评审上下文" in partial_markdowns[0]
     assert "## 评审信息" in partial_markdowns[0]
+    assert partial_markdowns[0].index("## 评审上下文") < partial_markdowns[0].index(
+        "## 评审信息"
+    )
     assert "## 评审结论" in partial_markdowns[-1]
+    assert "## 评审上下文" in partial_markdowns[-1]
     assert "## 评审信息" in partial_markdowns[-1]
     assert "## 问题统计" in partial_markdowns[-1]
     assert "## 优先级看板" in partial_markdowns[-1]
@@ -3998,9 +3984,13 @@ def test_runtime_raw_json_stream_turn_renders_incident_improvement_artifact_data
 
     assert len(partial_markdowns) >= 1
     assert partial_markdowns[0].startswith("# 故障复盘报告")
-    assert "## 报告信息" not in partial_markdowns[0]
     assert "## 第一部分：事件还原" in partial_markdowns[0]
+    assert "## 报告信息" in partial_markdowns[0]
+    assert partial_markdowns[0].index("## 第一部分：事件还原") < partial_markdowns[
+        0
+    ].index("## 报告信息")
     assert "## 报告信息" in partial_markdowns[-1]
+    assert "## 报告概览" in partial_markdowns[-1]
     assert "## 第一部分：事件还原" in partial_markdowns[-1]
     assert "## 第二部分：根因分析" in partial_markdowns[-1]
     assert "## 第三部分：改进措施" in partial_markdowns[-1]
@@ -4560,7 +4550,9 @@ def test_runtime_raw_json_stream_turn_renders_all_story_breakdown_stages_from_ar
     final_json = json.dumps(
         {
             "chat": "我已完成用户故事拆解产物，请查看右侧文档。",
-            "artifact_data": VALID_STORY_BREAKDOWN_ARTIFACT_DATA,
+            "artifact_data": ARTIFACT_DATA_STAGE_FIXTURES[
+                ("STORY_BREAKDOWN", stage_id)
+            ],
             "stage_action": stage_action,
             "warnings": [],
         },

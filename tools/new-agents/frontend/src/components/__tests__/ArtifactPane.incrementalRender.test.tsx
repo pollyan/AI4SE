@@ -125,4 +125,27 @@ describe('ArtifactPane incremental section rendering', () => {
         expect(markdownRenderCounts.get(thirdSection)).toBe(1);
         expect(markdownRenderCounts.get(insertedSection)).toBe(1);
     });
+
+    it('appends the metadata footer after business sections without rerendering them', () => {
+        const businessSection = '## 业务结论\n\n业务正文保持稳定';
+        const metadataSection = '## 文档信息\n\n文档元信息：Artifact 名称：需求分析 ｜ Workflow：TEST_DESIGN';
+        const initialArtifact = `# 文档\n\n${businessSection}`;
+        const completedArtifact = `${initialArtifact}\n\n${metadataSection}`;
+        useStore.setState({
+            artifactContent: initialArtifact,
+            stageArtifacts: { CLARIFY: initialArtifact },
+        });
+
+        render(<ArtifactPane />);
+        expect(markdownRenderCounts.get(businessSection)).toBe(1);
+
+        act(() => {
+            useStore.getState().setArtifactContent(completedArtifact);
+        });
+
+        expect(markdownRenderCounts.get(businessSection)).toBe(1);
+        expect(markdownRenderCounts.get(metadataSection)).toBe(1);
+        expect(useStore.getState().artifactContent.indexOf(businessSection))
+            .toBeLessThan(useStore.getState().artifactContent.indexOf(metadataSection));
+    });
 });

@@ -10,7 +10,7 @@
 
 2026-07-16 用户先明确要求只保留本文件中的 3 项产品体验待办，旧质量整改序列、P2/P3 条件触发项、旧 E 编号、旧结构化失败治理候选和旧真实模型 smoke 候选均不再作为 backlog。随后用户基于当前测试盘点新增并批准第 4 项：以真实 DeepSeek、真实后端/SSE/持久化和无头 Chromium 为核心的 New Agents 功能测试重构。该项是依据当前目标重新建立的独立待办，不是恢复旧 smoke 候选。历史完成证据保留在 `docs/todos/archive/`，不得从归档文字、旧 checkbox、旧计划或旧分支自动恢复实施；未来若出现新的实际失败，必须按当时事实重新建项。
 
-本文件是当前唯一活跃产品待办入口。用户已在 2026-07-16 启动 Goal Mode，并再次确认必须严格按 `QG-017 → QG-018 → QG-019 → QG-020` 串行执行；QG-017 已独立交付并推送，QG-018 已完成实现、正式审查与完成型验证，正在进行独立提交和推送，QG-019 与 QG-020 不得提前穿插。QG-018 远端同步成功后的唯一下一入口是 QG-019 ASSESS。
+本文件是当前唯一活跃产品待办入口。用户已在 2026-07-16 启动 Goal Mode，并再次确认必须严格按 `QG-017 → QG-018 → QG-019 → QG-020` 串行执行；QG-017 已独立交付并推送，QG-018 已以 `cb2fb87e` 独立交付并推送，QG-019 已完成全部质量门并由本结果所在独立提交交付，唯一下一入口是 QG-020。
 
 ## 共享架构边界
 
@@ -25,7 +25,7 @@
 |---|---|---|---|---|
 | `QG-017` | P1 | 全工作流左侧有意义对话先于右侧产出物 | `DONE` | 首个非占位自然对话先出现，随后右侧开始真实产出；双栏各自单调更新、互不饥饿 |
 | `QG-018` | P1 | 统一 25 个在线阶段的右侧分段流式 | `DONE` | 已完整且可校验的业务章节逐段出现，最终与 deterministic renderer 完全一致 |
-| `QG-019` | P2 | 文档信息退出首屏重表格 | `NOT_STARTED` | 右侧先展示业务正文，元信息保留但只在尾部轻量附录或共享轻量区出现 |
+| `QG-019` | P2 | 文档信息退出首屏重表格 | `DONE` | 25/25 阶段先展示业务正文；19 个阶段在文末单行展示元信息，6 个阶段不伪造元信息 |
 | `QG-020` | P1 | New Agents 真实链路、无头优先的功能测试重构 | `NOT_STARTED` | PR 运行关键真实链路，Nightly/发布运行全阶段矩阵；验证格式、流式、持久化与阶段流转，不以截图或像素差异作为门禁 |
 
 ## QG-017 — 全工作流左侧有意义对话先于右侧产出物
@@ -106,7 +106,7 @@
 ### 已知证据
 
 - 至少 `TEST_DESIGN/CLARIFY`、`TEST_DESIGN/DELIVERY`、`VALUE_DISCOVERY/BLUEPRINT` 和四个 `PRD_REVIEW` stage 的 deterministic renderer 会在标题后立即输出元信息表。
-- CLARIFY partial renderer 还会把 `document_info` 作为首个有效增量。
+- QG-018 已阻止 metadata-only partial 独立产生右栏增量；当前剩余问题是首个业务 section 到达后，render plan 仍会把已完成的 `document_info` 排在同一 Markdown 的业务正文前面。
 - CLARIFY、DELIVERY、BLUEPRINT 的 frontend template 已把同类信息定义为文末“附录”，与 deterministic renderer 的实际顺序不一致。
 
 ### 方案边界
@@ -121,6 +121,18 @@
 - `document_info` 不再以首段大型表格出现，也不再成为 `QG-018` 的首个右侧流式增量。
 - partial 与 final renderer 的章节顺序一致，结构化数据、持久化、版本恢复、handoff 与导出语义不丢失。
 - 每个 workflow 至少一条窄右栏 DOM 证据，覆盖首屏、长文滚动与元信息可发现性；共享前端测试覆盖编辑/预览、版本恢复和导出。
+
+### 完成结果与证据（2026-07-16）
+
+- 共享 `ArtifactRenderPlan` 对 `business | metadata` 建立唯一 canonical 顺序并拒绝重复 section、未知 role 与无业务 section；partial/final 共用该顺序，metadata-only 输入不会成为首个右栏增量。
+- 25/25 stage 完成机械分类：19 个 stage 使用文末 compact metadata footer，6 个 stage 没有纯文档元信息且不伪造 footer。DELIVERY、REQ REVIEW/REPORT、INCIDENT IMPROVEMENT 与 VALUE BLUEPRINT 的混合信息已拆成业务摘要和纯元信息投影。
+- compact footer 保留结构化 `artifact_data`，不使用表格或水平分隔线；特殊 Markdown/HTML 字符用安全实体编码，preview、Markdown、DOCX 与 PDF 均保持可见原文。Story/PRD/Test 的 `document_info.workflow/stage` 会与运行时身份精确校验。
+- manifest 的 19 个相关 stage 已同步 required headings 和 `2026.07.16.1` prompt/template 版本；25-stage 双向精确 heading tracer 同时阻止 manifest 漏标题、renderer 漏声明及近似子串假通过。
+- frontend 覆盖 preview/code/edit、section lock、历史恢复、Markdown 字节、DOCX/PDF 顺序与实体保真；1024×800 无头 Chromium 的 7/7 workflow 专项证明业务正文首屏可见、footer 文末可发现且无 metadata 表格，完整 browser 为 `32 passed, 3 skipped`。
+- Spec 与 Standards 正式审查最终均为 PASS，Critical / Important / Minor 全部清零；审查员额外用 `## PRD 输入` 与 `## 文档信息附录` 两个 mutation 证明双向精确漂移测试会失败关闭。
+- 完成型证据：backend 全量 `1092 passed, 1 skipped`；frontend `62 files / 928 passed`，TypeScript lint 与 production build 通过；`./scripts/test/test-local.sh new-agents` 通过（frontend 928、backend 1089，另 4 个按 runner 选择规则不执行）；最终全仓 runner 通过（Intent 510、MidScene 40、common frontend lint/build、New Agents frontend 928/backend 1089/browser 22，另 3 skipped、10 deselected）；关键 flake8、Black check 与 `git diff --check` 通过。
+- 全仓 runner 首次使用系统 Python 3.14 时因该解释器缺少 pip/pytest/flake8 而无法形成有效验证；改用仓库 Python 3.11 虚拟环境 PATH 后，同一完整入口通过。无关 runner 生成文件 `tools/intent-tester/test-results/proxy/junit.xml` 始终不进入 QG-019 提交。
+- 设计与实施计划分别见 [`QG-019 spec`](../superpowers/specs/2026-07-16-qg019-lightweight-artifact-metadata-design.md) 和 [`QG-019 plan`](../superpowers/plans/2026-07-16-qg019-lightweight-artifact-metadata.md)。聚焦提交由本结果更新所在的 QG-019 commit 承载，交付后以 `git log` 定位 SHA。
 
 ## QG-020 — New Agents 真实链路、无头优先的功能测试重构
 

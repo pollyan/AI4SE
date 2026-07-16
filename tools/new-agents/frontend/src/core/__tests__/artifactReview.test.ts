@@ -49,6 +49,7 @@ describe('buildArtifactQualityDiagnostics', () => {
                 '## 6. 测试点拓扑',
                 '## 7. 资源与取舍',
                 '## 8. 阶段门禁',
+                '## 文档信息',
                 '风险 ID 测试点 ID 覆盖建议',
                 '```mermaid',
                 'quadrantChart',

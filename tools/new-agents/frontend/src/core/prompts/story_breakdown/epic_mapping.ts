@@ -8,6 +8,9 @@ export const EPIC_MAPPING_TEMPLATE = `结构化业务数据应覆盖：
 - user_stories：为每个 Epic 补充最小可交付故事草案，确保 story_id 能引用 epic_id。
 - dependencies：记录跨 Epic 或外部系统依赖及风险缓解。
 - stage_gate：确认 Epic 是否覆盖核心目标、边界、依赖和优先级。
+- document_info：标明 STORY_BREAKDOWN、EPIC_MAPPING 和产物状态。
+
+最终 Markdown 必须先渲染全部业务正文，再以“## 文档信息”单行展示 document_info 元信息；不要把元信息放在正文开头或渲染成表格。
 
 后端渲染器会基于 epics 生成 ai4se-visual flow-map，例如：
 ${FENCE}ai4se-visual

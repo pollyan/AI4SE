@@ -96,4 +96,7 @@ ${FENCE}
 - [ ] 所有 P0 测试点都有至少一条用例覆盖。
 - [ ] 每条用例都有测试数据、预期结果和断言。
 - [ ] 状态为“需补环境”的用例已列入开放问题。
-- [ ] traceability-matrix 与 Markdown 覆盖追溯表保持一致。`;
+- [ ] traceability-matrix 与 Markdown 覆盖追溯表保持一致。
+
+## 文档信息
+文档元信息：Artifact 名称：结构化测试用例集 ｜ Workflow：TEST_DESIGN ｜ Stage：CASES ｜ 状态：草稿 / 待确认 / 已确认`;

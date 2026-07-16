@@ -3,6 +3,7 @@ import {
     type NodeEdgeStructuredVisual,
     type TimelineStructuredVisual,
 } from './structuredVisuals';
+import { stripInlineMarkdownToText } from './markdownPlainText';
 
 const PDF_LINES_PER_PAGE = 42;
 
@@ -43,12 +44,7 @@ export function toUtf16BeHex(content: string): string {
 }
 
 function stripInlineMarkdown(content: string): string {
-    return content
-        .replace(/`([^`]+)`/g, '$1')
-        .replace(/\*\*([^*]+)\*\*/g, '$1')
-        .replace(/\*([^*]+)\*/g, '$1')
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-        .trim();
+    return stripInlineMarkdownToText(content).trim();
 }
 
 function isFenceStart(line: string): boolean {

@@ -117,7 +117,7 @@ describe('buildSystemPrompt', () => {
         });
 
         expect(prompt).toContain('【Prompt/template 版本】');
-        expect(prompt).toContain('当前阶段版本：2026.06.24.1');
+        expect(prompt).toContain('当前阶段版本：2026.07.16.1');
     });
 
     it('does not include legacy tag-based output protocol instructions', () => {

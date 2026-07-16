@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { buildPlainTextPdf, toUtf16BeHex } from '../artifactExport';
 
 describe('artifactExport', () => {
+    it('decodes safe compact metadata entities into literal PDF text', () => {
+        const pdf = buildPlainTextPdf([
+            '# 测试报告',
+            '',
+            '## 文档信息',
+            '文档元信息：值：&#95;draft&#95; &#126;&#126;old&#126;&#126; &#96;code&#96; &#92;path &#91;link&#93; &lt;script&gt; &#124; &amp;copy;',
+        ].join('\n'));
+
+        expect(pdf).toContain(toUtf16BeHex('文档元信息：值：_draft_ ~~old~~ `code` \\path [link] <script> | &copy;'));
+        expect(pdf).not.toContain(toUtf16BeHex('&#95;draft&#95;'));
+    });
+
     it('builds a minimal PDF with cleaned markdown text', () => {
         const pdf = buildPlainTextPdf('# 测试报告\n\n这是 **重点** 结论。');
 

@@ -24,4 +24,25 @@ describe('ArtifactMarkdownPreview', () => {
         expect(screen.getByText('登录')).toBeTruthy();
         expect(screen.getByText('回归')).toBeTruthy();
     });
+
+    it('renders compact metadata entities as literal text instead of Markdown or HTML', () => {
+        const { container } = render(
+            <ArtifactMarkdownPreview
+                content={[
+                    '# 文档',
+                    '',
+                    '## 文档信息',
+                    '文档元信息：值：&#95;draft&#95; &#126;&#126;old&#126;&#126; &#96;code&#96; &#92;path &#91;link&#93; &lt;script&gt; &#124; &amp;copy;',
+                ].join('\n')}
+                createComponents={() => components}
+                renderVersionKey="metadata-entities"
+            />
+        );
+
+        expect(screen.getByText(/_draft_ ~~old~~ `code` \\path \[link\] <script> \| &copy;/)).toBeTruthy();
+        expect(container.querySelector('em')).toBeNull();
+        expect(container.querySelector('del')).toBeNull();
+        expect(container.querySelector('code')).toBeNull();
+        expect(container.querySelector('script')).toBeNull();
+    });
 });

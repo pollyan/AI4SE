@@ -4,7 +4,11 @@ import json
 import re
 from typing import Any
 
-from artifact_data_renderer_base import StageGateCheck
+from artifact_data_renderer_base import (
+    DocumentInfo,
+    StageGateCheck,
+    render_compact_metadata,
+)
 from artifact_data_value_schema import (
     PositioningSummary,
     ValueFlowNode,
@@ -56,9 +60,9 @@ from artifact_data_value_schema import (
     ValueDiscoveryBlueprintArtifactData,
 )
 
+
 def _render_value_positioning_summary(summary: PositioningSummary) -> str:
     rows = [
-        ("Artifact 名称", "价值定位诊断报告"),
         ("一句话定位", summary.one_liner),
         ("核心用户", summary.core_user),
         ("核心痛点", summary.core_pain),
@@ -230,7 +234,6 @@ def _persona_names(personas: list[PersonaProfile]) -> dict[str, str]:
 
 def _render_persona_summary(summary: PersonaSummary) -> str:
     rows = [
-        ("Artifact 名称", summary.artifact_name),
         ("核心用户判断", summary.core_user_judgement),
         ("主要痛点", summary.primary_pain),
         ("验证状态", summary.validation_status),
@@ -602,14 +605,34 @@ def _escape_mermaid_mindmap_text(value: str) -> str:
 
 
 def _render_blueprint_document_info(info: BlueprintDocumentInfo) -> str:
-    rows = [
-        ("文档版本", info.version),
-        ("创建日期", info.created_at),
-        ("产品方向", info.product_direction),
-        ("Artifact 名称", info.artifact_name),
-        ("蓝图状态", info.blueprint_status),
-    ]
-    return "## 文档信息\n" + _markdown_table(["维度", "内容"], rows)
+    return render_compact_metadata(
+        "## 文档信息",
+        (
+            ("文档版本", info.version),
+            ("创建日期", info.created_at),
+            ("Artifact 名称", info.artifact_name),
+            ("蓝图状态", info.blueprint_status),
+        ),
+    )
+
+
+def _render_blueprint_overview(info: BlueprintDocumentInfo) -> str:
+    return "## 需求蓝图概览\n" + _markdown_table(
+        ["字段", "内容"],
+        [("产品方向", info.product_direction)],
+    )
+
+
+def _render_value_document_info(info: DocumentInfo) -> str:
+    return render_compact_metadata(
+        "## 文档信息",
+        (
+            ("Artifact 名称", info.artifact_name),
+            ("Workflow", info.workflow),
+            ("Stage", info.stage),
+            ("状态", info.status),
+        ),
+    )
 
 
 def _render_blueprint_product_overview(overview: BlueprintProductOverview) -> str:
@@ -880,7 +903,6 @@ def _render_blueprint_stage_gate(checks: list[StageGateCheck]) -> str:
     return "## 12. 阶段门禁\n" + "\n".join(lines)
 
 
-
 def _markdown_table(headers: list[str], rows: list[tuple[Any, ...]]) -> str:
     header = "| " + " | ".join(headers) + " |"
     separator = "| " + " | ".join("---" for _ in headers) + " |"
@@ -908,7 +930,6 @@ def _node_id(label: str, existing: dict[str, str]) -> str:
         suffix += 1
     existing[label] = candidate
     return candidate
-
 
 
 def _escape_mermaid_label(value: str) -> str:

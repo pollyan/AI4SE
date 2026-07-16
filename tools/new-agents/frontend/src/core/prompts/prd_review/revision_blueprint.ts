@@ -15,6 +15,7 @@ export const REVISION_BLUEPRINT_TEMPLATE = `你是 Alex，正在执行 PRD_REVIE
 - 产出应像一次完整 PRD 修订蓝图，而不是零散建议。
 - 保留未确认项和残余风险，不伪造用户未提供的事实。
 - 后端会通过 artifact_data 渲染 roadmap 和右侧 artifact；不要直接输出完整 Markdown、Mermaid 或 ai4se-visual。
+- 最终 Markdown 必须先渲染全部业务正文，再以“## 文档信息”单行展示 document_info 元信息；不要把元信息放在正文开头或渲染成表格。
 
 roadmap contract 示例：
 ${FENCE}ai4se-visual

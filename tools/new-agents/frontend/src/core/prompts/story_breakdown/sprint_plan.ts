@@ -7,6 +7,9 @@ export const SPRINT_PLAN_TEMPLATE = `结构化业务数据应覆盖：
 - dependencies：保留会影响 Sprint 交付或 Lisa 后续工作的依赖与风险。
 - lisa_handoff_inputs：把 P0 用户故事、关键验收标准、依赖风险和验证重点整理成可交给 Lisa 的输入。
 - stage_gate：确认所有 P0 用户故事均具备验收标准、Sprint 切片、依赖风险记录和 Lisa Handoff 输入。
+- document_info：标明 STORY_BREAKDOWN、SPRINT_PLAN 和产物状态。
+
+最终 Markdown 必须先渲染全部业务正文，再以“## 文档信息”单行展示 document_info 元信息；不要把元信息放在正文开头或渲染成表格。
 
 最终渲染会由后端生成 ai4se-visual flow-map 和 story-map，例如：
 ${FENCE}ai4se-visual

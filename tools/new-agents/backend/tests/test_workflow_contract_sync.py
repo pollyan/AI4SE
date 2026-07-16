@@ -184,10 +184,16 @@ def test_shared_visual_protocol_declares_layering_policy():
         "ai4se-visual JSON 代码块",
     ]
     assert protocol["mermaid"]["source"] == "backend_deterministic_renderer"
-    assert set(protocol["mermaid"]["allowedGeneratedDiagramTypes"]) >= required_mermaid_types
+    assert (
+        set(protocol["mermaid"]["allowedGeneratedDiagramTypes"])
+        >= required_mermaid_types
+    )
     assert protocol["structuredVisual"]["source"] == "backend_deterministic_renderer"
     assert protocol["structuredVisual"]["primaryForComplexBusinessVisuals"] is True
-    assert set(protocol["structuredVisual"]["currentTypes"]) >= required_structured_visual_types
+    assert (
+        set(protocol["structuredVisual"]["currentTypes"])
+        >= required_structured_visual_types
+    )
     assert "timeline-map" in protocol["structuredVisual"]["currentTypes"]
     assert "flow-map" in protocol["structuredVisual"]["currentTypes"]
     assert set(protocol["structuredVisual"]["plannedComplexTypes"]) >= {
@@ -275,8 +281,7 @@ def test_idea_converge_artifact_data_contract_manifest_drives_backend_instructio
     assert "ice_evaluations.idea_id 必须唯一" in instruction
     assert "rank 缺省时由后端按 ICE 得分降序派生" in instruction
     assert (
-        "ice_score 缺省时由后端按 "
-        "impact * confidence / effort 派生"
+        "ice_score 缺省时由后端按 " "impact * confidence / effort 派生"
     ) in instruction
     assert "decision_matrix.recommended_idea_id" in instruction
     assert "validation_experiments.idea_ids" in instruction
@@ -345,19 +350,26 @@ def test_strategy_artifact_data_contract_manifest_drives_backend_instruction():
         "TEST_DESIGN",
         "STRATEGY",
     )
-    contract = (
-        _workflow_manifest()["workflows"]["TEST_DESIGN"]["stages"][1]
-        .get("artifactDataContract")
+    contract = _workflow_manifest()["workflows"]["TEST_DESIGN"]["stages"][1].get(
+        "artifactDataContract"
     )
 
     assert contract is not None
-    assert "risks[].rpn 由后端根据 severity * occurrence * detection 计算" in instruction
+    assert (
+        "risks[].rpn 由后端根据 severity * occurrence * detection 计算" in instruction
+    )
     assert "quality_goals[].goal_id 必须唯一" in instruction
     assert "risks[].risk_id 必须唯一" in instruction
     assert "test_techniques[].technique_id 必须唯一" in instruction
     assert "test_points[].point_id 必须唯一" in instruction
-    assert "test_points.quality_goal、test_points.risk、test_points.technique" in instruction
-    assert "test_techniques.target、test_techniques.applies_to、test_layers.related" in instruction
+    assert (
+        "test_points.quality_goal、test_points.risk、test_points.technique"
+        in instruction
+    )
+    assert (
+        "test_techniques.target、test_techniques.applies_to、test_layers.related"
+        in instruction
+    )
     assert "risk-board JSON 代码块" in instruction
 
 
@@ -552,8 +564,13 @@ def test_incident_root_cause_artifact_data_contract_manifest_drives_backend_inst
     assert "why_chain[].level 必须唯一" in instruction
     assert "cause_evidence.cause_id 必须唯一" in instruction
     assert "cause_evidence.related_level 只能引用 why_chain[].level" in instruction
-    assert "fishbone_categories.cause_ids 只能引用 cause_evidence.cause_id" in instruction
-    assert "root_cause_conclusions.related_cause_id 只能引用 cause_evidence.cause_id" in instruction
+    assert (
+        "fishbone_categories.cause_ids 只能引用 cause_evidence.cause_id" in instruction
+    )
+    assert (
+        "root_cause_conclusions.related_cause_id 只能引用 cause_evidence.cause_id"
+        in instruction
+    )
     assert "why_chain 至少包含 3 层追问" in instruction
     assert "cause-map JSON 代码块" in instruction
     assert "ai4se-visual cause-map" in instruction
@@ -576,7 +593,9 @@ def test_incident_timeline_artifact_data_contract_manifest_drives_backend_instru
 
     assert contract is not None
     assert "所有字符串字段必须是非空白内容" in instruction
-    assert "impact_metrics、fact_sources、timeline_events、fact_separation" in instruction
+    assert (
+        "impact_metrics、fact_sources、timeline_events、fact_separation" in instruction
+    )
     assert "timeline_events[].fact_ids 必须至少包含 1 个事实 ID" in instruction
     assert "fact_sources[].fact_id 必须唯一" in instruction
     assert (
@@ -608,8 +627,7 @@ def test_incident_improvement_artifact_data_contract_manifest_drives_backend_ins
 
     assert contract is not None
     assert (
-        "report_info.action_count 缺省时由后端按 "
-        "improvement_actions 数量派生"
+        "report_info.action_count 缺省时由后端按 " "improvement_actions 数量派生"
     ) in instruction
     assert "improvement_actions[].action_id 必须唯一" in instruction
     assert (
@@ -650,8 +668,14 @@ def test_idea_define_artifact_data_contract_manifest_drives_backend_instruction(
     assert contract is not None
     assert "evidence_items[].evidence_id 必须唯一" in instruction
     assert "problem_landscape.subproblems[].problem_id 必须唯一" in instruction
-    assert "problem_user_fit.evidence_ids 只能引用 evidence_items[].evidence_id" in instruction
-    assert "problem_landscape.root_problem 必须被至少一个 evidence_items.related_problem 或 problem_user_fit.evidence_or_assumption 条目覆盖" in instruction
+    assert (
+        "problem_user_fit.evidence_ids 只能引用 evidence_items[].evidence_id"
+        in instruction
+    )
+    assert (
+        "problem_landscape.root_problem 必须被至少一个 evidence_items.related_problem 或 problem_user_fit.evidence_or_assumption 条目覆盖"
+        in instruction
+    )
     assert "stage_gate 至少包含一个 checked=true" in instruction
     assert "Mermaid 代码块" in instruction
     assert "mindmap 代码块" in instruction
@@ -677,8 +701,14 @@ def test_idea_diverge_artifact_data_contract_manifest_drives_backend_instruction
     assert "idea_cards[].idea_id 必须唯一" in instruction
     assert "idea_sources[].source_id 必须唯一" in instruction
     assert "parked_or_excluded[].record_id 必须唯一" in instruction
-    assert "idea_landscape.groups[].idea_ids 只能引用 idea_cards[].idea_id 中已定义的创意 ID" in instruction
-    assert "idea_sources[].idea_ids 只能引用 idea_cards[].idea_id 中已定义的创意 ID" in instruction
+    assert (
+        "idea_landscape.groups[].idea_ids 只能引用 idea_cards[].idea_id 中已定义的创意 ID"
+        in instruction
+    )
+    assert (
+        "idea_sources[].idea_ids 只能引用 idea_cards[].idea_id 中已定义的创意 ID"
+        in instruction
+    )
     assert "stage_gate 至少包含一个 checked=true" in instruction
     assert "Mermaid 代码块" in instruction
     assert "mindmap 代码块" in instruction
@@ -704,11 +734,26 @@ def test_idea_concept_artifact_data_contract_manifest_drives_backend_instruction
     assert "core_assumptions[].assumption_id 必须唯一" in instruction
     assert "validation_roadmap[].validation_id 必须唯一" in instruction
     assert "next_actions[].action_id 必须唯一" in instruction
-    assert "lean_canvas.cell 必须覆盖问题、用户群体、独特价值主张、解决方案、渠道、收入来源、成本结构、关键指标、竞争壁垒" in instruction
-    assert "growth_funnel.stage 必须覆盖 Acquisition、Activation、Retention、Revenue、Referral" in instruction
-    assert "mvp_features[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID" in instruction
-    assert "validation_roadmap[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID" in instruction
-    assert "next_actions[].related_ids 只能引用 core_assumptions[].assumption_id、validation_roadmap[].validation_id 或 premortem_risks[].risk_id 中已定义的 ID" in instruction
+    assert (
+        "lean_canvas.cell 必须覆盖问题、用户群体、独特价值主张、解决方案、渠道、收入来源、成本结构、关键指标、竞争壁垒"
+        in instruction
+    )
+    assert (
+        "growth_funnel.stage 必须覆盖 Acquisition、Activation、Retention、Revenue、Referral"
+        in instruction
+    )
+    assert (
+        "mvp_features[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID"
+        in instruction
+    )
+    assert (
+        "validation_roadmap[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID"
+        in instruction
+    )
+    assert (
+        "next_actions[].related_ids 只能引用 core_assumptions[].assumption_id、validation_roadmap[].validation_id 或 premortem_risks[].risk_id 中已定义的 ID"
+        in instruction
+    )
     assert "stage_gate 至少包含一个 checked=true" in instruction
     assert "mvp-map JSON 代码块" in instruction
     assert "右侧产品概念简报" in instruction
@@ -733,11 +778,23 @@ def test_value_elevator_artifact_data_contract_manifest_drives_backend_instructi
 
     assert contract is not None
     assert "value_flow.nodes[].node_id 必须唯一" in instruction
-    assert "value_flow.links[].from_node 和 value_flow.links[].to_node 只能引用 value_flow.nodes[].node_id 中已定义的节点 ID" in instruction
+    assert (
+        "value_flow.links[].from_node 和 value_flow.links[].to_node 只能引用 value_flow.nodes[].node_id 中已定义的节点 ID"
+        in instruction
+    )
     assert "score_matrix[].score 必须是 1 到 5 的整数" in instruction
-    assert "score_summary.total_score 由后端根据 score_matrix[].score 求和计算，模型不要输出" in instruction
-    assert "score_summary.average_score 由后端根据 score_matrix[].score 计算并保留 2 位小数，模型不要输出" in instruction
-    assert "如果模型显式输出 score_summary.total_score 或 score_summary.average_score，必须与后端计算结果一致" in instruction
+    assert (
+        "score_summary.total_score 由后端根据 score_matrix[].score 求和计算，模型不要输出"
+        in instruction
+    )
+    assert (
+        "score_summary.average_score 由后端根据 score_matrix[].score 计算并保留 2 位小数，模型不要输出"
+        in instruction
+    )
+    assert (
+        "如果模型显式输出 score_summary.total_score 或 score_summary.average_score，必须与后端计算结果一致"
+        in instruction
+    )
     assert "Mermaid 代码块" in instruction
     assert "score-matrix JSON 代码块" in instruction
     assert "右侧价值定位分析" in instruction
@@ -761,12 +818,18 @@ def test_value_persona_artifact_data_contract_manifest_drives_backend_instructio
 
     assert contract is not None
     assert "personas[].persona_id 必须唯一" in instruction
-    assert "behavior_scenarios[].persona_id、decision_chain[].persona_id、pain_evidence[].persona_id、priority_ranking[].persona_id 只能引用 personas[].persona_id 中已定义的画像 ID" in instruction
+    assert (
+        "behavior_scenarios[].persona_id、decision_chain[].persona_id、pain_evidence[].persona_id、priority_ranking[].persona_id 只能引用 personas[].persona_id 中已定义的画像 ID"
+        in instruction
+    )
     assert "priority_ranking[].persona_id 必须唯一" in instruction
     assert "完整 Markdown 文档" in instruction
     assert "Markdown 表格" in instruction
     assert "右侧用户画像分析" in instruction
-    assert "画像、行为场景、决策链、痛点证据、反画像和优先级排序 Markdown 表格" in instruction
+    assert (
+        "画像、行为场景、决策链、痛点证据、反画像和优先级排序 Markdown 表格"
+        in instruction
+    )
 
 
 def test_value_journey_artifact_data_contract_manifest_drives_backend_instruction():
@@ -788,9 +851,18 @@ def test_value_journey_artifact_data_contract_manifest_drives_backend_instructio
     assert "journey_stages[].pain_id 必须唯一" in instruction
     assert "journey_stages[].opportunity_id 必须唯一" in instruction
     assert "journey_stages[].emotion_score 必须是 1 到 5 的整数" in instruction
-    assert "pain_priorities[].stage_id 只能引用 journey_stages[].stage_id 中已定义的旅程阶段 ID" in instruction
-    assert "pain_priorities[].pain_id 和 opportunity_scores[].pain_id 只能引用 journey_stages[].pain_id 中已定义的痛点 ID" in instruction
-    assert "opportunity_scores[].opportunity_id、entry_strategy[].related_opportunity 和 validation_experiments[].opportunity_id 只能引用 journey_stages[].opportunity_id 中已定义的机会 ID" in instruction
+    assert (
+        "pain_priorities[].stage_id 只能引用 journey_stages[].stage_id 中已定义的旅程阶段 ID"
+        in instruction
+    )
+    assert (
+        "pain_priorities[].pain_id 和 opportunity_scores[].pain_id 只能引用 journey_stages[].pain_id 中已定义的痛点 ID"
+        in instruction
+    )
+    assert (
+        "opportunity_scores[].opportunity_id、entry_strategy[].related_opportunity 和 validation_experiments[].opportunity_id 只能引用 journey_stages[].opportunity_id 中已定义的机会 ID"
+        in instruction
+    )
     assert "Mermaid 代码块" in instruction
     assert "journey-map JSON 代码块" in instruction
     assert "右侧用户旅程分析" in instruction
@@ -815,12 +887,27 @@ def test_value_blueprint_artifact_data_contract_manifest_drives_backend_instruct
     assert contract is not None
     assert "requirements[].requirement_id 必须唯一" in instruction
     assert "acceptance_criteria[].acceptance_id 必须唯一" in instruction
-    assert "feature_modules[].features[].requirement_id 如果非空，只能引用 requirements[].requirement_id 中已定义的需求 ID" in instruction
-    assert "mvp_plan.included_features[].requirement_id 和 acceptance_criteria[].requirement_id 只能引用 requirements[].requirement_id 中已定义的需求 ID" in instruction
-    assert "lisa_handoff_inputs[] 中 input_type 为“需求”时 reference_id 只能引用 requirements[].requirement_id 中已定义的需求 ID" in instruction
-    assert "lisa_handoff_inputs[] 中 input_type 为“验收标准”时 reference_id 只能引用 acceptance_criteria[].acceptance_id 中已定义的验收标准 ID" in instruction
+    assert (
+        "feature_modules[].features[].requirement_id 如果非空，只能引用 requirements[].requirement_id 中已定义的需求 ID"
+        in instruction
+    )
+    assert (
+        "mvp_plan.included_features[].requirement_id 和 acceptance_criteria[].requirement_id 只能引用 requirements[].requirement_id 中已定义的需求 ID"
+        in instruction
+    )
+    assert (
+        "lisa_handoff_inputs[] 中 input_type 为“需求”时 reference_id 只能引用 requirements[].requirement_id 中已定义的需求 ID"
+        in instruction
+    )
+    assert (
+        "lisa_handoff_inputs[] 中 input_type 为“验收标准”时 reference_id 只能引用 acceptance_criteria[].acceptance_id 中已定义的验收标准 ID"
+        in instruction
+    )
     assert "main_flow.nodes[].node_id 必须唯一" in instruction
-    assert "main_flow.links[].from_node 和 main_flow.links[].to_node 只能引用 main_flow.nodes[].node_id 中已定义的流程节点 ID" in instruction
+    assert (
+        "main_flow.links[].from_node 和 main_flow.links[].to_node 只能引用 main_flow.nodes[].node_id 中已定义的流程节点 ID"
+        in instruction
+    )
     assert "Mermaid 代码块" in instruction
     assert "roadmap JSON 代码块" in instruction
     assert "右侧需求蓝图" in instruction
@@ -965,31 +1052,50 @@ def test_workflow_manifest_declares_prompt_template_versions_for_every_stage():
     for workflow_id, workflow in manifest["workflows"].items():
         for stage in workflow["stages"]:
             version = stage.get("promptTemplateVersion")
-            assert isinstance(version, str), (
-                f"{workflow_id}/{stage['id']} missing promptTemplateVersion"
-            )
-            assert PROMPT_TEMPLATE_VERSION_RE.match(version), (
-                f"{workflow_id}/{stage['id']} has invalid promptTemplateVersion: {version}"
-            )
+            assert isinstance(
+                version, str
+            ), f"{workflow_id}/{stage['id']} missing promptTemplateVersion"
+            assert PROMPT_TEMPLATE_VERSION_RE.match(
+                version
+            ), f"{workflow_id}/{stage['id']} has invalid promptTemplateVersion: {version}"
+
+
+def test_metadata_footer_stage_prompt_template_versions_match_current_contract():
+    from artifact_data_renderers import ARTIFACT_DATA_RENDERERS
+
+    metadata_stage_keys = {
+        stage_key
+        for stage_key, plan in ARTIFACT_DATA_RENDERERS.items()
+        if any(section.role == "metadata" for section in plan.sections)
+    }
+    manifest = _workflow_manifest()
+    versions = {
+        (workflow_id, stage["id"]): stage["promptTemplateVersion"]
+        for workflow_id, workflow in manifest["workflows"].items()
+        for stage in workflow["stages"]
+        if (workflow_id, stage["id"]) in metadata_stage_keys
+    }
+
+    assert set(versions) == metadata_stage_keys
+    assert set(versions.values()) == {"2026.07.16.1"}
 
 
 def test_workflow_manifest_declares_regression_samples_for_every_stage():
     known_sample_ids = {
-        sample["id"]
-        for sample in _prompt_regression_samples()["samples"]
+        sample["id"] for sample in _prompt_regression_samples()["samples"]
     }
     manifest = _workflow_manifest()
 
     for workflow_id, workflow in manifest["workflows"].items():
         for stage in workflow["stages"]:
             sample_ids = stage.get("regressionSampleIds")
-            assert isinstance(sample_ids, list) and sample_ids, (
-                f"{workflow_id}/{stage['id']} missing regressionSampleIds"
-            )
+            assert (
+                isinstance(sample_ids, list) and sample_ids
+            ), f"{workflow_id}/{stage['id']} missing regressionSampleIds"
             for sample_id in sample_ids:
-                assert sample_id in known_sample_ids, (
-                    f"{workflow_id}/{stage['id']} references unknown regression sample {sample_id}"
-                )
+                assert (
+                    sample_id in known_sample_ids
+                ), f"{workflow_id}/{stage['id']} references unknown regression sample {sample_id}"
 
 
 def test_prompt_regression_samples_reference_known_workflow_stages():
@@ -1058,26 +1164,71 @@ def test_backend_container_packages_shared_workflow_manifest():
         encoding="utf-8"
     )
 
-    assert "COPY tools/new-agents/workflow_manifest.json /workflow_manifest.json" in dockerfile
-    assert "COPY tools/new-agents/professional_methods.json /professional_methods.json" in dockerfile
-    assert "COPY tools/new-agents/prompt_regression_samples.json /prompt_regression_samples.json" in dockerfile
-    assert "./tools/new-agents/workflow_manifest.json:/workflow_manifest.json:ro" in dev_compose
-    assert "./tools/new-agents/workflow_manifest.json:/workflow_manifest.json:ro" in dev_cn_compose
-    assert "./tools/new-agents/professional_methods.json:/professional_methods.json:ro" in dev_compose
-    assert "./tools/new-agents/professional_methods.json:/professional_methods.json:ro" in dev_cn_compose
-    assert "./tools/new-agents/prompt_regression_samples.json:/prompt_regression_samples.json:ro" in dev_compose
-    assert "./tools/new-agents/prompt_regression_samples.json:/prompt_regression_samples.json:ro" in dev_cn_compose
+    assert (
+        "COPY tools/new-agents/workflow_manifest.json /workflow_manifest.json"
+        in dockerfile
+    )
+    assert (
+        "COPY tools/new-agents/professional_methods.json /professional_methods.json"
+        in dockerfile
+    )
+    assert (
+        "COPY tools/new-agents/prompt_regression_samples.json /prompt_regression_samples.json"
+        in dockerfile
+    )
+    assert (
+        "./tools/new-agents/workflow_manifest.json:/workflow_manifest.json:ro"
+        in dev_compose
+    )
+    assert (
+        "./tools/new-agents/workflow_manifest.json:/workflow_manifest.json:ro"
+        in dev_cn_compose
+    )
+    assert (
+        "./tools/new-agents/professional_methods.json:/professional_methods.json:ro"
+        in dev_compose
+    )
+    assert (
+        "./tools/new-agents/professional_methods.json:/professional_methods.json:ro"
+        in dev_cn_compose
+    )
+    assert (
+        "./tools/new-agents/prompt_regression_samples.json:/prompt_regression_samples.json:ro"
+        in dev_compose
+    )
+    assert (
+        "./tools/new-agents/prompt_regression_samples.json:/prompt_regression_samples.json:ro"
+        in dev_cn_compose
+    )
 
 
 def test_frontend_container_packages_shared_workflow_manifest_for_vite_build():
     dockerfile = (NEW_AGENTS_ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
 
-    assert "COPY tools/new-agents/workflow_manifest.json /workflow_manifest.json" in dockerfile
-    assert "COPY tools/new-agents/professional_methods.json /professional_methods.json" in dockerfile
-    assert "COPY tools/new-agents/prompt_regression_samples.json /prompt_regression_samples.json" in dockerfile
-    assert "COPY tools/new-agents/workflow_manifest.json ./workflow_manifest.json" in dockerfile
-    assert "COPY tools/new-agents/professional_methods.json ./professional_methods.json" in dockerfile
-    assert "COPY tools/new-agents/prompt_regression_samples.json ./prompt_regression_samples.json" in dockerfile
+    assert (
+        "COPY tools/new-agents/workflow_manifest.json /workflow_manifest.json"
+        in dockerfile
+    )
+    assert (
+        "COPY tools/new-agents/professional_methods.json /professional_methods.json"
+        in dockerfile
+    )
+    assert (
+        "COPY tools/new-agents/prompt_regression_samples.json /prompt_regression_samples.json"
+        in dockerfile
+    )
+    assert (
+        "COPY tools/new-agents/workflow_manifest.json ./workflow_manifest.json"
+        in dockerfile
+    )
+    assert (
+        "COPY tools/new-agents/professional_methods.json ./professional_methods.json"
+        in dockerfile
+    )
+    assert (
+        "COPY tools/new-agents/prompt_regression_samples.json ./prompt_regression_samples.json"
+        in dockerfile
+    )
 
 
 def test_frontend_templates_include_required_structured_visual_contract_examples():

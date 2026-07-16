@@ -3,6 +3,7 @@ import {
     type NodeEdgeStructuredVisual,
     type TimelineStructuredVisual,
 } from './structuredVisuals';
+import { stripInlineMarkdownToText } from './markdownPlainText';
 
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -35,13 +36,7 @@ const xmlEscape = (content: string): string => (
         .replace(/'/g, '&apos;')
 );
 
-const stripInlineMarkdown = (content: string): string => (
-    content
-        .replace(/`([^`]+)`/g, '$1')
-        .replace(/\*\*([^*]+)\*\*/g, '$1')
-        .replace(/\*([^*]+)\*/g, '$1')
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-);
+const stripInlineMarkdown = stripInlineMarkdownToText;
 
 const isFenceStart = (line: string): boolean => /^```/.test(line.trim());
 const getFenceLanguage = (line: string): string => (

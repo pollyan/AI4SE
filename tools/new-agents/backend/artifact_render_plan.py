@@ -38,6 +38,34 @@ class ArtifactRenderPlan:
     title_dependencies: tuple[str, ...]
     sections: tuple[ArtifactSectionSpec, ...]
 
+    def __post_init__(self) -> None:
+        section_ids = [section.section_id for section in self.sections]
+        if len(section_ids) != len(set(section_ids)):
+            raise ValueError(
+                "artifact render plan duplicate section ids are not allowed"
+            )
+        invalid_roles = {
+            section.role
+            for section in self.sections
+            if section.role not in {"business", "metadata"}
+        }
+        if invalid_roles:
+            raise ValueError(
+                "artifact render plan section role must be business or metadata: "
+                f"{sorted(invalid_roles)}"
+            )
+        if not any(section.role == "business" for section in self.sections):
+            raise ValueError("artifact render plan must define a business section")
+
+    @property
+    def canonical_sections(self) -> tuple[ArtifactSectionSpec, ...]:
+        return tuple(
+            section
+            for role in ("business", "metadata")
+            for section in self.sections
+            if section.role == role
+        )
+
     def render_available(
         self,
         raw_artifact_data: Mapping[str, Any],
@@ -52,7 +80,7 @@ class ArtifactRenderPlan:
         rendered_sections: list[str] = []
         completed_section_ids: list[str] = []
         completed_business_section = False
-        for section in self.sections:
+        for section in self.canonical_sections:
             values = self._validate_dependencies(
                 raw_artifact_data,
                 section.dependencies,
@@ -100,7 +128,7 @@ class ArtifactRenderPlan:
         )
         title = self.title(projection)
         rendered_sections = []
-        for section in self.sections:
+        for section in self.canonical_sections:
             if section.validate_projection is not None:
                 section.validate_projection(projection)
             rendered_sections.append(section.render(projection))
@@ -109,7 +137,7 @@ class ArtifactRenderPlan:
         return RenderedArtifact(
             markdown=markdown,
             completed_section_ids=tuple(
-                section.section_id for section in self.sections
+                section.section_id for section in self.canonical_sections
             ),
             normalized_artifact_data=model.model_dump(mode="json"),
         )

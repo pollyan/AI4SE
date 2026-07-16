@@ -369,6 +369,7 @@ cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.tes
 | 阶段推进安全 | 只能请求合法下一阶段；前端只设置待确认推进 | `test_agent_contracts.py`, `agentCore.test.ts`, `chatService.test.ts` |
 | SSE 契约稳定 | 成功/错误事件都是 typed SSE；API 测试解析 JSON 字段 | `test_stream_services.py`, `test_agent_endpoint.py`, `test_sse_encoder.py` |
 | 双栏首帧顺序 | 首个有意义自然对话先于首个 artifact；两者不同帧且 artifact-first provider 输入被缓存 | `test_stream_ordering.py`, `test_stream_services.py`, `llm.test.ts`, New Agents browser E2E |
+| 产出物信息层级 | 业务 section 始终先于 metadata section；元信息只在尾部单行展示且不生成表格 | `test_artifact_render_plan.py`, `metadataFooterPrompt.test.ts`, `docxExport.test.ts`, New Agents browser E2E |
 | 供应商兼容性 | DeepSeek/OpenAI 等模型特定设置有单测；真实冒烟可选运行 | `test_agent_runtime.py`, `test_agent_real_smoke.py` |
 | 前端写入边界 | assistant message 只来自 `chatResponse`；artifact 只来自 `newArtifact` | `llm.test.ts`, `chatService.test.ts`, `agentCore.test.ts` |
 | 左侧 Markdown 可读性 | `ChatPane` 长回复保留列表、强调、链接和代码样式，但不承载完整 artifact | `ChatPane.markdown.test.tsx`, `markdownCodeRenderer.test.tsx` |
@@ -376,7 +377,7 @@ cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.tes
 
 ## New Agents 浏览器工作流测试
 
-New Agents 另有一套独立于 intent-tester/MidScene 的浏览器级工作流测试，位于 `tests/e2e/new_agents_browser/`。它使用 Python Playwright 打开真实 React 前端，通过拆分的 mock typed SSE 响应验证完整阶段组织逻辑。完整 workflow runner 在发送前安装 `MutationObserver`，通过 `chat-pane`、`assistant-message-content` 与 `artifact-content` 语义定位记录首屏顺序；同一浏览器提交中同时出现会显式记为 `simultaneous` 并失败。`WorkflowRunResult.stream_order` 必须为 `("chat", "artifact")`。QG-018 的 7-workflow probe 进一步参数化覆盖 Lisa 与 Alex 的全部在线 workflow，要求真实无头 Chromium 观察到 `chat → artifact-1 → artifact-2 → final` 四次独立提交。其余结构化结果包括 `final_artifact`、`stage_artifacts`、`conversation_events` 和 `stage_transitions`，供确定性断言和可选 LLM judge 共用。
+New Agents 另有一套独立于 intent-tester/MidScene 的浏览器级工作流测试，位于 `tests/e2e/new_agents_browser/`。它使用 Python Playwright 打开真实 React 前端，通过拆分的 mock typed SSE 响应验证完整阶段组织逻辑。完整 workflow runner 在发送前安装 `MutationObserver`，通过 `chat-pane`、`assistant-message-content` 与 `artifact-content` 语义定位记录首屏顺序；同一浏览器提交中同时出现会显式记为 `simultaneous` 并失败。`WorkflowRunResult.stream_order` 必须为 `("chat", "artifact")`。QG-018 的 7-workflow probe 进一步参数化覆盖 Lisa 与 Alex 的全部在线 workflow，要求真实无头 Chromium 观察到 `chat → artifact-1 → artifact-2 → final` 四次独立提交。QG-019 的 7-workflow probe 固定为 1024×800 无头 Chromium，验证长文档默认先显示业务正文、元信息位于文末单行且可滚动发现、无纯元信息阶段不伪造尾注，并且不使用截图或像素差异门禁。其余结构化结果包括 `final_artifact`、`stage_artifacts`、`conversation_events` 和 `stage_transitions`，供确定性断言和可选 LLM judge 共用。
 
 默认确定性运行：
 

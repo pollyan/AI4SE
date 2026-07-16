@@ -8,6 +8,9 @@ export const STORY_BACKLOG_TEMPLATE = `结构化业务数据应覆盖：
 - dependencies：记录故事间依赖、外部系统依赖、质量风险和缓解策略。
 - lisa_handoff_inputs：至少包含用户故事和验收标准两类输入，便于 Lisa 测试设计和需求评审。
 - stage_gate：确认 P0 用户故事是否都有验收标准、优先级、可测试性和明确状态。
+- document_info：标明 STORY_BREAKDOWN、STORY_BACKLOG 和产物状态。
+
+最终 Markdown 必须先渲染全部业务正文，再以“## 文档信息”单行展示 document_info 元信息；不要把元信息放在正文开头或渲染成表格。
 
 后端渲染器会继续基于 epics 生成 ai4se-visual flow-map，例如：
 ${FENCE}ai4se-visual
