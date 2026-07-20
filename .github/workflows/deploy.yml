@@ -1,4 +1,4 @@
-name: Deploy to Tencent Cloud via SCP/SSH
+name: AI4SE Quality Gates and Deploy
 
 on:
   push:
@@ -6,6 +6,18 @@ on:
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
+    inputs:
+      real_scope:
+        description: New Agents real-model functional scope
+        required: true
+        default: release
+        type: choice
+        options:
+          - pr
+          - nightly
+          - release
+  schedule:
+    - cron: '17 18 * * *'
 
 jobs:
   # ====================================
@@ -54,7 +66,7 @@ jobs:
         python ../../../scripts/test/verification_outcomes.py run \
           --suite-id "new-agents-backend" \
           --parser pytest \
-          -- python -m pytest tests/ -v -c pytest.ini
+          -- python -m pytest tests/ -v -c pytest.ini -m "not slow"
         echo "::endgroup::"
   
   # ====================================
@@ -114,6 +126,152 @@ jobs:
         python ../../../scripts/test/verification_outcomes.py run --suite-id "new-agents-frontend-lint" --parser command -- npm run lint
         python ../../../scripts/test/verification_outcomes.py run --suite-id "new-agents-frontend" --parser vitest -- npm run test
         echo "::endgroup::"
+
+  # ====================================
+  # 阶段 1b-5: New Agents 无密钥确定性功能门禁（包含 PR）
+  # ====================================
+  new-agents-functional-deterministic-test:
+    name: New Agents Deterministic Functional Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: 🟢 Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: 📦 Install deterministic functional dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r tools/new-agents/backend/requirements.txt
+        cd tools/new-agents/frontend
+        npm ci
+        cd ../../..
+        python -m playwright install --with-deps chromium
+
+    - name: 🧪 Run deterministic functional infrastructure gate
+      run: |
+        python -m pytest -o addopts='' \
+          tests/test_new_agents_functional_runner.py \
+          tests/e2e/new_agents_real/test_contracts.py -q
+        python -m pytest -o addopts='' \
+          tests/e2e/new_agents_real/test_live_stack.py -q
+        cd tools/new-agents/frontend
+        npm run test -- --run devServerProxy.test.ts
+
+  # ====================================
+  # 阶段 1b-6: New Agents 受保护真实模型门禁（禁止 PR ref）
+  # ====================================
+  new-agents-real-functional-test:
+    name: New Agents Real Functional Tests
+    needs: [new-agents-functional-deterministic-test]
+    if: >-
+      (github.event_name == 'schedule' && github.ref == 'refs/heads/master' && github.ref_protected == true) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/master' && github.ref_protected == true) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master' && github.ref_protected == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && 'new-agents-real-manual' || 'new-agents-real-automatic' }}
+    steps:
+    - name: 📥 Checkout protected ref
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: 🟢 Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: 📦 Install real functional dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r tools/new-agents/backend/requirements.txt
+        cd tools/new-agents/frontend
+        npm ci
+        cd ../../..
+        python -m playwright install --with-deps chromium
+
+    - name: 🧭 Resolve protected real functional scope
+      id: real_scope
+      shell: bash
+      env:
+        MANUAL_REAL_SCOPE: ${{ inputs.real_scope }}
+      run: |
+        case "${{ github.event_name }}" in
+          schedule) scope=nightly ;;
+          push) scope=release ;;
+          workflow_dispatch)
+            case "$MANUAL_REAL_SCOPE" in
+              pr|nightly|release) scope="$MANUAL_REAL_SCOPE" ;;
+              *) echo "Unsupported manual scope" >&2; exit 2 ;;
+            esac
+            ;;
+          *) echo "Unsupported event: ${{ github.event_name }}" >&2; exit 2 ;;
+        esac
+        echo "scope=$scope" >> "$GITHUB_OUTPUT"
+
+    - name: 🤖 Run headless real-model functional gate
+      run: ./scripts/test/new-agents-functional.sh "$NEW_AGENTS_REAL_SCOPE"
+      env:
+        NEW_AGENTS_REAL_SCOPE: ${{ steps.real_scope.outputs.scope }}
+        NEW_AGENTS_SMOKE_API_KEY: ${{ secrets.NEW_AGENTS_SMOKE_API_KEY }}
+        NEW_AGENTS_SMOKE_BASE_URL: ${{ secrets.NEW_AGENTS_SMOKE_BASE_URL }}
+        NEW_AGENTS_SMOKE_MODEL: ${{ secrets.NEW_AGENTS_SMOKE_MODEL }}
+
+    - name: 🔐 Verify evidence upload allowlist
+      id: evidence_safety
+      if: always()
+      env:
+        NEW_AGENTS_SMOKE_API_KEY: ${{ secrets.NEW_AGENTS_SMOKE_API_KEY }}
+      shell: bash
+      run: |
+        python - <<'PY'
+        import os
+        from pathlib import Path
+
+        root = Path("test-results/new-agents-real")
+        secret = os.environ.get("NEW_AGENTS_SMOKE_API_KEY", "")
+        if not secret:
+            raise SystemExit("real-model API key is unavailable")
+        if root.is_symlink() or not root.is_dir():
+            raise SystemExit("real-model evidence directory is unavailable")
+        paths = tuple(root.iterdir())
+        if not paths:
+            raise SystemExit("real-model evidence is empty")
+        for path in paths:
+            if path.is_symlink() or not path.is_file() or path.suffix != ".json":
+                raise SystemExit("real-model evidence contains a non-allowlisted entry")
+            if secret in path.name or secret.encode() in path.read_bytes():
+                raise SystemExit("real-model evidence failed secret scan")
+        PY
+
+    - name: 📤 Upload sanitized real-model evidence
+      if: always() && steps.evidence_safety.outcome == 'success'
+      uses: actions/upload-artifact@v4
+      with:
+        name: new-agents-real-${{ github.run_id }}-${{ github.run_attempt }}
+        path: test-results/new-agents-real/*.json
+        if-no-files-found: error
+        retention-days: 14
 
   # ====================================
   # 阶段 1c: 代码质量检查
@@ -190,12 +348,12 @@ jobs:
   # ====================================
   deploy-to-production:
     name: Build and Deploy to Tencent Cloud
-    needs: [backend-api-test, common-frontend-test, new-agents-frontend-test, code-quality, proxy-test]  # 必须等待所有门禁完成且成功
+    needs: [backend-api-test, common-frontend-test, new-agents-frontend-test, new-agents-functional-deterministic-test, new-agents-real-functional-test, code-quality, proxy-test]  # 必须等待所有门禁完成且成功
     runs-on: ubuntu-latest
     environment:
       name: production
       url: http://www.datou212.tech
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master' && github.ref_protected == true && inputs.real_scope == 'release') || (github.event_name == 'push' && github.ref == 'refs/heads/master' && github.ref_protected == true)
     
     steps:
     - name: 📥 Checkout code
@@ -308,15 +466,18 @@ jobs:
         NEW_AGENTS_DEFAULT_LLM_BASE_URL: ${{ secrets.NEW_AGENTS_DEFAULT_LLM_BASE_URL }}
         NEW_AGENTS_DEFAULT_LLM_MODEL: ${{ secrets.NEW_AGENTS_DEFAULT_LLM_MODEL }}
         NEW_AGENTS_DEFAULT_LLM_DESCRIPTION: ${{ secrets.NEW_AGENTS_DEFAULT_LLM_DESCRIPTION }}
+        NEW_AGENTS_CONFIG_ADMIN_API_KEY: ${{ secrets.NEW_AGENTS_CONFIG_ADMIN_API_KEY }}
+        PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
       with:
         host: ${{ secrets.SERVER_HOST }}
         username: ${{ secrets.SERVER_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         timeout: 3600s
         command_timeout: 3600s
-        envs: DB_PASSWORD,SECRET_KEY,INTENT_ACCESS_MODE,INTENT_TESTER_ADMIN_PASSWORD_HASH,INTENT_PUBLIC_ORIGIN,INTENT_EXECUTION_ENABLED,INTENT_PROXY_TOKEN,OPENAI_API_KEY,OPENAI_BASE_URL,MIDSCENE_MODEL_NAME,NEW_AGENTS_DEFAULT_LLM_API_KEY,NEW_AGENTS_DEFAULT_LLM_BASE_URL,NEW_AGENTS_DEFAULT_LLM_MODEL,NEW_AGENTS_DEFAULT_LLM_DESCRIPTION
+        envs: DB_PASSWORD,SECRET_KEY,INTENT_ACCESS_MODE,INTENT_TESTER_ADMIN_PASSWORD_HASH,INTENT_PUBLIC_ORIGIN,INTENT_EXECUTION_ENABLED,INTENT_PROXY_TOKEN,OPENAI_API_KEY,OPENAI_BASE_URL,MIDSCENE_MODEL_NAME,NEW_AGENTS_DEFAULT_LLM_API_KEY,NEW_AGENTS_DEFAULT_LLM_BASE_URL,NEW_AGENTS_DEFAULT_LLM_MODEL,NEW_AGENTS_DEFAULT_LLM_DESCRIPTION,NEW_AGENTS_CONFIG_ADMIN_API_KEY,PROXY_API_KEY
         script: |
           set -e  # 遇到错误立即退出，防止虚假成功
+          umask 077
           
           echo "=========================================="
           echo "🚀 开始部署"
@@ -347,7 +508,7 @@ jobs:
           is_managed_env_key() {
             key="$1"
             case "$key" in
-              DB_PASSWORD|SECRET_KEY|INTENT_ACCESS_MODE|INTENT_TESTER_ADMIN_PASSWORD_HASH|INTENT_PUBLIC_ORIGIN|INTENT_EXECUTION_ENABLED|INTENT_PROXY_TOKEN|OPENAI_API_KEY|OPENAI_BASE_URL|MIDSCENE_MODEL_NAME|NEW_AGENTS_DEFAULT_LLM_API_KEY|NEW_AGENTS_DEFAULT_LLM_BASE_URL|NEW_AGENTS_DEFAULT_LLM_MODEL|NEW_AGENTS_DEFAULT_LLM_DESCRIPTION)
+              DB_PASSWORD|SECRET_KEY|INTENT_ACCESS_MODE|INTENT_TESTER_ADMIN_PASSWORD_HASH|INTENT_PUBLIC_ORIGIN|INTENT_EXECUTION_ENABLED|INTENT_PROXY_TOKEN|OPENAI_API_KEY|OPENAI_BASE_URL|MIDSCENE_MODEL_NAME|NEW_AGENTS_DEFAULT_LLM_API_KEY|NEW_AGENTS_DEFAULT_LLM_BASE_URL|NEW_AGENTS_DEFAULT_LLM_MODEL|NEW_AGENTS_DEFAULT_LLM_DESCRIPTION|NEW_AGENTS_CONFIG_ADMIN_API_KEY|PROXY_API_KEY)
                 return 0
                 ;;
               *)
@@ -391,6 +552,20 @@ jobs:
           require_secret NEW_AGENTS_DEFAULT_LLM_API_KEY "$NEW_AGENTS_DEFAULT_LLM_API_KEY"
           require_secret NEW_AGENTS_DEFAULT_LLM_BASE_URL "$NEW_AGENTS_DEFAULT_LLM_BASE_URL"
           require_secret NEW_AGENTS_DEFAULT_LLM_MODEL "$NEW_AGENTS_DEFAULT_LLM_MODEL"
+          require_secret NEW_AGENTS_CONFIG_ADMIN_API_KEY "$NEW_AGENTS_CONFIG_ADMIN_API_KEY"
+          require_secret PROXY_API_KEY "$PROXY_API_KEY"
+          if [ "$NEW_AGENTS_CONFIG_ADMIN_API_KEY" = "$PROXY_API_KEY" ]; then
+            echo "::error::NEW_AGENTS_CONFIG_ADMIN_API_KEY and PROXY_API_KEY must differ"
+            exit 1
+          fi
+          if [ "$NEW_AGENTS_CONFIG_ADMIN_API_KEY" = "$NEW_AGENTS_DEFAULT_LLM_API_KEY" ]; then
+            echo "::error::NEW_AGENTS_CONFIG_ADMIN_API_KEY and NEW_AGENTS_DEFAULT_LLM_API_KEY must differ"
+            exit 1
+          fi
+          if [ "$PROXY_API_KEY" = "$NEW_AGENTS_DEFAULT_LLM_API_KEY" ]; then
+            echo "::error::PROXY_API_KEY and NEW_AGENTS_DEFAULT_LLM_API_KEY must differ"
+            exit 1
+          fi
 
           NEW_AGENTS_DEFAULT_LLM_DESCRIPTION_VALUE="$NEW_AGENTS_DEFAULT_LLM_DESCRIPTION"
           if [ -z "$NEW_AGENTS_DEFAULT_LLM_DESCRIPTION_VALUE" ]; then
@@ -431,6 +606,8 @@ jobs:
           write_env_var NEW_AGENTS_DEFAULT_LLM_BASE_URL "$NEW_AGENTS_DEFAULT_LLM_BASE_URL"
           write_env_var NEW_AGENTS_DEFAULT_LLM_MODEL "$NEW_AGENTS_DEFAULT_LLM_MODEL"
           write_env_var NEW_AGENTS_DEFAULT_LLM_DESCRIPTION "$NEW_AGENTS_DEFAULT_LLM_DESCRIPTION_VALUE"
+          write_env_var NEW_AGENTS_CONFIG_ADMIN_API_KEY "$NEW_AGENTS_CONFIG_ADMIN_API_KEY"
+          write_env_var PROXY_API_KEY "$PROXY_API_KEY"
 
           mv .env.managed .env
           chmod 600 .env

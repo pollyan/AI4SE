@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from context_summary_format import (
@@ -8,7 +9,6 @@ from context_summary_format import (
     build_artifact_summary_content,
 )
 from run_persistence import get_run_snapshot
-
 
 DEFAULT_CONTEXT_MAX_CHARS = 12000
 CONTEXT_TRUNCATED_WARNING = "context_truncated"
@@ -34,6 +34,8 @@ def _is_assistant_control_feedback(role: str, content: str) -> bool:
         or content.lstrip().startswith("*(已停止生成)*")
         or content.lstrip().startswith("⚠️ **模型配置或供应商异常**")
         or content.lstrip().startswith("⚠️ **模型额度或限流异常**")
+        or content.lstrip().startswith("⚠️ **模型调用未完成**")
+        or content.lstrip().startswith("⚠️ **本轮生成失败**")
         or content.lstrip().startswith("⚠️ **结构化输出生成失败**")
     )
 
@@ -100,9 +102,7 @@ def _artifact_summaries_from_snapshot(snapshot: dict) -> list[str]:
     return [
         formatted
         for artifact in snapshot["artifacts"]
-        if (
-            summary_content := build_artifact_summary_content(artifact["content"])
-        )
+        if (summary_content := build_artifact_summary_content(artifact["content"]))
         is not None
         and (
             formatted := _format_artifact_summary(
@@ -133,8 +133,13 @@ def build_run_context(
     current_prompt: str,
     *,
     max_chars: int = DEFAULT_CONTEXT_MAX_CHARS,
+    exclude_message_sequence: int | None = None,
+    exclude_message_sequences: Iterable[int] = (),
 ) -> RunContext:
     snapshot = get_run_snapshot(run_id)
+    excluded_message_sequences = set(exclude_message_sequences)
+    if exclude_message_sequence is not None:
+        excluded_message_sequences.add(exclude_message_sequence)
     user_supplements = _structured_summaries_from_snapshot(
         snapshot,
         source_type=SUMMARY_SOURCE_USER_INPUT,
@@ -156,18 +161,20 @@ def build_run_context(
     artifact_summaries = _artifact_summaries_from_snapshot(snapshot)
     locked_sections = _locked_sections_from_snapshot(snapshot)
     context_blocks = []
+    priority_context_blocks = []
     if user_supplements:
-        context_blocks.append(
-            "\n\n".join([USER_SUPPLEMENT_HEADING, *user_supplements])
+        user_supplement_block = "\n\n".join(
+            [USER_SUPPLEMENT_HEADING, *user_supplements]
         )
+        context_blocks.append(user_supplement_block)
+        if excluded_message_sequences:
+            priority_context_blocks.append(user_supplement_block)
     if stage_conclusions:
         context_blocks.append(
             "\n\n".join([STAGE_CONCLUSION_HEADING, *stage_conclusions])
         )
     if decisions:
-        context_blocks.append(
-            "\n\n".join([DECISION_HEADING, *decisions])
-        )
+        context_blocks.append("\n\n".join([DECISION_HEADING, *decisions]))
     if artifact_summaries:
         context_blocks.append(
             "\n\n".join([ARTIFACT_SUMMARY_HEADING, *artifact_summaries])
@@ -179,9 +186,9 @@ def build_run_context(
     prior_messages = [
         formatted
         for message in snapshot["messages"]
-        if (
-            formatted := _format_message(message["role"], message["content"])
-        ) is not None
+        if message["sequenceIndex"] not in excluded_message_sequences
+        if (formatted := _format_message(message["role"], message["content"]))
+        is not None
     ]
     current_message = f"[用户]\n{current_prompt}"
     if not context_blocks and not prior_messages:
@@ -194,7 +201,17 @@ def build_run_context(
 
     kept = [current_message]
     used_chars = len(current_message) + len(TRUNCATION_NOTICE) + 4
-    for block in reversed([*context_blocks, *prior_messages]):
+    for block in priority_context_blocks:
+        next_used_chars = used_chars + len(block) + 2
+        if next_used_chars <= max_chars:
+            kept.insert(0, block)
+            used_chars = next_used_chars
+    remaining_blocks = [
+        block
+        for block in [*context_blocks, *prior_messages]
+        if block not in priority_context_blocks
+    ]
+    for block in reversed(remaining_blocks):
         next_used_chars = used_chars + len(block) + 2
         if next_used_chars > max_chars:
             break
@@ -212,9 +229,13 @@ def build_run_context_prompt(
     current_prompt: str,
     *,
     max_chars: int = DEFAULT_CONTEXT_MAX_CHARS,
+    exclude_message_sequence: int | None = None,
+    exclude_message_sequences: Iterable[int] = (),
 ) -> str:
     return build_run_context(
         run_id,
         current_prompt,
         max_chars=max_chars,
+        exclude_message_sequence=exclude_message_sequence,
+        exclude_message_sequences=exclude_message_sequences,
     ).prompt

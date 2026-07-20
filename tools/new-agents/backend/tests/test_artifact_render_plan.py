@@ -244,6 +244,15 @@ def test_strategy_unknown_reference_withholds_only_dependent_section():
             "IDEA_BRAINSTORM",
             "DEFINE",
             ("IDEA_BRAINSTORM", "DEFINE"),
+            lambda fixture: fixture["evidence_items"][0]["related_problem_ids"].append(
+                "P-404"
+            ),
+            "evidence-items",
+        ),
+        (
+            "IDEA_BRAINSTORM",
+            "DEFINE",
+            ("IDEA_BRAINSTORM", "DEFINE"),
             lambda fixture: fixture["problem_user_fit"][0]["evidence_ids"].append(
                 "EV-404"
             ),
@@ -531,36 +540,62 @@ def test_compact_metadata_rejects_invalid_heading_and_escapes_inline_markup():
 
 
 @pytest.mark.parametrize(
-    ("stage_key", "wrong_workflow", "wrong_stage"),
+    "stage_key",
     [
-        (("STORY_BREAKDOWN", "INPUT_ANALYSIS"), "STORY_BREAKDOWN", "SPRINT_PLAN"),
-        (("PRD_REVIEW", "INVENTORY"), "PRD_REVIEW", "REVISION_BLUEPRINT"),
-        (("TEST_DESIGN", "CLARIFY"), "REQ_REVIEW", "CLARIFY"),
+        ("STORY_BREAKDOWN", "INPUT_ANALYSIS"),
+        ("PRD_REVIEW", "QUALITY_AUDIT"),
+        ("TEST_DESIGN", "CLARIFY"),
     ],
 )
-def test_document_info_identity_must_match_runtime_stage(
+def test_document_info_identity_is_derived_from_runtime_without_mutating_input(
     stage_key: tuple[str, str],
-    wrong_workflow: str,
-    wrong_stage: str,
 ):
     workflow_id, stage_id = stage_key
     fixture = copy.deepcopy(ARTIFACT_DATA_STAGE_FIXTURES[stage_key])
-    fixture["document_info"]["workflow"] = wrong_workflow
-    fixture["document_info"]["stage"] = wrong_stage
+    fixture["document_info"]["workflow"] = "UNTRUSTED_WORKFLOW"
+    fixture["document_info"]["stage"] = "UNTRUSTED_STAGE"
+    source = copy.deepcopy(fixture)
 
-    with pytest.raises(ValueError, match="document_info identity"):
-        render_complete_artifact_data(
-            fixture,
-            workflow_id=workflow_id,
-            current_stage_id=stage_id,
-        )
+    complete = render_complete_artifact_data(
+        fixture,
+        workflow_id=workflow_id,
+        current_stage_id=stage_id,
+    )
+    available = render_available_artifact_data(
+        fixture,
+        workflow_id=workflow_id,
+        current_stage_id=stage_id,
+    )
 
-    with pytest.raises(ValueError, match="document_info identity"):
-        render_available_artifact_data(
-            fixture,
-            workflow_id=workflow_id,
-            current_stage_id=stage_id,
-        )
+    assert complete.normalized_artifact_data is not None
+    assert complete.normalized_artifact_data["document_info"]["workflow"] == workflow_id
+    assert complete.normalized_artifact_data["document_info"]["stage"] == stage_id
+    assert available is not None
+    assert workflow_id.replace("_", "&#95;") in available.markdown
+    assert stage_id.replace("_", "&#95;") in available.markdown
+    assert fixture == source
+
+
+def test_document_info_runtime_identity_fills_fields_omitted_by_model():
+    fixture = copy.deepcopy(
+        ARTIFACT_DATA_STAGE_FIXTURES[("PRD_REVIEW", "QUALITY_AUDIT")]
+    )
+    fixture["document_info"].pop("workflow")
+    fixture["document_info"].pop("stage")
+
+    rendered = render_complete_artifact_data(
+        fixture,
+        workflow_id="PRD_REVIEW",
+        current_stage_id="QUALITY_AUDIT",
+    )
+
+    assert rendered.normalized_artifact_data is not None
+    assert (
+        rendered.normalized_artifact_data["document_info"]["workflow"] == "PRD_REVIEW"
+    )
+    assert (
+        rendered.normalized_artifact_data["document_info"]["stage"] == "QUALITY_AUDIT"
+    )
 
 
 def test_clarify_renders_business_first_and_compact_document_metadata_last():

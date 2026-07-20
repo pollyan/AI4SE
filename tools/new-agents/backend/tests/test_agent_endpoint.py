@@ -5,12 +5,13 @@ from datetime import datetime, timedelta
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 from pydantic_ai.exceptions import UnexpectedModelBehavior
 
 from agent_contracts import AgentTurnOutput
 from agent_runtime import AgentRuntimeDependencyError
 from app import create_app
-from models import AgentRun, LlmConfig, db
+from models import AgentRun, AgentRunTurnRequest, LlmConfig, db
 from run_persistence import (
     append_run_message,
     create_agent_run,
@@ -18,7 +19,6 @@ from run_persistence import (
     record_artifact_version,
     record_turn_metric,
 )
-
 
 VALID_ARTIFACT_DATA = {
     "document_info": {
@@ -290,28 +290,32 @@ class FakeRuntime:
                 "current_stage_id": current_stage_id,
             }
         )
-        yield AgentTurnOutput.model_validate({
-            "chat": "正在梳理登录需求。",
-            "artifact_update": {
-                "type": "replace",
-                "markdown": VALID_CLARIFY_ARTIFACT,
-            },
-            "stage_action": None,
-            "warnings": [],
-        })
-        yield AgentTurnOutput.model_validate({
-            "chat": "已更新右侧需求分析文档。",
-            "artifact_update": {
-                "type": "replace",
-                "markdown": VALID_CLARIFY_ARTIFACT,
-            },
-            "artifact_data": VALID_ARTIFACT_DATA,
-            "stage_action": {
-                "type": "request_next_stage",
-                "target_stage_id": "STRATEGY",
-            },
-            "warnings": [],
-        })
+        yield AgentTurnOutput.model_validate(
+            {
+                "chat": "正在梳理登录需求。",
+                "artifact_update": {
+                    "type": "replace",
+                    "markdown": VALID_CLARIFY_ARTIFACT,
+                },
+                "stage_action": None,
+                "warnings": [],
+            }
+        )
+        yield AgentTurnOutput.model_validate(
+            {
+                "chat": "已更新右侧需求分析文档。",
+                "artifact_update": {
+                    "type": "replace",
+                    "markdown": VALID_CLARIFY_ARTIFACT,
+                },
+                "artifact_data": VALID_ARTIFACT_DATA,
+                "stage_action": {
+                    "type": "request_next_stage",
+                    "target_stage_id": "STRATEGY",
+                },
+                "warnings": [],
+            }
+        )
 
 
 class FailingRuntime:
@@ -359,8 +363,6 @@ def test_agent_runs_stream_returns_started_delta_and_final_sse_events(
         "run_started",
         "agent_delta",
         "agent_delta",
-        "agent_delta",
-        "agent_delta",
         "agent_turn",
     ]
     delta_payloads = [
@@ -378,6 +380,10 @@ def test_agent_runs_stream_returns_started_delta_and_final_sse_events(
     )
     assert first_chat_index < first_artifact_index
     assert "artifact_update" not in delta_payloads[first_chat_index]["output"]
+    assert all(
+        payload["output"].get("chat") != "正在梳理登录需求。"
+        for payload in delta_payloads
+    )
     assert response.get_data(as_text=True).strip().endswith("data: [DONE]")
 
     event = payloads[-1]
@@ -429,8 +435,7 @@ def test_agent_runs_stream_persists_run_messages_and_final_artifact(
     assert snapshot["run"]["currentStageId"] == "CLARIFY"
     assert snapshot["run"]["model"] == "test-model"
     assert [
-        (message["role"], message["content"])
-        for message in snapshot["messages"]
+        (message["role"], message["content"]) for message in snapshot["messages"]
     ] == [
         ("user", "用户需求: 登录功能"),
         ("assistant", "已更新右侧需求分析文档。"),
@@ -485,8 +490,7 @@ def test_agent_runs_stream_reuses_existing_run_id(
         snapshot = get_run_snapshot(run_id)
 
     assert [
-        (message["role"], message["content"])
-        for message in snapshot["messages"]
+        (message["role"], message["content"]) for message in snapshot["messages"]
     ] == [
         ("user", "第一轮"),
         ("assistant", "已更新右侧需求分析文档。"),
@@ -580,8 +584,60 @@ def test_agent_runs_stream_replays_failed_request_without_second_model_call(
     assert mock_build_runtime.call_count == 1
     with app.app_context():
         snapshot = get_run_snapshot(request_payload["runId"])
-    assert [message["role"] for message in snapshot["messages"]] == ["user"]
+    assert [message["role"] for message in snapshot["messages"]] == [
+        "user",
+        "assistant",
+    ]
+    failed_message = snapshot["messages"][1]
+    assert failed_message["content"].startswith("⚠️ **结构化输出生成失败**")
+    assert "Exceeded maximum output retries" not in failed_message["content"]
+    assert failed_message["errorDiagnostic"]["code"] == ("SCHEMA_VALIDATION_FAILED")
+    assert failed_message["errorDiagnostic"]["retryable"] is True
     assert snapshot["artifacts"] == []
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_agent_runs_stream_replays_clarify_status_failure_identically(
+    mock_build_runtime,
+    client,
+    default_config,
+):
+    validation_error = ValidationError.from_exception_data(
+        "ClarifyArtifactData",
+        [
+            {
+                "type": "literal_error",
+                "loc": ("clarification_questions", 0, "status"),
+                "input": "需要澄清",
+                "ctx": {
+                    "expected": "'待确认', '已确认', '已假设' or 'AI 假设'",
+                },
+            }
+        ],
+    )
+    mock_build_runtime.return_value = FailingRuntime(validation_error)
+    request_payload = {
+        "prompt": "用户需求: 登录功能",
+        "systemPrompt": "你是 Lisa 测试专家。",
+        "workflowId": "TEST_DESIGN",
+        "stageId": "CLARIFY",
+        "runId": "clarify-status-failure-run-001",
+        "requestId": "clarify-status-failure-request-001",
+    }
+
+    first_payloads = _parse_sse_event_payloads(
+        client.post("/api/agent/runs/stream", json=request_payload)
+    )
+    replay_payloads = _parse_sse_event_payloads(
+        client.post("/api/agent/runs/stream", json=request_payload)
+    )
+
+    assert replay_payloads == first_payloads
+    assert mock_build_runtime.call_count == 1
+    diagnostic = first_payloads[-1]["diagnostic"]
+    assert diagnostic["validator"] == "clarify_question_status_literal"
+    assert diagnostic["fieldPath"] == ("artifact_data.clarification_questions[].status")
+    assert "需要澄清" not in json.dumps(first_payloads, ensure_ascii=False)
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -964,8 +1020,13 @@ def test_agent_run_artifact_collaboration_endpoint_replaces_state(
     }
 
     snapshot_response = client.get(f"/api/agent/runs/{run_id}")
-    assert snapshot_response.json["artifactComments"] == response.json["artifactComments"]
-    assert snapshot_response.json["artifactSectionLocks"] == response.json["artifactSectionLocks"]
+    assert (
+        snapshot_response.json["artifactComments"] == response.json["artifactComments"]
+    )
+    assert (
+        snapshot_response.json["artifactSectionLocks"]
+        == response.json["artifactSectionLocks"]
+    )
     assert snapshot_response.json["artifactAuditEvents"] == [
         {
             "stageId": "CLARIFY",
@@ -1091,7 +1152,9 @@ def test_agent_runs_list_endpoint_returns_recent_runs_with_summaries(
         newer_run_id = newer_run.id
 
         db.session.get(AgentRun, older_run_id).updated_at = base_time
-        db.session.get(AgentRun, newer_run_id).updated_at = base_time + timedelta(minutes=5)
+        db.session.get(AgentRun, newer_run_id).updated_at = base_time + timedelta(
+            minutes=5
+        )
         db.session.commit()
 
     response = client.get("/api/agent/runs")
@@ -1160,8 +1223,12 @@ def test_agent_runs_list_endpoint_paginates_and_reports_more_runs(
         newest_run_id = newest_run.id
 
         db.session.get(AgentRun, oldest_run_id).updated_at = base_time
-        db.session.get(AgentRun, middle_run_id).updated_at = base_time + timedelta(minutes=5)
-        db.session.get(AgentRun, newest_run_id).updated_at = base_time + timedelta(minutes=10)
+        db.session.get(AgentRun, middle_run_id).updated_at = base_time + timedelta(
+            minutes=5
+        )
+        db.session.get(AgentRun, newest_run_id).updated_at = base_time + timedelta(
+            minutes=10
+        )
         db.session.commit()
 
     response = client.get("/api/agent/runs?workflowId=TEST_DESIGN&limit=1&offset=1")
@@ -1276,6 +1343,34 @@ def test_agent_run_clone_endpoint_creates_independent_reusable_run(
     ]
 
 
+def test_agent_run_clone_endpoint_reports_unresolved_history_as_conflict(
+    app,
+    client,
+    default_config,
+):
+    with app.app_context():
+        source = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        append_run_message(source.id, "user", "UNRESOLVED-RAW-PROMPT-CANARY")
+        db.session.add(
+            AgentRunTurnRequest(
+                run_id=source.id,
+                request_id="unresolved-clone-endpoint-request",
+                stage_id="CLARIFY",
+                status="abandoned",
+            )
+        )
+        db.session.commit()
+        source_run_id = source.id
+
+    response = client.post(f"/api/agent/runs/{source_run_id}/clone")
+
+    assert response.status_code == 409
+    assert response.json == {
+        "error": "Unable to clone a run with unresolved turn requests."
+    }
+    assert "UNRESOLVED-RAW-PROMPT-CANARY" not in response.get_data(as_text=True)
+
+
 def test_agent_run_test_assets_endpoint_exports_cases_artifact(
     app,
     client,
@@ -1376,7 +1471,9 @@ def test_agent_run_test_assets_materialize_endpoint_persists_collection(
 
     assert detail_response.status_code == 200
     assert detail_response.json["id"] == collection_id
-    assert detail_response.json["testCases"][0]["versions"][0]["title"] == "用户登录成功"
+    assert (
+        detail_response.json["testCases"][0]["versions"][0]["title"] == "用户登录成功"
+    )
 
 
 def test_agent_test_assets_case_update_endpoint_creates_new_version(
@@ -1550,7 +1647,10 @@ def test_agent_test_assets_intent_tester_result_endpoint_persists_snapshot(
     detail_response = client.get(f"/api/agent/test-assets/{collection['id']}")
 
     assert detail_response.status_code == 200
-    assert detail_response.json["intentTesterMappings"][0]["latestResult"] == response.json["latestResult"]
+    assert (
+        detail_response.json["intentTesterMappings"][0]["latestResult"]
+        == response.json["latestResult"]
+    )
 
 
 def test_agent_test_assets_issue_status_update_endpoint_persists_status(
@@ -1620,7 +1720,9 @@ def test_agent_test_assets_test_point_update_endpoint_persists_calibration(
     assert detail_response.json["coverageSummary"]["coveredTestPoints"] == 0
     assert detail_response.json["coverageSummary"]["uncoveredTestPoints"] == 1
     risk = next(
-        item for item in detail_response.json["riskMatrix"] if item["risk"] == "R-LOGIN-LOCK"
+        item
+        for item in detail_response.json["riskMatrix"]
+        if item["risk"] == "R-LOGIN-LOCK"
     )
     assert risk["id"] > 0
     assert risk["isManual"] is False
@@ -1841,7 +1943,11 @@ def test_agent_run_handoffs_endpoint_exports_configured_targets(
     assert response.status_code == 200
     assert response.json["runId"] == run_id
     assert [
-        (handoff["targetWorkflowId"], handoff["targetStageId"], handoff["targetAgentId"])
+        (
+            handoff["targetWorkflowId"],
+            handoff["targetStageId"],
+            handoff["targetAgentId"],
+        )
         for handoff in response.json["handoffs"]
     ] == [
         ("STORY_BREAKDOWN", "INPUT_ANALYSIS", "alex"),
@@ -2062,7 +2168,7 @@ def test_agent_runs_stream_returns_typed_error_when_runtime_dependency_missing(
         {
             "type": "error",
             "code": "AGENT_RUNTIME_UNAVAILABLE",
-            "message": "pydantic-ai runtime unavailable",
+            "message": "智能体运行时依赖不可用，本轮生成未开始。",
             "diagnostic": {
                 "phase": "runtime",
                 "workflowId": "TEST_DESIGN",
@@ -2202,7 +2308,7 @@ def test_agent_observability_endpoint_returns_runtime_turn_summary(
 def test_agent_observability_endpoint_filters_by_workflow_and_stage(
     app,
     client,
-    ):
+):
     with app.app_context():
         clarify_run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
         clarify_run_id = clarify_run.id
@@ -2350,16 +2456,13 @@ def test_agent_observability_endpoint_groups_provider_issue_codes(
     assert response.json["totals"]["providerIssueCount"] == 1
     assert response.json["totals"]["providerIssueCodes"] == {"LLM_ERROR": 1}
     clarify_stage = next(
-        stage for stage in response.json["byStage"]
-        if stage["stageId"] == "CLARIFY"
+        stage for stage in response.json["byStage"] if stage["stageId"] == "CLARIFY"
     )
     strategy_stage = next(
-        stage for stage in response.json["byStage"]
-        if stage["stageId"] == "STRATEGY"
+        stage for stage in response.json["byStage"] if stage["stageId"] == "STRATEGY"
     )
     cases_stage = next(
-        stage for stage in response.json["byStage"]
-        if stage["stageId"] == "CASES"
+        stage for stage in response.json["byStage"] if stage["stageId"] == "CASES"
     )
     assert clarify_stage["providerIssueCount"] == 1
     assert clarify_stage["providerIssueCodes"] == {"LLM_ERROR": 1}
@@ -2376,8 +2479,7 @@ def test_agent_observability_endpoint_groups_provider_issue_codes(
     assert "模型/供应商配置异常" in diagnostic_titles
     assert "结构化输出重试偏高" in diagnostic_titles
     contract_retry_diagnostic = next(
-        item for item in response.json["diagnostics"]
-        if item["id"] == "contract-retry"
+        item for item in response.json["diagnostics"] if item["id"] == "contract-retry"
     )
     assert contract_retry_diagnostic["severity"] == "warning"
     assert "TEST_DESIGN / STRATEGY" in contract_retry_diagnostic["detail"]

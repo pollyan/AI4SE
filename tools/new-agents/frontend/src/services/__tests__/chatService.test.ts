@@ -776,11 +776,15 @@ describe('useChatService', () => {
         expect(state.artifactContent).toBe('# 需求分析文档\n补充后版本');
     });
 
-    it('should stop consuming stream after NEXT_STAGE and ignore later artifact updates', async () => {
-        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+    it('should drain the stream after NEXT_STAGE without applying later artifact updates', async () => {
+        let streamReachedEof = false;
+        let capturedSignal: AbortSignal | undefined;
+        vi.mocked(generateResponseStream).mockImplementation(async function* (_message, _attachments, signal) {
+            capturedSignal = signal;
             yield { chatResponse: '正在分析需求...', newArtifact: '# 需求分析文档\n内容', action: '', hasArtifactUpdate: true };
             yield { chatResponse: '好的，进入策略制定阶段', newArtifact: '# 需求分析文档\n最终版', action: 'NEXT_STAGE', hasArtifactUpdate: true };
             yield { chatResponse: '继续生成策略细节', newArtifact: '# 测试策略蓝图\n不应写入', action: '', hasArtifactUpdate: true };
+            streamReachedEof = true;
         });
 
         const { result } = renderHook(() => useChatService());
@@ -799,6 +803,8 @@ describe('useChatService', () => {
         expect(state.stageIndex).toBe(0);
         expect(state.artifactContent).toBe('# 需求分析文档\n最终版');
         expect(state.stageArtifacts['CLARIFY']).toBe('# 需求分析文档\n最终版');
+        expect(streamReachedEof).toBe(true);
+        expect(capturedSignal?.aborted).toBe(false);
 
         // Simulate user confirming the transition
         act(() => {
@@ -1212,10 +1218,154 @@ describe('useChatService', () => {
         expect(result.current.input).toBe('生成一份较长产物');
     });
 
-    it('reuses the same durable request identity when a user retries a failed logical send', async () => {
+    it('reuses the same durable request identity when retrying an interrupted request with unknown outcome', async () => {
         vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            throw new Error('connection reset by peer');
+        });
+        const { result } = renderHook(() => useChatService());
+
+        act(() => {
+            result.current.setInput('请分析登录需求');
+        });
+        await act(async () => {
+            await result.current.handleSend();
+        });
+        const firstIdentity = vi.mocked(generateResponseStream).mock.calls[0][3];
+
+        act(() => {
+            result.current.handleRetry();
+        });
+        await act(async () => {
+            await result.current.handleSend();
+        });
+
+        expect(vi.mocked(generateResponseStream).mock.calls[1][3]).toEqual(
+            firstIdentity
+        );
+    });
+
+    it('keeps the run id but creates a new request id when retrying a terminal runtime error', async () => {
+        let attempt = 0;
+        const publicReason = '模型供应商返回错误，本轮生成未完成，右侧产出物已保持不变。';
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            attempt += 1;
+            if (attempt === 1) {
+                yield {
+                    chatResponse: '不会持久化的中间回复',
+                    newArtifact: '# 未持久化的部分产出物',
+                    action: '',
+                    hasArtifactUpdate: true,
+                };
+                throw Object.assign(
+                    new Error(`LLM_ERROR: ${publicReason}`),
+                    {
+                        name: 'AgentRuntimeStreamError',
+                        code: 'LLM_ERROR',
+                        diagnostic: {
+                            phase: 'provider',
+                            workflowId: 'TEST_DESIGN',
+                            stageId: 'CLARIFY',
+                            fieldPath: 'provider',
+                            validator: 'provider_error',
+                            retryable: true,
+                            publicReason,
+                        },
+                    }
+                );
+            }
             yield {
-                chatResponse: '本轮生成失败，请重试。',
+                chatResponse: '重试成功。',
+                newArtifact: '# Initial',
+                action: '',
+                hasArtifactUpdate: false,
+            };
+        });
+        const { result } = renderHook(() => useChatService());
+
+        act(() => {
+            result.current.setInput('请分析登录需求');
+        });
+        await act(async () => {
+            await result.current.handleSend();
+        });
+        const firstIdentity = vi.mocked(generateResponseStream).mock.calls[0][3];
+        expect(useStore.getState().chatHistory[1].errorDiagnostic).toMatchObject({
+            code: 'LLM_ERROR',
+            phase: 'provider',
+            retryable: true,
+        });
+        expect(useStore.getState().chatHistory[1].content).toBe(
+            `⚠️ **模型调用未完成**\n\n${publicReason}`
+        );
+        expect(useStore.getState().artifactContent).toBe('initial artifact');
+        expect(useStore.getState().stageArtifacts.CLARIFY).toBe('initial artifact');
+        expect(useStore.getState().artifactTruncated).toBe(false);
+
+        act(() => {
+            result.current.handleRetry();
+        });
+        expect(useStore.getState().chatHistory).toEqual([
+            expect.objectContaining({
+                role: 'user',
+                content: '请分析登录需求',
+            }),
+            expect.objectContaining({
+                role: 'assistant',
+                errorDiagnostic: expect.objectContaining({ code: 'LLM_ERROR' }),
+            }),
+        ]);
+        expect(result.current.input).toBe('请分析登录需求');
+        await act(async () => {
+            await result.current.handleSend();
+        });
+        const retryIdentity = vi.mocked(generateResponseStream).mock.calls[1][3];
+
+        expect(retryIdentity?.runId).toBe(firstIdentity?.runId);
+        expect(retryIdentity?.requestId).not.toBe(firstIdentity?.requestId);
+        expect(useStore.getState().chatHistory).toEqual([
+            expect.objectContaining({
+                role: 'user',
+                content: '请分析登录需求',
+            }),
+            expect.objectContaining({
+                role: 'assistant',
+                errorDiagnostic: expect.objectContaining({ code: 'LLM_ERROR' }),
+            }),
+            expect.objectContaining({
+                role: 'user',
+                content: '请分析登录需求',
+            }),
+            expect.objectContaining({
+                role: 'assistant',
+                content: '重试成功。',
+            }),
+        ]);
+    });
+
+    it('reuses the same durable request identity when retrying an in-progress request', async () => {
+        let attempt = 0;
+        vi.mocked(generateResponseStream).mockImplementation(async function* () {
+            attempt += 1;
+            if (attempt === 1) {
+                throw Object.assign(
+                    new Error('REQUEST_IN_PROGRESS: 请求仍在处理中。'),
+                    {
+                        name: 'AgentRuntimeStreamError',
+                        code: 'REQUEST_IN_PROGRESS',
+                        diagnostic: {
+                            phase: 'persistence',
+                            workflowId: 'TEST_DESIGN',
+                            stageId: 'CLARIFY',
+                            fieldPath: 'requestId',
+                            validator: 'request_in_progress',
+                            retryable: true,
+                            publicReason: '请求仍在处理中，请稍后重试。',
+                        },
+                    }
+                );
+            }
+            yield {
+                chatResponse: '原请求处理完成。',
                 newArtifact: '# Initial',
                 action: '',
                 hasArtifactUpdate: false,

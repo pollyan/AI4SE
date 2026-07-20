@@ -1,4 +1,5 @@
 import os
+import hmac
 import logging
 import time
 import uuid
@@ -7,6 +8,10 @@ from flask_cors import CORS
 from sqlalchemy import inspect, text
 from models import db
 from config import Config
+from config_admin_auth import (
+    browser_config_admin_available,
+    config_admin_keys_collide,
+)
 from config_service import upsert_default_llm_config_from_env
 from routes import api_bp
 
@@ -29,13 +34,14 @@ def _ensure_agent_artifact_version_columns():
         return
 
     existing_columns = {
-        column["name"]
-        for column in inspector.get_columns("agent_artifact_versions")
+        column["name"] for column in inspector.get_columns("agent_artifact_versions")
     }
     if "artifact_data_json" not in existing_columns:
-        db.session.execute(text(
-            "ALTER TABLE agent_artifact_versions ADD COLUMN artifact_data_json TEXT"
-        ))
+        db.session.execute(
+            text(
+                "ALTER TABLE agent_artifact_versions ADD COLUMN artifact_data_json TEXT"
+            )
+        )
         db.session.commit()
 
 
@@ -46,13 +52,12 @@ def _ensure_agent_run_turn_metric_columns():
         return
 
     existing_columns = {
-        column["name"]
-        for column in inspector.get_columns("agent_run_turn_metrics")
+        column["name"] for column in inspector.get_columns("agent_run_turn_metrics")
     }
     if "diagnostic_json" not in existing_columns:
-        db.session.execute(text(
-            "ALTER TABLE agent_run_turn_metrics ADD COLUMN diagnostic_json TEXT"
-        ))
+        db.session.execute(
+            text("ALTER TABLE agent_run_turn_metrics ADD COLUMN diagnostic_json TEXT")
+        )
         db.session.commit()
 
 
@@ -63,8 +68,7 @@ def _ensure_artifact_comment_columns():
         return
 
     existing_columns = {
-        column["name"]
-        for column in inspector.get_columns("agent_artifact_comments")
+        column["name"] for column in inspector.get_columns("agent_artifact_comments")
     }
     column_migrations = {
         "anchor_text": "ALTER TABLE agent_artifact_comments ADD COLUMN anchor_text TEXT",
@@ -89,9 +93,11 @@ def _ensure_artifact_section_lock_columns():
         for column in inspector.get_columns("agent_artifact_section_locks")
     }
     if "section_anchor" not in existing_columns:
-        db.session.execute(text(
-            "ALTER TABLE agent_artifact_section_locks ADD COLUMN section_anchor TEXT"
-        ))
+        db.session.execute(
+            text(
+                "ALTER TABLE agent_artifact_section_locks ADD COLUMN section_anchor TEXT"
+            )
+        )
         db.session.commit()
 
 
@@ -103,12 +109,16 @@ def create_app(test_config=None):
     if not app.debug:
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
 
     # P0-1: CORS restricted to allowed origins only
-    cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:5173,http://localhost:18679')
-    allowed_origins = [origin.strip() for origin in cors_origins.split(',') if origin.strip()]
+    cors_origins = os.environ.get(
+        "CORS_ORIGINS", "http://localhost:5173,http://localhost:18679"
+    )
+    allowed_origins = [
+        origin.strip() for origin in cors_origins.split(",") if origin.strip()
+    ]
     CORS(app, origins=allowed_origins)
 
     if test_config is None:
@@ -117,14 +127,16 @@ def create_app(test_config=None):
         app.config.from_mapping(test_config)
 
     # Configure SQLAlchemy
-    if 'SQLALCHEMY_DATABASE_URI' not in app.config:
-        app.config['SQLALCHEMY_DATABASE_URI'] = app.config.get('DATABASE_URL', Config.DATABASE_URL)
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    if "SQLALCHEMY_DATABASE_URI" not in app.config:
+        app.config["SQLALCHEMY_DATABASE_URI"] = app.config.get(
+            "DATABASE_URL", Config.DATABASE_URL
+        )
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     db.init_app(app)
 
     # Create tables if not in testing mode (tests handle their own setup)
-    if not os.environ.get('FLASK_TESTING'):
+    if not os.environ.get("FLASK_TESTING"):
         init_db(app)
 
     # Register routes
@@ -144,31 +156,67 @@ def init_routes(app):
         app.logger.info(f"[{g.request_id}] {request.method} {request.path} - Started")
 
         # P0-2: API Key authentication for sensitive endpoints
-        proxy_api_key = os.environ.get('PROXY_API_KEY')
-        protected_paths = {
-            '/api/agent/runs/stream',
-            '/api/utils/mermaid/repair',
+        proxy_api_key = (os.environ.get("PROXY_API_KEY") or "").strip()
+        config_admin_api_key = (
+            os.environ.get("NEW_AGENTS_CONFIG_ADMIN_API_KEY") or ""
+        ).strip()
+        request_coordinate = (request.method, request.path)
+        config_admin_requests = {
+            ("POST", "/api/config"),
+            ("POST", "/api/config/check"),
         }
-        if proxy_api_key and request.path in protected_paths and request.method == 'POST':
-            client_key = request.headers.get('X-API-Key', '')
-            gateway_marker = request.headers.get('X-AI4SE-Gateway', '')
-            is_gateway_request = gateway_marker == 'new-agents'
-            if client_key != proxy_api_key and not is_gateway_request:
-                app.logger.warning(f"[{g.request_id}] Unauthorized API access attempt to {request.path}")
+        gateway_protected_requests = {
+            ("POST", "/api/agent/runs/stream"),
+            ("POST", "/api/config/default/check"),
+            ("POST", "/api/utils/mermaid/repair"),
+        }
+        sensitive_requests = config_admin_requests | gateway_protected_requests
+        if request_coordinate in sensitive_requests and config_admin_keys_collide():
+            app.logger.error(
+                f"[{g.request_id}] Service authentication credentials collide"
+            )
+            return jsonify({"error": "服务认证未正确配置"}), 503
+        if request_coordinate in config_admin_requests:
+            allow_unauthenticated = browser_config_admin_available()
+            client_key = request.headers.get("X-API-Key", "")
+            has_valid_admin_key = bool(config_admin_api_key) and hmac.compare_digest(
+                client_key,
+                config_admin_api_key,
+            )
+            if not has_valid_admin_key and not allow_unauthenticated:
+                app.logger.warning(
+                    f"[{g.request_id}] Unauthorized config administration attempt"
+                )
+                return jsonify({"error": "未授权访问，请提供配置管理密钥"}), 401
+        elif proxy_api_key and request_coordinate in gateway_protected_requests:
+            client_key = request.headers.get("X-API-Key", "")
+            gateway_marker = request.headers.get("X-AI4SE-Gateway", "")
+            trust_gateway_header = os.environ.get(
+                "AI4SE_TRUST_GATEWAY_HEADER",
+                "1",
+            ).strip().lower() in {"1", "true", "yes"}
+            is_gateway_request = trust_gateway_header and gateway_marker == "new-agents"
+            has_valid_proxy_key = hmac.compare_digest(client_key, proxy_api_key)
+            if not has_valid_proxy_key and not is_gateway_request:
+                app.logger.warning(
+                    f"[{g.request_id}] Unauthorized API access attempt to {request.path}"
+                )
                 return jsonify({"error": "未授权访问，请提供有效的 API Key"}), 401
 
     @app.after_request
     def after_request(response):
         """记录请求耗时"""
-        if hasattr(g, 'start_time'):
+        if hasattr(g, "start_time"):
             elapsed = time.time() - g.start_time
-            app.logger.info(f"[{g.request_id}] {request.method} {request.path} - Completed in {elapsed:.3f}s")
+            app.logger.info(
+                f"[{g.request_id}] {request.method} {request.path} - Completed in {elapsed:.3f}s"
+            )
         return response
 
     @app.errorhandler(Exception)
     def handle_exception(e):
         # 让 Flask 处理其自身的 HTTP 错误（如 415 UnsupportedMediaType）
-        if hasattr(e, 'code') and isinstance(e.code, int) and e.code < 500:
+        if hasattr(e, "code") and isinstance(e.code, int) and e.code < 500:
             return e
         app.logger.exception(f"[{g.request_id}] Unhandled exception: {str(e)}")
         return jsonify({"error": "服务器内部错误", "request_id": g.request_id}), 500
@@ -179,5 +227,5 @@ def init_routes(app):
 # For backward compatibility and direct execution
 app = create_app()
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5002, debug=True)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5002, debug=True)

@@ -112,12 +112,14 @@ services:
     container_name: ai4se-new-agents-backend-prod
     restart: unless-stopped
     environment:
+      AI4SE_ENV: "production"
       DATABASE_URL: "postgresql://${DB_USER:?DB_USER is required}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/ai4se"
       NEW_AGENTS_DEFAULT_LLM_API_KEY: "${NEW_AGENTS_DEFAULT_LLM_API_KEY:?NEW_AGENTS_DEFAULT_LLM_API_KEY is required}"
       NEW_AGENTS_DEFAULT_LLM_BASE_URL: "${NEW_AGENTS_DEFAULT_LLM_BASE_URL:?NEW_AGENTS_DEFAULT_LLM_BASE_URL is required}"
       NEW_AGENTS_DEFAULT_LLM_MODEL: "${NEW_AGENTS_DEFAULT_LLM_MODEL:?NEW_AGENTS_DEFAULT_LLM_MODEL is required}"
       NEW_AGENTS_DEFAULT_LLM_DESCRIPTION: "${NEW_AGENTS_DEFAULT_LLM_DESCRIPTION:-GitHub Actions managed default LLM config}"
-      PROXY_API_KEY: "${PROXY_API_KEY:-}"
+      NEW_AGENTS_CONFIG_ADMIN_API_KEY: "${NEW_AGENTS_CONFIG_ADMIN_API_KEY:?NEW_AGENTS_CONFIG_ADMIN_API_KEY is required}"
+      PROXY_API_KEY: "${PROXY_API_KEY:?PROXY_API_KEY is required}"
     depends_on:
       postgres:
         condition: service_healthy

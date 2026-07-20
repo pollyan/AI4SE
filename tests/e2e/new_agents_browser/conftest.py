@@ -13,8 +13,12 @@ from urllib.request import urlopen
 import pytest
 from playwright.sync_api import Browser, Page, Route, sync_playwright
 
-from .sse_mock import build_agent_sse_response
+from tests.e2e.new_agents_real.config import (
+    build_secret_free_browser_environment,
+    secret_free_sync_playwright,
+)
 
+from .sse_mock import build_agent_sse_response
 
 ROOT = Path(__file__).resolve().parents[3]
 FRONTEND_DIR = ROOT / "tools" / "new-agents" / "frontend"
@@ -44,9 +48,7 @@ def _wait_for_server(url: str, process: subprocess.Popen[str]) -> None:
     last_error = ""
     while time.time() < deadline:
         if process.poll() is not None:
-            raise RuntimeError(
-                "Vite dev server exited before becoming ready"
-            )
+            raise RuntimeError("Vite dev server exited before becoming ready")
         try:
             with urlopen(url, timeout=0.5) as response:
                 if response.status < 500:
@@ -77,7 +79,10 @@ def new_agents_base_url() -> Generator[str, None, None]:
         str(port),
         "--strictPort",
     ]
-    env = {**os.environ, "DISABLE_HMR": "true"}
+    env = {
+        **build_secret_free_browser_environment(os.environ),
+        "DISABLE_HMR": "true",
+    }
     process = subprocess.Popen(
         command,
         cwd=FRONTEND_DIR,
@@ -101,8 +106,11 @@ def new_agents_base_url() -> Generator[str, None, None]:
 @pytest.fixture(scope="session")
 def browser() -> Generator[Browser, None, None]:
     try:
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
+        with secret_free_sync_playwright(sync_playwright, os.environ) as playwright:
+            browser = playwright.chromium.launch(
+                headless=True,
+                env=build_secret_free_browser_environment(os.environ),
+            )
             try:
                 yield browser
             finally:
@@ -170,8 +178,7 @@ def new_agents_page(
 
     def route_run_handoffs(route: Route) -> None:
         has_value_blueprint = (
-            route_agent_stream.call_counts.get(("VALUE_DISCOVERY", "BLUEPRINT"), 0)
-            > 0
+            route_agent_stream.call_counts.get(("VALUE_DISCOVERY", "BLUEPRINT"), 0) > 0
         )
         handoffs = []
         if has_value_blueprint:

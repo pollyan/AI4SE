@@ -192,6 +192,7 @@ class IdeaSubproblem(StrictArtifactDataModel):
 
 
 class IdeaProblemLandscape(StrictArtifactDataModel):
+    root_problem_id: str
     root_problem: str
     subproblems: list[IdeaSubproblem] = Field(min_length=1)
 
@@ -199,6 +200,7 @@ class IdeaProblemLandscape(StrictArtifactDataModel):
 class IdeaEvidenceItem(StrictArtifactDataModel):
     evidence_id: str
     related_problem: str
+    related_problem_ids: list[str] = Field(min_length=1)
     source: str
     evidence_level: str
     validation_action: str
@@ -1554,27 +1556,29 @@ def render_test_design_clarify_markdown(data: ClarifyArtifactData) -> str:
     ).markdown
 
 
-def _validate_document_info_identity(
+def _inject_runtime_document_info_identity(
     artifact_data: dict[str, Any],
     *,
+    plan: ArtifactRenderPlan,
     workflow_id: str,
     current_stage_id: str,
-) -> None:
+) -> dict[str, Any]:
+    document_info_field = plan.model.model_fields.get("document_info")
+    if (
+        document_info_field is None
+        or document_info_field.annotation is not DocumentInfo
+    ):
+        return artifact_data
     document_info = artifact_data.get("document_info")
     if not isinstance(document_info, dict):
-        return
+        return artifact_data
 
-    declared_workflow = document_info.get("workflow")
-    declared_stage = document_info.get("stage")
-    if declared_workflow not in (None, workflow_id) or declared_stage not in (
-        None,
-        current_stage_id,
-    ):
-        raise ValueError(
-            "document_info identity must match runtime workflow/stage: "
-            f"expected {workflow_id}/{current_stage_id}, "
-            f"got {declared_workflow}/{declared_stage}"
-        )
+    normalized_artifact_data = dict(artifact_data)
+    normalized_document_info = dict(document_info)
+    normalized_document_info["workflow"] = workflow_id
+    normalized_document_info["stage"] = current_stage_id
+    normalized_artifact_data["document_info"] = normalized_document_info
+    return normalized_artifact_data
 
 
 def render_complete_artifact_data(
@@ -1590,12 +1594,13 @@ def render_complete_artifact_data(
             f"artifact_data renderer is not configured for "
             f"{workflow_id}/{current_stage_id}"
         )
-    _validate_document_info_identity(
+    normalized_artifact_data = _inject_runtime_document_info_identity(
         artifact_data,
+        plan=plan,
         workflow_id=workflow_id,
         current_stage_id=current_stage_id,
     )
-    return plan.render_complete(artifact_data)
+    return plan.render_complete(normalized_artifact_data)
 
 
 def render_available_artifact_data(
@@ -1610,12 +1615,13 @@ def render_available_artifact_data(
             f"artifact_data renderer is not configured for "
             f"{workflow_id}/{current_stage_id}"
         )
-    _validate_document_info_identity(
+    normalized_artifact_data = _inject_runtime_document_info_identity(
         artifact_data,
+        plan=plan,
         workflow_id=workflow_id,
         current_stage_id=current_stage_id,
     )
-    return plan.render_available(artifact_data)
+    return plan.render_available(normalized_artifact_data)
 
 
 def render_partial_artifact_data_markdown(
@@ -2089,14 +2095,17 @@ def _render_idea_problem_landscape(landscape: IdeaProblemLandscape) -> str:
             lines.append(f"      {_escape_mermaid_mindmap_text(symptom)}")
     lines.append("```")
     rows = [
-        (item.problem_id, item.problem, "、".join(item.symptoms))
-        for item in landscape.subproblems
+        (landscape.root_problem_id, "根问题", landscape.root_problem, "-"),
+        *[
+            (item.problem_id, "子问题", item.problem, "、".join(item.symptoms))
+            for item in landscape.subproblems
+        ],
     ]
     return (
         "## 问题域全景\n"
         + "\n".join(lines)
         + "\n\n"
-        + _markdown_table(["问题 ID", "子问题", "表现"], rows)
+        + _markdown_table(["问题 ID", "类型", "问题", "表现"], rows)
     )
 
 
@@ -2104,6 +2113,7 @@ def _render_idea_evidence_items(items: list[IdeaEvidenceItem]) -> str:
     rows = [
         (
             item.evidence_id,
+            ", ".join(item.related_problem_ids),
             item.related_problem,
             item.source,
             item.evidence_level,
@@ -2116,6 +2126,7 @@ def _render_idea_evidence_items(items: list[IdeaEvidenceItem]) -> str:
     return "## 证据与验证状态\n" + _markdown_table(
         [
             "证据 ID",
+            "关联问题 ID",
             "关联问题",
             "证据来源",
             "证据等级",
@@ -5348,11 +5359,51 @@ def _validate_idea_define_landscape(data: Any) -> None:
     problem_ids = [item.problem_id for item in data.problem_landscape.subproblems]
     if len(problem_ids) != len(set(problem_ids)):
         raise ValueError("problem_landscape contains duplicate problem_id")
+    if data.problem_landscape.root_problem_id in problem_ids:
+        raise ValueError(
+            "problem_landscape.root_problem_id duplicates subproblem problem_id"
+        )
+
+
+def _idea_define_root_evidence_ids(data: Any) -> set[str]:
+    _validate_idea_define_landscape(data)
+    root_problem_id = data.problem_landscape.root_problem_id
+    known_problem_ids = {root_problem_id} | {
+        item.problem_id for item in data.problem_landscape.subproblems
+    }
+    unknown_problem_ids = sorted(
+        {
+            problem_id
+            for item in data.evidence_items
+            for problem_id in item.related_problem_ids
+            if problem_id not in known_problem_ids
+        }
+    )
+    if unknown_problem_ids:
+        raise ValueError(
+            "evidence_items references unknown problem ids: "
+            + ", ".join(unknown_problem_ids)
+        )
+    root_evidence_ids = {
+        item.evidence_id
+        for item in data.evidence_items
+        if root_problem_id in item.related_problem_ids
+    }
+    if not root_evidence_ids:
+        raise ValueError(
+            "problem_landscape.root_problem_id must be covered by evidence_items"
+        )
+    return root_evidence_ids
+
+
+def _validate_idea_define_evidence_references(data: Any) -> None:
+    _validate_idea_define_evidence(data)
+    _idea_define_root_evidence_ids(data)
 
 
 def _validate_idea_define_fit(data: Any) -> None:
     _validate_idea_define_evidence(data)
-    _validate_idea_define_landscape(data)
+    root_evidence_ids = _idea_define_root_evidence_ids(data)
     evidence_ids = {item.evidence_id for item in data.evidence_items}
     unknown = sorted(
         evidence_id
@@ -5364,17 +5415,14 @@ def _validate_idea_define_fit(data: Any) -> None:
         raise ValueError(
             "problem_user_fit references unknown evidence ids: " + ", ".join(unknown)
         )
-    root_problem = data.problem_landscape.root_problem
-    if not (
-        any(root_problem in item.related_problem for item in data.evidence_items)
-        or any(
-            root_problem in item.evidence_or_assumption
-            for item in data.problem_user_fit
-        )
+    if not any(
+        evidence_id in root_evidence_ids
+        for item in data.problem_user_fit
+        for evidence_id in item.evidence_ids
     ):
         raise ValueError(
-            "problem_landscape.root_problem must be covered by evidence_items "
-            "or problem_user_fit"
+            "problem_user_fit must reference evidence covering "
+            "problem_landscape.root_problem_id"
         )
 
 
@@ -6514,9 +6562,9 @@ IDEA_DEFINE_RENDER_PLAN = ArtifactRenderPlan(
         ),
         _section(
             "evidence-items",
-            ("evidence_items",),
+            ("problem_landscape", "evidence_items"),
             lambda data: _render_idea_evidence_items(data.evidence_items),
-            validate_projection=_validate_idea_define_evidence,
+            validate_projection=_validate_idea_define_evidence_references,
         ),
         _section(
             "problem-user-fit",

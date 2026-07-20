@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from workflow_manifest import format_artifact_data_contract_instruction
 
+DOCUMENT_INFO_RUNTIME_IDENTITY_INSTRUCTION = (
+    "document_info.workflow 和 document_info.stage 由后端注入，模型不要输出这两个字段。"
+)
+
 ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = (
     """
 
@@ -17,12 +21,12 @@ JSON 对象结构：
 {
   "chat": "面向用户的自然工作对话。说明我本轮已经做了什么、本轮确认或假定的关键点、右侧产出物会更新哪些部分、接下来需要用户确认或补充什么。不要复制完整产出物正文。",
   "artifact_data": {
-    "document_info": {"artifact_name": "...", "workflow": "TEST_DESIGN", "stage": "CLARIFY", "status": "..."},
+    "document_info": {"artifact_name": "...", "status": "..."},
     "requirement_facts": [{"fact_id": "F-001", "fact": "...", "source": "...", "evidence_level": "...", "status": "..."}],
     "system_boundaries": [{"boundary_type": "...", "content": "...", "testing_meaning": "...", "status": "..."}],
     "business_rules": [{"rule_id": "BR-001", "rule": "...", "trigger": "...", "state_transition": "...", "exception_handling": "...", "acceptance": "...", "status": "..."}],
     "flow_links": [{"from_node": "用户", "to_node": "登录页", "label": "打开入口"}],
-    "clarification_questions": [{"question_id": "Q-001", "question": "...", "priority": "P1", "blocking": "阻断/非阻断", "impact": "...", "assumption": "...", "owner": "...", "status": "待确认/已确认/已假设/AI 假设"}],
+    "clarification_questions": [{"question_id": "Q-001", "question": "...", "priority": "P1", "blocking": "阻断/非阻断", "impact": "...", "assumption": "...", "owner": "...", "status": "待确认"}],
     "quality_requirements": [{"dimension": "...", "requirement_or_assumption": "...", "metric": "...", "risk": "...", "status": "..."}],
     "downstream_inputs": [{"input_type": "...", "input_id": "...", "content": "...", "source": "...", "usage": "..."}],
     "stage_gate": [{"checked": true, "item": "..."}]
@@ -54,7 +58,7 @@ JSON 对象结构：
 {
   "chat": "面向用户的自然工作对话。说明我本轮已经做了什么、本轮确认或假定的关键点、右侧测试策略蓝图会更新哪些部分、接下来需要用户确认或补充什么。不要复制完整产出物正文。",
   "artifact_data": {
-    "document_info": {"artifact_name": "...", "workflow": "TEST_DESIGN", "stage": "STRATEGY", "status": "..."},
+    "document_info": {"artifact_name": "...", "status": "..."},
     "strategy_summary": {"conclusion": "...", "basis": "F-001 / BR-001 / R-SEED-001", "case_stage_readiness": "可进入/暂缓进入/需补充策略输入"},
     "quality_goals": [{"goal_id": "QG-001", "goal": "...", "metric": "...", "source": "...", "priority": "P0", "status": "..."}],
     "risks": [{"risk_id": "R-001", "name": "...", "failure_mode": "...", "impact": "...", "source": "...", "severity": 5, "occurrence": 3, "detection": 4, "mitigation": "...", "coverage": "...", "status": "待覆盖/已覆盖/风险接受"}],
@@ -90,7 +94,7 @@ JSON 对象结构：
 {
   "chat": "面向用户的自然工作对话。说明我本轮已经生成哪些用例、覆盖了哪些测试点、哪些环境或数据仍需确认。不要复制完整产出物正文。",
   "artifact_data": {
-    "document_info": {"artifact_name": "...", "workflow": "TEST_DESIGN", "stage": "CASES", "status": "..."},
+    "document_info": {"artifact_name": "...", "status": "..."},
     "design_bases": [{"basis_id": "BASIS-001", "source_type": "质量目标/风险/测试点/业务规则", "source_id": "TP-001", "basis": "...", "case_direction": "正向/异常/边界/安全/性能"}],
     "case_groups": [{"dimension": "正向功能验证", "cases": [{"case_id": "TC-001", "title": "...", "priority": "P0", "test_point": "TP-001 登录主链路", "risk": "R-001", "precondition": "...", "steps": "1. ... 2. ...", "test_data": "...", "expected_result": "...", "assertion": "...", "execution_layer": "单元/集成/E2E/探索", "automation_suggestion": "优先自动化/可自动化/暂不自动化", "status": "草稿/待确认/可执行/需补环境"}]}],
     "test_data_environments": [{"data_id": "DATA-001", "type": "测试账号/业务数据/配置/第三方依赖/环境", "content": "...", "preparation": "人工准备/脚本构造/mock/现网只读", "related_cases": "TC-001", "status": "已具备/待准备/需确认"}],
@@ -126,7 +130,7 @@ JSON 对象结构：
 {
   "chat": "面向用户的自然工作对话。说明我本轮已经整合哪些需求、策略和用例结论，交付文档是否可评审/可签署，哪些风险仍需确认。不要复制完整产出物正文。",
   "artifact_data": {
-    "document_info": {"artifact_name": "...", "workflow": "TEST_DESIGN", "stage": "DELIVERY", "status": "..."},
+    "document_info": {"artifact_name": "...", "status": "..."},
     "delivery_metrics": {"project_name": "...", "version": "v1.0", "generated_at": "YYYY-MM-DD", "delivery_status": "草稿/待评审/可签署/需补充"},
     "executive_summary": [{"summary_item": "测试范围/核心风险/用例覆盖/交付判断", "conclusion": "...", "evidence_source": "CLARIFY / STRATEGY / CASES / 阶段门禁", "status": "已确认/待确认/可签署/需补充"}],
     "requirement_summary": [{"content_type": "事实/业务规则/链路/澄清问题", "reference": "F-001 / BR-001 / PATH-001 / Q-001", "conclusion": "...", "open_status": "已确认/待确认/AI 假设/已关闭"}],
@@ -234,7 +238,7 @@ JSON 对象结构：
 {
   "chat": "面向用户的自然工作对话。说明我本轮已经澄清哪些价值定位信息、哪些内容是已确认事实/AI 假设/待验证项、右侧价值定位分析会更新哪些部分。不要复制完整产出物正文。",
   "artifact_data": {
-    "document_info": {"artifact_name": "价值定位诊断报告", "workflow": "VALUE_DISCOVERY", "stage": "ELEVATOR", "status": "可进入用户画像/需补充定位信息/暂缓"},
+    "document_info": {"artifact_name": "价值定位诊断报告", "status": "可进入用户画像/需补充定位信息/暂缓"},
     "positioning_summary": {"one_liner": "...", "core_user": "...", "core_pain": "...", "unique_value": "...", "current_judgement": "可继续画像分析/需补充定位信息/暂缓"},
     "value_flow": {
       "nodes": [{"node_id": "USER", "label": "目标用户", "description": "..."}, {"node_id": "PAIN", "label": "核心痛点", "description": "..."}],
@@ -260,7 +264,8 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 """
 
 
-VALUE_PERSONA_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+VALUE_PERSONA_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = (
+    """
 
 【结构化输出格式要求】
 你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
@@ -274,7 +279,7 @@ JSON 对象结构：
 {
   "chat": "面向用户的自然工作对话。说明我本轮已经形成哪些画像、哪些画像证据仍待验证、决策链和反画像有什么关键结论。不要复制完整产出物正文。",
   "artifact_data": {
-    "document_info": {"artifact_name": "用户画像与决策链分析", "workflow": "VALUE_DISCOVERY", "stage": "PERSONA", "status": "可进入用户旅程/需补充画像证据/暂缓"},
+    "document_info": {"artifact_name": "用户画像与决策链分析", "status": "可进入用户旅程/需补充画像证据/暂缓"},
     "persona_summary": {"artifact_name": "用户画像与决策链分析", "core_user_judgement": "...", "primary_pain": "PAIN-001 ...", "validation_status": "已验证/部分验证/待验证", "journey_readiness": "可进入/需补充画像证据/暂缓"},
     "personas": [{
       "persona_id": "PER-001",
@@ -295,10 +300,13 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；personas.persona_id 必须唯一；behavior_scenarios、decision_chain、pain_evidence、priority_ranking 中的 persona_id 只能引用 personas 中已存在的 persona_id；priority_ranking 中同一个 persona_id 只能出现一次。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或解释文字，后端会负责确定性渲染右侧用户画像分析。
+"""
+    + format_artifact_data_contract_instruction("VALUE_DISCOVERY", "PERSONA")
+    + """
 chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
+)
 
 
 VALUE_JOURNEY_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
@@ -315,7 +323,7 @@ JSON 对象结构：
 {
   "chat": "面向用户的自然工作对话。说明我本轮已经形成哪些旅程阶段、情绪低谷、关键痛点、机会假设和验证实验。不要复制完整产出物正文。",
   "artifact_data": {
-    "document_info": {"artifact_name": "用户旅程与机会地图", "workflow": "VALUE_DISCOVERY", "stage": "JOURNEY", "status": "可进入需求蓝图/需补充旅程证据/暂缓"},
+    "document_info": {"artifact_name": "用户旅程与机会地图", "status": "可进入需求蓝图/需补充旅程证据/暂缓"},
     "journey_summary": {"core_persona": "...", "core_pain": "...", "entry_strategy": "...", "blueprint_readiness": "可进入需求蓝图/需补充旅程证据/暂缓"},
     "journey_stages": [{
       "stage_id": "JS-001",
@@ -518,8 +526,8 @@ JSON 对象结构：
   "artifact_data": {
     "problem_statement": {"target_user": "...", "scenario": "...", "core_pain": "...", "existing_alternative": "...", "alternative_gap": "...", "consequence": "...", "validation_status": "待验证/部分验证/已验证"},
     "target_users": [{"dimension": "角色定义/核心痛点/痛点频率/现有应对/期望状态/付费意愿", "description": "...", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "validation_status": "已验证/部分验证/待验证"}],
-    "problem_landscape": {"root_problem": "...", "subproblems": [{"problem_id": "P-001", "problem": "...", "symptoms": ["..."]}]},
-    "evidence_items": [{"evidence_id": "EV-001", "related_problem": "...", "source": "用户访谈/数据/社区讨论/类比案例/AI 假设", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "validation_action": "...", "owner": "产品/用户研究/业务/用户确认", "validation_status": "已验证/部分验证/待验证"}],
+    "problem_landscape": {"root_problem_id": "P-ROOT", "root_problem": "...", "subproblems": [{"problem_id": "P-001", "problem": "...", "symptoms": ["..."]}]},
+    "evidence_items": [{"evidence_id": "EV-001", "related_problem": "...", "related_problem_ids": ["P-ROOT"], "source": "用户访谈/数据/社区讨论/类比案例/AI 假设", "evidence_level": "事实证据/用户陈述/合理推断/待验证", "validation_action": "...", "owner": "产品/用户研究/业务/用户确认", "validation_status": "已验证/部分验证/待验证"}],
     "problem_user_fit": [{"dimension": "问题是否真实存在？/受影响用户群规模/用户是否在主动寻求解决方案？/现有替代方案的满意度", "current_judgement": "...", "evidence_or_assumption": "...", "evidence_ids": ["EV-001"], "validation_action": "...", "validation_status": "已验证/部分验证/待验证"}],
     "constraints_boundaries": [{"boundary_type": "约束/不可做边界", "content": "...", "impact": "...", "status": "已确认/待确认"}],
     "reverse_validation": [{"failure_hypothesis": "...", "trigger_signal": "...", "validation_action": "...", "validation_status": "待验证/部分验证/已验证"}],
@@ -529,10 +537,13 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；evidence_items.evidence_id 必须唯一；problem_landscape.subproblems.problem_id 必须唯一；problem_user_fit.evidence_ids 只能引用已存在的 evidence_id；problem_landscape.root_problem 必须被至少一个 evidence_items 或 problem_user_fit 条目覆盖；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块或 mindmap，后端会负责确定性渲染右侧问题域分析和 Mermaid mindmap。
+__ARTIFACT_DATA_CONTRACT_INSTRUCTION__
 chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
-"""
+""".replace(
+    "__ARTIFACT_DATA_CONTRACT_INSTRUCTION__",
+    format_artifact_data_contract_instruction("IDEA_BRAINSTORM", "DEFINE"),
+)
 
 
 IDEA_DIVERGE_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
@@ -601,7 +612,8 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 )
 
 
-IDEA_CONCEPT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = """
+IDEA_CONCEPT_ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTION = (
+    """
 
 【结构化输出格式要求】
 你必须只输出一个 JSON 对象，不要输出 Markdown 代码围栏，不要输出 JSON 之外的任何解释。
@@ -631,10 +643,13 @@ JSON 对象结构：
   "warnings": []
 }
 
-artifact_data 中所有字符串必须非空；数组必须至少包含一项；core_assumptions.assumption_id、validation_roadmap.validation_id 和 next_actions.action_id 必须唯一；lean_canvas 必须覆盖问题、用户群体、独特价值主张、解决方案、渠道、收入来源、成本结构、关键指标和竞争壁垒；growth_funnel 必须覆盖 Acquisition、Activation、Retention、Revenue 和 Referral；mvp_features.assumption_ids 和 validation_roadmap.assumption_ids 只能引用已存在的 assumption_id；next_actions.related_ids 只能引用已存在的 assumption_id、validation_id 或 risk_id；stage_gate 至少包含一个 checked=true。不要输出完整 Markdown 文档、Markdown 表格、Mermaid 代码块、pie、flowchart 或 ai4se-visual mvp-map，后端会负责确定性渲染右侧产品概念简报、Mermaid 图和 mvp-map。
+"""
+    + format_artifact_data_contract_instruction("IDEA_BRAINSTORM", "CONCEPT")
+    + """
 chat 字段必须像一次自然的工作对话，不要只用一两句模板化提示；简单同步可以使用自然短段落，信息较多、存在风险或需要用户确认时可以适度使用短列表；不要每轮套用固定 bullet 数量、固定标签或固定栏目，让左侧对话有独立阅读价值。
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
+)
 
 
 def _story_breakdown_artifact_data_instruction(
@@ -653,7 +668,7 @@ JSON 对象结构：
 {
   "chat": "面向用户的自然工作对话。说明我本轮如何把输入需求拆成 Epic、User Story、验收标准、依赖风险、Sprint 切片和 Lisa Handoff 输入。不要复制完整产出物正文。",
   "artifact_data": {
-    "document_info": {"artifact_name": "用户故事拆解包", "workflow": "STORY_BREAKDOWN", "stage": "{stage_id}", "status": "草稿/待确认/可交接 Lisa"},
+    "document_info": {"artifact_name": "用户故事拆解包", "status": "草稿/待确认/可交接 Lisa"},
     "input_analysis": {"source_type": "PRD/需求蓝图/产品想法/用户输入", "product_goal": "...", "target_users": ["..."], "constraints": ["..."], "open_questions": ["..."]},
     "epics": [{"epic_id": "EPIC-001", "name": "...", "value_goal": "...", "scope": "...", "priority": "P0/P1/P2", "dependencies": ["..."]}],
     "user_stories": [{"story_id": "US-001", "epic_id": "EPIC-001", "title": "...", "user_story": "作为...我想...以便...", "priority": "P0/P1/P2", "story_points": 5, "testability": "高/中/低", "status": "待评审/已确认"}],
@@ -698,7 +713,7 @@ JSON 对象结构：
 {
   "chat": "面向用户的自然工作对话。说明我本轮如何评审 PRD、识别缺口、组织补全动作或形成修订蓝图。不要复制完整产出物正文。",
   "artifact_data": {
-    "document_info": {"artifact_name": "PRD 质量评审与补全", "workflow": "PRD_REVIEW", "stage": "{stage_id}", "status": "可进入下一阶段/需补充信息/暂缓"},
+    "document_info": {"artifact_name": "PRD 质量评审与补全", "status": "可进入下一阶段/需补充信息/暂缓"},
     "prd_inventory": [{"item_id": "INV-001", "category": "目标用户/业务目标/范围/约束/验收材料", "content": "...", "source": "PRD 草案/用户输入/AI 推断", "evidence_level": "用户提供/文档证据/AI 假设", "status": "已识别/待确认/缺失"}],
     "quality_findings": [{"finding_id": "FIND-001", "dimension": "完整性/一致性/可测试性/边界/异常路径/非功能/风险/证据强度", "problem": "...", "severity": "P0/P1/P2", "blocking": "阻断/非阻断", "evidence": "...", "impact": "...", "recommendation": "...", "status": "待修订/待确认/已关闭"}],
     "completion_actions": [{"action_id": "ACT-001", "finding_ids": ["FIND-001"], "action": "...", "priority": "P0/P1/P2", "owner": "产品经理/业务/研发/测试/用户确认", "verification_method": "...", "review_condition": "...", "status": "待开始/进行中/已完成"}],

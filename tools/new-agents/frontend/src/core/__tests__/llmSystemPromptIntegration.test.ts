@@ -16,6 +16,7 @@ vi.stubGlobal('fetch', mockFetch);
 function createSseStream(): ReadableStream<Uint8Array> {
     const encoder = new TextEncoder();
     const payload = [
+        'data: {"type":"run_started","runId":"run-system-prompt-integration"}',
         'data: {"type":"agent_turn","output":{"chat":"继续生成策略内容","artifact_update":{"type":"none"},"stage_action":null,"warnings":[]}}',
         'data: [DONE]',
     ].join('\n') + '\n';

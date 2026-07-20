@@ -345,11 +345,11 @@ describe('buildSystemPrompt', () => {
         });
 
         const caseCountRule =
-            'case_summary_items[].case_count 缺省时由后端按 p0_count + p1_count + p2_count 派生；显式提供时必须一致';
+            'case_summary_items[].case_count 由后端按 p0_count + p1_count + p2_count 派生，模型不要输出';
         const totalCasesRule =
-            'delivery_metrics.total_cases 缺省时由后端按 case_summary_items[].case_count 总和派生；显式提供时必须一致';
+            'delivery_metrics.total_cases 由后端按 case_summary_items[].case_count 总和派生，模型不要输出';
         const highRiskRule =
-            'delivery_metrics.high_risk_count 缺省时由后端按 open_risks 中不可接受风险数量派生；显式提供时必须一致';
+            'delivery_metrics.high_risk_count 由后端按 open_risks 中 risk_type 包含“风险”且 acceptable 不为“是”的条目数量派生，模型不要输出';
         expect(prompt).toContain('【artifact_data 结构化契约】');
         expect(prompt).toContain(caseCountRule);
         expect(prompt).toContain(totalCasesRule);
@@ -358,6 +358,7 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('coverage-map JSON 代码块');
         expect(prompt).toContain('右侧测试设计交付包');
         expect(prompt).toContain('ai4se-visual coverage-map');
+        expect(prompt).toContain('当前阶段版本：2026.07.20.1');
         const caseCountRuleMatches = prompt.match(new RegExp(caseCountRule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? [];
         expect(caseCountRuleMatches).toHaveLength(1);
     });
@@ -478,9 +479,12 @@ describe('buildSystemPrompt', () => {
         const evidenceRule = 'evidence_items[].evidence_id 必须唯一';
         expect(prompt).toContain('【artifact_data 结构化契约】');
         expect(prompt).toContain(evidenceRule);
+        expect(prompt).toContain('problem_landscape.root_problem_id 必须唯一且不能与 problem_landscape.subproblems[].problem_id 重复');
         expect(prompt).toContain('problem_landscape.subproblems[].problem_id 必须唯一');
+        expect(prompt).toContain('evidence_items[].related_problem_ids 只能引用 problem_landscape.root_problem_id 或已定义的 problem_landscape.subproblems[].problem_id');
         expect(prompt).toContain('problem_user_fit.evidence_ids 只能引用 evidence_items[].evidence_id 中已定义的证据 ID');
-        expect(prompt).toContain('problem_landscape.root_problem 必须被至少一个 evidence_items.related_problem 或 problem_user_fit.evidence_or_assumption 条目覆盖');
+        expect(prompt).toContain('至少一个 evidence_items[].related_problem_ids 必须包含 problem_landscape.root_problem_id');
+        expect(prompt).toContain('至少一个 problem_user_fit[].evidence_ids 必须引用支撑 problem_landscape.root_problem_id 的 evidence_items[].evidence_id');
         expect(prompt).toContain('图表 代码块');
         expect(prompt).toContain('mindmap 代码块');
         expect(prompt).toContain('图表 mindmap');
@@ -556,9 +560,9 @@ describe('buildSystemPrompt', () => {
         expect(prompt).toContain('next_actions[].action_id 必须唯一');
         expect(prompt).toContain('lean_canvas.cell 必须覆盖问题、用户群体、独特价值主张、解决方案、渠道、收入来源、成本结构、关键指标、竞争壁垒');
         expect(prompt).toContain('growth_funnel.stage 必须覆盖 Acquisition、Activation、Retention、Revenue、Referral');
-        expect(prompt).toContain('mvp_features[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID');
-        expect(prompt).toContain('validation_roadmap[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID');
-        expect(prompt).toContain('next_actions[].related_ids 只能引用 core_assumptions[].assumption_id、validation_roadmap[].validation_id 或 premortem_risks[].risk_id 中已定义的 ID');
+        expect(prompt).toContain('mvp_features[].assumption_ids 必须至少包含 1 个且只能引用 core_assumptions[].assumption_id 中已定义的假设 ID');
+        expect(prompt).toContain('validation_roadmap[].assumption_ids 必须至少包含 1 个且只能引用 core_assumptions[].assumption_id 中已定义的假设 ID');
+        expect(prompt).toContain('next_actions[].related_ids 必须至少包含 1 个且只能引用 core_assumptions[].assumption_id、validation_roadmap[].validation_id 或 premortem_risks[].risk_id 中已定义的 ID');
         expect(prompt).toContain('stage_gate 至少包含一个 checked=true');
         expect(prompt).toContain('mvp-map JSON 代码块');
         expect(prompt).toContain('右侧产品概念简报');
@@ -605,10 +609,13 @@ describe('buildSystemPrompt', () => {
         });
 
         const personaIdRule = 'personas[].persona_id 必须唯一';
+        const behaviorTriggerRule = 'personas[].behavior_features[] 每一项都必须包含非空 trigger';
         expect(prompt).toContain('【artifact_data 结构化契约】');
         expect(prompt).toContain(personaIdRule);
+        expect(prompt).toContain(behaviorTriggerRule);
         expect(prompt).toContain('behavior_scenarios[].persona_id、decision_chain[].persona_id、pain_evidence[].persona_id、priority_ranking[].persona_id 只能引用 personas[].persona_id 中已定义的画像 ID');
         expect(prompt).toContain('priority_ranking[].persona_id 必须唯一');
+        expect(prompt).toContain('当前阶段版本：2026.07.20.2');
         expect(prompt).toContain('完整 Markdown 文档');
         expect(prompt).toContain('Markdown 表格');
         expect(prompt).toContain('右侧用户画像分析');

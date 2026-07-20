@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from agent_contracts import (
     AgentTurnOutput,
     ContractValidationError,
+    build_stage_action_contract_prompt,
     validate_agent_turn,
 )
 from artifact_data_renderers import (
@@ -19,8 +20,13 @@ from artifact_data_renderers import (
 )
 from artifact_data_instruction_registry import (
     ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS,
+    DOCUMENT_INFO_RUNTIME_IDENTITY_INSTRUCTION,
 )
 from llm_client import LlmClientError, stream_chat_completion_content
+from safe_error_diagnostics import (
+    SAFE_STREAM_TERMINATION_VALIDATORS,
+    project_safe_schema_field_path,
+)
 from sse_schemas import AgentRetrySignal, AgentTurnDeltaOutput
 from workflow_manifest import format_visual_protocol_instruction
 
@@ -75,6 +81,15 @@ class RawStreamingConfig:
 class StructuredOutputCapability:
     tier: str
     response_format: dict[str, Any] | None
+    max_output_tokens: int | None = None
+
+
+class RawJsonStreamTerminationError(ValueError):
+    SAFE_REASONS = frozenset(SAFE_STREAM_TERMINATION_VALIDATORS)
+
+    def __init__(self, reason: str):
+        self.reason = reason if reason in self.SAFE_REASONS else "unknown"
+        super().__init__(f"raw JSON stream terminated: {self.reason}")
 
 
 TEXT_STRUCTURED_OUTPUT_INSTRUCTION = """
@@ -104,6 +119,328 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 
 RAW_JSON_STREAMING_MAX_ATTEMPTS = 2
 
+_SAFE_RETRY_FIELD_PATHS = {
+    "artifact_data": "artifact_data",
+    "artifact_update": "artifact_update",
+    "chat": "chat",
+    "stage_action": "stage_action",
+    "warnings": "warnings",
+}
+_SAFE_RETRY_VALIDATORS = frozenset(
+    {
+        "bool_type",
+        "dict_type",
+        "enum",
+        "extra_forbidden",
+        "float_type",
+        "int_type",
+        "list_type",
+        "literal_error",
+        "missing",
+        "string_too_short",
+        "string_type",
+        "too_short",
+        "union_tag_invalid",
+        "union_tag_not_found",
+        "value_error",
+    }
+)
+_SAFE_RETRY_PATH_SEGMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_MAX_SAFE_RETRY_PATH_SEGMENTS = 12
+_MAX_SAFE_RETRY_FIELD_PATH_LENGTH = 240
+_SAFE_RETRY_CORRECTIONS = {
+    "blank_string": (
+        "所有字符串字段必须使用有意义的非空文本；条件不适用的字段填写“无”、"
+        "“不适用”或明确原因，不要输出空字符串。"
+    ),
+    "clarify_question_status_literal": (
+        "clarification_questions[].status 只能从“待确认”“已确认”“已假设”"
+        "“AI 假设”中选择一个；用户已明确回答时用“已确认”，用户明确授权代定"
+        "场景时用“已假设”，未经授权的临时推断用“AI 假设”，其余用“待确认”。"
+    ),
+    "delivery_case_count_mismatch": (
+        "模型不要输出 case_summary_items[].case_count；"
+        "该字段由后端派生，计算规则为 p0_count + p1_count + p2_count。"
+    ),
+    "delivery_high_risk_count_mismatch": (
+        "模型不要输出 delivery_metrics.high_risk_count；"
+        "该字段由后端派生，计算规则为 open_risks 中 risk_type 包含“风险”且 "
+        "acceptable 不为“是”的条目数量。"
+    ),
+    "delivery_total_cases_mismatch": (
+        "模型不要输出 delivery_metrics.total_cases；"
+        "该字段由后端派生，计算规则为 case_summary_items[].case_count 总和。"
+    ),
+    "too_short": (
+        "所有数组（包括嵌套的引用 ID 数组）必须至少包含一项；"
+        "引用 ID 必须来自同一 JSON 中对应已定义 ID。"
+    ),
+    "idea_converge_blank_elimination_reason": (
+        "ice_evaluations[].elimination_reason 必须是非空文本；"
+        "对于推荐或保留方案填写“不淘汰”并说明保留依据。"
+    ),
+    "idea_define_empty_evidence_ids": (
+        "problem_user_fit[].evidence_ids 必须至少引用一个"
+        "已在 evidence_items[].evidence_id 中定义的 ID。"
+    ),
+    "idea_define_duplicate_evidence_id": (
+        "evidence_items[].evidence_id 必须唯一；重复证据应合并内容或分配新的 ID。"
+    ),
+    "idea_define_duplicate_problem_id": (
+        "problem_landscape.subproblems[].problem_id 必须唯一。"
+    ),
+    "idea_define_duplicate_root_problem_id": (
+        "problem_landscape.root_problem_id 不能与任何 "
+        "problem_landscape.subproblems[].problem_id 重复。"
+    ),
+    "idea_define_unknown_problem_reference": (
+        "evidence_items[].related_problem_ids 只能引用 "
+        "problem_landscape.root_problem_id 或已定义的 "
+        "problem_landscape.subproblems[].problem_id。"
+    ),
+    "idea_define_missing_root_problem_evidence": (
+        "至少一个 evidence_items[].related_problem_ids 必须包含 "
+        "problem_landscape.root_problem_id。"
+    ),
+    "idea_define_missing_fit_root_evidence_reference": (
+        "至少一个 problem_user_fit[].evidence_ids 必须引用一条 "
+        "related_problem_ids 包含 root_problem_id 的 evidence_items[].evidence_id。"
+    ),
+    "idea_define_unknown_evidence_reference": (
+        "problem_user_fit[].evidence_ids 只能引用 evidence_items[].evidence_id"
+        " 中已定义的 ID。"
+    ),
+    "idea_concept_empty_mvp_feature_assumption_ids": (
+        "每个 mvp_features[].assumption_ids 必须至少引用一个 "
+        "core_assumptions[].assumption_id 中已定义的假设 ID。"
+    ),
+    "idea_concept_empty_validation_assumption_ids": (
+        "每个 validation_roadmap[].assumption_ids 必须至少引用一个 "
+        "core_assumptions[].assumption_id 中已定义的假设 ID。"
+    ),
+    "idea_concept_empty_next_action_related_ids": (
+        "每个 next_actions[].related_ids 必须至少引用一个已定义的 "
+        "assumption_id、validation_id 或 risk_id。"
+    ),
+    "incident_improvement_blank_risk_acceptor": (
+        "root_cause_coverage[].risk_acceptor 必须是非空文本；"
+        "无需风险接受时填写“不适用”并说明覆盖状态。"
+    ),
+    "incident_improvement_duplicate_action_id": (
+        "improvement_actions[].action_id 必须唯一；重复行动应合并或分配新的 ID。"
+    ),
+    "incident_improvement_action_count_mismatch": (
+        "模型不要输出 report_info.action_count；该字段由后端根据 "
+        "improvement_actions 的数量派生。"
+    ),
+    "incident_improvement_priority_distribution_mismatch": (
+        "模型不要输出 priority_distribution；该字段由后端根据 "
+        "improvement_actions[].priority 派生。"
+    ),
+    "incident_improvement_duplicate_cause_id": (
+        "root_cause_coverage[].cause_id 必须唯一。"
+    ),
+    "incident_improvement_unknown_action_reference": (
+        "root_cause_coverage[].action_ids 只能引用 "
+        "improvement_actions[].action_id 中已定义的 ID。"
+    ),
+    "incident_improvement_unknown_cause_reference": (
+        "improvement_actions[].root_cause_id 只能引用 "
+        "root_cause_coverage[].cause_id 中已定义的 ID。"
+    ),
+    "incident_improvement_covered_without_actions": (
+        "root_cause_coverage[].coverage_status 为“已覆盖”时，action_ids "
+        "必须至少包含一个已定义的行动 ID。"
+    ),
+    "incident_improvement_action_group_mismatch": (
+        "每个 root_cause_coverage[].action_ids 必须精确等于所有 "
+        "root_cause_id 为该 cause_id 的 improvement_actions[].action_id。"
+    ),
+    "stage_gate_unchecked": ("stage_gate 至少包含一个 checked=true 的已满足门禁项。"),
+    "journey_duplicate_stage_id": (
+        "journey_stages 每一项的 stage_id 必须唯一，并让引用字段使用对应 ID。"
+    ),
+    "journey_duplicate_pain_id": (
+        "journey_stages 每一项的 pain_id 必须唯一；同一痛点跨阶段出现时也要分配不同 ID。"
+    ),
+    "journey_duplicate_opportunity_id": (
+        "journey_stages 每一项的 opportunity_id 必须唯一；同一机会跨阶段出现时也要分配不同 ID。"
+    ),
+    "journey_unknown_stage_reference": (
+        "pain_priorities[].stage_id 必须逐字引用 journey_stages[].stage_id 中已定义的 ID。"
+    ),
+    "journey_unknown_pain_reference": (
+        "pain_priorities 和 opportunity_scores 的 pain_id 必须逐字引用 journey_stages 中已定义的 pain_id。"
+    ),
+    "journey_unknown_opportunity_reference": (
+        "opportunity_scores、entry_strategy 和 validation_experiments 的机会 ID 必须逐字引用 journey_stages 中已定义的 opportunity_id。"
+    ),
+}
+
+
+def project_safe_value_error_validator(error_detail: dict[str, Any]) -> str | None:
+    location = tuple(error_detail.get("loc") or ())
+    if (
+        error_detail.get("type") == "literal_error"
+        and len(location) == 3
+        and location[0] == "clarification_questions"
+        and isinstance(location[1], int)
+        and location[2] == "status"
+    ):
+        return "clarify_question_status_literal"
+    if error_detail.get("type") == "too_short" and (
+        len(location) == 3 and isinstance(location[1], int)
+    ):
+        return {
+            ("mvp_features", "assumption_ids"): (
+                "idea_concept_empty_mvp_feature_assumption_ids"
+            ),
+            ("next_actions", "related_ids"): (
+                "idea_concept_empty_next_action_related_ids"
+            ),
+            ("problem_user_fit", "evidence_ids"): ("idea_define_empty_evidence_ids"),
+            ("validation_roadmap", "assumption_ids"): (
+                "idea_concept_empty_validation_assumption_ids"
+            ),
+        }.get((location[0], location[2]))
+    if error_detail.get("type") != "value_error":
+        return None
+    context = error_detail.get("ctx")
+    if not isinstance(context, dict):
+        return None
+    message = str(context.get("error") or "")
+    if message == "case_count must equal p0_count + p1_count + p2_count":
+        return "delivery_case_count_mismatch"
+    if message == (
+        "delivery_metrics.total_cases must match case_summary_items total_cases"
+    ):
+        return "delivery_total_cases_mismatch"
+    if message == (
+        "delivery_metrics.high_risk_count must match unacceptable open risks"
+    ):
+        return "delivery_high_risk_count_mismatch"
+    if message == "string fields cannot be blank":
+        if (
+            len(location) == 3
+            and location[0] == "ice_evaluations"
+            and isinstance(location[1], int)
+            and location[2] == "elimination_reason"
+        ):
+            return "idea_converge_blank_elimination_reason"
+        if (
+            len(location) == 3
+            and location[0] == "root_cause_coverage"
+            and isinstance(location[1], int)
+            and location[2] == "risk_acceptor"
+        ):
+            return "incident_improvement_blank_risk_acceptor"
+        return "blank_string"
+    duplicate_match = re.fullmatch(
+        r"journey_stages contains duplicate (stage_id|pain_id|opportunity_id)",
+        message,
+    )
+    if duplicate_match:
+        return f"journey_duplicate_{duplicate_match.group(1)}"
+    if message.startswith("pain_priorities references unknown stage ids:"):
+        return "journey_unknown_stage_reference"
+    if message.startswith("journey references unknown pain ids:"):
+        return "journey_unknown_pain_reference"
+    if message.startswith("journey references unknown opportunity ids:"):
+        return "journey_unknown_opportunity_reference"
+    if message == "evidence_items contains duplicate evidence_id":
+        return "idea_define_duplicate_evidence_id"
+    if message == "problem_landscape contains duplicate problem_id":
+        return "idea_define_duplicate_problem_id"
+    if message == (
+        "problem_landscape.root_problem_id duplicates subproblem problem_id"
+    ):
+        return "idea_define_duplicate_root_problem_id"
+    if message.startswith("evidence_items references unknown problem ids:"):
+        return "idea_define_unknown_problem_reference"
+    if message == (
+        "problem_landscape.root_problem_id must be covered by evidence_items"
+    ):
+        return "idea_define_missing_root_problem_evidence"
+    if message == (
+        "problem_user_fit must reference evidence covering "
+        "problem_landscape.root_problem_id"
+    ):
+        return "idea_define_missing_fit_root_evidence_reference"
+    if message.startswith("problem_user_fit references unknown evidence ids:"):
+        return "idea_define_unknown_evidence_reference"
+    if message == "improvement_actions contains duplicate action_id":
+        return "incident_improvement_duplicate_action_id"
+    if message == ("report_info.action_count must match improvement_actions length"):
+        return "incident_improvement_action_count_mismatch"
+    if message == "priority_distribution must match improvement_actions priorities":
+        return "incident_improvement_priority_distribution_mismatch"
+    if message == "root_cause_coverage contains duplicate cause_id":
+        return "incident_improvement_duplicate_cause_id"
+    if message.startswith("root_cause_coverage references unknown action ids:"):
+        return "incident_improvement_unknown_action_reference"
+    if message.startswith(
+        "improvement_actions.root_cause_id references unknown coverage cause ids:"
+    ):
+        return "incident_improvement_unknown_cause_reference"
+    if message.startswith(
+        "root_cause_coverage.coverage_status 已覆盖 requires action_ids:"
+    ):
+        return "incident_improvement_covered_without_actions"
+    if message.startswith(
+        "root_cause_coverage.action_ids must match improvement_actions grouped "
+        "by root_cause_id:"
+    ):
+        return "incident_improvement_action_group_mismatch"
+    if message == "stage_gate must include at least one checked item":
+        return "stage_gate_unchecked"
+    return None
+
+
+def project_safe_value_error_field_path(validator: str) -> str:
+    return project_safe_schema_field_path(validator)
+
+
+def project_safe_missing_field_path(error_detail: dict[str, Any]) -> str | None:
+    if error_detail.get("type") != "missing":
+        return None
+    location = tuple(error_detail.get("loc") or ())
+    if location in {
+        ("stage_action", "type"),
+        ("stage_action", "target_stage_id"),
+    }:
+        return ".".join(location)
+    if (
+        not location
+        or len(location) > _MAX_SAFE_RETRY_PATH_SEGMENTS
+        or not any(isinstance(segment, int) for segment in location)
+    ):
+        return None
+
+    projected_segments: list[str] = []
+    for segment in location:
+        if isinstance(segment, bool):
+            return None
+        if isinstance(segment, int):
+            if not projected_segments:
+                return None
+            projected_segments[-1] += "[]"
+            continue
+        if (
+            not isinstance(segment, str)
+            or _SAFE_RETRY_PATH_SEGMENT.fullmatch(segment) is None
+        ):
+            return None
+        projected_segments.append(segment)
+
+    if not projected_segments:
+        return None
+    if projected_segments[0] != "artifact_data":
+        projected_segments.insert(0, "artifact_data")
+    field_path = ".".join(projected_segments)
+    if len(field_path) > _MAX_SAFE_RETRY_FIELD_PATH_LENGTH:
+        return None
+    return field_path
+
 
 def get_artifact_data_ready_stages() -> set[tuple[str, str]]:
     return set(ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS)
@@ -125,7 +462,87 @@ def build_structured_output_instruction(
     instruction = ARTIFACT_DATA_STRUCTURED_OUTPUT_INSTRUCTIONS.get(stage_key)
     if instruction is None:
         return TEXT_STRUCTURED_OUTPUT_INSTRUCTION
-    return instruction.rstrip() + "\n\n" + format_visual_protocol_instruction() + "\n"
+    document_info_instruction = (
+        "\n\n" + DOCUMENT_INFO_RUNTIME_IDENTITY_INSTRUCTION
+        if '"document_info"' in instruction
+        else ""
+    )
+    return (
+        instruction.rstrip()
+        + document_info_instruction
+        + "\n\n"
+        + format_visual_protocol_instruction()
+        + "\n"
+    )
+
+
+def _safe_raw_json_retry_diagnostic(error: Exception) -> tuple[str, str, str]:
+    if isinstance(error, RawJsonStreamTerminationError):
+        validator = SAFE_STREAM_TERMINATION_VALIDATORS[error.reason]
+        return "stream_termination", "response_json", validator
+    if isinstance(error, json.JSONDecodeError):
+        return "json_syntax", "response_json", "json_decode"
+    if isinstance(error, ValidationError):
+        errors = error.errors()
+        if not errors:
+            return (
+                "schema_validation",
+                "structured_output",
+                "pydantic_validation",
+            )
+        first_error = errors[0]
+        projected_validator = project_safe_value_error_validator(first_error)
+        if projected_validator is not None:
+            return (
+                "schema_validation",
+                project_safe_value_error_field_path(projected_validator),
+                projected_validator,
+            )
+        projected_missing_path = project_safe_missing_field_path(first_error)
+        if projected_missing_path is not None:
+            return "schema_validation", projected_missing_path, "missing"
+        location = first_error.get("loc") or ()
+        top_level = str(location[0]) if location else ""
+        field_path = _SAFE_RETRY_FIELD_PATHS.get(
+            top_level,
+            "structured_output",
+        )
+        validator_candidate = str(first_error.get("type") or "pydantic_validation")
+        validator = (
+            validator_candidate
+            if validator_candidate in _SAFE_RETRY_VALIDATORS
+            else "pydantic_validation"
+        )
+        return "schema_validation", field_path, validator
+    if isinstance(error, ContractValidationError):
+        message = str(error)
+        if message == "last stage cannot request next stage":
+            return (
+                "contract_validation",
+                "stage_action",
+                "terminal_stage_action",
+            )
+        if message.startswith("invalid target stage:") or message.startswith(
+            "target stage must be next stage:"
+        ):
+            return (
+                "contract_validation",
+                "stage_action.target_stage_id",
+                "stage_transition",
+            )
+        return "contract_validation", "artifact_contract", "workflow_contract"
+    if isinstance(error, ValueError):
+        return "artifact_validation", "artifact_data", "artifact_value"
+    return "structured_output", "structured_output", "output_validation"
+
+
+def _format_safe_raw_json_retry_diagnostic(error: Exception) -> str:
+    category, field_path, validator = _safe_raw_json_retry_diagnostic(error)
+    return (
+        f"failureCategory={category}; "
+        f"fieldPath={field_path}; "
+        f"validator={validator}"
+    )
 
 
 def build_raw_json_retry_prompt(
@@ -135,17 +552,44 @@ def build_raw_json_retry_prompt(
     workflow_id: str | None = None,
     current_stage_id: str | None = None,
 ) -> str:
+    category, field_path, validator = _safe_raw_json_retry_diagnostic(error)
+    safe_diagnostic = (
+        f"failureCategory={category}; "
+        f"fieldPath={field_path}; "
+        f"validator={validator}"
+    )
+    correction = _SAFE_RETRY_CORRECTIONS.get(validator)
+    if (
+        (field_path == "stage_action" or field_path.startswith("stage_action."))
+        and workflow_id is not None
+        and current_stage_id is not None
+    ):
+        correction = build_stage_action_contract_prompt(
+            workflow_id=workflow_id,
+            current_stage_id=current_stage_id,
+        ).strip()
+    if correction is None and validator == "missing" and "." in field_path:
+        correction = (
+            f"{field_path} 是必填字段；该路径对应的每个对象都必须包含这个字段，"
+            "且字符串值必须非空。"
+        )
+    correction_line = f"\n{correction}" if correction else ""
     if (
         workflow_id is not None
         and current_stage_id is not None
         and supports_artifact_data_rendering(workflow_id, current_stage_id)
     ):
+        repair_target = (
+            "上述 artifact_data 数据问题"
+            if field_path == "artifact_data" or field_path.startswith("artifact_data.")
+            else "上述结构化输出问题"
+        )
         return (
             f"{prompt}\n\n"
             "【上一轮结构化输出未通过校验】\n"
-            f"{error}\n\n"
+            f"{safe_diagnostic}{correction_line}\n\n"
             "请立刻重新输出一个完整合法的 JSON 对象，不要输出 JSON 之外的解释。"
-            "必须修正上述 artifact_data 数据问题；所有必填字段必须存在，"
+            f"必须修正{repair_target}；所有必填字段必须存在，"
             "所有字符串必须非空，数组必须至少包含一项。不要输出 Markdown 文档、"
             "Mermaid、D2、Graphviz DOT、PlantUML 代码块或表格，"
             "后端会根据 artifact_data 渲染右侧产出物。"
@@ -153,7 +597,7 @@ def build_raw_json_retry_prompt(
     return (
         f"{prompt}\n\n"
         "【上一轮结构化输出未通过校验】\n"
-        f"{error}\n\n"
+        f"{safe_diagnostic}{correction_line}\n\n"
         "请立刻重新输出一个完整合法的 JSON 对象，不要输出 JSON 之外的解释。"
         "必须修正上述问题；如果当前阶段要求右侧产出物，"
         "artifact_update.type 必须为 replace，markdown 必须包含当前阶段完整 Markdown 文档、"
@@ -174,8 +618,9 @@ def register_contract_output_validator(agent: Any) -> None:
             )
         except ContractValidationError as exc:
             raise ModelRetry(
-                f"结构化输出不符合业务契约，请重新生成完整合法输出：{exc}"
-            ) from exc
+                "结构化输出不符合业务契约，请重新生成完整合法输出。"
+                f"{_format_safe_raw_json_retry_diagnostic(exc)}"
+            ) from None
 
 
 class PydanticAgentRuntime:
@@ -325,10 +770,15 @@ class PydanticAgentRuntime:
             latest_markdown = ""
             emitted_any_delta = False
             attempt_token_usage = 0
+            finish_reason: str | None = None
 
             def record_attempt_usage(total_tokens: int) -> None:
                 nonlocal attempt_token_usage
                 attempt_token_usage = total_tokens
+
+            def record_finish_reason(reason: str) -> None:
+                nonlocal finish_reason
+                finish_reason = reason
 
             for text_chunk in stream_chat_completion_content(
                 api_key=config.api_key,
@@ -350,14 +800,21 @@ class PydanticAgentRuntime:
                 temperature=0,
                 response_format=structured_output_capability.response_format,
                 extra_body=extra_body,
+                max_tokens=structured_output_capability.max_output_tokens,
                 on_usage=record_attempt_usage,
+                on_finish_reason=record_finish_reason,
             ):
                 accumulated += text_chunk
-                delta = build_partial_agent_delta(
-                    accumulated,
-                    workflow_id=workflow_id,
-                    current_stage_id=current_stage_id,
-                )
+                try:
+                    delta = build_partial_agent_delta(
+                        accumulated,
+                        workflow_id=workflow_id,
+                        current_stage_id=current_stage_id,
+                    )
+                except ValueError:
+                    # Partial projections are best effort. The complete payload is
+                    # validated below, where renderer failures trigger a safe retry.
+                    delta = None
                 if delta is None:
                     continue
                 next_chat = delta.chat or latest_chat
@@ -383,15 +840,30 @@ class PydanticAgentRuntime:
                     self.last_token_usage or 0
                 ) + attempt_token_usage
 
+            if finish_reason != "stop":
+                termination_error = RawJsonStreamTerminationError(
+                    finish_reason or "unknown"
+                )
+                if (
+                    finish_reason == "length"
+                    and attempt_index < RAW_JSON_STREAMING_MAX_ATTEMPTS - 1
+                ):
+                    attempt_prompt = build_raw_json_retry_prompt(
+                        prompt,
+                        termination_error,
+                        workflow_id=workflow_id,
+                        current_stage_id=current_stage_id,
+                    )
+                    continue
+                raise termination_error
+
             try:
                 final_output = parse_agent_turn_output_text(
                     accumulated,
                     workflow_id=workflow_id,
                     current_stage_id=current_stage_id,
                 )
-            except json.JSONDecodeError:
-                raise
-            except ValidationError as exc:
+            except (json.JSONDecodeError, ValidationError, ValueError) as exc:
                 if attempt_index >= RAW_JSON_STREAMING_MAX_ATTEMPTS - 1:
                     raise
                 attempt_prompt = build_raw_json_retry_prompt(
@@ -456,6 +928,7 @@ def resolve_structured_output_capability(
         return StructuredOutputCapability(
             tier="json_object_only",
             response_format={"type": "json_object"},
+            max_output_tokens=32768,
         )
     return StructuredOutputCapability(
         tier="json_object_only",

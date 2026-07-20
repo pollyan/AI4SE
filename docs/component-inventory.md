@@ -44,7 +44,7 @@
 | `ChatPane` | `components/ChatPane.tsx` | 交互 | 左侧对话面板（消息列表、输入框、附件） |
 | `ArtifactPane` | `components/ArtifactPane.tsx` | 展示 | 右侧产出物面板（Markdown 预览、版本历史） |
 | `Header` | `components/Header.tsx` | 导航 | 顶部栏（返回、工作流、阶段切换、历史会话、运行统计、Lisa 测试资产入口、导出） |
-| `SettingsModal` | `components/SettingsModal.tsx` | 配置 | 设置弹窗（默认 LLM 配置读取/更新、API Key 轮换、模型可用性检测、本地数据清理） |
+| `SettingsModal` | `components/SettingsModal.tsx` | 配置 | 设置弹窗（生产只读配置状态；仅显式 loopback 开发 capability 允许更新/轮换；本地数据清理） |
 | `WorkflowDropdown` | `components/WorkflowDropdown.tsx` | 导航 | 工作流切换下拉（带确认弹窗） |
 | `Mermaid` | `components/Mermaid.tsx` | 渲染 | Mermaid 图表渲染（含容错与 LLM 重试） |
 
@@ -113,7 +113,7 @@
 | `models` | `models.py` | `llm_config` 以及通用 `agent_runs` / `agent_messages` / `agent_artifacts` / `agent_artifact_versions` 数据模型 |
 | `run_persistence` | `run_persistence.py` | 服务端 run/session/message/artifact version repository，复用 `WORKFLOW_STAGES` 校验 workflow/stage |
 | `workflow_manifest` | `workflow_manifest.py` | 读取共享 `workflow_manifest.json`，为后端持久化提供 workflow 到 agent 的归属 |
-| `config_service` | `config_service.py` | 默认 LLM 配置读取、环境变量 upsert、UI 更新持久化和模型可用性检测 |
+| `config_service` | `config_service.py` | 默认 LLM 配置读取、环境变量/受控管理员更新持久化和脱敏的模型可用性检测 |
 | `test_assets` | `test_assets.py` | Lisa `TEST_DESIGN/CASES` 测试资产导出、实体化、覆盖摘要和用例版本更新 |
 | `workflow_handoffs` | `workflow_handoffs.py` | 基于 manifest 的跨 workflow handoff 候选和目标 run 启动 |
 

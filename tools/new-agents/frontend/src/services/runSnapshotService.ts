@@ -1,4 +1,5 @@
 import { AgentRunListItem, AgentRunListResponse, AgentRunSnapshot, AgentRunSnapshotArtifact, AgentRunSnapshotContextSummary, AgentRunSnapshotMessage, ArtifactAuditEvent, ArtifactComment, ArtifactCommentReply, ArtifactCommentStatus, ArtifactSectionLock, RunReuseStatus, WorkflowType } from '../core/types';
+import { sanitizeMessageErrorDiagnostic } from '../core/messageDiagnostics';
 import { WORKFLOWS } from '../core/workflows';
 
 const INVALID_SNAPSHOT_ERROR = 'Invalid run snapshot response';
@@ -40,11 +41,21 @@ const parseMessage = (message: unknown): AgentRunSnapshotMessage => {
         throw new Error(INVALID_SNAPSHOT_ERROR);
     }
 
-    return {
+    const parsedMessage: AgentRunSnapshotMessage = {
         role: message.role,
         content: message.content,
         sequenceIndex: message.sequenceIndex,
     };
+    if (Object.prototype.hasOwnProperty.call(message, 'errorDiagnostic')) {
+        const errorDiagnostic = sanitizeMessageErrorDiagnostic(
+            message.errorDiagnostic
+        );
+        if (errorDiagnostic === null) {
+            throw new Error(INVALID_SNAPSHOT_ERROR);
+        }
+        parsedMessage.errorDiagnostic = errorDiagnostic;
+    }
+    return parsedMessage;
 };
 
 const parseNullableString = (value: unknown, errorMessage: string): string | null => {

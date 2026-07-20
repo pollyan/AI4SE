@@ -1,6 +1,6 @@
 # QG-019 产出物元信息文末轻量化实施计划
 
-> 当前唯一厚切片是 [`QG-019 / 产出物元信息退出首屏重表格`](../specs/2026-07-16-qg019-lightweight-artifact-metadata-design.md#厚切片身份基线)，顺序基线见[活跃 todo](../../todos/2026-07-16-new-agents-streaming-and-artifact-ux.md#待办总览)。下列均为内部实现步骤（非切片），不得单独验收、提交、推送或计算进度。
+> 本计划执行时的唯一厚切片是 [`QG-019 / 产出物元信息退出首屏重表格`](../specs/2026-07-16-qg019-lightweight-artifact-metadata-design.md#厚切片身份基线)，顺序基线见[归档能力包](../../todos/archive/2026-07-16-new-agents-streaming-and-artifact-ux.md#待办总览)。下列均为内部实现步骤（非切片），不得单独验收、提交、推送或计算进度。
 
 ## 工作区与 ownership
 

@@ -8,7 +8,11 @@ import remarkGfm from 'remark-gfm';
 import { clsx } from 'clsx';
 import { useChatService } from '../services/chatService';
 import { getAgentById } from '../core/config/agents';
-import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/markdownUtils';
+import {
+  hashTextForDiagnostics,
+  preprocessMarkdown,
+  replaceMermaidBlockAtIndex,
+} from '../core/utils/markdownUtils';
 import { createMarkdownCodeRenderer } from './markdownCodeRenderer';
 import {
   fetchTargetWorkflowHandoffCandidates,
@@ -189,7 +193,7 @@ export const ChatPane: React.FC = () => {
     }));
 
     try {
-      const response = await fetch('/new-agents/api/config/check', {
+      const response = await fetch('/new-agents/api/config/default/check', {
         method: 'POST',
       });
       let data: { ok?: boolean; message?: unknown; error?: unknown } = {};
@@ -676,6 +680,12 @@ export const ChatPane: React.FC = () => {
                 </span>
                 <div
                   data-testid={msg.role === 'assistant' ? 'assistant-message-content' : 'user-message-content'}
+                  data-chat-source-hash={msg.role === 'assistant' && msg.content
+                    ? hashTextForDiagnostics(msg.content)
+                    : undefined}
+                  data-chat-source-length={msg.role === 'assistant' && msg.content
+                    ? msg.content.length
+                    : undefined}
                   className={clsx(
                   "rounded-2xl p-4 text-sm leading-relaxed shadow-sm",
                   msg.role === 'user'

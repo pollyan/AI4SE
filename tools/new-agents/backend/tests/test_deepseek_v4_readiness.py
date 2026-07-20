@@ -92,6 +92,7 @@ def test_deepseek_readiness_raw_json_streaming_uses_json_object_mode(
         calls.append(kwargs)
         yield final_json[:12]
         yield final_json[12:]
+        kwargs["on_finish_reason"]("stop")
 
     monkeypatch.setattr(
         "agent_runtime.stream_chat_completion_content",

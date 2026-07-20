@@ -21,9 +21,21 @@ describe('runSnapshotService', () => {
                 },
                 messages: [
                     {
-                        role: 'user',
-                        content: '用户需求: 登录功能',
+                        role: 'assistant',
+                        content: '⚠️ **模型调用未完成**\n\n模型供应商返回错误。',
                         sequenceIndex: 1,
+                        errorDiagnostic: {
+                            kind: 'provider',
+                            summary: '模型调用未完成',
+                            rawMessage: '模型供应商返回错误。',
+                            code: 'LLM_ERROR',
+                            phase: 'provider',
+                            workflowId: 'TEST_DESIGN',
+                            stageId: 'CLARIFY',
+                            fieldPath: 'provider',
+                            validator: 'provider_error',
+                            retryable: true,
+                        },
                     },
                 ],
                 artifacts: [
@@ -93,7 +105,22 @@ describe('runSnapshotService', () => {
         expect(fetch).toHaveBeenCalledWith('/new-agents/api/agent/runs/run-123');
         expect(snapshot.run.id).toBe('run-123');
         expect(snapshot.run.workflowId).toBe('TEST_DESIGN');
-        expect(snapshot.messages[0].content).toBe('用户需求: 登录功能');
+        expect(snapshot.messages[0]).toMatchObject({
+            role: 'assistant',
+            content: '⚠️ **模型调用未完成**\n\n模型供应商返回错误。',
+            errorDiagnostic: {
+                kind: 'provider',
+                summary: '模型调用未完成',
+                rawMessage: '模型供应商返回错误。',
+                code: 'LLM_ERROR',
+                phase: 'provider',
+                workflowId: 'TEST_DESIGN',
+                stageId: 'CLARIFY',
+                fieldPath: 'provider',
+                validator: 'provider_error',
+                retryable: true,
+            },
+        });
         expect(snapshot.artifacts[0].stageId).toBe('STRATEGY');
         expect(snapshot.artifacts[0].artifactData).toEqual({ strategyId: 'STR-001' });
         expect(snapshot.contextSummaries[0].content).toBe('摘要');

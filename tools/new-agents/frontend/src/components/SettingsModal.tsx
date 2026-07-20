@@ -8,7 +8,13 @@ const readString = (value: unknown): string => (
   typeof value === 'string' ? value : ''
 );
 
-export const SettingsModal: React.FC = () => {
+type SettingsModalProps = {
+  configAdministrationEnabled: boolean;
+};
+
+export const SettingsModal: React.FC<SettingsModalProps> = ({
+  configAdministrationEnabled,
+}) => {
   const {
     isSettingsOpen,
     setSettingsOpen,
@@ -85,6 +91,7 @@ export const SettingsModal: React.FC = () => {
 
   const handleSaveConfig = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!configAdministrationEnabled) return;
     setStatus('saving');
     setStatusMessage('');
 
@@ -114,6 +121,7 @@ export const SettingsModal: React.FC = () => {
   };
 
   const handleCheckConfig = async () => {
+    if (!configAdministrationEnabled) return;
     setStatus('checking');
     setStatusMessage('');
 
@@ -172,10 +180,18 @@ export const SettingsModal: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-slate-100">后端默认 LLM 配置</p>
                   <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                    API Key 只会提交到后端保存；已存在的密钥不会回显，留空时保留当前密钥。
+                    {configAdministrationEnabled
+                      ? 'API Key 只会提交到后端保存；已存在的密钥不会回显，留空时保留当前密钥。'
+                      : '当前页面只读展示非敏感配置；浏览器不会接收配置管理密钥。'}
                   </p>
                 </div>
               </div>
+
+              {!configAdministrationEnabled && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-100">
+                  生产环境模型配置由服务端管理员 API 管理
+                </div>
+              )}
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block text-xs font-semibold text-slate-300">
@@ -183,6 +199,7 @@ export const SettingsModal: React.FC = () => {
                   <input
                     value={baseUrl}
                     onChange={event => setBaseUrl(event.target.value)}
+                    disabled={!configAdministrationEnabled}
                     className="mt-2 w-full rounded-lg border border-slate-700 bg-[#0b1120] px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-blue-500"
                     placeholder="https://api.openai.com/v1"
                   />
@@ -192,6 +209,7 @@ export const SettingsModal: React.FC = () => {
                   <input
                     value={model}
                     onChange={event => setModel(event.target.value)}
+                    disabled={!configAdministrationEnabled}
                     className="mt-2 w-full rounded-lg border border-slate-700 bg-[#0b1120] px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-blue-500"
                     placeholder="gpt-4.1"
                   />
@@ -203,21 +221,24 @@ export const SettingsModal: React.FC = () => {
                 <input
                   value={description}
                   onChange={event => setDescription(event.target.value)}
+                  disabled={!configAdministrationEnabled}
                   className="mt-2 w-full rounded-lg border border-slate-700 bg-[#0b1120] px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-blue-500"
                   placeholder="本地默认模型配置"
                 />
               </label>
 
-              <label className="block text-xs font-semibold text-slate-300">
-                新 API Key
-                <input
-                  value={apiKey}
-                  onChange={event => setApiKey(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-slate-700 bg-[#0b1120] px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-blue-500"
-                  placeholder="留空则不更换现有密钥"
-                  type="password"
-                />
-              </label>
+              {configAdministrationEnabled && (
+                <label className="block text-xs font-semibold text-slate-300">
+                  新 API Key
+                  <input
+                    value={apiKey}
+                    onChange={event => setApiKey(event.target.value)}
+                    className="mt-2 w-full rounded-lg border border-slate-700 bg-[#0b1120] px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-blue-500"
+                    placeholder="留空则不更换现有密钥"
+                    type="password"
+                  />
+                </label>
+              )}
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className={`text-xs ${
@@ -229,7 +250,7 @@ export const SettingsModal: React.FC = () => {
                 }`}>
                   {status === 'loading' ? '正在读取配置' : statusMessage}
                 </p>
-                <div className="flex items-center gap-2">
+                {configAdministrationEnabled && <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={handleCheckConfig}
@@ -247,7 +268,7 @@ export const SettingsModal: React.FC = () => {
                     <Save className="mr-2 h-4 w-4" />
                     保存配置
                   </button>
-                </div>
+                </div>}
               </div>
             </form>
           </section>

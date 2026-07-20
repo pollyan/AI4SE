@@ -252,61 +252,41 @@ PY
     if "$PROJECT_PYTHON" "$OUTCOME_TOOL" run \
         --suite-id "new-agents-browser-e2e" \
         --parser pytest \
-        -- "$PROJECT_PYTHON" -m pytest -o addopts='' tests/e2e/new_agents_browser -m e2e -q; then
+        -- "$PROJECT_PYTHON" -m pytest -o addopts='' tests/e2e/new_agents_browser -m "e2e and not real_llm" -q; then
         log_info "✅ New Agents Browser E2E 测试通过"
     else
         log_error "❌ New Agents Browser E2E 测试失败"
         return 1
     fi
+
+    # Each suite owns a session-scoped sync Playwright runtime. Keep them in
+    # separate pytest processes so their event-loop lifecycles cannot overlap.
+    log_info "运行 New Agents 确定性真实栈测试..."
+    if "$PROJECT_PYTHON" "$OUTCOME_TOOL" run \
+        --suite-id "new-agents-deterministic-live-stack" \
+        --parser pytest \
+        -- "$PROJECT_PYTHON" -m pytest -o addopts='' tests/e2e/new_agents_real/test_live_stack.py -m "e2e and not real_llm" -q; then
+        log_info "✅ New Agents 确定性真实栈测试通过"
+    else
+        log_error "❌ New Agents 确定性真实栈测试失败"
+        return 1
+    fi
 }
 
 # ==========================================
-# New Agents Real LLM Smoke Tests
+# New Agents Real LLM Functional Tests
 # ==========================================
 run_smoke_tests() {
-    log_section "🔥 New Agents Real LLM Smoke Tests"
+    log_section "🔥 New Agents Real LLM Functional Tests"
     cd "$PROJECT_ROOT"
 
-    if [ -z "${NEW_AGENTS_SMOKE_API_KEY:-}" ] || [ -z "${NEW_AGENTS_SMOKE_BASE_URL:-}" ] || [ -z "${NEW_AGENTS_SMOKE_MODEL:-}" ]; then
-        log_warn "缺少 NEW_AGENTS_SMOKE_API_KEY / NEW_AGENTS_SMOKE_BASE_URL / NEW_AGENTS_SMOKE_MODEL，跳过真实 LLM smoke。"
-        if "$PROJECT_PYTHON" "$OUTCOME_TOOL" emit \
-            --suite-id "new-agents-real-llm-smoke" \
-            --status NOT_RUN \
-            --collected 0 \
-            --executed 0 \
-            --skipped 0 \
-            --reason "Missing NEW_AGENTS_SMOKE_API_KEY, NEW_AGENTS_SMOKE_BASE_URL, or NEW_AGENTS_SMOKE_MODEL."; then
-            :
-        fi
+    log_info "运行真实 LLM 单阶段功能测试..."
+    if "$PROJECT_ROOT/scripts/test/new-agents-functional.sh" stage TEST_DESIGN CLARIFY; then
+        log_info "✅ 真实 LLM 单阶段功能测试通过"
+    else
+        log_error "❌ 真实 LLM 单阶段功能测试失败或未运行"
         return 1
     fi
-
-    if "$PROJECT_PYTHON" -m pytest --version >/dev/null 2>&1 && "$PROJECT_PYTHON" - <<'PY' >/dev/null 2>&1
-import flask
-import flask_sqlalchemy
-import openai
-import pydantic_ai
-PY
-    then
-        log_info "Backend 依赖已存在，跳过安装"
-    else
-        log_info "安装 Backend 依赖..."
-        "$PROJECT_PYTHON" -m pip install -q -r tools/new-agents/backend/requirements.txt
-    fi
-
-    log_info "运行真实 LLM smoke 测试..."
-    cd "$PROJECT_ROOT/tools/new-agents/backend"
-    if "$PROJECT_PYTHON" "$OUTCOME_TOOL" run \
-        --suite-id "new-agents-real-llm-smoke" \
-        --parser pytest \
-        -- "$PROJECT_PYTHON" -m pytest tests/test_agent_real_smoke.py -q; then
-        log_info "✅ 真实 LLM smoke 测试通过"
-    else
-        log_error "❌ 真实 LLM smoke 测试失败"
-        cd "$PROJECT_ROOT"
-        return 1
-    fi
-    cd "$PROJECT_ROOT"
 }
 
 # ==========================================

@@ -88,13 +88,13 @@ tools/new-agents/backend/tests/
 | 边界场景 | 空值、最后阶段、非法阶段、无 artifact 更新等边界是否被保护 | 最后阶段不能请求下一阶段；必需 artifact 阶段不能返回 `none` |
 | 跨字段不变量 | 多个字段之间是否存在串位风险，并被测试明确约束 | `chat` 禁止承载 Markdown artifact；`NEXT_STAGE` 不直接写入未确认下一阶段产物 |
 | 跨层不变量 | 后端契约、SSE、前端解析、状态写入是否在同一规则下协作 | API 测试解析 SSE JSON；前端状态层只消费 `chatResponse` / `newArtifact` |
-| 供应商兼容 | 真实模型或供应商特性是否有可选冒烟验证 | DeepSeek V4 禁用 thinking、提高 retries；真实模型 smoke 只显式运行 |
+| 供应商兼容 | 真实模型或供应商特性是否有分层功能验证 | DeepSeek V4 禁用 thinking、提高 retries；真实模型通过统一无头功能 runner 显式运行 |
 
 ### 当前准入标准
 
 | 区域 | 必跑命令 | 当前要求 |
 |------|----------|----------|
-| `tools/new-agents/backend` | `cd tools/new-agents/backend && python3 -m pytest -m "not slow" -q` | 常规门禁通过；真实模型冒烟单独运行 |
+| `tools/new-agents/backend` | `cd tools/new-agents/backend && python3 -m pytest -m "not slow" -q` | 常规门禁通过；真实模型功能门禁由统一 runner 单独运行 |
 | `tools/new-agents/backend` 场景覆盖 | 对照本文件 New Agents 职责分层和审计清单逐项确认 | 新增或修改智能体链路时必须补正向/异常/边界/跨层不变量测试 |
 | `tools/new-agents/backend` 工具覆盖率 | `cd tools/new-agents/backend && python3 -m pytest -m "not slow" --cov=<关键模块> --cov-report=term-missing -q` | 辅助审计指标；不得替代场景矩阵判断 |
 | `tools/new-agents/frontend` | `cd tools/new-agents/frontend && npm test` | 全量通过 |
@@ -108,7 +108,7 @@ tools/new-agents/backend/tests/
 - **编排层看路径覆盖**：`stream_services.py`、`routes.py` 应覆盖成功、请求错误、LLM 错误、契约错误，不追求模拟所有 Flask/供应商细节。
 - **前端状态层看行为覆盖**：`chatService.ts`、`agentCore.ts` 必须覆盖左侧消息、右侧 artifact、阶段推进三类状态写入，不能只看组件渲染覆盖。
 - **协议错误不能静默跳过**：typed SSE、结构化 JSON、Pydantic 输出一旦损坏，应报错暴露问题，不通过“忽略坏事件继续处理”制造假成功。
-- **真实模型不纳入覆盖率门禁**：`test_agent_real_smoke.py` 是供应商兼容冒烟，依赖环境变量和额度，只作为发布前/本地专项验证；缺少必需配置时 runner 必须报告 `NOT_RUN` 并以非零退出，不能写成通过。
+- **真实模型不纳入代码覆盖率百分比**：`tests/e2e/new_agents_real/` 依赖环境变量和额度，按本地/受控 `pr`、Nightly、发布独立记账；缺少必需配置时 runner 必须报告 `NOT_RUN` 并以非零退出，不能写成通过或 skip。
 - **前端覆盖率工具链需显式安装**：如果运行 `npm test -- --coverage` 报缺少 `@vitest/coverage-v8`，说明只能确认测试通过，不能声称已有前端覆盖率数据。
 - **覆盖率下降必须解释**：如果新增代码导致覆盖率下降，要么补测试，要么在变更说明中明确为什么该代码不适合覆盖率衡量。
 
@@ -346,15 +346,16 @@ cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.tes
 - `tools/new-agents/frontend/src/services/__tests__/chatService.test.ts`
 - `tools/new-agents/frontend/src/core/__tests__/agentCore.test.ts`
 
-### 真实模型冒烟层：`test_agent_real_smoke.py`
+### 真实链路功能层：`tests/e2e/new_agents_real/`
 
-职责：少量验证真实模型与 PydanticAI/供应商兼容性，不替代确定性单元测试。
+职责：通过无头 Chromium、真实 React/Vite、Flask、SQLite、共享 typed SSE 和 provider adapter 验证格式、流式、持久化和阶段流转；不替代确定性单元测试，也不使用截图或像素门禁。
 
-必须覆盖：
-- 真实模型能返回合法 `AgentTurnOutput`。
-- `artifact_update.markdown` 包含阶段必需标题。
-- `chat` 不包含 artifact Markdown 结构。
-- 仅在显式提供 `NEW_AGENTS_SMOKE_*` 环境变量时运行，避免普通测试依赖外部网络和额度。
+证据分为两层：
+
+- evidence level 3：`test_live_stack.py` 使用本地 OpenAI-compatible deterministic adapter，只证明真实 frontend/backend/SSE/SQLite/browser harness，不声称真实模型质量。
+- evidence level 4：`test_real_agent_workflows.py` 使用真实 DeepSeek。`stage`/Nightly 运行独立 stage probe，`workflow`/PR/发布运行顺序 workflow journey；真实 scope 禁止 `page.route`、替换 production fetch、mock snapshot/artifact 或 fake success。
+
+每个真实 turn 必须在唯一且位于所有 delta 之后的最终 `agent_turn` 前产生有意义 chat delta 和至少两个不同 partial artifact；浏览器必须按本次 requestId 对齐并以 `chat → artifact` 提交，不能把上一阶段 assistant 或阶段切换占位当作新首帧。业务 section 的顺序、已完成段落内容 hash 和 DOM 状态必须单调累积；Mermaid loading→SVG 的视觉 hydration 会归一化为同一稳定标记。`agent_retry` 会开启独立 attempt，DOM 基线随 attempt 重置，验收只使用最终 attempt 且仍保留 retry 计数。最终 artifact 必须与服务端 snapshot、结构化 `artifactData`、version、context summary 和成功 metric 一致。完整 workflow 还必须复用 `runId`、累积全部 stage 的 messages/artifacts/versions、只允许 immediate-next transition，并在清空本地缓存刷新后从服务端恢复；失败报告中的 workflow/stage 取当前 trace 的实际请求坐标。
 
 ## New Agents 策略符合性审计清单
 
@@ -370,7 +371,7 @@ cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.tes
 | SSE 契约稳定 | 成功/错误事件都是 typed SSE；API 测试解析 JSON 字段 | `test_stream_services.py`, `test_agent_endpoint.py`, `test_sse_encoder.py` |
 | 双栏首帧顺序 | 首个有意义自然对话先于首个 artifact；两者不同帧且 artifact-first provider 输入被缓存 | `test_stream_ordering.py`, `test_stream_services.py`, `llm.test.ts`, New Agents browser E2E |
 | 产出物信息层级 | 业务 section 始终先于 metadata section；元信息只在尾部单行展示且不生成表格 | `test_artifact_render_plan.py`, `metadataFooterPrompt.test.ts`, `docxExport.test.ts`, New Agents browser E2E |
-| 供应商兼容性 | DeepSeek/OpenAI 等模型特定设置有单测；真实冒烟可选运行 | `test_agent_runtime.py`, `test_agent_real_smoke.py` |
+| 供应商兼容性 | DeepSeek/OpenAI 等模型特定设置有单测；真实 DeepSeek 分层失败关闭 | `test_agent_runtime.py`, `tests/e2e/new_agents_real/` |
 | 前端写入边界 | assistant message 只来自 `chatResponse`；artifact 只来自 `newArtifact` | `llm.test.ts`, `chatService.test.ts`, `agentCore.test.ts` |
 | 左侧 Markdown 可读性 | `ChatPane` 长回复保留列表、强调、链接和代码样式，但不承载完整 artifact | `ChatPane.markdown.test.tsx`, `markdownCodeRenderer.test.tsx` |
 | 旧协议清理 | 前端不再调用旧 `/api/chat/stream`，不保留 `<CHAT>/<ARTIFACT>` 协议 | `testHygiene.test.ts` |
@@ -379,11 +380,38 @@ cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.tes
 
 New Agents 另有一套独立于 intent-tester/MidScene 的浏览器级工作流测试，位于 `tests/e2e/new_agents_browser/`。它使用 Python Playwright 打开真实 React 前端，通过拆分的 mock typed SSE 响应验证完整阶段组织逻辑。完整 workflow runner 在发送前安装 `MutationObserver`，通过 `chat-pane`、`assistant-message-content` 与 `artifact-content` 语义定位记录首屏顺序；同一浏览器提交中同时出现会显式记为 `simultaneous` 并失败。`WorkflowRunResult.stream_order` 必须为 `("chat", "artifact")`。QG-018 的 7-workflow probe 进一步参数化覆盖 Lisa 与 Alex 的全部在线 workflow，要求真实无头 Chromium 观察到 `chat → artifact-1 → artifact-2 → final` 四次独立提交。QG-019 的 7-workflow probe 固定为 1024×800 无头 Chromium，验证长文档默认先显示业务正文、元信息位于文末单行且可滚动发现、无纯元信息阶段不伪造尾注，并且不使用截图或像素差异门禁。其余结构化结果包括 `final_artifact`、`stage_artifacts`、`conversation_events` 和 `stage_transitions`，供确定性断言和可选 LLM judge 共用。
 
-默认确定性运行：
+默认确定性 browser 运行会显式排除 `real_llm`，同时包含一个真实 frontend/backend/SQLite 的 deterministic live-stack tracer：
 
 ```bash
-python3 -m pytest -o addopts='' tests/e2e/new_agents_browser -m e2e -q
+./scripts/test/test-local.sh e2e
 ```
+
+统一 New Agents 功能命令：
+
+```bash
+./scripts/test/new-agents-functional.sh inner
+./scripts/test/new-agents-functional.sh stage TEST_DESIGN CLARIFY
+./scripts/test/new-agents-functional.sh workflow VALUE_DISCOVERY
+./scripts/test/new-agents-functional.sh pr
+./scripts/test/new-agents-functional.sh nightly
+./scripts/test/new-agents-functional.sh release
+```
+
+`inner` 用于开发/TDD；本地 `pr` 固定运行 Lisa `TEST_DESIGN` 与 Alex `VALUE_DISCOVERY` 两条真实顺序旅程；`nightly` 从 manifest 派生 25/25 独立 stage；`release` 从 manifest 派生 7/7 完整 workflow。本地真实 scope 从 Git ignored 的根 `.env` 读取 `NEW_AGENTS_SMOKE_API_KEY`、`NEW_AGENTS_SMOKE_BASE_URL`、`NEW_AGENTS_SMOKE_MODEL`。缺任一变量时状态是 `NOT_RUN` 且退出非零。
+
+GitHub Actions 的自动 PR 门禁只运行无 secret 的 runner/contracts、Vite proxy 和 deterministic live-stack；同仓 PR 与 fork PR 都不收集真实模型 job，PR head 也不会获得任何真实模型凭证。真实模型自动门禁只允许 `github.ref_protected == true` 的 `master` schedule 运行 `nightly`、push 运行 `release`；手动 `workflow_dispatch` 仅允许从同样受保护的 `master` 调用，并必须通过 `new-agents-real-manual` environment 审核。production deploy 仍依赖同一次受保护运行的真实 `release` gate。
+
+GitHub 仓库需要完成以下一次性配置：
+
+- 将 `master` 设为默认分支，并用 branch protection/ruleset 要求 PR review、把 `New Agents Deterministic Functional Tests` 设为 required status check、禁止 force push/删除，使 `github.ref_protected` 在真实门禁中为 `true`。
+- 创建 `new-agents-real-automatic` environment，deployment branches 只允许 `master`，用于受保护 push/schedule。
+- 创建 `new-agents-real-manual` environment，deployment branches 只允许 `master`，配置 required reviewers，启用 prevent self-review，并关闭 `Allow administrators to bypass configured protection rules`。
+- 在两个 environment 内分别配置三个 `NEW_AGENTS_SMOKE_*` environment secrets；不得在 repository 或 organization secret 层级保留同名值，否则 feature/PR workflow 可能绕过 environment 边界。
+- 如果当前仓库可见性或 GitHub 套餐不支持 environment required reviewers，不得在 `new-agents-real-manual` 中配置上述 secrets，手动真实门禁与手动生产发布保持禁用；只使用受保护 `master` push/schedule 路径。
+
+真实模型运行只上传 `test-results/new-agents-real/*.json`。上传前固定要求至少一份 JSON evidence，并检查目录中没有非 JSON 文件、符号链接或在文件名/内容中出现的 API key 原值；数据库、backend 原始日志、浏览器 storage、截图和整个结果目录都不得上传。
+
+真实 LiveStack 每次运行生成彼此不同的运行时代理令牌和配置管理令牌，且两者都不同于真实模型 Key、都进入日志脱敏集合。只有运行时令牌通过 `0600` 临时文件进入 Vite server，并仅向 Agent Runtime、Mermaid 修复和不可覆盖目标的默认模型诊断路径注入；配置写入与管理员检测路径拿不到该令牌，浏览器伪造的认证头会被剥离。生产部署同样要求模型、管理、代理三类密钥两两不同，固定 Nginx 网关标记不得授权配置管理。
 
 可选 LLM judge 运行：
 

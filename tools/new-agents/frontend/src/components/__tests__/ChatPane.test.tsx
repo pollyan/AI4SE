@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, beforeAll, afterEach, vi } from 'vite
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChatPane } from '../ChatPane';
 import { useStore, WORKFLOWS, WorkflowType, type Attachment, type Message } from '../../store';
+import { hashTextForDiagnostics } from '../../core/utils/markdownUtils';
 
 const mockNavigate = vi.hoisted(() => vi.fn());
 
@@ -168,6 +169,29 @@ describe('ChatPane Component', () => {
         
         // Ensure standard welcome UI is gone
         expect(screen.queryByText('你可以试试这样问：')).toBeNull();
+    });
+
+    it('exposes only safe source summaries for assistant DOM verification', () => {
+        const content = '风险为 **高风险**，请确认。';
+        useStore.setState({
+            chatHistory: [
+                {
+                    id: 'assistant-source-summary',
+                    role: 'assistant',
+                    content,
+                    timestamp: Date.now(),
+                },
+            ],
+        });
+
+        render(<ChatPane />);
+
+        const node = screen.getByTestId('assistant-message-content');
+        expect(node.getAttribute('data-chat-source-length')).toBe(String(content.length));
+        expect(node.getAttribute('data-chat-source-hash')).toBe(
+            hashTextForDiagnostics(content)
+        );
+        expect(node.getAttribute('data-chat-source')).toBeNull();
     });
 
     it('does not show retry for non-retryable assistant messages', () => {
@@ -556,7 +580,7 @@ describe('ChatPane Component', () => {
         fireEvent.click(screen.getByRole('button', { name: '检测连接' }));
 
         await waitFor(() => {
-            expect(mockFetch).toHaveBeenCalledWith('/new-agents/api/config/check', {
+            expect(mockFetch).toHaveBeenCalledWith('/new-agents/api/config/default/check', {
                 method: 'POST',
             });
         });

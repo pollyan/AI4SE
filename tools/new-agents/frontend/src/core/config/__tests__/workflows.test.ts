@@ -379,17 +379,29 @@ describe('Workflow Configuration', () => {
             'evidence_items[].evidence_id 必须唯一',
         );
         expect(define?.artifactDataContract?.modelOutputRules).toContain(
+            'problem_landscape.root_problem_id 必须唯一且不能与 problem_landscape.subproblems[].problem_id 重复',
+        );
+        expect(define?.artifactDataContract?.modelOutputRules).toContain(
             'problem_landscape.subproblems[].problem_id 必须唯一',
+        );
+        expect(define?.artifactDataContract?.modelOutputRules).toContain(
+            'evidence_items[].related_problem_ids 只能引用 problem_landscape.root_problem_id 或已定义的 problem_landscape.subproblems[].problem_id',
         );
         expect(define?.artifactDataContract?.modelOutputRules).toContain(
             'problem_user_fit.evidence_ids 只能引用 evidence_items[].evidence_id 中已定义的证据 ID',
         );
         expect(define?.artifactDataContract?.modelOutputRules).toContain(
-            'problem_landscape.root_problem 必须被至少一个 evidence_items.related_problem 或 problem_user_fit.evidence_or_assumption 条目覆盖',
+            '至少一个 evidence_items[].related_problem_ids 必须包含 problem_landscape.root_problem_id',
+        );
+        expect(define?.artifactDataContract?.modelOutputRules).toContain(
+            '至少一个 problem_user_fit[].evidence_ids 必须引用支撑 problem_landscape.root_problem_id 的 evidence_items[].evidence_id',
         );
         expect(define?.artifactDataContract?.forbiddenOutputs).toContain('Mermaid 代码块');
         expect(define?.artifactDataContract?.forbiddenOutputs).toContain('mindmap 代码块');
         expect(define?.artifactDataContract?.rendererOutputs).toContain('Mermaid mindmap');
+        expect(define?.template).toContain('| 问题 ID | 类型 | 问题 | 表现 |');
+        expect(define?.template).toContain('| 证据 ID | 关联问题 ID | 关联问题 |');
+        expect(define?.template).toContain('| 检验维度 | 当前判断 | 证据/假设 | 关联证据 |');
     });
 
     it('exposes manifest artifact data contract for IDEA BRAINSTORM DIVERGE', () => {
@@ -452,13 +464,13 @@ describe('Workflow Configuration', () => {
             'growth_funnel.stage 必须覆盖 Acquisition、Activation、Retention、Revenue、Referral',
         );
         expect(concept?.artifactDataContract?.modelOutputRules).toContain(
-            'mvp_features[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID',
+            'mvp_features[].assumption_ids 必须至少包含 1 个且只能引用 core_assumptions[].assumption_id 中已定义的假设 ID',
         );
         expect(concept?.artifactDataContract?.modelOutputRules).toContain(
-            'validation_roadmap[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID',
+            'validation_roadmap[].assumption_ids 必须至少包含 1 个且只能引用 core_assumptions[].assumption_id 中已定义的假设 ID',
         );
         expect(concept?.artifactDataContract?.modelOutputRules).toContain(
-            'next_actions[].related_ids 只能引用 core_assumptions[].assumption_id、validation_roadmap[].validation_id 或 premortem_risks[].risk_id 中已定义的 ID',
+            'next_actions[].related_ids 必须至少包含 1 个且只能引用 core_assumptions[].assumption_id、validation_roadmap[].validation_id 或 premortem_risks[].risk_id 中已定义的 ID',
         );
         expect(concept?.artifactDataContract?.forbiddenOutputs).toContain('mvp-map JSON 代码块');
         expect(concept?.artifactDataContract?.rendererOutputs).toContain('ai4se-visual mvp-map');
@@ -675,11 +687,11 @@ describe('Workflow Configuration', () => {
     it('exposes manifest artifact data contract for TEST DESIGN DELIVERY', () => {
         const delivery = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'DELIVERY');
         const caseCountRule =
-            'case_summary_items[].case_count 缺省时由后端按 p0_count + p1_count + p2_count 派生；显式提供时必须一致';
+            'case_summary_items[].case_count 由后端按 p0_count + p1_count + p2_count 派生，模型不要输出';
         const totalCasesRule =
-            'delivery_metrics.total_cases 缺省时由后端按 case_summary_items[].case_count 总和派生；显式提供时必须一致';
+            'delivery_metrics.total_cases 由后端按 case_summary_items[].case_count 总和派生，模型不要输出';
         const highRiskRule =
-            'delivery_metrics.high_risk_count 缺省时由后端按 open_risks 中不可接受风险数量派生；显式提供时必须一致';
+            'delivery_metrics.high_risk_count 由后端按 open_risks 中 risk_type 包含“风险”且 acceptable 不为“是”的条目数量派生，模型不要输出';
 
         expect(delivery?.artifactDataContract?.modelOutputRules).toContain(caseCountRule);
         expect(delivery?.artifactDataContract?.modelOutputRules).toContain(totalCasesRule);

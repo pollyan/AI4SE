@@ -4,6 +4,9 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import BaseModel, ConfigDict, ValidationError
+
+import agent_runtime
 
 from agent_contracts import (
     WORKFLOW_STAGES,
@@ -11,9 +14,22 @@ from agent_contracts import (
     ContractValidationError,
     validate_agent_turn,
 )
-from artifact_data_renderers import render_agent_turn_from_artifact_data
+from artifact_data_renderers import (
+    ClarifyArtifactData,
+    DeliveryArtifactData,
+    IncidentImprovementArtifactData,
+    IdeaConceptArtifactData,
+    IdeaConvergeArtifactData,
+    IdeaDefineArtifactData,
+    render_agent_turn_from_artifact_data,
+)
+from artifact_data_value_schema import (
+    ValueDiscoveryJourneyArtifactData,
+    ValueDiscoveryPersonaArtifactData,
+)
 from agent_runtime import (
     AgentRuntimeModelError,
+    RawJsonStreamTerminationError,
     AgentRuntimeSchemaError,
     AgentTurnValidationDeps,
     PydanticAgentRuntime,
@@ -31,7 +47,7 @@ from agent_runtime import (
     resolve_structured_output_capability,
     supports_artifact_data_rendering,
 )
-from sse_schemas import AgentTurnDeltaOutput
+from sse_schemas import AgentRetrySignal, AgentTurnDeltaOutput
 from test_artifact_data_renderers import (
     ARTIFACT_DATA_STAGE_FIXTURES,
     VALID_IDEA_CONCEPT_ARTIFACT_DATA,
@@ -54,11 +70,27 @@ from test_artifact_data_renderers import (
     VALID_VALUE_PERSONA_ARTIFACT_DATA,
 )
 from workflow_manifest import format_artifact_data_contract_instruction
+from run_persistence import SAFE_SCHEMA_VALIDATORS
+from safe_error_diagnostics import (
+    SAFE_RESPONSE_SCHEMA_VALIDATORS,
+    SAFE_SCHEMA_FIELD_PATHS,
+    SAFE_STREAM_TERMINATION_VALIDATORS,
+)
 
 RUNTIME_MODULE = Path(__file__).resolve().parents[1] / "agent_runtime.py"
 INSTRUCTION_REGISTRY_MODULE = (
     Path(__file__).resolve().parents[1] / "artifact_data_instruction_registry.py"
 )
+
+
+def test_runtime_safe_validator_registries_are_persistence_whitelisted():
+    assert set(agent_runtime._SAFE_RETRY_VALIDATORS) <= SAFE_SCHEMA_VALIDATORS
+    assert set(agent_runtime._SAFE_RETRY_CORRECTIONS) <= SAFE_SCHEMA_VALIDATORS
+    assert set(SAFE_SCHEMA_FIELD_PATHS) <= SAFE_SCHEMA_VALIDATORS
+    assert SAFE_RESPONSE_SCHEMA_VALIDATORS <= SAFE_SCHEMA_VALIDATORS
+    assert RawJsonStreamTerminationError.SAFE_REASONS == frozenset(
+        SAFE_STREAM_TERMINATION_VALIDATORS
+    )
 
 
 def _top_level_assignment_call_module(path: Path, name: str) -> str | None:
@@ -111,6 +143,14 @@ def test_artifact_data_structured_output_instruction_injects_visual_protocol():
     assert (
         "后续复杂视觉类型包括 mindmap、sequence-flow、distribution-chart" in instruction
     )
+
+
+def test_clarify_structured_output_uses_one_valid_question_status_example():
+    instruction = build_structured_output_instruction("TEST_DESIGN", "CLARIFY")
+
+    assert '"status": "待确认"' in instruction
+    assert '"status": "已假设"' not in instruction
+    assert '"status": "待确认/已确认/已假设/AI 假设"' not in instruction
 
 
 def _raw_json_chunks_after_artifact_data_members(
@@ -340,6 +380,24 @@ def test_deepseek_format_readiness_uses_artifact_data_instructions(
     assert "artifact_update.type 必须为 replace" not in retry_prompt
 
 
+def test_document_info_identity_is_declared_as_backend_derived_in_all_instructions():
+    instructions_with_document_info = {
+        stage_key: build_structured_output_instruction(*stage_key)
+        for stage_key in ARTIFACT_DATA_STREAMING_STAGES
+        for instruction in (build_structured_output_instruction(*stage_key),)
+        if '"document_info"' in instruction
+    }
+
+    assert instructions_with_document_info
+    for stage_key, instruction in instructions_with_document_info.items():
+        document_info_line = next(
+            line for line in instruction.splitlines() if '"document_info"' in line
+        )
+        assert '"workflow"' not in document_info_line, stage_key
+        assert '"stage"' not in document_info_line, stage_key
+        assert "document_info.workflow 和 document_info.stage 由后端注入" in instruction
+
+
 @pytest.mark.parametrize(
     ("workflow_id", "stage_id", "artifact_data"),
     DEEPSEEK_FORMAT_STAGE_CASES,
@@ -407,6 +465,31 @@ class FailingAgent:
 
     def run_sync(self, prompt, *, deps=None):
         raise self.error
+
+
+def _install_raw_stream_fake(
+    monkeypatch,
+    stream_fake,
+    *,
+    default_finish_reason: str | None = "stop",
+):
+    def stream_with_finish_reason(**kwargs):
+        finish_reason_reported = False
+        on_finish_reason = kwargs["on_finish_reason"]
+
+        def record_finish_reason(reason: str) -> None:
+            nonlocal finish_reason_reported
+            finish_reason_reported = True
+            on_finish_reason(reason)
+
+        yield from stream_fake(**{**kwargs, "on_finish_reason": record_finish_reason})
+        if not finish_reason_reported and default_finish_reason is not None:
+            on_finish_reason(default_finish_reason)
+
+    monkeypatch.setattr(
+        "agent_runtime.stream_chat_completion_content",
+        stream_with_finish_reason,
+    )
 
 
 def test_runtime_validates_pydantic_ai_output_before_returning_it():
@@ -732,7 +815,9 @@ def test_strategy_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite()
     )
 
     assert "artifact_data" in prompt
-    assert "risks.0.rpn" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "Mermaid、D2、Graphviz DOT、PlantUML 代码块或表格" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
@@ -832,7 +917,9 @@ def test_cases_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
     )
 
     assert "artifact_data" in prompt
-    assert "coverage_trace.0.covered_cases" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "Mermaid、D2、Graphviz DOT、PlantUML 代码块或表格" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
@@ -920,29 +1007,63 @@ def test_delivery_structured_output_instruction_omits_derived_delivery_counts():
     assert '"total_cases":' not in instruction
     assert '"high_risk_count":' not in instruction
     assert (
-        "case_summary_items[].case_count 缺省时由后端按 "
-        "p0_count + p1_count + p2_count 派生"
+        "case_summary_items[].case_count 由后端按 "
+        "p0_count + p1_count + p2_count 派生，模型不要输出"
     ) in instruction
     assert (
-        "delivery_metrics.total_cases 缺省时由后端按 "
-        "case_summary_items[].case_count 总和派生"
+        "delivery_metrics.total_cases 由后端按 "
+        "case_summary_items[].case_count 总和派生，模型不要输出"
     ) in instruction
     assert (
-        "delivery_metrics.high_risk_count 缺省时由后端按 "
-        "open_risks 中不可接受风险数量派生"
+        "delivery_metrics.high_risk_count 由后端按 open_risks 中 "
+        "risk_type 包含“风险”且 acceptable 不为“是”的条目数量派生，模型不要输出"
     ) in instruction
 
 
-def test_delivery_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
+@pytest.mark.parametrize(
+    ("metric_name", "expected_field_path", "expected_validator"),
+    [
+        (
+            "total_cases",
+            "artifact_data.delivery_metrics.total_cases",
+            "delivery_total_cases_mismatch",
+        ),
+        (
+            "high_risk_count",
+            "artifact_data.delivery_metrics.high_risk_count",
+            "delivery_high_risk_count_mismatch",
+        ),
+    ],
+)
+def test_delivery_retry_prompt_identifies_derived_metric_to_omit(
+    metric_name,
+    expected_field_path,
+    expected_validator,
+):
+    canary = "delivery-payload-canary"
+    invalid = copy.deepcopy(VALID_DELIVERY_ARTIFACT_DATA)
+    invalid["delivery_metrics"][metric_name] = 99
+    invalid["delivery_metrics"]["project_name"] = canary
+
+    with pytest.raises(ValidationError) as captured:
+        DeliveryArtifactData.model_validate(invalid)
+
     prompt = build_raw_json_retry_prompt(
         "用户需求",
-        ValueError("delivery_metrics.total_cases must match case_summary_items"),
+        captured.value,
         workflow_id="TEST_DESIGN",
         current_stage_id="DELIVERY",
     )
 
     assert "artifact_data" in prompt
-    assert "delivery_metrics.total_cases" in prompt
+    assert "failureCategory=schema_validation" in prompt
+    assert f"fieldPath={expected_field_path}" in prompt
+    assert f"validator={expected_validator}" in prompt
+    assert (
+        f"模型不要输出 {expected_field_path.removeprefix('artifact_data.')}" in prompt
+    )
+    assert "由后端派生" in prompt
+    assert canary not in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "Mermaid、D2、Graphviz DOT、PlantUML 代码块或表格" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
@@ -1061,7 +1182,9 @@ def test_req_review_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite
     )
 
     assert "artifact_data" in prompt
-    assert "issue_statistics.p0_count" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "Mermaid、D2、Graphviz DOT、PlantUML 代码块或表格" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
@@ -1158,7 +1281,9 @@ def test_req_review_report_retry_prompt_requests_artifact_data_fix_not_markdown_
     )
 
     assert "artifact_data" in prompt
-    assert "issue_statistics.p0_count" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "Mermaid、D2、Graphviz DOT、PlantUML 代码块或表格" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
@@ -1346,7 +1471,9 @@ def test_value_elevator_retry_prompt_requests_artifact_data_fix_not_markdown_rew
     )
 
     assert "artifact_data" in prompt
-    assert "score_summary.total_score" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -1788,6 +1915,7 @@ def test_value_persona_structured_output_instruction_requests_artifact_data_not_
     assert "personas" in instruction
     assert "decision_chain" in instruction
     assert "priority_ranking" in instruction
+    assert "personas[].behavior_features[] 每一项都必须包含非空 trigger" in instruction
     assert '"target_stage_id": "JOURNEY"' in instruction
     assert "不要输出完整 Markdown" in instruction
 
@@ -1931,19 +2059,17 @@ def test_idea_define_structured_output_instruction_requests_artifact_data_not_ma
     assert "不要输出完整 Markdown" in instruction
 
 
-def test_idea_define_structured_output_instruction_explains_root_problem_coverage():
+def test_idea_define_structured_output_instruction_uses_problem_id_references():
     instruction = build_structured_output_instruction(
         "IDEA_BRAINSTORM",
         "DEFINE",
     )
 
-    assert (
-        "problem_landscape.root_problem 必须被至少一个 evidence_items 或 problem_user_fit 条目覆盖"
-        in instruction
-    )
+    assert "root_problem_id" in instruction
+    assert "related_problem_ids" in instruction
     assert "related_problem" in instruction
     assert "evidence_ids" in instruction
-    assert "原样包含 problem_landscape.root_problem" not in instruction
+    assert "逐字出现在" not in instruction
 
 
 def test_idea_diverge_structured_output_instruction_requests_artifact_data_not_markdown():
@@ -2099,8 +2225,12 @@ def test_story_breakdown_structured_output_instruction_uses_manifest_artifact_da
         format_artifact_data_contract_instruction("STORY_BREAKDOWN", stage_id)
         in instruction
     )
-    assert f'"workflow": "STORY_BREAKDOWN", "stage": "{stage_id}"' in instruction
-    assert '"stage": "当前阶段 ID"' not in instruction
+    document_info_line = next(
+        line for line in instruction.splitlines() if '"document_info"' in line
+    )
+    assert '"workflow"' not in document_info_line
+    assert '"stage"' not in document_info_line
+    assert "document_info.workflow 和 document_info.stage 由后端注入" in instruction
 
 
 def test_value_persona_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
@@ -2112,9 +2242,31 @@ def test_value_persona_retry_prompt_requests_artifact_data_fix_not_markdown_rewr
     )
 
     assert "artifact_data" in prompt
-    assert "behavior_scenarios.0.persona_id" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
+
+
+def test_value_persona_retry_prompt_identifies_missing_behavior_trigger():
+    invalid = copy.deepcopy(VALID_VALUE_PERSONA_ARTIFACT_DATA)
+    invalid["personas"][0]["behavior_features"][1].pop("trigger")
+
+    with pytest.raises(ValidationError) as captured:
+        ValueDiscoveryPersonaArtifactData.model_validate(invalid)
+
+    prompt = build_raw_json_retry_prompt(
+        "原始提示",
+        captured.value,
+        workflow_id="VALUE_DISCOVERY",
+        current_stage_id="PERSONA",
+    )
+
+    assert "failureCategory=schema_validation" in prompt
+    assert "fieldPath=artifact_data.personas[].behavior_features[].trigger" in prompt
+    assert "validator=missing" in prompt
+    assert "该路径对应的每个对象都必须包含这个字段" in prompt
 
 
 def test_value_journey_retry_prompt_requests_artifact_data_fix_not_markdown_rewrite():
@@ -2126,7 +2278,9 @@ def test_value_journey_retry_prompt_requests_artifact_data_fix_not_markdown_rewr
     )
 
     assert "artifact_data" in prompt
-    assert "pain_priorities references unknown stage ids" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -2140,7 +2294,9 @@ def test_value_blueprint_retry_prompt_requests_artifact_data_fix_not_markdown_re
     )
 
     assert "artifact_data" in prompt
-    assert "acceptance_criteria references unknown requirement ids" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -2154,7 +2310,9 @@ def test_incident_timeline_retry_prompt_requests_artifact_data_fix_not_markdown_
     )
 
     assert "artifact_data" in prompt
-    assert "timeline_events references unknown fact ids" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -2168,7 +2326,9 @@ def test_incident_root_cause_retry_prompt_requests_artifact_data_fix_not_markdow
     )
 
     assert "artifact_data" in prompt
-    assert "fishbone_categories references unknown cause ids" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -2182,7 +2342,9 @@ def test_incident_improvement_retry_prompt_requests_artifact_data_fix_not_markdo
     )
 
     assert "artifact_data" in prompt
-    assert "root_cause_coverage references unknown action ids" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -2196,7 +2358,9 @@ def test_idea_define_retry_prompt_requests_artifact_data_fix_not_markdown_rewrit
     )
 
     assert "artifact_data" in prompt
-    assert "problem_user_fit references unknown evidence ids" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -2210,7 +2374,9 @@ def test_idea_diverge_retry_prompt_requests_artifact_data_fix_not_markdown_rewri
     )
 
     assert "artifact_data" in prompt
-    assert "idea_sources references unknown idea ids" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -2226,7 +2392,9 @@ def test_idea_converge_retry_prompt_requests_artifact_data_fix_not_markdown_rewr
     )
 
     assert "artifact_data" in prompt
-    assert "ice_evaluations.0.ice_score" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -2240,7 +2408,9 @@ def test_idea_concept_retry_prompt_requests_artifact_data_fix_not_markdown_rewri
     )
 
     assert "artifact_data" in prompt
-    assert "growth_funnel" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -2254,7 +2424,9 @@ def test_story_breakdown_retry_prompt_requests_artifact_data_fix_not_markdown_re
     )
 
     assert "artifact_data" in prompt
-    assert "acceptance_criteria references unknown story ids" in prompt
+    assert "failureCategory=artifact_validation" in prompt
+    assert "fieldPath=artifact_data" in prompt
+    assert "validator=artifact_value" in prompt
     assert "不要输出 Markdown 文档" in prompt
     assert "artifact_update.type 必须为 replace" not in prompt
 
@@ -2284,10 +2456,7 @@ def test_runtime_raw_json_stream_turn_yields_real_delta_before_final_output(
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -2341,10 +2510,7 @@ def test_runtime_raw_json_stream_turn_renders_artifact_data_before_final_output(
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -2407,10 +2573,7 @@ def test_runtime_raw_json_stream_turn_does_not_synthesize_chat_for_artifact_firs
         yield final_json[:chat_start]
         yield final_json[chat_start:]
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -2490,10 +2653,7 @@ def test_runtime_raw_json_stream_turn_renders_paragraph_level_clarify_artifact_d
     def fake_stream_chat_completion_content(**kwargs):
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -2562,10 +2722,7 @@ def test_runtime_raw_json_stream_turn_renders_strategy_artifact_data_before_fina
     def fake_stream_chat_completion_content(**kwargs):
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -2649,10 +2806,7 @@ def test_runtime_raw_json_stream_turn_renders_paragraph_level_strategy_artifact_
     def fake_stream_chat_completion_content(**kwargs):
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -2742,10 +2896,7 @@ def test_runtime_raw_json_stream_turn_waits_for_strategy_references_before_secti
     def fake_stream_chat_completion_content(**kwargs):
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -2831,10 +2982,7 @@ def test_runtime_raw_json_stream_turn_renders_paragraph_level_cases_artifact_dat
     def fake_stream_chat_completion_content(**kwargs):
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -2932,10 +3080,7 @@ def test_runtime_raw_json_stream_turn_renders_cases_after_case_groups_without_mo
     def fake_stream_chat_completion_content(**kwargs):
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -3028,10 +3173,7 @@ def test_runtime_raw_json_stream_turn_renders_delivery_artifact_data_before_fina
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -3142,10 +3284,7 @@ def test_runtime_raw_json_stream_turn_renders_req_review_artifact_data_before_fi
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -3253,10 +3392,7 @@ def test_runtime_raw_json_stream_turn_renders_req_review_report_artifact_data_be
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -3346,10 +3482,7 @@ def test_runtime_raw_json_stream_turn_renders_value_elevator_artifact_data_befor
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -3434,10 +3567,7 @@ def test_runtime_raw_json_stream_turn_renders_value_persona_artifact_data_before
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -3520,10 +3650,7 @@ def test_runtime_raw_json_stream_turn_renders_value_journey_artifact_data_before
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -3606,10 +3733,7 @@ def test_runtime_raw_json_stream_turn_renders_value_blueprint_artifact_data_befo
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -3725,10 +3849,7 @@ def test_runtime_raw_json_stream_turn_renders_incident_timeline_artifact_data_be
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -3840,10 +3961,7 @@ def test_runtime_raw_json_stream_turn_renders_incident_root_cause_artifact_data_
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -3952,10 +4070,7 @@ def test_runtime_raw_json_stream_turn_renders_incident_improvement_artifact_data
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -4073,10 +4188,7 @@ def test_runtime_raw_json_stream_turn_renders_idea_define_artifact_data_before_f
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -4187,10 +4299,7 @@ def test_runtime_raw_json_stream_turn_renders_idea_diverge_artifact_data_before_
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -4304,10 +4413,7 @@ def test_runtime_raw_json_stream_turn_renders_idea_converge_artifact_data_before
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -4421,10 +4527,7 @@ def test_runtime_raw_json_stream_turn_renders_idea_concept_artifact_data_before_
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -4565,10 +4668,7 @@ def test_runtime_raw_json_stream_turn_renders_all_story_breakdown_stages_from_ar
         calls.append(kwargs)
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -4622,10 +4722,7 @@ def test_raw_streaming_runtime_records_stream_usage(monkeypatch):
         kwargs["on_usage"](123)
         yield final_json
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -4662,10 +4759,7 @@ def test_raw_streaming_runtime_accumulates_usage_across_retry_attempts(monkeypat
         kwargs["on_usage"](token_count)
         yield content
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -4705,13 +4799,14 @@ def test_runtime_raw_json_stream_turn_fails_final_json_truncation_after_partial_
         ["document_info", "requirement_facts"],
     )[:2]
 
+    call_count = 0
+
     def fake_stream_chat_completion_content(**kwargs):
+        nonlocal call_count
+        call_count += 1
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -4729,11 +4824,18 @@ def test_runtime_raw_json_stream_turn_fails_final_json_truncation_after_partial_
     )
 
     emitted_deltas: list[AgentTurnDeltaOutput] = []
-    with pytest.raises(AgentRuntimeSchemaError):
+    retry_signals: list[AgentRetrySignal] = []
+    with pytest.raises(AgentRuntimeSchemaError) as captured:
         for output in stream:
-            assert isinstance(output, AgentTurnDeltaOutput)
-            emitted_deltas.append(output)
+            if isinstance(output, AgentRetrySignal):
+                retry_signals.append(output)
+            else:
+                assert isinstance(output, AgentTurnDeltaOutput)
+                emitted_deltas.append(output)
 
+    assert call_count == 2
+    assert [signal.attempt_index for signal in retry_signals] == [2]
+    assert isinstance(captured.value.__cause__, json.JSONDecodeError)
     artifact_deltas = [
         output for output in emitted_deltas if output.artifact_update is not None
     ]
@@ -4742,6 +4844,236 @@ def test_runtime_raw_json_stream_turn_fails_final_json_truncation_after_partial_
     assert first_markdown is not None
     assert first_markdown.startswith("# 需求分析文档")
     assert not any("artifact_truncated" in output.warnings for output in emitted_deltas)
+
+
+def test_runtime_raw_json_stream_turn_retries_json_decode_and_recovers(
+    monkeypatch,
+):
+    canary = "first-attempt-output-canary"
+    valid_json = json.dumps(
+        {
+            "chat": "已完成需求澄清并更新右侧文档，请确认关键假设。",
+            "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    invalid_json = valid_json.replace(
+        "已完成需求澄清并更新右侧文档，请确认关键假设。",
+        canary,
+    )[:-8]
+    attempts = iter((invalid_json, valid_json))
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield next(attempts)
+
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            system_prompt="system prompt",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "用户需求",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    )
+
+    retry_signals = [
+        output for output in outputs if isinstance(output, AgentRetrySignal)
+    ]
+    assert len(calls) == 2
+    assert [signal.attempt_index for signal in retry_signals] == [2]
+    retry_prompt = calls[1]["messages"][1]["content"]
+    assert "完整合法的 JSON" in retry_prompt
+    assert canary not in retry_prompt
+    assert isinstance(outputs[-1], AgentTurnOutput)
+
+
+def test_runtime_raw_json_stream_turn_replaces_model_document_identity_without_retry(
+    monkeypatch,
+):
+    invalid_artifact_data = copy.deepcopy(VALID_CLARIFY_ARTIFACT_DATA)
+    invalid_artifact_data["document_info"]["workflow"] = "renderer-canary"
+    invalid_json = json.dumps(
+        {
+            "chat": "已完成需求澄清并更新右侧文档，请确认关键假设。",
+            "artifact_data": invalid_artifact_data,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield invalid_json
+
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            system_prompt="system prompt",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "用户需求",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    )
+
+    assert len(calls) == 1
+    assert not any(isinstance(output, AgentRetrySignal) for output in outputs)
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert outputs[-1].artifact_data is not None
+    assert outputs[-1].artifact_data["document_info"]["workflow"] == "TEST_DESIGN"
+    assert outputs[-1].artifact_data["document_info"]["stage"] == "CLARIFY"
+
+
+def test_runtime_raw_json_stream_turn_retries_length_termination_and_recovers(
+    monkeypatch,
+):
+    canary = "first-truncated-output-canary"
+    valid_json = json.dumps(
+        {
+            "chat": "已完成需求澄清并更新右侧文档，请确认关键假设。",
+            "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    attempts = iter(((valid_json[:120] + canary, "length"), (valid_json, "stop")))
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        payload, reason = next(attempts)
+        kwargs["on_finish_reason"](reason)
+        yield payload
+
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="deepseek-v4-flash",
+            system_prompt="system prompt",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "用户需求",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    )
+
+    assert [
+        output.attempt_index
+        for output in outputs
+        if isinstance(output, AgentRetrySignal)
+    ] == [2]
+    assert isinstance(outputs[-1], AgentTurnOutput)
+    assert calls[0]["max_tokens"] == 32768
+    retry_prompt = calls[1]["messages"][1]["content"]
+    assert "validator=output_truncated" in retry_prompt
+    assert canary not in retry_prompt
+
+
+def test_runtime_raw_json_stream_turn_reports_repeated_length_termination(
+    monkeypatch,
+):
+    def fake_stream_chat_completion_content(**kwargs):
+        kwargs["on_finish_reason"]("length")
+        yield '{"chat":"partial'
+
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="deepseek-v4-flash",
+            system_prompt="system prompt",
+        ),
+    )
+
+    with pytest.raises(AgentRuntimeSchemaError) as captured:
+        list(
+            runtime.stream_turn(
+                "用户需求",
+                workflow_id="TEST_DESIGN",
+                current_stage_id="CLARIFY",
+            )
+        )
+
+    assert isinstance(captured.value.__cause__, RawJsonStreamTerminationError)
+    assert captured.value.__cause__.reason == "length"
+
+
+def test_runtime_raw_json_stream_turn_rejects_missing_finish_reason(
+    monkeypatch,
+):
+    valid_json = json.dumps(
+        {
+            "chat": "已完成需求澄清并更新右侧文档，请确认关键假设。",
+            "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+
+    def fake_stream_chat_completion_content(**kwargs):
+        yield valid_json
+
+    _install_raw_stream_fake(
+        monkeypatch,
+        fake_stream_chat_completion_content,
+        default_finish_reason=None,
+    )
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            system_prompt="system prompt",
+        ),
+    )
+    outputs = []
+
+    with pytest.raises(AgentRuntimeSchemaError) as captured:
+        for output in runtime.stream_turn(
+            "用户需求",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        ):
+            outputs.append(output)
+
+    assert isinstance(captured.value.__cause__, RawJsonStreamTerminationError)
+    assert captured.value.__cause__.reason == "unknown"
+    assert not any(isinstance(output, AgentTurnOutput) for output in outputs)
 
 
 def test_runtime_raw_json_stream_turn_streams_artifact_progress_for_artifact_data(
@@ -4767,10 +5099,7 @@ def test_runtime_raw_json_stream_turn_streams_artifact_progress_for_artifact_dat
     def fake_stream_chat_completion_content(**kwargs):
         yield from chunks
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -4871,10 +5200,7 @@ def test_runtime_raw_json_stream_turn_retries_contract_failure_with_feedback(
         calls.append(kwargs)
         yield invalid_json if len(calls) == 1 else valid_json
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -4895,7 +5221,8 @@ def test_runtime_raw_json_stream_turn_retries_contract_failure_with_feedback(
 
     assert len(calls) == 2
     assert "上一轮结构化输出未通过校验" in calls[1]["messages"][1]["content"]
-    assert "artifact update is required" in calls[1]["messages"][1]["content"]
+    assert "failureCategory=contract_validation" in calls[1]["messages"][1]["content"]
+    assert "fieldPath=artifact_contract" in calls[1]["messages"][1]["content"]
     assert outputs[-1].chat == "已更新右侧需求分析文档。"
     assert outputs[-1].artifact_update.markdown == VALID_CLARIFY_ARTIFACT
 
@@ -4931,10 +5258,7 @@ def test_runtime_marks_retry_boundary_after_visible_partial_before_success(
         calls.append(kwargs)
         yield attempts[len(calls) - 1]
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -4989,10 +5313,7 @@ def test_runtime_raw_json_stream_turn_retries_schema_shape_failure_with_feedback
         calls.append(kwargs)
         yield invalid_json if len(calls) == 1 else valid_json
 
-    monkeypatch.setattr(
-        "agent_runtime.stream_chat_completion_content",
-        fake_stream_chat_completion_content,
-    )
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
     runtime = PydanticAgentRuntime(
         FakeAgent({}),
         raw_streaming_config=RawStreamingConfig(
@@ -5016,6 +5337,475 @@ def test_runtime_raw_json_stream_turn_retries_schema_shape_failure_with_feedback
     assert "artifact_update" in calls[1]["messages"][1]["content"]
     assert outputs[-1].chat == "已更新右侧需求分析文档。"
     assert outputs[-1].artifact_update.markdown == VALID_CLARIFY_ARTIFACT
+
+
+def test_raw_json_retry_prompt_redacts_validation_error_model_data():
+    canary = "model-input-canary"
+
+    class StrictPayload(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        allowed: str
+
+    with pytest.raises(ValidationError) as captured:
+        StrictPayload.model_validate(
+            {
+                "allowed": "ok",
+                "target_stage_id": canary,
+                "model_field_canary": canary,
+            }
+        )
+
+    retry_prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        captured.value,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert "failureCategory=schema_validation" in retry_prompt
+    assert "fieldPath=structured_output" in retry_prompt
+    assert "validator=extra_forbidden" in retry_prompt
+    assert canary not in retry_prompt
+    assert "target_stage_id" not in retry_prompt
+    assert "model_field_canary" not in retry_prompt
+    assert "input_value" not in retry_prompt
+
+
+def test_raw_json_retry_prompt_projects_terminal_stage_action_missing_type():
+    with pytest.raises(ValidationError) as captured:
+        AgentTurnOutput.model_validate(
+            {
+                "chat": "我已完成需求评审报告并整理右侧产出物，请查看最终结论。",
+                "artifact_update": {"type": "none", "markdown": None},
+                "stage_action": {"target_stage_id": "REPORT"},
+                "warnings": [],
+            }
+        )
+
+    retry_prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        captured.value,
+        workflow_id="REQ_REVIEW",
+        current_stage_id="REPORT",
+    )
+
+    assert "failureCategory=schema_validation" in retry_prompt
+    assert "fieldPath=stage_action.type" in retry_prompt
+    assert "validator=missing" in retry_prompt
+    assert "当前阶段是最后阶段，stage_action 必须为 null" in retry_prompt
+    assert "artifact_data 数据问题" not in retry_prompt
+
+
+def test_raw_json_retry_prompt_projects_non_terminal_stage_action_missing_type():
+    with pytest.raises(ValidationError) as captured:
+        AgentTurnOutput.model_validate(
+            {
+                "chat": "我已完成当前阶段分析并整理右侧产出物，请确认下一步。",
+                "artifact_update": {"type": "none", "markdown": None},
+                "stage_action": {"target_stage_id": "REPORT"},
+                "warnings": [],
+            }
+        )
+
+    retry_prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        captured.value,
+        workflow_id="REQ_REVIEW",
+        current_stage_id="REVIEW",
+    )
+
+    assert "fieldPath=stage_action.type" in retry_prompt
+    assert '唯一合法值是 {"type": "request_next_stage"' in retry_prompt
+    assert '"target_stage_id": "REPORT"}' in retry_prompt
+    assert "artifact_data 数据问题" not in retry_prompt
+
+
+def test_raw_json_retry_prompt_projects_journey_duplicate_id_to_fixed_feedback():
+    canary = "sk-journey-duplicate-canary"
+    invalid = copy.deepcopy(VALID_VALUE_JOURNEY_ARTIFACT_DATA)
+    invalid["journey_stages"][0]["key_pain"] = canary
+    invalid["journey_stages"][1]["pain_id"] = invalid["journey_stages"][0]["pain_id"]
+
+    with pytest.raises(ValidationError) as captured:
+        ValueDiscoveryJourneyArtifactData.model_validate(invalid)
+
+    retry_prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        captured.value,
+        workflow_id="VALUE_DISCOVERY",
+        current_stage_id="JOURNEY",
+    )
+
+    assert "validator=journey_duplicate_pain_id" in retry_prompt
+    assert "journey_stages 每一项的 pain_id 必须唯一" in retry_prompt
+    assert canary not in retry_prompt
+
+
+def test_raw_json_retry_prompt_projects_blank_string_to_fixed_feedback():
+    invalid = copy.deepcopy(VALID_IDEA_CONVERGE_ARTIFACT_DATA)
+    invalid["ice_evaluations"][0]["elimination_reason"] = ""
+
+    with pytest.raises(ValidationError) as captured:
+        IdeaConvergeArtifactData.model_validate(invalid)
+
+    retry_prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        captured.value,
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONVERGE",
+    )
+
+    assert "validator=idea_converge_blank_elimination_reason" in retry_prompt
+    assert "elimination_reason" in retry_prompt
+    assert "不淘汰" in retry_prompt
+
+
+def test_raw_json_retry_prompt_explains_nested_non_empty_reference_arrays():
+    invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
+    invalid["problem_user_fit"][0]["evidence_ids"] = []
+
+    with pytest.raises(ValidationError) as captured:
+        IdeaDefineArtifactData.model_validate(invalid)
+
+    retry_prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        captured.value,
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="DEFINE",
+    )
+
+    assert "validator=idea_define_empty_evidence_ids" in retry_prompt
+    assert "problem_user_fit[].evidence_ids" in retry_prompt
+    assert "evidence_items[].evidence_id" in retry_prompt
+
+
+def test_raw_json_retry_prompt_projects_blank_incident_risk_acceptor():
+    invalid = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
+    invalid["root_cause_coverage"][0]["risk_acceptor"] = ""
+
+    with pytest.raises(ValidationError) as captured:
+        IncidentImprovementArtifactData.model_validate(invalid)
+
+    retry_prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        captured.value,
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="IMPROVEMENT",
+    )
+
+    assert "validator=incident_improvement_blank_risk_acceptor" in retry_prompt
+    assert "risk_acceptor" in retry_prompt
+    assert "不适用" in retry_prompt
+
+
+@pytest.mark.parametrize(
+    (
+        "failure",
+        "expected_validator",
+        "expected_field_path",
+        "expected_feedback",
+    ),
+    [
+        (
+            "duplicate_action",
+            "incident_improvement_duplicate_action_id",
+            "artifact_data.improvement_actions[].action_id",
+            "improvement_actions[].action_id 必须唯一",
+        ),
+        (
+            "action_count",
+            "incident_improvement_action_count_mismatch",
+            "artifact_data.report_info.action_count",
+            "不要输出 report_info.action_count",
+        ),
+        (
+            "priority_distribution",
+            "incident_improvement_priority_distribution_mismatch",
+            "artifact_data.priority_distribution",
+            "不要输出 priority_distribution",
+        ),
+        (
+            "duplicate_cause",
+            "incident_improvement_duplicate_cause_id",
+            "artifact_data.root_cause_coverage[].cause_id",
+            "root_cause_coverage[].cause_id 必须唯一",
+        ),
+        (
+            "unknown_action",
+            "incident_improvement_unknown_action_reference",
+            "artifact_data.root_cause_coverage[].action_ids",
+            "只能引用 improvement_actions[].action_id",
+        ),
+        (
+            "unknown_cause",
+            "incident_improvement_unknown_cause_reference",
+            "artifact_data.improvement_actions[].root_cause_id",
+            "只能引用 root_cause_coverage[].cause_id",
+        ),
+        (
+            "covered_without_actions",
+            "incident_improvement_covered_without_actions",
+            "artifact_data.root_cause_coverage[].action_ids",
+            "coverage_status 为“已覆盖”",
+        ),
+        (
+            "action_group_mismatch",
+            "incident_improvement_action_group_mismatch",
+            "artifact_data.root_cause_coverage[].action_ids",
+            "必须精确等于",
+        ),
+    ],
+)
+def test_raw_json_retry_prompt_projects_incident_improvement_consistency_failures(
+    failure: str,
+    expected_validator: str,
+    expected_field_path: str,
+    expected_feedback: str,
+):
+    invalid = copy.deepcopy(VALID_INCIDENT_IMPROVEMENT_ARTIFACT_DATA)
+    if failure == "duplicate_action":
+        invalid["improvement_actions"][1]["action_id"] = invalid["improvement_actions"][
+            0
+        ]["action_id"]
+    elif failure == "action_count":
+        invalid["report_info"]["action_count"] = 99
+    elif failure == "priority_distribution":
+        invalid["priority_distribution"]["urgent_count"] = 99
+    elif failure == "duplicate_cause":
+        invalid["root_cause_coverage"][1]["cause_id"] = invalid["root_cause_coverage"][
+            0
+        ]["cause_id"]
+    elif failure == "unknown_action":
+        invalid["root_cause_coverage"][0]["action_ids"].append("A-404")
+    elif failure == "unknown_cause":
+        invalid["improvement_actions"][0]["root_cause_id"] = "CAUSE-404"
+    elif failure == "covered_without_actions":
+        invalid["root_cause_coverage"][0]["action_ids"] = []
+    elif failure == "action_group_mismatch":
+        invalid["root_cause_coverage"][0]["action_ids"] = ["A-001"]
+    else:
+        raise AssertionError(f"unknown test failure: {failure}")
+
+    with pytest.raises(ValidationError) as captured:
+        IncidentImprovementArtifactData.model_validate(invalid)
+
+    retry_prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        captured.value,
+        workflow_id="INCIDENT_REVIEW",
+        current_stage_id="IMPROVEMENT",
+    )
+
+    assert f"validator={expected_validator}" in retry_prompt
+    assert f"fieldPath={expected_field_path}" in retry_prompt
+    assert expected_feedback in retry_prompt
+    assert "A-404" not in retry_prompt
+    assert "CAUSE-404" not in retry_prompt
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_validator", "expected_feedback"),
+    [
+        (
+            "duplicate_evidence",
+            "idea_define_duplicate_evidence_id",
+            "evidence_items[].evidence_id 必须唯一",
+        ),
+        (
+            "duplicate_problem",
+            "idea_define_duplicate_problem_id",
+            "problem_landscape.subproblems[].problem_id 必须唯一",
+        ),
+        (
+            "unknown_evidence",
+            "idea_define_unknown_evidence_reference",
+            "只能引用 evidence_items[].evidence_id",
+        ),
+        (
+            "duplicate_root_problem_id",
+            "idea_define_duplicate_root_problem_id",
+            "root_problem_id 不能与",
+        ),
+        (
+            "unknown_problem_reference",
+            "idea_define_unknown_problem_reference",
+            "related_problem_ids 只能引用",
+        ),
+        (
+            "missing_root_problem_evidence",
+            "idea_define_missing_root_problem_evidence",
+            "至少一个 evidence_items[].related_problem_ids 必须包含",
+        ),
+        (
+            "missing_fit_root_evidence_reference",
+            "idea_define_missing_fit_root_evidence_reference",
+            "至少一个 problem_user_fit[].evidence_ids 必须引用",
+        ),
+        (
+            "unchecked_stage_gate",
+            "stage_gate_unchecked",
+            "stage_gate 至少包含一个 checked=true",
+        ),
+    ],
+)
+def test_raw_json_retry_prompt_projects_idea_define_consistency_failures(
+    failure: str,
+    expected_validator: str,
+    expected_feedback: str,
+):
+    invalid = copy.deepcopy(VALID_IDEA_DEFINE_ARTIFACT_DATA)
+    if failure == "duplicate_evidence":
+        invalid["evidence_items"][1]["evidence_id"] = invalid["evidence_items"][0][
+            "evidence_id"
+        ]
+    elif failure == "duplicate_problem":
+        duplicate = copy.deepcopy(invalid["problem_landscape"]["subproblems"][0])
+        invalid["problem_landscape"]["subproblems"].append(duplicate)
+    elif failure == "unknown_evidence":
+        invalid["problem_user_fit"][0]["evidence_ids"] = ["EV-UNKNOWN"]
+    elif failure == "duplicate_root_problem_id":
+        invalid["problem_landscape"]["root_problem_id"] = invalid["problem_landscape"][
+            "subproblems"
+        ][0]["problem_id"]
+    elif failure == "unknown_problem_reference":
+        invalid["evidence_items"][0]["related_problem_ids"] = ["P-UNKNOWN"]
+    elif failure == "missing_root_problem_evidence":
+        invalid["evidence_items"][0]["related_problem_ids"] = ["P-001"]
+    elif failure == "missing_fit_root_evidence_reference":
+        for item in invalid["problem_user_fit"]:
+            item["evidence_ids"] = ["EV-002"]
+    elif failure == "unchecked_stage_gate":
+        for item in invalid["stage_gate"]:
+            item["checked"] = False
+    else:
+        raise AssertionError(f"unknown test failure: {failure}")
+
+    with pytest.raises(ValidationError) as captured:
+        IdeaDefineArtifactData.model_validate(invalid)
+
+    retry_prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        captured.value,
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="DEFINE",
+    )
+
+    assert f"validator={expected_validator}" in retry_prompt
+    assert expected_feedback in retry_prompt
+    assert "EV-UNKNOWN" not in retry_prompt
+    assert "P-UNKNOWN" not in retry_prompt
+
+
+@pytest.mark.parametrize(
+    (
+        "collection",
+        "field",
+        "expected_validator",
+        "expected_field_path",
+        "expected_feedback",
+    ),
+    [
+        (
+            "mvp_features",
+            "assumption_ids",
+            "idea_concept_empty_mvp_feature_assumption_ids",
+            "artifact_data.mvp_features[].assumption_ids",
+            "每个 mvp_features[].assumption_ids 必须至少引用一个",
+        ),
+        (
+            "validation_roadmap",
+            "assumption_ids",
+            "idea_concept_empty_validation_assumption_ids",
+            "artifact_data.validation_roadmap[].assumption_ids",
+            "每个 validation_roadmap[].assumption_ids 必须至少引用一个",
+        ),
+        (
+            "next_actions",
+            "related_ids",
+            "idea_concept_empty_next_action_related_ids",
+            "artifact_data.next_actions[].related_ids",
+            "每个 next_actions[].related_ids 必须至少引用一个",
+        ),
+    ],
+)
+def test_raw_json_retry_prompt_projects_empty_idea_concept_reference_arrays(
+    collection: str,
+    field: str,
+    expected_validator: str,
+    expected_field_path: str,
+    expected_feedback: str,
+):
+    invalid = copy.deepcopy(VALID_IDEA_CONCEPT_ARTIFACT_DATA)
+    invalid[collection][0][field] = []
+
+    with pytest.raises(ValidationError) as captured:
+        IdeaConceptArtifactData.model_validate(invalid)
+
+    retry_prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        captured.value,
+        workflow_id="IDEA_BRAINSTORM",
+        current_stage_id="CONCEPT",
+    )
+
+    assert f"validator={expected_validator}" in retry_prompt
+    assert f"fieldPath={expected_field_path}" in retry_prompt
+    assert expected_feedback in retry_prompt
+
+
+def test_raw_json_retry_prompt_projects_clarification_question_status_literal():
+    invalid = copy.deepcopy(VALID_CLARIFY_ARTIFACT_DATA)
+    invalid["clarification_questions"][0]["status"] = "需要澄清"
+
+    with pytest.raises(ValidationError) as captured:
+        ClarifyArtifactData.model_validate(invalid)
+
+    retry_prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        captured.value,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert "validator=clarify_question_status_literal" in retry_prompt
+    assert "fieldPath=artifact_data.clarification_questions[].status" in retry_prompt
+    assert "只能从“待确认”“已确认”“已假设”“AI 假设”中选择一个" in retry_prompt
+    assert "需要澄清" not in retry_prompt
+
+
+def test_raw_json_retry_prompt_projects_stage_transition_contract_error_safely():
+    canary = "contract-error-canary"
+    error = ContractValidationError(f"invalid target stage: target_stage_id={canary}")
+
+    retry_prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        error,
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert "failureCategory=contract_validation" in retry_prompt
+    assert "fieldPath=stage_action.target_stage_id" in retry_prompt
+    assert "validator=stage_transition" in retry_prompt
+    assert '唯一合法值是 {"type": "request_next_stage"' in retry_prompt
+    assert '"target_stage_id": "STRATEGY"}' in retry_prompt
+    assert canary not in retry_prompt
+
+
+def test_raw_json_retry_prompt_projects_terminal_stage_action_contract_error():
+    retry_prompt = build_raw_json_retry_prompt(
+        "用户需求",
+        ContractValidationError("last stage cannot request next stage"),
+        workflow_id="STORY_BREAKDOWN",
+        current_stage_id="SPRINT_PLAN",
+    )
+
+    assert "failureCategory=contract_validation" in retry_prompt
+    assert "fieldPath=stage_action" in retry_prompt
+    assert "validator=terminal_stage_action" in retry_prompt
+    assert "当前阶段是最后阶段，stage_action 必须为 null" in retry_prompt
+    assert "artifact_data 数据问题" not in retry_prompt
 
 
 def test_contract_output_validator_requests_model_retry_for_invalid_artifact():
@@ -5046,10 +5836,60 @@ def test_contract_output_validator_requests_model_retry_for_invalid_artifact():
             current_stage_id="CLARIFY",
         )
 
-    with pytest.raises(Exception, match="missing required artifact headings") as exc:
+    with pytest.raises(Exception, match="failureCategory=contract_validation") as exc:
         agent.validator(FakeContext(), invalid_output)
 
     assert exc.value.__class__.__name__ == "ModelRetry"
+
+
+def test_contract_output_validator_model_retry_redacts_contract_error(
+    monkeypatch,
+):
+    canary = "model-retry-contract-canary"
+
+    class ValidatorRecordingAgent:
+        validator = None
+
+        def output_validator(self, func):
+            self.validator = func
+            return func
+
+    def reject_output(*args, **kwargs):
+        raise ContractValidationError(f"invalid target stage: target_stage_id={canary}")
+
+    monkeypatch.setattr("agent_runtime.validate_agent_turn", reject_output)
+    agent = ValidatorRecordingAgent()
+    register_contract_output_validator(agent)
+    output = AgentTurnOutput.model_validate(
+        {
+            "chat": "已完成当前阶段工作，请确认。",
+            "artifact_update": {"type": "none"},
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+
+    with pytest.raises(Exception) as captured:
+        agent.validator(
+            type(
+                "FakeContext",
+                (),
+                {
+                    "deps": AgentTurnValidationDeps(
+                        workflow_id="TEST_DESIGN",
+                        current_stage_id="CLARIFY",
+                    )
+                },
+            )(),
+            output,
+        )
+
+    message = str(captured.value)
+    assert captured.value.__class__.__name__ == "ModelRetry"
+    assert "failureCategory=contract_validation" in message
+    assert "fieldPath=stage_action.target_stage_id" in message
+    assert "validator=stage_transition" in message
+    assert canary not in message
 
 
 def test_runtime_rejects_structured_output_that_violates_workflow_rules():
@@ -5170,6 +6010,7 @@ def test_deepseek_v4_resolves_json_object_only_capability():
 
     assert capability.tier == "json_object_only"
     assert capability.response_format == {"type": "json_object"}
+    assert capability.max_output_tokens == 32768
 
 
 import ast

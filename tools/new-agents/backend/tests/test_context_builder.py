@@ -12,6 +12,7 @@ from context_builder import build_run_context, build_run_context_prompt
 from models import AgentContextSummary, db
 from run_persistence import (
     append_run_message,
+    claim_agent_run_turn_request,
     create_agent_run,
     record_artifact_version,
     replace_artifact_collaboration_state,
@@ -56,6 +57,58 @@ def test_build_run_context_prompt_includes_prior_messages_in_sequence(app):
     assert prompt.index("[用户]\n第一条需求") < prompt.index("[助手]\n第一轮回复")
     assert prompt.index("[助手]\n第一轮回复") < prompt.index("[用户]\n第二条需求")
     assert prompt.endswith("[用户]\n第二条需求")
+
+
+def test_build_run_context_excludes_only_bound_request_message_sequence(app):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        first_same_text = append_run_message(run.id, "user", "相同输入")
+        append_run_message(run.id, "assistant", "第一轮回复")
+        bound_request = claim_agent_run_turn_request(
+            run.id,
+            request_id="context-bound-request-001",
+            stage_id="CLARIFY",
+            user_content="BOUND-REQUEST-CANARY-001",
+        )
+
+        context = build_run_context(
+            run.id,
+            "BOUND-REQUEST-CANARY-001",
+            exclude_message_sequence=bound_request.user_message_sequence,
+        )
+
+    assert first_same_text.sequence_index != bound_request.user_message_sequence
+    assert context.prompt.count("BOUND-REQUEST-CANARY-001") == 1
+    assert "[用户]\n相同输入" in context.prompt
+    assert "[用户补充: CLARIFY]\n相同输入" in context.prompt
+    assert "[助手]\n第一轮回复" in context.prompt
+    assert context.prompt.endswith("[用户]\nBOUND-REQUEST-CANARY-001")
+
+
+def test_bound_request_exclusion_keeps_prior_stage_supplement_when_truncated(app):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        old_supplement = "OLD-SUPPLEMENT-CANARY-001-" + ("旧摘要" * 380)
+        append_run_message(run.id, "user", old_supplement)
+        append_run_message(run.id, "assistant", "很长的历史回复" * 30)
+        bound_request = claim_agent_run_turn_request(
+            run.id,
+            request_id="context-bound-request-002",
+            stage_id="CLARIFY",
+            user_content="BOUND-REQUEST-CANARY-002",
+        )
+
+        context = build_run_context(
+            run.id,
+            "BOUND-REQUEST-CANARY-002",
+            max_chars=1350,
+            exclude_message_sequence=bound_request.user_message_sequence,
+        )
+
+    assert context.warnings == ["context_truncated"]
+    assert "[用户补充: CLARIFY]\nOLD-SUPPLEMENT-CANARY-001" in context.prompt
+    assert context.prompt.count("BOUND-REQUEST-CANARY-002") == 1
+    assert context.prompt.endswith("[用户]\nBOUND-REQUEST-CANARY-002")
 
 
 def test_build_run_context_prompt_filters_assistant_control_feedback(app):

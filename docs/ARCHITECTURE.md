@@ -235,9 +235,10 @@ App (BrowserRouter, basename="/new-agents")
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/health` | 健康检查 |
-| GET | `/api/config` | 获取 LLM 配置（不含 API Key） |
+| GET | `/api/config` | 获取 LLM 配置与浏览器配置管理 capability（不含 API Key） |
 | POST | `/api/config` | 创建或更新默认 LLM 配置（不返回 API Key） |
 | POST | `/api/config/check` | 检测默认 LLM 配置或设置表单临时配置是否可调用当前模型 |
+| POST | `/api/config/default/check` | 只检测服务端默认模型且不接受目标覆盖 |
 | POST | `/api/agent/runs/stream` | 结构化 Agent Runtime SSE |
 | GET | `/api/agent/runs/{runId}` | 已持久化 run snapshot |
 | POST | `/api/agent/runs/{runId}/artifacts` | 保存人工校准后的 artifact 版本 |
@@ -251,11 +252,12 @@ App (BrowserRouter, basename="/new-agents")
 
 - API Key 仅存储于 PostgreSQL `llm_config` 表，不进入前端状态持久化
 - `GET /api/config` 和 `POST /api/config` 响应都不返回 `api_key` / `apiKey` 字段
+- `POST /api/config` 与 `POST /api/config/check` 只接受独立的 `NEW_AGENTS_CONFIG_ADMIN_API_KEY`；运行时代理密钥和固定网关标记都不能授权配置管理，生产缺密钥或模型/管理/代理三类密钥任意碰撞时 fail-closed
 - `POST /api/config` 支持默认 LLM 配置更新和密钥轮换；已有配置时前端留空 API Key 会保留当前密钥
 - 默认 LLM 配置 key 默认为 `default`，可通过 `NEW_AGENTS_DEFAULT_LLM_CONFIG_KEY` 在不同部署环境选择不同配置行和模型
-- `POST /api/config/check` 无请求体时检测当前默认配置；带设置表单 JSON 时检测临时配置且不持久化，API Key 留空时复用已保存密钥；响应返回业务态 `ok` 和诊断消息，不回显密钥
+- `POST /api/config/check` 是受控管理员检测入口；`POST /api/config/default/check` 是浏览器运行时诊断入口，只能检测服务端目标且不接受请求体覆盖；两者均返回稳定公开消息，不回显供应商异常或密钥
 - `PUT /api/agent/runs/{runId}/artifact-collaboration` 复用共享 run persistence；非空批注/章节锁必须引用已有 artifact version，保存失败返回可诊断 JSON 错误，前端失败时回滚 optimistic 协作状态
-- 前端获取 `hasDefault` 标志判断是否可用代理模式，并在设置弹层提供默认配置维护和可用性检测入口
+- 前端同时读取 `hasDefault` 和服务端权威的 `browserConfigAdminAvailable`。只有明确启用匿名管理的 loopback 开发环境显示配置写入；生产设置弹层只读，更新由受控管理员 API 或部署 Secret 完成
 
 ---
 

@@ -188,6 +188,7 @@ export type AgentRunSnapshotMessage = {
     role: 'user' | 'assistant';
     content: string;
     sequenceIndex: number;
+    errorDiagnostic?: MessageErrorDiagnostic;
 };
 
 export type AgentRunSnapshotArtifact = {

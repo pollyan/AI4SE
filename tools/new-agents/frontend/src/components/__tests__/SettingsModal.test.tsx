@@ -18,11 +18,34 @@ describe('SettingsModal Component', () => {
     });
 
     it('renders correctly when open', () => {
-        render(<SettingsModal />);
+        render(<SettingsModal configAdministrationEnabled />);
         expect(screen.getByText('设置')).toBeDefined();
         expect(screen.getByLabelText('Base URL')).toBeDefined();
         expect(screen.getByLabelText('模型名称')).toBeDefined();
         expect(screen.getByLabelText('新 API Key')).toBeDefined();
+    });
+
+    it('keeps production model configuration read-only without browser admin credentials', async () => {
+        mockFetch.mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve({
+                hasDefault: true,
+                baseUrl: 'https://api.test.com/v1',
+                model: 'test-model',
+                description: 'Server managed',
+            }),
+        });
+
+        render(<SettingsModal configAdministrationEnabled={false} />);
+
+        expect(await screen.findByText('生产环境模型配置由服务端管理员 API 管理')).toBeDefined();
+        expect(screen.getByLabelText('Base URL')).toHaveProperty('disabled', true);
+        expect(screen.getByLabelText('模型名称')).toHaveProperty('disabled', true);
+        expect(screen.queryByLabelText('新 API Key')).toBeNull();
+        expect(screen.queryByRole('button', { name: '检测连接' })).toBeNull();
+        expect(screen.queryByRole('button', { name: '保存配置' })).toBeNull();
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        expect(mockFetch).toHaveBeenCalledWith('/new-agents/api/config');
     });
 
     it('loads sanitized backend config without showing an existing API key', async () => {
@@ -35,7 +58,7 @@ describe('SettingsModal Component', () => {
                 description: 'Test config',
             }),
         });
-        render(<SettingsModal />);
+        render(<SettingsModal configAdministrationEnabled />);
 
         expect(await screen.findByDisplayValue('https://api.test.com/v1')).toBeDefined();
         expect(screen.getByDisplayValue('test-model')).toBeDefined();
@@ -59,7 +82,7 @@ describe('SettingsModal Component', () => {
                 }),
             });
 
-        render(<SettingsModal />);
+        render(<SettingsModal configAdministrationEnabled />);
 
         fireEvent.change(screen.getByLabelText('Base URL'), {
             target: { value: 'https://api.new.test/v1' },
@@ -111,7 +134,7 @@ describe('SettingsModal Component', () => {
                 }),
             });
 
-        render(<SettingsModal />);
+        render(<SettingsModal configAdministrationEnabled />);
 
         fireEvent.change(screen.getByLabelText('Base URL'), {
             target: { value: 'https://api.new.test/v1' },
@@ -150,7 +173,7 @@ describe('SettingsModal Component', () => {
                 }),
             });
 
-        render(<SettingsModal />);
+        render(<SettingsModal configAdministrationEnabled />);
 
         fireEvent.change(await screen.findByLabelText('Base URL'), {
             target: { value: ' https://current.test/v1 ' },
@@ -206,7 +229,7 @@ describe('SettingsModal Component', () => {
                 }),
             });
 
-        render(<SettingsModal />);
+        render(<SettingsModal configAdministrationEnabled />);
 
         fireEvent.click(await screen.findByText('检测连接'));
 
@@ -237,7 +260,7 @@ describe('SettingsModal Component', () => {
                 }),
             });
 
-        render(<SettingsModal />);
+        render(<SettingsModal configAdministrationEnabled />);
 
         fireEvent.click(await screen.findByText('检测连接'));
 
@@ -247,12 +270,12 @@ describe('SettingsModal Component', () => {
 
     it('does not render when isSettingsOpen is false', () => {
         useStore.setState({ isSettingsOpen: false });
-        render(<SettingsModal />);
+        render(<SettingsModal configAdministrationEnabled />);
         expect(screen.queryByText('设置')).toBeNull();
     });
 
     it('closes modal when X button is clicked', () => {
-        render(<SettingsModal />);
+        render(<SettingsModal configAdministrationEnabled />);
 
         // By looking at the DOM, the first button is the close button in the header
         const clearButton = screen.getAllByRole('button')[0];
@@ -262,7 +285,7 @@ describe('SettingsModal Component', () => {
     });
 
     it('closes modal when save/done button is clicked', () => {
-        render(<SettingsModal />);
+        render(<SettingsModal configAdministrationEnabled />);
         
         const submitButton = screen.getByText('完成');
         fireEvent.click(submitButton);
@@ -275,7 +298,7 @@ describe('SettingsModal Component', () => {
         const confirmSpy = vi.spyOn(window, 'confirm').mockImplementation(() => true);
         useStore.setState({ chatHistory: [{ id: '1', role: 'user', content: 'test', timestamp: 123 }] });
         
-        render(<SettingsModal />);
+        render(<SettingsModal configAdministrationEnabled />);
         
         const clearButton = screen.getByText('清空数据');
         fireEvent.click(clearButton);
@@ -292,7 +315,7 @@ describe('SettingsModal Component', () => {
         const confirmSpy = vi.spyOn(window, 'confirm').mockImplementation(() => false);
         useStore.setState({ chatHistory: [{ id: '1', role: 'user', content: 'test', timestamp: 123 }] });
         
-        render(<SettingsModal />);
+        render(<SettingsModal configAdministrationEnabled />);
         
         const clearButton = screen.getByText('清空数据');
         fireEvent.click(clearButton);

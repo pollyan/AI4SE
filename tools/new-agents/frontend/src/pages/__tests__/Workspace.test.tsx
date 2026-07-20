@@ -83,7 +83,13 @@ describe('Workspace Page', () => {
     });
 
     it('shows onboarding overlay when backend has no default config', async () => {
-        mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ hasDefault: false }) });
+        mockFetch.mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve({
+                hasDefault: false,
+                browserConfigAdminAvailable: true,
+            }),
+        });
         render(
             <BrowserRouter>
                 <Workspace />
@@ -98,7 +104,13 @@ describe('Workspace Page', () => {
     });
 
     it('opens model settings from the missing default LLM onboarding overlay', async () => {
-        mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ hasDefault: false }) });
+        mockFetch.mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve({
+                hasDefault: false,
+                browserConfigAdminAvailable: true,
+            }),
+        });
         render(
             <BrowserRouter>
                 <Workspace />
@@ -109,6 +121,26 @@ describe('Workspace Page', () => {
         fireEvent.click(screen.getByRole('button', { name: '打开模型设置' }));
 
         expect(useStore.getState().isSettingsOpen).toBe(true);
+    });
+
+    it('directs production users to deployment administration without browser config writes', async () => {
+        mockFetch.mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve({
+                hasDefault: false,
+                browserConfigAdminAvailable: false,
+            }),
+        });
+        render(
+            <BrowserRouter>
+                <Workspace />
+            </BrowserRouter>
+        );
+
+        expect(await screen.findByText(/后端默认 LLM 未配置/)).toBeTruthy();
+        expect(screen.getByText(/请由部署管理员更新默认模型 Secret/)).toBeTruthy();
+        expect(screen.queryByRole('button', { name: '打开模型设置' })).toBeNull();
+        expect(screen.getByRole('button', { name: '重新检查配置' })).toBeTruthy();
     });
 
     it('hides onboarding after settings report a usable default LLM config', async () => {

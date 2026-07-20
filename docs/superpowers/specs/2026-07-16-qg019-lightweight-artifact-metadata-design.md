@@ -4,7 +4,7 @@
 
 - 日期：2026-07-16
 - 当前分支 / 基线：`master` / `cb2fb87e`
-- 顺序来源：[`New Agents 双栏流式、产出物信息层级与真实链路测试待办`](../../todos/2026-07-16-new-agents-streaming-and-artifact-ux.md) 中的 `QG-017 → QG-018 → QG-019 → QG-020`
+- 顺序来源：归档的 [`New Agents 双栏流式、产出物信息层级与真实链路测试待办`](../../todos/archive/2026-07-16-new-agents-streaming-and-artifact-ux.md) 中的 `QG-017 → QG-018 → QG-019 → QG-020`
 - 当前工作区保护边界：`tools/intent-tester/test-results/proxy/junit.xml` 是测试 runner 生成且不属于本切片的未提交文件，禁止修改、回滚或暂存；QG-020 不进入本切片。
 - 已读取事实源：`AGENTS.md`、目标模式 Playbook、活跃 todo、`workflow_manifest.json`、25-stage `ARTIFACT_DATA_RENDERERS`、`ArtifactRenderPlan`、结构化 schema、Markdown renderer、frontend prompt/template、`ArtifactPane`、历史版本/导出路径及现有 backend/frontend/browser 测试。
 - 当前质量门：QG-018 已经正式审查、全量验证并以 `cb2fb87e` 推送；没有新的 P0/P1、远端失败或外部阻塞。真实模型凭证不是本切片依赖。

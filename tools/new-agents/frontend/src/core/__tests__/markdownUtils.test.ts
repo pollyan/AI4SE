@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../utils/markdownUtils';
+import {
+    hashTextForDiagnostics,
+    preprocessMarkdown,
+    replaceMermaidBlockAtIndex,
+} from '../utils/markdownUtils';
+
+describe('hashTextForDiagnostics', () => {
+    it('matches the cross-runtime SHA-256 summary format', () => {
+        expect(hashTextForDiagnostics('abc')).toBe(
+            'sha256-ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+        );
+    });
+});
 
 describe('preprocessMarkdown', () => {
     it('should format simple mark tags', () => {

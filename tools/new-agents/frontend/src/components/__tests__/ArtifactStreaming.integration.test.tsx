@@ -180,7 +180,7 @@ describe('all workflow artifact streaming through the headless DOM', () => {
                     controller.enqueue(encoder.encode(sseEvent({
                         type: 'agent_turn',
                         output: {
-                            chat: '当前阶段分析已完成，请查看右侧完整产出物。',
+                            chat: '我已完成当前阶段分析，正在逐段更新右侧产出物。当前阶段分析已完成，请查看右侧完整产出物。',
                             artifact_update: {
                                 type: 'replace',
                                 markdown: finalArtifact,

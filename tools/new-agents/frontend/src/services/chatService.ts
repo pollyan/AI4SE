@@ -35,6 +35,7 @@ type SendOptions = {
 
 type ArtifactRollbackSnapshot = {
     artifactContent: string;
+    artifactChangeIndex: ReturnType<typeof useStore.getState>['artifactChangeIndex'];
     artifactHistory: ReturnType<typeof useStore.getState>['artifactHistory'];
     stageArtifacts: ReturnType<typeof useStore.getState>['stageArtifacts'];
 };
@@ -230,6 +231,56 @@ function formatAssistantErrorFeedback(error: unknown): AssistantErrorFeedback {
     const errorMessage = getErrorMessage(error);
     const errorCode = getErrorCode(error);
     const runtimeDiagnostic = getErrorDiagnosticPayload(error);
+    const isAgentRuntimeError = isErrorRecord(error)
+        && error.name === 'AgentRuntimeStreamError';
+    const runtimeErrorDetails = isErrorRecord(error)
+        && isAgentRuntimeError
+        ? {
+            ...(errorCode ? { code: errorCode } : {}),
+            ...(typeof runtimeDiagnostic?.phase === 'string' ? { phase: runtimeDiagnostic.phase } : {}),
+            ...(typeof runtimeDiagnostic?.workflowId === 'string' ? { workflowId: runtimeDiagnostic.workflowId } : {}),
+            ...(typeof runtimeDiagnostic?.stageId === 'string' ? { stageId: runtimeDiagnostic.stageId } : {}),
+            ...(typeof runtimeDiagnostic?.fieldPath === 'string' ? { fieldPath: runtimeDiagnostic.fieldPath } : {}),
+            ...(typeof runtimeDiagnostic?.validator === 'string' ? { validator: runtimeDiagnostic.validator } : {}),
+            ...(typeof runtimeDiagnostic?.retryable === 'boolean' ? { retryable: runtimeDiagnostic.retryable } : {}),
+        }
+        : {};
+
+    if (
+        isAgentRuntimeError
+        && errorCode
+        && typeof runtimeDiagnostic?.publicReason === 'string'
+        && runtimeDiagnostic.publicReason.trim()
+    ) {
+        const isStructuredFailure = [
+            'CONTRACT_VALIDATION_FAILED',
+            'SCHEMA_VALIDATION_FAILED',
+            'VISUAL_VALIDATION_FAILED',
+        ].includes(errorCode);
+        const kind = errorCode === 'LLM_ERROR'
+            ? 'provider'
+            : isStructuredFailure
+                ? 'structured'
+                : 'generic';
+        const summary = errorCode === 'LLM_ERROR'
+            ? '模型调用未完成'
+            : isStructuredFailure
+                ? '结构化输出生成失败'
+                : '本轮生成失败';
+        const runtimeMessagePrefix = `${errorCode}: `;
+        const safeRawMessage = errorMessage.startsWith(runtimeMessagePrefix)
+            ? errorMessage.slice(runtimeMessagePrefix.length)
+            : runtimeDiagnostic.publicReason;
+        return {
+            content: `⚠️ **${summary}**\n\n${runtimeDiagnostic.publicReason}`,
+            diagnostic: {
+                kind,
+                summary,
+                rawMessage: safeRawMessage,
+                ...runtimeErrorDetails,
+            },
+        };
+    }
 
     if (
         isStructuredOutputError(error, errorMessage)
@@ -283,6 +334,7 @@ function formatAssistantErrorFeedback(error: unknown): AssistantErrorFeedback {
                 rawMessage: errorMessage,
                 reason: providerDiagnostic.reason,
                 action: providerDiagnostic.action,
+                ...runtimeErrorDetails,
             },
         };
     }
@@ -297,6 +349,7 @@ function formatAssistantErrorFeedback(error: unknown): AssistantErrorFeedback {
             kind: 'generic',
             summary: '本轮生成失败',
             rawMessage: errorMessage,
+            ...runtimeErrorDetails,
         },
     };
 }
@@ -331,6 +384,7 @@ function createPersistedArtifactRollbackSnapshot(
     if (!restoredVersion) {
         return {
             artifactContent: currentStageBaseline,
+            artifactChangeIndex: [],
             artifactHistory,
             stageArtifacts: {
                 ...state.stageArtifacts,
@@ -345,6 +399,7 @@ function createPersistedArtifactRollbackSnapshot(
 
     return {
         artifactContent: restoredContent,
+        artifactChangeIndex: [],
         artifactHistory,
         stageArtifacts: {
             ...state.stageArtifacts,
@@ -363,16 +418,31 @@ export function useChatService() {
     );
     const pendingRetryIdentityRef = useRef<AgentRunRequestIdentity | null>(null);
 
-    const restoreRetryRequestIdentity = (
-        removedMessages: ReturnType<typeof useStore.getState>['chatHistory']
-    ) => {
-        const retryIdentity = [...removedMessages]
+    const prepareRetryRequestIdentity = (
+        retryAttemptMessages: ReturnType<typeof useStore.getState>['chatHistory']
+    ): boolean => {
+        const retryIdentity = [...retryAttemptMessages]
             .reverse()
             .map(message => requestIdentityByMessageRef.current.get(message.id))
             .find((identity): identity is AgentRunRequestIdentity => Boolean(identity));
-        if (retryIdentity) {
+        const hasTerminalRuntimeError = retryAttemptMessages.some(message => (
+            message.role === 'assistant'
+            && typeof message.errorDiagnostic?.code === 'string'
+            && message.errorDiagnostic.code.length > 0
+            && message.errorDiagnostic.code !== 'REQUEST_IN_PROGRESS'
+        ));
+        if (hasTerminalRuntimeError) {
+            const runId = retryIdentity?.runId || useStore.getState().currentRunId;
+            pendingRetryIdentityRef.current = runId
+                ? {
+                    runId,
+                    requestId: createTurnRequestId(),
+                }
+                : null;
+        } else if (retryIdentity) {
             pendingRetryIdentityRef.current = retryIdentity;
         }
+        return hasTerminalRuntimeError;
     };
 
     const { chatHistory, addMessage, updateLastMessage, removeLastMessage, isGenerating, setIsGenerating } = useStore();
@@ -487,6 +557,7 @@ export function useChatService() {
         const runStageId = runWorkflowDef.stages[runStageIndex].id;
         const artifactRollbackSnapshot: ArtifactRollbackSnapshot = {
             artifactContent: runState.artifactContent,
+            artifactChangeIndex: [...runState.artifactChangeIndex],
             artifactHistory: [...runState.artifactHistory],
             stageArtifacts: { ...runState.stageArtifacts },
         };
@@ -528,6 +599,7 @@ export function useChatService() {
             );
 
             let hasTransitioned = false;
+            let shouldIgnoreRemainingChunks = false;
 
             for await (const chunk of stream) {
                 if (runAbortController.signal.aborted) {
@@ -538,6 +610,10 @@ export function useChatService() {
                 if (!isRunStillActive()) {
                     runAbortController.abort();
                     break;
+                }
+
+                if (shouldIgnoreRemainingChunks) {
+                    continue;
                 }
 
                 const decision = reduceAgentStreamChunk(chunk, {
@@ -646,8 +722,7 @@ export function useChatService() {
                 }
 
                 if (decision.shouldStopStream) {
-                    runAbortController.abort();
-                    break;
+                    shouldIgnoreRemainingChunks = true;
                 }
             }
         } catch (error) {
@@ -677,14 +752,32 @@ export function useChatService() {
                 didRunFail = true;
                 if (!isRunStillActive()) return;
 
-                if (didUpdateArtifact) {
+                const isTerminalRuntimeFailure = isErrorRecord(error)
+                    && error.name === 'AgentRuntimeStreamError'
+                    && typeof error.code === 'string'
+                    && error.code.length > 0
+                    && error.code !== 'REQUEST_IN_PROGRESS';
+                if (didUpdateArtifact && isTerminalRuntimeFailure) {
+                    useStore.setState({
+                        artifactContent: artifactRollbackSnapshot.artifactContent,
+                        artifactChangeIndex: artifactRollbackSnapshot.artifactChangeIndex,
+                        artifactHistory: artifactRollbackSnapshot.artifactHistory,
+                        stageArtifacts: artifactRollbackSnapshot.stageArtifacts,
+                    });
+                    useStore.getState().clearPendingStageTransition();
+                    useStore.getState().setArtifactTruncated(false);
+                } else if (didUpdateArtifact) {
                     useStore.getState().setArtifactTruncated(true);
                 }
                 const errorFeedback = formatAssistantErrorFeedback(error);
 
                 if (isMidstream) {
                     updateLastMessage(
-                        (history[history.length - 1]?.content || '') + '\n\n' + errorFeedback.content,
+                        isTerminalRuntimeFailure
+                            ? errorFeedback.content
+                            : (history[history.length - 1]?.content || '')
+                                + '\n\n'
+                                + errorFeedback.content,
                         errorFeedback.diagnostic
                     );
                 } else {
@@ -804,31 +897,36 @@ export function useChatService() {
         const history = currentState.chatHistory;
         const retryPlan = planRetryFromHistory(history);
         if (!retryPlan) return;
-        const removedMessages = history.slice(
+        const retryAttemptMessages = history.slice(
             history.length - retryPlan.messagesToRemove
         );
-        restoreRetryRequestIdentity(removedMessages);
-        const inMemoryRollbackSnapshot = [...removedMessages]
+        const shouldPreserveFailedAttempt = prepareRetryRequestIdentity(
+            retryAttemptMessages
+        );
+        const inMemoryRollbackSnapshot = [...retryAttemptMessages]
             .reverse()
             .map(message => artifactRollbackSnapshotsRef.current.get(message.id))
             .find((snapshot): snapshot is ArtifactRollbackSnapshot => Boolean(snapshot));
         const rollbackSnapshot = inMemoryRollbackSnapshot
             || (
-                removedMessages.some(message => message.role === 'assistant')
+                retryAttemptMessages.some(message => message.role === 'assistant')
                     ? createPersistedArtifactRollbackSnapshot(currentState)
                     : null
             );
 
-        for (let i = 0; i < retryPlan.messagesToRemove; i += 1) {
-            useStore.getState().removeLastMessage();
+        if (!shouldPreserveFailedAttempt) {
+            for (let i = 0; i < retryPlan.messagesToRemove; i += 1) {
+                useStore.getState().removeLastMessage();
+            }
         }
-        removedMessages.forEach(message => {
+        retryAttemptMessages.forEach(message => {
             artifactRollbackSnapshotsRef.current.delete(message.id);
         });
 
         if (rollbackSnapshot) {
             useStore.setState({
                 artifactContent: rollbackSnapshot.artifactContent,
+                artifactChangeIndex: rollbackSnapshot.artifactChangeIndex,
                 artifactHistory: rollbackSnapshot.artifactHistory,
                 stageArtifacts: rollbackSnapshot.stageArtifacts,
             });
@@ -855,29 +953,34 @@ export function useChatService() {
                 : 0;
         if (messagesToRemove === 0) return;
 
-        const removedMessages = history.slice(history.length - messagesToRemove);
-        restoreRetryRequestIdentity(removedMessages);
-        const inMemoryRollbackSnapshot = [...removedMessages]
+        const retryAttemptMessages = history.slice(history.length - messagesToRemove);
+        const shouldPreserveFailedAttempt = prepareRetryRequestIdentity(
+            retryAttemptMessages
+        );
+        const inMemoryRollbackSnapshot = [...retryAttemptMessages]
             .reverse()
             .map(message => artifactRollbackSnapshotsRef.current.get(message.id))
             .find((snapshot): snapshot is ArtifactRollbackSnapshot => Boolean(snapshot));
         const rollbackSnapshot = inMemoryRollbackSnapshot
             || (
-                removedMessages.some(message => message.role === 'assistant')
+                retryAttemptMessages.some(message => message.role === 'assistant')
                     ? createPersistedArtifactRollbackSnapshot(currentState)
                     : null
             );
 
-        for (let i = 0; i < messagesToRemove; i += 1) {
-            useStore.getState().removeLastMessage();
+        if (!shouldPreserveFailedAttempt) {
+            for (let i = 0; i < messagesToRemove; i += 1) {
+                useStore.getState().removeLastMessage();
+            }
         }
-        removedMessages.forEach(message => {
+        retryAttemptMessages.forEach(message => {
             artifactRollbackSnapshotsRef.current.delete(message.id);
         });
 
         if (rollbackSnapshot) {
             useStore.setState({
                 artifactContent: rollbackSnapshot.artifactContent,
+                artifactChangeIndex: rollbackSnapshot.artifactChangeIndex,
                 artifactHistory: rollbackSnapshot.artifactHistory,
                 stageArtifacts: rollbackSnapshot.stageArtifacts,
             });

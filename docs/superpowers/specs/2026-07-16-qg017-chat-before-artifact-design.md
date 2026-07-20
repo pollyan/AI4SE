@@ -4,7 +4,7 @@
 
 - **ID / 名称**：`QG-017 — 全工作流有意义对话先于右侧产出物`。
 - **完整用户任务**：用户在任一 New Agents workflow/stage 发起生成后，先在左侧看到由本轮模型输出的、有独立阅读价值的自然工作对话，再在右侧看到第一段真实产出物；随后双栏分别单调更新，阶段动作、持久化和版本只在最终结果收敛后生效。
-- **顺序基线**：[唯一活动 Todo 的待办总览](../../todos/2026-07-16-new-agents-streaming-and-artifact-ux.md#待办总览)，固定顺序为 `QG-017 → QG-018 → QG-019 → QG-020`。
+- **顺序基线**：[归档能力包的待办总览](../../todos/archive/2026-07-16-new-agents-streaming-and-artifact-ux.md#待办总览)，固定顺序为 `QG-017 → QG-018 → QG-019 → QG-020`。
 - **纳入边界**：25 个在线 stage 的结构化输出字段顺序；raw JSON partial parser；共享 Agent Runtime 到 typed SSE 的首帧排序；前端 SSE mapper、store 和左右 Pane 的可见时序；terminal-only、chat-first、artifact-first、混合 delta、错误中断、重放与 `NEXT_STAGE`；Lisa/Alex 的语义 DOM 证据；相关测试与事实文档同步。
 - **排除边界**：不为单个 Agent/workflow/stage 新增 runtime 或分支；不在本切片补齐 24 个 stage 的段落级 partial renderer（属于 `QG-018`）；不调整文档元信息位置（属于 `QG-019`）；不建立真实 DeepSeek 全矩阵与 CI 调度（属于 `QG-020`）；不修改 Intent Tester；不做截图或像素回归。
 - **依赖**：共享 `/api/agent/runs/stream`、`AgentTurnOutput`、`AgentTurnDeltaOutput`、artifact-data renderer、前端 `generateResponseStream` / `useChatService`、现有服务端 run 持久化；不依赖 DeepSeek API Key 才能完成确定性实现和低层验证。

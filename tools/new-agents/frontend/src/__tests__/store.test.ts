@@ -640,8 +640,20 @@ describe('Zustand Store', () => {
                 },
                 {
                     role: 'assistant',
-                    content: '已更新需求分析文档。',
+                    content: '⚠️ **模型调用未完成**\n\n模型供应商返回错误。',
                     sequenceIndex: 2,
+                    errorDiagnostic: {
+                        kind: 'provider',
+                        summary: '模型调用未完成',
+                        rawMessage: '模型供应商返回错误。',
+                        code: 'LLM_ERROR',
+                        phase: 'provider',
+                        workflowId: 'TEST_DESIGN',
+                        stageId: 'CLARIFY',
+                        fieldPath: 'provider',
+                        validator: 'provider_error',
+                        retryable: true,
+                    },
                 },
             ],
             artifacts: [
@@ -689,7 +701,19 @@ describe('Zustand Store', () => {
             expect.objectContaining({
                 id: 'run-123-message-2',
                 role: 'assistant',
-                content: '已更新需求分析文档。',
+                content: '⚠️ **模型调用未完成**\n\n模型供应商返回错误。',
+                errorDiagnostic: {
+                    kind: 'provider',
+                    summary: '模型调用未完成',
+                    rawMessage: '模型供应商返回错误。',
+                    code: 'LLM_ERROR',
+                    phase: 'provider',
+                    workflowId: 'TEST_DESIGN',
+                    stageId: 'CLARIFY',
+                    fieldPath: 'provider',
+                    validator: 'provider_error',
+                    retryable: true,
+                },
             }),
         ]);
         expect(state.pendingStageTransition).toBeNull();

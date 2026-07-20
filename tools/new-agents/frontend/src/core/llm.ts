@@ -698,29 +698,28 @@ const validateArtifactVisualBlocks = async (markdown: string): Promise<void> => 
 };
 
 const splitChatForStreaming = (chat: string): string[] => {
-  const trimmed = chat.trim();
-  if (!trimmed) return [chat];
+  if (!chat.trim()) return [chat];
 
-  const paragraphs = trimmed
-    .split(/\n{2,}/)
-    .map(part => part.trim())
-    .filter(Boolean);
-  const units = paragraphs.length > 1
-    ? paragraphs
-    : (
-      trimmed.match(/[^。！？；.!?]+[。！？；.!?]+|[^。！？；.!?]+$/g)
-      || [trimmed]
-    ).map(part => part.trim()).filter(Boolean);
+  const boundaryPattern = /\n{2,}|[。！？；.!?]+/g;
+  const boundaryEnds = Array.from(chat.matchAll(boundaryPattern))
+    .map(match => (match.index ?? 0) + match[0].length)
+    .filter(end => end > 0 && end < chat.length);
+  boundaryEnds.push(chat.length);
 
-  if (units.length <= 1) return [chat];
-  if (units.length <= MAX_SYNTHETIC_STREAM_STEPS) return units;
-
-  const grouped: string[] = [];
-  const groupSize = Math.ceil(units.length / MAX_SYNTHETIC_STREAM_STEPS);
-  for (let index = 0; index < units.length; index += groupSize) {
-    grouped.push(units.slice(index, index + groupSize).join('\n\n'));
+  const distinctEnds = [...new Set(boundaryEnds)];
+  if (distinctEnds.length <= MAX_SYNTHETIC_STREAM_STEPS) {
+    return distinctEnds.map(end => chat.slice(0, end));
   }
-  return grouped;
+
+  const selectedEnds: number[] = [];
+  const groupSize = Math.ceil(
+    distinctEnds.length / MAX_SYNTHETIC_STREAM_STEPS
+  );
+  for (let index = groupSize - 1; index < distinctEnds.length; index += groupSize) {
+    selectedEnds.push(distinctEnds[index]);
+  }
+  if (selectedEnds.at(-1) !== chat.length) selectedEnds.push(chat.length);
+  return selectedEnds.map(end => chat.slice(0, end));
 };
 
 const splitArtifactForStreaming = (
@@ -922,7 +921,9 @@ const getStableAgentDeltaChat = (
 ): string => {
   const candidate = output.chat || previousChat;
   if (!previousChat) return candidate;
-  if (candidate.length < previousChat.length) return previousChat;
+  if (!candidate.startsWith(previousChat)) {
+    throw new Error('结构化智能体 SSE 对话发生回退');
+  }
   return candidate;
 };
 
@@ -965,11 +966,10 @@ const mapAgentDeltaToStreamChunks = async function* (
   const newArtifact = hasArtifactUpdate
     ? output.artifact_update?.markdown || ''
     : currentArtifact;
-  const chatUnits = previousChat
+  const chatFrames = previousChat
     ? [chat]
     : splitChatForStreaming(chat);
-  const frameCount = Math.max(chatUnits.length, 1);
-  let accumulatedChat = '';
+  const frameCount = Math.max(chatFrames.length, 1);
 
   if (hasArtifactUpdate) {
     await validateArtifactVisualBlocks(newArtifact);
@@ -977,15 +977,10 @@ const mapAgentDeltaToStreamChunks = async function* (
 
   for (let index = 0; index < frameCount; index += 1) {
     const isFinalChunk = index === frameCount - 1;
-    const chatUnit = chatUnits[Math.min(index, chatUnits.length - 1)];
-    if (index < chatUnits.length) {
-      accumulatedChat = accumulatedChat
-        ? `${accumulatedChat}\n\n${chatUnit}`
-        : chatUnit;
-    }
+    const chatFrame = chatFrames[Math.min(index, chatFrames.length - 1)];
 
     yield {
-      chatResponse: isFinalChunk ? chat : accumulatedChat,
+      chatResponse: chatFrame,
       newArtifact,
       action: '',
       hasArtifactUpdate,
@@ -1036,6 +1031,7 @@ async function* generateResponseStreamViaAgentRuntime(
   const decoder = new TextDecoder();
   let buffer = '';
   let shouldStop = false;
+  let protocolPhase: 'awaiting_start' | 'running' | 'terminal' = 'awaiting_start';
   let pendingDataLines: string[] = [];
   let receivedRenderableArtifactDelta = false;
   let receivedTerminalAgentTurn = false;
@@ -1049,7 +1045,10 @@ async function* generateResponseStreamViaAgentRuntime(
   ): AsyncGenerator<StreamChunk, void, unknown> {
     const trimmedPayload = payload.trim();
     if (trimmedPayload === '[DONE]') {
-      if (!receivedTerminalAgentTurn) {
+      if (
+        protocolPhase !== 'terminal'
+        || !receivedTerminalAgentTurn
+      ) {
         throw new Error('结构化智能体 SSE 在收到终态前意外结束');
       }
       shouldStop = true;
@@ -1059,6 +1058,10 @@ async function* generateResponseStreamViaAgentRuntime(
     const event = parseAgentRuntimeEvent(trimmedPayload);
     if (!event) return;
     if (event.type === 'error') {
+      if (protocolPhase === 'terminal') {
+        throw new Error('结构化智能体 SSE 事件顺序错误');
+      }
+      protocolPhase = 'terminal';
       throw new AgentRuntimeStreamError(
         event.code,
         event.message,
@@ -1066,6 +1069,10 @@ async function* generateResponseStreamViaAgentRuntime(
       );
     }
     if (event.type === 'run_started') {
+      if (protocolPhase !== 'awaiting_start') {
+        throw new Error('结构化智能体 SSE 事件顺序错误');
+      }
+      protocolPhase = 'running';
       if (event.runId) {
         useStore.getState().setCurrentRunId(event.runId);
       }
@@ -1080,6 +1087,9 @@ async function* generateResponseStreamViaAgentRuntime(
       return;
     }
     if (event.type === 'agent_retry') {
+      if (protocolPhase !== 'running') {
+        throw new Error('结构化智能体 SSE 事件顺序错误');
+      }
       receivedRenderableArtifactDelta = false;
       previousAgentDeltaChat = '';
       latestStreamedArtifact = '';
@@ -1088,6 +1098,9 @@ async function* generateResponseStreamViaAgentRuntime(
       return;
     }
     if (event.type === 'agent_delta') {
+      if (protocolPhase !== 'running') {
+        throw new Error('结构化智能体 SSE 事件顺序错误');
+      }
       const hadEmittedMeaningfulAgentChat = hasEmittedMeaningfulAgentChat;
       const hasArtifactUpdate = hasRenderableArtifactDelta(event.output);
       if (hasArtifactUpdate) {
@@ -1158,27 +1171,35 @@ async function* generateResponseStreamViaAgentRuntime(
       return;
     }
     if (event.type === 'agent_turn') {
+      if (protocolPhase !== 'running') {
+        throw new Error('结构化智能体 SSE 事件顺序错误');
+      }
+      protocolPhase = 'terminal';
       receivedTerminalAgentTurn = true;
       const finalOutput = event.output;
+      const stableFinalChat = getStableAgentDeltaChat(
+        { chat: finalOutput.chat },
+        previousAgentDeltaChat
+      );
       const hadEmittedMeaningfulAgentChat = hasEmittedMeaningfulAgentChat;
       const shouldEmitFinalChat = (
         !hasEmittedMeaningfulAgentChat
-        || finalOutput.chat !== previousAgentDeltaChat
+        || stableFinalChat !== previousAgentDeltaChat
       );
       if (shouldEmitFinalChat) {
         for await (const chunk of mapAgentDeltaToStreamChunks(
           {
-            chat: finalOutput.chat,
+            chat: stableFinalChat,
             warnings: finalOutput.warnings,
           },
           currentArtifact,
-          finalOutput.chat,
+          stableFinalChat,
           previousAgentDeltaChat
         )) {
           yield chunk;
         }
         hasEmittedMeaningfulAgentChat = true;
-        previousAgentDeltaChat = finalOutput.chat;
+        previousAgentDeltaChat = stableFinalChat;
       }
 
       pendingArtifactDelta = null;
@@ -1264,34 +1285,47 @@ async function* generateResponseStreamViaAgentRuntime(
     pendingDataLines.push(data);
   };
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      buffer += decoder.decode();
-      if (buffer.trim()) {
-        for await (const chunk of processSseLine(buffer)) {
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        if (shouldStop && receivedTerminalAgentTurn) {
+          break;
+        }
+        buffer += decoder.decode();
+        if (buffer.trim()) {
+          for await (const chunk of processSseLine(buffer)) {
+            yield chunk;
+          }
+        }
+        for await (const chunk of flushSseEvent()) {
           yield chunk;
         }
+        if (!shouldStop || !receivedTerminalAgentTurn) {
+          throw new Error('结构化智能体 SSE 在收到终态前意外结束');
+        }
+        break;
       }
-      for await (const chunk of flushSseEvent()) {
-        yield chunk;
-      }
-      if (!shouldStop || !receivedTerminalAgentTurn) {
-        throw new Error('结构化智能体 SSE 在收到终态前意外结束');
-      }
-      break;
-    }
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      for await (const chunk of processSseLine(line)) {
-        yield chunk;
+      if (shouldStop) {
+        continue;
       }
-      if (shouldStop) return;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        for await (const chunk of processSseLine(line)) {
+          yield chunk;
+        }
+        if (shouldStop) break;
+      }
     }
+  } catch (error) {
+    // Cancellation is best-effort cleanup; the original protocol error remains authoritative.
+    await Promise.allSettled([reader.cancel()]);
+    throw error;
   }
 }
 

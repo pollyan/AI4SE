@@ -9,7 +9,7 @@ const readString = (value: unknown): string | null => (
 
 export const checkDefaultLlmConfig = async (): Promise<ConfigCheckResult> => {
     try {
-        const response = await fetch('/new-agents/api/config/check', { method: 'POST' });
+        const response = await fetch('/new-agents/api/config/default/check', { method: 'POST' });
         let data: { ok?: unknown; message?: unknown; error?: unknown } = {};
         try {
             data = await response.json();

@@ -8,9 +8,15 @@ from sse_schemas import SseEvent
 
 def build_sse_response(events: Iterable[SseEvent]) -> Response:
     def generate():
-        for event in events:
-            yield encode_sse_event(event)
-        yield encode_sse_done()
+        event_iterator = iter(events)
+        try:
+            for event in event_iterator:
+                yield encode_sse_event(event)
+            yield encode_sse_done()
+        finally:
+            close = getattr(event_iterator, "close", None)
+            if close is not None:
+                close()
 
     stream = generate()
     if has_request_context():

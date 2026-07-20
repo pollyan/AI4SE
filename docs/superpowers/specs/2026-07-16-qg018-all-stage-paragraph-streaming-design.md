@@ -4,7 +4,7 @@
 
 - **ID / 名称**：`QG-018 — 25 个在线阶段统一分段流式`。
 - **完整用户任务**：以 `TEST_DESIGN/CLARIFY` 的真实字段级体验为基准，让 manifest 中 7 个 workflow、25 个在线 stage 都在模型完成并闭合可校验业务结构后，立即把对应章节累积到右侧产出物；最终仍精确收敛到同一 deterministic Markdown，不回退、不闪烁、不伪造成功。
-- **顺序基线**：[当前唯一活跃 Todo 的 QG-017 → QG-020 顺序](../../todos/2026-07-16-new-agents-streaming-and-artifact-ux.md#待办总览)。`QG-017` 已由提交 `8d00bb36` 完成并推送，本切片承接 QG-018；QG-019、QG-020 不得穿插。
+- **顺序基线**：[归档能力包的 QG-017 → QG-020 顺序](../../todos/archive/2026-07-16-new-agents-streaming-and-artifact-ux.md#待办总览)。`QG-017` 已由提交 `8d00bb36` 完成并推送，本切片承接 QG-018；QG-019、QG-020 不得穿插。
 - **纳入边界**：共享 artifact render plan；25-stage partial 能力与同步门禁；局部 schema、引用和 visual 校验；raw JSON partial → typed SSE → frontend mapper/store → `ArtifactPane` 的累计与回退防护；7-workflow 无头 DOM 分段证据；相关测试与事实文档。
 - **排除边界**：不改变文档元信息位置或样式（QG-019）；不接入真实 DeepSeek、真实后端浏览器矩阵或 CI 分层（QG-020）；不修改 Intent Tester；不新增 workflow/stage 专属 endpoint、runtime、SSE、store 或前端 renderer；不恢复历史 Markdown reverse parsing/patch 方案。
 - **七项门禁**：入口是任一 New Agents 在线 stage 的一次共享 `/api/agent/runs/stream` 调用；动作是用户发送本阶段输入；处理是 runtime 从同一 attempt 内 append-only 的 provider JSON 中识别已闭合顶层字段，并由共享 render plan 校验、渲染可用章节；可见结果是左侧自然对话后右侧至少三次业务章节更新并最终收敛；状态承接是当前 stage draft 在同一 attempt 内单调更新且成功时只保存一个 final artifact/version；失败反馈是无效 section 被暂扣、回退 replace 被显式拒绝、完整 contract 失败仍走 typed error/`agent_retry`；证据是 25-stage backend 矩阵、typed SSE/mapper/store tests 和 7-workflow headless DOM probe。

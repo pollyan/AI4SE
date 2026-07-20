@@ -1,9 +1,20 @@
+import json
 from unittest.mock import MagicMock, patch
 
 from openai import APIError, AuthenticationError, RateLimitError
 import httpx
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic_core import PydanticCustomError
+from pydantic_ai.exceptions import UnexpectedModelBehavior
+import pytest
 from agent_contracts import AgentTurnOutput, ContractValidationError
-from agent_runtime import AgentRuntimeModelError, AgentRuntimeSchemaError
+from artifact_data_renderers import DeliveryArtifactData
+from artifact_data_value_schema import ValueDiscoveryJourneyArtifactData
+from agent_runtime import (
+    AgentRuntimeModelError,
+    AgentRuntimeSchemaError,
+    RawJsonStreamTerminationError,
+)
 from request_schemas import AgentRunStreamRequest
 from sse_schemas import (
     AgentRetryEvent,
@@ -15,15 +26,24 @@ from sse_schemas import (
     ErrorEvent,
     RunStartedEvent,
 )
+from sse_response import build_sse_response
 from stream_services import (
     CONTRACT_VALIDATION_PUBLIC_REASON,
+    PROVIDER_AUTH_PUBLIC_REASON,
+    PROVIDER_CONNECTION_PUBLIC_REASON,
     PROVIDER_ERROR_PUBLIC_REASON,
+    PROVIDER_RATE_LIMIT_PUBLIC_REASON,
     REQUEST_VALIDATION_PUBLIC_REASON,
     SCHEMA_RETRY_EXHAUSTED_MESSAGE,
     STRUCTURED_OUTPUT_PUBLIC_REASON,
+    VISUAL_VALIDATION_PUBLIC_REASON,
     stream_agent_run_events,
 )
-from run_persistence import TurnPersistenceError, TurnRequestClaim
+from run_persistence import (
+    TurnPersistenceError,
+    TurnRequestClaim,
+    TurnRequestIdentityConflictError,
+)
 
 VALID_ARTIFACT_DATA = {
     "document_info": {
@@ -113,7 +133,11 @@ class FakePersistence:
     def __init__(self) -> None:
         self.calls = []
         self.context_warnings = []
-        self.turn_request_claim = TurnRequestClaim(state="new")
+        self.turn_request_claim = TurnRequestClaim(
+            state="new",
+            owner_token="owner-token-001",
+            user_message_sequence=1,
+        )
 
     def ensure_run(self, agent_request, *, model_name: str) -> str:
         self.calls.append(
@@ -142,9 +166,27 @@ class FakePersistence:
         run_id: str,
         *,
         request_id: str,
+        owner_token: str,
         terminal_event: dict,
     ) -> None:
-        self.calls.append(("fail_turn_request", run_id, request_id, terminal_event))
+        self.calls.append(
+            (
+                "fail_turn_request",
+                run_id,
+                request_id,
+                terminal_event,
+                owner_token,
+            )
+        )
+
+    def abandon_turn_request(
+        self,
+        run_id: str,
+        *,
+        request_id: str,
+        owner_token: str,
+    ) -> None:
+        self.calls.append(("abandon_turn_request", run_id, request_id, owner_token))
 
     def complete_agent_run_turn(
         self,
@@ -156,6 +198,7 @@ class FakePersistence:
         artifact_data=None,
         metric: dict,
         request_id: str | None = None,
+        owner_token: str | None = None,
         terminal_event: dict | None = None,
     ) -> None:
         self.calls.append(
@@ -169,11 +212,18 @@ class FakePersistence:
                 request_id,
                 terminal_event,
                 metric,
+                owner_token,
             )
         )
 
-    def build_runtime_context(self, run_id: str, current_prompt: str):
-        self.calls.append(("build_runtime_context", run_id, current_prompt))
+    def build_runtime_context(
+        self,
+        run_id: str,
+        current_prompt: str,
+        *,
+        request_id: str,
+    ):
+        self.calls.append(("build_runtime_context", run_id, current_prompt, request_id))
         return f"服务端上下文\n\n[用户]\n{current_prompt}", self.context_warnings
 
     def record_turn_metric(self, **kwargs) -> None:
@@ -184,9 +234,9 @@ class FakePersistence:
 def test_stream_agent_run_events_yields_started_delta_and_final_events(
     mock_build_runtime: MagicMock,
 ) -> None:
-    partial = AgentTurnOutput.model_validate(
+    partial = AgentTurnDeltaOutput.model_validate(
         {
-            "chat": "正在梳理需求。",
+            "chat": "我正在梳理当前登录需求的业务边界。",
             "artifact_update": {
                 "type": "replace",
                 "markdown": VALID_CLARIFY_ARTIFACT,
@@ -235,7 +285,7 @@ def test_stream_agent_run_events_yields_started_delta_and_final_events(
     first_chat_index = next(
         index
         for index, event in enumerate(delta_events)
-        if event.output.chat == "正在梳理需求。"
+        if event.output.chat == "我正在梳理当前登录需求的业务边界。"
     )
     first_artifact_index = next(
         index
@@ -341,7 +391,7 @@ def test_stream_agent_run_events_exposes_retry_boundary_and_reapplies_chat_first
     complete_call = next(
         call for call in persistence.calls if call[0] == "complete_agent_run_turn"
     )
-    assert complete_call[-1]["contract_retry_count"] == 1
+    assert complete_call[8]["contract_retry_count"] == 1
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -373,6 +423,91 @@ def test_stream_agent_run_events_records_observed_retry_before_terminal_error(
         call for call in persistence.calls if call[0] == "record_turn_metric"
     )
     assert metric_call[1]["contract_retry_count"] == 1
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_prefers_observed_retry_over_exhaustion_text(
+    mock_build_runtime: MagicMock,
+) -> None:
+    def retry_then_error():
+        yield AgentRetrySignal(attemptIndex=2)
+        raise UnexpectedModelBehavior("Exceeded maximum output retries (3)")
+
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = retry_then_error()
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="deepseek-v4-flash",
+            persistence=persistence,
+        )
+    )
+
+    metric_call = next(
+        call for call in persistence.calls if call[0] == "record_turn_metric"
+    )
+    assert metric_call[1]["contract_retry_count"] == 1
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_ignores_forged_untrusted_retry_count(
+    mock_build_runtime: MagicMock,
+) -> None:
+    runtime = MagicMock()
+    runtime.stream_turn.side_effect = AgentRuntimeSchemaError(
+        "Exceeded maximum output retries (999999999)"
+    )
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="deepseek-v4-flash",
+            persistence=persistence,
+        )
+    )
+
+    metric_call = next(
+        call for call in persistence.calls if call[0] == "record_turn_metric"
+    )
+    assert metric_call[1]["contract_retry_count"] == 0
+    assert events[-1].message == STRUCTURED_OUTPUT_PUBLIC_REASON
+    assert events[-1].diagnostic.validator == "structured_output"
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_clamps_trusted_retry_count_to_runtime_limit(
+    mock_build_runtime: MagicMock,
+) -> None:
+    runtime = MagicMock()
+    runtime.stream_turn.side_effect = UnexpectedModelBehavior(
+        "Exceeded maximum output retries (999999999)"
+    )
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="deepseek-v4-flash",
+            persistence=persistence,
+        )
+    )
+
+    metric_call = next(
+        call for call in persistence.calls if call[0] == "record_turn_metric"
+    )
+    assert metric_call[1]["contract_retry_count"] == 3
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -495,11 +630,17 @@ def test_stream_agent_run_events_records_turn_through_persistence_adapter(
 
     assert events[0] == RunStartedEvent(run_id="run-123")
     assert events[-1] == AgentTurnEvent(output=final)
-    assert persistence.calls[:2] == [
+    assert persistence.calls[:3] == [
         ("ensure_run", "TEST_DESIGN", "CLARIFY", None, "test-model"),
-        ("build_runtime_context", "run-123", "用户需求"),
+        ("claim_turn_request", "run-123", "stream-persistence-001"),
+        (
+            "build_runtime_context",
+            "run-123",
+            "用户需求",
+            "stream-persistence-001",
+        ),
     ]
-    request_claim = persistence.calls[2]
+    request_claim = persistence.calls[1]
     assert request_claim[:2] == ("claim_turn_request", "run-123")
     assert request_claim[2]
     completed_turn = persistence.calls[3]
@@ -517,6 +658,7 @@ def test_stream_agent_run_events_records_turn_through_persistence_adapter(
         "output": final.model_dump(mode="json"),
     }
     metric = completed_turn[8]
+    assert completed_turn[9] == "owner-token-001"
     assert metric["workflow_id"] == "TEST_DESIGN"
     assert metric["stage_id"] == "CLARIFY"
     assert metric["model_name"] == "test-model"
@@ -571,9 +713,336 @@ def test_stream_agent_run_events_replays_completed_request_without_model_invocat
     mock_build_runtime.assert_not_called()
     assert [call[0] for call in persistence.calls] == [
         "ensure_run",
-        "build_runtime_context",
         "claim_turn_request",
     ]
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_rejects_active_request_without_reading_context(
+    mock_build_runtime: MagicMock,
+) -> None:
+    persistence = FakePersistence()
+    persistence.turn_request_claim = TurnRequestClaim(state="active")
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
+
+    assert len(events) == 1
+    assert events[0].code == "REQUEST_IN_PROGRESS"
+    assert [call[0] for call in persistence.calls] == [
+        "ensure_run",
+        "claim_turn_request",
+    ]
+    mock_build_runtime.assert_not_called()
+
+
+@pytest.mark.parametrize("failure_point", ["ensure_run", "claim_turn_request"])
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_projects_pre_run_persistence_failure(
+    mock_build_runtime: MagicMock,
+    failure_point: str,
+) -> None:
+    canary = f"PRE-RUN-SQL-SECRET-{failure_point}-CANARY"
+    persistence = FakePersistence()
+
+    def fail_before_run(*args, **kwargs):
+        raise TurnPersistenceError(canary)
+
+    setattr(persistence, failure_point, fail_before_run)
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
+
+    assert len(events) == 1
+    assert events[0].code == "PERSISTENCE_FAILED"
+    assert events[0].diagnostic.phase == "persistence"
+    assert events[0].diagnostic.field_path == "run_outcome"
+    assert events[0].diagnostic.validator == "atomic_commit"
+    assert canary not in events[0].model_dump_json()
+    assert "fail_turn_request" not in [call[0] for call in persistence.calls]
+    mock_build_runtime.assert_not_called()
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_terminalizes_owned_context_failure_without_leaking(
+    mock_build_runtime: MagicMock,
+) -> None:
+    canary = "sk-context-read-failure-canary"
+    persistence = FakePersistence()
+
+    def fail_context(*args, **kwargs):
+        raise TurnPersistenceError(canary)
+
+    persistence.build_runtime_context = fail_context
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
+
+    assert len(events) == 1
+    assert events[0].code == "PERSISTENCE_FAILED"
+    failed_turn = next(
+        call for call in persistence.calls if call[0] == "fail_turn_request"
+    )
+    assert failed_turn[2] == "stream-default-request-001"
+    assert failed_turn[4] == "owner-token-001"
+    assert "abandon_turn_request" not in [call[0] for call in persistence.calls]
+    assert canary not in json.dumps(
+        [events[0].model_dump(mode="json"), failed_turn],
+        ensure_ascii=False,
+    )
+    mock_build_runtime.assert_not_called()
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_reports_request_identity_conflict_without_mutating_claim(
+    mock_build_runtime: MagicMock,
+) -> None:
+    persistence = FakePersistence()
+
+    def reject_identity_reuse(*args, **kwargs):
+        raise TurnRequestIdentityConflictError("requestId identity conflict")
+
+    persistence.claim_turn_request = reject_identity_reuse
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
+
+    assert len(events) == 1
+    assert events[0].code == "REQUEST_IDENTITY_CONFLICT"
+    assert events[0].diagnostic.phase == "persistence"
+    assert events[0].diagnostic.field_path == "request_id"
+    assert events[0].diagnostic.validator == "immutable_request_identity"
+    assert events[0].diagnostic.retryable is False
+    assert "requestId" in events[0].message
+    assert "fail_turn_request" not in [call[0] for call in persistence.calls]
+    assert "build_runtime_context" not in [call[0] for call in persistence.calls]
+    mock_build_runtime.assert_not_called()
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_releases_active_claim_when_consumer_closes(
+    mock_build_runtime: MagicMock,
+) -> None:
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter(
+        [AgentTurnDeltaOutput(chat="正在分析登录需求。")]
+    )
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+    request = _request()
+
+    events = stream_agent_run_events(
+        request,
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+        persistence=persistence,
+    )
+
+    assert next(events) == RunStartedEvent(run_id="run-123")
+    events.close()
+
+    assert (
+        "abandon_turn_request",
+        "run-123",
+        request.request_id,
+        "owner-token-001",
+    ) in persistence.calls
+    assert "complete_agent_run_turn" not in [call[0] for call in persistence.calls]
+    assert "fail_turn_request" not in [call[0] for call in persistence.calls]
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_sse_response_close_propagates_to_owned_agent_stream(
+    mock_build_runtime: MagicMock,
+) -> None:
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter(
+        [AgentTurnDeltaOutput(chat="我正在分析登录需求的业务边界。")]
+    )
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+    inner_events = stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+        persistence=persistence,
+    )
+    response = build_sse_response(inner_events)
+
+    next(response.response)
+    response.close()
+
+    assert (
+        "abandon_turn_request",
+        "run-123",
+        "stream-default-request-001",
+        "owner-token-001",
+    ) in persistence.calls
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_close_uses_bounded_lease_when_abandon_persistence_fails(
+    mock_build_runtime: MagicMock,
+    caplog,
+) -> None:
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter(
+        [AgentTurnDeltaOutput(chat="我正在分析登录需求的业务边界。")]
+    )
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+    persistence_canary = "OWNER-TOKEN-AND-SQL-PARAMETER-CANARY"
+
+    def fail_abandon(*args, **kwargs) -> None:
+        raise TurnPersistenceError(persistence_canary)
+
+    persistence.abandon_turn_request = fail_abandon
+    events = stream_agent_run_events(
+        _request(),
+        api_key="test-api-key",
+        base_url="https://api.test.com/v1",
+        model_name="test-model",
+        persistence=persistence,
+    )
+
+    next(events)
+    events.close()
+
+    assert "bounded lease reclaim" in caplog.text
+    assert persistence_canary not in caplog.text
+    assert all(record.exc_info is None for record in caplog.records)
+
+
+@pytest.mark.parametrize(
+    ("stored_code", "stored_validator", "expected_code"),
+    [
+        ("SCHEMA_VALIDATION_FAILED", "legacy-validator", "SCHEMA_VALIDATION_FAILED"),
+        ("SECRET_LEGACY_CODE", "legacy-validator", "LLM_ERROR"),
+        ("LLM_ERROR", {"nested": "legacy-validator"}, "LLM_ERROR"),
+    ],
+)
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_sanitizes_legacy_failed_request_replay(
+    mock_build_runtime: MagicMock,
+    stored_code: str,
+    stored_validator,
+    expected_code: str,
+) -> None:
+    canary = "sk-qg020-legacy-replay-canary"
+    persistence = FakePersistence()
+    persistence.turn_request_claim = TurnRequestClaim(
+        state="failed",
+        terminal_event={
+            "type": "error",
+            "code": stored_code,
+            "message": f"legacy provider output {canary}",
+            "diagnostic": {
+                "phase": canary,
+                "workflowId": "TEST_DESIGN",
+                "stageId": "CLARIFY",
+                "fieldPath": canary,
+                "validator": stored_validator,
+                "retryable": True,
+                "publicReason": canary,
+            },
+        },
+    )
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
+
+    assert events[0] == RunStartedEvent(run_id="run-123")
+    assert isinstance(events[-1], ErrorEvent)
+    assert events[-1].code == expected_code
+    assert canary not in json.dumps(
+        events[-1].model_dump(mode="json", by_alias=True),
+        ensure_ascii=False,
+    )
+    assert [call[0] for call in persistence.calls] == [
+        "ensure_run",
+        "claim_turn_request",
+    ]
+    mock_build_runtime.assert_not_called()
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_preserves_safe_auth_replay_semantics(
+    mock_build_runtime: MagicMock,
+) -> None:
+    canary = "OpaqueLegacyAuthMessage987"
+    persistence = FakePersistence()
+    persistence.turn_request_claim = TurnRequestClaim(
+        state="failed",
+        terminal_event={
+            "type": "error",
+            "code": "LLM_ERROR",
+            "message": canary,
+            "diagnostic": {
+                "phase": "provider",
+                "workflowId": "TEST_DESIGN",
+                "stageId": "CLARIFY",
+                "fieldPath": "provider",
+                "validator": "provider_authentication",
+                "retryable": True,
+                "publicReason": canary,
+            },
+        },
+    )
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
+
+    error = events[-1]
+    assert error.code == "LLM_ERROR"
+    assert error.diagnostic.validator == "provider_authentication"
+    assert error.diagnostic.retryable is False
+    assert error.message == PROVIDER_AUTH_PUBLIC_REASON
+    assert canary not in error.model_dump_json()
+    mock_build_runtime.assert_not_called()
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -612,8 +1081,8 @@ def test_stream_agent_run_events_reports_atomic_persistence_failure_without_succ
         )
     )
 
+    assert len(events) == 2
     assert isinstance(events[0], RunStartedEvent)
-    assert isinstance(events[1], AgentTurnDeltaEvent)
     assert events[-1] == ErrorEvent(
         code="PERSISTENCE_FAILED",
         message="本轮结果未能安全保存，请重试。",
@@ -629,6 +1098,194 @@ def test_stream_agent_run_events_reports_atomic_persistence_failure_without_succ
     )
     assert not any(isinstance(event, AgentTurnEvent) for event in events)
     assert "record_turn_metric" not in [call[0] for call in persistence.calls]
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_withholds_all_complete_snapshots_until_commit(
+    mock_build_runtime: MagicMock,
+) -> None:
+    first_complete_snapshot = AgentTurnOutput.model_validate(
+        {
+            "chat": "第一份完整快照也不能提前作为成功结果发送。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": VALID_CLARIFY_ARTIFACT,
+            },
+            "artifact_data": VALID_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+    final = first_complete_snapshot.model_copy(
+        update={"chat": "最终完整快照同样必须等待持久化。"}
+    )
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter([first_complete_snapshot, final])
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    def fail_completed_turn(*args, **kwargs) -> None:
+        raise TurnPersistenceError("simulated database failure")
+
+    persistence.complete_agent_run_turn = fail_completed_turn
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
+
+    assert len(events) == 2
+    assert isinstance(events[0], RunStartedEvent)
+    assert isinstance(events[1], ErrorEvent)
+    assert events[1].code == "PERSISTENCE_FAILED"
+    assert not any(isinstance(event, AgentTurnDeltaEvent) for event in events)
+    assert not any(isinstance(event, AgentTurnEvent) for event in events)
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_keeps_true_partials_but_withholds_final_delta_until_commit(
+    mock_build_runtime: MagicMock,
+) -> None:
+    partial_chat = "正在梳理真实的流式片段。"
+    partial_markdown = "# 处理中\n\n## 已识别事实\n\n- 登录需求"
+    final_chat = "最终完整对话不应在持久化失败时发送。"
+    final = AgentTurnOutput.model_validate(
+        {
+            "chat": final_chat,
+            "artifact_update": {
+                "type": "replace",
+                "markdown": VALID_CLARIFY_ARTIFACT,
+            },
+            "artifact_data": VALID_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter(
+        [
+            AgentTurnDeltaOutput(chat=partial_chat),
+            AgentTurnDeltaOutput.model_validate(
+                {
+                    "artifact_update": {
+                        "type": "replace",
+                        "markdown": partial_markdown,
+                    }
+                }
+            ),
+            AgentTurnDeltaOutput.model_validate(
+                {
+                    "artifact_update": {
+                        "type": "replace",
+                        "markdown": VALID_CLARIFY_ARTIFACT,
+                    }
+                }
+            ),
+            final,
+        ]
+    )
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    def fail_completed_turn(*args, **kwargs) -> None:
+        raise TurnPersistenceError("simulated database failure")
+
+    persistence.complete_agent_run_turn = fail_completed_turn
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
+
+    deltas = [
+        event.output for event in events if isinstance(event, AgentTurnDeltaEvent)
+    ]
+    assert any(delta.chat == partial_chat for delta in deltas)
+    assert any(
+        delta.artifact_update is not None
+        and delta.artifact_update.markdown == partial_markdown
+        for delta in deltas
+    )
+    assert all(delta.chat != final_chat for delta in deltas)
+    assert all(
+        delta.artifact_update is None
+        or delta.artifact_update.markdown != VALID_CLARIFY_ARTIFACT
+        for delta in deltas
+    )
+    assert isinstance(events[-1], ErrorEvent)
+    assert events[-1].code == "PERSISTENCE_FAILED"
+    assert not any(isinstance(event, AgentTurnEvent) for event in events)
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_does_not_flush_final_artifact_when_chat_arrives_later(
+    mock_build_runtime: MagicMock,
+) -> None:
+    partial_chat = "正在分析真实需求，稍后给出最终结论。"
+    final = AgentTurnOutput.model_validate(
+        {
+            "chat": "最终对话必须等待持久化成功。",
+            "artifact_update": {
+                "type": "replace",
+                "markdown": VALID_CLARIFY_ARTIFACT,
+            },
+            "artifact_data": VALID_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        }
+    )
+    runtime = MagicMock()
+    runtime.stream_turn.return_value = iter(
+        [
+            AgentTurnDeltaOutput.model_validate(
+                {
+                    "artifact_update": {
+                        "type": "replace",
+                        "markdown": VALID_CLARIFY_ARTIFACT,
+                    }
+                }
+            ),
+            AgentTurnDeltaOutput(chat=partial_chat),
+            final,
+        ]
+    )
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+    persistence.complete_agent_run_turn = MagicMock(
+        side_effect=TurnPersistenceError("simulated database failure")
+    )
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
+
+    deltas = [
+        event.output for event in events if isinstance(event, AgentTurnDeltaEvent)
+    ]
+    assert any(delta.chat == partial_chat for delta in deltas)
+    assert all(
+        delta.artifact_update is None
+        or delta.artifact_update.markdown != VALID_CLARIFY_ARTIFACT
+        for delta in deltas
+    )
+    assert isinstance(events[-1], ErrorEvent)
+    assert events[-1].code == "PERSISTENCE_FAILED"
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -669,7 +1326,7 @@ def test_stream_agent_run_events_rejects_visual_failure_before_persistence(
         RunStartedEvent(run_id="run-123"),
         ErrorEvent(
             code="VISUAL_VALIDATION_FAILED",
-            message="ai4se-visual block 1 must contain valid JSON",
+            message=VISUAL_VALIDATION_PUBLIC_REASON,
             diagnostic=_diagnostic(
                 phase="visual_validation",
                 field_path="artifact_update.markdown",
@@ -761,7 +1418,7 @@ def test_stream_agent_run_events_records_error_turn_metric(
         RunStartedEvent(run_id="run-123"),
         ErrorEvent(
             code="LLM_ERROR",
-            message="provider API failed",
+            message=PROVIDER_ERROR_PUBLIC_REASON,
             diagnostic=diagnostic,
         ),
     ]
@@ -786,13 +1443,69 @@ def test_stream_agent_run_events_records_error_turn_metric(
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_maps_metric_persistence_failure_to_safe_error(
+    mock_build_runtime: MagicMock,
+) -> None:
+    canary = "opaque-provider-and-metric-failure-canary"
+    runtime = MagicMock()
+    runtime.stream_turn.side_effect = AgentRuntimeModelError(
+        f"provider response included {canary}"
+    )
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    def fail_metric_write(**kwargs) -> None:
+        raise TurnPersistenceError(f"metric database included {canary}")
+
+    persistence.record_turn_metric = fail_metric_write
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
+
+    diagnostic = _diagnostic(
+        phase="persistence",
+        field_path="run_outcome",
+        validator="atomic_commit",
+        retryable=True,
+        public_reason=(
+            "本轮结果未能安全保存，右侧产出物和历史版本均未作为成功结果提交。"
+        ),
+    )
+    assert events == [
+        RunStartedEvent(run_id="run-123"),
+        ErrorEvent(
+            code="PERSISTENCE_FAILED",
+            message="本轮结果未能安全保存，请重试。",
+            diagnostic=diagnostic,
+        ),
+    ]
+    failed_turn = next(
+        call for call in persistence.calls if call[0] == "fail_turn_request"
+    )
+    serialized = json.dumps(
+        [event.model_dump(mode="json") for event in events] + [failed_turn],
+        ensure_ascii=False,
+    )
+    assert failed_turn[3]["code"] == "PERSISTENCE_FAILED"
+    assert canary not in serialized
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
 def test_stream_agent_run_events_records_schema_retry_count_from_runtime_error(
     mock_build_runtime: MagicMock,
 ) -> None:
+    trusted_cause = UnexpectedModelBehavior("Exceeded maximum output retries (3)")
+    runtime_error = AgentRuntimeSchemaError(str(trusted_cause))
+    runtime_error.__cause__ = trusted_cause
     runtime = MagicMock()
-    runtime.stream_turn.side_effect = AgentRuntimeSchemaError(
-        "Exceeded maximum output retries (3)"
-    )
+    runtime.stream_turn.side_effect = runtime_error
     mock_build_runtime.return_value = runtime
     persistence = FakePersistence()
 
@@ -801,7 +1514,7 @@ def test_stream_agent_run_events_records_schema_retry_count_from_runtime_error(
             _request(),
             api_key="test-api-key",
             base_url="https://api.test.com/v1",
-            model_name="test-model",
+            model_name="deepseek-v4-flash",
             persistence=persistence,
         )
     )
@@ -947,13 +1660,256 @@ def test_stream_agent_run_events_splits_single_final_output_into_chat_then_artif
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_classifies_wrapped_json_decode_without_error_text(
+    mock_build_runtime: MagicMock,
+) -> None:
+    cause = json.JSONDecodeError("contains-sensitive-provider-output", "{", 1)
+    runtime_error = AgentRuntimeSchemaError("contains-sensitive-provider-output")
+    runtime_error.__cause__ = cause
+    runtime = MagicMock()
+    runtime.stream_turn.side_effect = runtime_error
+    mock_build_runtime.return_value = runtime
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+        )
+    )
+
+    error_event = events[-1]
+    assert isinstance(error_event, ErrorEvent)
+    assert error_event.diagnostic == _diagnostic(
+        phase="structured_output",
+        field_path="response_json",
+        validator="json_decode",
+        retryable=True,
+        public_reason=STRUCTURED_OUTPUT_PUBLIC_REASON,
+    )
+    assert "contains-sensitive-provider-output" not in error_event.model_dump_json()
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_classifies_output_truncation_without_raw_text(
+    mock_build_runtime: MagicMock,
+) -> None:
+    cause = RawJsonStreamTerminationError("length")
+    runtime_error = AgentRuntimeSchemaError("raw output was truncated")
+    runtime_error.__cause__ = cause
+    runtime = MagicMock()
+    runtime.stream_turn.side_effect = runtime_error
+    mock_build_runtime.return_value = runtime
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="deepseek-v4-flash",
+        )
+    )
+
+    error_event = events[-1]
+    assert isinstance(error_event, ErrorEvent)
+    assert error_event.diagnostic == _diagnostic(
+        phase="structured_output",
+        field_path="response_json",
+        validator="output_truncated",
+        retryable=True,
+        public_reason=STRUCTURED_OUTPUT_PUBLIC_REASON,
+    )
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_projects_journey_duplicate_id_diagnostic(
+    mock_build_runtime: MagicMock,
+) -> None:
+    from test_artifact_data_renderers import VALID_VALUE_JOURNEY_ARTIFACT_DATA
+
+    invalid = json.loads(json.dumps(VALID_VALUE_JOURNEY_ARTIFACT_DATA))
+    invalid["journey_stages"][1]["pain_id"] = invalid["journey_stages"][0]["pain_id"]
+    with pytest.raises(ValidationError) as captured:
+        ValueDiscoveryJourneyArtifactData.model_validate(invalid)
+    runtime_error = AgentRuntimeSchemaError("structured output failed")
+    runtime_error.__cause__ = captured.value
+    runtime = MagicMock()
+    runtime.stream_turn.side_effect = runtime_error
+    mock_build_runtime.return_value = runtime
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="deepseek-v4-flash",
+        )
+    )
+
+    assert events[-1].diagnostic.validator == "journey_duplicate_pain_id"
+
+
+@pytest.mark.parametrize(
+    ("metric_name", "expected_field_path", "expected_validator"),
+    [
+        (
+            "total_cases",
+            "artifact_data.delivery_metrics.total_cases",
+            "delivery_total_cases_mismatch",
+        ),
+        (
+            "high_risk_count",
+            "artifact_data.delivery_metrics.high_risk_count",
+            "delivery_high_risk_count_mismatch",
+        ),
+    ],
+)
+def test_stream_agent_run_events_projects_delivery_derived_metric_validator(
+    metric_name: str,
+    expected_field_path: str,
+    expected_validator: str,
+) -> None:
+    from test_artifact_data_renderers import VALID_DELIVERY_ARTIFACT_DATA
+
+    invalid = json.loads(json.dumps(VALID_DELIVERY_ARTIFACT_DATA))
+    invalid["delivery_metrics"][metric_name] = 99
+    with pytest.raises(ValidationError) as captured:
+        DeliveryArtifactData.model_validate(invalid)
+    runtime_error = AgentRuntimeSchemaError("structured output failed")
+    runtime_error.__cause__ = captured.value
+
+    with patch("stream_services.build_pydantic_agent_runtime") as build_runtime:
+        runtime = MagicMock()
+        runtime.stream_turn.side_effect = runtime_error
+        build_runtime.return_value = runtime
+        events = list(
+            stream_agent_run_events(
+                _request(),
+                api_key="test-api-key",
+                base_url="https://api.test.com/v1",
+                model_name="deepseek-v4-flash",
+            )
+        )
+
+    assert events[-1].diagnostic.field_path == expected_field_path
+    assert events[-1].diagnostic.validator == expected_validator
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_rejects_unknown_live_schema_validator(
+    mock_build_runtime: MagicMock,
+) -> None:
+    class ModelControlledValidatorPayload(BaseModel):
+        value: str
+
+        @field_validator("value")
+        @classmethod
+        def reject_value(cls, value: str) -> str:
+            raise PydanticCustomError(
+                "model_controlled_validator",
+                "do not expose this validator",
+            )
+
+    with pytest.raises(ValidationError) as captured:
+        ModelControlledValidatorPayload.model_validate({"value": "unsafe"})
+    runtime_error = AgentRuntimeSchemaError("structured output failed")
+    runtime_error.__cause__ = captured.value
+    runtime = MagicMock()
+    runtime.stream_turn.side_effect = runtime_error
+    mock_build_runtime.return_value = runtime
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="deepseek-v4-flash",
+        )
+    )
+
+    assert events[-1].diagnostic.validator == "pydantic_validation"
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_does_not_emit_or_persist_provider_error_text(
+    mock_build_runtime: MagicMock,
+) -> None:
+    secret = "sk-provider-error-canary"
+    runtime = MagicMock()
+    runtime.stream_turn.side_effect = AgentRuntimeModelError(
+        f"Authorization: Bearer {secret}"
+    )
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
+
+    serialized_event = events[-1].model_dump_json()
+    failed_turn = next(
+        call for call in persistence.calls if call[0] == "fail_turn_request"
+    )
+    assert secret not in serialized_event
+    assert secret not in json.dumps(failed_turn)
+    assert events[-1].message == PROVIDER_AUTH_PUBLIC_REASON
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
+def test_stream_agent_run_events_does_not_persist_model_controlled_extra_field_name(
+    mock_build_runtime: MagicMock,
+) -> None:
+    secret = "sk_model_controlled_field"
+
+    class StrictPayload(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        allowed: str
+
+    with pytest.raises(ValidationError) as captured:
+        StrictPayload.model_validate({"allowed": "ok", secret: "value"})
+    runtime_error = AgentRuntimeSchemaError("structured output failed")
+    runtime_error.__cause__ = captured.value
+    runtime = MagicMock()
+    runtime.stream_turn.side_effect = runtime_error
+    mock_build_runtime.return_value = runtime
+    persistence = FakePersistence()
+
+    events = list(
+        stream_agent_run_events(
+            _request(),
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            persistence=persistence,
+        )
+    )
+
+    failed_turn = next(
+        call for call in persistence.calls if call[0] == "fail_turn_request"
+    )
+    serialized = events[-1].model_dump_json() + json.dumps(failed_turn)
+    assert secret not in serialized
+    assert events[-1].diagnostic.field_path == "artifact_data.extra_field"
+    assert events[-1].diagnostic.validator == "extra_forbidden"
+
+
+@patch("stream_services.build_pydantic_agent_runtime")
 def test_stream_agent_run_events_maps_pydantic_ai_output_failure_to_error_event(
     mock_build_runtime: MagicMock,
 ) -> None:
+    trusted_cause = UnexpectedModelBehavior("Exceeded maximum output retries (1)")
+    runtime_error = AgentRuntimeSchemaError(str(trusted_cause))
+    runtime_error.__cause__ = trusted_cause
     runtime = MagicMock()
-    runtime.stream_turn.side_effect = AgentRuntimeSchemaError(
-        "Exceeded maximum output retries (1)"
-    )
+    runtime.stream_turn.side_effect = runtime_error
     mock_build_runtime.return_value = runtime
     request = AgentRunStreamRequest.model_validate(
         {
@@ -1066,7 +2022,7 @@ def test_stream_agent_run_events_maps_contract_failure_to_error_event(
         RunStartedEvent(),
         ErrorEvent(
             code="CONTRACT_VALIDATION_FAILED",
-            message="chat must not contain artifact markdown",
+            message=CONTRACT_VALIDATION_PUBLIC_REASON,
             diagnostic=_diagnostic(
                 phase="contract_validation",
                 field_path="artifact_contract",
@@ -1105,7 +2061,6 @@ def test_stream_agent_run_events_validates_workflow_stage_before_building_runtim
                     "requestId": "stream-invalid-workflow-001",
                 }
             ),
-            "未知 workflowId: UNKNOWN_WORKFLOW",
             _diagnostic(
                 phase="request_validation",
                 workflow_id="UNKNOWN_WORKFLOW",
@@ -1126,7 +2081,6 @@ def test_stream_agent_run_events_validates_workflow_stage_before_building_runtim
                     "requestId": "stream-invalid-stage-001",
                 }
             ),
-            "workflowId 与 stageId 不匹配: TEST_DESIGN/REPORT",
             _diagnostic(
                 phase="request_validation",
                 workflow_id="TEST_DESIGN",
@@ -1139,7 +2093,7 @@ def test_stream_agent_run_events_validates_workflow_stage_before_building_runtim
         ),
     ]
 
-    for request, message, diagnostic in requests:
+    for request, diagnostic in requests:
         events = list(
             stream_agent_run_events(
                 request,
@@ -1152,7 +2106,7 @@ def test_stream_agent_run_events_validates_workflow_stage_before_building_runtim
         assert events == [
             ErrorEvent(
                 code="REQUEST_VALIDATION_FAILED",
-                message=message,
+                message=REQUEST_VALIDATION_PUBLIC_REASON,
                 diagnostic=diagnostic,
             )
         ]
@@ -1181,7 +2135,7 @@ def test_stream_agent_run_events_maps_model_http_error_to_llm_error_event(
     assert len(events) == 2
     assert events[0] == RunStartedEvent()
     assert events[1].code == "LLM_ERROR"
-    assert "503" in events[1].message
+    assert events[1].message == PROVIDER_ERROR_PUBLIC_REASON
 
 
 @patch("stream_services.NaturalChatFirstDeltaSequencer.discard", autospec=True)
@@ -1240,7 +2194,7 @@ def test_stream_agent_run_events_maps_model_api_error_to_llm_error_event(
         RunStartedEvent(),
         ErrorEvent(
             code="LLM_ERROR",
-            message="provider API failed",
+            message=PROVIDER_ERROR_PUBLIC_REASON,
             diagnostic=_diagnostic(
                 phase="provider",
                 field_path="provider",
@@ -1280,7 +2234,7 @@ def test_stream_agent_run_events_maps_openai_auth_error_to_llm_error_event(
     assert len(events) == 2
     assert events[0] == RunStartedEvent()
     assert events[1].code == "LLM_ERROR"
-    assert "invalid api key" in events[1].message
+    assert events[1].message == PROVIDER_AUTH_PUBLIC_REASON
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -1311,7 +2265,7 @@ def test_stream_agent_run_events_maps_openai_rate_limit_error_to_llm_error_event
     assert len(events) == 2
     assert events[0] == RunStartedEvent()
     assert events[1].code == "LLM_ERROR"
-    assert "rate limit exceeded" in events[1].message
+    assert events[1].message == PROVIDER_RATE_LIMIT_PUBLIC_REASON
 
 
 @patch("stream_services.build_pydantic_agent_runtime")
@@ -1339,4 +2293,4 @@ def test_stream_agent_run_events_maps_openai_api_error_to_llm_error_event(
     assert len(events) == 2
     assert events[0] == RunStartedEvent()
     assert events[1].code == "LLM_ERROR"
-    assert "connection failed" in events[1].message
+    assert events[1].message == PROVIDER_CONNECTION_PUBLIC_REASON

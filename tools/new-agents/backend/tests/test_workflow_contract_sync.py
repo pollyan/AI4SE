@@ -287,6 +287,10 @@ def test_idea_converge_artifact_data_contract_manifest_drives_backend_instructio
     assert "validation_experiments.idea_ids" in instruction
     assert "merge_paths.source_idea_ids" in instruction
     assert "推荐方案必须同时出现在 ICE 结论和决策矩阵中" in instruction
+    assert (
+        "ice_evaluations[].elimination_reason 必须非空；"
+        "推荐或保留方案填写“不淘汰”并说明保留依据"
+    ) in instruction
     assert "quadrantChart" in instruction
     assert "右侧收敛聚焦产物" in instruction
 
@@ -432,16 +436,16 @@ def test_test_design_delivery_artifact_data_contract_manifest_drives_backend_ins
 
     assert contract is not None
     assert (
-        "case_summary_items[].case_count 缺省时由后端按 "
-        "p0_count + p1_count + p2_count 派生"
+        "case_summary_items[].case_count 由后端按 "
+        "p0_count + p1_count + p2_count 派生，模型不要输出"
     ) in instruction
     assert (
-        "delivery_metrics.total_cases 缺省时由后端按 "
-        "case_summary_items[].case_count 总和派生"
+        "delivery_metrics.total_cases 由后端按 "
+        "case_summary_items[].case_count 总和派生，模型不要输出"
     ) in instruction
     assert (
-        "delivery_metrics.high_risk_count 缺省时由后端按 open_risks 中"
-        "不可接受风险数量派生"
+        "delivery_metrics.high_risk_count 由后端按 open_risks 中 "
+        "risk_type 包含“风险”且 acceptable 不为“是”的条目数量派生，模型不要输出"
     ) in instruction
     assert "coverage_map[].case_ids 必须至少包含 1 个用例 ID" in instruction
     assert "coverage-map JSON 代码块" in instruction
@@ -646,12 +650,17 @@ def test_incident_improvement_artifact_data_contract_manifest_drives_backend_ins
         "root_cause_coverage[].action_ids 必须精确匹配所有 root_cause_id "
         "等于对应 cause_id 的 improvement_actions[].action_id"
     ) in instruction
+    assert (
+        "root_cause_coverage[].risk_acceptor 必须非空；"
+        "无需风险接受时填写“不适用”并说明原因"
+    ) in instruction
     assert "action-board JSON 代码块" in instruction
     assert "右侧最终故障复盘报告" in instruction
     assert "ai4se-visual action-board" in instruction
 
 
 def test_idea_define_artifact_data_contract_manifest_drives_backend_instruction():
+    from agent_runtime import build_structured_output_instruction
     from workflow_manifest import format_artifact_data_contract_instruction
 
     instruction = format_artifact_data_contract_instruction(
@@ -664,6 +673,10 @@ def test_idea_define_artifact_data_contract_manifest_drives_backend_instruction(
         if stage["id"] == "DEFINE"
     )
     contract = stage.get("artifactDataContract")
+    runtime_instruction = build_structured_output_instruction(
+        "IDEA_BRAINSTORM",
+        "DEFINE",
+    )
 
     assert contract is not None
     assert "evidence_items[].evidence_id 必须唯一" in instruction
@@ -673,7 +686,25 @@ def test_idea_define_artifact_data_contract_manifest_drives_backend_instruction(
         in instruction
     )
     assert (
-        "problem_landscape.root_problem 必须被至少一个 evidence_items.related_problem 或 problem_user_fit.evidence_or_assumption 条目覆盖"
+        "problem_user_fit[].evidence_ids 必须至少包含 1 个"
+        "已定义的 evidence_items[].evidence_id"
+    ) in instruction
+    assert (
+        "problem_landscape.root_problem_id 必须唯一且不能与"
+        " problem_landscape.subproblems[].problem_id 重复" in instruction
+    )
+    assert (
+        "evidence_items[].related_problem_ids 只能引用"
+        " problem_landscape.root_problem_id 或已定义的"
+        " problem_landscape.subproblems[].problem_id" in instruction
+    )
+    assert (
+        "至少一个 evidence_items[].related_problem_ids 必须包含"
+        " problem_landscape.root_problem_id" in instruction
+    )
+    assert (
+        "至少一个 problem_user_fit[].evidence_ids 必须引用支撑"
+        " problem_landscape.root_problem_id 的 evidence_items[].evidence_id"
         in instruction
     )
     assert "stage_gate 至少包含一个 checked=true" in instruction
@@ -681,6 +712,10 @@ def test_idea_define_artifact_data_contract_manifest_drives_backend_instruction(
     assert "mindmap 代码块" in instruction
     assert "右侧问题域分析" in instruction
     assert "Mermaid mindmap" in instruction
+    assert instruction in runtime_instruction
+    assert '"root_problem_id": "P-ROOT"' in runtime_instruction
+    assert '"related_problem_ids": ["P-ROOT"]' in runtime_instruction
+    assert "逐字出现在" not in runtime_instruction
 
 
 def test_idea_diverge_artifact_data_contract_manifest_drives_backend_instruction():
@@ -717,6 +752,7 @@ def test_idea_diverge_artifact_data_contract_manifest_drives_backend_instruction
 
 
 def test_idea_concept_artifact_data_contract_manifest_drives_backend_instruction():
+    from agent_runtime import build_structured_output_instruction
     from workflow_manifest import format_artifact_data_contract_instruction
 
     instruction = format_artifact_data_contract_instruction(
@@ -729,6 +765,10 @@ def test_idea_concept_artifact_data_contract_manifest_drives_backend_instruction
         if stage["id"] == "CONCEPT"
     )
     contract = stage.get("artifactDataContract")
+    runtime_instruction = build_structured_output_instruction(
+        "IDEA_BRAINSTORM",
+        "CONCEPT",
+    )
 
     assert contract is not None
     assert "core_assumptions[].assumption_id 必须唯一" in instruction
@@ -743,16 +783,17 @@ def test_idea_concept_artifact_data_contract_manifest_drives_backend_instruction
         in instruction
     )
     assert (
-        "mvp_features[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID"
-        in instruction
+        "mvp_features[].assumption_ids 必须至少包含 1 个且只能引用 "
+        "core_assumptions[].assumption_id 中已定义的假设 ID" in instruction
     )
     assert (
-        "validation_roadmap[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID"
-        in instruction
+        "validation_roadmap[].assumption_ids 必须至少包含 1 个且只能引用 "
+        "core_assumptions[].assumption_id 中已定义的假设 ID" in instruction
     )
     assert (
-        "next_actions[].related_ids 只能引用 core_assumptions[].assumption_id、validation_roadmap[].validation_id 或 premortem_risks[].risk_id 中已定义的 ID"
-        in instruction
+        "next_actions[].related_ids 必须至少包含 1 个且只能引用 "
+        "core_assumptions[].assumption_id、validation_roadmap[].validation_id 或 "
+        "premortem_risks[].risk_id 中已定义的 ID" in instruction
     )
     assert "stage_gate 至少包含一个 checked=true" in instruction
     assert "mvp-map JSON 代码块" in instruction
@@ -760,6 +801,7 @@ def test_idea_concept_artifact_data_contract_manifest_drives_backend_instruction
     assert "ai4se-visual mvp-map" in instruction
     assert "Mermaid pie" in instruction
     assert "Mermaid flowchart" in instruction
+    assert instruction in runtime_instruction
 
 
 def test_value_elevator_artifact_data_contract_manifest_drives_backend_instruction():
@@ -1060,6 +1102,17 @@ def test_workflow_manifest_declares_prompt_template_versions_for_every_stage():
             ), f"{workflow_id}/{stage['id']} has invalid promptTemplateVersion: {version}"
 
 
+def test_clarify_regression_sample_protects_authorization_gate():
+    sample = next(
+        sample
+        for sample in _prompt_regression_samples()["samples"]
+        if sample["id"] == "test-design.clarify.baseline"
+    )
+
+    assert "未经用户授权的澄清项保持待确认或 AI 假设" in sample["acceptanceChecks"]
+    assert "P0/P1 阻断项未闭环时不得请求进入下一阶段" in sample["acceptanceChecks"]
+
+
 def test_metadata_footer_stage_prompt_template_versions_match_current_contract():
     from artifact_data_renderers import ARTIFACT_DATA_RENDERERS
 
@@ -1077,7 +1130,16 @@ def test_metadata_footer_stage_prompt_template_versions_match_current_contract()
     }
 
     assert set(versions) == metadata_stage_keys
-    assert set(versions.values()) == {"2026.07.16.1"}
+    expected_versions = {stage_key: "2026.07.16.1" for stage_key in metadata_stage_keys}
+    expected_versions.update(
+        {
+            ("INCIDENT_REVIEW", "IMPROVEMENT"): "2026.07.20.1",
+            ("TEST_DESIGN", "CLARIFY"): "2026.07.20.2",
+            ("TEST_DESIGN", "DELIVERY"): "2026.07.20.1",
+            ("VALUE_DISCOVERY", "PERSONA"): "2026.07.20.2",
+        }
+    )
+    assert versions == expected_versions
 
 
 def test_workflow_manifest_declares_regression_samples_for_every_stage():
@@ -1110,6 +1172,20 @@ def test_prompt_regression_samples_reference_known_workflow_stages():
         assert sample["input"].strip()
         assert sample["expectedFocus"]
         assert sample["acceptanceChecks"]
+
+
+def test_idea_define_regression_sample_covers_structured_problem_references():
+    sample = next(
+        sample
+        for sample in _prompt_regression_samples()["samples"]
+        if sample["id"] == "idea-brainstorm.define.baseline"
+    )
+
+    assert {
+        "根问题和子问题使用唯一问题 ID",
+        "证据通过关联问题 ID 覆盖根问题",
+        "问题匹配通过证据 ID 引用根问题证据",
+    } <= set(sample["acceptanceChecks"])
 
 
 def test_shared_workflow_manifest_declares_alex_to_lisa_handoffs():

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.11、Pydantic、Flask typed SSE、pytest；React 18、TypeScript 5、Zustand、Vitest/Testing Library；Python Playwright + headless Chromium。
 
-**Design source:** [QG-018 设计与厚切片身份基线](../specs/2026-07-16-qg018-all-stage-paragraph-streaming-design.md)。顺序基线仍是 [当前唯一活跃 Todo](../../todos/2026-07-16-new-agents-streaming-and-artifact-ux.md#待办总览) 的 `QG-017 → QG-018 → QG-019 → QG-020`。
+**Design source:** [QG-018 设计与厚切片身份基线](../specs/2026-07-16-qg018-all-stage-paragraph-streaming-design.md)。顺序基线是[归档能力包](../../todos/archive/2026-07-16-new-agents-streaming-and-artifact-ux.md#待办总览)中的 `QG-017 → QG-018 → QG-019 → QG-020`。
 
 ## 全局约束
 

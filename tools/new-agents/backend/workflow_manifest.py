@@ -3,7 +3,6 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-
 NEW_AGENTS_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_MANIFEST = NEW_AGENTS_ROOT / "workflow_manifest.json"
 
@@ -43,8 +42,8 @@ DERIVED_ARTIFACT_DATA_FIELD_POLICIES: tuple[dict[str, Any], ...] = (
         "stage_id": "DELIVERY",
         "path": "case_summary_items[].case_count",
         "required_contract_fragments": (
-            "case_summary_items[].case_count 缺省时由后端按 "
-            "p0_count + p1_count + p2_count 派生",
+            "case_summary_items[].case_count 由后端按 "
+            "p0_count + p1_count + p2_count 派生，模型不要输出",
         ),
         "forbidden_runtime_example_tokens": ('"case_count":',),
     },
@@ -53,8 +52,8 @@ DERIVED_ARTIFACT_DATA_FIELD_POLICIES: tuple[dict[str, Any], ...] = (
         "stage_id": "DELIVERY",
         "path": "delivery_metrics.total_cases",
         "required_contract_fragments": (
-            "delivery_metrics.total_cases 缺省时由后端按 "
-            "case_summary_items[].case_count 总和派生",
+            "delivery_metrics.total_cases 由后端按 "
+            "case_summary_items[].case_count 总和派生，模型不要输出",
         ),
         "forbidden_runtime_example_tokens": ('"total_cases":',),
     },
@@ -63,8 +62,8 @@ DERIVED_ARTIFACT_DATA_FIELD_POLICIES: tuple[dict[str, Any], ...] = (
         "stage_id": "DELIVERY",
         "path": "delivery_metrics.high_risk_count",
         "required_contract_fragments": (
-            "delivery_metrics.high_risk_count 缺省时由后端按 "
-            "open_risks 中不可接受风险数量派生",
+            "delivery_metrics.high_risk_count 由后端按 open_risks 中 "
+            "risk_type 包含“风险”且 acceptable 不为“是”的条目数量派生，模型不要输出",
         ),
         "forbidden_runtime_example_tokens": ('"high_risk_count":',),
     },
@@ -90,9 +89,7 @@ DERIVED_ARTIFACT_DATA_FIELD_POLICIES: tuple[dict[str, Any], ...] = (
             "issue_groups[].issues[].dimension 缺省时由后端按外层 "
             "issue_groups[].dimension 派生",
         ),
-        "forbidden_runtime_example_tokens": (
-            '"issue_id": "Q-001", "dimension":',
-        ),
+        "forbidden_runtime_example_tokens": ('"issue_id": "Q-001", "dimension":',),
     },
     {
         "workflow_id": "REQ_REVIEW",
@@ -160,9 +157,7 @@ DERIVED_ARTIFACT_DATA_FIELD_POLICIES: tuple[dict[str, Any], ...] = (
         "workflow_id": "IDEA_BRAINSTORM",
         "stage_id": "CONVERGE",
         "path": "ice_evaluations[].rank",
-        "required_contract_fragments": (
-            "rank 缺省时由后端按 ICE 得分降序派生",
-        ),
+        "required_contract_fragments": ("rank 缺省时由后端按 ICE 得分降序派生",),
         "forbidden_runtime_example_tokens": ('"rank":',),
     },
     {
@@ -254,9 +249,7 @@ def get_stage_artifact_data_contract(
     if contract is None:
         return None
     if not isinstance(contract, dict):
-        raise ValueError(
-            f"artifactDataContract 必须是对象: {workflow_id}/{stage_id}"
-        )
+        raise ValueError(f"artifactDataContract 必须是对象: {workflow_id}/{stage_id}")
     return contract
 
 
@@ -328,7 +321,9 @@ def format_visual_protocol_instruction() -> str:
     if model_output.get("mode") != "artifact_data_only":
         raise ValueError("visualProtocol.modelOutput.mode 必须是 artifact_data_only")
     if mermaid.get("source") != "backend_deterministic_renderer":
-        raise ValueError("visualProtocol.mermaid.source 必须是 backend_deterministic_renderer")
+        raise ValueError(
+            "visualProtocol.mermaid.source 必须是 backend_deterministic_renderer"
+        )
     if structured_visual.get("source") != "backend_deterministic_renderer":
         raise ValueError(
             "visualProtocol.structuredVisual.source 必须是 "
@@ -361,8 +356,7 @@ def format_visual_protocol_instruction() -> str:
         "plannedComplexTypes",
     )
     forbidden_dsl_labels = [
-        item.removesuffix(" 代码块")
-        for item in forbidden_dsl_outputs
+        item.removesuffix(" 代码块") for item in forbidden_dsl_outputs
     ]
 
     return (

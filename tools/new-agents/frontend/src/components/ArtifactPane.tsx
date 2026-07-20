@@ -34,7 +34,11 @@ import {
   truncateAuditLine,
 } from '../core/artifactMerge';
 import type { AutoMergedConflictResult } from '../core/artifactMerge';
-import { preprocessMarkdown, replaceMermaidBlockAtIndex } from '../core/utils/markdownUtils';
+import {
+  hashTextForDiagnostics,
+  preprocessMarkdown,
+  replaceMermaidBlockAtIndex,
+} from '../core/utils/markdownUtils';
 import { Download, Code, Eye, History, X, AlertTriangle, GitCompare, Edit3, Save, MessageSquare, Trash2, Lock, Unlock, MoreHorizontal, RefreshCw } from 'lucide-react';
 import { ArtifactMarkdownPreview } from './ArtifactMarkdownPreview';
 import { createArtifactMarkdownComponents } from './artifactMarkdownComponents';
@@ -3845,6 +3849,12 @@ export const ArtifactPane: React.FC = () => {
         )}
         <div
           data-testid="artifact-content"
+          data-artifact-source-hash={artifactContent
+            ? hashTextForDiagnostics(artifactContent)
+            : undefined}
+          data-artifact-source-length={artifactContent
+            ? artifactContent.length
+            : undefined}
           ref={artifactPreviewRef}
           onMouseUp={captureSelectedArtifactText}
           onKeyUp={captureSelectedArtifactText}

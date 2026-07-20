@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { ReactElement } from 'react';
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { ArtifactPane } from '../ArtifactPane';
 import { useStore } from '../../store';
+import { hashTextForDiagnostics } from '../../core/utils/markdownUtils';
 
 const { markdownRenderCounts } = vi.hoisted(() => ({
     markdownRenderCounts: new Map<string, number>(),
@@ -99,6 +100,25 @@ describe('ArtifactPane incremental section rendering', () => {
         expect(markdownRenderCounts.get(stableSection)).toBe(1);
         expect(markdownRenderCounts.get(initialChangingSection)).toBe(1);
         expect(markdownRenderCounts.get(nextChangingSection)).toBe(1);
+    });
+
+    it('exposes only the artifact source digest and length for functional tracing', () => {
+        const artifact = '# 文档\n\n## 范围\n\n稳定范围';
+        useStore.setState({
+            artifactContent: artifact,
+            stageArtifacts: { CLARIFY: artifact },
+        });
+
+        render(<ArtifactPane />);
+
+        const content = screen.getByTestId('artifact-content');
+        expect(content.getAttribute('data-artifact-source-hash')).toBe(
+            hashTextForDiagnostics(artifact)
+        );
+        expect(content.getAttribute('data-artifact-source-length')).toBe(
+            String(artifact.length)
+        );
+        expect(content.outerHTML).not.toContain(artifact);
     });
 
     it('inserts a previously withheld middle section without rerendering stable anchors', () => {

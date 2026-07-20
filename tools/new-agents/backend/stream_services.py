@@ -1,4 +1,6 @@
 from collections.abc import Iterator
+import json
+import logging
 from math import ceil
 import re
 from time import perf_counter
@@ -20,14 +22,24 @@ from agent_runtime import (
     AgentRuntimeModelError,
     AgentRuntimeSchemaError,
     PYDANTIC_AI_SCHEMA_ERRORS,
+    RawJsonStreamTerminationError,
+    build_agent_retries,
     build_pydantic_agent_runtime,
+    project_safe_value_error_field_path,
+    project_safe_value_error_validator,
 )
 from request_schemas import (
     AgentRunStreamRequest,
     RequestValidationError,
     parse_agent_run_stream_request,
 )
-from run_persistence import TurnPersistenceConflictError, TurnPersistenceError
+from safe_error_diagnostics import SAFE_STREAM_TERMINATION_VALIDATORS
+from run_persistence import (
+    SAFE_SCHEMA_VALIDATORS,
+    TurnPersistenceConflictError,
+    TurnPersistenceError,
+    TurnRequestIdentityConflictError,
+)
 from stage_readiness import apply_stage_readiness_gate
 from sse_schemas import (
     AgentRetryEvent,
@@ -41,6 +53,8 @@ from sse_schemas import (
     SseEvent,
 )
 from stream_ordering import NaturalChatFirstDeltaSequencer
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_RETRY_EXHAUSTED_MESSAGE = (
     "模型连续生成的结构化结果未通过校验。请重试本轮操作；"
@@ -73,9 +87,30 @@ PERSISTENCE_PUBLIC_REASON = (
     "本轮结果未能安全保存，右侧产出物和历史版本均未作为成功结果提交。"
 )
 REQUEST_IN_PROGRESS_PUBLIC_REASON = "相同请求仍在运行中，请等待其完成或恢复同一请求。"
+REQUEST_IDENTITY_CONFLICT_PUBLIC_REASON = (
+    "requestId 已绑定到另一个阶段或输入，请使用新的 requestId。"
+)
 PERSISTENCE_CONFLICT_PUBLIC_REASON = (
     "另一项并发更新已占用当前产出物版本，请重新发起本轮生成。"
 )
+REPLAYABLE_ERROR_CODES = frozenset(
+    {
+        "AGENT_RUNTIME_UNAVAILABLE",
+        "CONTRACT_VALIDATION_FAILED",
+        "LLM_ERROR",
+        "PERSISTENCE_CONFLICT",
+        "PERSISTENCE_FAILED",
+        "REQUEST_VALIDATION_FAILED",
+        "SCHEMA_VALIDATION_FAILED",
+        "VISUAL_VALIDATION_FAILED",
+    }
+)
+REPLAY_PROVIDER_PROFILES = {
+    "provider_authentication": (False, PROVIDER_AUTH_PUBLIC_REASON),
+    "provider_connection": (True, PROVIDER_CONNECTION_PUBLIC_REASON),
+    "provider_error": (True, PROVIDER_ERROR_PUBLIC_REASON),
+    "provider_rate_limit": (True, PROVIDER_RATE_LIMIT_PUBLIC_REASON),
+}
 
 
 class StreamPersistence(Protocol):
@@ -99,13 +134,24 @@ class StreamPersistence(Protocol):
         run_id: str,
         *,
         request_id: str,
+        owner_token: str,
         terminal_event: dict,
+    ) -> None: ...
+
+    def abandon_turn_request(
+        self,
+        run_id: str,
+        *,
+        request_id: str,
+        owner_token: str,
     ) -> None: ...
 
     def build_runtime_context(
         self,
         run_id: str,
         current_prompt: str,
+        *,
+        request_id: str,
     ) -> tuple[str, list[str]]: ...
 
     def complete_agent_run_turn(
@@ -117,6 +163,7 @@ class StreamPersistence(Protocol):
         artifact_content: str | None,
         artifact_data: dict | None,
         request_id: str | None,
+        owner_token: str | None,
         terminal_event: dict | None,
         metric: dict,
     ) -> None: ...
@@ -132,18 +179,41 @@ def build_runtime_system_prompt(agent_request: AgentRunStreamRequest) -> str:
     return f"{agent_request.system_prompt}{artifact_contract}"
 
 
+_PYDANTIC_AI_RETRY_EXHAUSTION_PATTERN = re.compile(
+    r"Exceeded maximum output retries \(([0-9]+)\)"
+)
+
+
+def _trusted_pydantic_ai_retry_match(error: Exception) -> re.Match[str] | None:
+    candidate: Exception | None = None
+    if isinstance(error, PYDANTIC_AI_SCHEMA_ERRORS):
+        candidate = error
+    elif isinstance(error.__cause__, PYDANTIC_AI_SCHEMA_ERRORS):
+        candidate = error.__cause__
+    if candidate is None:
+        return None
+    return _PYDANTIC_AI_RETRY_EXHAUSTION_PATTERN.fullmatch(str(candidate))
+
+
 def format_schema_validation_error_message(error: Exception) -> str:
-    message = str(error)
-    if "Exceeded maximum output retries" in message:
+    if _trusted_pydantic_ai_retry_match(error) is not None:
         return SCHEMA_RETRY_EXHAUSTED_MESSAGE
-    return message
+    return STRUCTURED_OUTPUT_PUBLIC_REASON
 
 
-def extract_contract_retry_count(error: Exception) -> int:
-    match = re.search(r"Exceeded maximum output retries \((\d+)\)", str(error))
+def extract_contract_retry_count(error: Exception, *, model_name: str) -> int:
+    match = _trusted_pydantic_ai_retry_match(error)
     if match is None:
         return 0
-    return int(match.group(1))
+    configured_limit = build_agent_retries(model_name)
+    retry_limit = configured_limit if configured_limit is not None else 1
+    raw_count = match.group(1).lstrip("0") or "0"
+    retry_limit_text = str(retry_limit)
+    if len(raw_count) > len(retry_limit_text) or (
+        len(raw_count) == len(retry_limit_text) and raw_count > retry_limit_text
+    ):
+        return retry_limit
+    return int(raw_count)
 
 
 def _first_validation_error(error: ValidationError) -> tuple[str, str]:
@@ -152,9 +222,32 @@ def _first_validation_error(error: ValidationError) -> tuple[str, str]:
         return "artifact_data", "pydantic_validation"
 
     first_error = errors[0]
-    location = first_error.get("loc") or ("artifact_data",)
-    field_path = ".".join(str(part) for part in location)
     validator = str(first_error.get("type") or "pydantic_validation")
+    projected_validator = project_safe_value_error_validator(first_error)
+    if (
+        projected_validator is not None
+        and projected_validator in SAFE_SCHEMA_VALIDATORS
+    ):
+        return (
+            project_safe_value_error_field_path(projected_validator),
+            projected_validator,
+        )
+    if validator not in SAFE_SCHEMA_VALIDATORS:
+        validator = "pydantic_validation"
+    if validator == "extra_forbidden":
+        return "artifact_data.extra_field", validator
+    location = first_error.get("loc") or ("artifact_data",)
+    safe_parts: list[str] = []
+    for part in location[:12]:
+        normalized = str(part)
+        if re.fullmatch(r"[A-Za-z0-9_-]{1,64}", normalized) is None or re.search(
+            r"api.?key|authorization|bearer|password|secret|token|sk[-_]",
+            normalized,
+            flags=re.IGNORECASE,
+        ):
+            normalized = "field"
+        safe_parts.append(normalized)
+    field_path = ".".join(safe_parts)
     return field_path or "artifact_data", validator
 
 
@@ -208,9 +301,21 @@ def _build_error_diagnostic(
     if code == "SCHEMA_VALIDATION_FAILED":
         field_path = "artifact_data"
         validator = "structured_output"
-        if isinstance(error, ValidationError):
-            field_path, validator = _first_validation_error(error)
-        elif "Exceeded maximum output retries" in str(error):
+        cause = error.__cause__ or error
+        if isinstance(cause, json.JSONDecodeError):
+            field_path = "response_json"
+            validator = "json_decode"
+        elif isinstance(cause, RawJsonStreamTerminationError):
+            field_path = "response_json"
+            validator = SAFE_STREAM_TERMINATION_VALIDATORS[cause.reason]
+        elif isinstance(cause, ValidationError):
+            field_path, validator = _first_validation_error(cause)
+        elif isinstance(cause, ContractValidationError):
+            field_path = "artifact_contract"
+            validator = "workflow_contract"
+        elif isinstance(cause, ValueError):
+            validator = "artifact_value"
+        elif _trusted_pydantic_ai_retry_match(error) is not None:
             validator = "pydantic_ai_output_retry"
         return ErrorDiagnostic(
             phase="structured_output",
@@ -300,6 +405,17 @@ def _build_error_diagnostic(
             publicReason=REQUEST_IN_PROGRESS_PUBLIC_REASON,
         )
 
+    if code == "REQUEST_IDENTITY_CONFLICT":
+        return ErrorDiagnostic(
+            phase="persistence",
+            workflowId=workflow_id,
+            stageId=stage_id,
+            fieldPath="request_id",
+            validator="immutable_request_identity",
+            retryable=False,
+            publicReason=REQUEST_IDENTITY_CONFLICT_PUBLIC_REASON,
+        )
+
     if code == "PERSISTENCE_CONFLICT":
         return ErrorDiagnostic(
             phase="persistence",
@@ -328,6 +444,105 @@ def _error_diagnostic_payload(
     if diagnostic is None:
         return None
     return diagnostic.model_dump(mode="json", by_alias=True)
+
+
+def _sanitize_replayed_error_event(
+    terminal_event: object,
+    *,
+    workflow_id: str,
+    stage_id: str,
+) -> ErrorEvent:
+    stored_code = (
+        terminal_event.get("code") if isinstance(terminal_event, dict) else None
+    )
+    code = (
+        stored_code
+        if isinstance(stored_code, str) and stored_code in REPLAYABLE_ERROR_CODES
+        else "LLM_ERROR"
+    )
+    if code == "LLM_ERROR":
+        stored_diagnostic = (
+            terminal_event.get("diagnostic")
+            if isinstance(terminal_event, dict)
+            else None
+        )
+        stored_validator = (
+            stored_diagnostic.get("validator")
+            if isinstance(stored_diagnostic, dict)
+            else None
+        )
+        validator = (
+            stored_validator
+            if isinstance(stored_validator, str)
+            and stored_validator in REPLAY_PROVIDER_PROFILES
+            else "provider_error"
+        )
+        retryable, public_reason = REPLAY_PROVIDER_PROFILES[validator]
+        diagnostic = ErrorDiagnostic(
+            phase="provider",
+            workflowId=workflow_id,
+            stageId=stage_id,
+            fieldPath="provider",
+            validator=validator,
+            retryable=retryable,
+            publicReason=public_reason,
+        )
+        return ErrorEvent(
+            code=code,
+            message=public_reason,
+            diagnostic=diagnostic,
+        )
+    if code == "SCHEMA_VALIDATION_FAILED":
+        stored_diagnostic = (
+            terminal_event.get("diagnostic")
+            if isinstance(terminal_event, dict)
+            else None
+        )
+        stored_validator = (
+            stored_diagnostic.get("validator")
+            if isinstance(stored_diagnostic, dict)
+            else None
+        )
+        validator = (
+            stored_validator
+            if isinstance(stored_validator, str)
+            and stored_validator in SAFE_SCHEMA_VALIDATORS
+            else "structured_output"
+        )
+        field_path = project_safe_value_error_field_path(validator)
+        stored_message = (
+            terminal_event.get("message") if isinstance(terminal_event, dict) else None
+        )
+        message = (
+            SCHEMA_RETRY_EXHAUSTED_MESSAGE
+            if validator == "pydantic_ai_output_retry"
+            and stored_message == SCHEMA_RETRY_EXHAUSTED_MESSAGE
+            else STRUCTURED_OUTPUT_PUBLIC_REASON
+        )
+        return ErrorEvent(
+            code=code,
+            message=message,
+            diagnostic=ErrorDiagnostic(
+                phase="structured_output",
+                workflowId=workflow_id,
+                stageId=stage_id,
+                fieldPath=field_path,
+                validator=validator,
+                retryable=True,
+                publicReason=STRUCTURED_OUTPUT_PUBLIC_REASON,
+            ),
+        )
+    diagnostic = _build_error_diagnostic(
+        code=code,
+        error=ValueError("persisted terminal failure"),
+        workflow_id=workflow_id,
+        stage_id=stage_id,
+    )
+    return ErrorEvent(
+        code=code,
+        message=diagnostic.public_reason,
+        diagnostic=diagnostic,
+    )
 
 
 def _estimated_tokens(input_chars: int, output_chars: int) -> int:
@@ -413,6 +628,10 @@ def stream_agent_run_events(
     observed_contract_retry_count = 0
     provider = infer_provider_name(base_url)
     sequencer = NaturalChatFirstDeltaSequencer()
+    metric_persistence_failed = False
+    request_owned = False
+    request_terminalized = False
+    request_owner_token: str | None = None
 
     def duration_ms() -> int:
         return max(0, int((perf_counter() - started_at) * 1000))
@@ -425,36 +644,67 @@ def stream_agent_run_events(
         actual_token_count: int | None = None,
         diagnostic: ErrorDiagnostic | None = None,
     ) -> None:
-        _record_turn_metric(
-            persistence,
-            run_id=run_id,
-            workflow_id=agent_request.workflow_id,
-            stage_id=agent_request.stage_id,
-            model_name=model_name,
-            provider=provider,
-            status=status,
-            error_code=error_code,
-            duration_ms=duration_ms(),
-            input_chars=input_chars,
-            output_chars=output_chars,
-            contract_retry_count=max(
-                observed_contract_retry_count,
-                contract_retry_count,
-            ),
-            actual_token_count=actual_token_count,
-            diagnostic=diagnostic,
-        )
+        nonlocal metric_persistence_failed
+        try:
+            _record_turn_metric(
+                persistence,
+                run_id=run_id,
+                workflow_id=agent_request.workflow_id,
+                stage_id=agent_request.stage_id,
+                model_name=model_name,
+                provider=provider,
+                status=status,
+                error_code=error_code,
+                duration_ms=duration_ms(),
+                input_chars=input_chars,
+                output_chars=output_chars,
+                contract_retry_count=(
+                    observed_contract_retry_count
+                    if observed_contract_retry_count > 0
+                    else contract_retry_count
+                ),
+                actual_token_count=actual_token_count,
+                diagnostic=diagnostic,
+            )
+        except TurnPersistenceError:
+            metric_persistence_failed = True
 
     def persist_terminal_error(event: ErrorEvent) -> ErrorEvent:
+        nonlocal request_terminalized
         sequencer.discard()
-        if persistence is None or run_id is None:
+        if metric_persistence_failed:
+            diagnostic = _build_error_diagnostic(
+                code="PERSISTENCE_FAILED",
+                error=TurnPersistenceError("Turn metric persistence failed."),
+                workflow_id=agent_request.workflow_id,
+                stage_id=agent_request.stage_id,
+            )
+            event = ErrorEvent(
+                code="PERSISTENCE_FAILED",
+                message="本轮结果未能安全保存，请重试。",
+                diagnostic=diagnostic,
+            )
+        if event.code == "SCHEMA_VALIDATION_FAILED":
+            event = _sanitize_replayed_error_event(
+                event.model_dump(mode="json"),
+                workflow_id=agent_request.workflow_id,
+                stage_id=agent_request.stage_id,
+            )
+        if (
+            persistence is None
+            or run_id is None
+            or not request_owned
+            or request_owner_token is None
+        ):
             return event
         try:
             persistence.fail_turn_request(
                 run_id,
                 request_id=agent_request.request_id,
+                owner_token=request_owner_token,
                 terminal_event=event.model_dump(mode="json"),
             )
+            request_terminalized = True
         except TurnPersistenceError as error:
             diagnostic = _build_error_diagnostic(
                 code="PERSISTENCE_FAILED",
@@ -477,10 +727,6 @@ def stream_agent_run_events(
         context_warnings = []
         if persistence is not None:
             run_id = persistence.ensure_run(agent_request, model_name=model_name)
-            runtime_prompt, context_warnings = persistence.build_runtime_context(
-                run_id,
-                agent_request.prompt,
-            )
             request_claim = persistence.claim_turn_request(
                 run_id,
                 agent_request,
@@ -518,13 +764,28 @@ def stream_agent_run_events(
                 )
                 return
             if request_claim.state == "failed":
-                terminal_event = ErrorEvent.model_validate(request_claim.terminal_event)
+                terminal_event = _sanitize_replayed_error_event(
+                    request_claim.terminal_event,
+                    workflow_id=agent_request.workflow_id,
+                    stage_id=agent_request.stage_id,
+                )
                 yield RunStartedEvent(
                     run_id=run_id,
                     warnings=context_warnings or None,
                 )
                 yield terminal_event
                 return
+            request_owner_token = getattr(request_claim, "owner_token", None)
+            if not isinstance(request_owner_token, str) or not request_owner_token:
+                raise TurnPersistenceError(
+                    "Turn request ownership token was not established."
+                )
+            request_owned = True
+            runtime_prompt, context_warnings = persistence.build_runtime_context(
+                run_id,
+                agent_request.prompt,
+                request_id=agent_request.request_id,
+            )
         runtime = build_pydantic_agent_runtime(
             api_key=api_key,
             base_url=base_url,
@@ -536,12 +797,17 @@ def stream_agent_run_events(
             warnings=context_warnings or None,
         )
         final_output = None
+        pending_chat_delta: AgentTurnDeltaOutput | None = None
+        pending_artifact_delta: AgentTurnDeltaOutput | None = None
         for output in runtime.stream_turn(
             runtime_prompt,
             workflow_id=agent_request.workflow_id,
             current_stage_id=agent_request.stage_id,
         ):
             if isinstance(output, AgentRetrySignal):
+                pending_chat_delta = None
+                pending_artifact_delta = None
+                final_output = None
                 observed_contract_retry_count = max(
                     observed_contract_retry_count,
                     output.attempt_index - 1,
@@ -557,19 +823,49 @@ def stream_agent_run_events(
                 artifact_update = output.artifact_update
                 if artifact_update.type == "replace" and artifact_update.markdown:
                     validate_artifact_visual_blocks(artifact_update.markdown)
-                delta_output = AgentTurnDeltaOutput.model_validate(
-                    output.model_dump(mode="json")
-                )
-                for sequenced_output in sequencer.push(
-                    delta_output,
-                    is_final=True,
-                ):
-                    yield AgentTurnDeltaEvent(output=sequenced_output)
                 final_output = output
             else:
-                for sequenced_output in sequencer.push(output):
-                    yield AgentTurnDeltaEvent(output=sequenced_output)
+                if output.chat is not None:
+                    if pending_chat_delta is not None:
+                        for sequenced_output in sequencer.push(pending_chat_delta):
+                            yield AgentTurnDeltaEvent(output=sequenced_output)
+                    pending_chat_delta = AgentTurnDeltaOutput(chat=output.chat)
+                if output.artifact_update is not None:
+                    if pending_artifact_delta is not None:
+                        for sequenced_output in sequencer.push(pending_artifact_delta):
+                            yield AgentTurnDeltaEvent(output=sequenced_output)
+                    pending_artifact_delta = AgentTurnDeltaOutput(
+                        artifact_update=output.artifact_update,
+                        artifact_patch=output.artifact_patch,
+                    )
+                if output.warnings:
+                    for sequenced_output in sequencer.push(
+                        AgentTurnDeltaOutput(warnings=output.warnings)
+                    ):
+                        yield AgentTurnDeltaEvent(output=sequenced_output)
         if final_output is not None:
+            if (
+                pending_chat_delta is not None
+                and pending_chat_delta.chat != final_output.chat
+            ):
+                for sequenced_output in sequencer.push(pending_chat_delta):
+                    yield AgentTurnDeltaEvent(output=sequenced_output)
+            if (
+                pending_artifact_delta is not None
+                and pending_artifact_delta.artifact_update
+                != final_output.artifact_update
+            ):
+                for sequenced_output in sequencer.push(pending_artifact_delta):
+                    yield AgentTurnDeltaEvent(output=sequenced_output)
+            delta_output = AgentTurnDeltaOutput.model_validate(
+                final_output.model_dump(mode="json")
+            )
+            pending_final_deltas = tuple(
+                sequencer.push(
+                    delta_output,
+                    is_final=True,
+                )
+            )
             artifact_update = final_output.artifact_update
             if persistence is not None and run_id is not None:
                 if artifact_update.type == "replace" and artifact_update.markdown:
@@ -590,6 +886,7 @@ def stream_agent_run_events(
                     ),
                     artifact_data=final_output.artifact_data,
                     request_id=agent_request.request_id,
+                    owner_token=request_owner_token,
                     terminal_event={
                         "type": "agent_turn",
                         "output": final_output.model_dump(mode="json"),
@@ -613,7 +910,17 @@ def stream_agent_run_events(
                         "contract_retry_count": observed_contract_retry_count,
                     },
                 )
+                request_terminalized = True
+            for sequenced_output in pending_final_deltas:
+                yield AgentTurnDeltaEvent(output=sequenced_output)
             yield AgentTurnEvent(output=final_output)
+        else:
+            if pending_chat_delta is not None:
+                for sequenced_output in sequencer.push(pending_chat_delta):
+                    yield AgentTurnDeltaEvent(output=sequenced_output)
+            if pending_artifact_delta is not None:
+                for sequenced_output in sequencer.push(pending_artifact_delta):
+                    yield AgentTurnDeltaEvent(output=sequenced_output)
     except TurnPersistenceConflictError as e:
         diagnostic = _build_error_diagnostic(
             code="PERSISTENCE_CONFLICT",
@@ -653,7 +960,7 @@ def stream_agent_run_events(
         yield persist_terminal_error(
             ErrorEvent(
                 code="VISUAL_VALIDATION_FAILED",
-                message=str(e),
+                message=diagnostic.public_reason,
                 diagnostic=diagnostic,
             )
         )
@@ -668,7 +975,7 @@ def stream_agent_run_events(
         yield persist_terminal_error(
             ErrorEvent(
                 code="CONTRACT_VALIDATION_FAILED",
-                message=str(e),
+                message=diagnostic.public_reason,
                 diagnostic=diagnostic,
             )
         )
@@ -682,7 +989,10 @@ def stream_agent_run_events(
         record_metric(
             "error",
             "SCHEMA_VALIDATION_FAILED",
-            contract_retry_count=extract_contract_retry_count(e),
+            contract_retry_count=extract_contract_retry_count(
+                e,
+                model_name=model_name,
+            ),
             diagnostic=diagnostic,
         )
         yield persist_terminal_error(
@@ -702,7 +1012,10 @@ def stream_agent_run_events(
         record_metric(
             "error",
             "SCHEMA_VALIDATION_FAILED",
-            contract_retry_count=extract_contract_retry_count(e),
+            contract_retry_count=extract_contract_retry_count(
+                e,
+                model_name=model_name,
+            ),
             diagnostic=diagnostic,
         )
         yield persist_terminal_error(
@@ -722,7 +1035,10 @@ def stream_agent_run_events(
         record_metric(
             "error",
             "SCHEMA_VALIDATION_FAILED",
-            contract_retry_count=extract_contract_retry_count(e),
+            contract_retry_count=extract_contract_retry_count(
+                e,
+                model_name=model_name,
+            ),
             diagnostic=diagnostic,
         )
         yield persist_terminal_error(
@@ -743,10 +1059,36 @@ def stream_agent_run_events(
         yield persist_terminal_error(
             ErrorEvent(
                 code="REQUEST_VALIDATION_FAILED",
-                message=str(e),
+                message=diagnostic.public_reason,
                 diagnostic=diagnostic,
             )
         )
+    except TurnRequestIdentityConflictError as e:
+        diagnostic = _build_error_diagnostic(
+            code="REQUEST_IDENTITY_CONFLICT",
+            error=e,
+            workflow_id=agent_request.workflow_id,
+            stage_id=agent_request.stage_id,
+        )
+        record_metric("error", "REQUEST_IDENTITY_CONFLICT", diagnostic=diagnostic)
+        if metric_persistence_failed:
+            diagnostic = _build_error_diagnostic(
+                code="PERSISTENCE_FAILED",
+                error=TurnPersistenceError("Turn metric persistence failed."),
+                workflow_id=agent_request.workflow_id,
+                stage_id=agent_request.stage_id,
+            )
+            yield ErrorEvent(
+                code="PERSISTENCE_FAILED",
+                message="本轮结果未能安全保存，请重试。",
+                diagnostic=diagnostic,
+            )
+        else:
+            yield ErrorEvent(
+                code="REQUEST_IDENTITY_CONFLICT",
+                message=diagnostic.public_reason,
+                diagnostic=diagnostic,
+            )
     except ValueError as e:
         diagnostic = _build_error_diagnostic(
             code="REQUEST_VALIDATION_FAILED",
@@ -758,7 +1100,7 @@ def stream_agent_run_events(
         yield persist_terminal_error(
             ErrorEvent(
                 code="REQUEST_VALIDATION_FAILED",
-                message=str(e),
+                message=diagnostic.public_reason,
                 diagnostic=diagnostic,
             )
         )
@@ -773,7 +1115,7 @@ def stream_agent_run_events(
         yield persist_terminal_error(
             ErrorEvent(
                 code="AGENT_RUNTIME_UNAVAILABLE",
-                message=str(e),
+                message=diagnostic.public_reason,
                 diagnostic=diagnostic,
             )
         )
@@ -788,7 +1130,7 @@ def stream_agent_run_events(
         yield persist_terminal_error(
             ErrorEvent(
                 code="LLM_ERROR",
-                message=str(e),
+                message=diagnostic.public_reason,
                 diagnostic=diagnostic,
             )
         )
@@ -803,7 +1145,24 @@ def stream_agent_run_events(
         yield persist_terminal_error(
             ErrorEvent(
                 code="LLM_ERROR",
-                message=str(e),
+                message=diagnostic.public_reason,
                 diagnostic=diagnostic,
             )
         )
+    finally:
+        if (
+            request_owned
+            and not request_terminalized
+            and persistence is not None
+            and run_id is not None
+        ):
+            try:
+                persistence.abandon_turn_request(
+                    run_id,
+                    request_id=agent_request.request_id,
+                    owner_token=request_owner_token,
+                )
+            except TurnPersistenceError:
+                logger.error(
+                    "Unable to release active turn request; bounded lease reclaim will apply."
+                )

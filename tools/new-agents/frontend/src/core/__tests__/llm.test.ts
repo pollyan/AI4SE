@@ -57,7 +57,12 @@ async function collectStream(
 /** 构造一个模拟的 SSE ReadableStream */
 function createSSEStream(events: string[]): ReadableStream<Uint8Array> {
     const encoder = new TextEncoder();
-    const fullPayload = events.join('\n') + '\n';
+    const normalizedEvents = events.some(event => (
+        event.includes('"type":"run_started"')
+    ))
+        ? events
+        : ['data: {"type":"run_started"}', ...events];
+    const fullPayload = normalizedEvents.join('\n') + '\n';
     return new ReadableStream({
         start(controller) {
             controller.enqueue(encoder.encode(fullPayload));
@@ -72,7 +77,12 @@ function createChunkedSSEStream(
     chunkSize: number
 ): ReadableStream<Uint8Array> {
     const encoder = new TextEncoder();
-    const fullPayload = events.join('\n') + '\n';
+    const normalizedEvents = events.some(event => (
+        event.includes('"type":"run_started"')
+    ))
+        ? events
+        : ['data: {"type":"run_started"}', ...events];
+    const fullPayload = normalizedEvents.join('\n') + '\n';
     const bytes = encoder.encode(fullPayload);
     let offset = 0;
 
@@ -222,6 +232,12 @@ describe('llm.ts', () => {
 
             // 验证解析结果
             expect(results).toEqual([
+                {
+                    chatResponse: '正在生成...',
+                    newArtifact: '# Initial',
+                    action: '',
+                    hasArtifactUpdate: false,
+                },
                 {
                     chatResponse: '你好',
                     newArtifact: '# Initial',
@@ -536,7 +552,7 @@ describe('llm.ts', () => {
 
             expect(results.length).toBeGreaterThan(1);
             const firstArtifactIndex = results.findIndex(result => result.hasArtifactUpdate);
-            expect(results.at(0)).toMatchObject({
+            expect(results.find(result => result.chatResponse !== '正在生成...')).toMatchObject({
                 chatResponse: '需求太模糊了，没法直接出测试用例。',
                 newArtifact: '# 需求分析文档\n\n初始内容',
                 hasArtifactUpdate: false,
@@ -600,7 +616,7 @@ describe('llm.ts', () => {
 
             expect(results.length).toBeGreaterThan(1);
             const firstArtifactIndex = results.findIndex(result => result.hasArtifactUpdate);
-            expect(results.at(0)).toMatchObject({
+            expect(results.find(result => result.chatResponse !== '正在生成...')).toMatchObject({
                 chatResponse: '我会先梳理登录链路。',
                 newArtifact: '# 需求分析文档\n\n初始内容',
                 hasArtifactUpdate: false,
@@ -685,13 +701,13 @@ describe('llm.ts', () => {
                 action: '',
                 hasArtifactUpdate: false,
             });
-            expect(results[2]).toEqual({
+            expect(results).toContainEqual({
                 chatResponse: '正在梳理需求。\n\n已生成初稿。',
                 newArtifact: '# 需求分析文档\n\n初始内容',
                 action: '',
                 hasArtifactUpdate: false,
             });
-            expect(results[3]).toEqual({
+            expect(results).toContainEqual({
                 chatResponse: '正在梳理需求。\n\n已生成初稿。',
                 newArtifact: draftArtifact,
                 action: '',
@@ -813,7 +829,7 @@ describe('llm.ts', () => {
                         },
                     }),
                     createAgentTurnEvent({
-                        chat: '需求评审已修正并完成。',
+                        chat: '我已根据契约反馈重新生成需求评审结果。\n\n需求评审已修正并完成。',
                         artifact_update: {
                             type: 'replace',
                             markdown: finalArtifact,
@@ -1144,16 +1160,58 @@ describe('llm.ts', () => {
             const results = await collectStream(
                 generateResponseStream('帮我分析登录功能')
             );
+            const chatResults = results.filter(
+                result => result.chatResponse !== '正在生成...'
+            );
 
             expect(results.length).toBeGreaterThan(1);
-            expect(results[0]).toMatchObject({
+            expect(chatResults[0]).toMatchObject({
                 chatResponse: '第一句分析已经完成。',
                 hasArtifactUpdate: false,
             });
-            expect(results.at(-1)).toMatchObject({
+            expect(chatResults.at(-1)).toMatchObject({
                 chatResponse: '第一句分析已经完成。第二句继续补充关键风险。第三句说明下一步需要澄清。',
                 hasArtifactUpdate: false,
             });
+            for (let index = 1; index < chatResults.length; index += 1) {
+                expect(chatResults[index].chatResponse.startsWith(
+                    chatResults[index - 1].chatResponse
+                )).toBe(true);
+            }
+        });
+
+        it.each([
+            ['agent_delta', [
+                createAgentDeltaEvent({
+                    chat: '我已完成原始分析，并保留当前结论。',
+                }),
+                createAgentDeltaEvent({
+                    chat: '这是一段更长但完全改写了既有前缀的错误回复。',
+                }),
+            ]],
+            ['agent_turn', [
+                createAgentDeltaEvent({
+                    chat: '我已完成原始分析，并保留当前结论。',
+                }),
+                createAgentTurnEvent({
+                    chat: '这是一段更长但完全改写了既有前缀的错误终态回复。',
+                    artifact_update: { type: 'none' },
+                    stage_action: null,
+                    warnings: [],
+                }),
+            ]],
+        ])('应拒绝 %s 对已显示 chat 的非前缀改写', async (_kind, events) => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    ...events,
+                    'data: [DONE]',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('帮我分析登录功能'))
+            ).rejects.toThrow('结构化智能体 SSE 对话发生回退');
         });
 
         it('多个 artifact delta 携带相同长 chat 时不应让左侧聊天回退变短', async () => {
@@ -1693,7 +1751,7 @@ describe('llm.ts', () => {
                         warnings: [],
                     }),
                     createAgentTurnEvent({
-                        chat: '已更新测试策略蓝图，详细内容已在右侧产出物中展示。',
+                        chat: '正在制定测试策略。\n\n已生成策略蓝图草稿。\n\n已更新测试策略蓝图，详细内容已在右侧产出物中展示。',
                         artifact_update: {
                             type: 'replace',
                             markdown: finalArtifact,
@@ -1716,7 +1774,7 @@ describe('llm.ts', () => {
                 hasArtifactUpdate: true,
             });
             expect(artifactFrames.at(-1)).toMatchObject({
-                chatResponse: '已更新测试策略蓝图，详细内容已在右侧产出物中展示。',
+                chatResponse: '正在制定测试策略。\n\n已生成策略蓝图草稿。\n\n已更新测试策略蓝图，详细内容已在右侧产出物中展示。',
                 newArtifact: finalArtifact,
                 hasArtifactUpdate: true,
             });
@@ -1948,14 +2006,18 @@ describe('llm.ts', () => {
                 '    ["获客渠道不稳定"]',
                 '    ["定价缺少依据"]',
                 '```',
+                '| 问题 ID | 类型 | 问题 | 表现 |',
+                '| --- | --- | --- | --- |',
+                '| P-ROOT | 根问题 | 变现困难 | - |',
+                '| P-001 | 子问题 | 获客渠道不稳定 | 线索不足 |',
                 '## 证据与验证状态',
-                '| 证据 ID | 关联问题 | 证据来源 | 证据等级 | 验证动作 | owner | 验证状态 |',
-                '| --- | --- | --- | --- | --- | --- | --- |',
-                '| EV-001 | 获客渠道不稳定 | 用户陈述 | 用户陈述 | 访谈 5 位独立开发者 | 产品 | 待验证 |',
+                '| 证据 ID | 关联问题 ID | 关联问题 | 证据来源 | 证据等级 | 验证动作 | owner | 验证状态 |',
+                '| --- | --- | --- | --- | --- | --- | --- | --- |',
+                '| EV-001 | P-ROOT | 获客渠道不稳定 | 用户陈述 | 用户陈述 | 访谈 5 位独立开发者 | 产品 | 待验证 |',
                 '## 问题-用户-场景匹配',
-                '| 检验维度 | 当前判断 | 证据/假设 | 验证动作 | 验证状态 |',
-                '| --- | --- | --- | --- | --- |',
-                '| 问题是否真实存在？ | 待验证 | 社区讨论 | 访谈 | 待验证 |',
+                '| 检验维度 | 当前判断 | 证据/假设 | 关联证据 | 验证动作 | 验证状态 |',
+                '| --- | --- | --- | --- | --- | --- |',
+                '| 问题是否真实存在？ | 待验证 | 社区讨论 | EV-001 | 访谈 | 待验证 |',
                 '## 约束与边界',
                 '| 类型 | 内容 | 影响 | 状态 |',
                 '| --- | --- | --- | --- |',
@@ -2194,6 +2256,32 @@ describe('llm.ts', () => {
             ).rejects.toThrow('CONTRACT_VALIDATION_FAILED: missing heading');
         });
 
+        it('应保留 run_started 之前的持久化冲突 typed error', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream([
+                    'data: {"type":"error","code":"REQUEST_IN_PROGRESS","message":"request is already active","diagnostic":{"phase":"persistence","workflowId":"TEST_DESIGN","stageId":"CLARIFY","fieldPath":"requestId","validator":"request_in_progress","retryable":true,"publicReason":"request is already active"}}',
+                    'data: {"type":"run_started"}',
+                ]),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toMatchObject({
+                name: 'AgentRuntimeStreamError',
+                code: 'REQUEST_IN_PROGRESS',
+                diagnostic: {
+                    phase: 'persistence',
+                    workflowId: 'TEST_DESIGN',
+                    stageId: 'CLARIFY',
+                    fieldPath: 'requestId',
+                    validator: 'request_in_progress',
+                    retryable: true,
+                    publicReason: 'request is already active',
+                },
+            });
+        });
+
         it('应在 SSE error 抛错中保留结构化 diagnostic', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
@@ -2257,6 +2345,118 @@ describe('llm.ts', () => {
             expect(allText).not.toContain('这段不应该被处理');
         });
 
+        it('收到 [DONE] 后继续读取到 EOF，避免提前关闭共享响应流', async () => {
+            const encoder = new TextEncoder();
+            const reader = {
+                read: vi.fn()
+                    .mockResolvedValueOnce({
+                        done: false,
+                        value: encoder.encode(`data: {"type":"run_started"}\n\n${createAgentTurnEvent({
+                            chat: '终态回复',
+                            artifact_update: { type: 'none' },
+                            stage_action: null,
+                            warnings: [],
+                        })}\n\ndata: [DONE]\n\n`),
+                    })
+                    .mockResolvedValueOnce({ done: true, value: undefined }),
+                cancel: vi.fn().mockResolvedValue(undefined),
+            };
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: {
+                    getReader: () => reader,
+                } as unknown as ReadableStream<Uint8Array>,
+            });
+
+            const results = await collectStream(generateResponseStream('hi'));
+
+            expect(results.some(result => result.chatResponse === '终态回复')).toBe(true);
+            expect(reader.read).toHaveBeenCalledTimes(2);
+            expect(reader.cancel).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            [
+                'delta 出现在 run_started 之前',
+                [
+                    createAgentDeltaEvent({ chat: '提前到达的对话' }),
+                    'data: {"type":"run_started"}',
+                    createAgentTurnEvent({
+                        chat: '提前到达的对话已完成',
+                        artifact_update: { type: 'none' },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ],
+            ],
+            [
+                '重复 run_started',
+                [
+                    'data: {"type":"run_started"}',
+                    'data: {"type":"run_started"}',
+                    createAgentTurnEvent({
+                        chat: '终态回复',
+                        artifact_update: { type: 'none' },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    'data: [DONE]',
+                ],
+            ],
+            [
+                '终态之后继续发送 delta',
+                [
+                    'data: {"type":"run_started"}',
+                    createAgentTurnEvent({
+                        chat: '终态回复',
+                        artifact_update: { type: 'none' },
+                        stage_action: null,
+                        warnings: [],
+                    }),
+                    createAgentDeltaEvent({ chat: '终态回复之后的非法内容' }),
+                    'data: [DONE]',
+                ],
+            ],
+        ])('应拒绝 SSE 事件逆序：%s', async (_label, events) => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: createSSEStream(events),
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 事件顺序错误');
+        });
+
+        it('本地协议校验失败时应取消 reader，阻止后端继续生成', async () => {
+            const encoder = new TextEncoder();
+            const reader = {
+                read: vi.fn()
+                    .mockResolvedValueOnce({
+                        done: false,
+                        value: encoder.encode(
+                            `${createAgentDeltaEvent({ chat: '缺少起始事件' })}\n\n`
+                        ),
+                    })
+                    .mockResolvedValueOnce({ done: true, value: undefined }),
+                cancel: vi.fn().mockResolvedValue(undefined),
+            };
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: {
+                    getReader: () => reader,
+                } as unknown as ReadableStream<Uint8Array>,
+            });
+
+            await expect(
+                collectStream(generateResponseStream('hi'))
+            ).rejects.toThrow('结构化智能体 SSE 事件顺序错误');
+
+            expect(reader.read).toHaveBeenCalledTimes(1);
+            expect(reader.cancel).toHaveBeenCalledTimes(1);
+        });
+
         it('delta 后连接 EOF 不能被当作成功终态', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
@@ -2310,6 +2510,12 @@ describe('llm.ts', () => {
             const results = await collectStream(generateResponseStream('hi'));
 
             expect(results).toEqual([
+                {
+                    chatResponse: '正在生成...',
+                    newArtifact: '# Initial',
+                    action: '',
+                    hasArtifactUpdate: false,
+                },
                 {
                     chatResponse: '无空格 data 行',
                     newArtifact: '# Initial',
@@ -2589,6 +2795,8 @@ describe('llm.ts', () => {
                 ok: true,
                 body: createRawSSEStream(
                     [
+                        'data: {"type":"run_started"}',
+                        '',
                         'data: {"type":"agent_turn",',
                         'data: "output":{"chat":"多行事件",',
                         'data: "artifact_update":{"type":"none"},',
@@ -2604,6 +2812,12 @@ describe('llm.ts', () => {
 
             expect(results).toEqual([
                 {
+                    chatResponse: '正在生成...',
+                    newArtifact: '# Initial',
+                    action: '',
+                    hasArtifactUpdate: false,
+                },
+                {
                     chatResponse: '多行事件',
                     newArtifact: '# Initial',
                     action: '',
@@ -2617,6 +2831,8 @@ describe('llm.ts', () => {
                 ok: true,
                 body: createRawSSEStream(
                     [
+                        'data: {"type":"run_started"}',
+                        '',
                         createAgentTurnEvent({
                             chat: '最后一条',
                             artifact_update: { type: 'none' },
@@ -2631,6 +2847,12 @@ describe('llm.ts', () => {
             const results = await collectStream(generateResponseStream('hi'));
 
             expect(results).toEqual([
+                {
+                    chatResponse: '正在生成...',
+                    newArtifact: '# Initial',
+                    action: '',
+                    hasArtifactUpdate: false,
+                },
                 {
                     chatResponse: '最后一条',
                     newArtifact: '# Initial',

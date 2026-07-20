@@ -165,6 +165,8 @@ git pull origin master
 | `NEW_AGENTS_DEFAULT_LLM_API_KEY` | New Agents 后端默认 LLM API Key | `sk-...` |
 | `NEW_AGENTS_DEFAULT_LLM_BASE_URL` | New Agents 后端默认 LLM Base URL | `https://api.deepseek.com` |
 | `NEW_AGENTS_DEFAULT_LLM_MODEL` | New Agents 后端默认模型名 | `deepseek-v4-flash` |
+| `NEW_AGENTS_CONFIG_ADMIN_API_KEY` | New Agents 配置写入和模型检测的独立管理密钥 | `随机高熵字符串` |
+| `PROXY_API_KEY` | New Agents 运行时直连后端的代理密钥 | `随机高熵字符串` |
 
 ### 可选变量
 
@@ -173,6 +175,9 @@ git pull origin master
 | `FLASK_ENV` | Flask 环境 | `production` |
 | `MIDSCENE_SERVER_URL` | MidScene 服务地址 | `http://host.docker.internal:3001` |
 | `NEW_AGENTS_DEFAULT_LLM_DESCRIPTION` | New Agents 后端默认模型说明 | `GitHub Actions managed default LLM config` |
+| `NEW_AGENTS_CONFIG_ADMIN_ALLOW_UNAUTHENTICATED` | 仅本地开发可显式放开配置管理；生产环境强制忽略 | `false` |
+
+`NEW_AGENTS_DEFAULT_LLM_API_KEY`、`NEW_AGENTS_CONFIG_ADMIN_API_KEY` 与 `PROXY_API_KEY` 必须使用三个不同的高熵值。GitHub 部署、部署脚本和应用请求边界都会拒绝重复值。开发 Compose 默认关闭匿名配置管理，并将 80/443 仅绑定 `127.0.0.1`；确需本机表单配置时，操作者必须显式设置 `AI4SE_ENV=development` 和 `NEW_AGENTS_CONFIG_ADMIN_ALLOW_UNAUTHENTICATED=true`。
 
 ### CI/CD Secrets (GitHub)
 
@@ -187,6 +192,8 @@ git pull origin master
 | `NEW_AGENTS_DEFAULT_LLM_BASE_URL` | New Agents 后端默认 LLM Base URL |
 | `NEW_AGENTS_DEFAULT_LLM_MODEL` | New Agents 后端默认模型名 |
 | `NEW_AGENTS_DEFAULT_LLM_DESCRIPTION` | New Agents 后端默认模型说明，可选 |
+| `NEW_AGENTS_CONFIG_ADMIN_API_KEY` | New Agents 配置管理独立密钥；不得与模型或代理 Key 复用 |
+| `PROXY_API_KEY` | New Agents 后端代理密钥；不得与模型或配置管理 Key 复用 |
 
 ---
 

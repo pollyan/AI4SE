@@ -25,6 +25,7 @@ export function Workspace() {
         setSettingsOpen,
     } = useStore();
     const [showOnboarding, setShowOnboarding] = useState(false);
+    const [browserConfigAdminAvailable, setBrowserConfigAdminAvailable] = useState(false);
     const [configCheckStatus, setConfigCheckStatus] = useState<ConfigCheckStatus>('idle');
     const [configCheckMessage, setConfigCheckMessage] = useState('');
     const configCheckSeqRef = useRef(0);
@@ -100,6 +101,7 @@ export function Workspace() {
             const response = await fetch('/new-agents/api/config');
             if (configCheckSeqRef.current !== requestSeq) return;
             if (!response.ok) {
+                setBrowserConfigAdminAvailable(false);
                 setShowOnboarding(true);
                 setConfigCheckStatus('error');
                 setConfigCheckMessage('默认模型配置检查失败，请稍后重试。');
@@ -108,6 +110,7 @@ export function Workspace() {
 
             const data = await response.json();
             if (configCheckSeqRef.current !== requestSeq) return;
+            setBrowserConfigAdminAvailable(data.browserConfigAdminAvailable === true);
             if (data.hasDefault === true) {
                 setShowOnboarding(false);
                 setConfigCheckStatus('idle');
@@ -120,6 +123,7 @@ export function Workspace() {
             setConfigCheckMessage('尚未检测到可用的默认模型配置。');
         } catch {
             if (configCheckSeqRef.current !== requestSeq) return;
+            setBrowserConfigAdminAvailable(false);
             setShowOnboarding(true);
             setConfigCheckStatus('error');
             setConfigCheckMessage('无法连接后端配置服务，请检查服务状态后重试。');
@@ -141,7 +145,7 @@ export function Workspace() {
                     <ArtifactPane />
                 </Suspense>
             </main>
-            <SettingsModal />
+            <SettingsModal configAdministrationEnabled={browserConfigAdminAvailable} />
 
             {/* P0-10: First-time setup guide overlay */}
             {showOnboarding && (
@@ -164,14 +168,23 @@ export function Workspace() {
                             <div className="bg-[#0f1623] rounded-xl p-5 text-left space-y-3 border border-[#1e293b]">
                                 <h3 className="text-sm font-bold text-slate-200">推荐处理路径</h3>
                                 <ul className="text-xs text-slate-400 space-y-2">
-                                    <li className="flex items-center gap-2">
-                                        <span className="text-emerald-400">&#10003;</span>
-                                        直接打开模型设置，维护后端默认 LLM 配置
-                                    </li>
-                                    <li className="flex items-center gap-2">
-                                        <span className="text-emerald-400">&#10003;</span>
-                                        保存后检测连接，确认当前模型可访问
-                                    </li>
+                                    {browserConfigAdminAvailable ? (
+                                        <>
+                                            <li className="flex items-center gap-2">
+                                                <span className="text-emerald-400">&#10003;</span>
+                                                直接打开模型设置，维护后端默认 LLM 配置
+                                            </li>
+                                            <li className="flex items-center gap-2">
+                                                <span className="text-emerald-400">&#10003;</span>
+                                                保存后检测连接，确认当前模型可访问
+                                            </li>
+                                        </>
+                                    ) : (
+                                        <li className="flex items-center gap-2">
+                                            <span className="text-amber-300">!</span>
+                                            请由部署管理员更新默认模型 Secret，并重新部署服务
+                                        </li>
+                                    )}
                                     <li className="flex items-center gap-2">
                                         <span className="text-emerald-400">&#10003;</span>
                                         配置可用后自动回到当前工作流继续生成
@@ -187,17 +200,21 @@ export function Workspace() {
                                     </p>
                                 )}
                                 <p className="text-[10px] text-slate-500 pt-2 border-t border-[#1e293b]">
-                                    前端不会绕过后端结构化 Agent Runtime；API Key 只会提交到后端默认配置，不会在页面回显。
+                                    {browserConfigAdminAvailable
+                                        ? '前端不会绕过后端结构化 Agent Runtime；API Key 只会提交到本机后端默认配置，不会在页面回显。'
+                                        : '生产浏览器不持有配置管理密钥；配置写入只接受受控管理员 API。'}
                                 </p>
                             </div>
 
-                            <div className="grid gap-3 pt-2 sm:grid-cols-2">
-                                <button
-                                    onClick={() => setSettingsOpen(true)}
-                                    className="w-full rounded-xl bg-blue-600 hover:bg-blue-500 text-white py-3 text-sm font-bold transition-all shadow-lg shadow-blue-500/20"
-                                >
-                                    打开模型设置
-                                </button>
+                            <div className={`grid gap-3 pt-2 ${browserConfigAdminAvailable ? 'sm:grid-cols-2' : ''}`}>
+                                {browserConfigAdminAvailable && (
+                                    <button
+                                        onClick={() => setSettingsOpen(true)}
+                                        className="w-full rounded-xl bg-blue-600 hover:bg-blue-500 text-white py-3 text-sm font-bold transition-all shadow-lg shadow-blue-500/20"
+                                    >
+                                        打开模型设置
+                                    </button>
+                                )}
                                 <button
                                     onClick={checkDefaultConfig}
                                     disabled={configCheckStatus === 'checking'}

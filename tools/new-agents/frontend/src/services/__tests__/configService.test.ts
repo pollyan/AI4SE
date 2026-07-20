@@ -20,7 +20,7 @@ describe('configService', () => {
             ok: true,
             message: '模型配置可用',
         });
-        expect(fetchMock).toHaveBeenCalledWith('/new-agents/api/config/check', { method: 'POST' });
+        expect(fetchMock).toHaveBeenCalledWith('/new-agents/api/config/default/check', { method: 'POST' });
     });
 
     it('uses backend error text when model connectivity check fails', async () => {

@@ -6,6 +6,10 @@ from werkzeug.exceptions import HTTPException
 
 from agent_contracts import AgentTurnOutput, validate_agent_turn
 from api_responses import DEFAULT_LLM_CONFIG_MISSING_CODE, json_error_response
+from config_admin_auth import (
+    ServiceCredentialCollisionError,
+    browser_config_admin_available,
+)
 from config_service import (
     build_default_llm_config_payload,
     build_default_llm_config_check_candidate,
@@ -19,6 +23,7 @@ from route_guards import require_default_llm_config
 from run_persistence import (
     AgentRunPersistence,
     ArtifactVersionConflictError,
+    UnresolvedTurnHistoryError,
     clone_agent_run,
     get_run_snapshot,
     get_runtime_observability_summary,
@@ -50,7 +55,6 @@ from workflow_handoffs import (
     export_target_workflow_handoffs,
     start_workflow_handoff,
 )
-
 
 api_bp = Blueprint("new_agents_api", __name__, url_prefix="/api")
 register_test_asset_routes(api_bp)
@@ -86,11 +90,7 @@ def _replace_mermaid_block_at_index(
     replacement = f"```mermaid\n{new_code.strip()}\n```"
     if replacement == target.group(0):
         return markdown
-    return (
-        f"{markdown[:target.start()]}"
-        f"{replacement}"
-        f"{markdown[target.end():]}"
-    )
+    return f"{markdown[:target.start()]}" f"{replacement}" f"{markdown[target.end():]}"
 
 
 def _validate_mermaid_repair_artifact_contract(
@@ -117,15 +117,17 @@ def _validate_mermaid_repair_artifact_contract(
         )
 
     try:
-        output = AgentTurnOutput.model_validate({
-            "chat": "已完成 Mermaid 图表修复校验。",
-            "artifact_update": {
-                "type": "replace",
-                "markdown": candidate_artifact,
-            },
-            "stage_action": None,
-            "warnings": [],
-        })
+        output = AgentTurnOutput.model_validate(
+            {
+                "chat": "已完成 Mermaid 图表修复校验。",
+                "artifact_update": {
+                    "type": "replace",
+                    "markdown": candidate_artifact,
+                },
+                "stage_action": None,
+                "warnings": [],
+            }
+        )
         validate_agent_turn(
             output,
             workflow_id=repair_request.workflow_id,
@@ -133,8 +135,7 @@ def _validate_mermaid_repair_artifact_contract(
         )
     except ValueError as e:
         raise MermaidRepairError(
-            "Mermaid repair artifact contract validation failed: "
-            f"{str(e)}"
+            "Mermaid repair artifact contract validation failed: " f"{str(e)}"
         ) from e
 
 
@@ -147,7 +148,14 @@ def health():
 def get_default_config():
     """获取系统默认模型配置（不返回 API Key）"""
     try:
-        return jsonify(get_default_llm_config_payload()), 200
+        payload = get_default_llm_config_payload()
+        payload["browserConfigAdminAvailable"] = browser_config_admin_available()
+        return jsonify(payload), 200
+    except ServiceCredentialCollisionError:
+        current_app.logger.error(
+            f"[{g.request_id}] Service credentials collide while reading config"
+        )
+        return json_error_response("服务认证未正确配置", 503)
     except SQLAlchemyError as e:
         current_app.logger.error(f"[{g.request_id}] Error getting config: {str(e)}")
         return json_error_response("获取配置失败", 500)
@@ -195,6 +203,25 @@ def check_default_config():
     config, error_response = require_default_llm_config(
         g.request_id,
         context="config check",
+    )
+    if error_response:
+        return error_response
+    return jsonify(check_default_llm_config(config)), 200
+
+
+@api_bp.route("/config/default/check", methods=["POST"])
+def check_runtime_default_config():
+    """Check only the saved provider target through runtime authentication."""
+    try:
+        request_body = _read_json_body()
+    except RequestValidationError as e:
+        return json_error_response(str(e), 400)
+    if request_body is not None:
+        return json_error_response("运行时默认配置检测不接受目标覆盖", 400)
+
+    config, error_response = require_default_llm_config(
+        g.request_id,
+        context="runtime default config check",
     )
     if error_response:
         return error_response
@@ -258,15 +285,18 @@ def agent_runs_list():
     except ValueError:
         return json_error_response("offset 必须是整数", 400)
     try:
-        return jsonify(
-            list_agent_runs(
-                workflow_id=workflow_id,
-                reuse_status=reuse_status,
-                limit=limit,
-                offset=offset,
-                query_text=query_text,
-            )
-        ), 200
+        return (
+            jsonify(
+                list_agent_runs(
+                    workflow_id=workflow_id,
+                    reuse_status=reuse_status,
+                    limit=limit,
+                    offset=offset,
+                    query_text=query_text,
+                )
+            ),
+            200,
+        )
     except ValueError as e:
         return json_error_response(str(e), 400)
 
@@ -282,13 +312,16 @@ def agent_observability():
     except ValueError:
         return json_error_response("limit 必须是整数", 400)
     try:
-        return jsonify(
-            get_runtime_observability_summary(
-                limit=limit,
-                workflow_id=workflow_id,
-                stage_id=stage_id,
-            )
-        ), 200
+        return (
+            jsonify(
+                get_runtime_observability_summary(
+                    limit=limit,
+                    workflow_id=workflow_id,
+                    stage_id=stage_id,
+                )
+            ),
+            200,
+        )
     except ValueError as e:
         return json_error_response(str(e), 400)
 
@@ -308,6 +341,8 @@ def agent_run_clone(run_id: str):
     try:
         cloned_run = clone_agent_run(run_id)
         return jsonify(get_run_snapshot(cloned_run.id)), 200
+    except UnresolvedTurnHistoryError as e:
+        return json_error_response(str(e), 409)
     except ValueError as e:
         return json_error_response(str(e), 404)
 
@@ -322,10 +357,14 @@ def agent_run_context_summary_update(run_id: str):
         return json_error_response(str(e), 400)
     except ValueError as e:
         message = str(e)
-        status_code = 404 if (
-            message.startswith("未知 runId:")
-            or message.startswith("未知上下文摘要:")
-        ) else 400
+        status_code = (
+            404
+            if (
+                message.startswith("未知 runId:")
+                or message.startswith("未知上下文摘要:")
+            )
+            else 400
+        )
         return json_error_response(message, status_code)
 
 
@@ -338,10 +377,15 @@ def agent_run_artifact_update(run_id: str):
     except RequestValidationError as e:
         return json_error_response(str(e), 400)
     except ArtifactVersionConflictError as e:
-        return jsonify({
-            "error": str(e),
-            "currentArtifact": e.current_artifact,
-        }), 409
+        return (
+            jsonify(
+                {
+                    "error": str(e),
+                    "currentArtifact": e.current_artifact,
+                }
+            ),
+            409,
+        )
     except ValueError as e:
         message = str(e)
         status_code = 404 if message.startswith("未知 runId:") else 400
@@ -401,12 +445,15 @@ def agent_workflow_handoff_candidates():
         return json_error_response("targetWorkflowId 不能为空", 400)
 
     try:
-        return jsonify(
-            export_target_workflow_handoffs(
-                target_workflow_id,
-                target_stage_id,
-            )
-        ), 200
+        return (
+            jsonify(
+                export_target_workflow_handoffs(
+                    target_workflow_id,
+                    target_stage_id,
+                )
+            ),
+            200,
+        )
     except ValueError as e:
         return json_error_response(str(e), 400)
 

@@ -50,5 +50,26 @@ def test_check_default_llm_config_returns_unavailable_on_client_error(
         "ok": False,
         "baseUrl": "https://api.test.com/v1",
         "model": "test-model",
-        "message": "provider unavailable",
+        "message": "模型连接检测失败",
     }
+
+
+@patch("config_service.stream_chat_completion_content")
+def test_check_default_llm_config_never_reflects_provider_secret_canary(
+    mock_stream,
+) -> None:
+    secret = "provider-authorization-secret-canary"
+    mock_stream.side_effect = LlmClientError(
+        f"upstream rejected Authorization: Bearer {secret}"
+    )
+    config = LlmConfig(
+        config_key="default",
+        api_key=secret,
+        base_url="https://api.test.com/v1",
+        model="test-model",
+    )
+
+    result = check_default_llm_config(config)
+
+    assert result["message"] == "模型连接检测失败"
+    assert secret not in str(result)

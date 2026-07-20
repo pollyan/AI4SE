@@ -191,7 +191,7 @@
               "Mermaid flowchart"
             ]
           },
-          "promptTemplateVersion": "2026.07.16.1",
+          "promptTemplateVersion": "2026.07.20.2",
           "regressionSampleIds": [
             "test-design.clarify.baseline"
           ]
@@ -352,9 +352,9 @@
           },
           "artifactDataContract": {
             "modelOutputRules": [
-              "case_summary_items[].case_count 缺省时由后端按 p0_count + p1_count + p2_count 派生；显式提供时必须一致",
-              "delivery_metrics.total_cases 缺省时由后端按 case_summary_items[].case_count 总和派生；显式提供时必须一致",
-              "delivery_metrics.high_risk_count 缺省时由后端按 open_risks 中不可接受风险数量派生；显式提供时必须一致",
+              "case_summary_items[].case_count 由后端按 p0_count + p1_count + p2_count 派生，模型不要输出",
+              "delivery_metrics.total_cases 由后端按 case_summary_items[].case_count 总和派生，模型不要输出",
+              "delivery_metrics.high_risk_count 由后端按 open_risks 中 risk_type 包含“风险”且 acceptable 不为“是”的条目数量派生，模型不要输出",
               "coverage_map[].case_ids 必须至少包含 1 个用例 ID"
             ],
             "forbiddenOutputs": [
@@ -368,7 +368,7 @@
               "ai4se-visual coverage-map"
             ]
           },
-          "promptTemplateVersion": "2026.07.16.1",
+          "promptTemplateVersion": "2026.07.20.1",
           "regressionSampleIds": [
             "test-design.delivery.baseline"
           ]
@@ -748,7 +748,8 @@
               "root_cause_coverage[].action_ids 只能引用 improvement_actions[].action_id 中已定义的行动 ID",
               "improvement_actions[].root_cause_id 只能引用 root_cause_coverage[].cause_id 中已定义的根因 ID",
               "root_cause_coverage[].action_ids 必须精确匹配所有 root_cause_id 等于对应 cause_id 的 improvement_actions[].action_id",
-              "当 root_cause_coverage[].coverage_status 为“已覆盖”时，action_ids 必须至少包含 1 个行动 ID"
+              "当 root_cause_coverage[].coverage_status 为“已覆盖”时，action_ids 必须至少包含 1 个行动 ID",
+              "root_cause_coverage[].risk_acceptor 必须非空；无需风险接受时填写“不适用”并说明原因"
             ],
             "forbiddenOutputs": [
               "完整 Markdown 文档",
@@ -763,7 +764,7 @@
               "ai4se-visual action-board"
             ]
           },
-          "promptTemplateVersion": "2026.07.16.1",
+          "promptTemplateVersion": "2026.07.20.1",
           "regressionSampleIds": [
             "incident-review.improvement.baseline"
           ]
@@ -841,9 +842,13 @@
           "artifactDataContract": {
             "modelOutputRules": [
               "evidence_items[].evidence_id 必须唯一",
+              "problem_landscape.root_problem_id 必须唯一且不能与 problem_landscape.subproblems[].problem_id 重复",
               "problem_landscape.subproblems[].problem_id 必须唯一",
+              "evidence_items[].related_problem_ids 只能引用 problem_landscape.root_problem_id 或已定义的 problem_landscape.subproblems[].problem_id",
               "problem_user_fit.evidence_ids 只能引用 evidence_items[].evidence_id 中已定义的证据 ID",
-              "problem_landscape.root_problem 必须被至少一个 evidence_items.related_problem 或 problem_user_fit.evidence_or_assumption 条目覆盖",
+              "problem_user_fit[].evidence_ids 必须至少包含 1 个已定义的 evidence_items[].evidence_id",
+              "至少一个 evidence_items[].related_problem_ids 必须包含 problem_landscape.root_problem_id",
+              "至少一个 problem_user_fit[].evidence_ids 必须引用支撑 problem_landscape.root_problem_id 的 evidence_items[].evidence_id",
               "stage_gate 至少包含一个 checked=true"
             ],
             "forbiddenOutputs": [
@@ -857,7 +862,7 @@
               "Mermaid mindmap"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.20.2",
           "regressionSampleIds": [
             "idea-brainstorm.define.baseline"
           ]
@@ -952,6 +957,7 @@
               "ice_score 缺省时由后端按 impact * confidence / effort 派生；显式提供时必须一致",
               "decision_matrix.recommended_idea_id、validation_experiments.idea_ids 和 merge_paths.source_idea_ids 只能引用已存在的 idea_id",
               "推荐方案必须同时出现在 ICE 结论和决策矩阵中",
+              "ice_evaluations[].elimination_reason 必须非空；推荐或保留方案填写“不淘汰”并说明保留依据",
               "stage_gate 至少包含一个 checked=true"
             ],
             "forbiddenOutputs": [
@@ -965,7 +971,7 @@
               "Mermaid quadrantChart"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.20.1",
           "regressionSampleIds": [
             "idea-brainstorm.converge.baseline"
           ]
@@ -1004,9 +1010,9 @@
               "next_actions[].action_id 必须唯一",
               "lean_canvas.cell 必须覆盖问题、用户群体、独特价值主张、解决方案、渠道、收入来源、成本结构、关键指标、竞争壁垒",
               "growth_funnel.stage 必须覆盖 Acquisition、Activation、Retention、Revenue、Referral",
-              "mvp_features[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID",
-              "validation_roadmap[].assumption_ids 只能引用 core_assumptions[].assumption_id 中已定义的假设 ID",
-              "next_actions[].related_ids 只能引用 core_assumptions[].assumption_id、validation_roadmap[].validation_id 或 premortem_risks[].risk_id 中已定义的 ID",
+              "mvp_features[].assumption_ids 必须至少包含 1 个且只能引用 core_assumptions[].assumption_id 中已定义的假设 ID",
+              "validation_roadmap[].assumption_ids 必须至少包含 1 个且只能引用 core_assumptions[].assumption_id 中已定义的假设 ID",
+              "next_actions[].related_ids 必须至少包含 1 个且只能引用 core_assumptions[].assumption_id、validation_roadmap[].validation_id 或 premortem_risks[].risk_id 中已定义的 ID",
               "stage_gate 至少包含一个 checked=true"
             ],
             "forbiddenOutputs": [
@@ -1024,7 +1030,7 @@
               "Mermaid flowchart"
             ]
           },
-          "promptTemplateVersion": "2026.06.24.1",
+          "promptTemplateVersion": "2026.07.20.1",
           "regressionSampleIds": [
             "idea-brainstorm.concept.baseline"
           ]
@@ -1158,6 +1164,7 @@
           "artifactDataContract": {
             "modelOutputRules": [
               "personas[].persona_id 必须唯一",
+              "personas[].behavior_features[] 每一项都必须包含非空 trigger，用于说明该行为发生的触发条件",
               "behavior_scenarios[].persona_id、decision_chain[].persona_id、pain_evidence[].persona_id、priority_ranking[].persona_id 只能引用 personas[].persona_id 中已定义的画像 ID",
               "priority_ranking[].persona_id 必须唯一"
             ],
@@ -1170,7 +1177,7 @@
               "画像、行为场景、决策链、痛点证据、反画像和优先级排序 Markdown 表格"
             ]
           },
-          "promptTemplateVersion": "2026.07.16.1",
+          "promptTemplateVersion": "2026.07.20.2",
           "regressionSampleIds": [
             "value-discovery.persona.baseline"
           ]
