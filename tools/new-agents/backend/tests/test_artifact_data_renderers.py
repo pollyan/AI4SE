@@ -3626,6 +3626,24 @@ def test_render_clarify_artifact_data_is_deterministic_and_contract_valid():
     )
 
 
+def test_render_intermediate_artifact_data_derives_next_stage_confirmation():
+    output = render_agent_turn_from_artifact_data(
+        {
+            "chat": "我已整理登录需求澄清基线，请确认右侧文档。",
+            "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        workflow_id="TEST_DESIGN",
+        current_stage_id="CLARIFY",
+    )
+
+    assert output is not None
+    assert output.stage_action is not None
+    assert output.stage_action.type == "request_next_stage"
+    assert output.stage_action.target_stage_id == "STRATEGY"
+
+
 def test_strategy_artifact_data_rejects_inconsistent_rpn():
     invalid = {
         **VALID_STRATEGY_ARTIFACT_DATA,

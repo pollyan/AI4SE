@@ -11,7 +11,7 @@ from pydantic import (
     model_validator,
 )
 
-from agent_contracts import AgentTurnOutput
+from agent_contracts import AgentTurnOutput, WORKFLOW_STAGES
 
 from artifact_render_plan import (
     ArtifactRenderPlan,
@@ -1534,6 +1534,19 @@ def render_agent_turn_from_artifact_data(
         current_stage_id=current_stage_id,
     )
 
+    stage_action = payload.get("stage_action")
+    if stage_action is None:
+        stages = WORKFLOW_STAGES.get(workflow_id, ())
+        try:
+            stage_index = stages.index(current_stage_id)
+        except ValueError:
+            stage_index = -1
+        if 0 <= stage_index < len(stages) - 1:
+            stage_action = {
+                "type": "request_next_stage",
+                "target_stage_id": stages[stage_index + 1],
+            }
+
     return AgentTurnOutput.model_validate(
         {
             "chat": payload.get("chat"),
@@ -1542,7 +1555,7 @@ def render_agent_turn_from_artifact_data(
                 "markdown": rendered.markdown,
             },
             "artifact_data": rendered.normalized_artifact_data,
-            "stage_action": payload.get("stage_action"),
+            "stage_action": stage_action,
             "warnings": payload.get("warnings", []),
         }
     )

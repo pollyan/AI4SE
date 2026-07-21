@@ -117,7 +117,7 @@ chat 字段必须像一次自然的工作对话，不要只用一两句模板化
 所有字符串内容必须使用合法 JSON 转义；最终 JSON 必须能被 json.loads 解析。
 """
 
-RAW_JSON_STREAMING_MAX_ATTEMPTS = 2
+RAW_JSON_STREAMING_MAX_ATTEMPTS = 3
 
 _SAFE_RETRY_FIELD_PATHS = {
     "artifact_data": "artifact_data",

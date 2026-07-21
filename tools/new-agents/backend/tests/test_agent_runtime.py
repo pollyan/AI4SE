@@ -4837,8 +4837,8 @@ def test_runtime_raw_json_stream_turn_fails_final_json_truncation_after_partial_
                 assert isinstance(output, AgentTurnDeltaOutput)
                 emitted_deltas.append(output)
 
-    assert call_count == 2
-    assert [signal.attempt_index for signal in retry_signals] == [2]
+    assert call_count == 3
+    assert [signal.attempt_index for signal in retry_signals] == [2, 3]
     assert isinstance(captured.value.__cause__, json.JSONDecodeError)
     artifact_deltas = [
         output for output in emitted_deltas if output.artifact_update is not None
@@ -4901,6 +4901,51 @@ def test_runtime_raw_json_stream_turn_retries_json_decode_and_recovers(
     retry_prompt = calls[1]["messages"][1]["content"]
     assert "完整合法的 JSON" in retry_prompt
     assert canary not in retry_prompt
+    assert isinstance(outputs[-1], AgentTurnOutput)
+
+
+def test_runtime_raw_json_stream_turn_recovers_on_third_schema_attempt(monkeypatch):
+    valid_json = json.dumps(
+        {
+            "chat": "已完成需求澄清并更新右侧文档，请确认关键假设。",
+            "artifact_data": VALID_CLARIFY_ARTIFACT_DATA,
+            "stage_action": None,
+            "warnings": [],
+        },
+        ensure_ascii=False,
+    )
+    attempts = iter(("{", "{", valid_json))
+    calls = []
+
+    def fake_stream_chat_completion_content(**kwargs):
+        calls.append(kwargs)
+        yield next(attempts)
+
+    _install_raw_stream_fake(monkeypatch, fake_stream_chat_completion_content)
+    runtime = PydanticAgentRuntime(
+        FakeAgent({}),
+        raw_streaming_config=RawStreamingConfig(
+            api_key="test-api-key",
+            base_url="https://api.test.com/v1",
+            model_name="test-model",
+            system_prompt="system prompt",
+        ),
+    )
+
+    outputs = list(
+        runtime.stream_turn(
+            "用户需求",
+            workflow_id="TEST_DESIGN",
+            current_stage_id="CLARIFY",
+        )
+    )
+
+    assert len(calls) == 3
+    assert [
+        output.attempt_index
+        for output in outputs
+        if isinstance(output, AgentRetrySignal)
+    ] == [2, 3]
     assert isinstance(outputs[-1], AgentTurnOutput)
 
 
