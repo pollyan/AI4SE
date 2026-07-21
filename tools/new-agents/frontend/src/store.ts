@@ -153,6 +153,29 @@ const buildSnapshotArtifactHistory = (
   })
 );
 
+const buildSnapshotPendingStageTransition = (
+  snapshot: AgentRunSnapshot,
+  workflow: WorkflowType,
+  stageIndex: number,
+) => {
+  const pending = snapshot.pendingStageTransition;
+  const workflowStages = WORKFLOWS[workflow].stages;
+  const currentStage = workflowStages[stageIndex];
+  if (
+    !pending
+    || !currentStage
+    || pending.fromStageId !== currentStage.id
+  ) {
+    return null;
+  }
+  const targetStageIndex = workflowStages.findIndex(
+    stage => stage.id === pending.targetStageId
+  );
+  return targetStageIndex === stageIndex + 1
+    ? { fromStageIndex: stageIndex, toStageIndex: targetStageIndex }
+    : null;
+};
+
 const isSameContextSummary = (
   left: Pick<AgentRunSnapshotContextSummary, 'sourceType' | 'sourceStageId' | 'summaryType'>,
   right: Pick<AgentRunSnapshotContextSummary, 'sourceType' | 'sourceStageId' | 'summaryType'>
@@ -748,6 +771,11 @@ export const useStore = create<AppState>()(
         const artifactContent = stageArtifacts[currentStage.id]
           || getInitialArtifactForStage(workflow, stageIndex);
         stageArtifacts[currentStage.id] = artifactContent;
+        const pendingStageTransition = buildSnapshotPendingStageTransition(
+          snapshot,
+          workflow,
+          stageIndex,
+        );
 
         return {
           workflow,
@@ -762,7 +790,7 @@ export const useStore = create<AppState>()(
           stageArtifacts,
           contextSummaries: snapshot.contextSummaries,
           currentRunId: snapshot.run.id,
-          pendingStageTransition: null,
+          pendingStageTransition,
           artifactTruncated: false,
           artifactVisualDiagnostics: [],
           artifactVisualDiagnosticFocusRequest: null,

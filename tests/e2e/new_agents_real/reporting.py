@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -35,6 +36,17 @@ SAFE_MONOTONIC_REASONS = {
     "source_length_rewind",
     "source_prefix_rewrite",
     "stable_section_rewrite",
+}
+SAFE_ASSERTION_STEPS = {
+    "dom_observer_finalize",
+    "next_stage_confirmation_click",
+    "next_stage_confirmation_visible",
+    "restore_artifact_hash",
+    "restore_artifact_length",
+    "restore_assistant_messages",
+    "run_snapshot_fetch",
+    "stream_terminal_wait",
+    "terminal_artifact_dom_sync",
 }
 
 ERROR_CATEGORIES = {
@@ -127,6 +139,9 @@ def _safe_coordinates(value: Mapping[str, Any] | None) -> dict[str, Any]:
     monotonic_reason = value.get("monotonicReason")
     if monotonic_reason in SAFE_MONOTONIC_REASONS:
         coordinates["monotonicReason"] = monotonic_reason
+    assertion_step = value.get("assertionStep")
+    if assertion_step in SAFE_ASSERTION_STEPS:
+        coordinates["assertionStep"] = assertion_step
     diagnostic = _safe_diagnostic(value.get("diagnostic"))
     if diagnostic is not None:
         coordinates["diagnostic"] = diagnostic
@@ -210,9 +225,22 @@ def report_path(
 ) -> Path:
     safe_scope = SAFE_FILE_PART.sub("-", scope).strip("-")
     safe_identifier = SAFE_FILE_PART.sub("-", identifier).strip("-")
-    return (
-        root
-        / "test-results"
-        / "new-agents-real"
-        / f"{safe_scope}-{safe_identifier}.json"
-    )
+    evidence_value = os.environ.get("NEW_AGENTS_REAL_EVIDENCE_DIR", "").strip()
+    if not evidence_value:
+        return (
+            root
+            / "test-results"
+            / "new-agents-real"
+            / f"{safe_scope}-{safe_identifier}.json"
+        )
+    evidence_root = Path(evidence_value).resolve()
+    allowed_root = (root / "test-results" / "pre-push").resolve()
+    if (
+        not evidence_root.is_absolute()
+        or not evidence_root.is_relative_to(allowed_root)
+        or evidence_root.name != "real-e2e"
+    ):
+        raise ValueError(
+            "real-model evidence directory is outside controlled pre-push output"
+        )
+    return evidence_root / f"{safe_scope}-{safe_identifier}.json"

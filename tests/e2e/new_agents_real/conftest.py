@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from .config import load_real_llm_config
+from .deployed_stack import DeployedStack, DeploymentControl, DeploymentTarget
 from .live_stack import LiveStack, LiveStackStartupError
 from .matrix import FunctionalCase, selection_from_environment
 from .reporting import build_failure_evidence, report_path, write_report
@@ -19,6 +20,15 @@ def _manifest() -> dict:
     return json.loads(
         (ROOT / "tools/new-agents/workflow_manifest.json").read_text(encoding="utf-8")
     )
+
+
+def build_real_stack(root: Path, config, *, environ: dict[str, str]):
+    target_url = environ.get("NEW_AGENTS_REAL_TARGET_URL", "").strip()
+    if not target_url:
+        return LiveStack(root, config)
+    target = DeploymentTarget.parse(target_url)
+    control = DeploymentControl.from_environment(root, environ)
+    return DeployedStack(root, config, target, control)
 
 
 def pytest_generate_tests(metafunc) -> None:
@@ -44,7 +54,7 @@ def real_live_stack() -> Generator[LiveStack, None, None]:
         raise pytest.UsageError("NEW_AGENTS_REAL_SCOPE is required")
     config = load_real_llm_config(ROOT, os.environ)
     scope = os.environ["NEW_AGENTS_REAL_SCOPE"]
-    stack = LiveStack(ROOT, config)
+    stack = build_real_stack(ROOT, config, environ=os.environ)
     try:
         with stack:
             yield stack

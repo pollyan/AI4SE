@@ -90,12 +90,14 @@ def test_stage_and_workflow_selection_reject_manifest_drift():
         )
 
 
-def test_missing_real_config_is_not_run_and_fails_closed():
+def test_missing_real_config_is_not_run_and_fails_closed(tmp_path, monkeypatch):
     runner = _load_runner()
+    manifest = runner.load_workflow_manifest(ROOT)
+    monkeypatch.setattr(runner, "load_workflow_manifest", lambda _root: manifest)
 
     execution = runner.plan_execution(
         runner.ScopeSelection(runner.FunctionalScope.PR),
-        root=ROOT,
+        root=tmp_path,
         environ={},
     )
 
@@ -103,6 +105,47 @@ def test_missing_real_config_is_not_run_and_fails_closed():
     assert execution.exit_code != 0
     assert execution.command == ()
     assert "NEW_AGENTS_SMOKE_API_KEY" in execution.reason
+
+
+def test_release_rejects_partial_deployment_target_configuration():
+    runner = _load_runner()
+    execution = runner.plan_execution(
+        runner.ScopeSelection(runner.FunctionalScope.RELEASE),
+        root=ROOT,
+        environ={
+            "NEW_AGENTS_SMOKE_API_KEY": "sk-qg021-canary",
+            "NEW_AGENTS_SMOKE_BASE_URL": "https://api.deepseek.example",
+            "NEW_AGENTS_SMOKE_MODEL": "deepseek-v4-flash",
+            "NEW_AGENTS_REAL_TARGET_URL": "http://127.0.0.1:18080/new-agents/",
+        },
+    )
+
+    assert execution.status == "NOT_RUN"
+    assert "deployment target configuration" in execution.reason
+
+
+def test_inner_omits_frontend_backend_and_live_stack_suites_owned_by_pre_push(
+    monkeypatch,
+):
+    runner = _load_runner()
+    commands: list[tuple[str, ...]] = []
+
+    class SuccessfulRun:
+        returncode = 0
+
+    def capture(command, **_kwargs):
+        commands.append(tuple(command))
+        return SuccessfulRun()
+
+    monkeypatch.setattr(runner.subprocess, "run", capture)
+
+    assert runner._run_inner(ROOT, {}) == 0
+
+    flattened = "\n".join(" ".join(command) for command in commands)
+    assert "tests/test_new_agents_functional_runner.py" in flattened
+    assert "tests/e2e/new_agents_real/test_contracts.py" in flattened
+    assert "tests/e2e/new_agents_real/test_live_stack.py" not in flattened
+    assert "scripts/test/test-local.sh" not in flattened
 
 
 def test_real_config_is_masked_and_removed_from_frontend_environment(tmp_path):
@@ -410,6 +453,28 @@ def test_complete_config_builds_secret_free_real_command_and_selection_environme
     assert secret not in repr(execution)
 
 
+def test_real_command_routes_playwright_output_to_the_supplied_isolated_directory(
+    tmp_path,
+):
+    runner = _load_runner()
+    output_dir = tmp_path / "playwright-artifacts" / "release"
+
+    execution = runner.plan_execution(
+        runner.ScopeSelection(runner.FunctionalScope.RELEASE),
+        root=ROOT,
+        environ={
+            "PATH": "/usr/bin",
+            "NEW_AGENTS_SMOKE_API_KEY": "sk-qg021-output-canary",
+            "NEW_AGENTS_SMOKE_BASE_URL": "https://api.deepseek.example/v1",
+            "NEW_AGENTS_SMOKE_MODEL": "deepseek-v4-flash",
+            "NEW_AGENTS_REAL_PLAYWRIGHT_OUTPUT_DIR": str(output_dir),
+        },
+    )
+
+    assert execution.status == "READY"
+    assert f"--output={output_dir}" in execution.command
+
+
 def test_real_gate_output_forwarding_redacts_provider_secret(capsys):
     runner = _load_runner()
     secret = "sk-qg020-output-canary"
@@ -570,7 +635,7 @@ def test_live_stack_uses_active_python_in_ci_instead_of_local_venv_path():
     assert 'self.root / ".venv/bin/python"' not in source
 
 
-def test_real_model_module_can_be_deselected_without_scope_configuration():
+def test_real_model_module_can_be_deselected_without_scope_configuration(tmp_path):
     result = subprocess.run(
         [
             sys.executable,
@@ -578,6 +643,7 @@ def test_real_model_module_can_be_deselected_without_scope_configuration():
             "pytest",
             "-o",
             "addopts=",
+            f"--output={tmp_path / 'playwright-artifacts'}",
             "tests/e2e/new_agents_real/test_contracts.py",
             "tests/e2e/new_agents_real/test_real_agent_workflows.py",
             "-m",
@@ -596,7 +662,7 @@ def test_real_model_module_can_be_deselected_without_scope_configuration():
     assert "1 deselected" in result.stdout
 
 
-def test_real_model_module_fails_closed_when_selected_without_scope():
+def test_real_model_module_fails_closed_when_selected_without_scope(tmp_path):
     result = subprocess.run(
         [
             sys.executable,
@@ -604,6 +670,7 @@ def test_real_model_module_fails_closed_when_selected_without_scope():
             "pytest",
             "-o",
             "addopts=",
+            f"--output={tmp_path / 'playwright-artifacts'}",
             "tests/e2e/new_agents_real/test_real_agent_workflows.py",
             "-m",
             "real_llm",

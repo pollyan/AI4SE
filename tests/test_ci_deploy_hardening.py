@@ -123,3 +123,21 @@ def test_typescript_incremental_build_metadata_is_not_tracked():
     )
 
     assert result.stdout.strip() == ""
+
+
+def test_docker_build_context_excludes_nested_node_modules():
+    dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+
+    assert "**/node_modules/" in dockerignore
+
+
+def test_repository_documents_and_ci_reference_the_fixed_pre_push_contract():
+    for path in (
+        ROOT / "AGENTS.md",
+        ROOT / "docs/TESTING.md",
+        ROOT / "docs/deployment-guide.md",
+    ):
+        assert "scripts/test/pre-push.sh" in path.read_text(encoding="utf-8")
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert "tests/test_pre_push_gate.py" in workflow
+    assert "tests/test_pre_push_deployment.py" in workflow

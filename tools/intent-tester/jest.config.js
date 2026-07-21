@@ -69,7 +69,7 @@ module.exports = {
   reporters: [
     'default',
     ['jest-junit', {
-      outputDirectory: './test-results/proxy',
+      outputDirectory: process.env.JEST_JUNIT_OUTPUT_DIR || './test-results/proxy',
       outputName: 'junit.xml',
       classNameTemplate: '{classname}',
       titleTemplate: '{title}',

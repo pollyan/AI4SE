@@ -669,6 +669,8 @@ describe('Workflow Configuration', () => {
         const clarify = WORKFLOWS.TEST_DESIGN.stages.find(stage => stage.id === 'CLARIFY');
         const clarificationStatusRule =
             'clarification_questions[].status 只能是待确认、已确认、已假设或 AI 假设；已假设仅用于用户明确授权 Lisa 代定的默认场景，可推进；AI 假设仍表示未经授权的临时推断，P0/P1 阻断问题不能推进；用户给出具体答案后必须更新为已确认';
+        const clarificationStatusLiteralRule =
+            'clarification_questions[].status 必须精确取值为待确认、已确认、已假设或 AI 假设之一；禁止组合值、同义词、括号说明或其它文本';
 
         expect(clarify?.artifactDataContract?.modelOutputRules).toContain(
             'requirement_facts、system_boundaries、business_rules、flow_links、clarification_questions、quality_requirements、downstream_inputs 和 stage_gate 都必须至少包含 1 条',
@@ -678,6 +680,9 @@ describe('Workflow Configuration', () => {
         );
         expect(clarify?.artifactDataContract?.modelOutputRules).toContain(
             clarificationStatusRule,
+        );
+        expect(clarify?.artifactDataContract?.modelOutputRules).toContain(
+            clarificationStatusLiteralRule,
         );
         expect(clarify?.artifactDataContract?.forbiddenOutputs).toContain('Mermaid 代码块');
         expect(clarify?.artifactDataContract?.rendererOutputs).toContain('右侧需求分析文档');

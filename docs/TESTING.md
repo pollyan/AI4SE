@@ -401,6 +401,24 @@ New Agents 另有一套独立于 intent-tester/MidScene 的浏览器级工作流
 
 GitHub Actions 的自动 PR 门禁只运行无 secret 的 runner/contracts、Vite proxy 和 deterministic live-stack；同仓 PR 与 fork PR 都不收集真实模型 job，PR head 也不会获得任何真实模型凭证。真实模型自动门禁只允许 `github.ref_protected == true` 的 `master` schedule 运行 `nightly`、push 运行 `release`；手动 `workflow_dispatch` 仅允许从同样受保护的 `master` 调用，并必须通过 `new-agents-real-manual` environment 审核。production deploy 仍依赖同一次受保护运行的真实 `release` gate。
 
+## GitHub Push 前的固定全量门禁
+
+每个 clone 首次执行一次：
+
+```bash
+./scripts/dev/install-git-hooks.sh
+```
+
+随后每次 `git push` 前，versioned hook 会运行唯一入口：
+
+```bash
+./scripts/test/pre-push.sh
+```
+
+该命令不接受路径、diff 或 scope 参数；它对同一 `HEAD` 固定运行静态/构建、确定性跨层、隔离的 production-shaped Compose，以及部署栈上的真实模型 `release`。Docker、Chromium、`.venv`、三项 `NEW_AGENTS_SMOKE_*` 配置或任意 suite 缺失时均以非零结果停止，不能用聚焦测试、系统 Python 或 mock 成功替代。证据只写入 Git ignored 的 `test-results/pre-push/<HEAD>/`，不会覆盖 tracked JUnit 文件；其中真实模型报告是脱敏 JSON，临时部署凭证不属于可上传证据。
+
+CI 仍是远端复验与生产部署前置，而不是第一次真实验证；其 `Pre-push Contract Tests` 只验证 runner、隔离 Compose、hook 和安全边界，不会静默把本地 Docker/真实模型门禁替换为绿色。
+
 GitHub 仓库需要完成以下一次性配置：
 
 - 将 `master` 设为默认分支，并用 branch protection/ruleset 要求 PR review、把 `New Agents Deterministic Functional Tests` 设为 required status check、禁止 force push/删除，使 `github.ref_protected` 在真实门禁中为 `true`。

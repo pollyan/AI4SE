@@ -67,6 +67,8 @@
 
 **绝不直接部署到服务器。** 推送到 `master` 分支 → GitHub Actions CI 测试 → 自动部署。
 
+推送前必须先在本机对最终 `HEAD` 执行固定全量验证：首次运行 `./scripts/dev/install-git-hooks.sh` 安装 versioned hook；也可显式运行 `./scripts/test/pre-push.sh`。该命令会在隔离的 loopback Compose 项目中验证 Nginx、New Agents frontend/backend、PostgreSQL、重启恢复和真实模型 E2E。它不部署到生产，也不替代随后 GitHub Actions 的远端复验。
+
 ### CI/CD 流程
 
 ```text

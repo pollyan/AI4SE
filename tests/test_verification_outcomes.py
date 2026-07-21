@@ -4,7 +4,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 OUTCOME_TOOL = ROOT / "scripts" / "test" / "verification_outcomes.py"
 LOCAL_RUNNER = ROOT / "scripts" / "test" / "test-local.sh"
@@ -305,7 +304,10 @@ def test_emit_rejects_pass_without_collected_and_executed_work():
 
     assert result.returncode == 1
     assert outcome["status"] == "FAIL"
-    assert "PASS requires collected and executed counts greater than zero" in outcome["reason"]
+    assert (
+        "PASS requires collected and executed counts greater than zero"
+        in outcome["reason"]
+    )
 
 
 def test_local_smoke_runner_reports_missing_configuration_as_not_run():
@@ -315,7 +317,7 @@ def test_local_smoke_runner_reports_missing_configuration_as_not_run():
         "NEW_AGENTS_SMOKE_BASE_URL",
         "NEW_AGENTS_SMOKE_MODEL",
     ):
-        environment.pop(name, None)
+        environment[name] = ""
 
     result = subprocess.run(
         ["bash", str(LOCAL_RUNNER), "smoke"],
@@ -334,12 +336,16 @@ def test_local_smoke_runner_reports_missing_configuration_as_not_run():
     ]
     assert outcomes == [
         {
-            "suiteId": "new-agents-real-llm-smoke",
+            "suiteId": "new-agents-functional-stage",
             "status": "NOT_RUN",
-            "collected": 0,
+            "collected": 1,
             "executed": 0,
             "skipped": 0,
-            "reason": "Missing NEW_AGENTS_SMOKE_API_KEY, NEW_AGENTS_SMOKE_BASE_URL, or NEW_AGENTS_SMOKE_MODEL.",
+            "reason": (
+                "missing required real-model configuration: "
+                "NEW_AGENTS_SMOKE_API_KEY, NEW_AGENTS_SMOKE_BASE_URL, "
+                "NEW_AGENTS_SMOKE_MODEL"
+            ),
         }
     ]
 
@@ -350,9 +356,12 @@ def test_proxy_gates_reject_zero_collection_in_local_runner_and_ci():
 
     assert "--passWithNoTests" not in local_runner
     assert "--passWithNoTests" not in workflow
-    assert "--testPathPattern=\"tests/proxy\"" in local_runner
-    assert "--testPathPattern=\"tests/proxy\"" in workflow
-    assert 'OUTCOME_TOOL="$PROJECT_ROOT/scripts/test/verification_outcomes.py"' in local_runner
+    assert '--testPathPattern="tests/proxy"' in local_runner
+    assert '--testPathPattern="tests/proxy"' in workflow
+    assert (
+        'OUTCOME_TOOL="$PROJECT_ROOT/scripts/test/verification_outcomes.py"'
+        in local_runner
+    )
     assert '"$PROJECT_PYTHON" "$OUTCOME_TOOL" run' in local_runner
     assert "verification_outcomes.py run" in workflow
 
@@ -362,12 +371,15 @@ def test_docs_gate_does_not_silence_child_tool_errors():
 
     assert "set -e -o pipefail" in docs_check
     assert 'GREP_BIN="${GREP_BIN:-grep}"' in docs_check
-    assert 'if links=$("$GREP_BIN" -oP' in docs_check
+    assert 'if links=$("$GREP_BIN" -oE' in docs_check
+    assert "sed -E" in docs_check
     assert 'if [ "$status" -eq 1 ]; then' in docs_check
     assert 'return "$status"' in docs_check
 
 
-def test_docs_gate_emits_machine_readable_failure_for_a_child_tool_error(tmp_path: Path):
+def test_docs_gate_emits_machine_readable_failure_for_a_child_tool_error(
+    tmp_path: Path,
+):
     fake_grep = tmp_path / "grep-that-fails"
     fake_grep.write_text("#!/bin/sh\nexit 2\n", encoding="utf-8")
     fake_grep.chmod(0o755)

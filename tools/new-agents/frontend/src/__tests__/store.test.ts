@@ -721,6 +721,40 @@ describe('Zustand Store', () => {
         expect(state.isGenerating).toBe(false);
     });
 
+    it('restores a persisted confirmation for the immediate next stage', () => {
+        useStore.getState().restoreRunSnapshot({
+            run: {
+                id: 'run-pending-transition',
+                workflowId: 'TEST_DESIGN',
+                agentId: 'lisa',
+                currentStageId: 'CLARIFY',
+                status: 'active',
+                model: 'test-model',
+            },
+            messages: [],
+            artifacts: [
+                {
+                    stageId: 'CLARIFY',
+                    content: '# 需求分析文档',
+                    versionNumber: 1,
+                },
+            ],
+            contextSummaries: [],
+            pendingStageTransition: {
+                fromStageId: 'CLARIFY',
+                targetStageId: 'STRATEGY',
+            },
+            artifactComments: [],
+            artifactSectionLocks: [],
+            artifactAuditEvents: [],
+        });
+
+        expect(useStore.getState().pendingStageTransition).toEqual({
+            fromStageIndex: 0,
+            toStageIndex: 1,
+        });
+    });
+
     it('should restore and locally calibrate context summaries from a server run snapshot', () => {
         useStore.getState().restoreRunSnapshot({
             run: {

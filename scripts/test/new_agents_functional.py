@@ -28,6 +28,12 @@ from tests.e2e.new_agents_real.matrix import (
     select_cases,
 )
 
+DEPLOYMENT_TARGET_ENV_NAMES = (
+    "NEW_AGENTS_REAL_TARGET_URL",
+    "NEW_AGENTS_REAL_EVIDENCE_DIR",
+    "NEW_AGENTS_REAL_DEPLOYMENT_CONTROL_FILE",
+)
+
 
 class ScopeSelection(NamedTuple):
     scope: FunctionalScope
@@ -126,6 +132,32 @@ def plan_execution(
         **config.real_test_environment(),
         "NEW_AGENTS_REAL_SCOPE": selection.scope.value,
     }
+    deployment_values = {
+        name: str(environ.get(name, "")).strip() for name in DEPLOYMENT_TARGET_ENV_NAMES
+    }
+    has_deployment_target = any(deployment_values.values())
+    if has_deployment_target and not all(deployment_values.values()):
+        return ExecutionPlan(
+            status="NOT_RUN",
+            exit_code=1,
+            reason="partial deployment target configuration is not allowed",
+            command=(),
+            cases=cases,
+            config=None,
+            environment=dict(environ),
+        )
+    if has_deployment_target and selection.scope is not FunctionalScope.RELEASE:
+        return ExecutionPlan(
+            status="NOT_RUN",
+            exit_code=1,
+            reason="deployment target configuration is only valid for release",
+            command=(),
+            cases=cases,
+            config=None,
+            environment=dict(environ),
+        )
+    if has_deployment_target:
+        test_environment.update(deployment_values)
     if selection.workflow_id:
         test_environment["NEW_AGENTS_REAL_WORKFLOW"] = selection.workflow_id
     if selection.stage_id:
@@ -133,12 +165,19 @@ def plan_execution(
     python = root / ".venv/bin/python"
     if not python.is_file():
         python = Path(sys.executable)
+    playwright_output_dir = str(
+        environ.get("NEW_AGENTS_REAL_PLAYWRIGHT_OUTPUT_DIR", "")
+    ).strip()
+    playwright_output_option = (
+        (f"--output={playwright_output_dir}",) if playwright_output_dir else ()
+    )
     command = (
         str(python),
         "-m",
         "pytest",
         "-o",
         "addopts=",
+        *playwright_output_option,
         str(root / "tests/e2e/new_agents_real/test_real_agent_workflows.py"),
         "-m",
         "real_llm",
@@ -210,16 +249,6 @@ def _run_inner(root: Path, environ: Mapping[str, str]) -> int:
             "tests/e2e/new_agents_real/test_contracts.py",
             "-q",
         ),
-        (
-            str(python),
-            "-m",
-            "pytest",
-            "-o",
-            "addopts=",
-            "tests/e2e/new_agents_real/test_live_stack.py",
-            "-q",
-        ),
-        (str(root / "scripts/test/test-local.sh"), "new-agents"),
     )
     for command in commands:
         result = subprocess.run(

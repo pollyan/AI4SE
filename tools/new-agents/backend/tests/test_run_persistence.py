@@ -435,6 +435,70 @@ def test_turn_request_claim_is_idempotent_and_replays_completed_terminal_outcome
 
 
 @pytest.mark.parametrize(
+    ("target_stage_id", "expected_pending_transition"),
+    (
+        (
+            "STRATEGY",
+            {"fromStageId": "CLARIFY", "targetStageId": "STRATEGY"},
+        ),
+        ("CASES", None),
+    ),
+)
+def test_run_snapshot_projects_only_the_immediate_persisted_stage_transition(
+    app,
+    target_stage_id,
+    expected_pending_transition,
+):
+    with app.app_context():
+        run = create_agent_run("TEST_DESIGN", "lisa", "CLARIFY")
+        claim = claim_agent_run_turn_request(
+            run.id,
+            request_id="req-snapshot-pending-transition",
+            stage_id="CLARIFY",
+            user_content="请完成需求澄清",
+        )
+        complete_agent_run_turn(
+            run.id,
+            request_id="req-snapshot-pending-transition",
+            owner_token=claim.owner_token,
+            stage_id="CLARIFY",
+            assistant_content="需求澄清完成，请确认进入策略制定。",
+            artifact_content="# 需求分析文档\n\n已完成需求澄清。",
+            artifact_data={"document": "clarify"},
+            terminal_event={
+                "type": "agent_turn",
+                "output": {
+                    "chat": "需求澄清完成，请确认进入策略制定。",
+                    "artifact_update": {"type": "replace"},
+                    "stage_action": {
+                        "type": "request_next_stage",
+                        "target_stage_id": target_stage_id,
+                    },
+                    "warnings": [],
+                },
+            },
+            metric={
+                "workflow_id": "TEST_DESIGN",
+                "stage_id": "CLARIFY",
+                "model_name": "test-model",
+                "provider": "test-provider",
+                "status": "success",
+                "error_code": None,
+                "duration_ms": 1,
+                "input_chars": 8,
+                "output_chars": 20,
+                "estimated_tokens": 7,
+                "contract_retry_count": 0,
+            },
+        )
+
+        snapshot = get_run_snapshot(run.id)
+
+    assert snapshot["run"]["currentStageId"] == "CLARIFY"
+    assert snapshot["pendingStageTransition"] == expected_pending_transition
+
+
+@pytest.mark.parametrize(
     ("reused_stage_id", "reused_user_content"),
     (
         ("STRATEGY", "请分析登录需求"),

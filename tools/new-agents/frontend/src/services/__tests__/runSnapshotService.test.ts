@@ -56,6 +56,10 @@ describe('runSnapshotService', () => {
                         content: '摘要',
                     },
                 ],
+                pendingStageTransition: {
+                    fromStageId: 'STRATEGY',
+                    targetStageId: 'CASES',
+                },
                 artifactComments: [
                     {
                         id: 'comment-1',
@@ -124,6 +128,10 @@ describe('runSnapshotService', () => {
         expect(snapshot.artifacts[0].stageId).toBe('STRATEGY');
         expect(snapshot.artifacts[0].artifactData).toEqual({ strategyId: 'STR-001' });
         expect(snapshot.contextSummaries[0].content).toBe('摘要');
+        expect(snapshot.pendingStageTransition).toEqual({
+            fromStageId: 'STRATEGY',
+            targetStageId: 'CASES',
+        });
         expect(snapshot).toMatchObject({
             artifactComments: [
                 {
@@ -176,6 +184,38 @@ describe('runSnapshotService', () => {
                 messages: 'broken',
                 artifacts: [],
                 contextSummaries: [],
+            }),
+            {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            },
+        ));
+
+        await expect(fetchRunSnapshot('run-123')).rejects.toThrow(
+            'Invalid run snapshot response'
+        );
+    });
+
+    it('should reject a persisted confirmation that skips a workflow stage', async () => {
+        vi.mocked(fetch).mockResolvedValue(new Response(
+            JSON.stringify({
+                run: {
+                    id: 'run-123',
+                    workflowId: 'TEST_DESIGN',
+                    agentId: 'lisa',
+                    currentStageId: 'CLARIFY',
+                    status: 'active',
+                    model: 'test-model',
+                },
+                messages: [],
+                artifacts: [],
+                contextSummaries: [],
+                pendingStageTransition: {
+                    fromStageId: 'CLARIFY',
+                    targetStageId: 'CASES',
+                },
+                artifactComments: [],
+                artifactSectionLocks: [],
             }),
             {
                 status: 200,

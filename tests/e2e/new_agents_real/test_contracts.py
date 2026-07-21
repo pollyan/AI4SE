@@ -6,6 +6,7 @@ import os
 import re
 import traceback
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -901,6 +902,7 @@ def test_failure_evidence_uses_typed_code_and_trace_coordinates():
             "runId": "run-1",
             "eventIndex": 4,
             "monotonicReason": "active_tail_rewrite",
+            "assertionStep": "terminal_artifact_dom_sync",
         },
     )
 
@@ -924,6 +926,109 @@ def test_failure_evidence_uses_typed_code_and_trace_coordinates():
     assert payload["eventIndex"] == 4
     assert payload["retryCount"] == 1
     assert payload["monotonicReason"] == "active_tail_rewrite"
+    assert payload["assertionStep"] == "terminal_artifact_dom_sync"
+
+
+def test_browser_step_converts_raw_browser_errors_to_a_safe_failure_coordinate():
+    workflow_runner = importlib.import_module(
+        "tests.e2e.new_agents_real.workflow_runner"
+    )
+
+    with pytest.raises(workflow_runner.FunctionalAssertionError) as captured:
+        workflow_runner._browser_step(
+            "terminal_artifact_dom_sync",
+            lambda: (_ for _ in ()).throw(AssertionError("raw browser output")),
+        )
+
+    assert captured.value.code == "BROWSER_ASSERTION_FAILED"
+    assert captured.value.details == {
+        "assertionStep": "terminal_artifact_dom_sync",
+    }
+
+
+def test_workflow_journey_resets_the_browser_stream_index_after_restart(
+    monkeypatch,
+):
+    workflow_runner = importlib.import_module(
+        "tests.e2e.new_agents_real.workflow_runner"
+    )
+    stream_indices: list[int] = []
+
+    class Action:
+        def fill(self, _content):
+            return None
+
+        def click(self):
+            return None
+
+    class Page:
+        def locator(self, _selector):
+            return Action()
+
+        def get_by_role(self, _role, **_kwargs):
+            return Action()
+
+    def stage_evidence(_stack, case, *, stream_index, **_kwargs):
+        stream_indices.append(stream_index)
+        return (
+            workflow_runner.StageEvidence(
+                level=4,
+                workflow_id=case.workflow_id,
+                stage_id=case.stage_id,
+                run_id="run-1",
+                request_id=f"request-{stream_index}",
+                stream_order=("chat", "artifact"),
+                artifact_delta_count=2,
+                artifact_hash="sha256-" + "a" * 64,
+                retry_count=0,
+                snapshot_artifact_versions=1,
+                snapshot_message_count=1,
+                snapshot_artifact_stage_ids=(case.stage_id,),
+                snapshot_context_summary_count=1,
+                metric_status="success",
+                restored_from_server=False,
+                event_types=("run_started", "agent_turn", "done"),
+            ),
+            {},
+        )
+
+    monkeypatch.setattr(
+        workflow_runner,
+        "_manifest_workflow",
+        lambda *_args: {
+            "stages": (
+                {"id": "CLARIFY", "name": "需求澄清"},
+                {"id": "STRATEGY", "name": "策略制定"},
+            )
+        },
+    )
+    monkeypatch.setattr(workflow_runner, "_open_clean_workspace", lambda *_args: None)
+    monkeypatch.setattr(workflow_runner, "start_dom_observer", lambda *_args: None)
+    monkeypatch.setattr(
+        workflow_runner, "_stage_evidence_from_current_turn", stage_evidence
+    )
+    monkeypatch.setattr(workflow_runner, "should_verify_restart", lambda *_args: True)
+    monkeypatch.setattr(workflow_runner, "restart_and_restore", lambda *_args: None)
+    monkeypatch.setattr(
+        workflow_runner, "_restore_from_server", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        workflow_runner, "assert_workflow_run_ids", lambda _ids: "run-1"
+    )
+    monkeypatch.setattr(
+        workflow_runner,
+        "expect",
+        lambda _locator: SimpleNamespace(to_be_visible=lambda **_kwargs: None),
+    )
+
+    workflow_runner.run_workflow_journey(
+        SimpleNamespace(page=Page()),
+        matrix.FunctionalCase("workflow", "TEST_DESIGN", None, "lisa", "test-design"),
+        "测试输入",
+        max_stages=2,
+    )
+
+    assert stream_indices == [0, 0]
 
 
 def test_failure_evidence_drops_raw_exception_and_unapproved_coordinates():

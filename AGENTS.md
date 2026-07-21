@@ -31,6 +31,8 @@ Changes to New Agents architecture must be covered at the boundary they affect: 
 
 - `./scripts/dev/deploy-dev.sh`: deploy the local Docker development stack.
 - `./scripts/test/test-local.sh`: run the repository's local validation suite.
+- `./scripts/dev/install-git-hooks.sh`: install the versioned fixed pre-push hook once per clone.
+- `./scripts/test/pre-push.sh`: run the required full fixed pre-push gate for the current `HEAD`; it includes Docker and a real-model deployment E2E and accepts no scope arguments.
 - `pytest`: run Python tests from the repository root.
 - `flake8 --select=E9,F63,F7,F82 .`: run critical Python lint checks.
 - `cd tools/frontend && npm run build`: build the main React frontend.
@@ -50,6 +52,8 @@ Follow TDD: write or update a failing test before changing behavior. Pytest disc
 For `tools/new-agents`, preserve layered coverage: backend contracts, runtime validation, typed SSE/API behavior, frontend stream parsing, and state updates. Real model smoke tests require explicit environment configuration.
 
 In Codex goal mode, follow `docs/strategy/goal-mode-playbook.md` and the relevant plan rules for sub-agent dispatch, review, verification, and recording.
+
+Before pushing to GitHub, run the installed fixed pre-push gate for the final `HEAD`. Focused tests are for development feedback only and cannot replace this gate. Missing Docker, Chromium, model configuration, zero collection, cleanup failure, or changed worktree status must remain non-PASS.
 
 ## Commit & Pull Request Guidelines
 

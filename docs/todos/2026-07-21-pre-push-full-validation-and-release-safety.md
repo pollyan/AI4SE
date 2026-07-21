@@ -17,7 +17,7 @@
 
 | ID | 优先级 | 能力包 | 状态 | 独立验收目标 |
 |---|---|---|---|---|
-| `QG-021` | P1 | 固定全量 pre-push 质量门禁与测试去重 | `TODO` | 任意 push 前由一个固定入口完成全仓确定性门禁、production-shaped 本地部署和部署栈真实 DeepSeek 7-workflow E2E；不按 diff 选测且无重复/污染 |
+| `QG-021` | P1 | 固定全量 pre-push 质量门禁与测试去重 | `IN_PROGRESS` | 任意 push 前由一个固定入口完成全仓确定性门禁、production-shaped 本地部署和部署栈真实 DeepSeek 7-workflow E2E；不按 diff 选测且无重复/污染 |
 | `QG-022` | P0 | 可信生产发布事务与完整 readiness | `TODO` | 备份/回滚身份可信、构建失败不先停服、健康检查覆盖真实 New Agents 前端和主干链路；失败可安全恢复且并发发布受控 |
 
 ## QG-021 — 固定全量 Pre-push 质量门禁与测试去重

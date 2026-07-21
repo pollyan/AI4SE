@@ -805,6 +805,43 @@ def _stored_turn_request_terminal_event(
     return terminal_event if isinstance(terminal_event, dict) else None
 
 
+def _snapshot_pending_stage_transition(run: AgentRun) -> dict[str, str] | None:
+    """Project only the durable, immediate transition requested by the latest turn."""
+    stages = WORKFLOW_STAGES.get(run.workflow_id)
+    if stages is None or run.current_stage_id not in stages:
+        return None
+    stage_index = stages.index(run.current_stage_id)
+    if stage_index + 1 >= len(stages):
+        return None
+
+    latest_request = (
+        AgentRunTurnRequest.query.filter_by(
+            run_id=run.id,
+            stage_id=run.current_stage_id,
+        )
+        .order_by(AgentRunTurnRequest.id.desc())
+        .first()
+    )
+    if latest_request is None or latest_request.status != "completed":
+        return None
+    terminal_event = _stored_turn_request_terminal_event(latest_request)
+    output = terminal_event.get("output") if isinstance(terminal_event, dict) else None
+    stage_action = output.get("stage_action") if isinstance(output, dict) else None
+    target_stage_id = (
+        stage_action.get("target_stage_id")
+        if isinstance(stage_action, dict)
+        and stage_action.get("type") == "request_next_stage"
+        else None
+    )
+    expected_target_stage_id = stages[stage_index + 1]
+    if target_stage_id != expected_target_stage_id:
+        return None
+    return {
+        "fromStageId": run.current_stage_id,
+        "targetStageId": target_stage_id,
+    }
+
+
 def _bind_turn_request_identity(
     turn_request: AgentRunTurnRequest,
     *,
@@ -2157,6 +2194,7 @@ def get_run_snapshot(run_id: str) -> dict:
             "status": run.status,
             "model": run.model,
         },
+        "pendingStageTransition": _snapshot_pending_stage_transition(run),
         "messages": [
             {
                 "role": message.role,

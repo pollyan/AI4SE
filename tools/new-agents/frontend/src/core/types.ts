@@ -205,6 +205,11 @@ export type AgentRunSnapshotContextSummary = {
     content: string;
 };
 
+export type AgentRunSnapshotPendingStageTransition = {
+    fromStageId: string;
+    targetStageId: string;
+};
+
 export type AgentRunSnapshot = {
     run: {
         id: string;
@@ -217,6 +222,7 @@ export type AgentRunSnapshot = {
     messages: AgentRunSnapshotMessage[];
     artifacts: AgentRunSnapshotArtifact[];
     contextSummaries: AgentRunSnapshotContextSummary[];
+    pendingStageTransition?: AgentRunSnapshotPendingStageTransition | null;
     artifactComments: ArtifactComment[];
     artifactSectionLocks: ArtifactSectionLock[];
     artifactAuditEvents: ArtifactAuditEvent[];

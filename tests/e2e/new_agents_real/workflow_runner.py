@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlencode, urljoin
 
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import expect
 
 from .assertions import (
@@ -53,6 +55,18 @@ class WorkflowEvidence:
     stages: tuple[StageEvidence, ...]
     transition_count: int
     restored_from_server: bool
+
+
+def _browser_step(assertion_step: str, action: Callable[[], Any]) -> Any:
+    """Keep browser failure evidence actionable without writing DOM or model text."""
+    try:
+        return action()
+    except (AssertionError, PlaywrightError) as error:
+        raise FunctionalAssertionError(
+            "BROWSER_ASSERTION_FAILED",
+            "browser functional assertion failed",
+            details={"assertionStep": assertion_step},
+        ) from error
 
 
 def _manifest_workflow(stack: LiveStack, workflow_id: str) -> dict[str, Any]:
@@ -153,8 +167,11 @@ def workflow_journey_prompt(
 
 def _snapshot(stack: LiveStack, run_id: str) -> dict[str, Any]:
     assert stack.page is not None
-    response = stack.page.request.get(
-        urljoin(stack.frontend_url, f"api/agent/runs/{run_id}")
+    response = _browser_step(
+        "run_snapshot_fetch",
+        lambda: stack.page.request.get(
+            urljoin(stack.frontend_url, f"api/agent/runs/{run_id}")
+        ),
     )
     if not response.ok:
         raise FunctionalAssertionError(
@@ -215,20 +232,29 @@ def _restore_from_server(
         timeout=60_000,
     )
     artifact_content = page.get_by_test_id("artifact-content")
-    expect(page.get_by_test_id("assistant-message")).to_have_count(
-        expected_turn_count,
-        timeout=30_000,
+    _browser_step(
+        "restore_assistant_messages",
+        lambda: expect(page.get_by_test_id("assistant-message")).to_have_count(
+            expected_turn_count,
+            timeout=30_000,
+        ),
     )
     expected_artifact_hash = text_digest(markdown)
-    expect(artifact_content).to_have_attribute(
-        "data-artifact-source-hash",
-        expected_artifact_hash,
-        timeout=30_000,
+    _browser_step(
+        "restore_artifact_hash",
+        lambda: expect(artifact_content).to_have_attribute(
+            "data-artifact-source-hash",
+            expected_artifact_hash,
+            timeout=30_000,
+        ),
     )
-    expect(artifact_content).to_have_attribute(
-        "data-artifact-source-length",
-        str(len(markdown)),
-        timeout=30_000,
+    _browser_step(
+        "restore_artifact_length",
+        lambda: expect(artifact_content).to_have_attribute(
+            "data-artifact-source-length",
+            str(len(markdown)),
+            timeout=30_000,
+        ),
     )
     restored_dom_summary = artifact_content.evaluate("""
         node => ({
@@ -268,6 +294,34 @@ def _restore_from_server(
     )
 
 
+def restart_and_restore(
+    stack: LiveStack,
+    case: FunctionalCase,
+    evidence: StageEvidence,
+    snapshot: dict[str, Any],
+    expected_stage_ids: tuple[str, ...],
+    expected_turn_count: int,
+) -> None:
+    restart = getattr(stack, "restart_backend", None)
+    if not callable(restart):
+        raise ValueError("restart verification requires a deployment-controlled stack")
+    restart()
+    _restore_from_server(
+        stack,
+        case,
+        evidence,
+        snapshot,
+        expected_stage_ids=expected_stage_ids,
+        expected_turn_count=expected_turn_count,
+    )
+
+
+def should_verify_restart(stack: LiveStack) -> bool:
+    return os.environ.get(
+        "NEW_AGENTS_REAL_VERIFY_RESTART", ""
+    ).strip() == "1" and callable(getattr(stack, "restart_backend", None))
+
+
 def _stage_evidence_from_current_turn(
     stack: LiveStack,
     case: FunctionalCase,
@@ -280,7 +334,10 @@ def _stage_evidence_from_current_turn(
 ) -> tuple[StageEvidence, dict[str, Any]]:
     assert stack.page is not None and case.stage_id is not None
     page = stack.page
-    trace = wait_for_stream_trace(page, stream_index, timeout_ms=180_000)
+    trace = _browser_step(
+        "stream_terminal_wait",
+        lambda: wait_for_stream_trace(page, stream_index, timeout_ms=180_000),
+    )
     terminal_artifact = next(
         (
             event.get("artifact")
@@ -292,17 +349,25 @@ def _stage_evidence_from_current_turn(
     )
     if terminal_artifact is not None:
         artifact_content = page.get_by_test_id("artifact-content")
-        expect(artifact_content).to_have_attribute(
-            "data-artifact-source-hash",
-            str(terminal_artifact.get("hash")),
-            timeout=30_000,
+        _browser_step(
+            "terminal_artifact_dom_sync",
+            lambda: (
+                expect(artifact_content).to_have_attribute(
+                    "data-artifact-source-hash",
+                    str(terminal_artifact.get("hash")),
+                    timeout=30_000,
+                ),
+                expect(artifact_content).to_have_attribute(
+                    "data-artifact-source-length",
+                    str(terminal_artifact.get("length")),
+                    timeout=30_000,
+                ),
+            ),
         )
-        expect(artifact_content).to_have_attribute(
-            "data-artifact-source-length",
-            str(terminal_artifact.get("length")),
-            timeout=30_000,
-        )
-    dom_trace = finish_dom_observer(page)
+    dom_trace = _browser_step(
+        "dom_observer_finalize",
+        lambda: finish_dom_observer(page),
+    )
     trace_result = assert_stage_trace(
         trace,
         dom_trace,
@@ -390,14 +455,24 @@ def run_stage_probe(
         expected_stage_ids=expected_stage_ids,
         expected_turn_count=1,
     )
-    _restore_from_server(
-        stack,
-        case,
-        evidence,
-        snapshot,
-        expected_stage_ids=expected_stage_ids,
-        expected_turn_count=1,
-    )
+    if should_verify_restart(stack):
+        restart_and_restore(
+            stack,
+            case,
+            evidence,
+            snapshot,
+            expected_stage_ids,
+            1,
+        )
+    else:
+        _restore_from_server(
+            stack,
+            case,
+            evidence,
+            snapshot,
+            expected_stage_ids=expected_stage_ids,
+            expected_turn_count=1,
+        )
     return replace(evidence, restored_from_server=True)
 
 
@@ -423,6 +498,7 @@ def run_workflow_journey(
     evidence_items: list[StageEvidence] = []
     snapshots: list[dict[str, Any]] = []
     run_ids: list[str] = []
+    page_stream_index = 0
     for stage_index, stage in enumerate(stages):
         stage_case = FunctionalCase(
             kind="stage",
@@ -431,7 +507,7 @@ def run_workflow_journey(
             agent_id=case.agent_id,
             slug=case.slug,
         )
-        start_dom_observer(page, stage_index)
+        start_dom_observer(page, page_stream_index)
         if stage_index == 0:
             page.locator("textarea").fill(
                 workflow_journey_prompt(
@@ -441,17 +517,20 @@ def run_workflow_journey(
             )
             page.locator("#send-button").click()
         else:
-            page.get_by_role(
-                "button",
-                name=f"确认进入 {stage['name']}",
-            ).click()
+            _browser_step(
+                "next_stage_confirmation_click",
+                lambda: page.get_by_role(
+                    "button",
+                    name=f"确认进入 {stage['name']}",
+                ).click(),
+            )
         expected_stage_ids = tuple(
             str(completed_stage["id"]) for completed_stage in stages[: stage_index + 1]
         )
         evidence, snapshot = _stage_evidence_from_current_turn(
             stack,
             stage_case,
-            stream_index=stage_index,
+            stream_index=page_stream_index,
             expected_next_stage_id=_next_stage_id(workflow, stage_index),
             evidence_level=evidence_level,
             expected_stage_ids=expected_stage_ids,
@@ -460,15 +539,30 @@ def run_workflow_journey(
         evidence_items.append(evidence)
         snapshots.append(snapshot)
         run_ids.append(evidence.run_id)
+        if stage_index == 0 and should_verify_restart(stack):
+            restart_and_restore(
+                stack,
+                stage_case,
+                evidence,
+                snapshot,
+                expected_stage_ids,
+                stage_index + 1,
+            )
+            page_stream_index = 0
+        else:
+            page_stream_index += 1
         next_stage_id = _next_stage_id(workflow, stage_index)
         if next_stage_id is not None:
             next_stage = workflow["stages"][stage_index + 1]
-            expect(
-                page.get_by_role(
-                    "button",
-                    name=f"确认进入 {next_stage['name']}",
-                )
-            ).to_be_visible(timeout=30_000)
+            _browser_step(
+                "next_stage_confirmation_visible",
+                lambda: expect(
+                    page.get_by_role(
+                        "button",
+                        name=f"确认进入 {next_stage['name']}",
+                    )
+                ).to_be_visible(timeout=30_000),
+            )
 
     run_id = assert_workflow_run_ids(tuple(run_ids))
     final_evidence = evidence_items[-1]

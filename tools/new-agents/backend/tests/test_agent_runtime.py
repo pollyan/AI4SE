@@ -151,6 +151,10 @@ def test_clarify_structured_output_uses_one_valid_question_status_example():
     assert '"status": "待确认"' in instruction
     assert '"status": "已假设"' not in instruction
     assert '"status": "待确认/已确认/已假设/AI 假设"' not in instruction
+    assert (
+        "clarification_questions[].status 必须精确取值为待确认、已确认、"
+        "已假设或 AI 假设之一；禁止组合值、同义词、括号说明或其它文本"
+    ) in instruction
 
 
 def _raw_json_chunks_after_artifact_data_members(

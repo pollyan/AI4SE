@@ -135,6 +135,36 @@ const parseContextSummary = (summary: unknown): AgentRunSnapshotContextSummary =
     };
 };
 
+const parsePendingStageTransition = (
+    value: unknown,
+    workflowId: WorkflowType,
+    currentStageId: string,
+) => {
+    if (value === undefined || value === null) return null;
+    if (
+        !isRecord(value)
+        || typeof value.fromStageId !== 'string'
+        || typeof value.targetStageId !== 'string'
+    ) {
+        throw new Error(INVALID_SNAPSHOT_ERROR);
+    }
+    const stages = WORKFLOWS[workflowId].stages;
+    const currentStageIndex = stages.findIndex(stage => stage.id === currentStageId);
+    const targetStageIndex = stages.findIndex(
+        stage => stage.id === value.targetStageId
+    );
+    if (
+        value.fromStageId !== currentStageId
+        || targetStageIndex !== currentStageIndex + 1
+    ) {
+        throw new Error(INVALID_SNAPSHOT_ERROR);
+    }
+    return {
+        fromStageId: value.fromStageId,
+        targetStageId: value.targetStageId,
+    };
+};
+
 const parseArtifactComment = (comment: unknown): ArtifactComment => {
     if (
         !isRecord(comment)
@@ -293,6 +323,12 @@ const parseRunSnapshot = (payload: unknown): AgentRunSnapshot => {
         throw new Error(INVALID_SNAPSHOT_ERROR);
     }
 
+    const pendingStageTransition = parsePendingStageTransition(
+        payload.pendingStageTransition,
+        workflowId,
+        currentStageId,
+    );
+
     const collaborationState = parseArtifactCollaborationState(payload);
     const artifactAuditEvents = Array.isArray(payload.artifactAuditEvents)
         ? payload.artifactAuditEvents.map(parseArtifactAuditEvent)
@@ -310,6 +346,7 @@ const parseRunSnapshot = (payload: unknown): AgentRunSnapshot => {
         messages: payload.messages.map(parseMessage),
         artifacts: payload.artifacts.map(parseArtifact),
         contextSummaries: payload.contextSummaries.map(parseContextSummary),
+        pendingStageTransition,
         artifactComments: collaborationState.artifactComments,
         artifactSectionLocks: collaborationState.artifactSectionLocks,
         artifactAuditEvents,

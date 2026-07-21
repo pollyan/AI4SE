@@ -57,8 +57,9 @@ check_markdown_links() {
     fi
     log_info "检查文档: $file"
     
-    # 提取 [text](path) 格式的相对路径 (排除了以 http 或 file:/// 开头的外链和绝对路径)
-    if links=$("$GREP_BIN" -oP '\[.*?\]\((?!http|file:///)(.*?)\)' "$file" | "$GREP_BIN" -oP '\(\K[^\)]+'); then
+    # macOS BSD grep lacks -P. Extract Markdown destinations with portable ERE,
+    # then ignore external URLs in the loop below.
+    if links=$("$GREP_BIN" -oE '\[[^]]*\]\([^)]*\)' "$file" | sed -E 's/.*\]\(([^)]*)\).*/\1/'); then
         :
     else
         status=$?
@@ -71,6 +72,11 @@ check_markdown_links() {
     fi
     
     for link in $links; do
+        case "$link" in
+            http*|file:///*)
+                continue
+                ;;
+        esac
         # 移除锚点 (#xxx)
         clean_link=$(echo "$link" | cut -d'#' -f1)
         if [ -z "$clean_link" ]; then
