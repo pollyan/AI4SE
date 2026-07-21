@@ -2,8 +2,8 @@
 
 - 状态：`ACTIVE`
 - 创建日期：2026-07-21
-- 完成情况：0/2
-- 当前入口：`QG-021`
+- 完成情况：1/2
+- 当前入口：`QG-022`
 - 唯一范围：固定全量 pre-push 质量保障、测试分层去重、真实本地部署 E2E，以及随后处理已确认的生产发布事务风险
 - 事实审计：[`本地提交 / 推送前验证审计`](../test_requirements/2026-07-21-pre-push-local-validation-audit.md)
 
@@ -17,8 +17,8 @@
 
 | ID | 优先级 | 能力包 | 状态 | 独立验收目标 |
 |---|---|---|---|---|
-| `QG-021` | P1 | 固定全量 pre-push 质量门禁与测试去重 | `IN_PROGRESS` | 任意 push 前由一个固定入口完成全仓确定性门禁、production-shaped 本地部署和部署栈真实 DeepSeek 7-workflow E2E；不按 diff 选测且无重复/污染 |
-| `QG-022` | P0 | 可信生产发布事务与完整 readiness | `TODO` | 备份/回滚身份可信、构建失败不先停服、健康检查覆盖真实 New Agents 前端和主干链路；失败可安全恢复且并发发布受控 |
+| `QG-021` | P1 | 固定全量 pre-push 质量门禁与测试去重 | `DONE` | 任意 push 前由一个固定入口完成全仓确定性门禁、production-shaped 本地部署和部署栈真实 DeepSeek 7-workflow E2E；不按 diff 选测且无重复/污染 |
+| `QG-022` | P0 | 可信生产发布事务与完整 readiness | `IN_PROGRESS` | 备份/回滚身份可信、构建失败不先停服、健康检查覆盖真实 New Agents 前端和主干链路；失败可安全恢复且并发发布受控 |
 
 ## QG-021 — 固定全量 Pre-push 质量门禁与测试去重
 
@@ -47,6 +47,13 @@
 
 - 不在本项引入产出物 LLM judge/评分；该话题后续独立设计。
 - 不在本项修复生产发布事务；只建立可暴露部署风险的本地验证边界。
+
+### 完成证据
+
+- 2026-07-21 在隔离、干净检出上对实现候选执行 `./scripts/test/pre-push.sh`，所有固定 phase 均为 `PASS`：preflight、static、deterministic、deployment、real_e2e、finalization。
+- 真实 Release 证据覆盖 manifest 的 7/7 workflow、25/25 stage、18 次阶段推进；7 份 `release-*.json` 均为脱敏 `PASS`。
+- 实际通过计数包括：Intent API 510、Intent proxy 40、New Agents 前端 Vitest 949、New Agents 后端 Pytest 1249、受控浏览器 E2E 22/25（另有 3 个合法跳过）；临时 Docker project、credential 环境文件和子工作区均已清理。
+- 失败的首次真实模型运行被保留为非 PASS 诊断事实；随后独立的首失败诊断与正式完整门禁均完成 7/7，通过证据没有覆盖首次失败记录。
 
 ## QG-022 — 可信生产发布事务与完整 Readiness
 
