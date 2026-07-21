@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -127,6 +128,55 @@ def test_deployed_restart_waits_for_backend_readiness(monkeypatch, tmp_path):
     stack.restart_backend()
 
     assert events == ["restart", "ready", "ready", "ready"]
+
+
+def test_deployed_readiness_requires_database_json_and_typed_sse(monkeypatch, tmp_path):
+    environment = _control_environment(tmp_path)
+    stack = DeployedStack(
+        tmp_path,
+        RealLlmConfig(
+            "provider-api-key-canary",
+            "https://api.deepseek.example",
+            "deepseek-v4-flash",
+        ),
+        DeploymentTarget.parse(environment["NEW_AGENTS_REAL_TARGET_URL"]),
+        SimpleNamespace(),
+    )
+    requested: list[str] = []
+
+    class Response:
+        status = 200
+
+        def __init__(self, url: str):
+            self.url = url
+            self.headers = {"Content-Type": "text/event-stream"}
+
+        def read(self):
+            if self.url.endswith("/readiness/stream"):
+                return (
+                    b'data: {"type": "run_started", "runId": "readiness"}\n\n'
+                    b"data: [DONE]\n\n"
+                )
+            if self.url.endswith("/readiness"):
+                return (
+                    b'{"status":"ok","service":"new-agents-backend",'
+                    b'"database":"ok"}'
+                )
+            return b'{"status":"ok","service":"new-agents-backend"}'
+
+    @contextmanager
+    def request(url: str):
+        requested.append(url)
+        yield Response(url)
+
+    monkeypatch.setattr(stack, "_request", request)
+
+    stack._assert_ready()
+
+    assert requested[-2:] == [
+        "http://127.0.0.1:18080/new-agents/api/readiness",
+        "http://127.0.0.1:18080/new-agents/api/readiness/stream",
+    ]
 
 
 def test_restart_verification_requires_an_explicit_deployment_flag(monkeypatch):

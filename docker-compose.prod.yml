@@ -27,6 +27,7 @@ services:
       context: .
       dockerfile: tools/intent-tester/docker/Dockerfile
       target: web
+    image: "ai4se/intent-tester:${AI4SE_RELEASE_ID:?AI4SE_RELEASE_ID is required}"
     container_name: ai4se-intent-tester-prod
     restart: unless-stopped
     environment:
@@ -69,6 +70,7 @@ services:
       context: .
       dockerfile: tools/intent-tester/docker/Dockerfile
       target: proxy
+    image: "ai4se/intent-execution-proxy:${AI4SE_RELEASE_ID:?AI4SE_RELEASE_ID is required}"
     container_name: ai4se-intent-execution-proxy-prod
     restart: unless-stopped
     profiles: [execution]
@@ -96,6 +98,7 @@ services:
     build:
       context: .
       dockerfile: tools/new-agents/docker/Dockerfile
+    image: "ai4se/new-agents:${AI4SE_RELEASE_ID:?AI4SE_RELEASE_ID is required}"
     container_name: ai4se-new-agents-prod
     restart: unless-stopped
     deploy:
@@ -109,6 +112,7 @@ services:
     build:
       context: .
       dockerfile: tools/new-agents/backend/docker/Dockerfile
+    image: "ai4se/new-agents-backend:${AI4SE_RELEASE_ID:?AI4SE_RELEASE_ID is required}"
     container_name: ai4se-new-agents-backend-prod
     restart: unless-stopped
     environment:

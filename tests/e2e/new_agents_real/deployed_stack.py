@@ -200,6 +200,31 @@ class DeployedStack:
             payload = json.loads(response.read())
             if payload.get("status") != "ok":
                 raise RuntimeError("deployed New Agents backend health is invalid")
+        with self._request(
+            f"{self.target.origin}/new-agents/api/readiness"
+        ) as response:
+            if response.status != 200:
+                raise RuntimeError("deployed New Agents database readiness is unavailable")
+            payload = json.loads(response.read())
+            if payload != {
+                "status": "ok",
+                "service": "new-agents-backend",
+                "database": "ok",
+            }:
+                raise RuntimeError("deployed New Agents database readiness is invalid")
+        with self._request(
+            f"{self.target.origin}/new-agents/api/readiness/stream"
+        ) as response:
+            if response.status != 200:
+                raise RuntimeError("deployed New Agents readiness stream is unavailable")
+            content_type = response.headers.get("Content-Type", "")
+            body = response.read()
+            if (
+                not content_type.startswith("text/event-stream")
+                or b'"type": "run_started"' not in body
+                or b"data: [DONE]" not in body
+            ):
+                raise RuntimeError("deployed New Agents readiness stream is invalid")
 
     def __enter__(self) -> "DeployedStack":
         self._assert_ready()

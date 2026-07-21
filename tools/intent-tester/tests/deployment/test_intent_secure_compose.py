@@ -17,6 +17,7 @@ DEV_COMPOSES = (
 )
 WORKFLOW = REPO_ROOT / ".github/workflows/deploy.yml"
 DEPLOY_SCRIPT = REPO_ROOT / "scripts/ci/deploy.sh"
+RELEASE_TRANSACTION = REPO_ROOT / "scripts/ci/release_transaction.py"
 NGINX_CONFIG = REPO_ROOT / "nginx/nginx.conf"
 HEALTH_SCRIPT = REPO_ROOT / "scripts/health/health_check.sh"
 
@@ -88,9 +89,10 @@ def test_production_managed_execution_is_internal_and_fail_closed() -> None:
         assert proxy_env[key] == f"${{{key}:-}}", key
 
 
-def test_production_workflow_validates_complete_environment_before_replacement() -> None:
+def test_production_workflow_hands_complete_environment_to_the_transaction() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     deploy = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+    transaction = RELEASE_TRANSACTION.read_text(encoding="utf-8")
     always_required = (
         "DB_PASSWORD",
         "SECRET_KEY",
@@ -110,22 +112,18 @@ def test_production_workflow_validates_complete_environment_before_replacement()
     for key in (*always_required, *execution_required):
         assert f"{key}: ${{{{ secrets.{key} }}}}" in workflow
         assert key in envs_line
-        assert f"write_env_var {key} " in workflow
-        assert f"{key}|" in workflow or f"|{key})" in workflow
+        assert f'"{key}"' in transaction
 
-    validation_end = workflow.index("mv .env.managed .env")
     for key in always_required:
-        assert workflow.index(f"require_secret {key} ") < validation_end
-    assert 'case "$INTENT_EXECUTION_ENABLED" in' in workflow
-    assert 'if [ "$INTENT_EXECUTION_ENABLED" = "true" ]; then' in workflow
+        assert key in transaction.split("ALWAYS_REQUIRED_ENVIRONMENT_KEYS", 1)[1]
+    assert 'values["INTENT_EXECUTION_ENABLED"] not in {"true", "false"}' in transaction
+    assert 'values["INTENT_EXECUTION_ENABLED"] == "true"' in transaction
     for key in execution_required:
-        assert workflow.index(f"require_secret {key} ") < validation_end
+        assert key in transaction
 
-    assert "validate_deploy_environment" in deploy
-    assert 'COMPOSE_PROFILE_ARGS="--profile execution"' in deploy
-    assert deploy.index("validate_deploy_environment") < deploy.index(
-        'log_info "停止现有服务..."'
-    )
+    assert "release_transaction.py" in workflow
+    assert "release_transaction.py" in deploy
+    assert "validate_deploy_environment" not in deploy
 
 
 def test_development_compose_closes_managed_loop_without_host_bridge() -> None:
@@ -166,15 +164,12 @@ def test_gateway_preserves_intent_static_namespace_to_flask() -> None:
     assert "proxy_pass http://intent_tester/static" not in intent_static
 
 
-def test_production_health_uses_gateway_and_declared_access_outcomes() -> None:
+def test_legacy_production_helpers_cannot_replace_transaction_readiness() -> None:
     deploy = DEPLOY_SCRIPT.read_text(encoding="utf-8")
     health = HEALTH_SCRIPT.read_text(encoding="utf-8")
 
     assert "localhost:5001" not in deploy
-    assert "localhost:5001" not in health
-    assert 'http://localhost/intent-tester/health' in deploy
-    assert '"ai4se-db-prod"' in health
-    assert '"ai4se-intent-tester-prod"' in health
-    assert '"ai4se-gateway-prod"' in health
-    assert "200|401" in health
-    assert "200|302|403" in health
+    assert "release_transaction.py" in deploy
+    assert "release_transaction.py" in health
+    production = health.split("prod|production|remote)", 1)[1].split(";;", 1)[0]
+    assert "exit 2" in production

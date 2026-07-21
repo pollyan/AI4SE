@@ -88,6 +88,10 @@ def test_readiness_requires_new_agents_page_backend_and_database_not_static_gate
     class Response:
         status = 200
 
+        def __init__(self, target):
+            self.target = target
+            self.headers = {}
+
         def __enter__(self):
             return self
 
@@ -95,13 +99,21 @@ def test_readiness_requires_new_agents_page_backend_and_database_not_static_gate
             return None
 
         def read(self):
+            if self.target.endswith("/readiness/stream"):
+                self.headers = {"Content-Type": "text/event-stream"}
+                return (
+                    b'data: {"type": "run_started", "runId": "readiness"}\n\n'
+                    b"data: [DONE]\n\n"
+                )
+            if self.target.endswith("/readiness"):
+                return b'{"status":"ok","service":"new-agents-backend","database":"ok"}'
             return b'{"status":"ok","service":"new-agents-backend"}'
 
     def request(target, **_kwargs):
         if isinstance(target, module.Request):
             raise module.HTTPError(target.full_url, 401, "Unauthorized", {}, None)
         checked_paths.append(target)
-        return Response()
+        return Response(target)
 
     commands: list[tuple[str, ...]] = []
 
@@ -125,6 +137,14 @@ def test_readiness_requires_new_agents_page_backend_and_database_not_static_gate
     assert f"http://127.0.0.1:{deployment.gateway_port}/new-agents/" in checked_paths
     assert (
         f"http://127.0.0.1:{deployment.gateway_port}/new-agents/api/health"
+        in checked_paths
+    )
+    assert (
+        f"http://127.0.0.1:{deployment.gateway_port}/new-agents/api/readiness"
+        in checked_paths
+    )
+    assert (
+        f"http://127.0.0.1:{deployment.gateway_port}/new-agents/api/readiness/stream"
         in checked_paths
     )
     assert f"http://127.0.0.1:{deployment.gateway_port}/health" not in checked_paths
@@ -169,6 +189,37 @@ def test_compose_command_passes_each_compose_file_with_its_own_flag(tmp_path):
     first_file, second_file = map(str, deployment.compose_files)
     assert command[command.index(first_file) - 1] == "-f"
     assert command[command.index(second_file) - 1] == "-f"
+
+
+def test_compose_subprocess_cannot_inherit_parent_release_or_compose_controls(
+    monkeypatch, tmp_path
+):
+    module = _load_deployment_module()
+    deployment = module.DeploymentConfig.create(
+        root=tmp_path,
+        output_dir=tmp_path / "test-results",
+        llm_config=_llm_config(),
+    )
+    harness = module.ProductionHarness(deployment)
+    captured = {}
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setenv("AI4SE_RELEASE_ID", "parent-release")
+    monkeypatch.setenv("COMPOSE_FILE", "parent-compose.yml")
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda _command, **kwargs: captured.update(kwargs) or Result(),
+    )
+
+    harness._run_compose("config", "--quiet")
+
+    assert "AI4SE_RELEASE_ID" not in captured["env"]
+    assert "COMPOSE_FILE" not in captured["env"]
 
 
 def test_close_removes_private_environment_even_when_stack_never_started(tmp_path):

@@ -65,7 +65,7 @@
 
 ### 自动部署（推荐）
 
-**绝不直接部署到服务器。** 推送到 `master` 分支 → GitHub Actions CI 测试 → 自动部署。
+**绝不直接部署到 live 目录。** 受保护的 `master` SHA 经 GitHub Actions 全部测试后，由发布事务自动部署。
 
 推送前必须先在本机对最终 `HEAD` 执行固定全量验证：首次运行 `./scripts/dev/install-git-hooks.sh` 安装 versioned hook；也可显式运行 `./scripts/test/pre-push.sh`。该命令会在隔离的 loopback Compose 项目中验证 Nginx、New Agents frontend/backend、PostgreSQL、重启恢复和真实模型 E2E。它不部署到生产，也不替代随后 GitHub Actions 的远端复验。
 
@@ -88,43 +88,24 @@ Push to master
 ┌─────────────────────────────────────────┐
 │ deploy-to-production                    │
 │                                         │
-│  1. 构建代理包                            │
-│  2. 构建前端                              │
-│  3. rsync 到腾讯云                        │
-│  4. SSH 执行 scripts/ci/deploy.sh        │
+│  1. 构建发布包与 SHA/内容摘要 manifest       │
+│  2. 传输到独立 uploads/run-attempt-sha      │
+│  3. 锁内预检并构建 immutable release       │
+│  4. 原子切换、完整 readiness 或可信回滚      │
 └─────────────────────────────────────────┘
 ```
 
-### 生产部署脚本行为
+### 生产发布事务
 
-```bash
-# 在服务器上执行
-scripts/ci/deploy.sh production
-```
+发布唯一入口是上传包内的 `scripts/ci/release_transaction.py`；`scripts/ci/deploy.sh production` 和 `scripts/health/health_check.sh production` 会明确失败，不能绕过该事务。
 
-1. **备份**: `rsync` 当前版本到 `/opt/intent-test-framework-backup/latest`
-2. **停止服务**: `sudo docker-compose down`
-3. **清理**: 移除残留容器和网络
-4. **构建**: `sudo docker-compose build --no-cache`
-5. **启动**: `sudo docker-compose up -d`
-6. **健康检查**: `curl http://localhost:5001/health` (最多 10 次重试)
-7. **失败回滚**: 自动从备份恢复并重启
+1. GitHub 将受保护 SHA、release manifest 与代码传入唯一的 `uploads/<run>-<attempt>-<sha>/` 目录。
+2. 远端以 `flock` 串行化发布，重算内容摘要，并只在 `releases/<sha>/` 中生成候选与 mode `0600` 的私有环境文件。
+3. 候选先完成 Compose config、镜像 build 与 image identity 记录；这些步骤不会停止当前服务。
+4. 只有预检成功后才原子更新 `current` symlink，并使用同一个 Compose project 受控重建。
+5. 成功必须同时证明 New Agents 页面、gateway backend health、DB-backed readiness、typed SSE 与 PostgreSQL 临时读写；任一失败都以 recorded previous release 的 source/env/image identity 重建并复验。
 
-### 手动部署（紧急情况）
-
-```bash
-# SSH 到服务器
-ssh user@server
-
-# 进入项目目录
-cd /opt/intent-test-framework
-
-# 拉取最新代码
-git pull origin master
-
-# 执行部署
-./scripts/ci/deploy.sh production
-```
+首次迁移是刻意 fail-closed：若服务器没有 `current -> releases/<known-sha>` 的可信基线及 active state，事务拒绝切换。需由受权运维人员在维护窗口以已验证 SHA 建立基线；不能用 `git pull`、复制未知 live 目录或伪造 state 绕过。
 
 ---
 
@@ -162,9 +143,9 @@ git pull origin master
 | 变量 | 说明 | 示例 |
 |------|------|------|
 | `DB_USER` | 数据库用户名 | `ai4se_user` |
-| `DB_PASSWORD` | 数据库密码 | `change_me_in_production` |
-| `SECRET_KEY` | Flask 密钥 | `random-secure-string` |
-| `NEW_AGENTS_DEFAULT_LLM_API_KEY` | New Agents 后端默认 LLM API Key | `sk-...` |
+| `DB_PASSWORD` | 数据库密码 | 仅 GitHub Secret / 远端私有 env |
+| `SECRET_KEY` | Flask 密钥 | 仅 GitHub Secret / 远端私有 env |
+| `NEW_AGENTS_DEFAULT_LLM_API_KEY` | New Agents 后端默认 LLM API Key | 仅 GitHub Secret / 远端私有 env |
 | `NEW_AGENTS_DEFAULT_LLM_BASE_URL` | New Agents 后端默认 LLM Base URL | `https://api.deepseek.com` |
 | `NEW_AGENTS_DEFAULT_LLM_MODEL` | New Agents 后端默认模型名 | `deepseek-v4-flash` |
 | `NEW_AGENTS_CONFIG_ADMIN_API_KEY` | New Agents 配置写入和模型检测的独立管理密钥 | `随机高熵字符串` |
@@ -208,6 +189,8 @@ git pull origin master
 ./scripts/health/health_check.sh          # 默认
 ```
 
+它只用于 local/dev 诊断，不能作为生产发布成功条件。生产 release 的唯一 verdict 是 transaction 内的完整 readiness。
+
 ### 端点
 
 | 服务 | 端点 | 预期 |
@@ -215,6 +198,8 @@ git pull origin master
 | Nginx 网关 | `http://localhost/health` | 200 |
 | Intent-Tester | `http://localhost:5001/health` | `{"status": "ok"}` |
 | New Agents Backend | `http://localhost:5002/api/health` | `{"status": "ok"}` |
+| New Agents Readiness | `http://localhost/new-agents/api/readiness` | DB-backed `{"status":"ok","database":"ok"}` |
+| New Agents SSE Readiness | `http://localhost/new-agents/api/readiness/stream` | typed `run_started` SSE + `[DONE]` |
 
 ---
 

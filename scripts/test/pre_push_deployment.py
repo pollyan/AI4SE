@@ -108,6 +108,7 @@ class DeploymentConfig:
                 _random_secret(), method="pbkdf2:sha256:1000000"
             ),
             "INTENT_PROXY_TOKEN": _random_secret(),
+            "AI4SE_RELEASE_ID": secrets.token_hex(20),
             "OPENAI_API_KEY": "",
             "OPENAI_BASE_URL": "",
             "MIDSCENE_MODEL_NAME": "",
@@ -172,6 +173,13 @@ class ProductionHarness:
             *arguments,
         )
 
+    def _compose_environment(self) -> dict[str, str]:
+        return {
+            key: value
+            for key, value in os.environ.items()
+            if key not in self.config.environment and not key.startswith("COMPOSE_")
+        }
+
     @staticmethod
     def _parse_version(value: str) -> tuple[int, int, int] | None:
         parts = value.strip().removeprefix("v").split(".")
@@ -193,6 +201,7 @@ class ProductionHarness:
             text=True,
             capture_output=True,
             check=False,
+            env=self._compose_environment(),
         )
         version = self._parse_version(result.stdout) if result.returncode == 0 else None
         if version is None or version < MINIMUM_COMPOSE_VERSION:
@@ -205,6 +214,7 @@ class ProductionHarness:
             text=True,
             capture_output=True,
             check=False,
+            env=self._compose_environment(),
         )
         if result.returncode != 0:
             raise RuntimeError(
@@ -228,6 +238,7 @@ class ProductionHarness:
             text=True,
             capture_output=True,
             check=False,
+            env=self._compose_environment(),
         )
         if result.returncode != 0:
             raise RuntimeError("isolated project cleanup command failed")
@@ -237,7 +248,13 @@ class ProductionHarness:
         with urlopen(request, timeout=timeout) as response:
             yield response
 
-    def _wait_for_http(self, path: str, *, expect_json: bool = False) -> None:
+    def _wait_for_http(
+        self,
+        path: str,
+        *,
+        expected_json: Mapping[str, str] | None = None,
+        require_typed_sse: bool = False,
+    ) -> None:
         deadline = time.monotonic() + 45
         last_error: BaseException | None = None
         url = f"http://127.0.0.1:{self.config.gateway_port}{path}"
@@ -248,10 +265,21 @@ class ProductionHarness:
                     if response.status != 200:
                         raise RuntimeError("unexpected readiness status")
                     body = response.read()
-                    if expect_json:
+                    if expected_json is not None:
                         payload = json.loads(body)
-                        if payload.get("status") != "ok":
+                        if not isinstance(payload, Mapping) or any(
+                            payload.get(key) != value
+                            for key, value in expected_json.items()
+                        ):
                             raise RuntimeError("backend readiness did not report ok")
+                    if require_typed_sse:
+                        content_type = response.headers.get("Content-Type", "")
+                        if (
+                            not content_type.startswith("text/event-stream")
+                            or b'"type": "run_started"' not in body
+                            or b"data: [DONE]" not in body
+                        ):
+                            raise RuntimeError("backend readiness stream is invalid")
                     return
             except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as error:
                 last_error = error
@@ -306,7 +334,21 @@ class ProductionHarness:
 
     def assert_ready(self) -> None:
         self._wait_for_http("/new-agents/")
-        self._wait_for_http("/new-agents/api/health", expect_json=True)
+        self._wait_for_http(
+            "/new-agents/api/health",
+            expected_json={"status": "ok", "service": "new-agents-backend"},
+        )
+        self._wait_for_http(
+            "/new-agents/api/readiness",
+            expected_json={
+                "status": "ok",
+                "service": "new-agents-backend",
+                "database": "ok",
+            },
+        )
+        self._wait_for_http(
+            "/new-agents/api/readiness/stream", require_typed_sse=True
+        )
         self._assert_config_admin_is_protected()
         self._run_compose(
             "exec",

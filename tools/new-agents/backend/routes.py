@@ -1,6 +1,7 @@
 import re
 
 from flask import Blueprint, current_app, g, jsonify, request
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.exceptions import HTTPException
 
@@ -43,6 +44,7 @@ from request_schemas import (
     read_json_request_body,
 )
 from sse_response import build_sse_response
+from sse_schemas import RunStartedEvent
 from stream_services import stream_agent_run_events
 from routes_test_assets import register_test_asset_routes
 from story_handoff_packets import (
@@ -142,6 +144,43 @@ def _validate_mermaid_repair_artifact_contract(
 @api_bp.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "service": "new-agents-backend"})
+
+
+def _database_ready() -> bool:
+    try:
+        db.session.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        return False
+    return True
+
+
+def _readiness_unavailable_response():
+    return (
+        jsonify(
+            {
+                "status": "unavailable",
+                "service": "new-agents-backend",
+                "database": "unavailable",
+            }
+        ),
+        503,
+    )
+
+
+@api_bp.route("/readiness", methods=["GET"])
+def readiness():
+    if not _database_ready():
+        return _readiness_unavailable_response()
+    return jsonify(
+        {"status": "ok", "service": "new-agents-backend", "database": "ok"}
+    )
+
+
+@api_bp.route("/readiness/stream", methods=["GET"])
+def readiness_stream():
+    if not _database_ready():
+        return _readiness_unavailable_response()
+    return build_sse_response((RunStartedEvent(run_id="readiness"),))
 
 
 @api_bp.route("/config", methods=["GET"])

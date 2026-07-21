@@ -54,10 +54,8 @@ case "$ENVIRONMENT" in
         CONTAINERS=("ai4se-db" "ai4se-intent-tester" "ai4se-gateway" "ai4se-new-agents-backend")
         ;;
     prod|production|remote)
-        BASE_URL="http://localhost"
-        COMPOSE_FILE="docker-compose.prod.yml"
-        DB_CONTAINER="ai4se-db-prod"
-        CONTAINERS=("ai4se-db-prod" "ai4se-intent-tester-prod" "ai4se-gateway-prod" "ai4se-new-agents-backend-prod")
+        echo "Production release verification requires scripts/ci/release_transaction.py." >&2
+        exit 2
         ;;
     *)
         log_error "未知环境: $ENVIRONMENT"
