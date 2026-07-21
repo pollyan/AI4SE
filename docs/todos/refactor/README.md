@@ -1,10 +1,10 @@
 # Refactor Todo
 
-`docs/todos/` 当前有 1 份活动待办：[`2026-07-21-pre-push-full-validation-and-release-safety.md`](../2026-07-21-pre-push-full-validation-and-release-safety.md)。2026-07-16 用户确认的四项 New Agents 工作已在 2026-07-20 全部完成并归档；此前取消的 P2/P3、条件触发、旧真实模型 smoke、旧 E 编号和历史集成候选继续只保留事实证据，不得自动恢复实施。
+`docs/todos/` 当前没有活动待办。2026-07-21 的固定全量 pre-push 与生产发布安全工作已完成并归档为 [`历史记录`](../archive/2026-07-21-pre-push-full-validation-and-release-safety.md)；此前取消的 P2/P3、条件触发、旧真实模型 smoke、旧 E 编号和历史集成候选继续只保留事实证据，不得自动恢复实施。
 
 ## 当前状态
 
-当前执行入口是 [`QG-021 固定全量 pre-push 质量门禁与测试去重`](../2026-07-21-pre-push-full-validation-and-release-safety.md#qg-021--固定全量-pre-push-质量门禁与测试去重)，完成后按用户确认顺序进入 `QG-022`，处理备份/回滚、先停服再构建和健康检查遗漏三个生产发布风险。
+当前没有执行入口；需要新增工作时必须从 Goal Mode `BOOTSTRAP` 重新审计活动待办、失败证据与用户最新目标。
 
 最近完成并归档的能力包为 [`2026-07-16-new-agents-streaming-and-artifact-ux.md`](../archive/2026-07-16-new-agents-streaming-and-artifact-ux.md)，包含：
 
@@ -13,7 +13,7 @@
 3. `QG-019`：文档信息退出首屏重表格。
 4. `QG-020`：New Agents 真实链路、无头优先的功能测试重构；PR 跑关键真实旅程，Nightly/发布跑全阶段矩阵。
 
-四项状态均为 `DONE`。当前活动待办包含 2 个有序能力包，状态均为 `TODO`；不得与归档 Todo、旧 checkbox、旧分支或旧计划混合续跑。
+四项状态均为 `DONE`。不得与归档 Todo、旧 checkbox、旧分支或旧计划混合续跑。
 
 ## 共享架构约束
 

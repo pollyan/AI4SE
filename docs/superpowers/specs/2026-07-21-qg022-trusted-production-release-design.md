@@ -1,6 +1,6 @@
 # QG-022 可信生产发布事务与完整 Readiness 设计
 
-- 关联待办：[QG-022](../../todos/2026-07-21-pre-push-full-validation-and-release-safety.md)
+- 关联待办：[QG-022](../../todos/archive/2026-07-21-pre-push-full-validation-and-release-safety.md)
 - 前置完成证据：[QG-021 验证记录](../../test_requirements/2026-07-21-qg021-validation-record.md)
 - 设计日期：2026-07-21
 

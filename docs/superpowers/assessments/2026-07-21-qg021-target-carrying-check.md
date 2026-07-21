@@ -3,7 +3,7 @@
 - 日期：2026-07-21
 - Goal Mode 状态：`ASSESS → MILESTONE`
 - 结论：`CONTINUE QG-021`
-- 顺序基线：[活动待办 QG-021 → QG-022](../../todos/2026-07-21-pre-push-full-validation-and-release-safety.md)
+- 顺序基线：[历史待办 QG-021 → QG-022](../../todos/archive/2026-07-21-pre-push-full-validation-and-release-safety.md)
 - 厚切片身份基线：[QG-021 设计](../specs/2026-07-21-fixed-full-pre-push-quality-gate-design.md#厚切片身份基线)
 
 ## 1. 已确认目标与上一轮证据

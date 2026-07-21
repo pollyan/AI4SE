@@ -1,9 +1,9 @@
 # 固定全量 Pre-push 门禁与生产发布安全待办
 
-- 状态：`ACTIVE`
+- 状态：`DONE`
 - 创建日期：2026-07-21
-- 完成情况：1/2
-- 当前入口：`QG-022`
+- 完成情况：2/2
+- 当前入口：`NONE`（已归档）
 - 唯一范围：固定全量 pre-push 质量保障、测试分层去重、真实本地部署 E2E，以及随后处理已确认的生产发布事务风险
 - 事实审计：[`本地提交 / 推送前验证审计`](../test_requirements/2026-07-21-pre-push-local-validation-audit.md)
 
@@ -18,7 +18,7 @@
 | ID | 优先级 | 能力包 | 状态 | 独立验收目标 |
 |---|---|---|---|---|
 | `QG-021` | P1 | 固定全量 pre-push 质量门禁与测试去重 | `DONE` | 任意 push 前由一个固定入口完成全仓确定性门禁、production-shaped 本地部署和部署栈真实 DeepSeek 7-workflow E2E；不按 diff 选测且无重复/污染 |
-| `QG-022` | P0 | 可信生产发布事务与完整 readiness | `IN_PROGRESS` | 备份/回滚身份可信、构建失败不先停服、健康检查覆盖真实 New Agents 前端和主干链路；失败可安全恢复且并发发布受控 |
+| `QG-022` | P0 | 可信生产发布事务与完整 readiness | `DONE` | 备份/回滚身份可信、构建失败不先停服、健康检查覆盖真实 New Agents 前端和主干链路；失败可安全恢复且并发发布受控 |
 
 ## QG-021 — 固定全量 Pre-push 质量门禁与测试去重
 
@@ -86,9 +86,14 @@
 - docs/test-only 变更是否发布由未来设计明确裁决；在此之前不得用 path skip 破坏 required checks。
 - 部署文档、workflow、脚本和实际生产行为保持一致，不保留虚假回滚或浅健康声明。
 
-## 执行与归档规则
+### 完成证据
 
-- 目标模式从 `QG-021` 开始；完成后更新本文件证据和下一入口，再进入 `QG-022`。
-- 每个能力包以完整厚切片形成独立 spec、plan、验证、审查、commit 和交付，不把内部测试迁移批次记为额外进度。
-- 两项全部终结后才归档本文件。历史归档中的 QG、QS、E 编号或旧 checkbox 不得自动恢复。
-- 活动待办只保留本文件；三个发布风险属于 `QG-022`，不得再复制成多个竞争 backlog。
+- 2026-07-21 在隔离、干净检出上执行固定 `./scripts/test/pre-push.sh`；preflight、static、deterministic、deployment、real_e2e、finalization 全部 `PASS`。
+- 真实 Release E2E 覆盖 7/7 workflow、25/25 stage、18 次阶段流转；页面、gateway upstream、backend DB JSON readiness、typed SSE 和 PostgreSQL 临时读写均由本地 production-shaped Docker 环境验证。
+- 首次全量运行曾暴露中间阶段的真实模型流转/结构化一致性问题；已由共享运行时的确定性下一阶段确认和三次结构化重试修复，最终完整门禁为 `PASS`，未以重跑掩盖首个失败。
+- 未执行真实生产发布、未写入真实 production 配置、未 push GitHub；本轮未触碰 `tools/intent-tester/test-results/proxy/junit.xml`。
+
+## 历史执行与归档结论
+
+- `QG-021` 与 `QG-022` 均已终结，因此本文件不再是活动入口。
+- 历史归档中的 QG、QS、E 编号或旧 checkbox 不得自动恢复为待办。

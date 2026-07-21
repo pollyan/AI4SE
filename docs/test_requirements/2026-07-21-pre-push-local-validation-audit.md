@@ -9,7 +9,7 @@
 
 本审计完成后，用户于 2026-07-21 明确决定：每次 push 到 GitHub 前运行相同的固定全量门禁，不依据 diff、路径或 Agent 影响分析缩减范围。开发过程仍可使用聚焦测试，但效率优化只能通过测试分层、职责归属和去重实现。
 
-因此，本文关于“按 diff 触发附加门禁”的内容只用于解释现有风险、测试归属和去重候选，不再作为允许跳过 pre-push suite 的政策。当前设计与执行入口以 [`QG-021 spec`](../superpowers/specs/2026-07-21-fixed-full-pre-push-quality-gate-design.md) 和 [`活动待办`](../todos/2026-07-21-pre-push-full-validation-and-release-safety.md) 为准。
+因此，本文关于“按 diff 触发附加门禁”的内容只用于解释现有风险、测试归属和去重候选，不再作为允许跳过 pre-push suite 的政策。当前设计以 [`QG-021 spec`](../superpowers/specs/2026-07-21-fixed-full-pre-push-quality-gate-design.md) 为准；对应能力包已进入 [`历史待办`](../todos/archive/2026-07-21-pre-push-full-validation-and-release-safety.md)。
 
 ## 结论摘要
 

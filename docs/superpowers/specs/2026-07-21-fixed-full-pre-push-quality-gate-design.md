@@ -2,7 +2,7 @@
 
 - 日期：2026-07-21
 - 状态：已批准；2026-07-21 Goal Mode 实施完成，待最终 `HEAD` 的固定全量门禁
-- Owning todo：[`QG-021`](../../todos/2026-07-21-pre-push-full-validation-and-release-safety.md#qg-021--固定全量-pre-push-质量门禁与测试去重)
+- Owning todo：[`QG-021`](../../todos/archive/2026-07-21-pre-push-full-validation-and-release-safety.md#qg-021--固定全量-pre-push-质量门禁与测试去重)
 - 事实审计：[`本地提交 / 推送前验证审计`](../../test_requirements/2026-07-21-pre-push-local-validation-audit.md)
 - 顺序基线：`QG-021 → QG-022`；本设计只覆盖第一项
 

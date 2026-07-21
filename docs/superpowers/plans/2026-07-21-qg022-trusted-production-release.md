@@ -56,7 +56,7 @@
 - Produces `ReleasePaths.from_root(root, release_id, upload_dir) -> ReleasePaths`，目录固定为 `uploads/`、`releases/`、`current`、`.release.lock`。
 - Produces `ReleaseFailure(code: str)`；错误码仅可为 `INVALID_MANIFEST`、`UNTRUSTED_PREVIOUS`、`LOCKED`、`PREPARE_FAILED`、`ACTIVATION_FAILED`、`READINESS_FAILED`、`ROLLBACK_FAILED`、`IDENTITY_MISMATCH`。
 
-- [ ] **Step 1: Write the failing identity tests**
+- [x] **Step 1: Write the failing identity tests**
 
 ```python
 def test_manifest_rejects_sha_or_content_digest_mismatch(tmp_path):
@@ -81,13 +81,13 @@ def test_untrusted_previous_stops_before_any_compose_command(tmp_path):
     assert runner.commands == []
 ```
 
-- [ ] **Step 2: Run the tests to verify RED**
+- [x] **Step 2: Run the tests to verify RED**
 
 Run: `pytest tests/test_release_transaction.py -q`
 
 Expected: FAIL because `scripts.ci.release_transaction` and the frozen interfaces do not exist.
 
-- [ ] **Step 3: Implement the minimal identity model and lock**
+- [x] **Step 3: Implement the minimal identity model and lock**
 
 ```python
 RELEASE_ID = re.compile(r"[0-9a-f]{40}\Z")
@@ -115,7 +115,7 @@ class ReleaseManifest:
 
 Implement `flock` with `fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)`; convert `BlockingIOError` to `ReleaseFailure("LOCKED")`. `trusted_previous()` must resolve `current`, reject non-symlink/missing state/env/image IDs, and never infer an identity from a legacy live directory.
 
-- [ ] **Step 4: Run GREEN and freeze the contract**
+- [x] **Step 4: Run GREEN and freeze the contract**
 
 Run: `pytest tests/test_release_transaction.py -q`
 
@@ -134,7 +134,7 @@ Expected: PASS; test double records no Docker command for every identity/lock fa
 - Produces `ReleaseTransaction.prepare() -> ReleaseState`, `activate(candidate, previous) -> None`, `rollback(previous) -> None`, and `run() -> ReleaseState`.
 - `CommandRunner.run(command: Sequence[str], cwd: Path) -> CompletedCommand` is injected in tests; production wrapper uses `subprocess.run(..., check=False, capture_output=True, text=True)` and never includes captured body in a failure.
 
-- [ ] **Step 1: Add failing transaction mutation tests**
+- [x] **Step 1: Add failing transaction mutation tests**
 
 ```python
 def test_build_and_config_complete_before_current_pointer_changes(tmp_path):
@@ -157,13 +157,13 @@ def test_readiness_failure_restores_previous_pointer_and_recorded_images(tmp_pat
     assert runner.image_ids_checked == paths.previous_state.image_ids
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pytest tests/test_release_transaction.py -q`
 
 Expected: FAIL because prepare/activation/rollback has not been implemented.
 
-- [ ] **Step 3: Implement a single transaction path**
+- [x] **Step 3: Implement a single transaction path**
 
 ```python
 def run(self) -> ReleaseState:
@@ -185,7 +185,7 @@ def run(self) -> ReleaseState:
 
 `prepare()` moves the verified upload only to `releases/<sha>`, writes a `0600` candidate `.env` by preserving only explicitly allowlisted unmanaged current keys and replacing managed keys from the process environment, then runs `docker compose config`, `build`, image inspect and config/env digest recording. `compose_up()` must use `--project-directory <release> --env-file <release>/.env -p ai4se -f <release>/docker-compose.prod.yml up --no-build --wait --force-recreate --remove-orphans`; do not issue `down`. `rollback()` must point `current` to previous, use that exact directory/env, assert all recorded image IDs, run the same `compose_up()`, and call readiness before returning.
 
-- [ ] **Step 4: Run GREEN and the mutation matrix**
+- [x] **Step 4: Run GREEN and the mutation matrix**
 
 Run: `pytest tests/test_release_transaction.py -q`
 
@@ -203,7 +203,7 @@ Expected: PASS for build failure, config failure, lock collision, readiness fail
 - Produces `GET /api/readiness` returning exactly `{"status": "ok", "service": "new-agents-backend", "database": "ok"}` on `SELECT 1`; otherwise returns `503` with `{"status": "unavailable", "service": "new-agents-backend", "database": "unavailable"}`.
 - Produces `GET /api/readiness/stream` returning the same DB gate as one typed `run_started` SSE frame followed by `[DONE]`, with `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `X-Accel-Buffering: no`; it must not call a model or inspect/write a credential.
 
-- [ ] **Step 1: Write failing Flask route tests**
+- [x] **Step 1: Write failing Flask route tests**
 
 ```python
 def test_readiness_requires_database_and_returns_safe_projection(client, monkeypatch):
@@ -228,13 +228,13 @@ def test_readiness_stream_is_unbuffered_typed_sse(client):
     )
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `cd tools/new-agents/backend && ../../.venv/bin/python -m pytest tests/test_readiness_endpoint.py -q`
 
 Expected: FAIL with 404 because neither readiness route exists.
 
-- [ ] **Step 3: Implement the two safe routes**
+- [x] **Step 3: Implement the two safe routes**
 
 ```python
 from flask import Response
@@ -256,7 +256,7 @@ def readiness():
 
 `/readiness/stream` must call `_database_ready()` first; on failure reuse the JSON 503 response, on success construct the fixed one-frame `Response`. Do not route readiness through default-LLM config or Agent Runtime.
 
-- [ ] **Step 4: Run GREEN and adjacent backend contracts**
+- [x] **Step 4: Run GREEN and adjacent backend contracts**
 
 Run: `cd tools/new-agents/backend && ../../../.venv/bin/python -m pytest tests/test_readiness_endpoint.py tests/test_api.py tests/test_api_auth.py -q`
 
@@ -278,7 +278,7 @@ Expected: PASS with no changed authentication behavior for existing sensitive en
 - Compose build services expose stable `image: ai4se/<service>:${AI4SE_RELEASE_ID:?AI4SE_RELEASE_ID is required}` fields consumed by Task 2’s image ID recorder.
 - GitHub `deploy-to-production` adds a production-only concurrency group and generates package manifest before transfer; remote staging includes `${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}`.
 
-- [ ] **Step 1: Write failing static contracts**
+- [x] **Step 1: Write failing static contracts**
 
 ```python
 def test_production_deploy_uses_unique_staging_manifest_and_serial_concurrency():
@@ -300,13 +300,13 @@ def test_legacy_production_deploy_cannot_down_or_globally_clean_resources():
 
 Add contracts for tagged `image`, gateway `/new-agents/api/readiness` and `/readiness/stream`, New Agents page probe, absence of static `/health` as release verdict, and required `flock`/recorded image checks.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pytest tests/test_ci_deploy_hardening.py -q`
 
 Expected: FAIL because current workflow overwrites fixed live/upload paths and legacy script performs early `down`/global cleanup.
 
-- [ ] **Step 3: Implement the CI/Compose handoff**
+- [x] **Step 3: Implement the CI/Compose handoff**
 
 ```yaml
 concurrency:
@@ -318,7 +318,7 @@ In the deploy package step, use Python stdlib to write `release-manifest.json` a
 
 Give every `build:` service in `docker-compose.prod.yml` an explicit `image: ai4se/<service>:${AI4SE_RELEASE_ID:?AI4SE_RELEASE_ID is required}`. Change legacy `deploy.sh production` to fail with the fixed instruction that production requires `release_transaction.py`; retain local/dev behavior. Change `health_check.sh production` to the same fail-closed instruction; local/dev diagnostics remain non-release helpers.
 
-- [ ] **Step 4: Run GREEN plus syntax/config validation**
+- [x] **Step 4: Run GREEN plus syntax/config validation**
 
 Run: `pytest tests/test_ci_deploy_hardening.py -q && bash -n scripts/ci/deploy.sh scripts/health/health_check.sh && docker compose -f docker-compose.prod.yml config --quiet`
 
@@ -339,7 +339,7 @@ Expected: PASS. The last command is run with a test-only environment containing 
 - Produces `GatewayReadiness.assert_ready(release: ReleaseState) -> None` with injectable `request(url, timeout)` and `CommandRunner`.
 - Produces only safe codes `READINESS_FAILED`, `IDENTITY_MISMATCH` or `ROLLBACK_FAILED`; no body/log diagnostic is serialized.
 
-- [ ] **Step 1: Write failing readiness and rollback mutation tests**
+- [x] **Step 1: Write failing readiness and rollback mutation tests**
 
 ```python
 def test_gateway_readiness_requires_new_agents_page_json_sse_and_database_write(tmp_path):
@@ -359,13 +359,13 @@ def test_any_gateway_readiness_mutation_causes_candidate_rollback(tmp_path, brok
     assert transaction.current_release_id() == transaction.previous_release_id
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pytest tests/test_release_transaction.py tests/test_pre_push_deployment.py tests/e2e/new_agents_real/test_deployed_stack.py -q`
 
 Expected: FAIL because release readiness does not yet check gateway page/DB/SSE or bind rollback to all failed probes.
 
-- [ ] **Step 3: Implement bounded, secret-free readiness**
+- [x] **Step 3: Implement bounded, secret-free readiness**
 
 ```python
 def assert_ready(self, release: ReleaseState) -> None:
@@ -378,7 +378,7 @@ def assert_ready(self, release: ReleaseState) -> None:
 
 `require_*` methods accept only status/headers/fixed markers, discard bodies before raising, and bind all URLs to loopback/public gateway configured by the transaction. Add deployed-stack contract tests that Nginx keeps `proxy_buffering off` for the readiness SSE path and exposes the New Agents backend response through `/new-agents/api/`.
 
-- [ ] **Step 4: Run GREEN and local production-shaped proof**
+- [x] **Step 4: Run GREEN and local production-shaped proof**
 
 Run: `pytest tests/test_release_transaction.py tests/test_pre_push_deployment.py tests/e2e/new_agents_real/test_deployed_stack.py -q`
 
@@ -389,7 +389,7 @@ Expected: PASS for positive path and every negative mutation. Then run the exist
 **Files:**
 
 - Modify: `docs/deployment-guide.md`
-- Modify: `docs/todos/2026-07-21-pre-push-full-validation-and-release-safety.md`
+- Move: `docs/todos/2026-07-21-pre-push-full-validation-and-release-safety.md` → `docs/todos/archive/2026-07-21-pre-push-full-validation-and-release-safety.md`
 - Create: `docs/test_requirements/2026-07-21-qg022-validation-record.md`
 - Review: all Task 1–5 paths
 
@@ -398,21 +398,21 @@ Expected: PASS for positive path and every negative mutation. Then run the exist
 - Documents only the public `release-manifest.json`, release layout, required trusted bootstrap, lock/prepare/activate/rollback/readiness phases, evidence locations and no-secret constraints.
 - Marks `QG-022` done only after final current-HEAD full gate passes; archives the todo only when both QG entries are terminal, following the Goal Mode archive rule.
 
-- [ ] **Step 1: Write docs and documentation assertions first**
+- [x] **Step 1: Write docs and documentation assertions first**
 
 Add documentation tests/links that require the deployment guide to reference `release_transaction.py`, `releases/<sha>`, trusted bootstrap and `scripts/test/pre-push.sh`. Add a QG-022 validation record template whose PASS claim is left absent until actual commands run.
 
-- [ ] **Step 2: Run documentation RED/consistency checks**
+- [x] **Step 2: Run documentation RED/consistency checks**
 
 Run: `bash scripts/test/check-docs.sh && pytest tests/test_ci_deploy_hardening.py -q`
 
 Expected: PASS only after the docs name the implemented transaction; do not write a completed validation claim before the commands exist.
 
-- [ ] **Step 3: Perform the one thick-slice formal review**
+- [x] **Step 3: Perform the one thick-slice formal review**
 
 Review the final diff against [QG-022 design](../specs/2026-07-21-qg022-trusted-production-release-design.md): source/image/config identity, no early stop/global cleanup, trusted bootstrap, lock, recovery proof, page/DB/SSE readiness, secret boundary and user dirty-file ownership. Resolve every Critical/Important finding before verification; record any Minor risk with owner and disposition in the validation record.
 
-- [ ] **Step 4: Run layered verification**
+- [x] **Step 4: Run layered verification**
 
 Run:
 
@@ -425,7 +425,7 @@ bash scripts/test/check-docs.sh
 
 Expected: PASS. Record actual test counts, mutation coverage and any legitimate skips; do not claim a remote production run.
 
-- [ ] **Step 5: Commit and execute the complete fixed gate**
+- [x] **Step 5: Commit and execute the complete fixed gate**
 
 Precisely stage only QG-022 source/tests/docs, excluding `tools/intent-tester/test-results/proxy/junit.xml`. Create one focused local commit. In a clean isolated checkout at that exact HEAD run:
 

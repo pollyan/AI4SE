@@ -11,7 +11,7 @@
 ## 全局约束
 
 - 固定入口是 `./scripts/test/pre-push.sh`；不得接收 diff/path/Agent scope，也不得有 skip、fallback-to-green 或 retry-to-green 参数。
-- 本轮是 `QG-021` 的内部实施步骤（非切片）；唯一顺序基线为 [活动待办](../../todos/2026-07-21-pre-push-full-validation-and-release-safety.md)，身份基线为 [QG-021 spec](../specs/2026-07-21-fixed-full-pre-push-quality-gate-design.md#厚切片身份基线)。
+- 本轮是 `QG-021` 的内部实施步骤（非切片）；唯一顺序基线为 [历史待办](../../todos/archive/2026-07-21-pre-push-full-validation-and-release-safety.md)，身份基线为 [QG-021 spec](../specs/2026-07-21-fixed-full-pre-push-quality-gate-design.md#厚切片身份基线)。
 - 不读取、修改、暂存或清理用户已有的 `tools/intent-tester/test-results/proxy/junit.xml`。
 - canonical runner 不安装依赖、不改 lockfile、不使用系统 Python 兼容降级；缺少 `.venv`、Node modules、Docker/Compose、Chromium 或真实模型配置必须输出非 `PASS` 并返回非零。
 - 生产 Compose overlay 使用 Compose `!override` 合并标签；preflight 必须要求 Docker Compose v2.24.4 或更新版本，避免旧版本把 base 的 `80:80` 端口与 loopback port 同时保留。
@@ -425,7 +425,7 @@ Expected: PASS；mutation tests 还必须覆盖缺 `.venv`、缺 Docker、缺三
 - Modify: `docs/TESTING.md`
 - Modify: `docs/deployment-guide.md`
 - Modify: `.github/workflows/deploy.yml`
-- Modify: `docs/todos/2026-07-21-pre-push-full-validation-and-release-safety.md`
+- Move: `docs/todos/2026-07-21-pre-push-full-validation-and-release-safety.md` → `docs/todos/archive/2026-07-21-pre-push-full-validation-and-release-safety.md`
 - Modify: `docs/todos/refactor/README.md`
 - Modify: `docs/superpowers/specs/2026-07-21-fixed-full-pre-push-quality-gate-design.md`
 - Create: `docs/test_requirements/2026-07-21-qg021-validation-record.md`
