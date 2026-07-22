@@ -352,7 +352,8 @@ cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.tes
 
 证据分为两层：
 
-- evidence level 3：`test_live_stack.py` 使用本地 OpenAI-compatible deterministic adapter，只证明真实 frontend/backend/SSE/SQLite/browser harness，不声称真实模型质量。
+- evidence level 2：`test_live_stack_contracts.py` 覆盖启动日志脱敏、DOM/stream observer 与 SSE 诊断等可控故障契约；它不被计为一条用户旅程 E2E。
+- evidence level 3：`test_deterministic_live_stack.py` 使用本地 OpenAI-compatible deterministic adapter，执行同一 `TEST_DESIGN` run 的 `CLARIFY → STRATEGY` 两阶段旅程；它证明真实 frontend/backend/SSE/SQLite/browser harness、配置鉴权、持久化恢复与阶段流转，不声称真实模型质量。
 - evidence level 4：`test_real_agent_workflows.py` 使用真实 DeepSeek。`stage`/Nightly 运行独立 stage probe，`workflow`/PR/发布运行顺序 workflow journey；真实 scope 禁止 `page.route`、替换 production fetch、mock snapshot/artifact 或 fake success。
 
 每个真实 turn 必须在唯一且位于所有 delta 之后的最终 `agent_turn` 前产生有意义 chat delta 和至少两个不同 partial artifact；浏览器必须按本次 requestId 对齐并以 `chat → artifact` 提交，不能把上一阶段 assistant 或阶段切换占位当作新首帧。业务 section 的顺序、已完成段落内容 hash 和 DOM 状态必须单调累积；Mermaid loading→SVG 的视觉 hydration 会归一化为同一稳定标记。`agent_retry` 会开启独立 attempt，DOM 基线随 attempt 重置，验收只使用最终 attempt 且仍保留 retry 计数。最终 artifact 必须与服务端 snapshot、结构化 `artifactData`、version、context summary 和成功 metric 一致。完整 workflow 还必须复用 `runId`、累积全部 stage 的 messages/artifacts/versions、只允许 immediate-next transition，并在清空本地缓存刷新后从服务端恢复；失败报告中的 workflow/stage 取当前 trace 的实际请求坐标。
@@ -380,7 +381,7 @@ cd tools/new-agents/frontend && npm run test -- --run src/core/__tests__/llm.tes
 
 New Agents 另有一套独立于 intent-tester/MidScene 的浏览器级工作流测试，位于 `tests/e2e/new_agents_browser/`。它使用 Python Playwright 打开真实 React 前端，通过拆分的 mock typed SSE 响应验证完整阶段组织逻辑。完整 workflow runner 在发送前安装 `MutationObserver`，通过 `chat-pane`、`assistant-message-content` 与 `artifact-content` 语义定位记录首屏顺序；同一浏览器提交中同时出现会显式记为 `simultaneous` 并失败。`WorkflowRunResult.stream_order` 必须为 `("chat", "artifact")`。QG-018 的 7-workflow probe 进一步参数化覆盖 Lisa 与 Alex 的全部在线 workflow，要求真实无头 Chromium 观察到 `chat → artifact-1 → artifact-2 → final` 四次独立提交。QG-019 的 7-workflow probe 固定为 1024×800 无头 Chromium，验证长文档默认先显示业务正文、元信息位于文末单行且可滚动发现、无纯元信息阶段不伪造尾注，并且不使用截图或像素差异门禁。其余结构化结果包括 `final_artifact`、`stage_artifacts`、`conversation_events` 和 `stage_transitions`，供确定性断言和可选 LLM judge 共用。
 
-默认确定性 browser 运行会显式排除 `real_llm`，同时包含一个真实 frontend/backend/SQLite 的 deterministic live-stack tracer：
+确定性功能 E2E 是一条门禁、两个 adapter：browser adapter 保留完整的受控坏路径和 7-workflow UI 行为；live-stack adapter 保留一个真实 frontend/backend/SQLite 的两阶段 tracer。二者为避免同步 Playwright 生命周期冲突而在独立 pytest 子进程执行，但由同一失败关闭 runner 汇总；不是两条独立 E2E 门禁。`test-local.sh e2e` 先执行 level-2 contracts，再执行这条 level-3 E2E；contracts 不是第三条 E2E。默认运行显式排除 `real_llm`：
 
 ```bash
 ./scripts/test/test-local.sh e2e
@@ -399,7 +400,7 @@ New Agents 另有一套独立于 intent-tester/MidScene 的浏览器级工作流
 
 `inner` 用于开发/TDD；本地 `pr` 固定运行 Lisa `TEST_DESIGN` 与 Alex `VALUE_DISCOVERY` 两条真实顺序旅程；`nightly` 从 manifest 派生 25/25 独立 stage；`release` 从 manifest 派生 7/7 完整 workflow。本地真实 scope 从 Git ignored 的根 `.env` 读取 `NEW_AGENTS_SMOKE_API_KEY`、`NEW_AGENTS_SMOKE_BASE_URL`、`NEW_AGENTS_SMOKE_MODEL`。缺任一变量时状态是 `NOT_RUN` 且退出非零。
 
-GitHub Actions 的自动 PR 门禁只运行无 secret 的 runner/contracts、Vite proxy 和 deterministic live-stack；同仓 PR 与 fork PR 都不收集真实模型 job，PR head 也不会获得任何真实模型凭证。真实模型自动门禁只允许 `github.ref_protected == true` 的 `master` schedule 运行 `nightly`、push 运行 `release`；手动 `workflow_dispatch` 仅允许从同样受保护的 `master` 调用，并必须通过 `new-agents-real-manual` environment 审核。production deploy 仍依赖同一次受保护运行的真实 `release` gate。
+GitHub Actions 的自动 PR 门禁只运行无 secret 的 runner/contracts、Vite proxy 和完整确定性功能 E2E（controlled browser + deterministic live-stack）；同仓 PR 与 fork PR 都不收集真实模型 job，PR head 也不会获得任何真实模型凭证。真实模型自动门禁只允许 `github.ref_protected == true` 的 `master` schedule 运行 `nightly`、push 运行 `release`；手动 `workflow_dispatch` 仅允许从同样受保护的 `master` 调用，并必须通过 `new-agents-real-manual` environment 审核。production deploy 仍依赖同一次受保护运行的真实 `release` gate。
 
 ## GitHub Push 前的固定全量门禁
 

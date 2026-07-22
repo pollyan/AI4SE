@@ -110,7 +110,7 @@ git log --oneline --decorate @{upstream}..HEAD
 
 ### 4.1 `test-local.sh all` 实际覆盖
 
-默认 `all` 顺序运行：Intent Python、Intent critical lint、proxy Jest、Common frontend lint / build、New Agents frontend tests、New Agents backend `not slow`、mock browser E2E 和 deterministic LiveStack。[test-local.sh：all 分派](../../scripts/test/test-local.sh#L343-L397)
+默认 `all` 顺序运行：Intent Python、Intent critical lint、proxy Jest、Common frontend lint / build、New Agents frontend tests、New Agents backend `not slow`，以及 New Agents level-2 contracts 和统一 deterministic E2E。[test-local.sh：all 分派](../../scripts/test/test-local.sh#L343-L397)
 
 它是有价值的全仓聚合入口，但不是严格 CI 等价：
 
@@ -118,9 +118,9 @@ git log --oneline --decorate @{upstream}..HEAD
 |---|---|---|---|
 | Intent coverage | 生成 coverage，但没有 `--cov-fail-under=50` | threshold 50 是硬门禁 | Intent / shared Python diff 必须补跑 CI selector与阈值 |
 | New Agents frontend | `npm run test` | `npm run lint` 后 `npm run test` | New Agents frontend diff 补 `npm run lint`；生产构建面再补 `npm run build` |
-| QG-020 runner / contract | 默认 `all` 不显式收集 root `tests/test_new_agents_functional_runner.py` 与 `tests/e2e/new_agents_real/test_contracts.py` | deterministic job 显式收集 | New Agents runner、scope、CI、secret 或 LiveStack diff 必须补跑 |
+| QG-020 runner / contract | 默认 `all` 收集 `test_contracts.py` 与 `test_live_stack_contracts.py`，但不收集 root `tests/test_new_agents_functional_runner.py` | deterministic job 显式收集全部三者 | New Agents runner、scope、CI 或 secret diff 必须补跑 root runner tests |
 | root deploy / outcome tests | `tests/test_ci_deploy_hardening.py`、`tests/test_verification_outcomes.py` 不在 `all` | 当前 CI 也未持续收集它们 | workflow、Compose、deploy、health 或 gate parser diff 必须直接补跑；这是现存持续门禁缺口 |
-| Browser E2E | 多跑真实 Vite + mock API browser，以及 deterministic LiveStack | CI deterministic job只显式跑 runner/contracts、LiveStack 和 Vite proxy test | 这是本地额外的 UI 证据，不应被删减成 CI job 的同义词 |
+| 确定性 E2E | 先跑 level-2 contracts，再跑 controlled Vite/browser 与 deterministic LiveStack 两个 adapter | 同样运行 contracts 与统一 adapter runner，另加 Vite proxy test | 核心 E2E 已对齐；CI 的 Vite proxy 仍是额外独有证据 |
 | 真实模型 | 默认 `all` 明确不跑；只有 `smoke` 子命令调用单 stage | protected master 运行 `nightly` / `release` | 按第 6 节独立记账 |
 
 对应命令差异可以直接核对 [test-local.sh：Intent selector](../../scripts/test/test-local.sh#L58-L92)、[test-local.sh：New Agents frontend / backend](../../scripts/test/test-local.sh#L167-L228)、[test-local.sh：browser / LiveStack](../../scripts/test/test-local.sh#L230-L290) 与 [deploy.yml：backend 与 frontend jobs](../../.github/workflows/deploy.yml#L26-L128)。
@@ -129,13 +129,12 @@ git log --oneline --decorate @{upstream}..HEAD
 
 ### 4.2 `new-agents-functional.sh inner` 实际覆盖
 
-`inner` 依次运行：
+`inner` 只运行：
 
-1. runner + deterministic contracts；
-2. `test_live_stack.py`；
-3. `test-local.sh new-agents`，即 New Agents frontend 全量 Vitest和 backend `not slow`。
+1. `tests/test_new_agents_functional_runner.py`；
+2. `tests/e2e/new_agents_real/test_contracts.py`。
 
-这是代码中真实编排，不等于“所有 New Agents 验证”。它不运行 mock browser workflow E2E，也不运行 frontend lint / build、root deploy hardening 或 outcome tests。[new_agents_functional.py：inner 编排](../../scripts/test/new_agents_functional.py#L198-L233)
+这是代码中真实编排，不等于“所有 New Agents 验证”。它不运行 `test-local.sh new-agents`、mock browser workflow E2E、frontend lint / build、root deploy hardening 或 outcome tests。[new_agents_functional.py：inner 编排](../../scripts/test/new_agents_functional.py#L237-L262)
 
 因此普通 New Agents 完成型变更的合理组合是：
 
@@ -232,7 +231,7 @@ scope 选择由 manifest 派生，[matrix.py：scope selection](../../tests/e2e/
 
 `LiveStack` 在临时目录创建 SQLite，启动 `flask run`、Vite dev server 和 headless Chromium，使用动态 loopback 端口；它没有启动 Docker、Gunicorn、Nginx 或 PostgreSQL。[live_stack.py：临时栈生命周期](../../tests/e2e/new_agents_real/live_stack.py#L171-L279)
 
-当前 deterministic 端到端 tracer 的产品旅程集中在 `TEST_DESIGN/CLARIFY`，以及同一 run 的前两个 stage；它不是 7 workflow 的 deterministic production stack matrix。[test_live_stack.py：CLARIFY tracer](../../tests/e2e/new_agents_real/test_live_stack.py#L1145-L1213) [test_live_stack.py：两阶段 tracer](../../tests/e2e/new_agents_real/test_live_stack.py#L1216-L1257)
+当前 deterministic 端到端 tracer 的产品旅程集中在同一 `TEST_DESIGN` run 的前两个 stage；它不是 7 workflow 的 deterministic production stack matrix。[两阶段 tracer](../../tests/e2e/new_agents_real/test_deterministic_live_stack.py)；observer、启动脱敏与 SSE 诊断已下沉到 [deterministic contracts](../../tests/e2e/new_agents_real/test_live_stack_contracts.py)。
 
 mock browser E2E 又是另一层：它启动真实 Vite / Chromium，但通过 `page.route` 替换 Agent stream、config、snapshot 和 handoff API，因此只证明真实 UI 对 mock typed SSE 的行为。[browser conftest：API route mocks](../../tests/e2e/new_agents_browser/conftest.py#L507-L530)
 

@@ -4,6 +4,8 @@
 
 > **完成记录（2026-07-20）：** 本计划已全部执行并归档。最终确定性门禁为 runner/contracts 107、LiveStack 18、frontend 947、backend 1247 全部通过；真实门禁严格按 `pr → nightly → release` 获得 2/2、25/25、7/7 PASS；Code 与 Security 独立复审均为零遗留。
 
+> **路径替代（2026-07-22）：** 本文件保留原实施时的文件名作为历史证据。现行 deterministic E2E 已由 QG-023 收口为 [`test_deterministic_live_stack.py`](../../tests/e2e/new_agents_real/test_deterministic_live_stack.py) 与 [`test_live_stack_contracts.py`](../../tests/e2e/new_agents_real/test_live_stack_contracts.py)，入口见 [`new_agents_deterministic_e2e.py`](../../scripts/test/new_agents_deterministic_e2e.py)。
+
 **Goal:** 建立一个无头、功能型、失败关闭的 New Agents 测试入口，使开发内环、无 secret 自动 PR、受保护 Nightly 与发布分别获得真实程度和成本匹配的格式、SSE 流式、DOM、持久化与阶段流转证据。
 
 **Architecture:** 用 `scope + workflow + stage` 作为统一深模块接口；matrix 从 manifest 派生，live stack 隐藏 Vite/Flask/SQLite/Chromium 生命周期，SSE observer 与 assertions 只消费脱敏结构化 trace。相同 provider seam 在开发内环接 deterministic OpenAI-compatible adapter，在真实门禁接 DeepSeek，两个证据层级独立记账。

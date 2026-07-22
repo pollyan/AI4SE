@@ -1,10 +1,12 @@
 # Refactor Todo
 
-`docs/todos/` 当前没有活动待办。2026-07-21 的固定全量 pre-push 与生产发布安全工作已完成并归档为 [`历史记录`](../archive/2026-07-21-pre-push-full-validation-and-release-safety.md)；此前取消的 P2/P3、条件触发、旧真实模型 smoke、旧 E 编号和历史集成候选继续只保留事实证据，不得自动恢复实施。
+`docs/todos/` 当前只有一个活动待办：[`QG-023：New Agents 双层 E2E 收口`](2026-07-22-new-agents-two-tier-e2e-consolidation.md)。它承接用户已确认的“确定性功能 E2E + 真实模型 Release E2E”两道门禁，必须在不降低既有流式、阶段流转和真实发布覆盖的前提下完成收口。
+
+2026-07-21 的固定全量 pre-push 与生产发布安全工作已完成并归档为 [`历史记录`](../archive/2026-07-21-pre-push-full-validation-and-release-safety.md)；此前取消的 P2/P3、条件触发、旧真实模型 smoke、旧 E 编号和历史集成候选继续只保留事实证据，不得自动恢复实施。
 
 ## 当前状态
 
-当前没有执行入口；需要新增工作时必须从 Goal Mode `BOOTSTRAP` 重新审计活动待办、失败证据与用户最新目标。
+当前执行入口是 `QG-023`。它是一个工程信任闭环，不是“只删测试”：先把两道 E2E 门禁的职责、命令和证据收口，再通过固定全量 pre-push 为最终 `HEAD` 取得新鲜证据。
 
 最近完成并归档的能力包为 [`2026-07-16-new-agents-streaming-and-artifact-ux.md`](../archive/2026-07-16-new-agents-streaming-and-artifact-ux.md)，包含：
 

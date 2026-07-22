@@ -4,7 +4,6 @@ import importlib
 import json
 import os
 import traceback
-from pathlib import Path
 
 import pytest
 from playwright.sync_api import sync_playwright
@@ -15,14 +14,12 @@ from .config import (
     secret_free_sync_playwright,
 )
 from .assertions import text_digest
-from .matrix import FunctionalScope, select_cases
 from .stream_observer import (
     STREAM_OBSERVER_SCRIPT,
     finish_dom_observer,
     start_dom_observer,
 )
 
-ROOT = Path(__file__).resolve().parents[3]
 pytestmark = pytest.mark.e2e
 
 
@@ -1140,118 +1137,3 @@ def test_stream_observer_does_not_retain_malformed_sse_parse_error():
     serialized = json.dumps(trace)
     assert secret not in serialized
     assert trace["observerError"] == "sse_observer_failed"
-
-
-def test_deterministic_provider_crosses_real_frontend_backend_and_persistence():
-    fake_provider = _module("fake_provider")
-    live_stack = _module("live_stack")
-    workflow_runner = _module("workflow_runner")
-    manifest = json.loads(
-        (ROOT / "tools/new-agents/workflow_manifest.json").read_text(encoding="utf-8")
-    )
-    case = select_cases(
-        FunctionalScope.STAGE,
-        manifest,
-        workflow_id="TEST_DESIGN",
-        stage_id="CLARIFY",
-    )[0]
-    scenario = json.loads(
-        (ROOT / "tests/e2e/new_agents_real/real_llm_scenarios.json").read_text(
-            encoding="utf-8"
-        )
-    )["TEST_DESIGN"]
-
-    with fake_provider.FakeOpenAIProvider.for_clarify(ROOT) as provider:
-        config = RealLlmConfig(
-            api_key="fake-provider-key",
-            base_url=provider.base_url,
-            model="deepseek-v4-flash",
-        )
-        with live_stack.LiveStack(ROOT, config) as stack:
-            assert stack.page is not None
-            stack.page.goto(
-                stack.frontend_url,
-                wait_until="domcontentloaded",
-                timeout=60_000,
-            )
-            config_check_status = stack.page.evaluate("""
-                async () => {
-                  const response = await window.fetch(
-                    '/new-agents/api/config/check',
-                    {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'X-API-Key': 'browser-forged-key',
-                        'X-AI4SE-Gateway': 'new-agents',
-                      },
-                      body: JSON.stringify({
-                        baseUrl: 'https://attacker.example/v1',
-                        model: 'capture-authorization',
-                      }),
-                    },
-                  );
-                  return response.status;
-                }
-                """)
-            assert config_check_status == 401
-            evidence = workflow_runner.run_stage_probe(
-                stack,
-                case,
-                scenario["prompt"],
-                evidence_level=3,
-            )
-
-    assert evidence.level == 3
-    assert evidence.workflow_id == "TEST_DESIGN"
-    assert evidence.stage_id == "CLARIFY"
-    assert evidence.stream_order[:2] == ("chat", "artifact")
-    assert evidence.artifact_delta_count >= 2
-    assert evidence.snapshot_artifact_versions == 1
-    assert evidence.restored_from_server is True
-    assert "agent_turn" in evidence.event_types
-    assert evidence.event_types[-1] == "done"
-
-
-def test_second_stage_requires_new_chat_before_artifact_in_same_run():
-    fake_provider = _module("fake_provider")
-    live_stack = _module("live_stack")
-    workflow_runner = _module("workflow_runner")
-    manifest = json.loads(
-        (ROOT / "tools/new-agents/workflow_manifest.json").read_text(encoding="utf-8")
-    )
-    case = select_cases(
-        FunctionalScope.WORKFLOW,
-        manifest,
-        workflow_id="TEST_DESIGN",
-    )[0]
-    scenario = json.loads(
-        (ROOT / "tests/e2e/new_agents_real/real_llm_scenarios.json").read_text(
-            encoding="utf-8"
-        )
-    )["TEST_DESIGN"]
-
-    with fake_provider.FakeOpenAIProvider.for_test_design_prefix(ROOT) as provider:
-        config = RealLlmConfig(
-            api_key="fake-provider-key",
-            base_url=provider.base_url,
-            model="deepseek-v4-flash",
-        )
-        with live_stack.LiveStack(ROOT, config) as stack:
-            evidence = workflow_runner.run_workflow_journey(
-                stack,
-                case,
-                scenario["prompt"],
-                evidence_level=3,
-                max_stages=2,
-            )
-
-    assert len(evidence.stages) == 2
-    assert evidence.transition_count == 1
-    assert evidence.stages[0].run_id == evidence.stages[1].run_id
-    assert evidence.stages[1].stream_order[:2] == ("chat", "artifact")
-    assert evidence.stages[1].snapshot_artifact_stage_ids == (
-        "CLARIFY",
-        "STRATEGY",
-    )
-    assert evidence.stages[1].snapshot_message_count == 4

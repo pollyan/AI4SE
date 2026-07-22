@@ -17,8 +17,7 @@
 | `new-agents-runner-contracts` | real-model runner scope and secret boundary | 2 | none | `scripts/test/pre_push.py` | 中 | KEEP |
 | `verification-outcomes` | zero collection and non-PASS outcome closure | 2 | none | `scripts/test/pre_push.py` | 中 | KEEP |
 | `ci-deploy-hardening` | CI and deployment configuration contracts | 2 | none | `scripts/test/pre_push.py` | 中 | KEEP |
-| `new-agents-real-contracts` | real-model evidence, stream and persistence assertions | 2 | none | `scripts/test/pre_push.py` | 中 | KEEP |
-| `new-agents-live-stack` | real frontend/backend/SSE/browser deterministic boundary | 3 | deterministic provider seam | `scripts/test/pre_push.py` | 长 | MERGE |
-| `new-agents-browser-e2e` | browser-visible stream order and artifact rendering | 3 | controlled Agent Runtime seam | `scripts/test/pre_push.py` | 长 | KEEP |
+| `new-agents-real-contracts` | real-model evidence, stream and persistence assertions<br>stream observer and startup diagnostics remain fail-closed | 2 | none | `scripts/test/pre_push.py` | 中 | KEEP |
+| `new-agents-deterministic-e2e` | browser-visible stream order and artifact rendering<br>real frontend/backend/SSE/SQLite two-stage journey | 3 | controlled Agent Runtime seam and deterministic provider seam | `scripts/test/pre_push.py` | 长 | MERGE |
 | `new-agents-deployed-real-release` | deployed real-model release covers every manifest workflow, stage and transition | 4 | isolated production Compose and real configured provider | `scripts/test/pre_push.py` | 很长 | MOVE |
 | `new-agents-real-nightly-stage-probes` | independent per-stage real-model diagnostic coverage | 4 | GitHub scheduled runner and real configured provider | `.github/workflows/deploy.yml` | 很长 | KEEP |

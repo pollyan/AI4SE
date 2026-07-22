@@ -144,7 +144,7 @@ def test_inner_omits_frontend_backend_and_live_stack_suites_owned_by_pre_push(
     flattened = "\n".join(" ".join(command) for command in commands)
     assert "tests/test_new_agents_functional_runner.py" in flattened
     assert "tests/e2e/new_agents_real/test_contracts.py" in flattened
-    assert "tests/e2e/new_agents_real/test_live_stack.py" not in flattened
+    assert "tests/e2e/new_agents_real/test_deterministic_live_stack.py" not in flattened
     assert "scripts/test/test-local.sh" not in flattened
 
 
@@ -230,7 +230,7 @@ def test_all_functional_chromium_launches_use_shared_secret_free_environment():
     helper_name = "build_secret_free_browser_environment"
     launch_paths = (
         ROOT / "tests/e2e/new_agents_real/live_stack.py",
-        ROOT / "tests/e2e/new_agents_real/test_live_stack.py",
+        ROOT / "tests/e2e/new_agents_real/test_live_stack_contracts.py",
         ROOT / "tests/e2e/new_agents_browser/conftest.py",
     )
 
@@ -265,7 +265,7 @@ def test_all_functional_playwright_drivers_use_secret_free_environment():
     }
     driver_paths = (
         ROOT / "tests/e2e/new_agents_real/live_stack.py",
-        ROOT / "tests/e2e/new_agents_real/test_live_stack.py",
+        ROOT / "tests/e2e/new_agents_real/test_live_stack_contracts.py",
         ROOT / "tests/e2e/new_agents_browser/conftest.py",
     )
 
@@ -509,20 +509,23 @@ def test_shell_adapter_and_existing_test_runner_use_fail_closed_scopes():
     adapter_source = shell_adapter.read_text(encoding="utf-8")
     assert "new_agents_functional.py" in adapter_source
     assert '"$@"' in adapter_source
-    assert '-m "e2e and not real_llm"' in test_local
+    deterministic_e2e = (
+        ROOT / "scripts/test/new_agents_deterministic_e2e.py"
+    ).read_text(encoding="utf-8")
+    assert '"e2e and not real_llm"' in deterministic_e2e
     assert 'new-agents-functional.sh" stage TEST_DESIGN CLARIFY' in test_local
 
 
-def test_browser_e2e_runner_isolates_sync_playwright_session_lifecycles():
+def test_deterministic_e2e_runner_collects_browser_and_live_adapters_together():
     test_local = (ROOT / "scripts/test/test-local.sh").read_text(encoding="utf-8")
 
-    assert (
-        "tests/e2e/new_agents_browser " "tests/e2e/new_agents_real/test_live_stack.py"
-    ) not in test_local
-    assert '--suite-id "new-agents-browser-e2e"' in test_local
-    assert '--suite-id "new-agents-deterministic-live-stack"' in test_local
-    assert "tests/e2e/new_agents_browser -m" in test_local
-    assert "tests/e2e/new_agents_real/test_live_stack.py -m" in test_local
+    assert '--suite-id "new-agents-deterministic-contracts"' in test_local
+    assert '--suite-id "new-agents-deterministic-e2e"' in test_local
+    assert "new-agents-browser-e2e" not in test_local
+    assert "new-agents-deterministic-live-stack" not in test_local
+    assert "tests/e2e/new_agents_real/test_contracts.py" in test_local
+    assert "tests/e2e/new_agents_real/test_live_stack_contracts.py" in test_local
+    assert "scripts/test/new_agents_deterministic_e2e.py" in test_local
 
 
 def test_legacy_direct_runtime_smoke_is_removed():
@@ -603,7 +606,8 @@ def test_ci_maps_events_to_real_scopes_and_blocks_production_deploy():
         "NEW_AGENTS_SMOKE_BASE_URL",
         "NEW_AGENTS_SMOKE_MODEL",
     }
-    assert "tests/e2e/new_agents_real/test_live_stack.py" in source
+    assert "scripts/test/new_agents_deterministic_e2e.py" in source
+    assert "tests/e2e/new_agents_real/test_live_stack_contracts.py" in source
     assert "tests/e2e/new_agents_real/test_contracts.py" in source
     assert "devServerProxy.test.ts" in source
     assert "new-agents-functional.sh" in source

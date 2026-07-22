@@ -164,9 +164,12 @@ jobs:
       run: |
         python -m pytest -o addopts='' \
           tests/test_new_agents_functional_runner.py \
-          tests/e2e/new_agents_real/test_contracts.py -q
+          tests/e2e/new_agents_real/test_contracts.py \
+          tests/e2e/new_agents_real/test_live_stack_contracts.py -q
         python -m pytest -o addopts='' \
-          tests/e2e/new_agents_real/test_live_stack.py -q
+          tests/test_new_agents_deterministic_e2e.py -q
+        python scripts/test/new_agents_deterministic_e2e.py \
+          --python python --root "$GITHUB_WORKSPACE"
         cd tools/new-agents/frontend
         npm run test -- --run devServerProxy.test.ts
 

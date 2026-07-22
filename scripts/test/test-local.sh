@@ -10,7 +10,7 @@
 #   ./scripts/test/test-local.sh proxy    # 仅运行代理测试
 #   ./scripts/test/test-local.sh lint     # 仅运行代码检查
 #   ./scripts/test/test-local.sh new-agents # 仅运行 New Agents 确定性测试
-#   ./scripts/test/test-local.sh e2e      # 仅运行 New Agents 浏览器 E2E
+#   ./scripts/test/test-local.sh e2e      # 仅运行 New Agents 确定性功能 E2E
 #   ./scripts/test/test-local.sh smoke    # 仅运行耗时的大模型冒烟测试
 # ========================================
 
@@ -228,10 +228,10 @@ PY
 }
 
 # ==========================================
-# New Agents Browser E2E Tests (Playwright)
+# New Agents Deterministic Functional E2E Tests (Playwright)
 # ==========================================
-run_new_agents_browser_e2e_tests() {
-    log_section "🌐 New Agents Browser E2E Tests"
+run_new_agents_deterministic_e2e_tests() {
+    log_section "🌐 New Agents Deterministic Functional E2E Tests"
     cd "$PROJECT_ROOT"
 
     if "$PROJECT_PYTHON" - <<'PY' >/dev/null 2>&1
@@ -248,27 +248,25 @@ PY
     log_info "确认 Playwright Chromium 可用..."
     "$PROJECT_PYTHON" -m playwright install chromium
 
-    log_info "运行 New Agents Browser E2E 测试..."
+    log_info "运行 New Agents 确定性 contracts 测试..."
     if "$PROJECT_PYTHON" "$OUTCOME_TOOL" run \
-        --suite-id "new-agents-browser-e2e" \
+        --suite-id "new-agents-deterministic-contracts" \
         --parser pytest \
-        -- "$PROJECT_PYTHON" -m pytest -o addopts='' tests/e2e/new_agents_browser -m "e2e and not real_llm" -q; then
-        log_info "✅ New Agents Browser E2E 测试通过"
+        -- "$PROJECT_PYTHON" -m pytest -o addopts='' tests/e2e/new_agents_real/test_contracts.py tests/e2e/new_agents_real/test_live_stack_contracts.py -q; then
+        log_info "✅ New Agents 确定性 contracts 测试通过"
     else
-        log_error "❌ New Agents Browser E2E 测试失败"
+        log_error "❌ New Agents 确定性 contracts 测试失败"
         return 1
     fi
 
-    # Each suite owns a session-scoped sync Playwright runtime. Keep them in
-    # separate pytest processes so their event-loop lifecycles cannot overlap.
-    log_info "运行 New Agents 确定性真实栈测试..."
+    log_info "运行 New Agents browser + live-stack 确定性 E2E 测试..."
     if "$PROJECT_PYTHON" "$OUTCOME_TOOL" run \
-        --suite-id "new-agents-deterministic-live-stack" \
+        --suite-id "new-agents-deterministic-e2e" \
         --parser pytest \
-        -- "$PROJECT_PYTHON" -m pytest -o addopts='' tests/e2e/new_agents_real/test_live_stack.py -m "e2e and not real_llm" -q; then
-        log_info "✅ New Agents 确定性真实栈测试通过"
+        -- "$PROJECT_PYTHON" "$PROJECT_ROOT/scripts/test/new_agents_deterministic_e2e.py" --python "$PROJECT_PYTHON" --root "$PROJECT_ROOT"; then
+        log_info "✅ New Agents 确定性功能 E2E 测试通过"
     else
-        log_error "❌ New Agents 确定性真实栈测试失败"
+        log_error "❌ New Agents 确定性功能 E2E 测试失败"
         return 1
     fi
 }
@@ -365,7 +363,7 @@ case "$TEST_TYPE" in
         run_new_agents_backend_tests || FAILED=1
         ;;
     e2e)
-        run_new_agents_browser_e2e_tests || FAILED=1
+        run_new_agents_deterministic_e2e_tests || FAILED=1
         ;;
     all)
         run_api_tests || FAILED=1
@@ -374,7 +372,7 @@ case "$TEST_TYPE" in
         run_common_frontend_tests || FAILED=1
         run_new_agents_frontend_tests || FAILED=1
         run_new_agents_backend_tests || FAILED=1
-        run_new_agents_browser_e2e_tests || FAILED=1
+        run_new_agents_deterministic_e2e_tests || FAILED=1
         ;;
     *)
         log_error "未知测试类型: $TEST_TYPE"

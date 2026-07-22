@@ -117,7 +117,6 @@ def test_fixed_suite_registry_has_one_owner_and_full_required_coverage(tmp_path)
         "deterministic",
         "deterministic",
         "deterministic",
-        "deterministic",
     ]
     assert len({suite.suite_id for suite in suites}) == len(suites)
     assert {suite.suite_id for suite in suites} >= {
@@ -135,11 +134,37 @@ def test_fixed_suite_registry_has_one_owner_and_full_required_coverage(tmp_path)
         "verification-outcomes",
         "ci-deploy-hardening",
         "new-agents-real-contracts",
-        "new-agents-live-stack",
-        "new-agents-browser-e2e",
+        "new-agents-deterministic-e2e",
     }
     assert all(suite.invariants and suite.canonical_owner for suite in suites)
     assert {suite.disposition for suite in suites} >= {"KEEP", "MOVE", "MERGE"}
+
+
+def test_deterministic_new_agents_e2e_is_one_gate_with_two_required_adapters(tmp_path):
+    runner = _load_runner()
+    context = runner.PrePushContext(
+        root=ROOT,
+        head="a" * 40,
+        output_dir=tmp_path / "test-results" / "pre-push" / ("a" * 40),
+        initial_status=(),
+    )
+
+    suites = {suite.suite_id: suite for suite in runner.fixed_suites(context)}
+
+    assert "new-agents-live-stack" not in suites
+    assert "new-agents-browser-e2e" not in suites
+    suite = suites["new-agents-deterministic-e2e"]
+    assert suite.phase == "deterministic"
+    assert suite.parser == "pytest"
+    assert suite.command[-1] == str(
+        ROOT / "scripts/test/new_agents_deterministic_e2e.py"
+    )
+    helper = ROOT / "scripts/test/new_agents_deterministic_e2e.py"
+    assert helper.is_file()
+    helper_source = helper.read_text(encoding="utf-8")
+    assert "tests/e2e/new_agents_browser" in helper_source
+    assert "tests/e2e/new_agents_real/test_deterministic_live_stack.py" in helper_source
+    assert suite.evidence_level == 3
 
 
 def test_fixed_build_outputs_use_the_child_isolated_workspace(tmp_path):

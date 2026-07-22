@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use `superpowers:executing-plans` for inline execution. 本计划的内部步骤不得拆成独立切片、独立交付、独立 commit 或 push。
 
+> **路径替代（2026-07-22）：** 本文件保留 QG-021 实施时的 suite 名和文件名作为历史证据。现行 registry 的唯一 deterministic New Agents E2E suite 为 `new-agents-deterministic-e2e`；其两个 adapter 与下沉 contracts 由 QG-023 定义，见 [`QG-023 spec`](../specs/2026-07-22-qg023-two-tier-new-agents-e2e-design.md)。
+
 **Goal:** 让任意 GitHub push 前都由一个固定、fail-closed 的本地命令验证当前 `HEAD`：全仓确定性门禁、隔离 production-shaped Compose、部署栈真实 DeepSeek 7-workflow E2E、脱敏证据和工作区清理全部通过才允许 push。
 
 **Architecture:** 新增 Python canonical runner 负责前置检查、固定 suite registry、结果/evidence、工作区基线和最终裁决；shell 与 Git hook 只调用它。独立 Compose harness 以 project name、loopback 端口、临时 env/volume/network 启动 `docker-compose.prod.yml` 的叠加形态；真实模型 runner 增加一个只能访问该本地 Nginx target 的 `DeployedStack`，沿用既有 7/25 workflow 断言与脱敏报告，不复制 Agent Runtime、SSE 或浏览器断言逻辑。
